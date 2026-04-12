@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>lpdf WASM — browser verification</title>
+  <style>
+    body { font-family: monospace; padding: 2rem; background: #111; color: #ccc; }
+    h1 { color: #fff; font-size: 1rem; margin-bottom: 1.5rem; }
+    .case { margin-bottom: 1rem; }
+    .label { color: #888; }
+    .pass { color: #4c4; }
+    .fail { color: #c44; }
+    .detail { color: #aaa; margin-left: 1rem; }
+    #status { margin-top: 2rem; font-size: 0.85rem; color: #666; }
+  </style>
+</head>
+<body>
+  <h1>lpdf WASM — browser verification</h1>
+  <div id="results"></div>
+  <div id="status">loading…</div>
+
+  <script type="module">
+    import init, { LpdfEngine } from '../dist/web/lpdf.js';
+
+    const results = document.getElementById('results');
+    const status  = document.getElementById('status');
+
+    function check(label, passed, detail) {
+      const row = document.createElement('div');
+      row.className = 'case';
+      row.innerHTML =
+        `<span class="label">${label}</span> ` +
+        `<span class="${passed ? 'pass' : 'fail'}">${passed ? 'PASS' : 'FAIL'}</span>` +
+        (detail ? `<div class="detail">${detail}</div>` : '');
+      results.appendChild(row);
+      return passed;
+    }
+
+    await init();
+
+    let allPassed = true;
+
+    // --- unlicensed: watermark must be present ---
+    const free       = new LpdfEngine('');
+    const freeResult = JSON.parse(free.render('<doc/>'));
+    allPassed &= check(
+      'unlicensed — watermark present',
+      freeResult.watermark !== null && freeResult.watermark !== undefined,
+      JSON.stringify(freeResult.watermark),
+    );
+
+    // --- licensed: watermark must be null ---
+    const paid       = new LpdfEngine('test-key');
+    const paidResult = JSON.parse(paid.render('<doc/>'));
+    allPassed &= check(
+      'licensed   — watermark absent ',
+      paidResult.watermark === null,
+      JSON.stringify(paidResult.watermark),
+    );
+
+    // --- render tree shape ---
+    allPassed &= check(
+      'render tree — version field',
+      paidResult.version === 1,
+      `version: ${paidResult.version}`,
+    );
+    allPassed &= check(
+      'render tree — pages array',
+      Array.isArray(paidResult.pages) && paidResult.pages.length === 1,
+      `pages: ${JSON.stringify(paidResult.pages)}`,
+    );
+
+    status.textContent = allPassed ? '✓ all checks passed' : '✗ one or more checks failed';
+    status.style.color = allPassed ? '#4c4' : '#c44';
+  </script>
+</body>
+</html>
