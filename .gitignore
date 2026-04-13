@@ -1,4 +1,7 @@
 /target
 /src/core/target
+
+node_modules
 var
+
 .claude

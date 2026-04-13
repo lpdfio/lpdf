@@ -1,0 +1,446 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- ============================================================
+       Simple Types
+  ============================================================ -->
+
+  <xs:simpleType name="TokenScale">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="xs"/>
+      <xs:enumeration value="s"/>
+      <xs:enumeration value="m"/>
+      <xs:enumeration value="l"/>
+      <xs:enumeration value="xl"/>
+      <xs:enumeration value="xxl"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- e.g. "10pt" or "10.5pt" -->
+  <xs:simpleType name="PtValue">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d+(\.\d+)?pt"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- token name or explicit pt value, e.g. "m" or "14pt" -->
+  <xs:simpleType name="TokenScaleOrPt">
+    <xs:union memberTypes="TokenScale PtValue"/>
+  </xs:simpleType>
+
+  <!-- e.g. "10pt" | "10pt 12pt" | "10pt 12pt 8pt" | "10pt 12pt 8pt 6pt" -->
+  <xs:simpleType name="SpacingValue">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d+(\.\d+)?pt( \d+(\.\d+)?pt){0,3}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- spacing: explicit multi-pt shorthand OR a single token name -->
+  <xs:simpleType name="SpacingOrToken">
+    <xs:union memberTypes="SpacingValue TokenScale"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="PageSizeNamed">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="a4"/>
+      <xs:enumeration value="a3"/>
+      <xs:enumeration value="a5"/>
+      <xs:enumeration value="letter"/>
+      <xs:enumeration value="legal"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- e.g. "100pt 200pt" -->
+  <xs:simpleType name="PageSizeCustom">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="\d+(\.\d+)?pt \d+(\.\d+)?pt"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="PageSize">
+    <xs:union memberTypes="PageSizeNamed PageSizeCustom"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="Orientation">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="portrait"/>
+      <xs:enumeration value="landscape"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- e.g. "#1763cf" or "#fff" -->
+  <xs:simpleType name="ColorHex">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- hex or a named color token e.g. "primary", "surface-alt" -->
+  <xs:simpleType name="Color">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|[a-z][a-z0-9-]*"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- e.g. "s #ccc", "m primary", or "1.5pt #ccc" -->
+  <xs:simpleType name="BorderValue">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="(\d+(\.\d+)?pt|xs|s|m|l|xl|2xl) .+"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- cross-axis alignment (stack cross-axis supports stretch) -->
+  <xs:simpleType name="AlignFull">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="start"/>
+      <xs:enumeration value="center"/>
+      <xs:enumeration value="end"/>
+      <xs:enumeration value="stretch"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="Align">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="start"/>
+      <xs:enumeration value="center"/>
+      <xs:enumeration value="end"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="Justify">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="start"/>
+      <xs:enumeration value="center"/>
+      <xs:enumeration value="end"/>
+      <xs:enumeration value="between"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="TextAlignH">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="left"/>
+      <xs:enumeration value="center"/>
+      <xs:enumeration value="right"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- "full", "fill", or an explicit pt value e.g. "48pt" -->
+  <xs:simpleType name="HeightValue">
+    <xs:union memberTypes="HeightMode PtValue"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="HeightMode">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="full"/>
+      <xs:enumeration value="fill"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="BuiltinFont">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="Courier"/>
+      <xs:enumeration value="Courier-Bold"/>
+      <xs:enumeration value="Courier-Oblique"/>
+      <xs:enumeration value="Courier-BoldOblique"/>
+      <xs:enumeration value="Helvetica"/>
+      <xs:enumeration value="Helvetica-Bold"/>
+      <xs:enumeration value="Helvetica-Oblique"/>
+      <xs:enumeration value="Helvetica-BoldOblique"/>
+      <xs:enumeration value="Times-Roman"/>
+      <xs:enumeration value="Times-Bold"/>
+      <xs:enumeration value="Times-Italic"/>
+      <xs:enumeration value="Times-BoldItalic"/>
+      <xs:enumeration value="Symbol"/>
+      <xs:enumeration value="ZapfDingbats"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+
+  <!-- ============================================================
+       Reusable complex types
+  ============================================================ -->
+
+  <!-- All six scale slots with pt values — used by every token row -->
+  <xs:complexType name="TokenScaleRow">
+    <xs:attribute name="xs"  type="PtValue" use="required"/>
+    <xs:attribute name="s"   type="PtValue" use="required"/>
+    <xs:attribute name="m"   type="PtValue" use="required"/>
+    <xs:attribute name="l"   type="PtValue" use="required"/>
+    <xs:attribute name="xl"  type="PtValue" use="required"/>
+    <xs:attribute name="xxl" type="PtValue" use="required"/>
+  </xs:complexType>
+
+
+  <!-- ============================================================
+       Shared attribute groups
+  ============================================================ -->
+
+  <!-- Box attrs shared by all layout elements -->
+  <xs:attributeGroup name="BoxAttrs">
+    <xs:attribute name="gap"        type="TokenScaleOrPt"/>
+    <xs:attribute name="padding"    type="SpacingOrToken"/>
+    <xs:attribute name="height"     type="HeightValue"/>
+    <xs:attribute name="background" type="Color"/>
+    <xs:attribute name="border"     type="BorderValue"/>
+    <xs:attribute name="radius"     type="TokenScaleOrPt"/>
+  </xs:attributeGroup>
+
+
+  <!-- ============================================================
+       Layout content group — any layout element can nest any other
+  ============================================================ -->
+
+  <xs:group name="LayoutContent">
+    <xs:choice>
+      <xs:element ref="stack"/>
+      <xs:element ref="flank"/>
+      <xs:element ref="split"/>
+      <xs:element ref="cluster"/>
+      <xs:element ref="grid"/>
+      <xs:element ref="frame"/>
+      <xs:element ref="link"/>
+      <xs:element ref="text"/>
+      <xs:element ref="divider"/>
+    </xs:choice>
+  </xs:group>
+
+
+  <!-- ============================================================
+       Token elements
+  ============================================================ -->
+
+  <xs:element name="font">
+    <xs:complexType>
+      <!-- font has either src (file/url) or builtin, not both -->
+      <xs:attribute name="name"    type="xs:string"  use="required"/>
+      <xs:attribute name="src"     type="xs:anyURI"/>
+      <xs:attribute name="builtin" type="BuiltinFont"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="color">
+    <xs:complexType>
+      <xs:attribute name="name"  type="xs:string" use="required"/>
+      <xs:attribute name="value" type="ColorHex"  use="required"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="tokens">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="space"  type="TokenScaleRow"/>
+        <xs:element name="border" type="TokenScaleRow"/>
+        <xs:element name="radius" type="TokenScaleRow"/>
+        <xs:element name="width"  type="TokenScaleRow"/>
+        <xs:element name="text"   type="TokenScaleRow"/>
+        <!-- "grid" and "space" share the same shape -->
+        <xs:element name="grid"   type="TokenScaleRow"/>
+        <xs:element name="fonts">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element ref="font" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="colors">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element ref="color" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+
+  <!-- ============================================================
+       Document structure
+  ============================================================ -->
+
+  <xs:element name="meta">
+    <xs:complexType>
+      <xs:attribute name="title"    type="xs:string"/>
+      <xs:attribute name="author"   type="xs:string"/>
+      <xs:attribute name="subject"  type="xs:string"/>
+      <xs:attribute name="keywords" type="xs:string"/>
+      <xs:attribute name="creator"  type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="page">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attribute name="size"        type="PageSize"/>
+      <xs:attribute name="orientation" type="Orientation"/>
+      <xs:attribute name="margin"      type="SpacingValue"/>
+      <xs:attribute name="background"  type="Color"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="document">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="meta" minOccurs="0"/>
+        <xs:element name="pages">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element ref="page" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+      <xs:attribute name="size"        type="PageSize"/>
+      <xs:attribute name="orientation" type="Orientation"/>
+      <xs:attribute name="margin"      type="SpacingValue"/>
+      <xs:attribute name="lang"        type="xs:language"/>
+      <xs:attribute name="background"  type="Color"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Root element -->
+  <xs:element name="lpdf">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="tokens"   minOccurs="0"/>
+        <xs:element ref="document"/>
+      </xs:sequence>
+      <xs:attribute name="version"                  type="xs:positiveInteger" use="required"/>
+      <xs:attribute name="xmlns:xsi"                type="xs:anyURI"/>
+      <xs:attribute name="xsi:noNamespaceSchemaLocation" type="xs:anyURI"/>
+    </xs:complexType>
+  </xs:element>
+
+
+  <!-- ============================================================
+       Layout elements
+  ============================================================ -->
+
+  <xs:element name="stack">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attributeGroup ref="BoxAttrs"/>
+      <xs:attribute name="align"   type="AlignFull"/>
+      <xs:attribute name="justify" type="Justify"/>
+      <xs:attribute name="width"   type="TokenScaleOrPt"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="flank">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attributeGroup ref="BoxAttrs"/>
+      <xs:attribute name="align" type="Align"/>
+      <xs:attribute name="end"   type="xs:boolean"/>
+      <xs:attribute name="width" type="TokenScaleOrPt"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="split">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attributeGroup ref="BoxAttrs"/>
+      <xs:attribute name="align" type="Align"/>
+      <xs:attribute name="equal" type="xs:boolean"/>
+      <xs:attribute name="width" type="TokenScaleOrPt"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="cluster">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attributeGroup ref="BoxAttrs"/>
+      <xs:attribute name="align"   type="AlignFull"/>
+      <xs:attribute name="justify" type="Justify"/>
+      <xs:attribute name="wrap"    type="xs:boolean"/>
+      <xs:attribute name="width"   type="TokenScaleOrPt"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="grid">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attributeGroup ref="BoxAttrs"/>
+      <xs:attribute name="width" type="TokenScaleOrPt"/>
+      <xs:attribute name="col-width" type="TokenScaleOrPt"/>
+      <xs:attribute name="cols">
+        <xs:simpleType>
+          <xs:restriction base="xs:positiveInteger">
+            <xs:minInclusive value="1"/>
+            <xs:maxInclusive value="12"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="frame">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attributeGroup ref="BoxAttrs"/>
+      <xs:attribute name="width" type="TokenScaleOrPt"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="link">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attribute name="href" type="xs:anyURI" use="required"/>
+      <xs:attribute name="gap"  type="SpacingOrToken"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="divider">
+    <xs:complexType>
+      <xs:attribute name="direction">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="horizontal"/>
+            <xs:enumeration value="vertical"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+      <xs:attribute name="color"     type="Color"/>
+      <xs:attribute name="thickness" type="TokenScaleOrPt"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="span">
+    <xs:complexType mixed="true">
+      <xs:attribute name="font"      type="xs:string"/>
+      <xs:attribute name="color"     type="Color"/>
+      <xs:attribute name="href"      type="xs:anyURI"/>
+      <xs:attribute name="underline" type="xs:boolean"/>
+      <xs:attribute name="strike"    type="xs:boolean"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="text">
+    <xs:complexType mixed="true">
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element ref="span"/>
+      </xs:choice>
+      <xs:attribute name="size"  type="TokenScaleOrPt"/>
+      <xs:attribute name="font"  type="xs:string"/>
+      <xs:attribute name="color" type="Color"/>
+      <xs:attribute name="align" type="TextAlignH"/>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

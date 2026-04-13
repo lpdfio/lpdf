@@ -1,0 +1,34 @@
+{
+  "name": "lpdf",
+  "version": "0.1.0",
+  "description": "lpdf adapter — XML → PDF via pdf-lib (Node.js + browser)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "types":   "./dist/index.d.ts"
+    },
+    "./browser": {
+      "import": "./dist/browser.js",
+      "types":  "./dist/browser.d.ts"
+    }
+  },
+  "scripts": {
+    "build":         "tsc && node build-browser.mjs",
+    "build:node":    "tsc",
+    "build:browser": "node build-browser.mjs",
+    "test":          "node --test test/render.test.mjs"
+  },
+  "files": [
+    "dist/"
+  ],
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "esbuild":     "^0.25.0",
+    "typescript":  "^5.0.0"
+  }
+}
