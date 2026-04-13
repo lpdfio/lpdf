@@ -1,4 +1,4 @@
-use crate::parse::{Align, Direction, HeightMode, Justify, Node, NodeKind, Page, TextAlign};
+use crate::parse::{Align, Direction, HeightMode, Justify, Node, NodeKind, Page, Repeat, TextAlign, TextRun};
 use crate::render::{RenderBox, RenderLine, RenderLink, RenderNode, RenderPage, RenderText};
 
 // ── Public entry point ────────────────────────────────────────────────────────
@@ -17,6 +17,7 @@ pub fn layout_page(page: &Page) -> Vec<RenderPage> {
             page.children[0].height_mode,
             HeightMode::Full | HeightMode::Fill
         )
+        && page.children[0].repeat == Repeat::None
     {
         let (nodes, _) = layout_stack(
             &page.children, avail_x, avail_y, avail_w, Some(avail_h),
@@ -31,43 +32,203 @@ pub fn layout_page(page: &Page) -> Vec<RenderPage> {
         }];
     }
 
-    // Build per-page chunks at the source-node level so that each chunk is
-    // independently laid out from y = avail_y — no post-layout y adjustment.
-    let chunks = split_into_pages(&page.children, avail_w, avail_h, 0.0);
+    // ── Partition direct children into chrome (top/bottom) and flow ──────────
+    let mut lead = 0usize;
+    while lead < page.children.len() && page.children[lead].repeat != Repeat::None {
+        lead += 1;
+    }
+    let mut trail_start = page.children.len();
+    while trail_start > lead && page.children[trail_start - 1].repeat != Repeat::None {
+        trail_start -= 1;
+    }
+    let top_chrome: &[Node] = &page.children[..lead];
+    let flow: Vec<Node> = page.children[lead..trail_start]
+        .iter()
+        // Defensive: a repeat child stuck in the middle is treated as flow
+        // (acts like an atomic node that appears once, not chrome).
+        .cloned()
+        .collect();
+    let bot_chrome: &[Node] = &page.children[trail_start..];
 
-    chunks
-        .into_iter()
-        .map(|chunk| {
-            let (nodes, _) = layout_stack(
-                &chunk, avail_x, avail_y, avail_w, Some(avail_h),
-                0.0, &Align::Stretch, &Justify::Start,
-            );
-            RenderPage {
-                width: page.width,
-                height: page.height,
-                background: page.background.clone(),
-                margin: page.margin,
-                nodes,
-            }
-        })
-        .collect()
+    // Fast path: no chrome — standard pagination.
+    if top_chrome.is_empty() && bot_chrome.is_empty() {
+        let chunks = split_into_pages(&flow, avail_w, avail_h, avail_h, 0.0);
+        return chunks
+            .into_iter()
+            .map(|chunk| {
+                let (nodes, _) = layout_stack(
+                    &chunk, avail_x, avail_y, avail_w, Some(avail_h),
+                    0.0, &Align::Stretch, &Justify::Start,
+                );
+                RenderPage {
+                    width: page.width,
+                    height: page.height,
+                    background: page.background.clone(),
+                    margin: page.margin,
+                    nodes,
+                }
+            })
+            .collect();
+    }
+
+    // ── Measure chrome heights ────────────────────────────────────────────────
+    // "always" = sum of page-repeat only (used on every page)
+    // "first"  = sum of every chrome (used on page 1 if repeat="first" is present)
+    let top_always_h = measure_chrome_height(top_chrome, avail_w, false);
+    let top_first_h  = measure_chrome_height(top_chrome, avail_w, true);
+    let bot_always_h = measure_chrome_height(bot_chrome, avail_w, false);
+    let bot_first_h  = measure_chrome_height(bot_chrome, avail_w, true);
+
+    let budget_first = (avail_h - top_first_h - bot_first_h).max(0.0);
+    let budget_rest  = (avail_h - top_always_h - bot_always_h).max(0.0);
+
+    // ── Paginate flow with per-page budgets ──────────────────────────────────
+    let chunks = split_into_pages(&flow, avail_w, budget_first, budget_rest, 0.0);
+    let total_pages = chunks.len();
+
+    // ── Build each output page ───────────────────────────────────────────────
+    let mut pages_out: Vec<RenderPage> = Vec::with_capacity(total_pages);
+    for (idx, chunk) in chunks.into_iter().enumerate() {
+        let is_first = idx == 0;
+        let page_num = idx + 1;
+
+        let top_here: Vec<Node> = top_chrome.iter()
+            .filter(|n| n.repeat == Repeat::Page || (is_first && n.repeat == Repeat::First))
+            .map(|n| substitute_page_tokens(n, page_num, total_pages))
+            .collect();
+        let bot_here: Vec<Node> = bot_chrome.iter()
+            .filter(|n| n.repeat == Repeat::Page || (is_first && n.repeat == Repeat::First))
+            .map(|n| substitute_page_tokens(n, page_num, total_pages))
+            .collect();
+
+        // Top chrome laid out from y = mt down.
+        let (top_nodes, top_h) = layout_stack(
+            &top_here, avail_x, avail_y, avail_w, None,
+            0.0, &Align::Stretch, &Justify::Start,
+        );
+
+        // Bottom chrome anchored to the bottom.
+        let bot_h = measure_stack_height(&bot_here, avail_w);
+        let bot_y = avail_y + avail_h - bot_h;
+        let (bot_nodes, _) = layout_stack(
+            &bot_here, avail_x, bot_y, avail_w, None,
+            0.0, &Align::Stretch, &Justify::Start,
+        );
+
+        // Flow between chromes.
+        let flow_y = avail_y + top_h;
+        let flow_budget = if is_first { budget_first } else { budget_rest };
+        let (flow_nodes, _) = layout_stack(
+            &chunk, avail_x, flow_y, avail_w, Some(flow_budget),
+            0.0, &Align::Stretch, &Justify::Start,
+        );
+
+        let mut all_nodes = top_nodes;
+        all_nodes.extend(flow_nodes);
+        all_nodes.extend(bot_nodes);
+
+        pages_out.push(RenderPage {
+            width: page.width,
+            height: page.height,
+            background: page.background.clone(),
+            margin: page.margin,
+            nodes: all_nodes,
+        });
+    }
+
+    // Guarantee at least one page, even if flow is empty but chrome exists.
+    if pages_out.is_empty() {
+        let top_here: Vec<Node> = top_chrome.iter()
+            .map(|n| substitute_page_tokens(n, 1, 1))
+            .collect();
+        let bot_here: Vec<Node> = bot_chrome.iter()
+            .map(|n| substitute_page_tokens(n, 1, 1))
+            .collect();
+        let (top_nodes, _) = layout_stack(&top_here, avail_x, avail_y, avail_w, None, 0.0, &Align::Stretch, &Justify::Start);
+        let bot_h = measure_stack_height(&bot_here, avail_w);
+        let bot_y = avail_y + avail_h - bot_h;
+        let (bot_nodes, _) = layout_stack(&bot_here, avail_x, bot_y, avail_w, None, 0.0, &Align::Stretch, &Justify::Start);
+        let mut all = top_nodes;
+        all.extend(bot_nodes);
+        pages_out.push(RenderPage {
+            width: page.width, height: page.height,
+            background: page.background.clone(), margin: page.margin,
+            nodes: all,
+        });
+    }
+
+    pages_out
+}
+
+/// Total stack height of a list of nodes at a given width (uses the standard
+/// stack layout). Used to reserve top/bottom chrome space.
+fn measure_stack_height(nodes: &[Node], avail_w: f32) -> f32 {
+    if nodes.is_empty() { return 0.0; }
+    let (_, h) = layout_stack(
+        nodes, 0.0, 0.0, avail_w, None,
+        0.0, &Align::Stretch, &Justify::Start,
+    );
+    h
+}
+
+/// Height of chrome nodes on a given page. When `include_first` is false,
+/// repeat="first" nodes are excluded (i.e. what later pages look like).
+fn measure_chrome_height(chrome: &[Node], avail_w: f32, include_first: bool) -> f32 {
+    if chrome.is_empty() { return 0.0; }
+    let selected: Vec<Node> = chrome.iter()
+        .filter(|n| n.repeat == Repeat::Page || (include_first && n.repeat == Repeat::First))
+        .cloned()
+        .collect();
+    measure_stack_height(&selected, avail_w)
+}
+
+// ── Page-number token substitution ────────────────────────────────────────────
+
+/// Produce a copy of `node` with `{page}` / `{pages}` tokens inside any
+/// descendant `<text>` replaced by the given page index / total pages.
+fn substitute_page_tokens(node: &Node, page: usize, total: usize) -> Node {
+    let mut n = node.clone();
+    substitute_in_place(&mut n, page, total);
+    n
+}
+
+fn substitute_in_place(n: &mut Node, page: usize, total: usize) {
+    if n.kind == NodeKind::Text {
+        for run in n.text_runs.iter_mut() {
+            substitute_in_text(&mut run.text, page, total);
+        }
+    }
+    for c in n.children.iter_mut() {
+        substitute_in_place(c, page, total);
+    }
+}
+
+fn substitute_in_text(s: &mut String, page: usize, total: usize) {
+    if !s.contains('{') { return; }
+    *s = s
+        .replace("{page}", &page.to_string())
+        .replace("{pages}", &total.to_string());
 }
 
 // ── Source-level pagination ───────────────────────────────────────────────────
 
 /// Packs `nodes` (stacked vertically with `gap` between adjacent items) into
-/// page-sized chunks, each of which will be independently laid out from
-/// y = top_margin on a fresh page.
+/// page-sized chunks. The first chunk gets `budget_first` of vertical space,
+/// every subsequent chunk gets `budget_rest` (this lets callers reserve
+/// different chrome on page 1 vs. later pages).
 ///
-/// The algorithm is stateful: it tracks how much vertical space has been used
-/// on the current page and tries to *partially* place splittable containers
-/// (Stack, Frame, Grid) to fill the remaining space before starting a new page.
-/// Atomic nodes (Flank, Split, Cluster, Divider, Text, Link, …) are never cut;
-/// if one doesn't fit in the remaining space it moves wholesale to the next page.
+/// Splittable: Stack (Auto), Grid, Cluster, Text.
+/// Atomic: Frame, Flank, Split, Divider, Link, plus anything with Fixed/Full/Fill.
 ///
-/// Recursion through `split_node_at` handles arbitrary nesting depth — e.g. a
-/// stack containing a grid inside another stack.
-fn split_into_pages(nodes: &[Node], avail_w: f32, avail_h: f32, gap: f32) -> Vec<Vec<Node>> {
+/// When a node doesn't fit and can't be split, it moves wholesale to the next
+/// page. If a single atomic node is taller than a full page, it is force-placed.
+fn split_into_pages(
+    nodes: &[Node],
+    avail_w: f32,
+    budget_first: f32,
+    budget_rest: f32,
+    gap: f32,
+) -> Vec<Vec<Node>> {
     if nodes.is_empty() {
         return vec![vec![]];
     }
@@ -76,21 +237,24 @@ fn split_into_pages(nodes: &[Node], avail_w: f32, avail_h: f32, gap: f32) -> Vec
     let mut used_h: f32 = 0.0;
     let mut queue: std::collections::VecDeque<Node> = nodes.iter().cloned().collect();
 
+    let page_budget = |idx: usize| -> f32 {
+        if idx == 0 { budget_first } else { budget_rest }
+    };
+
     while let Some(node) = queue.pop_front() {
+        let cur_idx = pages.len() - 1;
+        let budget = page_budget(cur_idx);
         let gap_before = if pages.last().unwrap().is_empty() { 0.0 } else { gap };
-        let h = measure_height(&node, avail_w, avail_h);
-        let remaining = avail_h - used_h - gap_before;
+        let h = measure_height(&node, avail_w, budget);
+        let remaining = budget - used_h - gap_before;
 
         if h <= remaining + 0.5 {
-            // Fits on the current page.
             pages.last_mut().unwrap().push(node);
             used_h += gap_before + h;
         } else {
-            // Doesn't fit. Try to split the node at the remaining height.
             let target = remaining.max(0.0);
-            match split_node_at(&node, avail_w, target, avail_h) {
+            match split_node_at(&node, avail_w, target, budget) {
                 SplitOutcome::First(first, rest) => {
-                    // `first` fills the rest of the current page; `rest` goes on the next.
                     pages.last_mut().unwrap().push(first);
                     pages.push(vec![]);
                     used_h = 0.0;
@@ -99,14 +263,13 @@ fn split_into_pages(nodes: &[Node], avail_w: f32, avail_h: f32, gap: f32) -> Vec
                     }
                 }
                 SplitOutcome::NothingFits(rest) => {
-                    // Nothing of this node fits in the remaining space.
                     if pages.last().unwrap().is_empty() {
                         // Already on a fresh page and still can't split — force-place
                         // the first piece to prevent an infinite loop.
                         let first = rest.into_iter().next().unwrap_or(node);
-                        let fh = measure_height(&first, avail_w, avail_h);
+                        let fh = measure_height(&first, avail_w, budget);
                         pages.last_mut().unwrap().push(first);
-                        used_h = fh.min(avail_h);
+                        used_h = fh.min(budget);
                     } else {
                         pages.push(vec![]);
                         used_h = 0.0;
@@ -116,11 +279,9 @@ fn split_into_pages(nodes: &[Node], avail_w: f32, avail_h: f32, gap: f32) -> Vec
                     }
                 }
                 SplitOutcome::Atomic => {
-                    // Indivisible node: move to the next page.
                     if pages.last().unwrap().is_empty() {
-                        // Force-place on an empty page even if it overflows.
                         pages.last_mut().unwrap().push(node);
-                        used_h = avail_h; // treat page as full so next item starts a new page
+                        used_h = budget;
                     } else {
                         pages.push(vec![]);
                         used_h = 0.0;
@@ -131,7 +292,6 @@ fn split_into_pages(nodes: &[Node], avail_w: f32, avail_h: f32, gap: f32) -> Vec
         }
     }
 
-    // Drop any trailing empty page that may have been created by the last split.
     while pages.len() > 1 && pages.last().map_or(true, |p| p.is_empty()) {
         pages.pop();
     }
@@ -153,21 +313,26 @@ enum SplitOutcome {
 /// Try to split `node` so that a first part fits within `target_h` and the
 /// remainder continues on subsequent pages.
 ///
-/// Splittable node types:
-/// - **Stack / Frame (Auto)**: split child-by-child.  If the very first child
-///   overflows `target_h` the function recurses into that child.
-/// - **Grid (Auto)**: split row-by-row (whole rows only).
+/// Splittable node types (Auto height only):
+/// - **Stack**: split child-by-child; recurses into first child if that's what overflows.
+/// - **Grid**: split row-by-row (rows are atomic; children inside a row are atomic).
+/// - **Cluster**: split between wrapped rows (items within a row are atomic).
+/// - **Text**: split line-by-line, reconstructing runs on each half.
 ///
-/// Everything else (Flank, Split, Cluster, Divider, Text, Link, Fixed/Full/Fill
-/// height nodes) returns `Atomic`.
+/// Everything else (Frame, Flank, Split, Divider, Link, or any Fixed/Full/Fill
+/// height node) returns `Atomic`. Frame is atomic by design — it represents a
+/// card-like enclosure that should not be cut.
 fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
-    if node.height_mode != HeightMode::Auto || node.children.is_empty() {
+    if node.height_mode != HeightMode::Auto {
+        return SplitOutcome::Atomic;
+    }
+    if node.kind != NodeKind::Text && node.children.is_empty() {
         return SplitOutcome::Atomic;
     }
 
     match node.kind {
-        // ── Stack / Frame ─────────────────────────────────────────────────────
-        NodeKind::Stack | NodeKind::Frame => {
+        // ── Stack ─────────────────────────────────────────────────────────────
+        NodeKind::Stack => {
             let [pt, pr, pb, pl] = node.padding;
             let inner_w = (avail_w - pl - pr).max(0.0);
             let inner_target = (target_h - pt - pb).max(0.0);
@@ -175,7 +340,6 @@ fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> 
             let gap = node.gap;
             let n = node.children.len();
 
-            // Greedy-fill: find how many children fit within inner_target.
             let mut split_idx = 0usize;
             let mut chunk_h = 0.0_f32;
 
@@ -190,12 +354,11 @@ fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> 
             }
 
             if split_idx == n {
-                return SplitOutcome::Atomic; // all children fit
+                return SplitOutcome::Atomic;
             }
 
             if split_idx == 0 {
-                // The very first child already exceeds inner_target.
-                // Recurse into that child to fill whatever space remains.
+                // First child itself overflows — try to recurse into it.
                 match split_node_at(&node.children[0], inner_w, inner_target, inner_full) {
                     SplitOutcome::First(child_first, child_rest) => {
                         let first_node = Node {
@@ -208,12 +371,10 @@ fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> 
                         SplitOutcome::First(first_node, vec![rest_node])
                     }
                     SplitOutcome::NothingFits(_) | SplitOutcome::Atomic => {
-                        // Can't fit anything on the current page.
                         SplitOutcome::NothingFits(vec![node.clone()])
                     }
                 }
             } else {
-                // Some children fit, the rest go to the next page.
                 let first = Node {
                     children: node.children[..split_idx].to_vec(),
                     ..node.clone()
@@ -262,7 +423,7 @@ fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> 
             }
 
             if split_row == n_rows {
-                return SplitOutcome::Atomic; // all rows fit
+                return SplitOutcome::Atomic;
             }
             if split_row == 0 {
                 return SplitOutcome::NothingFits(vec![node.clone()]);
@@ -280,9 +441,246 @@ fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> 
             SplitOutcome::First(first, vec![rest])
         }
 
-        // All other kinds (Flank, Split, Cluster, Divider, Text, Link) are atomic.
+        // ── Cluster ───────────────────────────────────────────────────────────
+        // Bucket items into wrapped rows first; the cluster splits between
+        // rows. Items inside a row are treated as atomic (the user's rule:
+        // cluster children never split).
+        NodeKind::Cluster => {
+            let [pt, pr, pb, pl] = node.padding;
+            let inner_w = (avail_w - pl - pr).max(0.0);
+            let inner_target = (target_h - pt - pb).max(0.0);
+            let gap = node.gap;
+
+            // Bucket by width, same logic as layout_cluster's pass 1.
+            let mut rows: Vec<(usize, usize, f32)> = Vec::new(); // (start, end_exclusive, row_h)
+            let mut row_start = 0usize;
+            let mut cur_x = 0.0_f32;
+            let mut row_h = 0.0_f32;
+            for (i, child) in node.children.iter().enumerate() {
+                let cw = child.width_constraint
+                    .unwrap_or_else(|| measure_natural_w(child))
+                    .min(inner_w);
+                let ch = measure_height(child, cw, inner_target);
+                let adv = if i == row_start { cw } else { gap + cw };
+                if node.wrap && i > row_start && cur_x + adv > inner_w + 0.01 {
+                    rows.push((row_start, i, row_h));
+                    row_start = i;
+                    cur_x = cw;
+                    row_h = ch;
+                } else {
+                    cur_x += adv;
+                    row_h = row_h.max(ch);
+                }
+            }
+            if row_start < node.children.len() {
+                rows.push((row_start, node.children.len(), row_h));
+            }
+
+            let n_rows = rows.len();
+            let mut split_row = 0usize;
+            let mut chunk_h = 0.0_f32;
+            for (r, (_, _, rh)) in rows.iter().enumerate() {
+                let g = if r == 0 { 0.0 } else { gap };
+                if chunk_h + g + rh > inner_target + 0.5 {
+                    break;
+                }
+                chunk_h += g + rh;
+                split_row = r + 1;
+            }
+
+            if split_row == n_rows {
+                return SplitOutcome::Atomic;
+            }
+            if split_row == 0 {
+                return SplitOutcome::NothingFits(vec![node.clone()]);
+            }
+
+            let item_split = rows[split_row].0;
+            let first = Node {
+                children: node.children[..item_split].to_vec(),
+                ..node.clone()
+            };
+            let rest = Node {
+                children: node.children[item_split..].to_vec(),
+                ..node.clone()
+            };
+            SplitOutcome::First(first, vec![rest])
+        }
+
+        // ── Text ──────────────────────────────────────────────────────────────
+        NodeKind::Text => {
+            let line_h = node.font_size * 1.2;
+            let lines = wrap_text_split(node, avail_w);
+            let n_lines = lines.len();
+            if n_lines <= 1 {
+                return SplitOutcome::Atomic;
+            }
+            if line_h <= 0.0 {
+                return SplitOutcome::Atomic;
+            }
+            let max_lines = ((target_h / line_h).floor().max(0.0)) as usize;
+            if max_lines >= n_lines {
+                return SplitOutcome::Atomic;
+            }
+            if max_lines == 0 {
+                return SplitOutcome::NothingFits(vec![node.clone()]);
+            }
+            let first_atoms: Vec<SplitAtom> =
+                lines[..max_lines].iter().flatten().cloned().collect();
+            let rest_atoms: Vec<SplitAtom> =
+                lines[max_lines..].iter().flatten().cloned().collect();
+            let first = Node {
+                text_runs: atoms_to_runs(&first_atoms),
+                ..node.clone()
+            };
+            let rest = Node {
+                text_runs: atoms_to_runs(&rest_atoms),
+                ..node.clone()
+            };
+            SplitOutcome::First(first, vec![rest])
+        }
+
+        // Frame, Flank, Split, Divider, Link — atomic by design.
         _ => SplitOutcome::Atomic,
     }
+}
+
+// ── Text splitting helpers ────────────────────────────────────────────────────
+
+#[derive(Clone)]
+struct SplitAtom {
+    text:           String,
+    font_override:  Option<String>,
+    color_override: Option<String>,
+    href:           Option<String>,
+    underline:      bool,
+    strike:         bool,
+    /// Whether this atom needs a leading space when concatenated after the
+    /// previous atom in the output. For the first atom in a line, ignore.
+    leading_space:  bool,
+    /// True if this atom came from a `<span>`; spans stay as single atoms
+    /// (not word-sliced) to keep formatting intact.
+    is_span:        bool,
+}
+
+/// Tokenize text_runs + wrap into lines. Mirrors the shape of `layout_text`'s
+/// wrap step but preserves the overrides needed to rebuild `TextRun`s.
+fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
+    let font_size   = node.font_size;
+    let parent_font = node.font.as_str();
+    let space_w     = text_width(parent_font, " ", font_size);
+
+    let mut atoms: Vec<SplitAtom> = Vec::new();
+    let mut pending_leading = false;
+    for (ri, run) in node.text_runs.iter().enumerate() {
+        let is_span = run.font.is_some() || run.color.is_some()
+                   || run.href.is_some() || run.underline || run.strike;
+
+        let run_leading = ri > 0 && run.leading_space;
+
+        if is_span {
+            if !run.text.is_empty() {
+                atoms.push(SplitAtom {
+                    text: run.text.clone(),
+                    font_override: run.font.clone(),
+                    color_override: run.color.clone(),
+                    href: run.href.clone(),
+                    underline: run.underline,
+                    strike: run.strike,
+                    leading_space: pending_leading || run_leading,
+                    is_span: true,
+                });
+                pending_leading = false;
+            }
+        } else {
+            for (j, word) in run.text.split_whitespace().enumerate() {
+                atoms.push(SplitAtom {
+                    text: word.to_string(),
+                    font_override: None,
+                    color_override: None,
+                    href: None,
+                    underline: false,
+                    strike: false,
+                    leading_space: if j == 0 { pending_leading || run_leading } else { true },
+                    is_span: false,
+                });
+                pending_leading = false;
+            }
+        }
+    }
+
+    if atoms.is_empty() { return vec![]; }
+
+    // Greedy wrap.
+    let mut lines: Vec<Vec<SplitAtom>> = Vec::new();
+    let mut cur_line: Vec<SplitAtom> = Vec::new();
+    let mut cur_w: f32 = 0.0;
+
+    for atom in atoms {
+        let font_for_atom = atom.font_override.as_deref().unwrap_or(parent_font);
+        let aw = text_width(font_for_atom, &atom.text, font_size);
+        let gap = if cur_line.is_empty() || !atom.leading_space { 0.0 } else { space_w };
+        if cur_line.is_empty() || cur_w + gap + aw <= avail_w + 0.01 {
+            cur_w += gap + aw;
+            cur_line.push(atom);
+        } else {
+            lines.push(std::mem::take(&mut cur_line));
+            cur_w = aw;
+            // First atom of a fresh line has no leading space visually.
+            let mut first = atom;
+            first.leading_space = false;
+            cur_line.push(first);
+        }
+    }
+    if !cur_line.is_empty() { lines.push(cur_line); }
+    lines
+}
+
+/// Rebuild `TextRun`s from a flat list of atoms. Consecutive plain atoms with
+/// the same (empty) override set are coalesced into one run; span atoms become
+/// one run each (they carry arbitrary overrides that can't be coalesced safely).
+fn atoms_to_runs(atoms: &[SplitAtom]) -> Vec<TextRun> {
+    let mut runs: Vec<TextRun> = Vec::new();
+    let mut first_emitted = false;
+
+    for atom in atoms {
+        let leading = if !first_emitted { false } else { atom.leading_space };
+
+        if atom.is_span {
+            runs.push(TextRun {
+                text: atom.text.clone(),
+                leading_space: leading,
+                font: atom.font_override.clone(),
+                color: atom.color_override.clone(),
+                href: atom.href.clone(),
+                underline: atom.underline,
+                strike: atom.strike,
+            });
+        } else {
+            // Try to append to the last plain run.
+            let can_append = runs.last().map_or(false, |r| {
+                r.font.is_none() && r.color.is_none() && r.href.is_none()
+                    && !r.underline && !r.strike
+            });
+            if can_append {
+                let r = runs.last_mut().unwrap();
+                if leading { r.text.push(' '); }
+                r.text.push_str(&atom.text);
+            } else {
+                runs.push(TextRun {
+                    text: atom.text.clone(),
+                    leading_space: leading,
+                    font: None,
+                    color: None,
+                    href: None,
+                    underline: false,
+                    strike: false,
+                });
+            }
+        }
+        first_emitted = true;
+    }
+    runs
 }
 
 /// Return the height that `node` would occupy when laid out at `avail_w`
@@ -1595,5 +1993,132 @@ mod tests {
         assert!(!pages[0]["nodes"].as_array().unwrap().is_empty());
         // Page 2 must also have nodes (the overflowing rows).
         assert!(!pages[1]["nodes"].as_array().unwrap().is_empty());
+    }
+
+    // ── New behaviors (atomic_ctx, repeat, page numbering) ────────────────────
+
+    #[test]
+    fn frame_is_atomic_when_oversized() {
+        // A frame taller than one page must not be split. It's force-placed on
+        // its own page (may overflow visually but doesn't corrupt pagination).
+        let body = r##"<frame height="900pt" background="#eeeeee" />"##;
+        let tree = engine_render(&minimal(body));
+        let pages = tree["pages"].as_array().unwrap();
+        // Single oversized atomic → single page, not multiple.
+        assert_eq!(pages.len(), 1);
+    }
+
+    #[test]
+    fn frame_moves_to_next_page_instead_of_splitting() {
+        // First frame fills most of the page; second frame doesn't fit in the
+        // remaining space and is moved wholesale — not cut in half.
+        let body = r##"<frame height="500pt" background="#ddd" /><frame height="400pt" background="#bbb" />"##;
+        let tree = engine_render(&minimal(body));
+        let pages = tree["pages"].as_array().unwrap();
+        assert_eq!(pages.len(), 2);
+        // Each page has exactly one frame; neither is cut.
+        let p0_nodes = pages[0]["nodes"].as_array().unwrap();
+        let p1_nodes = pages[1]["nodes"].as_array().unwrap();
+        assert_eq!(p0_nodes.len(), 1);
+        assert_eq!(p1_nodes.len(), 1);
+        assert_eq!(p0_nodes[0]["height"], 500.0);
+        assert_eq!(p1_nodes[0]["height"], 400.0);
+    }
+
+    #[test]
+    fn long_text_splits_across_pages() {
+        // Generate a text block tall enough to need at least 2 pages.
+        let word = "lorem ipsum dolor sit amet ";
+        let paragraph = word.repeat(400); // plenty of wrapped lines
+        let body = format!(r#"<text size="m">{paragraph}</text>"#);
+        let tree = engine_render(&minimal(&body));
+        let pages = tree["pages"].as_array().unwrap();
+        assert!(pages.len() >= 2, "expected text to split, got {} pages", pages.len());
+        // Each page has the text at the top.
+        for p in pages {
+            assert!(!p["nodes"].as_array().unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn cluster_splits_between_wrapped_rows() {
+        // Many fixed-height frames in a cluster produce many wrapped rows; the
+        // cluster breaks between rows rather than treating itself as atomic.
+        let item = r##"<frame width="180pt" height="100pt" background="#ddd" />"##;
+        let body = format!(r#"<cluster gap="m" wrap="true">{}</cluster>"#, item.repeat(40));
+        let tree = engine_render(&minimal(&body));
+        let pages = tree["pages"].as_array().unwrap();
+        assert!(pages.len() >= 2, "cluster should split, got {} pages", pages.len());
+    }
+
+    #[test]
+    fn repeat_page_renders_on_every_page() {
+        // A footer marked repeat="page" must appear on every generated page.
+        let filler = r#"<frame height="120pt" />"#;
+        let body = format!(
+            r#"{}<text repeat="page" size="s">FOOTER</text>"#,
+            filler.repeat(10)
+        );
+        let tree = engine_render(&minimal(&body));
+        let pages = tree["pages"].as_array().unwrap();
+        assert!(pages.len() >= 2);
+        // Every page must contain a text node whose content starts with "FOOTER".
+        for (i, p) in pages.iter().enumerate() {
+            let found = find_text_content(p).iter().any(|t| t.contains("FOOTER"));
+            assert!(found, "page {} missing footer", i + 1);
+        }
+    }
+
+    #[test]
+    fn repeat_first_renders_only_on_first_page() {
+        let filler = r#"<frame height="120pt" />"#;
+        let body = format!(
+            r#"<text repeat="first" size="s">COVER HEADER</text>{}"#,
+            filler.repeat(10)
+        );
+        let tree = engine_render(&minimal(&body));
+        let pages = tree["pages"].as_array().unwrap();
+        assert!(pages.len() >= 2);
+        let p1_has = find_text_content(&pages[0]).iter().any(|t| t.contains("COVER HEADER"));
+        let p2_has = find_text_content(&pages[1]).iter().any(|t| t.contains("COVER HEADER"));
+        assert!(p1_has, "first page must have cover header");
+        assert!(!p2_has, "second page must not have cover header");
+    }
+
+    #[test]
+    fn page_number_tokens_substituted_per_page() {
+        let filler = r#"<frame height="120pt" />"#;
+        let body = format!(
+            r#"{}<text repeat="page" size="s">Page {{page}} of {{pages}}</text>"#,
+            filler.repeat(10)
+        );
+        let tree = engine_render(&minimal(&body));
+        let pages = tree["pages"].as_array().unwrap();
+        let total = pages.len();
+        assert!(total >= 2);
+        for (i, p) in pages.iter().enumerate() {
+            let expected = format!("Page {} of {}", i + 1, total);
+            let texts = find_text_content(p);
+            let found = texts.iter().any(|t| t.contains(&expected));
+            assert!(found, "page {} should render '{}' but saw {:?}", i + 1, expected, texts);
+        }
+    }
+
+    /// Helper: collect every "content" string of text nodes in a page tree.
+    fn find_text_content(page: &serde_json::Value) -> Vec<String> {
+        let mut out = Vec::new();
+        fn walk(v: &serde_json::Value, out: &mut Vec<String>) {
+            if v["type"] == "text" {
+                if let Some(s) = v["content"].as_str() { out.push(s.to_string()); }
+            }
+            if let Some(arr) = v["children"].as_array() {
+                for c in arr { walk(c, out); }
+            }
+            if let Some(arr) = v["nodes"].as_array() {
+                for c in arr { walk(c, out); }
+            }
+        }
+        walk(page, &mut out);
+        out
     }
 }

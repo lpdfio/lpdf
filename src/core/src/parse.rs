@@ -50,6 +50,7 @@ pub struct Node {
     pub radius: f32,
     pub height_mode: HeightMode,
     pub width_constraint: Option<f32>,
+    pub repeat: Repeat,
     // layout-specific
     pub align: Align,
     pub justify: Justify,
@@ -71,6 +72,18 @@ pub struct Node {
     // link
     pub url: Option<String>,
     pub children: Vec<Node>,
+}
+
+/// How a node relates to page pagination.
+/// Only meaningful on direct children of `<page>`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Repeat {
+    /// Ordinary flow node — paginated normally.
+    None,
+    /// Page chrome — rendered on every generated page at the same position.
+    Page,
+    /// First-page chrome — rendered only on page 1; its space is reclaimed on later pages.
+    First,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -139,6 +152,7 @@ impl Node {
             radius: 0.0,
             height_mode: HeightMode::Auto,
             width_constraint: None,
+            repeat: Repeat::None,
             align: Align::Start,
             justify: Justify::Start,
             end: false,
@@ -427,6 +441,15 @@ fn parse_node(elem: &roxmltree::Node, tokens: &Tokens) -> Result<Node, String> {
     }
     if let Some(v) = elem.attribute("width") {
         node.width_constraint = Some(tokens.resolve_width(v)?);
+    }
+    if let Some(v) = elem.attribute("repeat") {
+        node.repeat = match v {
+            "page"  => Repeat::Page,
+            "first" => Repeat::First,
+            other   => return Err(format!(
+                "invalid repeat value: '{other}' (expected 'page' or 'first')"
+            )),
+        };
     }
 
     // ── Kind-specific attrs ───────────────────────────────────────────────────

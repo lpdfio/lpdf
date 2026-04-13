@@ -136,6 +136,17 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <!-- Page chrome: valid on direct children of <page>. "page" = rendered on
+       every output page; "first" = rendered on page 1 only. Must be placed at
+       the top or bottom of the page child list; any non-repeat siblings
+       between them form the paginated flow. -->
+  <xs:simpleType name="Repeat">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="page"/>
+      <xs:enumeration value="first"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="BuiltinFont">
     <xs:restriction base="xs:string">
       <xs:enumeration value="Courier"/>
@@ -183,6 +194,7 @@
     <xs:attribute name="background" type="Color"/>
     <xs:attribute name="border"     type="BorderValue"/>
     <xs:attribute name="radius"     type="TokenScaleOrPt"/>
+    <xs:attribute name="repeat"     type="Repeat"/>
   </xs:attributeGroup>
 
 
@@ -401,8 +413,9 @@
       <xs:sequence>
         <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
       </xs:sequence>
-      <xs:attribute name="href" type="xs:anyURI" use="required"/>
-      <xs:attribute name="gap"  type="SpacingOrToken"/>
+      <xs:attribute name="href"   type="xs:anyURI" use="required"/>
+      <xs:attribute name="gap"    type="SpacingOrToken"/>
+      <xs:attribute name="repeat" type="Repeat"/>
     </xs:complexType>
   </xs:element>
 
@@ -418,6 +431,7 @@
       </xs:attribute>
       <xs:attribute name="color"     type="Color"/>
       <xs:attribute name="thickness" type="TokenScaleOrPt"/>
+      <xs:attribute name="repeat"    type="Repeat"/>
     </xs:complexType>
   </xs:element>
 
@@ -436,10 +450,11 @@
       <xs:choice minOccurs="0" maxOccurs="unbounded">
         <xs:element ref="span"/>
       </xs:choice>
-      <xs:attribute name="size"  type="TokenScaleOrPt"/>
-      <xs:attribute name="font"  type="xs:string"/>
-      <xs:attribute name="color" type="Color"/>
-      <xs:attribute name="align" type="TextAlignH"/>
+      <xs:attribute name="size"   type="TokenScaleOrPt"/>
+      <xs:attribute name="font"   type="xs:string"/>
+      <xs:attribute name="color"  type="Color"/>
+      <xs:attribute name="align"  type="TextAlignH"/>
+      <xs:attribute name="repeat" type="Repeat"/>
     </xs:complexType>
   </xs:element>
 
