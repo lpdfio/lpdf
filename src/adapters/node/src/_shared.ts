@@ -85,8 +85,6 @@ export interface LinkNode {
 // ── Public render options ─────────────────────────────────────────────────────
 
 export interface RenderOptions {
-  /** License key. Omit or pass empty string for free tier (watermark applied). */
-  licenseKey?: string;
   /**
    * Pre-loaded font bytes for custom fonts referenced via <fonts src="…">.
    * Keys are the font names used in the document; values are raw TTF/OTF bytes.

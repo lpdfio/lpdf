@@ -12,20 +12,36 @@ const { LpdfEngine } = require('../../../../dist/node/lpdf.js') as { LpdfEngine:
 export type { RenderOptions } from './_shared';
 
 /**
- * Render an lpdf XML document to PDF bytes (Node.js).
- * Custom fonts not supplied via `fontBytes` are loaded from disk using the
- * `src` path in the document's `<fonts>` declaration.
+ * Stateful renderer. Construct once with the license key and optional shared
+ * config; call `renderPdf` as many times as needed without repeating the key.
  */
-export async function renderPdf(
-  xml: string,
-  options: RenderOptions = {},
-): Promise<Uint8Array> {
-  const engine = new LpdfEngine(options.licenseKey ?? '');
-  const raw = engine.render(xml);
-  engine.free();
+export class Lpdf {
+  private readonly _licenseKey: string;
+  private readonly _opts: RenderOptions;
 
-  const tree = JSON.parse(raw) as RenderTree;
-  if (tree.error) throw new Error(tree.error);
+  constructor(licenseKey: string, options: RenderOptions = {}) {
+    this._licenseKey = licenseKey;
+    this._opts = options;
+  }
 
-  return buildPdf(tree, options.fontBytes ?? {}, (path) => readFileSync(path));
+  /**
+   * Render an lpdf XML document to PDF bytes (Node.js).
+   * Per-call `fontBytes` are merged with the instance-level ones; per-call
+   * keys win on collision.  Custom fonts not supplied via `fontBytes` are
+   * loaded from disk using the `src` path in the document's `<fonts>`
+   * declaration.
+   */
+  async renderPdf(xml: string, callOptions: RenderOptions = {}): Promise<Uint8Array> {
+    const fontBytes = { ...this._opts.fontBytes, ...callOptions.fontBytes };
+    const engine = new LpdfEngine(this._licenseKey);
+    const raw = engine.render(xml);
+    engine.free();
+
+    const tree = JSON.parse(raw) as RenderTree;
+    if (tree.error) throw new Error(tree.error);
+
+    return buildPdf(tree, fontBytes, (path) => readFileSync(path));
+  }
 }
+
+

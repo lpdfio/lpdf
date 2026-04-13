@@ -485,7 +485,7 @@
 
     setStatus('loading', 'rendering…', true);
     try {
-      const bytes = await lpdf.renderPdf(xml, { licenseKey: '' });
+      const bytes = await lpdf.renderPdf(xml);
       const byteSize = bytes.length;
       currentPdfBytes = bytes.slice();
       currentPdfDoc  = await pdfjsLib.getDocument({ data: bytes }).promise;

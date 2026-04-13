@@ -20026,16 +20026,17 @@ function parseHex(hex) {
 }
 
 // src/browser.ts
-async function initLpdf(wasmSource) {
+async function initLpdf(wasmSource, licenseKey = "", initOptions = {}) {
   await __wbg_init(wasmSource);
   return {
-    async renderPdf(xml, options = {}) {
-      const engine = new LpdfEngine(options.licenseKey ?? "");
+    async renderPdf(xml, callOptions = {}) {
+      const fontBytes = { ...initOptions.fontBytes, ...callOptions.fontBytes };
+      const engine = new LpdfEngine(licenseKey);
       const raw = engine.render(xml);
       engine.free();
       const tree = JSON.parse(raw);
       if (tree.error) throw new Error(tree.error);
-      return buildPdf(tree, options.fontBytes ?? {});
+      return buildPdf(tree, fontBytes);
     }
   };
 }
