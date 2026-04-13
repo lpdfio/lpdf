@@ -1,0 +1,83 @@
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="brand"       value="#e63946" />
+      <color name="brand-dark"  value="#9b1c26" />
+      <color name="surface"     value="#ffffff" />
+      <color name="surface-alt" value="#f8f8f8" />
+      <color name="text"        value="#1a1a1a" />
+      <color name="text-muted"  value="#6b6b6b" />
+      <color name="rule"        value="#e0e0e0" />
+      <color name="stub-bg"     value="#1a1a1a" />
+    </colors>
+  </tokens>
+  <!-- Event ticket: 5.5in × 2in = 396pt × 144pt -->
+  <document size="396pt 144pt" margin="0pt">
+    <meta title="NorthStar Conf 2026 — Ticket" />
+    <pages>
+      <page background="surface">
+
+        <split gap="0pt" align="stretch" height="full">
+
+          <!-- main ticket body -->
+          <stack padding="m" gap="s" height="full" justify="between">
+
+            <!-- top row: event name + badge -->
+            <flank gap="m" align="start" end="true">
+              <stack gap="xs">
+                <text size="xs" font="Helvetica-Bold" color="brand">NORTHSTAR CONFERENCE 2026</text>
+                <text size="xl" font="Helvetica-Bold" color="text">Full Access Pass</text>
+              </stack>
+              <frame background="brand" padding="xs" radius="xs">
+                <text size="xs" font="Helvetica-Bold" color="surface">GENERAL</text>
+              </frame>
+            </flank>
+
+            <divider color="rule" thickness="xs" />
+
+            <!-- details row -->
+            <cluster gap="l" align="center">
+              <stack gap="xs">
+                <text size="xs" color="text-muted">DATE</text>
+                <text size="s" font="Helvetica-Bold">June 14–16, 2026</text>
+              </stack>
+              <divider direction="vertical" color="rule" thickness="xs" />
+              <stack gap="xs">
+                <text size="xs" color="text-muted">VENUE</text>
+                <text size="s" font="Helvetica-Bold">Moscone Center, SF</text>
+              </stack>
+              <divider direction="vertical" color="rule" thickness="xs" />
+              <stack gap="xs">
+                <text size="xs" color="text-muted">DOOR</text>
+                <text size="s" font="Helvetica-Bold">08:00 AM</text>
+              </stack>
+            </cluster>
+
+            <!-- attendee -->
+            <flank gap="m" align="end" end="true">
+              <stack gap="xs">
+                <text size="xs" color="text-muted">ATTENDEE</text>
+                <text size="m" font="Helvetica-Bold">Jane Doe</text>
+              </stack>
+              <text size="xs" color="text-muted"># GA-00842</text>
+            </flank>
+
+          </stack>
+
+          <!-- tear-off stub -->
+          <frame width="90pt" background="stub-bg" padding="s" height="full">
+            <stack gap="s" align="center" justify="center" height="full">
+              <text size="xs" font="Helvetica-Bold" color="brand">NS26</text>
+              <frame width="56pt" height="56pt" background="surface" radius="xs" />
+              <text size="xs" color="surface">GA-00842</text>
+            </stack>
+          </frame>
+
+        </split>
+
+      </page>
+    </pages>
+  </document>
+</lpdf>

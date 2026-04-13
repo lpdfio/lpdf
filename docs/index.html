@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lpdf — Layout PDF</title>
+  <meta name="description" content="A declarative XML layout language for PDFs. Give lpdf an XML file, get a PDF back — no coordinate math, no boilerplate." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:      #0f2044;
+      --navy-mid:  #1a3460;
+      --blue:      #1763cf;
+      --blue-dark: #124fa8;
+      --blue-pale: #dce8f9;
+      --orange:    #f2800d;
+      --green:     #248f4b;
+      --red:       #d92626;
+      --surface:   #ffffff;
+      --bg:        #f7f8fc;
+      --border:    #e2e6f0;
+      --text:      #1a1a1a;
+      --muted:     #64748b;
+      --code-bg:   #0d1b35;
+      --code-text: #c9d9f0;
+      --radius-s:  6px;
+      --radius-m:  10px;
+      --radius-l:  16px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: var(--text);
+      background: var(--surface);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Nav ────────────────────────────────────────────────── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav-logo img { height: 28px; width: auto; }
+    .nav-links { display: flex; align-items: center; gap: 28px; list-style: none; }
+    .nav-links a {
+      text-decoration: none;
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 500;
+      transition: color .15s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta {
+      background: var(--blue);
+      color: #fff !important;
+      padding: 7px 16px;
+      border-radius: var(--radius-s);
+      transition: background .15s !important;
+    }
+    .nav-cta:hover { background: var(--blue-dark) !important; color: #fff !important; }
+
+    /* ── Hero ───────────────────────────────────────────────── */
+    .hero {
+      background: linear-gradient(160deg, var(--navy) 0%, var(--navy-mid) 55%, #1a4a8a 100%);
+      color: #fff;
+      padding: 96px 24px 80px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 110%, rgba(23,99,207,.35) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-inner { max-width: 760px; margin: 0 auto; position: relative; }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,.1);
+      border: 1px solid rgba(255,255,255,.2);
+      color: #a8c4f0;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      padding: 5px 12px;
+      border-radius: 20px;
+      margin-bottom: 28px;
+    }
+    .hero h1 {
+      font-size: clamp(2.2rem, 5vw, 3.4rem);
+      font-weight: 800;
+      line-height: 1.12;
+      letter-spacing: -.02em;
+      margin-bottom: 20px;
+    }
+    .hero h1 span { color: #5fa3ff; }
+    .hero p {
+      font-size: clamp(1rem, 2vw, 1.2rem);
+      color: #9ab7e0;
+      max-width: 580px;
+      margin: 0 auto 36px;
+      line-height: 1.65;
+    }
+    .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 15px;
+      font-weight: 600;
+      padding: 11px 22px;
+      border-radius: var(--radius-m);
+      text-decoration: none;
+      transition: all .15s;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-primary:hover { background: var(--blue-dark); transform: translateY(-1px); }
+    .btn-outline {
+      background: rgba(255,255,255,.08);
+      color: #c8dcf8;
+      border: 1px solid rgba(255,255,255,.18);
+    }
+    .btn-outline:hover { background: rgba(255,255,255,.14); color: #fff; }
+
+    /* ── Code comparison ────────────────────────────────────── */
+    .compare {
+      background: var(--bg);
+      padding: 80px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-label {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--blue);
+      margin-bottom: 10px;
+    }
+    .section-title {
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      font-weight: 800;
+      letter-spacing: -.02em;
+      margin-bottom: 12px;
+    }
+    .section-sub {
+      font-size: 1rem;
+      color: var(--muted);
+      max-width: 560px;
+      line-height: 1.6;
+    }
+    .compare-inner { max-width: 1100px; margin: 0 auto; }
+    .compare-header { margin-bottom: 40px; }
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 700px) { .compare-grid { grid-template-columns: 1fr; } }
+    .code-card {
+      background: var(--code-bg);
+      border-radius: var(--radius-l);
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.06);
+    }
+    .code-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .dots { display: flex; gap: 6px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .dot-r { background: #ff5f57; }
+    .dot-y { background: #ffbd2e; }
+    .dot-g { background: #28c840; }
+    .code-card-title { font-size: 12px; color: #607090; font-weight: 500; flex: 1; text-align: center; }
+    .code-card-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .badge-bad  { background: rgba(217,38,38,.2);  color: #f87171; }
+    .badge-good { background: rgba(36,143,75,.2);  color: #4ade80; }
+    pre {
+      padding: 20px 18px;
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, monospace;
+      font-size: 12.5px;
+      line-height: 1.7;
+      color: var(--code-text);
+      overflow-x: auto;
+      white-space: pre;
+    }
+    .c-cmt  { color: #4a6a9a; }
+    .c-kw   { color: #79b8ff; }
+    .c-tag  { color: #7ec8e3; }
+    .c-attr { color: #b5d4ff; }
+    .c-val  { color: #9ecbff; }
+    .c-str  { color: #9ecbff; }
+    .c-num  { color: #f0c66a; }
+    .c-fn   { color: #d2a8ff; }
+    .c-bad  { color: #f87171; }
+
+    /* ── Primitives ─────────────────────────────────────────── */
+    .primitives {
+      padding: 80px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .primitives-inner { max-width: 1100px; margin: 0 auto; }
+    .primitives-header { margin-bottom: 48px; }
+    .prim-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .prim-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-m);
+      padding: 22px 22px 20px;
+      background: var(--surface);
+      transition: box-shadow .15s, border-color .15s;
+    }
+    .prim-card:hover {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px var(--blue-pale);
+    }
+    .prim-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-s);
+      background: var(--blue-pale);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 14px;
+    }
+    .prim-icon svg { width: 18px; height: 18px; }
+    .prim-name {
+      font-size: 13px;
+      font-weight: 700;
+      font-family: "SF Mono", "Fira Code", monospace;
+      color: var(--blue);
+      margin-bottom: 6px;
+    }
+    .prim-label {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .prim-desc { font-size: 14px; color: var(--muted); line-height: 1.55; }
+    .prim-example {
+      margin-top: 14px;
+      font-size: 11.5px;
+      color: #8ba4c8;
+      background: var(--code-bg);
+      border-radius: var(--radius-s);
+      padding: 8px 10px;
+      font-family: "SF Mono", "Fira Code", monospace;
+    }
+
+    /* ── How it works ───────────────────────────────────────── */
+    .how {
+      background: var(--bg);
+      padding: 80px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .how-inner { max-width: 1100px; margin: 0 auto; }
+    .how-header { margin-bottom: 52px; }
+    .pipeline {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 52px;
+    }
+    .pipe-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      min-width: 130px;
+    }
+    .pipe-icon {
+      width: 56px; height: 56px;
+      border-radius: var(--radius-m);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+    }
+    .pipe-icon-navy   { background: var(--navy);      }
+    .pipe-icon-blue   { background: var(--blue);      }
+    .pipe-icon-orange { background: var(--orange);    }
+    .pipe-label { font-size: 13px; font-weight: 700; text-align: center; }
+    .pipe-sub   { font-size: 12px; color: var(--muted); text-align: center; }
+    .pipe-arrow {
+      font-size: 20px;
+      color: var(--border);
+      margin: 0 6px;
+      padding-bottom: 28px;
+    }
+    .adapter-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .adapter-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-m);
+      padding: 16px 18px;
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .adapter-lang {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--blue);
+    }
+    .adapter-lib { font-size: 14px; font-weight: 700; }
+    .adapter-status {
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--green);
+    }
+
+    /* ── Use cases ──────────────────────────────────────────── */
+    .usecases { padding: 80px 24px; border-bottom: 1px solid var(--border); }
+    .usecases-inner { max-width: 1100px; margin: 0 auto; }
+    .usecases-header { margin-bottom: 48px; }
+    .uc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 14px;
+    }
+    .uc-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-m);
+      padding: 20px;
+      text-align: center;
+      background: var(--surface);
+      transition: box-shadow .15s;
+    }
+    .uc-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.07); }
+    .uc-icon { font-size: 28px; margin-bottom: 10px; }
+    .uc-name { font-size: 14px; font-weight: 700; }
+    .uc-note { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    /* ── Pricing ────────────────────────────────────────────── */
+    .pricing {
+      background: var(--bg);
+      padding: 80px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .pricing-inner { max-width: 1100px; margin: 0 auto; }
+    .pricing-header { margin-bottom: 48px; }
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .price-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-l);
+      padding: 28px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+    .price-card.featured {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px var(--blue-pale);
+    }
+    .price-tier { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+    .price-amount { font-size: 2.4rem; font-weight: 800; letter-spacing: -.03em; color: var(--text); line-height: 1; }
+    .price-period { font-size: 13px; color: var(--muted); margin-top: 4px; margin-bottom: 16px; }
+    .price-revenue { font-size: 13px; color: var(--muted); padding: 10px 0; border-top: 1px solid var(--border); margin-bottom: 20px; }
+    .price-features { list-style: none; display: flex; flex-direction: column; gap: 9px; flex: 1; margin-bottom: 24px; }
+    .price-features li { font-size: 14px; display: flex; align-items: flex-start; gap: 8px; }
+    .price-features li::before { content: "✓"; color: var(--green); font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+    .price-oss {
+      background: var(--navy);
+      color: #fff;
+      border-color: var(--navy);
+      border-radius: var(--radius-l);
+      padding: 28px 24px;
+    }
+    .price-oss .price-tier { color: #5fa3ff; }
+    .price-oss .price-amount { color: #fff; }
+    .price-oss .price-period { color: #7a9ec4; }
+    .price-oss .price-revenue { color: #7a9ec4; border-color: rgba(255,255,255,.1); }
+    .price-oss .price-features li { color: #c8daf2; }
+    .price-oss .price-features li::before { color: #4ade80; }
+    .watermark-note {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #7a9ec4;
+      font-style: italic;
+    }
+    .btn-tier {
+      display: block;
+      text-align: center;
+      padding: 10px;
+      border-radius: var(--radius-s);
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      background: var(--blue);
+      color: #fff;
+      transition: background .15s;
+    }
+    .btn-tier:hover { background: var(--blue-dark); }
+    .btn-tier-ghost {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,.2);
+      color: #c8daf2;
+    }
+    .btn-tier-ghost:hover { background: rgba(255,255,255,.08); color: #fff; }
+
+    /* ── FAQ ────────────────────────────────────────────────── */
+    .faq { padding: 80px 24px; border-bottom: 1px solid var(--border); }
+    .faq-inner { max-width: 720px; margin: 0 auto; }
+    .faq-header { margin-bottom: 40px; }
+    .faq-list { display: flex; flex-direction: column; gap: 0; }
+    .faq-item {
+      border-top: 1px solid var(--border);
+      padding: 20px 0;
+    }
+    .faq-item:last-child { border-bottom: 1px solid var(--border); }
+    .faq-q { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+    .faq-a { font-size: 14px; color: var(--muted); line-height: 1.65; }
+    .faq-a code {
+      font-family: "SF Mono","Fira Code",monospace;
+      background: var(--bg);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 12px;
+      color: var(--text);
+    }
+
+    /* ── Footer ─────────────────────────────────────────────── */
+    footer {
+      background: var(--navy);
+      color: #7a9ec4;
+      padding: 48px 24px;
+    }
+    .footer-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .footer-logo { display: flex; align-items: center; gap: 10px; }
+    .footer-logo img { height: 24px; width: auto; filter: brightness(0) invert(1); opacity: .6; }
+    .footer-tagline { font-size: 13px; margin-top: 4px; }
+    .footer-links { display: flex; gap: 24px; flex-wrap: wrap; }
+    .footer-links a { font-size: 13px; color: #7a9ec4; text-decoration: none; transition: color .15s; }
+    .footer-links a:hover { color: #c8daf2; }
+    .footer-copy { font-size: 12px; color: #4a6a90; width: 100%; margin-top: 16px; }
+
+    /* ── Responsive ─────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      .nav-links { display: none; }
+      .pipeline { gap: 0; }
+      .pipe-arrow { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Nav ──────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">
+      <img src="assets/logo-lpdf.png" alt="lpdf" />
+    </a>
+    <ul class="nav-links">
+      <li><a href="#primitives">Primitives</a></li>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="demo.html">Demo</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="https://github.com/lpdf-io/lpdf" class="nav-cta">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ── Hero ─────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-badge">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="5" fill="#4ade80"/></svg>
+      Early access
+    </div>
+    <h1>PDF layout without<br/><span>the coordinate math</span></h1>
+    <p>lpdf is a declarative XML layout language for PDFs. Describe your document with semantic layout primitives — Stack, Flank, Grid — and get a PDF back. No coordinate math. No boilerplate.</p>
+    <div class="hero-actions">
+      <a href="#compare" class="btn btn-primary">See it in action</a>
+      <a href="#pricing" class="btn btn-outline">View pricing</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Code comparison ──────────────────────────────────────── -->
+<section class="compare" id="compare">
+  <div class="compare-inner">
+    <div class="compare-header">
+      <div class="section-label">The problem</div>
+      <h2 class="section-title">Stop doing arithmetic.<br/>Start describing layout.</h2>
+      <p class="section-sub">Every PDF library makes you think in points and absolute positions. lpdf lets you think in layout intent.</p>
+    </div>
+    <div class="compare-grid">
+      <div class="code-card">
+        <div class="code-card-header">
+          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+          <span class="code-card-title">invoice.js — raw PDF library</span>
+          <span class="code-card-badge badge-bad">before</span>
+        </div>
+        <pre><span class="c-cmt">// Every PDF library, every language, forever</span>
+<span class="c-fn">page</span>.<span class="c-fn">drawText</span>(<span class="c-str">"Invoice #1234"</span>, {
+  x: <span class="c-bad">72</span>, y: <span class="c-bad">720</span>, size: <span class="c-bad">14</span>
+})
+<span class="c-fn">page</span>.<span class="c-fn">drawLine</span>({
+  start: { x: <span class="c-bad">72</span>, y: <span class="c-bad">705</span> },
+  end:   { x: <span class="c-bad">540</span>, y: <span class="c-bad">705</span> },
+  thickness: <span class="c-bad">1</span>
+})
+<span class="c-fn">page</span>.<span class="c-fn">drawText</span>(<span class="c-str">"Item"</span>, {
+  x: <span class="c-bad">72</span>, y: <span class="c-bad">688</span>, size: <span class="c-bad">10</span>
+})
+<span class="c-fn">page</span>.<span class="c-fn">drawText</span>(<span class="c-str">"Qty"</span>, {
+  x: <span class="c-bad">320</span>, y: <span class="c-bad">688</span>, size: <span class="c-bad">10</span>
+})
+<span class="c-fn">page</span>.<span class="c-fn">drawText</span>(<span class="c-str">"Price"</span>, {
+  x: <span class="c-bad">468</span>, y: <span class="c-bad">688</span>, size: <span class="c-bad">10</span>
+})
+<span class="c-cmt">// Now move one column and redo all of this...</span></pre>
+      </div>
+      <div class="code-card">
+        <div class="code-card-header">
+          <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+          <span class="code-card-title">invoice.lpdf.xml</span>
+          <span class="code-card-badge badge-good">after</span>
+        </div>
+        <pre><span class="c-tag">&lt;lpdf</span> <span class="c-attr">version</span>=<span class="c-val">"1"</span><span class="c-tag">&gt;</span>
+  <span class="c-tag">&lt;document</span> <span class="c-attr">size</span>=<span class="c-val">"a4"</span> <span class="c-attr">margin</span>=<span class="c-val">"28pt"</span><span class="c-tag">&gt;</span>
+    <span class="c-tag">&lt;pages&gt;&lt;page&gt;</span>
+      <span class="c-tag">&lt;stack</span> <span class="c-attr">gap</span>=<span class="c-val">"m"</span><span class="c-tag">&gt;</span>
+
+        <span class="c-cmt">&lt;!-- title + date, right-aligned --&gt;</span>
+        <span class="c-tag">&lt;flank</span> <span class="c-attr">align</span>=<span class="c-val">"center"</span> <span class="c-attr">end</span>=<span class="c-val">"true"</span><span class="c-tag">&gt;</span>
+          <span class="c-tag">&lt;text</span> <span class="c-attr">size</span>=<span class="c-val">"l"</span> <span class="c-attr">weight</span>=<span class="c-val">"bold"</span><span class="c-tag">&gt;</span>Invoice #1234<span class="c-tag">&lt;/text&gt;</span>
+          <span class="c-tag">&lt;text</span> <span class="c-attr">color</span>=<span class="c-val">"text-muted"</span><span class="c-tag">&gt;</span>2024-01-15<span class="c-tag">&lt;/text&gt;</span>
+        <span class="c-tag">&lt;/flank&gt;</span>
+
+        <span class="c-tag">&lt;divider</span> <span class="c-attr">thickness</span>=<span class="c-val">"xs"</span> <span class="c-attr">color</span>=<span class="c-val">"#e0e0e0"</span><span class="c-tag">/&gt;</span>
+
+        <span class="c-cmt">&lt;!-- table header --&gt;</span>
+        <span class="c-tag">&lt;split</span> <span class="c-attr">gap</span>=<span class="c-val">"m"</span><span class="c-tag">&gt;</span>
+          <span class="c-tag">&lt;text</span> <span class="c-attr">weight</span>=<span class="c-val">"bold"</span><span class="c-tag">&gt;</span>Item<span class="c-tag">&lt;/text&gt;</span>
+          <span class="c-tag">&lt;cluster</span> <span class="c-attr">gap</span>=<span class="c-val">"l"</span> <span class="c-attr">justify</span>=<span class="c-val">"end"</span><span class="c-tag">&gt;</span>
+            <span class="c-tag">&lt;text</span> <span class="c-attr">weight</span>=<span class="c-val">"bold"</span><span class="c-tag">&gt;</span>Qty<span class="c-tag">&lt;/text&gt;</span>
+            <span class="c-tag">&lt;text</span> <span class="c-attr">weight</span>=<span class="c-val">"bold"</span><span class="c-tag">&gt;</span>Price<span class="c-tag">&lt;/text&gt;</span>
+          <span class="c-tag">&lt;/cluster&gt;</span>
+        <span class="c-tag">&lt;/split&gt;</span>
+
+      <span class="c-tag">&lt;/stack&gt;</span>
+    <span class="c-tag">&lt;/page&gt;&lt;/pages&gt;</span>
+  <span class="c-tag">&lt;/document&gt;</span>
+<span class="c-tag">&lt;/lpdf&gt;</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Primitives ────────────────────────────────────────────── -->
+<section class="primitives" id="primitives">
+  <div class="primitives-inner">
+    <div class="primitives-header">
+      <div class="section-label">Layout primitives</div>
+      <h2 class="section-title">A vocabulary you already know</h2>
+      <p class="section-sub">Inspired by modern CSS layout — if you think in flexbox, you already know lpdf.</p>
+    </div>
+    <div class="prim-grid">
+
+      <div class="prim-card">
+        <div class="prim-icon">
+          <svg viewBox="0 0 18 18" fill="none" stroke="#1763cf" stroke-width="1.8">
+            <rect x="2" y="2" width="14" height="4" rx="1.5"/>
+            <rect x="2" y="8" width="14" height="4" rx="1.5"/>
+            <rect x="2" y="14" width="14" height="2" rx="1"/>
+          </svg>
+        </div>
+        <div class="prim-name">&lt;stack&gt;</div>
+        <div class="prim-label">Stack</div>
+        <div class="prim-desc">Vertical column. Children placed top-to-bottom with configurable gap, alignment, and space distribution.</div>
+        <div class="prim-example">gap="m" justify="between" align="center"</div>
+      </div>
+
+      <div class="prim-card">
+        <div class="prim-icon">
+          <svg viewBox="0 0 18 18" fill="none" stroke="#1763cf" stroke-width="1.8">
+            <rect x="2" y="5" width="9" height="8" rx="1.5"/>
+            <rect x="13" y="5" width="3" height="8" rx="1.5"/>
+          </svg>
+        </div>
+        <div class="prim-name">&lt;flank&gt;</div>
+        <div class="prim-label">Flank</div>
+        <div class="prim-desc">One child fills available width; the other takes its natural size. Perfect for headers with a logo and date.</div>
+        <div class="prim-example">end="true" align="center"</div>
+      </div>
+
+      <div class="prim-card">
+        <div class="prim-icon">
+          <svg viewBox="0 0 18 18" fill="none" stroke="#1763cf" stroke-width="1.8">
+            <rect x="2" y="5" width="6" height="8" rx="1.5"/>
+            <rect x="10" y="5" width="6" height="8" rx="1.5"/>
+          </svg>
+        </div>
+        <div class="prim-name">&lt;split&gt;</div>
+        <div class="prim-label">Split</div>
+        <div class="prim-desc">Two children share available width. Equal halves or natural + fill. Great for sidebar + main layouts.</div>
+        <div class="prim-example">equal="true" align="stretch"</div>
+      </div>
+
+      <div class="prim-card">
+        <div class="prim-icon">
+          <svg viewBox="0 0 18 18" fill="none" stroke="#1763cf" stroke-width="1.8">
+            <rect x="2" y="5" width="4" height="4" rx="1"/>
+            <rect x="8" y="5" width="4" height="4" rx="1"/>
+            <rect x="14" y="5" width="2" height="4" rx="1"/>
+            <rect x="2" y="11" width="6" height="4" rx="1"/>
+            <rect x="10" y="11" width="6" height="4" rx="1"/>
+          </svg>
+        </div>
+        <div class="prim-name">&lt;cluster&gt;</div>
+        <div class="prim-label">Cluster</div>
+        <div class="prim-desc">Horizontal flow with optional wrapping. Tag groups, chip sets, and badge rows — anything that can wrap.</div>
+        <div class="prim-example">wrap="true" gap="s" justify="start"</div>
+      </div>
+
+      <div class="prim-card">
+        <div class="prim-icon">
+          <svg viewBox="0 0 18 18" fill="none" stroke="#1763cf" stroke-width="1.8">
+            <rect x="2" y="2" width="5" height="5" rx="1"/>
+            <rect x="9" y="2" width="5" height="5" rx="1"/>
+            <rect x="2" y="9" width="5" height="5" rx="1"/>
+            <rect x="9" y="9" width="5" height="5" rx="1"/>
+          </svg>
+        </div>
+        <div class="prim-name">&lt;grid&gt;</div>
+        <div class="prim-label">Grid</div>
+        <div class="prim-desc">N-column equal-width grid. Children placed left-to-right, row-by-row. Ideal for metric cards and image grids.</div>
+        <div class="prim-example">cols="3" gap="m"</div>
+      </div>
+
+      <div class="prim-card">
+        <div class="prim-icon">
+          <svg viewBox="0 0 18 18" fill="none" stroke="#1763cf" stroke-width="1.8">
+            <rect x="3" y="3" width="12" height="12" rx="2"/>
+            <rect x="6" y="6" width="6" height="6" rx="1"/>
+          </svg>
+        </div>
+        <div class="prim-name">&lt;frame&gt;</div>
+        <div class="prim-label">Frame</div>
+        <div class="prim-desc">Single-child constrained container with optional max width. Use for centered inset boxes and image placeholders.</div>
+        <div class="prim-example">width="l" padding="m" radius="s"</div>
+      </div>
+
+      <div class="prim-card">
+        <div class="prim-icon">
+          <svg viewBox="0 0 18 18" fill="none" stroke="#1763cf" stroke-width="1.8">
+            <line x1="2" y1="9" x2="16" y2="9" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="prim-name">&lt;divider&gt;</div>
+        <div class="prim-label">Divider</div>
+        <div class="prim-desc">Horizontal or vertical rule. Renders a line at configurable thickness and color. No children.</div>
+        <div class="prim-example">direction="horizontal" thickness="xs"</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── How it works ──────────────────────────────────────────── -->
+<section class="how" id="how">
+  <div class="how-inner">
+    <div class="how-header">
+      <div class="section-label">How it works</div>
+      <h2 class="section-title">XML in.<br/>PDF out.</h2>
+      <p class="section-sub">Give lpdf an XML layout description and it hands back a PDF. The adapter is bundled — you don't wire anything up, you don't pick a drawing library. You just describe what the document should look like.</p>
+    </div>
+
+    <div class="pipeline">
+      <div class="pipe-step">
+        <div class="pipe-icon pipe-icon-navy" style="font-size:20px;">📄</div>
+        <div class="pipe-label">XML Input</div>
+        <div class="pipe-sub">Your layout description</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="pipe-icon pipe-icon-blue" style="font-size:20px;">⚙️</div>
+        <div class="pipe-label">lpdf</div>
+        <div class="pipe-sub">Bundled engine + adapter</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="pipe-icon" style="background:var(--green);font-size:20px;">📦</div>
+        <div class="pipe-label">PDF output</div>
+        <div class="pipe-sub">Ready to use</div>
+      </div>
+    </div>
+
+    <div class="adapter-row">
+      <div class="adapter-card">
+        <div class="adapter-lang">JavaScript</div>
+        <div class="adapter-lib">lpdf / npm</div>
+        <div class="adapter-status">● available</div>
+      </div>
+      <div class="adapter-card">
+        <div class="adapter-lang">Python</div>
+        <div class="adapter-lib">lpdf / PyPI</div>
+        <div class="adapter-status">● available</div>
+      </div>
+      <div class="adapter-card">
+        <div class="adapter-lang">C# / .NET</div>
+        <div class="adapter-lib">lpdf / NuGet</div>
+        <div class="adapter-status">● available</div>
+      </div>
+      <div class="adapter-card">
+        <div class="adapter-lang">PHP</div>
+        <div class="adapter-lib">lpdf / Composer</div>
+        <div class="adapter-status">● available</div>
+      </div>
+      <div class="adapter-card">
+        <div class="adapter-lang">Any language</div>
+        <div class="adapter-lib">Hosted API</div>
+        <div class="adapter-status">● available</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Use cases ─────────────────────────────────────────────── -->
+<section class="usecases" id="usecases">
+  <div class="usecases-inner">
+    <div class="usecases-header">
+      <div class="section-label">Built for</div>
+      <h2 class="section-title">Designed documents,<br/>not data pipelines</h2>
+      <p class="section-sub">lpdf solves a recurring problem — not all PDF problems. It's not html2pdf and it's not an enterprise PDF library. It's the right tool when you need to produce a clean, structured document without the boilerplate.</p>
+    </div>
+    <div class="uc-grid">
+      <div class="uc-card">
+        <div class="uc-icon">🧾</div>
+        <div class="uc-name">Invoices</div>
+        <div class="uc-note">1–2 pages, structured</div>
+      </div>
+      <div class="uc-card">
+        <div class="uc-icon">🎓</div>
+        <div class="uc-name">Certificates</div>
+        <div class="uc-note">Diplomas, awards</div>
+      </div>
+      <div class="uc-card">
+        <div class="uc-icon">📋</div>
+        <div class="uc-name">Résumés / CVs</div>
+        <div class="uc-note">Columnar, 1–2 pages</div>
+      </div>
+      <div class="uc-card">
+        <div class="uc-icon">🎫</div>
+        <div class="uc-name">Tickets & Passes</div>
+        <div class="uc-note">Boarding, event, badge</div>
+      </div>
+      <div class="uc-card">
+        <div class="uc-icon">📦</div>
+        <div class="uc-name">Labels</div>
+        <div class="uc-note">Shipping, product</div>
+      </div>
+      <div class="uc-card">
+        <div class="uc-icon">📇</div>
+        <div class="uc-name">Business Cards</div>
+        <div class="uc-note">Fixed size, precise</div>
+      </div>
+      <div class="uc-card">
+        <div class="uc-icon">📝</div>
+        <div class="uc-name">Form Templates</div>
+        <div class="uc-note">Blank forms, fields</div>
+      </div>
+      <div class="uc-card">
+        <div class="uc-icon">📰</div>
+        <div class="uc-name">Flyers & One-pagers</div>
+        <div class="uc-note">Marketing, announcements</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Pricing ───────────────────────────────────────────────── -->
+<section class="pricing" id="pricing">
+  <div class="pricing-inner">
+    <div class="pricing-header">
+      <div class="section-label">Pricing</div>
+      <h2 class="section-title">Open source.<br/>Commercial when you ship.</h2>
+      <p class="section-sub">lpdf is AGPL v3. Build freely. A commercial license is required when you deploy in a revenue-generating context — priced by company revenue, not usage.</p>
+    </div>
+    <div class="pricing-grid">
+
+      <div class="price-card price-oss">
+        <div class="price-tier">Open Source</div>
+        <div class="price-amount">Free</div>
+        <div class="price-period">forever</div>
+        <div class="price-revenue">Open source &amp; non-commercial</div>
+        <ul class="price-features">
+          <li>Full layout engine</li>
+          <li>All adapters</li>
+          <li>AGPL v3 license</li>
+          <li>Community support</li>
+        </ul>
+        <div class="watermark-note">Watermark: "made with lpdf.io" on every page</div>
+        <br/>
+        <a href="https://github.com/lpdf-io/lpdf" class="btn-tier btn-tier-ghost">Get started free</a>
+      </div>
+
+      <div class="price-card">
+        <div class="price-tier">Starter</div>
+        <div class="price-amount">$99</div>
+        <div class="price-period">/ year &nbsp;&middot;&nbsp; one license covers your whole company</div>
+        <div class="price-revenue">Under $1M annual revenue</div>
+        <ul class="price-features">
+          <li>No watermark</li>
+          <li>All adapters &amp; the core engine</li>
+          <li>All releases during license period</li>
+          <li>No usage metering or telemetry</li>
+        </ul>
+        <br/>
+        <a href="#" class="btn-tier">Buy Starter license</a>
+      </div>
+
+      <div class="price-card featured">
+        <div class="price-tier">Business</div>
+        <div class="price-amount">$299</div>
+        <div class="price-period">/ year &nbsp;&middot;&nbsp; one license covers your whole company</div>
+        <div class="price-revenue">$1M – $10M annual revenue</div>
+        <ul class="price-features">
+          <li>No watermark</li>
+          <li>All adapters &amp; the core engine</li>
+          <li>All releases during license period</li>
+          <li>No usage metering or telemetry</li>
+        </ul>
+        <br/>
+        <a href="#" class="btn-tier">Buy Business license</a>
+      </div>
+
+      <div class="price-card">
+        <div class="price-tier">Scale</div>
+        <div class="price-amount">$999</div>
+        <div class="price-period">/ year &nbsp;&middot;&nbsp; one license covers your whole company</div>
+        <div class="price-revenue">Over $10M annual revenue</div>
+        <ul class="price-features">
+          <li>No watermark</li>
+          <li>All adapters &amp; the core engine</li>
+          <li>All releases during license period</li>
+          <li>No usage metering or telemetry</li>
+        </ul>
+        <br/>
+        <a href="#" class="btn-tier">Buy Scale license</a>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── FAQ ───────────────────────────────────────────────────── -->
+<section class="faq" id="faq">
+  <div class="faq-inner">
+    <div class="faq-header">
+      <div class="section-label">FAQ</div>
+      <h2 class="section-title">Common questions</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item">
+        <div class="faq-q">Can I evaluate lpdf before buying?</div>
+        <div class="faq-a">Yes. Build with it freely under AGPL. A commercial license is only required when you ship to production in a revenue-generating context.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">What is the watermark on unlicensed builds?</div>
+        <div class="faq-a">A small <code>made with lpdf.io</code> label appears in the bottom-right corner of every page — 7pt Helvetica, light gray, with a link. It is injected by the core engine and cannot be removed without a commercial license.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Does lpdf replace my PDF library?</div>
+        <div class="faq-a">No. lpdf takes XML and returns a PDF — the adapter is bundled. You don't need a PDF library and you don't wire anything up. Just give it a layout description.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">What if my revenue grows into the next tier?</div>
+        <div class="faq-a">Upgrade at your next annual renewal. No retroactive charges.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Does lpdf work with HTML-to-PDF workflows?</div>
+        <div class="faq-a">No — and that's intentional. lpdf is not html2pdf. We don't spin up a browser and we don't try to render the web. lpdf works from an explicit layout description, for documents with known structure. If you need to capture a web page as a PDF, Puppeteer or Playwright is the right tool. If you need to produce an invoice, a certificate, or a label without coordinate math, lpdf is.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Does one license cover all my applications?</div>
+        <div class="faq-a">Yes. One company license covers unlimited use across all your products and services. Pricing is per company, not per application or developer.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ───────────────────────────────────────────────── -->
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div class="footer-logo">
+        <img src="assets/logo-lpdf.png" alt="lpdf" />
+      </div>
+      <div class="footer-tagline">Layout PDF — declarative XML layout for PDFs</div>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/lpdf-io/lpdf">GitHub</a>
+      <a href="#primitives">Docs</a>
+      <a href="#pricing">Pricing</a>
+      <a href="mailto:hello@lpdf.io">Contact</a>
+    </div>
+    <div class="footer-copy">
+      lpdf is open source under AGPL v3. Commercial use requires a license.
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
