@@ -19915,7 +19915,7 @@ async function buildPdf(tree, providedBytes, srcFallback) {
   if (tree.meta.subject) doc.setSubject(tree.meta.subject);
   if (tree.meta.keywords?.length) doc.setKeywords(tree.meta.keywords);
   if (tree.meta.creator) doc.setCreator(tree.meta.creator);
-  doc.setProducer("lpdf");
+  doc.setProducer("lpdf.io");
   const fontMap = await loadFonts(doc, tree, providedBytes, srcFallback);
   for (const pageData of tree.pages) {
     const page = doc.addPage([pageData.width, pageData.height]);
