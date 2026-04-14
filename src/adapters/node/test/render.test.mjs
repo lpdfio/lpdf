@@ -6,7 +6,7 @@
 
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
-import { Lpdf } from '../dist/index.js';
+import { LpdfEngine } from '../dist/index.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -15,12 +15,12 @@ function doc(body) {
   return `<lpdf version="1"><document><pages><page>${body}</page></pages></document></lpdf>`;
 }
 
-// ── Lpdf class ────────────────────────────────────────────────────────────────
+// ── LpdfEngine class ──────────────────────────────────────────────────────────
 
-describe('Lpdf', () => {
+describe('LpdfEngine', () => {
 
   it('returns a valid PDF byte sequence', async () => {
-    const lpdf = new Lpdf('test-key');
+    const lpdf = new LpdfEngine('test-key');
     const bytes = await lpdf.renderPdf(doc(''));
     assert(bytes instanceof Uint8Array, 'result should be Uint8Array');
     // PDF files start with "%PDF-"
@@ -29,7 +29,7 @@ describe('Lpdf', () => {
   });
 
   it('throws on invalid XML', async () => {
-    const lpdf = new Lpdf('test-key');
+    const lpdf = new LpdfEngine('test-key');
     await assert.rejects(
       () => lpdf.renderPdf('not xml at all'),
       /error/i,
@@ -40,7 +40,7 @@ describe('Lpdf', () => {
     // The engine returns watermark != null when licenseKey is empty.
     // We can't easily inspect the PDF, but we can verify no error is thrown
     // and the result is still a valid PDF.
-    const lpdf = new Lpdf('');
+    const lpdf = new LpdfEngine('');
     const bytes = await lpdf.renderPdf(doc(''));
     const header = Buffer.from(bytes.slice(0, 5)).toString('ascii');
     assert.equal(header, '%PDF-');
@@ -53,14 +53,14 @@ describe('Lpdf', () => {
         <frame height="40pt"/>
       </stack>
     `);
-    const lpdf = new Lpdf('test-key');
+    const lpdf = new LpdfEngine('test-key');
     const bytes = await lpdf.renderPdf(xml);
     assert(bytes.length > 100, 'PDF should be non-trivial');
   });
 
   it('renders a divider line', async () => {
     const xml = doc(`<divider thickness="xs" color="#cccccc"/>`);
-    const lpdf = new Lpdf('test-key');
+    const lpdf = new LpdfEngine('test-key');
     const bytes = await lpdf.renderPdf(xml);
     const header = Buffer.from(bytes.slice(0, 5)).toString('ascii');
     assert.equal(header, '%PDF-');
@@ -74,7 +74,7 @@ describe('Lpdf', () => {
         <frame height="20pt"/>
       </grid>
     `);
-    const lpdf = new Lpdf('test-key');
+    const lpdf = new LpdfEngine('test-key');
     const bytes = await lpdf.renderPdf(xml);
     assert(bytes.length > 100);
   });
@@ -84,7 +84,7 @@ describe('Lpdf', () => {
     // We can't easily inspect loaded fonts, but verifying no error is enough.
     const instanceFont = new Uint8Array([1, 2, 3]);
     const callFont = new Uint8Array([4, 5, 6]);
-    const lpdf = new Lpdf('test-key', { fontBytes: { Shared: instanceFont } });
+    const lpdf = new LpdfEngine('test-key', { fontBytes: { Shared: instanceFont } });
     const bytes = await lpdf.renderPdf(doc(''), { fontBytes: { Shared: callFont } });
     const header = Buffer.from(bytes.slice(0, 5)).toString('ascii');
     assert.equal(header, '%PDF-');

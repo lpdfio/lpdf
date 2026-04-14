@@ -4288,6 +4288,24 @@ var LpdfEngine = class {
       wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
     }
   }
+  /**
+   * @param {string} json
+   * @returns {string}
+   */
+  render_tree(json) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+      const ptr0 = passStringToWasm0(json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+      const len0 = WASM_VECTOR_LEN;
+      const ret = wasm.lpdfengine_render_tree(this.__wbg_ptr, ptr0, len0);
+      deferred2_0 = ret[0];
+      deferred2_1 = ret[1];
+      return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+      wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+  }
 };
 if (Symbol.dispose) LpdfEngine.prototype[Symbol.dispose] = LpdfEngine.prototype.free;
 function __wbg_get_imports() {
@@ -4682,39 +4700,39 @@ var copyStringIntoBuffer = function(str, buffer, offset) {
 var escapeRegExp = function(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };
-var cleanText = function(text) {
-  return text.replace(/\t|\u0085|\u2028|\u2029/g, "    ").replace(/[\b\v]/g, "");
+var cleanText = function(text2) {
+  return text2.replace(/\t|\u0085|\u2028|\u2029/g, "    ").replace(/[\b\v]/g, "");
 };
 var escapedNewlineChars = ["\\n", "\\f", "\\r", "\\u000B"];
-var isNewlineChar = function(text) {
-  return /^[\n\f\r\u000B]$/.test(text);
+var isNewlineChar = function(text2) {
+  return /^[\n\f\r\u000B]$/.test(text2);
 };
-var lineSplit = function(text) {
-  return text.split(/[\n\f\r\u000B]/);
+var lineSplit = function(text2) {
+  return text2.split(/[\n\f\r\u000B]/);
 };
-var mergeLines = function(text) {
-  return text.replace(/[\n\f\r\u000B]/g, " ");
+var mergeLines = function(text2) {
+  return text2.replace(/[\n\f\r\u000B]/g, " ");
 };
-var charAtIndex = function(text, index) {
-  var cuFirst = text.charCodeAt(index);
+var charAtIndex = function(text2, index) {
+  var cuFirst = text2.charCodeAt(index);
   var cuSecond;
   var nextIndex = index + 1;
   var length = 1;
   if (
     // Check if it's the start of a surrogate pair.
     cuFirst >= 55296 && cuFirst <= 56319 && // high surrogate
-    text.length > nextIndex
+    text2.length > nextIndex
   ) {
-    cuSecond = text.charCodeAt(nextIndex);
+    cuSecond = text2.charCodeAt(nextIndex);
     if (cuSecond >= 56320 && cuSecond <= 57343)
       length = 2;
   }
-  return [text.slice(index, index + length), length];
+  return [text2.slice(index, index + length), length];
 };
-var charSplit = function(text) {
+var charSplit = function(text2) {
   var chars3 = [];
-  for (var idx = 0, len = text.length; idx < len; ) {
-    var _a = charAtIndex(text, idx), c = _a[0], cLen = _a[1];
+  for (var idx = 0, len = text2.length; idx < len; ) {
+    var _a = charAtIndex(text2, idx), c = _a[0], cLen = _a[1];
     chars3.push(c);
     idx += cLen;
   }
@@ -4733,9 +4751,9 @@ var buildWordBreakRegex = function(wordBreaks) {
   var breakRules = escapedRules.join("|");
   return new RegExp("(" + newlineCharUnion + ")|((.*?)(" + breakRules + "))", "gm");
 };
-var breakTextIntoLines = function(text, wordBreaks, maxWidth, computeWidthOfText) {
+var breakTextIntoLines = function(text2, wordBreaks, maxWidth, computeWidthOfText) {
   var regex = buildWordBreakRegex(wordBreaks);
-  var words = cleanText(text).match(regex);
+  var words = cleanText(text2).match(regex);
   var currLine = "";
   var currWidth = 0;
   var lines = [];
@@ -8176,10 +8194,10 @@ var PDFHexString = (
       return pdfDocEncodingDecode(bytes);
     };
     PDFHexString2.prototype.decodeDate = function() {
-      var text = this.decodeText();
-      var date = parseDate(text);
+      var text2 = this.decodeText();
+      var date = parseDate(text2);
       if (!date)
-        throw new InvalidPDFDateStringError(text);
+        throw new InvalidPDFDateStringError(text2);
       return date;
     };
     PDFHexString2.prototype.asString = function() {
@@ -8226,16 +8244,16 @@ var StandardFontEmbedder = (
       this.fontName = this.font.FontName;
       this.customName = customName;
     }
-    StandardFontEmbedder2.prototype.encodeText = function(text) {
-      var glyphs = this.encodeTextAsGlyphs(text);
+    StandardFontEmbedder2.prototype.encodeText = function(text2) {
+      var glyphs = this.encodeTextAsGlyphs(text2);
       var hexCodes = new Array(glyphs.length);
       for (var idx = 0, len = glyphs.length; idx < len; idx++) {
         hexCodes[idx] = toHexString(glyphs[idx].code);
       }
       return PDFHexString_default.of(hexCodes.join(""));
     };
-    StandardFontEmbedder2.prototype.widthOfTextAtSize = function(text, size) {
-      var glyphs = this.encodeTextAsGlyphs(text);
+    StandardFontEmbedder2.prototype.widthOfTextAtSize = function(text2, size) {
+      var glyphs = this.encodeTextAsGlyphs(text2);
       var totalWidth = 0;
       for (var idx = 0, len = glyphs.length; idx < len; idx++) {
         var left = glyphs[idx].name;
@@ -8282,8 +8300,8 @@ var StandardFontEmbedder = (
     StandardFontEmbedder2.prototype.widthOfGlyph = function(glyphName) {
       return this.font.getWidthOfGlyph(glyphName) || 250;
     };
-    StandardFontEmbedder2.prototype.encodeTextAsGlyphs = function(text) {
-      var codePoints = Array.from(text);
+    StandardFontEmbedder2.prototype.encodeTextAsGlyphs = function(text2) {
+      var codePoints = Array.from(text2);
       var glyphs = new Array(codePoints.length);
       for (var idx = 0, len = codePoints.length; idx < len; idx++) {
         var codePoint = toCodePoint(codePoints[idx]);
@@ -8446,10 +8464,10 @@ var PDFString = (
       return pdfDocEncodingDecode(bytes);
     };
     PDFString2.prototype.decodeDate = function() {
-      var text = this.decodeText();
-      var date = parseDate(text);
+      var text2 = this.decodeText();
+      var date = parseDate(text2);
       if (!date)
-        throw new InvalidPDFDateStringError(text);
+        throw new InvalidPDFDateStringError(text2);
       return date;
     };
     PDFString2.prototype.asString = function() {
@@ -8526,16 +8544,16 @@ var CustomFontEmbedder = (
         });
       });
     };
-    CustomFontEmbedder2.prototype.encodeText = function(text) {
-      var glyphs = this.font.layout(text, this.fontFeatures).glyphs;
+    CustomFontEmbedder2.prototype.encodeText = function(text2) {
+      var glyphs = this.font.layout(text2, this.fontFeatures).glyphs;
       var hexCodes = new Array(glyphs.length);
       for (var idx = 0, len = glyphs.length; idx < len; idx++) {
         hexCodes[idx] = toHexStringOfMinLength(glyphs[idx].id, 4);
       }
       return PDFHexString_default.of(hexCodes.join(""));
     };
-    CustomFontEmbedder2.prototype.widthOfTextAtSize = function(text, size) {
-      var glyphs = this.font.layout(text, this.fontFeatures).glyphs;
+    CustomFontEmbedder2.prototype.widthOfTextAtSize = function(text2, size) {
+      var glyphs = this.font.layout(text2, this.fontFeatures).glyphs;
       var totalWidth = 0;
       for (var idx = 0, len = glyphs.length; idx < len; idx++) {
         totalWidth += glyphs[idx].advanceWidth * this.scale;
@@ -8747,8 +8765,8 @@ var CustomFontSubsetEmbedder = (
         });
       });
     };
-    CustomFontSubsetEmbedder2.prototype.encodeText = function(text) {
-      var glyphs = this.font.layout(text, this.fontFeatures).glyphs;
+    CustomFontSubsetEmbedder2.prototype.encodeText = function(text2) {
+      var glyphs = this.font.layout(text2, this.fontFeatures).glyphs;
       var hexCodes = new Array(glyphs.length);
       for (var idx = 0, len = glyphs.length; idx < len; idx++) {
         var glyph = glyphs[idx];
@@ -9156,8 +9174,8 @@ UPNG.decode = function(buff) {
       if (out.tabs[type] == null) out.tabs[type] = {};
       var nz = bin.nextZero(data, offset);
       var keyw = bin.readASCII(data, offset, nz - offset);
-      var text = bin.readASCII(data, nz + 1, offset + len - nz - 1);
-      out.tabs[type][keyw] = text;
+      var text2 = bin.readASCII(data, nz + 1, offset + len - nz - 1);
+      out.tabs[type][keyw] = text2;
     } else if (type == "iTXt") {
       if (out.tabs[type] == null) out.tabs[type] = {};
       var nz = 0, off = offset;
@@ -9172,8 +9190,8 @@ UPNG.decode = function(buff) {
       nz = bin.nextZero(data, off);
       var tkeyw = bin.readUTF8(data, off, nz - off);
       off = nz + 1;
-      var text = bin.readUTF8(data, off, len - (off - offset));
-      out.tabs[type][keyw] = text;
+      var text2 = bin.readUTF8(data, off, len - (off - offset));
+      out.tabs[type][keyw] = text2;
     } else if (type == "PLTE") {
       out.tabs[type] = bin.readBytes(data, offset, len);
     } else if (type == "hIST") {
@@ -10367,8 +10385,8 @@ var PNG = (
       var frames = UPNG_default.toRGBA8(upng);
       if (frames.length > 1)
         throw new Error("Animated PNGs are not supported");
-      var frame = new Uint8Array(frames[0]);
-      var _a = splitAlphaChannel(frame), rgbChannel = _a.rgbChannel, alphaChannel = _a.alphaChannel;
+      var frame2 = new Uint8Array(frames[0]);
+      var _a = splitAlphaChannel(frame2), rgbChannel = _a.rgbChannel, alphaChannel = _a.alphaChannel;
       this.rgbChannel = rgbChannel;
       var hasAlphaValues = alphaChannel.some(function(a) {
         return a < 255;
@@ -11912,8 +11930,8 @@ var decodePDFRawStream = function(_a) {
 };
 
 // node_modules/pdf-lib/es/core/embedders/PDFPageEmbedder.js
-var fullPageBoundingBox = function(page) {
-  var mediaBox = page.MediaBox();
+var fullPageBoundingBox = function(page2) {
+  var mediaBox = page2.MediaBox();
   var width = mediaBox.lookup(2, PDFNumber_default).asNumber() - mediaBox.lookup(0, PDFNumber_default).asNumber();
   var height = mediaBox.lookup(3, PDFNumber_default).asNumber() - mediaBox.lookup(1, PDFNumber_default).asNumber();
   return { left: 0, bottom: 0, right: width, top: height };
@@ -11924,18 +11942,18 @@ var boundingBoxAdjustedMatrix = function(bb) {
 var PDFPageEmbedder = (
   /** @class */
   (function() {
-    function PDFPageEmbedder2(page, boundingBox, transformationMatrix) {
-      this.page = page;
-      var bb = boundingBox !== null && boundingBox !== void 0 ? boundingBox : fullPageBoundingBox(page);
+    function PDFPageEmbedder2(page2, boundingBox, transformationMatrix) {
+      this.page = page2;
+      var bb = boundingBox !== null && boundingBox !== void 0 ? boundingBox : fullPageBoundingBox(page2);
       this.width = bb.right - bb.left;
       this.height = bb.top - bb.bottom;
       this.boundingBox = bb;
       this.transformationMatrix = transformationMatrix !== null && transformationMatrix !== void 0 ? transformationMatrix : boundingBoxAdjustedMatrix(bb);
     }
-    PDFPageEmbedder2.for = function(page, boundingBox, transformationMatrix) {
+    PDFPageEmbedder2.for = function(page2, boundingBox, transformationMatrix) {
       return __awaiter(this, void 0, void 0, function() {
         return __generator(this, function(_a) {
-          return [2, new PDFPageEmbedder2(page, boundingBox, transformationMatrix)];
+          return [2, new PDFPageEmbedder2(page2, boundingBox, transformationMatrix)];
         });
       });
     };
@@ -12650,8 +12668,8 @@ var PDFWidgetAnnotation = (
         return P;
       return void 0;
     };
-    PDFWidgetAnnotation2.prototype.setP = function(page) {
-      this.dict.set(PDFName_default.of("P"), page);
+    PDFWidgetAnnotation2.prototype.setP = function(page2) {
+      this.dict.set(PDFName_default.of("P"), page2);
     };
     PDFWidgetAnnotation2.prototype.setDefaultAppearance = function(appearance) {
       this.dict.set(PDFName_default.of("DA"), PDFString_default.of(appearance));
@@ -14814,8 +14832,8 @@ var endPath = function() {
 var nextLine = function() {
   return PDFOperator_default.of(PDFOperatorNames_default.NextLine);
 };
-var showText = function(text) {
-  return PDFOperator_default.of(PDFOperatorNames_default.ShowText, [text]);
+var showText = function(text2) {
+  return PDFOperator_default.of(PDFOperatorNames_default.ShowText, [text2]);
 };
 var beginText = function() {
   return PDFOperator_default.of(PDFOperatorNames_default.BeginText);
@@ -16000,9 +16018,9 @@ var splitOutLines = function(input, maxWidth, font, fontSize) {
     remainder: void 0
   };
 };
-var layoutMultilineText = function(text, _a) {
+var layoutMultilineText = function(text2, _a) {
   var alignment = _a.alignment, fontSize = _a.fontSize, font = _a.font, bounds = _a.bounds;
-  var lines = lineSplit(cleanText(text));
+  var lines = lineSplit(cleanText(text2));
   if (fontSize === void 0 || fontSize === 0) {
     fontSize = computeFontSize(lines, font, bounds, true);
   }
@@ -16044,9 +16062,9 @@ var layoutMultilineText = function(text, _a) {
     }
   };
 };
-var layoutCombedText = function(text, _a) {
+var layoutCombedText = function(text2, _a) {
   var fontSize = _a.fontSize, font = _a.font, bounds = _a.bounds, cellCount = _a.cellCount;
-  var line = mergeLines(cleanText(text));
+  var line = mergeLines(cleanText(text2));
   if (line.length > cellCount) {
     throw new CombedTextLayoutError(line.length, cellCount);
   }
@@ -16092,9 +16110,9 @@ var layoutCombedText = function(text, _a) {
     }
   };
 };
-var layoutSinglelineText = function(text, _a) {
+var layoutSinglelineText = function(text2, _a) {
   var alignment = _a.alignment, fontSize = _a.fontSize, font = _a.font, bounds = _a.bounds;
-  var line = mergeLines(cleanText(text));
+  var line = mergeLines(cleanText(text2));
   if (fontSize === void 0 || fontSize === 0) {
     fontSize = computeFontSize([line], font, bounds);
   }
@@ -16305,7 +16323,7 @@ var defaultTextFieldAppearanceProvider = function(textField, widget, font) {
   var rectangle = widget.getRectangle();
   var ap = widget.getAppearanceCharacteristics();
   var bs = widget.getBorderStyle();
-  var text = (_a = textField.getText()) !== null && _a !== void 0 ? _a : "";
+  var text2 = (_a = textField.getText()) !== null && _a !== void 0 ? _a : "";
   var borderWidth = (_b = bs === null || bs === void 0 ? void 0 : bs.getWidth()) !== null && _b !== void 0 ? _b : 0;
   var rotation = reduceRotation(ap === null || ap === void 0 ? void 0 : ap.getRotation());
   var _e = adjustDimsForRotation(rectangle, rotation), width = _e.width, height = _e.height;
@@ -16323,7 +16341,7 @@ var defaultTextFieldAppearanceProvider = function(textField, widget, font) {
     height: height - (borderWidth + padding) * 2
   };
   if (textField.isMultiline()) {
-    var layout = layoutMultilineText(text, {
+    var layout = layoutMultilineText(text2, {
       alignment: textField.getAlignment(),
       fontSize: widgetFontSize !== null && widgetFontSize !== void 0 ? widgetFontSize : fieldFontSize,
       font,
@@ -16332,7 +16350,7 @@ var defaultTextFieldAppearanceProvider = function(textField, widget, font) {
     textLines = layout.lines;
     fontSize = layout.fontSize;
   } else if (textField.isCombed()) {
-    var layout = layoutCombedText(text, {
+    var layout = layoutCombedText(text2, {
       fontSize: widgetFontSize !== null && widgetFontSize !== void 0 ? widgetFontSize : fieldFontSize,
       font,
       bounds,
@@ -16341,7 +16359,7 @@ var defaultTextFieldAppearanceProvider = function(textField, widget, font) {
     textLines = layout.cells;
     fontSize = layout.fontSize;
   } else {
-    var layout = layoutSinglelineText(text, {
+    var layout = layoutSinglelineText(text2, {
       alignment: textField.getAlignment(),
       fontSize: widgetFontSize !== null && widgetFontSize !== void 0 ? widgetFontSize : fieldFontSize,
       font,
@@ -16381,7 +16399,7 @@ var defaultDropdownAppearanceProvider = function(dropdown, widget, font) {
   var rectangle = widget.getRectangle();
   var ap = widget.getAppearanceCharacteristics();
   var bs = widget.getBorderStyle();
-  var text = (_a = dropdown.getSelected()[0]) !== null && _a !== void 0 ? _a : "";
+  var text2 = (_a = dropdown.getSelected()[0]) !== null && _a !== void 0 ? _a : "";
   var borderWidth = (_b = bs === null || bs === void 0 ? void 0 : bs.getWidth()) !== null && _b !== void 0 ? _b : 0;
   var rotation = reduceRotation(ap === null || ap === void 0 ? void 0 : ap.getRotation());
   var _d = adjustDimsForRotation(rectangle, rotation), width = _d.width, height = _d.height;
@@ -16396,7 +16414,7 @@ var defaultDropdownAppearanceProvider = function(dropdown, widget, font) {
     width: width - (borderWidth + padding) * 2,
     height: height - (borderWidth + padding) * 2
   };
-  var _e = layoutSinglelineText(text, {
+  var _e = layoutSinglelineText(text2, {
     alignment: TextAlignment.Left,
     fontSize: widgetFontSize !== null && widgetFontSize !== void 0 ? widgetFontSize : fieldFontSize,
     font,
@@ -16444,11 +16462,11 @@ var defaultOptionListAppearanceProvider = function(optionList, widget, font) {
   var selected = optionList.getSelected();
   if (optionList.isSorted())
     options.sort();
-  var text = "";
+  var text2 = "";
   for (var idx = 0, len = options.length; idx < len; idx++) {
-    text += options[idx];
+    text2 += options[idx];
     if (idx < len - 1)
-      text += "\n";
+      text2 += "\n";
   }
   var padding = 1;
   var bounds = {
@@ -16457,7 +16475,7 @@ var defaultOptionListAppearanceProvider = function(optionList, widget, font) {
     width: width - (borderWidth + padding) * 2,
     height: height - (borderWidth + padding) * 2
   };
-  var _d = layoutMultilineText(text, {
+  var _d = layoutMultilineText(text2, {
     alignment: TextAlignment.Left,
     fontSize: widgetFontSize !== null && widgetFontSize !== void 0 ? widgetFontSize : fieldFontSize,
     font,
@@ -16562,15 +16580,15 @@ var PDFFont = (
       this.name = embedder.fontName;
       this.embedder = embedder;
     }
-    PDFFont3.prototype.encodeText = function(text) {
-      assertIs(text, "text", ["string"]);
+    PDFFont3.prototype.encodeText = function(text2) {
+      assertIs(text2, "text", ["string"]);
       this.modified = true;
-      return this.embedder.encodeText(text);
+      return this.embedder.encodeText(text2);
     };
-    PDFFont3.prototype.widthOfTextAtSize = function(text, size) {
-      assertIs(text, "text", ["string"]);
+    PDFFont3.prototype.widthOfTextAtSize = function(text2, size) {
+      assertIs(text2, "text", ["string"]);
       assertIs(size, "size", ["number"]);
-      return this.embedder.widthOfTextAtSize(text, size);
+      return this.embedder.widthOfTextAtSize(text2, size);
     };
     PDFFont3.prototype.heightAtSize = function(size, options) {
       var _a;
@@ -16934,9 +16952,9 @@ var PDFCheckBox = (
       var onValue = this.acroField.getOnValue();
       return !!onValue && onValue === this.acroField.getValue();
     };
-    PDFCheckBox2.prototype.addToPage = function(page, options) {
+    PDFCheckBox2.prototype.addToPage = function(page2, options) {
       var _a, _b, _c, _d, _e, _f;
-      assertIs(page, "page", [[PDFPage_default, "PDFPage"]]);
+      assertIs(page2, "page", [[PDFPage_default, "PDFPage"]]);
       assertFieldAppearanceOptions(options);
       if (!options)
         options = {};
@@ -16959,13 +16977,13 @@ var PDFCheckBox = (
         borderWidth: (_e = options.borderWidth) !== null && _e !== void 0 ? _e : 0,
         rotate: (_f = options.rotate) !== null && _f !== void 0 ? _f : degrees(0),
         hidden: options.hidden,
-        page: page.ref
+        page: page2.ref
       });
       var widgetRef = this.doc.context.register(widget.dict);
       this.acroField.addWidget(widgetRef);
       widget.setAppearanceState(PDFName_default.of("Off"));
       this.updateWidgetAppearance(widget, PDFName_default.of("Yes"));
-      page.node.addAnnot(widgetRef);
+      page2.node.addAnnot(widgetRef);
     };
     PDFCheckBox2.prototype.needsAppearancesUpdate = function() {
       var _a;
@@ -17140,9 +17158,9 @@ var PDFDropdown = (
     PDFDropdown2.prototype.disableSelectOnClick = function() {
       this.acroField.setFlagTo(AcroChoiceFlags.CommitOnSelChange, false);
     };
-    PDFDropdown2.prototype.addToPage = function(page, options) {
+    PDFDropdown2.prototype.addToPage = function(page2, options) {
       var _a, _b, _c, _d, _e, _f, _g;
-      assertIs(page, "page", [[PDFPage_default, "PDFPage"]]);
+      assertIs(page2, "page", [[PDFPage_default, "PDFPage"]]);
       assertFieldAppearanceOptions(options);
       if (!options)
         options = {};
@@ -17165,13 +17183,13 @@ var PDFDropdown = (
         borderWidth: (_e = options.borderWidth) !== null && _e !== void 0 ? _e : 0,
         rotate: (_f = options.rotate) !== null && _f !== void 0 ? _f : degrees(0),
         hidden: options.hidden,
-        page: page.ref
+        page: page2.ref
       });
       var widgetRef = this.doc.context.register(widget.dict);
       this.acroField.addWidget(widgetRef);
       var font = (_g = options.font) !== null && _g !== void 0 ? _g : this.doc.getForm().getDefaultFont();
       this.updateWidgetAppearance(widget, font);
-      page.node.addAnnot(widgetRef);
+      page2.node.addAnnot(widgetRef);
     };
     PDFDropdown2.prototype.needsAppearancesUpdate = function() {
       var _a;
@@ -17321,9 +17339,9 @@ var PDFOptionList = (
     PDFOptionList2.prototype.disableSelectOnClick = function() {
       this.acroField.setFlagTo(AcroChoiceFlags.CommitOnSelChange, false);
     };
-    PDFOptionList2.prototype.addToPage = function(page, options) {
+    PDFOptionList2.prototype.addToPage = function(page2, options) {
       var _a, _b, _c, _d, _e, _f, _g;
-      assertIs(page, "page", [[PDFPage_default, "PDFPage"]]);
+      assertIs(page2, "page", [[PDFPage_default, "PDFPage"]]);
       assertFieldAppearanceOptions(options);
       if (!options)
         options = {};
@@ -17346,13 +17364,13 @@ var PDFOptionList = (
         borderWidth: (_e = options.borderWidth) !== null && _e !== void 0 ? _e : 0,
         rotate: (_f = options.rotate) !== null && _f !== void 0 ? _f : degrees(0),
         hidden: options.hidden,
-        page: page.ref
+        page: page2.ref
       });
       var widgetRef = this.doc.context.register(widget.dict);
       this.acroField.addWidget(widgetRef);
       var font = (_g = options.font) !== null && _g !== void 0 ? _g : this.doc.getForm().getDefaultFont();
       this.updateWidgetAppearance(widget, font);
-      page.node.addAnnot(widgetRef);
+      page2.node.addAnnot(widgetRef);
     };
     PDFOptionList2.prototype.needsAppearancesUpdate = function() {
       var _a;
@@ -17480,10 +17498,10 @@ var PDFRadioGroup = (
     PDFRadioGroup2.prototype.disableMutualExclusion = function() {
       this.acroField.setFlagTo(AcroButtonFlags.RadiosInUnison, true);
     };
-    PDFRadioGroup2.prototype.addOptionToPage = function(option, page, options) {
+    PDFRadioGroup2.prototype.addOptionToPage = function(option, page2, options) {
       var _a, _b, _c, _d, _e, _f, _g, _h, _j;
       assertIs(option, "option", ["string"]);
-      assertIs(page, "page", [[PDFPage_default, "PDFPage"]]);
+      assertIs(page2, "page", [[PDFPage_default, "PDFPage"]]);
       assertFieldAppearanceOptions(options);
       var widget = this.createWidget({
         x: (_a = options === null || options === void 0 ? void 0 : options.x) !== null && _a !== void 0 ? _a : 0,
@@ -17496,13 +17514,13 @@ var PDFRadioGroup = (
         borderWidth: (_h = options === null || options === void 0 ? void 0 : options.borderWidth) !== null && _h !== void 0 ? _h : 1,
         rotate: (_j = options === null || options === void 0 ? void 0 : options.rotate) !== null && _j !== void 0 ? _j : degrees(0),
         hidden: options === null || options === void 0 ? void 0 : options.hidden,
-        page: page.ref
+        page: page2.ref
       });
       var widgetRef = this.doc.context.register(widget.dict);
       var apStateValue = this.acroField.addWidgetWithOpt(widgetRef, PDFHexString_default.fromText(option), !this.isMutuallyExclusive());
       widget.setAppearanceState(PDFName_default.of("Off"));
       this.updateWidgetAppearance(widget, apStateValue);
-      page.node.addAnnot(widgetRef);
+      page2.node.addAnnot(widgetRef);
     };
     PDFRadioGroup2.prototype.needsAppearancesUpdate = function() {
       var _a;
@@ -17587,16 +17605,16 @@ var PDFTextField = (
       }
       return value === null || value === void 0 ? void 0 : value.decodeText();
     };
-    PDFTextField2.prototype.setText = function(text) {
-      assertOrUndefined(text, "text", ["string"]);
+    PDFTextField2.prototype.setText = function(text2) {
+      assertOrUndefined(text2, "text", ["string"]);
       var maxLength = this.getMaxLength();
-      if (maxLength !== void 0 && text && text.length > maxLength) {
-        throw new ExceededMaxLengthError(text.length, maxLength, this.getName());
+      if (maxLength !== void 0 && text2 && text2.length > maxLength) {
+        throw new ExceededMaxLengthError(text2.length, maxLength, this.getName());
       }
       this.markAsDirty();
       this.disableRichFormatting();
-      if (text) {
-        this.acroField.setValue(PDFHexString_default.fromText(text));
+      if (text2) {
+        this.acroField.setValue(PDFHexString_default.fromText(text2));
       } else {
         this.acroField.removeValue();
       }
@@ -17619,9 +17637,9 @@ var PDFTextField = (
       if (maxLength === void 0) {
         this.acroField.removeMaxLength();
       } else {
-        var text = this.getText();
-        if (text && text.length > maxLength) {
-          throw new InvalidMaxLengthError(text.length, maxLength, this.getName());
+        var text2 = this.getText();
+        if (text2 && text2.length > maxLength) {
+          throw new InvalidMaxLengthError(text2.length, maxLength, this.getName());
         }
         this.acroField.setMaxLength(maxLength);
       }
@@ -17720,9 +17738,9 @@ var PDFTextField = (
     PDFTextField2.prototype.disableRichFormatting = function() {
       this.acroField.setFlagTo(AcroTextFlags.RichText, false);
     };
-    PDFTextField2.prototype.addToPage = function(page, options) {
+    PDFTextField2.prototype.addToPage = function(page2, options) {
       var _a, _b, _c, _d, _e, _f, _g;
-      assertIs(page, "page", [[PDFPage_default, "PDFPage"]]);
+      assertIs(page2, "page", [[PDFPage_default, "PDFPage"]]);
       assertFieldAppearanceOptions(options);
       if (!options)
         options = {};
@@ -17745,13 +17763,13 @@ var PDFTextField = (
         borderWidth: (_e = options.borderWidth) !== null && _e !== void 0 ? _e : 0,
         rotate: (_f = options.rotate) !== null && _f !== void 0 ? _f : degrees(0),
         hidden: options.hidden,
-        page: page.ref
+        page: page2.ref
       });
       var widgetRef = this.doc.context.register(widget.dict);
       this.acroField.addWidget(widgetRef);
       var font = (_g = options.font) !== null && _g !== void 0 ? _g : this.doc.getForm().getDefaultFont();
       this.updateWidgetAppearance(widget, font);
-      page.node.addAnnot(widgetRef);
+      page2.node.addAnnot(widgetRef);
     };
     PDFTextField2.prototype.needsAppearancesUpdate = function() {
       var _a;
@@ -17960,10 +17978,10 @@ var PDFForm = (
       assertIs(name, "name", ["string"]);
       var nameParts = splitFieldName(name);
       var parent = this.findOrCreateNonTerminals(nameParts.nonTerminal);
-      var text = PDFAcroText_default.create(this.doc.context);
-      text.setPartialName(nameParts.terminal);
-      addFieldToParent(parent, [text, text.ref], nameParts.terminal);
-      return PDFTextField_default.of(text, text.ref, this.doc);
+      var text2 = PDFAcroText_default.create(this.doc.context);
+      text2.setPartialName(nameParts.terminal);
+      addFieldToParent(parent, [text2, text2.ref], nameParts.terminal);
+      return PDFTextField_default.of(text2, text2.ref, this.doc);
     };
     PDFForm2.prototype.flatten = function(options) {
       if (options === void 0) {
@@ -17978,9 +17996,9 @@ var PDFForm = (
         var widgets = field.acroField.getWidgets();
         for (var j = 0, lenWidgets = widgets.length; j < lenWidgets; j++) {
           var widget = widgets[j];
-          var page = this.findWidgetPage(widget);
+          var page2 = this.findWidgetPage(widget);
           var widgetRef = this.findWidgetAppearanceRef(field, widget);
-          var xObjectKey = page.node.newXObject("FlatWidget", widgetRef);
+          var xObjectKey = page2.node.newXObject("FlatWidget", widgetRef);
           var rectangle = widget.getRectangle();
           var operators = __spreadArrays([
             pushGraphicsState(),
@@ -17989,7 +18007,7 @@ var PDFForm = (
             drawObject(xObjectKey),
             popGraphicsState()
           ]).filter(Boolean);
-          page.pushOperators.apply(page, operators);
+          page2.pushOperators.apply(page2, operators);
         }
         this.removeField(field);
       }
@@ -18000,12 +18018,12 @@ var PDFForm = (
       for (var i = 0, len = widgets.length; i < len; i++) {
         var widget = widgets[i];
         var widgetRef = this.findWidgetAppearanceRef(field, widget);
-        var page = this.findWidgetPage(widget);
-        pages.add(page);
-        page.node.removeAnnot(widgetRef);
+        var page2 = this.findWidgetPage(widget);
+        pages.add(page2);
+        page2.node.removeAnnot(widgetRef);
       }
-      pages.forEach(function(page2) {
-        return page2.node.removeAnnot(field.ref);
+      pages.forEach(function(page3) {
+        return page3.node.removeAnnot(field.ref);
       });
       this.acroForm.removeField(field.acroField);
       var fieldKids = field.acroField.normalizedEntries().Kids;
@@ -18046,20 +18064,20 @@ var PDFForm = (
     };
     PDFForm2.prototype.findWidgetPage = function(widget) {
       var pageRef = widget.P();
-      var page = this.doc.getPages().find(function(x) {
+      var page2 = this.doc.getPages().find(function(x) {
         return x.ref === pageRef;
       });
-      if (page === void 0) {
+      if (page2 === void 0) {
         var widgetRef = this.doc.context.getObjectRef(widget.dict);
         if (widgetRef === void 0) {
           throw new Error("Could not find PDFRef for PDFObject");
         }
-        page = this.doc.findPageForAnnotationRef(widgetRef);
-        if (page === void 0) {
+        page2 = this.doc.findPageForAnnotationRef(widgetRef);
+        if (page2 === void 0) {
           throw new Error("Could not find page for PDFRef " + widgetRef);
         }
       }
-      return page;
+      return page2;
     };
     PDFForm2.prototype.findWidgetAppearanceRef = function(field, widget) {
       var _a;
@@ -18393,12 +18411,12 @@ var PDFDocument = (
         var pages = [];
         _this.catalog.Pages().traverse(function(node, ref) {
           if (node instanceof PDFPageLeaf_default) {
-            var page = _this.pageMap.get(node);
-            if (!page) {
-              page = PDFPage_default.of(node, ref, _this);
-              _this.pageMap.set(node, page);
+            var page2 = _this.pageMap.get(node);
+            if (!page2) {
+              page2 = PDFPage_default.of(node, ref, _this);
+              _this.pageMap.set(node, page2);
             }
-            pages.push(page);
+            pages.push(page2);
           }
         });
         return pages;
@@ -18605,27 +18623,27 @@ var PDFDocument = (
       this.catalog.removeLeafNode(index);
       this.pageCount = pageCount - 1;
     };
-    PDFDocument2.prototype.addPage = function(page) {
-      assertIs(page, "page", ["undefined", [PDFPage_default, "PDFPage"], Array]);
-      return this.insertPage(this.getPageCount(), page);
+    PDFDocument2.prototype.addPage = function(page2) {
+      assertIs(page2, "page", ["undefined", [PDFPage_default, "PDFPage"], Array]);
+      return this.insertPage(this.getPageCount(), page2);
     };
-    PDFDocument2.prototype.insertPage = function(index, page) {
+    PDFDocument2.prototype.insertPage = function(index, page2) {
       var pageCount = this.getPageCount();
       assertRange(index, "index", 0, pageCount);
-      assertIs(page, "page", ["undefined", [PDFPage_default, "PDFPage"], Array]);
-      if (!page || Array.isArray(page)) {
-        var dims = Array.isArray(page) ? page : PageSizes.A4;
-        page = PDFPage_default.create(this);
-        page.setSize.apply(page, dims);
-      } else if (page.doc !== this) {
+      assertIs(page2, "page", ["undefined", [PDFPage_default, "PDFPage"], Array]);
+      if (!page2 || Array.isArray(page2)) {
+        var dims = Array.isArray(page2) ? page2 : PageSizes.A4;
+        page2 = PDFPage_default.create(this);
+        page2.setSize.apply(page2, dims);
+      } else if (page2.doc !== this) {
         throw new ForeignPageError();
       }
-      var parentRef = this.catalog.insertLeafNode(page.ref, index);
-      page.node.setParent(parentRef);
-      this.pageMap.set(page.node, page);
+      var parentRef = this.catalog.insertLeafNode(page2.ref, index);
+      page2.node.setParent(parentRef);
+      this.pageMap.set(page2.node, page2);
       this.pageCache.invalidate();
       this.pageCount = pageCount + 1;
-      return page;
+      return page2;
     };
     PDFDocument2.prototype.copyPages = function(srcDoc, indices) {
       return __awaiter(this, void 0, void 0, function() {
@@ -18854,14 +18872,14 @@ var PDFDocument = (
         });
       });
     };
-    PDFDocument2.prototype.embedPage = function(page, boundingBox, transformationMatrix) {
+    PDFDocument2.prototype.embedPage = function(page2, boundingBox, transformationMatrix) {
       return __awaiter(this, void 0, void 0, function() {
         var embeddedPage;
         return __generator(this, function(_a) {
           switch (_a.label) {
             case 0:
-              assertIs(page, "page", [[PDFPage_default, "PDFPage"]]);
-              return [4, this.embedPages([page], [boundingBox], [transformationMatrix])];
+              assertIs(page2, "page", [[PDFPage_default, "PDFPage"]]);
+              return [4, this.embedPages([page2], [boundingBox], [transformationMatrix])];
             case 1:
               embeddedPage = _a.sent()[0];
               return [2, embeddedPage];
@@ -18877,7 +18895,7 @@ var PDFDocument = (
         transformationMatrices = [];
       }
       return __awaiter(this, void 0, void 0, function() {
-        var idx, len, currPage, nextPage, context, maybeCopyPage, embeddedPages, idx, len, page, box, matrix, embedder, ref;
+        var idx, len, currPage, nextPage, context, maybeCopyPage, embeddedPages, idx, len, page2, box, matrix, embedder, ref;
         var _a;
         return __generator(this, function(_b) {
           switch (_b.label) {
@@ -18900,10 +18918,10 @@ var PDFDocument = (
               _b.label = 1;
             case 1:
               if (!(idx < len)) return [3, 4];
-              page = maybeCopyPage(pages[idx].node);
+              page2 = maybeCopyPage(pages[idx].node);
               box = boundingBoxes[idx];
               matrix = transformationMatrices[idx];
-              return [4, PDFPageEmbedder_default.for(page, box, matrix)];
+              return [4, PDFPageEmbedder_default.for(page2, box, matrix)];
             case 2:
               embedder = _b.sent();
               ref = this.context.nextRef();
@@ -19000,10 +19018,10 @@ var PDFDocument = (
     PDFDocument2.prototype.findPageForAnnotationRef = function(ref) {
       var pages = this.getPages();
       for (var idx = 0, len = pages.length; idx < len; idx++) {
-        var page = pages[idx];
-        var annotations = page.node.Annots();
+        var page2 = pages[idx];
+        var annotations = page2.node.Annots();
         if ((annotations === null || annotations === void 0 ? void 0 : annotations.indexOf(ref)) !== void 0) {
-          return page;
+          return page2;
         }
       }
       return void 0;
@@ -19322,12 +19340,12 @@ var PDFPage = (
       var contentStream = this.getContentStream();
       contentStream.push.apply(contentStream, operator);
     };
-    PDFPage3.prototype.drawText = function(text, options) {
+    PDFPage3.prototype.drawText = function(text2, options) {
       var _a, _b, _c, _d, _e, _f, _g;
       if (options === void 0) {
         options = {};
       }
-      assertIs(text, "text", ["string"]);
+      assertIs(text2, "text", ["string"]);
       assertOrUndefined(options.color, "options.color", [[Object, "Color"]]);
       assertRangeOrUndefined(options.opacity, "opacity.opacity", 0, 1);
       assertOrUndefined(options.font, "options.font", [[PDFFont_default, "PDFFont"]]);
@@ -19347,7 +19365,7 @@ var PDFPage = (
       var textWidth = function(t) {
         return newFont.widthOfTextAtSize(t, fontSize);
       };
-      var lines = options.maxWidth === void 0 ? lineSplit(cleanText(text)) : breakTextIntoLines(text, wordBreaks, options.maxWidth, textWidth);
+      var lines = options.maxWidth === void 0 ? lineSplit(cleanText(text2)) : breakTextIntoLines(text2, wordBreaks, options.maxWidth, textWidth);
       var encodedLines = new Array(lines.length);
       for (var idx = 0, len = lines.length; idx < len; idx++) {
         encodedLines[idx] = newFont.encodeText(lines[idx]);
@@ -19767,10 +19785,10 @@ var PDFButton = (
       this.acroField.setFontSize(fontSize);
       this.markAsDirty();
     };
-    PDFButton2.prototype.addToPage = function(text, page, options) {
+    PDFButton2.prototype.addToPage = function(text2, page2, options) {
       var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
-      assertOrUndefined(text, "text", ["string"]);
-      assertOrUndefined(page, "page", [[PDFPage_default, "PDFPage"]]);
+      assertOrUndefined(text2, "text", ["string"]);
+      assertOrUndefined(page2, "page", [[PDFPage_default, "PDFPage"]]);
       assertFieldAppearanceOptions(options);
       var widget = this.createWidget({
         x: ((_a = options === null || options === void 0 ? void 0 : options.x) !== null && _a !== void 0 ? _a : 0) - ((_b = options === null || options === void 0 ? void 0 : options.borderWidth) !== null && _b !== void 0 ? _b : 0) / 2,
@@ -19782,15 +19800,15 @@ var PDFButton = (
         borderColor: options === null || options === void 0 ? void 0 : options.borderColor,
         borderWidth: (_j = options === null || options === void 0 ? void 0 : options.borderWidth) !== null && _j !== void 0 ? _j : 0,
         rotate: (_k = options === null || options === void 0 ? void 0 : options.rotate) !== null && _k !== void 0 ? _k : degrees(0),
-        caption: text,
+        caption: text2,
         hidden: options === null || options === void 0 ? void 0 : options.hidden,
-        page: page.ref
+        page: page2.ref
       });
       var widgetRef = this.doc.context.register(widget.dict);
       this.acroField.addWidget(widgetRef);
       var font = (_l = options === null || options === void 0 ? void 0 : options.font) !== null && _l !== void 0 ? _l : this.doc.getForm().getDefaultFont();
       this.updateWidgetAppearance(widget, font);
-      page.node.addAnnot(widgetRef);
+      page2.node.addAnnot(widgetRef);
     };
     PDFButton2.prototype.needsAppearancesUpdate = function() {
       var _a;
@@ -19861,8 +19879,8 @@ function collectFontNames(nodes, out) {
 }
 async function loadFonts(doc, tree, providedBytes, srcFallback) {
   const names = /* @__PURE__ */ new Set();
-  for (const page of tree.pages) {
-    collectFontNames(page.nodes, names);
+  for (const page2 of tree.pages) {
+    collectFontNames(page2.nodes, names);
   }
   names.add("Helvetica");
   const fontMap = /* @__PURE__ */ new Map();
@@ -19887,7 +19905,7 @@ async function loadFonts(doc, tree, providedBytes, srcFallback) {
   }
   return fontMap;
 }
-function addUriAnnotation(doc, page, rect, url) {
+function addUriAnnotation(doc, page2, rect, url) {
   const annotRef = doc.context.register(
     doc.context.obj({
       Type: PDFName_default.of("Annot"),
@@ -19901,11 +19919,11 @@ function addUriAnnotation(doc, page, rect, url) {
       })
     })
   );
-  const existing = page.node.lookupMaybe(PDFName_default.of("Annots"), PDFArray_default);
+  const existing = page2.node.lookupMaybe(PDFName_default.of("Annots"), PDFArray_default);
   if (existing) {
     existing.push(annotRef);
   } else {
-    page.node.set(PDFName_default.of("Annots"), doc.context.obj([annotRef]));
+    page2.node.set(PDFName_default.of("Annots"), doc.context.obj([annotRef]));
   }
 }
 async function buildPdf(tree, providedBytes, srcFallback) {
@@ -19918,9 +19936,9 @@ async function buildPdf(tree, providedBytes, srcFallback) {
   doc.setProducer("lpdf.io");
   const fontMap = await loadFonts(doc, tree, providedBytes, srcFallback);
   for (const pageData of tree.pages) {
-    const page = doc.addPage([pageData.width, pageData.height]);
+    const page2 = doc.addPage([pageData.width, pageData.height]);
     if (pageData.background) {
-      page.drawRectangle({
+      page2.drawRectangle({
         x: 0,
         y: 0,
         width: pageData.width,
@@ -19930,7 +19948,7 @@ async function buildPdf(tree, providedBytes, srcFallback) {
       });
     }
     for (const node of pageData.nodes) {
-      drawNode(doc, page, node, fontMap);
+      drawNode(doc, page2, node, fontMap);
     }
     if (tree.watermark) {
       const wFont = fontMap.get("Helvetica");
@@ -19940,7 +19958,7 @@ async function buildPdf(tree, providedBytes, srcFallback) {
       const textW = wFont.widthOfTextAtSize(wText, wSize);
       const wX = pageData.width - wPad - textW;
       const wY = pageData.height - wPad - wSize;
-      page.drawText(wText, {
+      page2.drawText(wText, {
         x: wX,
         y: wY,
         font: wFont,
@@ -19948,20 +19966,20 @@ async function buildPdf(tree, providedBytes, srcFallback) {
         color: parseHex("#aaaaaa")
       });
       if (tree.watermark.url) {
-        addUriAnnotation(doc, page, [wX, wY, wX + textW, wY + wSize], tree.watermark.url);
+        addUriAnnotation(doc, page2, [wX, wY, wX + textW, wY + wSize], tree.watermark.url);
       }
     }
   }
   return doc.save();
 }
-function drawNode(doc, page, node, fonts) {
-  const pageH = page.getHeight();
+function drawNode(doc, page2, node, fonts) {
+  const pageH = page2.getHeight();
   if (node.type === "box") {
     const hasFill = !!node.fill;
     const hasBorder = node.border_width > 0 && !!node.border_color;
     const pdfY = pageH - node.y - node.height;
     if (hasFill || hasBorder) {
-      page.drawRectangle({
+      page2.drawRectangle({
         x: node.x,
         y: pdfY,
         width: node.width,
@@ -19973,10 +19991,10 @@ function drawNode(doc, page, node, fonts) {
       });
     }
     for (const child of node.children) {
-      drawNode(doc, page, child, fonts);
+      drawNode(doc, page2, child, fonts);
     }
   } else if (node.type === "line") {
-    page.drawLine({
+    page2.drawLine({
       start: { x: node.x1, y: pageH - node.y1 },
       end: { x: node.x2, y: pageH - node.y2 },
       thickness: node.thickness,
@@ -19994,7 +20012,7 @@ function drawNode(doc, page, node, fonts) {
       drawX = node.x;
     }
     const pdfY = pageH - node.y - node.size;
-    page.drawText(node.content, {
+    page2.drawText(node.content, {
       x: drawX,
       y: pdfY,
       font,
@@ -20003,9 +20021,9 @@ function drawNode(doc, page, node, fonts) {
     });
   } else if (node.type === "link") {
     for (const child of node.children) {
-      drawNode(doc, page, child, fonts);
+      drawNode(doc, page2, child, fonts);
     }
-    addUriAnnotation(doc, page, [
+    addUriAnnotation(doc, page2, [
       node.x,
       pageH - node.y - node.height,
       node.x + node.width,
@@ -20025,6 +20043,103 @@ function parseHex(hex) {
   );
 }
 
+// src/kit.ts
+function attrKey(camel) {
+  return camel.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());
+}
+function buildAttrs(options) {
+  const result = {};
+  for (const [key, val] of Object.entries(options)) {
+    if (val !== void 0) {
+      result[attrKey(key)] = val;
+    }
+  }
+  return result;
+}
+function makeContainer(type, input) {
+  return {
+    type,
+    attrs: buildAttrs(input.options ?? {}),
+    children: input.nodes ?? []
+  };
+}
+function stack(input = {}) {
+  return makeContainer("stack", input);
+}
+function flank(input = {}) {
+  return makeContainer("flank", input);
+}
+function split(input = {}) {
+  return makeContainer("split", input);
+}
+function cluster(input = {}) {
+  return makeContainer("cluster", input);
+}
+function grid(input = {}) {
+  return makeContainer("grid", input);
+}
+function frame(input = {}) {
+  return makeContainer("frame", input);
+}
+function link(input = {}) {
+  return makeContainer("link", input);
+}
+function text(input = {}) {
+  return {
+    type: "text",
+    attrs: buildAttrs(input.options ?? {}),
+    children: input.nodes ?? []
+  };
+}
+function span(input = {}) {
+  return {
+    type: "span",
+    attrs: buildAttrs(input.options ?? {}),
+    children: input.nodes ?? []
+  };
+}
+function divider(input = {}) {
+  return {
+    type: "divider",
+    attrs: buildAttrs(input.options ?? {})
+  };
+}
+function page(input = {}) {
+  return {
+    type: "page",
+    attrs: buildAttrs(input.options ?? {}),
+    children: input.nodes ?? []
+  };
+}
+function document(input = {}) {
+  const { tokens, meta, ...restOpts } = input.options ?? {};
+  const attrs = {
+    ...buildAttrs(restOpts)
+  };
+  if (tokens !== void 0) attrs["tokens"] = tokens;
+  if (meta !== void 0) attrs["meta"] = meta;
+  return {
+    version: 1,
+    type: "document",
+    attrs,
+    children: input.nodes ?? []
+  };
+}
+var LpdfKit = Object.freeze({
+  stack,
+  flank,
+  split,
+  cluster,
+  grid,
+  frame,
+  link,
+  text,
+  span,
+  divider,
+  page,
+  document
+});
+
 // src/browser.ts
 async function initLpdf(wasmSource, licenseKey = "", initOptions = {}) {
   await __wbg_init(wasmSource);
@@ -20041,6 +20156,7 @@ async function initLpdf(wasmSource, licenseKey = "", initOptions = {}) {
   };
 }
 export {
+  LpdfKit,
   initLpdf
 };
 /*! Bundled license information:

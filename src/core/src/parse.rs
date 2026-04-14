@@ -86,6 +86,42 @@ pub enum Repeat {
     First,
 }
 
+// ── Font-token resolution ────────────────────────────────────────────────────
+
+/// Walk every node in the document and replace font token aliases (e.g.
+/// `"heading"`, `"body"`) with their resolved builtin font names (e.g.
+/// `"Helvetica-Bold"`, `"Helvetica"`).  This lets `measure_natural_w` in
+/// the layout engine call `text_width` with a real font name and get correct
+/// per-character AFM metrics instead of the generic 0.44 fallback.
+fn resolve_font_tokens(doc: &mut Document) {
+    // Clone to satisfy the borrow checker (fonts is small — typically 2–5 entries).
+    let fonts = doc.fonts.clone();
+    for page in &mut doc.pages {
+        for node in &mut page.children {
+            resolve_node_font(node, &fonts);
+        }
+    }
+}
+
+fn resolve_node_font(node: &mut Node, fonts: &std::collections::HashMap<String, crate::tokens::FontDef>) {
+    // Resolve the node's own font field (used by Text nodes for their base font).
+    if let Some(crate::tokens::FontDef::Builtin(builtin)) = fonts.get(&node.font) {
+        node.font = builtin.clone();
+    }
+    // Resolve per-run font overrides inside Text nodes.
+    for run in &mut node.text_runs {
+        if let Some(ref alias) = run.font.clone() {
+            if let Some(crate::tokens::FontDef::Builtin(builtin)) = fonts.get(alias) {
+                run.font = Some(builtin.clone());
+            }
+        }
+    }
+    // Recurse.
+    for child in &mut node.children {
+        resolve_node_font(child, fonts);
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeKind {
     Stack,
@@ -260,7 +296,9 @@ pub fn parse(xml: &str) -> Result<Document, String> {
         }
     }
 
-    Ok(Document { meta, fonts: tokens.fonts, pages })
+    let mut doc = Document { meta, fonts: tokens.fonts, pages };
+    resolve_font_tokens(&mut doc);
+    Ok(doc)
 }
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
@@ -281,6 +319,11 @@ fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), 
                         let def = if let Some(b) = font_elem.attribute("builtin") {
                             FontDef::Builtin(b.to_string())
                         } else if let Some(s) = font_elem.attribute("src") {
+                            if is_url(s) {
+                                return Err(format!(
+                                    "<font name=\"{name}\"> src must be a file path, not a URL"
+                                ));
+                            }
                             FontDef::Src(s.to_string())
                         } else {
                             return Err(format!(
@@ -610,6 +653,19 @@ fn parse_justify(val: &str) -> Result<Justify, String> {
     }
 }
 
+// ── Asset path helpers ────────────────────────────────────────────────────────
+
+/// Returns `true` if the string looks like a URL (starts with a known scheme).
+/// Used to reject URLs where only file paths are accepted (fonts, images).
+fn is_url(s: &str) -> bool {
+    let lower = s.to_ascii_lowercase();
+    lower.starts_with("http://")
+        || lower.starts_with("https://")
+        || lower.starts_with("ftp://")
+        || lower.starts_with("file://")
+        || lower.starts_with("data:")
+}
+
 // ── XML helpers ───────────────────────────────────────────────────────────────
 
 fn elems<'a>(
@@ -716,7 +772,9 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
         return Err("document must have at least one page".into());
     }
 
-    Ok(Document { meta, fonts: tokens.fonts, pages })
+    let mut doc = Document { meta, fonts: tokens.fonts, pages };
+    resolve_font_tokens(&mut doc);
+    Ok(doc)
 }
 
 fn parse_tree_tokens(
@@ -758,6 +816,11 @@ fn parse_tree_tokens(
             let font_def = if let Some(b) = def.get("builtin").and_then(|v| v.as_str()) {
                 FontDef::Builtin(b.to_string())
             } else if let Some(s) = def.get("src").and_then(|v| v.as_str()) {
+                if is_url(s) {
+                    return Err(format!(
+                        "font '{name}' src must be a file path, not a URL"
+                    ));
+                }
                 FontDef::Src(s.to_string())
             } else {
                 return Err(format!("font '{name}' needs 'src' or 'builtin'"));

@@ -1,19 +1,23 @@
 import { RenderOptions } from './_shared';
+import { LpdfDocument } from './kit';
 export type { RenderOptions } from './_shared';
+export type { LpdfDocument, LpdfPageNode, LpdfNode, LpdfContainerNode, LpdfTextNode, LpdfSpanNode, LpdfDividerNode, LpdfTokens, LpdfFontDef, LpdfMeta, StackInput, FlankInput, SplitInput, ClusterInput, GridInput, FrameInput, LinkInput, TextInput, SpanInput, DividerInput, PageInput, DocumentInput, StackOptions, FlankOptions, SplitOptions, ClusterOptions, GridOptions, FrameOptions, LinkOptions, TextOptions, SpanOptions, DividerOptions, PageOptions, DocumentOptions } from './kit';
+export { LpdfKit } from './kit';
+export { kitToXml } from './kit-to-xml';
 /**
  * Stateful renderer. Construct once with the license key and optional shared
  * config; call `renderPdf` as many times as needed without repeating the key.
  */
-export declare class Lpdf {
+export declare class LpdfEngine {
     private readonly _licenseKey;
     private readonly _opts;
     constructor(licenseKey: string, options?: RenderOptions);
     /**
-     * Render an lpdf XML document to PDF bytes (Node.js).
-     * Per-call `fontBytes` are merged with the instance-level ones; per-call
-     * keys win on collision.  Custom fonts not supplied via `fontBytes` are
-     * loaded from disk using the `src` path in the document's `<fonts>`
-     * declaration.
+     * Render an lpdf XML string to PDF bytes (Node.js).
      */
-    renderPdf(xml: string, callOptions?: RenderOptions): Promise<Uint8Array>;
+    renderPdf(input: string, callOptions?: RenderOptions): Promise<Uint8Array>;
+    /**
+     * Render an `LpdfDocument` tree (built with `LpdfKit`) to PDF bytes (Node.js).
+     */
+    renderPdf(input: LpdfDocument, callOptions?: RenderOptions): Promise<Uint8Array>;
 }

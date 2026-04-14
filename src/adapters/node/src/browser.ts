@@ -15,10 +15,17 @@
  * Custom fonts must be pre-loaded and supplied via `fontBytes`; there is no
  * automatic filesystem fallback in a browser context.
  */
-import initWasm, { LpdfEngine } from '../../../../dist/web/lpdf.js';
+import initWasm, { LpdfEngine as WasmEngine } from '../../../../dist/web/lpdf.js';
 import { buildPdf, RenderOptions, RenderTree } from './_shared';
 
 export type { RenderOptions } from './_shared';
+export type { LpdfDocument, LpdfPageNode, LpdfNode, LpdfContainerNode, LpdfTextNode, LpdfSpanNode, LpdfDividerNode,
+              LpdfTokens, LpdfFontDef, LpdfMeta,
+              StackInput, FlankInput, SplitInput, ClusterInput, GridInput, FrameInput, LinkInput,
+              TextInput, SpanInput, DividerInput, PageInput, DocumentInput,
+              StackOptions, FlankOptions, SplitOptions, ClusterOptions, GridOptions, FrameOptions, LinkOptions,
+              TextOptions, SpanOptions, DividerOptions, PageOptions, DocumentOptions } from './kit';
+export { LpdfKit } from './kit';
 
 export interface LpdfBrowser {
   /**
@@ -49,7 +56,7 @@ export async function initLpdf(
   return {
     async renderPdf(xml: string, callOptions: RenderOptions = {}): Promise<Uint8Array> {
       const fontBytes = { ...initOptions.fontBytes, ...callOptions.fontBytes };
-      const engine = new LpdfEngine(licenseKey);
+      const engine = new WasmEngine(licenseKey);
       const raw = engine.render(xml);
       engine.free();
 
