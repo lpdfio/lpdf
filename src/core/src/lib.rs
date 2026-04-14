@@ -31,6 +31,28 @@ impl LpdfEngine {
             }
         };
 
+        self.render_doc(doc)
+    }
+
+    pub fn render_tree(&self, json: &str) -> String {
+        if json.len() > 4_194_304 {
+            return r#"{"error":"input exceeds 4 MB limit"}"#.to_string();
+        }
+
+        let doc = match parse::parse_tree(json) {
+            Ok(d) => d,
+            Err(e) => {
+                return serde_json::json!({ "error": e }).to_string();
+            }
+        };
+
+        self.render_doc(doc)
+    }
+}
+
+// Private helpers — not exported to WASM.
+impl LpdfEngine {
+    fn render_doc(&self, doc: parse::Document) -> String {
         let pages: Vec<render::RenderPage> =
             doc.pages.iter().flat_map(layout::layout_page).collect();
 

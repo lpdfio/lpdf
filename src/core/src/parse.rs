@@ -633,6 +633,368 @@ fn opt_attr(elem: &roxmltree::Node, name: &str) -> String {
     elem.attribute(name).unwrap_or("").to_string()
 }
 
+// ── Tree (JSON) parser ────────────────────────────────────────────────────────
+
+/// Inline helper: read a string attribute from a JSON node's "attrs" object.
+fn jattr<'a>(json: &'a serde_json::Value, key: &str) -> Option<&'a str> {
+    json.get("attrs")?.get(key)?.as_str()
+}
+
+/// Parse a JSON document tree (produced by `LpdfKit`) into a `Document`.
+pub fn parse_tree(json: &str) -> Result<Document, String> {
+    let root: serde_json::Value = serde_json::from_str(json)
+        .map_err(|e| format!("JSON parse error: {e}"))?;
+
+    match root.get("version").and_then(|v| v.as_u64()) {
+        Some(1) => {}
+        Some(v) => return Err(format!("unsupported tree version: {v}")),
+        None    => return Err("tree JSON missing 'version' field".into()),
+    }
+    if root.get("type").and_then(|v| v.as_str()) != Some("document") {
+        return Err("tree root 'type' must be 'document'".into());
+    }
+
+    let empty_map = serde_json::Map::new();
+    let attrs = root.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty_map);
+
+    // ── Tokens ────────────────────────────────────────────────────────────────
+    let mut tokens = Tokens::default();
+    if let Some(tok) = attrs.get("tokens").and_then(|v| v.as_object()) {
+        parse_tree_tokens(tok, &mut tokens)?;
+    }
+
+    // ── Meta ──────────────────────────────────────────────────────────────────
+    let meta = if let Some(m) = attrs.get("meta").and_then(|v| v.as_object()) {
+        Meta {
+            title:    m.get("title")   .and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            author:   m.get("author")  .and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            subject:  m.get("subject") .and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            keywords: m.get("keywords").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            creator:  m.get("creator") .and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        }
+    } else {
+        Meta::default()
+    };
+
+    // ── Document-level page defaults ──────────────────────────────────────────
+    let doc_size_str  = attrs.get("size")       .and_then(|v| v.as_str());
+    let doc_orient    = attrs.get("orientation").and_then(|v| v.as_str());
+    let doc_margin_s  = attrs.get("margin")     .and_then(|v| v.as_str());
+    let doc_bg_s      = attrs.get("background") .and_then(|v| v.as_str());
+
+    let mut doc_size = if let Some(s) = doc_size_str {
+        parse_page_size(s)?
+    } else {
+        (595.28_f32, 841.89_f32) // a4
+    };
+    if doc_orient == Some("landscape") {
+        doc_size = (doc_size.1, doc_size.0);
+    }
+    let doc_margin = if let Some(s) = doc_margin_s {
+        tokens.resolve_spacing(s)?
+    } else {
+        [0.0_f32; 4]
+    };
+    let doc_background = if let Some(s) = doc_bg_s {
+        Some(tokens.resolve_color(s)?)
+    } else {
+        None
+    };
+
+    // ── Pages ─────────────────────────────────────────────────────────────────
+    let page_arr = root.get("children").and_then(|v| v.as_array())
+        .ok_or("tree JSON 'children' must be an array")?;
+
+    let mut pages: Vec<Page> = Vec::new();
+    for child in page_arr {
+        if child.get("type").and_then(|v| v.as_str()) != Some("page") {
+            return Err("document children must all be page nodes".into());
+        }
+        pages.push(parse_tree_page(child, doc_size, doc_margin, doc_background.clone(), &tokens)?);
+    }
+    if pages.is_empty() {
+        return Err("document must have at least one page".into());
+    }
+
+    Ok(Document { meta, fonts: tokens.fonts, pages })
+}
+
+fn parse_tree_tokens(
+    obj: &serde_json::Map<String, serde_json::Value>,
+    tokens: &mut Tokens,
+) -> Result<(), String> {
+    use crate::tokens::scale_idx;
+
+    // Helper: overlay a [f32; 6] array from a JSON string map.
+    let apply_scale = |json_key: &str, scale: &mut [f32; 6]| -> Result<(), String> {
+        if let Some(map) = obj.get(json_key).and_then(|v| v.as_object()) {
+            for (k, v) in map {
+                if let (Some(idx), Some(s)) = (scale_idx(k), v.as_str()) {
+                    scale[idx] = parse_pt(s)
+                        .ok_or_else(|| format!("invalid {json_key} token '{k}': '{s}'"))?;
+                }
+            }
+        }
+        Ok(())
+    };
+
+    apply_scale("space",  &mut tokens.space)?;
+    apply_scale("border", &mut tokens.border)?;
+    apply_scale("radius", &mut tokens.radius)?;
+    apply_scale("width",  &mut tokens.width)?;
+    apply_scale("grid",   &mut tokens.grid_col)?;
+    apply_scale("text",   &mut tokens.text)?;
+
+    if let Some(colors) = obj.get("colors").and_then(|v| v.as_object()) {
+        for (k, v) in colors {
+            if let Some(s) = v.as_str() {
+                tokens.colors.insert(k.clone(), crate::tokens::normalize_hex(s)?);
+            }
+        }
+    }
+
+    if let Some(fonts) = obj.get("fonts").and_then(|v| v.as_object()) {
+        for (name, def) in fonts {
+            let font_def = if let Some(b) = def.get("builtin").and_then(|v| v.as_str()) {
+                FontDef::Builtin(b.to_string())
+            } else if let Some(s) = def.get("src").and_then(|v| v.as_str()) {
+                FontDef::Src(s.to_string())
+            } else {
+                return Err(format!("font '{name}' needs 'src' or 'builtin'"));
+            };
+            tokens.fonts.insert(name.clone(), font_def);
+        }
+    }
+
+    Ok(())
+}
+
+fn parse_tree_page(
+    json: &serde_json::Value,
+    doc_size: (f32, f32),
+    doc_margin: [f32; 4],
+    doc_background: Option<String>,
+    tokens: &Tokens,
+) -> Result<Page, String> {
+    let mut size = doc_size;
+    let mut margin = doc_margin;
+    let mut background = doc_background;
+
+    if let Some(s) = jattr(json, "size") {
+        size = parse_page_size(s)?;
+    }
+    if jattr(json, "orientation") == Some("landscape") {
+        size = (size.1, size.0);
+    }
+    if let Some(s) = jattr(json, "margin") {
+        margin = tokens.resolve_spacing(s)?;
+    }
+    if let Some(s) = jattr(json, "background") {
+        background = Some(tokens.resolve_color(s)?);
+    }
+
+    let children = if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
+        arr.iter().map(|c| parse_tree_node(c, tokens)).collect::<Result<Vec<_>, _>>()?
+    } else {
+        vec![]
+    };
+
+    Ok(Page { width: size.0, height: size.1, margin, background, children })
+}
+
+fn parse_tree_node(json: &serde_json::Value, tokens: &Tokens) -> Result<Node, String> {
+    let type_str = json.get("type").and_then(|v| v.as_str())
+        .ok_or_else(|| "node missing 'type' field".to_string())?;
+
+    let kind = match type_str {
+        "stack"   => NodeKind::Stack,
+        "flank"   => NodeKind::Flank,
+        "split"   => NodeKind::Split,
+        "cluster" => NodeKind::Cluster,
+        "grid"    => NodeKind::Grid,
+        "frame"   => NodeKind::Frame,
+        "divider" => NodeKind::Divider,
+        "text"    => NodeKind::Text,
+        "link"    => NodeKind::Link,
+        other => return Err(format!("unknown node type: '{other}'")),
+    };
+
+    let mut node = Node::default_for(kind.clone());
+
+    // ── Shared box attrs ──────────────────────────────────────────────────────
+    if let Some(v) = jattr(json, "gap") {
+        node.gap = tokens.resolve_space(v)?;
+    }
+    if let Some(v) = jattr(json, "padding") {
+        node.padding = tokens.resolve_spacing(v)?;
+    }
+    if let Some(v) = jattr(json, "background") {
+        node.background = Some(tokens.resolve_color(v)?);
+    }
+    if let Some(v) = jattr(json, "border") {
+        node.border = Some(tokens.resolve_border(v)?);
+    }
+    if let Some(v) = jattr(json, "radius") {
+        node.radius = tokens.resolve_radius(v)?;
+    }
+    if let Some(v) = jattr(json, "height") {
+        node.height_mode = match v {
+            "full" => HeightMode::Full,
+            "fill" => HeightMode::Fill,
+            other  => {
+                parse_pt(other)
+                    .map(HeightMode::Fixed)
+                    .ok_or_else(|| format!("invalid height value: '{other}'"))?
+            }
+        };
+    }
+    if let Some(v) = jattr(json, "width") {
+        node.width_constraint = Some(tokens.resolve_width(v)?);
+    }
+    if let Some(v) = jattr(json, "repeat") {
+        node.repeat = match v {
+            "page"  => Repeat::Page,
+            "first" => Repeat::First,
+            other   => return Err(format!("invalid repeat value: '{other}'")),
+        };
+    }
+
+    // ── Kind-specific attrs ───────────────────────────────────────────────────
+    match kind {
+        NodeKind::Stack => {
+            node.align   = parse_align(jattr(json, "align").unwrap_or("start"))?;
+            node.justify = parse_justify(jattr(json, "justify").unwrap_or("start"))?;
+        }
+        NodeKind::Flank => {
+            node.align   = parse_align(jattr(json, "align").unwrap_or("start"))?;
+            node.justify = parse_justify(jattr(json, "justify").unwrap_or("start"))?;
+            node.end     = jattr(json, "end").map(|v| v == "true").unwrap_or(false);
+        }
+        NodeKind::Split => {
+            node.align = parse_align(jattr(json, "align").unwrap_or("start"))?;
+            node.equal = jattr(json, "equal").map(|v| v == "true").unwrap_or(false);
+        }
+        NodeKind::Cluster => {
+            node.align   = parse_align(jattr(json, "align").unwrap_or("start"))?;
+            node.justify = parse_justify(jattr(json, "justify").unwrap_or("start"))?;
+            node.wrap    = jattr(json, "wrap").map(|v| v != "false").unwrap_or(true);
+        }
+        NodeKind::Frame => {
+            node.align   = parse_align(jattr(json, "align").unwrap_or("center"))?;
+            node.justify = parse_justify(jattr(json, "justify").unwrap_or("center"))?;
+        }
+        NodeKind::Grid => {
+            node.cols = jattr(json, "cols").and_then(|v| v.parse().ok()).unwrap_or(1);
+            if let Some(v) = jattr(json, "col-width") {
+                node.col_width = Some(tokens.resolve_grid_col(v)?);
+            }
+        }
+        NodeKind::Divider => {
+            node.direction = match jattr(json, "direction").unwrap_or("horizontal") {
+                "vertical" => Direction::Vertical,
+                _          => Direction::Horizontal,
+            };
+            node.color = Some(if let Some(v) = jattr(json, "color") {
+                tokens.resolve_color(v)?
+            } else {
+                "#000000".into()
+            });
+            node.thickness = if let Some(v) = jattr(json, "thickness") {
+                tokens.resolve_border_thickness(v)?
+            } else {
+                1.0
+            };
+        }
+        NodeKind::Text => {
+            node.font = jattr(json, "font").unwrap_or("Helvetica").to_string();
+            // tree uses "font-size"; XML uses "size" — try both
+            node.font_size = match jattr(json, "font-size").or_else(|| jattr(json, "size")) {
+                Some(v) => tokens.resolve_text_size(v)?,
+                None    => 11.0,
+            };
+            node.text_color = Some(match jattr(json, "color") {
+                Some(v) => tokens.resolve_color(v)?,
+                None    => tokens.resolve_color("text").unwrap_or_else(|_| "#1a1a1a".into()),
+            });
+            // tree uses "text-align"; XML uses "align" — try both
+            node.text_align = match jattr(json, "text-align").or_else(|| jattr(json, "align")).unwrap_or("left") {
+                "center" => TextAlign::Center,
+                "right"  => TextAlign::Right,
+                _        => TextAlign::Left,
+            };
+
+            // Children: array of string | span node
+            if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
+                for (i, child) in arr.iter().enumerate() {
+                    let leading = i > 0;
+                    if let Some(s) = child.as_str() {
+                        let words: Vec<&str> = s.split_whitespace().collect();
+                        if !words.is_empty() {
+                            node.text_runs.push(TextRun {
+                                text: words.join(" "),
+                                leading_space: leading,
+                                font: None, color: None, href: None,
+                                underline: false, strike: false,
+                            });
+                        }
+                    } else if child.get("type").and_then(|v| v.as_str()) == Some("span") {
+                        let span_text: String = child
+                            .get("children").and_then(|v| v.as_array())
+                            .map(|arr| {
+                                arr.iter()
+                                   .filter_map(|v| v.as_str())
+                                   .collect::<Vec<_>>()
+                                   .join(" ")
+                            })
+                            .unwrap_or_default()
+                            .split_whitespace()
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        if !span_text.is_empty() {
+                            let color = match jattr(child, "color") {
+                                Some(v) => Some(tokens.resolve_color(v)?),
+                                None    => None,
+                            };
+                            // tree uses "url"; XML uses "href"
+                            let href = jattr(child, "url")
+                                .or_else(|| jattr(child, "href"))
+                                .map(str::to_string);
+                            node.text_runs.push(TextRun {
+                                text: span_text,
+                                leading_space: leading,
+                                font:      jattr(child, "font").map(str::to_string),
+                                color,
+                                href,
+                                underline: jattr(child, "underline").map(|v| v == "true").unwrap_or(false),
+                                strike:    jattr(child, "strike")   .map(|v| v == "true").unwrap_or(false),
+                            });
+                        }
+                    }
+                }
+            }
+            return Ok(node); // text nodes have no layout children
+        }
+        NodeKind::Link => {
+            node.url = Some(
+                jattr(json, "url")
+                    .ok_or("<link> node requires a 'url' attribute")?
+                    .to_string(),
+            );
+        }
+    }
+
+    // ── Layout children ───────────────────────────────────────────────────────
+    if kind != NodeKind::Divider {
+        if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
+            for child in arr {
+                node.children.push(parse_tree_node(child, tokens)?);
+            }
+        }
+    }
+
+    Ok(node)
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]

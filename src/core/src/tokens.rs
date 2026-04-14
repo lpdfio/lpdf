@@ -18,15 +18,17 @@ pub enum FontDef {
     Src(String),
 }
 
-const SCALE_NAMES: [&str; 6] = ["xs", "s", "m", "l", "xl", "xxl"];
+pub const SCALE_NAMES: [&str; 6] = ["xs", "s", "m", "l", "xl", "xxl"];
 
-fn scale_idx(name: &str) -> Option<usize> {
+pub fn scale_idx(name: &str) -> Option<usize> {
     SCALE_NAMES.iter().position(|&n| n == name)
 }
 
-/// Parse a pt value like "12pt" or "0.5pt"
+/// Parse a pt value like "12pt", "0.5pt", or bare "0".
 pub fn parse_pt(val: &str) -> Option<f32> {
-    val.trim().strip_suffix("pt")?.trim().parse().ok()
+    let s = val.trim();
+    if s == "0" { return Some(0.0); }
+    s.strip_suffix("pt")?.trim().parse().ok()
 }
 
 pub fn normalize_hex(s: &str) -> Result<String, String> {
