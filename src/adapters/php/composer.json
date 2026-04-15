@@ -1,0 +1,18 @@
+{
+  "name": "lpdf/lpdf",
+  "description": "PHP adapter for the lpdf document rendering engine",
+  "type": "library",
+  "license": "proprietary",
+  "require": {
+    "php": ">=8.2"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^11"
+  },
+  "autoload": {
+    "psr-4": { "Lpdf\\": "src/" }
+  },
+  "autoload-dev": {
+    "psr-4": { "Lpdf\\Tests\\": "test/" }
+  }
+}

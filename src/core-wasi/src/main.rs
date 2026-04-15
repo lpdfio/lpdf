@@ -117,7 +117,9 @@ fn render_pdf_doc(doc: parse::Document, license_key: &str, req: &serde_json::Val
     };
     let watermark_ref = watermark.map(|(t, u)| (t, u));
 
-    match pdf::render_pdf(&pages, &doc.fonts, &registry, &doc.meta, watermark_ref, None) {
+    let created_on = req["created_on"].as_str();
+
+    match pdf::render_pdf(&pages, &doc.fonts, &registry, &doc.meta, watermark_ref, created_on) {
         Ok(bytes) => {
             let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
             serde_json::json!({ "pdf": b64 }).to_string()
