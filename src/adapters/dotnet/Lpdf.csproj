@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Lpdf</RootNamespace>
+    <AssemblyName>Lpdf</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>Lpdf</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>lpdf.io</Authors>
+    <Description>lpdf .NET adapter — render PDF from an lpdf document tree or XML.</Description>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/codesensedev/lpdf</RepositoryUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="test\**" />
+    <EmbeddedResource Remove="test\**" />
+    <None Remove="test\**" />
+    <Compile Remove="example\**" />
+    <EmbeddedResource Remove="example\**" />
+    <None Remove="example\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- WASM host -->
+    <PackageReference Include="Wasmtime" Version="*" />
+  </ItemGroup>
+
+  <!-- Embed the pre-built WASI binary so callers don't need to manage a separate file -->
+  <ItemGroup>
+    <EmbeddedResource Include="wasm\lpdf.wasm" />
+  </ItemGroup>
+
+</Project>

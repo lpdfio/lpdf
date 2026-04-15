@@ -1,0 +1,20 @@
+[package]
+name = "lpdf-wasi"
+version = "0.0.0"
+edition = "2024"
+description = "lpdf — WASI binary entrypoint for the .NET adapter"
+license = "AGPL-3.0-or-later OR LicenseRef-Commercial"
+
+[[bin]]
+name = "lpdf-wasi"
+
+[dependencies]
+serde_json = "1"
+serde     = { version = "1", features = ["derive"] }
+roxmltree = "0.20"
+# PDF rendering — same versions as core/Cargo.toml
+pdf-writer = "0.12"
+ttf-parser = "0.25"
+subsetter   = "0.2"
+# Base64 encoding for binary PDF bytes in the JSON envelope
+base64 = "0.22"

@@ -1,6 +1,8 @@
 /target
 /src/core/target
 
+bin
+obj
 node_modules
 var
 
