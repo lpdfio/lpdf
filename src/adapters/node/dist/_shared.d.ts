@@ -1,8 +1,8 @@
 /**
- * Shared render-tree types and pdf-lib drawing logic used by both the Node.js
- * and browser entry points.  No Node built-ins (no `node:fs`, no `require`).
+ * Shared render-tree types used by both the Node.js and browser entry points.
+ * PDF generation now happens inside the Rust core (pdf.rs) and is surfaced via
+ * the WASM `render_pdf()` method — no pdf-lib dependency required.
  */
-import { PDFDocument, PDFFont, Color } from 'pdf-lib';
 export interface RenderTree {
     version: number;
     meta: RenderMeta;
@@ -78,16 +78,7 @@ export interface RenderOptions {
     /**
      * Pre-loaded font bytes for custom fonts referenced via <fonts src="…">.
      * Keys are the font names used in the document; values are raw TTF/OTF bytes.
+     * @deprecated Pass font bytes via `LpdfEngine.loadFont()` instead.
      */
     fontBytes?: Record<string, Uint8Array>;
 }
-/**
- * Embed all fonts referenced by the render tree into the PDF document.
- *
- * @param srcFallback  Optional callback to load font bytes by path (Node only).
- *                     In the browser this is left undefined; callers must
- *                     supply all custom font bytes via `providedBytes`.
- */
-export declare function loadFonts(doc: PDFDocument, tree: RenderTree, providedBytes: Record<string, Uint8Array>, srcFallback?: (path: string) => Uint8Array): Promise<Map<string, PDFFont>>;
-export declare function buildPdf(tree: RenderTree, providedBytes: Record<string, Uint8Array>, srcFallback?: (path: string) => Uint8Array): Promise<Uint8Array>;
-export declare function parseHex(hex: string): Color;

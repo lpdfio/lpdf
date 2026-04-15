@@ -10,13 +10,14 @@
  *
  *   const lpdf = await initLpdf(new URL('./lpdf_bg.wasm', import.meta.url), licenseKey)
  *   const pdfBytes = await lpdf.renderPdf(xmlString)
- *   const pdfBytes2 = await lpdf.renderPdf(xmlString2, { fontBytes: { ... } })
+ *   lpdf.loadFont('Inter', interFontBytes)
+ *   const pdfBytes2 = await lpdf.renderPdf(xmlString2)
  *
- * Custom fonts must be pre-loaded and supplied via `fontBytes`; there is no
- * automatic filesystem fallback in a browser context.
+ * Custom fonts must be pre-loaded via `loadFont()` or the deprecated
+ * `fontBytes` option; there is no automatic filesystem fallback in the browser.
  */
 import initWasm, { LpdfEngine as WasmEngine } from '../../../../dist/web/lpdf.js';
-import { buildPdf, RenderOptions, RenderTree } from './_shared';
+import { RenderOptions } from './_shared';
 
 export type { RenderOptions } from './_shared';
 export type { LpdfDocument, LpdfPageNode, LpdfNode, LpdfContainerNode, LpdfTextNode, LpdfSpanNode, LpdfDividerNode,
@@ -29,9 +30,14 @@ export { LpdfKit } from './kit';
 
 export interface LpdfBrowser {
   /**
+   * Register raw TTF/OTF bytes for a custom font name used in `<font src="…">`.
+   * Call before `renderPdf`. Mutates the renderer in-place.
+   */
+  loadFont(name: string, bytes: Uint8Array): void;
+  /**
    * Render an lpdf XML document to PDF bytes.
-   * Custom fonts must be passed via `options.fontBytes`; src-path loading is
-   * not available in the browser.
+   * Custom fonts must be registered via `loadFont()` or the deprecated
+   * `fontBytes` option; src-path loading is not available in the browser.
    */
   renderPdf(xml: string, options?: RenderOptions): Promise<Uint8Array>;
 }
@@ -47,23 +53,42 @@ export interface LpdfBrowser {
  * @param initOptions - Optional long-lived config (e.g. shared `fontBytes`).
  */
 export async function initLpdf(
-  wasmSource: Parameters<typeof initWasm>[0],
+  wasmSource:  Parameters<typeof initWasm>[0],
   licenseKey = '',
   initOptions: RenderOptions = {},
 ): Promise<LpdfBrowser> {
   await initWasm(wasmSource);
 
+  const fontMap = new Map<string, Uint8Array>();
+
+  // Seed with any fonts supplied at init time (deprecated fontBytes path).
+  if (initOptions.fontBytes) {
+    for (const [name, bytes] of Object.entries(initOptions.fontBytes)) {
+      fontMap.set(name, bytes);
+    }
+  }
+
   return {
+    loadFont(name: string, bytes: Uint8Array): void {
+      fontMap.set(name, bytes);
+    },
+
     async renderPdf(xml: string, callOptions: RenderOptions = {}): Promise<Uint8Array> {
-      const fontBytes = { ...initOptions.fontBytes, ...callOptions.fontBytes };
       const engine = new WasmEngine(licenseKey);
-      const raw = engine.render(xml);
+
+      for (const [name, bytes] of fontMap) {
+        engine.load_font(name, bytes);
+      }
+      // Per-call fontBytes (deprecated) take lower precedence than loadFont().
+      if (callOptions.fontBytes) {
+        for (const [name, bytes] of Object.entries(callOptions.fontBytes)) {
+          if (!fontMap.has(name)) engine.load_font(name, bytes);
+        }
+      }
+
+      const pdf = engine.render_pdf(xml);
       engine.free();
-
-      const tree = JSON.parse(raw) as RenderTree;
-      if (tree.error) throw new Error(tree.error);
-
-      return buildPdf(tree, fontBytes);
+      return pdf;
     },
   };
 }

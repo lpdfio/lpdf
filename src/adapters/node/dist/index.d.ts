@@ -11,7 +11,13 @@ export { kitToXml } from './kit-to-xml';
 export declare class LpdfEngine {
     private readonly _licenseKey;
     private readonly _opts;
+    private readonly _fonts;
     constructor(licenseKey: string, options?: RenderOptions);
+    /**
+     * Register raw TTF/OTF bytes for a custom font name used in `<font src="…">`.
+     * Call before `renderPdf`. Returns `this` for chaining.
+     */
+    loadFont(name: string, bytes: Uint8Array): this;
     /**
      * Render an lpdf XML string to PDF bytes (Node.js).
      */

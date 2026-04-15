@@ -6,7 +6,12 @@
 declare module '../../../../dist/web/lpdf.js' {
   export class LpdfEngine {
     constructor(license_key: string): LpdfEngine;
-    render(xml: string): string;
+    /** Register raw font bytes for a custom font name. */
+    load_font(name: string, bytes: Uint8Array): void;
+    /** Set an optional ISO 8601 creation timestamp for /CreationDate. */
+    set_created_on(iso: string): void;
+    /** Render XML to binary PDF bytes. */
+    render_pdf(xml: string): Uint8Array;
     free(): void;
     [Symbol.dispose](): void;
   }

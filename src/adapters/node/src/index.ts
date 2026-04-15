@@ -1,9 +1,15 @@
 import { readFileSync } from 'node:fs';
-import { buildPdf, RenderOptions, RenderTree } from './_shared';
+import { RenderOptions } from './_shared';
 import { LpdfDocument } from './kit';
+import { kitToXml } from './kit-to-xml';
 
 // The WASM CJS module is loaded at runtime; we declare only what we use.
-interface IWasmEngine { render(xml: string): string; render_tree?(json: string): string; free(): void; }
+interface IWasmEngine {
+  render_pdf(xml: string): Uint8Array;
+  load_font(name: string, bytes: Uint8Array): void;
+  set_created_on(iso: string): void;
+  free(): void;
+}
 interface WasmEngineConstructor { new(licenseKey: string): IWasmEngine; }
 // require() path is relative to the compiled output at dist/index.js.
 // dist/index.js → ../../../../dist/node/lpdf.js = project-root/dist/node/lpdf.js
@@ -26,11 +32,21 @@ export { kitToXml } from './kit-to-xml';
  */
 export class LpdfEngine {
   private readonly _licenseKey: string;
-  private readonly _opts: RenderOptions;
+  private readonly _opts:  RenderOptions;
+  private readonly _fonts: Map<string, Uint8Array> = new Map();
 
   constructor(licenseKey: string, options: RenderOptions = {}) {
     this._licenseKey = licenseKey;
     this._opts = options;
+  }
+
+  /**
+   * Register raw TTF/OTF bytes for a custom font name used in `<font src="…">`.
+   * Call before `renderPdf`. Returns `this` for chaining.
+   */
+  loadFont(name: string, bytes: Uint8Array): this {
+    this._fonts.set(name, bytes);
+    return this;
   }
 
   /**
@@ -42,25 +58,47 @@ export class LpdfEngine {
    */
   async renderPdf(input: LpdfDocument, callOptions?: RenderOptions): Promise<Uint8Array>;
   async renderPdf(input: string | LpdfDocument, callOptions: RenderOptions = {}): Promise<Uint8Array> {
-    const fontBytes = { ...this._opts.fontBytes, ...callOptions.fontBytes };
-    const engine = new WasmEngine(this._licenseKey);
+    // LpdfDocument trees are serialised to XML before being handed to the Rust engine.
+    const xml = typeof input === 'string' ? input : kitToXml(input);
 
-    let raw: string;
-    if (typeof input === 'string') {
-      raw = engine.render(input);
-    } else {
-      if (!engine.render_tree) {
-        throw new Error('renderTree is not supported by the current WASM build — update the lpdf core package.');
-      }
-      raw = engine.render_tree(JSON.stringify(input));
+    // Merge fonts: instance-level loadFont() calls take precedence over the
+    // deprecated fontBytes option, which is kept for one-version compat.
+    const allFonts = new Map<string, Uint8Array>(this._fonts);
+    const extraBytes = { ...this._opts.fontBytes, ...callOptions.fontBytes };
+    for (const [name, bytes] of Object.entries(extraBytes)) {
+      if (!allFonts.has(name)) allFonts.set(name, bytes);
     }
+
+    // Auto-load fonts declared via <font src="…"> that haven't been
+    // explicitly provided — mirrors the old srcFallback behaviour.
+    for (const [name, src] of extractFontSrcs(xml)) {
+      if (!allFonts.has(name)) {
+        try { allFonts.set(name, readFileSync(src)); } catch { /* not found; Rust falls back to Helvetica */ }
+      }
+    }
+
+    const engine = new WasmEngine(this._licenseKey);
+    for (const [name, bytes] of allFonts) {
+      engine.load_font(name, bytes);
+    }
+    const pdf = engine.render_pdf(xml);
     engine.free();
-
-    const tree = JSON.parse(raw) as RenderTree;
-    if (tree.error) throw new Error(tree.error);
-
-    return buildPdf(tree, fontBytes, (path) => readFileSync(path));
+    return pdf;
   }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Extract `name → src` pairs from `<font name="…" src="…">` tags in XML. */
+function extractFontSrcs(xml: string): Map<string, string> {
+  const result = new Map<string, string>();
+  for (const match of xml.matchAll(/<font\s[^>]*>/g)) {
+    const tag  = match[0];
+    const name = /\bname="([^"]*)"/.exec(tag)?.[1];
+    const src  = /\bsrc="([^"]*)"/.exec(tag)?.[1];
+    if (name && src) result.set(name, src);
+  }
+  return result;
 }
 
 
