@@ -1346,7 +1346,7 @@ fn layout_divider(
 // (char_code − 32) for ASCII printable characters 32–126 (95 entries).
 // Source: Adobe AFM files for the 14 standard PDF built-in fonts.
 
-fn builtin_char_advance(font: &str, c: char) -> Option<u16> {
+pub(crate) fn builtin_char_advance(font: &str, c: char) -> Option<u16> {
     let idx = (c as u32).checked_sub(32)? as usize;
     if idx >= 95 { return None; }
 
@@ -1463,7 +1463,7 @@ fn builtin_char_advance(font: &str, c: char) -> Option<u16> {
 /// Uses per-character AFM glyph metrics for the standard PDF built-in fonts.
 /// Falls back to a constant-ratio approximation for Courier (monospace) and
 /// any unknown / custom font.
-fn text_width(font: &str, text: &str, size: f32) -> f32 {
+pub(crate) fn text_width(font: &str, text: &str, size: f32) -> f32 {
     // Courier family: monospace, 600/1000 per glyph.
     if font.contains("Courier") {
         return text.chars().count() as f32 * size * 0.6;

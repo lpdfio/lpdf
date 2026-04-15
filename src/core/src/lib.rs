@@ -1,5 +1,6 @@
 mod layout;
 mod parse;
+mod pdf;
 mod render;
 mod tokens;
 
@@ -8,6 +9,10 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 pub struct LpdfEngine {
     license_key: String,
+    /// Per-engine font registry; populated via `load_font`.
+    fonts:       pdf::FontRegistry,
+    /// Optional ISO 8601 creation timestamp for the PDF `/CreationDate` field.
+    created_on:  Option<String>,
 }
 
 #[wasm_bindgen]
@@ -16,7 +21,55 @@ impl LpdfEngine {
     pub fn new(license_key: &str) -> LpdfEngine {
         LpdfEngine {
             license_key: license_key.to_string(),
+            fonts:       pdf::FontRegistry::new(),
+            created_on:  None,
         }
+    }
+
+    /// Register raw font bytes (TTF/OTF) for a custom font name.
+    /// Call this once per font before calling `render_pdf`.
+    pub fn load_font(&mut self, name: &str, bytes: &[u8]) {
+        self.fonts.register(name, bytes.to_vec());
+    }
+
+    /// Set an optional ISO 8601 creation timestamp (e.g. `"2024-06-01T12:00:00"`).
+    /// When provided, written as `/CreationDate` in the PDF info dictionary.
+    /// Omitting this keeps builds reproducible (no embedded timestamp).
+    pub fn set_created_on(&mut self, iso: &str) {
+        self.created_on = Some(iso.to_string());
+    }
+
+    /// Render `xml` to binary PDF bytes.
+    ///
+    /// Any custom fonts referenced in `<font src="…">` declarations must have
+    /// their bytes registered via `load_font` before calling this method.
+    pub fn render_pdf(&self, xml: &str) -> Result<Vec<u8>, JsValue> {
+        if xml.len() > 1_048_576 {
+            return Err(JsValue::from_str("input exceeds 1 MB limit"));
+        }
+
+        let doc = parse::parse(xml)
+            .map_err(|e| JsValue::from_str(&e))?;
+
+        let pages: Vec<render::RenderPage> =
+            doc.pages.iter().flat_map(layout::layout_page).collect();
+
+        // Show the lpdf.io watermark when the engine is running unlicensed.
+        let wm: Option<(&str, Option<&str>)> = if self.license_key.is_empty() {
+            Some(("made with lpdf.io", Some("https://lpdf.io")))
+        } else {
+            None
+        };
+
+        pdf::render_pdf(
+            &pages,
+            &doc.fonts,
+            &self.fonts,
+            &doc.meta,
+            wm,
+            self.created_on.as_deref(),
+        )
+        .map_err(|e| JsValue::from_str(&e))
     }
 
     pub fn render(&self, xml: &str) -> String {
