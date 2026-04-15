@@ -92,4 +92,52 @@ describe('LpdfEngine', () => {
 
 });
 
+// ── Snapshot tests ────────────────────────────────────────────────────────────
+// Render each fixture XML → PDF, hash with SHA-256, compare against stored hash.
+//
+// Generate / update snapshots:
+//   UPDATE_SNAPSHOTS=1 node --test test/render.test.mjs
+//
+// Normal run (CI):
+//   node --test test/render.test.mjs
 
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+const __dirname  = path.dirname(fileURLToPath(import.meta.url));
+const ROOT       = path.resolve(__dirname, '../../../../');
+const FIXTURES   = path.join(ROOT, 'test/fixtures');
+const SNAPSHOTS  = path.join(ROOT, 'test/snapshots');
+const UPDATE     = !!process.env.UPDATE_SNAPSHOTS;
+
+function sha256hex(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+const EXAMPLES = [
+  'example1', 'example2', 'example3', 'example4',  'example5',
+  'example6', 'example7', 'example8', 'example9', 'example10', 'example11',
+];
+
+describe('PDF snapshots (fixture XMLs)', () => {
+  for (const name of EXAMPLES) {
+    it(`${name} matches stored hash`, async () => {
+      const xml   = readFileSync(path.join(FIXTURES, `${name}.xml`), 'utf8');
+      const lpdf  = new LpdfEngine('test-key');
+      const bytes = await lpdf.renderPdf(xml);
+      const hash  = sha256hex(bytes);
+      const snap  = path.join(SNAPSHOTS, `${name}.pdf.sha256`);
+
+      if (UPDATE) {
+        writeFileSync(snap, hash, 'utf8');
+        console.log(`  updated snapshot ${name}: ${hash}`);
+      } else {
+        const stored = readFileSync(snap, 'utf8').trim();
+        assert.equal(hash, stored,
+          `PDF output changed for ${name}. Run with UPDATE_SNAPSHOTS=1 to accept.`);
+      }
+    });
+  }
+});

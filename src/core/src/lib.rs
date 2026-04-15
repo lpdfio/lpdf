@@ -105,6 +105,15 @@ impl LpdfEngine {
 
 // Private helpers — not exported to WASM.
 impl LpdfEngine {
+    /// Render XML to PDF bytes without WASM error types — used by tests.
+    #[cfg(test)]
+    pub(crate) fn render_xml_to_pdf_bytes(xml: &str) -> Result<Vec<u8>, String> {
+        let doc = parse::parse(xml)?;
+        let pages: Vec<render::RenderPage> =
+            doc.pages.iter().flat_map(layout::layout_page).collect();
+        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &doc.meta, None, None)
+    }
+
     fn render_doc(&self, doc: parse::Document) -> String {
         let pages: Vec<render::RenderPage> =
             doc.pages.iter().flat_map(layout::layout_page).collect();
@@ -147,6 +156,9 @@ impl LpdfEngine {
         render::pages_to_json(&pages, meta, watermark)
     }
 }
+
+#[cfg(test)]
+mod snapshot_tests;
 
 #[cfg(test)]
 mod tests {

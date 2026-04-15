@@ -1,3 +1,5 @@
+SHELL := C:/Program Files/Git/bin/sh.exe
+
 .PHONY: build test clean adapter-node adapter-node-test
 
 build:

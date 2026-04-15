@@ -586,8 +586,12 @@ pub fn render_pdf(
     }
     used_font_names.insert("Helvetica".to_string());
 
+    // Sort names so resource IDs (F0, F1, …) are assigned deterministically.
+    let mut sorted_font_names: Vec<String> = used_font_names.into_iter().collect();
+    sorted_font_names.sort();
+
     let mut fonts: HashMap<String, PreparedFont> = HashMap::new();
-    for (idx, name) in used_font_names.iter().enumerate() {
+    for (idx, name) in sorted_font_names.iter().enumerate() {
         let resource_name = format!("F{idx}");
         let kind          = resolve_font_kind(name, font_defs, registry);
         fonts.insert(name.clone(), PreparedFont { resource_name, kind });
@@ -686,7 +690,8 @@ pub fn render_pdf(
     }
 
     let mut font_id_map: HashMap<String, FontIds> = HashMap::new();
-    for (name, font) in &fonts {
+    for name in &sorted_font_names {
+        let font = &fonts[name];
         let font_dict_id = alloc.next();
         let extra_ids = match &font.kind {
             PreparedFontKind::Builtin { .. }  => vec![],
@@ -750,7 +755,8 @@ pub fn render_pdf(
         {
             let mut resources = pw.resources();
             let mut font_res  = resources.fonts();
-            for (name, font) in &fonts {
+            for name in &sorted_font_names {
+                let font = &fonts[name];
                 let fid = font_id_map[name].font_dict_id;
                 font_res.pair(Name(font.resource_name.as_bytes()), fid);
             }
@@ -790,7 +796,8 @@ pub fn render_pdf(
     }
 
     // -- Font objects ----------------------------------------------------------
-    for (name, font) in &fonts {
+    for name in &sorted_font_names {
+        let font = &fonts[name];
         let ids = &font_id_map[name];
 
         match &font.kind {

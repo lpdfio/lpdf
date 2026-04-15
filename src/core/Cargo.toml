@@ -20,3 +20,6 @@ pdf-writer = "0.12"
 ttf-parser = "0.25"
 # Font subsetting — embed only the glyphs actually used, keeps PDF size small
 subsetter = "0.2"
+
+[dev-dependencies]
+sha2 = "0.10"

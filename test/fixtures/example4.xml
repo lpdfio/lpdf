@@ -1,0 +1,73 @@
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="gold"        value="#b8860b" />
+      <color name="gold-light"  value="#fdf6e3" />
+      <color name="navy"        value="#1a2d5a" />
+      <color name="rule"        value="#d4b97a" />
+      <color name="surface"     value="#ffffff" />
+      <color name="text-muted"  value="#5a5a5a" />
+    </colors>
+  </tokens>
+  <document size="letter" orientation="landscape" margin="0pt">
+    <meta title="Certificate of Completion — Jane Doe" />
+    <pages>
+      <page background="surface">
+
+        <!-- outer border frame -->
+        <frame border="l gold" padding="xl" height="full">
+          <frame border="xs gold" padding="l" height="full">
+
+            <stack gap="l" align="center" justify="center" height="full">
+
+              <!-- issuer -->
+              <stack gap="xs" align="center">
+                <text size="s" font="Helvetica-Bold" color="text-muted">PRESENTED BY</text>
+                <text size="xl" font="Helvetica-Bold" color="navy">Acme Academy</text>
+              </stack>
+
+              <!-- certificate title -->
+              <stack gap="xs" align="center">
+                <divider color="rule" thickness="xs" />
+                <text size="xxl" font="Times-BoldItalic" color="navy">Certificate of Completion</text>
+                <divider color="rule" thickness="xs" />
+              </stack>
+
+              <divider color="rule" thickness="s" />
+
+              <!-- recipient -->
+              <stack gap="s" align="center">
+                <text size="s" color="text-muted">This certificate is proudly awarded to</text>
+                <text size="xxl" font="Times-BoldItalic" color="navy">Jane Doe</text>
+                <text size="s" color="text-muted">for successfully completing</text>
+                <text size="l" font="Helvetica-Bold" color="navy">Advanced Rust Systems Programming</text>
+                <text size="s" color="text-muted">a 40-hour course covering memory safety, async runtimes, and WebAssembly targets</text>
+              </stack>
+
+              <divider color="rule" thickness="xs" />
+
+              <!-- date + signature row -->
+              <split gap="xxl" align="end">
+                <stack gap="xs" align="center">
+                  <divider color="navy" thickness="xs" />
+                  <text size="s" font="Helvetica-Bold" color="navy">April 12, 2026</text>
+                  <text size="s" color="text-muted">Date of completion</text>
+                </stack>
+                <stack gap="xs" align="center">
+                  <divider color="navy" thickness="xs" />
+                  <text size="s" font="Helvetica-Bold" color="navy">Dr. Alice Morrow</text>
+                  <text size="s" color="text-muted">Program Director</text>
+                </stack>
+              </split>
+
+            </stack>
+
+          </frame>
+        </frame>
+
+      </page>
+    </pages>
+  </document>
+</lpdf>
