@@ -4,6 +4,30 @@ use crate::render::{RenderBox, RenderLine, RenderLink, RenderNode, RenderPage, R
 // ── Public entry point ────────────────────────────────────────────────────────
 
 pub fn layout_page(page: &Page) -> Vec<RenderPage> {
+    let mut pages = layout_page_impl(page);
+    for rp in &mut pages {
+        apply_debug_overlay(&mut rp.nodes);
+        if page.debug {
+            let [mt, mr, mb, ml] = rp.margin;
+            let cx = ml;
+            let cy = mt;
+            let cw = rp.width - ml - mr;
+            let ch = rp.height - mt - mb;
+            let mut overlay = debug_rect_lines(cx, cy, cw, ch, "#ff0033");
+            for node in rp.nodes.iter() {
+                if let RenderNode::Box(b) = node {
+                    if !b.debug_self {
+                        overlay.extend(debug_rect_lines(b.x, b.y, b.width, b.height, "#0066ff"));
+                    }
+                }
+            }
+            rp.nodes.extend(overlay);
+        }
+    }
+    pages
+}
+
+fn layout_page_impl(page: &Page) -> Vec<RenderPage> {
     let [mt, mr, mb, ml] = page.margin;
     let avail_x = ml;
     let avail_y = mt;
@@ -767,6 +791,7 @@ fn layout_container(
             border_width,
             border_color,
             radius: node.radius,
+            debug_self: node.debug,
             children,
         }),
         outer_h,
@@ -1265,7 +1290,7 @@ fn layout_link(
         HeightMode::Auto => content_h,
     };
     (
-        RenderNode::Link(RenderLink { url, x, y, width: avail_w, height, children }),
+        RenderNode::Link(RenderLink { url, x, y, width: avail_w, height, debug_self: node.debug, children }),
         height,
     )
 }
@@ -1291,6 +1316,7 @@ fn layout_divider(
                 y2: y + t / 2.0,
                 color,
                 thickness: t,
+                dash: None,
             }),
             t,
         ),
@@ -1304,6 +1330,7 @@ fn layout_divider(
                     y2: y + h,
                     color,
                     thickness: t,
+                    dash: None,
                 }),
                 h,
             )
@@ -1567,7 +1594,7 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
     if toks.is_empty() {
         return (RenderNode::Box(RenderBox {
             x, y, width: 0.0, height: 0.0, fill: None,
-            border_width: 0.0, border_color: None, radius: 0.0, children: vec![],
+            border_width: 0.0, border_color: None, radius: 0.0, debug_self: false, children: vec![],
         }), 0.0);
     }
 
@@ -1683,6 +1710,7 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
                         x1: cur_x, y1: line_y + font_size,
                         x2: cur_x + aw, y2: line_y + font_size,
                         color: atom.color.clone(), thickness: 0.75,
+                        dash: None,
                     }));
                 }
                 if atom.strike {
@@ -1690,13 +1718,14 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
                     seg.push(RenderNode::Line(RenderLine {
                         x1: cur_x, y1: sy, x2: cur_x + aw, y2: sy,
                         color: atom.color.clone(), thickness: 0.75,
+                        dash: None,
                     }));
                 }
 
                 match &atom.href {
                     Some(href) => all_nodes.push(RenderNode::Link(RenderLink {
                         url: href.clone(), x: cur_x, y: line_y,
-                        width: aw, height: line_height, children: seg,
+                        width: aw, height: line_height, debug_self: false, children: seg,
                     })),
                     None => all_nodes.extend(seg),
                 }
@@ -1719,6 +1748,7 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
         RenderNode::Box(RenderBox {
             x, y, width: avail_w, height: total_h,
             fill: None, border_width: 0.0, border_color: None, radius: 0.0,
+            debug_self: node.debug,
             children: all_nodes,
         }),
         total_h,
@@ -1806,6 +1836,78 @@ fn shift_x(node: RenderNode, dx: f32) -> RenderNode {
             RenderNode::Link(l)
         }
     }
+}
+
+// ── Debug overlay ─────────────────────────────────────────────────────────────
+
+/// Append debug overlay lines to any debug-flagged box or link in `nodes`,
+/// recursing into children first so inner nodes are processed before outer.
+fn apply_debug_overlay(nodes: &mut Vec<RenderNode>) {
+    for node in nodes.iter_mut() {
+        match node {
+            RenderNode::Box(b) => {
+                apply_debug_overlay(&mut b.children);
+                if b.debug_self {
+                    let self_lines = debug_rect_lines(b.x, b.y, b.width, b.height, "#ff0033");
+                    let child_lines: Vec<RenderNode> = b.children.iter()
+                        .filter_map(|c| {
+                            if let RenderNode::Box(cb) = c {
+                                if !cb.debug_self {
+                                    Some(debug_rect_lines(cb.x, cb.y, cb.width, cb.height, "#0066ff"))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        })
+                        .flatten()
+                        .collect();
+                    b.children.extend(self_lines);
+                    b.children.extend(child_lines);
+                }
+            }
+            RenderNode::Link(l) => {
+                apply_debug_overlay(&mut l.children);
+                if l.debug_self {
+                    let self_lines = debug_rect_lines(l.x, l.y, l.width, l.height, "#ff0033");
+                    let child_lines: Vec<RenderNode> = l.children.iter()
+                        .filter_map(|c| {
+                            if let RenderNode::Box(cb) = c {
+                                if !cb.debug_self {
+                                    Some(debug_rect_lines(cb.x, cb.y, cb.width, cb.height, "#0066ff"))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        })
+                        .flatten()
+                        .collect();
+                    l.children.extend(self_lines);
+                    l.children.extend(child_lines);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Generate 4 dashed `RenderLine`s tracing the rect (x, y, w, h) in `color`.
+/// Stroke is centred on each edge (0.25pt inside, 0.25pt outside).
+fn debug_rect_lines(x: f32, y: f32, w: f32, h: f32, color: &str) -> Vec<RenderNode> {
+    let dash = Some(vec![1.5_f32, 1.5_f32]);
+    vec![
+        RenderNode::Line(RenderLine { x1: x, y1: y, x2: x + w, y2: y,
+            color: color.to_string(), thickness: 0.5, dash: dash.clone() }),
+        RenderNode::Line(RenderLine { x1: x + w, y1: y, x2: x + w, y2: y + h,
+            color: color.to_string(), thickness: 0.5, dash: dash.clone() }),
+        RenderNode::Line(RenderLine { x1: x, y1: y + h, x2: x + w, y2: y + h,
+            color: color.to_string(), thickness: 0.5, dash: dash.clone() }),
+        RenderNode::Line(RenderLine { x1: x, y1: y, x2: x, y2: y + h,
+            color: color.to_string(), thickness: 0.5, dash }),
+    ]
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -2120,5 +2222,113 @@ mod tests {
         }
         walk(page, &mut out);
         out
+    }
+
+    // ── Debug overlay tests ───────────────────────────────────────────────────
+
+    /// A stack with debug="true" containing two frames produces:
+    /// - the original 2 frame children
+    /// - 4 red self-outline lines appended after content
+    /// - 8 blue child-outline lines (4 per frame)
+    #[test]
+    fn debug_overlay_golden() {
+        let body = r##"<stack debug="true" gap="0pt">
+            <frame height="20pt" background="#aaa" />
+            <frame height="30pt" background="#bbb" />
+        </stack>"##;
+        let tree = engine_render(&minimal(body));
+        let stack = &tree["pages"][0]["nodes"][0];
+        assert_eq!(stack["type"], "box");
+        let children = stack["children"].as_array().unwrap();
+        // 2 frames + 4 red self lines + 8 blue child lines = 14
+        assert_eq!(children.len(), 14, "expected 14 children, got {}", children.len());
+        // The last 12 entries are lines
+        for i in 2..14 {
+            assert_eq!(children[i]["type"], "line", "child[{i}] should be a line");
+            assert!(children[i]["dash"].is_array(), "debug lines must have dash array");
+            assert_eq!(children[i]["thickness"], 0.5);
+        }
+        // First 4 lines are red
+        for i in 2..6 {
+            assert_eq!(children[i]["color"], "#ff0033", "child[{i}] should be red");
+        }
+        // Next 8 lines are blue (4 per frame child)
+        for i in 6..14 {
+            assert_eq!(children[i]["color"], "#0066ff", "child[{i}] should be blue");
+        }
+    }
+
+    /// Layout geometry is identical with and without debug="true".
+    #[test]
+    fn debug_overlay_does_not_affect_layout() {
+        let body_no_debug = r##"<stack gap="m">
+            <frame height="20pt" background="#aaa" />
+            <frame height="30pt" background="#bbb" />
+        </stack>"##;
+        let body_debug = r##"<stack debug="true" gap="m">
+            <frame height="20pt" background="#aaa" />
+            <frame height="30pt" background="#bbb" />
+        </stack>"##;
+
+        let t_clean = engine_render(&minimal(body_no_debug));
+        let t_debug = engine_render(&minimal(body_debug));
+
+        let stack_clean = &t_clean["pages"][0]["nodes"][0];
+        let stack_debug = &t_debug["pages"][0]["nodes"][0];
+
+        // Outer box geometry identical
+        assert_eq!(stack_clean["x"], stack_debug["x"]);
+        assert_eq!(stack_clean["y"], stack_debug["y"]);
+        assert_eq!(stack_clean["width"], stack_debug["width"]);
+        assert_eq!(stack_clean["height"], stack_debug["height"]);
+
+        // Frame children geometry identical
+        for i in 0..2 {
+            let c_clean = &stack_clean["children"][i];
+            let c_debug = &stack_debug["children"][i];
+            assert_eq!(c_clean["x"], c_debug["x"], "child[{i}] x differs");
+            assert_eq!(c_clean["y"], c_debug["y"], "child[{i}] y differs");
+            assert_eq!(c_clean["height"], c_debug["height"], "child[{i}] height differs");
+        }
+    }
+
+    /// When both parent and one child have debug="true":
+    /// - parent gets 4 red self-lines
+    /// - flagged child gets 4 red self-lines (not blue from parent)
+    /// - unflagged child gets 4 blue lines from parent
+    #[test]
+    fn debug_overlay_composition() {
+        let body = r##"<stack debug="true" gap="0pt">
+            <frame height="20pt" background="#aaa" />
+            <frame height="30pt" background="#bbb" debug="true" />
+        </stack>"##;
+        let tree = engine_render(&minimal(body));
+        let stack = &tree["pages"][0]["nodes"][0];
+        let children = stack["children"].as_array().unwrap();
+
+        // stack: 2 frames + 4 red self + 4 blue (only frame[0], not frame[1] since it's debug_self)
+        assert_eq!(children.len(), 10, "expected 10 children (2 frames + 4 red + 4 blue), got {}", children.len());
+
+        // red self-lines for stack
+        for i in 2..6 {
+            assert_eq!(children[i]["color"], "#ff0033", "child[{i}] should be red stack self-line");
+        }
+        // blue child-lines only for frame[0] (4 lines)
+        for i in 6..10 {
+            assert_eq!(children[i]["color"], "#0066ff", "child[{i}] should be blue child-line");
+        }
+
+        // The flagged frame child (index 1) must have its own 4 red self-lines
+        let frame2 = &children[1];
+        let frame2_children = frame2["children"].as_array().unwrap();
+        assert_eq!(frame2_children.len(), 4, "flagged frame should have 4 self-lines");
+        for i in 0..4 {
+            assert_eq!(frame2_children[i]["color"], "#ff0033", "frame2 child[{i}] should be red");
+        }
+
+        // The unflagged frame child (index 0) must have no children
+        let frame1 = &children[0];
+        assert!(frame1["children"].as_array().map(|a| a.is_empty()).unwrap_or(true),
+            "unflagged frame should have no children");
     }
 }

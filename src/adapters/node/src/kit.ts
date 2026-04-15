@@ -45,6 +45,7 @@ export interface StackOptions {
   height?:     string;
   border?:     string;
   radius?:     string;
+  debug?:      string;
 }
 
 export interface FlankOptions {
@@ -58,6 +59,7 @@ export interface FlankOptions {
   height?:     string;
   border?:     string;
   radius?:     string;
+  debug?:      string;
 }
 
 export interface SplitOptions {
@@ -68,6 +70,7 @@ export interface SplitOptions {
   height?:     string;
   border?:     string;
   radius?:     string;
+  debug?:      string;
 }
 
 export interface ClusterOptions {
@@ -79,6 +82,7 @@ export interface ClusterOptions {
   height?:     string;
   border?:     string;
   radius?:     string;
+  debug?:      string;
 }
 
 export interface GridOptions {
@@ -92,6 +96,7 @@ export interface GridOptions {
   height?:     string;
   border?:     string;
   radius?:     string;
+  debug?:      string;
 }
 
 export interface FrameOptions {
@@ -102,12 +107,14 @@ export interface FrameOptions {
   border?:     string;
   radius?:     string;
   align?:      string;
+  debug?:      string;
 }
 
 export interface LinkOptions {
-  url?:  string;
-  width?: string;
+  url?:    string;
+  width?:  string;
   height?: string;
+  debug?:  string;
 }
 
 export interface TextOptions {
@@ -119,6 +126,7 @@ export interface TextOptions {
   padding?:    string;
   background?: string;
   repeat?:     string;
+  debug?:      string;
 }
 
 export interface SpanOptions {
@@ -133,6 +141,7 @@ export interface DividerOptions {
   color?:      string;
   thickness?:  string;
   direction?:  string;
+  debug?:      string;
 }
 
 export interface PageOptions {
@@ -140,6 +149,7 @@ export interface PageOptions {
   orientation?: string;
   margin?:      string;
   background?:  string;
+  debug?:       string;
 }
 
 export interface LpdfTokens {
@@ -172,6 +182,7 @@ export interface DocumentOptions {
   background?:  string;
   tokens?:      LpdfTokens;
   meta?:        LpdfMeta;
+  debug?:       string;
 }
 
 // ── Input interfaces (what callers pass to each helper) ───────────────────────

@@ -26,6 +26,7 @@ pub struct RenderBox {
     pub border_width: f32,
     pub border_color: Option<String>,
     pub radius: f32,
+    pub debug_self: bool,
     pub children: Vec<RenderNode>,
 }
 
@@ -36,6 +37,7 @@ pub struct RenderLine {
     pub y2: f32,
     pub color: String,
     pub thickness: f32,
+    pub dash: Option<Vec<f32>>,
 }
 
 pub struct RenderText {
@@ -60,6 +62,7 @@ pub struct RenderLink {
     pub y: f32,
     pub width: f32,
     pub height: f32,
+    pub debug_self: bool,
     pub children: Vec<RenderNode>,
 }
 
@@ -100,6 +103,7 @@ fn is_invisible(node: &RenderNode) -> bool {
             && b.fill.is_none()
             && b.border_width == 0.0
             && b.children.is_empty()
+            && !b.debug_self
     } else {
         false
     }
@@ -119,15 +123,22 @@ fn node_to_json(node: &RenderNode) -> Value {
             "radius":       r2(b.radius),
             "children":     nodes_to_json(&b.children),
         }),
-        RenderNode::Line(l) => json!({
-            "type":      "line",
-            "x1":        r2(l.x1),
-            "y1":        r2(l.y1),
-            "x2":        r2(l.x2),
-            "y2":        r2(l.y2),
-            "color":     l.color,
-            "thickness": r2(l.thickness),
-        }),
+        RenderNode::Line(l) => {
+            let mut v = json!({
+                "type":      "line",
+                "x1":        r2(l.x1),
+                "y1":        r2(l.y1),
+                "x2":        r2(l.x2),
+                "y2":        r2(l.y2),
+                "color":     l.color,
+                "thickness": r2(l.thickness),
+            });
+            if let Some(dash) = &l.dash {
+                let dash_vals: Vec<f64> = dash.iter().map(|&d| r2(d as f32)).collect();
+                v["dash"] = serde_json::json!(dash_vals);
+            }
+            v
+        },
         RenderNode::Text(t) => json!({
             "type":       "text",
             "x":          r2(t.x),

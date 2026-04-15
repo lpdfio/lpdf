@@ -195,6 +195,7 @@
     <xs:attribute name="border"     type="BorderValue"/>
     <xs:attribute name="radius"     type="TokenScaleOrPt"/>
     <xs:attribute name="repeat"     type="Repeat"/>
+    <xs:attribute name="debug"      type="xs:boolean"/>
   </xs:attributeGroup>
 
 
@@ -289,6 +290,7 @@
       <xs:attribute name="orientation" type="Orientation"/>
       <xs:attribute name="margin"      type="SpacingValue"/>
       <xs:attribute name="background"  type="Color"/>
+      <xs:attribute name="debug"       type="xs:boolean"/>
     </xs:complexType>
   </xs:element>
 
@@ -309,6 +311,7 @@
       <xs:attribute name="margin"      type="SpacingValue"/>
       <xs:attribute name="lang"        type="xs:language"/>
       <xs:attribute name="background"  type="Color"/>
+      <xs:attribute name="debug"       type="xs:boolean"/>
     </xs:complexType>
   </xs:element>
 
@@ -416,6 +419,7 @@
       <xs:attribute name="href"   type="xs:anyURI" use="required"/>
       <xs:attribute name="gap"    type="SpacingOrToken"/>
       <xs:attribute name="repeat" type="Repeat"/>
+      <xs:attribute name="debug"  type="xs:boolean"/>
     </xs:complexType>
   </xs:element>
 
@@ -432,6 +436,7 @@
       <xs:attribute name="color"     type="Color"/>
       <xs:attribute name="thickness" type="TokenScaleOrPt"/>
       <xs:attribute name="repeat"    type="Repeat"/>
+      <xs:attribute name="debug"     type="xs:boolean"/>
     </xs:complexType>
   </xs:element>
 
@@ -455,6 +460,7 @@
       <xs:attribute name="color"  type="Color"/>
       <xs:attribute name="align"  type="TextAlignH"/>
       <xs:attribute name="repeat" type="Repeat"/>
+      <xs:attribute name="debug"  type="xs:boolean"/>
     </xs:complexType>
   </xs:element>
 

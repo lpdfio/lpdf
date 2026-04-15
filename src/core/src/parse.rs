@@ -25,6 +25,7 @@ pub struct Page {
     pub height: f32,
     pub margin: [f32; 4], // top, right, bottom, left
     pub background: Option<String>,
+    pub debug: bool,
     pub children: Vec<Node>,
 }
 
@@ -51,6 +52,7 @@ pub struct Node {
     pub height_mode: HeightMode,
     pub width_constraint: Option<f32>,
     pub repeat: Repeat,
+    pub debug: bool,
     // layout-specific
     pub align: Align,
     pub justify: Justify,
@@ -189,6 +191,7 @@ impl Node {
             height_mode: HeightMode::Auto,
             width_constraint: None,
             repeat: Repeat::None,
+            debug: false,
             align: Align::Start,
             justify: Justify::Start,
             end: false,
@@ -236,6 +239,7 @@ pub fn parse(xml: &str) -> Result<Document, String> {
     let mut doc_size = (595.28_f32, 841.89_f32); // a4
     let mut doc_margin = [0.0_f32; 4];
     let mut doc_background: Option<String> = None;
+    let mut doc_debug = false;
 
     // ── Pass 2: parse <document> using the resolved tokens ───────────────────
     for child in elems(&root) {
@@ -254,6 +258,9 @@ pub fn parse(xml: &str) -> Result<Document, String> {
                 if let Some(v) = child.attribute("background") {
                     doc_background = Some(tokens.resolve_color(v)?);
                 }
+                if let Some(v) = child.attribute("debug") {
+                    doc_debug = v == "true";
+                }
 
                 let mut found_pages_elem = false;
                 for doc_child in elems(&child) {
@@ -268,6 +275,7 @@ pub fn parse(xml: &str) -> Result<Document, String> {
                                         doc_size,
                                         doc_margin,
                                         doc_background.clone(),
+                                        doc_debug,
                                         &tokens,
                                     )?),
                                     other => {
@@ -379,6 +387,7 @@ fn parse_page(
     doc_size: (f32, f32),
     doc_margin: [f32; 4],
     doc_background: Option<String>,
+    doc_debug: bool,
     tokens: &Tokens,
 ) -> Result<Page, String> {
     let mut size = doc_size;
@@ -397,6 +406,7 @@ fn parse_page(
     if let Some(v) = elem.attribute("background") {
         background = Some(tokens.resolve_color(v)?);
     }
+    let debug = elem.attribute("debug").map(|v| v == "true").unwrap_or(doc_debug);
 
     let mut children = Vec::new();
     for child in elems(elem) {
@@ -408,6 +418,7 @@ fn parse_page(
         height: size.1,
         margin,
         background,
+        debug,
         children,
     })
 }
@@ -494,6 +505,7 @@ fn parse_node(elem: &roxmltree::Node, tokens: &Tokens) -> Result<Node, String> {
             )),
         };
     }
+    node.debug = elem.attribute("debug").map(|v| v == "true").unwrap_or(false);
 
     // ── Kind-specific attrs ───────────────────────────────────────────────────
     match kind {
@@ -756,6 +768,8 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     } else {
         None
     };
+    let doc_debug = attrs.get("debug").and_then(|v| v.as_str())
+        .map(|v| v == "true").unwrap_or(false);
 
     // ── Pages ─────────────────────────────────────────────────────────────────
     let page_arr = root.get("children").and_then(|v| v.as_array())
@@ -766,7 +780,7 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
         if child.get("type").and_then(|v| v.as_str()) != Some("page") {
             return Err("document children must all be page nodes".into());
         }
-        pages.push(parse_tree_page(child, doc_size, doc_margin, doc_background.clone(), &tokens)?);
+        pages.push(parse_tree_page(child, doc_size, doc_margin, doc_background.clone(), doc_debug, &tokens)?);
     }
     if pages.is_empty() {
         return Err("document must have at least one page".into());
@@ -837,6 +851,7 @@ fn parse_tree_page(
     doc_size: (f32, f32),
     doc_margin: [f32; 4],
     doc_background: Option<String>,
+    doc_debug: bool,
     tokens: &Tokens,
 ) -> Result<Page, String> {
     let mut size = doc_size;
@@ -855,6 +870,7 @@ fn parse_tree_page(
     if let Some(s) = jattr(json, "background") {
         background = Some(tokens.resolve_color(s)?);
     }
+    let debug = jattr(json, "debug").map(|v| v == "true").unwrap_or(doc_debug);
 
     let children = if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
         arr.iter().map(|c| parse_tree_node(c, tokens)).collect::<Result<Vec<_>, _>>()?
@@ -862,7 +878,7 @@ fn parse_tree_page(
         vec![]
     };
 
-    Ok(Page { width: size.0, height: size.1, margin, background, children })
+    Ok(Page { width: size.0, height: size.1, margin, background, debug, children })
 }
 
 fn parse_tree_node(json: &serde_json::Value, tokens: &Tokens) -> Result<Node, String> {
@@ -1047,6 +1063,7 @@ fn parse_tree_node(json: &serde_json::Value, tokens: &Tokens) -> Result<Node, St
     }
 
     // ── Layout children ───────────────────────────────────────────────────────
+    node.debug = jattr(json, "debug").map(|v| v == "true").unwrap_or(false);
     if kind != NodeKind::Divider {
         if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
             for child in arr {

@@ -25,6 +25,7 @@ export interface StackOptions {
     height?: string;
     border?: string;
     radius?: string;
+    debug?: string;
 }
 export interface FlankOptions {
     gap?: string;
@@ -37,6 +38,7 @@ export interface FlankOptions {
     height?: string;
     border?: string;
     radius?: string;
+    debug?: string;
 }
 export interface SplitOptions {
     gap?: string;
@@ -46,6 +48,7 @@ export interface SplitOptions {
     height?: string;
     border?: string;
     radius?: string;
+    debug?: string;
 }
 export interface ClusterOptions {
     gap?: string;
@@ -56,6 +59,7 @@ export interface ClusterOptions {
     height?: string;
     border?: string;
     radius?: string;
+    debug?: string;
 }
 export interface GridOptions {
     cols?: string;
@@ -68,6 +72,7 @@ export interface GridOptions {
     height?: string;
     border?: string;
     radius?: string;
+    debug?: string;
 }
 export interface FrameOptions {
     width?: string;
@@ -77,11 +82,13 @@ export interface FrameOptions {
     border?: string;
     radius?: string;
     align?: string;
+    debug?: string;
 }
 export interface LinkOptions {
     url?: string;
     width?: string;
     height?: string;
+    debug?: string;
 }
 export interface TextOptions {
     font?: string;
@@ -92,6 +99,7 @@ export interface TextOptions {
     padding?: string;
     background?: string;
     repeat?: string;
+    debug?: string;
 }
 export interface SpanOptions {
     font?: string;
@@ -104,12 +112,14 @@ export interface DividerOptions {
     color?: string;
     thickness?: string;
     direction?: string;
+    debug?: string;
 }
 export interface PageOptions {
     size?: string;
     orientation?: string;
     margin?: string;
     background?: string;
+    debug?: string;
 }
 export interface LpdfTokens {
     colors?: Record<string, string>;
@@ -142,6 +152,7 @@ export interface DocumentOptions {
     background?: string;
     tokens?: LpdfTokens;
     meta?: LpdfMeta;
+    debug?: string;
 }
 export interface StackInput {
     nodes?: LpdfNode[];
