@@ -18,6 +18,7 @@ Object.defineProperty(exports, "kitToXml", { enumerable: true, get: function () 
 class LpdfEngine {
     constructor(licenseKey, options = {}) {
         this._fonts = new Map();
+        this._disposed = false;
         this._licenseKey = licenseKey;
         this._opts = options;
     }
@@ -26,10 +27,24 @@ class LpdfEngine {
      * Call before `renderPdf`. Returns `this` for chaining.
      */
     loadFont(name, bytes) {
+        this._throwIfDisposed();
         this._fonts.set(name, bytes);
         return this;
     }
+    /**
+     * Release held resources. Idempotent. Subsequent `renderPdf` / `loadFont`
+     * calls after disposal will throw.
+     */
+    dispose() {
+        this._disposed = true;
+    }
+    [Symbol.dispose]() { this.dispose(); }
+    _throwIfDisposed() {
+        if (this._disposed)
+            throw new Error('LpdfEngine has been disposed.');
+    }
     async renderPdf(input, callOptions = {}) {
+        this._throwIfDisposed();
         // LpdfDocument trees are serialised to XML before being handed to the Rust engine.
         const xml = typeof input === 'string' ? input : (0, kit_to_xml_1.kitToXml)(input);
         // Merge fonts: instance-level loadFont() calls take precedence over the

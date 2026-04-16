@@ -15,18 +15,27 @@ rustup target add wasm32-wasip1
 
 | Command | Description |
 |---|---|
-| `make build` | Build WASM for Node.js and browser (`dist/node`, `dist/web`) |
-| `make wasi` | Build WASI binary (`dist/wasi/lpdf.wasm`) |
-| `make test` | Run core Rust unit tests |
+| `make build-wasm` | Build WASM for Node.js and browser (`dist/node`, `dist/web`) |
+| `make build-wasi` | Build WASI binary (`dist/wasi/lpdf.wasm`) |
+| `make test-wasm` | Run core Rust unit tests |
 | `make test-wasi` | Run WASI crate tests |
-| `make adapter-node` | Install and build the Node.js adapter |
-| `make adapter-node-test` | Build and test the Node.js adapter |
-| `make adapter-dotnet` | Build the .NET adapter (requires `wasi` first) |
-| `make adapter-dotnet-test` | Build and test the .NET adapter |
-| `make adapter-php` | Build the PHP Docker image (requires `wasi` first) |
-| `make adapter-php-test` | Build and run PHP tests via Docker |
+| `make build-adapter-node` | Install and build the Node.js adapter |
+| `make test-adapter-node` | Build and test the Node.js adapter |
+| `make build-adapter-dotnet` | Build the .NET adapter |
+| `make test-adapter-dotnet` | Build and test the .NET adapter |
+| `make build-adapter-php` | Build the PHP Docker image |
+| `make test-adapter-php` | Build and run PHP tests via Docker |
+| `make build-adapter-python` | Build the Python Docker image |
+| `make test-adapter-python` | Build and run Python tests via Docker |
 | `make build-all` | Build everything (WASM + WASI + all adapters) |
 | `make test-all` | Run all tests across all adapters |
+| `make example-all` | Run all examples |
+| `make clean-wasm` | Remove WASM build artifacts (`dist/node`, `dist/web`) |
+| `make clean-wasi` | Remove WASI build artifacts (`dist/wasi`) |
+| `make clean-adapter-node` | Remove Node.js adapter build artifacts |
+| `make clean-adapter-dotnet` | Remove .NET adapter build artifacts |
+| `make clean-adapter-php` | Remove PHP Docker image |
+| `make clean-adapter-python` | Remove Python Docker image |
 | `make clean` | Remove all build artifacts |
 
 ## Examples

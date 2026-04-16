@@ -100,6 +100,15 @@ var LpdfEngine = class {
     const len0 = WASM_VECTOR_LEN;
     wasm.lpdfengine_set_created_on(this.__wbg_ptr, ptr0, len0);
   }
+  /**
+   * Set the current Unix timestamp (seconds) for license expiry checking.
+   * Must be called before `render_pdf` when using a time-limited token.
+   * If not set (default `0`), expiry is not checked.
+   * @param {bigint} unix
+   */
+  set_now(unix) {
+    wasm.lpdfengine_set_now(this.__wbg_ptr, unix);
+  }
 };
 if (Symbol.dispose) LpdfEngine.prototype[Symbol.dispose] = LpdfEngine.prototype.free;
 function __wbg_get_imports() {

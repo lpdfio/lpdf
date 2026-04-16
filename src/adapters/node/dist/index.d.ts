@@ -12,12 +12,20 @@ export declare class LpdfEngine {
     private readonly _licenseKey;
     private readonly _opts;
     private readonly _fonts;
+    private _disposed;
     constructor(licenseKey: string, options?: RenderOptions);
     /**
      * Register raw TTF/OTF bytes for a custom font name used in `<font src="…">`.
      * Call before `renderPdf`. Returns `this` for chaining.
      */
     loadFont(name: string, bytes: Uint8Array): this;
+    /**
+     * Release held resources. Idempotent. Subsequent `renderPdf` / `loadFont`
+     * calls after disposal will throw.
+     */
+    dispose(): void;
+    [Symbol.dispose](): void;
+    private _throwIfDisposed;
     /**
      * Render an lpdf XML string to PDF bytes (Node.js).
      */
