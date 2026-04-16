@@ -34,6 +34,7 @@ export class LpdfEngine {
   private readonly _licenseKey: string;
   private readonly _opts:  RenderOptions;
   private readonly _fonts: Map<string, Uint8Array> = new Map();
+  private _disposed = false;
 
   constructor(licenseKey: string, options: RenderOptions = {}) {
     this._licenseKey = licenseKey;
@@ -45,8 +46,23 @@ export class LpdfEngine {
    * Call before `renderPdf`. Returns `this` for chaining.
    */
   loadFont(name: string, bytes: Uint8Array): this {
+    this._throwIfDisposed();
     this._fonts.set(name, bytes);
     return this;
+  }
+
+  /**
+   * Release held resources. Idempotent. Subsequent `renderPdf` / `loadFont`
+   * calls after disposal will throw.
+   */
+  dispose(): void {
+    this._disposed = true;
+  }
+
+  [Symbol.dispose](): void { this.dispose(); }
+
+  private _throwIfDisposed(): void {
+    if (this._disposed) throw new Error('LpdfEngine has been disposed.');
   }
 
   /**
@@ -58,6 +74,7 @@ export class LpdfEngine {
    */
   async renderPdf(input: LpdfDocument, callOptions?: RenderOptions): Promise<Uint8Array>;
   async renderPdf(input: string | LpdfDocument, callOptions: RenderOptions = {}): Promise<Uint8Array> {
+    this._throwIfDisposed();
     // LpdfDocument trees are serialised to XML before being handed to the Rust engine.
     const xml = typeof input === 'string' ? input : kitToXml(input);
 
