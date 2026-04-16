@@ -23,13 +23,22 @@ final class LpdfEngine
     /**
      * Render an lpdf XML document and return raw PDF bytes.
      *
+     * @param  RenderOptions|null $callOptions Per-call overrides merged with constructor options.
      * @throws \RuntimeException on render error.
      */
-    public function renderPdf(string $xml): string
+    public function renderPdf(string $xml, ?RenderOptions $callOptions = null): string
     {
         $runner = new WasmRunner(
-            wasmBinary: $this->options->wasmBinary ?? self::defaultBinary(),
-            wasmRunner: $this->options->wasmRunner ?? 'wasmtime',
+            wasmBinary: $callOptions?->wasmBinary ?? $this->options->wasmBinary ?? self::defaultBinary(),
+            wasmRunner: $callOptions?->wasmRunner ?? $this->options->wasmRunner ?? 'wasmtime',
+        );
+
+        // Merge fonts: loadFont() calls take precedence, then per-call fontBytes,
+        // then constructor-level fontBytes. Per-call wins over constructor on collision.
+        $mergedFonts = array_merge(
+            $this->options->fontBytes ?? [],
+            $callOptions?->fontBytes  ?? [],
+            $this->fonts,
         );
 
         $payload = [
@@ -38,12 +47,13 @@ final class LpdfEngine
             'input'  => $xml,
         ];
 
-        if ($this->fonts !== []) {
-            $payload['fonts'] = array_map('base64_encode', $this->fonts);
+        if ($mergedFonts !== []) {
+            $payload['fonts'] = array_map('base64_encode', $mergedFonts);
         }
 
-        if ($this->options->createdOn !== null) {
-            $payload['created_on'] = $this->options->createdOn;
+        $createdOn = $callOptions?->createdOn ?? $this->options->createdOn;
+        if ($createdOn !== null) {
+            $payload['created_on'] = $createdOn;
         }
 
         $response = $runner->invoke($payload);
