@@ -1,6 +1,6 @@
 SHELL := C:/PROGRA~1/Git/bin/sh.exe
 
-.PHONY: build test clean adapter-node adapter-node-test adapter-dotnet adapter-dotnet-test adapter-php adapter-php-test build-all test-all
+.PHONY: build test clean adapter-node adapter-node-test adapter-dotnet adapter-dotnet-test adapter-php adapter-php-test build-all test-all example-node example-dotnet example-php
 
 build:
 	@echo ""
@@ -85,6 +85,30 @@ adapter-php-test: adapter-php
 build-all: build wasi adapter-node adapter-dotnet adapter-php
 
 test-all: test test-wasi adapter-node-test adapter-dotnet-test adapter-php-test
+
+example-node: adapter-node
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Running Node example..."
+	@echo ""
+	cd src/adapters/node && npx ts-node example/example.ts
+
+example-dotnet: adapter-dotnet
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Running .NET example..."
+	@echo ""
+	dotnet run --project src/adapters/dotnet/example/LpdfExample.csproj
+
+example-php: adapter-php
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Running PHP example..."
+	@echo ""
+	docker run --rm \
+		-v "$(CURDIR)/src/adapters/php/example://app/src/adapters/php/example" \
+		-v "$(CURDIR)/example://app/example" \
+		-w //app lpdf-php php src/adapters/php/example/example.php
 
 clean:
 	@echo ""
