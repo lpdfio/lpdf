@@ -1,4 +1,5 @@
 mod layout;
+mod license;
 mod parse;
 mod pdf;
 mod render;
@@ -13,6 +14,9 @@ pub struct LpdfEngine {
     fonts:       pdf::FontRegistry,
     /// Optional ISO 8601 creation timestamp for the PDF `/CreationDate` field.
     created_on:  Option<String>,
+    /// Current Unix timestamp (seconds) used for license expiry checking.
+    /// Set via `set_now()`.  Defaults to `0` (expiry check skipped).
+    now_unix:    i64,
 }
 
 #[wasm_bindgen]
@@ -23,6 +27,7 @@ impl LpdfEngine {
             license_key: license_key.to_string(),
             fonts:       pdf::FontRegistry::new(),
             created_on:  None,
+            now_unix:    0,
         }
     }
 
@@ -37,6 +42,13 @@ impl LpdfEngine {
     /// Omitting this keeps builds reproducible (no embedded timestamp).
     pub fn set_created_on(&mut self, iso: &str) {
         self.created_on = Some(iso.to_string());
+    }
+
+    /// Set the current Unix timestamp (seconds) for license expiry checking.
+    /// Must be called before `render_pdf` when using a time-limited token.
+    /// If not set (default `0`), expiry is not checked.
+    pub fn set_now(&mut self, unix: i64) {
+        self.now_unix = unix;
     }
 
     /// Render `xml` to binary PDF bytes.
@@ -54,11 +66,11 @@ impl LpdfEngine {
         let pages: Vec<render::RenderPage> =
             doc.pages.iter().flat_map(layout::layout_page).collect();
 
-        // Show the lpdf.io watermark when the engine is running unlicensed.
-        let wm: Option<(&str, Option<&str>)> = if self.license_key.is_empty() {
-            Some(("made with lpdf.io", Some("https://lpdf.io")))
-        } else {
+        let status = license::check(&self.license_key, self.now_unix);
+        let wm: Option<(&str, Option<&str>)> = if status.is_licensed() {
             None
+        } else {
+            Some(("made with lpdf.io", Some("https://lpdf.io")))
         };
 
         pdf::render_pdf(
@@ -68,6 +80,7 @@ impl LpdfEngine {
             &doc.meta,
             wm,
             self.created_on.as_deref(),
+            status.is_licensed(),
         )
         .map_err(|e| JsValue::from_str(&e))
     }
@@ -111,7 +124,11 @@ impl LpdfEngine {
         let doc = parse::parse(xml)?;
         let pages: Vec<render::RenderPage> =
             doc.pages.iter().flat_map(layout::layout_page).collect();
-        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &doc.meta, None, None)
+        // Render as unlicensed (with watermark) to match what the adapters
+        // produce when no valid license key is supplied — keeps snapshot hashes
+        // consistent between the Rust tests and the adapter test suites.
+        let wm = Some(("made with lpdf.io", Some("https://lpdf.io")));
+        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &doc.meta, wm, None, false)
     }
 
     fn render_doc(&self, doc: parse::Document) -> String {
@@ -143,17 +160,25 @@ impl LpdfEngine {
             "fonts":    fonts,
         });
 
-        let watermark = if self.license_key.is_empty() {
+        let status = license::check(&self.license_key, self.now_unix);
+        let watermark = if status.is_licensed() {
+            serde_json::Value::Null
+        } else {
             serde_json::json!({
                 "type": "lpdf:watermark",
                 "text": "made with lpdf.io",
                 "url":  "https://lpdf.io"
             })
-        } else {
-            serde_json::Value::Null
         };
 
-        render::pages_to_json(&pages, meta, watermark)
+        let mut output = render::pages_to_json(&pages, meta, watermark);
+        if let Some(warn) = status.warning() {
+            if let Ok(mut val) = serde_json::from_str::<serde_json::Value>(&output) {
+                val["license_warning"] = serde_json::Value::String(warn.to_string());
+                output = val.to_string();
+            }
+        }
+        output
     }
 }
 
@@ -165,7 +190,7 @@ mod tests {
     use super::*;
 
     fn render_value(xml: &str) -> serde_json::Value {
-        let engine = LpdfEngine::new("test-key");
+        let engine = LpdfEngine::new("");
         serde_json::from_str(&engine.render(xml))
             .expect("render() returned invalid JSON")
     }
@@ -186,9 +211,17 @@ mod tests {
     }
 
     #[test]
-    fn licensed_render_omits_watermark() {
-        let result = render_value(&minimal(""));
-        assert!(result["watermark"].is_null());
+    fn malformed_token_falls_back_to_watermark_with_warning() {
+        let engine = LpdfEngine::new("not-a-valid-token");
+        let result: serde_json::Value =
+            serde_json::from_str(&engine.render(&minimal(""))).unwrap();
+        // Should still render (no hard error)
+        assert!(result["error"].is_null());
+        // Should have watermark (falls back to free mode)
+        assert!(!result["watermark"].is_null());
+        assert_eq!(result["watermark"]["type"], "lpdf:watermark");
+        // Should carry a warning
+        assert!(result["license_warning"].is_string());
     }
 
     #[test]

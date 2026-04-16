@@ -20,6 +20,10 @@ pdf-writer = "0.12"
 ttf-parser = "0.25"
 # Font subsetting — embed only the glyphs actually used, keeps PDF size small
 subsetter = "0.2"
+# License token verification — Ed25519 signature check (verification only, no keygen)
+ed25519-dalek = { version = "2", default-features = false, features = ["alloc"] }
+# Base64url decoding for license token payload and signature segments
+base64 = "0.22"
 
 [dev-dependencies]
 sha2 = "0.10"

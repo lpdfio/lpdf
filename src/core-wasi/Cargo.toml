@@ -18,3 +18,5 @@ ttf-parser = "0.25"
 subsetter   = "0.2"
 # Base64 encoding for binary PDF bytes in the JSON envelope
 base64 = "0.22"
+# License token verification — Ed25519 signature check
+ed25519-dalek = { version = "2", default-features = false, features = ["alloc"] }
