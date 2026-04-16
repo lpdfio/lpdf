@@ -21,13 +21,22 @@ final class LpdfEngine
     }
 
     /**
-     * Render an lpdf XML document and return raw PDF bytes.
+     * Render an lpdf XML string or LpdfDocument tree and return raw PDF bytes.
      *
-     * @param  RenderOptions|null $callOptions Per-call overrides merged with constructor options.
+     * @param  string|LpdfDocument $input       XML string or a tree built with LpdfKit.
+     * @param  RenderOptions|null  $callOptions Per-call overrides merged with constructor options.
      * @throws \RuntimeException on render error.
      */
-    public function renderPdf(string $xml, ?RenderOptions $callOptions = null): string
+    public function renderPdf(string|LpdfDocument $input, ?RenderOptions $callOptions = null): string
     {
+        if ($input instanceof LpdfDocument) {
+            $method   = 'render_tree_pdf';
+            $inputStr = json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+        } else {
+            $method   = 'render_pdf';
+            $inputStr = $input;
+        }
+
         $runner = new WasmRunner(
             wasmBinary: $callOptions?->wasmBinary ?? $this->options->wasmBinary ?? self::defaultBinary(),
             wasmRunner: $callOptions?->wasmRunner ?? $this->options->wasmRunner ?? 'wasmtime',
@@ -42,9 +51,9 @@ final class LpdfEngine
         );
 
         $payload = [
-            'method' => 'render_pdf',
+            'method' => $method,
             'key'    => $this->licenseKey,
-            'input'  => $xml,
+            'input'  => $inputStr,
         ];
 
         if ($mergedFonts !== []) {
