@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lpdf License Generator</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    background: #f5f5f5;
+    color: #1a1a1a;
+    padding: 32px 16px;
+  }
+
+  .container { max-width: 760px; margin: 0 auto; }
+
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { color: #666; margin-bottom: 32px; font-size: 13px; }
+
+  .card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .field  { display: flex; flex-direction: column; gap: 4px; }
+  .field.full { grid-column: 1 / -1; }
+
+  label { font-size: 12px; font-weight: 500; color: #444; }
+
+  input, select {
+    border: 1px solid #d0d0d0;
+    border-radius: 4px;
+    padding: 7px 10px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  input:focus, select:focus { border-color: #4a90e2; }
+
+  button {
+    margin-top: 16px;
+    padding: 9px 20px;
+    background: #1a1a1a;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  button:hover { background: #333; }
+  button:disabled { background: #aaa; cursor: default; }
+
+  .result { display: none; margin-top: 16px; }
+  .result.visible { display: block; }
+
+  .token-box {
+    font-family: "Menlo", "Consolas", monospace;
+    font-size: 12px;
+    background: #f8f8f8;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 10px 12px;
+    word-break: break-all;
+    line-height: 1.6;
+    cursor: pointer;
+    user-select: all;
+  }
+  .token-box:hover { background: #f0f0f0; }
+
+  .copy-hint { font-size: 11px; color: #888; margin-top: 4px; }
+
+  .meta {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #555;
+    background: #f8f8f8;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+    padding: 8px 12px;
+  }
+  .meta span { display: inline-block; margin-right: 16px; }
+
+  .error-msg {
+    margin-top: 12px;
+    color: #c0392b;
+    font-size: 13px;
+  }
+
+  /* Pubkey constant */
+  .pubkey-block {
+    font-family: "Menlo", "Consolas", monospace;
+    font-size: 12px;
+    background: #1a1a1a;
+    color: #a8d8a8;
+    border-radius: 4px;
+    padding: 12px 14px;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.6;
+  }
+  .pubkey-reload { font-size: 12px; color: #4a90e2; cursor: pointer; border: none; background: none; padding: 0; margin-top: 8px; }
+  .pubkey-reload:hover { text-decoration: underline; }
+
+  /* Licenses table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #ebebeb; }
+  th { font-weight: 600; background: #fafafa; }
+  td.token-cell { font-family: monospace; font-size: 11px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  td.token-cell:hover { overflow: visible; white-space: normal; word-break: break-all; }
+  .plan-badge {
+    display: inline-block; padding: 2px 7px; border-radius: 10px;
+    font-size: 11px; font-weight: 600;
+  }
+  .plan-starter  { background: #e8f4fd; color: #1a6fa8; }
+  .plan-business { background: #e8f8e8; color: #1a7a1a; }
+  .plan-scale    { background: #fdf0e8; color: #b35c00; }
+
+  .refresh-btn { font-size: 12px; color: #4a90e2; cursor: pointer; border: none; background: none; padding: 0; margin-left: 8px; }
+  .refresh-btn:hover { text-decoration: underline; }
+  .empty-state { text-align: center; padding: 24px; color: #999; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>lpdf License Generator</h1>
+  <p class="subtitle">Local development tool — generates Ed25519-signed license tokens for testing.</p>
+
+  <!-- Public key constant -->
+  <div class="card">
+    <h2>Rust Public Key Constant
+      <button class="pubkey-reload" onclick="loadPubkey()">↻ reload</button>
+    </h2>
+    <div class="pubkey-block" id="pubkey">Loading…</div>
+    <p class="copy-hint">Paste this into <code>src/core/src/license.rs</code> → replace <code>PUBLIC_KEY_BYTES</code> → rebuild.</p>
+  </div>
+
+  <!-- Generate form -->
+  <div class="card">
+    <h2>Generate License Token</h2>
+    <form id="genForm">
+      <div class="fields">
+        <div class="field">
+          <label for="email">Email *</label>
+          <input id="email" type="email" placeholder="customer@example.com" required>
+        </div>
+        <div class="field">
+          <label for="plan">Plan *</label>
+          <select id="plan">
+            <option value="starter">starter</option>
+            <option value="business" selected>business</option>
+            <option value="scale">scale</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="days">Expiry (days)</label>
+          <input id="days" type="number" value="365" min="1" max="3650">
+        </div>
+        <div class="field">
+          <label for="cid">Customer ID (optional)</label>
+          <input id="cid" type="text" placeholder="e.g. paddle_ctm_abc123">
+        </div>
+      </div>
+      <button type="submit" id="genBtn">Generate Token</button>
+    </form>
+
+    <div class="result" id="result">
+      <div class="token-box" id="tokenBox" title="Click to select all"></div>
+      <p class="copy-hint">Click token to select · Pass as the license key to LpdfEngine</p>
+      <div class="meta" id="metaBox"></div>
+    </div>
+    <p class="error-msg" id="errorMsg"></p>
+  </div>
+
+  <!-- Licenses list -->
+  <div class="card">
+    <h2>Generated Licenses
+      <button class="refresh-btn" onclick="loadLicenses()">↻ refresh</button>
+    </h2>
+    <div class="table-wrap">
+      <table id="licensesTable">
+        <thead>
+          <tr><th>#</th><th>Email</th><th>Plan</th><th>CID</th><th>Expires</th><th>Token</th></tr>
+        </thead>
+        <tbody id="licensesTbody">
+          <tr><td colspan="6" class="empty-state">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Public key constant
+// ---------------------------------------------------------------------------
+async function loadPubkey() {
+  const el = document.getElementById("pubkey");
+  try {
+    const r = await fetch("/pubkey");
+    el.textContent = await r.text();
+  } catch {
+    el.textContent = "Could not load — is the server running?";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Generate
+// ---------------------------------------------------------------------------
+document.getElementById("genForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn      = document.getElementById("genBtn");
+  const result   = document.getElementById("result");
+  const tokenBox = document.getElementById("tokenBox");
+  const metaBox  = document.getElementById("metaBox");
+  const errorMsg = document.getElementById("errorMsg");
+
+  btn.disabled = true;
+  result.classList.remove("visible");
+  errorMsg.textContent = "";
+
+  const body = {
+    email: document.getElementById("email").value.trim(),
+    plan:  document.getElementById("plan").value,
+    days:  parseInt(document.getElementById("days").value, 10),
+    cid:   document.getElementById("cid").value.trim(),
+  };
+
+  try {
+    const r  = await fetch("/generate", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(body),
+    });
+    const data = await r.json();
+
+    if (!r.ok) {
+      errorMsg.textContent = data.error ?? "Unknown error";
+      return;
+    }
+
+    tokenBox.textContent = data.token;
+    const exp = new Date(data.payload.exp * 1000).toLocaleDateString();
+    metaBox.innerHTML =
+      `<span>Plan: <strong>${data.payload.plan}</strong></span>` +
+      `<span>CID: ${data.payload.cid}</span>` +
+      `<span>Expires: ${exp}</span>` +
+      `<span>ID: #${data.id}</span>`;
+
+    result.classList.add("visible");
+    loadLicenses();
+  } catch (err) {
+    errorMsg.textContent = `Request failed: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Licenses table
+// ---------------------------------------------------------------------------
+async function loadLicenses() {
+  const tbody = document.getElementById("licensesTbody");
+  try {
+    const r    = await fetch("/licenses");
+    const text = await r.text();
+    const lines = text.trim().split("\n").filter(Boolean);
+
+    if (lines.length <= 1) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty-state">No licenses generated yet.</td></tr>`;
+      return;
+    }
+
+    const rows = lines.slice(1).reverse().map(line => {
+      const [id, cid, email, plan, iat, exp, token] = line.split(",");
+      const expDate = new Date(parseInt(exp, 10) * 1000).toLocaleDateString();
+      const badge   = `<span class="plan-badge plan-${plan}">${plan}</span>`;
+      const tok     = token ? `<td class="token-cell" title="${token}">${token.slice(0, 32)}…</td>` : "<td>—</td>";
+      return `<tr><td>${id}</td><td>${email}</td><td>${badge}</td><td>${cid}</td><td>${expDate}</td>${tok}</tr>`;
+    });
+
+    tbody.innerHTML = rows.join("");
+  } catch {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Could not load licenses.</td></tr>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+loadPubkey();
+loadLicenses();
+</script>
+</body>
+</html>

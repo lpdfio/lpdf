@@ -1,0 +1,11 @@
+# Generated keypair — never commit
+keys/
+
+# Generated license records — local only
+licenses.csv
+
+# Environment overrides
+.env
+
+# Node modules
+node_modules/
