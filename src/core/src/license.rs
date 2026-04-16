@@ -4,26 +4,44 @@
 //! - Payload  : UTF-8 JSON, Base64url-encoded (no padding).
 //! - Signature: Ed25519 signature over the raw payload bytes, Base64url-encoded.
 //!
-//! The 32-byte public key is embedded as `PUBLIC_KEY_BYTES` below.
+//! Trusted public keys are embedded in `TRUSTED_KEYS` below.  A token is
+//! valid if it verifies against **any** of those keys.  This supports
+//! zero-downtime key rotation:
+//!
+//! 1. Generate a new keypair with `npm start` in `src/license/`.
+//! 2. Add the new key as the **first** entry in `TRUSTED_KEYS`.
+//! 3. Rebuild and deploy the binary.
+//! 4. Reissue tokens to customers (signed with the new private key).
+//! 5. After the grace period remove the old key, rebuild, and deploy again.
 //!
 //! # Local test setup
 //! Run `npm start` inside `src/license/` once to auto-generate a keypair.
-//! The server prints a Rust constant — paste it over `PUBLIC_KEY_BYTES` and
-//! rebuild.  The server's `keys/private.hex` is gitignored; never commit it.
+//! The server prints a Rust constant — add it to `TRUSTED_KEYS` and rebuild.
+//! The server's `keys/private.hex` is gitignored; never commit it.
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use ed25519_dalek::{Signature, VerifyingKey, Verifier};
 
 // ---------------------------------------------------------------------------
-// Embedded public key
+// Trusted public keys
 // ---------------------------------------------------------------------------
 
-/// 32-byte Ed25519 public key.
+/// All trusted Ed25519 public keys, newest first.
 ///
-/// **Replace with the bytes printed by `npm start` in `src/license/` before
-/// building a real binary.**  The all-zero placeholder causes every token to
-/// fail verification and fall back to free mode.
-pub const PUBLIC_KEY_BYTES: [u8; 32] = [0u8; 32];
+/// A token is accepted if it verifies against **any** entry.  To rotate keys:
+///  1. Prepend the new key here.
+///  2. Rebuild and deploy.
+///  3. Reissue tokens to customers.
+///  4. After the grace period, remove the old key and rebuild.
+pub const TRUSTED_KEYS: &[[u8; 32]] = &[
+    // dev key — replace with production key before release
+    [
+        0xff, 0x7c, 0xde, 0x34, 0xb1, 0x6b, 0xbf, 0xbe,
+        0x78, 0x02, 0xfb, 0x7b, 0xbe, 0xa1, 0xf9, 0x45,
+        0x43, 0xa5, 0x5a, 0xea, 0xd9, 0x30, 0x6d, 0xb2,
+        0x70, 0x76, 0x55, 0x3d, 0x81, 0xf5, 0xf8, 0xc7,
+    ],
+];
 
 // ---------------------------------------------------------------------------
 // Status type
@@ -105,20 +123,17 @@ pub fn check(token: &str, now_unix: i64) -> LicenseStatus {
         Err(_) => return LicenseStatus::Malformed,
     };
 
-    // ── Verify Ed25519 signature ─────────────────────────────────────────────
-    let verifying_key = match VerifyingKey::from_bytes(&PUBLIC_KEY_BYTES) {
-        Ok(k)  => k,
-        Err(_) => {
-            // The embedded key constant is invalid (e.g. all-zero placeholder).
-            // Treat every token as having a bad signature.
-            return LicenseStatus::InvalidSignature;
-        }
-    };
+    // ── Verify Ed25519 signature against all trusted keys ───────────────────
     let signature = match Signature::from_slice(&sig_bytes) {
         Ok(s)  => s,
         Err(_) => return LicenseStatus::Malformed,
     };
-    if verifying_key.verify(&payload_bytes, &signature).is_err() {
+    let verified = TRUSTED_KEYS.iter().any(|key_bytes| {
+        VerifyingKey::from_bytes(key_bytes)
+            .map(|vk| vk.verify(&payload_bytes, &signature).is_ok())
+            .unwrap_or(false)
+    });
+    if !verified {
         return LicenseStatus::InvalidSignature;
     }
 
@@ -170,8 +185,7 @@ mod tests {
 
     #[test]
     fn valid_base64_bad_sig_is_invalid_signature() {
-        // Valid base64url payload, valid base64url sig — but key is all-zero
-        // placeholder so from_bytes fails → InvalidSignature.
+        // Valid base64url payload + sig bytes, but signature doesn't match any trusted key.
         let payload = URL_SAFE_NO_PAD.encode(b"{\"plan\":\"starter\",\"exp\":9999999999}");
         let sig     = URL_SAFE_NO_PAD.encode(&[0u8; 64]);
         let token   = format!("{payload}.{sig}");
