@@ -50,7 +50,7 @@ final class LpdfEngine
      *
      * @param  string|LpdfDocument $input       XML string or a tree built with LpdfKit.
      * @param  RenderOptions|null  $callOptions Per-call overrides merged with constructor options.
-     * @throws \RuntimeException on render error.
+     * @throws LpdfRenderException On render or process error.
      */
     public function renderPdf(string|LpdfDocument $input, ?RenderOptions $callOptions = null): string
     {
@@ -104,12 +104,12 @@ final class LpdfEngine
         $response = $runner->invoke($payload);
 
         if (!isset($response['pdf'])) {
-            throw new \RuntimeException('Unexpected response from WASI process.');
+            throw new LpdfRenderException('Unexpected response from WASI process.');
         }
 
         $bytes = base64_decode($response['pdf'], strict: true);
         if ($bytes === false) {
-            throw new \RuntimeException('Failed to decode base64 PDF response.');
+            throw new LpdfRenderException('Failed to decode base64 PDF response.');
         }
 
         return $bytes;

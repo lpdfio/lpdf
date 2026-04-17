@@ -4,6 +4,10 @@ export type { RenderOptions } from './_shared';
 export type { LpdfDocument, LpdfPageNode, LpdfNode, LpdfContainerNode, LpdfTextNode, LpdfSpanNode, LpdfDividerNode, LpdfTokens, LpdfFontDef, LpdfMeta, StackInput, FlankInput, SplitInput, ClusterInput, GridInput, FrameInput, LinkInput, TextInput, SpanInput, DividerInput, PageInput, DocumentInput, StackOptions, FlankOptions, SplitOptions, ClusterOptions, GridOptions, FrameOptions, LinkOptions, TextOptions, SpanOptions, DividerOptions, PageOptions, DocumentOptions } from './kit';
 export { LpdfKit } from './kit';
 export { kitToXml } from './kit-to-xml';
+/** Thrown when the lpdf engine returns a layout or parse error. */
+export declare class LpdfRenderError extends Error {
+    constructor(message: string);
+}
 /**
  * Stateful renderer. Construct once with the license key and optional shared
  * config; call `renderPdf` as many times as needed without repeating the key.

@@ -27,6 +27,14 @@ export type { LpdfDocument, LpdfPageNode, LpdfNode, LpdfContainerNode, LpdfTextN
 export { LpdfKit } from './kit';
 export { kitToXml } from './kit-to-xml';
 
+/** Thrown when the lpdf engine returns a layout or parse error. */
+export class LpdfRenderError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LpdfRenderError';
+  }
+}
+
 /**
  * Stateful renderer. Construct once with the license key and optional shared
  * config; call `renderPdf` as many times as needed without repeating the key.
@@ -114,7 +122,14 @@ export class LpdfEngine {
       engine.load_image(name, bytes);
     }
 
-    const pdf = engine.render_pdf(xml);
+    let pdf: Uint8Array;
+    try {
+      pdf = engine.render_pdf(xml);
+    } catch (e) {
+      engine.free();
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new LpdfRenderError(msg);
+    }
     engine.free();
     return pdf;
   }

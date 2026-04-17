@@ -14,7 +14,7 @@ final class WasmRunner
     /**
      * @param  array<string, mixed> $payload  Already-built request array.
      * @return array<string, mixed>            Decoded response.
-     * @throws \RuntimeException               On process error or JSON error.
+     * @throws LpdfRenderException On process or render error.
      */
     public function invoke(array $payload): array
     {
@@ -29,7 +29,7 @@ final class WasmRunner
         ], $pipes);
 
         if ($proc === false) {
-            throw new \RuntimeException('Failed to start WASI process.');
+            throw new LpdfRenderException('Failed to start WASI process.');
         }
 
         fwrite($pipes[0], json_encode($payload, JSON_THROW_ON_ERROR));
@@ -42,13 +42,13 @@ final class WasmRunner
         proc_close($proc);
 
         if ($out === false || $out === '') {
-            throw new \RuntimeException("WASI process produced no output. Stderr: $err");
+            throw new LpdfRenderException("WASI process produced no output. Stderr: $err");
         }
 
         $response = json_decode($out, true, 512, JSON_THROW_ON_ERROR);
 
         if (isset($response['error'])) {
-            throw new \RuntimeException("lpdf render error: {$response['error']}");
+            throw new LpdfRenderException("lpdf render error: {$response['error']}");
         }
 
         return $response;

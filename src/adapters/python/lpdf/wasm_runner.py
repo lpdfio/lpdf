@@ -1,6 +1,8 @@
 import json
 import subprocess
 
+from .exceptions import LpdfRenderError
+
 
 class WasmRunner:
     def __init__(self, wasm_binary: str, wasm_runner: str = "wasmtime"):
@@ -14,10 +16,10 @@ class WasmRunner:
             capture_output=True,
         )
         if result.returncode != 0 or not result.stdout:
-            raise RuntimeError(
+            raise LpdfRenderError(
                 f"WASI process failed. Stderr: {result.stderr.decode()}"
             )
         response = json.loads(result.stdout)
         if "error" in response:
-            raise RuntimeError(f"lpdf render error: {response['error']}")
+            raise LpdfRenderError(f"lpdf render error: {response['error']}")
         return response

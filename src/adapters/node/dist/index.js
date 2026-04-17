@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LpdfEngine = exports.kitToXml = exports.LpdfKit = void 0;
+exports.LpdfEngine = exports.LpdfRenderError = exports.kitToXml = exports.LpdfKit = void 0;
 const node_fs_1 = require("node:fs");
 const kit_to_xml_1 = require("./kit-to-xml");
 // require() path is relative to the compiled output at dist/index.js.
@@ -11,6 +11,14 @@ var kit_1 = require("./kit");
 Object.defineProperty(exports, "LpdfKit", { enumerable: true, get: function () { return kit_1.LpdfKit; } });
 var kit_to_xml_2 = require("./kit-to-xml");
 Object.defineProperty(exports, "kitToXml", { enumerable: true, get: function () { return kit_to_xml_2.kitToXml; } });
+/** Thrown when the lpdf engine returns a layout or parse error. */
+class LpdfRenderError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'LpdfRenderError';
+    }
+}
+exports.LpdfRenderError = LpdfRenderError;
 /**
  * Stateful renderer. Construct once with the license key and optional shared
  * config; call `renderPdf` as many times as needed without repeating the key.
@@ -82,7 +90,15 @@ class LpdfEngine {
         for (const [name, bytes] of this._images) {
             engine.load_image(name, bytes);
         }
-        const pdf = engine.render_pdf(xml);
+        let pdf;
+        try {
+            pdf = engine.render_pdf(xml);
+        }
+        catch (e) {
+            engine.free();
+            const msg = e instanceof Error ? e.message : String(e);
+            throw new LpdfRenderError(msg);
+        }
         engine.free();
         return pdf;
     }

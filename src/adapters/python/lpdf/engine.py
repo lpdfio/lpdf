@@ -4,6 +4,7 @@ import base64
 import json
 from pathlib import Path
 
+from .exceptions import LpdfRenderError
 from .options import RenderOptions
 from .types import LpdfDocument
 from .wasm_runner import WasmRunner
@@ -78,7 +79,7 @@ class LpdfEngine:
         response = runner.invoke(payload)
 
         if "pdf" not in response:
-            raise RuntimeError("Unexpected response from WASI process.")
+            raise LpdfRenderError("Unexpected response from WASI process.")
 
         return base64.b64decode(response["pdf"])
 

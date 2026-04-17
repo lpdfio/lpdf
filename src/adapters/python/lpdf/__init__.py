@@ -1,4 +1,5 @@
 from .engine import LpdfEngine
+from .exceptions import LpdfRenderError
 from .options import RenderOptions
 from .kit import stack, flank, split, cluster, grid, frame, link, text, span, divider, page, document
 from .types import (
@@ -10,7 +11,7 @@ from .types import (
 )
 
 __all__ = [
-    "LpdfEngine", "RenderOptions",
+    "LpdfEngine", "LpdfRenderError", "RenderOptions",
     "stack", "flank", "split", "cluster", "grid", "frame", "link",
     "text", "span", "divider", "page", "document",
     "StackOptions", "FlankOptions", "SplitOptions", "ClusterOptions", "GridOptions",
