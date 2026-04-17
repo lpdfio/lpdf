@@ -41,8 +41,14 @@ impl LpdfEngine {
 
     /// Register raw font bytes (TTF/OTF) for a custom font name.
     /// Call this once per font before calling `render_pdf`.
+    /// Glyph advance-width metrics are extracted automatically from the font
+    /// bytes so the layout engine can measure text accurately — no separate
+    /// `set_font_metrics` call is required.
     pub fn load_font(&mut self, name: &str, bytes: &[u8]) {
         self.fonts.register(name, bytes.to_vec());
+        if let Some(widths) = extract_font_widths(bytes) {
+            self.font_widths.insert(name.to_string(), widths);
+        }
     }
 
     /// Register raw image bytes (JPEG or PNG) for an image name.
@@ -255,6 +261,32 @@ impl LpdfEngine {
         }
         output
     }
+}
+
+/// Extract per-glyph advance widths for printable ASCII (code points 32–126)
+/// from raw TrueType/OpenType font bytes, normalised to 1/1000 em units.
+/// Returns `None` if the font cannot be parsed (WOFF/WOFF2, corrupt data, etc.).
+fn extract_font_widths(bytes: &[u8]) -> Option<tokens::FontWidths> {
+    let face = ttf_parser::Face::parse(bytes, 0).ok()?;
+    let upm = face.units_per_em() as u32;
+    if upm == 0 { return None; }
+
+    let mut ascii: Vec<u16> = Vec::with_capacity(95);
+    let mut sum: u32 = 0;
+    let mut count: u32 = 0;
+
+    for cp in 32u32..=126 {
+        let ch = char::from_u32(cp).unwrap_or(' ');
+        let adv = face.glyph_index(ch)
+            .and_then(|gid| face.glyph_hor_advance(gid))
+            .unwrap_or_else(|| face.glyph_hor_advance(ttf_parser::GlyphId(0)).unwrap_or(0));
+        let w = ((adv as u32 * 1000 + upm / 2) / upm) as u16;
+        ascii.push(w);
+        if w > 0 { sum += w as u32; count += 1; }
+    }
+
+    let default = if count > 0 { ((sum + count / 2) / count) as u16 } else { 500 };
+    Some(tokens::FontWidths { default, ascii })
 }
 
 #[cfg(test)]

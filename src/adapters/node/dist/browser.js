@@ -13,6 +13,9 @@ var LpdfEngine = class {
   /**
    * Register raw font bytes (TTF/OTF) for a custom font name.
    * Call this once per font before calling `render_pdf`.
+   * Glyph advance-width metrics are extracted automatically from the font
+   * bytes so the layout engine can measure text accurately — no separate
+   * `set_font_metrics` call is required.
    * @param {string} name
    * @param {Uint8Array} bytes
    */

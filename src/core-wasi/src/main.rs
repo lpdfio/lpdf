@@ -30,6 +30,32 @@ mod license;
 use std::io::Read;
 use base64::Engine as _;
 
+/// Extract per-glyph advance widths for printable ASCII (code points 32–126)
+/// from raw TrueType/OpenType font bytes, normalised to 1/1000 em units.
+/// Returns `None` if the font cannot be parsed (WOFF/WOFF2, corrupt data, etc.).
+fn extract_font_widths(bytes: &[u8]) -> Option<tokens::FontWidths> {
+    let face = ttf_parser::Face::parse(bytes, 0).ok()?;
+    let upm = face.units_per_em() as u32;
+    if upm == 0 { return None; }
+
+    let mut ascii: Vec<u16> = Vec::with_capacity(95);
+    let mut sum: u32 = 0;
+    let mut count: u32 = 0;
+
+    for cp in 32u32..=126 {
+        let ch = char::from_u32(cp).unwrap_or(' ');
+        let adv = face.glyph_index(ch)
+            .and_then(|gid| face.glyph_hor_advance(gid))
+            .unwrap_or_else(|| face.glyph_hor_advance(ttf_parser::GlyphId(0)).unwrap_or(0));
+        let w = ((adv as u32 * 1000 + upm / 2) / upm) as u16;
+        ascii.push(w);
+        if w > 0 { sum += w as u32; count += 1; }
+    }
+
+    let default = if count > 0 { ((sum + count / 2) / count) as u16 } else { 500 };
+    Some(tokens::FontWidths { default, ascii })
+}
+
 fn main() {
     let mut buf = String::new();
     std::io::stdin().read_to_string(&mut buf).unwrap_or(0);
@@ -124,6 +150,7 @@ fn build_image_registry(req: &serde_json::Value) -> pdf::ImageRegistry {
 
 /// Decode the optional `metrics` field from the request envelope into a font-widths map.
 /// Format: `{ "fontName": { "default": 500, "ascii": [260, 285, ...] } }`
+/// Kept for backward compatibility; auto-extraction from font bytes is preferred.
 fn build_font_widths(req: &serde_json::Value) -> std::collections::HashMap<String, tokens::FontWidths> {
     let mut map = std::collections::HashMap::new();
     if let Some(obj) = req.get("metrics").and_then(|v| v.as_object()) {
@@ -166,8 +193,14 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
         layout::prefill_image_sizes(&mut page.children, &meta);
     }
 
-    // Merge adapter-supplied font widths (from the `metrics` payload field) into
-    // the doc. Adapter values fill in any gaps; doc-level values take precedence.
+    // Auto-extract glyph advance-width metrics from the loaded font bytes.
+    // This is the primary source of font metrics; adapter-supplied `metrics`
+    // (kept for backward compatibility) fill in any remaining gaps.
+    for (name, bytes) in registry.iter() {
+        if let Some(widths) = extract_font_widths(bytes) {
+            doc.font_widths.entry(name.to_string()).or_insert(widths);
+        }
+    }
     let adapter_widths = build_font_widths(req);
     for (name, widths) in adapter_widths {
         doc.font_widths.entry(name).or_insert(widths);

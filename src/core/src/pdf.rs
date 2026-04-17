@@ -65,6 +65,10 @@ impl FontRegistry {
     pub fn get(&self, name: &str) -> Option<&[u8]> {
         self.bytes.get(name).map(|b| b.as_slice())
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &[u8])> {
+        self.bytes.iter().map(|(k, v)| (k.as_str(), v.as_slice()))
+    }
 }
 
 /// Stores raw image bytes (JPEG/PNG) for images referenced by a document via

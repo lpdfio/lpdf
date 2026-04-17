@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
@@ -82,23 +81,12 @@ internal sealed class WasmRunner : IDisposable
         foreach (var (name, bytes) in fonts)
             fontsNode[name] = Convert.ToBase64String(bytes);
 
-        // Extract glyph advance widths from each font binary and pass to the WASI
-        // engine so the Rust layout pass measures custom-font text accurately.
-        var metricsNode = new JsonObject();
-        foreach (var (name, bytes) in fonts)
-        {
-            var widths = ExtractFontWidths(bytes);
-            if (widths is not null)
-                metricsNode[name] = widths;
-        }
-
         var requestObj = new JsonObject
         {
             ["method"]  = method,
             ["key"]     = licenseKey,
             ["input"]   = input,
             ["fonts"]   = fontsNode,
-            ["metrics"] = metricsNode,
         };
         var requestBytes = Encoding.UTF8.GetBytes(requestObj.ToJsonString());
 
@@ -194,113 +182,6 @@ internal sealed class WasmRunner : IDisposable
             try { File.Delete(inputPath); }  catch { /* best-effort cleanup */ }
             try { File.Delete(outputPath); } catch { /* best-effort cleanup */ }
         }
-    }
-
-    /// <summary>
-    /// Parse the head/hhea/cmap/hmtx tables from a TrueType or OpenType font binary
-    /// and return per-glyph advance widths for printable ASCII (code points 32–126),
-    /// normalised to 1/1000 em units — the format expected by the Rust layout engine.
-    /// Returns <c>null</c> if the font cannot be parsed (WOFF/WOFF2/unsupported cmap).
-    /// </summary>
-    private static JsonObject? ExtractFontWidths(byte[] data)
-    {
-        if (data.Length < 12) return null;
-
-        ushort U16(int off) => BinaryPrimitives.ReadUInt16BigEndian(data.AsSpan(off));
-        uint   U32(int off) => BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(off));
-        short  I16(int off) => BinaryPrimitives.ReadInt16BigEndian(data.AsSpan(off));
-
-        // ── sfnt table directory ──────────────────────────────────────────────
-        int numTables = U16(4);
-        var tables = new Dictionary<string, int>();
-        for (int i = 0; i < numTables; i++)
-        {
-            int b = 12 + i * 16;
-            if (b + 16 > data.Length) return null;
-            var tag = Encoding.ASCII.GetString(data, b, 4);
-            tables[tag] = (int)U32(b + 8);
-        }
-
-        if (!tables.ContainsKey("head") || !tables.ContainsKey("cmap") ||
-            !tables.ContainsKey("hmtx") || !tables.ContainsKey("hhea"))
-            return null;
-
-        // ── units-per-em (head, offset 18) ───────────────────────────────────
-        int upm = U16(tables["head"] + 18);
-        if (upm == 0) return null;
-
-        // ── numOfLongHorMetrics (hhea, offset 34) ────────────────────────────
-        int numHMetrics = U16(tables["hhea"] + 34);
-        if (numHMetrics == 0) return null;
-
-        // ── glyph advance width from hmtx ────────────────────────────────────
-        int hmtxBase = tables["hmtx"];
-        int GetAdvance(int glyphId)
-        {
-            int idx = Math.Min(glyphId, numHMetrics - 1);
-            return U16(hmtxBase + idx * 4);
-        }
-
-        // ── find Unicode BMP cmap subtable ────────────────────────────────────
-        int cmapBase   = tables["cmap"];
-        int numEncTbls = U16(cmapBase + 2);
-        int subtableOff  = -1;
-        int bestPriority = 999;
-        for (int i = 0; i < numEncTbls; i++)
-        {
-            int b          = cmapBase + 4 + i * 8;
-            int platformId = U16(b);
-            int encodingId = U16(b + 2);
-            int off        = cmapBase + (int)U32(b + 4);
-            if (platformId == 3 && encodingId == 1 && bestPriority > 0)
-            { subtableOff = off; bestPriority = 0; }
-            else if (platformId == 0 && bestPriority > 1)
-            { subtableOff = off; bestPriority = 1; }
-        }
-        if (subtableOff < 0) return null;
-
-        // ── parse cmap format 4 ───────────────────────────────────────────────
-        if (U16(subtableOff) != 4) return null;
-
-        int segCount      = U16(subtableOff + 6) >> 1;
-        int endCodesOff   = subtableOff + 14;
-        int startCodesOff = endCodesOff   + segCount * 2 + 2; // +2 for reservedPad
-        int idDeltaOff    = startCodesOff + segCount * 2;
-        int idRangeOff    = idDeltaOff    + segCount * 2;
-
-        int GetGlyphId(int cp)
-        {
-            for (int s = 0; s < segCount; s++)
-            {
-                int end = U16(endCodesOff + s * 2);
-                if (cp > end) continue;
-                int start    = U16(startCodesOff + s * 2);
-                if (cp < start) return 0;
-                int delta    = I16(idDeltaOff + s * 2);
-                int rangeOff = U16(idRangeOff + s * 2);
-                if (rangeOff == 0)
-                    return (cp + delta) & 0xFFFF;
-                int glyphOff = idRangeOff + s * 2 + rangeOff + (cp - start) * 2;
-                int glyphId  = U16(glyphOff);
-                return glyphId == 0 ? 0 : (glyphId + delta) & 0xFFFF;
-            }
-            return 0;
-        }
-
-        // ── sample ASCII range (32–126) ───────────────────────────────────────
-        var ascii = new JsonArray();
-        int sum = 0, count = 0;
-        for (int cp = 32; cp <= 126; cp++)
-        {
-            int glyphId = GetGlyphId(cp);
-            int adv     = glyphId > 0 ? GetAdvance(glyphId) : GetAdvance(0);
-            int w       = (int)Math.Round(adv * 1000.0 / upm);
-            ascii.Add(w);
-            if (w > 0) { sum += w; count++; }
-        }
-
-        int def = count > 0 ? (int)Math.Round((double)sum / count) : 500;
-        return new JsonObject { ["default"] = def, ["ascii"] = ascii };
     }
 
     private static byte[] LoadWasmBytes()
