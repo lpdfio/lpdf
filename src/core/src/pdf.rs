@@ -1119,36 +1119,44 @@ impl Alloc {
     }
 }
 
-// ── Main render function ──────────────────────────────────────────────────────
+// ── Sub-function data structures ──────────────────────────────────────────────
 
-/// Convert a fully laid-out document into a binary PDF.
+/// Font object ID bundle for one font.
+///   Builtin  → only `font_dict_id` used (`extra_ids` is empty).
+///   Truetype → `extra_ids` = [program, descriptor, cid_font, cmap].
+struct FontIds {
+    /// The ref placed in page /Font resource dictionaries.
+    font_dict_id: Ref,
+    /// Additional objects for TrueType fonts.
+    extra_ids:    Vec<Ref>,
+}
+
+/// All pre-allocated indirect-object IDs for a document, produced by
+/// `allocate_ids` and consumed by `assemble_pdf`.
+struct AllocatedIds {
+    catalog_id:      Ref,
+    info_id:         Ref,
+    pages_id:        Ref,
+    page_ids:        Vec<Ref>,
+    content_ids:     Vec<Ref>,
+    annot_ids:       Vec<Vec<Ref>>,
+    font_id_map:     HashMap<String, FontIds>,
+    image_id_map:    HashMap<String, Ref>,
+    image_smask_ids: Vec<Option<Ref>>,
+}
+
+// ── Step 1a: Font preparation ─────────────────────────────────────────────────
+
+/// Collect every font name referenced in `pages`, prepare each for embedding,
+/// and return a stable (sorted) name list together with the prepared-font map.
 ///
-/// # Parameters
-/// - `pages`      – Layout output: one `RenderPage` per document page.
-/// - `font_defs`  – Font name → definition from the document's `<fonts>` section.
-/// - `registry`   – Raw font bytes for custom fonts (populated via `load_font`).
-/// - `meta`       – Document metadata (title, author, subject, etc.).
-/// - `watermark`  – Optional `(text, url)`.  Drawn top-right at 8 pt Helvetica,
-///                  light grey (`#aaaaaa`), 4 pt from the page edge.
-/// - `created_on` – Optional ISO 8601 date string written to `/CreationDate`.
-/// - `licensed`   – `true` when a valid commercial license token was supplied.
-///                  Controls the `/Producer` field (`lpdf.io` vs `lpdf.io (free)`).
-pub fn render_pdf(
-    pages:          &[RenderPage],
-    font_defs:      &HashMap<String, FontDef>,
-    registry:       &FontRegistry,
-    image_registry: &ImageRegistry,
-    meta:           &Meta,
-    watermark:      Option<(&str, Option<&str>)>,
-    created_on:     Option<&str>,
-    licensed:       bool,
-) -> Result<Vec<u8>, String> {
-
-    // ── Step 1: Resolve all font definitions ─────────────────────────────────
-    //
-    // Walk the entire document to find every font name referenced by text
-    // nodes.  Helvetica is always included so the watermark always has a font.
-
+/// Helvetica is always included so the optional watermark always has a font.
+fn prepare_fonts(
+    pages:     &[RenderPage],
+    font_defs: &HashMap<String, FontDef>,
+    registry:  &FontRegistry,
+    watermark: Option<(&str, Option<&str>)>,
+) -> (Vec<String>, HashMap<String, PreparedFont>) {
     let mut used_font_names: HashSet<String> = HashSet::new();
     for page in pages {
         collect_used_fonts(&page.nodes, &mut used_font_names);
@@ -1185,15 +1193,24 @@ pub fn render_pdf(
         fonts.insert(name.clone(), PreparedFont { resource_name, kind });
     }
 
-    // Collect all image names used in the document and build a stable resource
-    // name map (image_res_map: name → "I0", "I1", …).
+    (sorted_font_names, fonts)
+}
+
+// ── Step 1b: Image preparation ────────────────────────────────────────────────
+
+/// Collect every image name referenced in `pages`, filter to embeddable
+/// formats, and return a stable (sorted) name list and the XObject resource
+/// name map (`"logo.png"` → `"I0"`, etc.).
+fn prepare_images(
+    pages:          &[RenderPage],
+    image_registry: &ImageRegistry,
+) -> (Vec<String>, HashMap<String, String>) {
     let mut used_image_names: HashSet<String> = HashSet::new();
     for page in pages {
         collect_used_images(&page.nodes, &mut used_image_names);
     }
     // Filter to only formats that can actually be embedded to avoid dangling
-    // XObject references in the resource dictionary (e.g. RGBA PNG is not
-    // supported without a zlib decoder; the image is silently omitted).
+    // XObject references in the resource dictionary.
     let mut sorted_image_names: Vec<String> = used_image_names.into_iter()
         .filter(|name| image_registry.get(name).map_or(false, is_image_embeddable))
         .collect();
@@ -1201,12 +1218,19 @@ pub fn render_pdf(
     let image_res_map: HashMap<String, String> = sorted_image_names.iter().enumerate()
         .map(|(i, n)| (n.clone(), format!("I{i}")))
         .collect();
+    (sorted_image_names, image_res_map)
+}
 
-    // ── Step 2: Build page content streams + collect annotations ─────────────
-    //
-    // Each page is processed independently.  The resulting content stream
-    // bytes and any link annotations are stored for later object writing.
+// ── Step 2: Content stream building ──────────────────────────────────────────
 
+/// Render every page to a content-stream byte buffer and collect link
+/// annotations.  Returns one `(content_bytes, annotations)` tuple per page.
+fn build_content_streams(
+    pages:         &[RenderPage],
+    fonts:         &HashMap<String, PreparedFont>,
+    image_res_map: &HashMap<String, String>,
+    watermark:     Option<(&str, Option<&str>)>,
+) -> Vec<(Vec<u8>, Vec<AnnotData>)> {
     let mut rendered_pages: Vec<(Vec<u8>, Vec<AnnotData>)> = Vec::new();
 
     for page in pages {
@@ -1222,18 +1246,18 @@ pub fn render_pdf(
         }
 
         // Draw all render-tree nodes.
-        draw_nodes(&mut content, &mut annots, &page.nodes, &fonts, &image_res_map, page.height);
+        draw_nodes(&mut content, &mut annots, &page.nodes, fonts, image_res_map, page.height);
 
         // Draw optional watermark — top-right corner, 8 pt Helvetica, grey.
         if let Some((wtext, wurl)) = watermark {
-            let wfont   = fonts.get("Helvetica")
-                .expect("Helvetica always present after Step 1");
-            let wsize   = 8.0_f32;
-            let wpad    = 4.0_f32;  // distance from page edge (independent of margin)
-            let tw      = wfont.text_width(wtext, wsize);
-            let wx      = page.width - wpad - tw;
-            // In PDF bottom-up coords: baseline = height - 4 (pad) - 8 (size)
-            let pdf_wy  = page.height - wpad - wsize;
+            let wfont  = fonts.get("Helvetica")
+                .expect("Helvetica always present after prepare_fonts");
+            let wsize  = 8.0_f32;
+            let wpad   = 4.0_f32;  // distance from page edge
+            let tw     = wfont.text_width(wtext, wsize);
+            let wx     = page.width - wpad - tw;
+            // In PDF bottom-up coords: baseline = height - pad - size
+            let pdf_wy = page.height - wpad - wsize;
 
             let encoded = wfont.encode_text(wtext);
             let rname   = wfont.resource_name.as_bytes().to_vec();
@@ -1260,13 +1284,21 @@ pub fn render_pdf(
         rendered_pages.push((content.finish(), annots));
     }
 
-    // ── Step 3: Pre-allocate all PDF object IDs ───────────────────────────────
-    //
-    // Every indirect object in the file needs a unique integer ID (starting at
-    // 1).  We allocate them all upfront so that forward references (e.g. a
-    // page dict referencing its content stream) are known before any writing.
+    rendered_pages
+}
 
-    let n = pages.len();
+// ── Step 3: ID allocation ─────────────────────────────────────────────────────
+
+/// Pre-allocate all PDF indirect-object IDs so that forward references (e.g.
+/// a page dict referencing its content stream) are known before writing begins.
+fn allocate_ids(
+    rendered_pages:     &[(Vec<u8>, Vec<AnnotData>)],
+    fonts:              &HashMap<String, PreparedFont>,
+    sorted_font_names:  &[String],
+    sorted_image_names: &[String],
+    image_registry:     &ImageRegistry,
+) -> AllocatedIds {
+    let n = rendered_pages.len();
     let mut alloc = Alloc(0);
 
     let catalog_id   = alloc.next();  // 1  — document catalog
@@ -1287,15 +1319,8 @@ pub fn render_pdf(
     //   Builtin  → 1 object  (Type1 font dict)
     //   Truetype → 5 objects (font-program stream, font descriptor, CID font,
     //                         ToUnicode CMap stream, Type0 wrapper dict)
-    struct FontIds {
-        /// The ref placed in page /Font resource dictionaries.
-        font_dict_id: Ref,
-        /// Additional objects: [program, descriptor, cid_font, cmap] for TTF.
-        extra_ids:    Vec<Ref>,
-    }
-
     let mut font_id_map: HashMap<String, FontIds> = HashMap::new();
-    for name in &sorted_font_names {
+    for name in sorted_font_names {
         let font = &fonts[name];
         let font_dict_id = alloc.next();
         let extra_ids = match &font.kind {
@@ -1319,8 +1344,43 @@ pub fn render_pdf(
         if is_rgba { Some(alloc.next()) } else { None }
     }).collect();
 
-    // ── Step 4: Write all PDF objects ─────────────────────────────────────────
+    AllocatedIds {
+        catalog_id,
+        info_id,
+        pages_id,
+        page_ids,
+        content_ids,
+        annot_ids,
+        font_id_map,
+        image_id_map,
+        image_smask_ids,
+    }
+}
 
+// ── Step 4: PDF assembly ──────────────────────────────────────────────────────
+
+/// Write all pre-built objects into a `pdf_writer::Pdf` buffer and return the
+/// final binary bytes.
+fn assemble_pdf(
+    pages:              &[RenderPage],
+    fonts:              &HashMap<String, PreparedFont>,
+    sorted_font_names:  &[String],
+    sorted_image_names: &[String],
+    image_registry:     &ImageRegistry,
+    image_res_map:      &HashMap<String, String>,
+    rendered_pages:     Vec<(Vec<u8>, Vec<AnnotData>)>,
+    ids:                AllocatedIds,
+    meta:               &Meta,
+    created_on:         Option<&str>,
+    licensed:           bool,
+) -> Result<Vec<u8>, String> {
+    let AllocatedIds {
+        catalog_id, info_id, pages_id,
+        page_ids, content_ids, annot_ids,
+        font_id_map, image_id_map, image_smask_ids,
+    } = ids;
+
+    let n = pages.len();
     let mut pdf = Pdf::new();
 
     // -- Catalog ---------------------------------------------------------------
@@ -1374,17 +1434,17 @@ pub fn render_pdf(
         {
             let mut resources = pw.resources();
             {
-                let mut font_res  = resources.fonts();
-                for name in &sorted_font_names {
+                let mut font_res = resources.fonts();
+                for name in sorted_font_names {
                     let font = &fonts[name];
-                    let fid = font_id_map[name].font_dict_id;
+                    let fid  = font_id_map[name].font_dict_id;
                     font_res.pair(Name(font.resource_name.as_bytes()), fid);
                 }
             }
             // Add image XObjects to the resource dictionary.
             if !sorted_image_names.is_empty() {
                 let mut xobj_res = resources.x_objects();
-                for name in &sorted_image_names {
+                for name in sorted_image_names {
                     let res_name = &image_res_map[name];
                     let img_id   = image_id_map[name];
                     xobj_res.pair(Name(res_name.as_bytes()), img_id);
@@ -1398,7 +1458,6 @@ pub fn render_pdf(
         // Add the per-page annotation array if there are any link annotations.
         let page_annot_ids = &annot_ids[i];
         if !page_annot_ids.is_empty() {
-            // `annotations` takes the iterator of Refs directly.
             pw.annotations(page_annot_ids.iter().copied());
         }
     }
@@ -1422,9 +1481,9 @@ pub fn render_pdf(
     // (0-width) so only the URI action fires; no visual box is drawn.
     for (i, (_, page_annots)) in rendered_pages.iter().enumerate() {
         for (j, ann) in page_annots.iter().enumerate() {
-            let aid      = annot_ids[i][j];
+            let aid       = annot_ids[i][j];
             let url_bytes = ann.url.as_bytes().to_vec();
-            let mut aw   = pdf.annotation(aid);
+            let mut aw    = pdf.annotation(aid);
             aw.subtype(AnnotationType::Link)
               .rect(Rect::new(ann.x1, ann.y1, ann.x2, ann.y2))
               .border(0.0, 0.0, 0.0, None);
@@ -1435,15 +1494,15 @@ pub fn render_pdf(
     }
 
     // -- Font objects ----------------------------------------------------------
-    for name in &sorted_font_names {
+    for name in sorted_font_names {
         let font = &fonts[name];
-        let ids = &font_id_map[name];
+        let fids = &font_id_map[name];
 
         match &font.kind {
             PreparedFontKind::Builtin { base_name } => {
                 // Type 1 (built-in resident) font.  Just a font dictionary with
                 // a /BaseFont entry; no font program stream is needed.
-                pdf.type1_font(ids.font_dict_id)
+                pdf.type1_font(fids.font_dict_id)
                    .base_font(Name(base_name.as_bytes()))
                    .encoding_predefined(Name(b"WinAnsiEncoding"));
             }
@@ -1458,10 +1517,10 @@ pub fn render_pdf(
                 //   [3] ToUnicode CMap stream
                 //   [font_dict_id] Type0 composite font wrapper
 
-                let prog_id  = ids.extra_ids[0];
-                let desc_id  = ids.extra_ids[1];
-                let cid_id   = ids.extra_ids[2];
-                let cmap_id  = ids.extra_ids[3];
+                let prog_id = fids.extra_ids[0];
+                let desc_id = fids.extra_ids[1];
+                let cid_id  = fids.extra_ids[2];
+                let cmap_id = fids.extra_ids[3];
 
                 // Parse the original font for descriptor metrics (ascender,
                 // descender, bounding box).  These values are identical in the
@@ -1535,7 +1594,7 @@ pub fn render_pdf(
                 pdf.stream(cmap_id, &cmap_bytes);
 
                 // [font_dict_id] Type0 composite font wrapper.
-                pdf.type0_font(ids.font_dict_id)
+                pdf.type0_font(fids.font_dict_id)
                    .base_font(Name(fname.as_bytes()))
                    .encoding_predefined(Name(b"Identity-H"))
                    .descendant_font(cid_id)
@@ -1545,4 +1604,43 @@ pub fn render_pdf(
     }
 
     Ok(pdf.finish())
+}
+
+// ── Main render function ──────────────────────────────────────────────────────
+
+/// Convert a fully laid-out document into a binary PDF.
+///
+/// # Parameters
+/// - `pages`      – Layout output: one `RenderPage` per document page.
+/// - `font_defs`  – Font name → definition from the document's `<fonts>` section.
+/// - `registry`   – Raw font bytes for custom fonts (populated via `load_font`).
+/// - `meta`       – Document metadata (title, author, subject, etc.).
+/// - `watermark`  – Optional `(text, url)`.  Drawn top-right at 8 pt Helvetica,
+///                  light grey (`#aaaaaa`), 4 pt from the page edge.
+/// - `created_on` – Optional ISO 8601 date string written to `/CreationDate`.
+/// - `licensed`   – `true` when a valid commercial license token was supplied.
+///                  Controls the `/Producer` field (`lpdf.io` vs `lpdf.io (free)`).
+pub fn render_pdf(
+    pages:          &[RenderPage],
+    font_defs:      &HashMap<String, FontDef>,
+    registry:       &FontRegistry,
+    image_registry: &ImageRegistry,
+    meta:           &Meta,
+    watermark:      Option<(&str, Option<&str>)>,
+    created_on:     Option<&str>,
+    licensed:       bool,
+) -> Result<Vec<u8>, String> {
+    let (sorted_font_names, fonts) =
+        prepare_fonts(pages, font_defs, registry, watermark);
+    let (sorted_image_names, image_res_map) =
+        prepare_images(pages, image_registry);
+    let rendered_pages =
+        build_content_streams(pages, &fonts, &image_res_map, watermark);
+    let ids =
+        allocate_ids(&rendered_pages, &fonts, &sorted_font_names, &sorted_image_names, image_registry);
+    assemble_pdf(
+        pages, &fonts, &sorted_font_names, &sorted_image_names,
+        image_registry, &image_res_map, rendered_pages, ids,
+        meta, created_on, licensed,
+    )
 }
