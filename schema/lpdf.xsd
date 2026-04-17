@@ -188,7 +188,22 @@
 
   <!-- Box attrs shared by all layout elements -->
   <xs:attributeGroup name="BoxAttrs">
+    <xs:attribute name="font"       type="xs:string"/>
+    <xs:attribute name="font-size"  type="TokenScaleOrPt"/>
     <xs:attribute name="gap"        type="TokenScaleOrPt"/>
+    <xs:attribute name="padding"    type="SpacingOrToken"/>
+    <xs:attribute name="height"     type="HeightValue"/>
+    <xs:attribute name="background" type="Color"/>
+    <xs:attribute name="border"     type="BorderValue"/>
+    <xs:attribute name="radius"     type="TokenScaleOrPt"/>
+    <xs:attribute name="repeat"     type="Repeat"/>
+    <xs:attribute name="debug"      type="xs:boolean"/>
+  </xs:attributeGroup>
+
+  <!-- Box attrs for frame — no gap (frame always centers its single child) -->
+  <xs:attributeGroup name="FrameBoxAttrs">
+    <xs:attribute name="font"       type="xs:string"/>
+    <xs:attribute name="font-size"  type="TokenScaleOrPt"/>
     <xs:attribute name="padding"    type="SpacingOrToken"/>
     <xs:attribute name="height"     type="HeightValue"/>
     <xs:attribute name="background" type="Color"/>
@@ -213,6 +228,7 @@
       <xs:element ref="frame"/>
       <xs:element ref="link"/>
       <xs:element ref="text"/>
+      <xs:element ref="img"/>
       <xs:element ref="divider"/>
     </xs:choice>
   </xs:group>
@@ -222,12 +238,20 @@
        Token elements
   ============================================================ -->
 
+  <!-- Font asset: either a built-in PDF core font (core=) or a registry key (ref=) -->
   <xs:element name="font">
     <xs:complexType>
-      <!-- font has either src (file/url) or builtin, not both -->
-      <xs:attribute name="name"    type="xs:string"  use="required"/>
-      <xs:attribute name="src"     type="xs:anyURI"/>
-      <xs:attribute name="builtin" type="BuiltinFont"/>
+      <xs:attribute name="name" type="xs:string"  use="required"/>
+      <xs:attribute name="core" type="BuiltinFont"/>
+      <xs:attribute name="ref"  type="xs:string"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Image asset declared in <assets><images> -->
+  <xs:element name="image">
+    <xs:complexType>
+      <xs:attribute name="name" type="xs:string"  use="required"/>
+      <xs:attribute name="src"  type="xs:anyURI"/>
     </xs:complexType>
   </xs:element>
 
@@ -241,24 +265,39 @@
   <xs:element name="tokens">
     <xs:complexType>
       <xs:all>
-        <xs:element name="space"  type="TokenScaleRow"/>
-        <xs:element name="border" type="TokenScaleRow"/>
-        <xs:element name="radius" type="TokenScaleRow"/>
-        <xs:element name="width"  type="TokenScaleRow"/>
-        <xs:element name="text"   type="TokenScaleRow"/>
+        <xs:element name="space"  type="TokenScaleRow" minOccurs="0"/>
+        <xs:element name="border" type="TokenScaleRow" minOccurs="0"/>
+        <xs:element name="radius" type="TokenScaleRow" minOccurs="0"/>
+        <xs:element name="width"  type="TokenScaleRow" minOccurs="0"/>
+        <xs:element name="text"   type="TokenScaleRow" minOccurs="0"/>
         <!-- "grid" and "space" share the same shape -->
-        <xs:element name="grid"   type="TokenScaleRow"/>
-        <xs:element name="fonts">
+        <xs:element name="grid"   type="TokenScaleRow" minOccurs="0"/>
+        <xs:element name="colors" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element ref="color" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Asset declarations: fonts and images used by layout elements -->
+  <xs:element name="assets">
+    <xs:complexType>
+      <xs:all>
+        <xs:element name="fonts" minOccurs="0">
           <xs:complexType>
             <xs:sequence>
               <xs:element ref="font" minOccurs="0" maxOccurs="unbounded"/>
             </xs:sequence>
           </xs:complexType>
         </xs:element>
-        <xs:element name="colors">
+        <xs:element name="images" minOccurs="0">
           <xs:complexType>
             <xs:sequence>
-              <xs:element ref="color" minOccurs="0" maxOccurs="unbounded"/>
+              <xs:element ref="image" minOccurs="0" maxOccurs="unbounded"/>
             </xs:sequence>
           </xs:complexType>
         </xs:element>
@@ -306,10 +345,10 @@
           </xs:complexType>
         </xs:element>
       </xs:sequence>
+      <xs:attribute name="font"        type="xs:string"/>
       <xs:attribute name="size"        type="PageSize"/>
       <xs:attribute name="orientation" type="Orientation"/>
       <xs:attribute name="margin"      type="SpacingValue"/>
-      <xs:attribute name="lang"        type="xs:language"/>
       <xs:attribute name="background"  type="Color"/>
       <xs:attribute name="debug"       type="xs:boolean"/>
     </xs:complexType>
@@ -319,6 +358,7 @@
   <xs:element name="lpdf">
     <xs:complexType>
       <xs:sequence>
+        <xs:element ref="assets"   minOccurs="0"/>
         <xs:element ref="tokens"   minOccurs="0"/>
         <xs:element ref="document"/>
       </xs:sequence>
@@ -377,7 +417,6 @@
       <xs:attributeGroup ref="BoxAttrs"/>
       <xs:attribute name="align"   type="AlignFull"/>
       <xs:attribute name="justify" type="Justify"/>
-      <xs:attribute name="wrap"    type="xs:boolean"/>
       <xs:attribute name="width"   type="TokenScaleOrPt"/>
     </xs:complexType>
   </xs:element>
@@ -404,9 +443,9 @@
   <xs:element name="frame">
     <xs:complexType>
       <xs:sequence>
-        <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
+        <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="1"/>
       </xs:sequence>
-      <xs:attributeGroup ref="BoxAttrs"/>
+      <xs:attributeGroup ref="FrameBoxAttrs"/>
       <xs:attribute name="width" type="TokenScaleOrPt"/>
     </xs:complexType>
   </xs:element>
@@ -450,17 +489,35 @@
     </xs:complexType>
   </xs:element>
 
+  <xs:element name="img">
+    <xs:complexType>
+      <!-- <img> uses a pt-only height constraint, not HeightMode (fill/full) -->
+      <xs:attribute name="name"       type="xs:string"     use="required"/>
+      <xs:attribute name="height"     type="PtValue"/>
+      <xs:attribute name="width"      type="TokenScaleOrPt"/>
+      <xs:attribute name="font"       type="xs:string"/>
+      <xs:attribute name="font-size"  type="TokenScaleOrPt"/>
+      <xs:attribute name="gap"        type="TokenScaleOrPt"/>
+      <xs:attribute name="padding"    type="SpacingOrToken"/>
+      <xs:attribute name="background" type="Color"/>
+      <xs:attribute name="border"     type="BorderValue"/>
+      <xs:attribute name="radius"     type="TokenScaleOrPt"/>
+      <xs:attribute name="repeat"     type="Repeat"/>
+      <xs:attribute name="debug"      type="xs:boolean"/>
+    </xs:complexType>
+  </xs:element>
+
   <xs:element name="text">
     <xs:complexType mixed="true">
       <xs:choice minOccurs="0" maxOccurs="unbounded">
         <xs:element ref="span"/>
       </xs:choice>
-      <xs:attribute name="size"   type="TokenScaleOrPt"/>
-      <xs:attribute name="font"   type="xs:string"/>
-      <xs:attribute name="color"  type="Color"/>
-      <xs:attribute name="align"  type="TextAlignH"/>
-      <xs:attribute name="repeat" type="Repeat"/>
-      <xs:attribute name="debug"  type="xs:boolean"/>
+      <xs:attribute name="font-size" type="TokenScaleOrPt"/>
+      <xs:attribute name="font"      type="xs:string"/>
+      <xs:attribute name="color"     type="Color"/>
+      <xs:attribute name="align"     type="TextAlignH"/>
+      <xs:attribute name="repeat"    type="Repeat"/>
+      <xs:attribute name="debug"     type="xs:boolean"/>
     </xs:complexType>
   </xs:element>
 

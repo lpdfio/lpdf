@@ -527,7 +527,7 @@ fn split_cluster(node: &Node, avail_w: f32, target_h: f32) -> SplitOutcome {
             .min(inner_w);
         let ch  = measure_height(child, cw, inner_target);
         let adv = if i == row_start { cw } else { gap + cw };
-        if node.wrap && i > row_start && cur_x + adv > inner_w + 0.01 {
+        if i > row_start && cur_x + adv > inner_w + 0.01 {
             rows.push((row_start, i, row_h));
             row_start = i;
             cur_x = cw;
@@ -835,16 +835,17 @@ fn dispatch_children(
         ),
         NodeKind::Cluster => layout_cluster(
             &node.children, x, y, avail_w,
-            node.gap, node.wrap, &node.justify, &node.align,
+            node.gap, &node.justify, &node.align,
         ),
         NodeKind::Grid => layout_grid(
             &node.children, x, y, avail_w,
             node.gap, node.cols, node.col_width,
         ),
         NodeKind::Frame => layout_stack(
-            // Frame centres its children by default (overridable via align/justify attrs)
+            // Frame always centers its single child (horizontally via Align::Center,
+            // vertically via Justify::Center when avail_h is known).
             &node.children, x, y, avail_w, avail_h,
-            node.gap, &node.align, &node.justify,
+            0.0, &Align::Center, &Justify::Center,
         ),
         NodeKind::Link => layout_stack(
             &node.children, x, y, avail_w, avail_h,
@@ -1089,29 +1090,31 @@ fn layout_split(
 
     let (first, second) = (&children[0], &children[1]);
 
-    let (first_w, second_w) = if equal {
+    let (first_w, second_w, second_x) = if equal {
         let w = ((avail_w - gap) / 2.0).max(0.0);
-        (w, w)
+        (w, w, x + w + gap)
     } else {
-        match (first.width_constraint, second.width_constraint) {
-            (Some(fw), _) => {
-                let fw = fw.min(avail_w - gap);
-                (fw, (avail_w - gap - fw).max(0.0))
-            }
-            (None, Some(sw)) => {
-                let sw = sw.min(avail_w - gap);
-                ((avail_w - gap - sw).max(0.0), sw)
-            }
-            (None, None) => {
-                let w = ((avail_w - gap) / 2.0).max(0.0);
-                (w, w)
-            }
-        }
+        // Each child takes its natural width (or its explicit width constraint).
+        // First child is left-aligned; second child is right-aligned (spread apart).
+        let fw = first
+            .width_constraint
+            .unwrap_or_else(|| measure_natural_w(first))
+            .min(avail_w);
+        // Cap second child to the space remaining after the first child, so the
+        // pair can never overflow avail_w regardless of natural content width.
+        let sw_remaining = (avail_w - fw - gap).max(0.0);
+        let sw = second
+            .width_constraint
+            .unwrap_or_else(|| measure_natural_w(second))
+            .min(sw_remaining);
+        // Second child is pushed to the right edge; first keeps the minimum gap.
+        let sx = (x + avail_w - sw).max(x + fw + gap);
+        (fw, sw, sx)
     };
 
     let (first_node, first_h) = layout_node(first, x, y, first_w, avail_h);
     let (second_node, second_h) =
-        layout_node(second, x + first_w + gap, y, second_w, avail_h);
+        layout_node(second, second_x, y, second_w, avail_h);
 
     let row_h = first_h.max(second_h);
     let first_node = shift_y_cross(first_node, first_h, row_h, align);
@@ -1128,7 +1131,6 @@ fn layout_cluster(
     y: f32,
     avail_w: f32,
     gap: f32,
-    wrap: bool,
     justify: &Justify,
     align: &Align,
 ) -> (Vec<RenderNode>, f32) {
@@ -1154,7 +1156,7 @@ fn layout_cluster(
             .min(avail_w);
 
         // Wrap check before layout so we use the correct x position
-        if wrap && !current_row.is_empty() && cur_x + cw > x + avail_w + 0.01 {
+        if !current_row.is_empty() && cur_x + cw > x + avail_w + 0.01 {
             rows.push(std::mem::take(&mut current_row));
             cur_x = x;
         }
@@ -1178,19 +1180,13 @@ fn layout_cluster(
         let row_w: f32 = row.iter().map(|i| i.w).sum::<f32>()
             + gap * (row.len().saturating_sub(1)) as f32;
 
-        // Justify: compute starting x and extra inter-item gap for this row
+        // Justify: compute starting x for this row
         let remaining_w = (avail_w - row_w).max(0.0);
-        let (row_start_x, item_extra_gap) = match justify {
-            Justify::Start   => (x, 0.0),
-            Justify::Center  => (x + remaining_w / 2.0, 0.0),
-            Justify::End     => (x + remaining_w, 0.0),
-            Justify::Between => {
-                if row.len() > 1 {
-                    (x, remaining_w / (row.len() - 1) as f32)
-                } else {
-                    (x, 0.0)
-                }
-            }
+        let row_start_x = match justify {
+            Justify::Start   => x,
+            Justify::Center  => x + remaining_w / 2.0,
+            Justify::End     => x + remaining_w,
+            Justify::Between => x, // not reachable for cluster; parse rejects it
         };
 
         let mut item_x = row_start_x;
@@ -1208,7 +1204,7 @@ fn layout_cluster(
 
             let repositioned = shift_x(shift_y(item.node, dy), dx);
             nodes.push(repositioned);
-            item_x += item.w + gap + item_extra_gap;
+            item_x += item.w + gap;
         }
 
         cur_y += row_h + gap;
@@ -1797,11 +1793,62 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Resolve child width given parent's available width and alignment.
-fn resolve_child_w(child: &Node, avail_w: f32, _align: &Align) -> f32 {
+fn resolve_child_w(child: &Node, avail_w: f32, align: &Align) -> f32 {
     if let Some(w) = child.width_constraint {
         return w.min(avail_w);
     }
-    avail_w
+    match align {
+        Align::Stretch => avail_w,
+        _ => natural_w(child).min(avail_w),
+    }
+}
+
+/// Intrinsic (content-driven, unwrapped) width of a node.
+/// Used by `resolve_child_w` for non-Stretch cross-axis alignment so that
+/// children shrink to their content instead of filling the container.
+/// Returns `f32::MAX` for node types that always fill available width;
+/// the caller clamps with `.min(avail_w)`.
+fn natural_w(node: &Node) -> f32 {
+    if let Some(w) = node.width_constraint {
+        return w;
+    }
+    match node.kind {
+        NodeKind::Text => text_natural_w(node),
+        _ => f32::MAX, // layout containers fill available width
+    }
+}
+
+/// Width of `node`'s text content laid out as a single unwrapped line.
+/// Mirrors the token-building logic in `layout_text` but accumulates widths
+/// instead of word-wrapping.
+fn text_natural_w(node: &Node) -> f32 {
+    let font_size   = node.font_size;
+    let parent_font = node.font.as_str();
+    let space_w     = text_width(parent_font, " ", font_size);
+    let mut total          = 0.0_f32;
+    let mut pending_space  = false;
+
+    for (ri, run) in node.text_runs.iter().enumerate() {
+        let is_span = run.font.is_some() || run.color.is_some()
+                   || run.href.is_some() || run.underline || run.strike;
+        let font = run.font.as_deref().unwrap_or(parent_font);
+
+        if ri > 0 && run.leading_space { pending_space = true; }
+
+        if is_span {
+            if !run.text.is_empty() {
+                if pending_space { total += space_w; pending_space = false; }
+                total += text_width(font, &run.text, font_size);
+            }
+        } else {
+            for (j, word) in run.text.split_whitespace().enumerate() {
+                if j > 0 { pending_space = true; }
+                if pending_space { total += space_w; pending_space = false; }
+                total += text_width(font, word, font_size);
+            }
+        }
+    }
+    total
 }
 
 /// X position of child given parent x, available width, child width, and alignment.
@@ -2194,7 +2241,7 @@ mod tests {
         // Many fixed-height frames in a cluster produce many wrapped rows; the
         // cluster breaks between rows rather than treating itself as atomic.
         let item = r##"<frame width="180pt" height="100pt" background="#ddd" />"##;
-        let body = format!(r#"<cluster gap="m" wrap="true">{}</cluster>"#, item.repeat(40));
+        let body = format!(r#"<cluster gap="m">{}</cluster>"#, item.repeat(40));
         let tree = engine_render(&minimal(&body));
         let pages = tree["pages"].as_array().unwrap();
         assert!(pages.len() >= 2, "cluster should split, got {} pages", pages.len());

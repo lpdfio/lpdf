@@ -12,7 +12,11 @@ ROOT      = Path("/app")
 FIXTURES  = ROOT / "test" / "fixtures"
 SNAPSHOTS = ROOT / "test" / "snapshots"
 
-EXAMPLES = [f"example{i}" for i in range(1, 12)]
+EXAMPLES = [
+    *[f"example{i}" for i in range(1, 12)],
+    "showcase-cluster", "showcase-flank", "showcase-frame",
+    "showcase-grid", "showcase-split", "showcase-stack",
+]
 
 
 def compare_or_update(name: str, pdf_bytes: bytes) -> None:

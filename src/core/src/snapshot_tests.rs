@@ -73,3 +73,16 @@ snapshot_test!(example8);
 snapshot_test!(example9);
 snapshot_test!(example10);
 snapshot_test!(example11);
+
+#[test]
+fn showcase_cluster() { run_snapshot("showcase-cluster"); }
+#[test]
+fn showcase_flank() { run_snapshot("showcase-flank"); }
+#[test]
+fn showcase_frame() { run_snapshot("showcase-frame"); }
+#[test]
+fn showcase_grid() { run_snapshot("showcase-grid"); }
+#[test]
+fn showcase_split() { run_snapshot("showcase-split"); }
+#[test]
+fn showcase_stack() { run_snapshot("showcase-stack"); }

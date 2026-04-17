@@ -1,0 +1,171 @@
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf" />
+      <color name="surface"  value="#ffffff" />
+      <color name="bg"       value="#f5f7fa" />
+      <color name="accent"   value="#e8f0fc" />
+      <color name="muted"    value="#737373" />
+      <color name="rule"     value="#dde3ed" />
+    </colors>
+  </tokens>
+  <document size="a4" margin="40pt">
+    <meta title="lpdf Showcase — Flank" subject="Layout primitives" />
+    <pages>
+
+      <!-- Flank -->
+      <page background="surface">
+        <stack gap="xl">
+
+          <stack gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Flank</text>
+            <text font-size="m" color="muted">One child fills the remaining width; the other(s) shrink-wrap to their content</text>
+          </stack>
+
+          <!-- end (fill side) -->
+          <stack gap="m">
+            <text font-size="l" font="Helvetica-Bold">end (which side fills)</text>
+            <stack gap="xs">
+              <text font-size="m" color="muted">end="false" (default) — flank on left, fill on right</text>
+              <flank debug="true" gap="s" background="bg" padding="s">
+                <stack background="accent" padding="xs"><text font-size="m">Label</text></stack>
+                <stack background="rule" padding="xs"><text font-size="m">This content fills the remaining width</text></stack>
+              </flank>
+            </stack>
+            <stack gap="xs">
+              <text font-size="m" color="muted">end="true" — fill on left, flank on right</text>
+              <flank debug="true" end="true" gap="s" background="bg" padding="s">
+                <stack background="rule" padding="xs"><text font-size="m">This content fills the remaining width</text></stack>
+                <stack background="accent" padding="xs"><text font-size="m">Action</text></stack>
+              </flank>
+            </stack>
+            <stack gap="xs">
+              <text font-size="m" color="muted">end="false" — multiple flanks on left</text>
+              <flank debug="true" gap="s" background="bg" padding="s">
+                <stack background="accent" padding="xs"><text font-size="m">Icon</text></stack>
+                <stack background="accent" padding="xs"><text font-size="m">Label</text></stack>
+                <stack background="rule" padding="xs"><text font-size="m">Fill content stretches to fit</text></stack>
+              </flank>
+            </stack>
+            <stack gap="xs">
+              <text font-size="m" color="muted">end="true" — multiple flanks on right</text>
+              <flank debug="true" end="true" gap="s" background="bg" padding="s">
+                <stack background="rule" padding="xs"><text font-size="m">Fill content stretches to fit</text></stack>
+                <stack background="accent" padding="xs"><text font-size="m">Edit</text></stack>
+                <stack background="accent" padding="xs"><text font-size="m">Delete</text></stack>
+              </flank>
+            </stack>
+          </stack>
+
+          <!-- align (cross-axis = vertical) -->
+          <stack gap="m">
+            <text font-size="l" font="Helvetica-Bold">align (cross-axis)</text>
+            <stack gap="xs">
+              <text font-size="m" color="muted">align="start" — items top-aligned</text>
+              <flank debug="true" align="start" gap="s" background="bg" padding="s">
+                <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
+                <stack background="rule" padding="xs"><text font-size="m">Fill</text><text font-size="m">Two lines</text><text font-size="m">Three lines</text></stack>
+              </flank>
+            </stack>
+            <stack gap="xs">
+              <text font-size="m" color="muted">align="center" — items middle-aligned</text>
+              <flank debug="true" align="center" gap="s" background="bg" padding="s">
+                <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
+                <stack background="rule" padding="xs"><text font-size="m">Fill</text><text font-size="m">Two lines</text><text font-size="m">Three lines</text></stack>
+              </flank>
+            </stack>
+            <stack gap="xs">
+              <text font-size="m" color="muted">align="end" — items bottom-aligned</text>
+              <flank debug="true" align="end" gap="s" background="bg" padding="s">
+                <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
+                <stack background="rule" padding="xs"><text font-size="m">Fill</text><text font-size="m">Two lines</text><text font-size="m">Three lines</text></stack>
+              </flank>
+            </stack>
+          </stack>
+
+          <!-- gap -->
+          <stack gap="m">
+            <text font-size="l" font="Helvetica-Bold">gap</text>
+            <stack gap="xs">
+              <text font-size="m" color="muted">gap="xs"</text>
+              <flank debug="true" gap="xs" background="bg" padding="s">
+                <stack background="accent" padding="xs"><text font-size="m">Label</text></stack>
+                <stack background="rule" padding="xs"><text font-size="m">Fill</text></stack>
+              </flank>
+            </stack>
+            <stack gap="xs">
+              <text font-size="m" color="muted">gap="m"</text>
+              <flank debug="true" gap="m" background="bg" padding="s">
+                <stack background="accent" padding="xs"><text font-size="m">Label</text></stack>
+                <stack background="rule" padding="xs"><text font-size="m">Fill</text></stack>
+              </flank>
+            </stack>
+            <stack gap="xs">
+              <text font-size="m" color="muted">gap="xl"</text>
+              <flank debug="true" gap="xl" background="bg" padding="s">
+                <stack background="accent" padding="xs"><text font-size="m">Label</text></stack>
+                <stack background="rule" padding="xs"><text font-size="m">Fill</text></stack>
+              </flank>
+            </stack>
+          </stack>
+
+          <!-- padding -->
+          <stack gap="m">
+            <text font-size="l" font="Helvetica-Bold">padding</text>
+            <stack gap="xs">
+              <text font-size="m" color="muted">padding="xs"</text>
+              <flank debug="true" padding="xs" background="bg" gap="s">
+                <stack background="accent" padding="xs"><text font-size="m">Label</text></stack>
+                <stack background="rule" padding="xs"><text font-size="m">Fill</text></stack>
+              </flank>
+            </stack>
+            <stack gap="xs">
+              <text font-size="m" color="muted">padding="l"</text>
+              <flank debug="true" padding="l" background="bg" gap="s">
+                <stack background="accent" padding="xs"><text font-size="m">Label</text></stack>
+                <stack background="rule" padding="xs"><text font-size="m">Fill</text></stack>
+              </flank>
+            </stack>
+            <stack gap="xs">
+              <text font-size="m" color="muted">padding="20pt 8pt" (vertical · horizontal)</text>
+              <flank debug="true" padding="20pt 8pt" background="bg" gap="s">
+                <stack background="accent" padding="xs"><text font-size="m">Label</text></stack>
+                <stack background="rule" padding="xs"><text font-size="m">Fill</text></stack>
+              </flank>
+            </stack>
+          </stack>
+
+          <!-- border · radius -->
+          <stack gap="m">
+            <text font-size="l" font="Helvetica-Bold">border · radius</text>
+            <stack gap="xs">
+              <text font-size="m" color="muted">border="xs rule" radius="xs"</text>
+              <flank padding="s" gap="s" border="xs rule" radius="xs">
+                <stack background="accent" padding="xs"><text font-size="m">Label</text></stack>
+                <stack padding="xs"><text font-size="m">Fill content</text></stack>
+              </flank>
+            </stack>
+            <stack gap="xs">
+              <text font-size="m" color="muted">border="s primary" radius="l"</text>
+              <flank padding="m" gap="s" border="s primary" radius="l">
+                <stack background="accent" padding="xs"><text font-size="m">Label</text></stack>
+                <stack padding="xs"><text font-size="m">Fill content</text></stack>
+              </flank>
+            </stack>
+            <stack gap="xs">
+              <text font-size="m" color="muted">background="accent" radius="m" padding="m"</text>
+              <flank background="accent" radius="m" padding="m" gap="s">
+                <stack background="surface" padding="xs" radius="xs"><text font-size="m">Label</text></stack>
+                <stack background="surface" padding="xs" radius="xs"><text font-size="m">Fill content</text></stack>
+              </flank>
+            </stack>
+          </stack>
+
+        </stack>
+      </page>
+
+    </pages>
+  </document>
+</lpdf>

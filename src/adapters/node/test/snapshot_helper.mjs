@@ -17,6 +17,8 @@ export const UPDATE    = !!process.env.UPDATE_SNAPSHOTS;
 export const EXAMPLES = [
   'example1', 'example2', 'example3', 'example4',  'example5',
   'example6', 'example7', 'example8', 'example9', 'example10', 'example11',
+  'showcase-cluster', 'showcase-flank', 'showcase-frame',
+  'showcase-grid', 'showcase-split', 'showcase-stack',
 ];
 
 /** Returns the contents of a fixture XML file by name (without extension). */

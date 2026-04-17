@@ -62,7 +62,6 @@ pub struct Node {
     pub justify: Justify,
     pub end: bool,
     pub equal: bool,
-    pub wrap: bool,
     pub cols: u32,
     pub col_width: Option<f32>,
     // divider
@@ -172,7 +171,6 @@ struct ParsedNode {
     justify: Justify,
     end: bool,
     equal: bool,
-    wrap: bool,
     cols: u32,
     col_width: Option<f32>,
     direction: Direction,
@@ -220,11 +218,10 @@ impl ParsedNode {
             width_constraint: None,
             repeat: Repeat::None,
             debug: false,
-            align: Align::Start,
+            align: Align::Stretch,
             justify: Justify::Start,
             end: false,
             equal: false,
-            wrap: true,
             cols: 1,
             col_width: None,
             direction: Direction::Horizontal,
@@ -346,7 +343,6 @@ fn resolve_node(
         justify:               n.justify,
         end:                   n.end,
         equal:                 n.equal,
-        wrap:                  n.wrap,
         cols:                  n.cols,
         col_width:             n.col_width,
         direction:             n.direction,
@@ -760,6 +756,12 @@ fn parse_node(
         for child in elems(elem) {
             node.children.push(parse_node(&child, tokens, asset_images)?);
         }
+        if kind == NodeKind::Frame && node.children.len() > 1 {
+            return Err(format!(
+                "frame accepts at most one child; got {}",
+                node.children.len()
+            ));
+        }
     }
 
     Ok(node)
@@ -896,7 +898,7 @@ fn apply_layout_kind_attrs(
 ) -> Result<(), String> {
     match node.kind {
         NodeKind::Stack => {
-            node.align   = parse_align(a.get("align").unwrap_or("start"))?;
+            node.align   = parse_align(a.get("align").unwrap_or("stretch"))?;
             node.justify = parse_justify(a.get("justify").unwrap_or("start"))?;
         }
         NodeKind::Flank => {
@@ -910,12 +912,23 @@ fn apply_layout_kind_attrs(
         }
         NodeKind::Cluster => {
             node.align   = parse_align(a.get("align").unwrap_or("start"))?;
-            node.justify = parse_justify(a.get("justify").unwrap_or("start"))?;
-            node.wrap    = a.get("wrap").map(|v| v != "false").unwrap_or(true);
+            let j_str = a.get("justify").unwrap_or("start");
+            if j_str == "between" {
+                return Err("cluster does not support justify=\"between\"; use start, center, or end".into());
+            }
+            node.justify = parse_justify(j_str)?;
         }
         NodeKind::Frame => {
-            node.align   = parse_align(a.get("align").unwrap_or("center"))?;
-            node.justify = parse_justify(a.get("justify").unwrap_or("center"))?;
+            // Frame always centers its single child; these attrs are not supported.
+            if a.get("gap").is_some() {
+                return Err("frame does not support gap; it always centers its child".into());
+            }
+            if a.get("align").is_some() {
+                return Err("frame does not support align; it always centers its child".into());
+            }
+            if a.get("justify").is_some() {
+                return Err("frame does not support justify; it always centers its child".into());
+            }
         }
         NodeKind::Grid => {
             node.cols = a.get("cols").and_then(|v| v.parse().ok()).unwrap_or(1);
@@ -1268,6 +1281,12 @@ fn parse_tree_node(
             for child in arr {
                 node.children.push(parse_tree_node(child, tokens, asset_images)?);
             }
+        }
+        if kind == NodeKind::Frame && node.children.len() > 1 {
+            return Err(format!(
+                "frame accepts at most one child; got {}",
+                node.children.len()
+            ));
         }
     }
 

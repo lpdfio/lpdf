@@ -28,6 +28,12 @@ public class SnapshotTests
     [InlineData("example9")]
     [InlineData("example10")]
     [InlineData("example11")]
+    [InlineData("showcase-cluster")]
+    [InlineData("showcase-flank")]
+    [InlineData("showcase-frame")]
+    [InlineData("showcase-grid")]
+    [InlineData("showcase-split")]
+    [InlineData("showcase-stack")]
     public async Task FixtureMatchesStoredHash(string name)
     {
         var xml   = File.ReadAllText(Path.Combine(SnapshotHelper.Fixtures, $"{name}.xml"));
