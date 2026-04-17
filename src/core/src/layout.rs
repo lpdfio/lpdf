@@ -1,5 +1,59 @@
 use crate::parse::{Align, Direction, HeightMode, Justify, Node, NodeKind, Page, Repeat, TextAlign, TextRun};
-use crate::render::{RenderBox, RenderLine, RenderLink, RenderNode, RenderPage, RenderText};
+use crate::render::{RenderBox, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText};
+use crate::tokens::FontWidths;
+use std::cell::RefCell;
+use std::collections::HashMap;
+
+// ── Per-call custom font width tables ────────────────────────────────────────
+// Set by LpdfEngine before calling layout_page so that text_width can use
+// real glyph metrics instead of the 0.44 constant fallback.
+thread_local! {
+    static FONT_WIDTHS: RefCell<HashMap<String, FontWidths>> = RefCell::new(HashMap::new());
+}
+
+/// Install caller-supplied width tables for the current layout call.
+/// Must be called before `layout_page`. WASM is single-threaded so the
+/// thread_local is safe to use as a per-call context.
+pub fn set_font_widths(widths: HashMap<String, FontWidths>) {
+    FONT_WIDTHS.with(|fw| *fw.borrow_mut() = widths);
+}
+
+/// Natural pixel dimensions for declared images: name → (width_px, height_px).
+pub type ImageMeta = HashMap<String, (u32, u32)>;
+
+/// Fill in concrete `width_constraint` and `img_height_constraint` for every
+/// `NodeKind::Img` node in a page tree, using `meta` for aspect-ratio derivation.
+///
+/// Call this on every `Page` *before* calling `layout_page`. After the pass,
+/// `layout_img` can read `.width_constraint.unwrap_or(avail_w)` and
+/// `.img_height_constraint.unwrap_or(w)` safely.
+pub fn prefill_image_sizes(nodes: &mut Vec<Node>, meta: &ImageMeta) {
+    for node in nodes.iter_mut() {
+        prefill_node(node, meta);
+    }
+}
+
+fn prefill_node(node: &mut Node, meta: &ImageMeta) {
+    if node.kind == NodeKind::Img {
+        let name = node.image_name.as_deref().unwrap_or("");
+        let (nat_w, nat_h) = meta.get(name)
+            .map(|&(w, h)| (w as f32, h as f32))
+            .unwrap_or((100.0, 100.0));
+        let aspect = if nat_h > 0.0 { nat_w / nat_h } else { 1.0 };
+        let (w, h) = match (node.width_constraint, node.img_height_constraint) {
+            (Some(w), Some(h)) => (w, h),
+            (Some(w), None)    => (w, if aspect > 0.0 { w / aspect } else { w }),
+            (None, Some(h))    => (if aspect > 0.0 { h * aspect } else { h }, h),
+            (None, None)       => (nat_w, nat_h),
+        };
+        node.width_constraint      = Some(w);
+        node.img_height_constraint = Some(h);
+    } else {
+        for child in &mut node.children {
+            prefill_node(child, meta);
+        }
+    }
+}
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
@@ -744,6 +798,7 @@ fn layout_node(
         NodeKind::Divider => layout_divider(node, node_x, y, node_w, avail_h),
         NodeKind::Text => layout_text(node, node_x, y, node_w),
         NodeKind::Link => layout_link(node, node_x, y, node_w, avail_h),
+        NodeKind::Img => layout_img(node, node_x, y, node_w),
         _ => layout_container(node, node_x, y, node_w, avail_h),
     }
 }
@@ -1295,6 +1350,17 @@ fn layout_link(
     )
 }
 
+// ── Image ─────────────────────────────────────────────────────────────────────
+
+fn layout_img(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
+    // width_constraint and img_height_constraint are pre-filled by prefill_image_sizes.
+    // If somehow missing, fall back to a square box at available width.
+    let w = node.width_constraint.unwrap_or(avail_w).min(avail_w);
+    let h = node.img_height_constraint.unwrap_or(w);
+    let name = node.image_name.clone().unwrap_or_default();
+    (RenderNode::Image(RenderImage { x, y, width: w, height: h, name }), h)
+}
+
 // ── Divider ───────────────────────────────────────────────────────────────────
 
 fn layout_divider(
@@ -1468,18 +1534,30 @@ pub(crate) fn text_width(font: &str, text: &str, size: f32) -> f32 {
     if font.contains("Courier") {
         return text.chars().count() as f32 * size * 0.6;
     }
-    // For known builtins use per-character AFM widths; for unknown fonts fall
-    // back to a constant multiplier (same as before).  We detect "known" by
-    // checking whether the space glyph (always ASCII 32) has a table entry.
-    if builtin_char_advance(font, ' ').is_none() {
-        return text.chars().count() as f32 * size * 0.44;
+    // Check caller-supplied width table first (custom fonts via set_font_metrics).
+    let custom = FONT_WIDTHS.with(|fw| fw.borrow().get(font).cloned());
+    if let Some(w) = custom {
+        return text.chars().map(|c| {
+            let cp = c as u32;
+            let advance = if cp >= 32 && cp <= 126 && !w.ascii.is_empty() {
+                w.ascii[(cp - 32) as usize]
+            } else {
+                w.default
+            };
+            advance as f32 * size / 1000.0
+        }).sum();
     }
-    text.chars()
-        .map(|c| {
-            // 500/1000 = 0.5em for characters outside ASCII printable range.
-            builtin_char_advance(font, c).unwrap_or(500) as f32 * size / 1000.0
-        })
-        .sum()
+    // For known builtins use per-character AFM widths.
+    if builtin_char_advance(font, ' ').is_some() {
+        return text.chars()
+            .map(|c| builtin_char_advance(font, c).unwrap_or(500) as f32 * size / 1000.0)
+            .sum();
+    }
+    // Unknown font (undefined alias, unsupported builtin, or custom font with no
+    // width table). Use Helvetica metrics as the fallback — this matches what
+    // the renderer does (it also falls back to Helvetica for unknown fonts), so
+    // layout and rendering stay in sync.
+    text_width("Helvetica", text, size)
 }
 
 /// Measure the natural (preferred/unconstrained) width of a node.
@@ -1506,6 +1584,7 @@ fn measure_natural_w(node: &Node) -> f32 {
             total
         }
         NodeKind::Divider => node.thickness,
+        NodeKind::Img => node.width_constraint.unwrap_or(100.0),
         _ => {
             let [_pt, pr, _pb, pl] = node.padding;
             let inner = match node.kind {
@@ -1808,6 +1887,10 @@ fn shift_y(node: RenderNode, dy: f32) -> RenderNode {
             l.children = l.children.into_iter().map(|c| shift_y(c, dy)).collect();
             RenderNode::Link(l)
         }
+        RenderNode::Image(mut i) => {
+            i.y += dy;
+            RenderNode::Image(i)
+        }
     }
 }
 
@@ -1834,6 +1917,10 @@ fn shift_x(node: RenderNode, dx: f32) -> RenderNode {
             l.x += dx;
             l.children = l.children.into_iter().map(|c| shift_x(c, dx)).collect();
             RenderNode::Link(l)
+        }
+        RenderNode::Image(mut i) => {
+            i.x += dx;
+            RenderNode::Image(i)
         }
     }
 }

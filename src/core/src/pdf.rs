@@ -31,9 +31,12 @@
 
 use std::collections::{HashMap, HashSet};
 
-use pdf_writer::{Content, Name, Pdf, Rect, Ref, Str, TextStr};
-use pdf_writer::types::{ActionType, AnnotationType, CidFontType, FontFlags};
+use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
+use pdf_writer::types::{ActionType, AnnotationType, CidFontType, FontFlags, Predictor};
 use ttf_parser::Face;
+use miniz_oxide::deflate::compress_to_vec_zlib;
+use miniz_oxide::inflate::decompress_to_vec_zlib;
+use subsetter::GlyphRemapper;
 
 use crate::render::{RenderNode, RenderPage};
 use crate::parse::Meta;
@@ -62,6 +65,449 @@ impl FontRegistry {
     pub fn get(&self, name: &str) -> Option<&[u8]> {
         self.bytes.get(name).map(|b| b.as_slice())
     }
+}
+
+/// Stores raw image bytes (JPEG/PNG) for images referenced by a document via
+/// its `<assets><images>` declarations.  Populate before calling `render_pdf`.
+pub struct ImageRegistry {
+    bytes: HashMap<String, Vec<u8>>,
+}
+
+impl ImageRegistry {
+    pub fn new() -> Self {
+        Self { bytes: HashMap::new() }
+    }
+
+    /// Associate `name` with raw image file bytes.
+    pub fn load(&mut self, name: &str, data: Vec<u8>) {
+        self.bytes.insert(name.to_string(), data);
+    }
+
+    pub fn get(&self, name: &str) -> Option<&[u8]> {
+        self.bytes.get(name).map(|b| b.as_slice())
+    }
+}
+
+// ── Image helpers ─────────────────────────────────────────────────────────────
+
+/// Read the pixel dimensions of a JPEG or PNG image.
+/// Returns `(width_px, height_px)` or `None` if unrecognised format.
+pub fn image_natural_size(bytes: &[u8]) -> Option<(u32, u32)> {
+    if bytes.starts_with(b"\xFF\xD8\xFF") {
+        jpeg_dims(bytes)
+    } else if bytes.starts_with(b"\x89PNG\r\n\x1A\n") {
+        png_dims(bytes)
+    } else {
+        None
+    }
+}
+
+/// Build an `ImageMeta` map (name → (w_px, h_px)) from a registry.
+pub fn build_image_meta(registry: &ImageRegistry) -> crate::layout::ImageMeta {
+    let mut meta = crate::layout::ImageMeta::new();
+    for (name, bytes) in &registry.bytes {
+        if let Some(dims) = image_natural_size(bytes) {
+            meta.insert(name.clone(), dims);
+        }
+    }
+    meta
+}
+
+fn jpeg_dims(bytes: &[u8]) -> Option<(u32, u32)> {
+    let mut i = 2usize;
+    while i + 3 < bytes.len() {
+        if bytes[i] != 0xFF { break; }
+        let marker = bytes[i + 1];
+        if i + 3 >= bytes.len() { break; }
+        let seg_len = u16::from_be_bytes([bytes[i + 2], bytes[i + 3]]) as usize;
+        // SOF0=0xC0, SOF1=0xC1, SOF2=0xC2
+        if matches!(marker, 0xC0 | 0xC1 | 0xC2) && i + 8 < bytes.len() {
+            let h = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]) as u32;
+            let w = u16::from_be_bytes([bytes[i + 7], bytes[i + 8]]) as u32;
+            return Some((w, h));
+        }
+        i += 2 + seg_len;
+    }
+    None
+}
+
+/// PNG bit depth + color type → (components, is_supported)
+fn png_info(bytes: &[u8]) -> Option<(u32, u32, u8, u8)> {
+    // PNG IHDR: 8-byte sig + 4-byte length + 4-byte "IHDR" + 4-byte W + 4-byte H
+    //           + 1-byte bit-depth + 1-byte color-type
+    if bytes.len() < 26 { return None; }
+    let w  = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
+    let h  = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
+    let bd = bytes[24]; // bit depth
+    let ct = bytes[25]; // color type: 0=gray, 2=RGB, 3=palette, 4=gray+A, 6=RGBA
+    Some((w, h, bd, ct))
+}
+
+fn png_dims(bytes: &[u8]) -> Option<(u32, u32)> {
+    let (w, h, _, _) = png_info(bytes)?;
+    Some((w, h))
+}
+
+/// Collect IDAT payload bytes from a PNG file (all chunks concatenated).
+fn png_idat_bytes(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut pos = 8usize; // skip 8-byte PNG signature
+    while pos + 12 <= bytes.len() {
+        let len = u32::from_be_bytes([
+            bytes[pos], bytes[pos+1], bytes[pos+2], bytes[pos+3],
+        ]) as usize;
+        let tag = &bytes[pos+4..pos+8];
+        if tag == b"IDAT" && pos + 8 + len <= bytes.len() {
+            out.extend_from_slice(&bytes[pos+8..pos+8+len]);
+        }
+        pos += 12 + len; // length(4) + tag(4) + data(len) + crc(4)
+    }
+    out
+}
+
+// ── PNG RGBA decoding ─────────────────────────────────────────────────────────
+
+/// Paeth predictor function used by PNG filter type 4.
+fn paeth_predictor(a: u8, b: u8, c: u8) -> u8 {
+    let a = a as i32;
+    let b = b as i32;
+    let c = c as i32;
+    let p  = a + b - c;
+    let pa = (p - a).abs();
+    let pb = (p - b).abs();
+    let pc = (p - c).abs();
+    if pa <= pb && pa <= pc { a as u8 }
+    else if pb <= pc { b as u8 }
+    else { c as u8 }
+}
+
+/// Reconstruct (unfilter) raw PNG scanline data.
+/// `channels` is bytes per pixel (e.g. 4 for RGBA, 3 for RGB).
+/// Returns the flat defiltered pixel buffer, or `None` on malformed input.
+fn unfilter_png(width: u32, height: u32, channels: usize, raw: &[u8]) -> Option<Vec<u8>> {
+    let stride  = width as usize * channels;
+    let row_len = stride + 1; // +1 for the leading filter byte
+    if raw.len() < row_len * height as usize {
+        return None;
+    }
+    let mut out  = vec![0u8; stride * height as usize];
+    let mut prev = vec![0u8; stride];
+    for y in 0..height as usize {
+        let filter = raw[y * row_len];
+        let src    = &raw[y * row_len + 1..y * row_len + 1 + stride];
+        let dst    = &mut out[y * stride..(y + 1) * stride];
+        match filter {
+            0 => dst.copy_from_slice(src),
+            1 => {
+                for i in 0..stride {
+                    let a = if i >= channels { dst[i - channels] } else { 0 };
+                    dst[i] = src[i].wrapping_add(a);
+                }
+            }
+            2 => {
+                for i in 0..stride { dst[i] = src[i].wrapping_add(prev[i]); }
+            }
+            3 => {
+                for i in 0..stride {
+                    let a = if i >= channels { dst[i - channels] as u16 } else { 0 };
+                    let b = prev[i] as u16;
+                    dst[i] = src[i].wrapping_add(((a + b) / 2) as u8);
+                }
+            }
+            4 => {
+                for i in 0..stride {
+                    let a = if i >= channels { dst[i - channels] } else { 0 };
+                    let b = prev[i];
+                    let c = if i >= channels { prev[i - channels] } else { 0 };
+                    dst[i] = src[i].wrapping_add(paeth_predictor(a, b, c));
+                }
+            }
+            _ => return None,
+        }
+        prev.copy_from_slice(dst);
+    }
+    Some(out)
+}
+
+/// Decode an RGBA PNG (8-bit or 16-bit) into separate zlib-compressed RGB and
+/// alpha buffers suitable for embedding as a PDF image XObject + SMask.
+///
+/// 16-bit channels are downsampled to 8-bit by taking the high byte.
+///
+/// Returns `(width, height, rgb_zlib, alpha_zlib)` or `None` on failure.
+fn decode_rgba_png(bytes: &[u8]) -> Option<(u32, u32, Vec<u8>, Vec<u8>)> {
+    let (w, h, bd, ct) = png_info(bytes)?;
+    if ct != 6 { return None; }
+    if bd != 8 && bd != 16 { return None; }
+    let bpc     = (bd / 8) as usize; // bytes per channel (1 or 2)
+    let idat    = png_idat_bytes(bytes);
+    let raw     = decompress_to_vec_zlib(&idat).ok()?;
+    let pixels  = unfilter_png(w, h, 4 * bpc, &raw)?;
+    let n       = (w * h) as usize;
+    let mut rgb   = Vec::with_capacity(n * 3);
+    let mut alpha = Vec::with_capacity(n);
+    if bpc == 1 {
+        for px in pixels.chunks_exact(4) {
+            rgb.push(px[0]);
+            rgb.push(px[1]);
+            rgb.push(px[2]);
+            alpha.push(px[3]);
+        }
+    } else {
+        // 16-bit big-endian per channel; take the high byte (downsample to 8-bit)
+        for px in pixels.chunks_exact(8) {
+            rgb.push(px[0]);
+            rgb.push(px[2]);
+            rgb.push(px[4]);
+            alpha.push(px[6]);
+        }
+    }
+    let level   = 6u8;
+    let rgb_z   = compress_to_vec_zlib(&rgb,   level);
+    let alpha_z = compress_to_vec_zlib(&alpha, level);
+    Some((w, h, rgb_z, alpha_z))
+}
+
+/// Return the data bytes of the first PNG chunk with the given 4-byte tag,
+/// or `None` if the chunk is absent or the file is truncated.
+fn png_chunk<'a>(bytes: &'a [u8], tag: &[u8; 4]) -> Option<&'a [u8]> {
+    let mut pos = 8usize; // skip 8-byte PNG signature
+    while pos + 12 <= bytes.len() {
+        let len = u32::from_be_bytes([
+            bytes[pos], bytes[pos+1], bytes[pos+2], bytes[pos+3],
+        ]) as usize;
+        if &bytes[pos+4..pos+8] == tag {
+            if pos + 8 + len <= bytes.len() {
+                return Some(&bytes[pos+8..pos+8+len]);
+            }
+            return None; // truncated chunk
+        }
+        pos += 12 + len;
+    }
+    None
+}
+
+/// Decode an 8-bit indexed-color PNG to raw RGB pixels with an optional alpha
+/// channel.  Returns `(width, height, rgb_pixels, alpha_pixels_or_none)`.
+///
+/// `alpha_pixels` is `Some(…)` only when the image has a `tRNS` chunk that
+/// contains at least one non-opaque (< 255) entry.
+fn decode_indexed_png(bytes: &[u8]) -> Option<(u32, u32, Vec<u8>, Option<Vec<u8>>)> {
+    let (w, h, bd, ct) = png_info(bytes)?;
+    if ct != 3 || bd != 8 { return None; }
+
+    // Read palette (PLTE chunk: N × RGB triplets, N ≤ 256)
+    let plte_data = png_chunk(bytes, b"PLTE")?;
+    if plte_data.len() % 3 != 0 { return None; }
+    let palette: Vec<[u8; 3]> = plte_data.chunks_exact(3)
+        .map(|c| [c[0], c[1], c[2]])
+        .collect();
+
+    // Optional per-index alpha values (tRNS chunk)
+    let trns: &[u8] = png_chunk(bytes, b"tRNS").unwrap_or(&[]);
+    let has_alpha   = trns.iter().any(|&a| a != 255);
+
+    // Decode and unfilter the IDAT stream (1 byte per pixel for 8-bit indexed)
+    let idat    = png_idat_bytes(bytes);
+    let raw     = decompress_to_vec_zlib(&idat).ok()?;
+    let indices = unfilter_png(w, h, 1, &raw)?;
+
+    let n = (w * h) as usize;
+    let mut rgb   = Vec::with_capacity(n * 3);
+    let mut alpha = if has_alpha { Some(Vec::with_capacity(n)) } else { None };
+
+    for &idx in &indices {
+        let i     = idx as usize;
+        let color = if i < palette.len() { palette[i] } else { [0, 0, 0] };
+        rgb.push(color[0]);
+        rgb.push(color[1]);
+        rgb.push(color[2]);
+        if let Some(ref mut a_buf) = alpha {
+            a_buf.push(if i < trns.len() { trns[i] } else { 255 });
+        }
+    }
+
+    Some((w, h, rgb, alpha))
+}
+
+/// Collect all unique image names referenced by the render tree.
+fn collect_used_images(nodes: &[RenderNode], out: &mut HashSet<String>) {
+    for node in nodes {
+        match node {
+            RenderNode::Image(img) => { out.insert(img.name.clone()); }
+            RenderNode::Box(b)     => collect_used_images(&b.children, out),
+            RenderNode::Link(l)    => collect_used_images(&l.children, out),
+            _                      => {}
+        }
+    }
+}
+
+/// Returns `true` if the image format and subtype can be embedded by
+/// `embed_image_xobject`.  Images that fail this check are silently excluded
+/// from the PDF resource dictionary so no dangling XObject references occur.
+pub fn is_image_embeddable(bytes: &[u8]) -> bool {
+    image_format_error(bytes).is_none()
+}
+
+/// Returns a human-readable error string if `bytes` cannot be embedded,
+/// or `None` if the format is supported.
+pub fn image_format_error(bytes: &[u8]) -> Option<String> {
+    if bytes.starts_with(b"\xFF\xD8\xFF") {
+        return if jpeg_dims(bytes).is_some() {
+            None
+        } else {
+            Some("JPEG file could not be parsed (no valid SOF marker found)".to_string())
+        };
+    }
+    if bytes.starts_with(b"\x89PNG\r\n\x1A\n") {
+        return match png_info(bytes) {
+            None => Some("PNG file could not be parsed (IHDR chunk missing or truncated)".to_string()),
+            Some((_, _, bd, ct)) => match (ct, bd) {
+                (0 | 2, 8 | 16) => None, // grayscale / RGB — 8-bit and 16-bit
+                (6, 8 | 16)     => None, // RGBA — 8-bit and 16-bit
+                (3, 8)          => None, // indexed-color 8-bit
+                (0 | 2 | 6, bd) => Some(format!(
+                    "PNG with {bd}-bit depth is not supported"
+                )),
+                (3, bd) => Some(format!(
+                    "PNG indexed-color with {bd}-bit depth is not supported; \
+                     use 8-bit depth or convert to RGB"
+                )),
+                (4, _) => Some(
+                    "PNG grayscale+alpha images are not supported; \
+                     convert to RGBA".to_string()
+                ),
+                (ct, _) => Some(format!("PNG color type {ct} is not supported")),
+            },
+        };
+    }
+    // Detect common unsupported formats to give a better message.
+    let hint = if bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP") {
+        "WebP"
+    } else if bytes.starts_with(b"GIF8") {
+        "GIF"
+    } else if bytes.starts_with(b"\x00\x00\x00") && bytes.get(4..8) == Some(b"ftyp") {
+        "AVIF/HEIC"
+    } else if bytes.starts_with(b"BM") {
+        "BMP"
+    } else if bytes.starts_with(b"II\x2A\x00") || bytes.starts_with(b"MM\x00\x2A") {
+        "TIFF"
+    } else {
+        "unknown"
+    };
+    Some(format!(
+        "{hint} images are not supported; use JPEG or PNG"
+    ))
+}
+
+/// Write one image XObject into the PDF.  Supports:
+///   - JPEG                      → `/Filter /DCTDecode`
+///   - PNG grayscale/RGB 8 or 16-bit (ct 0, 2)  → IDAT passthrough with FlateDecode + PNG predictor
+///   - PNG RGBA 8 or 16-bit (ct 6)               → decoded, split into RGB XObject + alpha SMask
+///   - PNG indexed 8-bit (ct 3)                  → palette-expanded to RGB, or RGBA+SMask if tRNS present
+fn embed_image_xobject(pdf: &mut Pdf, id: Ref, smask_id: Option<Ref>, bytes: &[u8]) {
+    if bytes.starts_with(b"\xFF\xD8\xFF") {
+        // JPEG
+        if let Some((w, h)) = jpeg_dims(bytes) {
+            let mut img = pdf.image_xobject(id, bytes);
+            img.width(w as i32)
+               .height(h as i32)
+               .bits_per_component(8);
+            img.color_space().device_rgb();
+            img.filter(Filter::DctDecode);
+        }
+    } else if bytes.starts_with(b"\x89PNG\r\n\x1A\n") {
+        // PNG passthrough: embed raw IDAT (zlib stream) with FlateDecode + PNG predictor
+        if let Some((w, h, bd, ct)) = png_info(bytes) {
+            match ct {
+                0 | 2 => {
+                    // Grayscale or RGB — raw IDAT passthrough (no decompression needed).
+                    let (colors, supported) = match ct {
+                        0 => (1i32, true),
+                        2 => (3i32, true),
+                        _ => (3i32, false),
+                    };
+                    if supported {
+                        let idat = png_idat_bytes(bytes);
+                        let mut img = pdf.image_xobject(id, &idat);
+                        img.width(w as i32)
+                           .height(h as i32)
+                           .bits_per_component(bd as i32);
+                        match ct {
+                            0 => { img.color_space().device_gray(); }
+                            _ => { img.color_space().device_rgb(); }
+                        }
+                        img.filter(Filter::FlateDecode);
+                        img.decode_parms()
+                           .predictor(Predictor::PngOptimum)
+                           .colors(colors)
+                           .bits_per_component(bd as i32)
+                           .columns(w as i32);
+                    }
+                }
+                3 => {
+                    // Indexed/palette — expand palette, embed as RGB or RGBA+SMask.
+                    if let Some((dw, dh, rgb, alpha_opt)) = decode_indexed_png(bytes) {
+                        let level = 6u8;
+                        let rgb_z = compress_to_vec_zlib(&rgb, level);
+                        if let Some(alpha) = alpha_opt {
+                            let alpha_z = compress_to_vec_zlib(&alpha, level);
+                            if let Some(smask_ref) = smask_id {
+                                let mut mask = pdf.image_xobject(smask_ref, &alpha_z);
+                                mask.width(dw as i32)
+                                    .height(dh as i32)
+                                    .bits_per_component(8);
+                                mask.color_space().device_gray();
+                                mask.filter(Filter::FlateDecode);
+                            }
+                            let mut img = pdf.image_xobject(id, &rgb_z);
+                            img.width(dw as i32)
+                               .height(dh as i32)
+                               .bits_per_component(8);
+                            img.color_space().device_rgb();
+                            img.filter(Filter::FlateDecode);
+                            if let Some(smask_ref) = smask_id {
+                                img.s_mask(smask_ref);
+                            }
+                        } else {
+                            let mut img = pdf.image_xobject(id, &rgb_z);
+                            img.width(dw as i32)
+                               .height(dh as i32)
+                               .bits_per_component(8);
+                            img.color_space().device_rgb();
+                            img.filter(Filter::FlateDecode);
+                        }
+                    }
+                }
+                6 => {
+                    // RGBA — decompress, split into RGB + alpha, embed with SMask.
+                    if let Some((dw, dh, rgb_z, alpha_z)) = decode_rgba_png(bytes) {
+                        // Write the alpha channel as a grayscale SMask XObject.
+                        if let Some(smask_ref) = smask_id {
+                            let mut mask = pdf.image_xobject(smask_ref, &alpha_z);
+                            mask.width(dw as i32)
+                                .height(dh as i32)
+                                .bits_per_component(8);
+                            mask.color_space().device_gray();
+                            mask.filter(Filter::FlateDecode);
+                        }
+                        // Write the RGB image XObject, linking to the SMask.
+                        let mut img = pdf.image_xobject(id, &rgb_z);
+                        img.width(dw as i32)
+                           .height(dh as i32)
+                           .bits_per_component(8);
+                        img.color_space().device_rgb();
+                        img.filter(Filter::FlateDecode);
+                        if let Some(smask_ref) = smask_id {
+                            img.s_mask(smask_ref);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    // Unsupported format: no object written for this ID (PDF ref unused).
 }
 
 // ── Built-in font table ───────────────────────────────────────────────────────
@@ -101,9 +547,20 @@ struct PreparedFont {
 enum PreparedFontKind {
     /// One of the 14 PDF resident Type 1 fonts.  No bytes to embed.
     Builtin { base_name: &'static str },
-    /// Custom TrueType/OpenType font, to be embedded as CIDFont Type2 with
-    /// Identity-H encoding, giving full Unicode support.
-    Truetype { bytes: Vec<u8> },
+    /// Custom TrueType/OpenType font, subsetted and embedded as CIDFont Type2
+    /// with Identity-H encoding, giving full Unicode support.
+    Truetype {
+        /// Original full font bytes — used for descriptor metrics (ascender, etc.).
+        original_bytes: Vec<u8>,
+        /// Subsetted font bytes — what is actually written to the PDF stream.
+        subsetted_bytes: Vec<u8>,
+        /// Character → remapped glyph ID for content stream encoding.
+        char_to_gid: HashMap<char, u16>,
+        /// (remapped_gid, unicode_codepoint) sorted by GID — for ToUnicode CMap.
+        glyph_unicode: Vec<(u16, u32)>,
+        /// (remapped_gid, width_per_mille) sorted by GID — for /W array.
+        glyph_widths: Vec<(u16, f32)>,
+    },
 }
 
 impl PreparedFont {
@@ -117,7 +574,7 @@ impl PreparedFont {
             PreparedFontKind::Builtin { base_name } => {
                 crate::layout::text_width(base_name, text, size)
             }
-            PreparedFontKind::Truetype { bytes } => text_width_ttf(bytes, text, size),
+            PreparedFontKind::Truetype { original_bytes, .. } => text_width_ttf(original_bytes, text, size),
         }
     }
 
@@ -128,8 +585,16 @@ impl PreparedFont {
     ///   character, resolved via `ttf-parser`.
     fn encode_text(&self, text: &str) -> Vec<u8> {
         match &self.kind {
-            PreparedFontKind::Builtin { .. }      => encode_latin1(text),
-            PreparedFontKind::Truetype { bytes }  => encode_glyph_ids(bytes, text),
+            PreparedFontKind::Builtin { .. } => encode_latin1(text),
+            PreparedFontKind::Truetype { char_to_gid, .. } => {
+                let mut out = Vec::with_capacity(text.chars().count() * 2);
+                for c in text.chars() {
+                    let gid = char_to_gid.get(&c).copied().unwrap_or(0);
+                    out.push((gid >> 8) as u8);
+                    out.push((gid & 0xFF) as u8);
+                }
+                out
+            }
         }
     }
 }
@@ -205,22 +670,6 @@ fn win1252_byte(c: char) -> Option<u8> {
         '\u{0178}' => 0x9F, // Ÿ
         _          => return None,
     })
-}
-
-/// Encode text as two-byte big-endian glyph IDs for a TrueType font using
-/// Identity-H encoding.  Unmapped characters produce `[0x00, 0x00]` (.notdef).
-fn encode_glyph_ids(font_bytes: &[u8], text: &str) -> Vec<u8> {
-    let face = match Face::parse(font_bytes, 0) {
-        Ok(f)  => f,
-        Err(_) => return vec![0u8; text.chars().count() * 2],
-    };
-    let mut out = Vec::with_capacity(text.chars().count() * 2);
-    for c in text.chars() {
-        let gid = face.glyph_index(c).map(|g| g.0).unwrap_or(0);
-        out.push((gid >> 8) as u8);
-        out.push((gid & 0xFF) as u8);
-    }
-    out
 }
 
 // ── Text width (TrueType) ─────────────────────────────────────────────────────
@@ -329,19 +778,20 @@ fn collect_used_fonts(nodes: &[RenderNode], out: &mut HashSet<String>) {
 /// 3. Document defines the font as `Src(_)` but no bytes → fall back to Helvetica.
 /// 4. No document definition → try the name directly as a builtin, else Helvetica.
 fn resolve_font_kind(
-    name:      &str,
-    font_defs: &HashMap<String, FontDef>,
-    registry:  &FontRegistry,
+    name:       &str,
+    font_defs:  &HashMap<String, FontDef>,
+    registry:   &FontRegistry,
+    used_chars: &HashSet<char>,
 ) -> PreparedFontKind {
     if let Some(def) = font_defs.get(name) {
         match def {
-            FontDef::Builtin(b) => {
+            FontDef::Core(b) => {
                 let ps = pdf_builtin_name(b).unwrap_or("Helvetica");
                 PreparedFontKind::Builtin { base_name: ps }
             }
-            FontDef::Src(_) => {
+            FontDef::Ref(_) => {
                 if let Some(bytes) = registry.get(name) {
-                    return PreparedFontKind::Truetype { bytes: bytes.to_vec() };
+                    return prepare_truetype_font(bytes, used_chars);
                 }
                 // Bytes not provided at render time → degrade gracefully.
                 PreparedFontKind::Builtin { base_name: "Helvetica" }
@@ -353,6 +803,92 @@ fn resolve_font_kind(
     }
 }
 
+/// Subset a TrueType/OpenType font to only the glyphs used in the document,
+/// and pre-build all per-glyph tables needed by the PDF writer.
+///
+/// On subsetting failure the full font is embedded as a fallback.
+fn prepare_truetype_font(bytes: &[u8], used_chars: &HashSet<char>) -> PreparedFontKind {
+    // Parse the font to map characters → original glyph IDs and extract metrics.
+    let face = match Face::parse(bytes, 0) {
+        Ok(f)  => f,
+        Err(_) => {
+            return PreparedFontKind::Truetype {
+                original_bytes:  bytes.to_vec(),
+                subsetted_bytes: bytes.to_vec(),
+                char_to_gid:     HashMap::new(),
+                glyph_unicode:   Vec::new(),
+                glyph_widths:    Vec::new(),
+            };
+        }
+    };
+    let upem = face.units_per_em() as f32;
+
+    // Map every used character to its original glyph ID.
+    let char_gid_orig: Vec<(char, u16)> = used_chars.iter()
+        .filter_map(|&c| face.glyph_index(c).map(|g| (c, g.0)))
+        .collect();
+
+    // Build a glyph remapper — registers each original GID and assigns new
+    // consecutive IDs starting at 1 (.notdef stays at 0).
+    let mut remapper = GlyphRemapper::new();
+    for (_, orig_gid) in &char_gid_orig {
+        remapper.remap(*orig_gid);
+    }
+
+    // Subset the font.  Fall back to full bytes on error.
+    let (subsetted_bytes, use_remap) = match subsetter::subset(bytes, 0, &remapper) {
+        Ok(sub) => (sub, true),
+        Err(_)  => (bytes.to_vec(), false),
+    };
+
+    // Build char → (new) glyph ID map for content stream encoding.
+    let char_to_gid: HashMap<char, u16> = char_gid_orig.iter()
+        .filter_map(|(c, orig_gid)| {
+            let new_gid = if use_remap {
+                remapper.get(*orig_gid)?
+            } else {
+                *orig_gid
+            };
+            Some((*c, new_gid))
+        })
+        .collect();
+
+    // Build glyph_unicode: (new_gid, unicode_codepoint), one entry per new GID.
+    // Use a HashMap to deduplicate (multiple chars can share a glyph; keep first).
+    let mut gid_to_unicode: HashMap<u16, u32> = HashMap::new();
+    for (c, new_gid) in &char_to_gid {
+        gid_to_unicode.entry(*new_gid).or_insert(*c as u32);
+    }
+    let mut glyph_unicode: Vec<(u16, u32)> = gid_to_unicode.into_iter().collect();
+    glyph_unicode.sort_by_key(|(gid, _)| *gid);
+
+    // Build glyph_widths: (new_gid, advance_per_mille), one entry per new GID.
+    // Widths come from the original face (advances are the same after subsetting).
+    let mut gid_to_width: HashMap<u16, f32> = HashMap::new();
+    for (_, orig_gid) in &char_gid_orig {
+        let new_gid = if use_remap {
+            match remapper.get(*orig_gid) { Some(g) => g, None => continue }
+        } else {
+            *orig_gid
+        };
+        if !gid_to_width.contains_key(&new_gid) {
+            if let Some(adv) = face.glyph_hor_advance(ttf_parser::GlyphId(*orig_gid)) {
+                gid_to_width.insert(new_gid, adv as f32 / upem * 1000.0);
+            }
+        }
+    }
+    let mut glyph_widths: Vec<(u16, f32)> = gid_to_width.into_iter().collect();
+    glyph_widths.sort_by_key(|(gid, _)| *gid);
+
+    PreparedFontKind::Truetype {
+        original_bytes: bytes.to_vec(),
+        subsetted_bytes,
+        char_to_gid,
+        glyph_unicode,
+        glyph_widths,
+    }
+}
+
 // ── Content-stream builder ────────────────────────────────────────────────────
 
 /// Write all render nodes for one page into a `Content` stream and collect
@@ -361,23 +897,25 @@ fn resolve_font_kind(
 /// `page_h` is required for the top-down → bottom-up coordinate flip:
 ///   `pdf_y = page_h − layout_y − node_height`
 fn draw_nodes(
-    content: &mut Content,
-    annots:  &mut Vec<AnnotData>,
-    nodes:   &[RenderNode],
-    fonts:   &HashMap<String, PreparedFont>,
-    page_h:  f32,
+    content:       &mut Content,
+    annots:        &mut Vec<AnnotData>,
+    nodes:         &[RenderNode],
+    fonts:         &HashMap<String, PreparedFont>,
+    image_res_map: &HashMap<String, String>,
+    page_h:        f32,
 ) {
     for node in nodes {
-        draw_node(content, annots, node, fonts, page_h);
+        draw_node(content, annots, node, fonts, image_res_map, page_h);
     }
 }
 
 fn draw_node(
-    content: &mut Content,
-    annots:  &mut Vec<AnnotData>,
-    node:    &RenderNode,
-    fonts:   &HashMap<String, PreparedFont>,
-    page_h:  f32,
+    content:       &mut Content,
+    annots:        &mut Vec<AnnotData>,
+    node:          &RenderNode,
+    fonts:         &HashMap<String, PreparedFont>,
+    image_res_map: &HashMap<String, String>,
+    page_h:        f32,
 ) {
     match node {
         // ── Box ──────────────────────────────────────────────────────────────
@@ -419,7 +957,7 @@ fn draw_node(
                 content.restore_state();
             }
 
-            draw_nodes(content, annots, &b.children, fonts, page_h);
+            draw_nodes(content, annots, &b.children, fonts, image_res_map, page_h);
         }
 
         // ── Line ─────────────────────────────────────────────────────────────
@@ -475,7 +1013,7 @@ fn draw_node(
         // ── Link ─────────────────────────────────────────────────────────────
         RenderNode::Link(lk) => {
             // Draw child nodes first (they appear inside the link area).
-            draw_nodes(content, annots, &lk.children, fonts, page_h);
+            draw_nodes(content, annots, &lk.children, fonts, image_res_map, page_h);
 
             // Collect the annotation rect in bottom-up PDF coordinates.
             // The annotation PDF object will be written during assembly.
@@ -488,6 +1026,20 @@ fn draw_node(
                 y2:  y_top,
                 url: lk.url.clone(),
             });
+        }
+
+        // ── Image ────────────────────────────────────────────────────────────
+        RenderNode::Image(img) => {
+            if let Some(res_name) = image_res_map.get(&img.name) {
+                // PDF images are painted with a CTM that scales a 1×1 unit
+                // image to the desired width/height, positioned at (x, pdf_y).
+                let pdf_y = page_h - img.y - img.height;
+                content.save_state();
+                content.transform([img.width, 0.0, 0.0, img.height, img.x, pdf_y]);
+                let rname: Vec<u8> = res_name.bytes().collect();
+                content.x_object(Name(&rname));
+                content.restore_state();
+            }
         }
     }
 }
@@ -569,13 +1121,14 @@ impl Alloc {
 /// - `licensed`   – `true` when a valid commercial license token was supplied.
 ///                  Controls the `/Producer` field (`lpdf.io` vs `lpdf.io (free)`).
 pub fn render_pdf(
-    pages:      &[RenderPage],
-    font_defs:  &HashMap<String, FontDef>,
-    registry:   &FontRegistry,
-    meta:       &Meta,
-    watermark:  Option<(&str, Option<&str>)>,
-    created_on: Option<&str>,
-    licensed:   bool,
+    pages:          &[RenderPage],
+    font_defs:      &HashMap<String, FontDef>,
+    registry:       &FontRegistry,
+    image_registry: &ImageRegistry,
+    meta:           &Meta,
+    watermark:      Option<(&str, Option<&str>)>,
+    created_on:     Option<&str>,
+    licensed:       bool,
 ) -> Result<Vec<u8>, String> {
 
     // ── Step 1: Resolve all font definitions ─────────────────────────────────
@@ -593,12 +1146,48 @@ pub fn render_pdf(
     let mut sorted_font_names: Vec<String> = used_font_names.into_iter().collect();
     sorted_font_names.sort();
 
+    // Pre-collect every character used per font across all pages.  This must
+    // happen before font preparation so that subsetting knows which glyphs to
+    // keep and can build the remapped-GID tables used by the content streams.
+    let mut chars_per_font: HashMap<String, HashSet<char>> = HashMap::new();
+    for name in &sorted_font_names {
+        let mut used: HashSet<char> = HashSet::new();
+        for page in pages {
+            collect_chars_for_font(&page.nodes, name, &mut used);
+        }
+        if name == "Helvetica" {
+            if let Some((wtext, _)) = watermark {
+                used.extend(wtext.chars());
+            }
+        }
+        chars_per_font.insert(name.clone(), used);
+    }
+
+    let empty_chars: HashSet<char> = HashSet::new();
     let mut fonts: HashMap<String, PreparedFont> = HashMap::new();
     for (idx, name) in sorted_font_names.iter().enumerate() {
         let resource_name = format!("F{idx}");
-        let kind          = resolve_font_kind(name, font_defs, registry);
+        let used_chars    = chars_per_font.get(name).unwrap_or(&empty_chars);
+        let kind          = resolve_font_kind(name, font_defs, registry, used_chars);
         fonts.insert(name.clone(), PreparedFont { resource_name, kind });
     }
+
+    // Collect all image names used in the document and build a stable resource
+    // name map (image_res_map: name → "I0", "I1", …).
+    let mut used_image_names: HashSet<String> = HashSet::new();
+    for page in pages {
+        collect_used_images(&page.nodes, &mut used_image_names);
+    }
+    // Filter to only formats that can actually be embedded to avoid dangling
+    // XObject references in the resource dictionary (e.g. RGBA PNG is not
+    // supported without a zlib decoder; the image is silently omitted).
+    let mut sorted_image_names: Vec<String> = used_image_names.into_iter()
+        .filter(|name| image_registry.get(name).map_or(false, is_image_embeddable))
+        .collect();
+    sorted_image_names.sort();
+    let image_res_map: HashMap<String, String> = sorted_image_names.iter().enumerate()
+        .map(|(i, n)| (n.clone(), format!("I{i}")))
+        .collect();
 
     // ── Step 2: Build page content streams + collect annotations ─────────────
     //
@@ -620,7 +1209,7 @@ pub fn render_pdf(
         }
 
         // Draw all render-tree nodes.
-        draw_nodes(&mut content, &mut annots, &page.nodes, &fonts, page.height);
+        draw_nodes(&mut content, &mut annots, &page.nodes, &fonts, &image_res_map, page.height);
 
         // Draw optional watermark — top-right corner, 8 pt Helvetica, grey.
         if let Some((wtext, wurl)) = watermark {
@@ -703,6 +1292,20 @@ pub fn render_pdf(
         font_id_map.insert(name.clone(), FontIds { font_dict_id, extra_ids });
     }
 
+    // One image XObject per unique image name.
+    let image_xobj_ids: Vec<Ref> = (0..sorted_image_names.len()).map(|_| alloc.next()).collect();
+    let image_id_map: HashMap<String, Ref> = sorted_image_names.iter().enumerate()
+        .map(|(i, n)| (n.clone(), image_xobj_ids[i]))
+        .collect();
+
+    // For RGBA PNGs, allocate an extra Ref for the alpha SMask XObject.
+    let image_smask_ids: Vec<Option<Ref>> = sorted_image_names.iter().map(|name| {
+        let is_rgba = image_registry.get(name)
+            .and_then(|b| png_info(b))
+            .map_or(false, |(_, _, _, ct)| ct == 6);
+        if is_rgba { Some(alloc.next()) } else { None }
+    }).collect();
+
     // ── Step 4: Write all PDF objects ─────────────────────────────────────────
 
     let mut pdf = Pdf::new();
@@ -757,11 +1360,22 @@ pub fn render_pdf(
         // per-page scan.)
         {
             let mut resources = pw.resources();
-            let mut font_res  = resources.fonts();
-            for name in &sorted_font_names {
-                let font = &fonts[name];
-                let fid = font_id_map[name].font_dict_id;
-                font_res.pair(Name(font.resource_name.as_bytes()), fid);
+            {
+                let mut font_res  = resources.fonts();
+                for name in &sorted_font_names {
+                    let font = &fonts[name];
+                    let fid = font_id_map[name].font_dict_id;
+                    font_res.pair(Name(font.resource_name.as_bytes()), fid);
+                }
+            }
+            // Add image XObjects to the resource dictionary.
+            if !sorted_image_names.is_empty() {
+                let mut xobj_res = resources.x_objects();
+                for name in &sorted_image_names {
+                    let res_name = &image_res_map[name];
+                    let img_id   = image_id_map[name];
+                    xobj_res.pair(Name(res_name.as_bytes()), img_id);
+                }
             }
         }
 
@@ -779,6 +1393,15 @@ pub fn render_pdf(
     // -- Content streams -------------------------------------------------------
     for (i, (content_bytes, _)) in rendered_pages.iter().enumerate() {
         pdf.stream(content_ids[i], content_bytes);
+    }
+
+    // -- Image XObject streams -------------------------------------------------
+    for (i, name) in sorted_image_names.iter().enumerate() {
+        let img_id   = image_id_map[name];
+        let smask_id = image_smask_ids[i];
+        if let Some(bytes) = image_registry.get(name) {
+            embed_image_xobject(&mut pdf, img_id, smask_id, bytes);
+        }
     }
 
     // -- Link annotation objects -----------------------------------------------
@@ -812,9 +1435,11 @@ pub fn render_pdf(
                    .encoding_predefined(Name(b"WinAnsiEncoding"));
             }
 
-            PreparedFontKind::Truetype { bytes } => {
+            PreparedFontKind::Truetype {
+                original_bytes, subsetted_bytes, glyph_unicode, glyph_widths, ..
+            } => {
                 // Five objects are needed for a proper TrueType composite font:
-                //   [0] Font program stream (raw TrueType bytes)
+                //   [0] Font program stream (subsetted TrueType bytes)
                 //   [1] Font descriptor
                 //   [2] CID font dictionary (the descendant font)
                 //   [3] ToUnicode CMap stream
@@ -825,39 +1450,20 @@ pub fn render_pdf(
                 let cid_id   = ids.extra_ids[2];
                 let cmap_id  = ids.extra_ids[3];
 
-                // Collect every character used with this font across all pages.
-                let mut used_chars: HashSet<char> = HashSet::new();
-                for page in pages {
-                    collect_chars_for_font(&page.nodes, name, &mut used_chars);
-                }
-                if name == "Helvetica" {
-                    if let Some((wtext, _)) = watermark {
-                        used_chars.extend(wtext.chars());
-                    }
-                }
-
-                // Parse the font to extract metrics.
-                let face = Face::parse(bytes, 0)
+                // Parse the original font for descriptor metrics (ascender,
+                // descender, bounding box).  These values are identical in the
+                // subsetted font but parsing the full face is simpler.
+                let face = Face::parse(original_bytes, 0)
                     .map_err(|e| format!("Failed to parse font '{name}': {e:?}"))?;
                 let upem = face.units_per_em() as f32;
 
-                // Build glyph ID → Unicode mapping (sorted by glyph ID).
-                let mut glyph_unicode: Vec<(u16, u32)> = used_chars.iter()
-                    .filter_map(|&c| face.glyph_index(c).map(|g| (g.0, c as u32)))
-                    .collect();
-                glyph_unicode.sort_by_key(|(gid, _)| *gid);
-
-                // Build glyph ID → width in PDF per-mille units (1000 = 1 em).
-                let glyph_widths: Vec<(u16, f32)> = glyph_unicode.iter()
-                    .filter_map(|(gid, _)| {
-                        let ttf_gid = ttf_parser::GlyphId(*gid);
-                        face.glyph_hor_advance(ttf_gid)
-                            .map(|adv| (*gid, adv as f32 / upem * 1000.0))
-                    })
-                    .collect();
-
-                // [0] Font program (raw TTF bytes, uncompressed for simplicity).
-                pdf.stream(prog_id, bytes);
+                // [0] Font program — subsetted + FlateDecode-compressed.
+                // /Length1 must be the *uncompressed* (subsetted) length per the
+                // PDF spec for /FontFile2 TrueType streams.
+                let compressed_font = compress_to_vec_zlib(subsetted_bytes, 6);
+                pdf.stream(prog_id, &compressed_font)
+                   .filter(Filter::FlateDecode)
+                   .pair(Name(b"Length1"), subsetted_bytes.len() as i32);
 
                 // [1] Font descriptor — describes the font's metrics and links
                 //     to the embedded font program.
@@ -905,14 +1511,14 @@ pub fn render_pdf(
                     // ranges of length 1 for simplicity.
                     if !glyph_widths.is_empty() {
                         let mut w = cid.widths();
-                        for (gid, width) in &glyph_widths {
+                        for (gid, width) in glyph_widths {
                             w.consecutive(*gid, [*width]);
                         }
                     }
                 }
 
                 // [3] ToUnicode CMap stream — enables text extraction.
-                let cmap_bytes = build_to_unicode_cmap(&fname, &glyph_unicode);
+                let cmap_bytes = build_to_unicode_cmap(&fname, glyph_unicode);
                 pdf.stream(cmap_id, &cmap_bytes);
 
                 // [font_dict_id] Type0 composite font wrapper.

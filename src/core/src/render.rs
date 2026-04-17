@@ -15,6 +15,15 @@ pub enum RenderNode {
     Line(RenderLine),
     Text(RenderText),
     Link(RenderLink),
+    Image(RenderImage),
+}
+
+pub struct RenderImage {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    pub name: String,
 }
 
 pub struct RenderBox {
@@ -157,6 +166,14 @@ fn node_to_json(node: &RenderNode) -> Value {
             "width":    r2(l.width),
             "height":   r2(l.height),
             "children": nodes_to_json(&l.children),
+        }),
+        RenderNode::Image(i) => json!({
+            "type":   "image",
+            "x":      r2(i.x),
+            "y":      r2(i.y),
+            "width":  r2(i.width),
+            "height": r2(i.height),
+            "name":   i.name,
         }),
     }
 }

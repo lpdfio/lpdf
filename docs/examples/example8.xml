@@ -22,8 +22,8 @@
 
           <!-- page header -->
           <stack gap="xs">
-            <text size="xxl" font="Helvetica-Bold" color="primary">Platform Features</text>
-            <text size="m" color="text-muted">Everything included in your Acme Pro subscription — twelve capabilities across four rows.</text>
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Platform Features</text>
+            <text font-size="m" color="text-muted">Everything included in your Acme Pro subscription — twelve capabilities across four rows.</text>
           </stack>
 
           <divider color="rule" thickness="xs" />
@@ -35,36 +35,36 @@
             <frame background="surface-alt" border="xs card-border" padding="m" radius="s">
               <stack gap="s">
                 <flank gap="s" align="center" end="true">
-                  <text size="m" font="Helvetica-Bold" color="text">Single Sign-On</text>
+                  <text font-size="m" font="Helvetica-Bold" color="text">Single Sign-On</text>
                   <frame background="badge-bg" padding="xs" radius="xs">
-                    <text size="xs" font="Helvetica-Bold" color="badge-text">Security</text>
+                    <text font-size="xs" font="Helvetica-Bold" color="badge-text">Security</text>
                   </frame>
                 </flank>
-                <text size="s" color="text-muted">Connect any SAML 2.0 or OIDC identity provider in minutes with no custom code.</text>
+                <text font-size="s" color="text-muted">Connect any SAML 2.0 or OIDC identity provider in minutes with no custom code.</text>
               </stack>
             </frame>
 
             <frame background="surface-alt" border="xs card-border" padding="m" radius="s">
               <stack gap="s">
                 <flank gap="s" align="center" end="true">
-                  <text size="m" font="Helvetica-Bold" color="text">Audit Logs</text>
+                  <text font-size="m" font="Helvetica-Bold" color="text">Audit Logs</text>
                   <frame background="badge-bg" padding="xs" radius="xs">
-                    <text size="xs" font="Helvetica-Bold" color="badge-text">Security</text>
+                    <text font-size="xs" font="Helvetica-Bold" color="badge-text">Security</text>
                   </frame>
                 </flank>
-                <text size="s" color="text-muted">Immutable, tamper-evident logs of every user action with 90-day retention.</text>
+                <text font-size="s" color="text-muted">Immutable, tamper-evident logs of every user action with 90-day retention.</text>
               </stack>
             </frame>
 
             <frame background="surface-alt" border="xs card-border" padding="m" radius="s">
               <stack gap="s">
                 <flank gap="s" align="center" end="true">
-                  <text size="m" font="Helvetica-Bold" color="text">Role-Based Access</text>
+                  <text font-size="m" font="Helvetica-Bold" color="text">Role-Based Access</text>
                   <frame background="badge-bg" padding="xs" radius="xs">
-                    <text size="xs" font="Helvetica-Bold" color="badge-text">Security</text>
+                    <text font-size="xs" font="Helvetica-Bold" color="badge-text">Security</text>
                   </frame>
                 </flank>
-                <text size="s" color="text-muted">Assign fine-grained permissions to teams, projects, and individual resources.</text>
+                <text font-size="s" color="text-muted">Assign fine-grained permissions to teams, projects, and individual resources.</text>
               </stack>
             </frame>
 
@@ -72,36 +72,36 @@
             <frame background="surface-alt" border="xs card-border" padding="m" radius="s">
               <stack gap="s">
                 <flank gap="s" align="center" end="true">
-                  <text size="m" font="Helvetica-Bold" color="text">REST API</text>
+                  <text font-size="m" font="Helvetica-Bold" color="text">REST API</text>
                   <frame background="badge-bg" padding="xs" radius="xs">
-                    <text size="xs" font="Helvetica-Bold" color="badge-text">Integration</text>
+                    <text font-size="xs" font="Helvetica-Bold" color="badge-text">Integration</text>
                   </frame>
                 </flank>
-                <text size="s" color="text-muted">Full-coverage OpenAPI 3.1 spec with SDKs for Python, Node, Go, and Ruby.</text>
+                <text font-size="s" color="text-muted">Full-coverage OpenAPI 3.1 spec with SDKs for Python, Node, Go, and Ruby.</text>
               </stack>
             </frame>
 
             <frame background="surface-alt" border="xs card-border" padding="m" radius="s">
               <stack gap="s">
                 <flank gap="s" align="center" end="true">
-                  <text size="m" font="Helvetica-Bold" color="text">Webhooks</text>
+                  <text font-size="m" font="Helvetica-Bold" color="text">Webhooks</text>
                   <frame background="badge-bg" padding="xs" radius="xs">
-                    <text size="xs" font="Helvetica-Bold" color="badge-text">Integration</text>
+                    <text font-size="xs" font="Helvetica-Bold" color="badge-text">Integration</text>
                   </frame>
                 </flank>
-                <text size="s" color="text-muted">Push real-time event notifications to any HTTPS endpoint with retry and delivery logs.</text>
+                <text font-size="s" color="text-muted">Push real-time event notifications to any HTTPS endpoint with retry and delivery logs.</text>
               </stack>
             </frame>
 
             <frame background="surface-alt" border="xs card-border" padding="m" radius="s">
               <stack gap="s">
                 <flank gap="s" align="center" end="true">
-                  <text size="m" font="Helvetica-Bold" color="text">Custom Domains</text>
+                  <text font-size="m" font="Helvetica-Bold" color="text">Custom Domains</text>
                   <frame background="badge-bg" padding="xs" radius="xs">
-                    <text size="xs" font="Helvetica-Bold" color="badge-text">Branding</text>
+                    <text font-size="xs" font="Helvetica-Bold" color="badge-text">Branding</text>
                   </frame>
                 </flank>
-                <text size="s" color="text-muted">Serve the platform from your own domain with automatic TLS provisioning.</text>
+                <text font-size="s" color="text-muted">Serve the platform from your own domain with automatic TLS provisioning.</text>
               </stack>
             </frame>
 
@@ -109,36 +109,36 @@
             <frame background="surface-alt" border="xs card-border" padding="m" radius="s">
               <stack gap="s">
                 <flank gap="s" align="center" end="true">
-                  <text size="m" font="Helvetica-Bold" color="text">Analytics Dashboard</text>
+                  <text font-size="m" font="Helvetica-Bold" color="text">Analytics Dashboard</text>
                   <frame background="badge-bg" padding="xs" radius="xs">
-                    <text size="xs" font="Helvetica-Bold" color="badge-text">Insights</text>
+                    <text font-size="xs" font="Helvetica-Bold" color="badge-text">Insights</text>
                   </frame>
                 </flank>
-                <text size="s" color="text-muted">Pre-built charts for usage, retention, and revenue with CSV export.</text>
+                <text font-size="s" color="text-muted">Pre-built charts for usage, retention, and revenue with CSV export.</text>
               </stack>
             </frame>
 
             <frame background="surface-alt" border="xs card-border" padding="m" radius="s">
               <stack gap="s">
                 <flank gap="s" align="center" end="true">
-                  <text size="m" font="Helvetica-Bold" color="text">Scheduled Reports</text>
+                  <text font-size="m" font="Helvetica-Bold" color="text">Scheduled Reports</text>
                   <frame background="badge-bg" padding="xs" radius="xs">
-                    <text size="xs" font="Helvetica-Bold" color="badge-text">Insights</text>
+                    <text font-size="xs" font="Helvetica-Bold" color="badge-text">Insights</text>
                   </frame>
                 </flank>
-                <text size="s" color="text-muted">Deliver daily, weekly, or monthly digest emails to any list of recipients.</text>
+                <text font-size="s" color="text-muted">Deliver daily, weekly, or monthly digest emails to any list of recipients.</text>
               </stack>
             </frame>
 
             <frame background="surface-alt" border="xs card-border" padding="m" radius="s">
               <stack gap="s">
                 <flank gap="s" align="center" end="true">
-                  <text size="m" font="Helvetica-Bold" color="text">Data Retention</text>
+                  <text font-size="m" font="Helvetica-Bold" color="text">Data Retention</text>
                   <frame background="badge-bg" padding="xs" radius="xs">
-                    <text size="xs" font="Helvetica-Bold" color="badge-text">Compliance</text>
+                    <text font-size="xs" font="Helvetica-Bold" color="badge-text">Compliance</text>
                   </frame>
                 </flank>
-                <text size="s" color="text-muted">Configure per-workspace data lifecycle policies from 30 days to 10 years.</text>
+                <text font-size="s" color="text-muted">Configure per-workspace data lifecycle policies from 30 days to 10 years.</text>
               </stack>
             </frame>
 
@@ -146,36 +146,36 @@
             <frame background="surface-alt" border="xs card-border" padding="m" radius="s">
               <stack gap="s">
                 <flank gap="s" align="center" end="true">
-                  <text size="m" font="Helvetica-Bold" color="text">Priority Support</text>
+                  <text font-size="m" font="Helvetica-Bold" color="text">Priority Support</text>
                   <frame background="badge-bg" padding="xs" radius="xs">
-                    <text size="xs" font="Helvetica-Bold" color="badge-text">Support</text>
+                    <text font-size="xs" font="Helvetica-Bold" color="badge-text">Support</text>
                   </frame>
                 </flank>
-                <text size="s" color="text-muted">Dedicated Slack channel and 4-hour SLA for P1 incidents around the clock.</text>
+                <text font-size="s" color="text-muted">Dedicated Slack channel and 4-hour SLA for P1 incidents around the clock.</text>
               </stack>
             </frame>
 
             <frame background="surface-alt" border="xs card-border" padding="m" radius="s">
               <stack gap="s">
                 <flank gap="s" align="center" end="true">
-                  <text size="m" font="Helvetica-Bold" color="text">Uptime SLA</text>
+                  <text font-size="m" font="Helvetica-Bold" color="text">Uptime SLA</text>
                   <frame background="badge-bg" padding="xs" radius="xs">
-                    <text size="xs" font="Helvetica-Bold" color="badge-text">Support</text>
+                    <text font-size="xs" font="Helvetica-Bold" color="badge-text">Support</text>
                   </frame>
                 </flank>
-                <text size="s" color="text-muted">Contractual 99.9% monthly uptime with automatic service credits on breach.</text>
+                <text font-size="s" color="text-muted">Contractual 99.9% monthly uptime with automatic service credits on breach.</text>
               </stack>
             </frame>
 
             <frame background="surface-alt" border="xs card-border" padding="m" radius="s">
               <stack gap="s">
                 <flank gap="s" align="center" end="true">
-                  <text size="m" font="Helvetica-Bold" color="text">SOC 2 Type II</text>
+                  <text font-size="m" font="Helvetica-Bold" color="text">SOC 2 Type II</text>
                   <frame background="badge-bg" padding="xs" radius="xs">
-                    <text size="xs" font="Helvetica-Bold" color="badge-text">Compliance</text>
+                    <text font-size="xs" font="Helvetica-Bold" color="badge-text">Compliance</text>
                   </frame>
                 </flank>
-                <text size="s" color="text-muted">Annual audit reports available on request. GDPR and HIPAA BAA included.</text>
+                <text font-size="s" color="text-muted">Annual audit reports available on request. GDPR and HIPAA BAA included.</text>
               </stack>
             </frame>
 
@@ -183,7 +183,7 @@
 
           <divider color="rule" thickness="xs" />
 
-          <text size="s" color="text-muted">All features are available on Pro and Enterprise plans. Contact sales@acmecorp.example for custom pricing.</text>
+          <text font-size="s" color="text-muted">All features are available on Pro and Enterprise plans. Contact sales@acmecorp.example for custom pricing.</text>
 
         </stack>
       </page>

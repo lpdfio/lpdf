@@ -20,3 +20,5 @@ subsetter   = "0.2"
 base64 = "0.22"
 # License token verification — Ed25519 signature check
 ed25519-dalek = { version = "2", default-features = false, features = ["alloc"] }
+# Deflate/inflate for PNG RGBA decoding (SMask support)
+miniz_oxide = "0.7"

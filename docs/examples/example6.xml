@@ -21,12 +21,12 @@
 
           <!-- name + title -->
           <stack gap="xs">
-            <text size="l" font="Helvetica-Bold" color="surface">Jane Doe</text>
-            <text size="s" color="surface">Staff Engineer</text>
+            <text font-size="l" font="Helvetica-Bold" color="surface">Jane Doe</text>
+            <text font-size="s" color="surface">Staff Engineer</text>
           </stack>
 
           <!-- company -->
-          <text size="m" font="Helvetica-Bold" color="surface">Acme Corp</text>
+          <text font-size="m" font="Helvetica-Bold" color="surface">Acme Corp</text>
 
         </stack>
       </page>
@@ -36,27 +36,27 @@
         <stack padding="l" gap="m" height="full" justify="between">
 
           <!-- company repeated small -->
-          <text size="xs" font="Helvetica-Bold" color="brand">ACME CORP</text>
+          <text font-size="xs" font="Helvetica-Bold" color="brand">ACME CORP</text>
 
           <!-- contact details -->
           <stack gap="s">
             <flank gap="s" align="center" end="true">
-              <text size="s" color="text-muted">Email</text>
-              <text size="s">jane@acmecorp.example</text>
+              <text font-size="s" color="text-muted">Email</text>
+              <text font-size="s">jane@acmecorp.example</text>
             </flank>
             <flank gap="s" align="center" end="true">
-              <text size="s" color="text-muted">Phone</text>
-              <text size="s">+1 555 000 1234</text>
+              <text font-size="s" color="text-muted">Phone</text>
+              <text font-size="s">+1 555 000 1234</text>
             </flank>
             <flank gap="s" align="center" end="true">
-              <text size="s" color="text-muted">Web</text>
-              <text size="s">acmecorp.example</text>
+              <text font-size="s" color="text-muted">Web</text>
+              <text font-size="s">acmecorp.example</text>
             </flank>
           </stack>
 
           <divider color="rule" thickness="xs" />
 
-          <text size="xs" color="text-muted">123 Business Ave, Suite 4 · San Francisco, CA 94107</text>
+          <text font-size="xs" color="text-muted">123 Business Ave, Suite 4 · San Francisco, CA 94107</text>
 
         </stack>
       </page>

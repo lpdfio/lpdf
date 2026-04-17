@@ -1,13 +1,17 @@
-use std::collections::HashMap;
-use crate::tokens::{parse_pt, FontDef, Tokens};
+use std::collections::{HashMap, HashSet};
+use crate::tokens::{parse_pt, FontDef, FontWidths, Tokens};
 
-// ── Document model ────────────────────────────────────────────────────────────
+// ── Resolved document model (layout / render operate on these) ────────────────
 
 #[derive(Debug, Clone)]
 pub struct Document {
-    pub meta: Meta,
-    pub fonts: HashMap<String, FontDef>,
-    pub pages: Vec<Page>,
+    pub meta:        Meta,
+    pub fonts:       HashMap<String, FontDef>,
+    pub images:      HashSet<String>,
+    pub pages:       Vec<Page>,
+    /// Caller-supplied glyph width tables for custom fonts (tree path or
+    /// injected via `set_font_metrics` before the WASM call).
+    pub font_widths: HashMap<String, FontWidths>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -73,6 +77,9 @@ pub struct Node {
     pub text_align: TextAlign,
     // link
     pub url: Option<String>,
+    // img (NodeKind::Img only)
+    pub image_name: Option<String>,
+    pub img_height_constraint: Option<f32>,
     pub children: Vec<Node>,
 }
 
@@ -88,42 +95,6 @@ pub enum Repeat {
     First,
 }
 
-// ── Font-token resolution ────────────────────────────────────────────────────
-
-/// Walk every node in the document and replace font token aliases (e.g.
-/// `"heading"`, `"body"`) with their resolved builtin font names (e.g.
-/// `"Helvetica-Bold"`, `"Helvetica"`).  This lets `measure_natural_w` in
-/// the layout engine call `text_width` with a real font name and get correct
-/// per-character AFM metrics instead of the generic 0.44 fallback.
-fn resolve_font_tokens(doc: &mut Document) {
-    // Clone to satisfy the borrow checker (fonts is small — typically 2–5 entries).
-    let fonts = doc.fonts.clone();
-    for page in &mut doc.pages {
-        for node in &mut page.children {
-            resolve_node_font(node, &fonts);
-        }
-    }
-}
-
-fn resolve_node_font(node: &mut Node, fonts: &std::collections::HashMap<String, crate::tokens::FontDef>) {
-    // Resolve the node's own font field (used by Text nodes for their base font).
-    if let Some(crate::tokens::FontDef::Builtin(builtin)) = fonts.get(&node.font) {
-        node.font = builtin.clone();
-    }
-    // Resolve per-run font overrides inside Text nodes.
-    for run in &mut node.text_runs {
-        if let Some(ref alias) = run.font.clone() {
-            if let Some(crate::tokens::FontDef::Builtin(builtin)) = fonts.get(alias) {
-                run.font = Some(builtin.clone());
-            }
-        }
-    }
-    // Recurse.
-    for child in &mut node.children {
-        resolve_node_font(child, fonts);
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeKind {
     Stack,
@@ -135,18 +106,19 @@ pub enum NodeKind {
     Divider,
     Text,
     Link,
+    Img,
 }
 
-/// How a node determines its height
+/// How a node determines its height.
 #[derive(Debug, Clone, PartialEq)]
 pub enum HeightMode {
-    /// Size to content
+    /// Size to content.
     Auto,
-    /// Fills parent's full available height (height="full")
+    /// Fills parent's full available height (`height="full"`).
     Full,
-    /// Takes remaining space after siblings are sized (height="fill")
+    /// Takes remaining space after siblings are sized (`height="fill"`).
     Fill,
-    /// Explicit pt value (height="28pt")
+    /// Explicit pt value (`height="28pt"`).
     Fixed(f32),
 }
 
@@ -179,9 +151,65 @@ pub enum TextAlign {
     Right,
 }
 
-impl Node {
+// ── Pre-trickle-down (parsed) model ──────────────────────────────────────────
+
+/// A node as produced by the XML/JSON parser, before font inheritance is
+/// resolved.  `font` and `font_size` may be `None` (meaning "inherit from
+/// parent").  The `resolve_doc` pass converts this into a `Document` of
+/// concrete `Node` values.
+struct ParsedNode {
+    kind: NodeKind,
+    gap: f32,
+    padding: [f32; 4],
+    background: Option<String>,
+    border: Option<(f32, String)>,
+    radius: f32,
+    height_mode: HeightMode,
+    width_constraint: Option<f32>,
+    repeat: Repeat,
+    debug: bool,
+    align: Align,
+    justify: Justify,
+    end: bool,
+    equal: bool,
+    wrap: bool,
+    cols: u32,
+    col_width: Option<f32>,
+    direction: Direction,
+    color: Option<String>,
+    thickness: f32,
+    text_runs: Vec<TextRun>,
+    font:      Option<String>,  // None = inherit
+    font_size: Option<f32>,     // None = inherit
+    text_color: Option<String>,
+    text_align: TextAlign,
+    url: Option<String>,
+    image_name: Option<String>,
+    img_height_constraint: Option<f32>,
+    children: Vec<ParsedNode>,
+}
+
+struct ParsedPage {
+    width: f32,
+    height: f32,
+    margin: [f32; 4],
+    background: Option<String>,
+    debug: bool,
+    children: Vec<ParsedNode>,
+}
+
+struct ParsedDocument {
+    meta:        Meta,
+    fonts:       HashMap<String, FontDef>,
+    font_widths: HashMap<String, FontWidths>,
+    images:      HashSet<String>,
+    pages:       Vec<ParsedPage>,
+    doc_font:    Option<String>, // from <document font="...">
+}
+
+impl ParsedNode {
     fn default_for(kind: NodeKind) -> Self {
-        Node {
+        ParsedNode {
             kind,
             gap: 0.0,
             padding: [0.0; 4],
@@ -203,17 +231,141 @@ impl Node {
             color: None,
             thickness: 1.0,
             text_runs: Vec::new(),
-            font: "Helvetica".to_string(),
-            font_size: 11.0,
+            font: None,
+            font_size: None,
             text_color: None,
             text_align: TextAlign::Left,
             url: None,
+            image_name: None,
+            img_height_constraint: None,
             children: Vec::new(),
         }
     }
 }
 
-// ── Main parse entry point ────────────────────────────────────────────────────
+// ── Trickle-down (font inheritance) pass ─────────────────────────────────────
+
+/// Resolve a font alias (e.g. `"body"`) through the assets font map to a
+/// concrete name:
+///
+/// - `Core("Helvetica-Bold")` → `"Helvetica-Bold"`
+/// - `Ref("montserrat")`      → `"montserrat"` (the registry key)
+/// - Unknown name             → the name itself (may be a bare builtin like
+///   `"Helvetica"` used directly without an assets declaration)
+fn resolve_font_alias(name: &str, fonts: &HashMap<String, FontDef>) -> String {
+    match fonts.get(name) {
+        Some(FontDef::Core(builtin)) => builtin.clone(),
+        Some(FontDef::Ref(key))      => key.clone(),
+        // Unknown name: pass through. May be a direct builtin name (e.g.
+        // "Helvetica-Bold") used without an alias declaration, or an undefined
+        // alias. The layout engine handles both via its own fallback logic.
+        None                         => name.to_string(),
+    }
+}
+
+/// Convert a `ParsedDocument` into a resolved `Document` by propagating
+/// `font` and `font_size` values down the node tree.
+fn resolve_doc(parsed: ParsedDocument) -> Document {
+    let root_font = parsed.doc_font
+        .as_deref()
+        .map(|f| resolve_font_alias(f, &parsed.fonts))
+        .unwrap_or_else(|| "Helvetica".to_string());
+    let root_size = 11.0_f32;
+
+    // Build resolved_fonts keyed by the concrete name (not the alias).
+    let mut resolved_fonts: HashMap<String, FontDef> = HashMap::new();
+    for (_alias, def) in &parsed.fonts {
+        let key = match def {
+            FontDef::Core(name) => name.clone(),
+            FontDef::Ref(k)     => k.clone(),
+        };
+        resolved_fonts.insert(key, def.clone());
+    }
+
+    let pages = parsed.pages.into_iter().map(|page| {
+        let children = page.children
+            .into_iter()
+            .map(|n| resolve_node(n, &root_font, root_size, &parsed.fonts))
+            .collect();
+        Page {
+            width:      page.width,
+            height:     page.height,
+            margin:     page.margin,
+            background: page.background,
+            debug:      page.debug,
+            children,
+        }
+    }).collect();
+
+    Document {
+        meta:        parsed.meta,
+        fonts:       resolved_fonts,
+        font_widths: parsed.font_widths,
+        images:      parsed.images,
+        pages,
+    }
+}
+
+fn resolve_node(
+    n:            ParsedNode,
+    current_font: &str,
+    current_size: f32,
+    fonts:        &HashMap<String, FontDef>,
+) -> Node {
+    let font_raw  = n.font.as_deref().unwrap_or(current_font);
+    let font      = resolve_font_alias(font_raw, fonts);
+    let font_size = n.font_size.unwrap_or(current_size);
+
+    // Resolve span-level font aliases.
+    let text_runs = n.text_runs.into_iter().map(|run| {
+        if let Some(ref alias) = run.font {
+            let resolved = resolve_font_alias(alias, fonts);
+            TextRun { font: Some(resolved), ..run }
+        } else {
+            run
+        }
+    }).collect();
+
+    let children = n.children
+        .into_iter()
+        .map(|c| resolve_node(c, &font, font_size, fonts))
+        .collect();
+
+    Node {
+        kind:                  n.kind,
+        gap:                   n.gap,
+        padding:               n.padding,
+        background:            n.background,
+        border:                n.border,
+        radius:                n.radius,
+        height_mode:           n.height_mode,
+        width_constraint:      n.width_constraint,
+        repeat:                n.repeat,
+        debug:                 n.debug,
+        align:                 n.align,
+        justify:               n.justify,
+        end:                   n.end,
+        equal:                 n.equal,
+        wrap:                  n.wrap,
+        cols:                  n.cols,
+        col_width:             n.col_width,
+        direction:             n.direction,
+        color:                 n.color,
+        thickness:             n.thickness,
+        text_runs,
+        font,
+        font_size,
+        text_color:            n.text_color,
+        text_align:            n.text_align,
+        url:                   n.url,
+        image_name:            n.image_name,
+        img_height_constraint: n.img_height_constraint,
+        children,
+    }
+}
+
+
+// ── Main parse entry point (XML) ─────────────────────────────────────────────
 
 pub fn parse(xml: &str) -> Result<Document, String> {
     let doc = roxmltree::Document::parse(xml)
@@ -224,7 +376,16 @@ pub fn parse(xml: &str) -> Result<Document, String> {
         return Err("root element must be <lpdf>".into());
     }
 
-    // ── Pass 1: collect <tokens> regardless of document order ────────────────
+    // ── Pass 0: collect <assets> ─────────────────────────────────────────────
+    let mut asset_fonts:  HashMap<String, FontDef> = HashMap::new();
+    let mut asset_images: HashSet<String>           = HashSet::new();
+    for child in elems(&root) {
+        if child.tag_name().name() == "assets" {
+            parse_assets_elem(&child, &mut asset_fonts, &mut asset_images)?;
+        }
+    }
+
+    // ── Pass 1: collect <tokens> ─────────────────────────────────────────────
     let mut tokens = Tokens::default();
     for child in elems(&root) {
         if child.tag_name().name() == "tokens" {
@@ -232,20 +393,25 @@ pub fn parse(xml: &str) -> Result<Document, String> {
         }
     }
 
-    let mut meta = Meta::default();
-    let mut pages: Vec<Page> = Vec::new();
-
-    // Document-level defaults (overridable per page)
-    let mut doc_size = (595.28_f32, 841.89_f32); // a4
-    let mut doc_margin = [0.0_f32; 4];
+    let mut meta          = Meta::default();
+    let mut pages: Vec<ParsedPage> = Vec::new();
+    let mut doc_size      = (595.28_f32, 841.89_f32); // a4
+    let mut doc_margin    = [0.0_f32; 4];
     let mut doc_background: Option<String> = None;
-    let mut doc_debug = false;
+    let mut doc_debug     = false;
+    let mut doc_font: Option<String> = None;
 
-    // ── Pass 2: parse <document> using the resolved tokens ───────────────────
+    // ── Pass 2: parse <document> ─────────────────────────────────────────────
     for child in elems(&root) {
         match child.tag_name().name() {
-            "tokens" => { /* already handled in pass 1 */ }
+            "assets" | "tokens" => { /* already handled */ }
             "document" => {
+                if child.attribute("font-size").is_some() {
+                    return Err("<document> does not allow font-size".into());
+                }
+                if let Some(v) = child.attribute("font") {
+                    doc_font = Some(v.to_string());
+                }
                 if let Some(v) = child.attribute("size") {
                     doc_size = parse_page_size(v)?;
                 }
@@ -277,23 +443,20 @@ pub fn parse(xml: &str) -> Result<Document, String> {
                                         doc_background.clone(),
                                         doc_debug,
                                         &tokens,
+                                        &asset_images,
                                     )?),
-                                    other => {
-                                        return Err(format!(
-                                            "unexpected element in <pages>: <{other}>"
-                                        ))
-                                    }
+                                    other => return Err(format!(
+                                        "unexpected element in <pages>: <{other}>"
+                                    )),
                                 }
                             }
                             if pages.is_empty() {
                                 return Err("<pages> must contain at least one <page>".into());
                             }
                         }
-                        other => {
-                            return Err(format!(
-                                "unexpected element in <document>: <{other}>"
-                            ))
-                        }
+                        other => return Err(format!(
+                            "unexpected element in <document>: <{other}>"
+                        )),
                     }
                 }
                 if !found_pages_elem {
@@ -304,9 +467,74 @@ pub fn parse(xml: &str) -> Result<Document, String> {
         }
     }
 
-    let mut doc = Document { meta, fonts: tokens.fonts, pages };
-    resolve_font_tokens(&mut doc);
-    Ok(doc)
+    let parsed = ParsedDocument {
+        meta,
+        fonts:       asset_fonts,
+        font_widths: HashMap::new(),
+        images:      asset_images,
+        pages,
+        doc_font,
+    };
+    Ok(resolve_doc(parsed))
+}
+
+// ── Assets ────────────────────────────────────────────────────────────────────
+
+fn validate_asset_name(name: &str) -> Result<(), String> {
+    let valid = !name.is_empty()
+        && name.chars().next().map_or(false, |c| c.is_ascii_lowercase())
+        && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    if !valid {
+        return Err(format!(
+            "asset name '{name}' is invalid: use only lowercase letters, digits, and '-', starting with a letter"
+        ));
+    }
+    Ok(())
+}
+
+fn parse_assets_elem(
+    elem:         &roxmltree::Node,
+    fonts:        &mut HashMap<String, FontDef>,
+    images:       &mut HashSet<String>,
+) -> Result<(), String> {
+    for child in elems(elem) {
+        match child.tag_name().name() {
+            "fonts" => {
+                for font_elem in elems(&child) {
+                    if font_elem.tag_name().name() == "font" {
+                        let name = req_attr(&font_elem, "name")?;
+                        validate_asset_name(&name)?;
+                        let def = if let Some(b) = font_elem.attribute("core") {
+                            FontDef::Core(b.to_string())
+                        } else if let Some(r) = font_elem.attribute("ref") {
+                            if is_url(r) {
+                                return Err(format!(
+                                    "<font name=\"{name}\"> ref must be a registry key, not a URL"
+                                ));
+                            }
+                            FontDef::Ref(r.to_string())
+                        } else {
+                            return Err(format!(
+                                "<font name=\"{name}\"> needs 'core' or 'ref'"
+                            ));
+                        };
+                        fonts.insert(name, def);
+                    }
+                }
+            }
+            "images" => {
+                for img_elem in elems(&child) {
+                    if img_elem.tag_name().name() == "image" {
+                        let name = req_attr(&img_elem, "name")?;
+                        validate_asset_name(&name)?;
+                        images.insert(name);
+                    }
+                }
+            }
+            other => return Err(format!("unknown element in <assets>: <{other}>")),
+        }
+    }
+    Ok(())
 }
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
@@ -314,40 +542,18 @@ pub fn parse(xml: &str) -> Result<Document, String> {
 fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), String> {
     for child in elems(elem) {
         match child.tag_name().name() {
-            "space" => tokens.space = parse_scale_row(&child)?,
-            "border" => tokens.border = parse_scale_row(&child)?,
-            "radius" => tokens.radius = parse_scale_row(&child)?,
-            "width" => tokens.width = parse_scale_row(&child)?,
-            "text" => tokens.text = parse_scale_row(&child)?,
-            "grid" => tokens.grid_col = parse_scale_row(&child)?,
-            "fonts" => {
-                for font_elem in elems(&child) {
-                    if font_elem.tag_name().name() == "font" {
-                        let name = req_attr(&font_elem, "name")?;
-                        let def = if let Some(b) = font_elem.attribute("builtin") {
-                            FontDef::Builtin(b.to_string())
-                        } else if let Some(s) = font_elem.attribute("src") {
-                            if is_url(s) {
-                                return Err(format!(
-                                    "<font name=\"{name}\"> src must be a file path, not a URL"
-                                ));
-                            }
-                            FontDef::Src(s.to_string())
-                        } else {
-                            return Err(format!(
-                                "<font name=\"{name}\"> needs 'src' or 'builtin'"
-                            ));
-                        };
-                        tokens.fonts.insert(name, def);
-                    }
-                }
-            }
+            "space"  => tokens.space    = parse_scale_row(&child)?,
+            "border" => tokens.border   = parse_scale_row(&child)?,
+            "radius" => tokens.radius   = parse_scale_row(&child)?,
+            "width"  => tokens.width    = parse_scale_row(&child)?,
+            "text"   => tokens.text     = parse_scale_row(&child)?,
+            "grid"   => tokens.grid_col = parse_scale_row(&child)?,
             "colors" => {
                 for color_elem in elems(&child) {
                     if color_elem.tag_name().name() == "color" {
-                        let name = req_attr(&color_elem, "name")?;
+                        let name  = req_attr(&color_elem, "name")?;
                         let value = req_attr(&color_elem, "value")?;
-                        let hex = crate::tokens::normalize_hex(&value)?;
+                        let hex   = crate::tokens::normalize_hex(&value)?;
                         tokens.colors.insert(name, hex);
                     }
                 }
@@ -357,6 +563,7 @@ fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), 
     }
     Ok(())
 }
+
 
 /// Parse xs/s/m/l/xl/xxl pt attributes from a token scale element.
 fn parse_scale_row(elem: &roxmltree::Node) -> Result<[f32; 6], String> {
@@ -383,15 +590,20 @@ fn parse_meta(elem: &roxmltree::Node) -> Meta {
 }
 
 fn parse_page(
-    elem: &roxmltree::Node,
-    doc_size: (f32, f32),
-    doc_margin: [f32; 4],
+    elem:           &roxmltree::Node,
+    doc_size:       (f32, f32),
+    doc_margin:     [f32; 4],
     doc_background: Option<String>,
-    doc_debug: bool,
-    tokens: &Tokens,
-) -> Result<Page, String> {
-    let mut size = doc_size;
-    let mut margin = doc_margin;
+    doc_debug:      bool,
+    tokens:         &Tokens,
+    asset_images:   &HashSet<String>,
+) -> Result<ParsedPage, String> {
+    if elem.attribute("font-size").is_some() {
+        return Err("<page> does not allow font-size".into());
+    }
+
+    let mut size       = doc_size;
+    let mut margin     = doc_margin;
     let mut background = doc_background;
 
     if let Some(v) = elem.attribute("size") {
@@ -410,17 +622,10 @@ fn parse_page(
 
     let mut children = Vec::new();
     for child in elems(elem) {
-        children.push(parse_node(&child, tokens)?);
+        children.push(parse_node(&child, tokens, asset_images)?);
     }
 
-    Ok(Page {
-        width: size.0,
-        height: size.1,
-        margin,
-        background,
-        debug,
-        children,
-    })
+    Ok(ParsedPage { width: size.0, height: size.1, margin, background, debug, children })
 }
 
 fn parse_page_size(val: &str) -> Result<(f32, f32), String> {
@@ -447,24 +652,37 @@ fn parse_page_size(val: &str) -> Result<(f32, f32), String> {
 
 // ── Node parsing ──────────────────────────────────────────────────────────────
 
-fn parse_node(elem: &roxmltree::Node, tokens: &Tokens) -> Result<Node, String> {
+fn parse_node(
+    elem:         &roxmltree::Node,
+    tokens:       &Tokens,
+    asset_images: &HashSet<String>,
+) -> Result<ParsedNode, String> {
     let tag = elem.tag_name().name();
     let kind = match tag {
-        "stack" => NodeKind::Stack,
-        "flank" => NodeKind::Flank,
-        "split" => NodeKind::Split,
+        "stack"   => NodeKind::Stack,
+        "flank"   => NodeKind::Flank,
+        "split"   => NodeKind::Split,
         "cluster" => NodeKind::Cluster,
-        "grid" => NodeKind::Grid,
-        "frame" => NodeKind::Frame,
+        "grid"    => NodeKind::Grid,
+        "frame"   => NodeKind::Frame,
         "divider" => NodeKind::Divider,
-        "text" => NodeKind::Text,
-        "link" => NodeKind::Link,
-        other => return Err(format!("unknown layout element: <{other}>")),
+        "text"    => NodeKind::Text,
+        "link"    => NodeKind::Link,
+        "img"     => NodeKind::Img,
+        other     => return Err(format!("unknown layout element: <{other}>")),
     };
 
-    let mut node = Node::default_for(kind.clone());
+    let mut node = ParsedNode::default_for(kind.clone());
 
-    // ── Shared box attrs ──────────────────────────────────────────────────────
+    // ── font / font-size (allowed on ALL kinds) ───────────────────────────────
+    if let Some(v) = elem.attribute("font") {
+        node.font = Some(v.to_string());
+    }
+    if let Some(v) = elem.attribute("font-size") {
+        node.font_size = Some(tokens.resolve_text_size(v)?);
+    }
+
+    // ── Shared box attrs (skipped for Img where height means natural height) ──
     if let Some(v) = elem.attribute("gap") {
         node.gap = tokens.resolve_space(v)?;
     }
@@ -480,18 +698,20 @@ fn parse_node(elem: &roxmltree::Node, tokens: &Tokens) -> Result<Node, String> {
     if let Some(v) = elem.attribute("radius") {
         node.radius = tokens.resolve_radius(v)?;
     }
-    if let Some(v) = elem.attribute("height") {
-        node.height_mode = match v {
-            "full" => HeightMode::Full,
-            "fill" => HeightMode::Fill,
-            other => {
-                if let Some(h) = parse_pt(other) {
-                    HeightMode::Fixed(h)
-                } else {
-                    return Err(format!("invalid height value: '{other}'"));
+    if kind != NodeKind::Img {
+        if let Some(v) = elem.attribute("height") {
+            node.height_mode = match v {
+                "full" => HeightMode::Full,
+                "fill" => HeightMode::Fill,
+                other  => {
+                    if let Some(h) = parse_pt(other) {
+                        HeightMode::Fixed(h)
+                    } else {
+                        return Err(format!("invalid height value: '{other}'"));
+                    }
                 }
-            }
-        };
+            };
+        }
     }
     if let Some(v) = elem.attribute("width") {
         node.width_constraint = Some(tokens.resolve_width(v)?);
@@ -510,21 +730,21 @@ fn parse_node(elem: &roxmltree::Node, tokens: &Tokens) -> Result<Node, String> {
     // ── Kind-specific attrs ───────────────────────────────────────────────────
     match kind {
         NodeKind::Stack => {
-            node.align = parse_align(elem.attribute("align").unwrap_or("start"))?;
+            node.align   = parse_align(elem.attribute("align").unwrap_or("start"))?;
             node.justify = parse_justify(elem.attribute("justify").unwrap_or("start"))?;
         }
         NodeKind::Flank => {
             node.align = parse_align(elem.attribute("align").unwrap_or("start"))?;
-            node.end = elem.attribute("end").map(|v| v == "true").unwrap_or(false);
+            node.end   = elem.attribute("end").map(|v| v == "true").unwrap_or(false);
         }
         NodeKind::Split => {
             node.align = parse_align(elem.attribute("align").unwrap_or("start"))?;
             node.equal = elem.attribute("equal").map(|v| v == "true").unwrap_or(false);
         }
         NodeKind::Cluster => {
-            node.align = parse_align(elem.attribute("align").unwrap_or("start"))?;
+            node.align   = parse_align(elem.attribute("align").unwrap_or("start"))?;
             node.justify = parse_justify(elem.attribute("justify").unwrap_or("start"))?;
-            node.wrap = elem.attribute("wrap").map(|v| v != "false").unwrap_or(true);
+            node.wrap    = elem.attribute("wrap").map(|v| v != "false").unwrap_or(true);
         }
         NodeKind::Frame => {
             node.align   = parse_align(elem.attribute("align").unwrap_or("center"))?;
@@ -542,7 +762,7 @@ fn parse_node(elem: &roxmltree::Node, tokens: &Tokens) -> Result<Node, String> {
         NodeKind::Divider => {
             node.direction = match elem.attribute("direction").unwrap_or("horizontal") {
                 "vertical" => Direction::Vertical,
-                _ => Direction::Horizontal,
+                _          => Direction::Horizontal,
             };
             node.color = if let Some(v) = elem.attribute("color") {
                 Some(tokens.resolve_color(v)?)
@@ -556,12 +776,6 @@ fn parse_node(elem: &roxmltree::Node, tokens: &Tokens) -> Result<Node, String> {
             };
         }
         NodeKind::Text => {
-            node.font = elem.attribute("font").unwrap_or("Helvetica").to_string();
-            node.font_size = if let Some(v) = elem.attribute("size") {
-                tokens.resolve_text_size(v)?
-            } else {
-                11.0
-            };
             node.text_color = Some(if let Some(v) = elem.attribute("color") {
                 tokens.resolve_color(v)?
             } else {
@@ -569,10 +783,10 @@ fn parse_node(elem: &roxmltree::Node, tokens: &Tokens) -> Result<Node, String> {
             });
             node.text_align = match elem.attribute("align").unwrap_or("left") {
                 "center" => TextAlign::Center,
-                "right" => TextAlign::Right,
-                _ => TextAlign::Left,
+                "right"  => TextAlign::Right,
+                _        => TextAlign::Left,
             };
-            // Mixed content: text nodes become plain runs; <span> elements become styled runs.
+            // Mixed content: text nodes → plain runs; <span> elements → styled runs.
             let mut prev_ended_space = false;
             for child in elem.children() {
                 if child.is_text() {
@@ -605,21 +819,15 @@ fn parse_node(elem: &roxmltree::Node, tokens: &Tokens) -> Result<Node, String> {
                         node.text_runs.push(TextRun {
                             text: span_text,
                             leading_space: prev_ended_space,
-                            font: child.attribute("font").map(|s| s.to_string()),
+                            font:  child.attribute("font").map(|s| s.to_string()),
                             color: if let Some(v) = child.attribute("color") {
                                 Some(tokens.resolve_color(v)?)
                             } else {
                                 None
                             },
-                            href: child.attribute("href").map(|s| s.to_string()),
-                            underline: child
-                                .attribute("underline")
-                                .map(|v| v == "true")
-                                .unwrap_or(false),
-                            strike: child
-                                .attribute("strike")
-                                .map(|v| v == "true")
-                                .unwrap_or(false),
+                            href:      child.attribute("href").map(|s| s.to_string()),
+                            underline: child.attribute("underline").map(|v| v == "true").unwrap_or(false),
+                            strike:    child.attribute("strike").map(|v| v == "true").unwrap_or(false),
                         });
                     }
                     prev_ended_space = raw_span.ends_with(char::is_whitespace);
@@ -633,12 +841,30 @@ fn parse_node(elem: &roxmltree::Node, tokens: &Tokens) -> Result<Node, String> {
                     .to_string(),
             );
         }
+        NodeKind::Img => {
+            let name = req_attr(elem, "name")?;
+            if !asset_images.contains(&name) {
+                return Err(format!(
+                    "<img name=\"{name}\"> references an unknown asset image; \
+                     declare it in <assets><images>"
+                ));
+            }
+            node.image_name = Some(name);
+            // `height` on <img> sets the display height constraint (not HeightMode).
+            if let Some(v) = elem.attribute("height") {
+                if let Some(h) = parse_pt(v) {
+                    node.img_height_constraint = Some(h);
+                } else {
+                    return Err(format!("<img> height: invalid pt value '{v}'"));
+                }
+            }
+        }
     }
 
-    // ── Children (not for leaf nodes) ─────────────────────────────────────────
-    if kind != NodeKind::Divider && kind != NodeKind::Text {
+    // ── Children (not for leaf nodes) ────────────────────────────────────────
+    if !matches!(kind, NodeKind::Divider | NodeKind::Text | NodeKind::Img) {
         for child in elems(elem) {
-            node.children.push(parse_node(&child, tokens)?);
+            node.children.push(parse_node(&child, tokens, asset_images)?);
         }
     }
 
@@ -725,6 +951,39 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     let empty_map = serde_json::Map::new();
     let attrs = root.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty_map);
 
+    // ── Assets ────────────────────────────────────────────────────────────────
+    let mut asset_fonts:       HashMap<String, FontDef>   = HashMap::new();
+    let mut asset_images:      HashSet<String>             = HashSet::new();
+    let mut asset_font_widths: HashMap<String, FontWidths> = HashMap::new();
+    if let Some(assets) = attrs.get("assets").and_then(|v| v.as_object()) {
+        if let Some(fonts_obj) = assets.get("fonts").and_then(|v| v.as_object()) {
+            for (name, def) in fonts_obj {
+                let font_def = if let Some(b) = def.get("core").and_then(|v| v.as_str()) {
+                    FontDef::Core(b.to_string())
+                } else if let Some(r) = def.get("ref").and_then(|v| v.as_str()) {
+                    FontDef::Ref(r.to_string())
+                } else {
+                    return Err(format!("asset font '{name}' needs 'core' or 'ref'"));
+                };
+                // Optional caller-supplied glyph widths for accurate layout.
+                if let Some(w) = def.get("widths").and_then(|v| v.as_object()) {
+                    let default = w.get("default").and_then(|v| v.as_u64()).unwrap_or(500) as u16;
+                    let ascii: Vec<u16> = w.get("ascii")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| arr.iter().map(|n| n.as_u64().unwrap_or(500) as u16).collect())
+                        .unwrap_or_default();
+                    asset_font_widths.insert(name.clone(), FontWidths { default, ascii });
+                }
+                asset_fonts.insert(name.clone(), font_def);
+            }
+        }
+        if let Some(images_obj) = assets.get("images").and_then(|v| v.as_object()) {
+            for (name, _) in images_obj {
+                asset_images.insert(name.clone());
+            }
+        }
+    }
+
     // ── Tokens ────────────────────────────────────────────────────────────────
     let mut tokens = Tokens::default();
     if let Some(tok) = attrs.get("tokens").and_then(|v| v.as_object()) {
@@ -745,6 +1004,7 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     };
 
     // ── Document-level page defaults ──────────────────────────────────────────
+    let doc_font   = attrs.get("font")       .and_then(|v| v.as_str()).map(str::to_string);
     let doc_size_str  = attrs.get("size")       .and_then(|v| v.as_str());
     let doc_orient    = attrs.get("orientation").and_then(|v| v.as_str());
     let doc_margin_s  = attrs.get("margin")     .and_then(|v| v.as_str());
@@ -775,20 +1035,22 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     let page_arr = root.get("children").and_then(|v| v.as_array())
         .ok_or("tree JSON 'children' must be an array")?;
 
-    let mut pages: Vec<Page> = Vec::new();
+    let mut pages: Vec<ParsedPage> = Vec::new();
     for child in page_arr {
         if child.get("type").and_then(|v| v.as_str()) != Some("page") {
             return Err("document children must all be page nodes".into());
         }
-        pages.push(parse_tree_page(child, doc_size, doc_margin, doc_background.clone(), doc_debug, &tokens)?);
+        pages.push(parse_tree_page(
+            child, doc_size, doc_margin, doc_background.clone(),
+            doc_debug, &tokens, &asset_images,
+        )?);
     }
     if pages.is_empty() {
         return Err("document must have at least one page".into());
     }
 
-    let mut doc = Document { meta, fonts: tokens.fonts, pages };
-    resolve_font_tokens(&mut doc);
-    Ok(doc)
+    let parsed = ParsedDocument { meta, fonts: asset_fonts, font_widths: asset_font_widths, images: asset_images, pages, doc_font };
+    Ok(resolve_doc(parsed))
 }
 
 fn parse_tree_tokens(
@@ -797,7 +1059,6 @@ fn parse_tree_tokens(
 ) -> Result<(), String> {
     use crate::tokens::scale_idx;
 
-    // Helper: overlay a [f32; 6] array from a JSON string map.
     let apply_scale = |json_key: &str, scale: &mut [f32; 6]| -> Result<(), String> {
         if let Some(map) = obj.get(json_key).and_then(|v| v.as_object()) {
             for (k, v) in map {
@@ -825,37 +1086,20 @@ fn parse_tree_tokens(
         }
     }
 
-    if let Some(fonts) = obj.get("fonts").and_then(|v| v.as_object()) {
-        for (name, def) in fonts {
-            let font_def = if let Some(b) = def.get("builtin").and_then(|v| v.as_str()) {
-                FontDef::Builtin(b.to_string())
-            } else if let Some(s) = def.get("src").and_then(|v| v.as_str()) {
-                if is_url(s) {
-                    return Err(format!(
-                        "font '{name}' src must be a file path, not a URL"
-                    ));
-                }
-                FontDef::Src(s.to_string())
-            } else {
-                return Err(format!("font '{name}' needs 'src' or 'builtin'"));
-            };
-            tokens.fonts.insert(name.clone(), font_def);
-        }
-    }
-
     Ok(())
 }
 
 fn parse_tree_page(
-    json: &serde_json::Value,
-    doc_size: (f32, f32),
-    doc_margin: [f32; 4],
+    json:           &serde_json::Value,
+    doc_size:       (f32, f32),
+    doc_margin:     [f32; 4],
     doc_background: Option<String>,
-    doc_debug: bool,
-    tokens: &Tokens,
-) -> Result<Page, String> {
-    let mut size = doc_size;
-    let mut margin = doc_margin;
+    doc_debug:      bool,
+    tokens:         &Tokens,
+    asset_images:   &HashSet<String>,
+) -> Result<ParsedPage, String> {
+    let mut size       = doc_size;
+    let mut margin     = doc_margin;
     let mut background = doc_background;
 
     if let Some(s) = jattr(json, "size") {
@@ -873,15 +1117,21 @@ fn parse_tree_page(
     let debug = jattr(json, "debug").map(|v| v == "true").unwrap_or(doc_debug);
 
     let children = if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
-        arr.iter().map(|c| parse_tree_node(c, tokens)).collect::<Result<Vec<_>, _>>()?
+        arr.iter()
+           .map(|c| parse_tree_node(c, tokens, asset_images))
+           .collect::<Result<Vec<_>, _>>()?
     } else {
         vec![]
     };
 
-    Ok(Page { width: size.0, height: size.1, margin, background, debug, children })
+    Ok(ParsedPage { width: size.0, height: size.1, margin, background, debug, children })
 }
 
-fn parse_tree_node(json: &serde_json::Value, tokens: &Tokens) -> Result<Node, String> {
+fn parse_tree_node(
+    json:         &serde_json::Value,
+    tokens:       &Tokens,
+    asset_images: &HashSet<String>,
+) -> Result<ParsedNode, String> {
     let type_str = json.get("type").and_then(|v| v.as_str())
         .ok_or_else(|| "node missing 'type' field".to_string())?;
 
@@ -895,10 +1145,20 @@ fn parse_tree_node(json: &serde_json::Value, tokens: &Tokens) -> Result<Node, St
         "divider" => NodeKind::Divider,
         "text"    => NodeKind::Text,
         "link"    => NodeKind::Link,
+        "img"     => NodeKind::Img,
         other => return Err(format!("unknown node type: '{other}'")),
     };
 
-    let mut node = Node::default_for(kind.clone());
+    let mut node = ParsedNode::default_for(kind.clone());
+
+    // ── font / font-size (allowed on ALL kinds) ───────────────────────────────
+    if let Some(v) = jattr(json, "font") {
+        node.font = Some(v.to_string());
+    }
+    // tree uses "font-size"
+    if let Some(v) = jattr(json, "font-size") {
+        node.font_size = Some(tokens.resolve_text_size(v)?);
+    }
 
     // ── Shared box attrs ──────────────────────────────────────────────────────
     if let Some(v) = jattr(json, "gap") {
@@ -916,16 +1176,18 @@ fn parse_tree_node(json: &serde_json::Value, tokens: &Tokens) -> Result<Node, St
     if let Some(v) = jattr(json, "radius") {
         node.radius = tokens.resolve_radius(v)?;
     }
-    if let Some(v) = jattr(json, "height") {
-        node.height_mode = match v {
-            "full" => HeightMode::Full,
-            "fill" => HeightMode::Fill,
-            other  => {
-                parse_pt(other)
-                    .map(HeightMode::Fixed)
-                    .ok_or_else(|| format!("invalid height value: '{other}'"))?
-            }
-        };
+    if kind != NodeKind::Img {
+        if let Some(v) = jattr(json, "height") {
+            node.height_mode = match v {
+                "full" => HeightMode::Full,
+                "fill" => HeightMode::Fill,
+                other  => {
+                    parse_pt(other)
+                        .map(HeightMode::Fixed)
+                        .ok_or_else(|| format!("invalid height value: '{other}'"))?
+                }
+            };
+        }
     }
     if let Some(v) = jattr(json, "width") {
         node.width_constraint = Some(tokens.resolve_width(v)?);
@@ -937,6 +1199,7 @@ fn parse_tree_node(json: &serde_json::Value, tokens: &Tokens) -> Result<Node, St
             other   => return Err(format!("invalid repeat value: '{other}'")),
         };
     }
+    node.debug = jattr(json, "debug").map(|v| v == "true").unwrap_or(false);
 
     // ── Kind-specific attrs ───────────────────────────────────────────────────
     match kind {
@@ -985,24 +1248,16 @@ fn parse_tree_node(json: &serde_json::Value, tokens: &Tokens) -> Result<Node, St
             };
         }
         NodeKind::Text => {
-            node.font = jattr(json, "font").unwrap_or("Helvetica").to_string();
-            // tree uses "font-size"; XML uses "size" — try both
-            node.font_size = match jattr(json, "font-size").or_else(|| jattr(json, "size")) {
-                Some(v) => tokens.resolve_text_size(v)?,
-                None    => 11.0,
-            };
             node.text_color = Some(match jattr(json, "color") {
                 Some(v) => tokens.resolve_color(v)?,
                 None    => tokens.resolve_color("text").unwrap_or_else(|_| "#1a1a1a".into()),
             });
-            // tree uses "text-align"; XML uses "align" — try both
             node.text_align = match jattr(json, "text-align").or_else(|| jattr(json, "align")).unwrap_or("left") {
                 "center" => TextAlign::Center,
                 "right"  => TextAlign::Right,
                 _        => TextAlign::Left,
             };
 
-            // Children: array of string | span node
             if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
                 for (i, child) in arr.iter().enumerate() {
                     let leading = i > 0;
@@ -1034,7 +1289,6 @@ fn parse_tree_node(json: &serde_json::Value, tokens: &Tokens) -> Result<Node, St
                                 Some(v) => Some(tokens.resolve_color(v)?),
                                 None    => None,
                             };
-                            // tree uses "url"; XML uses "href"
                             let href = jattr(child, "url")
                                 .or_else(|| jattr(child, "href"))
                                 .map(str::to_string);
@@ -1060,14 +1314,32 @@ fn parse_tree_node(json: &serde_json::Value, tokens: &Tokens) -> Result<Node, St
                     .to_string(),
             );
         }
+        NodeKind::Img => {
+            let name = jattr(json, "name")
+                .ok_or("<img> node requires a 'name' attribute")?
+                .to_string();
+            if !asset_images.contains(&name) {
+                return Err(format!(
+                    "<img name=\"{name}\"> references an unknown asset image; \
+                     declare it in assets.images"
+                ));
+            }
+            node.image_name = Some(name);
+            if let Some(v) = jattr(json, "height") {
+                if let Some(h) = parse_pt(v) {
+                    node.img_height_constraint = Some(h);
+                } else {
+                    return Err(format!("img height: invalid pt value '{v}'"));
+                }
+            }
+        }
     }
 
     // ── Layout children ───────────────────────────────────────────────────────
-    node.debug = jattr(json, "debug").map(|v| v == "true").unwrap_or(false);
-    if kind != NodeKind::Divider {
+    if !matches!(kind, NodeKind::Divider | NodeKind::Img) {
         if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
             for child in arr {
-                node.children.push(parse_tree_node(child, tokens)?);
+                node.children.push(parse_tree_node(child, tokens, asset_images)?);
             }
         }
     }
@@ -1132,12 +1404,67 @@ mod tests {
 
     #[test]
     fn parse_text_node() {
-        let doc = parse(&minimal(r#"<text size="m" color="text">Hello world</text>"#)).unwrap();
+        let doc = parse(&minimal(r#"<text font-size="m" color="text">Hello world</text>"#)).unwrap();
         let t = &doc.pages[0].children[0];
         assert_eq!(t.kind, NodeKind::Text);
         assert_eq!(t.font_size, 11.0);
         assert_eq!(t.text_runs.len(), 1);
         assert_eq!(t.text_runs[0].text, "Hello world");
+    }
+
+    #[test]
+    fn font_inheritance_from_document() {
+        let xml = r#"<lpdf version="1">
+            <assets>
+                <fonts>
+                    <font name="body" core="Helvetica-Oblique"/>
+                </fonts>
+            </assets>
+            <document size="a4" font="body"><pages><page>
+                <text>Hello</text>
+            </page></pages></document>
+        </lpdf>"#;
+        let doc = parse(xml).unwrap();
+        let t = &doc.pages[0].children[0];
+        assert_eq!(t.font, "Helvetica-Oblique");
+    }
+
+    #[test]
+    fn font_size_inheritance() {
+        let xml = r#"<lpdf version="1">
+            <document size="a4"><pages><page>
+                <stack font-size="14pt"><text>Hello</text></stack>
+            </page></pages></document>
+        </lpdf>"#;
+        let doc = parse(xml).unwrap();
+        let stack = &doc.pages[0].children[0];
+        let text  = &stack.children[0];
+        assert_eq!(text.font_size, 14.0);
+    }
+
+    #[test]
+    fn img_node_registered() {
+        let xml = r#"<lpdf version="1">
+            <assets>
+                <images>
+                    <image name="logo"/>
+                </images>
+            </assets>
+            <document size="a4"><pages><page>
+                <img name="logo" width="100pt"/>
+            </page></pages></document>
+        </lpdf>"#;
+        let doc = parse(xml).unwrap();
+        let img = &doc.pages[0].children[0];
+        assert_eq!(img.kind, NodeKind::Img);
+        assert_eq!(img.image_name.as_deref(), Some("logo"));
+    }
+
+    #[test]
+    fn img_unregistered_errors() {
+        let result = parse(&minimal(r#"<img name="ghost" />"#));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("unknown asset image"));
     }
 
     #[test]

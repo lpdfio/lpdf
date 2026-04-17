@@ -27,11 +27,11 @@
             <!-- top row: event name + badge -->
             <flank gap="m" align="start" end="true">
               <stack gap="xs">
-                <text size="xs" font="Helvetica-Bold" color="brand">NORTHSTAR CONFERENCE 2026</text>
-                <text size="xl" font="Helvetica-Bold" color="text">Full Access Pass</text>
+                <text font-size="xs" font="Helvetica-Bold" color="brand">NORTHSTAR CONFERENCE 2026</text>
+                <text font-size="xl" font="Helvetica-Bold" color="text">Full Access Pass</text>
               </stack>
               <frame background="brand" padding="xs" radius="xs">
-                <text size="xs" font="Helvetica-Bold" color="surface">GENERAL</text>
+                <text font-size="xs" font="Helvetica-Bold" color="surface">GENERAL</text>
               </frame>
             </flank>
 
@@ -40,28 +40,28 @@
             <!-- details row -->
             <cluster gap="l" align="center">
               <stack gap="xs">
-                <text size="xs" color="text-muted">DATE</text>
-                <text size="s" font="Helvetica-Bold">June 14–16, 2026</text>
+                <text font-size="xs" color="text-muted">DATE</text>
+                <text font-size="s" font="Helvetica-Bold">June 14–16, 2026</text>
               </stack>
               <divider direction="vertical" color="rule" thickness="xs" />
               <stack gap="xs">
-                <text size="xs" color="text-muted">VENUE</text>
-                <text size="s" font="Helvetica-Bold">Moscone Center, SF</text>
+                <text font-size="xs" color="text-muted">VENUE</text>
+                <text font-size="s" font="Helvetica-Bold">Moscone Center, SF</text>
               </stack>
               <divider direction="vertical" color="rule" thickness="xs" />
               <stack gap="xs">
-                <text size="xs" color="text-muted">DOOR</text>
-                <text size="s" font="Helvetica-Bold">08:00 AM</text>
+                <text font-size="xs" color="text-muted">DOOR</text>
+                <text font-size="s" font="Helvetica-Bold">08:00 AM</text>
               </stack>
             </cluster>
 
             <!-- attendee -->
             <flank gap="m" align="end" end="true">
               <stack gap="xs">
-                <text size="xs" color="text-muted">ATTENDEE</text>
-                <text size="m" font="Helvetica-Bold">Jane Doe</text>
+                <text font-size="xs" color="text-muted">ATTENDEE</text>
+                <text font-size="m" font="Helvetica-Bold">Jane Doe</text>
               </stack>
-              <text size="xs" color="text-muted"># GA-00842</text>
+              <text font-size="xs" color="text-muted"># GA-00842</text>
             </flank>
 
           </stack>
@@ -69,9 +69,9 @@
           <!-- tear-off stub -->
           <frame width="90pt" background="stub-bg" padding="s" height="full">
             <stack gap="s" align="center" justify="center" height="full">
-              <text size="xs" font="Helvetica-Bold" color="brand">NS26</text>
+              <text font-size="xs" font="Helvetica-Bold" color="brand">NS26</text>
               <frame width="56pt" height="56pt" background="surface" radius="xs" />
-              <text size="xs" color="surface">GA-00842</text>
+              <text font-size="xs" color="surface">GA-00842</text>
             </stack>
           </frame>
 

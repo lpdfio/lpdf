@@ -24,14 +24,14 @@
 
               <!-- issuer -->
               <stack gap="xs" align="center">
-                <text size="s" font="Helvetica-Bold" color="text-muted">PRESENTED BY</text>
-                <text size="xl" font="Helvetica-Bold" color="navy">Acme Academy</text>
+                <text font-size="s" font="Helvetica-Bold" color="text-muted">PRESENTED BY</text>
+                <text font-size="xl" font="Helvetica-Bold" color="navy">Acme Academy</text>
               </stack>
 
               <!-- certificate title -->
               <stack gap="xs" align="center">
                 <divider color="rule" thickness="xs" />
-                <text size="xxl" font="Times-BoldItalic" color="navy">Certificate of Completion</text>
+                <text font-size="xxl" font="Times-BoldItalic" color="navy">Certificate of Completion</text>
                 <divider color="rule" thickness="xs" />
               </stack>
 
@@ -39,11 +39,11 @@
 
               <!-- recipient -->
               <stack gap="s" align="center">
-                <text size="s" color="text-muted">This certificate is proudly awarded to</text>
-                <text size="xxl" font="Times-BoldItalic" color="navy">Jane Doe</text>
-                <text size="s" color="text-muted">for successfully completing</text>
-                <text size="l" font="Helvetica-Bold" color="navy">Advanced Rust Systems Programming</text>
-                <text size="s" color="text-muted">a 40-hour course covering memory safety, async runtimes, and WebAssembly targets</text>
+                <text font-size="s" color="text-muted">This certificate is proudly awarded to</text>
+                <text font-size="xxl" font="Times-BoldItalic" color="navy">Jane Doe</text>
+                <text font-size="s" color="text-muted">for successfully completing</text>
+                <text font-size="l" font="Helvetica-Bold" color="navy">Advanced Rust Systems Programming</text>
+                <text font-size="s" color="text-muted">a 40-hour course covering memory safety, async runtimes, and WebAssembly targets</text>
               </stack>
 
               <divider color="rule" thickness="xs" />
@@ -52,13 +52,13 @@
               <split gap="xxl" align="end">
                 <stack gap="xs" align="center">
                   <divider color="navy" thickness="xs" />
-                  <text size="s" font="Helvetica-Bold" color="navy">April 12, 2026</text>
-                  <text size="s" color="text-muted">Date of completion</text>
+                  <text font-size="s" font="Helvetica-Bold" color="navy">April 12, 2026</text>
+                  <text font-size="s" color="text-muted">Date of completion</text>
                 </stack>
                 <stack gap="xs" align="center">
                   <divider color="navy" thickness="xs" />
-                  <text size="s" font="Helvetica-Bold" color="navy">Dr. Alice Morrow</text>
-                  <text size="s" color="text-muted">Program Director</text>
+                  <text font-size="s" font="Helvetica-Bold" color="navy">Dr. Alice Morrow</text>
+                  <text font-size="s" color="text-muted">Program Director</text>
                 </stack>
               </split>
 

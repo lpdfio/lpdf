@@ -9,13 +9,28 @@ pub struct Tokens {
     pub grid_col: [f32; 6],
     pub text: [f32; 6],
     pub colors: HashMap<String, String>,
-    pub fonts: HashMap<String, FontDef>,
 }
 
+/// A font definition resolved from `<assets><fonts>`.
 #[derive(Debug, Clone)]
 pub enum FontDef {
-    Builtin(String),
-    Src(String),
+    /// One of the 14 PDF core (built-in Type 1) fonts. No bytes needed.
+    Core(String),
+    /// A registry key registered via `loadFont(key, bytes)`. Bytes must be
+    /// supplied in the WASI envelope's `fonts` field at render time.
+    Ref(String),
+}
+
+/// Per-glyph advance widths for a custom font, in 1/1000 em units.
+/// Supplied by the adapter before the WASM call so the layout engine can
+/// measure custom-font text accurately instead of using the 0.44 fallback.
+#[derive(Debug, Clone)]
+pub struct FontWidths {
+    /// Advance width for code points outside the ASCII printable range (32–126).
+    pub default: u16,
+    /// Advances for code points 32 (space) through 126 (~), normalised to 1000 UPM.
+    /// Length must be exactly 95 elements; index = codepoint - 32.
+    pub ascii: Vec<u16>,
 }
 
 pub const SCALE_NAMES: [&str; 6] = ["xs", "s", "m", "l", "xl", "xxl"];
@@ -180,7 +195,6 @@ impl Default for Tokens {
             grid_col: [60.0, 100.0, 140.0, 180.0, 220.0, 280.0],
             text: [7.0, 9.0, 11.0, 14.0, 20.0, 28.0],
             colors,
-            fonts: HashMap::new(),
         }
     }
 }

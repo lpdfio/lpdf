@@ -20,9 +20,9 @@
           <!-- carrier header -->
           <frame background="text" padding="m">
             <flank gap="m" align="center" end="true">
-              <text size="xl" font="Helvetica-Bold" color="surface">PRIORITY MAIL</text>
+              <text font-size="xl" font="Helvetica-Bold" color="surface">PRIORITY MAIL</text>
               <frame background="priority-bg" padding="xs" radius="xs">
-                <text size="s" font="Helvetica-Bold" color="surface">2-DAY</text>
+                <text font-size="s" font="Helvetica-Bold" color="surface">2-DAY</text>
               </frame>
             </flank>
           </frame>
@@ -33,22 +33,22 @@
             <!-- from -->
             <frame padding="m" border="xs rule">
               <stack gap="xs">
-                <text size="xs" font="Helvetica-Bold" color="text-muted">FROM</text>
-                <text size="s" font="Helvetica-Bold">Acme Corp — Fulfillment Center</text>
-                <text size="s">789 Warehouse Blvd</text>
-                <text size="s">Oakland, CA 94601</text>
-                <text size="s">US</text>
+                <text font-size="xs" font="Helvetica-Bold" color="text-muted">FROM</text>
+                <text font-size="s" font="Helvetica-Bold">Acme Corp — Fulfillment Center</text>
+                <text font-size="s">789 Warehouse Blvd</text>
+                <text font-size="s">Oakland, CA 94601</text>
+                <text font-size="s">US</text>
               </stack>
             </frame>
 
             <!-- to -->
             <frame padding="m">
               <stack gap="xs">
-                <text size="xs" font="Helvetica-Bold" color="text-muted">SHIP TO</text>
-                <text size="l" font="Helvetica-Bold">Jane Doe</text>
-                <text size="m">456 Elm Street, Apt 7B</text>
-                <text size="m">Austin, TX 78701</text>
-                <text size="m">US</text>
+                <text font-size="xs" font="Helvetica-Bold" color="text-muted">SHIP TO</text>
+                <text font-size="l" font="Helvetica-Bold">Jane Doe</text>
+                <text font-size="m">456 Elm Street, Apt 7B</text>
+                <text font-size="m">Austin, TX 78701</text>
+                <text font-size="m">US</text>
               </stack>
             </frame>
 
@@ -60,7 +60,7 @@
           <frame padding="m" height="fill">
             <stack gap="s" align="center">
               <frame width="220pt" height="60pt" background="rule" radius="xs" />
-              <text size="s" font="Courier-Bold">9400 1118 9922 3456 7890 12</text>
+              <text font-size="s" font="Courier-Bold">9400 1118 9922 3456 7890 12</text>
             </stack>
           </frame>
 
@@ -70,20 +70,20 @@
           <frame padding="m">
             <stack gap="s">
               <flank gap="m" align="center" end="true">
-                <text size="xs" color="text-muted">ORDER</text>
-                <text size="s" font="Helvetica-Bold">ORD-20260412-0087</text>
+                <text font-size="xs" color="text-muted">ORDER</text>
+                <text font-size="s" font="Helvetica-Bold">ORD-20260412-0087</text>
               </flank>
               <flank gap="m" align="center" end="true">
-                <text size="xs" color="text-muted">WEIGHT</text>
-                <text size="s">1.2 lbs</text>
+                <text font-size="xs" color="text-muted">WEIGHT</text>
+                <text font-size="s">1.2 lbs</text>
               </flank>
               <flank gap="m" align="center" end="true">
-                <text size="xs" color="text-muted">DIMENSIONS</text>
-                <text size="s">12 × 8 × 4 in</text>
+                <text font-size="xs" color="text-muted">DIMENSIONS</text>
+                <text font-size="s">12 × 8 × 4 in</text>
               </flank>
               <flank gap="m" align="center" end="true">
-                <text size="xs" color="text-muted">SERVICE</text>
-                <text size="s">Priority Mail 2-Day</text>
+                <text font-size="xs" color="text-muted">SERVICE</text>
+                <text font-size="s">Priority Mail 2-Day</text>
               </flank>
             </stack>
           </frame>
@@ -93,8 +93,8 @@
           <!-- footer: label date -->
           <frame padding="s">
             <flank gap="m" align="center" end="true">
-              <text size="xs" color="text-muted">Label created April 12, 2026</text>
-              <text size="xs" color="text-muted">acmecorp.example/track</text>
+              <text font-size="xs" color="text-muted">Label created April 12, 2026</text>
+              <text font-size="xs" color="text-muted">acmecorp.example/track</text>
             </flank>
           </frame>
 

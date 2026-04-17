@@ -5,6 +5,7 @@ mod pdf;
 mod render;
 mod tokens;
 
+use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -12,6 +13,11 @@ pub struct LpdfEngine {
     license_key: String,
     /// Per-engine font registry; populated via `load_font`.
     fonts:       pdf::FontRegistry,
+    /// Per-engine image registry; populated via `load_image`.
+    images:      pdf::ImageRegistry,
+    /// Caller-supplied glyph width tables; populated via `set_font_metrics`.
+    /// Used by the layout engine to measure custom-font text accurately.
+    font_widths: HashMap<String, tokens::FontWidths>,
     /// Optional ISO 8601 creation timestamp for the PDF `/CreationDate` field.
     created_on:  Option<String>,
     /// Current Unix timestamp (seconds) used for license expiry checking.
@@ -26,6 +32,8 @@ impl LpdfEngine {
         LpdfEngine {
             license_key: license_key.to_string(),
             fonts:       pdf::FontRegistry::new(),
+            images:      pdf::ImageRegistry::new(),
+            font_widths: HashMap::new(),
             created_on:  None,
             now_unix:    0,
         }
@@ -35,6 +43,12 @@ impl LpdfEngine {
     /// Call this once per font before calling `render_pdf`.
     pub fn load_font(&mut self, name: &str, bytes: &[u8]) {
         self.fonts.register(name, bytes.to_vec());
+    }
+
+    /// Register raw image bytes (JPEG or PNG) for an image name.
+    /// Call this for every image referenced by `<img name="…">` nodes.
+    pub fn load_image(&mut self, name: &str, bytes: &[u8]) {
+        self.images.load(name, bytes.to_vec());
     }
 
     /// Set an optional ISO 8601 creation timestamp (e.g. `"2024-06-01T12:00:00"`).
@@ -51,6 +65,33 @@ impl LpdfEngine {
         self.now_unix = unix;
     }
 
+    /// Inject glyph advance-width tables for custom fonts.
+    ///
+    /// Call this *before* `render_pdf` / `render` when the document uses custom
+    /// fonts (declared via `<font src="…"`). The adapter extracts these widths
+    /// from the font binary and passes them as a JSON object:
+    ///
+    /// ```json
+    /// { "fontName": { "default": 500, "ascii": [260, 285, …] } }
+    /// ```
+    ///
+    /// `ascii` is a 95-element array for code points 32–126. `default` is used
+    /// for code points outside that range. All values are in 1/1000 em units.
+    pub fn set_font_metrics(&mut self, json: &str) {
+        if let Ok(map) = serde_json::from_str::<serde_json::Value>(json) {
+            if let Some(obj) = map.as_object() {
+                for (name, v) in obj {
+                    let default = v.get("default").and_then(|d| d.as_u64()).unwrap_or(500) as u16;
+                    let ascii: Vec<u16> = v.get("ascii")
+                        .and_then(|a| a.as_array())
+                        .map(|arr| arr.iter().map(|n| n.as_u64().unwrap_or(500) as u16).collect())
+                        .unwrap_or_default();
+                    self.font_widths.insert(name.clone(), tokens::FontWidths { default, ascii });
+                }
+            }
+        }
+    }
+
     /// Render `xml` to binary PDF bytes.
     ///
     /// Any custom fonts referenced in `<font src="…">` declarations must have
@@ -60,8 +101,34 @@ impl LpdfEngine {
             return Err(JsValue::from_str("input exceeds 1 MB limit"));
         }
 
-        let doc = parse::parse(xml)
+        let mut doc = parse::parse(xml)
             .map_err(|e| JsValue::from_str(&e))?;
+
+        // Confirm every image declared in <assets> has bytes in the registry.
+        for name in &doc.images {
+            if self.images.get(name).is_none() {
+                return Err(JsValue::from_str(&format!(
+                    "image '{name}' declared in <assets> but not loaded via loadImage()"
+                )));
+            }
+            if let Some(bytes) = self.images.get(name) {
+                if let Some(reason) = pdf::image_format_error(bytes) {
+                    return Err(JsValue::from_str(&format!(
+                        "image '{name}': {reason}"
+                    )));
+                }
+            }
+        }
+
+        let meta = pdf::build_image_meta(&self.images);
+        for page in &mut doc.pages {
+            layout::prefill_image_sizes(&mut page.children, &meta);
+        }
+
+        // Install font width tables so the layout engine can measure custom
+        // fonts accurately. Engine-level widths (from set_font_metrics) are used
+        // for the XML path; there are no doc-level widths for XML input.
+        layout::set_font_widths(self.font_widths.clone());
 
         let pages: Vec<render::RenderPage> =
             doc.pages.iter().flat_map(layout::layout_page).collect();
@@ -77,6 +144,7 @@ impl LpdfEngine {
             &pages,
             &doc.fonts,
             &self.fonts,
+            &self.images,
             &doc.meta,
             wm,
             self.created_on.as_deref(),
@@ -128,10 +196,17 @@ impl LpdfEngine {
         // produce when no valid license key is supplied — keeps snapshot hashes
         // consistent between the Rust tests and the adapter test suites.
         let wm = Some(("made with lpdf.io", Some("https://lpdf.io")));
-        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &doc.meta, wm, None, false)
+        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, wm, None, false)
     }
 
     fn render_doc(&self, doc: parse::Document) -> String {
+        // Merge widths: engine-level (from set_font_metrics) + doc-level (from
+        // tree JSON). Doc-level takes precedence — the adapter that built the
+        // tree knows the exact bytes it loaded.
+        let mut merged = self.font_widths.clone();
+        merged.extend(doc.font_widths.clone());
+        layout::set_font_widths(merged);
+
         let pages: Vec<render::RenderPage> =
             doc.pages.iter().flat_map(layout::layout_page).collect();
 
@@ -139,8 +214,8 @@ impl LpdfEngine {
             .into_iter()
             .map(|(name, def)| {
                 let v = match def {
-                    tokens::FontDef::Builtin(b) => serde_json::json!({ "builtin": b }),
-                    tokens::FontDef::Src(s)     => serde_json::json!({ "src": s }),
+                    tokens::FontDef::Core(b) => serde_json::json!({ "core": b }),
+                    tokens::FontDef::Ref(s)  => serde_json::json!({ "ref": s }),
                 };
                 (name, v)
             })

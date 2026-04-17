@@ -24,6 +24,19 @@ var LpdfEngine = class {
     wasm.lpdfengine_load_font(this.__wbg_ptr, ptr0, len0, ptr1, len1);
   }
   /**
+   * Register raw image bytes (JPEG or PNG) for an image name.
+   * Call this for every image referenced by `<img name="…">` nodes.
+   * @param {string} name
+   * @param {Uint8Array} bytes
+   */
+  load_image(name, bytes) {
+    const ptr0 = passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    wasm.lpdfengine_load_image(this.__wbg_ptr, ptr0, len0, ptr1, len1);
+  }
+  /**
    * @param {string} license_key
    */
   constructor(license_key) {
@@ -99,6 +112,26 @@ var LpdfEngine = class {
     const ptr0 = passStringToWasm0(iso, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     wasm.lpdfengine_set_created_on(this.__wbg_ptr, ptr0, len0);
+  }
+  /**
+   * Inject glyph advance-width tables for custom fonts.
+   *
+   * Call this *before* `render_pdf` / `render` when the document uses custom
+   * fonts (declared via `<font src="…"`). The adapter extracts these widths
+   * from the font binary and passes them as a JSON object:
+   *
+   * ```json
+   * { "fontName": { "default": 500, "ascii": [260, 285, …] } }
+   * ```
+   *
+   * `ascii` is a 95-element array for code points 32–126. `default` is used
+   * for code points outside that range. All values are in 1/1000 em units.
+   * @param {string} json
+   */
+  set_font_metrics(json) {
+    const ptr0 = passStringToWasm0(json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    wasm.lpdfengine_set_font_metrics(this.__wbg_ptr, ptr0, len0);
   }
   /**
    * Set the current Unix timestamp (seconds) for license expiry checking.

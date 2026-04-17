@@ -24,6 +24,8 @@ subsetter = "0.2"
 ed25519-dalek = { version = "2", default-features = false, features = ["alloc"] }
 # Base64url decoding for license token payload and signature segments
 base64 = "0.22"
+# Deflate/inflate for PNG RGBA decoding (SMask support)
+miniz_oxide = "0.7"
 
 [dev-dependencies]
 sha2 = "0.10"

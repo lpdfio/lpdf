@@ -107,11 +107,75 @@ fn build_registry(req: &serde_json::Value) -> pdf::FontRegistry {
     registry
 }
 
-fn render_pdf_doc(doc: parse::Document, license_key: &str, now_unix: i64, req: &serde_json::Value) -> String {
+/// Decode the optional `images` field from the request envelope into an `ImageRegistry`.
+fn build_image_registry(req: &serde_json::Value) -> pdf::ImageRegistry {
+    let mut registry = pdf::ImageRegistry::new();
+    if let Some(imgs_obj) = req.get("images").and_then(|v| v.as_object()) {
+        for (name, val) in imgs_obj {
+            if let Some(b64) = val.as_str() {
+                if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                    registry.load(name, bytes);
+                }
+            }
+        }
+    }
+    registry
+}
+
+/// Decode the optional `metrics` field from the request envelope into a font-widths map.
+/// Format: `{ "fontName": { "default": 500, "ascii": [260, 285, ...] } }`
+fn build_font_widths(req: &serde_json::Value) -> std::collections::HashMap<String, tokens::FontWidths> {
+    let mut map = std::collections::HashMap::new();
+    if let Some(obj) = req.get("metrics").and_then(|v| v.as_object()) {
+        for (name, val) in obj {
+            let default = val["default"].as_u64().unwrap_or(500) as u16;
+            let ascii: Vec<u16> = val["ascii"]
+                .as_array()
+                .map(|arr| arr.iter().map(|v| v.as_u64().unwrap_or(0) as u16).collect())
+                .unwrap_or_default();
+            if ascii.len() == 95 {
+                map.insert(name.clone(), tokens::FontWidths { default, ascii });
+            }
+        }
+    }
+    map
+}
+
+fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, req: &serde_json::Value) -> String {
+    let registry       = build_registry(req);
+    let image_registry = build_image_registry(req);
+
+    // Confirm every image declared in <assets> has bytes in the registry.
+    for name in &doc.images {
+        if image_registry.get(name).is_none() {
+            return serde_json::json!({
+                "error": format!("image '{name}' declared in <assets> but not loaded via loadImage()")
+            }).to_string();
+        }
+        if let Some(bytes) = image_registry.get(name) {
+            if let Some(reason) = pdf::image_format_error(bytes) {
+                return serde_json::json!({
+                    "error": format!("image '{name}': {reason}")
+                }).to_string();
+            }
+        }
+    }
+
+    let meta = pdf::build_image_meta(&image_registry);
+    for page in &mut doc.pages {
+        layout::prefill_image_sizes(&mut page.children, &meta);
+    }
+
+    // Merge adapter-supplied font widths (from the `metrics` payload field) into
+    // the doc. Adapter values fill in any gaps; doc-level values take precedence.
+    let adapter_widths = build_font_widths(req);
+    for (name, widths) in adapter_widths {
+        doc.font_widths.entry(name).or_insert(widths);
+    }
+
+    layout::set_font_widths(doc.font_widths.clone());
     let pages: Vec<render::RenderPage> =
         doc.pages.iter().flat_map(layout::layout_page).collect();
-
-    let registry = build_registry(req);
 
     let status = license::check(license_key, now_unix);
     let watermark = if status.is_licensed() {
@@ -123,7 +187,7 @@ fn render_pdf_doc(doc: parse::Document, license_key: &str, now_unix: i64, req: &
 
     let created_on = req["created_on"].as_str();
 
-    match pdf::render_pdf(&pages, &doc.fonts, &registry, &doc.meta, watermark_ref, created_on, status.is_licensed()) {
+    match pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, watermark_ref, created_on, status.is_licensed()) {
         Ok(bytes) => {
             let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
             serde_json::json!({ "pdf": b64 }).to_string()
@@ -133,6 +197,7 @@ fn render_pdf_doc(doc: parse::Document, license_key: &str, now_unix: i64, req: &
 }
 
 fn render_doc(doc: parse::Document, license_key: &str, now_unix: i64) -> String {
+    layout::set_font_widths(doc.font_widths.clone());
     let pages: Vec<render::RenderPage> =
         doc.pages.iter().flat_map(layout::layout_page).collect();
 
@@ -140,8 +205,8 @@ fn render_doc(doc: parse::Document, license_key: &str, now_unix: i64) -> String 
         .into_iter()
         .map(|(name, def)| {
             let v = match def {
-                tokens::FontDef::Builtin(b) => serde_json::json!({ "builtin": b }),
-                tokens::FontDef::Src(s)     => serde_json::json!({ "src": s }),
+                tokens::FontDef::Core(b) => serde_json::json!({ "core": b }),
+                tokens::FontDef::Ref(s)  => serde_json::json!({ "ref": s }),
             };
             (name, v)
         })
