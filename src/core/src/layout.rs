@@ -409,218 +409,178 @@ fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> 
     }
 
     match node.kind {
-        // ── Stack ─────────────────────────────────────────────────────────────
-        NodeKind::Stack => {
-            let [pt, pr, pb, pl] = node.padding;
-            let inner_w = (avail_w - pl - pr).max(0.0);
-            let inner_target = (target_h - pt - pb).max(0.0);
-            let inner_full = (full_page_h - pt - pb).max(0.0);
-            let gap = node.gap;
-            let n = node.children.len();
-
-            let mut split_idx = 0usize;
-            let mut chunk_h = 0.0_f32;
-
-            for (i, child) in node.children.iter().enumerate() {
-                let h = measure_height(child, inner_w, inner_full);
-                let g = if i == 0 { 0.0 } else { gap };
-                if chunk_h + g + h > inner_target + 0.5 {
-                    break;
-                }
-                chunk_h += g + h;
-                split_idx = i + 1;
-            }
-
-            if split_idx == n {
-                return SplitOutcome::Atomic;
-            }
-
-            if split_idx == 0 {
-                // First child itself overflows — try to recurse into it.
-                match split_node_at(&node.children[0], inner_w, inner_target, inner_full) {
-                    SplitOutcome::First(child_first, child_rest) => {
-                        let first_node = Node {
-                            children: vec![child_first],
-                            ..node.clone()
-                        };
-                        let mut rest_children = child_rest;
-                        rest_children.extend_from_slice(&node.children[1..]);
-                        let rest_node = Node { children: rest_children, ..node.clone() };
-                        SplitOutcome::First(first_node, vec![rest_node])
-                    }
-                    SplitOutcome::NothingFits(_) | SplitOutcome::Atomic => {
-                        SplitOutcome::NothingFits(vec![node.clone()])
-                    }
-                }
-            } else {
-                let first = Node {
-                    children: node.children[..split_idx].to_vec(),
-                    ..node.clone()
-                };
-                let rest = Node {
-                    children: node.children[split_idx..].to_vec(),
-                    ..node.clone()
-                };
-                SplitOutcome::First(first, vec![rest])
-            }
-        }
-
-        // ── Grid ──────────────────────────────────────────────────────────────
-        NodeKind::Grid => {
-            let [pt, pr, pb, pl] = node.padding;
-            let inner_w = (avail_w - pl - pr).max(0.0);
-            let inner_target = (target_h - pt - pb).max(0.0);
-            let inner_full = (full_page_h - pt - pb).max(0.0);
-            let gap = node.gap;
-
-            let cols = if let Some(min_w) = node.col_width {
-                let n = ((inner_w + gap) / (min_w + gap)).floor() as usize;
-                n.max(1)
-            } else {
-                (node.cols as usize).max(1)
-            };
-            let col_w = ((inner_w - gap * (cols - 1) as f32) / cols as f32).max(0.0);
-
-            let n_rows = (node.children.len() + cols - 1) / cols;
-            let mut split_row = 0usize;
-            let mut chunk_h = 0.0_f32;
-
-            for row in 0..n_rows {
-                let row_start = row * cols;
-                let row_end = (row_start + cols).min(node.children.len());
-                let rh = node.children[row_start..row_end]
-                    .iter()
-                    .map(|c| measure_height(c, col_w, inner_full))
-                    .fold(0.0_f32, f32::max);
-                let g = if row == 0 { 0.0 } else { gap };
-                if chunk_h + g + rh > inner_target + 0.5 {
-                    break;
-                }
-                chunk_h += g + rh;
-                split_row = row + 1;
-            }
-
-            if split_row == n_rows {
-                return SplitOutcome::Atomic;
-            }
-            if split_row == 0 {
-                return SplitOutcome::NothingFits(vec![node.clone()]);
-            }
-
-            let item_split = (split_row * cols).min(node.children.len());
-            let first = Node {
-                children: node.children[..item_split].to_vec(),
-                ..node.clone()
-            };
-            let rest = Node {
-                children: node.children[item_split..].to_vec(),
-                ..node.clone()
-            };
-            SplitOutcome::First(first, vec![rest])
-        }
-
-        // ── Cluster ───────────────────────────────────────────────────────────
-        // Bucket items into wrapped rows first; the cluster splits between
-        // rows. Items inside a row are treated as atomic (the user's rule:
-        // cluster children never split).
-        NodeKind::Cluster => {
-            let [pt, pr, pb, pl] = node.padding;
-            let inner_w = (avail_w - pl - pr).max(0.0);
-            let inner_target = (target_h - pt - pb).max(0.0);
-            let gap = node.gap;
-
-            // Bucket by width, same logic as layout_cluster's pass 1.
-            let mut rows: Vec<(usize, usize, f32)> = Vec::new(); // (start, end_exclusive, row_h)
-            let mut row_start = 0usize;
-            let mut cur_x = 0.0_f32;
-            let mut row_h = 0.0_f32;
-            for (i, child) in node.children.iter().enumerate() {
-                let cw = child.width_constraint
-                    .unwrap_or_else(|| measure_natural_w(child))
-                    .min(inner_w);
-                let ch = measure_height(child, cw, inner_target);
-                let adv = if i == row_start { cw } else { gap + cw };
-                if node.wrap && i > row_start && cur_x + adv > inner_w + 0.01 {
-                    rows.push((row_start, i, row_h));
-                    row_start = i;
-                    cur_x = cw;
-                    row_h = ch;
-                } else {
-                    cur_x += adv;
-                    row_h = row_h.max(ch);
-                }
-            }
-            if row_start < node.children.len() {
-                rows.push((row_start, node.children.len(), row_h));
-            }
-
-            let n_rows = rows.len();
-            let mut split_row = 0usize;
-            let mut chunk_h = 0.0_f32;
-            for (r, (_, _, rh)) in rows.iter().enumerate() {
-                let g = if r == 0 { 0.0 } else { gap };
-                if chunk_h + g + rh > inner_target + 0.5 {
-                    break;
-                }
-                chunk_h += g + rh;
-                split_row = r + 1;
-            }
-
-            if split_row == n_rows {
-                return SplitOutcome::Atomic;
-            }
-            if split_row == 0 {
-                return SplitOutcome::NothingFits(vec![node.clone()]);
-            }
-
-            let item_split = rows[split_row].0;
-            let first = Node {
-                children: node.children[..item_split].to_vec(),
-                ..node.clone()
-            };
-            let rest = Node {
-                children: node.children[item_split..].to_vec(),
-                ..node.clone()
-            };
-            SplitOutcome::First(first, vec![rest])
-        }
-
-        // ── Text ──────────────────────────────────────────────────────────────
-        NodeKind::Text => {
-            let line_h = node.font_size * 1.2;
-            let lines = wrap_text_split(node, avail_w);
-            let n_lines = lines.len();
-            if n_lines <= 1 {
-                return SplitOutcome::Atomic;
-            }
-            if line_h <= 0.0 {
-                return SplitOutcome::Atomic;
-            }
-            let max_lines = ((target_h / line_h).floor().max(0.0)) as usize;
-            if max_lines >= n_lines {
-                return SplitOutcome::Atomic;
-            }
-            if max_lines == 0 {
-                return SplitOutcome::NothingFits(vec![node.clone()]);
-            }
-            let first_atoms: Vec<SplitAtom> =
-                lines[..max_lines].iter().flatten().cloned().collect();
-            let rest_atoms: Vec<SplitAtom> =
-                lines[max_lines..].iter().flatten().cloned().collect();
-            let first = Node {
-                text_runs: atoms_to_runs(&first_atoms),
-                ..node.clone()
-            };
-            let rest = Node {
-                text_runs: atoms_to_runs(&rest_atoms),
-                ..node.clone()
-            };
-            SplitOutcome::First(first, vec![rest])
-        }
-
+        NodeKind::Stack   => split_stack(node, avail_w, target_h, full_page_h),
+        NodeKind::Grid    => split_grid(node, avail_w, target_h, full_page_h),
+        NodeKind::Cluster => split_cluster(node, avail_w, target_h),
+        NodeKind::Text    => split_text(node, avail_w, target_h),
         // Frame, Flank, Split, Divider, Link — atomic by design.
-        _ => SplitOutcome::Atomic,
+        _                 => SplitOutcome::Atomic,
     }
+}
+
+fn split_stack(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
+    let [pt, pr, pb, pl] = node.padding;
+    let inner_w      = (avail_w      - pl - pr).max(0.0);
+    let inner_target = (target_h     - pt - pb).max(0.0);
+    let inner_full   = (full_page_h  - pt - pb).max(0.0);
+    let gap = node.gap;
+    let n   = node.children.len();
+
+    let mut split_idx = 0usize;
+    let mut chunk_h   = 0.0_f32;
+
+    for (i, child) in node.children.iter().enumerate() {
+        let h = measure_height(child, inner_w, inner_full);
+        let g = if i == 0 { 0.0 } else { gap };
+        if chunk_h + g + h > inner_target + 0.5 {
+            break;
+        }
+        chunk_h += g + h;
+        split_idx = i + 1;
+    }
+
+    if split_idx == n {
+        return SplitOutcome::Atomic;
+    }
+
+    if split_idx == 0 {
+        // First child itself overflows — try to recurse into it.
+        match split_node_at(&node.children[0], inner_w, inner_target, inner_full) {
+            SplitOutcome::First(child_first, child_rest) => {
+                let first_node = Node { children: vec![child_first], ..node.clone() };
+                let mut rest_children = child_rest;
+                rest_children.extend_from_slice(&node.children[1..]);
+                let rest_node = Node { children: rest_children, ..node.clone() };
+                SplitOutcome::First(first_node, vec![rest_node])
+            }
+            SplitOutcome::NothingFits(_) | SplitOutcome::Atomic => {
+                SplitOutcome::NothingFits(vec![node.clone()])
+            }
+        }
+    } else {
+        let first = Node { children: node.children[..split_idx].to_vec(), ..node.clone() };
+        let rest  = Node { children: node.children[split_idx..].to_vec(), ..node.clone() };
+        SplitOutcome::First(first, vec![rest])
+    }
+}
+
+fn split_grid(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
+    let [pt, pr, pb, pl] = node.padding;
+    let inner_w      = (avail_w      - pl - pr).max(0.0);
+    let inner_target = (target_h     - pt - pb).max(0.0);
+    let inner_full   = (full_page_h  - pt - pb).max(0.0);
+    let gap  = node.gap;
+
+    let cols = if let Some(min_w) = node.col_width {
+        let n = ((inner_w + gap) / (min_w + gap)).floor() as usize;
+        n.max(1)
+    } else {
+        (node.cols as usize).max(1)
+    };
+    let col_w = ((inner_w - gap * (cols - 1) as f32) / cols as f32).max(0.0);
+
+    let n_rows = (node.children.len() + cols - 1) / cols;
+    let mut split_row = 0usize;
+    let mut chunk_h   = 0.0_f32;
+
+    for row in 0..n_rows {
+        let row_start = row * cols;
+        let row_end   = (row_start + cols).min(node.children.len());
+        let rh = node.children[row_start..row_end]
+            .iter()
+            .map(|c| measure_height(c, col_w, inner_full))
+            .fold(0.0_f32, f32::max);
+        let g = if row == 0 { 0.0 } else { gap };
+        if chunk_h + g + rh > inner_target + 0.5 {
+            break;
+        }
+        chunk_h += g + rh;
+        split_row = row + 1;
+    }
+
+    if split_row == n_rows { return SplitOutcome::Atomic; }
+    if split_row == 0      { return SplitOutcome::NothingFits(vec![node.clone()]); }
+
+    let item_split = (split_row * cols).min(node.children.len());
+    let first = Node { children: node.children[..item_split].to_vec(), ..node.clone() };
+    let rest  = Node { children: node.children[item_split..].to_vec(), ..node.clone() };
+    SplitOutcome::First(first, vec![rest])
+}
+
+/// Bucket items into wrapped rows first; the cluster splits between rows.
+/// Items inside a row are treated as atomic (the user's rule: cluster children
+/// never split).
+fn split_cluster(node: &Node, avail_w: f32, target_h: f32) -> SplitOutcome {
+    let [pt, pr, pb, pl] = node.padding;
+    let inner_w      = (avail_w  - pl - pr).max(0.0);
+    let inner_target = (target_h - pt - pb).max(0.0);
+    let gap = node.gap;
+
+    // Bucket by width, same logic as layout_cluster's pass 1.
+    let mut rows: Vec<(usize, usize, f32)> = Vec::new(); // (start, end_exclusive, row_h)
+    let mut row_start = 0usize;
+    let mut cur_x     = 0.0_f32;
+    let mut row_h     = 0.0_f32;
+    for (i, child) in node.children.iter().enumerate() {
+        let cw  = child.width_constraint
+            .unwrap_or_else(|| measure_natural_w(child))
+            .min(inner_w);
+        let ch  = measure_height(child, cw, inner_target);
+        let adv = if i == row_start { cw } else { gap + cw };
+        if node.wrap && i > row_start && cur_x + adv > inner_w + 0.01 {
+            rows.push((row_start, i, row_h));
+            row_start = i;
+            cur_x = cw;
+            row_h = ch;
+        } else {
+            cur_x += adv;
+            row_h = row_h.max(ch);
+        }
+    }
+    if row_start < node.children.len() {
+        rows.push((row_start, node.children.len(), row_h));
+    }
+
+    let n_rows = rows.len();
+    let mut split_row = 0usize;
+    let mut chunk_h   = 0.0_f32;
+    for (r, (_, _, rh)) in rows.iter().enumerate() {
+        let g = if r == 0 { 0.0 } else { gap };
+        if chunk_h + g + rh > inner_target + 0.5 {
+            break;
+        }
+        chunk_h += g + rh;
+        split_row = r + 1;
+    }
+
+    if split_row == n_rows { return SplitOutcome::Atomic; }
+    if split_row == 0      { return SplitOutcome::NothingFits(vec![node.clone()]); }
+
+    let item_split = rows[split_row].0;
+    let first = Node { children: node.children[..item_split].to_vec(), ..node.clone() };
+    let rest  = Node { children: node.children[item_split..].to_vec(), ..node.clone() };
+    SplitOutcome::First(first, vec![rest])
+}
+
+fn split_text(node: &Node, avail_w: f32, target_h: f32) -> SplitOutcome {
+    let line_h  = node.font_size * 1.2;
+    let lines   = wrap_text_split(node, avail_w);
+    let n_lines = lines.len();
+    if n_lines <= 1 || line_h <= 0.0 {
+        return SplitOutcome::Atomic;
+    }
+    let max_lines = ((target_h / line_h).floor().max(0.0)) as usize;
+    if max_lines >= n_lines {
+        return SplitOutcome::Atomic;
+    }
+    if max_lines == 0 {
+        return SplitOutcome::NothingFits(vec![node.clone()]);
+    }
+    let first_atoms: Vec<SplitAtom> = lines[..max_lines].iter().flatten().cloned().collect();
+    let rest_atoms:  Vec<SplitAtom> = lines[max_lines..].iter().flatten().cloned().collect();
+    let first = Node { text_runs: atoms_to_runs(&first_atoms), ..node.clone() };
+    let rest  = Node { text_runs: atoms_to_runs(&rest_atoms),  ..node.clone() };
+    SplitOutcome::First(first, vec![rest])
 }
 
 // ── Text splitting helpers ────────────────────────────────────────────────────

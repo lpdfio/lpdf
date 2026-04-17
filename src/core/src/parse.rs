@@ -579,6 +579,32 @@ fn parse_scale_row(elem: &roxmltree::Node) -> Result<[f32; 6], String> {
 
 // ── Page / meta ───────────────────────────────────────────────────────────────
 
+/// Apply size/orientation/margin/background/debug overrides from an attribute
+/// source onto the running page-defaults.  Works for both XML `<page>` elements
+/// and JSON page nodes via the `Attrs` trait.  Returns the resolved `debug` flag.
+fn apply_page_overrides(
+    size:       &mut (f32, f32),
+    margin:     &mut [f32; 4],
+    background: &mut Option<String>,
+    a:          &impl Attrs,
+    tokens:     &Tokens,
+    doc_debug:  bool,
+) -> Result<bool, String> {
+    if let Some(v) = a.get("size") {
+        *size = parse_page_size(v)?;
+    }
+    if a.get("orientation") == Some("landscape") {
+        *size = (size.1, size.0);
+    }
+    if let Some(v) = a.get("margin") {
+        *margin = tokens.resolve_spacing(v)?;
+    }
+    if let Some(v) = a.get("background") {
+        *background = Some(tokens.resolve_color(v)?);
+    }
+    Ok(a.get("debug").map(|v| v == "true").unwrap_or(doc_debug))
+}
+
 fn parse_meta(elem: &roxmltree::Node) -> Meta {
     Meta {
         title: opt_attr(elem, "title"),
@@ -601,24 +627,10 @@ fn parse_page(
     if elem.attribute("font-size").is_some() {
         return Err("<page> does not allow font-size".into());
     }
-
     let mut size       = doc_size;
     let mut margin     = doc_margin;
     let mut background = doc_background;
-
-    if let Some(v) = elem.attribute("size") {
-        size = parse_page_size(v)?;
-    }
-    if let Some("landscape") = elem.attribute("orientation") {
-        size = (size.1, size.0);
-    }
-    if let Some(v) = elem.attribute("margin") {
-        margin = tokens.resolve_spacing(v)?;
-    }
-    if let Some(v) = elem.attribute("background") {
-        background = Some(tokens.resolve_color(v)?);
-    }
-    let debug = elem.attribute("debug").map(|v| v == "true").unwrap_or(doc_debug);
+    let debug = apply_page_overrides(&mut size, &mut margin, &mut background, elem, tokens, doc_debug)?;
 
     let mut children = Vec::new();
     for child in elems(elem) {
@@ -738,15 +750,7 @@ fn parse_node(
             );
         }
         NodeKind::Img => {
-            let name = req_attr(elem, "name")?;
-            validate_img_asset(&name, asset_images, "<assets><images>")?;
-            node.image_name = Some(name);
-            // `height` on <img> sets the display height constraint (not HeightMode).
-            if let Some(v) = elem.attribute("height") {
-                node.img_height_constraint = Some(
-                    parse_pt(v).ok_or_else(|| format!("<img> height: invalid pt value '{v}'"))?
-                );
-            }
+            apply_img_attrs(&mut node, elem, asset_images, "<assets><images>")?;
         }
         _ => {}
     }
@@ -938,6 +942,28 @@ fn apply_layout_kind_attrs(
     Ok(())
 }
 
+/// Apply `name` and `height` attributes for an `<img>` / `"img"` node.
+/// Works with both XML elements and JSON attr objects via the `Attrs` trait.
+fn apply_img_attrs(
+    node:         &mut ParsedNode,
+    a:            &impl Attrs,
+    asset_images: &HashSet<String>,
+    hint:         &str,
+) -> Result<(), String> {
+    let name = a.get("name")
+        .ok_or_else(|| "<img> missing required attribute 'name'".to_string())?
+        .to_string();
+    validate_img_asset(&name, asset_images, hint)?;
+    node.image_name = Some(name);
+    // `height` on <img> sets the display height constraint (not HeightMode).
+    if let Some(v) = a.get("height") {
+        node.img_height_constraint = Some(
+            parse_pt(v).ok_or_else(|| format!("img height: invalid pt value '{v}'"))?
+        );
+    }
+    Ok(())
+}
+
 fn validate_img_asset(
     name:         &str,
     asset_images: &HashSet<String>,
@@ -1121,20 +1147,8 @@ fn parse_tree_page(
     let mut size       = doc_size;
     let mut margin     = doc_margin;
     let mut background = doc_background;
-
-    if let Some(s) = jattr(json, "size") {
-        size = parse_page_size(s)?;
-    }
-    if jattr(json, "orientation") == Some("landscape") {
-        size = (size.1, size.0);
-    }
-    if let Some(s) = jattr(json, "margin") {
-        margin = tokens.resolve_spacing(s)?;
-    }
-    if let Some(s) = jattr(json, "background") {
-        background = Some(tokens.resolve_color(s)?);
-    }
-    let debug = jattr(json, "debug").map(|v| v == "true").unwrap_or(doc_debug);
+    let a = JsonAttrs(json);
+    let debug = apply_page_overrides(&mut size, &mut margin, &mut background, &a, tokens, doc_debug)?;
 
     let children = if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
         arr.iter()
@@ -1243,16 +1257,7 @@ fn parse_tree_node(
             );
         }
         NodeKind::Img => {
-            let name = jattr(json, "name")
-                .ok_or("<img> node requires a 'name' attribute")?
-                .to_string();
-            validate_img_asset(&name, asset_images, "assets.images")?;
-            node.image_name = Some(name);
-            if let Some(v) = jattr(json, "height") {
-                node.img_height_constraint = Some(
-                    parse_pt(v).ok_or_else(|| format!("img height: invalid pt value '{v}'"))?
-                );
-            }
+            apply_img_attrs(&mut node, &a, asset_images, "assets.images")?;
         }
         _ => {}
     }
