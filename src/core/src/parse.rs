@@ -673,108 +673,10 @@ fn parse_node(
     };
 
     let mut node = ParsedNode::default_for(kind.clone());
+    apply_box_attrs(&mut node, elem, tokens)?;
+    apply_layout_kind_attrs(&mut node, elem, tokens)?;
 
-    // ── font / font-size (allowed on ALL kinds) ───────────────────────────────
-    if let Some(v) = elem.attribute("font") {
-        node.font = Some(v.to_string());
-    }
-    if let Some(v) = elem.attribute("font-size") {
-        node.font_size = Some(tokens.resolve_text_size(v)?);
-    }
-
-    // ── Shared box attrs (skipped for Img where height means natural height) ──
-    if let Some(v) = elem.attribute("gap") {
-        node.gap = tokens.resolve_space(v)?;
-    }
-    if let Some(v) = elem.attribute("padding") {
-        node.padding = tokens.resolve_spacing(v)?;
-    }
-    if let Some(v) = elem.attribute("background") {
-        node.background = Some(tokens.resolve_color(v)?);
-    }
-    if let Some(v) = elem.attribute("border") {
-        node.border = Some(tokens.resolve_border(v)?);
-    }
-    if let Some(v) = elem.attribute("radius") {
-        node.radius = tokens.resolve_radius(v)?;
-    }
-    if kind != NodeKind::Img {
-        if let Some(v) = elem.attribute("height") {
-            node.height_mode = match v {
-                "full" => HeightMode::Full,
-                "fill" => HeightMode::Fill,
-                other  => {
-                    if let Some(h) = parse_pt(other) {
-                        HeightMode::Fixed(h)
-                    } else {
-                        return Err(format!("invalid height value: '{other}'"));
-                    }
-                }
-            };
-        }
-    }
-    if let Some(v) = elem.attribute("width") {
-        node.width_constraint = Some(tokens.resolve_width(v)?);
-    }
-    if let Some(v) = elem.attribute("repeat") {
-        node.repeat = match v {
-            "page"  => Repeat::Page,
-            "first" => Repeat::First,
-            other   => return Err(format!(
-                "invalid repeat value: '{other}' (expected 'page' or 'first')"
-            )),
-        };
-    }
-    node.debug = elem.attribute("debug").map(|v| v == "true").unwrap_or(false);
-
-    // ── Kind-specific attrs ───────────────────────────────────────────────────
     match kind {
-        NodeKind::Stack => {
-            node.align   = parse_align(elem.attribute("align").unwrap_or("start"))?;
-            node.justify = parse_justify(elem.attribute("justify").unwrap_or("start"))?;
-        }
-        NodeKind::Flank => {
-            node.align = parse_align(elem.attribute("align").unwrap_or("start"))?;
-            node.end   = elem.attribute("end").map(|v| v == "true").unwrap_or(false);
-        }
-        NodeKind::Split => {
-            node.align = parse_align(elem.attribute("align").unwrap_or("start"))?;
-            node.equal = elem.attribute("equal").map(|v| v == "true").unwrap_or(false);
-        }
-        NodeKind::Cluster => {
-            node.align   = parse_align(elem.attribute("align").unwrap_or("start"))?;
-            node.justify = parse_justify(elem.attribute("justify").unwrap_or("start"))?;
-            node.wrap    = elem.attribute("wrap").map(|v| v != "false").unwrap_or(true);
-        }
-        NodeKind::Frame => {
-            node.align   = parse_align(elem.attribute("align").unwrap_or("center"))?;
-            node.justify = parse_justify(elem.attribute("justify").unwrap_or("center"))?;
-        }
-        NodeKind::Grid => {
-            node.cols = elem
-                .attribute("cols")
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(1);
-            if let Some(v) = elem.attribute("col-width") {
-                node.col_width = Some(tokens.resolve_grid_col(v)?);
-            }
-        }
-        NodeKind::Divider => {
-            node.direction = match elem.attribute("direction").unwrap_or("horizontal") {
-                "vertical" => Direction::Vertical,
-                _          => Direction::Horizontal,
-            };
-            node.color = if let Some(v) = elem.attribute("color") {
-                Some(tokens.resolve_color(v)?)
-            } else {
-                Some("#000000".into())
-            };
-            node.thickness = if let Some(v) = elem.attribute("thickness") {
-                tokens.resolve_border_thickness(v)?
-            } else {
-                1.0
-            };
-        }
         NodeKind::Text => {
             node.text_color = Some(if let Some(v) = elem.attribute("color") {
                 tokens.resolve_color(v)?
@@ -797,11 +699,8 @@ fn parse_node(
                         node.text_runs.push(TextRun {
                             text: words.join(" "),
                             leading_space: leading,
-                            font: None,
-                            color: None,
-                            href: None,
-                            underline: false,
-                            strike: false,
+                            font: None, color: None, href: None,
+                            underline: false, strike: false,
                         });
                     }
                     prev_ended_space = raw.ends_with(char::is_whitespace);
@@ -811,10 +710,7 @@ fn parse_node(
                         .filter(|n| n.is_text())
                         .filter_map(|n| n.text())
                         .collect();
-                    let span_text = raw_span
-                        .split_whitespace()
-                        .collect::<Vec<_>>()
-                        .join(" ");
+                    let span_text = raw_span.split_whitespace().collect::<Vec<_>>().join(" ");
                     if !span_text.is_empty() {
                         node.text_runs.push(TextRun {
                             text: span_text,
@@ -843,22 +739,16 @@ fn parse_node(
         }
         NodeKind::Img => {
             let name = req_attr(elem, "name")?;
-            if !asset_images.contains(&name) {
-                return Err(format!(
-                    "<img name=\"{name}\"> references an unknown asset image; \
-                     declare it in <assets><images>"
-                ));
-            }
+            validate_img_asset(&name, asset_images, "<assets><images>")?;
             node.image_name = Some(name);
             // `height` on <img> sets the display height constraint (not HeightMode).
             if let Some(v) = elem.attribute("height") {
-                if let Some(h) = parse_pt(v) {
-                    node.img_height_constraint = Some(h);
-                } else {
-                    return Err(format!("<img> height: invalid pt value '{v}'"));
-                }
+                node.img_height_constraint = Some(
+                    parse_pt(v).ok_or_else(|| format!("<img> height: invalid pt value '{v}'"))?
+                );
             }
         }
+        _ => {}
     }
 
     // ── Children (not for leaf nodes) ────────────────────────────────────────
@@ -927,12 +817,142 @@ fn opt_attr(elem: &roxmltree::Node, name: &str) -> String {
     elem.attribute(name).unwrap_or("").to_string()
 }
 
-// ── Tree (JSON) parser ────────────────────────────────────────────────────────
+// ── Shared node construction helpers ─────────────────────────────────────────
 
-/// Inline helper: read a string attribute from a JSON node's "attrs" object.
+/// Read a string attribute from a JSON node's "attrs" object.
 fn jattr<'a>(json: &'a serde_json::Value, key: &str) -> Option<&'a str> {
     json.get("attrs")?.get(key)?.as_str()
 }
+
+/// Uniform attribute lookup over both XML element and JSON object nodes,
+/// so shared node-construction helpers can work with either input format.
+trait Attrs {
+    fn get(&self, key: &str) -> Option<&str>;
+}
+
+impl<'a, 'b> Attrs for roxmltree::Node<'a, 'b> {
+    fn get(&self, key: &str) -> Option<&str> { self.attribute(key) }
+}
+
+struct JsonAttrs<'a>(&'a serde_json::Value);
+
+impl<'a> Attrs for JsonAttrs<'a> {
+    fn get(&self, key: &str) -> Option<&str> { jattr(self.0, key) }
+}
+
+fn parse_height_mode(v: &str) -> Result<HeightMode, String> {
+    match v {
+        "full" => Ok(HeightMode::Full),
+        "fill" => Ok(HeightMode::Fill),
+        other  => parse_pt(other)
+            .map(HeightMode::Fixed)
+            .ok_or_else(|| format!("invalid height value: '{other}'")),
+    }
+}
+
+fn parse_repeat_attr(v: &str) -> Result<Repeat, String> {
+    match v {
+        "page"  => Ok(Repeat::Page),
+        "first" => Ok(Repeat::First),
+        other   => Err(format!(
+            "invalid repeat value: '{other}' (expected 'page' or 'first')"
+        )),
+    }
+}
+
+/// Apply shared box attributes (font, spacing, visual, sizing) to a parsed node.
+/// Works with both XML elements and JSON attr objects via the `Attrs` trait.
+fn apply_box_attrs(
+    node:   &mut ParsedNode,
+    a:      &impl Attrs,
+    tokens: &Tokens,
+) -> Result<(), String> {
+    if let Some(v) = a.get("font")       { node.font      = Some(v.to_string()); }
+    if let Some(v) = a.get("font-size")  { node.font_size = Some(tokens.resolve_text_size(v)?); }
+    if let Some(v) = a.get("gap")        { node.gap       = tokens.resolve_space(v)?; }
+    if let Some(v) = a.get("padding")    { node.padding   = tokens.resolve_spacing(v)?; }
+    if let Some(v) = a.get("background") { node.background = Some(tokens.resolve_color(v)?); }
+    if let Some(v) = a.get("border")     { node.border    = Some(tokens.resolve_border(v)?); }
+    if let Some(v) = a.get("radius")     { node.radius    = tokens.resolve_radius(v)?; }
+    if node.kind != NodeKind::Img {
+        if let Some(v) = a.get("height") { node.height_mode = parse_height_mode(v)?; }
+    }
+    if let Some(v) = a.get("width")  { node.width_constraint = Some(tokens.resolve_width(v)?); }
+    if let Some(v) = a.get("repeat") { node.repeat = parse_repeat_attr(v)?; }
+    node.debug = a.get("debug").map(|v| v == "true").unwrap_or(false);
+    Ok(())
+}
+
+/// Apply kind-specific layout attributes shared between the XML and JSON parsers.
+/// Text, Link, and Img are omitted — their content is format-specific.
+fn apply_layout_kind_attrs(
+    node:   &mut ParsedNode,
+    a:      &impl Attrs,
+    tokens: &Tokens,
+) -> Result<(), String> {
+    match node.kind {
+        NodeKind::Stack => {
+            node.align   = parse_align(a.get("align").unwrap_or("start"))?;
+            node.justify = parse_justify(a.get("justify").unwrap_or("start"))?;
+        }
+        NodeKind::Flank => {
+            node.align   = parse_align(a.get("align").unwrap_or("start"))?;
+            node.justify = parse_justify(a.get("justify").unwrap_or("start"))?;
+            node.end     = a.get("end").map(|v| v == "true").unwrap_or(false);
+        }
+        NodeKind::Split => {
+            node.align = parse_align(a.get("align").unwrap_or("start"))?;
+            node.equal = a.get("equal").map(|v| v == "true").unwrap_or(false);
+        }
+        NodeKind::Cluster => {
+            node.align   = parse_align(a.get("align").unwrap_or("start"))?;
+            node.justify = parse_justify(a.get("justify").unwrap_or("start"))?;
+            node.wrap    = a.get("wrap").map(|v| v != "false").unwrap_or(true);
+        }
+        NodeKind::Frame => {
+            node.align   = parse_align(a.get("align").unwrap_or("center"))?;
+            node.justify = parse_justify(a.get("justify").unwrap_or("center"))?;
+        }
+        NodeKind::Grid => {
+            node.cols = a.get("cols").and_then(|v| v.parse().ok()).unwrap_or(1);
+            if let Some(v) = a.get("col-width") {
+                node.col_width = Some(tokens.resolve_grid_col(v)?);
+            }
+        }
+        NodeKind::Divider => {
+            node.direction = match a.get("direction").unwrap_or("horizontal") {
+                "vertical" => Direction::Vertical,
+                _          => Direction::Horizontal,
+            };
+            node.color = Some(match a.get("color") {
+                Some(v) => tokens.resolve_color(v)?,
+                None    => "#000000".into(),
+            });
+            node.thickness = match a.get("thickness") {
+                Some(v) => tokens.resolve_border_thickness(v)?,
+                None    => 1.0,
+            };
+        }
+        NodeKind::Text | NodeKind::Link | NodeKind::Img => {}
+    }
+    Ok(())
+}
+
+fn validate_img_asset(
+    name:         &str,
+    asset_images: &HashSet<String>,
+    declare_hint: &str,
+) -> Result<(), String> {
+    if !asset_images.contains(name) {
+        return Err(format!(
+            "<img name=\"{name}\"> references an unknown asset image; \
+             declare it in {declare_hint}"
+        ));
+    }
+    Ok(())
+}
+
+// ── Tree (JSON) parser ────────────────────────────────────────────────────────
 
 /// Parse a JSON document tree (produced by `LpdfKit`) into a `Document`.
 pub fn parse_tree(json: &str) -> Result<Document, String> {
@@ -1150,103 +1170,11 @@ fn parse_tree_node(
     };
 
     let mut node = ParsedNode::default_for(kind.clone());
+    let a = JsonAttrs(json);
+    apply_box_attrs(&mut node, &a, tokens)?;
+    apply_layout_kind_attrs(&mut node, &a, tokens)?;
 
-    // ── font / font-size (allowed on ALL kinds) ───────────────────────────────
-    if let Some(v) = jattr(json, "font") {
-        node.font = Some(v.to_string());
-    }
-    // tree uses "font-size"
-    if let Some(v) = jattr(json, "font-size") {
-        node.font_size = Some(tokens.resolve_text_size(v)?);
-    }
-
-    // ── Shared box attrs ──────────────────────────────────────────────────────
-    if let Some(v) = jattr(json, "gap") {
-        node.gap = tokens.resolve_space(v)?;
-    }
-    if let Some(v) = jattr(json, "padding") {
-        node.padding = tokens.resolve_spacing(v)?;
-    }
-    if let Some(v) = jattr(json, "background") {
-        node.background = Some(tokens.resolve_color(v)?);
-    }
-    if let Some(v) = jattr(json, "border") {
-        node.border = Some(tokens.resolve_border(v)?);
-    }
-    if let Some(v) = jattr(json, "radius") {
-        node.radius = tokens.resolve_radius(v)?;
-    }
-    if kind != NodeKind::Img {
-        if let Some(v) = jattr(json, "height") {
-            node.height_mode = match v {
-                "full" => HeightMode::Full,
-                "fill" => HeightMode::Fill,
-                other  => {
-                    parse_pt(other)
-                        .map(HeightMode::Fixed)
-                        .ok_or_else(|| format!("invalid height value: '{other}'"))?
-                }
-            };
-        }
-    }
-    if let Some(v) = jattr(json, "width") {
-        node.width_constraint = Some(tokens.resolve_width(v)?);
-    }
-    if let Some(v) = jattr(json, "repeat") {
-        node.repeat = match v {
-            "page"  => Repeat::Page,
-            "first" => Repeat::First,
-            other   => return Err(format!("invalid repeat value: '{other}'")),
-        };
-    }
-    node.debug = jattr(json, "debug").map(|v| v == "true").unwrap_or(false);
-
-    // ── Kind-specific attrs ───────────────────────────────────────────────────
     match kind {
-        NodeKind::Stack => {
-            node.align   = parse_align(jattr(json, "align").unwrap_or("start"))?;
-            node.justify = parse_justify(jattr(json, "justify").unwrap_or("start"))?;
-        }
-        NodeKind::Flank => {
-            node.align   = parse_align(jattr(json, "align").unwrap_or("start"))?;
-            node.justify = parse_justify(jattr(json, "justify").unwrap_or("start"))?;
-            node.end     = jattr(json, "end").map(|v| v == "true").unwrap_or(false);
-        }
-        NodeKind::Split => {
-            node.align = parse_align(jattr(json, "align").unwrap_or("start"))?;
-            node.equal = jattr(json, "equal").map(|v| v == "true").unwrap_or(false);
-        }
-        NodeKind::Cluster => {
-            node.align   = parse_align(jattr(json, "align").unwrap_or("start"))?;
-            node.justify = parse_justify(jattr(json, "justify").unwrap_or("start"))?;
-            node.wrap    = jattr(json, "wrap").map(|v| v != "false").unwrap_or(true);
-        }
-        NodeKind::Frame => {
-            node.align   = parse_align(jattr(json, "align").unwrap_or("center"))?;
-            node.justify = parse_justify(jattr(json, "justify").unwrap_or("center"))?;
-        }
-        NodeKind::Grid => {
-            node.cols = jattr(json, "cols").and_then(|v| v.parse().ok()).unwrap_or(1);
-            if let Some(v) = jattr(json, "col-width") {
-                node.col_width = Some(tokens.resolve_grid_col(v)?);
-            }
-        }
-        NodeKind::Divider => {
-            node.direction = match jattr(json, "direction").unwrap_or("horizontal") {
-                "vertical" => Direction::Vertical,
-                _          => Direction::Horizontal,
-            };
-            node.color = Some(if let Some(v) = jattr(json, "color") {
-                tokens.resolve_color(v)?
-            } else {
-                "#000000".into()
-            });
-            node.thickness = if let Some(v) = jattr(json, "thickness") {
-                tokens.resolve_border_thickness(v)?
-            } else {
-                1.0
-            };
-        }
         NodeKind::Text => {
             node.text_color = Some(match jattr(json, "color") {
                 Some(v) => tokens.resolve_color(v)?,
@@ -1318,21 +1246,15 @@ fn parse_tree_node(
             let name = jattr(json, "name")
                 .ok_or("<img> node requires a 'name' attribute")?
                 .to_string();
-            if !asset_images.contains(&name) {
-                return Err(format!(
-                    "<img name=\"{name}\"> references an unknown asset image; \
-                     declare it in assets.images"
-                ));
-            }
+            validate_img_asset(&name, asset_images, "assets.images")?;
             node.image_name = Some(name);
             if let Some(v) = jattr(json, "height") {
-                if let Some(h) = parse_pt(v) {
-                    node.img_height_constraint = Some(h);
-                } else {
-                    return Err(format!("img height: invalid pt value '{v}'"));
-                }
+                node.img_height_constraint = Some(
+                    parse_pt(v).ok_or_else(|| format!("img height: invalid pt value '{v}'"))?
+                );
             }
         }
+        _ => {}
     }
 
     // ── Layout children ───────────────────────────────────────────────────────
