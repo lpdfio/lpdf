@@ -2418,4 +2418,155 @@ mod tests {
         assert!(frame1["children"].as_array().map(|a| a.is_empty()).unwrap_or(true),
             "unflagged frame should have no children");
     }
+
+    // ── Page size table ───────────────────────────────────────────────────────
+
+    #[test]
+    fn page_sizes_correct() {
+        let cases: &[(&str, f64, f64)] = &[
+            ("a3",     841.89, 1190.55),
+            ("a5",     419.53,  595.28),
+            ("letter", 612.0,   792.0),
+            ("legal",  612.0,  1008.0),
+        ];
+        for &(size, exp_w, exp_h) in cases {
+            let xml = format!(
+                r#"<lpdf version="1"><document size="{size}" margin="0pt"><pages><page /></pages></document></lpdf>"#
+            );
+            let tree = engine_render(&xml);
+            let w = tree["pages"][0]["width"].as_f64().unwrap();
+            let h = tree["pages"][0]["height"].as_f64().unwrap();
+            assert!((w - exp_w).abs() < 0.1, "{size}: width {w} != {exp_w}");
+            assert!((h - exp_h).abs() < 0.1, "{size}: height {h} != {exp_h}");
+        }
+    }
+
+    // ── Flank layout ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn flank_default_places_flanks_left_fill_right() {
+        // end=false (default): first child is the flank (explicit width=100pt),
+        // last child is the fill and takes all remaining width on the right.
+        let body = r#"<flank gap="0pt"><frame width="100pt" height="20pt" /><frame height="20pt" /></flank>"#;
+        let tree = engine_render(&minimal(body));
+        let children = tree["pages"][0]["nodes"][0]["children"].as_array().unwrap();
+        assert_eq!(children.len(), 2);
+
+        let margin  = 28.0_f64;
+        let avail_w = 595.28 - 2.0 * margin;
+
+        let flank_x = children[0]["x"].as_f64().unwrap();
+        let flank_w = children[0]["width"].as_f64().unwrap();
+        let fill_x  = children[1]["x"].as_f64().unwrap();
+        let fill_w  = children[1]["width"].as_f64().unwrap();
+
+        assert!((flank_x - margin).abs() < 0.1,              "flank_x={flank_x}");
+        assert!((flank_w - 100.0).abs() < 0.1,               "flank_w={flank_w}");
+        assert!((fill_x  - (margin + 100.0)).abs() < 0.1,    "fill_x={fill_x}");
+        assert!((fill_w  - (avail_w - 100.0)).abs() < 0.5,   "fill_w={fill_w}");
+    }
+
+    #[test]
+    fn flank_end_true_places_fill_left_flanks_right() {
+        // end=true: fill child (first in XML) goes left, flank child (second, 100pt) goes right.
+        let body = r#"<flank gap="0pt" end="true"><frame height="20pt" /><frame width="100pt" height="20pt" /></flank>"#;
+        let tree = engine_render(&minimal(body));
+        let children = tree["pages"][0]["nodes"][0]["children"].as_array().unwrap();
+        assert_eq!(children.len(), 2);
+
+        let margin  = 28.0_f64;
+        let avail_w = 595.28 - 2.0 * margin;
+
+        let fill_x  = children[0]["x"].as_f64().unwrap();
+        let fill_w  = children[0]["width"].as_f64().unwrap();
+        let flank_x = children[1]["x"].as_f64().unwrap();
+        let flank_w = children[1]["width"].as_f64().unwrap();
+
+        assert!((fill_x  - margin).abs() < 0.1,                      "fill_x={fill_x}");
+        assert!((fill_w  - (avail_w - 100.0)).abs() < 0.5,           "fill_w={fill_w}");
+        assert!((flank_x - (margin + avail_w - 100.0)).abs() < 0.5,  "flank_x={flank_x}");
+        assert!((flank_w - 100.0).abs() < 0.1,                       "flank_w={flank_w}");
+    }
+
+    // ── Span decoration ───────────────────────────────────────────────────────
+
+    #[test]
+    fn span_underline_emits_line_decoration() {
+        let body = r#"<text size="m"><span underline="true">hello</span></text>"#;
+        let tree = engine_render(&minimal(body));
+        let kids = tree["pages"][0]["nodes"][0]["children"].as_array().unwrap();
+        // span atom produces a text node + an underline line node
+        let types: Vec<&str> = kids.iter().filter_map(|k| k["type"].as_str()).collect();
+        assert!(types.contains(&"text"), "no text node; got {:?}", types);
+        assert!(types.contains(&"line"), "no underline line; got {:?}", types);
+    }
+
+    #[test]
+    fn span_strike_emits_line_decoration() {
+        let body = r#"<text size="m"><span strike="true">hello</span></text>"#;
+        let tree = engine_render(&minimal(body));
+        let kids = tree["pages"][0]["nodes"][0]["children"].as_array().unwrap();
+        let types: Vec<&str> = kids.iter().filter_map(|k| k["type"].as_str()).collect();
+        assert!(types.contains(&"text"), "no text node; got {:?}", types);
+        assert!(types.contains(&"line"), "no strikethrough line; got {:?}", types);
+    }
+
+    #[test]
+    fn span_href_wraps_in_link_node() {
+        let body = r#"<text size="m"><span href="https://example.com">click here</span></text>"#;
+        let tree = engine_render(&minimal(body));
+        let kids = tree["pages"][0]["nodes"][0]["children"].as_array().unwrap();
+        let link = kids.iter().find(|k| k["type"] == "link").expect("no link node in children");
+        assert_eq!(link["url"], "https://example.com");
+        assert!(!link["children"].as_array().unwrap().is_empty());
+    }
+
+    // ── Custom document tokens ────────────────────────────────────────────────
+
+    #[test]
+    fn custom_tokens_space_scale_overrides_default() {
+        // Override the "m" space token to 50pt. A stack gap="m" should produce
+        // a 50pt gap, not the default 8pt.
+        let xml = r#"<lpdf version="1">
+            <tokens>
+                <space xs="1pt" s="2pt" m="50pt" l="100pt" xl="200pt" xxl="400pt" />
+            </tokens>
+            <document size="a4" margin="0pt">
+                <pages><page>
+                    <stack gap="m">
+                        <frame height="20pt" />
+                        <frame height="20pt" />
+                    </stack>
+                </page></pages>
+            </document>
+        </lpdf>"#;
+        let tree = engine_render(xml);
+        let children = tree["pages"][0]["nodes"][0]["children"].as_array().unwrap();
+        let y0 = children[0]["y"].as_f64().unwrap();
+        let y1 = children[1]["y"].as_f64().unwrap();
+        // second child y = first y + first height (20) + custom gap (50)
+        assert!((y1 - y0 - 20.0 - 50.0).abs() < 0.5,
+            "expected 50pt gap but y0={y0} y1={y1}");
+    }
+
+    #[test]
+    fn custom_tokens_color_overrides_default() {
+        // Override the "primary" color token. The frame background should use
+        // the custom value, not the built-in default.
+        let xml = r##"<lpdf version="1">
+            <tokens>
+                <colors>
+                    <color name="primary" value="#abcdef" />
+                </colors>
+            </tokens>
+            <document size="a4" margin="0pt">
+                <pages><page>
+                    <frame height="20pt" background="primary" />
+                </page></pages>
+            </document>
+        </lpdf>"##;
+        let tree = engine_render(xml);
+        let fill = tree["pages"][0]["nodes"][0]["fill"].as_str().unwrap();
+        assert_eq!(fill, "#abcdef");
+    }
 }

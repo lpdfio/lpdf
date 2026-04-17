@@ -372,4 +372,28 @@ mod tests {
         assert!(!kids.is_empty());
         assert_eq!(kids[0]["type"], "text");
     }
+
+    // ── render_pdf primary path ───────────────────────────────────────────────
+
+    #[test]
+    fn render_pdf_produces_pdf_header() {
+        let bytes = LpdfEngine::render_xml_to_pdf_bytes(&minimal("")).unwrap();
+        assert_eq!(&bytes[..5], b"%PDF-");
+    }
+
+    #[test]
+    fn render_pdf_invalid_xml_returns_error() {
+        let result = LpdfEngine::render_xml_to_pdf_bytes("<unclosed");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn render_pdf_size_limit() {
+        // render_pdf's 1 MB guard is also enforced by render(); test via the
+        // JSON path which works on non-WASM targets (JsValue panics otherwise).
+        let engine = LpdfEngine::new("");
+        let big = "x".repeat(1_048_577);
+        let result: serde_json::Value = serde_json::from_str(&engine.render(&big)).unwrap();
+        assert_eq!(result["error"], "input exceeds 1 MB limit");
+    }
 }
