@@ -75,6 +75,19 @@ final class LpdfEngine
             $this->fonts,
         );
 
+        // Auto-load fonts declared via src= that haven't been explicitly provided.
+        $fontSrcs = $method === 'render_pdf'
+            ? self::xmlFontSrcs($inputStr)
+            : self::jsonFontSrcs($inputStr);
+        foreach ($fontSrcs as $name => $path) {
+            if (!array_key_exists($name, $mergedFonts) && is_readable($path)) {
+                $bytes = file_get_contents($path);
+                if ($bytes !== false) {
+                    $mergedFonts[$name] = $bytes;
+                }
+            }
+        }
+
         // Merge images: same precedence order as fonts.
         $mergedImages = array_merge(
             $this->options->imageBytes ?? [],
@@ -113,6 +126,33 @@ final class LpdfEngine
         }
 
         return $bytes;
+    }
+
+    /** @return array<string,string> Font name → file path from `<font name="…" src="…">` tags. */
+    private static function xmlFontSrcs(string $xml): array
+    {
+        $srcs = [];
+        preg_match_all('/<font\s[^>]*>/', $xml, $m);
+        foreach ($m[0] as $tag) {
+            if (preg_match('/\bname="([^"]*)"/', $tag, $nm) &&
+                preg_match('/\bsrc="([^"]*)"/', $tag, $src)) {
+                $srcs[$nm[1]] = $src[1];
+            }
+        }
+        return $srcs;
+    }
+
+    /** @return array<string,string> Font name → file path from a serialised tree's `tokens.fonts`. */
+    private static function jsonFontSrcs(string $json): array
+    {
+        $srcs = [];
+        $doc  = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        foreach ($doc['attrs']['tokens']['fonts'] ?? [] as $name => $def) {
+            if (isset($def['src'])) {
+                $srcs[$name] = $def['src'];
+            }
+        }
+        return $srcs;
     }
 
     private static function defaultBinary(): string
