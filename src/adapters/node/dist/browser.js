@@ -158,13 +158,13 @@ function __wbg_get_imports() {
       return ret;
     },
     __wbindgen_init_externref_table: function() {
-      const table = wasm.__wbindgen_externrefs;
-      const offset = table.grow(4);
-      table.set(0, void 0);
-      table.set(offset + 0, void 0);
-      table.set(offset + 1, null);
-      table.set(offset + 2, true);
-      table.set(offset + 3, false);
+      const table2 = wasm.__wbindgen_externrefs;
+      const offset = table2.grow(4);
+      table2.set(0, void 0);
+      table2.set(offset + 0, void 0);
+      table2.set(offset + 1, null);
+      table2.set(offset + 2, true);
+      table2.set(offset + 3, false);
     }
   };
   return {
@@ -360,6 +360,34 @@ function frame(input = {}) {
 function link(input = {}) {
   return makeContainer("link", input);
 }
+function table(input) {
+  return {
+    type: "table",
+    attrs: buildAttrs(input.options),
+    children: input.nodes ?? []
+  };
+}
+function thead(input = {}) {
+  return {
+    type: "thead",
+    attrs: buildAttrs(input.options ?? {}),
+    children: input.nodes ?? []
+  };
+}
+function tr(input = {}) {
+  return {
+    type: "tr",
+    attrs: buildAttrs(input.options ?? {}),
+    children: input.nodes ?? []
+  };
+}
+function td(input = {}) {
+  return {
+    type: "td",
+    attrs: buildAttrs(input.options ?? {}),
+    children: input.nodes ?? []
+  };
+}
 function text(input = {}) {
   return {
     type: "text",
@@ -413,7 +441,11 @@ var LpdfKit = Object.freeze({
   span,
   divider,
   page,
-  document
+  document,
+  table,
+  thead,
+  tr,
+  td
 });
 
 // src/browser.ts

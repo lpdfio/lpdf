@@ -118,6 +118,32 @@ final class LpdfKit
         return new LpdfDividerNode(self::optionsToAttrs($options));
     }
 
+    // ── Table helpers ─────────────────────────────────────────────────────────
+
+    /** @param array<LpdfTheadNode|LpdfTrNode> $nodes */
+    public static function table(array $nodes = [], ?TableOptions $options = null): LpdfContainerNode
+    {
+        return new LpdfContainerNode('table', self::optionsToAttrs($options), $nodes);
+    }
+
+    /** @param LpdfTdNode[] $nodes */
+    public static function thead(array $nodes = [], ?TheadOptions $options = null): LpdfContainerNode
+    {
+        return new LpdfContainerNode('thead', self::optionsToAttrs($options), $nodes);
+    }
+
+    /** @param LpdfTdNode[] $nodes */
+    public static function tr(array $nodes = [], ?TrOptions $options = null): LpdfContainerNode
+    {
+        return new LpdfContainerNode('tr', self::optionsToAttrs($options), $nodes);
+    }
+
+    /** @param LpdfNode[] $nodes */
+    public static function td(array $nodes = [], ?TdOptions $options = null): LpdfContainerNode
+    {
+        return new LpdfContainerNode('td', self::optionsToAttrs($options), $nodes);
+    }
+
     // ── Page + document ───────────────────────────────────────────────────────
 
     /** @param LpdfNode[] $nodes */

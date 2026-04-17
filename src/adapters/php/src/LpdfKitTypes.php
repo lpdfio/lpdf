@@ -142,6 +142,48 @@ final readonly class DividerOptions
     ) {}
 }
 
+final readonly class TableOptions
+{
+    public function __construct(
+        public string  $cols,
+        public ?string $border     = null,
+        public ?string $stripe     = null,
+        public ?string $gap        = null,
+        public ?string $padding    = null,
+        public ?string $background = null,
+        public ?string $width      = null,
+        public ?string $height     = null,
+        public ?string $repeat     = null,
+    ) {}
+}
+
+final readonly class TheadOptions
+{
+    public function __construct(
+        public ?string $background = null,
+    ) {}
+}
+
+final readonly class TrOptions
+{
+    public function __construct(
+        public ?string $background = null,
+    ) {}
+}
+
+final readonly class TdOptions
+{
+    public function __construct(
+        public ?string $padding    = null,
+        public ?string $background = null,
+        public ?string $align      = null,
+        public ?string $valign     = null,
+        public ?string $border     = null,
+        public ?string $radius     = null,
+        public ?string $gap        = null,
+    ) {}
+}
+
 final readonly class PageOptions
 {
     public function __construct(

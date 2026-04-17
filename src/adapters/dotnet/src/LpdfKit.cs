@@ -66,6 +66,24 @@ public static class LpdfKit
     public static LpdfDividerNode Divider(DividerInput input) =>
         new(Attrs(input.Options));
 
+    // ── Table helpers ─────────────────────────────────────────────────────────
+
+    /// <summary>Build a <c>table</c> layout node.</summary>
+    public static LpdfContainerNode Table(TableInput input) =>
+        Container("table", input.Options, input.Nodes);
+
+    /// <summary>Build a <c>thead</c> table header row group.</summary>
+    public static LpdfContainerNode Thead(TheadInput input) =>
+        Container("thead", input.Options, input.Nodes);
+
+    /// <summary>Build a <c>tr</c> table row.</summary>
+    public static LpdfContainerNode Tr(TrInput input) =>
+        Container("tr", input.Options, input.Nodes);
+
+    /// <summary>Build a <c>td</c> table cell.</summary>
+    public static LpdfContainerNode Td(TdInput input) =>
+        Container("td", input.Options, input.Nodes);
+
     // ── Text helpers ──────────────────────────────────────────────────────────
 
     /// <summary>Build a <c>text</c> paragraph node.</summary>

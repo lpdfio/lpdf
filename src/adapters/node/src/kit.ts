@@ -99,6 +99,38 @@ export interface GridOptions {
   debug?:      string;
 }
 
+export interface TableOptions {
+  cols:        string;
+  border?:     string;
+  stripe?:     string;
+  gap?:        string;
+  padding?:    string;
+  background?: string;
+  width?:      string;
+  height?:     string;
+  repeat?:     string;
+  debug?:      string;
+}
+
+export interface TheadOptions {
+  background?: string;
+}
+
+export interface TrOptions {
+  background?: string;
+}
+
+export interface TdOptions {
+  padding?:    string;
+  background?: string;
+  align?:      string;
+  valign?:     string;
+  border?:     string;
+  radius?:     string;
+  gap?:        string;
+  debug?:      string;
+}
+
 export interface FrameOptions {
   width?:      string;
   height?:     string;
@@ -199,6 +231,10 @@ export interface SpanInput     { nodes?: string[];                    options?: 
 export interface DividerInput  {                                       options?: DividerOptions;  }
 export interface PageInput     { nodes?: LpdfNode[];                  options?: PageOptions;     }
 export interface DocumentInput { nodes?: LpdfPageNode[];              options?: DocumentOptions; }
+export interface TableInput    { nodes?: (LpdfTheadNode | LpdfTrNode)[];  options: TableOptions; }
+export interface TheadInput    { nodes?: LpdfTdNode[];                options?: TheadOptions;    }
+export interface TrInput       { nodes?: LpdfTdNode[];                options?: TrOptions;       }
+export interface TdInput       { nodes?: LpdfNode[];                  options?: TdOptions;       }
 
 // ── Output node shapes (what helpers return / the serialised tree) ─────────────
 
@@ -210,7 +246,7 @@ export interface LpdfSpanNode {
 }
 
 export interface LpdfContainerNode {
-  type:     'stack' | 'flank' | 'split' | 'cluster' | 'grid' | 'frame' | 'link';
+  type:     'stack' | 'flank' | 'split' | 'cluster' | 'grid' | 'frame' | 'link' | 'table' | 'thead' | 'tr' | 'td';
   attrs:    Record<string, string>;
   children: LpdfNode[];
 }
@@ -226,7 +262,31 @@ export interface LpdfDividerNode {
   attrs: Record<string, string>;
 }
 
-export type LpdfNode = LpdfContainerNode | LpdfTextNode | LpdfDividerNode;
+export interface LpdfTheadNode {
+  type:     'thead';
+  attrs:    Record<string, string>;
+  children: LpdfTdNode[];
+}
+
+export interface LpdfTrNode {
+  type:     'tr';
+  attrs:    Record<string, string>;
+  children: LpdfTdNode[];
+}
+
+export interface LpdfTdNode {
+  type:     'td';
+  attrs:    Record<string, string>;
+  children: LpdfNode[];
+}
+
+export interface LpdfTableNode {
+  type:     'table';
+  attrs:    Record<string, string>;
+  children: (LpdfTheadNode | LpdfTrNode)[];
+}
+
+export type LpdfNode = LpdfContainerNode | LpdfTextNode | LpdfDividerNode | LpdfTableNode;
 
 export interface LpdfPageNode {
   type:     'page';
@@ -280,6 +340,38 @@ function frame(input: FrameInput = {}): LpdfContainerNode {
 
 function link(input: LinkInput = {}): LpdfContainerNode {
   return makeContainer('link', input as { nodes?: LpdfNode[]; options?: Record<string, string | undefined> });
+}
+
+function table(input: TableInput): LpdfTableNode {
+  return {
+    type:     'table',
+    attrs:    buildAttrs(input.options as unknown as Record<string, string | undefined>),
+    children: input.nodes ?? [],
+  };
+}
+
+function thead(input: TheadInput = {}): LpdfTheadNode {
+  return {
+    type:     'thead',
+    attrs:    buildAttrs((input.options ?? {}) as Record<string, string | undefined>),
+    children: input.nodes ?? [],
+  };
+}
+
+function tr(input: TrInput = {}): LpdfTrNode {
+  return {
+    type:     'tr',
+    attrs:    buildAttrs((input.options ?? {}) as Record<string, string | undefined>),
+    children: input.nodes ?? [],
+  };
+}
+
+function td(input: TdInput = {}): LpdfTdNode {
+  return {
+    type:     'td',
+    attrs:    buildAttrs((input.options ?? {}) as Record<string, string | undefined>),
+    children: input.nodes ?? [],
+  };
 }
 
 function text(input: TextInput = {}): LpdfTextNode {
@@ -351,4 +443,8 @@ export const LpdfKit = Object.freeze({
   divider,
   page,
   document,
+  table,
+  thead,
+  tr,
+  td,
 });

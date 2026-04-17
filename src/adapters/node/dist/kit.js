@@ -62,6 +62,34 @@ function frame(input = {}) {
 function link(input = {}) {
     return makeContainer('link', input);
 }
+function table(input) {
+    return {
+        type: 'table',
+        attrs: buildAttrs(input.options),
+        children: input.nodes ?? [],
+    };
+}
+function thead(input = {}) {
+    return {
+        type: 'thead',
+        attrs: buildAttrs((input.options ?? {})),
+        children: input.nodes ?? [],
+    };
+}
+function tr(input = {}) {
+    return {
+        type: 'tr',
+        attrs: buildAttrs((input.options ?? {})),
+        children: input.nodes ?? [],
+    };
+}
+function td(input = {}) {
+    return {
+        type: 'td',
+        attrs: buildAttrs((input.options ?? {})),
+        children: input.nodes ?? [],
+    };
+}
 function text(input = {}) {
     return {
         type: 'text',
@@ -127,4 +155,8 @@ exports.LpdfKit = Object.freeze({
     divider,
     page,
     document,
+    table,
+    thead,
+    tr,
+    td,
 });

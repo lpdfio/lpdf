@@ -74,6 +74,34 @@ export interface GridOptions {
     radius?: string;
     debug?: string;
 }
+export interface TableOptions {
+    cols: string;
+    border?: string;
+    stripe?: string;
+    gap?: string;
+    padding?: string;
+    background?: string;
+    width?: string;
+    height?: string;
+    repeat?: string;
+    debug?: string;
+}
+export interface TheadOptions {
+    background?: string;
+}
+export interface TrOptions {
+    background?: string;
+}
+export interface TdOptions {
+    padding?: string;
+    background?: string;
+    align?: string;
+    valign?: string;
+    border?: string;
+    radius?: string;
+    gap?: string;
+    debug?: string;
+}
 export interface FrameOptions {
     width?: string;
     height?: string;
@@ -201,6 +229,22 @@ export interface DocumentInput {
     nodes?: LpdfPageNode[];
     options?: DocumentOptions;
 }
+export interface TableInput {
+    nodes?: (LpdfTheadNode | LpdfTrNode)[];
+    options: TableOptions;
+}
+export interface TheadInput {
+    nodes?: LpdfTdNode[];
+    options?: TheadOptions;
+}
+export interface TrInput {
+    nodes?: LpdfTdNode[];
+    options?: TrOptions;
+}
+export interface TdInput {
+    nodes?: LpdfNode[];
+    options?: TdOptions;
+}
 /** Spans are only valid as children of `LpdfTextNode` — not part of `LpdfNode`. */
 export interface LpdfSpanNode {
     type: 'span';
@@ -208,7 +252,7 @@ export interface LpdfSpanNode {
     children: string[];
 }
 export interface LpdfContainerNode {
-    type: 'stack' | 'flank' | 'split' | 'cluster' | 'grid' | 'frame' | 'link';
+    type: 'stack' | 'flank' | 'split' | 'cluster' | 'grid' | 'frame' | 'link' | 'table' | 'thead' | 'tr' | 'td';
     attrs: Record<string, string>;
     children: LpdfNode[];
 }
@@ -221,7 +265,27 @@ export interface LpdfDividerNode {
     type: 'divider';
     attrs: Record<string, string>;
 }
-export type LpdfNode = LpdfContainerNode | LpdfTextNode | LpdfDividerNode;
+export interface LpdfTheadNode {
+    type: 'thead';
+    attrs: Record<string, string>;
+    children: LpdfTdNode[];
+}
+export interface LpdfTrNode {
+    type: 'tr';
+    attrs: Record<string, string>;
+    children: LpdfTdNode[];
+}
+export interface LpdfTdNode {
+    type: 'td';
+    attrs: Record<string, string>;
+    children: LpdfNode[];
+}
+export interface LpdfTableNode {
+    type: 'table';
+    attrs: Record<string, string>;
+    children: (LpdfTheadNode | LpdfTrNode)[];
+}
+export type LpdfNode = LpdfContainerNode | LpdfTextNode | LpdfDividerNode | LpdfTableNode;
 export interface LpdfPageNode {
     type: 'page';
     attrs: Record<string, string>;
@@ -240,6 +304,10 @@ declare function cluster(input?: ClusterInput): LpdfContainerNode;
 declare function grid(input?: GridInput): LpdfContainerNode;
 declare function frame(input?: FrameInput): LpdfContainerNode;
 declare function link(input?: LinkInput): LpdfContainerNode;
+declare function table(input: TableInput): LpdfTableNode;
+declare function thead(input?: TheadInput): LpdfTheadNode;
+declare function tr(input?: TrInput): LpdfTrNode;
+declare function td(input?: TdInput): LpdfTdNode;
 declare function text(input?: TextInput): LpdfTextNode;
 declare function span(input?: SpanInput): LpdfSpanNode;
 declare function divider(input?: DividerInput): LpdfDividerNode;
@@ -266,5 +334,9 @@ export declare const LpdfKit: Readonly<{
     divider: typeof divider;
     page: typeof page;
     document: typeof document;
+    table: typeof table;
+    thead: typeof thead;
+    tr: typeof tr;
+    td: typeof td;
 }>;
 export {};

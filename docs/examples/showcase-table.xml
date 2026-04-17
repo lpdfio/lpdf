@@ -1,0 +1,220 @@
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf" />
+      <color name="surface"  value="#ffffff" />
+      <color name="bg"       value="#f5f7fa" />
+      <color name="accent"   value="#e8f0fc" />
+      <color name="muted"    value="#737373" />
+      <color name="rule"     value="#dde3ed" />
+    </colors>
+  </tokens>
+  <document size="a4" margin="40pt">
+    <meta title="lpdf Showcase — Table" subject="Layout primitives" />
+    <pages>
+
+      <page background="surface">
+        <stack gap="xl">
+
+          <stack gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Table</text>
+            <text font-size="m" color="muted">Tabular layout — explicit column widths, header repeat on new pages, alternating row shading</text>
+          </stack>
+
+          <!-- cols — fr units -->
+          <stack gap="m">
+            <text font-size="l" font="Helvetica-Bold">cols — fr (fractional)</text>
+            <stack gap="xs">
+              <text font-size="m" color="muted">cols="1fr 1fr 1fr" — three equal columns</text>
+              <table cols="1fr 1fr 1fr" border="0.5pt rule">
+                <tr>
+                  <td padding="xs s"><text font-size="m">Alpha</text></td>
+                  <td padding="xs s"><text font-size="m">Beta</text></td>
+                  <td padding="xs s"><text font-size="m">Gamma</text></td>
+                </tr>
+                <tr>
+                  <td padding="xs s"><text font-size="m">Delta</text></td>
+                  <td padding="xs s"><text font-size="m">Epsilon</text></td>
+                  <td padding="xs s"><text font-size="m">Zeta</text></td>
+                </tr>
+              </table>
+            </stack>
+            <stack gap="xs">
+              <text font-size="m" color="muted">cols="2fr 1fr 1fr" — first column twice as wide</text>
+              <table cols="2fr 1fr 1fr" border="0.5pt rule">
+                <tr>
+                  <td padding="xs s"><text font-size="m">Wider description column</text></td>
+                  <td padding="xs s"><text font-size="m">Value</text></td>
+                  <td padding="xs s"><text font-size="m">Total</text></td>
+                </tr>
+                <tr>
+                  <td padding="xs s"><text font-size="m">Another description row</text></td>
+                  <td padding="xs s"><text font-size="m">42</text></td>
+                  <td padding="xs s"><text font-size="m">$840</text></td>
+                </tr>
+              </table>
+            </stack>
+          </stack>
+
+          <!-- cols — pt and % -->
+          <stack gap="m">
+            <text font-size="l" font="Helvetica-Bold">cols — pt (fixed) and % (percentage)</text>
+            <stack gap="xs">
+              <text font-size="m" color="muted">cols="80pt 1fr 1fr" — fixed first column, fr remainder</text>
+              <table cols="80pt 1fr 1fr" border="0.5pt rule">
+                <tr>
+                  <td padding="xs s"><text font-size="m">Fixed 80pt</text></td>
+                  <td padding="xs s"><text font-size="m">Flex A</text></td>
+                  <td padding="xs s"><text font-size="m">Flex B</text></td>
+                </tr>
+                <tr>
+                  <td padding="xs s"><text font-size="m">Fixed 80pt</text></td>
+                  <td padding="xs s"><text font-size="m">Flex A</text></td>
+                  <td padding="xs s"><text font-size="m">Flex B</text></td>
+                </tr>
+              </table>
+            </stack>
+            <stack gap="xs">
+              <text font-size="m" color="muted">cols="50% 25% 25%" — percentage columns</text>
+              <table cols="50% 25% 25%" border="0.5pt rule">
+                <tr>
+                  <td padding="xs s"><text font-size="m">Half</text></td>
+                  <td padding="xs s"><text font-size="m">Quarter</text></td>
+                  <td padding="xs s"><text font-size="m">Quarter</text></td>
+                </tr>
+                <tr>
+                  <td padding="xs s"><text font-size="m">50%</text></td>
+                  <td padding="xs s"><text font-size="m">25%</text></td>
+                  <td padding="xs s"><text font-size="m">25%</text></td>
+                </tr>
+              </table>
+            </stack>
+          </stack>
+
+          <!-- stripe -->
+          <stack gap="m">
+            <text font-size="l" font="Helvetica-Bold">stripe</text>
+            <stack gap="xs">
+              <text font-size="m" color="muted">stripe="#f5f7fa" — alternating row shading on odd data rows</text>
+              <table cols="2fr 1fr 1fr" border="0.5pt rule" stripe="#f5f7fa">
+                <tr>
+                  <td padding="xs s"><text font-size="m">Row 1 (shaded)</text></td>
+                  <td padding="xs s"><text font-size="m">100</text></td>
+                  <td padding="xs s"><text font-size="m">$100</text></td>
+                </tr>
+                <tr>
+                  <td padding="xs s"><text font-size="m">Row 2</text></td>
+                  <td padding="xs s"><text font-size="m">200</text></td>
+                  <td padding="xs s"><text font-size="m">$200</text></td>
+                </tr>
+                <tr>
+                  <td padding="xs s"><text font-size="m">Row 3 (shaded)</text></td>
+                  <td padding="xs s"><text font-size="m">300</text></td>
+                  <td padding="xs s"><text font-size="m">$300</text></td>
+                </tr>
+                <tr>
+                  <td padding="xs s"><text font-size="m">Row 4</text></td>
+                  <td padding="xs s"><text font-size="m">400</text></td>
+                  <td padding="xs s"><text font-size="m">$400</text></td>
+                </tr>
+              </table>
+            </stack>
+          </stack>
+
+          <!-- thead -->
+          <stack gap="m">
+            <text font-size="l" font="Helvetica-Bold">thead</text>
+            <stack gap="xs">
+              <text font-size="m" color="muted">thead background="#e8ecf4" — header row, repeats on new pages</text>
+              <table cols="2fr 1fr 1fr 1fr" border="0.5pt rule" stripe="#f5f7fa">
+                <thead background="#e8ecf4">
+                  <td padding="xs s"><text font-size="m" font="Helvetica-Bold">Description</text></td>
+                  <td padding="xs s"><text font-size="m" font="Helvetica-Bold">Qty</text></td>
+                  <td padding="xs s"><text font-size="m" font="Helvetica-Bold">Unit price</text></td>
+                  <td padding="xs s"><text font-size="m" font="Helvetica-Bold">Total</text></td>
+                </thead>
+                <tr>
+                  <td padding="xs s"><text font-size="m">Consulting services – Q1 2026</text></td>
+                  <td padding="xs s"><text font-size="m">4</text></td>
+                  <td padding="xs s"><text font-size="m">$1,250.00</text></td>
+                  <td padding="xs s"><text font-size="m">$5,000.00</text></td>
+                </tr>
+                <tr>
+                  <td padding="xs s"><text font-size="m">Design assets</text></td>
+                  <td padding="xs s"><text font-size="m">1</text></td>
+                  <td padding="xs s"><text font-size="m">$800.00</text></td>
+                  <td padding="xs s"><text font-size="m">$800.00</text></td>
+                </tr>
+                <tr>
+                  <td padding="xs s"><text font-size="m">Hosting (annual)</text></td>
+                  <td padding="xs s"><text font-size="m">1</text></td>
+                  <td padding="xs s"><text font-size="m">$360.00</text></td>
+                  <td padding="xs s"><text font-size="m">$360.00</text></td>
+                </tr>
+              </table>
+            </stack>
+          </stack>
+
+          <!-- align -->
+          <stack gap="m">
+            <text font-size="l" font="Helvetica-Bold">td align</text>
+            <stack gap="xs">
+              <text font-size="m" color="muted">align="start" / "center" / "end" — horizontal text alignment per cell</text>
+              <table cols="1fr 1fr 1fr" border="0.5pt rule">
+                <thead background="#e8ecf4">
+                  <td padding="xs s" align="start"><text font-size="m" font="Helvetica-Bold">align="start"</text></td>
+                  <td padding="xs s" align="center"><text font-size="m" font="Helvetica-Bold">align="center"</text></td>
+                  <td padding="xs s" align="end"><text font-size="m" font="Helvetica-Bold">align="end"</text></td>
+                </thead>
+                <tr>
+                  <td padding="xs s" align="start"><text font-size="m">Left</text></td>
+                  <td padding="xs s" align="center"><text font-size="m">Center</text></td>
+                  <td padding="xs s" align="end"><text font-size="m">Right</text></td>
+                </tr>
+                <tr>
+                  <td padding="xs s" align="start"><text font-size="m">$1,250.00</text></td>
+                  <td padding="xs s" align="center"><text font-size="m">$800.00</text></td>
+                  <td padding="xs s" align="end"><text font-size="m">$360.00</text></td>
+                </tr>
+              </table>
+            </stack>
+          </stack>
+
+          <!-- borderless -->
+          <stack gap="m">
+            <text font-size="l" font="Helvetica-Bold">No border · per-row background</text>
+            <stack gap="xs">
+              <text font-size="m" color="muted">No border= — cells are adjacent with no lines; background= on tr for manual shading</text>
+              <table cols="2fr 1fr 1fr">
+                <thead background="#e8f0fc">
+                  <td padding="xs s"><text font-size="m" font="Helvetica-Bold" color="primary">Item</text></td>
+                  <td padding="xs s"><text font-size="m" font="Helvetica-Bold" color="primary">Status</text></td>
+                  <td padding="xs s" align="end"><text font-size="m" font="Helvetica-Bold" color="primary">Amount</text></td>
+                </thead>
+                <tr background="#f5f7fa">
+                  <td padding="xs s"><text font-size="m">Invoice #1042</text></td>
+                  <td padding="xs s"><text font-size="m" color="muted">Paid</text></td>
+                  <td padding="xs s" align="end"><text font-size="m">$5,000.00</text></td>
+                </tr>
+                <tr>
+                  <td padding="xs s"><text font-size="m">Invoice #1043</text></td>
+                  <td padding="xs s"><text font-size="m" color="primary">Pending</text></td>
+                  <td padding="xs s" align="end"><text font-size="m">$800.00</text></td>
+                </tr>
+                <tr background="#f5f7fa">
+                  <td padding="xs s"><text font-size="m">Invoice #1044</text></td>
+                  <td padding="xs s"><text font-size="m" color="muted">Paid</text></td>
+                  <td padding="xs s" align="end"><text font-size="m">$360.00</text></td>
+                </tr>
+              </table>
+            </stack>
+          </stack>
+
+        </stack>
+      </page>
+
+    </pages>
+  </document>
+</lpdf>

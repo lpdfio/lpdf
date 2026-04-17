@@ -31,6 +31,14 @@ public sealed record TextInput    (LpdfContent[]?  Nodes = null, TextOptions?   
 public sealed record SpanInput    (string[]?       Nodes = null, SpanOptions?     Options = null);
 /// <summary>Input to <see cref="LpdfKit.Divider"/>.</summary>
 public sealed record DividerInput (                              DividerOptions?  Options = null);
+/// <summary>Input to <see cref="LpdfKit.Table"/>.</summary>
+public sealed record TableInput   (LpdfNode[]?     Nodes = null, TableOptions?    Options = null);
+/// <summary>Input to <see cref="LpdfKit.Thead"/>.</summary>
+public sealed record TheadInput   (LpdfNode[]?     Nodes = null, TheadOptions?    Options = null);
+/// <summary>Input to <see cref="LpdfKit.Tr"/>.</summary>
+public sealed record TrInput      (LpdfNode[]?     Nodes = null, TrOptions?       Options = null);
+/// <summary>Input to <see cref="LpdfKit.Td"/>.</summary>
+public sealed record TdInput      (LpdfNode[]?     Nodes = null, TdOptions?       Options = null);
 /// <summary>Input to <see cref="LpdfKit.Page"/>.</summary>
 public sealed record PageInput    (LpdfNode[]?     Nodes = null, PageOptions?     Options = null);
 /// <summary>Input to <see cref="LpdfKit.Document"/>.</summary>
@@ -99,6 +107,27 @@ public sealed record SpanOptions(
 /// <summary>Attributes for the <c>divider</c> primitive.</summary>
 public sealed record DividerOptions(
     string? Color      = null, string? Thickness = null, string? Direction = null);
+
+/// <summary>Attributes for the <c>table</c> layout primitive.</summary>
+public sealed record TableOptions(
+    string? Cols       = null, string? Border    = null, string? Stripe     = null,
+    string? Gap        = null, string? Padding   = null, string? Background = null,
+    string? Width      = null, string? Height    = null, string? Repeat     = null);
+
+/// <summary>Attributes for the <c>thead</c> layout primitive.</summary>
+public sealed record TheadOptions(
+    string? Background = null);
+
+/// <summary>Attributes for the <c>tr</c> layout primitive.</summary>
+public sealed record TrOptions(
+    string? Background = null);
+
+/// <summary>Attributes for the <c>td</c> layout primitive.</summary>
+public sealed record TdOptions(
+    string? Padding    = null, string? Background = null,
+    string? Align      = null, string? Valign     = null,
+    string? Border     = null, string? Radius     = null,
+    string? Gap        = null);
 
 /// <summary>Attributes for the <c>page</c> primitive.</summary>
 public sealed record PageOptions(

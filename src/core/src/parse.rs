@@ -79,6 +79,9 @@ pub struct Node {
     // img (NodeKind::Img only)
     pub image_name: Option<String>,
     pub img_height_constraint: Option<f32>,
+    // table (NodeKind::Table only)
+    pub table_cols: String,
+    pub stripe: Option<String>,
     pub children: Vec<Node>,
 }
 
@@ -98,6 +101,10 @@ pub enum Repeat {
 pub enum NodeKind {
     Stack,
     Flank,
+    Table,
+    TableHead,
+    TableRow,
+    TableCell,
     Split,
     Cluster,
     Grid,
@@ -184,6 +191,8 @@ struct ParsedNode {
     url: Option<String>,
     image_name: Option<String>,
     img_height_constraint: Option<f32>,
+    table_cols: String,
+    stripe: Option<String>,
     children: Vec<ParsedNode>,
 }
 
@@ -235,6 +244,8 @@ impl ParsedNode {
             url: None,
             image_name: None,
             img_height_constraint: None,
+            table_cols: String::new(),
+            stripe: None,
             children: Vec::new(),
         }
     }
@@ -356,6 +367,8 @@ fn resolve_node(
         url:                   n.url,
         image_name:            n.image_name,
         img_height_constraint: n.img_height_constraint,
+        table_cols:            n.table_cols,
+        stripe:                n.stripe,
         children,
     }
 }
@@ -677,6 +690,10 @@ fn parse_node(
         "text"    => NodeKind::Text,
         "link"    => NodeKind::Link,
         "img"     => NodeKind::Img,
+        "table"   => NodeKind::Table,
+        "thead"   => NodeKind::TableHead,
+        "tr"      => NodeKind::TableRow,
+        "td"      => NodeKind::TableCell,
         other     => return Err(format!("unknown layout element: <{other}>")),
     };
 
@@ -754,7 +771,27 @@ fn parse_node(
     // ── Children (not for leaf nodes) ────────────────────────────────────────
     if !matches!(kind, NodeKind::Divider | NodeKind::Text | NodeKind::Img) {
         for child in elems(elem) {
-            node.children.push(parse_node(&child, tokens, asset_images)?);
+            let child_node = parse_node(&child, tokens, asset_images)?;
+            match kind {
+                NodeKind::Table => {
+                    if !matches!(child_node.kind, NodeKind::TableHead | NodeKind::TableRow) {
+                        return Err(format!(
+                            "<table> children must be <thead> or <tr>, got <{}>",
+                            child.tag_name().name()
+                        ));
+                    }
+                }
+                NodeKind::TableHead | NodeKind::TableRow => {
+                    if child_node.kind != NodeKind::TableCell {
+                        return Err(format!(
+                            "<thead> and <tr> children must be <td>, got <{}>",
+                            child.tag_name().name()
+                        ));
+                    }
+                }
+                _ => {}
+            }
+            node.children.push(child_node);
         }
         if kind == NodeKind::Frame && node.children.len() > 1 {
             return Err(format!(
@@ -949,6 +986,25 @@ fn apply_layout_kind_attrs(
                 Some(v) => tokens.resolve_border_thickness(v)?,
                 None    => 1.0,
             };
+        }
+        NodeKind::Table => {
+            if let Some(v) = a.get("cols") {
+                node.table_cols = v.to_string();
+            }
+            if let Some(v) = a.get("stripe") {
+                node.stripe = Some(tokens.resolve_color(v)?);
+            }
+        }
+        NodeKind::TableHead | NodeKind::TableRow => {}
+        NodeKind::TableCell => {
+            node.align   = parse_align(a.get("align").unwrap_or("stretch"))?;
+            let valign_str = a.get("valign").unwrap_or("top");
+            node.justify = parse_justify(match valign_str {
+                "top"    => "start",
+                "middle" => "center",
+                "bottom" => "end",
+                other    => other,
+            })?;
         }
         NodeKind::Text | NodeKind::Link | NodeKind::Img => {}
     }
@@ -1193,6 +1249,10 @@ fn parse_tree_node(
         "text"    => NodeKind::Text,
         "link"    => NodeKind::Link,
         "img"     => NodeKind::Img,
+        "table"   => NodeKind::Table,
+        "thead"   => NodeKind::TableHead,
+        "tr"      => NodeKind::TableRow,
+        "td"      => NodeKind::TableCell,
         other => return Err(format!("unknown node type: '{other}'")),
     };
 
@@ -1279,7 +1339,27 @@ fn parse_tree_node(
     if !matches!(kind, NodeKind::Divider | NodeKind::Img) {
         if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
             for child in arr {
-                node.children.push(parse_tree_node(child, tokens, asset_images)?);
+                let child_node = parse_tree_node(child, tokens, asset_images)?;
+                match kind {
+                    NodeKind::Table => {
+                        if !matches!(child_node.kind, NodeKind::TableHead | NodeKind::TableRow) {
+                            return Err(format!(
+                                "table children must be 'thead' or 'tr', got '{}'",
+                                child.get("type").and_then(|v| v.as_str()).unwrap_or("?")
+                            ));
+                        }
+                    }
+                    NodeKind::TableHead | NodeKind::TableRow => {
+                        if child_node.kind != NodeKind::TableCell {
+                            return Err(format!(
+                                "thead/tr children must be 'td', got '{}'",
+                                child.get("type").and_then(|v| v.as_str()).unwrap_or("?")
+                            ));
+                        }
+                    }
+                    _ => {}
+                }
+                node.children.push(child_node);
             }
         }
         if kind == NodeKind::Frame && node.children.len() > 1 {

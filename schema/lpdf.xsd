@@ -230,6 +230,7 @@
       <xs:element ref="text"/>
       <xs:element ref="img"/>
       <xs:element ref="divider"/>
+      <xs:element ref="table"/>
     </xs:choice>
   </xs:group>
 
@@ -518,6 +519,72 @@
       <xs:attribute name="align"     type="TextAlignH"/>
       <xs:attribute name="repeat"    type="Repeat"/>
       <xs:attribute name="debug"     type="xs:boolean"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ============================================================
+       Table elements
+  ============================================================ -->
+
+  <!-- <td>: a table cell — container equivalent to stack -->
+  <xs:element name="td">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attributeGroup ref="BoxAttrs"/>
+      <xs:attribute name="align"  type="Align"/>
+      <xs:attribute name="valign">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="top"/>
+            <xs:enumeration value="middle"/>
+            <xs:enumeration value="bottom"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- <thead>: header row — repeated at the top of each new page -->
+  <xs:element name="thead">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="td" minOccurs="1" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attribute name="background" type="Color"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- <tr>: a data row -->
+  <xs:element name="tr">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="td" minOccurs="1" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attribute name="background" type="Color"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- <table>: tabular layout with explicit column widths -->
+  <xs:element name="table">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="thead" minOccurs="0" maxOccurs="1"/>
+        <xs:element ref="tr"    minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <!-- cols: space-separated column widths — fr, pt, % units.
+           Example: "2fr 1fr 120pt 20%" -->
+      <xs:attribute name="cols"       type="xs:string" use="required"/>
+      <xs:attribute name="border"     type="BorderValue"/>
+      <xs:attribute name="stripe"     type="Color"/>
+      <xs:attribute name="gap"        type="TokenScaleOrPt"/>
+      <xs:attribute name="padding"    type="SpacingOrToken"/>
+      <xs:attribute name="background" type="Color"/>
+      <xs:attribute name="width"      type="TokenScaleOrPt"/>
+      <xs:attribute name="height"     type="HeightValue"/>
+      <xs:attribute name="repeat"     type="Repeat"/>
+      <xs:attribute name="debug"      type="xs:boolean"/>
     </xs:complexType>
   </xs:element>
 

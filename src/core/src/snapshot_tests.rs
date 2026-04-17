@@ -86,3 +86,5 @@ fn showcase_grid() { run_snapshot("showcase-grid"); }
 fn showcase_split() { run_snapshot("showcase-split"); }
 #[test]
 fn showcase_stack() { run_snapshot("showcase-stack"); }
+#[test]
+fn showcase_table() { run_snapshot("showcase-table"); }

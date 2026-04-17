@@ -123,6 +123,40 @@ class DividerOptions:
 
 
 @dataclass(frozen=True)
+class TableOptions:
+    cols: Optional[str] = None
+    border: Optional[str] = None
+    stripe: Optional[str] = None
+    gap: Optional[str] = None
+    padding: Optional[str] = None
+    background: Optional[str] = None
+    width: Optional[str] = None
+    height: Optional[str] = None
+    repeat: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class TheadOptions:
+    background: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class TrOptions:
+    background: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class TdOptions:
+    padding: Optional[str] = None
+    background: Optional[str] = None
+    align: Optional[str] = None
+    valign: Optional[str] = None
+    border: Optional[str] = None
+    radius: Optional[str] = None
+    gap: Optional[str] = None
+
+
+@dataclass(frozen=True)
 class PageOptions:
     size: Optional[str] = None
     orientation: Optional[str] = None

@@ -18,7 +18,11 @@ from .types import (
     SpanOptions,
     SplitOptions,
     StackOptions,
+    TableOptions,
+    TdOptions,
     TextOptions,
+    TheadOptions,
+    TrOptions,
     options_to_attrs,
 )
 
@@ -77,6 +81,24 @@ def span(nodes: list | None = None, options: SpanOptions | None = None) -> LpdfS
 
 def divider(options: DividerOptions | None = None) -> LpdfDividerNode:
     return LpdfDividerNode(options_to_attrs(options))
+
+
+# ── Table helpers ─────────────────────────────────────────────────────────────
+
+def table(nodes: list | None = None, options: TableOptions | None = None) -> LpdfContainerNode:
+    return LpdfContainerNode("table", options_to_attrs(options), nodes or [])
+
+
+def thead(nodes: list | None = None, options: TheadOptions | None = None) -> LpdfContainerNode:
+    return LpdfContainerNode("thead", options_to_attrs(options), nodes or [])
+
+
+def tr(nodes: list | None = None, options: TrOptions | None = None) -> LpdfContainerNode:
+    return LpdfContainerNode("tr", options_to_attrs(options), nodes or [])
+
+
+def td(nodes: list | None = None, options: TdOptions | None = None) -> LpdfContainerNode:
+    return LpdfContainerNode("td", options_to_attrs(options), nodes or [])
 
 
 # ── Page + document ───────────────────────────────────────────────────────────

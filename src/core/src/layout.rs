@@ -413,6 +413,7 @@ fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> 
         NodeKind::Grid    => split_grid(node, avail_w, target_h, full_page_h),
         NodeKind::Cluster => split_cluster(node, avail_w, target_h),
         NodeKind::Text    => split_text(node, avail_w, target_h),
+        NodeKind::Table   => split_table(node, avail_w, target_h, full_page_h),
         // Frame, Flank, Split, Divider, Link — atomic by design.
         _                 => SplitOutcome::Atomic,
     }
@@ -559,6 +560,233 @@ fn split_cluster(node: &Node, avail_w: f32, target_h: f32) -> SplitOutcome {
     let item_split = rows[split_row].0;
     let first = Node { children: node.children[..item_split].to_vec(), ..node.clone() };
     let rest  = Node { children: node.children[item_split..].to_vec(), ..node.clone() };
+    SplitOutcome::First(first, vec![rest])
+}
+
+// ── Table ─────────────────────────────────────────────────────────────────────
+
+/// Resolve a space-separated column-width spec into concrete pt values.
+///
+/// Units:
+/// - `Nfr`  — fractional share of remaining width after fixed/percent columns.
+/// - `Npt`  — absolute pt value.
+/// - `N%`   — percentage of `avail_w`.
+///
+/// Example: `"2fr 1fr 120pt 20%"` with `avail_w=400` →
+///   fixed = 120 + 80 = 200, remaining = 200, total_fr = 3,
+///   fr_unit = 200/3 ≈ 66.7 → [133.3, 66.7, 120, 80].
+fn resolve_col_widths(spec: &str, avail_w: f32) -> Vec<f32> {
+    if spec.is_empty() {
+        return vec![avail_w];
+    }
+    enum Unit { Fr(f32), Pt(f32), Pct(f32) }
+    let units: Vec<Unit> = spec.split_whitespace().filter_map(|tok| {
+        if let Some(s) = tok.strip_suffix("fr") {
+            s.parse::<f32>().ok().map(Unit::Fr)
+        } else if let Some(s) = tok.strip_suffix("pt") {
+            s.parse::<f32>().ok().map(Unit::Pt)
+        } else if let Some(s) = tok.strip_suffix('%') {
+            s.parse::<f32>().ok().map(Unit::Pct)
+        } else {
+            tok.parse::<f32>().ok().map(Unit::Fr)
+        }
+    }).collect();
+    if units.is_empty() {
+        return vec![avail_w];
+    }
+    let fixed: f32 = units.iter().map(|u| match u {
+        Unit::Pt(v)  => *v,
+        Unit::Pct(v) => avail_w * v / 100.0,
+        Unit::Fr(_)  => 0.0,
+    }).sum();
+    let total_fr: f32 = units.iter().map(|u| match u {
+        Unit::Fr(v) => *v,
+        _           => 0.0,
+    }).sum();
+    let remaining = (avail_w - fixed).max(0.0);
+    let fr_unit = if total_fr > 0.0 { remaining / total_fr } else { 0.0 };
+    units.iter().map(|u| match u {
+        Unit::Fr(v)  => (v * fr_unit).max(0.0),
+        Unit::Pt(v)  => *v,
+        Unit::Pct(v) => (avail_w * v / 100.0).max(0.0),
+    }).collect()
+}
+
+/// Measure the tallest cell height in a row at the given column widths.
+fn measure_row_height(row: &Node, col_widths: &[f32], _avail_h: f32) -> f32 {
+    row.children.iter().enumerate()
+        .filter(|(j, _)| *j < col_widths.len())
+        .map(|(j, cell)| {
+            let (_, h) = layout_node(cell, 0.0, 0.0, col_widths[j], None);
+            h
+        })
+        .fold(0.0_f32, f32::max)
+}
+
+fn layout_table(
+    rows:      &[Node],
+    x:         f32,
+    y:         f32,
+    avail_w:   f32,
+    gap:       f32,
+    cols_spec: &str,
+    border:    Option<&(f32, String)>,
+    stripe:    Option<&str>,
+) -> (Vec<RenderNode>, f32) {
+    if rows.is_empty() {
+        return (vec![], 0.0);
+    }
+
+    let col_widths  = resolve_col_widths(cols_spec, avail_w);
+    let n_cols      = col_widths.len();
+
+    let mut nodes:       Vec<RenderNode> = Vec::new();
+    let mut row_y        = y;
+    let mut data_row_idx = 0usize;
+
+    // Vectors to track geometry for border drawing.
+    let mut row_ys:      Vec<f32> = Vec::with_capacity(rows.len());
+    let mut row_heights: Vec<f32> = Vec::with_capacity(rows.len());
+
+    for row in rows {
+        let is_thead = row.kind == NodeKind::TableHead;
+        row_ys.push(row_y);
+
+        // Pass 1: measure the row's height (max over all cells).
+        let row_h = measure_row_height(row, &col_widths, f32::MAX);
+        row_heights.push(row_h);
+
+        // Determine row background (stripe overrides only when no explicit bg).
+        let row_bg: Option<String> = if is_thead {
+            row.background.clone()
+        } else {
+            let stripe_bg = if data_row_idx % 2 == 1 {
+                stripe.filter(|_| row.background.is_none()).map(str::to_string)
+            } else {
+                None
+            };
+            row.background.clone().or(stripe_bg)
+        };
+
+        // Emit row background box (must be below cells in draw order).
+        if let Some(bg) = row_bg {
+            nodes.push(RenderNode::Box(RenderBox {
+                x, y: row_y, width: avail_w, height: row_h,
+                fill: Some(bg),
+                border_width: 0.0, border_color: None, radius: 0.0,
+                debug_self: false, children: vec![],
+            }));
+        }
+
+        // Pass 2: lay out each cell at its column position, stretched to row_h.
+        let mut cell_x = x;
+        for (j, cell) in row.children.iter().enumerate().take(n_cols) {
+            let col_w   = col_widths[j];
+            let stretched = Node { height_mode: crate::parse::HeightMode::Full, ..cell.clone() };
+            let (rn, _) = layout_node(&stretched, cell_x, row_y, col_w, Some(row_h));
+            nodes.push(rn);
+            cell_x += col_w + gap;
+        }
+
+        row_y += row_h + gap;
+        if !is_thead { data_row_idx += 1; }
+    }
+
+    let total_h: f32 = row_heights.iter().sum::<f32>()
+        + gap * rows.len().saturating_sub(1) as f32;
+
+    // Draw grid borders.
+    if let Some((bw, bclr)) = border {
+        let half         = bw / 2.0;
+        let table_bottom = y + total_h;
+
+        // Outer left / right verticals (full table height).
+        nodes.push(RenderNode::Line(RenderLine {
+            x1: x + half, y1: y, x2: x + half, y2: table_bottom,
+            color: bclr.clone(), thickness: *bw, dash: None,
+        }));
+        nodes.push(RenderNode::Line(RenderLine {
+            x1: x + avail_w - half, y1: y, x2: x + avail_w - half, y2: table_bottom,
+            color: bclr.clone(), thickness: *bw, dash: None,
+        }));
+
+        // Horizontal: top of table + bottom of each row.
+        nodes.push(RenderNode::Line(RenderLine {
+            x1: x, y1: y + half, x2: x + avail_w, y2: y + half,
+            color: bclr.clone(), thickness: *bw, dash: None,
+        }));
+        let mut ry = y;
+        for rh in &row_heights {
+            ry += rh;
+            nodes.push(RenderNode::Line(RenderLine {
+                x1: x, y1: ry - half, x2: x + avail_w, y2: ry - half,
+                color: bclr.clone(), thickness: *bw, dash: None,
+            }));
+            ry += gap;
+        }
+
+        // Vertical column separators: one per adjacent column pair, per row.
+        for (&ry_start, &rh) in row_ys.iter().zip(row_heights.iter()) {
+            let mut vx = x;
+            for j in 0..n_cols {
+                vx += col_widths[j];
+                if j < n_cols - 1 {
+                    let sep_x = vx + gap / 2.0;
+                    nodes.push(RenderNode::Line(RenderLine {
+                        x1: sep_x, y1: ry_start,
+                        x2: sep_x, y2: ry_start + rh,
+                        color: bclr.clone(), thickness: *bw, dash: None,
+                    }));
+                    vx += gap;
+                }
+            }
+        }
+    }
+
+    (nodes, total_h)
+}
+
+fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
+    let [pt, pr, pb, pl] = node.padding;
+    let inner_w      = (avail_w     - pl - pr).max(0.0);
+    let inner_target = (target_h    - pt - pb).max(0.0);
+    let inner_full   = (full_page_h - pt - pb).max(0.0);
+    let gap          = node.gap;
+
+    let col_widths  = resolve_col_widths(&node.table_cols, inner_w);
+    let has_thead   = node.children.first()
+        .map_or(false, |c| c.kind == NodeKind::TableHead);
+
+    let n_rows = node.children.len();
+    let mut split_idx = 0usize;
+    let mut chunk_h   = 0.0_f32;
+
+    for (i, row) in node.children.iter().enumerate() {
+        let rh = measure_row_height(row, &col_widths, inner_full);
+        let g  = if i == 0 { 0.0 } else { gap };
+        if chunk_h + g + rh > inner_target + 0.5 {
+            break;
+        }
+        chunk_h   += g + rh;
+        split_idx  = i + 1;
+    }
+
+    if split_idx == n_rows { return SplitOutcome::Atomic; }
+
+    // Nothing useful fits: need at least thead (if present) + one data row.
+    let min_useful = if has_thead { 2 } else { 1 };
+    if split_idx < min_useful {
+        return SplitOutcome::NothingFits(vec![node.clone()]);
+    }
+
+    let first = Node { children: node.children[..split_idx].to_vec(), ..node.clone() };
+
+    // Carry thead onto the continuation page.
+    let mut rest_children = node.children[split_idx..].to_vec();
+    if has_thead {
+        rest_children.insert(0, node.children[0].clone());
+    }
+    let rest = Node { children: rest_children, ..node.clone() };
     SplitOutcome::First(first, vec![rest])
 }
 
@@ -790,11 +1018,15 @@ fn layout_container(
         HeightMode::Auto => content_h + pt + pb,
     };
 
-    let (border_width, border_color) = node
-        .border
-        .as_ref()
-        .map(|(t, c)| (*t, Some(c.clone())))
-        .unwrap_or((0.0, None));
+    let (border_width, border_color) = if node.kind == NodeKind::Table {
+        // Table border controls cell grid lines (drawn by layout_table), not the outer box.
+        (0.0, None)
+    } else {
+        node.border
+            .as_ref()
+            .map(|(t, c)| (*t, Some(c.clone())))
+            .unwrap_or((0.0, None))
+    };
 
     (
         RenderNode::Box(RenderBox {
@@ -850,6 +1082,14 @@ fn dispatch_children(
         NodeKind::Link => layout_stack(
             &node.children, x, y, avail_w, avail_h,
             0.0, &Align::Stretch, &Justify::Start,
+        ),
+        NodeKind::Table => layout_table(
+            &node.children, x, y, avail_w,
+            node.gap, &node.table_cols, node.border.as_ref(), node.stripe.as_deref(),
+        ),
+        NodeKind::TableHead | NodeKind::TableRow | NodeKind::TableCell => layout_stack(
+            &node.children, x, y, avail_w, avail_h,
+            node.gap, &node.align, &node.justify,
         ),
         _ => (vec![], 0.0),
     }
