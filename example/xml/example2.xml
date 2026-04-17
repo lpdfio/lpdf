@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <lpdf version="1">
-  <tokens>
-    <space xs="4pt" s="8pt" m="12pt" l="24pt" xl="40pt" xxl="64pt"/>
+  <assets>
     <fonts>
-      <font name="heading" builtin="Helvetica-Bold"/>
-      <font name="body" builtin="Helvetica"/>
+      <font name="body" ref="montserrat"/>
     </fonts>
+    <images>
+      <image name="logo" src="images/logo-lpdf.png"/>
+    </images>
+  </assets>
+  <tokens>
+    <text xs="7pt" s="9pt" m="11pt" l="14pt" xl="20pt" xxl="28pt" />
+    <space xs="4pt" s="8pt" m="12pt" l="24pt" xl="40pt" xxl="64pt"/>
     <colors>
       <color name="primary" value="#1763cf"/>
       <color name="text" value="#1a1a1a"/>
@@ -15,13 +20,14 @@
       <color name="surface-alt" value="#f3f4f6"/>
     </colors>
   </tokens>
-  <document>
+  <document font="body">
     <meta title="Invoice #1042" author="Acme Corp" subject="Invoice"/>
     <pages>
-      <page size="a4" margin="0">
+      <page size="letter" margin="0">
         <flank padding="l" background="surface">
+          <img name="logo" width="50pt" />
           <stack gap="xs">
-            <text font="heading" font-size="xxl" color="primary">INVOICE</text>
+            <text font="heading" font-size="xxl" color="primary">INVOICE1</text>
             <text font="body" font-size="m" color="muted">Acme Corp</text>
           </stack>
           <stack gap="xs">

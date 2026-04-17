@@ -14,24 +14,33 @@ import { resolve } from 'node:path';
 import { LpdfEngine } from '../dist/index.js';
 
 (async () => {
-  const __root = resolve(__dirname, '../../../..');
+  const __root = resolve(__dirname, '../../../../example/');
+
+  const examples = [
+    'example1', 
+    'example2',
+  ];
 
   // init engine
   const engine = new LpdfEngine('');       // empty key → free tier (watermark)
 
-  // optional: load fonts and assets
-  
-  const inputFile  = 'invoice.xml';
-  const outputFile = 'invoice-node.pdf';
+  // load assets (only used if referenced in xml/layout)
+  engine.loadFont('montserrat', readFileSync(resolve(__root, 'assets/fonts/Montserrat-Regular.ttf')));
+  engine.loadImage('logo', readFileSync(resolve(__root, 'assets/images/logo-lpdf.png')));
 
-  // load xml from file
-  const xml = readFileSync(resolve(__root, 'example', inputFile), 'utf8');
+  for (const example of examples) {
+    // load xml from file
+    const xml = readFileSync(resolve(__root, 'xml', `${example}.xml`), 'utf8');
 
-  // render pdf from xml
-  const bytes  = await engine.renderPdf(xml);
+    // render pdf from xml
+    const bytes = await engine.renderPdf(xml);
 
-  // write pdf to file
-  writeFileSync(resolve(__root, 'example', outputFile), bytes);
-  
-  console.log(`output: ${outputFile} (${bytes.length.toLocaleString()} bytes)`);
+    // define output file name
+    const outputFile = `${example}-node.pdf`;
+
+    // write pdf to file
+    writeFileSync(resolve(__root, 'result', outputFile), bytes);
+
+    console.log(`output: ${outputFile} (${bytes.length.toLocaleString()} bytes)`);
+  }
 })();

@@ -14,9 +14,14 @@ class LpdfEngine:
         self._license_key = license_key
         self._options = options or RenderOptions()
         self._fonts: dict[str, bytes] = {}
+        self._images: dict[str, bytes] = {}
 
     def load_font(self, name: str, data: bytes) -> LpdfEngine:
         self._fonts[name] = data
+        return self
+
+    def load_image(self, name: str, data: bytes) -> LpdfEngine:
+        self._images[name] = data
         return self
 
     def render_pdf(
@@ -52,6 +57,18 @@ class LpdfEngine:
         if merged_fonts:
             payload["fonts"] = {
                 name: base64.b64encode(data).decode() for name, data in merged_fonts.items()
+            }
+
+        merged_images: dict[str, bytes] = {}
+        if self._options.image_bytes:
+            merged_images.update(self._options.image_bytes)
+        if call_options and call_options.image_bytes:
+            merged_images.update(call_options.image_bytes)
+        merged_images.update(self._images)
+
+        if merged_images:
+            payload["images"] = {
+                name: base64.b64encode(data).decode() for name, data in merged_images.items()
             }
 
         created_on = (call_options and call_options.created_on) or self._options.created_on

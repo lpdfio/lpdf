@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+  <tokens>
+    <text xs="7pt" s="9pt" m="11pt" l="14pt" xl="20pt" xxl="28pt" />
+    <space xs="4pt" s="8pt" m="12pt" l="24pt" xl="40pt" xxl="64pt"/>
+    <colors>
+      <color name="primary" value="#1763cf"/>
+      <color name="text" value="#1a1a1a"/>
+      <color name="muted" value="#6b7280"/>
+      <color name="border" value="#e5e7eb"/>
+      <color name="surface" value="#f9fafb"/>
+      <color name="surface-alt" value="#f3f4f6"/>
+    </colors>
+  </tokens>
+  <document>
+    <meta title="Invoice #1042" author="Acme Corp" subject="Invoice"/>
+    <pages>
+      <page size="letter" margin="0">
+        <flank padding="l" background="surface">
+          <stack gap="xs">
+            <text font="heading" font-size="xxl" color="primary">INVOICE1</text>
+            <text font="body" font-size="m" color="muted">Acme Corp</text>
+          </stack>
+          <stack gap="xs">
+            <text font="body" font-size="m">Invoice #1042</text>
+            <text font="body" font-size="m" color="muted">Issued: 14 April 2026</text>
+            <text font="body" font-size="m" color="muted">Due: 14 May 2026</text>
+          </stack>
+        </flank>
+        <divider color="border"/>
+        <stack gap="0" padding="l">
+          <grid cols="4" gap="s" padding="s" background="surface-alt">
+            <text font="heading" font-size="s" color="muted">Description</text>
+            <text font="heading" font-size="s" color="muted">Qty</text>
+            <text font="heading" font-size="s" color="muted">Unit price</text>
+            <text font="heading" font-size="s" color="muted">Total</text>
+          </grid>
+          <grid cols="4" gap="s" padding="s">
+            <text font="body" font-size="m">Consulting services – Q1</text>
+            <text font="body" font-size="m">4</text>
+            <text font="body" font-size="m">$1,250.00</text>
+            <text font="body" font-size="m">$5,000.00</text>
+          </grid>
+          <grid cols="4" gap="s" padding="s">
+            <text font="body" font-size="m">Design system audit</text>
+            <text font="body" font-size="m">1</text>
+            <text font="body" font-size="m">$3,200.00</text>
+            <text font="body" font-size="m">$3,200.00</text>
+          </grid>
+          <grid cols="4" gap="s" padding="s">
+            <text font="body" font-size="m">Accessibility fix-up</text>
+            <text font="body" font-size="m">8</text>
+            <text font="body" font-size="m">$450.00</text>
+            <text font="body" font-size="m">$3,600.00</text>
+          </grid>
+        </stack>
+        <divider color="border"/>
+        <stack padding="l" gap="xs" align="end">
+          <flank padding="xs s">
+            <text font="body" font-size="m" color="text">Subtotal</text>
+            <text font="heading" font-size="m" color="text">$11,800.00</text>
+          </flank>
+          <flank padding="xs s">
+            <text font="body" font-size="m" color="text">Tax (11%)</text>
+            <text font="heading" font-size="m" color="text">$1,180.00</text>
+          </flank>
+          <divider color="border" thickness="xs"/>
+          <flank padding="xs s">
+            <text font="body" font-size="m" color="primary">Total due</text>
+            <text font="heading" font-size="m" color="primary">$12,980.00</text>
+          </flank>
+        </stack>
+        <stack padding="l">
+          <text font="body" font-size="s" color="muted">Payment terms: net 30 days. Questions? <span color="primary" url="mailto:billing@acme.example">billing@acme.example</span></text>
+        </stack>
+      </page>
+    </pages>
+  </document>
+</lpdf>

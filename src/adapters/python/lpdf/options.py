@@ -10,3 +10,4 @@ class RenderOptions:
     wasm_runner: Optional[str] = None
     created_on: Optional[str] = None
     font_bytes: Optional[Dict[str, bytes]] = None
+    image_bytes: Optional[Dict[str, bytes]] = None

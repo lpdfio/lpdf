@@ -1,30 +1,40 @@
-/// Minimal end-to-end example: render invoice.xml from the project root using LpdfEngine.
+/// Minimal end-to-end example: render examples from the project root using LpdfEngine.
 ///
 /// Run (after 'make wasi' and 'dotnet build'):
 ///   dotnet run --project src/adapters/dotnet/example/LpdfExample.csproj
-///
-/// Output: example/invoice-dotnet.pdf written to the project root.
 
 using Lpdf;
 
+var root = Path.Combine(AppContext.BaseDirectory, "../../../../../../../example/");
+
+var examples = new[] { 
+    "example1", 
+    "example2", 
+};
+
 // init engine
+var licenseKey = ""; //await File.ReadAllTextAsync(Path.Combine(root, "test.lic"));
 var engine = new LpdfEngine(
-    licenseKey: "",   // empty → evaluation watermark
+    licenseKey: licenseKey,
     options: new RenderOptions { SrcFallback = File.ReadAllBytes });
 
-// optional: load fonts and assets
+// load assets (only used if referenced in xml/layout)
+engine.LoadFont("montserrat", await File.ReadAllBytesAsync(Path.Combine(root, "assets/fonts/Montserrat-Regular.ttf")));
+engine.LoadImage("logo", await File.ReadAllBytesAsync(Path.Combine(root, "assets/images/logo-lpdf.png")));
 
-var inputFile  = "invoice.xml";
-var outputFile = "invoice-dotnet.pdf";
+foreach (var example in examples)
+{
+    // load xml from file
+    var xml = await File.ReadAllTextAsync(Path.Combine(root, $"xml/{example}.xml"));
 
-// load xml from file
-var xml = await File.ReadAllTextAsync(Path.Combine("example", inputFile));
+    // render pdf from xml
+    var bytes = await engine.RenderPdf(xml);
 
-// render pdf from xml
-var bytes = await engine.RenderPdf(xml);
+    // define output file name
+    var outputFile = $"{example}-dotnet.pdf";
 
-// write pdf to file
-// Directory.CreateDirectory("example");
-await File.WriteAllBytesAsync(Path.Combine("example", outputFile), bytes);
+    // write pdf to output file
+    await File.WriteAllBytesAsync(Path.Combine(root, $"result/{outputFile}"), bytes);
 
-Console.WriteLine($"output: {outputFile} ({bytes.Length:N0} bytes)");
+    Console.WriteLine($"output: {outputFile} ({bytes.Length:N0} bytes)");
+}

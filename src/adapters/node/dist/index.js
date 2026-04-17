@@ -18,6 +18,7 @@ Object.defineProperty(exports, "kitToXml", { enumerable: true, get: function () 
 class LpdfEngine {
     constructor(licenseKey, options = {}) {
         this._fonts = new Map();
+        this._images = new Map();
         this._disposed = false;
         this._licenseKey = licenseKey;
         this._opts = options;
@@ -29,6 +30,15 @@ class LpdfEngine {
     loadFont(name, bytes) {
         this._throwIfDisposed();
         this._fonts.set(name, bytes);
+        return this;
+    }
+    /**
+     * Register raw image bytes (PNG or JPEG) for an image name used in `<img name="…">`.
+     * Call before `renderPdf`. Returns `this` for chaining.
+     */
+    loadImage(name, bytes) {
+        this._throwIfDisposed();
+        this._images.set(name, bytes);
         return this;
     }
     /**
@@ -68,6 +78,9 @@ class LpdfEngine {
         const engine = new WasmEngine(this._licenseKey);
         for (const [name, bytes] of allFonts) {
             engine.load_font(name, bytes);
+        }
+        for (const [name, bytes] of this._images) {
+            engine.load_image(name, bytes);
         }
         const pdf = engine.render_pdf(xml);
         engine.free();

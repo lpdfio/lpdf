@@ -12,6 +12,7 @@ export declare class LpdfEngine {
     private readonly _licenseKey;
     private readonly _opts;
     private readonly _fonts;
+    private readonly _images;
     private _disposed;
     constructor(licenseKey: string, options?: RenderOptions);
     /**
@@ -19,6 +20,11 @@ export declare class LpdfEngine {
      * Call before `renderPdf`. Returns `this` for chaining.
      */
     loadFont(name: string, bytes: Uint8Array): this;
+    /**
+     * Register raw image bytes (PNG or JPEG) for an image name used in `<img name="…">`.
+     * Call before `renderPdf`. Returns `this` for chaining.
+     */
+    loadImage(name: string, bytes: Uint8Array): this;
     /**
      * Release held resources. Idempotent. Subsequent `renderPdf` / `loadFont`
      * calls after disposal will throw.

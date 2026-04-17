@@ -51,8 +51,9 @@ internal sealed class WasmRunner : IDisposable
         string xml,
         string licenseKey,
         IReadOnlyDictionary<string, byte[]>? fontBytes,
+        IReadOnlyDictionary<string, byte[]>? imageBytes,
         Func<string, byte[]>?                srcFallback)
-        => InvokeRenderPdf("render_pdf", xml, licenseKey, fontBytes, srcFallback, isTree: false);
+        => InvokeRenderPdf("render_pdf", xml, licenseKey, fontBytes, imageBytes, srcFallback, isTree: false);
 
     /// <summary>
     /// Render an lpdf JSON document tree to raw PDF bytes.
@@ -61,8 +62,9 @@ internal sealed class WasmRunner : IDisposable
         string json,
         string licenseKey,
         IReadOnlyDictionary<string, byte[]>? fontBytes,
+        IReadOnlyDictionary<string, byte[]>? imageBytes,
         Func<string, byte[]>?                srcFallback)
-        => InvokeRenderPdf("render_tree_pdf", json, licenseKey, fontBytes, srcFallback, isTree: true);
+        => InvokeRenderPdf("render_tree_pdf", json, licenseKey, fontBytes, imageBytes, srcFallback, isTree: true);
 
     // ── Internals ─────────────────────────────────────────────────────────────
 
@@ -71,6 +73,7 @@ internal sealed class WasmRunner : IDisposable
         string input,
         string licenseKey,
         IReadOnlyDictionary<string, byte[]>? fontBytes,
+        IReadOnlyDictionary<string, byte[]>? imageBytes,
         Func<string, byte[]>?                srcFallback,
         bool                                 isTree)
     {
@@ -88,6 +91,15 @@ internal sealed class WasmRunner : IDisposable
             ["input"]   = input,
             ["fonts"]   = fontsNode,
         };
+
+        if (imageBytes is { Count: > 0 })
+        {
+            var imagesNode = new JsonObject();
+            foreach (var (name, bytes) in imageBytes)
+                imagesNode[name] = Convert.ToBase64String(bytes);
+            requestObj["images"] = imagesNode;
+        }
+
         var requestBytes = Encoding.UTF8.GetBytes(requestObj.ToJsonString());
 
         var responseJson = RunWasm(requestBytes);

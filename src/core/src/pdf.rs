@@ -66,6 +66,7 @@ impl FontRegistry {
         self.bytes.get(name).map(|b| b.as_slice())
     }
 
+    #[allow(dead_code)]
     pub fn iter(&self) -> impl Iterator<Item = (&str, &[u8])> {
         self.bytes.iter().map(|(k, v)| (k.as_str(), v.as_slice()))
     }
@@ -89,6 +90,11 @@ impl ImageRegistry {
 
     pub fn get(&self, name: &str) -> Option<&[u8]> {
         self.bytes.get(name).map(|b| b.as_slice())
+    }
+
+    #[allow(dead_code)]
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &[u8])> {
+        self.bytes.iter().map(|(k, v)| (k.as_str(), v.as_slice()))
     }
 }
 
@@ -828,9 +834,12 @@ fn prepare_truetype_font(bytes: &[u8], used_chars: &HashSet<char>) -> PreparedFo
     let upem = face.units_per_em() as f32;
 
     // Map every used character to its original glyph ID.
-    let char_gid_orig: Vec<(char, u16)> = used_chars.iter()
+    let mut char_gid_orig: Vec<(char, u16)> = used_chars.iter()
         .filter_map(|&c| face.glyph_index(c).map(|g| (c, g.0)))
         .collect();
+    // Sort by codepoint so GlyphRemapper assigns new GIDs deterministically
+    // regardless of HashSet iteration order (which is randomised per process).
+    char_gid_orig.sort_by_key(|(c, _)| *c as u32);
 
     // Build a glyph remapper — registers each original GID and assigns new
     // consecutive IDs starting at 1 (.notdef stays at 0).

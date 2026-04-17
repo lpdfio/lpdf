@@ -7,6 +7,7 @@ import { kitToXml } from './kit-to-xml';
 interface IWasmEngine {
   render_pdf(xml: string): Uint8Array;
   load_font(name: string, bytes: Uint8Array): void;
+  load_image(name: string, bytes: Uint8Array): void;
   set_created_on(iso: string): void;
   free(): void;
 }
@@ -32,8 +33,9 @@ export { kitToXml } from './kit-to-xml';
  */
 export class LpdfEngine {
   private readonly _licenseKey: string;
-  private readonly _opts:  RenderOptions;
-  private readonly _fonts: Map<string, Uint8Array> = new Map();
+  private readonly _opts:   RenderOptions;
+  private readonly _fonts:  Map<string, Uint8Array> = new Map();
+  private readonly _images: Map<string, Uint8Array> = new Map();
   private _disposed = false;
 
   constructor(licenseKey: string, options: RenderOptions = {}) {
@@ -48,6 +50,16 @@ export class LpdfEngine {
   loadFont(name: string, bytes: Uint8Array): this {
     this._throwIfDisposed();
     this._fonts.set(name, bytes);
+    return this;
+  }
+
+  /**
+   * Register raw image bytes (PNG or JPEG) for an image name used in `<img name="…">`.
+   * Call before `renderPdf`. Returns `this` for chaining.
+   */
+  loadImage(name: string, bytes: Uint8Array): this {
+    this._throwIfDisposed();
+    this._images.set(name, bytes);
     return this;
   }
 
@@ -97,6 +109,9 @@ export class LpdfEngine {
     const engine = new WasmEngine(this._licenseKey);
     for (const [name, bytes] of allFonts) {
       engine.load_font(name, bytes);
+    }
+    for (const [name, bytes] of this._images) {
+      engine.load_image(name, bytes);
     }
 
     const pdf = engine.render_pdf(xml);

@@ -5,24 +5,32 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from lpdf import LpdfEngine
 
+_docker_root = Path("/app/example-data")
+root = _docker_root if _docker_root.exists() else Path(__file__).resolve().parents[4] / "example"
+
+examples = [
+    "example1",
+    "example2",
+]
+
 # init engine
 engine = LpdfEngine("")  # empty key → free tier (watermark)
 
-# optional: load fonts and assets
-# engine.load_font("Inter", Path("/path/to/Inter.ttf").read_bytes())
+# load assets (only used if referenced in xml/layout)
+engine.load_font("montserrat", (root / "assets/fonts/Montserrat-Regular.ttf").read_bytes())
+engine.load_image("logo", (root / "assets/images/logo-lpdf.png").read_bytes())
 
-input_file = "invoice.xml"
-output_file = "invoice-python.pdf"
+for example in examples:
+    # load xml from file
+    xml = (root / "xml" / f"{example}.xml").read_text(encoding="utf-8")
 
-root = Path("/app/example-data")
+    # render pdf from xml
+    pdf = engine.render_pdf(xml)
 
-# load xml from file
-xml = (root / input_file).read_text(encoding="utf-8")
+    # define output file name
+    output_file = f"{example}-python.pdf"
 
-# render pdf from xml
-pdf = engine.render_pdf(xml)
+    # write pdf to file
+    (root / "result" / output_file).write_bytes(pdf)
 
-# write pdf to file
-(root / output_file).write_bytes(pdf)
-
-print(f"output: {output_file} ({len(pdf):,} bytes)")
+    print(f"output: {output_file} ({len(pdf):,} bytes)")
