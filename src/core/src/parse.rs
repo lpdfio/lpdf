@@ -89,6 +89,18 @@ pub struct Node {
     // table (NodeKind::Table only)
     pub table_cols: String,
     pub stripe: Option<String>,
+    // form field (NodeKind::Field only)
+    pub field_kind:       Option<FieldKind>,
+    pub field_name:       Option<String>,
+    pub field_value:      Option<String>,
+    pub field_label:      Option<String>,
+    pub field_options:    Vec<String>,
+    pub field_required:   bool,
+    pub field_readonly:   bool,
+    pub field_checked:    bool,
+    pub field_max_len:    Option<u32>,
+    pub field_group:      Option<String>,
+    pub field_action_url: Option<String>,
     pub children: Vec<Node>,
 }
 
@@ -121,6 +133,16 @@ pub enum NodeKind {
     Link,
     Img,
     Barcode,
+    Field,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum FieldKind {
+    Text,
+    Checkbox,
+    Dropdown,
+    Radio,
+    Button,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -222,6 +244,17 @@ struct ParsedNode {
     barcode_bg: Option<String>,
     table_cols: String,
     stripe: Option<String>,
+    field_kind:       Option<FieldKind>,
+    field_name:       Option<String>,
+    field_value:      Option<String>,
+    field_label:      Option<String>,
+    field_options:    Vec<String>,
+    field_required:   bool,
+    field_readonly:   bool,
+    field_checked:    bool,
+    field_max_len:    Option<u32>,
+    field_group:      Option<String>,
+    field_action_url: Option<String>,
     children: Vec<ParsedNode>,
 }
 
@@ -281,6 +314,17 @@ impl ParsedNode {
             barcode_bg: None,
             table_cols: String::new(),
             stripe: None,
+            field_kind:       None,
+            field_name:       None,
+            field_value:      None,
+            field_label:      None,
+            field_options:    Vec::new(),
+            field_required:   false,
+            field_readonly:   false,
+            field_checked:    false,
+            field_max_len:    None,
+            field_group:      None,
+            field_action_url: None,
             children: Vec::new(),
         }
     }
@@ -410,6 +454,17 @@ fn resolve_node(
         barcode_bg:            n.barcode_bg,
         table_cols:            n.table_cols,
         stripe:                n.stripe,
+        field_kind:            n.field_kind,
+        field_name:            n.field_name,
+        field_value:           n.field_value,
+        field_label:           n.field_label,
+        field_options:         n.field_options,
+        field_required:        n.field_required,
+        field_readonly:        n.field_readonly,
+        field_checked:         n.field_checked,
+        field_max_len:         n.field_max_len,
+        field_group:           n.field_group,
+        field_action_url:      n.field_action_url,
         children,
     }
 }
@@ -732,6 +787,7 @@ fn parse_node(
         "link"    => NodeKind::Link,
         "img"     => NodeKind::Img,
         "barcode" => NodeKind::Barcode,
+        "field"   => NodeKind::Field,
         "table"   => NodeKind::Table,
         "thead"   => NodeKind::TableHead,
         "tr"      => NodeKind::TableRow,
@@ -810,11 +866,14 @@ fn parse_node(
         NodeKind::Barcode => {
             apply_barcode_attrs(&mut node, elem, tokens)?;
         }
+        NodeKind::Field => {
+            apply_field_attrs(&mut node, elem, tokens)?;
+        }
         _ => {}
     }
 
     // ── Children (not for leaf nodes) ────────────────────────────────────────
-    if !matches!(kind, NodeKind::Divider | NodeKind::Text | NodeKind::Img | NodeKind::Barcode) {
+    if !matches!(kind, NodeKind::Divider | NodeKind::Text | NodeKind::Img | NodeKind::Barcode | NodeKind::Field) {
         for child in elems(elem) {
             let child_node = parse_node(&child, tokens, asset_images)?;
             match kind {
@@ -962,7 +1021,7 @@ fn apply_box_attrs(
     if let Some(v) = a.get("background") { node.background = Some(tokens.resolve_color(v)?); }
     if let Some(v) = a.get("border")     { node.border    = Some(tokens.resolve_border(v)?); }
     if let Some(v) = a.get("radius")     { node.radius    = tokens.resolve_radius(v)?; }
-    if !matches!(node.kind, NodeKind::Img | NodeKind::Barcode) {
+    if !matches!(node.kind, NodeKind::Img | NodeKind::Barcode | NodeKind::Field) {
         if let Some(v) = a.get("height") { node.height_mode = parse_height_mode(v)?; }
     }
     if let Some(v) = a.get("width")  { node.width_constraint = Some(tokens.resolve_width(v)?); }
@@ -1051,7 +1110,7 @@ fn apply_layout_kind_attrs(
                 other    => other,
             })?;
         }
-        NodeKind::Text | NodeKind::Link | NodeKind::Img | NodeKind::Barcode => {}
+        NodeKind::Text | NodeKind::Link | NodeKind::Img | NodeKind::Barcode | NodeKind::Field => {}
     }
     Ok(())
 }
@@ -1172,6 +1231,57 @@ fn validate_img_asset(
 }
 
 // ── Tree (JSON) parser ────────────────────────────────────────────────────────
+
+/// Apply attributes for a `<field>` / `"field"` node.
+fn apply_field_attrs(
+    node:   &mut ParsedNode,
+    a:      &impl Attrs,
+    tokens: &Tokens,
+) -> Result<(), String> {
+    let type_str = a.get("type")
+        .ok_or_else(|| "<field> missing required attribute 'type'".to_string())?;
+    node.field_kind = Some(match type_str {
+        "text"     => FieldKind::Text,
+        "checkbox" => FieldKind::Checkbox,
+        "dropdown" => FieldKind::Dropdown,
+        "radio"    => FieldKind::Radio,
+        "button"   => FieldKind::Button,
+        other => return Err(format!(
+            "<field> unknown type '{other}'; use text, checkbox, dropdown, radio, or button"
+        )),
+    });
+
+    node.field_name = Some(
+        a.get("name")
+            .ok_or_else(|| "<field> missing required attribute 'name'".to_string())?
+            .to_string(),
+    );
+
+    if let Some(v) = a.get("value")      { node.field_value      = Some(v.to_string()); }
+    if let Some(v) = a.get("label")      { node.field_label      = Some(v.to_string()); }
+    if let Some(v) = a.get("group")      { node.field_group      = Some(v.to_string()); }
+    if let Some(v) = a.get("action-url") { node.field_action_url = Some(v.to_string()); }
+    if let Some(v) = a.get("options")    {
+        node.field_options = v.split(',').map(|s| s.trim().to_string()).collect();
+    }
+    node.field_required = a.get("required").map(|v| v == "true").unwrap_or(false);
+    node.field_readonly = a.get("readonly").map(|v| v == "true").unwrap_or(false);
+    node.field_checked  = a.get("checked").map(|v| v == "true").unwrap_or(false);
+    if let Some(v) = a.get("max-len") {
+        node.field_max_len = Some(
+            v.parse::<u32>().map_err(|_| format!("<field> invalid max-len '{v}'"))?
+        );
+    }
+    // height stored as img_height_constraint (atomic leaf, like <img>)
+    if let Some(v) = a.get("height") {
+        node.img_height_constraint = Some(
+            tokens.resolve_width(v)
+                  .map_err(|_| format!("<field> invalid height '{v}'"))?
+        );
+    }
+
+    Ok(())
+}
 
 /// Parse a JSON document tree (produced by `LpdfKit`) into a `Document`.
 pub fn parse_tree(json: &str) -> Result<Document, String> {
@@ -1374,6 +1484,7 @@ fn parse_tree_node(
         "link"    => NodeKind::Link,
         "img"     => NodeKind::Img,
         "barcode" => NodeKind::Barcode,
+        "field"   => NodeKind::Field,
         "table"   => NodeKind::Table,
         "thead"   => NodeKind::TableHead,
         "tr"      => NodeKind::TableRow,
@@ -1460,11 +1571,14 @@ fn parse_tree_node(
         NodeKind::Barcode => {
             apply_barcode_attrs(&mut node, &a, tokens)?;
         }
+        NodeKind::Field => {
+            apply_field_attrs(&mut node, &a, tokens)?;
+        }
         _ => {}
     }
 
     // ── Layout children ───────────────────────────────────────────────────────
-    if !matches!(kind, NodeKind::Divider | NodeKind::Img | NodeKind::Barcode) {
+    if !matches!(kind, NodeKind::Divider | NodeKind::Img | NodeKind::Barcode | NodeKind::Field) {
         if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
             for child in arr {
                 let child_node = parse_tree_node(child, tokens, asset_images)?;

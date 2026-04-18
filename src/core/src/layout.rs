@@ -1,5 +1,5 @@
-use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Direction, HeightMode, Justify, Node, NodeKind, Page, Repeat, TextAlign, TextRun};
-use crate::render::{RenderBarcode, RenderBox, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind};
+use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Direction, FieldKind, HeightMode, Justify, Node, NodeKind, Page, Repeat, TextAlign, TextRun};
+use crate::render::{RenderBarcode, RenderBox, RenderField, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind};
 use crate::tokens::FontWidths;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -988,6 +988,7 @@ fn layout_node(
         NodeKind::Link => layout_link(node, node_x, y, node_w, avail_h),
         NodeKind::Img => layout_img(node, node_x, y, node_w),
         NodeKind::Barcode => layout_barcode(node, node_x, y, node_w),
+        NodeKind::Field => layout_field(node, node_x, y, node_w),
         _ => layout_container(node, node_x, y, node_w, avail_h),
     }
 }
@@ -1558,6 +1559,30 @@ fn layout_img(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
     (RenderNode::Image(RenderImage { x, y, width: w, height: h, name }), h)
 }
 
+// ── Form field ────────────────────────────────────────────────────────────────
+
+fn layout_field(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
+    let w = node.width_constraint.unwrap_or(avail_w).min(avail_w);
+    let h = node.img_height_constraint.unwrap_or(20.0);
+    let field = RenderField {
+        x, y, width: w, height: h,
+        kind:       node.field_kind.clone().unwrap_or(FieldKind::Text),
+        name:       node.field_name.clone().unwrap_or_default(),
+        value:      node.field_value.clone().unwrap_or_default(),
+        label:      node.field_label.clone().unwrap_or_default(),
+        options:    node.field_options.clone(),
+        required:   node.field_required,
+        readonly:   node.field_readonly,
+        checked:    node.field_checked,
+        max_len:    node.field_max_len,
+        group:      node.field_group.clone(),
+        action_url: node.field_action_url.clone(),
+        background: node.background.clone(),
+        border:     node.border.clone(),
+    };
+    (RenderNode::Field(field), h)
+}
+
 // ── Barcode ───────────────────────────────────────────────────────────────────
 
 fn layout_barcode(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
@@ -2101,6 +2126,7 @@ fn measure_natural_w(node: &Node) -> f32 {
         NodeKind::Divider => node.thickness,
         NodeKind::Img => node.width_constraint.unwrap_or(100.0),
         NodeKind::Barcode => node.width_constraint.unwrap_or(80.0),
+        NodeKind::Field => node.width_constraint.unwrap_or(100.0),
         _ => {
             let [_pt, pr, _pb, pl] = node.padding;
             let inner = match node.kind {
@@ -2462,6 +2488,10 @@ fn shift_y(node: RenderNode, dy: f32) -> RenderNode {
             bc.y += dy;
             RenderNode::Barcode(bc)
         }
+        RenderNode::Field(mut f) => {
+            f.y += dy;
+            RenderNode::Field(f)
+        }
     }
 }
 
@@ -2496,6 +2526,10 @@ fn shift_x(node: RenderNode, dx: f32) -> RenderNode {
         RenderNode::Barcode(mut bc) => {
             bc.x += dx;
             RenderNode::Barcode(bc)
+        }
+        RenderNode::Field(mut f) => {
+            f.x += dx;
+            RenderNode::Field(f)
         }
     }
 }

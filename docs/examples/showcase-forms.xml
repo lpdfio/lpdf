@@ -1,0 +1,140 @@
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf" />
+      <color name="surface"  value="#ffffff" />
+      <color name="bg"       value="#f5f7fa" />
+      <color name="accent"   value="#e8f0fc" />
+      <color name="muted"    value="#737373" />
+      <color name="rule"     value="#dde3ed" />
+    </colors>
+  </tokens>
+  <document size="a4" margin="40pt">
+    <meta title="lpdf Showcase — Forms" subject="Interactive PDF forms" />
+    <pages>
+
+      <page background="surface">
+        <stack gap="xl">
+
+          <stack gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Forms</text>
+            <text font-size="m" color="muted">Interactive AcroForm fields — text, checkbox, dropdown, radio buttons, and submit button</text>
+          </stack>
+
+          <!-- Text fields -->
+          <stack gap="m">
+            <text font-size="l" font="Helvetica-Bold">Text fields</text>
+
+            <stack gap="xs">
+              <text font-size="s" color="muted">Plain text field</text>
+              <field type="text" name="fullname" height="24pt" />
+            </stack>
+
+            <stack gap="xs">
+              <text font-size="s" color="muted">Pre-filled value</text>
+              <field type="text" name="city" value="London" height="24pt" />
+            </stack>
+
+            <stack gap="xs">
+              <text font-size="s" color="muted">Required field</text>
+              <field type="text" name="email" required="true" height="24pt" />
+            </stack>
+
+            <stack gap="xs">
+              <text font-size="s" color="muted">Read-only field</text>
+              <field type="text" name="ref_no" value="REF-20240001" readonly="true" height="24pt" />
+            </stack>
+
+            <stack gap="xs">
+              <text font-size="s" color="muted">Limited to 5 characters</text>
+              <field type="text" name="postcode" max-len="5" width="80pt" height="24pt" />
+            </stack>
+          </stack>
+
+          <!-- Checkboxes -->
+          <stack gap="m">
+            <text font-size="l" font="Helvetica-Bold">Checkboxes</text>
+
+            <flank gap="s" align="center">
+              <field type="checkbox" name="terms" width="16pt" height="16pt" />
+              <text font-size="m">I agree to the terms and conditions</text>
+            </flank>
+
+            <flank gap="s" align="center">
+              <field type="checkbox" name="newsletter" checked="true" width="16pt" height="16pt" />
+              <text font-size="m">Subscribe to newsletter (checked by default)</text>
+            </flank>
+          </stack>
+
+          <!-- Dropdown -->
+          <stack gap="m">
+            <text font-size="l" font="Helvetica-Bold">Dropdown</text>
+
+            <stack gap="xs">
+              <text font-size="s" color="muted">Select a country</text>
+              <field type="dropdown" name="country" value="United Kingdom"
+                options="United Kingdom,Germany,France,Spain,Italy,Netherlands"
+                height="24pt" />
+            </stack>
+
+            <stack gap="xs">
+              <text font-size="s" color="muted">Select a size</text>
+              <field type="dropdown" name="size"
+                options="XS,S,M,L,XL,XXL"
+                width="100pt" height="24pt" />
+            </stack>
+          </stack>
+
+          <!-- Radio buttons -->
+          <stack gap="m">
+            <text font-size="l" font="Helvetica-Bold">Radio buttons</text>
+
+            <stack gap="xs">
+              <text font-size="s" color="muted">Payment method</text>
+              <stack gap="xs">
+                <flank gap="s" align="center">
+                  <field type="radio" name="payment_card"   group="payment" value="card"   checked="true"  width="14pt" height="14pt" />
+                  <text font-size="m">Credit / Debit card</text>
+                </flank>
+                <flank gap="s" align="center">
+                  <field type="radio" name="payment_paypal" group="payment" value="paypal" width="14pt" height="14pt" />
+                  <text font-size="m">PayPal</text>
+                </flank>
+                <flank gap="s" align="center">
+                  <field type="radio" name="payment_bank"   group="payment" value="bank"   width="14pt" height="14pt" />
+                  <text font-size="m">Bank transfer</text>
+                </flank>
+              </stack>
+            </stack>
+
+            <stack gap="xs">
+              <text font-size="s" color="muted">Delivery speed</text>
+              <stack gap="xs">
+                <flank gap="s" align="center">
+                  <field type="radio" name="delivery_std"      group="delivery" value="standard" checked="true" width="14pt" height="14pt" />
+                  <text font-size="m">Standard (3–5 days)</text>
+                </flank>
+                <flank gap="s" align="center">
+                  <field type="radio" name="delivery_express"  group="delivery" value="express"  width="14pt" height="14pt" />
+                  <text font-size="m">Express (1–2 days)</text>
+                </flank>
+              </stack>
+            </stack>
+          </stack>
+
+          <!-- Submit button -->
+          <stack gap="m">
+            <text font-size="l" font="Helvetica-Bold">Submit button</text>
+            <field type="button" name="submit" label="Submit Form"
+              action-url="https://example.com/submit"
+              width="120pt" height="30pt" />
+          </stack>
+
+        </stack>
+      </page>
+
+    </pages>
+  </document>
+</lpdf>

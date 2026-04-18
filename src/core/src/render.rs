@@ -1,4 +1,5 @@
 use serde_json::{json, Value};
+use crate::parse::FieldKind;
 
 // ── Render tree types ─────────────────────────────────────────────────────────
 
@@ -17,6 +18,7 @@ pub enum RenderNode {
     Link(RenderLink),
     Image(RenderImage),
     Barcode(RenderBarcode),
+    Field(RenderField),
 }
 
 pub struct RenderBarcode {
@@ -46,6 +48,27 @@ pub struct RenderImage {
     pub width: f32,
     pub height: f32,
     pub name: String,
+}
+
+#[derive(Clone)]
+pub struct RenderField {
+    pub x:            f32,
+    pub y:            f32,
+    pub width:        f32,
+    pub height:       f32,
+    pub kind:         FieldKind,
+    pub name:         String,
+    pub value:        String,
+    pub label:        String,
+    pub options:      Vec<String>,
+    pub required:     bool,
+    pub readonly:     bool,
+    pub checked:      bool,
+    pub max_len:      Option<u32>,
+    pub group:        Option<String>,
+    pub action_url:   Option<String>,
+    pub background:   Option<String>,
+    pub border:       Option<(f32, String)>,
 }
 
 pub struct RenderBox {
@@ -210,6 +233,29 @@ fn node_to_json(node: &RenderNode) -> Value {
                 "kind":   kind_str,
                 "color":  bc.color,
                 "bg":     bc.bg,
+            })
+        }
+        RenderNode::Field(f) => {
+            let kind_str = match f.kind {
+                FieldKind::Text     => "text",
+                FieldKind::Checkbox => "checkbox",
+                FieldKind::Dropdown => "dropdown",
+                FieldKind::Radio    => "radio",
+                FieldKind::Button   => "button",
+            };
+            json!({
+                "type":       "field",
+                "x":          r2(f.x),
+                "y":          r2(f.y),
+                "width":      r2(f.width),
+                "height":     r2(f.height),
+                "fieldType":  kind_str,
+                "name":       f.name,
+                "value":      f.value,
+                "label":      f.label,
+                "group":      f.group,
+                "checked":    f.checked,
+                "options":    f.options,
             })
         }
     }
