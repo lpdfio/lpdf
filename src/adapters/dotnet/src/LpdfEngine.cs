@@ -62,6 +62,13 @@ public sealed class RenderOptions
     /// In sandboxed environments supply all bytes via <see cref="FontBytes"/>.
     /// </summary>
     public Func<string, byte[]>? SrcFallback { get; init; }
+
+    /// <summary>
+    /// Optional ISO 8601 creation timestamp (e.g. <c>"2024-06-01T12:00:00"</c>).
+    /// When provided, written as <c>/CreationDate</c> in the PDF info dictionary.
+    /// Omitting this keeps builds reproducible (no embedded timestamp).
+    /// </summary>
+    public string? CreatedOn { get; init; }
 }
 
 /// <summary>
@@ -138,8 +145,9 @@ public sealed class LpdfEngine : IDisposable
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(xml);
         var merged = Merge(callOptions);
+        var createdOn = callOptions?.CreatedOn ?? _opts.CreatedOn;
         return Task.FromResult(
-            _wasm.RenderPdf(xml, _licenseKey, merged.FontBytes, merged.ImageBytes, merged.SrcFallback, BuildEncryptJson()));
+            _wasm.RenderPdf(xml, _licenseKey, merged.FontBytes, merged.ImageBytes, merged.SrcFallback, BuildEncryptJson(), createdOn));
     }
 
     /// <summary>Render an <see cref="LpdfDocument"/> tree (built with <see cref="LpdfKit"/>) to PDF bytes.</summary>
@@ -151,8 +159,25 @@ public sealed class LpdfEngine : IDisposable
         ArgumentNullException.ThrowIfNull(document);
         var merged = Merge(callOptions);
         var json   = JsonSerializer.Serialize(document, LpdfDocumentJson.Options);
+        var createdOn = callOptions?.CreatedOn ?? _opts.CreatedOn;
         return Task.FromResult(
-            _wasm.RenderTreePdf(json, _licenseKey, merged.FontBytes, merged.ImageBytes, merged.SrcFallback, BuildEncryptJson()));
+            _wasm.RenderTreePdf(json, _licenseKey, merged.FontBytes, merged.ImageBytes, merged.SrcFallback, BuildEncryptJson(), createdOn));
+    }
+
+    /// <summary>
+    /// Convert an <see cref="LpdfDocument"/> tree (built with <see cref="LpdfKit"/>) to an lpdf XML string.
+    /// </summary>
+    /// <remarks>
+    /// The serialisation is performed by the Rust core running as a WASI subprocess,
+    /// so the output is identical to the XML produced by the other adapters.
+    /// </remarks>
+    /// <param name="document">Document tree produced by <c>LpdfKit.Document(…)</c>.</param>
+    /// <returns>A well-formed XML string with an <c>&lt;?xml ...?&gt;</c> declaration.</returns>
+    public Task<string> KitToXml(LpdfDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var json = JsonSerializer.Serialize(document, LpdfDocumentJson.Options);
+        return Task.FromResult(_wasm.KitToXml(json));
     }
 
     // ── Internals ─────────────────────────────────────────────────────────────

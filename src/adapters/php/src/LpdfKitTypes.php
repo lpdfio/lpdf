@@ -13,10 +13,12 @@ final readonly class StackOptions
         public ?string $padding    = null,
         public ?string $background = null,
         public ?string $align      = null,
+        public ?string $justify    = null,
         public ?string $width      = null,
         public ?string $height     = null,
         public ?string $border     = null,
         public ?string $radius     = null,
+        public ?string $debug      = null,
     ) {}
 }
 
@@ -28,11 +30,12 @@ final readonly class FlankOptions
         public ?string $background = null,
         public ?string $align      = null,
         public ?string $justify    = null,
-        public ?string $wrap       = null,
+        public ?string $end        = null,
         public ?string $width      = null,
         public ?string $height     = null,
         public ?string $border     = null,
         public ?string $radius     = null,
+        public ?string $debug      = null,
     ) {}
 }
 
@@ -43,10 +46,12 @@ final readonly class SplitOptions
         public ?string $padding    = null,
         public ?string $background = null,
         public ?string $align      = null,
+        public ?string $equal      = null,
         public ?string $width      = null,
         public ?string $height     = null,
         public ?string $border     = null,
         public ?string $radius     = null,
+        public ?string $debug      = null,
     ) {}
 }
 
@@ -62,6 +67,7 @@ final readonly class ClusterOptions
         public ?string $height     = null,
         public ?string $border     = null,
         public ?string $radius     = null,
+        public ?string $debug      = null,
     ) {}
 }
 
@@ -78,6 +84,7 @@ final readonly class GridOptions
         public ?string $height     = null,
         public ?string $border     = null,
         public ?string $radius     = null,
+        public ?string $debug      = null,
     ) {}
 }
 
@@ -91,13 +98,16 @@ final readonly class FrameOptions
         public ?string $border     = null,
         public ?string $radius     = null,
         public ?string $align      = null,
+        public ?string $debug      = null,
     ) {}
 }
 
 final readonly class LinkOptions
 {
     public function __construct(
-        public ?string $url = null,
+        public ?string $url    = null,
+        public ?string $width  = null,
+        public ?string $height = null,
     ) {}
 }
 
@@ -142,6 +152,41 @@ final readonly class DividerOptions
     ) {}
 }
 
+final readonly class ImgOptions
+{
+    public function __construct(
+        public string  $name,
+        public ?string $height     = null,
+        public ?string $width      = null,
+        public ?string $font       = null,
+        public ?string $fontSize   = null,
+        public ?string $gap        = null,
+        public ?string $padding    = null,
+        public ?string $background = null,
+        public ?string $border     = null,
+        public ?string $radius     = null,
+        public ?string $repeat     = null,
+        public ?string $debug      = null,
+    ) {}
+}
+
+final readonly class BarcodeOptions
+{
+    public function __construct(
+        public string  $type,
+        public string  $data,
+        public ?string $size       = null,
+        public ?string $width      = null,
+        public ?string $height     = null,
+        public ?string $ec         = null,
+        public ?string $hrt        = null,
+        public ?string $color      = null,
+        public ?string $background = null,
+        public ?string $repeat     = null,
+        public ?string $debug      = null,
+    ) {}
+}
+
 final readonly class TableOptions
 {
     public function __construct(
@@ -154,6 +199,7 @@ final readonly class TableOptions
         public ?string $width      = null,
         public ?string $height     = null,
         public ?string $repeat     = null,
+        public ?string $debug      = null,
     ) {}
 }
 
@@ -181,6 +227,7 @@ final readonly class TdOptions
         public ?string $border     = null,
         public ?string $radius     = null,
         public ?string $gap        = null,
+        public ?string $debug      = null,
     ) {}
 }
 
@@ -191,6 +238,7 @@ final readonly class PageOptions
         public ?string $orientation = null,
         public ?string $margin      = null,
         public ?string $background  = null,
+        public ?string $debug       = null,
     ) {}
 }
 
@@ -283,7 +331,7 @@ final readonly class DocumentOptions
 // ── Nodes ─────────────────────────────────────────────────────────────────────
 
 /** Base class for all lpdf layout nodes. Use {@see LpdfKit} factory methods to construct. */
-abstract class LpdfNode implements \JsonSerializable
+abstract readonly class LpdfNode implements \JsonSerializable
 {
     abstract public function getType(): string;
 }
@@ -422,6 +470,56 @@ final readonly class LpdfDividerNode extends LpdfNode
     {
         return [
             'type'  => 'divider',
+            'attrs' => (object) $this->attrs,
+        ];
+    }
+}
+
+/**
+ * An img (image) leaf node.
+ *
+ * @internal Use LpdfKit::img() to construct.
+ */
+final readonly class LpdfImgNode extends LpdfNode
+{
+    /**
+     * @param array<string,string> $attrs
+     */
+    public function __construct(
+        private array $attrs,
+    ) {}
+
+    public function getType(): string { return 'img'; }
+
+    public function jsonSerialize(): mixed
+    {
+        return [
+            'type'  => 'img',
+            'attrs' => (object) $this->attrs,
+        ];
+    }
+}
+
+/**
+ * A barcode leaf node.
+ *
+ * @internal Use LpdfKit::barcode() to construct.
+ */
+final readonly class LpdfBarcodeNode extends LpdfNode
+{
+    /**
+     * @param array<string,string> $attrs
+     */
+    public function __construct(
+        private array $attrs,
+    ) {}
+
+    public function getType(): string { return 'barcode'; }
+
+    public function jsonSerialize(): mixed
+    {
+        return [
+            'type'  => 'barcode',
             'attrs' => (object) $this->attrs,
         ];
     }

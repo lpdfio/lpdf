@@ -81,4 +81,10 @@ export interface RenderOptions {
      * @deprecated Pass font bytes via `LpdfEngine.loadFont()` instead.
      */
     fontBytes?: Record<string, Uint8Array>;
+    /**
+     * Optional ISO 8601 creation timestamp (e.g. `"2024-06-01T12:00:00"`).
+     * When provided, written as `/CreationDate` in the PDF info dictionary.
+     * Omitting this keeps builds reproducible (no embedded timestamp).
+     */
+    createdOn?: string;
 }

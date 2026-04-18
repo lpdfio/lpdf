@@ -10,7 +10,8 @@
     "phpunit/phpunit": "^11"
   },
   "autoload": {
-    "psr-4": { "Lpdf\\": "src/" }
+    "psr-4": { "Lpdf\\": "src/" },
+    "files": ["src/LpdfKitTypes.php"]
   },
   "autoload-dev": {
     "psr-4": { "Lpdf\\Tests\\": "test/" }

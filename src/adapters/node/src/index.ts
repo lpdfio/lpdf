@@ -1,29 +1,37 @@
 import { readFileSync } from 'node:fs';
 import { RenderOptions } from './_shared';
 import { LpdfDocument } from './kit';
-import { kitToXml } from './kit-to-xml';
 
 // The WASM CJS module is loaded at runtime; we declare only what we use.
 interface IWasmEngine {
   render_pdf(xml: string): Uint8Array;
+  render_tree_pdf(json: string): Uint8Array;
   load_font(name: string, bytes: Uint8Array): void;
   load_image(name: string, bytes: Uint8Array): void;
   set_created_on(iso: string): void;
+  set_encryption(user_password: string, owner_password: string, permissions_json: string): void;
+  clear_encryption(): void;
   free(): void;
+}
+interface IWasmModule {
+  LpdfEngine: new (licenseKey: string) => IWasmEngine;
+  kit_to_xml: (json: string) => string;
 }
 interface WasmEngineConstructor { new(licenseKey: string): IWasmEngine; }
 // require() path is relative to the compiled output at dist/index.js.
 // dist/index.js → ../../../../dist/node/lpdf.js = project-root/dist/node/lpdf.js
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { LpdfEngine: WasmEngine } = require('../../../../dist/node/lpdf.js') as { LpdfEngine: WasmEngineConstructor };
+const wasmModule = require('../../../../dist/node/lpdf.js') as IWasmModule;
+const WasmEngine = wasmModule.LpdfEngine;
 
 export type { RenderOptions } from './_shared';
 export type { LpdfDocument, LpdfPageNode, LpdfNode, LpdfContainerNode, LpdfTextNode, LpdfSpanNode, LpdfDividerNode,
+              LpdfImgNode, LpdfBarcodeNode,
               LpdfTokens, LpdfFontDef, LpdfMeta,
               StackInput, FlankInput, SplitInput, ClusterInput, GridInput, FrameInput, LinkInput,
-              TextInput, SpanInput, DividerInput, PageInput, DocumentInput,
+              TextInput, SpanInput, DividerInput, ImgInput, BarcodeInput, PageInput, DocumentInput,
               StackOptions, FlankOptions, SplitOptions, ClusterOptions, GridOptions, FrameOptions, LinkOptions,
-              TextOptions, SpanOptions, DividerOptions, PageOptions, DocumentOptions } from './kit';
+              TextOptions, SpanOptions, DividerOptions, ImgOptions, BarcodeOptions, PageOptions, DocumentOptions } from './kit';
 export { LpdfKit } from './kit';
 export { kitToXml } from './kit-to-xml';
 
@@ -39,12 +47,35 @@ export class LpdfRenderError extends Error {
  * Stateful renderer. Construct once with the license key and optional shared
  * config; call `renderPdf` as many times as needed without repeating the key.
  */
+/** PDF permission flags for RC4-128 encryption. All flags default to `true` (allowed). */
+export interface EncryptPermissions {
+  print?:         boolean;
+  modify?:        boolean;
+  copy?:          boolean;
+  annotate?:      boolean;
+  fill_forms?:    boolean;
+  accessibility?: boolean;
+  assemble?:      boolean;
+  print_hq?:      boolean;
+}
+
+/** RC4-128 encryption options passed to {@link LpdfEngine.setEncryption}. */
+export interface EncryptOptions {
+  /** Open password shown to readers. Empty string = no open password required. */
+  userPassword:  string;
+  /** Owner (permissions) password. Required; must be non-empty. */
+  ownerPassword: string;
+  /** Permission flags applied to the document. Omitted flags default to `true`. */
+  permissions?:  EncryptPermissions;
+}
+
 export class LpdfEngine {
   private readonly _licenseKey: string;
   private readonly _opts:   RenderOptions;
   private readonly _fonts:  Map<string, Uint8Array> = new Map();
   private readonly _images: Map<string, Uint8Array> = new Map();
   private _disposed = false;
+  private _encrypt: EncryptOptions | null = null;
 
   constructor(licenseKey: string, options: RenderOptions = {}) {
     this._licenseKey = licenseKey;
@@ -72,6 +103,26 @@ export class LpdfEngine {
   }
 
   /**
+   * Configure RC4-128 encryption for all subsequent `renderPdf` calls.
+   * Returns `this` for chaining.
+   */
+  setEncryption(options: EncryptOptions): this {
+    this._throwIfDisposed();
+    this._encrypt = options;
+    return this;
+  }
+
+  /**
+   * Remove any previously configured encryption.
+   * Returns `this` for chaining.
+   */
+  clearEncryption(): this {
+    this._throwIfDisposed();
+    this._encrypt = null;
+    return this;
+  }
+
+  /**
    * Release held resources. Idempotent. Subsequent `renderPdf` / `loadFont`
    * calls after disposal will throw.
    */
@@ -95,8 +146,6 @@ export class LpdfEngine {
   async renderPdf(input: LpdfDocument, callOptions?: RenderOptions): Promise<Uint8Array>;
   async renderPdf(input: string | LpdfDocument, callOptions: RenderOptions = {}): Promise<Uint8Array> {
     this._throwIfDisposed();
-    // LpdfDocument trees are serialised to XML before being handed to the Rust engine.
-    const xml = typeof input === 'string' ? input : kitToXml(input);
 
     // Merge fonts: instance-level loadFont() calls take precedence over the
     // deprecated fontBytes option, which is kept for one-version compat.
@@ -106,25 +155,54 @@ export class LpdfEngine {
       if (!allFonts.has(name)) allFonts.set(name, bytes);
     }
 
-    // Auto-load fonts declared via <font src="…"> that haven't been
-    // explicitly provided — mirrors the old srcFallback behaviour.
-    for (const [name, src] of extractFontSrcs(xml)) {
-      if (!allFonts.has(name)) {
-        try { allFonts.set(name, readFileSync(src)); } catch { /* not found; Rust falls back to Helvetica */ }
-      }
-    }
-
     const engine = new WasmEngine(this._licenseKey);
-    for (const [name, bytes] of allFonts) {
-      engine.load_font(name, bytes);
-    }
-    for (const [name, bytes] of this._images) {
-      engine.load_image(name, bytes);
+
+    const createdOn = callOptions.createdOn ?? this._opts.createdOn;
+    if (createdOn) {
+      engine.set_created_on(createdOn);
     }
 
     let pdf: Uint8Array;
     try {
-      pdf = engine.render_pdf(xml);
+      if (typeof input === 'string') {
+        // XML path — auto-load fonts declared via <font src="…">.
+        const xml = input;
+        for (const [name, src] of extractFontSrcs(xml)) {
+          if (!allFonts.has(name)) {
+            try { allFonts.set(name, readFileSync(src)); } catch { /* not found; Rust falls back to Helvetica */ }
+          }
+        }
+        for (const [name, bytes] of allFonts) {
+          engine.load_font(name, bytes);
+        }
+        for (const [name, bytes] of this._images) {
+          engine.load_image(name, bytes);
+        }
+        if (this._encrypt) {
+          const permsJson = JSON.stringify(this._encrypt.permissions ?? {});
+          engine.set_encryption(this._encrypt.userPassword, this._encrypt.ownerPassword, permsJson);
+        }
+        pdf = engine.render_pdf(xml);
+      } else {
+        // JSON (Kit tree) path — pass JSON directly to render_tree_pdf.
+        const json = JSON.stringify(input);
+        for (const [name, src] of extractFontSrcsFromJson(json)) {
+          if (!allFonts.has(name)) {
+            try { allFonts.set(name, readFileSync(src)); } catch { /* not found; Rust falls back to Helvetica */ }
+          }
+        }
+        for (const [name, bytes] of allFonts) {
+          engine.load_font(name, bytes);
+        }
+        for (const [name, bytes] of this._images) {
+          engine.load_image(name, bytes);
+        }
+        if (this._encrypt) {
+          const permsJson = JSON.stringify(this._encrypt.permissions ?? {});
+          engine.set_encryption(this._encrypt.userPassword, this._encrypt.ownerPassword, permsJson);
+        }
+        pdf = engine.render_tree_pdf(json);
+      }
     } catch (e) {
       engine.free();
       const msg = e instanceof Error ? e.message : String(e);
@@ -146,6 +224,19 @@ function extractFontSrcs(xml: string): Map<string, string> {
     const src  = /\bsrc="([^"]*)"/.exec(tag)?.[1];
     if (name && src) result.set(name, src);
   }
+  return result;
+}
+
+/** Extract `name → src` pairs from `attrs.tokens.fonts[name].src` in a kit JSON string. */
+function extractFontSrcsFromJson(json: string): Map<string, string> {
+  const result = new Map<string, string>();
+  try {
+    const doc = JSON.parse(json);
+    const fonts = doc?.attrs?.tokens?.fonts ?? {};
+    for (const [name, def] of Object.entries(fonts as Record<string, { src?: string }>)) {
+      if (def.src) result.set(name, def.src);
+    }
+  } catch { /* ignore */ }
   return result;
 }
 

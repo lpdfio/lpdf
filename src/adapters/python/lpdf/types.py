@@ -12,10 +12,12 @@ class StackOptions:
     padding: Optional[str] = None
     background: Optional[str] = None
     align: Optional[str] = None
+    justify: Optional[str] = None
     width: Optional[str] = None
     height: Optional[str] = None
     border: Optional[str] = None
     radius: Optional[str] = None
+    debug: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -25,11 +27,12 @@ class FlankOptions:
     background: Optional[str] = None
     align: Optional[str] = None
     justify: Optional[str] = None
-    wrap: Optional[str] = None
+    end: Optional[str] = None
     width: Optional[str] = None
     height: Optional[str] = None
     border: Optional[str] = None
     radius: Optional[str] = None
+    debug: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -38,10 +41,12 @@ class SplitOptions:
     padding: Optional[str] = None
     background: Optional[str] = None
     align: Optional[str] = None
+    equal: Optional[str] = None
     width: Optional[str] = None
     height: Optional[str] = None
     border: Optional[str] = None
     radius: Optional[str] = None
+    debug: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +60,7 @@ class ClusterOptions:
     height: Optional[str] = None
     border: Optional[str] = None
     radius: Optional[str] = None
+    debug: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -69,6 +75,7 @@ class GridOptions:
     height: Optional[str] = None
     border: Optional[str] = None
     radius: Optional[str] = None
+    debug: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -80,11 +87,14 @@ class FrameOptions:
     border: Optional[str] = None
     radius: Optional[str] = None
     align: Optional[str] = None
+    debug: Optional[str] = None
 
 
 @dataclass(frozen=True)
 class LinkOptions:
     url: Optional[str] = None
+    width: Optional[str] = None
+    height: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -123,6 +133,37 @@ class DividerOptions:
 
 
 @dataclass(frozen=True)
+class ImgOptions:
+    name: str = ""
+    height: Optional[str] = None
+    width: Optional[str] = None
+    font: Optional[str] = None
+    font_size: Optional[str] = None
+    gap: Optional[str] = None
+    padding: Optional[str] = None
+    background: Optional[str] = None
+    border: Optional[str] = None
+    radius: Optional[str] = None
+    repeat: Optional[str] = None
+    debug: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class BarcodeOptions:
+    type: str = ""
+    data: str = ""
+    size: Optional[str] = None
+    width: Optional[str] = None
+    height: Optional[str] = None
+    ec: Optional[str] = None
+    hrt: Optional[str] = None
+    color: Optional[str] = None
+    background: Optional[str] = None
+    repeat: Optional[str] = None
+    debug: Optional[str] = None
+
+
+@dataclass(frozen=True)
 class TableOptions:
     cols: Optional[str] = None
     border: Optional[str] = None
@@ -133,6 +174,7 @@ class TableOptions:
     width: Optional[str] = None
     height: Optional[str] = None
     repeat: Optional[str] = None
+    debug: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -154,6 +196,7 @@ class TdOptions:
     border: Optional[str] = None
     radius: Optional[str] = None
     gap: Optional[str] = None
+    debug: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -162,6 +205,7 @@ class PageOptions:
     orientation: Optional[str] = None
     margin: Optional[str] = None
     background: Optional[str] = None
+    debug: Optional[str] = None
 
 
 # ── Tokens + Meta ─────────────────────────────────────────────────────────────
@@ -275,6 +319,32 @@ class LpdfDividerNode:
     def to_dict(self) -> dict:
         return {
             "type": "divider",
+            "attrs": self._attrs,
+        }
+
+
+class LpdfImgNode:
+    __slots__ = ("_attrs",)
+
+    def __init__(self, attrs: Dict[str, str]):
+        self._attrs = attrs
+
+    def to_dict(self) -> dict:
+        return {
+            "type": "img",
+            "attrs": self._attrs,
+        }
+
+
+class LpdfBarcodeNode:
+    __slots__ = ("_attrs",)
+
+    def __init__(self, attrs: Dict[str, str]):
+        self._attrs = attrs
+
+    def to_dict(self) -> dict:
+        return {
+            "type": "barcode",
             "attrs": self._attrs,
         }
 

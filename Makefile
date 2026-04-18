@@ -3,6 +3,7 @@ SHELL := C:/PROGRA~1/Git/bin/sh.exe
 .PHONY: build-wasm build-wasi test-wasm test-wasi \
         build-adapter-node build-adapter-dotnet build-adapter-php build-adapter-python \
         test-adapter-node test-adapter-dotnet test-adapter-php test-adapter-python \
+        benchmark \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python
@@ -36,6 +37,13 @@ test-wasi:
 	@echo ">>> Running WASI tests..."
 	@echo ""
 	cargo test --manifest-path src/core-wasi/Cargo.toml
+
+benchmark:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Running benchmarks..."
+	@echo ""
+	cargo bench --manifest-path src/core/Cargo.toml --bench pipeline --bench images --bench fonts -- --output-format bencher
 
 build-adapter-node:
 	@echo ""

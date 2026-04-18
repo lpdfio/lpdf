@@ -41,6 +41,7 @@ export interface StackOptions {
   padding?:    string;
   background?: string;
   align?:      string;
+  justify?:    string;
   width?:      string;
   height?:     string;
   border?:     string;
@@ -54,7 +55,7 @@ export interface FlankOptions {
   background?: string;
   align?:      string;
   justify?:    string;
-  wrap?:       string;
+  end?:        string;
   width?:      string;
   height?:     string;
   border?:     string;
@@ -66,6 +67,8 @@ export interface SplitOptions {
   gap?:        string;
   padding?:    string;
   background?: string;
+  align?:      string;
+  equal?:      string;
   width?:      string;
   height?:     string;
   border?:     string;
@@ -78,6 +81,7 @@ export interface ClusterOptions {
   padding?:    string;
   background?: string;
   align?:      string;
+  justify?:    string;
   width?:      string;
   height?:     string;
   border?:     string;
@@ -155,24 +159,60 @@ export interface TextOptions {
   textAlign?:  string;
   color?:      string;
   bold?:       string;
+  end?:        string;
   padding?:    string;
   background?: string;
+  width?:      string;
+  height?:     string;
+  border?:     string;
+  radius?:     string;
   repeat?:     string;
   debug?:      string;
 }
 
 export interface SpanOptions {
-  font?:      string;
-  fontSize?:  string;
-  color?:     string;
-  bold?:      string;
-  url?:       string;
+  font?:       string;
+  fontSize?:   string;
+  color?:      string;
+  bold?:       string;
+  url?:        string;
+  underline?:  string;
+  strike?:     string;
 }
 
 export interface DividerOptions {
   color?:      string;
   thickness?:  string;
   direction?:  string;
+  debug?:      string;
+}
+
+export interface ImgOptions {
+  name:        string;
+  height?:     string;
+  width?:      string;
+  font?:       string;
+  fontSize?:   string;
+  gap?:        string;
+  padding?:    string;
+  background?: string;
+  border?:     string;
+  radius?:     string;
+  repeat?:     string;
+  debug?:      string;
+}
+
+export interface BarcodeOptions {
+  type:        string;
+  data:        string;
+  size?:       string;
+  width?:      string;
+  height?:     string;
+  ec?:         string;
+  hrt?:        string;
+  color?:      string;
+  background?: string;
+  repeat?:     string;
   debug?:      string;
 }
 
@@ -229,6 +269,8 @@ export interface LinkInput     { nodes?: LpdfNode[];                  options?: 
 export interface TextInput     { nodes?: (string | LpdfSpanNode)[];   options?: TextOptions;     }
 export interface SpanInput     { nodes?: string[];                    options?: SpanOptions;     }
 export interface DividerInput  {                                       options?: DividerOptions;  }
+export interface ImgInput     {                                       options:  ImgOptions;      }
+export interface BarcodeInput {                                       options:  BarcodeOptions;  }
 export interface PageInput     { nodes?: LpdfNode[];                  options?: PageOptions;     }
 export interface DocumentInput { nodes?: LpdfPageNode[];              options?: DocumentOptions; }
 export interface TableInput    { nodes?: (LpdfTheadNode | LpdfTrNode)[];  options: TableOptions; }
@@ -262,6 +304,16 @@ export interface LpdfDividerNode {
   attrs: Record<string, string>;
 }
 
+export interface LpdfImgNode {
+  type:  'img';
+  attrs: Record<string, string>;
+}
+
+export interface LpdfBarcodeNode {
+  type:  'barcode';
+  attrs: Record<string, string>;
+}
+
 export interface LpdfTheadNode {
   type:     'thead';
   attrs:    Record<string, string>;
@@ -286,7 +338,7 @@ export interface LpdfTableNode {
   children: (LpdfTheadNode | LpdfTrNode)[];
 }
 
-export type LpdfNode = LpdfContainerNode | LpdfTextNode | LpdfDividerNode | LpdfTableNode;
+export type LpdfNode = LpdfContainerNode | LpdfTextNode | LpdfDividerNode | LpdfTableNode | LpdfImgNode | LpdfBarcodeNode;
 
 export interface LpdfPageNode {
   type:     'page';
@@ -397,6 +449,20 @@ function divider(input: DividerInput = {}): LpdfDividerNode {
   };
 }
 
+function img(input: ImgInput): LpdfImgNode {
+  return {
+    type:  'img',
+    attrs: buildAttrs(input.options as unknown as Record<string, string | undefined>),
+  };
+}
+
+function barcode(input: BarcodeInput): LpdfBarcodeNode {
+  return {
+    type:  'barcode',
+    attrs: buildAttrs(input.options as unknown as Record<string, string | undefined>),
+  };
+}
+
 function page(input: PageInput = {}): LpdfPageNode {
   return {
     type:     'page',
@@ -441,6 +507,8 @@ export const LpdfKit = Object.freeze({
   text,
   span,
   divider,
+  img,
+  barcode,
   page,
   document,
   table,

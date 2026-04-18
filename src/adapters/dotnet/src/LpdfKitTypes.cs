@@ -31,6 +31,10 @@ public sealed record TextInput    (LpdfContent[]?  Nodes = null, TextOptions?   
 public sealed record SpanInput    (string[]?       Nodes = null, SpanOptions?     Options = null);
 /// <summary>Input to <see cref="LpdfKit.Divider"/>.</summary>
 public sealed record DividerInput (                              DividerOptions?  Options = null);
+/// <summary>Input to <see cref="LpdfKit.Img"/>.</summary>
+public sealed record ImgInput     (                              ImgOptions       Options);
+/// <summary>Input to <see cref="LpdfKit.Barcode"/>.</summary>
+public sealed record BarcodeInput (                              BarcodeOptions   Options);
 /// <summary>Input to <see cref="LpdfKit.Table"/>.</summary>
 public sealed record TableInput   (LpdfNode[]?     Nodes = null, TableOptions?    Options = null);
 /// <summary>Input to <see cref="LpdfKit.Thead"/>.</summary>
@@ -51,44 +55,47 @@ public sealed record DocumentInput(LpdfPageNode[]? Nodes = null, DocumentOptions
 /// <summary>Attributes for the <c>stack</c> layout primitive.</summary>
 public sealed record StackOptions(
     string? Gap        = null, string? Padding = null, string? Background = null,
-    string? Align      = null, string? Width   = null, string? Height     = null,
-    string? Border     = null, string? Radius  = null);
+    string? Align      = null, string? Justify = null, string? Width      = null,
+    string? Height     = null, string? Border  = null, string? Radius     = null,
+    string? Debug      = null);
 
 /// <summary>Attributes for the <c>flank</c> layout primitive.</summary>
 public sealed record FlankOptions(
     string? Gap        = null, string? Padding = null, string? Background = null,
-    string? Align      = null, string? Justify = null, string? Wrap       = null,
+    string? Align      = null, string? Justify = null, string? End        = null,
     string? Width      = null, string? Height  = null, string? Border     = null,
-    string? Radius     = null);
+    string? Radius     = null, string? Debug   = null);
 
 /// <summary>Attributes for the <c>split</c> layout primitive.</summary>
 public sealed record SplitOptions(
     string? Gap        = null, string? Padding = null, string? Background = null,
-    string? Align      = null, string? Width   = null, string? Height     = null,
-    string? Border     = null, string? Radius  = null);
+    string? Align      = null, string? Equal   = null, string? Width      = null,
+    string? Height     = null, string? Border  = null, string? Radius     = null,
+    string? Debug      = null);
 
 /// <summary>Attributes for the <c>cluster</c> layout primitive.</summary>
 public sealed record ClusterOptions(
     string? Gap        = null, string? Padding = null, string? Background = null,
     string? Align      = null, string? Justify = null, string? Width      = null,
-    string? Height     = null, string? Border  = null, string? Radius     = null);
+    string? Height     = null, string? Border  = null, string? Radius     = null,
+    string? Debug      = null);
 
 /// <summary>Attributes for the <c>grid</c> layout primitive.</summary>
 public sealed record GridOptions(
-    string? Cols       = null, string? ColWidth = null, string? Gap       = null,
+    string? Cols       = null, string? ColWidth = null, string? Gap        = null,
     string? Equal      = null, string? Padding  = null, string? Background = null,
-    string? Width      = null, string? Height   = null, string? Border    = null,
-    string? Radius     = null);
+    string? Width      = null, string? Height   = null, string? Border     = null,
+    string? Radius     = null, string? Debug    = null);
 
 /// <summary>Attributes for the <c>frame</c> layout primitive.</summary>
 public sealed record FrameOptions(
     string? Width      = null, string? Height     = null, string? Padding    = null,
     string? Background = null, string? Border     = null, string? Radius     = null,
-    string? Align      = null);
+    string? Align      = null, string? Debug      = null);
 
 /// <summary>Attributes for the <c>link</c> layout primitive.</summary>
 public sealed record LinkOptions(
-    string? Url        = null);
+    string? Url        = null, string? Width = null, string? Height = null);
 
 /// <summary>Attributes for the <c>text</c> layout primitive.</summary>
 public sealed record TextOptions(
@@ -108,11 +115,31 @@ public sealed record SpanOptions(
 public sealed record DividerOptions(
     string? Color      = null, string? Thickness = null, string? Direction = null);
 
+/// <summary>Attributes for the <c>img</c> primitive.</summary>
+public sealed record ImgOptions(
+    string  Name,
+    string? Height     = null, string? Width      = null,
+    string? Font       = null, string? FontSize   = null,
+    string? Gap        = null, string? Padding    = null,
+    string? Background = null, string? Border     = null,
+    string? Radius     = null, string? Repeat     = null,
+    string? Debug      = null);
+
+/// <summary>Attributes for the <c>barcode</c> primitive.</summary>
+public sealed record BarcodeOptions(
+    string  Type,              string  Data,
+    string? Size       = null, string? Width      = null,
+    string? Height     = null, string? Ec         = null,
+    string? Hrt        = null, string? Color      = null,
+    string? Background = null, string? Repeat     = null,
+    string? Debug      = null);
+
 /// <summary>Attributes for the <c>table</c> layout primitive.</summary>
 public sealed record TableOptions(
     string? Cols       = null, string? Border    = null, string? Stripe     = null,
     string? Gap        = null, string? Padding   = null, string? Background = null,
-    string? Width      = null, string? Height    = null, string? Repeat     = null);
+    string? Width      = null, string? Height    = null, string? Repeat     = null,
+    string? Debug      = null);
 
 /// <summary>Attributes for the <c>thead</c> layout primitive.</summary>
 public sealed record TheadOptions(
@@ -127,12 +154,12 @@ public sealed record TdOptions(
     string? Padding    = null, string? Background = null,
     string? Align      = null, string? Valign     = null,
     string? Border     = null, string? Radius     = null,
-    string? Gap        = null);
+    string? Gap        = null, string? Debug      = null);
 
 /// <summary>Attributes for the <c>page</c> primitive.</summary>
 public sealed record PageOptions(
     string? Size       = null, string? Orientation = null, string? Margin   = null,
-    string? Background = null);
+    string? Background = null, string? Debug       = null);
 
 /// <summary>Document-level attributes applied as defaults to every page.</summary>
 public sealed record DocumentOptions(
@@ -232,6 +259,20 @@ public sealed record LpdfDividerNode(
     public override string Type => "divider";
 }
 
+/// <summary>A serialised <c>img</c> image node.</summary>
+public sealed record LpdfImgNode(
+    Dictionary<string, string> Attrs) : LpdfNode
+{
+    public override string Type => "img";
+}
+
+/// <summary>A serialised <c>barcode</c> node.</summary>
+public sealed record LpdfBarcodeNode(
+    Dictionary<string, string> Attrs) : LpdfNode
+{
+    public override string Type => "barcode";
+}
+
 /// <summary>Root document node — passed to <see cref="LpdfEngine.RenderPdf(LpdfDocument, RenderOptions?)"/>.</summary>
 public sealed record LpdfDocument(
     [property: JsonPropertyName("attrs")]    Dictionary<string, object?> Attrs,
@@ -282,6 +323,12 @@ internal sealed class LpdfNodeConverter : JsonConverter<LpdfNode>
                 break;
             case LpdfDividerNode d:
                 WriteAttrs(writer, d.Attrs);
+                break;
+            case LpdfImgNode img:
+                WriteAttrs(writer, img.Attrs);
+                break;
+            case LpdfBarcodeNode bc:
+                WriteAttrs(writer, bc.Attrs);
                 break;
         }
 

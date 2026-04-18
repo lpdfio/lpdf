@@ -21,6 +21,7 @@ export interface StackOptions {
     padding?: string;
     background?: string;
     align?: string;
+    justify?: string;
     width?: string;
     height?: string;
     border?: string;
@@ -33,7 +34,7 @@ export interface FlankOptions {
     background?: string;
     align?: string;
     justify?: string;
-    wrap?: string;
+    end?: string;
     width?: string;
     height?: string;
     border?: string;
@@ -44,6 +45,8 @@ export interface SplitOptions {
     gap?: string;
     padding?: string;
     background?: string;
+    align?: string;
+    equal?: string;
     width?: string;
     height?: string;
     border?: string;
@@ -55,6 +58,7 @@ export interface ClusterOptions {
     padding?: string;
     background?: string;
     align?: string;
+    justify?: string;
     width?: string;
     height?: string;
     border?: string;
@@ -124,8 +128,13 @@ export interface TextOptions {
     textAlign?: string;
     color?: string;
     bold?: string;
+    end?: string;
     padding?: string;
     background?: string;
+    width?: string;
+    height?: string;
+    border?: string;
+    radius?: string;
     repeat?: string;
     debug?: string;
 }
@@ -135,11 +144,40 @@ export interface SpanOptions {
     color?: string;
     bold?: string;
     url?: string;
+    underline?: string;
+    strike?: string;
 }
 export interface DividerOptions {
     color?: string;
     thickness?: string;
     direction?: string;
+    debug?: string;
+}
+export interface ImgOptions {
+    name: string;
+    height?: string;
+    width?: string;
+    font?: string;
+    fontSize?: string;
+    gap?: string;
+    padding?: string;
+    background?: string;
+    border?: string;
+    radius?: string;
+    repeat?: string;
+    debug?: string;
+}
+export interface BarcodeOptions {
+    type: string;
+    data: string;
+    size?: string;
+    width?: string;
+    height?: string;
+    ec?: string;
+    hrt?: string;
+    color?: string;
+    background?: string;
+    repeat?: string;
     debug?: string;
 }
 export interface PageOptions {
@@ -221,6 +259,12 @@ export interface SpanInput {
 export interface DividerInput {
     options?: DividerOptions;
 }
+export interface ImgInput {
+    options: ImgOptions;
+}
+export interface BarcodeInput {
+    options: BarcodeOptions;
+}
 export interface PageInput {
     nodes?: LpdfNode[];
     options?: PageOptions;
@@ -265,6 +309,14 @@ export interface LpdfDividerNode {
     type: 'divider';
     attrs: Record<string, string>;
 }
+export interface LpdfImgNode {
+    type: 'img';
+    attrs: Record<string, string>;
+}
+export interface LpdfBarcodeNode {
+    type: 'barcode';
+    attrs: Record<string, string>;
+}
 export interface LpdfTheadNode {
     type: 'thead';
     attrs: Record<string, string>;
@@ -285,7 +337,7 @@ export interface LpdfTableNode {
     attrs: Record<string, string>;
     children: (LpdfTheadNode | LpdfTrNode)[];
 }
-export type LpdfNode = LpdfContainerNode | LpdfTextNode | LpdfDividerNode | LpdfTableNode;
+export type LpdfNode = LpdfContainerNode | LpdfTextNode | LpdfDividerNode | LpdfTableNode | LpdfImgNode | LpdfBarcodeNode;
 export interface LpdfPageNode {
     type: 'page';
     attrs: Record<string, string>;
@@ -311,6 +363,8 @@ declare function td(input?: TdInput): LpdfTdNode;
 declare function text(input?: TextInput): LpdfTextNode;
 declare function span(input?: SpanInput): LpdfSpanNode;
 declare function divider(input?: DividerInput): LpdfDividerNode;
+declare function img(input: ImgInput): LpdfImgNode;
+declare function barcode(input: BarcodeInput): LpdfBarcodeNode;
 declare function page(input?: PageInput): LpdfPageNode;
 declare function document(input?: DocumentInput): LpdfDocument;
 /**
@@ -332,6 +386,8 @@ export declare const LpdfKit: Readonly<{
     text: typeof text;
     span: typeof span;
     divider: typeof divider;
+    img: typeof img;
+    barcode: typeof barcode;
     page: typeof page;
     document: typeof document;
     table: typeof table;

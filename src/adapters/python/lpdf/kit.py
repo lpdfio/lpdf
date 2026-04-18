@@ -7,10 +7,14 @@ from .types import (
     FlankOptions,
     FrameOptions,
     GridOptions,
+    ImgOptions,
+    BarcodeOptions,
     LinkOptions,
     LpdfContainerNode,
     LpdfDividerNode,
     LpdfDocument,
+    LpdfImgNode,
+    LpdfBarcodeNode,
     LpdfPageNode,
     LpdfSpanNode,
     LpdfTextNode,
@@ -81,6 +85,14 @@ def span(nodes: list | None = None, options: SpanOptions | None = None) -> LpdfS
 
 def divider(options: DividerOptions | None = None) -> LpdfDividerNode:
     return LpdfDividerNode(options_to_attrs(options))
+
+
+def img(options: ImgOptions) -> LpdfImgNode:
+    return LpdfImgNode(options_to_attrs(options))
+
+
+def barcode(options: BarcodeOptions) -> LpdfBarcodeNode:
+    return LpdfBarcodeNode(options_to_attrs(options))
 
 
 # ── Table helpers ─────────────────────────────────────────────────────────────

@@ -56,6 +56,7 @@ pub struct Node {
     pub height_mode: HeightMode,
     pub width_constraint: Option<f32>,
     pub repeat: Repeat,
+    pub paginate: Paginate,
     pub debug: bool,
     // layout-specific
     pub align: Align,
@@ -114,6 +115,21 @@ pub enum Repeat {
     Page,
     /// First-page chrome — rendered only on page 1; its space is reclaimed on later pages.
     First,
+}
+
+/// Pagination hint set via `paginate="…"` on any node.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Paginate {
+    /// Normal flow — split according to node type (default).
+    None,
+    /// Never split this node across pages; treat as atomic regardless of type.
+    No,
+    /// Always start this node on a new page.
+    BreakBefore,
+    /// Start a new page after this node (and all its continuations) have been placed.
+    BreakAfter,
+    /// If the next sibling would land on a different page, bump this node to that page too.
+    KeepNext,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -218,6 +234,7 @@ struct ParsedNode {
     height_mode: HeightMode,
     width_constraint: Option<f32>,
     repeat: Repeat,
+    paginate: Paginate,
     debug: bool,
     align: Align,
     justify: Justify,
@@ -288,6 +305,7 @@ impl ParsedNode {
             height_mode: HeightMode::Auto,
             width_constraint: None,
             repeat: Repeat::None,
+            paginate: Paginate::None,
             debug: false,
             align: Align::Stretch,
             justify: Justify::Start,
@@ -428,6 +446,7 @@ fn resolve_node(
         height_mode:           n.height_mode,
         width_constraint:      n.width_constraint,
         repeat:                n.repeat,
+        paginate:              n.paginate,
         debug:                 n.debug,
         align:                 n.align,
         justify:               n.justify,
@@ -1007,6 +1026,18 @@ fn parse_repeat_attr(v: &str) -> Result<Repeat, String> {
     }
 }
 
+fn parse_paginate_attr(v: &str) -> Result<Paginate, String> {
+    match v {
+        "no"           => Ok(Paginate::No),
+        "break-before" => Ok(Paginate::BreakBefore),
+        "break-after"  => Ok(Paginate::BreakAfter),
+        "keep-next"    => Ok(Paginate::KeepNext),
+        other          => Err(format!(
+            "invalid paginate value: '{other}' (expected 'no', 'break-before', 'break-after', or 'keep-next')"
+        )),
+    }
+}
+
 /// Apply shared box attributes (font, spacing, visual, sizing) to a parsed node.
 /// Works with both XML elements and JSON attr objects via the `Attrs` trait.
 fn apply_box_attrs(
@@ -1025,7 +1056,8 @@ fn apply_box_attrs(
         if let Some(v) = a.get("height") { node.height_mode = parse_height_mode(v)?; }
     }
     if let Some(v) = a.get("width")  { node.width_constraint = Some(tokens.resolve_width(v)?); }
-    if let Some(v) = a.get("repeat") { node.repeat = parse_repeat_attr(v)?; }
+    if let Some(v) = a.get("repeat")   { node.repeat   = parse_repeat_attr(v)?; }
+    if let Some(v) = a.get("paginate") { node.paginate = parse_paginate_attr(v)?; }
     node.debug = a.get("debug").map(|v| v == "true").unwrap_or(false);
     Ok(())
 }

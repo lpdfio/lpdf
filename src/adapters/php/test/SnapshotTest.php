@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Lpdf\Tests;
 
 use Lpdf\LpdfEngine;
+use Lpdf\LpdfKit;
+use Lpdf\LpdfTokens;
+use Lpdf\DocumentOptions;
 use PHPUnit\Framework\TestCase;
 
 final class SnapshotTest extends TestCase
@@ -40,6 +43,59 @@ final class SnapshotTest extends TestCase
         // the document does not reference it; we just assert no exception).
         $engine->loadFont('TestFont', '');
         $bytes = $engine->renderPdf($xml);
+        self::assertStringStartsWith('%PDF-', $bytes);
+    }
+
+    public function testKitToXmlReturnsXmlDeclaration(): void
+    {
+        $doc = LpdfKit::document([LpdfKit::page([])]);
+        $xml = LpdfEngine::kitToXml($doc);
+        self::assertStringStartsWith('<?xml version="1.0"', $xml);
+    }
+
+    public function testKitToXmlContainsLpdfRoot(): void
+    {
+        $doc = LpdfKit::document([LpdfKit::page([])]);
+        $xml = LpdfEngine::kitToXml($doc);
+        self::assertStringContainsString('<lpdf version="1">', $xml);
+    }
+
+    public function testKitToXmlBuiltinFontInAssets(): void
+    {
+        $doc = LpdfKit::document([], new DocumentOptions(
+            tokens: new LpdfTokens(fonts: ['heading' => ['builtin' => 'Helvetica-Bold']]),
+        ));
+        $xml = LpdfEngine::kitToXml($doc);
+        self::assertStringContainsString('<assets>', $xml);
+        self::assertStringContainsString('core="Helvetica-Bold"', $xml);
+        // Font must NOT appear inside <tokens>
+        $tokensStart = strpos($xml, '<tokens>');
+        $tokensEnd   = strpos($xml, '</tokens>');
+        $fontsInTokens = strpos($xml, '<fonts>', $tokensStart ?: 0);
+        self::assertTrue(
+            $tokensStart === false || $fontsInTokens === false || $fontsInTokens > $tokensEnd,
+            'Font was incorrectly placed inside <tokens>',
+        );
+    }
+
+    public function testKitToXmlCustomFontUsesRefAlias(): void
+    {
+        $doc = LpdfKit::document([], new DocumentOptions(
+            tokens: new LpdfTokens(fonts: ['body' => ['src' => '/fonts/MyFont.ttf']]),
+        ));
+        $xml = LpdfEngine::kitToXml($doc);
+        self::assertStringContainsString('ref="body"', $xml);
+        self::assertStringNotContainsString('src=', $xml);
+    }
+
+    public function testKitToXmlProducedXmlRendersToValidPdf(): void
+    {
+        $doc = LpdfKit::document([
+            LpdfKit::page([LpdfKit::text(['Hello from kitToXml'])]),
+        ]);
+        $xml    = LpdfEngine::kitToXml($doc);
+        $engine = new LpdfEngine('test-key');
+        $bytes  = $engine->renderPdf($xml);
         self::assertStringStartsWith('%PDF-', $bytes);
     }
 }

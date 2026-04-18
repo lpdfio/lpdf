@@ -66,6 +66,14 @@ public static class LpdfKit
     public static LpdfDividerNode Divider(DividerInput input) =>
         new(Attrs(input.Options));
 
+    /// <summary>Build an <c>img</c> image node.</summary>
+    public static LpdfImgNode Img(ImgInput input) =>
+        new(Attrs(input.Options));
+
+    /// <summary>Build a <c>barcode</c> node.</summary>
+    public static LpdfBarcodeNode Barcode(BarcodeInput input) =>
+        new(Attrs(input.Options));
+
     // ── Table helpers ─────────────────────────────────────────────────────────
 
     /// <summary>Build a <c>table</c> layout node.</summary>

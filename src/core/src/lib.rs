@@ -1,9 +1,11 @@
 mod encrypt;
+mod kit_to_xml;
 mod layout;
 mod license;
 mod parse;
 mod pdf;
 mod render;
+mod shared;
 mod tokens;
 
 use std::collections::HashMap;
@@ -52,7 +54,7 @@ impl LpdfEngine {
     /// To apply permissions without an open password, pass an empty `user_password`
     /// and a non-empty `owner_password`.
     pub fn set_encryption(&mut self, user_password: &str, owner_password: &str, permissions_json: &str) {
-        let perms = parse_permissions_json(permissions_json);
+        let perms = shared::parse_permissions_json(permissions_json);
         self.encrypt = Some(encrypt::EncryptConfig {
             user_password:  user_password.to_string(),
             owner_password: owner_password.to_string(),
@@ -72,7 +74,7 @@ impl LpdfEngine {
     /// `set_font_metrics` call is required.
     pub fn load_font(&mut self, name: &str, bytes: &[u8]) {
         self.fonts.register(name, bytes.to_vec());
-        if let Some(widths) = extract_font_widths(bytes) {
+        if let Some(widths) = shared::extract_font_widths(bytes) {
             self.font_widths.insert(name.to_string(), widths);
         }
     }
@@ -191,6 +193,75 @@ impl LpdfEngine {
         Ok(bytes)
     }
 
+    /// Render a JSON kit-tree document to PDF bytes.
+    ///
+    /// This is the JSON counterpart of `render_pdf`. The Node adapter uses it
+    /// when an `LpdfDocument` Kit tree is passed to `renderPdf()`, avoiding an
+    /// intermediate XML serialisation step. PHP, Python, and .NET adapters also
+    /// use this entry point.
+    pub fn render_tree_pdf(&self, json: &str) -> Result<Vec<u8>, JsValue> {
+        if json.len() > 4_194_304 {
+            return Err(JsValue::from_str("input exceeds 4 MB limit"));
+        }
+
+        let mut doc = parse::parse_tree(json)
+            .map_err(|e| JsValue::from_str(&e))?;
+
+        // Confirm every image declared in the tree has bytes in the registry.
+        for name in &doc.images {
+            if self.images.get(name).is_none() {
+                return Err(JsValue::from_str(&format!(
+                    "image '{name}' declared in assets but not loaded via loadImage()"
+                )));
+            }
+            if let Some(bytes) = self.images.get(name) {
+                if let Some(reason) = pdf::image_format_error(bytes) {
+                    return Err(JsValue::from_str(&format!(
+                        "image '{name}': {reason}"
+                    )));
+                }
+            }
+        }
+
+        let meta = pdf::build_image_meta(&self.images);
+        for page in &mut doc.pages {
+            layout::prefill_image_sizes(&mut page.children, &meta);
+        }
+
+        // Merge font widths: engine-level + doc-level (doc-level takes precedence).
+        let mut merged = self.font_widths.clone();
+        merged.extend(doc.font_widths.clone());
+        layout::set_font_widths(merged);
+
+        let pages: Vec<render::RenderPage> =
+            doc.pages.iter().flat_map(layout::layout_page).collect();
+
+        let status = license::check(&self.license_key, self.now_unix);
+        let wm: Option<(&str, Option<&str>)> = if status.is_licensed() {
+            None
+        } else {
+            Some(("made with lpdf.io", Some("https://lpdf.io")))
+        };
+
+        let bytes = pdf::render_pdf(
+            &pages,
+            &doc.fonts,
+            &self.fonts,
+            &self.images,
+            &doc.meta,
+            wm,
+            self.created_on.as_deref(),
+            status.is_licensed(),
+        )
+        .map_err(|e| JsValue::from_str(&e))?;
+
+        let bytes = match &self.encrypt {
+            Some(cfg) => encrypt::encrypt_pdf(&bytes, cfg),
+            None      => bytes,
+        };
+        Ok(bytes)
+    }
+
     pub fn render(&self, xml: &str) -> String {
         if xml.len() > 1_048_576 {
             return r#"{"error":"input exceeds 1 MB limit"}"#.to_string();
@@ -243,102 +314,100 @@ impl LpdfEngine {
         // tree knows the exact bytes it loaded.
         let mut merged = self.font_widths.clone();
         merged.extend(doc.font_widths.clone());
-        layout::set_font_widths(merged);
-
-        let pages: Vec<render::RenderPage> =
-            doc.pages.iter().flat_map(layout::layout_page).collect();
-
-        let fonts: serde_json::Map<String, serde_json::Value> = doc.fonts
-            .into_iter()
-            .map(|(name, def)| {
-                let v = match def {
-                    tokens::FontDef::Core(b) => serde_json::json!({ "core": b }),
-                    tokens::FontDef::Ref(s)  => serde_json::json!({ "ref": s }),
-                };
-                (name, v)
-            })
-            .collect();
-
-        let keywords: Vec<&str> = doc.meta.keywords
-            .split(|c: char| c == ',' || c.is_whitespace())
-            .filter(|s| !s.is_empty())
-            .collect();
-
-        let meta = serde_json::json!({
-            "title":    doc.meta.title,
-            "author":   doc.meta.author,
-            "subject":  doc.meta.subject,
-            "keywords": keywords,
-            "creator":  doc.meta.creator,
-            "fonts":    fonts,
-        });
-
-        let status = license::check(&self.license_key, self.now_unix);
-        let watermark = if status.is_licensed() {
-            serde_json::Value::Null
-        } else {
-            serde_json::json!({
-                "type": "lpdf:watermark",
-                "text": "made with lpdf.io",
-                "url":  "https://lpdf.io"
-            })
-        };
-
-        let mut output = render::pages_to_json(&pages, meta, watermark);
-        if let Some(warn) = status.warning() {
-            if let Ok(mut val) = serde_json::from_str::<serde_json::Value>(&output) {
-                val["license_warning"] = serde_json::Value::String(warn.to_string());
-                output = val.to_string();
-            }
-        }
-        output
+        shared::render_doc_shared(doc, merged, &self.license_key, self.now_unix)
     }
 }
 
-fn parse_permissions_json(json: &str) -> encrypt::Permissions {
-    let get_bool = |key: &str, default: bool| -> bool {
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
-            v.get(key).and_then(|b| b.as_bool()).unwrap_or(default)
-        } else {
-            default
-        }
-    };
-    encrypt::Permissions {
-        print:         get_bool("print",         true),
-        modify:        get_bool("modify",        true),
-        copy:          get_bool("copy",          true),
-        annotate:      get_bool("annotate",      true),
-        fill_forms:    get_bool("fill_forms",    true),
-        accessibility: get_bool("accessibility", true),
-        assemble:      get_bool("assemble",      true),
-        print_hq:      get_bool("print_hq",     true),
-    }
+// ── Standalone exports ────────────────────────────────────────────────────────
+
+/// Convert a JSON kit-tree (produced by `LpdfKit` in any adapter) to an lpdf
+/// XML string.
+///
+/// Useful for debugging Kit-generated documents, saving them as `.xml` files,
+/// or feeding them into the XML render path. The output is equivalent to
+/// hand-authored XML and passes through `render_pdf` without modification.
+#[wasm_bindgen]
+pub fn kit_to_xml(json: &str) -> Result<String, JsValue> {
+    kit_to_xml::kit_to_xml(json).map_err(|e| JsValue::from_str(&e))
 }
 
-/// Extract per-glyph advance widths for printable ASCII (code points 32–126)
-/// from raw TrueType/OpenType font bytes, normalised to 1/1000 em units.
-/// Returns `None` if the font cannot be parsed (WOFF/WOFF2, corrupt data, etc.).
-fn extract_font_widths(bytes: &[u8]) -> Option<tokens::FontWidths> {
-    let face = ttf_parser::Face::parse(bytes, 0).ok()?;
-    let upm = face.units_per_em() as u32;
-    if upm == 0 { return None; }
+// ── Public bench API ─────────────────────────────────────────────────────────
+// No cfg gate: these live in the rlib so bench binaries can link them.
 
-    let mut ascii: Vec<u16> = Vec::with_capacity(95);
-    let mut sum: u32 = 0;
-    let mut count: u32 = 0;
+/// Opaque pre-parsed document used by staged benchmarks.
+pub struct BenchDoc(parse::Document);
 
-    for cp in 32u32..=126 {
-        let ch = char::from_u32(cp).unwrap_or(' ');
-        let adv = face.glyph_index(ch)
-            .and_then(|gid| face.glyph_hor_advance(gid))
-            .unwrap_or_else(|| face.glyph_hor_advance(ttf_parser::GlyphId(0)).unwrap_or(0));
-        let w = ((adv as u32 * 1000 + upm / 2) / upm) as u16;
-        ascii.push(w);
-        if w > 0 { sum += w as u32; count += 1; }
-    }
+/// Parse XML — no layout, no PDF write. Used by `parse_xml` benchmarks.
+pub fn bench_parse(xml: &str) -> Result<BenchDoc, String> {
+    parse::parse(xml).map(BenchDoc)
+}
 
-    let default = if count > 0 { ((sum + count / 2) / count) as u16 } else { 500 };
-    Some(tokens::FontWidths { default, ascii })
+/// Parse a render-tree JSON — used by `parse_json` benchmarks.
+pub fn bench_parse_tree(json: &str) -> Result<BenchDoc, String> {
+    parse::parse_tree(json).map(BenchDoc)
+}
+
+/// Layout + PDF write on a pre-parsed doc. Used by `layout` benchmarks.
+pub fn bench_render_doc(doc: BenchDoc) -> Result<Vec<u8>, String> {
+    let pages: Vec<render::RenderPage> =
+        doc.0.pages.iter().flat_map(layout::layout_page).collect();
+    let wm = Some(("made with lpdf.io", Some("https://lpdf.io")));
+    pdf::render_pdf(
+        &pages, &doc.0.fonts,
+        &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
+        &doc.0.meta, wm, None, false,
+    )
+}
+
+/// Full pipeline: parse + layout + PDF write. Used by `end_to_end` benchmarks.
+pub fn bench_render_xml(xml: &str) -> Result<Vec<u8>, String> {
+    let doc = parse::parse(xml)?;
+    let pages: Vec<render::RenderPage> =
+        doc.pages.iter().flat_map(layout::layout_page).collect();
+    let wm = Some(("made with lpdf.io", Some("https://lpdf.io")));
+    pdf::render_pdf(
+        &pages, &doc.fonts,
+        &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
+        &doc.meta, wm, None, false,
+    )
+}
+
+/// Full pipeline with one custom font loaded. Used by `fonts` benchmarks.
+pub fn bench_render_xml_with_font(
+    xml: &str,
+    font_name: &str,
+    font_bytes: &[u8],
+) -> Result<Vec<u8>, String> {
+    let doc = parse::parse(xml)?;
+    let pages: Vec<render::RenderPage> =
+        doc.pages.iter().flat_map(layout::layout_page).collect();
+    let wm = Some(("made with lpdf.io", Some("https://lpdf.io")));
+    let mut fonts = pdf::FontRegistry::new();
+    fonts.register(font_name, font_bytes.to_vec());
+    pdf::render_pdf(
+        &pages, &doc.fonts,
+        &fonts, &pdf::ImageRegistry::new(),
+        &doc.meta, wm, None, false,
+    )
+}
+
+/// Full pipeline with one image loaded. Used by `images` benchmarks.
+pub fn bench_render_xml_with_image(
+    xml: &str,
+    image_name: &str,
+    image_bytes: &[u8],
+) -> Result<Vec<u8>, String> {
+    let doc = parse::parse(xml)?;
+    let pages: Vec<render::RenderPage> =
+        doc.pages.iter().flat_map(layout::layout_page).collect();
+    let wm = Some(("made with lpdf.io", Some("https://lpdf.io")));
+    let mut images = pdf::ImageRegistry::new();
+    images.load(image_name, image_bytes.to_vec());
+    pdf::render_pdf(
+        &pages, &doc.fonts,
+        &pdf::FontRegistry::new(), &images,
+        &doc.meta, wm, None, false,
+    )
 }
 
 #[cfg(test)]

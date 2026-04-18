@@ -113,3 +113,102 @@ public class LpdfKitTypesTests
         Assert.Single(page.Children);
     }
 }
+
+// ── KitToXml tests ────────────────────────────────────────────────────────────
+// These tests invoke the real WASI subprocess (same as SnapshotTests).
+
+public class KitToXmlTests
+{
+    private static LpdfDocument SimpleDoc() =>
+        LpdfKit.Document(new DocumentInput
+        {
+            Nodes = [LpdfKit.Page(new PageInput { Nodes = [] })],
+        });
+
+    [Fact]
+    public async Task KitToXml_ReturnsXmlDeclaration()
+    {
+        var engine = new LpdfEngine("test-key");
+        var xml    = await engine.KitToXml(SimpleDoc());
+        Assert.StartsWith("<?xml version=\"1.0\"", xml);
+    }
+
+    [Fact]
+    public async Task KitToXml_ContainsLpdfRoot()
+    {
+        var engine = new LpdfEngine("test-key");
+        var xml    = await engine.KitToXml(SimpleDoc());
+        Assert.Contains("<lpdf version=\"1\">", xml);
+    }
+
+    [Fact]
+    public async Task KitToXml_BuiltinFontPlacedInAssets()
+    {
+        var doc = LpdfKit.Document(new DocumentInput
+        {
+            Nodes   = [LpdfKit.Page(new PageInput { Nodes = [] })],
+            Options = new DocumentOptions
+            {
+                Tokens = new LpdfTokens(Fonts: new()
+                {
+                    ["heading"] = new LpdfFontBuiltin("Helvetica-Bold"),
+                }),
+            },
+        });
+        var engine = new LpdfEngine("test-key");
+        var xml    = await engine.KitToXml(doc);
+
+        Assert.Contains("<assets>",              xml);
+        Assert.Contains("core=\"Helvetica-Bold\"", xml);
+
+        // Font must NOT appear inside <tokens>
+        var tokensStart   = xml.IndexOf("<tokens>",  StringComparison.Ordinal);
+        var tokensEnd     = xml.IndexOf("</tokens>", StringComparison.Ordinal);
+        var fontsInTokens = tokensStart >= 0 ? xml.IndexOf("<fonts>", tokensStart, StringComparison.Ordinal) : -1;
+        Assert.True(
+            tokensStart < 0 || fontsInTokens < 0 || fontsInTokens > tokensEnd,
+            "Font was incorrectly placed inside <tokens>");
+    }
+
+    [Fact]
+    public async Task KitToXml_CustomFontUsesRefAlias()
+    {
+        var doc = LpdfKit.Document(new DocumentInput
+        {
+            Nodes   = [LpdfKit.Page(new PageInput { Nodes = [] })],
+            Options = new DocumentOptions
+            {
+                Tokens = new LpdfTokens(Fonts: new()
+                {
+                    ["body"] = new LpdfFontSrc("/fonts/MyFont.ttf"),
+                }),
+            },
+        });
+        var engine = new LpdfEngine("test-key");
+        var xml    = await engine.KitToXml(doc);
+
+        Assert.Contains("ref=\"body\"", xml);
+        Assert.DoesNotContain("src=",   xml);
+    }
+
+    [Fact]
+    public async Task KitToXml_ProducedXmlRendersToValidPdf()
+    {
+        var doc = LpdfKit.Document(new DocumentInput
+        {
+            Nodes = [LpdfKit.Page(new PageInput
+            {
+                Nodes = [LpdfKit.Text(new TextInput { Nodes = [new LpdfRawText("Hello from KitToXml")] })],
+            })],
+        });
+        var engine = new LpdfEngine("test-key");
+        var xml    = await engine.KitToXml(doc);
+        var pdf    = await engine.RenderPdf(xml);
+
+        Assert.True(pdf.Length > 100);
+        Assert.Equal(0x25, pdf[0]); // '%'
+        Assert.Equal(0x50, pdf[1]); // 'P'
+        Assert.Equal(0x44, pdf[2]); // 'D'
+        Assert.Equal(0x46, pdf[3]); // 'F'
+    }
+}

@@ -110,6 +110,18 @@ function divider(input = {}) {
         attrs: buildAttrs((input.options ?? {})),
     };
 }
+function img(input) {
+    return {
+        type: 'img',
+        attrs: buildAttrs(input.options),
+    };
+}
+function barcode(input) {
+    return {
+        type: 'barcode',
+        attrs: buildAttrs(input.options),
+    };
+}
 function page(input = {}) {
     return {
         type: 'page',
@@ -153,6 +165,8 @@ exports.LpdfKit = Object.freeze({
     text,
     span,
     divider,
+    img,
+    barcode,
     page,
     document,
     table,

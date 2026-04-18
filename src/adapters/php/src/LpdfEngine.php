@@ -168,6 +168,37 @@ final class LpdfEngine
         return $bytes;
     }
 
+    /**
+     * Convert an LpdfDocument tree (built with LpdfKit) to an lpdf XML string.
+     *
+     * The conversion is performed by the Rust core running as a WASI subprocess,
+     * so the output is identical to the XML produced by the other adapters.
+     *
+     * @param  LpdfDocument       $doc         The document tree to serialise.
+     * @param  string|null        $wasmBinary  Path to lpdf-wasi.wasm (defaults to bundled binary).
+     * @param  string             $wasmRunner  WASI runtime executable (default: wasmtime).
+     * @throws LpdfRenderException On process or serialisation error.
+     */
+    public static function kitToXml(
+        LpdfDocument $doc,
+        ?string $wasmBinary = null,
+        string $wasmRunner = 'wasmtime',
+    ): string {
+        $runner = new WasmRunner(
+            wasmBinary: $wasmBinary ?? self::defaultBinary(),
+            wasmRunner: $wasmRunner,
+        );
+        $payload  = [
+            'method' => 'kit_to_xml',
+            'input'  => json_encode($doc, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
+        ];
+        $response = $runner->invoke($payload);
+        if (!isset($response['xml'])) {
+            throw new LpdfRenderException('Unexpected response from WASI process (kit_to_xml).');
+        }
+        return $response['xml'];
+    }
+
     /** @return array<string,string> Font name → file path from `<font name="…" src="…">` tags. */
     private static function xmlFontSrcs(string $xml): array
     {

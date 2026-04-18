@@ -118,6 +118,18 @@ final class LpdfKit
         return new LpdfDividerNode(self::optionsToAttrs($options));
     }
 
+    /** Build an img (image) node. */
+    public static function img(ImgOptions $options): LpdfImgNode
+    {
+        return new LpdfImgNode(self::optionsToAttrs($options));
+    }
+
+    /** Build a barcode node. */
+    public static function barcode(BarcodeOptions $options): LpdfBarcodeNode
+    {
+        return new LpdfBarcodeNode(self::optionsToAttrs($options));
+    }
+
     // ── Table helpers ─────────────────────────────────────────────────────────
 
     /** @param array<LpdfTheadNode|LpdfTrNode> $nodes */

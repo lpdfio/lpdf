@@ -2,15 +2,15 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LpdfEngine = exports.LpdfRenderError = exports.kitToXml = exports.LpdfKit = void 0;
 const node_fs_1 = require("node:fs");
-const kit_to_xml_1 = require("./kit-to-xml");
 // require() path is relative to the compiled output at dist/index.js.
 // dist/index.js → ../../../../dist/node/lpdf.js = project-root/dist/node/lpdf.js
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { LpdfEngine: WasmEngine } = require('../../../../dist/node/lpdf.js');
+const wasmModule = require('../../../../dist/node/lpdf.js');
+const WasmEngine = wasmModule.LpdfEngine;
 var kit_1 = require("./kit");
 Object.defineProperty(exports, "LpdfKit", { enumerable: true, get: function () { return kit_1.LpdfKit; } });
-var kit_to_xml_2 = require("./kit-to-xml");
-Object.defineProperty(exports, "kitToXml", { enumerable: true, get: function () { return kit_to_xml_2.kitToXml; } });
+var kit_to_xml_1 = require("./kit-to-xml");
+Object.defineProperty(exports, "kitToXml", { enumerable: true, get: function () { return kit_to_xml_1.kitToXml; } });
 /** Thrown when the lpdf engine returns a layout or parse error. */
 class LpdfRenderError extends Error {
     constructor(message) {
@@ -19,15 +19,12 @@ class LpdfRenderError extends Error {
     }
 }
 exports.LpdfRenderError = LpdfRenderError;
-/**
- * Stateful renderer. Construct once with the license key and optional shared
- * config; call `renderPdf` as many times as needed without repeating the key.
- */
 class LpdfEngine {
     constructor(licenseKey, options = {}) {
         this._fonts = new Map();
         this._images = new Map();
         this._disposed = false;
+        this._encrypt = null;
         this._licenseKey = licenseKey;
         this._opts = options;
     }
@@ -50,6 +47,24 @@ class LpdfEngine {
         return this;
     }
     /**
+     * Configure RC4-128 encryption for all subsequent `renderPdf` calls.
+     * Returns `this` for chaining.
+     */
+    setEncryption(options) {
+        this._throwIfDisposed();
+        this._encrypt = options;
+        return this;
+    }
+    /**
+     * Remove any previously configured encryption.
+     * Returns `this` for chaining.
+     */
+    clearEncryption() {
+        this._throwIfDisposed();
+        this._encrypt = null;
+        return this;
+    }
+    /**
      * Release held resources. Idempotent. Subsequent `renderPdf` / `loadFont`
      * calls after disposal will throw.
      */
@@ -63,8 +78,6 @@ class LpdfEngine {
     }
     async renderPdf(input, callOptions = {}) {
         this._throwIfDisposed();
-        // LpdfDocument trees are serialised to XML before being handed to the Rust engine.
-        const xml = typeof input === 'string' ? input : (0, kit_to_xml_1.kitToXml)(input);
         // Merge fonts: instance-level loadFont() calls take precedence over the
         // deprecated fontBytes option, which is kept for one-version compat.
         const allFonts = new Map(this._fonts);
@@ -73,26 +86,59 @@ class LpdfEngine {
             if (!allFonts.has(name))
                 allFonts.set(name, bytes);
         }
-        // Auto-load fonts declared via <font src="…"> that haven't been
-        // explicitly provided — mirrors the old srcFallback behaviour.
-        for (const [name, src] of extractFontSrcs(xml)) {
-            if (!allFonts.has(name)) {
-                try {
-                    allFonts.set(name, (0, node_fs_1.readFileSync)(src));
-                }
-                catch { /* not found; Rust falls back to Helvetica */ }
-            }
-        }
         const engine = new WasmEngine(this._licenseKey);
-        for (const [name, bytes] of allFonts) {
-            engine.load_font(name, bytes);
-        }
-        for (const [name, bytes] of this._images) {
-            engine.load_image(name, bytes);
+        const createdOn = callOptions.createdOn ?? this._opts.createdOn;
+        if (createdOn) {
+            engine.set_created_on(createdOn);
         }
         let pdf;
         try {
-            pdf = engine.render_pdf(xml);
+            if (typeof input === 'string') {
+                // XML path — auto-load fonts declared via <font src="…">.
+                const xml = input;
+                for (const [name, src] of extractFontSrcs(xml)) {
+                    if (!allFonts.has(name)) {
+                        try {
+                            allFonts.set(name, (0, node_fs_1.readFileSync)(src));
+                        }
+                        catch { /* not found; Rust falls back to Helvetica */ }
+                    }
+                }
+                for (const [name, bytes] of allFonts) {
+                    engine.load_font(name, bytes);
+                }
+                for (const [name, bytes] of this._images) {
+                    engine.load_image(name, bytes);
+                }
+                if (this._encrypt) {
+                    const permsJson = JSON.stringify(this._encrypt.permissions ?? {});
+                    engine.set_encryption(this._encrypt.userPassword, this._encrypt.ownerPassword, permsJson);
+                }
+                pdf = engine.render_pdf(xml);
+            }
+            else {
+                // JSON (Kit tree) path — pass JSON directly to render_tree_pdf.
+                const json = JSON.stringify(input);
+                for (const [name, src] of extractFontSrcsFromJson(json)) {
+                    if (!allFonts.has(name)) {
+                        try {
+                            allFonts.set(name, (0, node_fs_1.readFileSync)(src));
+                        }
+                        catch { /* not found; Rust falls back to Helvetica */ }
+                    }
+                }
+                for (const [name, bytes] of allFonts) {
+                    engine.load_font(name, bytes);
+                }
+                for (const [name, bytes] of this._images) {
+                    engine.load_image(name, bytes);
+                }
+                if (this._encrypt) {
+                    const permsJson = JSON.stringify(this._encrypt.permissions ?? {});
+                    engine.set_encryption(this._encrypt.userPassword, this._encrypt.ownerPassword, permsJson);
+                }
+                pdf = engine.render_tree_pdf(json);
+            }
         }
         catch (e) {
             engine.free();
@@ -115,5 +161,19 @@ function extractFontSrcs(xml) {
         if (name && src)
             result.set(name, src);
     }
+    return result;
+}
+/** Extract `name → src` pairs from `attrs.tokens.fonts[name].src` in a kit JSON string. */
+function extractFontSrcsFromJson(json) {
+    const result = new Map();
+    try {
+        const doc = JSON.parse(json);
+        const fonts = doc?.attrs?.tokens?.fonts ?? {};
+        for (const [name, def] of Object.entries(fonts)) {
+            if (def.src)
+                result.set(name, def.src);
+        }
+    }
+    catch { /* ignore */ }
     return result;
 }

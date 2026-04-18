@@ -28,35 +28,13 @@ mod pdf;
 mod license;
 #[path = "../../core/src/encrypt.rs"]
 mod encrypt;
+#[path = "../../core/src/shared.rs"]
+mod shared;
+#[path = "../../core/src/kit_to_xml.rs"]
+mod kit_to_xml;
 
 use std::io::Read;
 use base64::Engine as _;
-
-/// Extract per-glyph advance widths for printable ASCII (code points 32–126)
-/// from raw TrueType/OpenType font bytes, normalised to 1/1000 em units.
-/// Returns `None` if the font cannot be parsed (WOFF/WOFF2, corrupt data, etc.).
-fn extract_font_widths(bytes: &[u8]) -> Option<tokens::FontWidths> {
-    let face = ttf_parser::Face::parse(bytes, 0).ok()?;
-    let upm = face.units_per_em() as u32;
-    if upm == 0 { return None; }
-
-    let mut ascii: Vec<u16> = Vec::with_capacity(95);
-    let mut sum: u32 = 0;
-    let mut count: u32 = 0;
-
-    for cp in 32u32..=126 {
-        let ch = char::from_u32(cp).unwrap_or(' ');
-        let adv = face.glyph_index(ch)
-            .and_then(|gid| face.glyph_hor_advance(gid))
-            .unwrap_or_else(|| face.glyph_hor_advance(ttf_parser::GlyphId(0)).unwrap_or(0));
-        let w = ((adv as u32 * 1000 + upm / 2) / upm) as u16;
-        ascii.push(w);
-        if w > 0 { sum += w as u32; count += 1; }
-    }
-
-    let default = if count > 0 { ((sum + count / 2) / count) as u16 } else { 500 };
-    Some(tokens::FontWidths { default, ascii })
-}
 
 fn main() {
     let mut buf = String::new();
@@ -106,6 +84,12 @@ fn dispatch(input: &str) -> String {
             match parse::parse_tree(body) {
                 Ok(d)  => render_doc(d, key, now_unix),
                 Err(e) => serde_json::json!({ "error": e }).to_string(),
+            }
+        }
+        "kit_to_xml" => {
+            match kit_to_xml::kit_to_xml(body) {
+                Ok(xml) => serde_json::json!({ "xml": xml }).to_string(),
+                Err(e)  => serde_json::json!({ "error": e }).to_string(),
             }
         }
         _ => {
@@ -199,7 +183,7 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     // This is the primary source of font metrics; adapter-supplied `metrics`
     // (kept for backward compatibility) fill in any remaining gaps.
     for (name, bytes) in registry.iter() {
-        if let Some(widths) = extract_font_widths(bytes) {
+        if let Some(widths) = shared::extract_font_widths(bytes) {
             doc.font_widths.entry(name.to_string()).or_insert(widths);
         }
     }
@@ -231,7 +215,7 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
                 let cfg = encrypt::EncryptConfig {
                     user_password:  user_pw.to_string(),
                     owner_password: owner_pw.to_string(),
-                    permissions:    parse_permissions_json(&perms_json),
+                    permissions:    shared::parse_permissions_json(&perms_json),
                 };
                 encrypt::encrypt_pdf(&bytes, &cfg)
             } else {
@@ -241,26 +225,6 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
             serde_json::json!({ "pdf": b64 }).to_string()
         }
         Err(e) => serde_json::json!({ "error": e }).to_string(),
-    }
-}
-
-fn parse_permissions_json(json: &str) -> encrypt::Permissions {
-    let get_bool = |key: &str, default: bool| -> bool {
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
-            v.get(key).and_then(|b| b.as_bool()).unwrap_or(default)
-        } else {
-            default
-        }
-    };
-    encrypt::Permissions {
-        print:         get_bool("print",         true),
-        modify:        get_bool("modify",        true),
-        copy:          get_bool("copy",          true),
-        annotate:      get_bool("annotate",      true),
-        fill_forms:    get_bool("fill_forms",    true),
-        accessibility: get_bool("accessibility", true),
-        assemble:      get_bool("assemble",      true),
-        print_hq:      get_bool("print_hq",      true),
     }
 }
 
@@ -282,53 +246,7 @@ impl LpdfEngine {
 }
 
 fn render_doc(doc: parse::Document, license_key: &str, now_unix: i64) -> String {
-    layout::set_font_widths(doc.font_widths.clone());
-    let pages: Vec<render::RenderPage> =
-        doc.pages.iter().flat_map(layout::layout_page).collect();
-
-    let fonts: serde_json::Map<String, serde_json::Value> = doc.fonts
-        .into_iter()
-        .map(|(name, def)| {
-            let v = match def {
-                tokens::FontDef::Core(b) => serde_json::json!({ "core": b }),
-                tokens::FontDef::Ref(s)  => serde_json::json!({ "ref": s }),
-            };
-            (name, v)
-        })
-        .collect();
-
-    let keywords: Vec<&str> = doc.meta.keywords
-        .split(|c: char| c == ',' || c.is_whitespace())
-        .filter(|s| !s.is_empty())
-        .collect();
-
-    let meta = serde_json::json!({
-        "title":    doc.meta.title,
-        "author":   doc.meta.author,
-        "subject":  doc.meta.subject,
-        "keywords": keywords,
-        "creator":  doc.meta.creator,
-        "fonts":    fonts,
-    });
-
-    let status = license::check(license_key, now_unix);
-    let watermark = if status.is_licensed() {
-        serde_json::Value::Null
-    } else {
-        serde_json::json!({
-            "type": "lpdf:watermark",
-            "text": "made with lpdf.io",
-            "url":  "https://lpdf.io"
-        })
-    };
-
-    let mut output = render::pages_to_json(&pages, meta, watermark);
-    if let Some(warn) = status.warning() {
-        if let Ok(mut val) = serde_json::from_str::<serde_json::Value>(&output) {
-            val["license_warning"] = serde_json::Value::String(warn.to_string());
-            output = val.to_string();
-        }
-    }
-    output
+    let font_widths = doc.font_widths.clone();
+    shared::render_doc_shared(doc, font_widths, license_key, now_unix)
 }
 

@@ -1,4 +1,4 @@
-use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Direction, FieldKind, HeightMode, Justify, Node, NodeKind, Page, Repeat, TextAlign, TextRun};
+use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Direction, FieldKind, HeightMode, Justify, Node, NodeKind, Page, Paginate, Repeat, TextAlign, TextRun};
 use crate::render::{RenderBarcode, RenderBox, RenderField, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind};
 use crate::tokens::FontWidths;
 use std::cell::RefCell;
@@ -320,19 +320,57 @@ fn split_into_pages(
     };
 
     while let Some(node) = queue.pop_front() {
+        // break-before: flush to a new page before placing this node.
+        // Requeue without the flag to avoid an infinite loop on a fresh page.
+        if node.paginate == Paginate::BreakBefore && !pages.last().unwrap().is_empty() {
+            pages.push(vec![]);
+            used_h = 0.0;
+            queue.push_front(Node { paginate: Paginate::None, ..node });
+            continue;
+        }
+
         let cur_idx = pages.len() - 1;
         let budget = page_budget(cur_idx);
         let gap_before = if pages.last().unwrap().is_empty() { 0.0 } else { gap };
         let h = measure_height(&node, avail_w, budget);
         let remaining = budget - used_h - gap_before;
 
+        let mut needs_break_after = false;
+
         if h <= remaining + 0.5 {
-            pages.last_mut().unwrap().push(node);
-            used_h += gap_before + h;
+            // keep-next: if the immediately following sibling would not fit on this
+            // page after placing this node, and both fit together on the next page,
+            // bump this node to the next page so they stay together.
+            let do_keep_next = node.paginate == Paginate::KeepNext
+                && !pages.last().unwrap().is_empty()
+                && queue.front().map_or(false, |next| {
+                    let next_h = measure_height(next, avail_w, budget);
+                    let remaining_for_next = remaining - h - gap;
+                    let next_budget = page_budget(pages.len());
+                    next_h > remaining_for_next + 0.5
+                        && h + gap + next_h <= next_budget + 0.5
+                });
+
+            if do_keep_next {
+                pages.push(vec![]);
+                used_h = 0.0;
+                queue.push_front(node);
+            } else {
+                needs_break_after = node.paginate == Paginate::BreakAfter;
+                pages.last_mut().unwrap().push(node);
+                used_h += gap_before + h;
+            }
         } else {
             let target = remaining.max(0.0);
             match split_node_at(&node, avail_w, target, budget) {
-                SplitOutcome::First(first, rest) => {
+                SplitOutcome::First(first, mut rest) => {
+                    // Propagate break-after to the last continuation so the
+                    // break fires after the final fragment, not the first.
+                    if node.paginate == Paginate::BreakAfter {
+                        if let Some(last) = rest.last_mut() {
+                            last.paginate = Paginate::BreakAfter;
+                        }
+                    }
                     pages.last_mut().unwrap().push(first);
                     pages.push(vec![]);
                     used_h = 0.0;
@@ -345,12 +383,14 @@ fn split_into_pages(
                         // Already on a fresh page and still can't split — force-place
                         // the first piece to prevent an infinite loop.
                         let first = rest.into_iter().next().unwrap_or(node);
+                        needs_break_after = first.paginate == Paginate::BreakAfter;
                         let fh = measure_height(&first, avail_w, budget);
                         pages.last_mut().unwrap().push(first);
                         used_h = fh.min(budget);
                     } else {
                         pages.push(vec![]);
                         used_h = 0.0;
+                        // paginate flags are preserved on rest items via clone
                         for item in rest.into_iter().rev() {
                             queue.push_front(item);
                         }
@@ -358,6 +398,7 @@ fn split_into_pages(
                 }
                 SplitOutcome::Atomic => {
                     if pages.last().unwrap().is_empty() {
+                        needs_break_after = node.paginate == Paginate::BreakAfter;
                         pages.last_mut().unwrap().push(node);
                         used_h = budget;
                     } else {
@@ -367,6 +408,12 @@ fn split_into_pages(
                     }
                 }
             }
+        }
+
+        // break-after: flush to a new page after this node (or its last fragment) is placed.
+        if needs_break_after && !pages.last().unwrap().is_empty() {
+            pages.push(vec![]);
+            used_h = 0.0;
         }
     }
 
@@ -401,6 +448,9 @@ enum SplitOutcome {
 /// height node) returns `Atomic`. Frame is atomic by design — it represents a
 /// card-like enclosure that should not be cut.
 fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
+    if node.paginate == Paginate::No {
+        return SplitOutcome::Atomic;
+    }
     if node.height_mode != HeightMode::Auto {
         return SplitOutcome::Atomic;
     }

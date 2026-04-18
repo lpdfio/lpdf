@@ -147,5 +147,40 @@ class LpdfEngine:
         return base64.b64decode(response["pdf"])
 
     @staticmethod
+    def kit_to_xml(
+        doc: "LpdfDocument",
+        wasm_binary: str | None = None,
+        wasm_runner: str = "wasmtime",
+    ) -> str:
+        """Convert an LpdfDocument tree (built with LpdfKit) to an lpdf XML string.
+
+        The conversion is performed by the Rust core running as a WASI subprocess,
+        so the output is identical to the XML produced by the other adapters.
+
+        Args:
+            doc:         The document tree to serialise.
+            wasm_binary: Path to lpdf-wasi.wasm (defaults to bundled binary).
+            wasm_runner: WASI runtime executable (default: wasmtime).
+
+        Returns:
+            A well-formed XML string with an ``<?xml ...?>`` declaration.
+
+        Raises:
+            LpdfRenderError: On process or serialisation error.
+        """
+        runner = WasmRunner(
+            wasm_binary=wasm_binary or LpdfEngine._default_binary(),
+            wasm_runner=wasm_runner,
+        )
+        payload = {
+            "method": "kit_to_xml",
+            "input":  json.dumps(doc.to_dict(), ensure_ascii=False),
+        }
+        response = runner.invoke(payload)
+        if "xml" not in response:
+            raise LpdfRenderError("Unexpected response from WASI process (kit_to_xml).")
+        return response["xml"]
+
+    @staticmethod
     def _default_binary() -> str:
         return str(Path(__file__).resolve().parent.parent / "resources" / "lpdf-wasi.wasm")

@@ -21,11 +21,12 @@ import { RenderOptions } from './_shared';
 
 export type { RenderOptions } from './_shared';
 export type { LpdfDocument, LpdfPageNode, LpdfNode, LpdfContainerNode, LpdfTextNode, LpdfSpanNode, LpdfDividerNode,
+              LpdfImgNode, LpdfBarcodeNode,
               LpdfTokens, LpdfFontDef, LpdfMeta,
               StackInput, FlankInput, SplitInput, ClusterInput, GridInput, FrameInput, LinkInput,
-              TextInput, SpanInput, DividerInput, PageInput, DocumentInput,
+              TextInput, SpanInput, DividerInput, ImgInput, BarcodeInput, PageInput, DocumentInput,
               StackOptions, FlankOptions, SplitOptions, ClusterOptions, GridOptions, FrameOptions, LinkOptions,
-              TextOptions, SpanOptions, DividerOptions, PageOptions, DocumentOptions } from './kit';
+              TextOptions, SpanOptions, DividerOptions, ImgOptions, BarcodeOptions, PageOptions, DocumentOptions } from './kit';
 export { LpdfKit } from './kit';
 
 export interface LpdfBrowser {
@@ -34,6 +35,11 @@ export interface LpdfBrowser {
    * Call before `renderPdf`. Mutates the renderer in-place.
    */
   loadFont(name: string, bytes: Uint8Array): void;
+  /**
+   * Register raw image bytes (PNG or JPEG) for an image name used in `<img name="…">`.
+   * Call before `renderPdf`. Mutates the renderer in-place.
+   */
+  loadImage(name: string, bytes: Uint8Array): void;
   /**
    * Render an lpdf XML document to PDF bytes.
    * Custom fonts must be registered via `loadFont()` or the deprecated
@@ -59,7 +65,8 @@ export async function initLpdf(
 ): Promise<LpdfBrowser> {
   await initWasm(wasmSource);
 
-  const fontMap = new Map<string, Uint8Array>();
+  const fontMap  = new Map<string, Uint8Array>();
+  const imageMap = new Map<string, Uint8Array>();
 
   // Seed with any fonts supplied at init time (deprecated fontBytes path).
   if (initOptions.fontBytes) {
@@ -73,6 +80,10 @@ export async function initLpdf(
       fontMap.set(name, bytes);
     },
 
+    loadImage(name: string, bytes: Uint8Array): void {
+      imageMap.set(name, bytes);
+    },
+
     async renderPdf(xml: string, callOptions: RenderOptions = {}): Promise<Uint8Array> {
       const engine = new WasmEngine(licenseKey);
 
@@ -84,6 +95,10 @@ export async function initLpdf(
         for (const [name, bytes] of Object.entries(callOptions.fontBytes)) {
           if (!fontMap.has(name)) engine.load_font(name, bytes);
         }
+      }
+
+      for (const [name, bytes] of imageMap) {
+        engine.load_image(name, bytes);
       }
 
       const pdf = engine.render_pdf(xml);

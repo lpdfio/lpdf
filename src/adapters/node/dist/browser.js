@@ -112,6 +112,27 @@ var LpdfEngine = class {
     }
   }
   /**
+   * Render a JSON kit-tree document to PDF bytes.
+   *
+   * This is the JSON counterpart of `render_pdf`. The Node adapter uses it
+   * when an `LpdfDocument` Kit tree is passed to `renderPdf()`, avoiding an
+   * intermediate XML serialisation step. PHP, Python, and .NET adapters also
+   * use this entry point.
+   * @param {string} json
+   * @returns {Uint8Array}
+   */
+  render_tree_pdf(json) {
+    const ptr0 = passStringToWasm0(json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.lpdfengine_render_tree_pdf(this.__wbg_ptr, ptr0, len0);
+    if (ret[3]) {
+      throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+  }
+  /**
    * Set an optional ISO 8601 creation timestamp (e.g. `"2024-06-01T12:00:00"`).
    * When provided, written as `/CreationDate` in the PDF info dictionary.
    * Omitting this keeps builds reproducible (no embedded timestamp).
@@ -436,6 +457,18 @@ function divider(input = {}) {
     attrs: buildAttrs(input.options ?? {})
   };
 }
+function img(input) {
+  return {
+    type: "img",
+    attrs: buildAttrs(input.options)
+  };
+}
+function barcode(input) {
+  return {
+    type: "barcode",
+    attrs: buildAttrs(input.options)
+  };
+}
 function page(input = {}) {
   return {
     type: "page",
@@ -468,6 +501,8 @@ var LpdfKit = Object.freeze({
   text,
   span,
   divider,
+  img,
+  barcode,
   page,
   document,
   table,
@@ -480,6 +515,7 @@ var LpdfKit = Object.freeze({
 async function initLpdf(wasmSource, licenseKey = "", initOptions = {}) {
   await __wbg_init(wasmSource);
   const fontMap = /* @__PURE__ */ new Map();
+  const imageMap = /* @__PURE__ */ new Map();
   if (initOptions.fontBytes) {
     for (const [name, bytes] of Object.entries(initOptions.fontBytes)) {
       fontMap.set(name, bytes);
@@ -488,6 +524,9 @@ async function initLpdf(wasmSource, licenseKey = "", initOptions = {}) {
   return {
     loadFont(name, bytes) {
       fontMap.set(name, bytes);
+    },
+    loadImage(name, bytes) {
+      imageMap.set(name, bytes);
     },
     async renderPdf(xml, callOptions = {}) {
       const engine = new LpdfEngine(licenseKey);
@@ -498,6 +537,9 @@ async function initLpdf(wasmSource, licenseKey = "", initOptions = {}) {
         for (const [name, bytes] of Object.entries(callOptions.fontBytes)) {
           if (!fontMap.has(name)) engine.load_font(name, bytes);
         }
+      }
+      for (const [name, bytes] of imageMap) {
+        engine.load_image(name, bytes);
       }
       const pdf = engine.render_pdf(xml);
       engine.free();

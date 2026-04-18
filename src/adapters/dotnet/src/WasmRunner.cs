@@ -53,8 +53,9 @@ internal sealed class WasmRunner : IDisposable
         IReadOnlyDictionary<string, byte[]>? fontBytes,
         IReadOnlyDictionary<string, byte[]>? imageBytes,
         Func<string, byte[]>?                srcFallback,
-        string?                              encryptJson = null)
-        => InvokeRenderPdf("render_pdf", xml, licenseKey, fontBytes, imageBytes, srcFallback, isTree: false, encryptJson);
+        string?                              encryptJson = null,
+        string?                              createdOn = null)
+        => InvokeRenderPdf("render_pdf", xml, licenseKey, fontBytes, imageBytes, srcFallback, isTree: false, encryptJson, createdOn);
 
     /// <summary>
     /// Render an lpdf JSON document tree to raw PDF bytes.
@@ -65,8 +66,31 @@ internal sealed class WasmRunner : IDisposable
         IReadOnlyDictionary<string, byte[]>? fontBytes,
         IReadOnlyDictionary<string, byte[]>? imageBytes,
         Func<string, byte[]>?                srcFallback,
-        string?                              encryptJson = null)
-        => InvokeRenderPdf("render_tree_pdf", json, licenseKey, fontBytes, imageBytes, srcFallback, isTree: true, encryptJson);
+        string?                              encryptJson = null,
+        string?                              createdOn = null)
+        => InvokeRenderPdf("render_tree_pdf", json, licenseKey, fontBytes, imageBytes, srcFallback, isTree: true, encryptJson, createdOn);
+
+    /// <summary>
+    /// Convert a JSON kit-tree (produced by <c>LpdfKit</c>) to an lpdf XML string.
+    /// </summary>
+    public string KitToXml(string json)
+    {
+        var requestObj  = new JsonObject { ["method"] = "kit_to_xml", ["input"] = json };
+        var requestBytes = Encoding.UTF8.GetBytes(requestObj.ToJsonString());
+        var responseJson = RunWasm(requestBytes);
+
+        using var doc = JsonDocument.Parse(responseJson);
+        var root = doc.RootElement;
+
+        if (root.TryGetProperty("error", out var errEl))
+            throw new LpdfRenderException(errEl.GetString() ?? "Unknown kit_to_xml error.");
+
+        if (!root.TryGetProperty("xml", out var xmlEl))
+            throw new InvalidOperationException("WASM kit_to_xml response missing 'xml' field.");
+
+        return xmlEl.GetString()
+            ?? throw new InvalidOperationException("WASM kit_to_xml 'xml' field is null.");
+    }
 
     // ── Internals ─────────────────────────────────────────────────────────────
 
@@ -78,7 +102,8 @@ internal sealed class WasmRunner : IDisposable
         IReadOnlyDictionary<string, byte[]>? imageBytes,
         Func<string, byte[]>?                srcFallback,
         bool                                 isTree,
-        string?                              encryptJson = null)
+        string?                              encryptJson = null,
+        string?                              createdOn = null)
     {
         var fonts = ResolveAllFonts(input, licenseKey, fontBytes, srcFallback, isTree);
 
@@ -105,6 +130,9 @@ internal sealed class WasmRunner : IDisposable
 
         if (encryptJson is not null)
             requestObj["encrypt"] = JsonNode.Parse(encryptJson);
+
+        if (createdOn is not null)
+            requestObj["created_on"] = createdOn;
 
         var requestBytes = Encoding.UTF8.GetBytes(requestObj.ToJsonString());
 

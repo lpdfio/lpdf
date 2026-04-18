@@ -3,6 +3,10 @@
  * lpdf XML string that can be passed directly to `LpdfEngine.renderPdf()` or
  * saved to disk.
  *
+ * The serialisation is performed by the Rust core (exposed as a WASM export)
+ * so every adapter produces identical XML and any schema change only requires
+ * a single Rust update.
+ *
  * @example
  * ```ts
  * import { LpdfKit, kitToXml } from './dist/index.js';
