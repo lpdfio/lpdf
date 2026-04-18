@@ -28,6 +28,8 @@ base64 = "0.22"
 miniz_oxide = "0.7"
 # QR code generation (vector, no image crate dependency)
 qrcode = { version = "0.14", default-features = false }
+# MD5 for RC4-128 PDF encryption key derivation — WASM-compatible, no_std
+md-5 = "0.10"
 
 [dev-dependencies]
 sha2 = "0.10"

@@ -23,3 +23,5 @@ ed25519-dalek = { version = "2", default-features = false, features = ["alloc"] 
 # Deflate/inflate for PNG RGBA decoding (SMask support)
 miniz_oxide = "0.7"
 qrcode = { version = "0.14", default-features = false }
+# MD5 for RC4-128 PDF encryption key derivation — WASM-compatible, no_std
+md-5 = "0.10"

@@ -3,6 +3,43 @@ using System.Text.Json;
 namespace Lpdf;
 
 /// <summary>
+/// PDF permission flags for RC4-128 encryption.
+/// All flags default to <c>true</c> (allowed); set to <c>false</c> to restrict.
+/// </summary>
+public sealed class EncryptPermissions
+{
+    /// <summary>Allow printing. Set to <c>false</c> to disable printing in viewers.</summary>
+    public bool Print         { get; init; } = true;
+    /// <summary>Allow content modification. Set to <c>false</c> to block edits.</summary>
+    public bool Modify        { get; init; } = true;
+    /// <summary>Allow text and graphic extraction. Set to <c>false</c> to block copying.</summary>
+    public bool Copy          { get; init; } = true;
+    /// <summary>Allow adding or modifying annotations. Set to <c>false</c> to block annotations.</summary>
+    public bool Annotate      { get; init; } = true;
+    /// <summary>Allow form field filling. Set to <c>false</c> to disable form input.</summary>
+    public bool FillForms     { get; init; } = true;
+    /// <summary>Allow accessibility tools (screen readers). Set to <c>false</c> to restrict.</summary>
+    public bool Accessibility { get; init; } = true;
+    /// <summary>Allow page insertion, deletion, and rotation. Set to <c>false</c> to block assembly.</summary>
+    public bool Assemble      { get; init; } = true;
+    /// <summary>Allow high-quality printing. Set to <c>false</c> to degrade print resolution.</summary>
+    public bool PrintHq       { get; init; } = true;
+}
+
+/// <summary>
+/// RC4-128 encryption options passed to <see cref="LpdfEngine.SetEncryption"/>.
+/// </summary>
+public sealed class EncryptOptions
+{
+    /// <summary>Open password shown to readers. Empty string = no open password required.</summary>
+    public string UserPassword  { get; init; } = "";
+    /// <summary>Owner (permissions) password. Required; must be non-empty.</summary>
+    public string OwnerPassword { get; init; } = "";
+    /// <summary>Permission flags applied to the document.</summary>
+    public EncryptPermissions Permissions { get; init; } = new();
+}
+
+/// <summary>
 /// Options shared across multiple <see cref="LpdfEngine.RenderPdf(string, RenderOptions?)"/> calls.
 /// </summary>
 public sealed class RenderOptions
@@ -40,6 +77,7 @@ public sealed class LpdfEngine : IDisposable
     private readonly Dictionary<string, byte[]> _fonts  = new();
     private readonly Dictionary<string, byte[]> _images = new();
     private          bool           _disposed;
+    private          EncryptOptions? _encrypt;
 
     /// <param name="licenseKey">
     ///   Your lpdf license key. Pass an empty string to render in evaluation
@@ -54,6 +92,17 @@ public sealed class LpdfEngine : IDisposable
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Configure RC4-128 encryption for all subsequent <see cref="RenderPdf(string, RenderOptions?)"/> calls.
+    /// Pass <see langword="null"/> to clear previously set encryption.
+    /// </summary>
+    public LpdfEngine SetEncryption(EncryptOptions? options)
+    {
+        ThrowIfDisposed();
+        _encrypt = options;
+        return this;
+    }
 
     /// <summary>
     /// Register raw TTF/OTF bytes for a font name referenced via <c>fonts src="…"</c>.
@@ -90,7 +139,7 @@ public sealed class LpdfEngine : IDisposable
         ArgumentNullException.ThrowIfNull(xml);
         var merged = Merge(callOptions);
         return Task.FromResult(
-            _wasm.RenderPdf(xml, _licenseKey, merged.FontBytes, merged.ImageBytes, merged.SrcFallback));
+            _wasm.RenderPdf(xml, _licenseKey, merged.FontBytes, merged.ImageBytes, merged.SrcFallback, BuildEncryptJson()));
     }
 
     /// <summary>Render an <see cref="LpdfDocument"/> tree (built with <see cref="LpdfKit"/>) to PDF bytes.</summary>
@@ -103,10 +152,32 @@ public sealed class LpdfEngine : IDisposable
         var merged = Merge(callOptions);
         var json   = JsonSerializer.Serialize(document, LpdfDocumentJson.Options);
         return Task.FromResult(
-            _wasm.RenderTreePdf(json, _licenseKey, merged.FontBytes, merged.ImageBytes, merged.SrcFallback));
+            _wasm.RenderTreePdf(json, _licenseKey, merged.FontBytes, merged.ImageBytes, merged.SrcFallback, BuildEncryptJson()));
     }
 
     // ── Internals ─────────────────────────────────────────────────────────────
+
+    private string? BuildEncryptJson()
+    {
+        if (_encrypt is null) return null;
+        var p = _encrypt.Permissions;
+        return JsonSerializer.Serialize(new
+        {
+            user_password  = _encrypt.UserPassword,
+            owner_password = _encrypt.OwnerPassword,
+            permissions    = new
+            {
+                print         = p.Print,
+                modify        = p.Modify,
+                copy          = p.Copy,
+                annotate      = p.Annotate,
+                fill_forms    = p.FillForms,
+                accessibility = p.Accessibility,
+                assemble      = p.Assemble,
+                print_hq      = p.PrintHq,
+            },
+        });
+    }
 
     private RenderOptions Merge(RenderOptions? call)
     {

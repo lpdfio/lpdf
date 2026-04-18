@@ -165,7 +165,7 @@ example-node:
 	@echo "-------------------------------"
 	@echo ">>> Running Node example..."
 	@echo ""
-	cd src/adapters/node && npx ts-node example/example.ts
+	cd src/adapters/node && npx ts-node example/example.ts && npx ts-node example/encrypt-permissions-only.ts && npx ts-node example/encrypt-open-password.ts
 
 example-dotnet:
 	@echo ""
@@ -173,6 +173,8 @@ example-dotnet:
 	@echo ">>> Running .NET example..."
 	@echo ""
 	dotnet run --project src/adapters/dotnet/example/LpdfExample.csproj
+	dotnet run --project src/adapters/dotnet/example/LpdfEncryptPermissionsOnly.csproj
+	dotnet run --project src/adapters/dotnet/example/LpdfEncryptOpenPassword.csproj
 
 example-php:
 	@echo ""
@@ -182,7 +184,18 @@ example-php:
 	docker run --rm \
 		-v "$(CURDIR)/src/adapters/php/example://app/src/adapters/php/example" \
 		-v "$(CURDIR)/example://app/example" \
+		-v "$(CURDIR)/docs://app/docs" \
 		-w //app lpdf-php php src/adapters/php/example/example.php
+	docker run --rm \
+		-v "$(CURDIR)/src/adapters/php/example://app/src/adapters/php/example" \
+		-v "$(CURDIR)/example://app/example" \
+		-v "$(CURDIR)/docs://app/docs" \
+		-w //app lpdf-php php src/adapters/php/example/encrypt-permissions-only.php
+	docker run --rm \
+		-v "$(CURDIR)/src/adapters/php/example://app/src/adapters/php/example" \
+		-v "$(CURDIR)/example://app/example" \
+		-v "$(CURDIR)/docs://app/docs" \
+		-w //app lpdf-php php src/adapters/php/example/encrypt-open-password.php
 
 example-python:
 	@echo ""
@@ -195,3 +208,17 @@ example-python:
 		-v "$(CURDIR)/example://app/example-data" \
 		-v "$(CURDIR)/src/adapters/python/resources://app/resources" \
 		-w //app lpdf-python python example/example.py
+	docker run --rm \
+		-v "$(CURDIR)/src/adapters/python/lpdf://app/lpdf" \
+		-v "$(CURDIR)/src/adapters/python/example://app/example" \
+		-v "$(CURDIR)/example://app/example-data" \
+		-v "$(CURDIR)/docs://app/docs" \
+		-v "$(CURDIR)/src/adapters/python/resources://app/resources" \
+		-w //app lpdf-python python example/encrypt-permissions-only.py
+	docker run --rm \
+		-v "$(CURDIR)/src/adapters/python/lpdf://app/lpdf" \
+		-v "$(CURDIR)/src/adapters/python/example://app/example" \
+		-v "$(CURDIR)/example://app/example-data" \
+		-v "$(CURDIR)/docs://app/docs" \
+		-v "$(CURDIR)/src/adapters/python/resources://app/resources" \
+		-w //app lpdf-python python example/encrypt-open-password.py

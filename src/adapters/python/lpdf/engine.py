@@ -27,6 +27,7 @@ class LpdfEngine:
         self._options = options or RenderOptions()
         self._fonts: dict[str, bytes] = {}
         self._images: dict[str, bytes] = {}
+        self._encrypt: dict | None = None
 
     def load_font(self, name: str, data: bytes) -> LpdfEngine:
         self._fonts[name] = data
@@ -34,6 +35,33 @@ class LpdfEngine:
 
     def load_image(self, name: str, data: bytes) -> LpdfEngine:
         self._images[name] = data
+        return self
+
+    def set_encryption(
+        self,
+        user_password: str,
+        owner_password: str,
+        permissions: dict[str, bool] | None = None,
+    ) -> LpdfEngine:
+        """Configure RC4-128 encryption for all subsequent render_pdf() calls.
+
+        Args:
+            user_password:  Open password (empty string = no open password required).
+            owner_password: Owner (permissions) password.
+            permissions:    Dict of boolean flags: print, modify, copy, annotate,
+                            fill_forms, accessibility, assemble, print_hq.
+                            Omitted flags default to True (allowed).
+        """
+        self._encrypt = {
+            "user_password":  user_password,
+            "owner_password": owner_password,
+            "permissions":    permissions or {},
+        }
+        return self
+
+    def clear_encryption(self) -> LpdfEngine:
+        """Remove any previously configured encryption."""
+        self._encrypt = None
         return self
 
     def render_pdf(
@@ -107,6 +135,9 @@ class LpdfEngine:
         created_on = (call_options and call_options.created_on) or self._options.created_on
         if created_on is not None:
             payload["created_on"] = created_on
+
+        if self._encrypt is not None:
+            payload["encrypt"] = self._encrypt
 
         response = runner.invoke(payload)
 

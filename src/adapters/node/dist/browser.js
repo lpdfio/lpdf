@@ -11,6 +11,12 @@ var LpdfEngine = class {
     wasm.__wbg_lpdfengine_free(ptr, 0);
   }
   /**
+   * Remove any previously configured encryption.
+   */
+  clear_encryption() {
+    wasm.lpdfengine_clear_encryption(this.__wbg_ptr);
+  }
+  /**
    * Register raw font bytes (TTF/OTF) for a custom font name.
    * Call this once per font before calling `render_pdf`.
    * Glyph advance-width metrics are extracted automatically from the font
@@ -115,6 +121,28 @@ var LpdfEngine = class {
     const ptr0 = passStringToWasm0(iso, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     wasm.lpdfengine_set_created_on(this.__wbg_ptr, ptr0, len0);
+  }
+  /**
+   * Configure RC4-128 encryption applied to every subsequent `render_pdf` call.
+   *
+   * `permissions_json` is a JSON object with boolean fields matching the
+   * `Permissions` struct (`print`, `modify`, `copy`, `annotate`, `fill_forms`,
+   * `accessibility`, `assemble`, `print_hq`). Omitted fields default to `true`.
+   *
+   * To apply permissions without an open password, pass an empty `user_password`
+   * and a non-empty `owner_password`.
+   * @param {string} user_password
+   * @param {string} owner_password
+   * @param {string} permissions_json
+   */
+  set_encryption(user_password, owner_password, permissions_json) {
+    const ptr0 = passStringToWasm0(user_password, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(owner_password, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(permissions_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    wasm.lpdfengine_set_encryption(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2);
   }
   /**
    * Inject glyph advance-width tables for custom fonts.

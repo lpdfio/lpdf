@@ -1,3 +1,4 @@
+mod encrypt;
 mod layout;
 mod license;
 mod parse;
@@ -23,6 +24,8 @@ pub struct LpdfEngine {
     /// Current Unix timestamp (seconds) used for license expiry checking.
     /// Set via `set_now()`.  Defaults to `0` (expiry check skipped).
     now_unix:    i64,
+    /// Optional RC4-128 encryption config; applied as a post-processing pass.
+    encrypt:     Option<encrypt::EncryptConfig>,
 }
 
 #[wasm_bindgen]
@@ -36,7 +39,30 @@ impl LpdfEngine {
             font_widths: HashMap::new(),
             created_on:  None,
             now_unix:    0,
+            encrypt:     None,
         }
+    }
+
+    /// Configure RC4-128 encryption applied to every subsequent `render_pdf` call.
+    ///
+    /// `permissions_json` is a JSON object with boolean fields matching the
+    /// `Permissions` struct (`print`, `modify`, `copy`, `annotate`, `fill_forms`,
+    /// `accessibility`, `assemble`, `print_hq`). Omitted fields default to `true`.
+    ///
+    /// To apply permissions without an open password, pass an empty `user_password`
+    /// and a non-empty `owner_password`.
+    pub fn set_encryption(&mut self, user_password: &str, owner_password: &str, permissions_json: &str) {
+        let perms = parse_permissions_json(permissions_json);
+        self.encrypt = Some(encrypt::EncryptConfig {
+            user_password:  user_password.to_string(),
+            owner_password: owner_password.to_string(),
+            permissions:    perms,
+        });
+    }
+
+    /// Remove any previously configured encryption.
+    pub fn clear_encryption(&mut self) {
+        self.encrypt = None;
     }
 
     /// Register raw font bytes (TTF/OTF) for a custom font name.
@@ -146,7 +172,7 @@ impl LpdfEngine {
             Some(("made with lpdf.io", Some("https://lpdf.io")))
         };
 
-        pdf::render_pdf(
+        let bytes = pdf::render_pdf(
             &pages,
             &doc.fonts,
             &self.fonts,
@@ -156,7 +182,13 @@ impl LpdfEngine {
             self.created_on.as_deref(),
             status.is_licensed(),
         )
-        .map_err(|e| JsValue::from_str(&e))
+        .map_err(|e| JsValue::from_str(&e))?;
+
+        let bytes = match &self.encrypt {
+            Some(cfg) => encrypt::encrypt_pdf(&bytes, cfg),
+            None      => bytes,
+        };
+        Ok(bytes)
     }
 
     pub fn render(&self, xml: &str) -> String {
@@ -260,6 +292,26 @@ impl LpdfEngine {
             }
         }
         output
+    }
+}
+
+fn parse_permissions_json(json: &str) -> encrypt::Permissions {
+    let get_bool = |key: &str, default: bool| -> bool {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
+            v.get(key).and_then(|b| b.as_bool()).unwrap_or(default)
+        } else {
+            default
+        }
+    };
+    encrypt::Permissions {
+        print:         get_bool("print",         true),
+        modify:        get_bool("modify",        true),
+        copy:          get_bool("copy",          true),
+        annotate:      get_bool("annotate",      true),
+        fill_forms:    get_bool("fill_forms",    true),
+        accessibility: get_bool("accessibility", true),
+        assemble:      get_bool("assemble",      true),
+        print_hq:      get_bool("print_hq",     true),
     }
 }
 

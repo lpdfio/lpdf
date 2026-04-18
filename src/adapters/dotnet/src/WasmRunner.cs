@@ -52,8 +52,9 @@ internal sealed class WasmRunner : IDisposable
         string licenseKey,
         IReadOnlyDictionary<string, byte[]>? fontBytes,
         IReadOnlyDictionary<string, byte[]>? imageBytes,
-        Func<string, byte[]>?                srcFallback)
-        => InvokeRenderPdf("render_pdf", xml, licenseKey, fontBytes, imageBytes, srcFallback, isTree: false);
+        Func<string, byte[]>?                srcFallback,
+        string?                              encryptJson = null)
+        => InvokeRenderPdf("render_pdf", xml, licenseKey, fontBytes, imageBytes, srcFallback, isTree: false, encryptJson);
 
     /// <summary>
     /// Render an lpdf JSON document tree to raw PDF bytes.
@@ -63,8 +64,9 @@ internal sealed class WasmRunner : IDisposable
         string licenseKey,
         IReadOnlyDictionary<string, byte[]>? fontBytes,
         IReadOnlyDictionary<string, byte[]>? imageBytes,
-        Func<string, byte[]>?                srcFallback)
-        => InvokeRenderPdf("render_tree_pdf", json, licenseKey, fontBytes, imageBytes, srcFallback, isTree: true);
+        Func<string, byte[]>?                srcFallback,
+        string?                              encryptJson = null)
+        => InvokeRenderPdf("render_tree_pdf", json, licenseKey, fontBytes, imageBytes, srcFallback, isTree: true, encryptJson);
 
     // ── Internals ─────────────────────────────────────────────────────────────
 
@@ -75,7 +77,8 @@ internal sealed class WasmRunner : IDisposable
         IReadOnlyDictionary<string, byte[]>? fontBytes,
         IReadOnlyDictionary<string, byte[]>? imageBytes,
         Func<string, byte[]>?                srcFallback,
-        bool                                 isTree)
+        bool                                 isTree,
+        string?                              encryptJson = null)
     {
         var fonts = ResolveAllFonts(input, licenseKey, fontBytes, srcFallback, isTree);
 
@@ -99,6 +102,9 @@ internal sealed class WasmRunner : IDisposable
                 imagesNode[name] = Convert.ToBase64String(bytes);
             requestObj["images"] = imagesNode;
         }
+
+        if (encryptJson is not null)
+            requestObj["encrypt"] = JsonNode.Parse(encryptJson);
 
         var requestBytes = Encoding.UTF8.GetBytes(requestObj.ToJsonString());
 

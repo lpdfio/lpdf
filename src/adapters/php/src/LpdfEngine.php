@@ -12,10 +12,46 @@ final class LpdfEngine
     /** @var array<string, string> Image name → raw image bytes (PNG/JPEG/WebP/…) */
     private array $images = [];
 
+    /**
+     * Optional RC4-128 encryption config.
+     * Keys: user_password (string), owner_password (string), permissions (array).
+     * @var array{user_password: string, owner_password: string, permissions: array<string, bool>}|null
+     */
+    private ?array $encrypt = null;
+
     public function __construct(
         private readonly string        $licenseKey,
         private readonly RenderOptions $options = new RenderOptions(),
     ) {}
+
+    /**
+     * Configure RC4-128 encryption for all subsequent renderPdf() calls.
+     * Pass null to clear previously set encryption.
+     *
+     * @param string                    $userPassword  Open password (empty = no open password).
+     * @param string                    $ownerPassword Owner (permissions) password.
+     * @param array<string, bool>       $permissions   Flags: print, modify, copy, annotate,
+     *                                                 fill_forms, accessibility, assemble, print_hq.
+     *                                                 Omitted flags default to true (allowed).
+     */
+    public function setEncryption(string $userPassword, string $ownerPassword, array $permissions = []): static
+    {
+        $this->encrypt = [
+            'user_password'  => $userPassword,
+            'owner_password' => $ownerPassword,
+            'permissions'    => $permissions,
+        ];
+        return $this;
+    }
+
+    /**
+     * Remove any previously configured encryption.
+     */
+    public function clearEncryption(): static
+    {
+        $this->encrypt = null;
+        return $this;
+    }
 
     /**
      * Register a custom font asset.
@@ -112,6 +148,10 @@ final class LpdfEngine
         $createdOn = $callOptions?->createdOn ?? $this->options->createdOn;
         if ($createdOn !== null) {
             $payload['created_on'] = $createdOn;
+        }
+
+        if ($this->encrypt !== null) {
+            $payload['encrypt'] = $this->encrypt;
         }
 
         $response = $runner->invoke($payload);

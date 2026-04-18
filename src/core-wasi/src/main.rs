@@ -26,6 +26,8 @@ mod render;
 mod pdf;
 #[path = "../../core/src/license.rs"]
 mod license;
+#[path = "../../core/src/encrypt.rs"]
+mod encrypt;
 
 use std::io::Read;
 use base64::Engine as _;
@@ -222,10 +224,60 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
 
     match pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, watermark_ref, created_on, status.is_licensed()) {
         Ok(bytes) => {
+            let bytes = if let Some(enc) = req.get("encrypt") {
+                let user_pw  = enc["user_password"] .as_str().unwrap_or("");
+                let owner_pw = enc["owner_password"].as_str().unwrap_or("");
+                let perms_json = enc["permissions"].to_string();
+                let cfg = encrypt::EncryptConfig {
+                    user_password:  user_pw.to_string(),
+                    owner_password: owner_pw.to_string(),
+                    permissions:    parse_permissions_json(&perms_json),
+                };
+                encrypt::encrypt_pdf(&bytes, &cfg)
+            } else {
+                bytes
+            };
             let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
             serde_json::json!({ "pdf": b64 }).to_string()
         }
         Err(e) => serde_json::json!({ "error": e }).to_string(),
+    }
+}
+
+fn parse_permissions_json(json: &str) -> encrypt::Permissions {
+    let get_bool = |key: &str, default: bool| -> bool {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
+            v.get(key).and_then(|b| b.as_bool()).unwrap_or(default)
+        } else {
+            default
+        }
+    };
+    encrypt::Permissions {
+        print:         get_bool("print",         true),
+        modify:        get_bool("modify",        true),
+        copy:          get_bool("copy",          true),
+        annotate:      get_bool("annotate",      true),
+        fill_forms:    get_bool("fill_forms",    true),
+        accessibility: get_bool("accessibility", true),
+        assemble:      get_bool("assemble",      true),
+        print_hq:      get_bool("print_hq",      true),
+    }
+}
+
+/// Test-only stub that mirrors `LpdfEngine::render_xml_to_pdf_bytes` from the
+/// core library crate so that `encrypt.rs` tests can reference `crate::LpdfEngine`
+/// even when compiled inside this WASI binary crate.
+#[cfg(test)]
+struct LpdfEngine;
+
+#[cfg(test)]
+impl LpdfEngine {
+    fn render_xml_to_pdf_bytes(xml: &str) -> Result<Vec<u8>, String> {
+        let doc = parse::parse(xml)?;
+        let pages: Vec<render::RenderPage> =
+            doc.pages.iter().flat_map(layout::layout_page).collect();
+        let wm = Some(("made with lpdf.io", Some("https://lpdf.io")));
+        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, wm, None, false)
     }
 }
 
