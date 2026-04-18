@@ -229,8 +229,9 @@ impl LpdfEngine {
         }
 
         // Merge font widths: engine-level + doc-level (doc-level takes precedence).
+        // doc.font_widths is consumed here (doc is owned); no clone needed.
         let mut merged = self.font_widths.clone();
-        merged.extend(doc.font_widths.clone());
+        merged.extend(std::mem::take(&mut doc.font_widths));
         layout::set_font_widths(merged);
 
         let pages: Vec<render::RenderPage> =
@@ -308,12 +309,13 @@ impl LpdfEngine {
         pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, wm, None, false)
     }
 
-    fn render_doc(&self, doc: parse::Document) -> String {
+    fn render_doc(&self, mut doc: parse::Document) -> String {
         // Merge widths: engine-level (from set_font_metrics) + doc-level (from
         // tree JSON). Doc-level takes precedence — the adapter that built the
         // tree knows the exact bytes it loaded.
+        // doc is owned so we take font_widths without cloning it.
         let mut merged = self.font_widths.clone();
-        merged.extend(doc.font_widths.clone());
+        merged.extend(std::mem::take(&mut doc.font_widths));
         shared::render_doc_shared(doc, merged, &self.license_key, self.now_unix)
     }
 }

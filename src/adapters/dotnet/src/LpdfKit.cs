@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Reflection;
 
 namespace Lpdf;
@@ -151,12 +152,17 @@ public static class LpdfKit
     /// Reflect over any options record and convert its non-null properties to
     /// a kebab-case attribute dictionary.
     /// </summary>
+    private static readonly ConcurrentDictionary<Type, PropertyInfo[]> _propCache = new();
+
     private static Dictionary<string, string> Attrs(object? options)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         if (options is null) return result;
 
-        foreach (var prop in options.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        var props = _propCache.GetOrAdd(
+            options.GetType(),
+            t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance));
+        foreach (var prop in props)
         {
             var value = prop.GetValue(options);
             if (value is string s)

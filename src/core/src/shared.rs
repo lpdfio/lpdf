@@ -37,22 +37,17 @@ pub(crate) fn extract_font_widths(bytes: &[u8]) -> Option<super::tokens::FontWid
 /// All boolean fields (`print`, `modify`, `copy`, `annotate`, `fill_forms`,
 /// `accessibility`, `assemble`, `print_hq`) default to `true` when absent.
 pub(crate) fn parse_permissions_json(json: &str) -> super::encrypt::Permissions {
-    let get_bool = |key: &str, default: bool| -> bool {
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
-            v.get(key).and_then(|b| b.as_bool()).unwrap_or(default)
-        } else {
-            default
-        }
-    };
+    let v: serde_json::Value = serde_json::from_str(json).unwrap_or(serde_json::Value::Null);
+    let get_bool = |key: &str| v.get(key).and_then(|b| b.as_bool()).unwrap_or(true);
     super::encrypt::Permissions {
-        print:         get_bool("print",         true),
-        modify:        get_bool("modify",        true),
-        copy:          get_bool("copy",          true),
-        annotate:      get_bool("annotate",      true),
-        fill_forms:    get_bool("fill_forms",    true),
-        accessibility: get_bool("accessibility", true),
-        assemble:      get_bool("assemble",      true),
-        print_hq:      get_bool("print_hq",      true),
+        print:         get_bool("print"),
+        modify:        get_bool("modify"),
+        copy:          get_bool("copy"),
+        annotate:      get_bool("annotate"),
+        fill_forms:    get_bool("fill_forms"),
+        accessibility: get_bool("accessibility"),
+        assemble:      get_bool("assemble"),
+        print_hq:      get_bool("print_hq"),
     }
 }
 

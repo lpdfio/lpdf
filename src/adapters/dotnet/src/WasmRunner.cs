@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Wasmtime;
 using WasmModule = Wasmtime.Module;
 
@@ -105,7 +106,7 @@ internal sealed class WasmRunner : IDisposable
         string?                              encryptJson = null,
         string?                              createdOn = null)
     {
-        var fonts = ResolveAllFonts(input, licenseKey, fontBytes, srcFallback, isTree);
+        var fonts = ResolveAllFonts(input, fontBytes, srcFallback, isTree);
 
         // Build the request object, including font bytes as base64.
         var fontsNode = new JsonObject();
@@ -152,13 +153,13 @@ internal sealed class WasmRunner : IDisposable
     }
 
     /// <summary>
-    /// When <paramref name="srcFallback"/> is set, performs a preliminary
-    /// <c>render</c> call to discover font <c>src</c> paths, then resolves
-    /// them. Returns the merged font bytes dictionary.
+    /// When <paramref name="srcFallback"/> is set, parses the XML or kit-JSON
+    /// directly to discover font <c>src</c> paths, then resolves them via the
+    /// callback. No WASM call is required — mirrors what the Node adapter does.
+    /// Returns the merged font bytes dictionary.
     /// </summary>
-    private IReadOnlyDictionary<string, byte[]> ResolveAllFonts(
+    private static IReadOnlyDictionary<string, byte[]> ResolveAllFonts(
         string input,
-        string licenseKey,
         IReadOnlyDictionary<string, byte[]>? fontBytes,
         Func<string, byte[]>?                srcFallback,
         bool                                 isTree)
@@ -166,32 +167,63 @@ internal sealed class WasmRunner : IDisposable
         if (srcFallback is null)
             return fontBytes ?? new Dictionary<string, byte[]>();
 
-        // Discover which fonts have src paths by doing a lightweight render call.
-        var renderJson = isTree ? RenderTree(input, licenseKey) : Render(input, licenseKey);
-        using var doc = JsonDocument.Parse(renderJson);
-
         var merged = new Dictionary<string, byte[]>(fontBytes ?? new Dictionary<string, byte[]>());
 
-        if (doc.RootElement.TryGetProperty("meta", out var meta) &&
-            meta.TryGetProperty("fonts", out var fontsEl))
+        // Extract font src paths directly from the input — no WASM call needed.
+        var srcPaths = isTree ? ExtractFontSrcsFromJson(input) : ExtractFontSrcsFromXml(input);
+        foreach (var (name, src) in srcPaths)
         {
-            foreach (var font in fontsEl.EnumerateObject())
-            {
-                var name = font.Name;
-                if (merged.ContainsKey(name)) continue;  // FontBytes takes priority
-                if (font.Value.TryGetProperty("src", out var srcEl))
-                {
-                    var src = srcEl.GetString();
-                    if (src is not null)
-                    {
-                        try   { merged[name] = srcFallback(src); }
-                        catch { /* skip unresolvable fonts — WASM will fall back or error */ }
-                    }
-                }
-            }
+            if (merged.ContainsKey(name)) continue;  // explicit FontBytes takes priority
+            try   { merged[name] = srcFallback(src); }
+            catch { /* skip unresolvable fonts — WASM will fall back to Helvetica */ }
         }
 
         return merged;
+    }
+
+    /// <summary>
+    /// Extract <c>name → src</c> pairs from <c>&lt;font name="…" src="…"&gt;</c>
+    /// tags in an lpdf XML string. Attribute order is not assumed.
+    /// </summary>
+    private static Dictionary<string, string> ExtractFontSrcsFromXml(string xml)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (Match m in Regex.Matches(xml, @"<font\s[^>]*>"))
+        {
+            var tag  = m.Value;
+            var name = Regex.Match(tag, @"\bname=""([^""]*)""").Groups[1].Value;
+            var src  = Regex.Match(tag, @"\bsrc=""([^""]*)""").Groups[1].Value;
+            if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(src))
+                result[name] = src;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Extract <c>name → src</c> pairs from <c>attrs.tokens.fonts[name].src</c>
+    /// in an lpdf kit-JSON string.
+    /// </summary>
+    private static Dictionary<string, string> ExtractFontSrcsFromJson(string json)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("attrs", out var attrs)) return result;
+            if (!attrs.TryGetProperty("tokens", out var tokens)) return result;
+            if (!tokens.TryGetProperty("fonts", out var fonts)) return result;
+            foreach (var font in fonts.EnumerateObject())
+            {
+                if (font.Value.TryGetProperty("src", out var srcEl))
+                {
+                    var src = srcEl.GetString();
+                    if (src is not null) result[font.Name] = src;
+                }
+            }
+        }
+        catch { /* malformed JSON — no fonts to auto-load */ }
+        return result;
     }
 
     private static string Invoke(string method, string input, string key)
