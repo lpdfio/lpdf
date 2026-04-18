@@ -16,6 +16,28 @@ pub enum RenderNode {
     Text(RenderText),
     Link(RenderLink),
     Image(RenderImage),
+    Barcode(RenderBarcode),
+}
+
+pub struct RenderBarcode {
+    pub x:          f32,
+    pub y:          f32,
+    pub width:      f32,
+    pub height:     f32,
+    pub kind:       RenderedBarcodeKind,
+    pub color:      String,
+    pub bg:         Option<String>,
+    pub debug_self: bool,
+}
+
+pub enum RenderedBarcodeKind {
+    /// Flat row-major grid of dark (true) / light (false) modules.
+    Qr { modules: Vec<bool>, size: u32 },
+    /// Alternating bar/space run-lengths (even index = bar), plus optional
+    /// human-readable text string.
+    Code128 { bars: Vec<u8>, hrt: Option<String> },
+    /// Same run-length encoding for EAN-13, plus the 13-digit string.
+    Ean13 { bars: Vec<u8>, digits: String, hrt: bool },
 }
 
 pub struct RenderImage {
@@ -104,8 +126,6 @@ fn nodes_to_json(nodes: &[RenderNode]) -> Vec<Value> {
     nodes.iter().filter(|n| !is_invisible(n)).map(node_to_json).collect()
 }
 
-/// Returns true for a box with no dimensions, no fill, no border, and no children.
-/// These are produced by empty <text> elements and add nothing to the output.
 fn is_invisible(node: &RenderNode) -> bool {
     if let RenderNode::Box(b) = node {
         b.height == 0.0 && b.width == 0.0
@@ -175,6 +195,23 @@ fn node_to_json(node: &RenderNode) -> Value {
             "height": r2(i.height),
             "name":   i.name,
         }),
+        RenderNode::Barcode(bc) => {
+            let kind_str = match &bc.kind {
+                RenderedBarcodeKind::Qr { .. }      => "qr",
+                RenderedBarcodeKind::Code128 { .. } => "code128",
+                RenderedBarcodeKind::Ean13 { .. }   => "ean13",
+            };
+            json!({
+                "type":   "barcode",
+                "x":      r2(bc.x),
+                "y":      r2(bc.y),
+                "width":  r2(bc.width),
+                "height": r2(bc.height),
+                "kind":   kind_str,
+                "color":  bc.color,
+                "bg":     bc.bg,
+            })
+        }
     }
 }
 

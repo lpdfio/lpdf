@@ -231,6 +231,7 @@
       <xs:element ref="img"/>
       <xs:element ref="divider"/>
       <xs:element ref="table"/>
+      <xs:element ref="barcode"/>
     </xs:choice>
   </xs:group>
 
@@ -503,6 +504,39 @@
       <xs:attribute name="background" type="Color"/>
       <xs:attribute name="border"     type="BorderValue"/>
       <xs:attribute name="radius"     type="TokenScaleOrPt"/>
+      <xs:attribute name="repeat"     type="Repeat"/>
+      <xs:attribute name="debug"      type="xs:boolean"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="barcode">
+    <xs:complexType>
+      <xs:attribute name="type" use="required">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="qr"/>
+            <xs:enumeration value="code128"/>
+            <xs:enumeration value="ean13"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+      <xs:attribute name="data"       type="xs:string"       use="required"/>
+      <xs:attribute name="size"       type="TokenScaleOrPt"/>
+      <xs:attribute name="width"      type="TokenScaleOrPt"/>
+      <xs:attribute name="height"     type="PtValue"/>
+      <xs:attribute name="ec">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="L"/>
+            <xs:enumeration value="M"/>
+            <xs:enumeration value="Q"/>
+            <xs:enumeration value="H"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+      <xs:attribute name="hrt"        type="xs:boolean"/>
+      <xs:attribute name="color"      type="Color"/>
+      <xs:attribute name="background" type="Color"/>
       <xs:attribute name="repeat"     type="Repeat"/>
       <xs:attribute name="debug"      type="xs:boolean"/>
     </xs:complexType>

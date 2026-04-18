@@ -79,6 +79,13 @@ pub struct Node {
     // img (NodeKind::Img only)
     pub image_name: Option<String>,
     pub img_height_constraint: Option<f32>,
+    // barcode (NodeKind::Barcode only)
+    pub barcode_type: Option<BarcodeType>,
+    pub barcode_data: Option<String>,
+    pub barcode_ec: BarcodeEcLevel,
+    pub barcode_hrt: bool,
+    pub barcode_color: Option<String>,
+    pub barcode_bg: Option<String>,
     // table (NodeKind::Table only)
     pub table_cols: String,
     pub stripe: Option<String>,
@@ -113,6 +120,22 @@ pub enum NodeKind {
     Text,
     Link,
     Img,
+    Barcode,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BarcodeType {
+    Qr,
+    Code128,
+    Ean13,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BarcodeEcLevel {
+    L,
+    M,
+    Q,
+    H,
 }
 
 /// How a node determines its height.
@@ -191,6 +214,12 @@ struct ParsedNode {
     url: Option<String>,
     image_name: Option<String>,
     img_height_constraint: Option<f32>,
+    barcode_type: Option<BarcodeType>,
+    barcode_data: Option<String>,
+    barcode_ec: BarcodeEcLevel,
+    barcode_hrt: bool,
+    barcode_color: Option<String>,
+    barcode_bg: Option<String>,
     table_cols: String,
     stripe: Option<String>,
     children: Vec<ParsedNode>,
@@ -244,6 +273,12 @@ impl ParsedNode {
             url: None,
             image_name: None,
             img_height_constraint: None,
+            barcode_type: None,
+            barcode_data: None,
+            barcode_ec: BarcodeEcLevel::M,
+            barcode_hrt: false,
+            barcode_color: None,
+            barcode_bg: None,
             table_cols: String::new(),
             stripe: None,
             children: Vec::new(),
@@ -367,6 +402,12 @@ fn resolve_node(
         url:                   n.url,
         image_name:            n.image_name,
         img_height_constraint: n.img_height_constraint,
+        barcode_type:          n.barcode_type,
+        barcode_data:          n.barcode_data,
+        barcode_ec:            n.barcode_ec,
+        barcode_hrt:           n.barcode_hrt,
+        barcode_color:         n.barcode_color,
+        barcode_bg:            n.barcode_bg,
         table_cols:            n.table_cols,
         stripe:                n.stripe,
         children,
@@ -690,6 +731,7 @@ fn parse_node(
         "text"    => NodeKind::Text,
         "link"    => NodeKind::Link,
         "img"     => NodeKind::Img,
+        "barcode" => NodeKind::Barcode,
         "table"   => NodeKind::Table,
         "thead"   => NodeKind::TableHead,
         "tr"      => NodeKind::TableRow,
@@ -765,11 +807,14 @@ fn parse_node(
         NodeKind::Img => {
             apply_img_attrs(&mut node, elem, asset_images, "<assets><images>")?;
         }
+        NodeKind::Barcode => {
+            apply_barcode_attrs(&mut node, elem, tokens)?;
+        }
         _ => {}
     }
 
     // ── Children (not for leaf nodes) ────────────────────────────────────────
-    if !matches!(kind, NodeKind::Divider | NodeKind::Text | NodeKind::Img) {
+    if !matches!(kind, NodeKind::Divider | NodeKind::Text | NodeKind::Img | NodeKind::Barcode) {
         for child in elems(elem) {
             let child_node = parse_node(&child, tokens, asset_images)?;
             match kind {
@@ -917,7 +962,7 @@ fn apply_box_attrs(
     if let Some(v) = a.get("background") { node.background = Some(tokens.resolve_color(v)?); }
     if let Some(v) = a.get("border")     { node.border    = Some(tokens.resolve_border(v)?); }
     if let Some(v) = a.get("radius")     { node.radius    = tokens.resolve_radius(v)?; }
-    if node.kind != NodeKind::Img {
+    if !matches!(node.kind, NodeKind::Img | NodeKind::Barcode) {
         if let Some(v) = a.get("height") { node.height_mode = parse_height_mode(v)?; }
     }
     if let Some(v) = a.get("width")  { node.width_constraint = Some(tokens.resolve_width(v)?); }
@@ -1006,7 +1051,7 @@ fn apply_layout_kind_attrs(
                 other    => other,
             })?;
         }
-        NodeKind::Text | NodeKind::Link | NodeKind::Img => {}
+        NodeKind::Text | NodeKind::Link | NodeKind::Img | NodeKind::Barcode => {}
     }
     Ok(())
 }
@@ -1030,6 +1075,85 @@ fn apply_img_attrs(
             parse_pt(v).ok_or_else(|| format!("img height: invalid pt value '{v}'"))?
         );
     }
+    Ok(())
+}
+
+/// Apply attributes for a `<barcode>` / `"barcode"` node.
+/// Works with both XML elements and JSON attr objects via the `Attrs` trait.
+fn apply_barcode_attrs(
+    node: &mut ParsedNode,
+    a:    &impl Attrs,
+    tokens: &Tokens,
+) -> Result<(), String> {
+    let type_str = a.get("type")
+        .ok_or_else(|| "<barcode> missing required attribute 'type'".to_string())?;
+    node.barcode_type = Some(match type_str {
+        "qr"      => BarcodeType::Qr,
+        "code128" => BarcodeType::Code128,
+        "ean13"   => BarcodeType::Ean13,
+        other     => return Err(format!("<barcode> unknown type '{other}'; use 'qr', 'code128', or 'ean13'")),
+    });
+
+    node.barcode_data = Some(
+        a.get("data")
+         .ok_or_else(|| "<barcode> missing required attribute 'data'".to_string())?
+         .to_string(),
+    );
+
+    // Error correction level (QR only, ignored for 1D barcodes)
+    node.barcode_ec = match a.get("ec").unwrap_or("M") {
+        "L" => BarcodeEcLevel::L,
+        "M" => BarcodeEcLevel::M,
+        "Q" => BarcodeEcLevel::Q,
+        "H" => BarcodeEcLevel::H,
+        other => return Err(format!("<barcode> invalid ec '{other}'; use L, M, Q, or H")),
+    };
+
+    // Human-readable text below 1D barcodes
+    node.barcode_hrt = a.get("hrt").map(|v| v == "true").unwrap_or(false);
+
+    // Bar color
+    node.barcode_color = if let Some(v) = a.get("color") {
+        Some(tokens.resolve_color(v)?)
+    } else {
+        None
+    };
+
+    // Background fill
+    node.barcode_bg = if let Some(v) = a.get("background") {
+        Some(tokens.resolve_color(v)?)
+    } else {
+        None
+    };
+
+    // Dimensions:
+    // QR uses `size` for both width and height (square).
+    // Code128 / EAN-13 use `width` and `height` independently.
+    match node.barcode_type.as_ref().unwrap() {
+        BarcodeType::Qr => {
+            let size = a.get("size")
+                .ok_or_else(|| "<barcode type=\"qr\"> missing required attribute 'size'".to_string())?;
+            let pt = tokens.resolve_width(size)
+                .map_err(|_| format!("<barcode> invalid size '{size}'"))?;
+            node.width_constraint      = Some(pt);
+            node.img_height_constraint = Some(pt);
+        }
+        BarcodeType::Code128 | BarcodeType::Ean13 => {
+            if let Some(w) = a.get("width") {
+                node.width_constraint = Some(
+                    tokens.resolve_width(w)
+                          .map_err(|_| format!("<barcode> invalid width '{w}'"))?,
+                );
+            }
+            if let Some(h) = a.get("height") {
+                node.img_height_constraint = Some(
+                    tokens.resolve_width(h)
+                          .map_err(|_| format!("<barcode> invalid height '{h}'"))?,
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -1249,6 +1373,7 @@ fn parse_tree_node(
         "text"    => NodeKind::Text,
         "link"    => NodeKind::Link,
         "img"     => NodeKind::Img,
+        "barcode" => NodeKind::Barcode,
         "table"   => NodeKind::Table,
         "thead"   => NodeKind::TableHead,
         "tr"      => NodeKind::TableRow,
@@ -1332,11 +1457,14 @@ fn parse_tree_node(
         NodeKind::Img => {
             apply_img_attrs(&mut node, &a, asset_images, "assets.images")?;
         }
+        NodeKind::Barcode => {
+            apply_barcode_attrs(&mut node, &a, tokens)?;
+        }
         _ => {}
     }
 
     // ── Layout children ───────────────────────────────────────────────────────
-    if !matches!(kind, NodeKind::Divider | NodeKind::Img) {
+    if !matches!(kind, NodeKind::Divider | NodeKind::Img | NodeKind::Barcode) {
         if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
             for child in arr {
                 let child_node = parse_tree_node(child, tokens, asset_images)?;

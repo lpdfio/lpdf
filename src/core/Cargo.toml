@@ -26,6 +26,8 @@ ed25519-dalek = { version = "2", default-features = false, features = ["alloc"] 
 base64 = "0.22"
 # Deflate/inflate for PNG RGBA decoding (SMask support)
 miniz_oxide = "0.7"
+# QR code generation (vector, no image crate dependency)
+qrcode = { version = "0.14", default-features = false }
 
 [dev-dependencies]
 sha2 = "0.10"

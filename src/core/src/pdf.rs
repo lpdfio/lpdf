@@ -38,7 +38,7 @@ use miniz_oxide::deflate::compress_to_vec_zlib;
 use miniz_oxide::inflate::decompress_to_vec_zlib;
 use subsetter::GlyphRemapper;
 
-use crate::render::{RenderNode, RenderPage};
+use crate::render::{RenderNode, RenderPage, RenderedBarcodeKind};
 use crate::parse::Meta;
 use crate::tokens::FontDef;
 
@@ -904,6 +904,35 @@ fn prepare_truetype_font(bytes: &[u8], used_chars: &HashSet<char>) -> PreparedFo
 
 // ── Content-stream builder ────────────────────────────────────────────────────
 
+/// Draw HRT (human-readable text) for a barcode, centered below the bars.
+fn draw_barcode_hrt(
+    content:  &mut Content,
+    fonts:    &HashMap<String, PreparedFont>,
+    text:     &str,
+    bar_x:    f32,
+    bar_bottom_y: f32,  // top-down coordinate of the baseline zone top
+    bar_w:    f32,
+    page_h:   f32,
+) {
+    let font = match fonts.get("Helvetica") {
+        Some(f) => f,
+        None    => return,
+    };
+    let size   = 8.0_f32;
+    let text_w = font.text_width(text, size);
+    let draw_x = bar_x + (bar_w - text_w) / 2.0;
+    // Place text 1pt below the bars.
+    let pdf_y  = page_h - bar_bottom_y - size - 1.0;
+    let encoded = font.encode_text(text);
+    let rname   = font.resource_name.as_bytes().to_vec();
+    content.begin_text();
+    content.set_fill_rgb(0.0, 0.0, 0.0);
+    content.set_font(Name(&rname), size);
+    content.set_text_matrix([1.0, 0.0, 0.0, 1.0, draw_x, pdf_y]);
+    content.show(Str(&encoded));
+    content.end_text();
+}
+
 /// Write all render nodes for one page into a `Content` stream and collect
 /// any link annotations encountered along the way.
 ///
@@ -1053,6 +1082,92 @@ fn draw_node(
                 content.x_object(Name(&rname));
                 content.restore_state();
             }
+        }
+
+        // ── Barcode ──────────────────────────────────────────────────────────
+        RenderNode::Barcode(bc) => {
+            content.save_state();
+
+            // Optional background fill.
+            if let Some(bg) = &bc.bg {
+                let (r, g, b) = parse_hex(bg);
+                let pdf_y = page_h - bc.y - bc.height;
+                content.set_fill_rgb(r, g, b);
+                content.rect(bc.x, pdf_y, bc.width, bc.height);
+                content.fill_nonzero();
+            }
+
+            let (fr, fg, fb) = parse_hex(&bc.color);
+            content.set_fill_rgb(fr, fg, fb);
+
+            match &bc.kind {
+                RenderedBarcodeKind::Qr { modules, size } => {
+                    let sz = *size as f32;
+                    let module_pt = bc.width / sz;
+                    for row in 0..*size {
+                        for col in 0..*size {
+                            let idx = (row * size + col) as usize;
+                            if modules[idx] {
+                                // PDF y-axis is bottom-up; row 0 is top.
+                                let mx = bc.x + col as f32 * module_pt;
+                                let my = page_h - bc.y - (row + 1) as f32 * module_pt;
+                                content.rect(mx, my, module_pt, module_pt);
+                                content.fill_nonzero();
+                            }
+                        }
+                    }
+                }
+
+                RenderedBarcodeKind::Code128 { bars, hrt } => {
+                    let total_units: u32 = bars.iter().map(|&w| w as u32).sum();
+                    if total_units > 0 {
+                        let unit_w = bc.width / total_units as f32;
+                        let bar_h  = if hrt.is_some() { bc.height - 12.0 } else { bc.height };
+                        let pdf_y  = page_h - bc.y - bar_h;
+                        let mut cur_x = bc.x;
+                        for (i, &run) in bars.iter().enumerate() {
+                            let run_w = run as f32 * unit_w;
+                            if i % 2 == 0 {
+                                // Even indices are bars.
+                                content.rect(cur_x, pdf_y, run_w, bar_h);
+                                content.fill_nonzero();
+                            }
+                            cur_x += run_w;
+                        }
+                        // HRT text is drawn as a simple centered annotation
+                        // using the draw_barcode_hrt helper.
+                        if let Some(text) = hrt {
+                            draw_barcode_hrt(content, fonts, text, bc.x, bc.y + bar_h, bc.width, page_h);
+                        }
+                    }
+                }
+
+                RenderedBarcodeKind::Ean13 { bars, digits, hrt } => {
+                    let total_units: u32 = bars.iter().map(|&w| w as u32).sum();
+                    if total_units > 0 {
+                        let unit_w = bc.width / total_units as f32;
+                        // EAN-13 standard: guard bars extend 5 units below digit bars.
+                        // For simplicity we use a uniform bar height here.
+                        let hrt_h  = if *hrt { 12.0_f32 } else { 0.0 };
+                        let bar_h  = bc.height - hrt_h;
+                        let pdf_y  = page_h - bc.y - bar_h;
+                        let mut cur_x = bc.x;
+                        for (i, &run) in bars.iter().enumerate() {
+                            let run_w = run as f32 * unit_w;
+                            if i % 2 == 0 {
+                                content.rect(cur_x, pdf_y, run_w, bar_h);
+                                content.fill_nonzero();
+                            }
+                            cur_x += run_w;
+                        }
+                        if *hrt {
+                            draw_barcode_hrt(content, fonts, digits, bc.x, bc.y + bar_h, bc.width, page_h);
+                        }
+                    }
+                }
+            }
+
+            content.restore_state();
         }
     }
 }

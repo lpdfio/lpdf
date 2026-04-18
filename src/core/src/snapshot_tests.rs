@@ -88,3 +88,5 @@ fn showcase_split() { run_snapshot("showcase-split"); }
 fn showcase_stack() { run_snapshot("showcase-stack"); }
 #[test]
 fn showcase_table() { run_snapshot("showcase-table"); }
+#[test]
+fn showcase_barcode() { run_snapshot("showcase-barcode"); }

@@ -1,5 +1,5 @@
-use crate::parse::{Align, Direction, HeightMode, Justify, Node, NodeKind, Page, Repeat, TextAlign, TextRun};
-use crate::render::{RenderBox, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText};
+use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Direction, HeightMode, Justify, Node, NodeKind, Page, Repeat, TextAlign, TextRun};
+use crate::render::{RenderBarcode, RenderBox, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind};
 use crate::tokens::FontWidths;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -987,6 +987,7 @@ fn layout_node(
         NodeKind::Text => layout_text(node, node_x, y, node_w),
         NodeKind::Link => layout_link(node, node_x, y, node_w, avail_h),
         NodeKind::Img => layout_img(node, node_x, y, node_w),
+        NodeKind::Barcode => layout_barcode(node, node_x, y, node_w),
         _ => layout_container(node, node_x, y, node_w, avail_h),
     }
 }
@@ -1557,6 +1558,324 @@ fn layout_img(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
     (RenderNode::Image(RenderImage { x, y, width: w, height: h, name }), h)
 }
 
+// ── Barcode ───────────────────────────────────────────────────────────────────
+
+fn layout_barcode(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
+    let btype = match &node.barcode_type {
+        Some(t) => t.clone(),
+        None    => return fallback_barcode(x, y, avail_w, "missing barcode type"),
+    };
+    let data = match &node.barcode_data {
+        Some(d) => d.clone(),
+        None    => return fallback_barcode(x, y, avail_w, "missing barcode data"),
+    };
+
+    let color = node.barcode_color.clone().unwrap_or_else(|| "#000000".to_string());
+    let bg    = node.barcode_bg.clone();
+
+    match btype {
+        BarcodeType::Qr => {
+            let size_pt = node.width_constraint.unwrap_or(80.0).min(avail_w);
+            let ec = match node.barcode_ec {
+                BarcodeEcLevel::L => qrcode::EcLevel::L,
+                BarcodeEcLevel::M => qrcode::EcLevel::M,
+                BarcodeEcLevel::Q => qrcode::EcLevel::Q,
+                BarcodeEcLevel::H => qrcode::EcLevel::H,
+            };
+            match qrcode::QrCode::with_error_correction_level(data.as_bytes(), ec) {
+                Ok(code) => {
+                    let sz = code.width() as u32;
+                    let mut modules = Vec::with_capacity((sz * sz) as usize);
+                    for row in 0..sz as usize {
+                        for col in 0..sz as usize {
+                            modules.push(code[(col, row)] == qrcode::Color::Dark);
+                        }
+                    }
+                    let bc = RenderBarcode {
+                        x, y, width: size_pt, height: size_pt,
+                        kind: RenderedBarcodeKind::Qr { modules, size: sz },
+                        color, bg, debug_self: node.debug,
+                    };
+                    (RenderNode::Barcode(bc), size_pt)
+                }
+                Err(_) => fallback_barcode(x, y, size_pt, "QR encoding failed"),
+            }
+        }
+
+        BarcodeType::Code128 => {
+            let w = node.width_constraint.unwrap_or(avail_w).min(avail_w);
+            let hrt_text = if node.barcode_hrt { Some(data.clone()) } else { None };
+            let hrt_h    = if node.barcode_hrt { 12.0_f32 } else { 0.0 };
+            let h = node.img_height_constraint.unwrap_or(40.0) + hrt_h;
+
+            match encode_code128(&data) {
+                Ok(bars) => {
+                    let bc = RenderBarcode {
+                        x, y, width: w, height: h,
+                        kind: RenderedBarcodeKind::Code128 { bars, hrt: hrt_text },
+                        color, bg, debug_self: node.debug,
+                    };
+                    (RenderNode::Barcode(bc), h)
+                }
+                Err(msg) => fallback_barcode(x, y, w, &msg),
+            }
+        }
+
+        BarcodeType::Ean13 => {
+            let w = node.width_constraint.unwrap_or(avail_w).min(avail_w);
+            let h = node.img_height_constraint.unwrap_or(60.0);
+
+            match encode_ean13(&data) {
+                Ok(bars) => {
+                    let bc = RenderBarcode {
+                        x, y, width: w, height: h,
+                        kind: RenderedBarcodeKind::Ean13 { bars, digits: data, hrt: node.barcode_hrt },
+                        color, bg, debug_self: node.debug,
+                    };
+                    (RenderNode::Barcode(bc), h)
+                }
+                Err(msg) => fallback_barcode(x, y, w, &msg),
+            }
+        }
+    }
+}
+
+/// Return an empty box placeholder for an invalid/unencodable barcode.
+fn fallback_barcode(x: f32, y: f32, w: f32, _reason: &str) -> (RenderNode, f32) {
+    let h = 40.0_f32;
+    let b = crate::render::RenderBox {
+        x, y, width: w, height: h,
+        fill: Some("#eeeeee".to_string()),
+        border_width: 0.5,
+        border_color: Some("#ff0000".to_string()),
+        radius: 0.0,
+        debug_self: false,
+        children: vec![],
+    };
+    (RenderNode::Box(b), h)
+}
+
+// ── Code 128 encoder ─────────────────────────────────────────────────────────
+//
+// Encodes a string using subset B (printable ASCII 32–126) into a flat
+// alternating bar/space run-length array starting with a bar.
+// Layout: START_B | data symbols | checksum | STOP
+
+/// Code 128 symbol patterns indexed 0–105 (each 6 elements, 11 units total).
+/// Elements alternate: bar, space, bar, space, bar, space.
+static CODE128: [[u8; 6]; 106] = [
+    [2,1,2,2,2,2], [2,2,2,1,2,2], [2,2,2,2,2,1], [1,2,1,2,2,3],
+    [1,2,1,3,2,2], [1,3,1,2,2,2], [1,2,2,2,1,3], [1,2,2,3,1,2],
+    [1,3,2,2,1,2], [2,2,1,2,1,3], [2,2,1,3,1,2], [2,3,1,2,1,2],
+    [1,1,2,2,3,2], [1,2,2,1,3,2], [1,2,2,2,3,1], [1,1,3,2,2,2],
+    [1,2,3,1,2,2], [1,2,3,2,2,1], [2,2,3,2,1,1], [2,2,1,1,3,2],
+    [2,2,1,2,3,1], [2,1,3,2,1,2], [2,2,3,1,1,2], [3,1,2,1,3,1],
+    [3,1,1,2,2,2], [3,2,1,1,2,2], [3,2,1,2,2,1], [3,1,2,2,1,2],
+    [3,2,2,1,1,2], [3,2,2,2,1,1], [2,1,2,1,2,3], [2,1,2,3,2,1],
+    [2,3,2,1,2,1], [1,1,1,3,2,3], [1,3,1,1,2,3], [1,3,1,3,2,1],
+    [1,1,2,3,1,3], [1,3,2,1,1,3], [1,3,2,3,1,1], [2,1,1,3,1,3],
+    [2,3,1,1,1,3], [2,3,1,3,1,1], [1,1,2,1,3,3], [1,1,2,3,3,1],
+    [1,3,2,1,3,1], [1,1,3,1,2,3], [1,1,3,3,2,1], [1,3,3,1,2,1],
+    [3,1,3,1,2,1], [2,1,1,3,3,1], [2,3,1,1,3,1], [2,1,3,1,1,3],
+    [2,1,3,3,1,1], [2,1,3,1,3,1], [3,1,1,1,2,3], [3,1,1,3,2,1],
+    [3,3,1,1,2,1], [3,1,2,1,1,3], [3,1,2,3,1,1], [3,3,2,1,1,1],
+    [3,1,4,1,1,1], [2,2,4,2,1,1], [4,3,1,1,1,1], [1,1,1,2,2,4],
+    [1,1,1,4,2,2], [1,2,1,1,2,4], [1,2,1,4,2,1], [1,4,1,1,2,2],
+    [1,4,1,2,2,1], [1,1,2,2,1,4], [1,1,2,4,1,2], [1,2,2,1,1,4],
+    [1,2,2,4,1,1], [1,4,2,1,1,2], [1,4,2,2,1,1], [2,4,1,2,1,1],
+    [2,2,1,1,1,4], [4,1,3,1,1,1], [2,4,1,1,1,2], [1,3,4,1,1,1],
+    [1,1,1,2,4,2], [1,2,1,1,4,2], [1,2,1,2,4,1], [1,1,4,2,1,2],
+    [1,2,4,1,1,2], [1,2,4,2,1,1], [4,1,1,2,1,2], [4,2,1,1,1,2],
+    [4,2,1,2,1,1], [2,1,2,1,4,1], [2,1,4,1,2,1], [4,1,2,1,2,1],
+    [1,1,1,1,4,3], [1,1,1,3,4,1], [1,3,1,1,4,1], [1,1,4,1,1,3],
+    [1,1,4,3,1,1], [4,1,1,1,1,3], [4,1,1,3,1,1], [1,1,3,1,4,1],
+    [1,1,4,1,3,1], [3,1,1,1,4,1], [4,1,1,1,3,1],                 // 100-102
+    [2,1,1,4,1,2], [2,1,1,2,1,4], [2,1,1,2,3,2],                 // 103=START A, 104=START B, 105=START C
+];
+
+/// Code 128 STOP symbol (7 elements, 13 units total).
+static CODE128_STOP: [u8; 7] = [2,3,3,1,1,1,2];
+
+fn encode_code128(data: &str) -> Result<Vec<u8>, String> {
+    // Validate: only subset B (printable ASCII 32–126).
+    for c in data.chars() {
+        if !(32u8..=126u8).contains(&(c as u8)) {
+            return Err(format!(
+                "Code 128: character '{}' (U+{:04X}) is not in subset B (ASCII 32\u{2013}126)",
+                c, c as u32
+            ));
+        }
+    }
+
+    // Build symbol list: START B + data symbols + checksum.
+    let start_b_value: u32 = 104;
+
+    let mut bars: Vec<u8> = Vec::new();
+    // START B (symbol 104)
+    bars.extend_from_slice(&CODE128[104]);
+
+    // Checksum: start_value + Σ(i+1 × symbol_value) mod 103
+    let check_sum: u32 = {
+        let data_sum: u32 = data.chars().enumerate()
+            .map(|(i, c)| (i + 1) as u32 * (c as u32 - 32))
+            .sum();
+        (start_b_value + data_sum) % 103
+    };
+
+    for c in data.chars() {
+        let sym = c as u8 - 32;
+        bars.extend_from_slice(&CODE128[sym as usize]);
+    }
+
+    // Checksum symbol
+    bars.extend_from_slice(&CODE128[check_sum as usize]);
+
+    // STOP symbol
+    bars.extend_from_slice(&CODE128_STOP);
+
+    Ok(bars)
+}
+
+// ── EAN-13 encoder ────────────────────────────────────────────────────────────
+//
+// Produces 95 modules as a flat alternating bar/space run-length array
+// starting with a bar (left guard starts with a bar module).
+
+/// EAN-13 parity pattern for the first digit (0–9).
+/// Bit i (from MSB=bit5) = 1 → G-code, 0 → L-code for left-group digit i.
+/// Left-group digits are positions 1–6 (second through seventh digit).
+static EAN13_PARITY: [u8; 10] = [
+    0b000000, // 0 → LLLLLL
+    0b001011, // 1 → LLGLGG
+    0b001101, // 2 → LLGGLG
+    0b001110, // 3 → LLGGGL
+    0b010011, // 4 → LGLLGG
+    0b011001, // 5 → LGGLLG
+    0b011100, // 6 → LGGGLL
+    0b010101, // 7 → LGLGLG
+    0b010110, // 8 → LGLGGL
+    0b011010, // 9 → LGGLGL
+];
+
+/// L-code bit patterns for digits 0–9 (7 bits, MSB first, 0=space 1=bar).
+static EAN13_L_PAT: [u8; 10] = [
+    0b0001101, // 0: s3 b2 s1 b1
+    0b0011001, // 1: s2 b2 s2 b1
+    0b0010011, // 2: s2 b1 s2 b2
+    0b0111101, // 3: s1 b4 s1 b1
+    0b0100011, // 4: s1 b1 s3 b2
+    0b0110001, // 5: s1 b2 s3 b1
+    0b0101111, // 6: s1 b1 s1 b4
+    0b0111011, // 7: s1 b3 s1 b2
+    0b0110111, // 8: s1 b2 s1 b3
+    0b0001011, // 9: s3 b1 s1 b2
+];
+
+fn ean_modules(pat: u8) -> [bool; 7] {
+    let mut out = [false; 7];
+    for i in 0..7usize {
+        out[i] = (pat >> (6 - i)) & 1 == 1;
+    }
+    out
+}
+
+fn ean13_check(d: &[u8]) -> u8 {
+    let sum: u32 = d[..12].iter().enumerate()
+        .map(|(i, &v)| if i % 2 == 0 { v as u32 } else { v as u32 * 3 })
+        .sum();
+    ((10 - (sum % 10)) % 10) as u8
+}
+
+fn encode_ean13(data: &str) -> Result<Vec<u8>, String> {
+    let digits_raw: Vec<u8> = data.trim().chars().map(|c| {
+        if c.is_ascii_digit() { c as u8 - b'0' } else { 255 }
+    }).collect();
+
+    if digits_raw.len() != 12 && digits_raw.len() != 13 {
+        return Err(format!(
+            "EAN-13: data must be 12 or 13 digits, got {}",
+            digits_raw.len()
+        ));
+    }
+    for (i, &d) in digits_raw.iter().enumerate() {
+        if d > 9 {
+            return Err(format!("EAN-13: non-digit at position {i}"));
+        }
+    }
+
+    let mut digits = digits_raw.clone();
+    let check = ean13_check(&digits);
+    if digits.len() == 13 {
+        if digits[12] != check {
+            return Err(format!(
+                "EAN-13: invalid check digit (got {}, expected {check})",
+                digits[12]
+            ));
+        }
+    } else {
+        digits.push(check);
+    }
+
+    // Build 95-module sequence.
+    let mut modules: Vec<bool> = Vec::with_capacity(95);
+
+    // Left guard: bar space bar
+    modules.extend_from_slice(&[true, false, true]);
+
+    // Left 6 digits (digits[1] through digits[6])
+    let parity = EAN13_PARITY[digits[0] as usize];
+    for i in 0..6usize {
+        let d   = digits[i + 1] as usize;
+        let use_g = (parity >> (5 - i)) & 1 == 1;
+        let l_mods = ean_modules(EAN13_L_PAT[d]);
+        if use_g {
+            // G-code = bit-reversal of L-code
+            let mut rev = l_mods;
+            rev.reverse();
+            modules.extend_from_slice(&rev);
+        } else {
+            modules.extend_from_slice(&l_mods);
+        }
+    }
+
+    // Center guard: space bar space bar space
+    modules.extend_from_slice(&[false, true, false, true, false]);
+
+    // Right 6 digits (digits[7] through digits[12]), R-code = complement of L-code
+    for i in 0..6usize {
+        let d      = digits[i + 7] as usize;
+        let l_mods = ean_modules(EAN13_L_PAT[d]);
+        let r_mods: [bool; 7] = std::array::from_fn(|j| !l_mods[j]);
+        modules.extend_from_slice(&r_mods);
+    }
+
+    // Right guard: bar space bar
+    modules.extend_from_slice(&[true, false, true]);
+
+    // Sequence starts with true (bar from left guard) — safe to RLE directly.
+    Ok(rle_modules(&modules))
+}
+
+/// Run-length encode a module sequence into alternating bar/space widths.
+/// The input must start with a bar (true); even-indexed elements are bars.
+fn rle_modules(modules: &[bool]) -> Vec<u8> {
+    let mut out = Vec::new();
+    if modules.is_empty() { return out; }
+    let mut cur = modules[0];
+    let mut run = 0u8;
+    for &m in modules {
+        if m == cur {
+            run += 1;
+        } else {
+            out.push(run);
+            cur = m;
+            run = 1;
+        }
+    }
+    out.push(run);
+    out
+}
+
 // ── Divider ───────────────────────────────────────────────────────────────────
 
 fn layout_divider(
@@ -1781,6 +2100,7 @@ fn measure_natural_w(node: &Node) -> f32 {
         }
         NodeKind::Divider => node.thickness,
         NodeKind::Img => node.width_constraint.unwrap_or(100.0),
+        NodeKind::Barcode => node.width_constraint.unwrap_or(80.0),
         _ => {
             let [_pt, pr, _pb, pl] = node.padding;
             let inner = match node.kind {
@@ -2138,6 +2458,10 @@ fn shift_y(node: RenderNode, dy: f32) -> RenderNode {
             i.y += dy;
             RenderNode::Image(i)
         }
+        RenderNode::Barcode(mut bc) => {
+            bc.y += dy;
+            RenderNode::Barcode(bc)
+        }
     }
 }
 
@@ -2169,6 +2493,10 @@ fn shift_x(node: RenderNode, dx: f32) -> RenderNode {
             i.x += dx;
             RenderNode::Image(i)
         }
+        RenderNode::Barcode(mut bc) => {
+            bc.x += dx;
+            RenderNode::Barcode(bc)
+        }
     }
 }
 
@@ -2184,16 +2512,12 @@ fn apply_debug_overlay(nodes: &mut Vec<RenderNode>) {
                 if b.debug_self {
                     let self_lines = debug_rect_lines(b.x, b.y, b.width, b.height, "#ff0033");
                     let child_lines: Vec<RenderNode> = b.children.iter()
-                        .filter_map(|c| {
-                            if let RenderNode::Box(cb) = c {
-                                if !cb.debug_self {
-                                    Some(debug_rect_lines(cb.x, cb.y, cb.width, cb.height, "#0066ff"))
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
-                            }
+                        .filter_map(|c| match c {
+                            RenderNode::Box(cb) if !cb.debug_self =>
+                                Some(debug_rect_lines(cb.x, cb.y, cb.width, cb.height, "#0066ff")),
+                            RenderNode::Barcode(cb) if !cb.debug_self =>
+                                Some(debug_rect_lines(cb.x, cb.y, cb.width, cb.height, "#0066ff")),
+                            _ => None,
                         })
                         .flatten()
                         .collect();
@@ -2206,16 +2530,12 @@ fn apply_debug_overlay(nodes: &mut Vec<RenderNode>) {
                 if l.debug_self {
                     let self_lines = debug_rect_lines(l.x, l.y, l.width, l.height, "#ff0033");
                     let child_lines: Vec<RenderNode> = l.children.iter()
-                        .filter_map(|c| {
-                            if let RenderNode::Box(cb) = c {
-                                if !cb.debug_self {
-                                    Some(debug_rect_lines(cb.x, cb.y, cb.width, cb.height, "#0066ff"))
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
-                            }
+                        .filter_map(|c| match c {
+                            RenderNode::Box(cb) if !cb.debug_self =>
+                                Some(debug_rect_lines(cb.x, cb.y, cb.width, cb.height, "#0066ff")),
+                            RenderNode::Barcode(cb) if !cb.debug_self =>
+                                Some(debug_rect_lines(cb.x, cb.y, cb.width, cb.height, "#0066ff")),
+                            _ => None,
                         })
                         .flatten()
                         .collect();
@@ -2226,6 +2546,20 @@ fn apply_debug_overlay(nodes: &mut Vec<RenderNode>) {
             _ => {}
         }
     }
+    // Barcodes are leaf nodes (no children vec), so inject their debug lines
+    // directly into this vec after the main pass.
+    let barcode_lines: Vec<RenderNode> = nodes.iter()
+        .filter_map(|n| {
+            if let RenderNode::Barcode(bc) = n {
+                if bc.debug_self {
+                    return Some(debug_rect_lines(bc.x, bc.y, bc.width, bc.height, "#ff0033"));
+                }
+            }
+            None
+        })
+        .flatten()
+        .collect();
+    nodes.extend(barcode_lines);
 }
 
 /// Generate 4 dashed `RenderLine`s tracing the rect (x, y, w, h) in `color`.
