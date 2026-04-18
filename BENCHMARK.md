@@ -1,6 +1,6 @@
 # Benchmark Results
 
-Recorded **2026-04-17** on Windows (release build, `cargo bench`).  
+Recorded **2026-04-18** on Windows (release build, `cargo bench`).  
 Runner: `make benchmark` → `cargo bench --manifest-path src/core/Cargo.toml --bench pipeline --bench images --bench fonts`
 
 ---
@@ -21,25 +21,25 @@ Runner: `make benchmark` → `cargo bench --manifest-path src/core/Cargo.toml --
 
 | Benchmark                      | Time (ns/iter) | ± (ns) |
 |-------------------------------|---------------:|-------:|
-| `parse_xml/small/example1`    | 25,719         | 5,166  |
-| `parse_xml/medium/example8`   | 250,566        | 59,048 |
-| `parse_xml/large/bench_large` | 236,061        | 32,206 |
+| `parse_xml/small/example1`    | 12,571         | 590    |
+| `parse_xml/medium/example8`   | 273,184        | 74,779 |
+| `parse_xml/large/bench_large` | 127,280        | 16,997 |
 
 ### Layout (parse excluded)
 
-| Benchmark      | Time (ns/iter) | ± (ns)    |
-|---------------|---------------:|----------:|
-| `layout/small`  | 385,461       | 69,996    |
-| `layout/medium` | 8,695,908     | 1,163,867 |
-| `layout/large`  | 10,979,120    | 1,325,512 |
+| Benchmark      | Time (ns/iter) | ± (ns)  |
+|---------------|---------------:|--------:|
+| `layout/small`  | 192,313       | 9,462   |
+| `layout/medium` | 4,636,877     | 176,800 |
+| `layout/large`  | 6,009,850     | 228,110 |
 
 ### End-to-End (parse + layout + PDF emit)
 
-| Benchmark                        | Time (ns/iter) | ± (ns)    |
-|---------------------------------|---------------:|----------:|
-| `end_to_end/small/example1`     | 394,000        | 73,126    |
-| `end_to_end/medium/example8`    | 8,854,575      | 1,237,815 |
-| `end_to_end/large/bench_large`  | 11,562,400     | 1,261,820 |
+| Benchmark                        | Time (ns/iter) | ± (ns)  |
+|---------------------------------|---------------:|--------:|
+| `end_to_end/small/example1`     | 421,229        | 132,230 |
+| `end_to_end/medium/example8`    | 4,705,043      | 299,380 |
+| `end_to_end/large/bench_large`  | 6,164,227      | 316,312 |
 
 ---
 
@@ -47,11 +47,11 @@ Runner: `make benchmark` → `cargo bench --manifest-path src/core/Cargo.toml --
 
 ### Parse XML is fast and scales linearly
 
-Throughput is ~40–65 MB/s across all fixture sizes. Parse time accounts for less than 1% of total end-to-end time on medium/large documents — it is not a bottleneck.
+Throughput is ~35–120 MB/s across fixture sizes (medium run is noise-affected). Parse time accounts for less than 3% of total end-to-end time on medium/large documents — it is not a bottleneck.
 
-### Layout dominates (~97% of total time)
+### Layout dominates (~97–98% of total time)
 
-This is expected and correct for a layout engine. All the box model, text measurement, line-breaking, and pagination work lives here. The ~9–11 ms ceiling for a 15 KB document is healthy.
+This is expected and correct for a layout engine. All the box model, text measurement, line-breaking, and pagination work lives here. The ~4.6–6.0 ms ceiling for a 15 KB document is healthy.
 
 ### PDF emit adds negligible overhead
 
@@ -59,15 +59,15 @@ The serialization cost (end-to-end minus layout) is:
 
 | Input  | Emit overhead |
 |--------|--------------|
-| small  | ~9 µs        |
-| medium | ~160 µs      |
-| large  | ~580 µs      |
+| small  | ~70 µs (noisy) |
+| medium | ~68 µs       |
+| large  | ~155 µs      |
 
-Well under 6% of total time. PDF emit is not a bottleneck.
+Well under 3% of total time on medium/large. PDF emit is not a bottleneck. The small-fixture figure is within measurement noise — see variance below.
 
 ### Variance
 
-Variance is 10–15%, typical for benchmarks that touch font/glyph data. Not alarming, but worth watching on large inputs.
+Variance is 5–30% depending on benchmark. Small fixtures (sub-millisecond) are the noisiest — `end_to_end/small` in particular can swing ±30% between runs. Layout and large end-to-end numbers are stable (~3–5% variance).
 
 ---
 
