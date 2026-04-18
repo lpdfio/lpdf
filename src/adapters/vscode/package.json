@@ -1,0 +1,98 @@
+{
+  "name": "lpdf",
+  "displayName": "lpdf",
+  "description": "Layout-first PDF authoring — lpdf library companion with live editor, preview, export, and codegen for TypeScript, C#, Python & PHP",
+  "publisher": "lpdf",
+  "version": "0.3.3",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codesensedev/lpdf"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Visualization",
+    "Other"
+  ],
+  "extensionDependencies": [
+    "redhat.vscode-xml"
+  ],
+  "activationEvents": [
+    "onLanguage:xml"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "lpdf",
+      "properties": {
+        "lpdf.licenseKey": {
+          "type": "string",
+          "default": "",
+          "description": "lpdf license key"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "lpdf.previewPdf",
+        "title": "lpdf: Preview PDF"
+      },
+      {
+        "command": "lpdf.exportPdf",
+        "title": "lpdf: Export PDF"
+      },
+      {
+        "command": "lpdf.generateTs",
+        "title": "lpdf: Generate TypeScript from XML"
+      },
+      {
+        "command": "lpdf.generateCs",
+        "title": "lpdf: Generate C# from XML"
+      },
+      {
+        "command": "lpdf.generatePy",
+        "title": "lpdf: Generate Python from XML"
+      },
+      {
+        "command": "lpdf.generatePhp",
+        "title": "lpdf: Generate PHP from XML"
+      },
+      {
+        "command": "lpdf.generateHere",
+        "title": "lpdf: Generate lpdf code here"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "when": "resourceExtname == .xml",
+          "command": "lpdf.previewPdf",
+          "group": "navigation@1"
+        },
+        {
+          "when": "resourceExtname == .xml",
+          "command": "lpdf.exportPdf",
+          "group": "navigation@2"
+        },
+        {
+          "when": "resourceExtname == .xml",
+          "command": "lpdf.generateHere",
+          "group": "navigation@3"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.0.0",
+    "pdfjs-dist": "^5.6.205",
+    "typescript": "^5.0.0"
+  }
+}

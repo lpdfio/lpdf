@@ -1,0 +1,13 @@
+lpdf Commercial License
+=======================
+
+Copyright (c) 2024-present lpdf.io
+
+A commercial license may be purchased at https://lpdf.io/pricing.
+
+Upon purchase you will receive a signed license token. Pass that token to the
+lpdf engine at initialisation time. By using lpdf under a commercial license
+you agree to the terms provided at https://lpdf.io/terms.
+
+All rights not expressly granted under a purchased commercial license are
+reserved by the copyright holder.
