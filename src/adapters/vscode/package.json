@@ -3,7 +3,7 @@
   "displayName": "lpdf",
   "description": "Layout-first PDF authoring — lpdf library companion with live editor, preview, export, and codegen for TypeScript, C#, Python & PHP",
   "publisher": "lpdf",
-  "version": "0.3.3",
+  "version": "0.4.2",
   "icon": "media/icon.png",
   "repository": {
     "type": "git",

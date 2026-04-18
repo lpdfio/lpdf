@@ -1,12 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <lpdf version="1">
   <assets>
-    <fonts>
-      <font name="body" ref="montserrat"/>
-    </fonts>
-    <images>
-      <image name="logo" src="images/logo-lpdf.png"/>
-    </images>
+    <font name="body" ref="montserrat"/>
+    <image name="logo" ref="logo"/>
   </assets>
   <tokens>
     <text xs="7pt" s="9pt" m="11pt" l="14pt" xl="20pt" xxl="28pt" />

@@ -25,7 +25,7 @@
               <text font-size="xxl" font="Helvetica-Bold" color="primary">Encryption</text>
               <text font-size="m" color="muted">RC4-128 · permission flags · open and owner passwords</text>
             </stack>
-            <frame padding="xs s" background="danger" radius="2pt">
+            <frame padding="s" background="danger" radius="2pt">
               <text font-size="s" font="Helvetica-Bold" color="#ffffff">CONFIDENTIAL</text>
             </frame>
           </flank>
@@ -63,36 +63,36 @@
             <text font-size="l" font="Helvetica-Bold" color="primary">Permission Flags</text>
             <table cols="1fr 2fr" border="0.5pt rule" stripe="bg">
               <thead background="accent">
-                <td padding="xs s"><text font-size="m" font="Helvetica-Bold">Flag</text></td>
-                <td padding="xs s"><text font-size="m" font="Helvetica-Bold">Effect when disabled</text></td>
+                <td padding="s"><text font-size="m" font="Helvetica-Bold">Flag</text></td>
+                <td padding="s"><text font-size="m" font="Helvetica-Bold">Effect when disabled</text></td>
               </thead>
               <tr>
-                <td padding="xs s"><text font-size="m" font="Helvetica-Bold">print</text></td>
-                <td padding="xs s"><text font-size="m">Printing disabled in viewer</text></td>
+                <td padding="s"><text font-size="m" font="Helvetica-Bold">print</text></td>
+                <td padding="s"><text font-size="m">Printing disabled in viewer</text></td>
               </tr>
               <tr>
-                <td padding="xs s"><text font-size="m" font="Helvetica-Bold">copy</text></td>
-                <td padding="xs s"><text font-size="m">Text and graphic extraction blocked</text></td>
+                <td padding="s"><text font-size="m" font="Helvetica-Bold">copy</text></td>
+                <td padding="s"><text font-size="m">Text and graphic extraction blocked</text></td>
               </tr>
               <tr>
-                <td padding="xs s"><text font-size="m" font="Helvetica-Bold">modify</text></td>
-                <td padding="xs s"><text font-size="m">Content modification blocked</text></td>
+                <td padding="s"><text font-size="m" font="Helvetica-Bold">modify</text></td>
+                <td padding="s"><text font-size="m">Content modification blocked</text></td>
               </tr>
               <tr>
-                <td padding="xs s"><text font-size="m" font="Helvetica-Bold">annotate</text></td>
-                <td padding="xs s"><text font-size="m">Adding or modifying annotations blocked</text></td>
+                <td padding="s"><text font-size="m" font="Helvetica-Bold">annotate</text></td>
+                <td padding="s"><text font-size="m">Adding or modifying annotations blocked</text></td>
               </tr>
               <tr>
-                <td padding="xs s"><text font-size="m" font="Helvetica-Bold">fill_forms</text></td>
-                <td padding="xs s"><text font-size="m">Form field filling disabled</text></td>
+                <td padding="s"><text font-size="m" font="Helvetica-Bold">fill_forms</text></td>
+                <td padding="s"><text font-size="m">Form field filling disabled</text></td>
               </tr>
               <tr>
-                <td padding="xs s"><text font-size="m" font="Helvetica-Bold">assemble</text></td>
-                <td padding="xs s"><text font-size="m">Page insertion, deletion, rotation blocked</text></td>
+                <td padding="s"><text font-size="m" font="Helvetica-Bold">assemble</text></td>
+                <td padding="s"><text font-size="m">Page insertion, deletion, rotation blocked</text></td>
               </tr>
               <tr>
-                <td padding="xs s"><text font-size="m" font="Helvetica-Bold">print_hq</text></td>
-                <td padding="xs s"><text font-size="m">High-quality printing degraded to low resolution</text></td>
+                <td padding="s"><text font-size="m" font="Helvetica-Bold">print_hq</text></td>
+                <td padding="s"><text font-size="m">High-quality printing degraded to low resolution</text></td>
               </tr>
             </table>
           </stack>

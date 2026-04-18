@@ -94,12 +94,12 @@ class LpdfEngine {
         let pdf;
         try {
             if (typeof input === 'string') {
-                // XML path — auto-load fonts declared via <font src="…">.
+                // XML path — auto-load fonts and images declared via src="…".
                 const xml = input;
-                for (const [name, src] of extractFontSrcs(xml)) {
-                    if (!allFonts.has(name)) {
+                for (const [key, src] of extractAssetSrcs(xml, 'font')) {
+                    if (!allFonts.has(key)) {
                         try {
-                            allFonts.set(name, (0, node_fs_1.readFileSync)(src));
+                            allFonts.set(key, (0, node_fs_1.readFileSync)(src));
                         }
                         catch { /* not found; Rust falls back to Helvetica */ }
                     }
@@ -110,6 +110,15 @@ class LpdfEngine {
                 for (const [name, bytes] of this._images) {
                     engine.load_image(name, bytes);
                 }
+                // Auto-load images declared via <image src="…"> that weren't pre-loaded.
+                for (const [key, src] of extractAssetSrcs(xml, 'image')) {
+                    if (!this._images.has(key)) {
+                        try {
+                            engine.load_image(key, (0, node_fs_1.readFileSync)(src));
+                        }
+                        catch { /* skip unresolvable image */ }
+                    }
+                }
                 if (this._encrypt) {
                     const permsJson = JSON.stringify(this._encrypt.permissions ?? {});
                     engine.set_encryption(this._encrypt.userPassword, this._encrypt.ownerPassword, permsJson);
@@ -119,10 +128,10 @@ class LpdfEngine {
             else {
                 // JSON (Kit tree) path — pass JSON directly to render_tree_pdf.
                 const json = JSON.stringify(input);
-                for (const [name, src] of extractFontSrcsFromJson(json)) {
-                    if (!allFonts.has(name)) {
+                for (const [key, src] of extractFontSrcsFromJson(json)) {
+                    if (!allFonts.has(key)) {
                         try {
-                            allFonts.set(name, (0, node_fs_1.readFileSync)(src));
+                            allFonts.set(key, (0, node_fs_1.readFileSync)(src));
                         }
                         catch { /* not found; Rust falls back to Helvetica */ }
                     }
@@ -151,27 +160,32 @@ class LpdfEngine {
 }
 exports.LpdfEngine = LpdfEngine;
 // ── Helpers ───────────────────────────────────────────────────────────────────
-/** Extract `name → src` pairs from `<font name="…" src="…">` tags in XML. */
-function extractFontSrcs(xml) {
+/** Extract `ref??name → src` pairs from `<font>` or `<image>` tags in XML. */
+function extractAssetSrcs(xml, tag) {
     const result = new Map();
-    for (const match of xml.matchAll(/<font\s[^>]*>/g)) {
-        const tag = match[0];
-        const name = /\bname="([^"]*)"/.exec(tag)?.[1];
-        const src = /\bsrc="([^"]*)"/.exec(tag)?.[1];
-        if (name && src)
-            result.set(name, src);
+    const re = tag === 'font' ? /<font\s[^>]*>/g : /<image\s[^>]*>/g;
+    for (const match of xml.matchAll(re)) {
+        const t = match[0];
+        const name = /\bname="([^"]*)"/.exec(t)?.[1];
+        const ref = /\bref="([^"]*)"/.exec(t)?.[1];
+        const src = /\bsrc="([^"]*)"/.exec(t)?.[1];
+        const key = ref ?? name;
+        if (key && src)
+            result.set(key, src);
     }
     return result;
 }
-/** Extract `name → src` pairs from `attrs.tokens.fonts[name].src` in a kit JSON string. */
+/** Extract `ref??name → src` pairs from `attrs.tokens.fonts[name].src` in a kit JSON string. */
 function extractFontSrcsFromJson(json) {
     const result = new Map();
     try {
         const doc = JSON.parse(json);
         const fonts = doc?.attrs?.tokens?.fonts ?? {};
         for (const [name, def] of Object.entries(fonts)) {
-            if (def.src)
-                result.set(name, def.src);
+            if (def.src) {
+                const key = def.ref ?? name;
+                result.set(key, def.src);
+            }
         }
     }
     catch { /* ignore */ }

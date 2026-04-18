@@ -139,7 +139,7 @@ impl LpdfEngine {
             .map_err(|e| JsValue::from_str(&e))?;
 
         // Confirm every image declared in <assets> has bytes in the registry.
-        for name in &doc.images {
+        for (_alias, name) in &doc.images {
             if self.images.get(name).is_none() {
                 return Err(JsValue::from_str(&format!(
                     "image '{name}' declared in <assets> but not loaded via loadImage()"
@@ -208,7 +208,7 @@ impl LpdfEngine {
             .map_err(|e| JsValue::from_str(&e))?;
 
         // Confirm every image declared in the tree has bytes in the registry.
-        for name in &doc.images {
+        for (_alias, name) in &doc.images {
             if self.images.get(name).is_none() {
                 return Err(JsValue::from_str(&format!(
                     "image '{name}' declared in assets but not loaded via loadImage()"

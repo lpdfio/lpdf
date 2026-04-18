@@ -232,6 +232,7 @@
       <xs:element ref="divider"/>
       <xs:element ref="table"/>
       <xs:element ref="barcode"/>
+      <xs:element ref="field"/>
     </xs:choice>
   </xs:group>
 
@@ -246,13 +247,15 @@
       <xs:attribute name="name" type="xs:string"  use="required"/>
       <xs:attribute name="core" type="BuiltinFont"/>
       <xs:attribute name="ref"  type="xs:string"/>
+      <xs:attribute name="src"  type="xs:anyURI"/>
     </xs:complexType>
   </xs:element>
 
-  <!-- Image asset declared in <assets><images> -->
+  <!-- Image asset declared in <assets> -->
   <xs:element name="image">
     <xs:complexType>
-      <xs:attribute name="name" type="xs:string"  use="required"/>
+      <xs:attribute name="name" type="xs:string" use="required"/>
+      <xs:attribute name="ref"  type="xs:string"/>
       <xs:attribute name="src"  type="xs:anyURI"/>
     </xs:complexType>
   </xs:element>
@@ -288,22 +291,10 @@
   <!-- Asset declarations: fonts and images used by layout elements -->
   <xs:element name="assets">
     <xs:complexType>
-      <xs:all>
-        <xs:element name="fonts" minOccurs="0">
-          <xs:complexType>
-            <xs:sequence>
-              <xs:element ref="font" minOccurs="0" maxOccurs="unbounded"/>
-            </xs:sequence>
-          </xs:complexType>
-        </xs:element>
-        <xs:element name="images" minOccurs="0">
-          <xs:complexType>
-            <xs:sequence>
-              <xs:element ref="image" minOccurs="0" maxOccurs="unbounded"/>
-            </xs:sequence>
-          </xs:complexType>
-        </xs:element>
-      </xs:all>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element ref="font"/>
+        <xs:element ref="image"/>
+      </xs:choice>
     </xs:complexType>
   </xs:element>
 
@@ -549,6 +540,7 @@
       <xs:attribute name="font"      type="xs:string"/>
       <xs:attribute name="color"     type="Color"/>
       <xs:attribute name="align"     type="TextAlignH"/>
+      <xs:attribute name="width"     type="TokenScaleOrPt"/>
       <xs:attribute name="repeat"    type="Repeat"/>
       <xs:attribute name="debug"     type="xs:boolean"/>
     </xs:complexType>
@@ -615,6 +607,40 @@
       <xs:attribute name="background" type="Color"/>
       <xs:attribute name="width"      type="TokenScaleOrPt"/>
       <xs:attribute name="height"     type="HeightValue"/>
+      <xs:attribute name="repeat"     type="Repeat"/>
+      <xs:attribute name="debug"      type="xs:boolean"/>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- ============================================================
+       Form field element
+  ============================================================ -->
+
+  <xs:element name="field">
+    <xs:complexType>
+      <xs:attribute name="type" use="required">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="text"/>
+            <xs:enumeration value="checkbox"/>
+            <xs:enumeration value="dropdown"/>
+            <xs:enumeration value="radio"/>
+            <xs:enumeration value="button"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+      <xs:attribute name="name"       type="xs:string" use="required"/>
+      <xs:attribute name="value"      type="xs:string"/>
+      <xs:attribute name="label"      type="xs:string"/>
+      <xs:attribute name="options"    type="xs:string"/>
+      <xs:attribute name="group"      type="xs:string"/>
+      <xs:attribute name="checked"    type="xs:boolean"/>
+      <xs:attribute name="required"   type="xs:boolean"/>
+      <xs:attribute name="readonly"   type="xs:boolean"/>
+      <xs:attribute name="max-len"    type="xs:positiveInteger"/>
+      <xs:attribute name="action-url" type="xs:anyURI"/>
+      <xs:attribute name="width"      type="TokenScaleOrPt"/>
+      <xs:attribute name="height"     type="PtValue"/>
       <xs:attribute name="repeat"     type="Repeat"/>
       <xs:attribute name="debug"      type="xs:boolean"/>
     </xs:complexType>

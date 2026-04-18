@@ -231,3 +231,47 @@ class TestLoadImage:
 
         payload = json.loads(mock_run.call_args.kwargs["input"] if "input" in mock_run.call_args.kwargs else mock_run.call_args[1]["input"])
         assert payload["images"]["logo"] == base64.b64encode(b"loaded-version").decode()
+
+
+class TestAssetSrcExtraction:
+    def test_xml_font_src_uses_ref_as_key(self):
+        from lpdf.engine import _extract_xml_font_srcs
+        xml = '<lpdf><assets><font name="body" ref="my-body" src="/fonts/MyFont.ttf"/></assets></lpdf>'
+        srcs = _extract_xml_font_srcs(xml)
+        assert "my-body" in srcs
+        assert srcs["my-body"] == "/fonts/MyFont.ttf"
+        assert "body" not in srcs
+
+    def test_xml_font_src_falls_back_to_name(self):
+        from lpdf.engine import _extract_xml_font_srcs
+        xml = '<lpdf><assets><font name="body" src="/fonts/MyFont.ttf"/></assets></lpdf>'
+        srcs = _extract_xml_font_srcs(xml)
+        assert "body" in srcs
+        assert srcs["body"] == "/fonts/MyFont.ttf"
+
+    def test_xml_image_src_uses_ref_as_key(self):
+        from lpdf.engine import _extract_xml_image_srcs
+        xml = '<lpdf><assets><image name="logo" ref="my-logo" src="/img/logo.png"/></assets></lpdf>'
+        srcs = _extract_xml_image_srcs(xml)
+        assert "my-logo" in srcs
+        assert srcs["my-logo"] == "/img/logo.png"
+        assert "logo" not in srcs
+
+    def test_xml_image_src_falls_back_to_name(self):
+        from lpdf.engine import _extract_xml_image_srcs
+        xml = '<lpdf><assets><image name="logo" src="/img/logo.png"/></assets></lpdf>'
+        srcs = _extract_xml_image_srcs(xml)
+        assert "logo" in srcs
+        assert srcs["logo"] == "/img/logo.png"
+
+    @patch("lpdf.wasm_runner.subprocess.run")
+    def test_render_xml_auto_loads_image_src(self, mock_run, tmp_path):
+        mock_run.return_value = _mock_subprocess_run()
+        img_file = tmp_path / "logo.png"
+        img_file.write_bytes(b"\x89PNG")
+        xml = f'<lpdf><assets><image name="logo" src="{img_file}"/></assets><document size="a4"><pages><page/></pages></document></lpdf>'
+        engine = LpdfEngine("key")
+        engine.render_pdf(xml)
+        payload = json.loads(mock_run.call_args.kwargs["input"] if "input" in mock_run.call_args.kwargs else mock_run.call_args[1]["input"])
+        assert "images" in payload
+        assert payload["images"]["logo"] == base64.b64encode(b"\x89PNG").decode()

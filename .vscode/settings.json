@@ -1,0 +1,42 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "make": true,
+        "cargo build": true,
+        "cargo test": true,
+        "npx tsx": true,
+        "npm run build:node": true,
+        "cargo check": true,
+        "npx tsc": true,
+        "where.exe": true,
+        "npm test": true,
+        "dotnet build": true,
+        "dotnet list": true,
+        "Test-Path": true,
+        "dotnet test": true,
+        "docker run": true,
+        "docker build": true,
+        "npm install": true,
+        "/^node server\\.js$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "Get-Item": true,
+        "cargo doc": true,
+        "cargo tree": true,
+        "dotnet run": true,
+        "cargo search": true,
+        "cargo metadata": true,
+        "npm run build": true
+    },
+    "typescript.tsdk": "src/adapters/vscode/node_modules/typescript/lib",
+    "xml.fileAssociations": [
+        {
+            "systemId": "${workspaceFolder}/schema/lpdf.xsd",
+            "pattern": "**/*.xml"
+        },
+        {
+            "systemId": "file:///c%3A/Users/codes/.vscode/extensions/lpdf.lpdf-0.4.1/schema/lpdf.xsd",
+            "pattern": "**/*.xml"
+        }
+    ]
+}

@@ -5,36 +5,63 @@
 
 using Lpdf;
 
-var root = Path.Combine(AppContext.BaseDirectory, "../../../../../../../example/");
+var root    = Path.Combine(AppContext.BaseDirectory, "../../../../../../../example/");
+var docsExamples = Path.Combine(AppContext.BaseDirectory, "../../../../../../../docs/examples/");
 
-var examples = new[] { 
-    "example1", 
-    "example2", 
-};
+// ── example1 / example2 ─────────────────────────────────────────────────────
 
-// init engine
-var licenseKey = ""; //await File.ReadAllTextAsync(Path.Combine(root, "test.lic"));
+var examples = new[] { "example1", "example2" };
+
 var engine = new LpdfEngine(
-    licenseKey: licenseKey,
+    licenseKey: "",
     options: new RenderOptions { SrcFallback = File.ReadAllBytes });
 
-// load assets (only used if referenced in xml/layout)
 engine.LoadFont("montserrat", await File.ReadAllBytesAsync(Path.Combine(root, "assets/fonts/Montserrat-Regular.ttf")));
 engine.LoadImage("logo", await File.ReadAllBytesAsync(Path.Combine(root, "assets/images/logo-lpdf.png")));
 
 foreach (var example in examples)
 {
-    // load xml from file
-    var xml = await File.ReadAllTextAsync(Path.Combine(root, $"xml/{example}.xml"));
-
-    // render pdf from xml
+    var xml   = await File.ReadAllTextAsync(Path.Combine(root, $"xml/{example}.xml"));
     var bytes = await engine.RenderPdf(xml);
-
-    // define output file name
     var outputFile = $"{example}-dotnet.pdf";
-
-    // write pdf to output file
     await File.WriteAllBytesAsync(Path.Combine(root, $"result/{outputFile}"), bytes);
+    Console.WriteLine($"output: {outputFile} ({bytes.Length:N0} bytes)");
+}
 
+// ── encrypt-permissions-only ─────────────────────────────────────────────────
+// No open password; cooperative viewers enforce Print = false, Copy = false.
+{
+    var encXml = await File.ReadAllTextAsync(Path.Combine(docsExamples, "showcase-encryption.xml"));
+    const string outputFile = "encrypt-permissions-only-dotnet.pdf";
+
+    var encEngine = new LpdfEngine(licenseKey: "", options: new RenderOptions { SrcFallback = File.ReadAllBytes });
+    encEngine.SetEncryption(new EncryptOptions
+    {
+        UserPassword  = "",
+        OwnerPassword = "s3cr3t",
+        Permissions   = new EncryptPermissions { Print = false, Copy = false },
+    });
+
+    var bytes = await encEngine.RenderPdf(encXml);
+    await File.WriteAllBytesAsync(Path.Combine(root, $"result/{outputFile}"), bytes);
+    Console.WriteLine($"output: {outputFile} ({bytes.Length:N0} bytes)");
+}
+
+// ── encrypt-open-password ────────────────────────────────────────────────────
+// Viewers prompt for "password" before displaying content.
+{
+    var encXml = await File.ReadAllTextAsync(Path.Combine(docsExamples, "showcase-encryption.xml"));
+    const string outputFile = "encrypt-open-password-dotnet.pdf";
+
+    var encEngine = new LpdfEngine(licenseKey: "", options: new RenderOptions { SrcFallback = File.ReadAllBytes });
+    encEngine.SetEncryption(new EncryptOptions
+    {
+        UserPassword  = "password",
+        OwnerPassword = "owner",
+        Permissions   = new EncryptPermissions { Copy = false },
+    });
+
+    var bytes = await encEngine.RenderPdf(encXml);
+    await File.WriteAllBytesAsync(Path.Combine(root, $"result/{outputFile}"), bytes);
     Console.WriteLine($"output: {outputFile} ({bytes.Length:N0} bytes)");
 }

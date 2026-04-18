@@ -106,7 +106,8 @@ internal sealed class WasmRunner : IDisposable
         string?                              encryptJson = null,
         string?                              createdOn = null)
     {
-        var fonts = ResolveAllFonts(input, fontBytes, srcFallback, isTree);
+        var fonts  = ResolveAllFonts(input, fontBytes, srcFallback, isTree);
+        var images = ResolveAllImages(input, imageBytes, srcFallback, isTree);
 
         // Build the request object, including font bytes as base64.
         var fontsNode = new JsonObject();
@@ -121,10 +122,10 @@ internal sealed class WasmRunner : IDisposable
             ["fonts"]   = fontsNode,
         };
 
-        if (imageBytes is { Count: > 0 })
+        if (images is { Count: > 0 })
         {
             var imagesNode = new JsonObject();
-            foreach (var (name, bytes) in imageBytes)
+            foreach (var (name, bytes) in images)
                 imagesNode[name] = Convert.ToBase64String(bytes);
             requestObj["images"] = imagesNode;
         }
@@ -182,8 +183,34 @@ internal sealed class WasmRunner : IDisposable
     }
 
     /// <summary>
-    /// Extract <c>name → src</c> pairs from <c>&lt;font name="…" src="…"&gt;</c>
-    /// tags in an lpdf XML string. Attribute order is not assumed.
+    /// Resolves image <c>src</c> paths from XML or kit-JSON via the fallback callback.
+    /// Returns the merged image bytes dictionary.
+    /// </summary>
+    private static IReadOnlyDictionary<string, byte[]> ResolveAllImages(
+        string input,
+        IReadOnlyDictionary<string, byte[]>? imageBytes,
+        Func<string, byte[]>?                srcFallback,
+        bool                                 isTree)
+    {
+        var merged = new Dictionary<string, byte[]>(imageBytes ?? new Dictionary<string, byte[]>());
+
+        if (srcFallback is null)
+            return merged;
+
+        var srcPaths = isTree ? ExtractImageSrcsFromJson(input) : ExtractImageSrcsFromXml(input);
+        foreach (var (name, src) in srcPaths)
+        {
+            if (merged.ContainsKey(name)) continue;
+            try   { merged[name] = srcFallback(src); }
+            catch { /* skip unresolvable images */ }
+        }
+
+        return merged;
+    }
+
+    /// <summary>
+    /// Extract <c>ref??name → src</c> pairs from <c>&lt;font name="…" src="…"&gt;</c>
+    /// tags in an lpdf XML string. Uses <c>ref</c> as the registry key when present.
     /// </summary>
     private static Dictionary<string, string> ExtractFontSrcsFromXml(string xml)
     {
@@ -192,16 +219,38 @@ internal sealed class WasmRunner : IDisposable
         {
             var tag  = m.Value;
             var name = Regex.Match(tag, @"\bname=""([^""]*)""").Groups[1].Value;
+            var refv = Regex.Match(tag, @"\bref=""([^""]*)""").Groups[1].Value;
             var src  = Regex.Match(tag, @"\bsrc=""([^""]*)""").Groups[1].Value;
-            if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(src))
-                result[name] = src;
+            var key  = !string.IsNullOrEmpty(refv) ? refv : name;
+            if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(src))
+                result[key] = src;
         }
         return result;
     }
 
     /// <summary>
-    /// Extract <c>name → src</c> pairs from <c>attrs.tokens.fonts[name].src</c>
-    /// in an lpdf kit-JSON string.
+    /// Extract <c>ref??name → src</c> pairs from <c>&lt;image name="…" src="…"&gt;</c>
+    /// tags in an lpdf XML string.
+    /// </summary>
+    private static Dictionary<string, string> ExtractImageSrcsFromXml(string xml)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (Match m in Regex.Matches(xml, @"<image\s[^>]*>"))
+        {
+            var tag  = m.Value;
+            var name = Regex.Match(tag, @"\bname=""([^""]*)""").Groups[1].Value;
+            var refv = Regex.Match(tag, @"\bref=""([^""]*)""").Groups[1].Value;
+            var src  = Regex.Match(tag, @"\bsrc=""([^""]*)""").Groups[1].Value;
+            var key  = !string.IsNullOrEmpty(refv) ? refv : name;
+            if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(src))
+                result[key] = src;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Extract <c>ref??name → src</c> pairs from <c>attrs.tokens.fonts[name].src</c>
+    /// in an lpdf kit-JSON string. Uses <c>ref</c> as the registry key when present.
     /// </summary>
     private static Dictionary<string, string> ExtractFontSrcsFromJson(string json)
     {
@@ -218,11 +267,46 @@ internal sealed class WasmRunner : IDisposable
                 if (font.Value.TryGetProperty("src", out var srcEl))
                 {
                     var src = srcEl.GetString();
-                    if (src is not null) result[font.Name] = src;
+                    if (src is null) continue;
+                    var key = font.Value.TryGetProperty("ref", out var refEl)
+                        ? (refEl.GetString() ?? font.Name)
+                        : font.Name;
+                    result[key] = src;
                 }
             }
         }
         catch { /* malformed JSON — no fonts to auto-load */ }
+        return result;
+    }
+
+    /// <summary>
+    /// Extract <c>ref??name → src</c> pairs from <c>attrs.tokens.images[name].src</c>
+    /// in an lpdf kit-JSON string.
+    /// </summary>
+    private static Dictionary<string, string> ExtractImageSrcsFromJson(string json)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("attrs", out var attrs)) return result;
+            if (!attrs.TryGetProperty("tokens", out var tokens)) return result;
+            if (!tokens.TryGetProperty("images", out var images)) return result;
+            foreach (var img in images.EnumerateObject())
+            {
+                if (img.Value.TryGetProperty("src", out var srcEl))
+                {
+                    var src = srcEl.GetString();
+                    if (src is null) continue;
+                    var key = img.Value.TryGetProperty("ref", out var refEl)
+                        ? (refEl.GetString() ?? img.Name)
+                        : img.Name;
+                    result[key] = src;
+                }
+            }
+        }
+        catch { /* malformed JSON — no images to auto-load */ }
         return result;
     }
 

@@ -417,6 +417,7 @@
     { label: 'Showcase - Barcode', file: 'examples/showcase-barcode.xml' },
     { label: 'Showcase - Forms',   file: 'examples/showcase-forms.xml' },
     { label: 'Showcase - Encryption', file: 'examples/showcase-encryption.xml' },
+    { label: 'Showcase - Assets',   file: 'examples/showcase-assets.xml' },
   ];
 
   EXAMPLES.forEach(({ label, file }, i) => {
@@ -429,6 +430,7 @@
   exampleSelect.addEventListener('change', async () => {
     const file = exampleSelect.value;
     if (!file) return;
+    currentBaseUrl = new URL(file, location.href).href;
     try {
       const res = await fetch(file);
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -449,7 +451,57 @@
   const ZOOM_MIN    = 0.25;
   const ZOOM_MAX    = 4.0;
 
+  // Base URL used to resolve relative src= paths declared in <assets>.
+  // Updated whenever an example file is loaded; defaults to the page URL.
+  let currentBaseUrl = location.href;
+  // Tracks which asset keys have already been fetched this session to
+  // avoid redundant network requests on every keystroke.
+  const _loadedAssets = new Set();
+
   // ── Helpers ────────────────────────────────────────────────────────────────
+  /** Extract (ref ?? name) → src pairs from <font> or <image> tags in xml. */
+  function extractAssetSrcs(xml, tag) {
+    const result = new Map();
+    const re = tag === 'font' ? /<font\b[\s\S]*?>/g : /<image\b[\s\S]*?>/g;
+    for (const match of xml.matchAll(re)) {
+      const t    = match[0];
+      const name = /\bname=["']([^"']*)["']/.exec(t)?.[1];
+      const ref  = /\bref=["']([^"']*)["']/.exec(t)?.[1];
+      const src  = /\bsrc=["']([^"']*)["']/.exec(t)?.[1];
+      const key  = ref ?? name;
+      if (key && src) { result.set(key, src); }
+    }
+    return result;
+  }
+
+  /** Fetch any font/image assets declared with src= in <assets> and register them. */
+  async function loadAssetsFromXml(xml) {
+    if (!lpdf) { return; }
+    const base   = currentBaseUrl;
+    const fonts  = extractAssetSrcs(xml, 'font');
+    const images = extractAssetSrcs(xml, 'image');
+    for (const [key, src] of fonts) {
+      if (_loadedAssets.has(`font:${key}`)) { continue; }
+      try {
+        const res = await fetch(new URL(src, base));
+        if (res.ok) {
+          lpdf.loadFont(key, new Uint8Array(await res.arrayBuffer()));
+          _loadedAssets.add(`font:${key}`);
+        }
+      } catch { /* ignore unfetchable assets */ }
+    }
+    for (const [key, src] of images) {
+      if (_loadedAssets.has(`image:${key}`)) { continue; }
+      try {
+        const res = await fetch(new URL(src, base));
+        if (res.ok) {
+          lpdf.loadImage(key, new Uint8Array(await res.arrayBuffer()));
+          _loadedAssets.add(`image:${key}`);
+        }
+      } catch { /* ignore unfetchable assets */ }
+    }
+  }
+
   function setStatus(kind, msg, spinner = false) {
     statusEl.innerHTML =
       (spinner ? '<span class="spinner"></span>' : '') +
@@ -495,6 +547,7 @@
 
     setStatus('loading', 'rendering…', true);
     try {
+      await loadAssetsFromXml(xml);
       const bytes = await lpdf.renderPdf(xml);
       const byteSize = bytes.length;
       currentPdfBytes = bytes.slice();
@@ -521,6 +574,7 @@
     lpdf = await initLpdf(wasmUrl);
     setStatus('ok', 'engine ready');
     btnRender.disabled = false;
+    currentBaseUrl = new URL(EXAMPLES[0].file, location.href).href;
     const res = await fetch(EXAMPLES[0].file);
     editor.value = res.ok ? await res.text() : '';
     render();

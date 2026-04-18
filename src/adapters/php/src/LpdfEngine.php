@@ -115,11 +115,11 @@ final class LpdfEngine
         $fontSrcs = $method === 'render_pdf'
             ? self::xmlFontSrcs($inputStr)
             : self::jsonFontSrcs($inputStr);
-        foreach ($fontSrcs as $name => $path) {
-            if (!array_key_exists($name, $mergedFonts) && is_readable($path)) {
+        foreach ($fontSrcs as $key => $path) {
+            if (!array_key_exists($key, $mergedFonts) && is_readable($path)) {
                 $bytes = file_get_contents($path);
                 if ($bytes !== false) {
-                    $mergedFonts[$name] = $bytes;
+                    $mergedFonts[$key] = $bytes;
                 }
             }
         }
@@ -130,6 +130,19 @@ final class LpdfEngine
             $callOptions?->imageBytes  ?? [],
             $this->images,
         );
+
+        // Auto-load images declared via src= that haven't been explicitly provided.
+        $imageSrcs = $method === 'render_pdf'
+            ? self::xmlImageSrcs($inputStr)
+            : self::jsonImageSrcs($inputStr);
+        foreach ($imageSrcs as $key => $path) {
+            if (!array_key_exists($key, $mergedImages) && is_readable($path)) {
+                $bytes = file_get_contents($path);
+                if ($bytes !== false) {
+                    $mergedImages[$key] = $bytes;
+                }
+            }
+        }
 
         $payload = [
             'method' => $method,
@@ -199,7 +212,7 @@ final class LpdfEngine
         return $response['xml'];
     }
 
-    /** @return array<string,string> Font name → file path from `<font name="…" src="…">` tags. */
+    /** @return array<string,string> Font ref??name → file path from `<font name="…" src="…">` tags. */
     private static function xmlFontSrcs(string $xml): array
     {
         $srcs = [];
@@ -207,20 +220,51 @@ final class LpdfEngine
         foreach ($m[0] as $tag) {
             if (preg_match('/\bname="([^"]*)"/', $tag, $nm) &&
                 preg_match('/\bsrc="([^"]*)"/', $tag, $src)) {
-                $srcs[$nm[1]] = $src[1];
+                $key = preg_match('/\bref="([^"]*)"/', $tag, $ref) ? $ref[1] : $nm[1];
+                $srcs[$key] = $src[1];
             }
         }
         return $srcs;
     }
 
-    /** @return array<string,string> Font name → file path from a serialised tree's `tokens.fonts`. */
+    /** @return array<string,string> Image ref??name → file path from `<image name="…" src="…">` tags. */
+    private static function xmlImageSrcs(string $xml): array
+    {
+        $srcs = [];
+        preg_match_all('/<image\s[^>]*>/', $xml, $m);
+        foreach ($m[0] as $tag) {
+            if (preg_match('/\bname="([^"]*)"/', $tag, $nm) &&
+                preg_match('/\bsrc="([^"]*)"/', $tag, $src)) {
+                $key = preg_match('/\bref="([^"]*)"/', $tag, $ref) ? $ref[1] : $nm[1];
+                $srcs[$key] = $src[1];
+            }
+        }
+        return $srcs;
+    }
+
+    /** @return array<string,string> Font ref??name → file path from a serialised tree's `tokens.fonts`. */
     private static function jsonFontSrcs(string $json): array
     {
         $srcs = [];
         $doc  = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
         foreach ($doc['attrs']['tokens']['fonts'] ?? [] as $name => $def) {
             if (isset($def['src'])) {
-                $srcs[$name] = $def['src'];
+                $key = $def['ref'] ?? $name;
+                $srcs[$key] = $def['src'];
+            }
+        }
+        return $srcs;
+    }
+
+    /** @return array<string,string> Image ref??name → file path from a serialised tree's `tokens.images`. */
+    private static function jsonImageSrcs(string $json): array
+    {
+        $srcs = [];
+        $doc  = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        foreach ($doc['attrs']['tokens']['images'] ?? [] as $name => $def) {
+            if (isset($def['src'])) {
+                $key = $def['ref'] ?? $name;
+                $srcs[$key] = $def['src'];
             }
         }
         return $srcs;

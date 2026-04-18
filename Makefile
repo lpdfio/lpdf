@@ -183,8 +183,6 @@ example-dotnet:
 	@echo ">>> Running .NET example..."
 	@echo ""
 	dotnet run --project src/adapters/dotnet/example/LpdfExample.csproj
-	dotnet run --project src/adapters/dotnet/example/LpdfEncryptPermissionsOnly.csproj
-	dotnet run --project src/adapters/dotnet/example/LpdfEncryptOpenPassword.csproj
 
 example-php:
 	@echo ""

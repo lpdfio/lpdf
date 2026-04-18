@@ -157,7 +157,7 @@ describe('kitToXml', () => {
     assert(xml.includes('<lpdf version="1">'), 'missing <lpdf version="1">');
   });
 
-  it('places builtin font in <assets><fonts> with core= attribute', () => {
+  it('places builtin font in <assets> (flat) with core= attribute', () => {
     const document = LpdfKit.document({
       nodes: [LpdfKit.page({ nodes: [] })],
       options: {
@@ -168,19 +168,19 @@ describe('kitToXml', () => {
     });
     const xml = kitToXml(document);
     assert(xml.includes('<assets>'), 'missing <assets>');
-    assert(xml.includes('<fonts>'), 'missing <fonts>');
+    assert(!xml.includes('<fonts>'), '<fonts> wrapper must not appear in flat structure');
+    assert(xml.includes('<font '), 'missing <font> element');
     assert(xml.includes('core="Helvetica-Bold"'), 'missing core= attribute');
-    assert(!xml.includes('<tokens>') || !xml.includes('<fonts>') || (() => {
-      // Fonts must NOT appear inside <tokens> — only inside <assets>
-      const tokensStart = xml.indexOf('<tokens>');
-      const tokensEnd   = xml.indexOf('</tokens>');
-      if (tokensStart === -1) return true;
-      const fontsInTokens = xml.indexOf('<fonts>', tokensStart);
-      return fontsInTokens === -1 || fontsInTokens > tokensEnd;
-    })(), 'fonts incorrectly placed inside <tokens>');
+    // Fonts must NOT appear inside <tokens>
+    const tokensStart = xml.indexOf('<tokens>');
+    const tokensEnd   = xml.indexOf('</tokens>');
+    if (tokensStart !== -1) {
+      const fontInTokens = xml.indexOf('<font ', tokensStart);
+      assert(fontInTokens === -1 || fontInTokens > tokensEnd, 'font incorrectly placed inside <tokens>');
+    }
   });
 
-  it('places custom font src in <assets><fonts> with ref= attribute', () => {
+  it('places custom font src in <assets> (flat) with ref= and src= attributes', () => {
     const document = LpdfKit.document({
       nodes: [LpdfKit.page({ nodes: [] })],
       options: {
@@ -191,7 +191,7 @@ describe('kitToXml', () => {
     });
     const xml = kitToXml(document);
     assert(xml.includes('ref="body"'), 'custom font should use alias name as ref=');
-    assert(!xml.includes('src='), 'src= path must not appear in XML (only ref= alias)');
+    assert(xml.includes('src='), 'src= path should appear in XML (preserved for adapter auto-loading)');
   });
 
   it('emits text tokens inside <tokens>', () => {

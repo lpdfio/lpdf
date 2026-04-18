@@ -15,7 +15,7 @@
     <meta title="Resume — Jane Doe" author="Jane Doe" />
     <pages>
       <page margin="0pt 18pt 0pt 0pt">
-        <split gap="0pt" align="stretch" height="full">
+        <split gap="0pt" height="full">
 
           <!-- sidebar -->
           <stack width="170pt" background="surface-alt" height="full">

@@ -58,15 +58,17 @@ function getEngine(licenseKey) {
     _engineKey = licenseKey;
     return _engine;
 }
-function extractFontSrcs(xml) {
+function extractAssetSrcs(xml, tag) {
     const result = new Map();
-    // Use [\s\S]*? (dotAll equivalent) to match multi-line tags; support both quote styles.
-    for (const match of xml.matchAll(/<font\b[\s\S]*?>/g)) {
-        const tag = match[0];
-        const name = /\bname=["']([^"']*)["|']/.exec(tag)?.[1];
-        const src = /\bsrc=["']([^"']*)["|']/.exec(tag)?.[1];
-        if (name && src) {
-            result.set(name, src);
+    const re = tag === 'font' ? /<font\b[\s\S]*?>/g : /<image\b[\s\S]*?>/g;
+    for (const match of xml.matchAll(re)) {
+        const t = match[0];
+        const name = /\bname=["']([^"']*)["']/.exec(t)?.[1];
+        const ref = /\bref=["']([^"']*)["']/.exec(t)?.[1];
+        const src = /\bsrc=["']([^"']*)["']/.exec(t)?.[1];
+        const key = ref ?? name;
+        if (key && src) {
+            result.set(key, src);
         }
     }
     return result;
@@ -74,12 +76,19 @@ function extractFontSrcs(xml) {
 worker_threads_1.parentPort.on('message', ({ id, xml, licenseKey, xmlDir }) => {
     try {
         const engine = getEngine(licenseKey);
-        for (const [name, src] of extractFontSrcs(xml)) {
+        for (const [key, src] of extractAssetSrcs(xml, 'font')) {
             const fontPath = path.isAbsolute(src) ? src : path.join(xmlDir, src);
             try {
-                engine.load_font(name, fs.readFileSync(fontPath));
+                engine.load_font(key, fs.readFileSync(fontPath));
             }
             catch { /* fall back to built-in */ }
+        }
+        for (const [key, src] of extractAssetSrcs(xml, 'image')) {
+            const imgPath = path.isAbsolute(src) ? src : path.join(xmlDir, src);
+            try {
+                engine.load_image(key, fs.readFileSync(imgPath));
+            }
+            catch { /* skip unresolvable image */ }
         }
         const rawBytes = engine.render_pdf(xml);
         // Copy into a new buffer to guarantee we own the ArrayBuffer before transferring.

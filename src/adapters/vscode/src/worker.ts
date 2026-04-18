@@ -5,6 +5,7 @@ import * as path from 'node:path';
 interface IWasmEngine {
   render_pdf(xml: string): Uint8Array;
   load_font(name: string, bytes: Uint8Array): void;
+  load_image(name: string, bytes: Uint8Array): void;
   free(): void;
 }
 interface IWasmModule {
@@ -41,14 +42,16 @@ function getEngine(licenseKey: string): IWasmEngine {
   return _engine;
 }
 
-function extractFontSrcs(xml: string): Map<string, string> {
+function extractAssetSrcs(xml: string, tag: 'font' | 'image'): Map<string, string> {
   const result = new Map<string, string>();
-  // Use [\s\S]*? (dotAll equivalent) to match multi-line tags; support both quote styles.
-  for (const match of xml.matchAll(/<font\b[\s\S]*?>/g)) {
-    const tag  = match[0];
-    const name = /\bname=["']([^"']*)["|']/.exec(tag)?.[1];
-    const src  = /\bsrc=["']([^"']*)["|']/.exec(tag)?.[1];
-    if (name && src) { result.set(name, src); }
+  const re = tag === 'font' ? /<font\b[\s\S]*?>/g : /<image\b[\s\S]*?>/g;
+  for (const match of xml.matchAll(re)) {
+    const t    = match[0];
+    const name = /\bname=["']([^"']*)["']/.exec(t)?.[1];
+    const ref  = /\bref=["']([^"']*)["']/.exec(t)?.[1];
+    const src  = /\bsrc=["']([^"']*)["']/.exec(t)?.[1];
+    const key  = ref ?? name;
+    if (key && src) { result.set(key, src); }
   }
   return result;
 }
@@ -56,9 +59,13 @@ function extractFontSrcs(xml: string): Map<string, string> {
 parentPort!.on('message', ({ id, xml, licenseKey, xmlDir }: RenderRequest) => {
   try {
     const engine = getEngine(licenseKey);
-    for (const [name, src] of extractFontSrcs(xml)) {
+    for (const [key, src] of extractAssetSrcs(xml, 'font')) {
       const fontPath = path.isAbsolute(src) ? src : path.join(xmlDir, src);
-      try { engine.load_font(name, fs.readFileSync(fontPath)); } catch { /* fall back to built-in */ }
+      try { engine.load_font(key, fs.readFileSync(fontPath)); } catch { /* fall back to built-in */ }
+    }
+    for (const [key, src] of extractAssetSrcs(xml, 'image')) {
+      const imgPath = path.isAbsolute(src) ? src : path.join(xmlDir, src);
+      try { engine.load_image(key, fs.readFileSync(imgPath)); } catch { /* skip unresolvable image */ }
     }
     const rawBytes = engine.render_pdf(xml);
     // Copy into a new buffer to guarantee we own the ArrayBuffer before transferring.

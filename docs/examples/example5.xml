@@ -19,7 +19,7 @@
     <pages>
       <page background="surface">
 
-        <split gap="0pt" align="stretch" height="full">
+        <split gap="0pt" height="full">
 
           <!-- main ticket body -->
           <stack padding="m" gap="s" height="full" justify="between">

@@ -15,9 +15,23 @@ def _extract_xml_font_srcs(xml: str) -> dict[str, str]:
     srcs = {}
     for tag in re.findall(r'<font\s[^>]*>', xml):
         name = re.search(r'\bname="([^"]*)"', tag)
+        ref  = re.search(r'\bref="([^"]*)"',  tag)
         src  = re.search(r'\bsrc="([^"]*)"',  tag)
         if name and src:
-            srcs[name.group(1)] = src.group(1)
+            key = ref.group(1) if ref else name.group(1)
+            srcs[key] = src.group(1)
+    return srcs
+
+
+def _extract_xml_image_srcs(xml: str) -> dict[str, str]:
+    srcs = {}
+    for tag in re.findall(r'<image\s[^>]*>', xml):
+        name = re.search(r'\bname="([^"]*)"', tag)
+        ref  = re.search(r'\bref="([^"]*)"',  tag)
+        src  = re.search(r'\bsrc="([^"]*)"',  tag)
+        if name and src:
+            key = ref.group(1) if ref else name.group(1)
+            srcs[key] = src.group(1)
     return srcs
 
 
@@ -94,18 +108,20 @@ class LpdfEngine:
         if input_dict is not None:
             tree_fonts = ((input_dict.get("attrs") or {}).get("tokens") or {}).get("fonts") or {}
             for name, def_ in tree_fonts.items():
-                if isinstance(def_, dict) and "src" in def_ and name not in merged_fonts:
-                    try:
-                        with open(def_["src"], "rb") as fh:
-                            merged_fonts[name] = fh.read()
-                    except OSError:
-                        pass
+                if isinstance(def_, dict) and "src" in def_:
+                    key = def_.get("ref") or name
+                    if key not in merged_fonts:
+                        try:
+                            with open(def_["src"], "rb") as fh:
+                                merged_fonts[key] = fh.read()
+                        except OSError:
+                            pass
         else:
-            for name, src in _extract_xml_font_srcs(input_str).items():
-                if name not in merged_fonts:
+            for key, src in _extract_xml_font_srcs(input_str).items():
+                if key not in merged_fonts:
                     try:
                         with open(src, "rb") as fh:
-                            merged_fonts[name] = fh.read()
+                            merged_fonts[key] = fh.read()
                     except OSError:
                         pass
 
@@ -126,6 +142,27 @@ class LpdfEngine:
         if call_options and call_options.image_bytes:
             merged_images.update(call_options.image_bytes)
         merged_images.update(self._images)
+
+        # Auto-load images declared via src= that haven't been explicitly provided.
+        if input_dict is not None:
+            tree_images = ((input_dict.get("attrs") or {}).get("tokens") or {}).get("images") or {}
+            for name, def_ in tree_images.items():
+                if isinstance(def_, dict) and "src" in def_:
+                    key = def_.get("ref") or name
+                    if key not in merged_images:
+                        try:
+                            with open(def_["src"], "rb") as fh:
+                                merged_images[key] = fh.read()
+                        except OSError:
+                            pass
+        else:
+            for key, src in _extract_xml_image_srcs(input_str).items():
+                if key not in merged_images:
+                    try:
+                        with open(src, "rb") as fh:
+                            merged_images[key] = fh.read()
+                    except OSError:
+                        pass
 
         if merged_images:
             payload["images"] = {

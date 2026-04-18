@@ -165,11 +165,11 @@ export class LpdfEngine {
     let pdf: Uint8Array;
     try {
       if (typeof input === 'string') {
-        // XML path — auto-load fonts declared via <font src="…">.
+        // XML path — auto-load fonts and images declared via src="…".
         const xml = input;
-        for (const [name, src] of extractFontSrcs(xml)) {
-          if (!allFonts.has(name)) {
-            try { allFonts.set(name, readFileSync(src)); } catch { /* not found; Rust falls back to Helvetica */ }
+        for (const [key, src] of extractAssetSrcs(xml, 'font')) {
+          if (!allFonts.has(key)) {
+            try { allFonts.set(key, readFileSync(src)); } catch { /* not found; Rust falls back to Helvetica */ }
           }
         }
         for (const [name, bytes] of allFonts) {
@@ -177,6 +177,12 @@ export class LpdfEngine {
         }
         for (const [name, bytes] of this._images) {
           engine.load_image(name, bytes);
+        }
+        // Auto-load images declared via <image src="…"> that weren't pre-loaded.
+        for (const [key, src] of extractAssetSrcs(xml, 'image')) {
+          if (!this._images.has(key)) {
+            try { engine.load_image(key, readFileSync(src)); } catch { /* skip unresolvable image */ }
+          }
         }
         if (this._encrypt) {
           const permsJson = JSON.stringify(this._encrypt.permissions ?? {});
@@ -186,9 +192,9 @@ export class LpdfEngine {
       } else {
         // JSON (Kit tree) path — pass JSON directly to render_tree_pdf.
         const json = JSON.stringify(input);
-        for (const [name, src] of extractFontSrcsFromJson(json)) {
-          if (!allFonts.has(name)) {
-            try { allFonts.set(name, readFileSync(src)); } catch { /* not found; Rust falls back to Helvetica */ }
+        for (const [key, src] of extractFontSrcsFromJson(json)) {
+          if (!allFonts.has(key)) {
+            try { allFonts.set(key, readFileSync(src)); } catch { /* not found; Rust falls back to Helvetica */ }
           }
         }
         for (const [name, bytes] of allFonts) {
@@ -215,26 +221,32 @@ export class LpdfEngine {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Extract `name → src` pairs from `<font name="…" src="…">` tags in XML. */
-function extractFontSrcs(xml: string): Map<string, string> {
+/** Extract `ref??name → src` pairs from `<font>` or `<image>` tags in XML. */
+function extractAssetSrcs(xml: string, tag: 'font' | 'image'): Map<string, string> {
   const result = new Map<string, string>();
-  for (const match of xml.matchAll(/<font\s[^>]*>/g)) {
-    const tag  = match[0];
-    const name = /\bname="([^"]*)"/.exec(tag)?.[1];
-    const src  = /\bsrc="([^"]*)"/.exec(tag)?.[1];
-    if (name && src) result.set(name, src);
+  const re = tag === 'font' ? /<font\s[^>]*>/g : /<image\s[^>]*>/g;
+  for (const match of xml.matchAll(re)) {
+    const t    = match[0];
+    const name = /\bname="([^"]*)"/.exec(t)?.[1];
+    const ref  = /\bref="([^"]*)"/.exec(t)?.[1];
+    const src  = /\bsrc="([^"]*)"/.exec(t)?.[1];
+    const key  = ref ?? name;
+    if (key && src) result.set(key, src);
   }
   return result;
 }
 
-/** Extract `name → src` pairs from `attrs.tokens.fonts[name].src` in a kit JSON string. */
+/** Extract `ref??name → src` pairs from `attrs.tokens.fonts[name].src` in a kit JSON string. */
 function extractFontSrcsFromJson(json: string): Map<string, string> {
   const result = new Map<string, string>();
   try {
     const doc = JSON.parse(json);
     const fonts = doc?.attrs?.tokens?.fonts ?? {};
-    for (const [name, def] of Object.entries(fonts as Record<string, { src?: string }>)) {
-      if (def.src) result.set(name, def.src);
+    for (const [name, def] of Object.entries(fonts as Record<string, { ref?: string; src?: string }>)) {
+      if (def.src) {
+        const key = def.ref ?? name;
+        result.set(key, def.src);
+      }
     }
   } catch { /* ignore */ }
   return result;

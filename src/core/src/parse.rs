@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use crate::tokens::{parse_pt, FontDef, FontWidths, Tokens};
 
 // ── Resolved document model (layout / render operate on these) ────────────────
@@ -7,7 +7,7 @@ use crate::tokens::{parse_pt, FontDef, FontWidths, Tokens};
 pub struct Document {
     pub meta:        Meta,
     pub fonts:       HashMap<String, FontDef>,
-    pub images:      HashSet<String>,
+    pub images:      HashMap<String, String>,
     pub pages:       Vec<Page>,
     /// Caller-supplied glyph width tables for custom fonts (tree path or
     /// injected via `set_font_metrics` before the WASM call).
@@ -288,7 +288,7 @@ struct ParsedDocument {
     meta:        Meta,
     fonts:       HashMap<String, FontDef>,
     font_widths: HashMap<String, FontWidths>,
-    images:      HashSet<String>,
+    images:      HashMap<String, String>,
     pages:       Vec<ParsedPage>,
     doc_font:    Option<String>, // from <document font="...">
 }
@@ -501,8 +501,8 @@ pub fn parse(xml: &str) -> Result<Document, String> {
     }
 
     // ── Pass 0: collect <assets> ─────────────────────────────────────────────
-    let mut asset_fonts:  HashMap<String, FontDef> = HashMap::new();
-    let mut asset_images: HashSet<String>           = HashSet::new();
+    let mut asset_fonts:  HashMap<String, FontDef>   = HashMap::new();
+    let mut asset_images: HashMap<String, String>     = HashMap::new();
     for child in elems(&root) {
         if child.tag_name().name() == "assets" {
             parse_assets_elem(&child, &mut asset_fonts, &mut asset_images)?;
@@ -619,41 +619,35 @@ fn validate_asset_name(name: &str) -> Result<(), String> {
 fn parse_assets_elem(
     elem:         &roxmltree::Node,
     fonts:        &mut HashMap<String, FontDef>,
-    images:       &mut HashSet<String>,
+    images:       &mut HashMap<String, String>,
 ) -> Result<(), String> {
     for child in elems(elem) {
         match child.tag_name().name() {
-            "fonts" => {
-                for font_elem in elems(&child) {
-                    if font_elem.tag_name().name() == "font" {
-                        let name = req_attr(&font_elem, "name")?;
-                        validate_asset_name(&name)?;
-                        let def = if let Some(b) = font_elem.attribute("core") {
-                            FontDef::Core(b.to_string())
-                        } else if let Some(r) = font_elem.attribute("ref") {
-                            if is_url(r) {
-                                return Err(format!(
-                                    "<font name=\"{name}\"> ref must be a registry key, not a URL"
-                                ));
-                            }
-                            FontDef::Ref(r.to_string())
-                        } else {
-                            return Err(format!(
-                                "<font name=\"{name}\"> needs 'core' or 'ref'"
-                            ));
-                        };
-                        fonts.insert(name, def);
+            "font" => {
+                let name = req_attr(&child, "name")?;
+                validate_asset_name(&name)?;
+                let def = if let Some(b) = child.attribute("core") {
+                    FontDef::Core(b.to_string())
+                } else if let Some(r) = child.attribute("ref") {
+                    if is_url(r) {
+                        return Err(format!(
+                            "<font name=\"{name}\"> ref must be a registry key, not a URL"
+                        ));
                     }
-                }
+                    FontDef::Ref(r.to_string())
+                } else {
+                    // No ref: use name as the registry key.
+                    FontDef::Ref(name.clone())
+                };
+                // src is an adapter-level hint only — ignored by the Rust parser.
+                fonts.insert(name, def);
             }
-            "images" => {
-                for img_elem in elems(&child) {
-                    if img_elem.tag_name().name() == "image" {
-                        let name = req_attr(&img_elem, "name")?;
-                        validate_asset_name(&name)?;
-                        images.insert(name);
-                    }
-                }
+            "image" => {
+                let name = req_attr(&child, "name")?;
+                validate_asset_name(&name)?;
+                let key = child.attribute("ref").unwrap_or(&name).to_string();
+                // src is an adapter-level hint only — ignored by the Rust parser.
+                images.insert(name, key);
             }
             other => return Err(format!("unknown element in <assets>: <{other}>")),
         }
@@ -746,7 +740,7 @@ fn parse_page(
     doc_background: Option<String>,
     doc_debug:      bool,
     tokens:         &Tokens,
-    asset_images:   &HashSet<String>,
+    asset_images:   &HashMap<String, String>,
 ) -> Result<ParsedPage, String> {
     if elem.attribute("font-size").is_some() {
         return Err("<page> does not allow font-size".into());
@@ -791,7 +785,7 @@ fn parse_page_size(val: &str) -> Result<(f32, f32), String> {
 fn parse_node(
     elem:         &roxmltree::Node,
     tokens:       &Tokens,
-    asset_images: &HashSet<String>,
+    asset_images: &HashMap<String, String>,
 ) -> Result<ParsedNode, String> {
     let tag = elem.tag_name().name();
     let kind = match tag {
@@ -880,7 +874,7 @@ fn parse_node(
             );
         }
         NodeKind::Img => {
-            apply_img_attrs(&mut node, elem, asset_images, "<assets><images>")?;
+            apply_img_attrs(&mut node, elem, asset_images, "<assets>")?;
         }
         NodeKind::Barcode => {
             apply_barcode_attrs(&mut node, elem, tokens)?;
@@ -1152,14 +1146,16 @@ fn apply_layout_kind_attrs(
 fn apply_img_attrs(
     node:         &mut ParsedNode,
     a:            &impl Attrs,
-    asset_images: &HashSet<String>,
+    asset_images: &HashMap<String, String>,
     hint:         &str,
 ) -> Result<(), String> {
     let name = a.get("name")
         .ok_or_else(|| "<img> missing required attribute 'name'".to_string())?
         .to_string();
     validate_img_asset(&name, asset_images, hint)?;
-    node.image_name = Some(name);
+    // Store the registry key (ref ?? name) so the render engine can look up bytes.
+    let registry_key = asset_images.get(&name).unwrap().clone();
+    node.image_name = Some(registry_key);
     // `height` on <img> sets the display height constraint (not HeightMode).
     if let Some(v) = a.get("height") {
         node.img_height_constraint = Some(
@@ -1250,10 +1246,10 @@ fn apply_barcode_attrs(
 
 fn validate_img_asset(
     name:         &str,
-    asset_images: &HashSet<String>,
+    asset_images: &HashMap<String, String>,
     declare_hint: &str,
 ) -> Result<(), String> {
-    if !asset_images.contains(name) {
+    if !asset_images.contains_key(name) {
         return Err(format!(
             "<img name=\"{name}\"> references an unknown asset image; \
              declare it in {declare_hint}"
@@ -1334,7 +1330,7 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
 
     // ── Assets ────────────────────────────────────────────────────────────────
     let mut asset_fonts:       HashMap<String, FontDef>   = HashMap::new();
-    let mut asset_images:      HashSet<String>             = HashSet::new();
+    let mut asset_images:      HashMap<String, String>     = HashMap::new();
     let mut asset_font_widths: HashMap<String, FontWidths> = HashMap::new();
     if let Some(assets) = attrs.get("assets").and_then(|v| v.as_object()) {
         if let Some(fonts_obj) = assets.get("fonts").and_then(|v| v.as_object()) {
@@ -1359,8 +1355,11 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
             }
         }
         if let Some(images_obj) = assets.get("images").and_then(|v| v.as_object()) {
-            for (name, _) in images_obj {
-                asset_images.insert(name.clone());
+            for (name, def) in images_obj {
+                let key = def.get("ref").and_then(|v| v.as_str())
+                    .unwrap_or(name)
+                    .to_string();
+                asset_images.insert(name.clone(), key);
             }
         }
     }
@@ -1477,7 +1476,7 @@ fn parse_tree_page(
     doc_background: Option<String>,
     doc_debug:      bool,
     tokens:         &Tokens,
-    asset_images:   &HashSet<String>,
+    asset_images:   &HashMap<String, String>,
 ) -> Result<ParsedPage, String> {
     let mut size       = doc_size;
     let mut margin     = doc_margin;
@@ -1499,7 +1498,7 @@ fn parse_tree_page(
 fn parse_tree_node(
     json:         &serde_json::Value,
     tokens:       &Tokens,
-    asset_images: &HashSet<String>,
+    asset_images: &HashMap<String, String>,
 ) -> Result<ParsedNode, String> {
     let type_str = json.get("type").and_then(|v| v.as_str())
         .ok_or_else(|| "node missing 'type' field".to_string())?;
@@ -1716,9 +1715,7 @@ mod tests {
     fn font_inheritance_from_document() {
         let xml = r#"<lpdf version="1">
             <assets>
-                <fonts>
-                    <font name="body" core="Helvetica-Oblique"/>
-                </fonts>
+                <font name="body" core="Helvetica-Oblique"/>
             </assets>
             <document size="a4" font="body"><pages><page>
                 <text>Hello</text>
@@ -1746,9 +1743,7 @@ mod tests {
     fn img_node_registered() {
         let xml = r#"<lpdf version="1">
             <assets>
-                <images>
-                    <image name="logo"/>
-                </images>
+                <image name="logo"/>
             </assets>
             <document size="a4"><pages><page>
                 <img name="logo" width="100pt"/>

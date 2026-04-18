@@ -159,7 +159,7 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     let image_registry = build_image_registry(req);
 
     // Confirm every image declared in <assets> has bytes in the registry.
-    for name in &doc.images {
+    for (_alias, name) in &doc.images {
         if image_registry.get(name).is_none() {
             return serde_json::json!({
                 "error": format!("image '{name}' declared in <assets> but not loaded via loadImage()")

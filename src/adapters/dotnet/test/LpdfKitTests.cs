@@ -188,7 +188,10 @@ public class KitToXmlTests
         var xml    = await engine.KitToXml(doc);
 
         Assert.Contains("ref=\"body\"", xml);
-        Assert.DoesNotContain("src=",   xml);
+        // ref= must be the alias name, not the file path
+        Assert.DoesNotContain("ref=\"/fonts/MyFont.ttf\"", xml);
+        // src= must be preserved so adapters can auto-load the font bytes
+        Assert.Contains("src=", xml);
     }
 
     [Fact]

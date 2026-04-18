@@ -6,8 +6,8 @@
 /// `parse.rs`. A schema change only needs one Rust update.
 ///
 /// Key differences vs the legacy TypeScript `kitToXml`:
-/// - `tokens.fonts` with `builtin` → `<assets><fonts><font … core="…"/>` (valid XML)
-/// - `tokens.fonts` with `src`     → `<assets><fonts><font … ref="<alias>"/>` (valid XML)
+/// - `tokens.fonts` with `builtin` → `<assets><font … core="…"/>` (flat, valid XML)
+/// - `tokens.fonts` with `src`     → `<assets><font … ref="<alias>" src="…"/>` (flat, valid XML)
 /// - The `<tokens>` block never contains a `<fonts>` child (which `parse.rs`
 ///   would reject as an unknown element).
 use serde_json::Value;
@@ -91,49 +91,83 @@ fn render_tokens(tokens: &serde_json::Map<String, Value>, depth: usize) -> Strin
 
     // NOTE: tokens.fonts are intentionally NOT emitted inside <tokens> because
     // parse.rs rejects <fonts> as an unknown element there. They are emitted
-    // as <assets><fonts> instead (see render_assets below).
+    // as flat <font> children of <assets> instead (see render_assets below).
 
     lines.push(format!("{pad}</tokens>"));
     lines.join("\n")
 }
 
-// ── Assets block (fonts derived from tokens.fonts) ───────────────────────────
+// ── Assets block (fonts and images derived from tokens) ──────────────────────
 
 fn render_assets(tokens: &serde_json::Map<String, Value>, depth: usize) -> Option<String> {
-    let fonts = tokens.get("fonts").and_then(|v| v.as_object())?;
-    if fonts.is_empty() {
+    let fonts  = tokens.get("fonts") .and_then(|v| v.as_object());
+    let images = tokens.get("images").and_then(|v| v.as_object());
+    if fonts.map_or(true, |f| f.is_empty()) && images.map_or(true, |i| i.is_empty()) {
         return None;
     }
 
-    let pad       = "  ".repeat(depth);
-    let inner     = "  ".repeat(depth + 1);
-    let font_pad  = "  ".repeat(depth + 2);
-    let mut lines: Vec<String> = vec![
-        format!("{pad}<assets>"),
-        format!("{inner}<fonts>"),
-    ];
+    let pad      = "  ".repeat(depth);
+    let item_pad = "  ".repeat(depth + 1);
+    let mut lines: Vec<String> = vec![format!("{pad}<assets>")];
 
-    for (name, def) in fonts {
-        if let Some(obj) = def.as_object() {
-            if let Some(builtin) = obj.get("builtin").and_then(|v| v.as_str()) {
-                // builtin PDF core font → core= attribute
+    if let Some(fonts) = fonts {
+        for (name, def) in fonts {
+            if let Some(obj) = def.as_object() {
+                if let Some(builtin) = obj.get("builtin").and_then(|v| v.as_str()) {
+                    // builtin PDF core font → core= attribute
+                    lines.push(format!(
+                        "{item_pad}<font name=\"{}\" core=\"{}\"/>",
+                        escape_attr(name),
+                        escape_attr(builtin)
+                    ));
+                } else if let Some(src) = obj.get("src").and_then(|v| v.as_str()) {
+                    // custom font with src — preserve src= and emit ref= (alias == name)
+                    let ref_key = obj.get("ref").and_then(|v| v.as_str()).unwrap_or(name);
+                    lines.push(format!(
+                        "{item_pad}<font name=\"{}\" ref=\"{}\" src=\"{}\"/>",
+                        escape_attr(name),
+                        escape_attr(ref_key),
+                        escape_attr(src)
+                    ));
+                } else if let Some(ref_key) = obj.get("ref").and_then(|v| v.as_str()) {
+                    lines.push(format!(
+                        "{item_pad}<font name=\"{}\" ref=\"{}\"/>",
+                        escape_attr(name),
+                        escape_attr(ref_key)
+                    ));
+                }
+            }
+        }
+    }
+
+    if let Some(images) = images {
+        for (name, def) in images {
+            let ref_key = def.get("ref").and_then(|v| v.as_str()).unwrap_or(name);
+            if let Some(src) = def.get("src").and_then(|v| v.as_str()) {
+                if ref_key == name {
+                    lines.push(format!(
+                        "{item_pad}<image name=\"{}\" src=\"{}\"/>",
+                        escape_attr(name),
+                        escape_attr(src)
+                    ));
+                } else {
+                    lines.push(format!(
+                        "{item_pad}<image name=\"{}\" ref=\"{}\" src=\"{}\"/>",
+                        escape_attr(name),
+                        escape_attr(ref_key),
+                        escape_attr(src)
+                    ));
+                }
+            } else {
                 lines.push(format!(
-                    "{font_pad}<font name=\"{}\" core=\"{}\"/>",
+                    "{item_pad}<image name=\"{}\" ref=\"{}\"/>",
                     escape_attr(name),
-                    escape_attr(builtin)
-                ));
-            } else if obj.contains_key("src") {
-                // custom loaded font — use the alias name as the registry ref
-                lines.push(format!(
-                    "{font_pad}<font name=\"{}\" ref=\"{}\"/>",
-                    escape_attr(name),
-                    escape_attr(name)
+                    escape_attr(ref_key)
                 ));
             }
         }
     }
 
-    lines.push(format!("{inner}</fonts>"));
     lines.push(format!("{pad}</assets>"));
     Some(lines.join("\n"))
 }
@@ -464,10 +498,12 @@ mod tests {
         }"#;
         let xml = kit_to_xml(json).unwrap();
 
-        // ref= must be the alias name, not the file path
+        // ref= must be the alias name ("body"), not the file path
         assert!(xml.contains(r#"ref="body""#), "expected ref=\"body\"");
-        // The file path must NOT appear in the output
-        assert!(!xml.contains("/fonts/MyFont.ttf"), "file path must not appear in XML");
+        // ref= must NOT be the file path
+        assert!(!xml.contains(r#"ref="/fonts/MyFont.ttf""#), "ref must not be the file path");
+        // src= should be preserved so adapters can auto-load the font bytes
+        assert!(xml.contains("src="), "expected src= to be preserved");
     }
 
     #[test]

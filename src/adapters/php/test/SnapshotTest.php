@@ -67,13 +67,15 @@ final class SnapshotTest extends TestCase
         ));
         $xml = LpdfEngine::kitToXml($doc);
         self::assertStringContainsString('<assets>', $xml);
+        self::assertStringNotContainsString('<fonts>', $xml, '<fonts> wrapper must not appear in flat structure');
+        self::assertStringContainsString('<font ', $xml);
         self::assertStringContainsString('core="Helvetica-Bold"', $xml);
         // Font must NOT appear inside <tokens>
         $tokensStart = strpos($xml, '<tokens>');
         $tokensEnd   = strpos($xml, '</tokens>');
-        $fontsInTokens = strpos($xml, '<fonts>', $tokensStart ?: 0);
+        $fontInTokens = strpos($xml, '<font ', $tokensStart ?: 0);
         self::assertTrue(
-            $tokensStart === false || $fontsInTokens === false || $fontsInTokens > $tokensEnd,
+            $tokensStart === false || $fontInTokens === false || $fontInTokens > $tokensEnd,
             'Font was incorrectly placed inside <tokens>',
         );
     }
@@ -85,7 +87,7 @@ final class SnapshotTest extends TestCase
         ));
         $xml = LpdfEngine::kitToXml($doc);
         self::assertStringContainsString('ref="body"', $xml);
-        self::assertStringNotContainsString('src=', $xml);
+        self::assertStringContainsString('src=', $xml, 'src= path should appear in XML (preserved for adapter auto-loading)');
     }
 
     public function testKitToXmlProducedXmlRendersToValidPdf(): void
