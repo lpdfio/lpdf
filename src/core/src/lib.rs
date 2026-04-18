@@ -187,7 +187,7 @@ impl LpdfEngine {
         .map_err(|e| JsValue::from_str(&e))?;
 
         let bytes = match &self.encrypt {
-            Some(cfg) => encrypt::encrypt_pdf(&bytes, cfg),
+            Some(cfg) => encrypt::encrypt_pdf(&bytes, cfg).map_err(|e| JsValue::from_str(&e))?,
             None      => bytes,
         };
         Ok(bytes)
@@ -256,7 +256,7 @@ impl LpdfEngine {
         .map_err(|e| JsValue::from_str(&e))?;
 
         let bytes = match &self.encrypt {
-            Some(cfg) => encrypt::encrypt_pdf(&bytes, cfg),
+            Some(cfg) => encrypt::encrypt_pdf(&bytes, cfg).map_err(|e| JsValue::from_str(&e))?,
             None      => bytes,
         };
         Ok(bytes)

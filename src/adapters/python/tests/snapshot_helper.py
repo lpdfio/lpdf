@@ -8,7 +8,13 @@ import hashlib
 import os
 from pathlib import Path
 
-ROOT      = Path("/app")
+# Walk up from this file: tests/ → python/ → adapters/ → src/ → workspace root
+# Accept a directory that has Cargo.toml (native) OR test/snapshots (Docker).
+_here = Path(__file__).resolve()
+ROOT  = next(
+    p for p in _here.parents
+    if (p / "Cargo.toml").exists() or (p / "test" / "snapshots").is_dir()
+)
 FIXTURES  = ROOT / "test" / "fixtures"
 SNAPSHOTS = ROOT / "test" / "snapshots"
 
@@ -16,6 +22,7 @@ EXAMPLES = [
     *[f"example{i}" for i in range(1, 12)],
     "showcase-cluster", "showcase-flank", "showcase-frame",
     "showcase-grid", "showcase-split", "showcase-stack",
+    "showcase-table", "showcase-barcode", "showcase-encryption", "showcase-forms",
 ]
 
 

@@ -156,3 +156,78 @@ class TestKitToXml:
         doc = document(nodes=[page(nodes=[])], options=DocumentOptions())
         with pytest.raises(LpdfRenderError, match="invalid kit JSON"):
             LpdfEngine.kit_to_xml(doc)
+
+
+class TestEncryption:
+    @patch("lpdf.wasm_runner.subprocess.run")
+    def test_encrypt_payload_sent(self, mock_run):
+        mock_run.return_value = _mock_subprocess_run()
+
+        engine = LpdfEngine("key")
+        engine.set_encryption("", "s3cr3t", {"print": False})
+        engine.render_pdf("<doc/>")
+
+        payload = json.loads(mock_run.call_args.kwargs["input"] if "input" in mock_run.call_args.kwargs else mock_run.call_args[1]["input"])
+        assert "encrypt" in payload
+        assert payload["encrypt"]["user_password"] == ""
+        assert payload["encrypt"]["owner_password"] == "s3cr3t"
+        assert payload["encrypt"]["permissions"] == {"print": False}
+
+    @patch("lpdf.wasm_runner.subprocess.run")
+    def test_clear_encryption_removes_payload(self, mock_run):
+        mock_run.return_value = _mock_subprocess_run()
+
+        engine = LpdfEngine("key")
+        engine.set_encryption("user", "owner")
+        engine.clear_encryption()
+        engine.render_pdf("<doc/>")
+
+        payload = json.loads(mock_run.call_args.kwargs["input"] if "input" in mock_run.call_args.kwargs else mock_run.call_args[1]["input"])
+        assert "encrypt" not in payload
+
+    @patch("lpdf.wasm_runner.subprocess.run")
+    def test_encrypt_defaults_to_empty_permissions(self, mock_run):
+        mock_run.return_value = _mock_subprocess_run()
+
+        engine = LpdfEngine("key")
+        engine.set_encryption("", "owner")
+        engine.render_pdf("<doc/>")
+
+        payload = json.loads(mock_run.call_args.kwargs["input"] if "input" in mock_run.call_args.kwargs else mock_run.call_args[1]["input"])
+        assert payload["encrypt"]["permissions"] == {}
+
+
+class TestLoadImage:
+    @patch("lpdf.wasm_runner.subprocess.run")
+    def test_image_sent_in_payload(self, mock_run):
+        mock_run.return_value = _mock_subprocess_run()
+
+        engine = LpdfEngine("key")
+        engine.load_image("logo", b"\x89PNG")
+        engine.render_pdf("<doc/>")
+
+        payload = json.loads(mock_run.call_args.kwargs["input"] if "input" in mock_run.call_args.kwargs else mock_run.call_args[1]["input"])
+        assert "images" in payload
+        assert payload["images"]["logo"] == base64.b64encode(b"\x89PNG").decode()
+
+    @patch("lpdf.wasm_runner.subprocess.run")
+    def test_load_image_via_render_options(self, mock_run):
+        mock_run.return_value = _mock_subprocess_run()
+
+        engine = LpdfEngine("key", options=RenderOptions(image_bytes={"bg": b"imgdata"}))
+        engine.render_pdf("<doc/>")
+
+        payload = json.loads(mock_run.call_args.kwargs["input"] if "input" in mock_run.call_args.kwargs else mock_run.call_args[1]["input"])
+        assert "images" in payload
+        assert payload["images"]["bg"] == base64.b64encode(b"imgdata").decode()
+
+    @patch("lpdf.wasm_runner.subprocess.run")
+    def test_load_image_instance_takes_precedence_over_options(self, mock_run):
+        mock_run.return_value = _mock_subprocess_run()
+
+        engine = LpdfEngine("key", options=RenderOptions(image_bytes={"logo": b"opts-version"}))
+        engine.load_image("logo", b"loaded-version")
+        engine.render_pdf("<doc/>")
+
+        payload = json.loads(mock_run.call_args.kwargs["input"] if "input" in mock_run.call_args.kwargs else mock_run.call_args[1]["input"])
+        assert payload["images"]["logo"] == base64.b64encode(b"loaded-version").decode()

@@ -100,6 +100,31 @@ describe('LpdfEngine', () => {
     assert.equal(header, '%PDF-');
   });
 
+  it('setEncryption produces a valid encrypted PDF', async () => {
+    const lpdf = new LpdfEngine('test-key');
+    lpdf.setEncryption({ userPassword: '', ownerPassword: 's3cr3t' });
+    const bytes = await lpdf.renderPdf(doc(''));
+    const header = Buffer.from(bytes.slice(0, 5)).toString('ascii');
+    assert.equal(header, '%PDF-');
+    // Encrypted PDFs contain the /Encrypt dictionary entry
+    const text = Buffer.from(bytes).toString('latin1');
+    assert(text.includes('/Encrypt'), 'encrypted PDF should contain /Encrypt entry');
+  });
+
+  it('loadImage does not throw and produces a valid PDF', async () => {
+    // A minimal 1×1 white PNG (grayscale, 1-bit depth)
+    const png1x1 = Buffer.from(
+      '89504e470d0a1a0a0000000d49484452000000010000000108000000003a7e9b55' +
+      '0000000a49444154789c6260000000020001e221bc330000000049454e44ae426082',
+      'hex',
+    );
+    const lpdf = new LpdfEngine('test-key');
+    lpdf.loadImage('testimg', png1x1);
+    const bytes = await lpdf.renderPdf(doc(''));
+    const header = Buffer.from(bytes.slice(0, 5)).toString('ascii');
+    assert.equal(header, '%PDF-');
+  });
+
 });
 
 // ── Snapshot tests ────────────────────────────────────────────────────────────

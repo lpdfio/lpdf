@@ -146,8 +146,9 @@ public sealed class LpdfEngine : IDisposable
         ArgumentNullException.ThrowIfNull(xml);
         var merged = Merge(callOptions);
         var createdOn = callOptions?.CreatedOn ?? _opts.CreatedOn;
-        return Task.FromResult(
-            _wasm.RenderPdf(xml, _licenseKey, merged.FontBytes, merged.ImageBytes, merged.SrcFallback, BuildEncryptJson(), createdOn));
+        var encryptJson = BuildEncryptJson();
+        return Task.Run(() =>
+            _wasm.RenderPdf(xml, _licenseKey, merged.FontBytes, merged.ImageBytes, merged.SrcFallback, encryptJson, createdOn));
     }
 
     /// <summary>Render an <see cref="LpdfDocument"/> tree (built with <see cref="LpdfKit"/>) to PDF bytes.</summary>
@@ -160,8 +161,9 @@ public sealed class LpdfEngine : IDisposable
         var merged = Merge(callOptions);
         var json   = JsonSerializer.Serialize(document, LpdfDocumentJson.Options);
         var createdOn = callOptions?.CreatedOn ?? _opts.CreatedOn;
-        return Task.FromResult(
-            _wasm.RenderTreePdf(json, _licenseKey, merged.FontBytes, merged.ImageBytes, merged.SrcFallback, BuildEncryptJson(), createdOn));
+        var encryptJson = BuildEncryptJson();
+        return Task.Run(() =>
+            _wasm.RenderTreePdf(json, _licenseKey, merged.FontBytes, merged.ImageBytes, merged.SrcFallback, encryptJson, createdOn));
     }
 
     /// <summary>
@@ -177,7 +179,7 @@ public sealed class LpdfEngine : IDisposable
     {
         ArgumentNullException.ThrowIfNull(document);
         var json = JsonSerializer.Serialize(document, LpdfDocumentJson.Options);
-        return Task.FromResult(_wasm.KitToXml(json));
+        return Task.Run(() => _wasm.KitToXml(json));
     }
 
     // ── Internals ─────────────────────────────────────────────────────────────

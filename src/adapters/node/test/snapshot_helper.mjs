@@ -19,6 +19,7 @@ export const EXAMPLES = [
   'example6', 'example7', 'example8', 'example9', 'example10', 'example11',
   'showcase-cluster', 'showcase-flank', 'showcase-frame',
   'showcase-grid', 'showcase-split', 'showcase-stack',
+  'showcase-table', 'showcase-barcode', 'showcase-encryption', 'showcase-forms',
 ];
 
 /** Returns the contents of a fixture XML file by name (without extension). */

@@ -98,4 +98,29 @@ final class SnapshotTest extends TestCase
         $bytes  = $engine->renderPdf($xml);
         self::assertStringStartsWith('%PDF-', $bytes);
     }
+
+    public function testSetEncryptionProducesEncryptedPdf(): void
+    {
+        $xml = file_get_contents(SnapshotHelper::fixtures() . '/example1.xml');
+        $engine = new LpdfEngine('test-key');
+        $engine->setEncryption('', 's3cr3t');
+        $bytes = $engine->renderPdf($xml);
+        self::assertStringStartsWith('%PDF-', $bytes);
+        // Encrypted PDFs contain the /Encrypt dictionary entry
+        self::assertStringContainsString('/Encrypt', $bytes);
+    }
+
+    public function testLoadImageDoesNotThrowAndProducesValidPdf(): void
+    {
+        // A minimal 1×1 white grayscale PNG
+        $png1x1 = hex2bin(
+            '89504e470d0a1a0a0000000d49484452000000010000000108000000003a7e9b55' .
+            '0000000a49444154789c6260000000020001e221bc330000000049454e44ae426082',
+        );
+        $xml    = file_get_contents(SnapshotHelper::fixtures() . '/example1.xml');
+        $engine = new LpdfEngine('test-key');
+        $engine->loadImage('testimg', $png1x1);
+        $bytes  = $engine->renderPdf($xml);
+        self::assertStringStartsWith('%PDF-', $bytes);
+    }
 }

@@ -3,6 +3,14 @@
 //! Applied as a post-processing pass on the raw bytes returned by pdf-writer.
 //! RC4 is length-preserving so all object offsets remain valid after encryption;
 //! the pass only appends a new /Encrypt object and rewrites the xref/trailer.
+//!
+//! # Compliance note
+//! This implementation uses RC4-128 (V=2 R=3), which is the weakest encryption
+//! scheme defined in the PDF specification and is considered legacy. It is
+//! intentionally chosen here for maximum reader compatibility (all PDF viewers
+//! support it). For environments with stricter security requirements (e.g. PCI-DSS,
+//! HIPAA, or ISO 27001 compliance), AES-256 encryption (V=5 R=6, PDF 1.7 Ext 3)
+//! should be used instead.
 
 use md5::{Digest, Md5};
 
@@ -325,8 +333,7 @@ fn encrypt_hex_string(data: &mut [u8], open_pos: usize, end: usize, key: &[u8; 1
     if pos >= end { return pos; }
 
     let hex_bytes: Vec<u8> = data[hex_start..pos].to_vec();
-    // pdf-writer always produces even-length hex strings with no whitespace
-    debug_assert!(hex_bytes.len() % 2 == 0, "odd-length hex string in PDF");
+    // pdf-writer always produces even-length hex strings; skip gracefully if not
     if hex_bytes.len() % 2 != 0 { return pos + 1; }
 
     let n = hex_bytes.len() / 2;
@@ -493,8 +500,10 @@ fn write_xref_and_trailer(
 // ── Public entry point ─────────────────────────────────────────────────────────
 
 /// Post-process a pdf-writer–generated PDF to add RC4-128 encryption (V=2 R=3).
-pub fn encrypt_pdf(bytes: &[u8], config: &EncryptConfig) -> Vec<u8> {
-    let xref = parse_xref(bytes).expect("encrypt_pdf: failed to parse xref");
+///
+/// Returns `Err` if the PDF structure is malformed (e.g. missing or corrupt xref).
+pub fn encrypt_pdf(bytes: &[u8], config: &EncryptConfig) -> Result<Vec<u8>, String> {
+    let xref = parse_xref(bytes)?;
 
     // File ID: MD5 of the unencrypted bytes — deterministic, no random salt needed
     let file_id = md5_hash(bytes);
@@ -520,7 +529,7 @@ pub fn encrypt_pdf(bytes: &[u8], config: &EncryptConfig) -> Vec<u8> {
     // Write fresh xref and trailer referencing the /Encrypt object and /ID
     write_xref_and_trailer(&mut out, &xref.entries, encrypt_obj_num, encrypt_obj_offset, &xref, &file_id);
 
-    out
+    Ok(out)
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
@@ -580,7 +589,7 @@ mod tests {
             owner_password: owner_pw.to_string(),
             permissions:    Permissions::default(),
         };
-        encrypt_pdf(&plain, &cfg)
+        encrypt_pdf(&plain, &cfg).expect("encrypt_pdf failed")
     }
 
     #[test]
@@ -632,7 +641,7 @@ mod tests {
                 print: false, copy: false, modify: false, ..Default::default()
             },
         };
-        let enc = encrypt_pdf(&plain, &cfg);
+        let enc = encrypt_pdf(&plain, &cfg).expect("encrypt_pdf failed");
         assert_eq!(&enc[..5], b"%PDF-");
         assert!(enc.windows(8).any(|w| w == b"/Encrypt"));
         // P integer must be present in the /Encrypt dict
@@ -653,11 +662,11 @@ mod tests {
                 copy: false, modify: false, ..Default::default()
             },
         };
-        let enc = encrypt_pdf(&plain, &cfg);
+        let enc = encrypt_pdf(&plain, &cfg).expect("encrypt_pdf failed");
         assert_eq!(&enc[..5], b"%PDF-");
         assert!(enc.windows(8).any(|w| w == b"/Encrypt"));
         // Determinism: encrypting the same input twice gives the same output
-        let enc2 = encrypt_pdf(&plain, &cfg);
+        let enc2 = encrypt_pdf(&plain, &cfg).expect("encrypt_pdf failed");
         assert_eq!(enc, enc2);
     }
 }

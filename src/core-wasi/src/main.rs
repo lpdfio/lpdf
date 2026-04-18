@@ -217,7 +217,10 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
                     owner_password: owner_pw.to_string(),
                     permissions:    shared::parse_permissions_json(&perms_json),
                 };
-                encrypt::encrypt_pdf(&bytes, &cfg)
+                match encrypt::encrypt_pdf(&bytes, &cfg) {
+                    Ok(b)  => b,
+                    Err(e) => return serde_json::json!({ "error": e }).to_string(),
+                }
             } else {
                 bytes
             };
