@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 interface IWasmEngine {
-  render_pdf(xml: string): Uint8Array;
+  render_pdf(xml: string, json_data?: string | null): Uint8Array;
   load_font(name: string, bytes: Uint8Array): void;
   load_image(name: string, bytes: Uint8Array): void;
   free(): void;

@@ -69,6 +69,13 @@ public sealed class RenderOptions
     /// Omitting this keeps builds reproducible (no embedded timestamp).
     /// </summary>
     public string? CreatedOn { get; init; }
+
+    /// <summary>
+    /// Optional data object for resolving <c>data-*</c> binding attributes in the
+    /// XML template.  Pass <see langword="null"/> or omit to render with inline
+    /// fallback content.  Only applies when rendering an XML string.
+    /// </summary>
+    public object? Data { get; init; }
 }
 
 /// <summary>
@@ -147,8 +154,9 @@ public sealed class LpdfEngine : IDisposable
         var merged = Merge(callOptions);
         var createdOn = callOptions?.CreatedOn ?? _opts.CreatedOn;
         var encryptJson = BuildEncryptJson();
+        var dataJson = BuildDataJson(callOptions?.Data);
         return Task.Run(() =>
-            _wasm.RenderPdf(xml, _licenseKey, merged.FontBytes, merged.ImageBytes, merged.SrcFallback, encryptJson, createdOn));
+            _wasm.RenderPdf(xml, _licenseKey, merged.FontBytes, merged.ImageBytes, merged.SrcFallback, encryptJson, createdOn, dataJson));
     }
 
     /// <summary>Render an <see cref="LpdfDocument"/> tree (built with <see cref="LpdfKit"/>) to PDF bytes.</summary>
@@ -204,6 +212,12 @@ public sealed class LpdfEngine : IDisposable
                 print_hq      = p.PrintHq,
             },
         });
+    }
+
+    private static string? BuildDataJson(object? data)
+    {
+        if (data is null) return null;
+        return JsonSerializer.Serialize(data);
     }
 
     private RenderOptions Merge(RenderOptions? call)

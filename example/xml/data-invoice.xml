@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+  <assets>
+    <font name="body"    core="Helvetica"/>
+    <font name="heading" core="Helvetica-Bold"/>
+  </assets>
+  <document size="a4" margin="48pt" font="body">
+    <pages>
+      <page>
+        <stack gap="m">
+
+          <!-- header row: title + invoice number -->
+          <flank>
+            <text font="heading" font-size="20pt">Invoice</text>
+            <text data-value="invoice_number" align="right">INV-2026-001</text>
+          </flank>
+
+          <!-- customer details -->
+          <stack gap="xs">
+            <text font="heading" data-value="customer.name">Acme Inc</text>
+            <text data-value="customer.address">123 Main St</text>
+          </stack>
+
+          <divider/>
+
+          <!-- line items loop -->
+          <stack data-source="items" gap="xs">
+            <flank>
+              <text data-value="description">Consulting Services</text>
+              <text data-value="price" align="right">$1,200.00</text>
+            </flank>
+          </stack>
+
+          <divider/>
+
+          <!-- total -->
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="total" align="right" font="heading">$1,600.00</text>
+          </flank>
+
+          <!-- premium badge (conditional) -->
+          <frame data-if="customer.isPremium" background="#ffd700" padding="xs">
+            <text align="center">Premium Customer</text>
+          </frame>
+
+          <!-- standard badge (conditional) -->
+          <frame data-if-not="customer.isPremium" background="#f0f0f0" padding="xs">
+            <text align="center">Standard Customer</text>
+          </frame>
+
+        </stack>
+      </page>
+    </pages>
+  </document>
+</lpdf>

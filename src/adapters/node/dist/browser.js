@@ -79,19 +79,26 @@ var LpdfEngine = class {
    *
    * Any custom fonts referenced in `<font src="…">` declarations must have
    * their bytes registered via `load_font` before calling this method.
+   *
+   * `json_data` is an optional JSON string used to resolve `data-*`
+   * attributes in the template.  Pass `None` (or `null` / `undefined` from
+   * JavaScript) to render the template with its inline fallback content.
    * @param {string} xml
+   * @param {string | null} [json_data]
    * @returns {Uint8Array}
    */
-  render_pdf(xml) {
+  render_pdf(xml, json_data) {
     const ptr0 = passStringToWasm0(xml, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.lpdfengine_render_pdf(this.__wbg_ptr, ptr0, len0);
+    var ptr1 = isLikeNone(json_data) ? 0 : passStringToWasm0(json_data, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    var len1 = WASM_VECTOR_LEN;
+    const ret = wasm.lpdfengine_render_pdf(this.__wbg_ptr, ptr0, len0, ptr1, len1);
     if (ret[3]) {
       throw takeFromExternrefTable0(ret[2]);
     }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
+    return v3;
   }
   /**
    * @param {string} json
@@ -238,6 +245,9 @@ function getUint8ArrayMemory0() {
     cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer);
   }
   return cachedUint8ArrayMemory0;
+}
+function isLikeNone(x) {
+  return x === void 0 || x === null;
 }
 function passArray8ToWasm0(arg, malloc) {
   const ptr = malloc(arg.length * 1, 1) >>> 0;
@@ -541,7 +551,8 @@ async function initLpdf(wasmSource, licenseKey = "", initOptions = {}) {
       for (const [name, bytes] of imageMap) {
         engine.load_image(name, bytes);
       }
-      const pdf = engine.render_pdf(xml);
+      const dataJson = callOptions.data != null ? JSON.stringify(callOptions.data) : null;
+      const pdf = engine.render_pdf(xml, dataJson);
       engine.free();
       return pdf;
     }

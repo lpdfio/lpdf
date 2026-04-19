@@ -1,0 +1,13 @@
+{
+  "invoice_number": "INV-2026-001",
+  "customer": {
+    "name": "Acme Inc",
+    "address": "123 Main St, Springfield",
+    "isPremium": true
+  },
+  "items": [
+    { "description": "Consulting Services",  "price": "$1,200.00" },
+    { "description": "Design Review",        "price": "$400.00"   }
+  ],
+  "total": "$1,600.00"
+}

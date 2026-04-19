@@ -125,4 +125,40 @@ final class SnapshotTest extends TestCase
         $bytes  = $engine->renderPdf($xml);
         self::assertStringStartsWith('%PDF-', $bytes);
     }
+
+    // ── Data binding ──────────────────────────────────────────────────────────
+
+    private static function minDoc(string $body): string
+    {
+        return '<lpdf version="1"><document><pages><page>' . $body . '</page></pages></document></lpdf>';
+    }
+
+    public function testDataValueSubstitutesScalar(): void
+    {
+        $xml  = self::minDoc('<text data-value="name">Fallback</text>');
+        $bytes = (new LpdfEngine('test-key'))->renderPdf($xml, null, ['name' => 'Acme Inc']);
+        self::assertStringStartsWith('%PDF-', $bytes);
+    }
+
+    public function testDataSourceExpandsArray(): void
+    {
+        $xml = self::minDoc('<stack data-source="items" gap="xs"><text data-value="label">Item</text></stack>');
+        $data = ['items' => [['label' => 'Alpha'], ['label' => 'Beta'], ['label' => 'Gamma']]];
+        $bytes = (new LpdfEngine('test-key'))->renderPdf($xml, null, $data);
+        self::assertStringStartsWith('%PDF-', $bytes);
+    }
+
+    public function testDataIfHidesNodeWhenFalse(): void
+    {
+        $xml = self::minDoc('<text data-if="isPremium">Premium only</text><text>Always visible</text>');
+        $bytes = (new LpdfEngine('test-key'))->renderPdf($xml, null, ['isPremium' => false]);
+        self::assertStringStartsWith('%PDF-', $bytes);
+    }
+
+    public function testNoDataRendersWithFallbackContent(): void
+    {
+        $xml   = self::minDoc('<text data-value="name">Inline fallback</text>');
+        $bytes = (new LpdfEngine('test-key'))->renderPdf($xml);
+        self::assertStringStartsWith('%PDF-', $bytes);
+    }
 }

@@ -4,7 +4,7 @@ import { LpdfDocument } from './kit';
 
 // The WASM CJS module is loaded at runtime; we declare only what we use.
 interface IWasmEngine {
-  render_pdf(xml: string): Uint8Array;
+  render_pdf(xml: string, json_data?: string | null): Uint8Array;
   render_tree_pdf(json: string): Uint8Array;
   load_font(name: string, bytes: Uint8Array): void;
   load_image(name: string, bytes: Uint8Array): void;
@@ -188,7 +188,8 @@ export class LpdfEngine {
           const permsJson = JSON.stringify(this._encrypt.permissions ?? {});
           engine.set_encryption(this._encrypt.userPassword, this._encrypt.ownerPassword, permsJson);
         }
-        pdf = engine.render_pdf(xml);
+        const dataJson = callOptions.data != null ? JSON.stringify(callOptions.data) : null;
+        pdf = engine.render_pdf(xml, dataJson);
       } else {
         // JSON (Kit tree) path — pass JSON directly to render_tree_pdf.
         const json = JSON.stringify(input);

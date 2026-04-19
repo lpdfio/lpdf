@@ -18,6 +18,8 @@
 mod tokens;
 #[path = "../../core/src/parse.rs"]
 mod parse;
+#[path = "../../core/src/data.rs"]
+mod data;
 #[path = "../../core/src/layout.rs"]
 mod layout;
 #[path = "../../core/src/render.rs"]
@@ -61,10 +63,17 @@ fn dispatch(input: &str) -> String {
             if body.len() > 1_048_576 {
                 return r#"{"error":"input exceeds 1 MB limit"}"#.to_string();
             }
-            let doc = match parse::parse(body) {
+            let mut doc = match parse::parse(body) {
                 Ok(d)  => d,
                 Err(e) => return serde_json::json!({ "error": e }).to_string(),
             };
+            // Optional data binding: the request may carry a "data" JSON object.
+            if let Some(data_val) = req.get("data").filter(|v| !v.is_null()) {
+                let json_str = data_val.to_string();
+                if let Err(e) = data::apply(&mut doc, &json_str) {
+                    return serde_json::json!({ "error": e }).to_string();
+                }
+            }
             render_pdf_doc(doc, key, now_unix, &req)
         }
         "render_tree_pdf" => {

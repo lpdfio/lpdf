@@ -14,4 +14,10 @@ export interface RenderOptions {
      * Omitting this keeps builds reproducible (no embedded timestamp).
      */
     createdOn?: string;
+    /**
+     * Optional data object for resolving `data-*` binding attributes in the
+     * XML template.  Pass `null` or omit to render with inline fallback content.
+     * Only applies when `input` is an XML string.
+     */
+    data?: Record<string, unknown> | null;
 }

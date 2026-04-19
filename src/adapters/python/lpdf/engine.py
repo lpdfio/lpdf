@@ -82,6 +82,7 @@ class LpdfEngine:
         self,
         input: str | LpdfDocument,
         call_options: RenderOptions | None = None,
+        data: dict | None = None,
     ) -> bytes:
         if isinstance(input, LpdfDocument):
             method = "render_tree_pdf"
@@ -175,6 +176,9 @@ class LpdfEngine:
 
         if self._encrypt is not None:
             payload["encrypt"] = self._encrypt
+
+        if data is not None and method == "render_pdf":
+            payload["data"] = data
 
         response = runner.invoke(payload)
 

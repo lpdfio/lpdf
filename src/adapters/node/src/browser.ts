@@ -101,7 +101,8 @@ export async function initLpdf(
         engine.load_image(name, bytes);
       }
 
-      const pdf = engine.render_pdf(xml);
+      const dataJson = callOptions.data != null ? JSON.stringify(callOptions.data) : null;
+      const pdf = engine.render_pdf(xml, dataJson);
       engine.free();
       return pdf;
     },

@@ -229,3 +229,50 @@ describe('PDF snapshots (fixture XMLs)', () => {
     });
   }
 });
+
+// ── Data binding ──────────────────────────────────────────────────────────────
+
+describe('data binding', () => {
+
+  it('data-value substitutes a scalar string', async () => {
+    const xml = doc(`<text data-value="name">Fallback</text>`);
+    const lpdf = new LpdfEngine('test-key');
+    const bytes = await lpdf.renderPdf(xml, { data: { name: 'Acme Inc' } });
+    const header = Buffer.from(bytes.slice(0, 5)).toString('ascii');
+    assert.equal(header, '%PDF-');
+    assert(bytes.length > 100);
+  });
+
+  it('data-source expands an array', async () => {
+    const xml = doc(`
+      <stack data-source="items" gap="xs">
+        <text data-value="label">Fallback item</text>
+      </stack>
+    `);
+    const lpdf = new LpdfEngine('test-key');
+    const data = { items: [{ label: 'Alpha' }, { label: 'Beta' }, { label: 'Gamma' }] };
+    const bytes = await lpdf.renderPdf(xml, { data });
+    const header = Buffer.from(bytes.slice(0, 5)).toString('ascii');
+    assert.equal(header, '%PDF-');
+  });
+
+  it('data-if hides node when false', async () => {
+    const xml = doc(`
+      <text data-if="isPremium">Premium only</text>
+      <text>Always visible</text>
+    `);
+    const lpdf = new LpdfEngine('test-key');
+    const bytes = await lpdf.renderPdf(xml, { data: { isPremium: false } });
+    const header = Buffer.from(bytes.slice(0, 5)).toString('ascii');
+    assert.equal(header, '%PDF-');
+  });
+
+  it('renders without data when data option is omitted', async () => {
+    const xml = doc(`<text data-value="name">Inline fallback</text>`);
+    const lpdf = new LpdfEngine('test-key');
+    const bytes = await lpdf.renderPdf(xml);
+    const header = Buffer.from(bytes.slice(0, 5)).toString('ascii');
+    assert.equal(header, '%PDF-');
+  });
+
+});

@@ -17,7 +17,7 @@ declare module '../../../../dist/web/lpdf.js' {
     /** Remove any previously configured encryption. */
     clear_encryption(): void;
     /** Render XML to binary PDF bytes. */
-    render_pdf(xml: string): Uint8Array;
+    render_pdf(xml: string, json_data?: string | null): Uint8Array;
     free(): void;
     [Symbol.dispose](): void;
   }

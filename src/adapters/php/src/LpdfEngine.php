@@ -86,9 +86,13 @@ final class LpdfEngine
      *
      * @param  string|LpdfDocument $input       XML string or a tree built with LpdfKit.
      * @param  RenderOptions|null  $callOptions Per-call overrides merged with constructor options.
+     * @param  array|object|null   $data        Optional data object for resolving data-* binding
+     *                                          attributes in the XML template.  Pass null or omit
+     *                                          to render with inline fallback content.  Only
+     *                                          applies when $input is an XML string.
      * @throws LpdfRenderException On render or process error.
      */
-    public function renderPdf(string|LpdfDocument $input, ?RenderOptions $callOptions = null): string
+    public function renderPdf(string|LpdfDocument $input, ?RenderOptions $callOptions = null, array|object|null $data = null): string
     {
         if ($input instanceof LpdfDocument) {
             $method   = 'render_tree_pdf';
@@ -165,6 +169,10 @@ final class LpdfEngine
 
         if ($this->encrypt !== null) {
             $payload['encrypt'] = $this->encrypt;
+        }
+
+        if ($data !== null && $method === 'render_pdf') {
+            $payload['data'] = $data;
         }
 
         $response = $runner->invoke($payload);

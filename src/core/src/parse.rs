@@ -102,6 +102,11 @@ pub struct Node {
     pub field_max_len:    Option<u32>,
     pub field_group:      Option<String>,
     pub field_action_url: Option<String>,
+    // data binding
+    pub data_value:  Option<String>,
+    pub data_source: Option<String>,
+    pub data_if:     Option<String>,
+    pub data_if_not: Option<String>,
     pub children: Vec<Node>,
 }
 
@@ -272,6 +277,11 @@ struct ParsedNode {
     field_max_len:    Option<u32>,
     field_group:      Option<String>,
     field_action_url: Option<String>,
+    // data binding
+    data_value:  Option<String>,
+    data_source: Option<String>,
+    data_if:     Option<String>,
+    data_if_not: Option<String>,
     children: Vec<ParsedNode>,
 }
 
@@ -343,6 +353,10 @@ impl ParsedNode {
             field_max_len:    None,
             field_group:      None,
             field_action_url: None,
+            data_value:  None,
+            data_source: None,
+            data_if:     None,
+            data_if_not: None,
             children: Vec::new(),
         }
     }
@@ -484,6 +498,10 @@ fn resolve_node(
         field_max_len:         n.field_max_len,
         field_group:           n.field_group,
         field_action_url:      n.field_action_url,
+        data_value:           n.data_value,
+        data_source:          n.data_source,
+        data_if:              n.data_if,
+        data_if_not:          n.data_if_not,
         children,
     }
 }
@@ -811,6 +829,12 @@ fn parse_node(
     let mut node = ParsedNode::default_for(kind.clone());
     apply_box_attrs(&mut node, elem, tokens)?;
     apply_layout_kind_attrs(&mut node, elem, tokens)?;
+
+    // data-binding attributes (valid on any element)
+    node.data_value  = elem.attribute("data-value").map(str::to_owned);
+    node.data_source = elem.attribute("data-source").map(str::to_owned);
+    node.data_if     = elem.attribute("data-if").map(str::to_owned);
+    node.data_if_not = elem.attribute("data-if-not").map(str::to_owned);
 
     match kind {
         NodeKind::Text => {

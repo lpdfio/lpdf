@@ -186,6 +186,18 @@
        Shared attribute groups
   ============================================================ -->
 
+  <!-- Data-binding attrs valid on any layout element.
+       data-value  : dot-path to a scalar; replaces the element's text content.
+       data-source : dot-path to an array; repeats this element once per item.
+       data-if     : dot-path to a value; element is rendered only when truthy.
+       data-if-not : dot-path to a value; element is rendered only when falsy. -->
+  <xs:attributeGroup name="DataBindingAttrs">
+    <xs:attribute name="data-value"  type="xs:string"/>
+    <xs:attribute name="data-source" type="xs:string"/>
+    <xs:attribute name="data-if"     type="xs:string"/>
+    <xs:attribute name="data-if-not" type="xs:string"/>
+  </xs:attributeGroup>
+
   <!-- Box attrs shared by all layout elements -->
   <xs:attributeGroup name="BoxAttrs">
     <xs:attribute name="font"       type="xs:string"/>
@@ -198,6 +210,7 @@
     <xs:attribute name="radius"     type="TokenScaleOrPt"/>
     <xs:attribute name="repeat"     type="Repeat"/>
     <xs:attribute name="debug"      type="xs:boolean"/>
+    <xs:attributeGroup ref="DataBindingAttrs"/>
   </xs:attributeGroup>
 
   <!-- Box attrs for frame — no gap (frame always centers its single child) -->
@@ -211,6 +224,7 @@
     <xs:attribute name="radius"     type="TokenScaleOrPt"/>
     <xs:attribute name="repeat"     type="Repeat"/>
     <xs:attribute name="debug"      type="xs:boolean"/>
+    <xs:attributeGroup ref="DataBindingAttrs"/>
   </xs:attributeGroup>
 
 
@@ -450,6 +464,7 @@
       <xs:attribute name="gap"    type="SpacingOrToken"/>
       <xs:attribute name="repeat" type="Repeat"/>
       <xs:attribute name="debug"  type="xs:boolean"/>
+      <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
   </xs:element>
 
@@ -467,6 +482,7 @@
       <xs:attribute name="thickness" type="TokenScaleOrPt"/>
       <xs:attribute name="repeat"    type="Repeat"/>
       <xs:attribute name="debug"     type="xs:boolean"/>
+      <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
   </xs:element>
 
@@ -495,6 +511,7 @@
       <xs:attribute name="radius"     type="TokenScaleOrPt"/>
       <xs:attribute name="repeat"     type="Repeat"/>
       <xs:attribute name="debug"      type="xs:boolean"/>
+      <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
   </xs:element>
 
@@ -528,6 +545,7 @@
       <xs:attribute name="background" type="Color"/>
       <xs:attribute name="repeat"     type="Repeat"/>
       <xs:attribute name="debug"      type="xs:boolean"/>
+      <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
   </xs:element>
 
@@ -543,6 +561,7 @@
       <xs:attribute name="width"     type="TokenScaleOrPt"/>
       <xs:attribute name="repeat"    type="Repeat"/>
       <xs:attribute name="debug"     type="xs:boolean"/>
+      <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
   </xs:element>
 
@@ -577,6 +596,7 @@
         <xs:element ref="td" minOccurs="1" maxOccurs="unbounded"/>
       </xs:sequence>
       <xs:attribute name="background" type="Color"/>
+      <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
   </xs:element>
 
@@ -587,6 +607,7 @@
         <xs:element ref="td" minOccurs="1" maxOccurs="unbounded"/>
       </xs:sequence>
       <xs:attribute name="background" type="Color"/>
+      <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
   </xs:element>
 
@@ -609,6 +630,7 @@
       <xs:attribute name="height"     type="HeightValue"/>
       <xs:attribute name="repeat"     type="Repeat"/>
       <xs:attribute name="debug"      type="xs:boolean"/>
+      <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
   </xs:element>
 
@@ -643,6 +665,7 @@
       <xs:attribute name="height"     type="PtValue"/>
       <xs:attribute name="repeat"     type="Repeat"/>
       <xs:attribute name="debug"      type="xs:boolean"/>
+      <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
   </xs:element>
 

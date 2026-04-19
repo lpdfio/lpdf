@@ -1,0 +1,191 @@
+%PDF-1.7
+%€€€€
+
+1 0 obj
+<<
+  /Type /Catalog
+  /Pages 3 0 R
+>>
+endobj
+
+2 0 obj
+<<
+  /Producer (lpdf.io (free))
+>>
+endobj
+
+3 0 obj
+<<
+  /Type /Pages
+  /Kids [4 0 R]
+  /Count 1
+>>
+endobj
+
+4 0 obj
+<<
+  /Type /Page
+  /Parent 3 0 R
+  /MediaBox [0 0 595.28 841.89]
+  /Resources <<
+    /Font <<
+      /F0 7 0 R
+      /F1 8 0 R
+    >>
+  >>
+  /Contents 5 0 R
+  /Annots [6 0 R]
+>>
+endobj
+
+5 0 obj
+<<
+  /Length 1316
+>>
+stream
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 20 Tf
+1 0 0 1 48 773.89 Tm
+(Invoice) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 478.80502 782.89 Tm
+(INV-2026-001) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 48 750.89 Tm
+(Acme Inc) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 735.69 Tm
+(123 Main St, Springfield) Tj
+ET
+q
+0 0 0 RG
+1 w
+48 724.99 m
+547.28 724.99 l
+S
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 705.49 Tm
+(Consulting Services) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 498.35202 705.49 Tm
+($1,200.00) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 684.29004 Tm
+(Design Review) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 507.52603 684.29004 Tm
+($400.00) Tj
+ET
+q
+0 0 0 RG
+1 w
+48 673.59 m
+547.28 673.59 l
+S
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 48 654.09 Tm
+(Total) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 498.35202 654.09 Tm
+($1,600.00) Tj
+ET
+q
+1 0.84313726 0 rg
+48 626.69 499.28003 17.2 re
+f
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 250.27402 630.89 Tm
+(Premium Customer) Tj
+ET
+BT
+0.6666667 0.6666667 0.6666667 rg
+/F0 8 Tf
+1 0 0 1 531.25604 829.89 Tm
+(made with lpdf.io) Tj
+ET
+endstream
+endobj
+
+6 0 obj
+<<
+  /Type /Annot
+  /Subtype /Link
+  /Rect [531.25604 829.89 591.28 837.89]
+  /Border [0 0 0]
+  /A <<
+    /Type /Action
+    /S /URI
+    /URI (https://lpdf.io)
+  >>
+>>
+endobj
+
+7 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+8 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica-Bold
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+xref
+0 9
+0000000000 65535 f
+0000000016 00000 n
+0000000070 00000 n
+0000000121 00000 n
+0000000185 00000 n
+0000000378 00000 n
+0000001749 00000 n
+0000001932 00000 n
+0000002038 00000 n
+trailer
+<<
+  /Size 9
+  /Root 1 0 R
+  /Info 2 0 R
+>>
+startxref
+2149
+%%EOF

@@ -65,3 +65,17 @@ foreach (var example in examples)
     await File.WriteAllBytesAsync(Path.Combine(root, $"result/{outputFile}"), bytes);
     Console.WriteLine($"output: {outputFile} ({bytes.Length:N0} bytes)");
 }
+
+// ── example-data ─────────────────────────────────────────────────────────────
+// Render data-invoice.xml with dynamic data from data-invoice.json.
+{
+    var xml      = await File.ReadAllTextAsync(Path.Combine(root, "xml/data-invoice.xml"));
+    var dataJson = await File.ReadAllTextAsync(Path.Combine(root, "xml/data-invoice.json"));
+    var data     = System.Text.Json.JsonSerializer.Deserialize<object>(dataJson);
+    const string outputFile = "example-data-dotnet.pdf";
+
+    var dataEngine = new LpdfEngine(licenseKey: "", options: new RenderOptions { SrcFallback = File.ReadAllBytes });
+    var bytes = await dataEngine.RenderPdf(xml, new RenderOptions { Data = data });
+    await File.WriteAllBytesAsync(Path.Combine(root, $"result/{outputFile}"), bytes);
+    Console.WriteLine($"output: {outputFile} ({bytes.Length:N0} bytes)");
+}

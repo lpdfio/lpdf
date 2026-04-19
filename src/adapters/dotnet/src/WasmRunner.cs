@@ -55,8 +55,9 @@ internal sealed class WasmRunner : IDisposable
         IReadOnlyDictionary<string, byte[]>? imageBytes,
         Func<string, byte[]>?                srcFallback,
         string?                              encryptJson = null,
-        string?                              createdOn = null)
-        => InvokeRenderPdf("render_pdf", xml, licenseKey, fontBytes, imageBytes, srcFallback, isTree: false, encryptJson, createdOn);
+        string?                              createdOn = null,
+        string?                              dataJson = null)
+        => InvokeRenderPdf("render_pdf", xml, licenseKey, fontBytes, imageBytes, srcFallback, isTree: false, encryptJson, createdOn, dataJson);
 
     /// <summary>
     /// Render an lpdf JSON document tree to raw PDF bytes.
@@ -104,7 +105,8 @@ internal sealed class WasmRunner : IDisposable
         Func<string, byte[]>?                srcFallback,
         bool                                 isTree,
         string?                              encryptJson = null,
-        string?                              createdOn = null)
+        string?                              createdOn = null,
+        string?                              dataJson = null)
     {
         var fonts  = ResolveAllFonts(input, fontBytes, srcFallback, isTree);
         var images = ResolveAllImages(input, imageBytes, srcFallback, isTree);
@@ -135,6 +137,9 @@ internal sealed class WasmRunner : IDisposable
 
         if (createdOn is not null)
             requestObj["created_on"] = createdOn;
+
+        if (dataJson is not null)
+            requestObj["data"] = JsonNode.Parse(dataJson);
 
         var requestBytes = Encoding.UTF8.GetBytes(requestObj.ToJsonString());
 

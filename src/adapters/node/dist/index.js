@@ -123,7 +123,8 @@ class LpdfEngine {
                     const permsJson = JSON.stringify(this._encrypt.permissions ?? {});
                     engine.set_encryption(this._encrypt.userPassword, this._encrypt.ownerPassword, permsJson);
                 }
-                pdf = engine.render_pdf(xml);
+                const dataJson = callOptions.data != null ? JSON.stringify(callOptions.data) : null;
+                pdf = engine.render_pdf(xml, dataJson);
             }
             else {
                 // JSON (Kit tree) path — pass JSON directly to render_tree_pdf.

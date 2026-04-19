@@ -1,3 +1,4 @@
+mod data;
 mod encrypt;
 mod kit_to_xml;
 mod layout;
@@ -130,13 +131,21 @@ impl LpdfEngine {
     ///
     /// Any custom fonts referenced in `<font src="…">` declarations must have
     /// their bytes registered via `load_font` before calling this method.
-    pub fn render_pdf(&self, xml: &str) -> Result<Vec<u8>, JsValue> {
+    ///
+    /// `json_data` is an optional JSON string used to resolve `data-*`
+    /// attributes in the template.  Pass `None` (or `null` / `undefined` from
+    /// JavaScript) to render the template with its inline fallback content.
+    pub fn render_pdf(&self, xml: &str, json_data: Option<String>) -> Result<Vec<u8>, JsValue> {
         if xml.len() > 1_048_576 {
             return Err(JsValue::from_str("input exceeds 1 MB limit"));
         }
 
         let mut doc = parse::parse(xml)
             .map_err(|e| JsValue::from_str(&e))?;
+
+        if let Some(json) = json_data.as_deref() {
+            data::apply(&mut doc, json).map_err(|e| JsValue::from_str(&e))?;
+        }
 
         // Confirm every image declared in <assets> has bytes in the registry.
         for (_alias, name) in &doc.images {

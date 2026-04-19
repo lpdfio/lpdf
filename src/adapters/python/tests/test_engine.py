@@ -275,3 +275,54 @@ class TestAssetSrcExtraction:
         payload = json.loads(mock_run.call_args.kwargs["input"] if "input" in mock_run.call_args.kwargs else mock_run.call_args[1]["input"])
         assert "images" in payload
         assert payload["images"]["logo"] == base64.b64encode(b"\x89PNG").decode()
+
+
+class TestDataBinding:
+    """Unit tests for data-* binding: verify the payload forwarded to the WASI process."""
+
+    @patch("lpdf.wasm_runner.subprocess.run")
+    def test_data_included_in_payload(self, mock_run):
+        mock_run.return_value = _mock_subprocess_run()
+
+        engine = LpdfEngine("test-key")
+        engine.render_pdf("<lpdf/>", data={"name": "Acme Inc"})
+
+        payload = json.loads(
+            mock_run.call_args.kwargs["input"]
+            if "input" in mock_run.call_args.kwargs
+            else mock_run.call_args[1]["input"]
+        )
+        assert "data" in payload
+        assert payload["data"] == {"name": "Acme Inc"}
+
+    @patch("lpdf.wasm_runner.subprocess.run")
+    def test_no_data_payload_has_no_data_key(self, mock_run):
+        mock_run.return_value = _mock_subprocess_run()
+
+        engine = LpdfEngine("test-key")
+        engine.render_pdf("<lpdf/>")
+
+        payload = json.loads(
+            mock_run.call_args.kwargs["input"]
+            if "input" in mock_run.call_args.kwargs
+            else mock_run.call_args[1]["input"]
+        )
+        assert "data" not in payload
+
+    @patch("lpdf.wasm_runner.subprocess.run")
+    def test_data_not_forwarded_for_tree_path(self, mock_run):
+        """data param is ignored for LpdfDocument tree (render_tree_pdf) — no data key in payload."""
+        mock_run.return_value = _mock_subprocess_run()
+
+        doc = document(nodes=[page(nodes=[])])
+        engine = LpdfEngine("test-key")
+        engine.render_pdf(doc, data={"name": "Acme"})
+
+        payload = json.loads(
+            mock_run.call_args.kwargs["input"]
+            if "input" in mock_run.call_args.kwargs
+            else mock_run.call_args[1]["input"]
+        )
+        assert payload["method"] == "render_tree_pdf"
+        assert "data" not in payload
+
