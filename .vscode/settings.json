@@ -26,7 +26,8 @@
         "dotnet run": true,
         "cargo search": true,
         "cargo metadata": true,
-        "npm run build": true
+        "npm run build": true,
+        "cargo bench": true
     },
     "typescript.tsdk": "src/adapters/vscode/node_modules/typescript/lib",
     "xml.fileAssociations": [

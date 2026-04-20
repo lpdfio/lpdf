@@ -5,7 +5,7 @@ SHELL := C:/PROGRA~1/Git/bin/sh.exe
         build-adapter-node build-adapter-dotnet build-adapter-php build-adapter-python \
         build-adapter-vscode package-adapter-vscode install-adapter-vscode \
         test-adapter-node test-adapter-dotnet test-adapter-php test-adapter-python \
-        benchmark \
+        benchmark benchmark-x gen-fixtures \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python
@@ -43,9 +43,24 @@ test-wasi:
 benchmark:
 	@echo ""
 	@echo "-------------------------------"
-	@echo ">>> Running benchmarks..."
+	@echo ">>> Running benchmarks (xs–xl)..."
 	@echo ""
-	cargo bench --manifest-path src/core/Cargo.toml --bench pipeline --bench images --bench fonts -- --output-format bencher
+	cargo bench --manifest-path src/core/Cargo.toml --bench pipeline --bench images --bench fonts -- --output-format bencher parse_xml/ layout/ end_to_end/ data/
+
+benchmark-x:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Running extended benchmarks (xxl + max)..."
+	@echo ">>> Warning: this may take 10+ minutes."
+	@echo ""
+	cargo bench --manifest-path src/core/Cargo.toml --bench pipeline -- --output-format bencher parse_xml_x/ layout_x/ end_to_end_x/
+
+gen-fixtures:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Generating benchmark fixtures..."
+	@echo ""
+	cargo run --manifest-path src/core/Cargo.toml --bin gen_fixtures -- --all --data --out test/fixtures
 
 build-adapter-node:
 	@echo ""

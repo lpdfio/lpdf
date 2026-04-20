@@ -44,6 +44,17 @@ pub struct TextRun {
     pub strike:       bool,
 }
 
+/// Data-binding attributes.  Boxed on `Node` so that the common case (no
+/// data binding) pays only a pointer's worth of overhead rather than 4 × 24
+/// bytes inline on every node in the tree.
+#[derive(Debug, Clone, Default)]
+pub struct DataAttrs {
+    pub data_value:  Option<String>,
+    pub data_source: Option<String>,
+    pub data_if:     Option<String>,
+    pub data_if_not: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Node {
     pub kind: NodeKind,
@@ -102,11 +113,9 @@ pub struct Node {
     pub field_max_len:    Option<u32>,
     pub field_group:      Option<String>,
     pub field_action_url: Option<String>,
-    // data binding
-    pub data_value:  Option<String>,
-    pub data_source: Option<String>,
-    pub data_if:     Option<String>,
-    pub data_if_not: Option<String>,
+    /// Data-binding attributes; `None` for the vast majority of nodes that
+    /// carry no `data-*` attributes, saving 96 bytes per node.
+    pub data_attrs: Option<Box<DataAttrs>>,
     pub children: Vec<Node>,
 }
 
@@ -277,11 +286,7 @@ struct ParsedNode {
     field_max_len:    Option<u32>,
     field_group:      Option<String>,
     field_action_url: Option<String>,
-    // data binding
-    data_value:  Option<String>,
-    data_source: Option<String>,
-    data_if:     Option<String>,
-    data_if_not: Option<String>,
+    data_attrs: Option<Box<DataAttrs>>,
     children: Vec<ParsedNode>,
 }
 
@@ -353,10 +358,7 @@ impl ParsedNode {
             field_max_len:    None,
             field_group:      None,
             field_action_url: None,
-            data_value:  None,
-            data_source: None,
-            data_if:     None,
-            data_if_not: None,
+            data_attrs: None,
             children: Vec::new(),
         }
     }
@@ -498,10 +500,7 @@ fn resolve_node(
         field_max_len:         n.field_max_len,
         field_group:           n.field_group,
         field_action_url:      n.field_action_url,
-        data_value:           n.data_value,
-        data_source:          n.data_source,
-        data_if:              n.data_if,
-        data_if_not:          n.data_if_not,
+        data_attrs:           n.data_attrs,
         children,
     }
 }
@@ -830,11 +829,21 @@ fn parse_node(
     apply_box_attrs(&mut node, elem, tokens)?;
     apply_layout_kind_attrs(&mut node, elem, tokens)?;
 
-    // data-binding attributes (valid on any element)
-    node.data_value  = elem.attribute("data-value").map(str::to_owned);
-    node.data_source = elem.attribute("data-source").map(str::to_owned);
-    node.data_if     = elem.attribute("data-if").map(str::to_owned);
-    node.data_if_not = elem.attribute("data-if-not").map(str::to_owned);
+    // data-binding attributes (valid on any element; boxed to keep Node lean)
+    {
+        let dv  = elem.attribute("data-value").map(str::to_owned);
+        let ds  = elem.attribute("data-source").map(str::to_owned);
+        let di  = elem.attribute("data-if").map(str::to_owned);
+        let din = elem.attribute("data-if-not").map(str::to_owned);
+        if dv.is_some() || ds.is_some() || di.is_some() || din.is_some() {
+            node.data_attrs = Some(Box::new(DataAttrs {
+                data_value:  dv,
+                data_source: ds,
+                data_if:     di,
+                data_if_not: din,
+            }));
+        }
+    }
 
     match kind {
         NodeKind::Text => {

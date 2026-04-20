@@ -38,6 +38,11 @@ public class SnapshotTests
     [InlineData("showcase-barcode")]
     [InlineData("showcase-encryption")]
     [InlineData("showcase-forms")]
+    [InlineData("bench_xs")]
+    [InlineData("bench_s")]
+    [InlineData("bench_m")]
+    [InlineData("bench_l")]
+    [InlineData("bench_xl")]
     public async Task FixtureMatchesStoredHash(string name)
     {
         var xml   = File.ReadAllText(Path.Combine(SnapshotHelper.Fixtures, $"{name}.xml"));

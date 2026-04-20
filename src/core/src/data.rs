@@ -105,22 +105,27 @@ fn apply_nodes(nodes: Vec<Node>, stack: &[&Value], root: &Value) -> Vec<Node> {
 /// - 1 output:  the normal case (data resolved and children recursed)
 /// - N outputs: the node has `data-source` and is expanded once per array item
 fn apply_single_node(node: Node, stack: &[&Value], root: &Value, out: &mut Vec<Node>) {
+    let di  = node.data_attrs.as_ref().and_then(|d| d.data_if.as_deref()).map(str::to_owned);
+    let din = node.data_attrs.as_ref().and_then(|d| d.data_if_not.as_deref()).map(str::to_owned);
+    let ds  = node.data_attrs.as_ref().and_then(|d| d.data_source.as_deref()).map(str::to_owned);
+    let dv  = node.data_attrs.as_ref().and_then(|d| d.data_value.as_deref()).map(str::to_owned);
+
     // 1. data-if: skip when the path evaluates to a falsy value.
-    if let Some(ref path) = node.data_if {
+    if let Some(ref path) = di {
         if !is_truthy(resolve_path(path, stack, root)) {
             return;
         }
     }
 
     // 2. data-if-not: skip when the path evaluates to a truthy value.
-    if let Some(ref path) = node.data_if_not {
+    if let Some(ref path) = din {
         if is_truthy(resolve_path(path, stack, root)) {
             return;
         }
     }
 
     // 3. data-source: expand into one copy per array element.
-    if let Some(ref path) = node.data_source.clone() {
+    if let Some(ref path) = ds {
         if let Some(Value::Array(items)) = resolve_path(path, stack, root) {
             let items: Vec<Value> = items.clone();
             for item in &items {
@@ -129,9 +134,11 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, out: &mut Vec<N
                 let mut template = node.clone();
                 // Clear binding attrs that belong to the container level so
                 // they are not re-evaluated when we recurse into the clone.
-                template.data_source = None;
-                template.data_if = None;
-                template.data_if_not = None;
+                if let Some(d) = &mut template.data_attrs {
+                    d.data_source = None;
+                    d.data_if     = None;
+                    d.data_if_not = None;
+                }
                 apply_single_node(template, &new_stack, root, out);
             }
         }
@@ -141,7 +148,7 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, out: &mut Vec<N
 
     // 4. data-value: substitute the text content.
     let mut node = node;
-    if let Some(ref path) = node.data_value.clone() {
+    if let Some(ref path) = dv {
         let text = value_to_string(resolve_path(path, stack, root));
         node.text_runs = if text.is_empty() {
             vec![]
@@ -156,7 +163,9 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, out: &mut Vec<N
                 strike:    false,
             }]
         };
-        node.data_value = None;
+        if let Some(d) = &mut node.data_attrs {
+            d.data_value = None;
+        }
     }
 
     // 5. Recurse into children with the current scope.
@@ -170,8 +179,8 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, out: &mut Vec<N
 mod tests {
     use super::*;
     use crate::parse::{
-        Align, BarcodeEcLevel, Direction, HeightMode, Justify, Meta, NodeKind, Page, Paginate,
-        Repeat, TextAlign,
+        Align, BarcodeEcLevel, DataAttrs, Direction, HeightMode, Justify, Meta, NodeKind, Page,
+        Paginate, Repeat, TextAlign,
     };
     use std::collections::HashMap;
 
@@ -226,10 +235,7 @@ mod tests {
             field_max_len: None,
             field_group: None,
             field_action_url: None,
-            data_value: None,
-            data_source: None,
-            data_if: None,
-            data_if_not: None,
+            data_attrs: None,
             children: vec![],
         }
     }
@@ -270,7 +276,7 @@ mod tests {
     #[test]
     fn data_value_substitutes_scalar() {
         let mut n = text_node("fallback");
-        n.data_value = Some("name".to_owned());
+        n.data_attrs = Some(Box::new(DataAttrs { data_value: Some("name".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
         apply(&mut doc, r#"{"name":"Acme Inc"}"#).unwrap();
         assert_eq!(doc.pages[0].children[0].text_runs[0].text, "Acme Inc");
@@ -279,7 +285,7 @@ mod tests {
     #[test]
     fn data_value_nested_dot_path() {
         let mut n = text_node("fallback");
-        n.data_value = Some("customer.name".to_owned());
+        n.data_attrs = Some(Box::new(DataAttrs { data_value: Some("customer.name".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
         apply(&mut doc, r#"{"customer":{"name":"Acme Inc"}}"#).unwrap();
         assert_eq!(doc.pages[0].children[0].text_runs[0].text, "Acme Inc");
@@ -288,7 +294,7 @@ mod tests {
     #[test]
     fn data_value_missing_path_produces_empty_runs() {
         let mut n = text_node("fallback");
-        n.data_value = Some("nonexistent".to_owned());
+        n.data_attrs = Some(Box::new(DataAttrs { data_value: Some("nonexistent".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
         apply(&mut doc, r#"{}"#).unwrap();
         assert!(doc.pages[0].children[0].text_runs.is_empty());
@@ -297,9 +303,9 @@ mod tests {
     #[test]
     fn data_source_expands_array() {
         let mut child = text_node("item");
-        child.data_value = Some("label".to_owned());
+        child.data_attrs = Some(Box::new(DataAttrs { data_value: Some("label".to_owned()), ..DataAttrs::default() }));
         let mut container = bare_node(NodeKind::Stack);
-        container.data_source = Some("items".to_owned());
+        container.data_attrs = Some(Box::new(DataAttrs { data_source: Some("items".to_owned()), ..DataAttrs::default() }));
         container.children = vec![child];
         let mut doc = make_doc(vec![container]);
         apply(
@@ -316,7 +322,7 @@ mod tests {
     #[test]
     fn data_source_empty_array_removes_node() {
         let mut container = bare_node(NodeKind::Stack);
-        container.data_source = Some("items".to_owned());
+        container.data_attrs = Some(Box::new(DataAttrs { data_source: Some("items".to_owned()), ..DataAttrs::default() }));
         container.children = vec![text_node("item")];
         let mut doc = make_doc(vec![container]);
         apply(&mut doc, r#"{"items":[]}"#).unwrap();
@@ -326,7 +332,7 @@ mod tests {
     #[test]
     fn data_if_truthy_keeps_node() {
         let mut n = text_node("premium");
-        n.data_if = Some("isPremium".to_owned());
+        n.data_attrs = Some(Box::new(DataAttrs { data_if: Some("isPremium".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
         apply(&mut doc, r#"{"isPremium":true}"#).unwrap();
         assert_eq!(doc.pages[0].children.len(), 1);
@@ -335,7 +341,7 @@ mod tests {
     #[test]
     fn data_if_falsy_removes_node() {
         let mut n = text_node("premium");
-        n.data_if = Some("isPremium".to_owned());
+        n.data_attrs = Some(Box::new(DataAttrs { data_if: Some("isPremium".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
         apply(&mut doc, r#"{"isPremium":false}"#).unwrap();
         assert_eq!(doc.pages[0].children.len(), 0);
@@ -344,7 +350,7 @@ mod tests {
     #[test]
     fn data_if_not_falsy_keeps_node() {
         let mut n = text_node("unpaid");
-        n.data_if_not = Some("isPaid".to_owned());
+        n.data_attrs = Some(Box::new(DataAttrs { data_if_not: Some("isPaid".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
         apply(&mut doc, r#"{"isPaid":false}"#).unwrap();
         assert_eq!(doc.pages[0].children.len(), 1);
@@ -353,7 +359,7 @@ mod tests {
     #[test]
     fn data_if_not_truthy_removes_node() {
         let mut n = text_node("unpaid");
-        n.data_if_not = Some("isPaid".to_owned());
+        n.data_attrs = Some(Box::new(DataAttrs { data_if_not: Some("isPaid".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
         apply(&mut doc, r#"{"isPaid":true}"#).unwrap();
         assert_eq!(doc.pages[0].children.len(), 0);
@@ -362,9 +368,9 @@ mod tests {
     #[test]
     fn data_if_inside_source_per_item() {
         let mut flag = text_node("highlighted");
-        flag.data_if = Some("isHighlighted".to_owned());
+        flag.data_attrs = Some(Box::new(DataAttrs { data_if: Some("isHighlighted".to_owned()), ..DataAttrs::default() }));
         let mut container = bare_node(NodeKind::Stack);
-        container.data_source = Some("items".to_owned());
+        container.data_attrs = Some(Box::new(DataAttrs { data_source: Some("items".to_owned()), ..DataAttrs::default() }));
         container.children = vec![flag];
         let mut doc = make_doc(vec![container]);
         apply(
@@ -380,9 +386,9 @@ mod tests {
     #[test]
     fn data_value_inside_source() {
         let mut child = text_node("desc");
-        child.data_value = Some("description".to_owned());
+        child.data_attrs = Some(Box::new(DataAttrs { data_value: Some("description".to_owned()), ..DataAttrs::default() }));
         let mut container = bare_node(NodeKind::Stack);
-        container.data_source = Some("items".to_owned());
+        container.data_attrs = Some(Box::new(DataAttrs { data_source: Some("items".to_owned()), ..DataAttrs::default() }));
         container.children = vec![child];
         let mut doc = make_doc(vec![container]);
         apply(
@@ -405,17 +411,17 @@ mod tests {
         // outer loop: items[].description  inner loop: items[].notes (unused)
         // child references ../description to read from the outer scope
         let mut inner_child = text_node("note");
-        inner_child.data_value = Some("../description".to_owned());
+        inner_child.data_attrs = Some(Box::new(DataAttrs { data_value: Some("../description".to_owned()), ..DataAttrs::default() }));
         let mut inner_template = bare_node(NodeKind::Stack);
         inner_template.children = vec![inner_child];
         let mut inner_loop = bare_node(NodeKind::Stack);
-        inner_loop.data_source = Some("notes".to_owned());
+        inner_loop.data_attrs = Some(Box::new(DataAttrs { data_source: Some("notes".to_owned()), ..DataAttrs::default() }));
         inner_loop.children = vec![inner_template];
 
         let mut outer_container = bare_node(NodeKind::Stack);
         outer_container.children = vec![inner_loop];
         let mut outer_loop = bare_node(NodeKind::Stack);
-        outer_loop.data_source = Some("items".to_owned());
+        outer_loop.data_attrs = Some(Box::new(DataAttrs { data_source: Some("items".to_owned()), ..DataAttrs::default() }));
         outer_loop.children = vec![outer_container];
 
         let mut doc = make_doc(vec![outer_loop]);
@@ -436,9 +442,9 @@ mod tests {
     #[test]
     fn root_path_anchor_inside_source() {
         let mut child = text_node("company");
-        child.data_value = Some("/company".to_owned());
+        child.data_attrs = Some(Box::new(DataAttrs { data_value: Some("/company".to_owned()), ..DataAttrs::default() }));
         let mut container = bare_node(NodeKind::Stack);
-        container.data_source = Some("items".to_owned());
+        container.data_attrs = Some(Box::new(DataAttrs { data_source: Some("items".to_owned()), ..DataAttrs::default() }));
         container.children = vec![child];
         let mut doc = make_doc(vec![container]);
         apply(
@@ -456,7 +462,7 @@ mod tests {
     fn parent_path_beyond_root_is_clamped() {
         // ../../.. from root level — must clamp to root, not panic
         let mut n = text_node("fallback");
-        n.data_value = Some("../../../name".to_owned());
+        n.data_attrs = Some(Box::new(DataAttrs { data_value: Some("../../../name".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
         apply(&mut doc, r#"{"name":"Safe"}"#).unwrap();
         assert_eq!(doc.pages[0].children[0].text_runs[0].text, "Safe");

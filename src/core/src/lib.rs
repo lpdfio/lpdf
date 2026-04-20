@@ -370,6 +370,13 @@ pub fn bench_render_doc(doc: BenchDoc) -> Result<Vec<u8>, String> {
     )
 }
 
+/// Apply data binding to a pre-parsed doc. Used by staged `data/*` benchmarks.
+pub fn bench_data_apply(doc: BenchDoc, json: &str) -> Result<BenchDoc, String> {
+    let mut inner = doc.0;
+    data::apply(&mut inner, json)?;
+    Ok(BenchDoc(inner))
+}
+
 /// Full pipeline: parse + layout + PDF write. Used by `end_to_end` benchmarks.
 pub fn bench_render_xml(xml: &str) -> Result<Vec<u8>, String> {
     let doc = parse::parse(xml)?;

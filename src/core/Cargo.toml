@@ -46,3 +46,8 @@ harness = false
 [[bench]]
 name    = "fonts"
 harness = false
+
+[[bin]]
+name              = "gen_fixtures"
+path              = "src/bin/gen_fixtures.rs"
+required-features = []

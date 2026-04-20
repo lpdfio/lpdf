@@ -23,6 +23,7 @@ EXAMPLES = [
     "showcase-cluster", "showcase-flank", "showcase-frame",
     "showcase-grid", "showcase-split", "showcase-stack",
     "showcase-table", "showcase-barcode", "showcase-encryption", "showcase-forms",
+    "bench_xs", "bench_s", "bench_m", "bench_l", "bench_xl",
 ]
 
 

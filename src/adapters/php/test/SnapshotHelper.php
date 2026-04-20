@@ -22,6 +22,9 @@ final class SnapshotHelper
         foreach (['showcase-cluster', 'showcase-flank', 'showcase-frame', 'showcase-grid', 'showcase-split', 'showcase-stack', 'showcase-table', 'showcase-barcode', 'showcase-encryption', 'showcase-forms'] as $name) {
             $names[$name] = [$name];
         }
+        foreach (['bench_xs', 'bench_s', 'bench_m', 'bench_l', 'bench_xl'] as $name) {
+            $names[$name] = [$name];
+        }
         return $names;
     }
 

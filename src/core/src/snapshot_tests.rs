@@ -74,6 +74,12 @@ snapshot_test!(example9);
 snapshot_test!(example10);
 snapshot_test!(example11);
 
+snapshot_test!(bench_xs);
+snapshot_test!(bench_s);
+snapshot_test!(bench_m);
+snapshot_test!(bench_l);
+snapshot_test!(bench_xl);
+
 #[test]
 fn showcase_cluster() { run_snapshot("showcase-cluster"); }
 #[test]
