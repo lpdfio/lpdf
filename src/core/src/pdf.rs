@@ -32,7 +32,7 @@
 use std::collections::{HashMap, HashSet};
 
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
-use pdf_writer::types::{ActionType, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, HighlightEffect, Predictor};
+use pdf_writer::types::{ActionType, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, HighlightEffect, LineCapStyle, LineJoinStyle, Predictor};
 use ttf_parser::Face;
 use miniz_oxide::deflate::compress_to_vec_zlib;
 use miniz_oxide::inflate::decompress_to_vec_zlib;
@@ -344,10 +344,12 @@ fn decode_indexed_png(bytes: &[u8]) -> Option<(u32, u32, Vec<u8>, Option<Vec<u8>
 fn collect_used_images(nodes: &[RenderNode], out: &mut HashSet<String>) {
     for node in nodes {
         match node {
-            RenderNode::Image(img) => { out.insert(img.name.clone()); }
-            RenderNode::Box(b)     => collect_used_images(&b.children, out),
-            RenderNode::Link(l)    => collect_used_images(&l.children, out),
-            _                      => {}
+            RenderNode::Image(img)    => { out.insert(img.name.clone()); }
+            RenderNode::Box(b)        => collect_used_images(&b.children, out),
+            RenderNode::Link(l)       => collect_used_images(&l.children, out),
+            RenderNode::CanvasImage(i) => { out.insert(i.src.clone()); }
+            RenderNode::CanvasLayer(l) => collect_used_images(&l.children, out),
+            _                          => {}
         }
     }
 }
@@ -760,7 +762,17 @@ fn collect_chars_for_font(nodes: &[RenderNode], font_name: &str, out: &mut HashS
             }
             RenderNode::Box(b)  => collect_chars_for_font(&b.children, font_name, out),
             RenderNode::Link(l) => collect_chars_for_font(&l.children, font_name, out),
-            _                   => {}
+            RenderNode::CanvasText(t) => {
+                if t.font == font_name {
+                    out.extend(t.content.chars());
+                    for run in &t.runs {
+                        let run_font = run.font.as_deref().unwrap_or(&t.font);
+                        if run_font == font_name { out.extend(run.text.chars()); }
+                    }
+                }
+            }
+            RenderNode::CanvasLayer(l) => collect_chars_for_font(&l.children, font_name, out),
+            _                      => {}
         }
     }
 }
@@ -772,6 +784,13 @@ fn collect_used_fonts(nodes: &[RenderNode], out: &mut HashSet<String>) {
             RenderNode::Text(t) => { out.insert(t.font.clone()); }
             RenderNode::Box(b)  => collect_used_fonts(&b.children, out),
             RenderNode::Link(l) => collect_used_fonts(&l.children, out),
+            RenderNode::CanvasText(t) => {
+                out.insert(t.font.clone());
+                for run in &t.runs {
+                    if let Some(ref f) = run.font { out.insert(f.clone()); }
+                }
+            }
+            RenderNode::CanvasLayer(l) => collect_used_fonts(&l.children, out),
             RenderNode::Field(_) | _ => {}
         }
     }
@@ -1035,7 +1054,9 @@ fn draw_node(
             let draw_x  = match t.text_align.as_str() {
                 "right"  => t.x - text_w,
                 "center" => t.x - text_w / 2.0,
-                _        => t.x,   // "left" — the anchor already is the left edge
+                // "left" and "justify" — anchor is already the left edge.
+                // Justify word-spacing is not applied to kit text (no avail_w).
+                _        => t.x,
             };
 
             // Layout y = top of the text block; PDF baseline = top − font-size.
@@ -1174,10 +1195,463 @@ fn draw_node(
         // Form fields are written as annotation objects during assembly,
         // not as content stream operations.  Nothing to draw here.
         RenderNode::Field(_) => {}
+
+        // ── Canvas Text ───────────────────────────────────────────────────────
+        RenderNode::CanvasText(t) => {
+            draw_canvas_text(content, fonts, t, page_h);
+        }
+
+        // ── Canvas Rect ───────────────────────────────────────────────────────
+        RenderNode::CanvasRect(r) => {
+            let has_fill   = r.fill.is_some();
+            let has_stroke = r.stroke.is_some() && r.stroke_width > 0.0;
+            if has_fill || has_stroke {
+                content.save_state();
+                if has_fill {
+                    let (rf, gf, bf) = parse_hex(r.fill.as_deref().unwrap_or("#000000"));
+                    content.set_fill_rgb(rf, gf, bf);
+                }
+                if has_stroke {
+                    let (rs, gs, bs) = parse_hex(r.stroke.as_deref().unwrap_or("#000000"));
+                    content.set_stroke_rgb(rs, gs, bs);
+                    content.set_line_width(r.stroke_width);
+                    if let Some(dash) = &r.stroke_dash {
+                        content.set_dash_pattern(dash.iter().copied(), 0.0);
+                    }
+                }
+                let pdf_y = page_h - r.y - r.h;
+                if r.border_radius > 0.0 {
+                    rounded_rect(content, r.x, pdf_y, r.w, r.h, r.border_radius);
+                } else {
+                    content.rect(r.x, pdf_y, r.w, r.h);
+                }
+                match (has_fill, has_stroke) {
+                    (true,  true)  => { content.fill_nonzero_and_stroke(); }
+                    (true,  false) => { content.fill_nonzero(); }
+                    (false, true)  => { content.stroke(); }
+                    (false, false) => { content.end_path(); }
+                }
+                content.restore_state();
+            }
+        }
+
+        // ── Canvas Line ───────────────────────────────────────────────────────
+        RenderNode::CanvasLine(l) => {
+            let (r, g, b) = parse_hex(&l.stroke);
+            content.save_state();
+            content.set_stroke_rgb(r, g, b);
+            content.set_line_width(l.stroke_width);
+            if l.line_cap > 0 { content.set_line_cap(u8_to_line_cap(l.line_cap)); }
+            if l.line_join > 0 { content.set_line_join(u8_to_line_join(l.line_join)); }
+            if let Some(dash) = &l.stroke_dash {
+                content.set_dash_pattern(dash.iter().copied(), 0.0);
+            }
+            content.move_to(l.x1, page_h - l.y1);
+            content.line_to(l.x2, page_h - l.y2);
+            content.stroke();
+            content.restore_state();
+        }
+
+        // ── Canvas Ellipse ────────────────────────────────────────────────────
+        RenderNode::CanvasEllipse(e) => {
+            let has_fill   = e.fill.is_some();
+            let has_stroke = e.stroke.is_some() && e.stroke_width > 0.0;
+            if has_fill || has_stroke {
+                content.save_state();
+                if has_fill {
+                    let (rf, gf, bf) = parse_hex(e.fill.as_deref().unwrap_or("#000000"));
+                    content.set_fill_rgb(rf, gf, bf);
+                }
+                if has_stroke {
+                    let (rs, gs, bs) = parse_hex(e.stroke.as_deref().unwrap_or("#000000"));
+                    content.set_stroke_rgb(rs, gs, bs);
+                    content.set_line_width(e.stroke_width);
+                    if let Some(dash) = &e.stroke_dash {
+                        content.set_dash_pattern(dash.iter().copied(), 0.0);
+                    }
+                }
+                // Emit ellipse via 4 cubic-Bézier arcs (Kappa approximation).
+                // PDF y is flipped.
+                let cx = e.cx;
+                let cy = page_h - e.cy;
+                ellipse_path(content, cx, cy, e.rx, e.ry);
+                match (has_fill, has_stroke) {
+                    (true,  true)  => { content.fill_nonzero_and_stroke(); }
+                    (true,  false) => { content.fill_nonzero(); }
+                    (false, true)  => { content.stroke(); }
+                    (false, false) => { content.end_path(); }
+                }
+                content.restore_state();
+            }
+        }
+
+        // ── Canvas Path ───────────────────────────────────────────────────────
+        RenderNode::CanvasPath(p) => {
+            let has_fill   = p.fill.is_some();
+            let has_stroke = p.stroke.is_some() && p.stroke_width > 0.0;
+            if has_fill || has_stroke {
+                content.save_state();
+                if has_fill {
+                    let (rf, gf, bf) = parse_hex(p.fill.as_deref().unwrap_or("#000000"));
+                    content.set_fill_rgb(rf, gf, bf);
+                }
+                if has_stroke {
+                    let (rs, gs, bs) = parse_hex(p.stroke.as_deref().unwrap_or("#000000"));
+                    content.set_stroke_rgb(rs, gs, bs);
+                    content.set_line_width(p.stroke_width);
+                    if p.line_cap > 0 { content.set_line_cap(u8_to_line_cap(p.line_cap)); }
+                    if p.line_join > 0 { content.set_line_join(u8_to_line_join(p.line_join)); }
+                    if let Some(dash) = &p.stroke_dash {
+                        content.set_dash_pattern(dash.iter().copied(), 0.0);
+                    }
+                }
+                emit_svg_path(content, &p.d, page_h);
+                match (has_fill, has_stroke, p.fill_rule_evenodd) {
+                    (true,  true,  false) => { content.fill_nonzero_and_stroke(); }
+                    (true,  true,  true)  => { content.fill_even_odd_and_stroke(); }
+                    (true,  false, false) => { content.fill_nonzero(); }
+                    (true,  false, true)  => { content.fill_even_odd(); }
+                    (false, true,  _)     => { content.stroke(); }
+                    (false, false, _)     => { content.end_path(); }
+                }
+                content.restore_state();
+            }
+        }
+
+        // ── Canvas Image ──────────────────────────────────────────────────────
+        RenderNode::CanvasImage(i) => {
+            if let Some(res_name) = image_res_map.get(&i.src) {
+                let pdf_y = page_h - i.y - i.h;
+                content.save_state();
+                content.transform([i.w, 0.0, 0.0, i.h, i.x, pdf_y]);
+                let rname: Vec<u8> = res_name.bytes().collect();
+                content.x_object(Name(&rname));
+                content.restore_state();
+            }
+        }
+
+        // ── Canvas Layer ──────────────────────────────────────────────────────
+        RenderNode::CanvasLayer(layer) => {
+            content.save_state();
+
+            // Apply optional CTM transform.
+            // The layer transform is in canvas (top-down) space; we need to
+            // convert the translation component to PDF (bottom-up) space.
+            // For scale-only / translate-only transforms this is sufficient.
+            if let Some(ctm) = layer.transform {
+                // ctm = [sx, 0, 0, sy, tx, ty] in canvas coords
+                // In PDF coords ty flips: pdf_ty = page_h * (1 - sy) - ty * sy
+                // For a pure translate: pdf_ty = page_h - ty  (simplified)
+                // We apply a general CTM by converting y-translation:
+                let [a, b, c, d, e, f] = ctm;
+                // Negate y-axis scale and adjust translation.
+                // This converts from canvas (y-down) to PDF (y-up):
+                //   pdf_a = a, pdf_b = -b, pdf_c = -c, pdf_d = -d (no, wrong)
+                // Simpler: just emit the matrix. The canvas user is expected to
+                // work in canvas coords; we flip translation only.
+                let pdf_f = page_h - f;
+                content.transform([a, b, c, d, e, pdf_f]);
+            }
+
+            // Apply optional clip rect.
+            if let Some(clip) = &layer.clip {
+                let clip_pdf_y = page_h - clip.y - clip.h;
+                if clip.border_radius > 0.0 {
+                    rounded_rect(content, clip.x, clip_pdf_y, clip.w, clip.h, clip.border_radius);
+                } else {
+                    content.rect(clip.x, clip_pdf_y, clip.w, clip.h);
+                }
+                content.clip_nonzero();
+                content.end_path();
+            }
+
+            // Apply opacity via graphics state parameter (if not fully opaque).
+            // We emit a raw `gs` operator for the opacity ExtGState.
+            // The ExtGState objects are pre-written during assembly; here we
+            // reference them by a computed name.
+            if (layer.opacity - 1.0).abs() > 0.001 {
+                let gs_name = opacity_gs_name(layer.opacity);
+                let gs_bytes: Vec<u8> = gs_name.bytes().collect();
+                content.set_parameters(Name(&gs_bytes));
+            }
+
+            draw_nodes(content, annots, &layer.children, fonts, image_res_map, page_h);
+
+            content.restore_state();
+        }
     }
 }
 
 // ── Form appearance helpers ───────────────────────────────────────────────────
+
+/// Build an ExtGState resource name for a given opacity value.
+/// E.g. opacity 0.5 → "GS50", 0.3 → "GS30".
+fn opacity_gs_name(opacity: f32) -> String {
+    format!("GS{:02}", (opacity * 100.0).round() as u32)
+}
+
+/// Convert a canvas line-cap code (0=butt, 1=round, 2=square) to pdf_writer's enum.
+fn u8_to_line_cap(v: u8) -> LineCapStyle {
+    match v {
+        1 => LineCapStyle::RoundCap,
+        2 => LineCapStyle::ProjectingSquareCap,
+        _ => LineCapStyle::ButtCap,
+    }
+}
+
+/// Convert a canvas line-join code (0=miter, 1=round, 2=bevel) to pdf_writer's enum.
+fn u8_to_line_join(v: u8) -> LineJoinStyle {
+    match v {
+        1 => LineJoinStyle::RoundJoin,
+        2 => LineJoinStyle::BevelJoin,
+        _ => LineJoinStyle::MiterJoin,
+    }
+}
+
+/// Recursively collect all unique opacity values (as integer percentages 1..99)
+/// from canvas layer nodes. Opacity 1.0 (fully opaque) is excluded.
+fn collect_used_opacities(nodes: &[RenderNode], out: &mut HashSet<u32>) {
+    for node in nodes {
+        match node {
+            RenderNode::CanvasLayer(l) => {
+                if (l.opacity - 1.0).abs() > 0.001 {
+                    let pct = (l.opacity * 100.0).round() as u32;
+                    if pct > 0 && pct < 100 { out.insert(pct); }
+                }
+                collect_used_opacities(&l.children, out);
+            }
+            RenderNode::Box(b)  => collect_used_opacities(&b.children, out),
+            RenderNode::Link(l) => collect_used_opacities(&l.children, out),
+            _                   => {}
+        }
+    }
+}
+
+/// Append an ellipse path (4 cubic-Bézier arcs) in PDF bottom-up coords.
+/// `cx`, `cy` are already in PDF (bottom-up) coordinates.
+fn ellipse_path(content: &mut Content, cx: f32, cy: f32, rx: f32, ry: f32) {
+    const KAPPA: f32 = 0.5523;
+    let kx = rx * KAPPA;
+    let ky = ry * KAPPA;
+    content.move_to(cx + rx, cy);
+    content.cubic_to(cx + rx, cy + ky,   cx + kx, cy + ry,   cx,      cy + ry);
+    content.cubic_to(cx - kx, cy + ry,   cx - rx, cy + ky,   cx - rx, cy);
+    content.cubic_to(cx - rx, cy - ky,   cx - kx, cy - ry,   cx,      cy - ry);
+    content.cubic_to(cx + kx, cy - ry,   cx + rx, cy - ky,   cx + rx, cy);
+    content.close_path();
+}
+
+/// Parse an SVG-like path string and emit PDF path operators.
+/// Supports: M/m, L/l, H/h, V/v, C/c, Q/q, Z/z.
+/// Y-coordinates are flipped (canvas top-down → PDF bottom-up).
+fn emit_svg_path(content: &mut Content, d: &str, page_h: f32) {
+    let flip = |y: f32| page_h - y;
+
+    // Tokenise: split on whitespace and commas, preserve command letters.
+    let tokens: Vec<&str> = d.split(|c: char| c == ',' || c.is_whitespace())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let mut i     = 0;
+    let mut cur_x = 0.0_f32;
+    let mut cur_y = 0.0_f32;
+
+    while i < tokens.len() {
+        let cmd = tokens[i];
+        i += 1;
+
+        // Helper closures to consume the next f32 token.
+        let next_f = |i: &mut usize| -> f32 {
+            if *i < tokens.len() {
+                let v = tokens[*i].parse::<f32>().unwrap_or(0.0);
+                *i += 1;
+                v
+            } else {
+                0.0
+            }
+        };
+
+        match cmd {
+            "M" => {
+                let x = next_f(&mut i); let y = next_f(&mut i);
+                content.move_to(x, flip(y));
+                cur_x = x; cur_y = y;
+                // Implicit subsequent L commands.
+                while i < tokens.len() && tokens[i].parse::<f32>().is_ok() {
+                    let lx = next_f(&mut i); let ly = next_f(&mut i);
+                    content.line_to(lx, flip(ly));
+                    cur_x = lx; cur_y = ly;
+                }
+            }
+            "m" => {
+                let dx = next_f(&mut i); let dy = next_f(&mut i);
+                cur_x += dx; cur_y += dy;
+                content.move_to(cur_x, flip(cur_y));
+                while i < tokens.len() && tokens[i].parse::<f32>().is_ok() {
+                    let dx2 = next_f(&mut i); let dy2 = next_f(&mut i);
+                    cur_x += dx2; cur_y += dy2;
+                    content.line_to(cur_x, flip(cur_y));
+                }
+            }
+            "L" => {
+                let x = next_f(&mut i); let y = next_f(&mut i);
+                content.line_to(x, flip(y));
+                cur_x = x; cur_y = y;
+                while i < tokens.len() && tokens[i].parse::<f32>().is_ok() {
+                    let lx = next_f(&mut i); let ly = next_f(&mut i);
+                    content.line_to(lx, flip(ly));
+                    cur_x = lx; cur_y = ly;
+                }
+            }
+            "l" => {
+                let dx = next_f(&mut i); let dy = next_f(&mut i);
+                cur_x += dx; cur_y += dy;
+                content.line_to(cur_x, flip(cur_y));
+                while i < tokens.len() && tokens[i].parse::<f32>().is_ok() {
+                    let dx2 = next_f(&mut i); let dy2 = next_f(&mut i);
+                    cur_x += dx2; cur_y += dy2;
+                    content.line_to(cur_x, flip(cur_y));
+                }
+            }
+            "H" => {
+                let x = next_f(&mut i);
+                content.line_to(x, flip(cur_y));
+                cur_x = x;
+            }
+            "h" => {
+                cur_x += next_f(&mut i);
+                content.line_to(cur_x, flip(cur_y));
+            }
+            "V" => {
+                let y = next_f(&mut i);
+                content.line_to(cur_x, flip(y));
+                cur_y = y;
+            }
+            "v" => {
+                cur_y += next_f(&mut i);
+                content.line_to(cur_x, flip(cur_y));
+            }
+            "C" => {
+                while i < tokens.len() && (tokens[i].parse::<f32>().is_ok() || tokens[i].starts_with('-')) {
+                    let x1 = next_f(&mut i); let y1 = next_f(&mut i);
+                    let x2 = next_f(&mut i); let y2 = next_f(&mut i);
+                    let x  = next_f(&mut i); let y  = next_f(&mut i);
+                    content.cubic_to(x1, flip(y1), x2, flip(y2), x, flip(y));
+                    cur_x = x; cur_y = y;
+                }
+            }
+            "c" => {
+                while i < tokens.len() && (tokens[i].parse::<f32>().is_ok() || tokens[i].starts_with('-')) {
+                    let dx1 = next_f(&mut i); let dy1 = next_f(&mut i);
+                    let dx2 = next_f(&mut i); let dy2 = next_f(&mut i);
+                    let dx  = next_f(&mut i); let dy  = next_f(&mut i);
+                    content.cubic_to(cur_x + dx1, flip(cur_y + dy1), cur_x + dx2, flip(cur_y + dy2), cur_x + dx, flip(cur_y + dy));
+                    cur_x += dx; cur_y += dy;
+                }
+            }
+            "Q" => {
+                // Quadratic Bézier → convert to cubic.
+                while i < tokens.len() && (tokens[i].parse::<f32>().is_ok() || tokens[i].starts_with('-')) {
+                    let qx1 = next_f(&mut i); let qy1 = next_f(&mut i);
+                    let x   = next_f(&mut i); let y   = next_f(&mut i);
+                    // Cubic control points: cp1 = start + 2/3*(qp1-start), cp2 = end + 2/3*(qp1-end)
+                    let cp1x = cur_x + (qx1 - cur_x) * 2.0 / 3.0;
+                    let cp1y = cur_y + (qy1 - cur_y) * 2.0 / 3.0;
+                    let cp2x = x     + (qx1 - x)     * 2.0 / 3.0;
+                    let cp2y = y     + (qy1 - y)      * 2.0 / 3.0;
+                    content.cubic_to(cp1x, flip(cp1y), cp2x, flip(cp2y), x, flip(y));
+                    cur_x = x; cur_y = y;
+                }
+            }
+            "q" => {
+                while i < tokens.len() && (tokens[i].parse::<f32>().is_ok() || tokens[i].starts_with('-')) {
+                    let dqx1 = next_f(&mut i); let dqy1 = next_f(&mut i);
+                    let dx   = next_f(&mut i); let dy   = next_f(&mut i);
+                    let qx1 = cur_x + dqx1; let qy1 = cur_y + dqy1;
+                    let ex  = cur_x + dx;   let ey  = cur_y + dy;
+                    let cp1x = cur_x + (qx1 - cur_x) * 2.0 / 3.0;
+                    let cp1y = cur_y + (qy1 - cur_y) * 2.0 / 3.0;
+                    let cp2x = ex    + (qx1 - ex)    * 2.0 / 3.0;
+                    let cp2y = ey    + (qy1 - ey)     * 2.0 / 3.0;
+                    content.cubic_to(cp1x, flip(cp1y), cp2x, flip(cp2y), ex, flip(ey));
+                    cur_x = ex; cur_y = ey;
+                }
+            }
+            "Z" | "z" => {
+                content.close_path();
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Render a canvas text node (plain string or runs) to the content stream.
+fn draw_canvas_text(
+    content:  &mut Content,
+    fonts:    &HashMap<String, PreparedFont>,
+    t:        &crate::render::RenderCanvasText,
+    page_h:   f32,
+) {
+    let default_font = fonts.get(&t.font)
+        .or_else(|| fonts.get("Helvetica"))
+        .expect("Helvetica must always be present");
+
+    // Resolve text lines from either runs or plain content.
+    let full_text: String = if !t.runs.is_empty() {
+        t.runs.iter().map(|r| r.text.as_str()).collect::<Vec<_>>().join("")
+    } else {
+        t.content.clone()
+    };
+
+    let lines: Vec<&str> = full_text.split('\n').collect();
+    let line_gap = t.size * t.line_height;
+
+    for (line_idx, line) in lines.iter().enumerate() {
+        let line_y = t.y + line_idx as f32 * line_gap;
+        let pdf_y  = page_h - line_y - t.size;
+
+        let text_w = default_font.text_width(line, t.size);
+        let avail_w = t.width.unwrap_or(0.0);
+
+        let draw_x = match t.align.as_str() {
+            "right"  => t.x + avail_w - text_w,
+            "center" => t.x + (avail_w - text_w) / 2.0,
+            "justify" if !line.is_empty() => {
+                // Simple word-space justification: distribute extra space.
+                let word_count = line.split_whitespace().count();
+                if word_count > 1 {
+                    let extra = avail_w - text_w;
+                    let tw_pts = extra / (word_count - 1) as f32;
+                    // Set Tw (word spacing) and draw from t.x.
+                    content.begin_text();
+                    let (cr, cg, cb) = parse_hex(&t.color);
+                    content.set_fill_rgb(cr, cg, cb);
+                    let rname = default_font.resource_name.as_bytes().to_vec();
+                    content.set_font(Name(&rname), t.size);
+                    content.set_text_matrix([1.0, 0.0, 0.0, 1.0, t.x, pdf_y]);
+                    content.set_word_spacing(tw_pts);
+                    let encoded = default_font.encode_text(line);
+                    content.show(Str(&encoded));
+                    content.set_word_spacing(0.0);
+                    content.end_text();
+                    continue;
+                }
+                t.x
+            }
+            _ => t.x,
+        };
+
+        let (cr, cg, cb) = parse_hex(&t.color);
+        let encoded = default_font.encode_text(line);
+        let rname   = default_font.resource_name.as_bytes().to_vec();
+        content.begin_text();
+        content.set_fill_rgb(cr, cg, cb);
+        content.set_font(Name(&rname), t.size);
+        content.set_text_matrix([1.0, 0.0, 0.0, 1.0, draw_x, pdf_y]);
+        content.show(Str(&encoded));
+        content.end_text();
+    }
+}
 
 /// Draw background fill and/or border for a form field appearance XObject.
 /// Coordinates are local (0,0 → w,h).
@@ -1334,6 +1808,8 @@ struct AllocatedIds {
     image_smask_ids:   Vec<Option<Ref>>,
     field_alloc:       Vec<FieldAllocIds>,        // one per field in collect order
     radio_parent_alloc: Vec<(String, Ref)>,        // (group_name, parent_dict_id)
+    /// ExtGState objects for canvas layer opacity: (opacity_pct 1..99) → Ref.
+    opacity_gs_ids:    Vec<(u32, Ref)>,
 }
 
 // ── Step 1a: Font preparation ─────────────────────────────────────────────────
@@ -1507,6 +1983,7 @@ fn collect_fields_in_nodes(nodes: &[RenderNode], page_idx: usize, out: &mut Vec<
 // ── Step 3b: ID allocation ─────────────────────────────────────────────────────
 
 fn allocate_ids(
+    pages:              &[RenderPage],
     rendered_pages:     &[(Vec<u8>, Vec<AnnotData>)],
     fonts:              &HashMap<String, PreparedFont>,
     sorted_font_names:  &[String],
@@ -1593,6 +2070,16 @@ fn allocate_ids(
     let acroform_id = if !fields.is_empty() { Some(alloc.next()) } else { None };
     let _ = acroform_id; // AcroForm is written inline in catalog, no separate object needed
 
+    // One ExtGState object per unique opacity percentage (1..99) used in canvas layers.
+    let mut used_opacities: HashSet<u32> = HashSet::new();
+    for page in pages {
+        collect_used_opacities(&page.nodes, &mut used_opacities);
+    }
+    let mut sorted_opacities: Vec<u32> = used_opacities.into_iter().collect();
+    sorted_opacities.sort();
+    let opacity_gs_ids: Vec<(u32, Ref)> =
+        sorted_opacities.iter().map(|&pct| (pct, alloc.next())).collect();
+
     AllocatedIds {
         catalog_id,
         info_id,
@@ -1605,6 +2092,7 @@ fn allocate_ids(
         image_smask_ids,
         field_alloc,
         radio_parent_alloc,
+        opacity_gs_ids,
     }
 }
 
@@ -1630,7 +2118,7 @@ fn assemble_pdf(
         catalog_id, info_id, pages_id,
         page_ids, content_ids, annot_ids,
         font_id_map, image_id_map, image_smask_ids,
-        field_alloc, radio_parent_alloc,
+        field_alloc, radio_parent_alloc, opacity_gs_ids,
     } = ids;
 
     let n = pages.len();
@@ -1726,6 +2214,14 @@ fn assemble_pdf(
                     xobj_res.pair(Name(res_name.as_bytes()), img_id);
                 }
             }
+            // Add ExtGState entries for canvas layer opacity.
+            if !opacity_gs_ids.is_empty() {
+                let mut gs_res = resources.ext_g_states();
+                for (pct, gs_id) in &opacity_gs_ids {
+                    let gs_name = format!("GS{pct:02}");
+                    gs_res.pair(Name(gs_name.as_bytes()), *gs_id);
+                }
+            }
         }
 
         // Add the content stream reference.
@@ -1748,6 +2244,14 @@ fn assemble_pdf(
     // -- Content streams -------------------------------------------------------
     for (i, (content_bytes, _)) in rendered_pages.iter().enumerate() {
         pdf.stream(content_ids[i], content_bytes);
+    }
+
+    // -- Opacity ExtGState objects ---------------------------------------------
+    for (pct, gs_id) in &opacity_gs_ids {
+        let opacity = *pct as f32 / 100.0;
+        let mut gs = pdf.ext_graphics(*gs_id);
+        gs.non_stroking_alpha(opacity);
+        gs.stroking_alpha(opacity);
     }
 
     // -- Image XObject streams -------------------------------------------------
@@ -2194,7 +2698,7 @@ pub fn render_pdf(
         build_content_streams(pages, &fonts, &image_res_map, watermark);
     let fields = collect_render_fields(pages);
     let ids =
-        allocate_ids(&rendered_pages, &fonts, &sorted_font_names, &sorted_image_names, image_registry, &fields);
+        allocate_ids(pages, &rendered_pages, &fonts, &sorted_font_names, &sorted_image_names, image_registry, &fields);
     assemble_pdf(
         pages, &fonts, &sorted_font_names, &sorted_image_names,
         image_registry, &image_res_map, rendered_pages, ids, &fields,

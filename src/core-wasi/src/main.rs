@@ -34,6 +34,8 @@ mod encrypt;
 mod shared;
 #[path = "../../core/src/kit_to_xml.rs"]
 mod kit_to_xml;
+#[path = "../../core/src/canvas.rs"]
+mod canvas;
 
 use std::io::Read;
 use base64::Engine as _;
@@ -79,6 +81,13 @@ fn dispatch(input: &str) -> String {
         "render_tree_pdf" => {
             if body.len() > 4_194_304 {
                 return r#"{"error":"input exceeds 4 MB limit"}"#.to_string();
+            }
+            if canvas::is_canvas_tree(body) {
+                let canvas_doc = match canvas::parse_canvas_tree(body) {
+                    Ok(d)  => d,
+                    Err(e) => return serde_json::json!({ "error": e }).to_string(),
+                };
+                return render_canvas_pdf_doc(canvas_doc, key, now_unix, &req);
             }
             let doc = match parse::parse_tree(body) {
                 Ok(d)  => d,
@@ -161,6 +170,76 @@ fn build_font_widths(req: &serde_json::Value) -> std::collections::HashMap<Strin
         }
     }
     map
+}
+
+fn render_canvas_pdf_doc(canvas_doc: canvas::CanvasDocument, license_key: &str, now_unix: i64, req: &serde_json::Value) -> String {
+    let registry       = build_registry(req);
+    let image_registry = build_image_registry(req);
+
+    // Confirm every canvas image has bytes in the registry.
+    for (_alias, name) in &canvas_doc.images {
+        if image_registry.get(name).is_none() {
+            return serde_json::json!({
+                "error": format!("image '{name}' declared in assets but not loaded via loadImage()")
+            }).to_string();
+        }
+        if let Some(bytes) = image_registry.get(name) {
+            if let Some(reason) = pdf::image_format_error(bytes) {
+                return serde_json::json!({
+                    "error": format!("image '{name}': {reason}")
+                }).to_string();
+            }
+        }
+    }
+
+    // Auto-extract glyph advance-width metrics from the loaded font bytes.
+    let adapter_widths = build_font_widths(req);
+    let mut merged = canvas_doc.font_widths.clone();
+    for (name, bytes) in registry.iter() {
+        if let Some(widths) = shared::extract_font_widths(bytes) {
+            merged.entry(name.to_string()).or_insert(widths);
+        }
+    }
+    for (name, widths) in adapter_widths {
+        merged.entry(name).or_insert(widths);
+    }
+    layout::set_font_widths(merged);
+
+    let pages = canvas::layout_canvas_pages(&canvas_doc);
+
+    let status = license::check(license_key, now_unix);
+    let watermark = if status.is_licensed() {
+        None
+    } else {
+        Some(("made with lpdf.io", Some("https://lpdf.io")))
+    };
+    let watermark_ref = watermark.map(|(t, u)| (t, u));
+
+    let created_on = req["created_on"].as_str();
+
+    match pdf::render_pdf(&pages, &canvas_doc.fonts, &registry, &image_registry, &canvas_doc.meta, watermark_ref, created_on, status.is_licensed()) {
+        Ok(bytes) => {
+            let bytes = if let Some(enc) = req.get("encrypt") {
+                let user_pw  = enc["user_password"] .as_str().unwrap_or("");
+                let owner_pw = enc["owner_password"].as_str().unwrap_or("");
+                let perms_json = enc["permissions"].to_string();
+                let cfg = encrypt::EncryptConfig {
+                    user_password:  user_pw.to_string(),
+                    owner_password: owner_pw.to_string(),
+                    permissions:    shared::parse_permissions_json(&perms_json),
+                };
+                match encrypt::encrypt_pdf(&bytes, &cfg) {
+                    Ok(b)  => b,
+                    Err(e) => return serde_json::json!({ "error": e }).to_string(),
+                }
+            } else {
+                bytes
+            };
+            let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+            serde_json::json!({ "pdf": b64 }).to_string()
+        }
+        Err(e) => serde_json::json!({ "error": e }).to_string(),
+    }
 }
 
 fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, req: &serde_json::Value) -> String {

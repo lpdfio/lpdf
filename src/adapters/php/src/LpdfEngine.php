@@ -92,9 +92,9 @@ final class LpdfEngine
      *                                          applies when $input is an XML string.
      * @throws LpdfRenderException On render or process error.
      */
-    public function renderPdf(string|LpdfDocument $input, ?RenderOptions $callOptions = null, array|object|null $data = null): string
+    public function renderPdf(string|LpdfDocument|LpdfCanvasDocument $input, ?RenderOptions $callOptions = null, array|object|null $data = null): string
     {
-        if ($input instanceof LpdfDocument) {
+        if ($input instanceof LpdfDocument || $input instanceof LpdfCanvasDocument) {
             $method   = 'render_tree_pdf';
             $inputStr = json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
         } else {

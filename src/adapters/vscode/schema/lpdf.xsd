@@ -121,6 +121,7 @@
       <xs:enumeration value="left"/>
       <xs:enumeration value="center"/>
       <xs:enumeration value="right"/>
+      <xs:enumeration value="justify"/>
     </xs:restriction>
   </xs:simpleType>
 

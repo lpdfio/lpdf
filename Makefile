@@ -224,6 +224,11 @@ example-php:
 		-v "$(CURDIR)/example://app/example" \
 		-v "$(CURDIR)/docs://app/docs" \
 		-w //app lpdf-php php src/adapters/php/example/example-data.php
+	docker run --rm \
+		-v "$(CURDIR)/src/adapters/php/example://app/src/adapters/php/example" \
+		-v "$(CURDIR)/example://app/example" \
+		-v "$(CURDIR)/docs://app/docs" \
+		-w //app lpdf-php php src/adapters/php/example/example_canvas.php
 
 example-python:
 	@echo ""

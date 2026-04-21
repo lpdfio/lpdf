@@ -2299,9 +2299,10 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
     let mut all_nodes: Vec<RenderNode> = Vec::new();
 
     let align_str = match node.text_align {
-        TextAlign::Left   => "left",
-        TextAlign::Center => "center",
-        TextAlign::Right  => "right",
+        TextAlign::Left    => "left",
+        TextAlign::Center  => "center",
+        TextAlign::Right   => "right",
+        TextAlign::Justify => "justify",
     };
 
     // ── Emit render nodes per line ────────────────────────────────────────────
@@ -2315,9 +2316,10 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
         // The approximate line_w is still needed for left-aligned group merging
         // (so we keep it) but no longer drives alignment position.
         let line_anchor_x = match node.text_align {
-            TextAlign::Left   => x,
-            TextAlign::Center => x + avail_w / 2.0,
-            TextAlign::Right  => x + avail_w,
+            TextAlign::Left    => x,
+            TextAlign::Center  => x + avail_w / 2.0,
+            TextAlign::Right   => x + avail_w,
+            TextAlign::Justify => x,
         };
 
         let mut cur_x = line_anchor_x;
@@ -2542,6 +2544,8 @@ fn shift_y(node: RenderNode, dy: f32) -> RenderNode {
             f.y += dy;
             RenderNode::Field(f)
         }
+        // Canvas nodes use absolute canvas coordinates; y-shifting is a no-op.
+        other => other,
     }
 }
 
@@ -2581,6 +2585,8 @@ fn shift_x(node: RenderNode, dx: f32) -> RenderNode {
             f.x += dx;
             RenderNode::Field(f)
         }
+        // Canvas nodes use absolute canvas coordinates; x-shifting is a no-op.
+        other => other,
     }
 }
 

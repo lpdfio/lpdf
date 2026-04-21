@@ -1,3 +1,4 @@
+mod canvas;
 mod data;
 mod encrypt;
 mod kit_to_xml;
@@ -202,7 +203,7 @@ impl LpdfEngine {
         Ok(bytes)
     }
 
-    /// Render a JSON kit-tree document to PDF bytes.
+    /// Render a JSON kit-tree or canvas-tree document to PDF bytes.
     ///
     /// This is the JSON counterpart of `render_pdf`. The Node adapter uses it
     /// when an `LpdfDocument` Kit tree is passed to `renderPdf()`, avoiding an
@@ -213,6 +214,58 @@ impl LpdfEngine {
             return Err(JsValue::from_str("input exceeds 4 MB limit"));
         }
 
+        // ── Canvas mode ───────────────────────────────────────────────────────
+        if canvas::is_canvas_tree(json) {
+            let canvas_doc = canvas::parse_canvas_tree(json)
+                .map_err(|e| JsValue::from_str(&e))?;
+
+            // Confirm every canvas image has bytes in the registry.
+            for (_alias, name) in &canvas_doc.images {
+                if self.images.get(name).is_none() {
+                    return Err(JsValue::from_str(&format!(
+                        "image '{name}' declared in assets but not loaded via loadImage()"
+                    )));
+                }
+                if let Some(bytes) = self.images.get(name) {
+                    if let Some(reason) = pdf::image_format_error(bytes) {
+                        return Err(JsValue::from_str(&format!("image '{name}': {reason}")));
+                    }
+                }
+            }
+
+            let mut merged = self.font_widths.clone();
+            merged.extend(canvas_doc.font_widths.iter().map(|(k, v)| (k.clone(), v.clone())));
+            layout::set_font_widths(merged);
+
+            let pages = canvas::layout_canvas_pages(&canvas_doc);
+
+            let status = license::check(&self.license_key, self.now_unix);
+            let wm: Option<(&str, Option<&str>)> = if status.is_licensed() {
+                None
+            } else {
+                Some(("made with lpdf.io", Some("https://lpdf.io")))
+            };
+
+            let bytes = pdf::render_pdf(
+                &pages,
+                &canvas_doc.fonts,
+                &self.fonts,
+                &self.images,
+                &canvas_doc.meta,
+                wm,
+                self.created_on.as_deref(),
+                status.is_licensed(),
+            )
+            .map_err(|e| JsValue::from_str(&e))?;
+
+            let bytes = match &self.encrypt {
+                Some(cfg) => encrypt::encrypt_pdf(&bytes, cfg).map_err(|e| JsValue::from_str(&e))?,
+                None      => bytes,
+            };
+            return Ok(bytes);
+        }
+
+        // ── Kit mode ──────────────────────────────────────────────────────────
         let mut doc = parse::parse_tree(json)
             .map_err(|e| JsValue::from_str(&e))?;
 

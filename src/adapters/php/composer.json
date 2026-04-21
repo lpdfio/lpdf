@@ -11,7 +11,7 @@
   },
   "autoload": {
     "psr-4": { "Lpdf\\": "src/" },
-    "files": ["src/LpdfKitTypes.php"]
+    "files": ["src/LpdfKitTypes.php", "src/LpdfCanvasTypes.php"]
   },
   "autoload-dev": {
     "psr-4": { "Lpdf\\Tests\\": "test/" }

@@ -230,6 +230,7 @@ pub enum TextAlign {
     Left,
     Center,
     Right,
+    Justify,
 }
 
 // ── Pre-trickle-down (parsed) model ──────────────────────────────────────────
@@ -775,7 +776,7 @@ fn parse_page(
     Ok(ParsedPage { width: size.0, height: size.1, margin, background, debug, children })
 }
 
-fn parse_page_size(val: &str) -> Result<(f32, f32), String> {
+pub fn parse_page_size(val: &str) -> Result<(f32, f32), String> {
     match val {
         "a4" => Ok((595.28, 841.89)),
         "a3" => Ok((841.89, 1190.55)),
@@ -853,9 +854,10 @@ fn parse_node(
                 tokens.resolve_color("text").unwrap_or_else(|_| "#1a1a1a".into())
             });
             node.text_align = match elem.attribute("align").unwrap_or("left") {
-                "center" => TextAlign::Center,
-                "right"  => TextAlign::Right,
-                _        => TextAlign::Left,
+                "center"  => TextAlign::Center,
+                "right"   => TextAlign::Right,
+                "justify" => TextAlign::Justify,
+                _         => TextAlign::Left,
             };
             // Mixed content: text nodes → plain runs; <span> elements → styled runs.
             let mut prev_ended_space = false;
@@ -1400,7 +1402,7 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     // ── Tokens ────────────────────────────────────────────────────────────────
     let mut tokens = Tokens::default();
     if let Some(tok) = attrs.get("tokens").and_then(|v| v.as_object()) {
-        parse_tree_tokens(tok, &mut tokens)?;
+        parse_tree_tokens_pub(tok, &mut tokens)?;
     }
 
     // ── Meta ──────────────────────────────────────────────────────────────────
@@ -1466,7 +1468,7 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     Ok(resolve_doc(parsed))
 }
 
-fn parse_tree_tokens(
+pub fn parse_tree_tokens_pub(
     obj: &serde_json::Map<String, serde_json::Value>,
     tokens: &mut Tokens,
 ) -> Result<(), String> {
@@ -1568,9 +1570,10 @@ fn parse_tree_node(
                 None    => tokens.resolve_color("text").unwrap_or_else(|_| "#1a1a1a".into()),
             });
             node.text_align = match jattr(json, "text-align").or_else(|| jattr(json, "align")).unwrap_or("left") {
-                "center" => TextAlign::Center,
-                "right"  => TextAlign::Right,
-                _        => TextAlign::Left,
+                "center"  => TextAlign::Center,
+                "right"   => TextAlign::Right,
+                "justify" => TextAlign::Justify,
+                _         => TextAlign::Left,
             };
 
             if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {

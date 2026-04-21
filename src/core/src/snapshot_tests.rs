@@ -100,3 +100,105 @@ fn showcase_barcode() { run_snapshot("showcase-barcode"); }
 fn showcase_forms() { run_snapshot("showcase-forms"); }
 #[test]
 fn showcase_encryption() { run_snapshot("showcase-encryption"); }
+
+// ── Canvas snapshot tests ─────────────────────────────────────────────────────
+
+/// Build a minimal canvas JSON document with all primitive types and render to
+/// PDF, verifying the bytes are a valid PDF and snapshot-stable.
+#[test]
+fn canvas_snapshot() {
+    let json = r##"{
+        "version": 1,
+        "type": "canvas-document",
+        "pages": [
+            {
+                "type": "canvas-page",
+                "attrs": { "width": 595, "height": 842 },
+                "children": [
+                    {
+                        "type": "canvas-rect",
+                        "attrs": { "x": 40, "y": 40, "w": 200, "h": 100,
+                                   "fill": "#4a90e2", "stroke": "#1a5276",
+                                   "strokeWidth": 2, "borderRadius": 8 }
+                    },
+                    {
+                        "type": "canvas-rect",
+                        "attrs": { "x": 260, "y": 40, "w": 200, "h": 100,
+                                   "fill": "#f0f0f0" }
+                    },
+                    {
+                        "type": "canvas-line",
+                        "attrs": { "x1": 40, "y1": 170, "x2": 555, "y2": 170,
+                                   "stroke": "#333333", "strokeWidth": 1 }
+                    },
+                    {
+                        "type": "canvas-ellipse",
+                        "attrs": { "cx": 140, "cy": 280, "rx": 80, "ry": 50,
+                                   "fill": "#f39c12", "stroke": "#d68910",
+                                   "strokeWidth": 2 }
+                    },
+                    {
+                        "type": "canvas-circle",
+                        "attrs": { "cx": 400, "cy": 280, "r": 60,
+                                   "fill": "#27ae60" }
+                    },
+                    {
+                        "type": "canvas-path",
+                        "attrs": { "d": "M 40 400 L 200 350 L 360 400 Z",
+                                   "fill": "#8e44ad", "fillRuleEvenodd": false }
+                    },
+                    {
+                        "type": "canvas-text",
+                        "attrs": { "x": 40, "y": 460, "content": "Hello Canvas!",
+                                   "font": "Helvetica", "size": 24,
+                                   "color": "#1a1a1a" }
+                    },
+                    {
+                        "type": "canvas-text",
+                        "attrs": { "x": 40, "y": 500, "content": "Centered text",
+                                   "font": "Helvetica", "size": 14,
+                                   "color": "#666666", "align": "center",
+                                   "width": 515 }
+                    },
+                    {
+                        "type": "canvas-layer",
+                        "attrs": { "opacity": 0.5 },
+                        "children": [
+                            {
+                                "type": "canvas-rect",
+                                "attrs": { "x": 40, "y": 540, "w": 515, "h": 60,
+                                           "fill": "#e74c3c" }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }"##;
+
+    let engine = crate::LpdfEngine::new("");
+    let result = engine.render_tree_pdf(json);
+    let pdf_bytes = result.expect("canvas render should succeed");
+
+    // Verify it's a valid PDF.
+    assert!(pdf_bytes.starts_with(b"%PDF-"), "output should start with %PDF-");
+
+    // Snapshot / update.
+    let hash = sha256_hex(&pdf_bytes);
+    let snap_path = snapshots_dir().join("canvas_snapshot.pdf.sha256");
+
+    if std::env::var("UPDATE_SNAPSHOTS").is_ok() {
+        std::fs::write(&snap_path, &hash).expect("write snapshot");
+        println!("updated canvas snapshot: {hash}");
+    } else if snap_path.exists() {
+        let stored = std::fs::read_to_string(&snap_path).expect("read snapshot");
+        assert_eq!(
+            stored.trim(), hash,
+            "canvas PDF output changed — run with UPDATE_SNAPSHOTS=1 to accept"
+        );
+    } else {
+        // First run: write the snapshot.
+        std::fs::write(&snap_path, &hash).expect("write initial canvas snapshot");
+        println!("created initial canvas snapshot: {hash}");
+    }
+}

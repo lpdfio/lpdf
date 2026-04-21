@@ -19,6 +19,14 @@ pub enum RenderNode {
     Image(RenderImage),
     Barcode(RenderBarcode),
     Field(RenderField),
+    // Canvas primitives — constructed by canvas.rs; allow dead_code for WASI build.
+    #[allow(dead_code)] CanvasText(RenderCanvasText),
+    #[allow(dead_code)] CanvasRect(RenderCanvasRect),
+    #[allow(dead_code)] CanvasLine(RenderCanvasLine),
+    #[allow(dead_code)] CanvasEllipse(RenderCanvasEllipse),
+    #[allow(dead_code)] CanvasPath(RenderCanvasPath),
+    #[allow(dead_code)] CanvasImage(RenderCanvasImage),
+    #[allow(dead_code)] CanvasLayer(RenderCanvasLayer),
 }
 
 pub struct RenderBarcode {
@@ -117,6 +125,111 @@ pub struct RenderLink {
     pub width: f32,
     pub height: f32,
     pub debug_self: bool,
+    pub children: Vec<RenderNode>,
+}
+
+// ── Canvas primitives ─────────────────────────────────────────────────────────
+
+/// A text block placed at an absolute canvas position.
+/// Coordinates are top-left origin, y-down (flipped at PDF render time).
+pub struct RenderCanvasText {
+    pub x: f32,
+    pub y: f32,
+    pub font: String,
+    pub size: f32,
+    pub color: String,
+    /// "left" | "center" | "right" | "justify"
+    pub align: String,
+    pub line_height: f32,
+    /// Explicit wrap width (None = content width − x).
+    pub width: Option<f32>,
+    /// Plain text content; lines split on `\n`.
+    pub content: String,
+    /// Mixed-style runs (if non-empty, overrides `content`).
+    pub runs: Vec<RenderCanvasRun>,
+}
+
+pub struct RenderCanvasRun {
+    pub text: String,
+    pub font: Option<String>,
+    #[allow(dead_code)]
+    pub size: Option<f32>,
+    #[allow(dead_code)]
+    pub color: Option<String>,
+}
+
+pub struct RenderCanvasRect {
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+    pub fill: Option<String>,
+    pub stroke: Option<String>,
+    pub stroke_width: f32,
+    pub stroke_dash: Option<Vec<f32>>,
+    pub border_radius: f32,
+}
+
+pub struct RenderCanvasLine {
+    pub x1: f32,
+    pub y1: f32,
+    pub x2: f32,
+    pub y2: f32,
+    pub stroke: String,
+    pub stroke_width: f32,
+    pub stroke_dash: Option<Vec<f32>>,
+    /// 0 = butt, 1 = round, 2 = square
+    pub line_cap: u8,
+    /// 0 = miter, 1 = round, 2 = bevel
+    pub line_join: u8,
+}
+
+pub struct RenderCanvasEllipse {
+    pub cx: f32,
+    pub cy: f32,
+    pub rx: f32,
+    pub ry: f32,
+    pub fill: Option<String>,
+    pub stroke: Option<String>,
+    pub stroke_width: f32,
+    pub stroke_dash: Option<Vec<f32>>,
+}
+
+/// A canvas path using SVG-like command string (M, L, C, Z).
+pub struct RenderCanvasPath {
+    pub d: String,
+    pub fill: Option<String>,
+    pub stroke: Option<String>,
+    pub stroke_width: f32,
+    pub stroke_dash: Option<Vec<f32>>,
+    /// false = nonzero, true = evenodd
+    pub fill_rule_evenodd: bool,
+    pub line_cap: u8,
+    pub line_join: u8,
+}
+
+pub struct RenderCanvasImage {
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+    pub src: String,
+}
+
+pub struct RenderCanvasClip {
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+    pub border_radius: f32,
+}
+
+pub struct RenderCanvasLayer {
+    /// Optional 6-element CTM [a b c d e f] (PDF coordinate space).
+    pub transform: Option<[f32; 6]>,
+    pub clip: Option<RenderCanvasClip>,
+    /// 0.0–1.0 opacity (1.0 = fully opaque).
+    pub opacity: f32,
     pub children: Vec<RenderNode>,
 }
 
@@ -258,6 +371,60 @@ fn node_to_json(node: &RenderNode) -> Value {
                 "options":    f.options,
             })
         }
+        RenderNode::CanvasText(t) => json!({
+            "type":  "canvas-text",
+            "x":     r2(t.x),
+            "y":     r2(t.y),
+            "font":  t.font,
+            "size":  r2(t.size),
+            "color": t.color,
+            "align": t.align,
+        }),
+        RenderNode::CanvasRect(r) => json!({
+            "type":   "canvas-rect",
+            "x":      r2(r.x),
+            "y":      r2(r.y),
+            "w":      r2(r.w),
+            "h":      r2(r.h),
+            "fill":   r.fill,
+            "stroke": r.stroke,
+        }),
+        RenderNode::CanvasLine(l) => json!({
+            "type":   "canvas-line",
+            "x1":     r2(l.x1),
+            "y1":     r2(l.y1),
+            "x2":     r2(l.x2),
+            "y2":     r2(l.y2),
+            "stroke": l.stroke,
+        }),
+        RenderNode::CanvasEllipse(e) => json!({
+            "type":   "canvas-ellipse",
+            "cx":     r2(e.cx),
+            "cy":     r2(e.cy),
+            "rx":     r2(e.rx),
+            "ry":     r2(e.ry),
+            "fill":   e.fill,
+            "stroke": e.stroke,
+        }),
+        RenderNode::CanvasPath(p) => json!({
+            "type":   "canvas-path",
+            "d":      p.d,
+            "fill":   p.fill,
+            "stroke": p.stroke,
+        }),
+        RenderNode::CanvasImage(i) => json!({
+            "type": "canvas-image",
+            "x":    r2(i.x),
+            "y":    r2(i.y),
+            "w":    r2(i.w),
+            "h":    r2(i.h),
+            "src":  i.src,
+        }),
+        RenderNode::CanvasLayer(l) => json!({
+            "type":     "canvas-layer",
+            "opacity":  l.opacity,
+            "children": nodes_to_json(&l.children),
+        }),
     }
 }
 

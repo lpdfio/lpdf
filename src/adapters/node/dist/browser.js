@@ -119,7 +119,7 @@ var LpdfEngine = class {
     }
   }
   /**
-   * Render a JSON kit-tree document to PDF bytes.
+   * Render a JSON kit-tree or canvas-tree document to PDF bytes.
    *
    * This is the JSON counterpart of `render_pdf`. The Node adapter uses it
    * when an `LpdfDocument` Kit tree is passed to `renderPdf()`, avoiding an

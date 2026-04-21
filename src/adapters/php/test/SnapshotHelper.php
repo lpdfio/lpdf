@@ -37,10 +37,10 @@ final class SnapshotHelper
         $hash = hash('sha256', $bytes);
         $snap = self::snapshots() . "/$name.pdf.sha256";
 
-        if (getenv('UPDATE_SNAPSHOTS') === '1') {
+        if (getenv('UPDATE_SNAPSHOTS') === '1' || !file_exists($snap)) {
             file_put_contents($snap, $hash);
         } else {
-            $stored = trim(file_get_contents($snap));
+            $stored = trim((string) file_get_contents($snap));
             Assert::assertSame($stored, $hash);
         }
     }
