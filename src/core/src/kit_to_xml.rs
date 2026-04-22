@@ -269,19 +269,29 @@ fn render_node(node: &Value, depth: usize) -> String {
 
 fn render_page(page: &Value, depth: usize) -> String {
     let pad     = "  ".repeat(depth);
+    let inner   = "  ".repeat(depth + 1);
     let empty   = serde_json::Map::new();
     let attrs   = page.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
     let attrs_s = attrs_str(attrs, &[]);
 
-    let children = page.get("children").and_then(|v| v.as_array());
-    match children {
+    // page.children must contain at most one "layout" node
+    let layout_children = page
+        .get("children")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            arr.iter().find(|c| c.get("type").and_then(|v| v.as_str()) == Some("layout"))
+        })
+        .and_then(|layout| layout.get("children"))
+        .and_then(|v| v.as_array());
+
+    match layout_children {
         Some(arr) if !arr.is_empty() => {
-            let children_str = arr
+            let nodes_str = arr
                 .iter()
-                .map(|c| render_node(c, depth + 1))
+                .map(|c| render_node(c, depth + 2))
                 .collect::<Vec<_>>()
                 .join("\n");
-            format!("{pad}<page{attrs_s}>\n{children_str}\n{pad}</page>")
+            format!("{pad}<page{attrs_s}>\n{inner}<layout>\n{nodes_str}\n{inner}</layout>\n{pad}</page>")
         }
         _ => format!("{pad}<page{attrs_s}/>"),
     }
@@ -556,16 +566,22 @@ mod tests {
                 "type": "page",
                 "attrs": {},
                 "children": [{
-                    "type": "stack",
-                    "attrs": { "gap": "m" },
-                    "children": [
-                        { "type": "frame", "attrs": { "height": "40pt" }, "children": [] },
-                        { "type": "frame", "attrs": { "height": "40pt" }, "children": [] }
-                    ]
+                    "type": "layout",
+                    "attrs": {},
+                    "children": [{
+                        "type": "stack",
+                        "attrs": { "gap": "m" },
+                        "children": [
+                            { "type": "frame", "attrs": { "height": "40pt" }, "children": [] },
+                            { "type": "frame", "attrs": { "height": "40pt" }, "children": [] }
+                        ]
+                    }]
                 }]
             }]
         }"#;
         let xml = kit_to_xml(json).unwrap();
+        assert!(xml.contains("<layout>"));
+        assert!(xml.contains("</layout>"));
         assert!(xml.contains(r#"<stack gap="m">"#));
         assert!(xml.contains("</stack>"));
         assert!(xml.matches("<frame").count() >= 2);
@@ -581,9 +597,13 @@ mod tests {
                 "type": "page",
                 "attrs": {},
                 "children": [{
-                    "type": "text",
+                    "type": "layout",
                     "attrs": {},
-                    "children": ["Hello world"]
+                    "children": [{
+                        "type": "text",
+                        "attrs": {},
+                        "children": ["Hello world"]
+                    }]
                 }]
             }]
         }"#;
@@ -602,12 +622,16 @@ mod tests {
                 "type": "page",
                 "attrs": {},
                 "children": [{
-                    "type": "text",
+                    "type": "layout",
                     "attrs": {},
-                    "children": [
-                        "Total: ",
-                        { "type": "span", "attrs": { "bold": "true" }, "children": ["$100"] }
-                    ]
+                    "children": [{
+                        "type": "text",
+                        "attrs": {},
+                        "children": [
+                            "Total: ",
+                            { "type": "span", "attrs": { "bold": "true" }, "children": ["$100"] }
+                        ]
+                    }]
                 }]
             }]
         }"#;
@@ -625,7 +649,11 @@ mod tests {
             "children": [{
                 "type": "page",
                 "attrs": {},
-                "children": [{ "type": "divider", "attrs": { "color": "#ccc" }, "children": [] }]
+                "children": [{
+                    "type": "layout",
+                    "attrs": {},
+                    "children": [{ "type": "divider", "attrs": { "color": "#ccc" }, "children": [] }]
+                }]
             }]
         }"##;
         let xml = kit_to_xml(json).unwrap();
@@ -656,7 +684,11 @@ mod tests {
             "children": [{
                 "type": "page",
                 "attrs": {},
-                "children": [{ "type": "text", "attrs": {}, "children": ["5 < 10 & 3 > 1"] }]
+                "children": [{
+                    "type": "layout",
+                    "attrs": {},
+                    "children": [{ "type": "text", "attrs": {}, "children": ["5 < 10 & 3 > 1"] }]
+                }]
             }]
         }"#;
         let xml = kit_to_xml(json).unwrap();
@@ -710,9 +742,13 @@ mod tests {
                 "type": "page",
                 "attrs": {},
                 "children": [{
-                    "type": "text",
+                    "type": "layout",
                     "attrs": {},
-                    "children": ["Hello roundtrip"]
+                    "children": [{
+                        "type": "text",
+                        "attrs": {},
+                        "children": ["Hello roundtrip"]
+                    }]
                 }]
             }]
         }"##;

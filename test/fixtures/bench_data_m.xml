@@ -8,6 +8,7 @@
   <document size="a4" margin="48pt" font="body">
     <pages>
       <page>
+        <layout>
         <stack gap="l">
 
           <!-- document header -->
@@ -1755,6 +1756,7 @@
           <divider/>
 
         </stack>
+        </layout>
       </page>
     </pages>
   </document>

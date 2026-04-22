@@ -5,6 +5,7 @@
     <meta title="Benchmark Fixture XS" />
     <pages>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 1 1</text>
           <stack gap="m">
@@ -26,6 +27,7 @@
             <text font-size="m">Paragraph 13. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
           </stack>
         </stack>
+        </layout>
       </page>
     </pages>
   </document>

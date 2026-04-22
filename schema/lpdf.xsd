@@ -328,10 +328,18 @@
     </xs:complexType>
   </xs:element>
 
-  <xs:element name="page">
+  <xs:element name="layout">
     <xs:complexType>
       <xs:sequence>
         <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="page">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="layout" minOccurs="0" maxOccurs="1"/>
       </xs:sequence>
       <xs:attribute name="size"        type="PageSize"/>
       <xs:attribute name="orientation" type="Orientation"/>

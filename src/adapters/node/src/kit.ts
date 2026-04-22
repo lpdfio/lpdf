@@ -340,10 +340,16 @@ export interface LpdfTableNode {
 
 export type LpdfNode = LpdfContainerNode | LpdfTextNode | LpdfDividerNode | LpdfTableNode | LpdfImgNode | LpdfBarcodeNode;
 
+export interface LpdfLayoutNode {
+  type:     'layout';
+  attrs:    Record<string, never>;
+  children: LpdfNode[];
+}
+
 export interface LpdfPageNode {
   type:     'page';
   attrs:    Record<string, string>;
-  children: LpdfNode[];
+  children: LpdfLayoutNode[];
 }
 
 export interface LpdfDocument {
@@ -464,10 +470,14 @@ function barcode(input: BarcodeInput): LpdfBarcodeNode {
 }
 
 function page(input: PageInput = {}): LpdfPageNode {
+  const nodes = input.nodes ?? [];
+  const children: LpdfLayoutNode[] = nodes.length > 0
+    ? [{ type: 'layout', attrs: {}, children: nodes }]
+    : [];
   return {
     type:     'page',
     attrs:    buildAttrs((input.options ?? {}) as Record<string, string | undefined>),
-    children: input.nodes ?? [],
+    children,
   };
 }
 

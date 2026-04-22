@@ -309,7 +309,17 @@ internal sealed class LpdfNodeConverter : JsonConverter<LpdfNode>
                 break;
             case LpdfPageNode p:
                 WriteAttrs(writer, p.Attrs);
-                WriteChildren(writer, p.Children, options);
+                writer.WriteStartArray("children");
+                if (p.Children.Count > 0)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("type", "layout");
+                    writer.WriteStartObject("attrs");
+                    writer.WriteEndObject();
+                    WriteChildren(writer, p.Children, options);
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
                 break;
             case LpdfTextNode t:
                 WriteAttrs(writer, t.Attrs);

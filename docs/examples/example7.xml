@@ -15,6 +15,7 @@
     <meta title="Shipping Label — ORD-20260412-0087" />
     <pages>
       <page background="surface">
+        <layout>
         <stack gap="0pt" height="full">
 
           <!-- carrier header -->
@@ -99,6 +100,7 @@
           </frame>
 
         </stack>
+        </layout>
       </page>
     </pages>
   </document>

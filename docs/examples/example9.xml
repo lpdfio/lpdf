@@ -5,6 +5,7 @@
     <meta title="Auto-pagination demo — flowing text article" />
     <pages>
       <page>
+        <layout>
         <stack gap="m">
 
           <text font-size="xxl" font="Helvetica-Bold">The Quiet Revolution in Declarative Layout</text>
@@ -36,6 +37,7 @@
           <text font-size="s" color="text-muted" font="Helvetica-Oblique">— end of article —</text>
 
         </stack>
+        </layout>
       </page>
     </pages>
   </document>

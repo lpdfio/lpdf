@@ -17,6 +17,7 @@
 
       <!-- Front -->
       <page background="brand">
+        <layout>
         <stack padding="l" gap="m" height="full" justify="between">
 
           <!-- name + title -->
@@ -29,10 +30,12 @@
           <text font-size="m" font="Helvetica-Bold" color="surface">Acme Corp</text>
 
         </stack>
+        </layout>
       </page>
 
       <!-- Back -->
       <page background="surface">
+        <layout>
         <stack padding="l" gap="m" height="full" justify="between">
 
           <!-- company repeated small -->
@@ -59,6 +62,7 @@
           <text font-size="xs" color="text-muted">123 Business Ave, Suite 4 · San Francisco, CA 94107</text>
 
         </stack>
+        </layout>
       </page>
 
     </pages>

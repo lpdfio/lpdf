@@ -5,6 +5,7 @@
     <meta title="Benchmark Fixture L" />
     <pages>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 1 1</text>
           <stack gap="m">
@@ -65,8 +66,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 2 19</text>
           <stack gap="m">
@@ -127,8 +130,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 3 37</text>
           <stack gap="m">
@@ -189,8 +194,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 4 55</text>
           <stack gap="m">
@@ -251,8 +258,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 5 73</text>
           <stack gap="m">
@@ -313,8 +322,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 6 91</text>
           <stack gap="m">
@@ -375,8 +386,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 7 109</text>
           <stack gap="m">
@@ -437,8 +450,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 8 127</text>
           <stack gap="m">
@@ -499,8 +514,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 9 145</text>
           <stack gap="m">
@@ -561,8 +578,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 10 163</text>
           <stack gap="m">
@@ -623,8 +642,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 11 181</text>
           <stack gap="m">
@@ -685,8 +706,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 12 199</text>
           <stack gap="m">
@@ -747,8 +770,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 13 217</text>
           <stack gap="m">
@@ -809,8 +834,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 14 235</text>
           <stack gap="m">
@@ -871,8 +898,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 15 253</text>
           <stack gap="m">
@@ -933,8 +962,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 16 271</text>
           <stack gap="m">
@@ -995,8 +1026,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 17 289</text>
           <stack gap="m">
@@ -1057,8 +1090,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 18 307</text>
           <stack gap="m">
@@ -1119,8 +1154,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 19 325</text>
           <stack gap="m">
@@ -1181,8 +1218,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 20 343</text>
           <stack gap="m">
@@ -1243,8 +1282,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 21 361</text>
           <stack gap="m">
@@ -1305,8 +1346,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 22 379</text>
           <stack gap="m">
@@ -1367,8 +1410,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 23 397</text>
           <stack gap="m">
@@ -1429,8 +1474,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 24 415</text>
           <stack gap="m">
@@ -1491,8 +1538,10 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 25 433</text>
           <stack gap="m">
@@ -1553,6 +1602,7 @@
             </stack>
           </frame>
         </stack>
+        </layout>
       </page>
     </pages>
   </document>

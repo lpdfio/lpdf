@@ -14,6 +14,7 @@
     <meta title="Quarterly Investor Update — Q1 2026" />
     <pages>
       <page>
+        <layout>
 
         <!-- letterhead: only on page 1 -->
         <frame repeat="first" background="brand-soft" padding="m" radius="s">
@@ -77,6 +78,7 @@
           </split>
         </stack>
 
+        </layout>
       </page>
     </pages>
   </document>

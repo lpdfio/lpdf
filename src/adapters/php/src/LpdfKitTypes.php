@@ -386,10 +386,14 @@ final readonly class LpdfPageNode extends LpdfNode
 
     public function jsonSerialize(): mixed
     {
+        $pageChildren = empty($this->children)
+            ? []
+            : [['type' => 'layout', 'attrs' => (object) [], 'children' => $this->children]];
+
         return [
             'type'     => 'page',
             'attrs'    => (object) $this->attrs,
-            'children' => $this->children,
+            'children' => $pageChildren,
         ];
     }
 }

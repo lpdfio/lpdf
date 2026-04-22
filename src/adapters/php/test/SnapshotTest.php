@@ -130,7 +130,7 @@ final class SnapshotTest extends TestCase
 
     private static function minDoc(string $body): string
     {
-        return '<lpdf version="1"><document><pages><page>' . $body . '</page></pages></document></lpdf>';
+        return '<lpdf version="1"><document><pages><page><layout>' . $body . '</layout></page></pages></document></lpdf>';
     }
 
     public function testDataValueSubstitutesScalar(): void

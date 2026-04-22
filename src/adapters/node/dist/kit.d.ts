@@ -338,10 +338,15 @@ export interface LpdfTableNode {
     children: (LpdfTheadNode | LpdfTrNode)[];
 }
 export type LpdfNode = LpdfContainerNode | LpdfTextNode | LpdfDividerNode | LpdfTableNode | LpdfImgNode | LpdfBarcodeNode;
+export interface LpdfLayoutNode {
+    type: 'layout';
+    attrs: Record<string, never>;
+    children: LpdfNode[];
+}
 export interface LpdfPageNode {
     type: 'page';
     attrs: Record<string, string>;
-    children: LpdfNode[];
+    children: LpdfLayoutNode[];
 }
 export interface LpdfDocument {
     version: 1;

@@ -2684,9 +2684,13 @@ mod tests {
     }
 
     fn minimal(body: &str) -> String {
-        format!(
-            r#"<lpdf version="1"><document size="a4" margin="28pt"><pages><page>{body}</page></pages></document></lpdf>"#
-        )
+        if body.is_empty() {
+            r#"<lpdf version="1"><document size="a4" margin="28pt"><pages><page/></pages></document></lpdf>"#.to_string()
+        } else {
+            format!(
+                r#"<lpdf version="1"><document size="a4" margin="28pt"><pages><page><layout>{body}</layout></page></pages></document></lpdf>"#
+            )
+        }
     }
 
     #[test]
@@ -3203,12 +3207,12 @@ mod tests {
                 <space xs="1pt" s="2pt" m="50pt" l="100pt" xl="200pt" xxl="400pt" />
             </tokens>
             <document size="a4" margin="0pt">
-                <pages><page>
+                <pages><page><layout>
                     <stack gap="m">
                         <frame height="20pt" />
                         <frame height="20pt" />
                     </stack>
-                </page></pages>
+                </layout></page></pages>
             </document>
         </lpdf>"#;
         let tree = engine_render(xml);
@@ -3231,9 +3235,9 @@ mod tests {
                 </colors>
             </tokens>
             <document size="a4" margin="0pt">
-                <pages><page>
+                <pages><page><layout>
                     <frame height="20pt" background="primary" />
-                </page></pages>
+                </layout></page></pages>
             </document>
         </lpdf>"##;
         let tree = engine_render(xml);

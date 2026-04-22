@@ -495,9 +495,13 @@ mod tests {
     }
 
     fn minimal(body: &str) -> String {
-        format!(
-            r#"<lpdf version="1"><document size="a4" margin="28pt"><pages><page>{body}</page></pages></document></lpdf>"#
-        )
+        if body.is_empty() {
+            r#"<lpdf version="1"><document size="a4" margin="28pt"><pages><page/></pages></document></lpdf>"#.to_string()
+        } else {
+            format!(
+                r#"<lpdf version="1"><document size="a4" margin="28pt"><pages><page><layout>{body}</layout></page></pages></document></lpdf>"#
+            )
+        }
     }
 
     #[test]
@@ -557,24 +561,26 @@ mod tests {
             <document size="a4" margin="28pt">
                 <pages>
                     <page background="surface">
-                        <stack gap="m">
-                            <frame background="primary" padding="m" radius="s">
-                                <flank gap="m" align="center" end="true">
-                                    <frame width="120pt" height="24pt" background="secondary" radius="xs" />
-                                    <frame width="80pt" height="14pt" background="surface" radius="xs" />
-                                </flank>
-                            </frame>
-                            <divider color="#e0e0e0" thickness="xs" />
-                            <grid cols="3" gap="m">
-                                <frame padding="s" border="xs #e0e0e0" radius="xs">
-                                    <stack gap="s">
-                                        <frame height="10pt" background="text-muted" radius="xs" />
-                                    </stack>
+                        <layout>
+                            <stack gap="m">
+                                <frame background="primary" padding="m" radius="s">
+                                    <flank gap="m" align="center" end="true">
+                                        <frame width="120pt" height="24pt" background="secondary" radius="xs" />
+                                        <frame width="80pt" height="14pt" background="surface" radius="xs" />
+                                    </flank>
                                 </frame>
-                                <frame padding="s" border="xs #e0e0e0" radius="xs" />
-                                <frame padding="s" border="xs #e0e0e0" radius="xs" />
-                            </grid>
-                        </stack>
+                                <divider color="#e0e0e0" thickness="xs" />
+                                <grid cols="3" gap="m">
+                                    <frame padding="s" border="xs #e0e0e0" radius="xs">
+                                        <stack gap="s">
+                                            <frame height="10pt" background="text-muted" radius="xs" />
+                                        </stack>
+                                    </frame>
+                                    <frame padding="s" border="xs #e0e0e0" radius="xs" />
+                                    <frame padding="s" border="xs #e0e0e0" radius="xs" />
+                                </grid>
+                            </stack>
+                        </layout>
                     </page>
                 </pages>
             </document>

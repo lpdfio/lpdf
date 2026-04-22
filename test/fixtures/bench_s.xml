@@ -5,6 +5,7 @@
     <meta title="Benchmark Fixture S" />
     <pages>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 1 1</text>
           <stack gap="m">
@@ -35,8 +36,10 @@
             <text font-size="m">Paragraph 12. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
           </stack>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 2 13</text>
           <stack gap="m">
@@ -67,8 +70,10 @@
             <text font-size="m">Paragraph 24. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
           </stack>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 3 25</text>
           <stack gap="m">
@@ -99,8 +104,10 @@
             <text font-size="m">Paragraph 36. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
           </stack>
         </stack>
+        </layout>
       </page>
       <page>
+        <layout>
         <stack gap="l">
           <text font-size="xl" font="Helvetica-Bold">Page 4 37</text>
           <stack gap="m">
@@ -131,6 +138,7 @@
             <text font-size="m">Paragraph 48. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
           </stack>
         </stack>
+        </layout>
       </page>
     </pages>
   </document>

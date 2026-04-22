@@ -3,6 +3,7 @@
   <document size="a4" margin="40pt">
     <pages>
       <page>
+        <layout>
         <!-- Basic table with header, stripe, border, and mixed column widths -->
         <table cols="2fr 1fr 1fr 1fr" border="0.5pt #cccccc" stripe="#f5f5f5">
 
@@ -56,6 +57,7 @@
           </tr>
         </table>
 
+        </layout>
       </page>
     </pages>
   </document>

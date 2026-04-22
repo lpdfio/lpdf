@@ -18,6 +18,7 @@
     <meta title="Platform Features" author="Acme Corp" subject="Product Overview" />
     <pages>
       <page background="surface">
+        <layout>
         <stack gap="l">
 
           <!-- page header -->
@@ -186,6 +187,7 @@
           <text font-size="s" color="text-muted">All features are available on Pro and Enterprise plans. Contact sales@acmecorp.example for custom pricing.</text>
 
         </stack>
+        </layout>
       </page>
     </pages>
   </document>

@@ -17,6 +17,7 @@
     <pages>
 
       <page background="surface">
+        <layout>
         <stack gap="xl">
 
           <!-- Header -->
@@ -106,6 +107,7 @@
           </frame>
 
         </stack>
+        </layout>
       </page>
 
     </pages>

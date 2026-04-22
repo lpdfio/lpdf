@@ -45,7 +45,7 @@ benchmark:
 	@echo "-------------------------------"
 	@echo ">>> Running benchmarks (xs–xl)..."
 	@echo ""
-	cargo bench --manifest-path src/core/Cargo.toml --bench pipeline --bench images --bench fonts -- --output-format bencher parse_xml/ layout/ end_to_end/ data/
+	cargo bench --manifest-path src/core/Cargo.toml --bench pipeline --bench images --bench fonts -- "parse_xml/|layout/|end_to_end/|data/"
 
 benchmark-x:
 	@echo ""
@@ -53,7 +53,7 @@ benchmark-x:
 	@echo ">>> Running extended benchmarks (xxl + max)..."
 	@echo ">>> Warning: this may take 10+ minutes."
 	@echo ""
-	cargo bench --manifest-path src/core/Cargo.toml --bench pipeline -- --output-format bencher parse_xml_x/ layout_x/ end_to_end_x/
+	cargo bench --manifest-path src/core/Cargo.toml --bench pipeline -- "parse_xml_x/|layout_x/|end_to_end_x/"
 
 gen-fixtures:
 	@echo ""

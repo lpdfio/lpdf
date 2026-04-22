@@ -273,10 +273,15 @@ class LpdfPageNode:
         self._children = children
 
     def to_dict(self) -> dict:
+        page_children = (
+            [{"type": "layout", "attrs": {}, "children": [_node_to_dict(c) for c in self._children]}]
+            if self._children
+            else []
+        )
         return {
             "type": "page",
             "attrs": self._attrs,
-            "children": [_node_to_dict(c) for c in self._children],
+            "children": page_children,
         }
 
 

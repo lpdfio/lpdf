@@ -123,10 +123,14 @@ function barcode(input) {
     };
 }
 function page(input = {}) {
+    const nodes = input.nodes ?? [];
+    const children = nodes.length > 0
+        ? [{ type: 'layout', attrs: {}, children: nodes }]
+        : [];
     return {
         type: 'page',
         attrs: buildAttrs((input.options ?? {})),
-        children: input.nodes ?? [],
+        children,
     };
 }
 function document(input = {}) {

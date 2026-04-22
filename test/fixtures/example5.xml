@@ -18,6 +18,7 @@
     <meta title="NorthStar Conf 2026 — Ticket" />
     <pages>
       <page background="surface">
+        <layout>
 
         <split gap="0pt" align="stretch" height="full">
 
@@ -77,6 +78,7 @@
 
         </split>
 
+        </layout>
       </page>
     </pages>
   </document>

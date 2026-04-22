@@ -16,6 +16,7 @@
     <meta title="Invoice #1042" author="Acme Corp" subject="Invoice" />
     <pages>
       <page background="surface">
+        <layout>
         <stack gap="l" height="full" justify="between">
 
           <!-- header: logo area + invoice label -->
@@ -145,6 +146,7 @@
           </stack>
 
         </stack>
+        </layout>
       </page>
     </pages>
   </document>

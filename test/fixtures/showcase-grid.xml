@@ -17,6 +17,7 @@
 
       <!-- Grid -->
       <page background="surface">
+        <layout>
         <stack gap="xl">
 
           <stack gap="xs">
@@ -188,6 +189,7 @@
           </stack>
 
         </stack>
+        </layout>
       </page>
 
     </pages>

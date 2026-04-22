@@ -770,7 +770,16 @@ fn parse_page(
 
     let mut children = Vec::new();
     for child in elems(elem) {
-        children.push(parse_node(&child, tokens, asset_images)?);
+        match child.tag_name().name() {
+            "layout" => {
+                for layout_child in elems(&child) {
+                    children.push(parse_node(&layout_child, tokens, asset_images)?);
+                }
+            }
+            other => return Err(format!(
+                "unexpected element in <page>: <{other}>; wrap layout content in <layout>"
+            )),
+        }
     }
 
     Ok(ParsedPage { width: size.0, height: size.1, margin, background, debug, children })
@@ -1520,9 +1529,18 @@ fn parse_tree_page(
     let debug = apply_page_overrides(&mut size, &mut margin, &mut background, &a, tokens, doc_debug)?;
 
     let children = if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
-        arr.iter()
-           .map(|c| parse_tree_node(c, tokens, asset_images))
-           .collect::<Result<Vec<_>, _>>()?
+        // page.children must contain at most one "layout" node; its children are the layout nodes.
+        let mut result = Vec::new();
+        for child in arr {
+            if child.get("type").and_then(|v| v.as_str()) == Some("layout") {
+                if let Some(layout_arr) = child.get("children").and_then(|v| v.as_array()) {
+                    for lc in layout_arr {
+                        result.push(parse_tree_node(lc, tokens, asset_images)?);
+                    }
+                }
+            }
+        }
+        result
     } else {
         vec![]
     };
@@ -1689,9 +1707,15 @@ mod tests {
     use super::*;
 
     fn minimal(body: &str) -> String {
-        format!(
-            r#"<lpdf version="1"><document size="a4" margin="28pt"><pages><page>{body}</page></pages></document></lpdf>"#
-        )
+        if body.is_empty() {
+            format!(
+                r#"<lpdf version="1"><document size="a4" margin="28pt"><pages><page/></pages></document></lpdf>"#
+            )
+        } else {
+            format!(
+                r#"<lpdf version="1"><document size="a4" margin="28pt"><pages><page><layout>{body}</layout></page></pages></document></lpdf>"#
+            )
+        }
     }
 
     #[test]
@@ -1753,9 +1777,9 @@ mod tests {
             <assets>
                 <font name="body" core="Helvetica-Oblique"/>
             </assets>
-            <document size="a4" font="body"><pages><page>
+            <document size="a4" font="body"><pages><page><layout>
                 <text>Hello</text>
-            </page></pages></document>
+            </layout></page></pages></document>
         </lpdf>"#;
         let doc = parse(xml).unwrap();
         let t = &doc.pages[0].children[0];
@@ -1765,9 +1789,9 @@ mod tests {
     #[test]
     fn font_size_inheritance() {
         let xml = r#"<lpdf version="1">
-            <document size="a4"><pages><page>
+            <document size="a4"><pages><page><layout>
                 <stack font-size="14pt"><text>Hello</text></stack>
-            </page></pages></document>
+            </layout></page></pages></document>
         </lpdf>"#;
         let doc = parse(xml).unwrap();
         let stack = &doc.pages[0].children[0];
@@ -1781,9 +1805,9 @@ mod tests {
             <assets>
                 <image name="logo"/>
             </assets>
-            <document size="a4"><pages><page>
+            <document size="a4"><pages><page><layout>
                 <img name="logo" width="100pt"/>
-            </page></pages></document>
+            </layout></page></pages></document>
         </lpdf>"#;
         let doc = parse(xml).unwrap();
         let img = &doc.pages[0].children[0];
@@ -1819,7 +1843,7 @@ mod tests {
                     <color name="primary" value="#ff0000" />
                 </colors>
             </tokens>
-            <document size="a4"><pages><page><frame background="primary" /></page></pages></document>
+            <document size="a4"><pages><page><layout><frame background="primary" /></layout></page></pages></document>
         </lpdf>"##;
         let doc = parse(xml).unwrap();
         assert_eq!(

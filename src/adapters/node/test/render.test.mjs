@@ -12,7 +12,8 @@ import { LpdfEngine, LpdfKit, kitToXml } from '../dist/index.js';
 
 /** Minimal valid lpdf document wrapping arbitrary body XML. */
 function doc(body) {
-  return `<lpdf version="1"><document><pages><page>${body}</page></pages></document></lpdf>`;
+  const inner = body.trim() ? `<layout>${body}</layout>` : '';
+  return `<lpdf version="1"><document><pages><page>${inner}</page></pages></document></lpdf>`;
 }
 
 // ── LpdfEngine class ──────────────────────────────────────────────────────────
