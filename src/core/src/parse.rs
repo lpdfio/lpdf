@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use crate::tokens::{parse_pt, FontDef, FontWidths, Tokens};
+use crate::canvas::{self, Canvas};
 
 // ── Resolved document model (layout / render operate on these) ────────────────
 
@@ -35,18 +36,32 @@ impl Document {
             let debug  = section.options.debug.unwrap_or(self.debug);
 
             // Collect layout nodes including regions converted to Repeat::Page nodes.
+            // Canvas layers before the first <layout> become underlays; after → overlays.
             let mut children: Vec<Node> = Vec::new();
+            let mut underlays: Vec<canvas::CanvasLayer> = Vec::new();
+            let mut overlays:  Vec<canvas::CanvasLayer> = Vec::new();
+            let mut seen_layout = false;
             for sc in &section.children {
-                if let SectionChild::Layout(layout) = sc {
-                    for lc in &layout.children {
-                        match lc {
-                            LayoutChild::Content(node) => children.push(node.clone()),
-                            LayoutChild::Region(reg)   => children.push(region_to_compat_node(reg)),
+                match sc {
+                    SectionChild::Layout(layout) => {
+                        seen_layout = true;
+                        for lc in &layout.children {
+                            match lc {
+                                LayoutChild::Content(node) => children.push(node.clone()),
+                                LayoutChild::Region(reg)   => children.push(region_to_compat_node(reg)),
+                            }
+                        }
+                    }
+                    SectionChild::Canvas(cv) => {
+                        if seen_layout {
+                            overlays.extend(cv.layers.iter().cloned());
+                        } else {
+                            underlays.extend(cv.layers.iter().cloned());
                         }
                     }
                 }
             }
-            result.push(SectionLayout { width, height, margin, background: bg, debug, children });
+            result.push(SectionLayout { width, height, margin, background: bg, debug, children, underlays, overlays });
         }
         result
     }
@@ -72,7 +87,6 @@ fn region_to_compat_node(reg: &LayoutRegion) -> Node {
 }
 
 // ── New section / canvas types ────────────────────────────────────────────────
-// Canvas rendering is not yet implemented; fields are read in a future phase.
 
 /// A page-range within a `PageScope`.  `end = None` means "last".
 #[allow(dead_code)]
@@ -91,159 +105,6 @@ pub enum PageScope {
     Odd,
     Even,
     Pages(Vec<PageRange>),
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq)]
-pub enum Anchor {
-    TopLeft, TopCenter, TopRight,
-    CenterLeft, Center, CenterRight,
-    BottomLeft, BottomCenter, BottomRight,
-}
-
-/// Coordinate mode for canvas primitives.
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub enum CanvasPosition {
-    /// Absolute page coordinates (top-left origin, y-down).
-    Absolute { x: f32, y: f32 },
-    /// Anchor reference point + signed offset (x+ = right, y+ = down).
-    Anchored  { anchor: Anchor, dx: f32, dy: f32 },
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct CanvasRect {
-    pub pos:          CanvasPosition,
-    pub w:            f32,
-    pub h:            f32,
-    pub fill:         Option<String>,
-    pub stroke:       Option<String>,
-    pub stroke_width: Option<f32>,
-    pub stroke_dash:  Option<String>,
-    pub radius:       Option<f32>,
-    pub opacity:      Option<f32>,
-}
-
-/// Circle: `pos` is the centre point.
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct CanvasCircle {
-    pub pos:          CanvasPosition,
-    pub r:            f32,
-    pub fill:         Option<String>,
-    pub stroke:       Option<String>,
-    pub stroke_width: Option<f32>,
-    pub stroke_dash:  Option<String>,
-    pub opacity:      Option<f32>,
-}
-
-/// Ellipse: `pos` is the centre point (cx/cy).
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct CanvasEllipse {
-    pub pos:          CanvasPosition,
-    pub rx:           f32,
-    pub ry:           f32,
-    pub fill:         Option<String>,
-    pub stroke:       Option<String>,
-    pub stroke_width: Option<f32>,
-    pub stroke_dash:  Option<String>,
-    pub opacity:      Option<f32>,
-}
-
-/// Line: no anchor — absolute coordinates always required.
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct CanvasLine {
-    pub x1:           f32,
-    pub y1:           f32,
-    pub x2:           f32,
-    pub y2:           f32,
-    pub stroke:       Option<String>,
-    pub stroke_width: Option<f32>,
-    pub stroke_dash:  Option<String>,
-    pub line_cap:     Option<String>,
-}
-
-/// Path: no anchor — coordinates are embedded in the SVG `d` string.
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct CanvasPath {
-    pub d:            String,
-    pub fill:         Option<String>,
-    pub stroke:       Option<String>,
-    pub fill_rule:    Option<String>,
-    pub stroke_width: Option<f32>,
-    pub stroke_dash:  Option<String>,
-    pub line_cap:     Option<String>,
-    pub opacity:      Option<f32>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct CanvasTextRun {
-    pub text:  String,
-    pub font:  Option<String>,
-    pub color: Option<String>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct CanvasText {
-    pub pos:         CanvasPosition,
-    pub font:        Option<String>,
-    pub font_size:   Option<f32>,
-    pub color:       Option<String>,
-    pub align:       Option<String>,
-    pub w:           Option<f32>,
-    pub line_height: Option<f32>,
-    pub opacity:     Option<f32>,
-    /// Plain text content (empty when `runs` is non-empty).
-    pub content:     String,
-    /// Mixed-run children from `<span>` elements.
-    pub runs:        Vec<CanvasTextRun>,
-    pub data_attrs:  Option<Box<DataAttrs>>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct CanvasImg {
-    pub name:       String,
-    pub pos:        CanvasPosition,
-    pub w:          f32,
-    pub h:          f32,
-    pub data_attrs: Option<Box<DataAttrs>>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub enum CanvasPrimitive {
-    Rect(CanvasRect),
-    Circle(CanvasCircle),
-    Ellipse(CanvasEllipse),
-    Line(CanvasLine),
-    Path(CanvasPath),
-    Text(CanvasText),
-    Img(CanvasImg),
-}
-
-/// Graphics-state scope inside a `<canvas>`.  Contains only flat primitives
-/// (no nested layers).  Document order of layers is paint order (first = bottom).
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct CanvasLayer {
-    pub children:  Vec<CanvasPrimitive>,
-    pub page:      Option<PageScope>,
-    pub opacity:   Option<f32>,
-    pub transform: Option<String>,
-    pub clip:      Option<String>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct Canvas {
-    pub layers: Vec<CanvasLayer>,
 }
 
 #[allow(dead_code)]
@@ -321,6 +182,8 @@ pub struct SectionLayout {
     pub background: Option<String>,
     pub debug: bool,
     pub children: Vec<Node>,
+    pub underlays: Vec<canvas::CanvasLayer>,
+    pub overlays: Vec<canvas::CanvasLayer>,
 }
 
 #[derive(Debug, Clone)]
@@ -1097,240 +960,6 @@ pub fn parse_signed_measurement(s: &str) -> Result<f32, String> {
     Ok(if neg { -val } else { val })
 }
 
-/// Parse `anchor` attribute to `Anchor`.
-pub fn parse_anchor(s: &str) -> Result<Anchor, String> {
-    match s {
-        "top-left"      => Ok(Anchor::TopLeft),
-        "top-center"    => Ok(Anchor::TopCenter),
-        "top-right"     => Ok(Anchor::TopRight),
-        "center-left"   => Ok(Anchor::CenterLeft),
-        "center"        => Ok(Anchor::Center),
-        "center-right"  => Ok(Anchor::CenterRight),
-        "bottom-left"   => Ok(Anchor::BottomLeft),
-        "bottom-center" => Ok(Anchor::BottomCenter),
-        "bottom-right"  => Ok(Anchor::BottomRight),
-        other => Err(format!("invalid anchor: '{other}'")),
-    }
-}
-
-/// Parse canvas position from element attributes.
-/// If `anchor` is present → `Anchored`.  Otherwise → `Absolute`.
-fn parse_canvas_position(elem: &roxmltree::Node) -> Result<CanvasPosition, String> {
-    if let Some(a) = elem.attribute("anchor") {
-        let anchor = parse_anchor(a)?;
-        let dx = elem.attribute("x")
-            .map(parse_signed_measurement)
-            .transpose()?
-            .unwrap_or(0.0);
-        let dy = elem.attribute("y")
-            .map(parse_signed_measurement)
-            .transpose()?
-            .unwrap_or(0.0);
-        Ok(CanvasPosition::Anchored { anchor, dx, dy })
-    } else {
-        let x = elem.attribute("x")
-            .map(parse_signed_measurement)
-            .transpose()?
-            .unwrap_or(0.0);
-        let y = elem.attribute("y")
-            .map(parse_signed_measurement)
-            .transpose()?
-            .unwrap_or(0.0);
-        Ok(CanvasPosition::Absolute { x, y })
-    }
-}
-
-/// Parse a canvas `<rect>` element.
-fn parse_canvas_rect(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
-    let pos          = parse_canvas_position(elem)?;
-    let w            = parse_measurement(elem.attribute("w").unwrap_or("0pt"))?;
-    let h            = parse_measurement(elem.attribute("h").unwrap_or("0pt"))?;
-    let fill         = opt_canvas_color(elem, "fill", tokens)?;
-    let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
-    let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
-    let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
-    let radius       = elem.attribute("radius").map(parse_measurement).transpose()?;
-    let opacity      = elem.attribute("opacity").map(|v| v.parse::<f32>().map_err(|_| format!("invalid opacity '{v}'"))).transpose()?;
-    Ok(CanvasPrimitive::Rect(CanvasRect { pos, w, h, fill, stroke, stroke_width, stroke_dash, radius, opacity }))
-}
-
-fn parse_canvas_circle(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
-    let pos          = parse_canvas_position(elem)?;
-    let r            = parse_measurement(elem.attribute("r").unwrap_or("0pt"))?;
-    let fill         = opt_canvas_color(elem, "fill", tokens)?;
-    let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
-    let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
-    let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
-    let opacity      = elem.attribute("opacity").map(|v| v.parse::<f32>().map_err(|_| format!("invalid opacity '{v}'"))).transpose()?;
-    Ok(CanvasPrimitive::Circle(CanvasCircle { pos, r, fill, stroke, stroke_width, stroke_dash, opacity }))
-}
-
-fn parse_canvas_ellipse(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
-    let pos          = parse_canvas_position(elem)?;
-    let rx           = parse_measurement(elem.attribute("rx").unwrap_or("0pt"))?;
-    let ry           = parse_measurement(elem.attribute("ry").unwrap_or("0pt"))?;
-    let fill         = opt_canvas_color(elem, "fill", tokens)?;
-    let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
-    let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
-    let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
-    let opacity      = elem.attribute("opacity").map(|v| v.parse::<f32>().map_err(|_| format!("invalid opacity '{v}'"))).transpose()?;
-    Ok(CanvasPrimitive::Ellipse(CanvasEllipse { pos, rx, ry, fill, stroke, stroke_width, stroke_dash, opacity }))
-}
-
-fn parse_canvas_line(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
-    let x1           = parse_signed_measurement(elem.attribute("x1").unwrap_or("0pt"))?;
-    let y1           = parse_signed_measurement(elem.attribute("y1").unwrap_or("0pt"))?;
-    let x2           = parse_signed_measurement(elem.attribute("x2").unwrap_or("0pt"))?;
-    let y2           = parse_signed_measurement(elem.attribute("y2").unwrap_or("0pt"))?;
-    let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
-    let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
-    let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
-    let line_cap     = elem.attribute("line-cap").map(str::to_string);
-    Ok(CanvasPrimitive::Line(CanvasLine { x1, y1, x2, y2, stroke, stroke_width, stroke_dash, line_cap }))
-}
-
-fn parse_canvas_path(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
-    let d            = elem.attribute("d").unwrap_or("").to_string();
-    let fill         = opt_canvas_color(elem, "fill", tokens)?;
-    let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
-    let fill_rule    = elem.attribute("fill-rule").map(str::to_string);
-    let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
-    let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
-    let line_cap     = elem.attribute("line-cap").map(str::to_string);
-    let opacity      = elem.attribute("opacity").map(|v| v.parse::<f32>().map_err(|_| format!("invalid opacity '{v}'"))).transpose()?;
-    Ok(CanvasPrimitive::Path(CanvasPath { d, fill, stroke, fill_rule, stroke_width, stroke_dash, line_cap, opacity }))
-}
-
-fn parse_canvas_text_elem(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
-    let pos        = parse_canvas_position(elem)?;
-    let font       = elem.attribute("font").map(str::to_string);
-    let font_size  = elem.attribute("font-size").map(parse_measurement).transpose()?;
-    let color      = opt_canvas_color(elem, "color", tokens)?;
-    let align      = elem.attribute("align").map(str::to_string);
-    let w          = elem.attribute("w").map(parse_measurement).transpose()?;
-    let line_height = elem.attribute("line-height").map(parse_measurement).transpose()?;
-    let opacity    = elem.attribute("opacity").map(|v| v.parse::<f32>().map_err(|_| format!("invalid opacity '{v}'"))).transpose()?;
-
-    let mut content = String::new();
-    let mut runs    = Vec::new();
-
-    for child in elem.children() {
-        if child.is_text() {
-            let txt = child.text().unwrap_or("").split_whitespace().collect::<Vec<_>>().join(" ");
-            if !txt.is_empty() { content.push_str(&txt); }
-        } else if child.is_element() && child.tag_name().name() == "span" {
-            let span_text = child.children()
-                .filter(|n| n.is_text())
-                .filter_map(|n| n.text())
-                .collect::<String>()
-                .split_whitespace().collect::<Vec<_>>().join(" ");
-            runs.push(CanvasTextRun {
-                text:  span_text,
-                font:  child.attribute("font").map(str::to_string),
-                color: if let Some(c) = child.attribute("color") {
-                    Some(tokens.resolve_color(c)?)
-                } else { None },
-            });
-        }
-    }
-
-    let data_attrs = parse_canvas_data_attrs(elem);
-    Ok(CanvasPrimitive::Text(CanvasText {
-        pos, font, font_size, color, align, w, line_height, opacity,
-        content, runs, data_attrs,
-    }))
-}
-
-fn parse_canvas_img_elem(
-    elem: &roxmltree::Node,
-    asset_images: &HashMap<String, String>,
-) -> Result<CanvasPrimitive, String> {
-    let name_raw = elem.attribute("name")
-        .ok_or("<img> (canvas) missing required attribute 'name'")?;
-    validate_img_asset(name_raw, asset_images, "<assets>")?;
-    let name    = asset_images[name_raw].clone();
-    let pos     = parse_canvas_position(elem)?;
-    let w       = parse_measurement(elem.attribute("w").unwrap_or("0pt"))?;
-    let h       = parse_measurement(elem.attribute("h").unwrap_or("0pt"))?;
-    let data_attrs = parse_canvas_data_attrs(elem);
-    Ok(CanvasPrimitive::Img(CanvasImg { name, pos, w, h, data_attrs }))
-}
-
-fn parse_canvas_data_attrs(elem: &roxmltree::Node) -> Option<Box<DataAttrs>> {
-    let dv  = elem.attribute("data-value").map(str::to_owned);
-    let ds  = elem.attribute("data-source").map(str::to_owned);
-    let di  = elem.attribute("data-if").map(str::to_owned);
-    let din = elem.attribute("data-if-not").map(str::to_owned);
-    if dv.is_some() || ds.is_some() || di.is_some() || din.is_some() {
-        Some(Box::new(DataAttrs { data_value: dv, data_source: ds, data_if: di, data_if_not: din }))
-    } else {
-        None
-    }
-}
-
-/// Resolve an optional color attribute, returning `None` if absent.
-fn opt_canvas_color(
-    elem:   &roxmltree::Node,
-    attr:   &str,
-    tokens: &Tokens,
-) -> Result<Option<String>, String> {
-    elem.attribute(attr).map(|v| tokens.resolve_color(v)).transpose()
-}
-
-/// Parse a `<canvas>` element into a `Canvas`.
-fn parse_canvas_elem(
-    elem:         &roxmltree::Node,
-    tokens:       &Tokens,
-    asset_images: &HashMap<String, String>,
-) -> Result<Canvas, String> {
-    let mut layers = Vec::new();
-    for child in elems(elem) {
-        match child.tag_name().name() {
-            "layer" => layers.push(parse_canvas_layer_elem(&child, tokens, asset_images)?),
-            other   => return Err(format!("<canvas> only accepts <layer> children, got <{other}>")),
-        }
-    }
-    Ok(Canvas { layers })
-}
-
-fn parse_canvas_layer_elem(
-    elem:         &roxmltree::Node,
-    tokens:       &Tokens,
-    asset_images: &HashMap<String, String>,
-) -> Result<CanvasLayer, String> {
-    let page = elem.attribute("page")
-        .map(parse_page_scope)
-        .transpose()?;
-    let opacity = elem.attribute("opacity")
-        .map(|v| v.parse::<f32>().map_err(|_| format!("invalid layer opacity '{v}'")))
-        .transpose()?;
-    let transform = elem.attribute("transform").map(str::to_string);
-    let clip      = elem.attribute("clip").map(str::to_string);
-
-    let mut children = Vec::new();
-    for child in elems(elem) {
-        children.push(parse_canvas_primitive_elem(&child, tokens, asset_images)?);
-    }
-    Ok(CanvasLayer { children, page, opacity, transform, clip })
-}
-
-fn parse_canvas_primitive_elem(
-    elem:         &roxmltree::Node,
-    tokens:       &Tokens,
-    asset_images: &HashMap<String, String>,
-) -> Result<CanvasPrimitive, String> {
-    match elem.tag_name().name() {
-        "rect"    => parse_canvas_rect(elem, tokens),
-        "circle"  => parse_canvas_circle(elem, tokens),
-        "ellipse" => parse_canvas_ellipse(elem, tokens),
-        "line"    => parse_canvas_line(elem, tokens),
-        "path"    => parse_canvas_path(elem, tokens),
-        "text"    => parse_canvas_text_elem(elem, tokens),
-        "img"     => parse_canvas_img_elem(elem, asset_images),
-        other => Err(format!("unknown canvas primitive: <{other}>")),
-    }
-}
-
 /// Parse a `<layout>` element that may contain `<region>` and layout nodes.
 #[allow(dead_code)]
 fn parse_layout_with_regions(
@@ -1437,7 +1066,7 @@ fn parse_section_elem(
             }
             "canvas" => {
                 children.push(SectionChild::Canvas(
-                    parse_canvas_elem(&child, tokens, asset_images)?
+                    canvas::parse_canvas_elem(&child, tokens, asset_images, size.0, size.1)?
                 ));
             }
             other => return Err(format!(
@@ -1655,7 +1284,7 @@ fn is_url(s: &str) -> bool {
 
 // ── XML helpers ───────────────────────────────────────────────────────────────
 
-fn elems<'a>(
+pub(crate) fn elems<'a>(
     node: &'a roxmltree::Node<'a, 'a>,
 ) -> impl Iterator<Item = roxmltree::Node<'a, 'a>> {
     node.children().filter(|n| n.is_element())
@@ -1679,7 +1308,7 @@ fn opt_attr(elem: &roxmltree::Node, name: &str) -> String {
 // ── Shared node construction helpers ─────────────────────────────────────────
 
 /// Read a string attribute from a JSON node's "attrs" object.
-fn jattr<'a>(json: &'a serde_json::Value, key: &str) -> Option<&'a str> {
+pub(crate) fn jattr<'a>(json: &'a serde_json::Value, key: &str) -> Option<&'a str> {
     json.get("attrs")?.get(key)?.as_str()
 }
 
@@ -1943,7 +1572,7 @@ fn apply_barcode_attrs(
     Ok(())
 }
 
-fn validate_img_asset(
+pub(crate) fn validate_img_asset(
     name:         &str,
     asset_images: &HashMap<String, String>,
     declare_hint: &str,
@@ -2231,7 +1860,7 @@ fn parse_tree_section(
                     let mut layers = Vec::new();
                     if let Some(nodes) = child.get("nodes").and_then(|v| v.as_array()) {
                         for layer_json in nodes {
-                            layers.push(parse_tree_canvas_layer(layer_json, tokens, asset_images)?);
+                            layers.push(canvas::parse_tree_canvas_layer(layer_json, tokens, asset_images, size.0, size.1)?);
                         }
                     }
                     children.push(SectionChild::Canvas(Canvas { layers }));
@@ -2287,175 +1916,6 @@ fn parse_tree_region(
         }
     }
     Ok(LayoutRegion { pin, page, w, children, debug })
-}
-
-fn parse_tree_canvas_layer(
-    json:         &serde_json::Value,
-    tokens:       &Tokens,
-    asset_images: &HashMap<String, String>,
-) -> Result<CanvasLayer, String> {
-    let page = jattr(json, "page").map(parse_page_scope).transpose()?;
-    let opacity = jattr(json, "opacity")
-        .map(|v| v.parse::<f32>().map_err(|_| format!("invalid layer opacity '{v}'")))
-        .transpose()?;
-    let transform = jattr(json, "transform").map(str::to_string);
-    let clip      = jattr(json, "clip").map(str::to_string);
-
-    let mut children = Vec::new();
-    if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
-        for n in arr {
-            children.push(parse_tree_canvas_primitive(n, tokens, asset_images)?);
-        }
-    }
-    Ok(CanvasLayer { children, page, opacity, transform, clip })
-}
-
-fn parse_tree_canvas_primitive(
-    json:         &serde_json::Value,
-    tokens:       &Tokens,
-    asset_images: &HashMap<String, String>,
-) -> Result<CanvasPrimitive, String> {
-    let type_str = json.get("type").and_then(|v| v.as_str())
-        .ok_or("canvas primitive missing 'type'")?;
-    // Strip optional "canvas-" prefix (JSON wire format uses "canvas-rect" etc.)
-    let type_str = type_str.strip_prefix("canvas-").unwrap_or(type_str);
-
-    let get_attr = |k: &str| jattr(json, k);
-    let get_color = |k: &str| -> Result<Option<String>, String> {
-        get_attr(k).map(|v| tokens.resolve_color(v)).transpose()
-    };
-    let get_f32 = |k: &str| -> Result<Option<f32>, String> {
-        get_attr(k).map(parse_measurement).transpose()
-    };
-    let get_f32_signed = |k: &str| -> Result<Option<f32>, String> {
-        get_attr(k).map(parse_signed_measurement).transpose()
-    };
-    let get_pos = || -> Result<CanvasPosition, String> {
-        if let Some(a) = get_attr("anchor") {
-            let anchor = parse_anchor(a)?;
-            let dx = get_f32_signed("x")?.unwrap_or(0.0);
-            let dy = get_f32_signed("y")?.unwrap_or(0.0);
-            Ok(CanvasPosition::Anchored { anchor, dx, dy })
-        } else {
-            let x = get_f32_signed("x")?.unwrap_or(0.0);
-            let y = get_f32_signed("y")?.unwrap_or(0.0);
-            Ok(CanvasPosition::Absolute { x, y })
-        }
-    };
-    let get_opacity = || -> Result<Option<f32>, String> {
-        get_attr("opacity").map(|v| v.parse::<f32>().map_err(|_| format!("invalid opacity '{v}'"))).transpose()
-    };
-
-    match type_str {
-        "rect" => Ok(CanvasPrimitive::Rect(CanvasRect {
-            pos: get_pos()?,
-            w:            get_f32("w")?.unwrap_or(0.0),
-            h:            get_f32("h")?.unwrap_or(0.0),
-            fill:         get_color("fill")?,
-            stroke:       get_color("stroke")?,
-            stroke_width: get_f32("stroke-width")?,
-            stroke_dash:  get_attr("stroke-dash").map(str::to_string),
-            radius:       get_f32("radius")?,
-            opacity:      get_opacity()?,
-        })),
-        "circle" => Ok(CanvasPrimitive::Circle(CanvasCircle {
-            pos: get_pos()?,
-            r:            get_f32("r")?.unwrap_or(0.0),
-            fill:         get_color("fill")?,
-            stroke:       get_color("stroke")?,
-            stroke_width: get_f32("stroke-width")?,
-            stroke_dash:  get_attr("stroke-dash").map(str::to_string),
-            opacity:      get_opacity()?,
-        })),
-        "ellipse" => Ok(CanvasPrimitive::Ellipse(CanvasEllipse {
-            pos: get_pos()?,
-            rx:           get_f32("rx")?.unwrap_or(0.0),
-            ry:           get_f32("ry")?.unwrap_or(0.0),
-            fill:         get_color("fill")?,
-            stroke:       get_color("stroke")?,
-            stroke_width: get_f32("stroke-width")?,
-            stroke_dash:  get_attr("stroke-dash").map(str::to_string),
-            opacity:      get_opacity()?,
-        })),
-        "line" => Ok(CanvasPrimitive::Line(CanvasLine {
-            x1:           get_f32_signed("x1")?.unwrap_or(0.0),
-            y1:           get_f32_signed("y1")?.unwrap_or(0.0),
-            x2:           get_f32_signed("x2")?.unwrap_or(0.0),
-            y2:           get_f32_signed("y2")?.unwrap_or(0.0),
-            stroke:       get_color("stroke")?,
-            stroke_width: get_f32("stroke-width")?,
-            stroke_dash:  get_attr("stroke-dash").map(str::to_string),
-            line_cap:     get_attr("line-cap").map(str::to_string),
-        })),
-        "path" => Ok(CanvasPrimitive::Path(CanvasPath {
-            d:            get_attr("d").unwrap_or("").to_string(),
-            fill:         get_color("fill")?,
-            stroke:       get_color("stroke")?,
-            fill_rule:    get_attr("fill-rule").map(str::to_string),
-            stroke_width: get_f32("stroke-width")?,
-            stroke_dash:  get_attr("stroke-dash").map(str::to_string),
-            line_cap:     get_attr("line-cap").map(str::to_string),
-            opacity:      get_opacity()?,
-        })),
-        "canvas-text" | "text" => {
-            let content = json.get("text").and_then(|v| v.as_str())
-                .unwrap_or("").to_string();
-            let runs = if let Some(arr) = json.get("runs").and_then(|v| v.as_array()) {
-                arr.iter().map(|r| {
-                    let text = r.get("text").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    let font = r.get("attrs").and_then(|a| a.get("font")).and_then(|v| v.as_str()).map(str::to_string);
-                    let color = r.get("attrs").and_then(|a| a.get("color")).and_then(|v| v.as_str())
-                        .map(|c| tokens.resolve_color(c))
-                        .transpose()?;
-                    Ok(CanvasTextRun { text, font, color })
-                }).collect::<Result<Vec<_>, String>>()?
-            } else { Vec::new() };
-            let data_attrs = {
-                let dv  = get_attr("data-value").map(str::to_owned);
-                let ds  = get_attr("data-source").map(str::to_owned);
-                let di  = get_attr("data-if").map(str::to_owned);
-                let din = get_attr("data-if-not").map(str::to_owned);
-                if dv.is_some() || ds.is_some() || di.is_some() || din.is_some() {
-                    Some(Box::new(DataAttrs { data_value: dv, data_source: ds, data_if: di, data_if_not: din }))
-                } else { None }
-            };
-            Ok(CanvasPrimitive::Text(CanvasText {
-                pos: get_pos()?,
-                font:        get_attr("font").map(str::to_string),
-                font_size:   get_f32("font-size")?,
-                color:       get_color("color")?,
-                align:       get_attr("align").map(str::to_string),
-                w:           get_f32("w")?,
-                line_height: get_f32("line-height")?,
-                opacity:     get_opacity()?,
-                content, runs, data_attrs,
-            }))
-        }
-        "img" => {
-            let name_raw = get_attr("src").or_else(|| get_attr("name"))
-                .ok_or("canvas-img missing 'src' or 'name'")?;
-            let name = asset_images.get(name_raw)
-                .ok_or_else(|| format!("canvas-img unknown asset '{name_raw}'"))?
-                .clone();
-            let data_attrs = {
-                let dv  = get_attr("data-value").map(str::to_owned);
-                let ds  = get_attr("data-source").map(str::to_owned);
-                let di  = get_attr("data-if").map(str::to_owned);
-                let din = get_attr("data-if-not").map(str::to_owned);
-                if dv.is_some() || ds.is_some() || di.is_some() || din.is_some() {
-                    Some(Box::new(DataAttrs { data_value: dv, data_source: ds, data_if: di, data_if_not: din }))
-                } else { None }
-            };
-            Ok(CanvasPrimitive::Img(CanvasImg {
-                name,
-                pos: get_pos()?,
-                w:   get_f32("w")?.unwrap_or(0.0),
-                h:   get_f32("h")?.unwrap_or(0.0),
-                data_attrs,
-            }))
-        }
-        other => Err(format!("unknown canvas primitive type: '{other}'")),
-    }
 }
 
 fn parse_tree_node(
@@ -2858,6 +2318,7 @@ mod tests {
     // §5.2.4 parse_anchor
     #[test]
     fn anchor_all_values() {
+        use crate::canvas::{Anchor, parse_anchor};
         let pairs = [
             ("top-left",      Anchor::TopLeft),
             ("top-center",    Anchor::TopCenter),
@@ -2874,7 +2335,10 @@ mod tests {
         }
     }
     #[test]
-    fn anchor_invalid() { assert!(parse_anchor("middle").is_err()); }
+    fn anchor_invalid() {
+        use crate::canvas::parse_anchor;
+        assert!(parse_anchor("middle").is_err());
+    }
 
     // §5.2.5 XML section parsing
     #[test]
@@ -3008,6 +2472,7 @@ mod tests {
     // §5.2.9 canvas primitives
     #[test]
     fn canvas_rect_absolute_pos() {
+        use crate::canvas::CanvasPrimitive;
         let xml = r##"<lpdf version="1">
             <document size="a4" margin="0pt">
                 <section>
@@ -3022,17 +2487,18 @@ mod tests {
         let doc = parse(xml).unwrap();
         if let SectionChild::Canvas(ref cv) = doc.sections[0].children[0] {
             if let CanvasPrimitive::Rect(ref r) = cv.layers[0].children[0] {
-                assert!(matches!(r.pos, CanvasPosition::Absolute { .. }));
+                assert!((r.x - 10.0).abs() < 0.01);
+                assert!((r.y - 20.0).abs() < 0.01);
                 assert!((r.w - 100.0).abs() < 0.01);
                 assert_eq!(r.fill.as_deref(), Some("#ff0000"));
                 assert!((r.radius.unwrap() - 4.0).abs() < 0.01);
-                assert!((r.opacity.unwrap() - 0.5).abs() < 0.01);
             } else { panic!("expected rect"); }
         } else { panic!("expected canvas"); }
     }
 
     #[test]
     fn canvas_rect_anchored_pos() {
+        use crate::canvas::CanvasPrimitive;
         let xml = r##"<lpdf version="1">
             <document size="a4" margin="0pt">
                 <section>
@@ -3047,15 +2513,16 @@ mod tests {
         let doc = parse(xml).unwrap();
         if let SectionChild::Canvas(ref cv) = doc.sections[0].children[0] {
             if let CanvasPrimitive::Rect(ref r) = cv.layers[0].children[0] {
-                assert!(matches!(r.pos, CanvasPosition::Anchored { anchor: Anchor::Center, dx, dy }
-                    if (dx - 10.0).abs() < 0.01 && (dy + 5.0).abs() < 0.01
-                ));
+                // A4 center = (297.64, 420.945), dx=10, dy=-5 → (307.64, 415.945)
+                assert!((r.x - 307.64).abs() < 0.5);
+                assert!((r.y - 415.94).abs() < 0.5);
             } else { panic!("expected rect"); }
         } else { panic!("expected canvas"); }
     }
 
     #[test]
     fn canvas_text_with_spans() {
+        use crate::canvas::CanvasPrimitive;
         let xml = r#"<lpdf version="1">
             <document size="a4" margin="0pt">
                 <section>
@@ -3070,7 +2537,9 @@ mod tests {
         let doc = parse(xml).unwrap();
         if let SectionChild::Canvas(ref cv) = doc.sections[0].children[0] {
             if let CanvasPrimitive::Text(ref t) = cv.layers[0].children[0] {
-                assert!(matches!(t.pos, CanvasPosition::Anchored { anchor: Anchor::Center, .. }));
+                // A4 center = (297.64, 420.945)
+                assert!((t.x - 297.64).abs() < 0.5);
+                assert!((t.y - 420.94).abs() < 0.5);
                 assert!((t.font_size.unwrap() - 12.0).abs() < 0.01);
                 assert_eq!(t.runs.len(), 1);
                 assert_eq!(t.runs[0].font.as_deref(), Some("Helvetica-Bold"));

@@ -19,14 +19,14 @@ pub enum RenderNode {
     Image(RenderImage),
     Barcode(RenderBarcode),
     Field(RenderField),
-    // Canvas primitives — constructed by canvas.rs; allow dead_code for WASI build.
-    #[allow(dead_code)] CanvasText(RenderCanvasText),
-    #[allow(dead_code)] CanvasRect(RenderCanvasRect),
-    #[allow(dead_code)] CanvasLine(RenderCanvasLine),
-    #[allow(dead_code)] CanvasEllipse(RenderCanvasEllipse),
-    #[allow(dead_code)] CanvasPath(RenderCanvasPath),
-    #[allow(dead_code)] CanvasImage(RenderCanvasImage),
-    #[allow(dead_code)] CanvasLayer(RenderCanvasLayer),
+    // Canvas primitives — constructed by canvas.rs.
+    CanvasText(RenderCanvasText),
+    CanvasRect(RenderCanvasRect),
+    CanvasLine(RenderCanvasLine),
+    CanvasEllipse(RenderCanvasEllipse),
+    CanvasPath(RenderCanvasPath),
+    CanvasImage(RenderCanvasImage),
+    CanvasLayer(RenderCanvasLayer),
 }
 
 pub struct RenderBarcode {

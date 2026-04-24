@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <assets>
+    <image name="logo" src="../assets/images/logo.png"/>
+  </assets>
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf"/>
+      <color name="accent"   value="#e8f0fc"/>
+      <color name="muted"    value="#737373"/>
+      <color name="rule"     value="#dde3ed"/>
+      <color name="surface"  value="#ffffff"/>
+    </colors>
+  </tokens>
+  <document size="a4" margin="0pt">
+    <meta title="lpdf Showcase — Canvas Underlay (letterhead)"
+          subject="Canvas underlay + layout"/>
+
+    <!-- canvas + layout: canvas is painted first (underlay/background) -->
+    <section margin="60pt 50pt 50pt 50pt">
+      <canvas>
+        <!-- Letterhead background: decorative header band -->
+        <layer page="each">
+          <!-- Blue header band -->
+          <rect anchor="top-left" w="595.28pt" h="100pt" fill="primary"/>
+          <!-- Subtle accent bar below header -->
+          <rect anchor="top-left" y="100pt" w="595.28pt" h="4pt" fill="accent"/>
+          <!-- Footer band -->
+          <rect anchor="bottom-left" w="595.28pt" h="40pt" fill="primary"/>
+          <!-- Diagonal decorative element top-right -->
+          <path d="M 495.28 0 L 595.28 0 L 595.28 80 Z" fill="#1050aa"/>
+        </layer>
+
+        <!-- Page number (first page only: no number) -->
+        <layer page="2-last">
+          <text anchor="bottom-center" y="-10pt" font-size="9pt" color="surface" align="center">
+            Page 2
+          </text>
+        </layer>
+      </canvas>
+
+      <!-- Layout content flows over the underlay -->
+      <layout>
+        <!-- Spacer for the header band height -->
+        <stack height="60pt"/>
+
+        <stack gap="xl" padding="0pt">
+          <stack gap="xs">
+            <text font-size="xl" font="Helvetica-Bold" color="primary">Letter of Engagement</text>
+            <text font-size="m" color="muted">22 April 2026</text>
+          </stack>
+
+          <divider color="rule" thickness="s"/>
+
+          <text font-size="m">
+            Dear Client,
+          </text>
+
+          <text font-size="m">
+            We are pleased to confirm our engagement to provide professional services as
+            described herein. This letterhead demonstrates the canvas underlay feature,
+            where the blue header and footer bands are rendered as a canvas layer beneath
+            the flowing layout content.
+          </text>
+
+          <text font-size="m">
+            The canvas layer is painted first (bottom), and the layout content flows over it.
+            This is the <span font="Helvetica-Bold">canvas underlay</span> pattern:
+            <span font="Helvetica-Bold">canvas → layout</span> in document order.
+          </text>
+
+          <text font-size="m">
+            The contrast is the <span font="Helvetica-Bold">canvas overlay</span> pattern
+            (layout → canvas), demonstrated in showcase-canvas-overlay.xml where a DRAFT
+            watermark is painted on top of the invoice content.
+          </text>
+
+          <divider color="rule" thickness="s"/>
+
+          <text font-size="m">Yours faithfully,</text>
+          <stack height="30pt"/>
+          <text font-size="m" font="Helvetica-Bold">The LPDF Team</text>
+          <text font-size="s" color="muted">lpdf.io</text>
+        </stack>
+      </layout>
+    </section>
+  </document>
+</lpdf>

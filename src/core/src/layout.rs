@@ -1,6 +1,7 @@
 use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Direction, FieldKind, HeightMode, Justify, Node, NodeKind, SectionLayout, Paginate, Repeat, TextAlign, TextRun};
 use crate::render::{RenderBarcode, RenderBox, RenderField, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind};
 use crate::tokens::FontWidths;
+use crate::canvas;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -78,6 +79,8 @@ pub fn layout_page(page: &SectionLayout) -> Vec<RenderPage> {
             rp.nodes.extend(overlay);
         }
     }
+    canvas::apply_canvas_layers(&mut pages, &page.underlays, true);
+    canvas::apply_canvas_layers(&mut pages, &page.overlays, false);
     pages
 }
 

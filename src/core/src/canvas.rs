@@ -1,97 +1,60 @@
-/// Canvas — coordinate-based rendering mode.
+/// Canvas — coordinate-based overlay/underlay rendering.
 ///
-/// Canvas trees and XML/kit trees are separate render modes.  `render_tree_pdf`
-/// accepts one or the other per call; they are not mixed.
-///
-/// This module handles:
-///   1. JSON parsing of canvas documents → `CanvasDocument`
-///   2. Layout (coordinate pass-through + overflow pagination) → `Vec<RenderPage>`
+/// This module owns the canvas type model, XML and JSON parsers, and the
+/// function that stamps canvas layers onto already-laid-out `RenderPage`s.
 ///
 /// Canvas uses top-left origin, y-down coordinates.  The PDF render layer
 /// (`pdf.rs`) flips to bottom-up when emitting content streams.
 
 use std::collections::HashMap;
-use crate::parse::Meta;
-use crate::tokens::FontDef;
+use crate::tokens::Tokens;
+use crate::parse::{
+    PageScope,
+    parse_measurement, parse_signed_measurement, parse_page_scope,
+    elems, validate_img_asset, jattr,
+};
 use crate::render::{
-    RenderCanvasClip, RenderCanvasEllipse, RenderCanvasImage, RenderCanvasLayer,
+    RenderCanvasEllipse, RenderCanvasImage, RenderCanvasLayer,
     RenderCanvasLine, RenderCanvasPath, RenderCanvasRect, RenderCanvasRun, RenderCanvasText,
     RenderNode, RenderPage,
 };
-use crate::tokens::{FontWidths, Tokens};
 
-// ── Canvas document model ─────────────────────────────────────────────────────
+// ── Canvas types ──────────────────────────────────────────────────────────────
 
-pub struct CanvasDocument {
-    pub meta:        Meta,
-    pub fonts:       HashMap<String, FontDef>,
-    pub font_widths: HashMap<String, FontWidths>,
-    pub images:      HashMap<String, String>,
-    pub sections:    Vec<CanvasSection>,
+#[derive(Debug, Clone, PartialEq)]
+pub enum Anchor {
+    TopLeft, TopCenter, TopRight,
+    CenterLeft, Center, CenterRight,
+    BottomLeft, BottomCenter, BottomRight,
 }
 
-pub struct CanvasSection {
-    pub width:      f32,
-    pub height:     f32,
-    pub margin:     [f32; 4],
-    pub background: Option<String>,
-    pub nodes:      Vec<CanvasNode>,
-}
-
-pub enum CanvasNode {
-    Text(CanvasText),
-    Rect(CanvasRect),
-    Line(CanvasLine),
-    Ellipse(CanvasEllipse),
-    Path(CanvasPath),
-    Image(CanvasImage),
-    Layer(CanvasLayer),
-}
-
-pub struct CanvasText {
-    pub x:           f32,
-    pub y:           f32,
-    pub font:        String,
-    pub size:        f32,
-    pub color:       String,
-    pub align:       String,
-    pub line_height: f32,
-    pub width:       Option<f32>,
-    pub content:     String,
-    pub runs:        Vec<CanvasRun>,
-}
-
-pub struct CanvasRun {
-    pub text:  String,
-    pub font:  Option<String>,
-    pub size:  Option<f32>,
-    pub color: Option<String>,
-}
-
+#[derive(Debug, Clone)]
 pub struct CanvasRect {
-    pub x:             f32,
-    pub y:             f32,
-    pub w:             f32,
-    pub h:             f32,
-    pub fill:          Option<String>,
-    pub stroke:        Option<String>,
-    pub stroke_width:  f32,
-    pub stroke_dash:   Option<Vec<f32>>,
-    pub border_radius: f32,
+    pub x:            f32,
+    pub y:            f32,
+    pub w:            f32,
+    pub h:            f32,
+    pub fill:         Option<String>,
+    pub stroke:       Option<String>,
+    pub stroke_width: Option<f32>,
+    pub stroke_dash:  Option<String>,
+    pub radius:       Option<f32>,
 }
 
-pub struct CanvasLine {
-    pub x1:           f32,
-    pub y1:           f32,
-    pub x2:           f32,
-    pub y2:           f32,
-    pub stroke:       String,
-    pub stroke_width: f32,
-    pub stroke_dash:  Option<Vec<f32>>,
-    pub line_cap:     u8,
-    pub line_join:    u8,
+/// Circle: `cx`/`cy` is the centre point.
+#[derive(Debug, Clone)]
+pub struct CanvasCircle {
+    pub cx:           f32,
+    pub cy:           f32,
+    pub r:            f32,
+    pub fill:         Option<String>,
+    pub stroke:       Option<String>,
+    pub stroke_width: Option<f32>,
+    pub stroke_dash:  Option<String>,
 }
 
+/// Ellipse: `cx`/`cy` is the centre point.
+#[derive(Debug, Clone)]
 pub struct CanvasEllipse {
     pub cx:           f32,
     pub cy:           f32,
@@ -99,583 +62,694 @@ pub struct CanvasEllipse {
     pub ry:           f32,
     pub fill:         Option<String>,
     pub stroke:       Option<String>,
-    pub stroke_width: f32,
-    pub stroke_dash:  Option<Vec<f32>>,
+    pub stroke_width: Option<f32>,
+    pub stroke_dash:  Option<String>,
 }
 
+/// Line: no anchor — absolute coordinates always required.
+#[derive(Debug, Clone)]
+pub struct CanvasLine {
+    pub x1:           f32,
+    pub y1:           f32,
+    pub x2:           f32,
+    pub y2:           f32,
+    pub stroke:       Option<String>,
+    pub stroke_width: Option<f32>,
+    pub stroke_dash:  Option<String>,
+    pub line_cap:     Option<String>,
+}
+
+/// Path: no anchor — coordinates are embedded in the SVG `d` string.
+#[derive(Debug, Clone)]
 pub struct CanvasPath {
-    pub d:                  String,
-    pub fill:               Option<String>,
-    pub stroke:             Option<String>,
-    pub stroke_width:       f32,
-    pub stroke_dash:        Option<Vec<f32>>,
-    pub fill_rule_evenodd:  bool,
-    pub line_cap:           u8,
-    pub line_join:          u8,
+    pub d:            String,
+    pub fill:         Option<String>,
+    pub stroke:       Option<String>,
+    pub fill_rule:    Option<String>,
+    pub stroke_width: Option<f32>,
+    pub stroke_dash:  Option<String>,
+    pub line_cap:     Option<String>,
 }
 
-pub struct CanvasImage {
-    pub x:   f32,
-    pub y:   f32,
-    pub w:   f32,
-    pub h:   f32,
-    pub src: String,
+#[derive(Debug, Clone)]
+pub struct CanvasTextRun {
+    pub text:  String,
+    pub font:  Option<String>,
+    pub color: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct CanvasText {
+    pub x:           f32,
+    pub y:           f32,
+    pub font:        Option<String>,
+    pub font_size:   Option<f32>,
+    pub color:       Option<String>,
+    pub align:       Option<String>,
+    pub w:           Option<f32>,
+    pub line_height: Option<f32>,
+    /// Plain text content (empty when `runs` is non-empty).
+    pub content:     String,
+    /// Mixed-run children from `<span>` elements.
+    pub runs:        Vec<CanvasTextRun>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CanvasImg {
+    pub name: String,
+    pub x:    f32,
+    pub y:    f32,
+    pub w:    f32,
+    pub h:    f32,
+}
+
+#[derive(Debug, Clone)]
+pub enum CanvasPrimitive {
+    Rect(CanvasRect),
+    Circle(CanvasCircle),
+    Ellipse(CanvasEllipse),
+    Line(CanvasLine),
+    Path(CanvasPath),
+    Text(CanvasText),
+    Img(CanvasImg),
+}
+
+/// Graphics-state scope inside a `<canvas>`.  Document order of layers is paint
+/// order (first = bottom).  Anchors and transforms are resolved at parse time.
+#[derive(Debug, Clone)]
 pub struct CanvasLayer {
+    pub children:  Vec<CanvasPrimitive>,
+    pub page:      Option<PageScope>,
+    pub opacity:   Option<f32>,
+    /// Optional 6-element CTM [a b c d e f] in canvas (top-down) space.
     pub transform: Option<[f32; 6]>,
-    pub clip:      Option<CanvasClip>,
-    pub opacity:   f32,
-    /// 1-based page index target (None = place on the current page).
-    pub page:      Option<usize>,
-    pub children:  Vec<CanvasNode>,
 }
 
-pub struct CanvasClip {
-    pub x:             f32,
-    pub y:             f32,
-    pub w:             f32,
-    pub h:             f32,
-    pub border_radius: f32,
+#[derive(Debug, Clone)]
+pub struct Canvas {
+    pub layers: Vec<CanvasLayer>,
 }
 
-// ── Peek helper ───────────────────────────────────────────────────────────────
+// ── Anchor helpers ────────────────────────────────────────────────────────────
 
-/// Return `true` if the JSON document uses canvas nodes (not kit nodes).
-/// Detects by checking the root "type" field for "canvas-document".
-pub fn is_canvas_tree(json: &str) -> bool {
-    let v: serde_json::Value = match serde_json::from_str(json) {
-        Ok(v)  => v,
-        Err(_) => return false,
-    };
-    v.get("type")
-     .and_then(|t| t.as_str())
-     .map(|t| t == "canvas-document")
-     .unwrap_or(false)
+pub fn parse_anchor(s: &str) -> Result<Anchor, String> {
+    match s {
+        "top-left"      => Ok(Anchor::TopLeft),
+        "top-center"    => Ok(Anchor::TopCenter),
+        "top-right"     => Ok(Anchor::TopRight),
+        "center-left"   => Ok(Anchor::CenterLeft),
+        "center"        => Ok(Anchor::Center),
+        "center-right"  => Ok(Anchor::CenterRight),
+        "bottom-left"   => Ok(Anchor::BottomLeft),
+        "bottom-center" => Ok(Anchor::BottomCenter),
+        "bottom-right"  => Ok(Anchor::BottomRight),
+        other => Err(format!("invalid anchor: '{other}'")),
+    }
 }
 
-// ── JSON parsing ──────────────────────────────────────────────────────────────
-
-/// Parse a canvas JSON document tree into a `CanvasDocument`.
-pub fn parse_canvas_tree(json: &str) -> Result<CanvasDocument, String> {
-    use crate::parse::parse_page_size;
-
-    let root: serde_json::Value = serde_json::from_str(json)
-        .map_err(|e| format!("JSON parse error: {e}"))?;
-
-    match root.get("version").and_then(|v| v.as_u64()) {
-        Some(1) => {}
-        Some(v) => return Err(format!("unsupported tree version: {v}")),
-        None    => return Err("tree JSON missing 'version' field".into()),
+fn resolve_anchor(anchor: &Anchor, page_w: f32, page_h: f32) -> (f32, f32) {
+    match anchor {
+        Anchor::TopLeft      => (0.0,          0.0),
+        Anchor::TopCenter    => (page_w / 2.0, 0.0),
+        Anchor::TopRight     => (page_w,       0.0),
+        Anchor::CenterLeft   => (0.0,          page_h / 2.0),
+        Anchor::Center       => (page_w / 2.0, page_h / 2.0),
+        Anchor::CenterRight  => (page_w,       page_h / 2.0),
+        Anchor::BottomLeft   => (0.0,          page_h),
+        Anchor::BottomCenter => (page_w / 2.0, page_h),
+        Anchor::BottomRight  => (page_w,       page_h),
     }
-    if root.get("type").and_then(|v| v.as_str()) != Some("canvas-document") {
-        return Err("tree root 'type' must be 'canvas-document'".into());
-    }
-
-    let empty_map = serde_json::Map::new();
-    let attrs = root.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty_map);
-
-    // ── Tokens (for size / color resolution) ─────────────────────────────────
-    let mut tokens = Tokens::default();
-    if let Some(tok) = attrs.get("tokens").and_then(|v| v.as_object()) {
-        crate::parse::parse_tree_tokens_pub(tok, &mut tokens)?;
-    }
-
-    // ── Assets ────────────────────────────────────────────────────────────────
-    let mut asset_fonts:       HashMap<String, FontDef>   = HashMap::new();
-    let mut asset_images:      HashMap<String, String>     = HashMap::new();
-    let mut asset_font_widths: HashMap<String, FontWidths> = HashMap::new();
-
-    if let Some(assets) = attrs.get("assets").and_then(|v| v.as_object()) {
-        if let Some(fonts_obj) = assets.get("fonts").and_then(|v| v.as_object()) {
-            for (name, def) in fonts_obj {
-                let font_def = if let Some(b) = def.get("core").and_then(|v| v.as_str()) {
-                    FontDef::Core(b.to_string())
-                } else if let Some(r) = def.get("ref").and_then(|v| v.as_str()) {
-                    FontDef::Ref(r.to_string())
-                } else {
-                    return Err(format!("asset font '{name}' needs 'core' or 'ref'"));
-                };
-                if let Some(w) = def.get("widths").and_then(|v| v.as_object()) {
-                    let default = w.get("default").and_then(|v| v.as_u64()).unwrap_or(500) as u16;
-                    let ascii: Vec<u16> = w.get("ascii")
-                        .and_then(|v| v.as_array())
-                        .map(|arr| arr.iter().map(|n| n.as_u64().unwrap_or(500) as u16).collect())
-                        .unwrap_or_default();
-                    asset_font_widths.insert(name.clone(), FontWidths { default, ascii });
-                }
-                asset_fonts.insert(name.clone(), font_def);
-            }
-        }
-        if let Some(images_obj) = assets.get("images").and_then(|v| v.as_object()) {
-            for (name, def) in images_obj {
-                let key = def.get("ref").and_then(|v| v.as_str())
-                    .unwrap_or(name)
-                    .to_string();
-                asset_images.insert(name.clone(), key);
-            }
-        }
-    }
-
-    // ── Meta ──────────────────────────────────────────────────────────────────
-    let meta = if let Some(m) = attrs.get("meta").and_then(|v| v.as_object()) {
-        Meta {
-            title:    m.get("title")   .and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            author:   m.get("author")  .and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            subject:  m.get("subject") .and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            keywords: m.get("keywords").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            creator:  m.get("creator") .and_then(|v| v.as_str()).unwrap_or("").to_string(),
-        }
-    } else {
-        Meta::default()
-    };
-
-    // ── Document-level page defaults ──────────────────────────────────────────
-    let mut doc_size = if let Some(s) = attrs.get("size").and_then(|v| v.as_str()) {
-        parse_page_size(s)?
-    } else {
-        (595.28_f32, 841.89_f32)
-    };
-    if attrs.get("orientation").and_then(|v| v.as_str()) == Some("landscape") {
-        doc_size = (doc_size.1, doc_size.0);
-    }
-    let doc_margin = if let Some(s) = attrs.get("margin").and_then(|v| v.as_str()) {
-        tokens.resolve_spacing(s)?
-    } else {
-        [0.0_f32; 4]
-    };
-    let doc_background = if let Some(s) = attrs.get("background").and_then(|v| v.as_str()) {
-        Some(tokens.resolve_color(s)?)
-    } else {
-        None
-    };
-
-    // ── Sections ──────────────────────────────────────────────────────────────
-    let section_arr = root.get("nodes").and_then(|v| v.as_array())
-        .ok_or("canvas tree JSON must have a 'nodes' array")?;
-
-    let mut sections: Vec<CanvasSection> = Vec::new();
-    for child in section_arr {
-        if child.get("type").and_then(|v| v.as_str()) != Some("canvas-section") {
-            return Err("canvas document nodes must all be canvas-section nodes".into());
-        }
-        sections.push(parse_canvas_section(child, doc_size, doc_margin, doc_background.clone(), &tokens, &asset_images)?);
-    }
-    if sections.is_empty() {
-        return Err("canvas document must have at least one section".into());
-    }
-
-    Ok(CanvasDocument {
-        meta,
-        fonts:       asset_fonts,
-        font_widths: asset_font_widths,
-        images:      asset_images,
-        sections,
-    })
 }
 
-fn parse_canvas_section(
-    json:           &serde_json::Value,
-    doc_size:       (f32, f32),
-    doc_margin:     [f32; 4],
-    doc_background: Option<String>,
-    tokens:         &Tokens,
-    asset_images:   &HashMap<String, String>,
-) -> Result<CanvasSection, String> {
-    use crate::parse::parse_page_size;
+// ── XML parse helpers ─────────────────────────────────────────────────────────
 
-    let mut size   = doc_size;
-    let mut margin = doc_margin;
-    let mut bg     = doc_background;
-
-    let empty = serde_json::Map::new();
-    let attrs  = json.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
-
-    if let Some(s) = attrs.get("size").and_then(|v| v.as_str()) {
-        size = parse_page_size(s)?;
+/// Parse canvas position from element attributes, resolving anchors immediately.
+/// Returns `(x, y)` in canvas top-down coordinates.
+fn parse_canvas_position(elem: &roxmltree::Node, page_w: f32, page_h: f32) -> Result<(f32, f32), String> {
+    if let Some(a) = elem.attribute("anchor") {
+        let anchor = parse_anchor(a)?;
+        let dx = elem.attribute("x").map(parse_signed_measurement).transpose()?.unwrap_or(0.0);
+        let dy = elem.attribute("y").map(parse_signed_measurement).transpose()?.unwrap_or(0.0);
+        let (bx, by) = resolve_anchor(&anchor, page_w, page_h);
+        Ok((bx + dx, by + dy))
     } else {
-        if let Some(w) = attrs.get("width").and_then(|v| v.as_f64()) { size.0 = w as f32; }
-        if let Some(h) = attrs.get("height").and_then(|v| v.as_f64()) { size.1 = h as f32; }
+        let x = elem.attribute("x").map(parse_signed_measurement).transpose()?.unwrap_or(0.0);
+        let y = elem.attribute("y").map(parse_signed_measurement).transpose()?.unwrap_or(0.0);
+        Ok((x, y))
     }
-    if attrs.get("orientation").and_then(|v| v.as_str()) == Some("landscape") {
-        size = (size.1, size.0);
-    }
-    if let Some(s) = attrs.get("margin").and_then(|v| v.as_str()) {
-        margin = tokens.resolve_spacing(s)?;
-    }
-    if let Some(s) = attrs.get("background").and_then(|v| v.as_str()) {
-        bg = Some(tokens.resolve_color(s)?);
-    }
+}
 
-    let mut nodes: Vec<CanvasNode> = Vec::new();
-    if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
-        for child in arr {
-            nodes.push(parse_canvas_node(child, tokens, asset_images)?);
+/// Parse a transform string such as `"translate(10pt 20pt)"`, `"scale(2)"`,
+/// `"rotate(45 297.64 421)"`, or `"matrix(a b c d e f)"` into a 6-element CTM.
+/// Numbers may be separated by commas or whitespace.  Returns `None` for
+/// the identity (no-op) transform or unrecognised strings.
+fn parse_transform(s: &str) -> Option<[f32; 6]> {
+    fn nums(inner: &str) -> Vec<f32> {
+        inner
+            .split(|c: char| c == ',' || c.is_whitespace())
+            .filter(|t| !t.is_empty())
+            .filter_map(|t| t.parse::<f32>().ok())
+            .collect()
+    }
+    let s = s.trim();
+    if s.starts_with("matrix(") {
+        let inner = &s["matrix(".len()..s.len() - 1];
+        let p = nums(inner);
+        if p.len() == 6 { return Some([p[0], p[1], p[2], p[3], p[4], p[5]]); }
+    } else if s.starts_with("translate(") {
+        let inner = &s["translate(".len()..s.len() - 1];
+        let p = nums(inner);
+        let tx = p.first().copied().unwrap_or(0.0);
+        let ty = p.get(1).copied().unwrap_or(0.0);
+        if tx != 0.0 || ty != 0.0 { return Some([1.0, 0.0, 0.0, 1.0, tx, ty]); }
+    } else if s.starts_with("scale(") {
+        let inner = &s["scale(".len()..s.len() - 1];
+        let p = nums(inner);
+        let sx = p.first().copied().unwrap_or(1.0);
+        let sy = p.get(1).copied().unwrap_or(sx);
+        if (sx - 1.0).abs() > 1e-6 || (sy - 1.0).abs() > 1e-6 {
+            return Some([sx, 0.0, 0.0, sy, 0.0, 0.0]);
+        }
+    } else if s.starts_with("rotate(") {
+        let inner = &s["rotate(".len()..s.len() - 1];
+        let p = nums(inner);
+        let deg = p.first().copied().unwrap_or(0.0);
+        if deg.abs() > 1e-6 {
+            let cx  = p.get(1).copied().unwrap_or(0.0);
+            let cy  = p.get(2).copied().unwrap_or(0.0);
+            let rad = deg.to_radians();
+            let cos = rad.cos();
+            let sin = rad.sin();
+            let e = cx - cx * cos + cy * sin;
+            let f = cy + cx * sin - cy * cos;
+            return Some([cos, sin, -sin, cos, e, f]);
         }
     }
-
-    Ok(CanvasSection { width: size.0, height: size.1, margin, background: bg, nodes })
+    None
 }
 
-fn jf(json: &serde_json::Value, key: &str) -> Option<f32> {
-    let v = json.get("attrs")?.get(key)?;
-    v.as_f64().map(|n| n as f32)
-        .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+fn opt_canvas_color(
+    elem:   &roxmltree::Node,
+    attr:   &str,
+    tokens: &Tokens,
+) -> Result<Option<String>, String> {
+    elem.attribute(attr).map(|v| tokens.resolve_color(v)).transpose()
 }
 
-fn js<'a>(json: &'a serde_json::Value, key: &str) -> Option<&'a str> {
-    json.get("attrs")?.get(key)?.as_str()
+fn parse_canvas_rect(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_h: f32) -> Result<CanvasPrimitive, String> {
+    let (x, y)       = parse_canvas_position(elem, page_w, page_h)?;
+    let w            = parse_measurement(elem.attribute("w").unwrap_or("0pt"))?;
+    let h            = parse_measurement(elem.attribute("h").unwrap_or("0pt"))?;
+    let fill         = opt_canvas_color(elem, "fill", tokens)?;
+    let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
+    let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
+    let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
+    let radius       = elem.attribute("radius").map(parse_measurement).transpose()?;
+    Ok(CanvasPrimitive::Rect(CanvasRect { x, y, w, h, fill, stroke, stroke_width, stroke_dash, radius }))
 }
 
-fn parse_dash(json: &serde_json::Value, key: &str) -> Option<Vec<f32>> {
-    json.get("attrs")?.get(key)?.as_array().map(|arr| {
-        arr.iter().filter_map(|v| v.as_f64().map(|n| n as f32)).collect()
-    })
+fn parse_canvas_circle(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_h: f32) -> Result<CanvasPrimitive, String> {
+    let (cx, cy)     = parse_canvas_position(elem, page_w, page_h)?;
+    let r            = parse_measurement(elem.attribute("r").unwrap_or("0pt"))?;
+    let fill         = opt_canvas_color(elem, "fill", tokens)?;
+    let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
+    let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
+    let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
+    Ok(CanvasPrimitive::Circle(CanvasCircle { cx, cy, r, fill, stroke, stroke_width, stroke_dash }))
 }
 
-fn parse_line_cap(s: &str) -> u8 {
-    match s { "round" => 1, "square" => 2, _ => 0 }
+fn parse_canvas_ellipse(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_h: f32) -> Result<CanvasPrimitive, String> {
+    let (cx, cy)     = parse_canvas_position(elem, page_w, page_h)?;
+    let rx           = parse_measurement(elem.attribute("rx").unwrap_or("0pt"))?;
+    let ry           = parse_measurement(elem.attribute("ry").unwrap_or("0pt"))?;
+    let fill         = opt_canvas_color(elem, "fill", tokens)?;
+    let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
+    let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
+    let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
+    Ok(CanvasPrimitive::Ellipse(CanvasEllipse { cx, cy, rx, ry, fill, stroke, stroke_width, stroke_dash }))
 }
 
-fn parse_line_join(s: &str) -> u8 {
-    match s { "round" => 1, "bevel" => 2, _ => 0 }
+fn parse_canvas_line(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
+    let x1           = parse_signed_measurement(elem.attribute("x1").unwrap_or("0pt"))?;
+    let y1           = parse_signed_measurement(elem.attribute("y1").unwrap_or("0pt"))?;
+    let x2           = parse_signed_measurement(elem.attribute("x2").unwrap_or("0pt"))?;
+    let y2           = parse_signed_measurement(elem.attribute("y2").unwrap_or("0pt"))?;
+    let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
+    let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
+    let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
+    let line_cap     = elem.attribute("line-cap").map(str::to_string);
+    Ok(CanvasPrimitive::Line(CanvasLine { x1, y1, x2, y2, stroke, stroke_width, stroke_dash, line_cap }))
 }
 
-fn parse_canvas_node(
+fn parse_canvas_path(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
+    let d            = elem.attribute("d").unwrap_or("").to_string();
+    let fill         = opt_canvas_color(elem, "fill", tokens)?;
+    let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
+    let fill_rule    = elem.attribute("fill-rule").map(str::to_string);
+    let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
+    let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
+    let line_cap     = elem.attribute("line-cap").map(str::to_string);
+    Ok(CanvasPrimitive::Path(CanvasPath { d, fill, stroke, fill_rule, stroke_width, stroke_dash, line_cap }))
+}
+
+fn parse_canvas_text_elem(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_h: f32) -> Result<CanvasPrimitive, String> {
+    let (x, y)      = parse_canvas_position(elem, page_w, page_h)?;
+    let font        = elem.attribute("font").map(str::to_string);
+    let font_size   = elem.attribute("font-size").map(parse_measurement).transpose()?;
+    let color       = opt_canvas_color(elem, "color", tokens)?;
+    let align       = elem.attribute("align").map(str::to_string);
+    let w           = elem.attribute("w").map(parse_measurement).transpose()?;
+    let line_height = elem.attribute("line-height").map(parse_measurement).transpose()?;
+
+
+    let mut content = String::new();
+    let mut runs    = Vec::new();
+
+    for child in elem.children() {
+        if child.is_text() {
+            let txt = child.text().unwrap_or("").split_whitespace().collect::<Vec<_>>().join(" ");
+            if !txt.is_empty() { content.push_str(&txt); }
+        } else if child.is_element() && child.tag_name().name() == "span" {
+            let span_text = child.children()
+                .filter(|n| n.is_text())
+                .filter_map(|n| n.text())
+                .collect::<String>()
+                .split_whitespace().collect::<Vec<_>>().join(" ");
+            runs.push(CanvasTextRun {
+                text:  span_text,
+                font:  child.attribute("font").map(str::to_string),
+                color: if let Some(c) = child.attribute("color") {
+                    Some(tokens.resolve_color(c)?)
+                } else { None },
+            });
+        }
+    }
+
+    Ok(CanvasPrimitive::Text(CanvasText {
+        x, y, font, font_size, color, align, w, line_height,
+        content, runs,
+    }))
+}
+
+fn parse_canvas_img_elem(
+    elem:         &roxmltree::Node,
+    asset_images: &HashMap<String, String>,
+    page_w:       f32,
+    page_h:       f32,
+) -> Result<CanvasPrimitive, String> {
+    let name_raw = elem.attribute("name")
+        .ok_or("<img> (canvas) missing required attribute 'name'")?;
+    validate_img_asset(name_raw, asset_images, "<assets>")?;
+    let name   = asset_images[name_raw].clone();
+    let (x, y) = parse_canvas_position(elem, page_w, page_h)?;
+    let w      = parse_measurement(elem.attribute("w").unwrap_or("0pt"))?;
+    let h      = parse_measurement(elem.attribute("h").unwrap_or("0pt"))?;
+    Ok(CanvasPrimitive::Img(CanvasImg { name, x, y, w, h }))
+}
+
+fn parse_canvas_primitive_elem(
+    elem:         &roxmltree::Node,
+    tokens:       &Tokens,
+    asset_images: &HashMap<String, String>,
+    page_w:       f32,
+    page_h:       f32,
+) -> Result<CanvasPrimitive, String> {
+    match elem.tag_name().name() {
+        "rect"    => parse_canvas_rect(elem, tokens, page_w, page_h),
+        "circle"  => parse_canvas_circle(elem, tokens, page_w, page_h),
+        "ellipse" => parse_canvas_ellipse(elem, tokens, page_w, page_h),
+        "line"    => parse_canvas_line(elem, tokens),
+        "path"    => parse_canvas_path(elem, tokens),
+        "text"    => parse_canvas_text_elem(elem, tokens, page_w, page_h),
+        "img"     => parse_canvas_img_elem(elem, asset_images, page_w, page_h),
+        other => Err(format!("unknown canvas primitive: <{other}>")),
+    }
+}
+
+fn parse_canvas_layer_elem(
+    elem:         &roxmltree::Node,
+    tokens:       &Tokens,
+    asset_images: &HashMap<String, String>,
+    page_w:       f32,
+    page_h:       f32,
+) -> Result<CanvasLayer, String> {
+    let page = elem.attribute("page")
+        .map(parse_page_scope)
+        .transpose()?;
+    let opacity = elem.attribute("opacity")
+        .map(|v| v.parse::<f32>().map_err(|_| format!("invalid layer opacity '{v}'")))
+        .transpose()?;
+    let transform = elem.attribute("transform").and_then(parse_transform);
+
+    let mut children = Vec::new();
+    for child in elems(elem) {
+        children.push(parse_canvas_primitive_elem(&child, tokens, asset_images, page_w, page_h)?);
+    }
+    Ok(CanvasLayer { children, page, opacity, transform })
+}
+
+/// Parse a `<canvas>` element into a `Canvas`.  `page_w` and `page_h` are the
+/// dimensions of the enclosing section page — needed to resolve anchor offsets.
+pub(crate) fn parse_canvas_elem(
+    elem:         &roxmltree::Node,
+    tokens:       &Tokens,
+    asset_images: &HashMap<String, String>,
+    page_w:       f32,
+    page_h:       f32,
+) -> Result<Canvas, String> {
+    let mut layers = Vec::new();
+    for child in elems(elem) {
+        match child.tag_name().name() {
+            "layer" => layers.push(parse_canvas_layer_elem(&child, tokens, asset_images, page_w, page_h)?),
+            other   => return Err(format!("<canvas> only accepts <layer> children, got <{other}>")),
+        }
+    }
+    Ok(Canvas { layers })
+}
+
+// ── JSON parse path ───────────────────────────────────────────────────────────
+
+/// Parse a canvas layer from a JSON tree node.  `page_w`/`page_h` are the
+/// section page dimensions for anchor resolution.
+pub(crate) fn parse_tree_canvas_layer(
     json:         &serde_json::Value,
     tokens:       &Tokens,
     asset_images: &HashMap<String, String>,
-) -> Result<CanvasNode, String> {
+    page_w:       f32,
+    page_h:       f32,
+) -> Result<CanvasLayer, String> {
+    let page = jattr(json, "page").map(parse_page_scope).transpose()?;
+    let opacity = jattr(json, "opacity")
+        .map(|v| v.parse::<f32>().map_err(|_| format!("invalid layer opacity '{v}'")))
+        .transpose()?;
+    let transform = jattr(json, "transform").and_then(parse_transform);
+
+    let mut children = Vec::new();
+    if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
+        for n in arr {
+            children.push(parse_tree_canvas_primitive(n, tokens, asset_images, page_w, page_h)?);
+        }
+    }
+    Ok(CanvasLayer { children, page, opacity, transform })
+}
+
+fn parse_tree_canvas_primitive(
+    json:         &serde_json::Value,
+    tokens:       &Tokens,
+    asset_images: &HashMap<String, String>,
+    page_w:       f32,
+    page_h:       f32,
+) -> Result<CanvasPrimitive, String> {
     let type_str = json.get("type").and_then(|v| v.as_str())
-        .ok_or("canvas node missing 'type' field")?;
+        .ok_or("canvas primitive missing 'type'")?;
+    let type_str = type_str.strip_prefix("canvas-").unwrap_or(type_str);
+
+    let get_attr = |k: &str| jattr(json, k);
+    let get_color = |k: &str| -> Result<Option<String>, String> {
+        get_attr(k).map(|v| tokens.resolve_color(v)).transpose()
+    };
+    let get_f32 = |k: &str| -> Result<Option<f32>, String> {
+        get_attr(k).map(parse_measurement).transpose()
+    };
+    let get_f32_signed = |k: &str| -> Result<Option<f32>, String> {
+        get_attr(k).map(parse_signed_measurement).transpose()
+    };
+    let get_pos = || -> Result<(f32, f32), String> {
+        if let Some(a) = get_attr("anchor") {
+            let anchor = parse_anchor(a)?;
+            let dx = get_f32_signed("x")?.unwrap_or(0.0);
+            let dy = get_f32_signed("y")?.unwrap_or(0.0);
+            let (bx, by) = resolve_anchor(&anchor, page_w, page_h);
+            Ok((bx + dx, by + dy))
+        } else {
+            let x = get_f32_signed("x")?.unwrap_or(0.0);
+            let y = get_f32_signed("y")?.unwrap_or(0.0);
+            Ok((x, y))
+        }
+    };
 
     match type_str {
-        "canvas-text" => {
-            let x    = jf(json, "x").unwrap_or(0.0);
-            let y    = jf(json, "y").unwrap_or(0.0);
-            let font = js(json, "font").unwrap_or("Helvetica").to_string();
-            let size = jf(json, "size").unwrap_or(12.0);
-            let color_raw = js(json, "color").unwrap_or("#000000");
-            let color = tokens.resolve_color(color_raw).unwrap_or_else(|_| color_raw.to_string());
-            let align = js(json, "align").unwrap_or("left").to_string();
-            let line_height = jf(json, "line-height").unwrap_or(1.2);
-            let width = jf(json, "width");
-
-            // Plain content attr takes priority; nodes = mixed runs fallback.
-            let (content, runs) = if let Some(c) = js(json, "content") {
-                (c.to_string(), vec![])
-            } else if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
-                let runs = arr.iter().filter_map(|child| {
-                    if child.get("type").and_then(|v| v.as_str()) == Some("canvas-run") {
-                        let text = child.get("nodes").and_then(|v| v.as_array())
-                            .and_then(|a| a.first())
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        let run_font  = child.get("attrs").and_then(|v| v.get("font")).and_then(|v| v.as_str()).map(str::to_string);
-                        let run_size  = child.get("attrs").and_then(|v| v.get("size")).and_then(|v| v.as_f64()).map(|n| n as f32);
-                        let run_color = child.get("attrs").and_then(|v| v.get("color")).and_then(|v| v.as_str()).map(|s| {
-                            tokens.resolve_color(s).unwrap_or_else(|_| s.to_string())
-                        });
-                        Some(CanvasRun { text, font: run_font, size: run_size, color: run_color })
-                    } else {
-                        None
-                    }
-                }).collect();
-                (String::new(), runs)
-            } else {
-                (String::new(), vec![])
-            };
-
-            Ok(CanvasNode::Text(CanvasText { x, y, font, size, color, align, line_height, width, content, runs }))
+        "rect" => {
+            let (x, y) = get_pos()?;
+            Ok(CanvasPrimitive::Rect(CanvasRect {
+                x, y,
+                w:            get_f32("w")?.unwrap_or(0.0),
+                h:            get_f32("h")?.unwrap_or(0.0),
+                fill:         get_color("fill")?,
+                stroke:       get_color("stroke")?,
+                stroke_width: get_f32("stroke-width")?,
+                stroke_dash:  get_attr("stroke-dash").map(str::to_string),
+                radius:       get_f32("radius")?,
+            }))
         }
-
-        "canvas-rect" => {
-            let x = jf(json, "x").unwrap_or(0.0);
-            let y = jf(json, "y").unwrap_or(0.0);
-            let w = jf(json, "w").unwrap_or(0.0);
-            let h = jf(json, "h").unwrap_or(0.0);
-            let fill   = js(json, "fill")
-                .filter(|&s| s != "none")
-                .map(|s| tokens.resolve_color(s).unwrap_or_else(|_| s.to_string()));
-            let stroke = js(json, "stroke")
-                .filter(|&s| s != "none")
-                .map(|s| tokens.resolve_color(s).unwrap_or_else(|_| s.to_string()));
-            let stroke_width  = jf(json, "stroke-width").unwrap_or(1.0);
-            let stroke_dash   = parse_dash(json, "stroke-dash");
-            let border_radius = jf(json, "border-radius").unwrap_or(0.0);
-            Ok(CanvasNode::Rect(CanvasRect { x, y, w, h, fill, stroke, stroke_width, stroke_dash, border_radius }))
+        "circle" => {
+            let (cx, cy) = get_pos()?;
+            Ok(CanvasPrimitive::Circle(CanvasCircle {
+                cx, cy,
+                r:            get_f32("r")?.unwrap_or(0.0),
+                fill:         get_color("fill")?,
+                stroke:       get_color("stroke")?,
+                stroke_width: get_f32("stroke-width")?,
+                stroke_dash:  get_attr("stroke-dash").map(str::to_string),
+            }))
         }
-
-        "canvas-line" => {
-            let x1 = jf(json, "x1").unwrap_or(0.0);
-            let y1 = jf(json, "y1").unwrap_or(0.0);
-            let x2 = jf(json, "x2").unwrap_or(0.0);
-            let y2 = jf(json, "y2").unwrap_or(0.0);
-            let stroke_raw   = js(json, "stroke").unwrap_or("#000000");
-            let stroke       = tokens.resolve_color(stroke_raw).unwrap_or_else(|_| stroke_raw.to_string());
-            let stroke_width = jf(json, "stroke-width").unwrap_or(1.0);
-            let stroke_dash  = parse_dash(json, "stroke-dash");
-            let line_cap     = parse_line_cap(js(json, "line-cap").unwrap_or("butt"));
-            let line_join    = parse_line_join(js(json, "line-join").unwrap_or("miter"));
-            Ok(CanvasNode::Line(CanvasLine { x1, y1, x2, y2, stroke, stroke_width, stroke_dash, line_cap, line_join }))
+        "ellipse" => {
+            let (cx, cy) = get_pos()?;
+            Ok(CanvasPrimitive::Ellipse(CanvasEllipse {
+                cx, cy,
+                rx:           get_f32("rx")?.unwrap_or(0.0),
+                ry:           get_f32("ry")?.unwrap_or(0.0),
+                fill:         get_color("fill")?,
+                stroke:       get_color("stroke")?,
+                stroke_width: get_f32("stroke-width")?,
+                stroke_dash:  get_attr("stroke-dash").map(str::to_string),
+            }))
         }
-
-        "canvas-ellipse" | "canvas-circle" => {
-            let cx = jf(json, "cx").unwrap_or(0.0);
-            let cy = jf(json, "cy").unwrap_or(0.0);
-            let (rx, ry) = if type_str == "canvas-circle" {
-                let r = jf(json, "r").unwrap_or(0.0);
-                (r, r)
-            } else {
-                (jf(json, "rx").unwrap_or(0.0), jf(json, "ry").unwrap_or(0.0))
-            };
-            let fill   = js(json, "fill")
-                .filter(|&s| s != "none")
-                .map(|s| tokens.resolve_color(s).unwrap_or_else(|_| s.to_string()));
-            let stroke = js(json, "stroke")
-                .filter(|&s| s != "none")
-                .map(|s| tokens.resolve_color(s).unwrap_or_else(|_| s.to_string()));
-            let stroke_width = jf(json, "stroke-width").unwrap_or(1.0);
-            let stroke_dash  = parse_dash(json, "stroke-dash");
-            Ok(CanvasNode::Ellipse(CanvasEllipse { cx, cy, rx, ry, fill, stroke, stroke_width, stroke_dash }))
+        "line" => Ok(CanvasPrimitive::Line(CanvasLine {
+            x1:           get_f32_signed("x1")?.unwrap_or(0.0),
+            y1:           get_f32_signed("y1")?.unwrap_or(0.0),
+            x2:           get_f32_signed("x2")?.unwrap_or(0.0),
+            y2:           get_f32_signed("y2")?.unwrap_or(0.0),
+            stroke:       get_color("stroke")?,
+            stroke_width: get_f32("stroke-width")?,
+            stroke_dash:  get_attr("stroke-dash").map(str::to_string),
+            line_cap:     get_attr("line-cap").map(str::to_string),
+        })),
+        "path" => Ok(CanvasPrimitive::Path(CanvasPath {
+            d:            get_attr("d").unwrap_or("").to_string(),
+            fill:         get_color("fill")?,
+            stroke:       get_color("stroke")?,
+            fill_rule:    get_attr("fill-rule").map(str::to_string),
+            stroke_width: get_f32("stroke-width")?,
+            stroke_dash:  get_attr("stroke-dash").map(str::to_string),
+            line_cap:     get_attr("line-cap").map(str::to_string),
+        })),
+        "canvas-text" | "text" => {
+            let (x, y) = get_pos()?;
+            let content = json.get("text").and_then(|v| v.as_str())
+                .unwrap_or("").to_string();
+            let runs = if let Some(arr) = json.get("runs").and_then(|v| v.as_array()) {
+                arr.iter().map(|r| {
+                    let text  = r.get("text").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let font  = r.get("attrs").and_then(|a| a.get("font")).and_then(|v| v.as_str()).map(str::to_string);
+                    let color = r.get("attrs").and_then(|a| a.get("color")).and_then(|v| v.as_str())
+                        .map(|c| tokens.resolve_color(c))
+                        .transpose()?;
+                    Ok(CanvasTextRun { text, font, color })
+                }).collect::<Result<Vec<_>, String>>()?
+            } else { Vec::new() };
+            Ok(CanvasPrimitive::Text(CanvasText {
+                x, y,
+                font:        get_attr("font").map(str::to_string),
+                font_size:   get_f32("font-size")?,
+                color:       get_color("color")?,
+                align:       get_attr("align").map(str::to_string),
+                w:           get_f32("w")?,
+                line_height: get_f32("line-height")?,
+                content, runs,
+            }))
         }
-
-        "canvas-path" => {
-            let d = js(json, "d").unwrap_or("").to_string();
-            let fill  = js(json, "fill")
-                .filter(|&s| s != "none")
-                .map(|s| tokens.resolve_color(s).unwrap_or_else(|_| s.to_string()));
-            let stroke = js(json, "stroke")
-                .filter(|&s| s != "none")
-                .map(|s| tokens.resolve_color(s).unwrap_or_else(|_| s.to_string()));
-            let stroke_width      = jf(json, "stroke-width").unwrap_or(1.0);
-            let stroke_dash       = parse_dash(json, "stroke-dash");
-            let fill_rule_evenodd = js(json, "fill-rule").map(|s| s == "evenodd").unwrap_or(false);
-            let line_cap          = parse_line_cap(js(json, "line-cap").unwrap_or("butt"));
-            let line_join         = parse_line_join(js(json, "line-join").unwrap_or("miter"));
-            Ok(CanvasNode::Path(CanvasPath { d, fill, stroke, stroke_width, stroke_dash, fill_rule_evenodd, line_cap, line_join }))
+        "img" => {
+            let (x, y) = get_pos()?;
+            let name_raw = get_attr("src").or_else(|| get_attr("name"))
+                .ok_or("canvas-img missing 'src' or 'name'")?;
+            let name = asset_images.get(name_raw)
+                .ok_or_else(|| format!("canvas-img unknown asset '{name_raw}'"))?
+                .clone();
+            Ok(CanvasPrimitive::Img(CanvasImg {
+                name, x, y,
+                w: get_f32("w")?.unwrap_or(0.0),
+                h: get_f32("h")?.unwrap_or(0.0),
+            }))
         }
+        other => Err(format!("unknown canvas primitive type: '{other}'")),
+    }
+}
 
-        "canvas-image" => {
-            let x   = jf(json, "x").unwrap_or(0.0);
-            let y   = jf(json, "y").unwrap_or(0.0);
-            let w   = jf(json, "w").unwrap_or(0.0);
-            let h   = jf(json, "h").unwrap_or(0.0);
-            let src = js(json, "src").unwrap_or("").to_string();
-            // Map through asset image aliases, same as kit path.
-            let resolved_src = asset_images.get(&src).cloned().unwrap_or(src);
-            Ok(CanvasNode::Image(CanvasImage { x, y, w, h, src: resolved_src }))
-        }
+// ── Render conversion ─────────────────────────────────────────────────────────
 
-        "canvas-layer" => {
-            let opacity = jf(json, "opacity").unwrap_or(1.0).clamp(0.0, 1.0);
-            let page    = json.get("attrs")
-                .and_then(|a| a.get("page"))
-                .and_then(|v| v.as_u64())
-                .map(|n| n as usize);
+fn stroke_dash_to_vec(s: &str) -> Option<Vec<f32>> {
+    let v: Vec<f32> = s.split_whitespace().filter_map(|t| t.parse().ok()).collect();
+    if v.is_empty() { None } else { Some(v) }
+}
 
-            // transform: { translate: [tx, ty], rotate: deg, scale: [sx, sy] }
-            // Convert to a 6-element PDF CTM [a b c d e f].
-            // For day-one we support translate + scale; rotate deferred.
-            let transform = json.get("attrs")
-                .and_then(|a| a.get("transform"))
-                .and_then(|t| {
-                    // Build CTM from sub-fields.
-                    let tx = t.get("translate").and_then(|v| v.as_array())
-                        .and_then(|a| a.first()).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                    let ty = t.get("translate").and_then(|v| v.as_array())
-                        .and_then(|a| a.get(1)).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                    let sx = t.get("scale").and_then(|v| v.as_array())
-                        .and_then(|a| a.first()).and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
-                    let sy = t.get("scale").and_then(|v| v.as_array())
-                        .and_then(|a| a.get(1)).and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
-                    if tx == 0.0 && ty == 0.0 && sx == 1.0 && sy == 1.0 { None }
-                    else { Some([sx, 0.0, 0.0, sy, tx, ty]) }
-                });
+fn line_cap_to_u8(s: &str) -> u8 {
+    match s { "round" => 1, "square" => 2, _ => 0 }
+}
 
-            // clip: { x, y, w, h, borderRadius? }
-            let clip = json.get("attrs")
-                .and_then(|a| a.get("clip"))
-                .and_then(|c| c.as_object())
-                .map(|c| CanvasClip {
-                    x:             c.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32,
-                    y:             c.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32,
-                    w:             c.get("w").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32,
-                    h:             c.get("h").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32,
-                    border_radius: c.get("borderRadius").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32,
-                });
-
-            let mut children: Vec<CanvasNode> = Vec::new();
-            if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
-                for child in arr {
-                    children.push(parse_canvas_node(child, tokens, asset_images)?);
+/// Return the 0-based indices of all render pages within a section that a
+/// layer's page-scope targets.  `n` is the total number of section pages.
+fn page_scope_indices(scope: &Option<PageScope>, n: usize) -> Vec<usize> {
+    if n == 0 { return Vec::new(); }
+    match scope {
+        None | Some(PageScope::Each) => (0..n).collect(),
+        Some(PageScope::First)       => vec![0],
+        Some(PageScope::Last)        => vec![n - 1],
+        Some(PageScope::Odd)         => (0..n).filter(|i| i % 2 == 0).collect(),
+        Some(PageScope::Even)        => (0..n).filter(|i| i % 2 == 1).collect(),
+        Some(PageScope::Pages(ranges)) => {
+            let mut out = Vec::new();
+            for range in ranges {
+                let start = (range.start as usize).saturating_sub(1);
+                let end   = range.end.map(|e| e as usize).unwrap_or(n);
+                for i in start..end.min(n) {
+                    out.push(i);
                 }
             }
-
-            Ok(CanvasNode::Layer(CanvasLayer { transform, clip, opacity, page, children }))
+            out
         }
-
-        other => Err(format!("unknown canvas node type: '{other}'")),
     }
 }
 
-// ── Layout (canvas → RenderPage) ─────────────────────────────────────────────
-
-/// Convert a `CanvasDocument` into `Vec<RenderPage>` ready for PDF rendering.
-///
-/// Page targeting (`canvas-layer` with `page: N`) is handled here.  Layers
-/// that target a specific page are lifted out and appended to that page's
-/// node list.  Pages are auto-created (as empty pages with the document
-/// defaults) if `N` exceeds the current page count.
-pub fn layout_canvas_sections(doc: &CanvasDocument) -> Vec<RenderPage> {
-    // Phase 1: build base pages from the document's section list.
-    let mut pages: Vec<RenderPage> = doc.sections.iter().map(|s| RenderPage {
-        width:      s.width,
-        height:     s.height,
-        margin:     s.margin,
-        background: s.background.clone(),
-        nodes:      Vec::new(),
-    }).collect();
-
-    // Phase 2: walk sections, convert canvas nodes to render nodes, handle page targeting.
-    for (section_idx, canvas_section) in doc.sections.iter().enumerate() {
-        let mut deferred: Vec<(usize, RenderNode)> = Vec::new();
-        for node in &canvas_section.nodes {
-            let render_nodes = layout_canvas_node(node, canvas_section, &mut deferred);
-            pages[section_idx].nodes.extend(render_nodes);
-        }
-        // Apply deferred page-targeted layers.
-        for (target_page, render_node) in deferred {
-            let target_idx = target_page.saturating_sub(1); // convert 1-based to 0-based
-            // Auto-create pages up to target_idx if needed.
-            while pages.len() <= target_idx {
-                let last = pages.last().map(|p| (p.width, p.height, p.margin, p.background.clone()))
-                    .unwrap_or((595.28, 841.89, [0.0; 4], None));
-                pages.push(RenderPage {
-                    width:      last.0,
-                    height:     last.1,
-                    margin:     last.2,
-                    background: last.3,
-                    nodes:      Vec::new(),
-                });
-            }
-            pages[target_idx].nodes.push(render_node);
-        }
-    }
-
-    pages
-}
-
-/// Convert one `CanvasNode` to `RenderNode`(s).
-/// Page-targeted layers are pushed to `deferred` instead of returned inline.
-fn layout_canvas_node(
-    node:     &CanvasNode,
-    page:     &CanvasSection,
-    deferred: &mut Vec<(usize, RenderNode)>,
-) -> Vec<RenderNode> {
-    match node {
-        CanvasNode::Text(t) => vec![RenderNode::CanvasText(RenderCanvasText {
-            x:           t.x,
-            y:           t.y,
-            font:        t.font.clone(),
-            size:        t.size,
-            color:       t.color.clone(),
-            align:       t.align.clone(),
-            line_height: t.line_height,
-            width:       t.width.or_else(|| Some(page.width - page.margin[1] - page.margin[3] - t.x)),
-            content:     t.content.clone(),
-            runs:        t.runs.iter().map(|r| RenderCanvasRun {
-                text:  r.text.clone(),
-                font:  r.font.clone(),
-                size:  r.size,
-                color: r.color.clone(),
-            }).collect(),
-        })],
-
-        CanvasNode::Rect(r) => vec![RenderNode::CanvasRect(RenderCanvasRect {
+fn primitive_to_render_node(prim: &CanvasPrimitive, page_w: f32) -> RenderNode {
+    match prim {
+        CanvasPrimitive::Rect(r) => RenderNode::CanvasRect(RenderCanvasRect {
             x:             r.x,
             y:             r.y,
             w:             r.w,
             h:             r.h,
             fill:          r.fill.clone(),
             stroke:        r.stroke.clone(),
-            stroke_width:  r.stroke_width,
-            stroke_dash:   r.stroke_dash.clone(),
-            border_radius: r.border_radius,
-        })],
-
-        CanvasNode::Line(l) => vec![RenderNode::CanvasLine(RenderCanvasLine {
-            x1:           l.x1,
-            y1:           l.y1,
-            x2:           l.x2,
-            y2:           l.y2,
-            stroke:       l.stroke.clone(),
-            stroke_width: l.stroke_width,
-            stroke_dash:  l.stroke_dash.clone(),
-            line_cap:     l.line_cap,
-            line_join:    l.line_join,
-        })],
-
-        CanvasNode::Ellipse(e) => vec![RenderNode::CanvasEllipse(RenderCanvasEllipse {
+            stroke_width:  r.stroke_width.unwrap_or(1.0),
+            stroke_dash:   r.stroke_dash.as_deref().and_then(stroke_dash_to_vec),
+            border_radius: r.radius.unwrap_or(0.0),
+        }),
+        CanvasPrimitive::Circle(c) => RenderNode::CanvasEllipse(RenderCanvasEllipse {
+            cx:           c.cx,
+            cy:           c.cy,
+            rx:           c.r,
+            ry:           c.r,
+            fill:         c.fill.clone(),
+            stroke:       c.stroke.clone(),
+            stroke_width: c.stroke_width.unwrap_or(1.0),
+            stroke_dash:  c.stroke_dash.as_deref().and_then(stroke_dash_to_vec),
+        }),
+        CanvasPrimitive::Ellipse(e) => RenderNode::CanvasEllipse(RenderCanvasEllipse {
             cx:           e.cx,
             cy:           e.cy,
             rx:           e.rx,
             ry:           e.ry,
             fill:         e.fill.clone(),
             stroke:       e.stroke.clone(),
-            stroke_width: e.stroke_width,
-            stroke_dash:  e.stroke_dash.clone(),
-        })],
-
-        CanvasNode::Path(p) => vec![RenderNode::CanvasPath(RenderCanvasPath {
+            stroke_width: e.stroke_width.unwrap_or(1.0),
+            stroke_dash:  e.stroke_dash.as_deref().and_then(stroke_dash_to_vec),
+        }),
+        CanvasPrimitive::Line(l) => RenderNode::CanvasLine(RenderCanvasLine {
+            x1:           l.x1,
+            y1:           l.y1,
+            x2:           l.x2,
+            y2:           l.y2,
+            stroke:       l.stroke.as_deref().unwrap_or("#000000").to_string(),
+            stroke_width: l.stroke_width.unwrap_or(1.0),
+            stroke_dash:  l.stroke_dash.as_deref().and_then(stroke_dash_to_vec),
+            line_cap:     l.line_cap.as_deref().map(line_cap_to_u8).unwrap_or(0),
+            line_join:    0,
+        }),
+        CanvasPrimitive::Path(p) => RenderNode::CanvasPath(RenderCanvasPath {
             d:                  p.d.clone(),
             fill:               p.fill.clone(),
             stroke:             p.stroke.clone(),
-            stroke_width:       p.stroke_width,
-            stroke_dash:        p.stroke_dash.clone(),
-            fill_rule_evenodd:  p.fill_rule_evenodd,
-            line_cap:           p.line_cap,
-            line_join:          p.line_join,
-        })],
-
-        CanvasNode::Image(i) => vec![RenderNode::CanvasImage(RenderCanvasImage {
+            stroke_width:       p.stroke_width.unwrap_or(1.0),
+            stroke_dash:        p.stroke_dash.as_deref().and_then(stroke_dash_to_vec),
+            fill_rule_evenodd:  p.fill_rule.as_deref() == Some("evenodd"),
+            line_cap:           p.line_cap.as_deref().map(line_cap_to_u8).unwrap_or(0),
+            line_join:          0,
+        }),
+        CanvasPrimitive::Text(t) => {
+            let runs = t.runs.iter().map(|r| RenderCanvasRun {
+                text:  r.text.clone(),
+                font:  r.font.clone(),
+                size:  None,
+                color: r.color.clone(),
+            }).collect();
+            RenderNode::CanvasText(RenderCanvasText {
+                x:           t.x,
+                y:           t.y,
+                font:        t.font.as_deref().unwrap_or("Helvetica").to_string(),
+                size:        t.font_size.unwrap_or(12.0),
+                color:       t.color.as_deref().unwrap_or("#000000").to_string(),
+                align:       t.align.as_deref().unwrap_or("left").to_string(),
+                line_height: t.line_height.unwrap_or(1.2),
+                width:       t.w.or(Some(page_w - t.x)),
+                content:     t.content.clone(),
+                runs,
+            })
+        }
+        CanvasPrimitive::Img(i) => RenderNode::CanvasImage(RenderCanvasImage {
             x:   i.x,
             y:   i.y,
             w:   i.w,
             h:   i.h,
-            src: i.src.clone(),
-        })],
+            src: i.name.clone(),
+        }),
+    }
+}
 
-        CanvasNode::Layer(layer) => {
-            let mut layer_deferred: Vec<(usize, RenderNode)> = Vec::new();
-            let mut children: Vec<RenderNode> = Vec::new();
-            for child in &layer.children {
-                children.extend(layout_canvas_node(child, page, &mut layer_deferred));
+fn layer_to_render_node(layer: &CanvasLayer, page_w: f32) -> RenderNode {
+    let children = layer.children.iter()
+        .map(|p| primitive_to_render_node(p, page_w))
+        .collect();
+    RenderNode::CanvasLayer(RenderCanvasLayer {
+        transform: layer.transform,
+        clip:      None,  // clip rendering deferred
+        opacity:   layer.opacity.unwrap_or(1.0).clamp(0.0, 1.0),
+        children,
+    })
+}
+
+/// Stamp canvas layers onto the render pages produced by `layout_page`.
+///
+/// When `prepend = true` (underlays) the layer's render node is inserted at
+/// index 0 of the target page's node list so it paints beneath layout content.
+/// Underlays are inserted in **reverse** document order so that the first layer
+/// in the document ends up at index 0 after all inserts.
+///
+/// When `prepend = false` (overlays) the layer is appended.
+///
+/// `pages` must be the pages of a single section (the output of one
+/// `layout_page` call).  Page-scope indices are relative to this slice.
+pub(crate) fn apply_canvas_layers(
+    pages:   &mut Vec<RenderPage>,
+    layers:  &[CanvasLayer],
+    prepend: bool,
+) {
+    let n = pages.len();
+    if n == 0 || layers.is_empty() { return; }
+
+    if prepend {
+        for layer in layers.iter().rev() {
+            for i in page_scope_indices(&layer.page, n) {
+                let page_w = pages[i].width;
+                let node = layer_to_render_node(layer, page_w);
+                pages[i].nodes.insert(0, node);
             }
-            // Nested deferred layers: propagate up (they'll be placed by the
-            // outer layout_canvas_sections loop).
-            deferred.extend(layer_deferred);
-
-            let render_layer = RenderNode::CanvasLayer(RenderCanvasLayer {
-                transform: layer.transform,
-                clip: layer.clip.as_ref().map(|c| RenderCanvasClip {
-                    x:             c.x,
-                    y:             c.y,
-                    w:             c.w,
-                    h:             c.h,
-                    border_radius: c.border_radius,
-                }),
-                opacity:  layer.opacity,
-                children,
-            });
-
-            // If the layer has a page target, defer it; otherwise return inline.
-            if let Some(target_page) = layer.page {
-                deferred.push((target_page, render_layer));
-                vec![]
-            } else {
-                vec![render_layer]
+        }
+    } else {
+        for layer in layers {
+            for i in page_scope_indices(&layer.page, n) {
+                let page_w = pages[i].width;
+                let node = layer_to_render_node(layer, page_w);
+                pages[i].nodes.push(node);
             }
         }
     }
