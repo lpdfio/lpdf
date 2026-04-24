@@ -13,151 +13,149 @@
   </tokens>
   <document size="a4" margin="40pt">
     <meta title="lpdf Showcase — Stack" subject="Layout primitives" />
-    <pages>
 
       <!-- Stack -->
-      <page background="surface">
-        <layout>
-        <stack gap="xl">
+    <section background="surface">
+      <layout>
+      <stack gap="xl">
 
-          <stack gap="xs">
-            <text font-size="xxl" font="Helvetica-Bold" color="primary">Stack</text>
-            <text font-size="m" color="muted">Vertical flex layout — children stacked top-to-bottom</text>
-          </stack>
-
-          <!-- align (cross-axis = horizontal) -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">align (cross-axis)</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">align="start" — children left, own width</text>
-              <stack debug="true" align="start" gap="xs" background="bg" padding="s">
-                <text font-size="m">Short</text>
-                <text font-size="m">A much wider item</text>
-              </stack>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">align="center" — children centered, own width</text>
-              <stack debug="true" align="center" gap="xs" background="bg" padding="s">
-                <text font-size="m">Short</text>
-                <text font-size="m">A much wider item</text>
-              </stack>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">align="end" — children right, own width</text>
-              <stack debug="true" align="end" gap="xs" background="bg" padding="s">
-                <text font-size="m">Short</text>
-                <text font-size="m">A much wider item</text>
-              </stack>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">align="stretch" (default) — children fill width</text>
-              <stack debug="true" align="stretch" gap="xs" background="bg" padding="s">
-                <text font-size="m">Stretches to full width</text>
-                <text font-size="m">Same as container</text>
-              </stack>
-            </stack>
-          </stack>
-
-          <!-- justify (main-axis = vertical, requires height) -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">justify (main-axis, needs fixed height)</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">justify="start" height="70pt"</text>
-              <stack debug="true" justify="start" height="70pt" gap="xs" background="bg" padding="s">
-                <stack background="accent" padding="xs"><text font-size="m">A</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">B</text></stack>
-              </stack>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">justify="center" height="70pt"</text>
-              <stack debug="true" justify="center" height="70pt" gap="xs" background="bg" padding="s">
-                <stack background="accent" padding="xs"><text font-size="m">A</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">B</text></stack>
-              </stack>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">justify="end" height="70pt"</text>
-              <stack debug="true" justify="end" height="70pt" gap="xs" background="bg" padding="s">
-                <stack background="accent" padding="xs"><text font-size="m">A</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">B</text></stack>
-              </stack>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">justify="between" height="70pt"</text>
-              <stack debug="true" justify="between" height="70pt" background="bg" padding="s">
-                <stack background="accent" padding="xs"><text font-size="m">A</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">B</text></stack>
-              </stack>
-            </stack>
-          </stack>
-
-          <!-- gap -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">gap</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">gap="xs"</text>
-              <stack debug="true" gap="xs" background="bg" padding="s">
-                <text font-size="m">Alpha</text>
-                <text font-size="m">Beta</text>
-                <text font-size="m">Gamma</text>
-              </stack>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">gap="m"</text>
-              <stack debug="true" gap="m" background="bg" padding="s">
-                <text font-size="m">Alpha</text>
-                <text font-size="m">Beta</text>
-                <text font-size="m">Gamma</text>
-              </stack>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">gap="xl"</text>
-              <stack debug="true" gap="xl" background="bg" padding="s">
-                <text font-size="m">Alpha</text>
-                <text font-size="m">Beta</text>
-                <text font-size="m">Gamma</text>
-              </stack>
-            </stack>
-          </stack>
-
-          <!-- padding -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">padding</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">padding="xs"</text>
-              <stack debug="true" padding="xs" background="bg"><text font-size="m">Tight padding</text></stack>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">padding="l"</text>
-              <stack debug="true" padding="l" background="bg"><text font-size="m">Generous padding</text></stack>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">padding="20pt 8pt" (vertical · horizontal)</text>
-              <stack debug="true" padding="20pt 8pt" background="bg"><text font-size="m">Asymmetric padding</text></stack>
-            </stack>
-          </stack>
-
-          <!-- border · radius -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">border · radius</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">border="xs rule" radius="xs"</text>
-              <stack padding="s" border="xs rule" radius="xs"><text font-size="m">Subtle card</text></stack>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">border="s primary" radius="l"</text>
-              <stack padding="m" border="s primary" radius="l"><text font-size="m">Bold rounded border</text></stack>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">background="accent" radius="m" padding="m"</text>
-              <stack background="accent" radius="m" padding="m"><text font-size="m">Filled background with radius</text></stack>
-            </stack>
-          </stack>
-
+        <stack gap="xs">
+          <text font-size="xxl" font="Helvetica-Bold" color="primary">Stack</text>
+          <text font-size="m" color="muted">Vertical flex layout — children stacked top-to-bottom</text>
         </stack>
-        </layout>
-      </page>
 
-    </pages>
+        <!-- align (cross-axis = horizontal) -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">align (cross-axis)</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">align="start" — children left, own width</text>
+            <stack debug="true" align="start" gap="xs" background="bg" padding="s">
+              <text font-size="m">Short</text>
+              <text font-size="m">A much wider item</text>
+            </stack>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">align="center" — children centered, own width</text>
+            <stack debug="true" align="center" gap="xs" background="bg" padding="s">
+              <text font-size="m">Short</text>
+              <text font-size="m">A much wider item</text>
+            </stack>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">align="end" — children right, own width</text>
+            <stack debug="true" align="end" gap="xs" background="bg" padding="s">
+              <text font-size="m">Short</text>
+              <text font-size="m">A much wider item</text>
+            </stack>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">align="stretch" (default) — children fill width</text>
+            <stack debug="true" align="stretch" gap="xs" background="bg" padding="s">
+              <text font-size="m">Stretches to full width</text>
+              <text font-size="m">Same as container</text>
+            </stack>
+          </stack>
+        </stack>
+
+        <!-- justify (main-axis = vertical, requires height) -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">justify (main-axis, needs fixed height)</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">justify="start" height="70pt"</text>
+            <stack debug="true" justify="start" height="70pt" gap="xs" background="bg" padding="s">
+              <stack background="accent" padding="xs"><text font-size="m">A</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">B</text></stack>
+            </stack>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">justify="center" height="70pt"</text>
+            <stack debug="true" justify="center" height="70pt" gap="xs" background="bg" padding="s">
+              <stack background="accent" padding="xs"><text font-size="m">A</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">B</text></stack>
+            </stack>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">justify="end" height="70pt"</text>
+            <stack debug="true" justify="end" height="70pt" gap="xs" background="bg" padding="s">
+              <stack background="accent" padding="xs"><text font-size="m">A</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">B</text></stack>
+            </stack>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">justify="between" height="70pt"</text>
+            <stack debug="true" justify="between" height="70pt" background="bg" padding="s">
+              <stack background="accent" padding="xs"><text font-size="m">A</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">B</text></stack>
+            </stack>
+          </stack>
+        </stack>
+
+        <!-- gap -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">gap</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">gap="xs"</text>
+            <stack debug="true" gap="xs" background="bg" padding="s">
+              <text font-size="m">Alpha</text>
+              <text font-size="m">Beta</text>
+              <text font-size="m">Gamma</text>
+            </stack>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">gap="m"</text>
+            <stack debug="true" gap="m" background="bg" padding="s">
+              <text font-size="m">Alpha</text>
+              <text font-size="m">Beta</text>
+              <text font-size="m">Gamma</text>
+            </stack>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">gap="xl"</text>
+            <stack debug="true" gap="xl" background="bg" padding="s">
+              <text font-size="m">Alpha</text>
+              <text font-size="m">Beta</text>
+              <text font-size="m">Gamma</text>
+            </stack>
+          </stack>
+        </stack>
+
+        <!-- padding -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">padding</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">padding="xs"</text>
+            <stack debug="true" padding="xs" background="bg"><text font-size="m">Tight padding</text></stack>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">padding="l"</text>
+            <stack debug="true" padding="l" background="bg"><text font-size="m">Generous padding</text></stack>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">padding="20pt 8pt" (vertical · horizontal)</text>
+            <stack debug="true" padding="20pt 8pt" background="bg"><text font-size="m">Asymmetric padding</text></stack>
+          </stack>
+        </stack>
+
+        <!-- border · radius -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">border · radius</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">border="xs rule" radius="xs"</text>
+            <stack padding="s" border="xs rule" radius="xs"><text font-size="m">Subtle card</text></stack>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">border="s primary" radius="l"</text>
+            <stack padding="m" border="s primary" radius="l"><text font-size="m">Bold rounded border</text></stack>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">background="accent" radius="m" padding="m"</text>
+            <stack background="accent" radius="m" padding="m"><text font-size="m">Filled background with radius</text></stack>
+          </stack>
+        </stack>
+
+      </stack>
+      </layout>
+    </section>
+
   </document>
 </lpdf>

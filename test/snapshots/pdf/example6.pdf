@@ -1,0 +1,233 @@
+%PDF-1.7
+%€€€€
+
+1 0 obj
+<<
+  /Type /Catalog
+  /Pages 3 0 R
+>>
+endobj
+
+2 0 obj
+<<
+  /Title <FEFF0042007500730069006E00650073007300200043006100720064002020140020004A0061006E006500200044006F0065>
+  /Producer (lpdf.io (free))
+>>
+endobj
+
+3 0 obj
+<<
+  /Type /Pages
+  /Kids [4 0 R 5 0 R]
+  /Count 2
+>>
+endobj
+
+4 0 obj
+<<
+  /Type /Page
+  /Parent 3 0 R
+  /MediaBox [0 0 252 144]
+  /Resources <<
+    /Font <<
+      /F0 10 0 R
+      /F1 11 0 R
+    >>
+  >>
+  /Contents 6 0 R
+  /Annots [8 0 R]
+>>
+endobj
+
+5 0 obj
+<<
+  /Type /Page
+  /Parent 3 0 R
+  /MediaBox [0 0 252 144]
+  /Resources <<
+    /Font <<
+      /F0 10 0 R
+      /F1 11 0 R
+    >>
+  >>
+  /Contents 7 0 R
+  /Annots [9 0 R]
+>>
+endobj
+
+6 0 obj
+<<
+  /Length 331
+>>
+stream
+0.09019608 0.3882353 0.8117647 rg
+0 0 252 144 re
+f
+BT
+1 1 1 rg
+/F1 14 Tf
+1 0 0 1 14 116 Tm
+(Jane Doe) Tj
+ET
+BT
+1 1 1 rg
+/F0 9 Tf
+1 0 0 1 14 102.2 Tm
+(Staff Engineer) Tj
+ET
+BT
+1 1 1 rg
+/F1 11 Tf
+1 0 0 1 14 16.199997 Tm
+(Acme Corp) Tj
+ET
+BT
+0.6666667 0.6666667 0.6666667 rg
+/F0 8 Tf
+1 0 0 1 187.97601 132 Tm
+(made with lpdf.io) Tj
+ET
+endstream
+endobj
+
+7 0 obj
+<<
+  /Length 1024
+>>
+stream
+1 1 1 rg
+0 0 252 144 re
+f
+BT
+0.09019608 0.3882353 0.8117647 rg
+/F1 7 Tf
+1 0 0 1 14 123 Tm
+(ACME CORP) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 14 93.16667 Tm
+(Email) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 9 Tf
+1 0 0 1 135.832 93.16667 Tm
+(jane@acmecorp.example) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 14 78.36667 Tm
+(Phone) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 9 Tf
+1 0 0 1 170.194 78.36667 Tm
+(+1 555 000 1234) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 14 63.566666 Tm
+(Web) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 9 Tf
+1 0 0 1 161.97699 63.566666 Tm
+(acmecorp.example) Tj
+ET
+q
+0.8666667 0.8901961 0.92941177 RG
+0.5 w
+14 42.083336 m
+238 42.083336 l
+S
+Q
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 7 Tf
+1 0 0 1 14 15.400009 Tm
+<31323320427573696E657373204176652C205375697465203420B72053616E204672616E636973636F2C204341203934313037> Tj
+ET
+BT
+0.6666667 0.6666667 0.6666667 rg
+/F0 8 Tf
+1 0 0 1 187.97601 132 Tm
+(made with lpdf.io) Tj
+ET
+endstream
+endobj
+
+8 0 obj
+<<
+  /Type /Annot
+  /Subtype /Link
+  /Rect [187.97601 132 248 140]
+  /Border [0 0 0]
+  /A <<
+    /Type /Action
+    /S /URI
+    /URI (https://lpdf.io)
+  >>
+>>
+endobj
+
+9 0 obj
+<<
+  /Type /Annot
+  /Subtype /Link
+  /Rect [187.97601 132 248 140]
+  /Border [0 0 0]
+  /A <<
+    /Type /Action
+    /S /URI
+    /URI (https://lpdf.io)
+  >>
+>>
+endobj
+
+10 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+11 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica-Bold
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+xref
+0 12
+0000000000 65535 f
+0000000016 00000 n
+0000000070 00000 n
+0000000233 00000 n
+0000000303 00000 n
+0000000492 00000 n
+0000000681 00000 n
+0000001066 00000 n
+0000002145 00000 n
+0000002319 00000 n
+0000002493 00000 n
+0000002600 00000 n
+trailer
+<<
+  /Size 12
+  /Root 1 0 R
+  /Info 2 0 R
+>>
+startxref
+2712
+%%EOF

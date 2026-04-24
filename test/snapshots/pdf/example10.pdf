@@ -1,0 +1,584 @@
+%PDF-1.7
+%€€€€
+
+1 0 obj
+<<
+  /Type /Catalog
+  /Pages 3 0 R
+>>
+endobj
+
+2 0 obj
+<<
+  /Title <FEFF0045006E00670069006E0065006500720069006E0067002000480061006E00640062006F006F006B00202014002000720075006E006E0069006E0067002000680065006100640065007200200061006E0064002000700061006700650020006E0075006D0062006500720073>
+  /Producer (lpdf.io (free))
+>>
+endobj
+
+3 0 obj
+<<
+  /Type /Pages
+  /Kids [4 0 R 5 0 R]
+  /Count 2
+>>
+endobj
+
+4 0 obj
+<<
+  /Type /Page
+  /Parent 3 0 R
+  /MediaBox [0 0 595.28 841.89]
+  /Resources <<
+    /Font <<
+      /F0 10 0 R
+      /F1 11 0 R
+      /F2 12 0 R
+    >>
+  >>
+  /Contents 6 0 R
+  /Annots [8 0 R]
+>>
+endobj
+
+5 0 obj
+<<
+  /Type /Page
+  /Parent 3 0 R
+  /MediaBox [0 0 595.28 841.89]
+  /Resources <<
+    /Font <<
+      /F0 10 0 R
+      /F1 11 0 R
+      /F2 12 0 R
+    >>
+  >>
+  /Contents 7 0 R
+  /Annots [9 0 R]
+>>
+endobj
+
+6 0 obj
+<<
+  /Length 9133
+>>
+stream
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 9 Tf
+1 0 0 1 48 784.89 Tm
+(ACME ENGINEERING HANDBOOK) Tj
+ET
+BT
+0.4 0.4 0.4 rg
+/F0 9 Tf
+1 0 0 1 477.74603 784.89 Tm
+(Revision 2026.04) Tj
+ET
+q
+0.8156863 0.8156863 0.8156863 RG
+0.5 w
+48 780.84 m
+547.28 780.84 l
+S
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 28 Tf
+1 0 0 1 48 752.59 Tm
+<436861707465722033209720436F646520526576696577> Tj
+ET
+BT
+0.4 0.4 0.4 rg
+/F2 9 Tf
+1 0 0 1 48 729.99 Tm
+(How we run reviews, why we run them this way, and what to expect as both author and reviewer.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 709.19 Tm
+(Code review is the single most leveraged process in our engineering culture. It is the moment at which) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 695.99 Tm
+(an idea, partially formed in one engineer's head, becomes a shared artefact that the rest of the team) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 682.79004 Tm
+(can reason about, critique, and ultimately depend on. A good review process treats this moment with) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 669.59 Tm
+(the seriousness it deserves; a bad one treats it as a procedural hurdle to be cleared as quickly as) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 656.39 Tm
+(possible. The difference, over the lifetime of a codebase, is enormous.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 635.19 Tm
+(The first principle is that a code review is a conversation, not an inspection. The author has context the) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 621.99 Tm
+(reviewer does not, and the reviewer has perspective the author cannot easily access from inside their) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 608.79004 Tm
+(own change. Both of these are valuable, and the goal of the review is to surface the parts of each that) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 595.59 Tm
+(are most useful to the decision at hand. When reviewers approach a change as a problem to be) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 582.39 Tm
+(solved together rather than a verdict to be issued, the quality of the resulting code rises sharply.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 561.19 Tm
+(The second principle is that the review should be sized to fit a human attention span. A change that) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 547.99 Tm
+(takes more than thirty minutes to read carefully is a change that will not be reviewed carefully. Splitting) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 534.79004 Tm
+<776F726B20696E746F20736D616C6C65722C20696E646570656E64656E746C79206D65616E696E6766756C20706965636573206973206E6F742061207374796C697374696320707265666572656E63652097206974206973207468652073696E676C65206D6F7374> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 521.58997 Tm
+(reliable lever an author has for getting useful feedback. We accept the small overhead of multiple) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 508.39 Tm
+(reviews because the alternative is one large review that is, in practice, no review at all.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 487.19 Tm
+(The third principle is that the reviewer's job is to ask questions, not to dictate solutions. A reviewer who) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 473.99 Tm
+(writes "do it this way instead" is exercising a kind of power that often produces compliance rather than) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 460.79 Tm
+(insight. A reviewer who writes "what happens when X is null here?" or "have we considered the case) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 447.59 Tm
+(where two clients race on this update?" is doing something far more valuable: they are putting the) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 434.39 Tm
+(author in a position to discover the right answer themselves, with full ownership of the result.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 413.19 Tm
+(The fourth principle is that approval is not a rubber stamp. When you click approve, you are stating) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 399.99 Tm
+(that you have read the change carefully enough to defend the decisions it embodies if something goes) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 386.79 Tm
+(wrong six months from now. This is a meaningful claim, and it is the reason approvals carry weight. If) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 373.59 Tm
+<796F752068617665206E6F7420646F6E65207468652072656164696E6720726571756972656420746F206D616B65207468617420636C61696D2C20646F206E6F7420617070726F766520972072657175657374206D6F72652074696D652C2061736B> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 360.39 Tm
+(another reviewer to share the load, or say plainly that you have skimmed it but have not done a deep) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 347.19 Tm
+(read.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 325.99 Tm
+(Authors have responsibilities too. The most important is to make the change easy to review: a clear) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 312.78998 Tm
+<6465736372697074696F6E206F66207468652070726F626C656D2C20612073756D6D617279206F662074686520617070726F6163682C206C696E6B7320746F2072656C6576616E74207072696F722064697363757373696F6E2C20616E642097> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 299.58997 Tm
+<6372756369616C6C79209720612074686F7567687466756C2073656C662D7265766965772070617373206265666F72652072657175657374696E67207265766965772066726F6D20616E796F6E6520656C73652E205265766965776572732077686F> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 286.39 Tm
+(open a change to find unrelated edits, dead code, or commented-out experiments tend to lose trust) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 273.19 Tm
+(quickly, and that lost trust takes a long time to rebuild.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 251.98999 Tm
+(A frequent question is how to handle disagreement. Our default is that the reviewer raises the) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 238.78998 Tm
+(concern, the author responds, and if the two cannot reach agreement within a round or two, a third) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 225.58997 Tm
+(engineer is invited in to break the tie. This works because everyone has agreed in advance that) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 212.39001 Tm
+(disagreement is normal and that the process for resolving it is bounded. Long, escalating threads are) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 199.19 Tm
+<61207369676E2074686174207468652070726F63657373206861732062726F6B656E20646F776E2097207768656E20796F7520736565206F6E6520666F726D696E672C2073746F7020747970696E6720616E64207069636B207570206120766964656F> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 185.98999 Tm
+(call instead.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 164.78998 Tm
+<576520646F206E6F742072657175697265207265766965777320746F20626520626C6F636B696E672E20466F7220736D616C6C2C206C6F772D7269736B206368616E6765732097207479706F732C20646570656E64656E63792062756D70732C> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 151.58997 Tm
+<696E7465726E616C2D746F6F6C20747765616B73209720612073656C662D6D65726765207769746820706F73742D686F63207265766965772069732061636365707461626C652C2070726F76696465642074686520617574686F7220666C61677320746865> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 138.38995 Tm
+(change for review within the same day. This is not a loophole; it is an acknowledgement that not every) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 125.19 Tm
+(change carries the same risk profile, and treating them all identically wastes the team's most) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 111.98999 Tm
+(expensive resource: focused attention.) Tj
+ET
+q
+0.8156863 0.8156863 0.8156863 RG
+0.5 w
+48 58.650024 m
+547.28 58.650024 l
+S
+Q
+BT
+0.4 0.4 0.4 rg
+/F0 7 Tf
+1 0 0 1 48 49.400024 Tm
+<A920323032362041636D6520456E67696E656572696E67> Tj
+ET
+BT
+0.4 0.4 0.4 rg
+/F0 7 Tf
+1 0 0 1 511.47504 49.400024 Tm
+(Page) Tj
+ET
+BT
+0.4 0.4 0.4 rg
+/F1 7 Tf
+1 0 0 1 529.766 49.400024 Tm
+(1) Tj
+ET
+BT
+0.4 0.4 0.4 rg
+/F0 7 Tf
+1 0 0 1 535.604 49.400024 Tm
+(of) Tj
+ET
+BT
+0.4 0.4 0.4 rg
+/F1 7 Tf
+1 0 0 1 543.388 49.400024 Tm
+(2) Tj
+ET
+BT
+0.6666667 0.6666667 0.6666667 rg
+/F0 8 Tf
+1 0 0 1 531.25604 829.89 Tm
+(made with lpdf.io) Tj
+ET
+endstream
+endobj
+
+7 0 obj
+<<
+  /Length 2133
+>>
+stream
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 9 Tf
+1 0 0 1 48 784.89 Tm
+(ACME ENGINEERING HANDBOOK) Tj
+ET
+BT
+0.4 0.4 0.4 rg
+/F0 9 Tf
+1 0 0 1 477.74603 784.89 Tm
+(Revision 2026.04) Tj
+ET
+q
+0.8156863 0.8156863 0.8156863 RG
+0.5 w
+48 780.84 m
+547.28 780.84 l
+S
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 769.59 Tm
+(Finally, remember that the codebase is the team's shared memory. A reviewer who lets through a) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 756.39 Tm
+(change that future engineers will struggle to understand is borrowing from a fund that only ever pays) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 743.19 Tm
+<6261636B207769746820696E7465726573742E204120666577206578747261206D696E75746573207370656E7420647572696E672072657669657720972070757368696E6720666F7220636C6561726572206E616D65732C2073696D706C6572> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 729.99 Tm
+<636F6E74726F6C20666C6F772C206265747465722D706C6163656420636F6D6D656E7473209720736176657320686F757273206F6620636F6E667573696F6E206C617465722E205468697320697320746865206465657065737420726561736F6E207765> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 716.79004 Tm
+(invest in review: not because we distrust authors, but because we trust the future readers, and we) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 703.59 Tm
+(want to leave them something they can work with.) Tj
+ET
+BT
+0.4 0.4 0.4 rg
+/F2 9 Tf
+1 0 0 1 48 684.39 Tm
+<9720656E64206F6620636861707465722097> Tj
+ET
+q
+0.8156863 0.8156863 0.8156863 RG
+0.5 w
+48 58.650024 m
+547.28 58.650024 l
+S
+Q
+BT
+0.4 0.4 0.4 rg
+/F0 7 Tf
+1 0 0 1 48 49.400024 Tm
+<A920323032362041636D6520456E67696E656572696E67> Tj
+ET
+BT
+0.4 0.4 0.4 rg
+/F0 7 Tf
+1 0 0 1 511.47504 49.400024 Tm
+(Page) Tj
+ET
+BT
+0.4 0.4 0.4 rg
+/F1 7 Tf
+1 0 0 1 529.766 49.400024 Tm
+(2) Tj
+ET
+BT
+0.4 0.4 0.4 rg
+/F0 7 Tf
+1 0 0 1 535.604 49.400024 Tm
+(of) Tj
+ET
+BT
+0.4 0.4 0.4 rg
+/F1 7 Tf
+1 0 0 1 543.388 49.400024 Tm
+(2) Tj
+ET
+BT
+0.6666667 0.6666667 0.6666667 rg
+/F0 8 Tf
+1 0 0 1 531.25604 829.89 Tm
+(made with lpdf.io) Tj
+ET
+endstream
+endobj
+
+8 0 obj
+<<
+  /Type /Annot
+  /Subtype /Link
+  /Rect [531.25604 829.89 591.28 837.89]
+  /Border [0 0 0]
+  /A <<
+    /Type /Action
+    /S /URI
+    /URI (https://lpdf.io)
+  >>
+>>
+endobj
+
+9 0 obj
+<<
+  /Type /Annot
+  /Subtype /Link
+  /Rect [531.25604 829.89 591.28 837.89]
+  /Border [0 0 0]
+  /A <<
+    /Type /Action
+    /S /URI
+    /URI (https://lpdf.io)
+  >>
+>>
+endobj
+
+10 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+11 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica-Bold
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+12 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica-Oblique
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+xref
+0 13
+0000000000 65535 f
+0000000016 00000 n
+0000000070 00000 n
+0000000353 00000 n
+0000000423 00000 n
+0000000635 00000 n
+0000000847 00000 n
+0000010035 00000 n
+0000012223 00000 n
+0000012406 00000 n
+0000012589 00000 n
+0000012696 00000 n
+0000012808 00000 n
+trailer
+<<
+  /Size 13
+  /Root 1 0 R
+  /Info 2 0 R
+>>
+startxref
+12923
+%%EOF

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf"/>
+      <color name="accent"   value="#e8f0fc"/>
+      <color name="muted"    value="#737373"/>
+      <color name="rule"     value="#dde3ed"/>
+      <color name="surface"  value="#ffffff"/>
+    </colors>
+  </tokens>
+  <document size="a4" margin="0pt">
+    <meta title="lpdf Showcase — Region Chrome (header and footer)"
+          subject="Layout region pin=top and pin=bottom"/>
+
+    <section margin="0pt">
+      <layout>
+        <!-- Pinned header: appears on every page -->
+        <region pin="top" page="each">
+          <stack background="primary" padding="12pt 40pt" gap="xs">
+            <flank>
+              <text font-size="l" font="Helvetica-Bold" color="surface">
+                Annual Report 2026
+              </text>
+              <text font-size="s" color="accent" align="right">
+                lpdf.io
+              </text>
+            </flank>
+          </stack>
+          <divider color="accent" thickness="m"/>
+        </region>
+
+        <!-- Pinned footer: appears on every page -->
+        <region pin="bottom" page="each">
+          <divider color="rule" thickness="xs"/>
+          <stack padding="8pt 40pt" gap="xs">
+            <flank>
+              <text font-size="xs" color="muted">Confidential — For internal use only</text>
+              <text font-size="xs" color="muted" align="right">
+                lpdf.io · PDF generation API
+              </text>
+            </flank>
+          </stack>
+        </region>
+
+        <!-- Pinned "first page only" header variant -->
+        <region pin="top" page="first">
+          <!-- Additional first-page-only banner below the main header -->
+          <stack background="accent" padding="8pt 40pt">
+            <text font-size="s" color="primary" align="center">
+              This banner appears on the first page only (region page="first")
+            </text>
+          </stack>
+        </region>
+
+        <!-- Flow content fills the remaining area between header and footer -->
+        <stack gap="xl" padding="40pt">
+          <stack gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">
+              Region Chrome Demo
+            </text>
+            <text font-size="m" color="muted">
+              The header and footer are pinned regions that reserve space on every page.
+              The flow content (this text) fills the remaining centre rectangle.
+            </text>
+          </stack>
+
+          <divider color="rule" thickness="xs"/>
+
+          <text font-size="m">
+            Layout regions use <span font="Helvetica-Bold">pin="top"</span> and
+            <span font="Helvetica-Bold">pin="bottom"</span> to anchor chrome to the edges
+            of the content area. Region height is determined naturally from its children.
+            Full content width is used automatically.
+          </text>
+
+          <text font-size="m">
+            The <span font="Helvetica-Bold">page</span> attribute on a region controls
+            which physical pages of this section the region appears on.
+            Supported values: <span font="Helvetica-Bold">each</span>,
+            <span font="Helvetica-Bold">first</span>,
+            <span font="Helvetica-Bold">last</span>,
+            <span font="Helvetica-Bold">odd</span>,
+            <span font="Helvetica-Bold">even</span>, or a numeric range like
+            <span font="Helvetica-Bold">1-3</span>.
+          </text>
+
+          <!-- Padding to force multi-page output -->
+          <stack height="400pt" background="accent" padding="m">
+            <text font-size="m" color="muted">
+              Spacer block — forces content to continue on subsequent pages to demonstrate
+              that the header and footer repeat correctly.
+            </text>
+          </stack>
+
+          <text font-size="m">
+            You should see the header and footer on every page produced from this section.
+            The "first page only" accent banner above the header should appear only on
+            the first page.
+          </text>
+
+          <text font-size="m">
+            Region <span font="Helvetica-Bold">pin="left"</span> and
+            <span font="Helvetica-Bold">pin="right"</span> are schema-valid for forward
+            compatibility but their implementation is deferred to a later phase.
+          </text>
+        </stack>
+      </layout>
+    </section>
+  </document>
+</lpdf>

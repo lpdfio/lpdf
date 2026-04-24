@@ -1,0 +1,176 @@
+%PDF-1.7
+%€€€€
+
+1 0 obj
+<<
+  /Type /Catalog
+  /Pages 3 0 R
+>>
+endobj
+
+2 0 obj
+<<
+  /Producer (lpdf.io (free))
+>>
+endobj
+
+3 0 obj
+<<
+  /Type /Pages
+  /Kids [4 0 R]
+  /Count 1
+>>
+endobj
+
+4 0 obj
+<<
+  /Type /Page
+  /Parent 3 0 R
+  /MediaBox [0 0 595 842]
+  /Resources <<
+    /Font <<
+      /F0 7 0 R
+    >>
+    /ExtGState <<
+      /GS50 8 0 R
+    >>
+  >>
+  /Contents 5 0 R
+  /Annots [6 0 R]
+>>
+endobj
+
+5 0 obj
+<<
+  /Length 1013
+>>
+stream
+q
+0.2901961 0.5647059 0.8862745 rg
+0.101960786 0.32156864 0.4627451 RG
+1 w
+40 702 200 100 re
+B
+Q
+q
+0.9411765 0.9411765 0.9411765 rg
+260 702 200 100 re
+f
+Q
+q
+0.2 0.2 0.2 RG
+1 w
+40 672 m
+555 672 l
+S
+Q
+q
+0.9529412 0.6117647 0.07058824 rg
+0.8392157 0.5372549 0.0627451 RG
+1 w
+220 562 m
+220 589.615 184.18399 612 140 612 c
+95.816 612 60 589.615 60 562 c
+60 534.385 95.816 512 140 512 c
+184.18399 512 220 534.385 220 562 c
+h
+B
+Q
+q
+0.15294118 0.68235296 0.3764706 rg
+460 562 m
+460 595.138 433.138 622 400 622 c
+366.862 622 340 595.138 340 562 c
+340 528.862 366.862 502 400 502 c
+433.138 502 460 528.862 460 562 c
+h
+f
+Q
+q
+0.5568628 0.26666668 0.6784314 rg
+40 442 m
+200 492 l
+360 442 l
+h
+f
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 24 Tf
+1 0 0 1 40 358 Tm
+(Hello Canvas!) Tj
+ET
+BT
+0.4 0.4 0.4 rg
+/F0 14 Tf
+1 0 0 1 255.479 328 Tm
+(Centered text) Tj
+ET
+q
+/GS50 gs
+q
+0.90588236 0.29803923 0.23529412 rg
+40 242 515 60 re
+f
+Q
+Q
+BT
+0.6666667 0.6666667 0.6666667 rg
+/F0 8 Tf
+1 0 0 1 530.976 830 Tm
+(made with lpdf.io) Tj
+ET
+endstream
+endobj
+
+8 0 obj
+<<
+  /Type /ExtGState
+  /ca 0.5
+  /CA 0.5
+>>
+endobj
+
+6 0 obj
+<<
+  /Type /Annot
+  /Subtype /Link
+  /Rect [530.976 830 591 838]
+  /Border [0 0 0]
+  /A <<
+    /Type /Action
+    /S /URI
+    /URI (https://lpdf.io)
+  >>
+>>
+endobj
+
+7 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+xref
+0 9
+0000000000 65535 f
+0000000016 00000 n
+0000000070 00000 n
+0000000121 00000 n
+0000000185 00000 n
+0000000399 00000 n
+0000001528 00000 n
+0000001700 00000 n
+0000001467 00000 n
+trailer
+<<
+  /Size 9
+  /Root 1 0 R
+  /Info 2 0 R
+>>
+startxref
+1806
+%%EOF

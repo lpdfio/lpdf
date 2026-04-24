@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Lpdf\Canvas;
+
+final readonly class LineStyle
+{
+    public function __construct(
+        public ?string      $stroke       = null,
+        public ?float       $strokeWidth  = null,
+        /** @var float[]|null */
+        public ?array       $strokeDash   = null,
+        public ?LineCap     $lineCap      = null,
+        public ?LineJoin    $lineJoin     = null,
+    ) {}
+}

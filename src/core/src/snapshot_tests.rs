@@ -1,7 +1,7 @@
 // Snapshot tests: render each fixture XML to PDF, hash with SHA-256, compare
 // against the stored hash in test/snapshots/.
 //
-// Generate / update snapshots:
+// Generate / update snapshots (also writes PDFs to test/snapshots/pdf/ for visual review):
 //   UPDATE_SNAPSHOTS=1 cargo test --manifest-path src/core/Cargo.toml snapshot
 //
 // Normal run (CI):
@@ -20,8 +20,29 @@ fn snapshots_dir() -> PathBuf {
         .join("../../test/snapshots")
 }
 
+fn pdf_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../test/snapshots/pdf")
+}
+
 fn sha256_hex(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
+}
+
+fn write_snapshot(name: &str, pdf_bytes: &[u8]) {
+    let dir = snapshots_dir();
+    let pdf_out = pdf_dir();
+    std::fs::create_dir_all(&pdf_out)
+        .unwrap_or_else(|e| panic!("failed to create pdf dir: {e}"));
+
+    let hash = sha256_hex(pdf_bytes);
+
+    std::fs::write(dir.join(format!("{name}.pdf.sha256")), &hash)
+        .unwrap_or_else(|e| panic!("failed to write snapshot {name}: {e}"));
+    std::fs::write(pdf_out.join(format!("{name}.pdf")), pdf_bytes)
+        .unwrap_or_else(|e| panic!("failed to write pdf {name}: {e}"));
+
+    println!("updated snapshot {name}: {hash}");
 }
 
 fn run_snapshot(name: &str) {
@@ -32,20 +53,17 @@ fn run_snapshot(name: &str) {
     let pdf_bytes = crate::LpdfEngine::render_xml_to_pdf_bytes(&xml)
         .unwrap_or_else(|e| panic!("render failed for {name}: {e}"));
 
-    let hash = sha256_hex(&pdf_bytes);
-    let snap_path = snapshots_dir().join(format!("{name}.pdf.sha256"));
-
     if std::env::var("UPDATE_SNAPSHOTS").is_ok() {
-        std::fs::write(&snap_path, &hash)
-            .unwrap_or_else(|e| panic!("failed to write snapshot {}: {e}", snap_path.display()));
-        println!("updated snapshot {name}: {hash}");
+        write_snapshot(name, &pdf_bytes);
     } else {
+        let snap_path = snapshots_dir().join(format!("{name}.pdf.sha256"));
         let stored = std::fs::read_to_string(&snap_path).unwrap_or_else(|_| {
             panic!(
                 "snapshot missing for {name} — run with UPDATE_SNAPSHOTS=1 to generate it\n  {}",
                 snap_path.display()
             )
         });
+        let hash = sha256_hex(&pdf_bytes);
         assert_eq!(
             stored.trim(), hash,
             "PDF output changed for {name}. Run with UPDATE_SNAPSHOTS=1 to accept the new output."
@@ -100,6 +118,10 @@ fn showcase_barcode() { run_snapshot("showcase-barcode"); }
 fn showcase_forms() { run_snapshot("showcase-forms"); }
 #[test]
 fn showcase_encryption() { run_snapshot("showcase-encryption"); }
+#[test]
+fn showcase_canvas_overlay() { run_snapshot("showcase-canvas-overlay"); }
+#[test]
+fn showcase_region_chrome()  { run_snapshot("showcase-region-chrome"); }
 
 // ── Canvas snapshot tests ─────────────────────────────────────────────────────
 
@@ -110,11 +132,11 @@ fn canvas_snapshot() {
     let json = r##"{
         "version": 1,
         "type": "canvas-document",
-        "pages": [
+        "nodes": [
             {
-                "type": "canvas-page",
+                "type": "canvas-section",
                 "attrs": { "width": 595, "height": 842 },
-                "children": [
+                "nodes": [
                     {
                         "type": "canvas-rect",
                         "attrs": { "x": 40, "y": 40, "w": 200, "h": 100,
@@ -163,7 +185,7 @@ fn canvas_snapshot() {
                     {
                         "type": "canvas-layer",
                         "attrs": { "opacity": 0.5 },
-                        "children": [
+                        "nodes": [
                             {
                                 "type": "canvas-rect",
                                 "attrs": { "x": 40, "y": 540, "w": 515, "h": 60,
@@ -184,21 +206,20 @@ fn canvas_snapshot() {
     assert!(pdf_bytes.starts_with(b"%PDF-"), "output should start with %PDF-");
 
     // Snapshot / update.
-    let hash = sha256_hex(&pdf_bytes);
-    let snap_path = snapshots_dir().join("canvas_snapshot.pdf.sha256");
-
     if std::env::var("UPDATE_SNAPSHOTS").is_ok() {
-        std::fs::write(&snap_path, &hash).expect("write snapshot");
-        println!("updated canvas snapshot: {hash}");
-    } else if snap_path.exists() {
-        let stored = std::fs::read_to_string(&snap_path).expect("read snapshot");
-        assert_eq!(
-            stored.trim(), hash,
-            "canvas PDF output changed — run with UPDATE_SNAPSHOTS=1 to accept"
-        );
+        write_snapshot("canvas_snapshot", &pdf_bytes);
     } else {
-        // First run: write the snapshot.
-        std::fs::write(&snap_path, &hash).expect("write initial canvas snapshot");
-        println!("created initial canvas snapshot: {hash}");
+        let snap_path = snapshots_dir().join("canvas_snapshot.pdf.sha256");
+        let hash = sha256_hex(&pdf_bytes);
+        if snap_path.exists() {
+            let stored = std::fs::read_to_string(&snap_path).expect("read snapshot");
+            assert_eq!(
+                stored.trim(), hash,
+                "canvas PDF output changed — run with UPDATE_SNAPSHOTS=1 to accept"
+            );
+        } else {
+            write_snapshot("canvas_snapshot", &pdf_bytes);
+            println!("created initial canvas snapshot: {hash}");
+        }
     }
 }

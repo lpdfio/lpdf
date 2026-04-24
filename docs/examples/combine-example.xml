@@ -1,0 +1,88 @@
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+
+  <!--
+    Demonstrates combining <layout> + <canvas> in the same section:
+      - <layout> drives paginated flow content
+      - <region pin="top" page="each"> inside <layout> repeats a header on every page
+      - <canvas> overlays the layout (declared after = paints on top)
+      - <layer page="each"> inside <canvas> places a page number at a fixed
+        position in the bottom margin on every page
+
+    Coordinate note:
+      <region> coordinates are margin-adjusted (0,0 = content top-left).
+      <canvas> coordinates are full-page (0,0 = page top-left, y-down).
+      Anchors on canvas primitives use standard signed offsets from a named
+      page reference point (x+ = right, y+ = down in page coordinates).
+      x and y default to 0 and can be omitted.
+      e.g. anchor="bottom-center" y="-20pt" means 20pt upward from
+      the bottom-centre of the page, regardless of page size.
+
+    PageScope values (page="each" etc.) are section-relative.
+  -->
+
+  <document size="a4" margin="40pt">
+    <meta title="Combine Example — Layout + Canvas" />
+
+    <section title="Main Content">
+
+      <!-- layout is painted first (bottom) -->
+      <layout>
+
+          <!-- ── Header: repeats on every physical page ─────────────────── -->
+          <region pin="top" page="each">
+            <flank>
+              <text font="Helvetica-Bold" font-size="m">My Document</text>
+              <text font-size="s" color="#737373" align="right">Confidential</text>
+            </flank>
+            <divider />
+          </region>
+
+          <!-- ── Flow content ───────────────────────────────────────────── -->
+          <stack gap="l">
+
+            <text font-size="xxl" font="Helvetica-Bold">Introduction</text>
+
+            <text font-size="m">
+              This document demonstrates the combined use of layout flow content
+              with canvas overlays. The header above repeats on every page via
+              <span font="Helvetica-Bold">&lt;region page="each"&gt;</span>.
+              The page number at the bottom is placed by a canvas layer.
+            </text>
+
+            <text font-size="m">
+              Add as much flow content here as needed. When it overflows the
+              page, the engine paginates automatically. The header and page
+              number chrome will appear on every produced page.
+            </text>
+
+          </stack>
+
+        </layout>
+
+        <!-- canvas is painted second (top) — overlays the layout -->
+        <canvas>
+
+          <!-- Page number centred in the bottom margin on every page.
+               anchor="bottom-center" sets the reference point to the
+               bottom-centre of the full page.
+               x is omitted — defaults to 0 (no horizontal offset).
+               y="-20pt" = 20pt upward (negative = up in page y-down coordinates).
+               No page dimensions needed; works for any page size. -->
+          <layer page="each">
+            <text
+              anchor="bottom-center"
+              y="-20pt"
+              font-size="s"
+              color="#737373"
+              data-value="page.number"
+            />
+          </layer>
+
+        </canvas>
+
+    </section>
+  </document>
+
+</lpdf>

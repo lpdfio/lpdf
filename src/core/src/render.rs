@@ -286,7 +286,7 @@ fn node_to_json(node: &RenderNode) -> Value {
             "border_width": r2(b.border_width),
             "border_color": b.border_color,
             "radius":       r2(b.radius),
-            "children":     nodes_to_json(&b.children),
+            "nodes":        nodes_to_json(&b.children),
         }),
         RenderNode::Line(l) => {
             let mut v = json!({
@@ -321,7 +321,7 @@ fn node_to_json(node: &RenderNode) -> Value {
             "y":        r2(l.y),
             "width":    r2(l.width),
             "height":   r2(l.height),
-            "children": nodes_to_json(&l.children),
+            "nodes": nodes_to_json(&l.children),
         }),
         RenderNode::Image(i) => json!({
             "type":   "image",
@@ -423,7 +423,7 @@ fn node_to_json(node: &RenderNode) -> Value {
         RenderNode::CanvasLayer(l) => json!({
             "type":     "canvas-layer",
             "opacity":  l.opacity,
-            "children": nodes_to_json(&l.children),
+            "nodes": nodes_to_json(&l.children),
         }),
     }
 }

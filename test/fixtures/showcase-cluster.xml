@@ -13,201 +13,199 @@
   </tokens>
   <document size="a4" margin="40pt">
     <meta title="lpdf Showcase — Cluster" subject="Layout primitives" />
-    <pages>
 
       <!-- Cluster -->
-      <page background="surface">
-        <layout>
-        <stack gap="xl">
+    <section background="surface">
+      <layout>
+      <stack gap="xl">
 
-          <stack gap="xs">
-            <text font-size="xxl" font="Helvetica-Bold" color="primary">Cluster</text>
-            <text font-size="m" color="muted">Horizontal flex layout — children arranged left-to-right, wrapping across rows</text>
-          </stack>
-
-          <!-- align (cross-axis = vertical) -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">align (cross-axis)</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">align="start" — items top-aligned</text>
-              <cluster debug="true" align="start" gap="s" background="bg" padding="s">
-                <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Two</text><text font-size="m">lines</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
-              </cluster>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">align="center" — items middle-aligned</text>
-              <cluster debug="true" align="center" gap="s" background="bg" padding="s">
-                <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Two</text><text font-size="m">lines</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
-              </cluster>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">align="end" — items bottom-aligned</text>
-              <cluster debug="true" align="end" gap="s" background="bg" padding="s">
-                <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Two</text><text font-size="m">lines</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
-              </cluster>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">align="stretch" — items fill row height</text>
-              <cluster debug="true" align="stretch" gap="s" background="bg" padding="s">
-                <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Two</text><text font-size="m">lines</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
-              </cluster>
-            </stack>
-          </stack>
-
-          <!-- justify (main-axis = horizontal) -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">justify (main-axis)</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">justify="start" (default)</text>
-              <cluster debug="true" justify="start" gap="s" background="bg" padding="s">
-                <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Gamma</text></stack>
-              </cluster>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">justify="center"</text>
-              <cluster debug="true" justify="center" gap="s" background="bg" padding="s">
-                <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Gamma</text></stack>
-              </cluster>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">justify="end"</text>
-              <cluster debug="true" justify="end" gap="s" background="bg" padding="s">
-                <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Gamma</text></stack>
-              </cluster>
-            </stack>
-          </stack>
-
-          <!-- gap -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">gap</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">gap="xs"</text>
-              <cluster debug="true" gap="xs" background="bg" padding="s">
-                <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Gamma</text></stack>
-              </cluster>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">gap="m"</text>
-              <cluster debug="true" gap="m" background="bg" padding="s">
-                <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Gamma</text></stack>
-              </cluster>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">gap="xl"</text>
-              <cluster debug="true" gap="xl" background="bg" padding="s">
-                <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Gamma</text></stack>
-              </cluster>
-            </stack>
-          </stack>
-
-          <!-- padding -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">padding</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">padding="xs"</text>
-              <cluster debug="true" padding="xs" background="bg">
-                <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
-              </cluster>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">padding="l"</text>
-              <cluster debug="true" padding="l" background="bg">
-                <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
-              </cluster>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">padding="20pt 8pt" (vertical · horizontal)</text>
-              <cluster debug="true" padding="20pt 8pt" background="bg">
-                <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
-              </cluster>
-            </stack>
-          </stack>
-
-          <!-- border · radius -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">border · radius</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">border="xs rule" radius="xs"</text>
-              <cluster padding="s" gap="s" border="xs rule" radius="xs">
-                <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Gamma</text></stack>
-              </cluster>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">border="s primary" radius="l"</text>
-              <cluster padding="m" gap="s" border="s primary" radius="l">
-                <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Gamma</text></stack>
-              </cluster>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">background="accent" radius="m" padding="m"</text>
-              <cluster background="accent" radius="m" padding="m" gap="s">
-                <stack background="surface" padding="xs" radius="xs"><text font-size="m">Alpha</text></stack>
-                <stack background="surface" padding="xs" radius="xs"><text font-size="m">Beta</text></stack>
-                <stack background="surface" padding="xs" radius="xs"><text font-size="m">Gamma</text></stack>
-              </cluster>
-            </stack>
-          </stack>
-
-          <!-- wrapping -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">wrapping</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">Many items — cluster wraps across multiple rows</text>
-              <cluster debug="true" gap="s" background="bg" padding="s">
-                <stack background="accent" padding="xs"><text font-size="m">Apple</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Banana</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Cherry</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Date</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Elderberry</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Fig</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Grape</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Honeydew</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Kiwi</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Lemon</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Mango</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Nectarine</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Orange</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Papaya</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Quince</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Raspberry</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Strawberry</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Tangerine</text></stack>
-                <stack background="accent" padding="xs"><text font-size="m">Watermelon</text></stack>
-              </cluster>
-            </stack>
-          </stack>
-
+        <stack gap="xs">
+          <text font-size="xxl" font="Helvetica-Bold" color="primary">Cluster</text>
+          <text font-size="m" color="muted">Horizontal flex layout — children arranged left-to-right, wrapping across rows</text>
         </stack>
-        </layout>
-      </page>
 
-    </pages>
+        <!-- align (cross-axis = vertical) -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">align (cross-axis)</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">align="start" — items top-aligned</text>
+            <cluster debug="true" align="start" gap="s" background="bg" padding="s">
+              <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Two</text><text font-size="m">lines</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
+            </cluster>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">align="center" — items middle-aligned</text>
+            <cluster debug="true" align="center" gap="s" background="bg" padding="s">
+              <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Two</text><text font-size="m">lines</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
+            </cluster>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">align="end" — items bottom-aligned</text>
+            <cluster debug="true" align="end" gap="s" background="bg" padding="s">
+              <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Two</text><text font-size="m">lines</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
+            </cluster>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">align="stretch" — items fill row height</text>
+            <cluster debug="true" align="stretch" gap="s" background="bg" padding="s">
+              <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Two</text><text font-size="m">lines</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Short</text></stack>
+            </cluster>
+          </stack>
+        </stack>
+
+        <!-- justify (main-axis = horizontal) -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">justify (main-axis)</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">justify="start" (default)</text>
+            <cluster debug="true" justify="start" gap="s" background="bg" padding="s">
+              <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Gamma</text></stack>
+            </cluster>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">justify="center"</text>
+            <cluster debug="true" justify="center" gap="s" background="bg" padding="s">
+              <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Gamma</text></stack>
+            </cluster>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">justify="end"</text>
+            <cluster debug="true" justify="end" gap="s" background="bg" padding="s">
+              <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Gamma</text></stack>
+            </cluster>
+          </stack>
+        </stack>
+
+        <!-- gap -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">gap</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">gap="xs"</text>
+            <cluster debug="true" gap="xs" background="bg" padding="s">
+              <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Gamma</text></stack>
+            </cluster>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">gap="m"</text>
+            <cluster debug="true" gap="m" background="bg" padding="s">
+              <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Gamma</text></stack>
+            </cluster>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">gap="xl"</text>
+            <cluster debug="true" gap="xl" background="bg" padding="s">
+              <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Gamma</text></stack>
+            </cluster>
+          </stack>
+        </stack>
+
+        <!-- padding -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">padding</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">padding="xs"</text>
+            <cluster debug="true" padding="xs" background="bg">
+              <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
+            </cluster>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">padding="l"</text>
+            <cluster debug="true" padding="l" background="bg">
+              <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
+            </cluster>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">padding="20pt 8pt" (vertical · horizontal)</text>
+            <cluster debug="true" padding="20pt 8pt" background="bg">
+              <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
+            </cluster>
+          </stack>
+        </stack>
+
+        <!-- border · radius -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">border · radius</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">border="xs rule" radius="xs"</text>
+            <cluster padding="s" gap="s" border="xs rule" radius="xs">
+              <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Gamma</text></stack>
+            </cluster>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">border="s primary" radius="l"</text>
+            <cluster padding="m" gap="s" border="s primary" radius="l">
+              <stack background="accent" padding="xs"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Gamma</text></stack>
+            </cluster>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">background="accent" radius="m" padding="m"</text>
+            <cluster background="accent" radius="m" padding="m" gap="s">
+              <stack background="surface" padding="xs" radius="xs"><text font-size="m">Alpha</text></stack>
+              <stack background="surface" padding="xs" radius="xs"><text font-size="m">Beta</text></stack>
+              <stack background="surface" padding="xs" radius="xs"><text font-size="m">Gamma</text></stack>
+            </cluster>
+          </stack>
+        </stack>
+
+        <!-- wrapping -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">wrapping</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">Many items — cluster wraps across multiple rows</text>
+            <cluster debug="true" gap="s" background="bg" padding="s">
+              <stack background="accent" padding="xs"><text font-size="m">Apple</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Banana</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Cherry</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Date</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Elderberry</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Fig</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Grape</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Honeydew</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Kiwi</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Lemon</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Mango</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Nectarine</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Orange</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Papaya</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Quince</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Raspberry</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Strawberry</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Tangerine</text></stack>
+              <stack background="accent" padding="xs"><text font-size="m">Watermelon</text></stack>
+            </cluster>
+          </stack>
+        </stack>
+
+      </stack>
+      </layout>
+    </section>
+
   </document>
 </lpdf>

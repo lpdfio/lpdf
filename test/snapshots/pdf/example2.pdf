@@ -1,0 +1,352 @@
+%PDF-1.7
+%€€€€
+
+1 0 obj
+<<
+  /Type /Catalog
+  /Pages 3 0 R
+>>
+endobj
+
+2 0 obj
+<<
+  /Title <FEFF0052006500730075006D0065002020140020004A0061006E006500200044006F0065>
+  /Author (Jane Doe)
+  /Producer (lpdf.io (free))
+>>
+endobj
+
+3 0 obj
+<<
+  /Type /Pages
+  /Kids [4 0 R]
+  /Count 1
+>>
+endobj
+
+4 0 obj
+<<
+  /Type /Page
+  /Parent 3 0 R
+  /MediaBox [0 0 595.28 841.89]
+  /Resources <<
+    /Font <<
+      /F0 7 0 R
+      /F1 8 0 R
+    >>
+  >>
+  /Contents 5 0 R
+  /Annots [6 0 R]
+>>
+endobj
+
+5 0 obj
+<<
+  /Length 4597
+>>
+stream
+q
+0.93333334 0.9490196 0.9764706 rg
+0 0 170 841.89 re
+f
+Q
+BT
+0.09019608 0.3882353 0.8117647 rg
+/F1 20 Tf
+1 0 0 1 14 807.89 Tm
+(Jane Doe) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 14 792.89 Tm
+(Senior Software Engineer) Tj
+ET
+q
+0.78431374 0.8392157 0.93333334 RG
+0.5 w
+14 776.84 m
+156 776.84 l
+S
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 9 Tf
+1 0 0 1 14 753.59 Tm
+(Contact) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 14 738.79004 Tm
+(jane@example.com) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 14 723.99 Tm
+(+1 555 000 1234) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 14 709.19 Tm
+(github.com/janedoe) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 14 694.39 Tm
+(San Francisco, CA) Tj
+ET
+q
+0.78431374 0.8392157 0.93333334 RG
+0.5 w
+14 678.34 m
+156 678.34 l
+S
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 9 Tf
+1 0 0 1 14 655.09 Tm
+(Skills) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 14 640.29004 Tm
+<5275737420B720576562417373656D626C79> Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 14 625.49 Tm
+<5479706553637269707420B7204E6F64652E6A73> Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 14 610.69 Tm
+<506F737467726553514C20B7205265646973> Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 14 595.89 Tm
+<446F636B657220B7204B756265726E65746573> Tj
+ET
+q
+0.78431374 0.8392157 0.93333334 RG
+0.5 w
+14 579.84 m
+156 579.84 l
+S
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 9 Tf
+1 0 0 1 14 556.59 Tm
+(Education) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 9 Tf
+1 0 0 1 14 541.79004 Tm
+(B.S. Computer Science) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 14 526.99005 Tm
+(MIT, 2014) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 14 Tf
+1 0 0 1 184 813.89 Tm
+(Profile) Tj
+ET
+q
+0.09019608 0.3882353 0.8117647 RG
+0.5 w
+184 806.84 m
+563.28 806.84 l
+S
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 184 791.59 Tm
+(Software engineer with 10 years of experience building high-performance) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 184 778.39 Tm
+(distributed systems. Specialising in Rust, WebAssembly, and developer) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 184 765.19 Tm
+(tooling. Proven track record of leading cross-functional teams and shipping) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 184 751.99 Tm
+(products used by millions of people worldwide.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 14 Tf
+1 0 0 1 184 721.79004 Tm
+(Experience) Tj
+ET
+q
+0.09019608 0.3882353 0.8117647 RG
+0.5 w
+184 710.74 m
+563.28 710.74 l
+S
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 184 691.49 Tm
+<537461666620456E67696E65657220972041636D6520436F7270> Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 502.74603 692.29004 Tm
+<3230323120962050726573656E74> Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 184 678.29004 Tm
+(Led architecture of a real-time data pipeline processing 50 million events per day. Reduced) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 184 667.49 Tm
+(p99 latency by 40% through custom memory allocators and lock-free queues written in Rust.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 184 646.69 Tm
+<53656E696F7220456E67696E656572209720427269676874204C616273> Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 513.744 647.49 Tm
+<3230313720962032303231> Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 184 633.49 Tm
+(Built and maintained a multi-tenant SaaS platform serving 8,000 customers. Migrated a) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 184 622.69 Tm
+(monolithic Rails application to microservices, cutting deployment time from 45 minutes to under) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 184 611.89 Tm
+(3 minutes.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 184 591.08997 Tm
+<536F66747761726520456E67696E6565722097204F72696F6E2053797374656D73> Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 513.744 591.89 Tm
+<3230313420962032303137> Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 184 577.89 Tm
+(Developed embedded firmware for IoT sensors in C and Rust. Delivered SDK integrations for) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 184 567.08997 Tm
+(AWS IoT and Azure IoT Hub adopted by three enterprise clients in the first year of release.) Tj
+ET
+BT
+0.6666667 0.6666667 0.6666667 rg
+/F0 8 Tf
+1 0 0 1 531.25604 829.89 Tm
+(made with lpdf.io) Tj
+ET
+endstream
+endobj
+
+6 0 obj
+<<
+  /Type /Annot
+  /Subtype /Link
+  /Rect [531.25604 829.89 591.28 837.89]
+  /Border [0 0 0]
+  /A <<
+    /Type /Action
+    /S /URI
+    /URI (https://lpdf.io)
+  >>
+>>
+endobj
+
+7 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+8 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica-Bold
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+xref
+0 9
+0000000000 65535 f
+0000000016 00000 n
+0000000070 00000 n
+0000000226 00000 n
+0000000290 00000 n
+0000000483 00000 n
+0000005135 00000 n
+0000005318 00000 n
+0000005424 00000 n
+trailer
+<<
+  /Size 9
+  /Root 1 0 R
+  /Info 2 0 R
+>>
+startxref
+5535
+%%EOF

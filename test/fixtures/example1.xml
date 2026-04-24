@@ -3,23 +3,21 @@
   xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
   <document size="a4" margin="40pt">
     <meta title="Getting Started with lpdf" />
-    <pages>
-      <page>
-        <layout>
-        <stack gap="l">
+    <section>
+      <layout>
+      <stack gap="l">
 
-          <!-- title -->
-          <text font-size="xxl" font="Helvetica-Bold">Getting Started with lpdf</text>
+        <!-- title -->
+        <text font-size="xxl" font="Helvetica-Bold">Getting Started with lpdf</text>
 
-          <!-- paragraph 1 -->
-          <text font-size="m"><span href="https://lpdf.io" font="Helvetica-Bold">lpdf</span> is a declarative PDF layout engine that maps XML directly to PDF primitives. It runs natively in Rust on the server and compiles to WebAssembly for use in the browser, with no runtime dependencies and a single function call that converts XML to a PDF binary.</text>
+        <!-- paragraph 1 -->
+        <text font-size="m"><span href="https://lpdf.io" font="Helvetica-Bold">lpdf</span> is a declarative PDF layout engine that maps XML directly to PDF primitives. It runs natively in Rust on the server and compiles to WebAssembly for use in the browser, with no runtime dependencies and a single function call that converts XML to a PDF binary.</text>
 
-          <!-- paragraph 2 -->
-          <text font-size="m">The layout model provides five composable primitives — stack, flank, split, cluster, and grid — each handling a specific axis of composition. Any primitive can nest inside any other, giving you the flexibility to build anything from a simple one-page document to a complex multi-page report without writing a single line of imperative code.</text>
+        <!-- paragraph 2 -->
+        <text font-size="m">The layout model provides five composable primitives — stack, flank, split, cluster, and grid — each handling a specific axis of composition. Any primitive can nest inside any other, giving you the flexibility to build anything from a simple one-page document to a complex multi-page report without writing a single line of imperative code.</text>
 
-        </stack>
-        </layout>
-      </page>
-    </pages>
+      </stack>
+      </layout>
+    </section>
   </document>
 </lpdf>

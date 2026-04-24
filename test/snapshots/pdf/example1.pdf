@@ -1,0 +1,176 @@
+%PDF-1.7
+%€€€€
+
+1 0 obj
+<<
+  /Type /Catalog
+  /Pages 3 0 R
+>>
+endobj
+
+2 0 obj
+<<
+  /Title (Getting Started with lpdf)
+  /Producer (lpdf.io (free))
+>>
+endobj
+
+3 0 obj
+<<
+  /Type /Pages
+  /Kids [4 0 R]
+  /Count 1
+>>
+endobj
+
+4 0 obj
+<<
+  /Type /Page
+  /Parent 3 0 R
+  /MediaBox [0 0 595.28 841.89]
+  /Resources <<
+    /Font <<
+      /F0 8 0 R
+      /F1 9 0 R
+    >>
+  >>
+  /Contents 5 0 R
+  /Annots [6 0 R 7 0 R]
+>>
+endobj
+
+5 0 obj
+<<
+  /Length 1574
+>>
+stream
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 28 Tf
+1 0 0 1 40 773.89 Tm
+(Getting Started with lpdf) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 40 743.29004 Tm
+(lpdf) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 63.221 743.29004 Tm
+(is a declarative PDF layout engine that maps XML directly to PDF primitives. It runs natively in Rust) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 730.09 Tm
+(on the server and compiles to WebAssembly for use in the browser, with no runtime dependencies and a) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 716.89 Tm
+(single function call that converts XML to a PDF binary.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 689.69 Tm
+<546865206C61796F7574206D6F64656C2070726F7669646573206669766520636F6D706F7361626C65207072696D697469766573209720737461636B2C20666C616E6B2C2073706C69742C20636C75737465722C20616E64206772696420972065616368> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 676.49 Tm
+(handling a specific axis of composition. Any primitive can nest inside any other, giving you the flexibility to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 663.29004 Tm
+(build anything from a simple one-page document to a complex multi-page report without writing a single) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 650.08997 Tm
+(line of imperative code.) Tj
+ET
+BT
+0.6666667 0.6666667 0.6666667 rg
+/F0 8 Tf
+1 0 0 1 531.25604 829.89 Tm
+(made with lpdf.io) Tj
+ET
+endstream
+endobj
+
+6 0 obj
+<<
+  /Type /Annot
+  /Subtype /Link
+  /Rect [40 741.09 60.163002 754.29004]
+  /Border [0 0 0]
+  /A <<
+    /Type /Action
+    /S /URI
+    /URI (https://lpdf.io)
+  >>
+>>
+endobj
+
+7 0 obj
+<<
+  /Type /Annot
+  /Subtype /Link
+  /Rect [531.25604 829.89 591.28 837.89]
+  /Border [0 0 0]
+  /A <<
+    /Type /Action
+    /S /URI
+    /URI (https://lpdf.io)
+  >>
+>>
+endobj
+
+8 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+9 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica-Bold
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+xref
+0 10
+0000000000 65535 f
+0000000016 00000 n
+0000000070 00000 n
+0000000158 00000 n
+0000000222 00000 n
+0000000421 00000 n
+0000002050 00000 n
+0000002232 00000 n
+0000002415 00000 n
+0000002521 00000 n
+trailer
+<<
+  /Size 10
+  /Root 1 0 R
+  /Info 2 0 R
+>>
+startxref
+2632
+%%EOF

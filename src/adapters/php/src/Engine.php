@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Lpdf;
 
-final class LpdfEngine
+use Lpdf\Kit\Document;
+use Lpdf\Engine\EngineException;
+use Lpdf\Engine\EngineOptions;
+use Lpdf\Engine\WasmRunner;
+final class Engine
 {
     /** @var array<string, string> Font name → raw TTF/OTF bytes */
     private array $fonts = [];
@@ -21,7 +25,7 @@ final class LpdfEngine
 
     public function __construct(
         private readonly string        $licenseKey,
-        private readonly RenderOptions $options = new RenderOptions(),
+        private readonly EngineOptions $options = new EngineOptions(),
     ) {}
 
     /**
@@ -82,19 +86,19 @@ final class LpdfEngine
     }
 
     /**
-     * Render an lpdf XML string or LpdfDocument tree and return raw PDF bytes.
+     * Render an lpdf XML string or Document tree and return raw PDF bytes.
      *
-     * @param  string|LpdfDocument $input       XML string or a tree built with LpdfKit.
-     * @param  RenderOptions|null  $callOptions Per-call overrides merged with constructor options.
+     * @param  string|Document $input       XML string or a Document.
+     * @param  EngineOptions|null  $callOptions Per-call overrides merged with constructor options.
      * @param  array|object|null   $data        Optional data object for resolving data-* binding
      *                                          attributes in the XML template.  Pass null or omit
      *                                          to render with inline fallback content.  Only
      *                                          applies when $input is an XML string.
-     * @throws LpdfRenderException On render or process error.
+     * @throws EngineException On render or process error.
      */
-    public function renderPdf(string|LpdfDocument|LpdfCanvasDocument $input, ?RenderOptions $callOptions = null, array|object|null $data = null): string
+    public function renderPdf(string|Document $input, ?EngineOptions $callOptions = null, array|object|null $data = null): string
     {
-        if ($input instanceof LpdfDocument || $input instanceof LpdfCanvasDocument) {
+        if ($input instanceof Document) {
             $method   = 'render_tree_pdf';
             $inputStr = json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
         } else {
@@ -105,6 +109,7 @@ final class LpdfEngine
         $runner = new WasmRunner(
             wasmBinary: $callOptions?->wasmBinary ?? $this->options->wasmBinary ?? self::defaultBinary(),
             wasmRunner: $callOptions?->wasmRunner ?? $this->options->wasmRunner ?? 'wasmtime',
+            timeout:    $callOptions?->timeout    ?? $this->options->timeout    ?? 30,
         );
 
         // Merge fonts: loadFont() calls take precedence, then per-call fontBytes,
@@ -178,36 +183,32 @@ final class LpdfEngine
         $response = $runner->invoke($payload);
 
         if (!isset($response['pdf'])) {
-            throw new LpdfRenderException('Unexpected response from WASI process.');
+            throw new EngineException('Unexpected response from WASI process.');
         }
 
         $bytes = base64_decode($response['pdf'], strict: true);
         if ($bytes === false) {
-            throw new LpdfRenderException('Failed to decode base64 PDF response.');
+            throw new EngineException('Failed to decode base64 PDF response.');
         }
 
         return $bytes;
     }
 
     /**
-     * Convert an LpdfDocument tree (built with LpdfKit) to an lpdf XML string.
+     * Convert a Document tree to an XML string.
      *
      * The conversion is performed by the Rust core running as a WASI subprocess,
      * so the output is identical to the XML produced by the other adapters.
      *
-     * @param  LpdfDocument       $doc         The document tree to serialise.
-     * @param  string|null        $wasmBinary  Path to lpdf-wasi.wasm (defaults to bundled binary).
-     * @param  string             $wasmRunner  WASI runtime executable (default: wasmtime).
-     * @throws LpdfRenderException On process or serialisation error.
+     * @param  Document $doc The document tree to serialise.
+     * @throws EngineException On process or serialisation error.
      */
-    public static function kitToXml(
-        LpdfDocument $doc,
-        ?string $wasmBinary = null,
-        string $wasmRunner = 'wasmtime',
-    ): string {
+    public function kitToXml(Document $doc, ?EngineOptions $callOptions = null): string
+    {
         $runner = new WasmRunner(
-            wasmBinary: $wasmBinary ?? self::defaultBinary(),
-            wasmRunner: $wasmRunner,
+            wasmBinary: $callOptions?->wasmBinary ?? $this->options->wasmBinary ?? self::defaultBinary(),
+            wasmRunner: $callOptions?->wasmRunner ?? $this->options->wasmRunner ?? 'wasmtime',
+            timeout:    $callOptions?->timeout    ?? $this->options->timeout    ?? 30,
         );
         $payload  = [
             'method' => 'kit_to_xml',
@@ -215,7 +216,7 @@ final class LpdfEngine
         ];
         $response = $runner->invoke($payload);
         if (!isset($response['xml'])) {
-            throw new LpdfRenderException('Unexpected response from WASI process (kit_to_xml).');
+            throw new EngineException('Unexpected response from WASI process (kit_to_xml).');
         }
         return $response['xml'];
     }

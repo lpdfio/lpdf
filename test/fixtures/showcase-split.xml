@@ -13,159 +13,157 @@
   </tokens>
   <document size="a4" margin="40pt">
     <meta title="lpdf Showcase — Split" subject="Layout primitives" />
-    <pages>
 
       <!-- Split -->
-      <page background="surface">
-        <layout>
-        <stack gap="xl">
+    <section background="surface">
+      <layout>
+      <stack gap="xl">
 
-          <stack gap="xs">
-            <text font-size="xxl" font="Helvetica-Bold" color="primary">Split</text>
-            <text font-size="m" color="muted">Two-column layout — first and second child placed side by side</text>
-          </stack>
-
-          <!-- equal -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">equal</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">equal="true" — both columns share width 50/50</text>
-              <split debug="true" equal="true" gap="m" background="bg" padding="s">
-                <stack background="accent" padding="s"><text font-size="m">Left column — equal width</text></stack>
-                <stack background="rule" padding="s"><text font-size="m">Right column — equal width</text></stack>
-              </split>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">equal="false" (default) — each child uses its natural width, spread to edges</text>
-              <split debug="true" background="bg" padding="s">
-                <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
-                <stack background="rule" padding="s"><text font-size="m">Right</text></stack>
-              </split>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">equal="false" — first child has explicit width="120pt", second uses natural width</text>
-              <split debug="true" background="bg" padding="s">
-                <stack background="accent" padding="s" width="120pt"><text font-size="m">Fixed 120pt</text></stack>
-                <stack background="rule" padding="s"><text font-size="m">Natural</text></stack>
-              </split>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">equal="false" — second child has explicit width="100pt", first uses natural width</text>
-              <split debug="true" background="bg" padding="s">
-                <stack background="rule" padding="s"><text font-size="m">Natural</text></stack>
-                <stack background="accent" padding="s" width="100pt"><text font-size="m">Fixed 100pt</text></stack>
-              </split>
-            </stack>
-          </stack>
-
-          <!-- align (cross-axis = vertical) -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">align (cross-axis)</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">align="start" — columns top-aligned</text>
-              <split debug="true" equal="true" align="start" gap="m" background="bg" padding="s">
-                <stack background="accent" padding="s"><text font-size="m">Short</text></stack>
-                <stack background="rule" padding="s"><text font-size="m">Taller</text><text font-size="m">column</text><text font-size="m">content</text></stack>
-              </split>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">align="center" — columns middle-aligned</text>
-              <split debug="true" equal="true" align="center" gap="m" background="bg" padding="s">
-                <stack background="accent" padding="s"><text font-size="m">Short</text></stack>
-                <stack background="rule" padding="s"><text font-size="m">Taller</text><text font-size="m">column</text><text font-size="m">content</text></stack>
-              </split>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">align="end" — columns bottom-aligned</text>
-              <split debug="true" equal="true" align="end" gap="m" background="bg" padding="s">
-                <stack background="accent" padding="s"><text font-size="m">Short</text></stack>
-                <stack background="rule" padding="s"><text font-size="m">Taller</text><text font-size="m">column</text><text font-size="m">content</text></stack>
-              </split>
-            </stack>
-          </stack>
-
-          <!-- gap -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">gap</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">gap="xs"</text>
-              <split debug="true" equal="true" gap="xs" background="bg" padding="s">
-                <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
-                <stack background="rule" padding="s"><text font-size="m">Right</text></stack>
-              </split>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">gap="m"</text>
-              <split debug="true" equal="true" gap="m" background="bg" padding="s">
-                <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
-                <stack background="rule" padding="s"><text font-size="m">Right</text></stack>
-              </split>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">gap="xl"</text>
-              <split debug="true" equal="true" gap="xl" background="bg" padding="s">
-                <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
-                <stack background="rule" padding="s"><text font-size="m">Right</text></stack>
-              </split>
-            </stack>
-          </stack>
-
-          <!-- padding -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">padding</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">padding="xs"</text>
-              <split debug="true" equal="true" padding="xs" gap="m" background="bg">
-                <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
-                <stack background="rule" padding="s"><text font-size="m">Right</text></stack>
-              </split>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">padding="l"</text>
-              <split debug="true" equal="true" padding="l" gap="m" background="bg">
-                <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
-                <stack background="rule" padding="s"><text font-size="m">Right</text></stack>
-              </split>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">padding="20pt 8pt" (vertical · horizontal)</text>
-              <split debug="true" equal="true" padding="20pt 8pt" gap="m" background="bg">
-                <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
-                <stack background="rule" padding="s"><text font-size="m">Right</text></stack>
-              </split>
-            </stack>
-          </stack>
-
-          <!-- border · radius -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">border · radius</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">border="xs rule" radius="xs"</text>
-              <split equal="true" padding="s" gap="m" border="xs rule" radius="xs">
-                <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
-                <stack background="bg" padding="s"><text font-size="m">Right</text></stack>
-              </split>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">border="s primary" radius="l"</text>
-              <split equal="true" padding="m" gap="m" border="s primary" radius="l">
-                <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
-                <stack background="bg" padding="s"><text font-size="m">Right</text></stack>
-              </split>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">background="accent" radius="m" padding="m"</text>
-              <split equal="true" background="accent" radius="m" padding="m" gap="m">
-                <stack background="surface" padding="s" radius="xs"><text font-size="m">Left</text></stack>
-                <stack background="surface" padding="s" radius="xs"><text font-size="m">Right</text></stack>
-              </split>
-            </stack>
-          </stack>
-
+        <stack gap="xs">
+          <text font-size="xxl" font="Helvetica-Bold" color="primary">Split</text>
+          <text font-size="m" color="muted">Two-column layout — first and second child placed side by side</text>
         </stack>
-        </layout>
-      </page>
 
-    </pages>
+        <!-- equal -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">equal</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">equal="true" — both columns share width 50/50</text>
+            <split debug="true" equal="true" gap="m" background="bg" padding="s">
+              <stack background="accent" padding="s"><text font-size="m">Left column — equal width</text></stack>
+              <stack background="rule" padding="s"><text font-size="m">Right column — equal width</text></stack>
+            </split>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">equal="false" (default) — each child uses its natural width, spread to edges</text>
+            <split debug="true" background="bg" padding="s">
+              <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
+              <stack background="rule" padding="s"><text font-size="m">Right</text></stack>
+            </split>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">equal="false" — first child has explicit width="120pt", second uses natural width</text>
+            <split debug="true" background="bg" padding="s">
+              <stack background="accent" padding="s" width="120pt"><text font-size="m">Fixed 120pt</text></stack>
+              <stack background="rule" padding="s"><text font-size="m">Natural</text></stack>
+            </split>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">equal="false" — second child has explicit width="100pt", first uses natural width</text>
+            <split debug="true" background="bg" padding="s">
+              <stack background="rule" padding="s"><text font-size="m">Natural</text></stack>
+              <stack background="accent" padding="s" width="100pt"><text font-size="m">Fixed 100pt</text></stack>
+            </split>
+          </stack>
+        </stack>
+
+        <!-- align (cross-axis = vertical) -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">align (cross-axis)</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">align="start" — columns top-aligned</text>
+            <split debug="true" equal="true" align="start" gap="m" background="bg" padding="s">
+              <stack background="accent" padding="s"><text font-size="m">Short</text></stack>
+              <stack background="rule" padding="s"><text font-size="m">Taller</text><text font-size="m">column</text><text font-size="m">content</text></stack>
+            </split>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">align="center" — columns middle-aligned</text>
+            <split debug="true" equal="true" align="center" gap="m" background="bg" padding="s">
+              <stack background="accent" padding="s"><text font-size="m">Short</text></stack>
+              <stack background="rule" padding="s"><text font-size="m">Taller</text><text font-size="m">column</text><text font-size="m">content</text></stack>
+            </split>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">align="end" — columns bottom-aligned</text>
+            <split debug="true" equal="true" align="end" gap="m" background="bg" padding="s">
+              <stack background="accent" padding="s"><text font-size="m">Short</text></stack>
+              <stack background="rule" padding="s"><text font-size="m">Taller</text><text font-size="m">column</text><text font-size="m">content</text></stack>
+            </split>
+          </stack>
+        </stack>
+
+        <!-- gap -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">gap</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">gap="xs"</text>
+            <split debug="true" equal="true" gap="xs" background="bg" padding="s">
+              <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
+              <stack background="rule" padding="s"><text font-size="m">Right</text></stack>
+            </split>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">gap="m"</text>
+            <split debug="true" equal="true" gap="m" background="bg" padding="s">
+              <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
+              <stack background="rule" padding="s"><text font-size="m">Right</text></stack>
+            </split>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">gap="xl"</text>
+            <split debug="true" equal="true" gap="xl" background="bg" padding="s">
+              <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
+              <stack background="rule" padding="s"><text font-size="m">Right</text></stack>
+            </split>
+          </stack>
+        </stack>
+
+        <!-- padding -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">padding</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">padding="xs"</text>
+            <split debug="true" equal="true" padding="xs" gap="m" background="bg">
+              <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
+              <stack background="rule" padding="s"><text font-size="m">Right</text></stack>
+            </split>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">padding="l"</text>
+            <split debug="true" equal="true" padding="l" gap="m" background="bg">
+              <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
+              <stack background="rule" padding="s"><text font-size="m">Right</text></stack>
+            </split>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">padding="20pt 8pt" (vertical · horizontal)</text>
+            <split debug="true" equal="true" padding="20pt 8pt" gap="m" background="bg">
+              <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
+              <stack background="rule" padding="s"><text font-size="m">Right</text></stack>
+            </split>
+          </stack>
+        </stack>
+
+        <!-- border · radius -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">border · radius</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">border="xs rule" radius="xs"</text>
+            <split equal="true" padding="s" gap="m" border="xs rule" radius="xs">
+              <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
+              <stack background="bg" padding="s"><text font-size="m">Right</text></stack>
+            </split>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">border="s primary" radius="l"</text>
+            <split equal="true" padding="m" gap="m" border="s primary" radius="l">
+              <stack background="accent" padding="s"><text font-size="m">Left</text></stack>
+              <stack background="bg" padding="s"><text font-size="m">Right</text></stack>
+            </split>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">background="accent" radius="m" padding="m"</text>
+            <split equal="true" background="accent" radius="m" padding="m" gap="m">
+              <stack background="surface" padding="s" radius="xs"><text font-size="m">Left</text></stack>
+              <stack background="surface" padding="s" radius="xs"><text font-size="m">Right</text></stack>
+            </split>
+          </stack>
+        </stack>
+
+      </stack>
+      </layout>
+    </section>
+
   </document>
 </lpdf>

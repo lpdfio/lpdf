@@ -1,0 +1,587 @@
+%PDF-1.7
+%€€€€
+
+1 0 obj
+<<
+  /Type /Catalog
+  /Pages 3 0 R
+>>
+endobj
+
+2 0 obj
+<<
+  /Title <FEFF004100750074006F002D0070006100670069006E006100740069006F006E002000640065006D006F0020201400200066006C006F00770069006E006700200074006500780074002000610072007400690063006C0065>
+  /Producer (lpdf.io (free))
+>>
+endobj
+
+3 0 obj
+<<
+  /Type /Pages
+  /Kids [4 0 R 5 0 R]
+  /Count 2
+>>
+endobj
+
+4 0 obj
+<<
+  /Type /Page
+  /Parent 3 0 R
+  /MediaBox [0 0 595.28 841.89]
+  /Resources <<
+    /Font <<
+      /F0 10 0 R
+      /F1 11 0 R
+      /F2 12 0 R
+    >>
+  >>
+  /Contents 6 0 R
+  /Annots [8 0 R]
+>>
+endobj
+
+5 0 obj
+<<
+  /Type /Page
+  /Parent 3 0 R
+  /MediaBox [0 0 595.28 841.89]
+  /Resources <<
+    /Font <<
+      /F0 10 0 R
+      /F1 11 0 R
+      /F2 12 0 R
+    >>
+  >>
+  /Contents 7 0 R
+  /Annots [9 0 R]
+>>
+endobj
+
+6 0 obj
+<<
+  /Length 8055
+>>
+stream
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 28 Tf
+1 0 0 1 48 765.89 Tm
+(The Quiet Revolution in Declarative) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 28 Tf
+1 0 0 1 48 732.29004 Tm
+(Layout) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F2 9 Tf
+1 0 0 1 48 709.69 Tm
+(A long-form article that overflows a single page and flows naturally onto the next.) Tj
+ET
+q
+0.8784314 0.8784314 0.8784314 RG
+0.5 w
+48 699.64 m
+547.28 699.64 l
+S
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 680.39 Tm
+(For the better part of three decades, document layout on paper and document layout on screens) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 667.19 Tm
+<65766F6C76656420696E20706172616C6C656C2062757420736570617261746520776F726C64732E205072696E742073797374656D7320972066726F6D2054655820746F20496E44657369676E209720617373756D656420612066697865642C> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 653.99 Tm
+(physical page and optimized for precise typography, consistent grids, and the delicate art of) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 640.79004 Tm
+(hyphenation. Web systems, meanwhile, grew up in a fluid medium where the viewport changes size,) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 627.59 Tm
+(content reflows, and the designer cedes a great deal of control to the reader's device.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 606.39 Tm
+(The tension between these two models is not merely aesthetic. It reveals a deeper disagreement) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 593.19 Tm
+(about what a document is supposed to be. In the print tradition, a document is a finished artefact: a) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 579.99 Tm
+(sequence of pages that look the same to every reader. In the web tradition, a document is a set of) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 566.79004 Tm
+(instructions that the browser interprets according to its own constraints. Neither model is wrong, but) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 553.59 Tm
+(each struggles when asked to play in the other's territory.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 532.39 Tm
+<5468652072697365206F66206465636C61726174697665205549206672616D65776F726B73206F6E207468652077656220972066697273742052656163742C207468656E20537769667455492C207468656E2061206C6F6E67207461696C206F6620736D616C6C6572> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 519.19 Tm
+<70726F6A6563747320972064656D6F6E73747261746564207468617420666C756964206C61796F757420636F756C642062652064657363726962656420636F6E636973656C792C20636F6D706F736564207072656469637461626C792C20616E64> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 505.99 Tm
+(reasoned about without imperative escape hatches. Designers could say what they wanted, and a) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 492.79 Tm
+(runtime would figure out how to make it work at any size. This was a genuine breakthrough, and it) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 479.59003 Tm
+(quietly changed the expectations of an entire generation of engineers. The question, then, was) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 466.39 Tm
+(whether the same breakthrough could be brought back to print.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 445.19 Tm
+(The answer turned out to be more subtle than it first appeared. A declarative layout language that) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 431.99 Tm
+(paginates well cannot be a straightforward port of CSS Flexbox. Flexbox has no notion of a page) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 418.79 Tm
+(break; its idioms assume an infinite vertical canvas. Porting them wholesale produces either clipped) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 405.59 Tm
+<636F6E74656E742C206475706C6963617465642072656E646572696E672C206F7220776F7273652097206C61796F75747320746861742073696C656E746C792064726F7020746865206F766572666C6F7720616E64206E657665722074656C6C20746865> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 392.39 Tm
+(author that anything went wrong. The honest alternative is to acknowledge pagination as a first-class) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 379.19 Tm
+(concern and design the primitives around it.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 357.99 Tm
+(In practice this means that each layout primitive needs two answers, not one: what does it look like) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 344.78998 Tm
+(when it fits, and what does it do when it doesn't. Some primitives have obvious answers. A vertical) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 331.59 Tm
+(stack can split between children. A grid can split between rows. A paragraph of text can break) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 318.39 Tm
+<6265747765656E206C696E65732E204F74686572207072696D697469766573207265736973742073706C697474696E67206279206E61747572652097206120686F72697A6F6E74616C20726F77206F662069636F6E732C20666F7220696E7374616E63652C> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 305.19 Tm
+<63616E6E6F742062652063757420696E2068616C6620766572746963616C6C7920776974686F7574206265636F6D696E67206E6F6E73656E7365209720616E6420746865207269676874206D6F766520697320746F20616363657074207468656D206173> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 291.99 Tm
+(atomic and let them move wholesale to the next page.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 270.78998 Tm
+(Frames fall into an interesting middle ground. A frame is typically used to represent a card, a callout) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 257.58997 Tm
+(box, or a labelled region, and cutting one in half across pages rarely produces a pleasing result. The) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 244.38995 Tm
+(cleanest rule turns out to be: treat the frame as atomic, and force any overflow to the next page.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 231.19 Tm
+(Authors who want the frame's *contents* to flow can use a stack instead. This gives them a clear) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 217.98999 Tm
+<63686F696365206265747765656E206120626F756E6465642076697375616C20756E697420616E6420616E206F70656E20666C6F7720726567696F6E209720612063686F69636520746865206C61796F757420656E67696E652063616E> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 204.78998 Tm
+(enforce mechanically rather than through convention.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 183.58997 Tm
+(The same reasoning applies to grid cells and cluster items. Within a single row of a grid, the cells are) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 170.38995 Tm
+(laid out side by side and reach a common height; splitting a single cell mid-content would produce) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 157.18994 Tm
+(inconsistent row heights and break the visual rhythm the author is trying to establish. The) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 143.98999 Tm
+(atomic-children rule keeps the grid honest: rows split between themselves, but never within a single) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 130.78998 Tm
+(row. Readers see complete rows on each page, and the grid feels like a grid, not an accidental flow.) Tj
+ET
+BT
+0.6666667 0.6666667 0.6666667 rg
+/F0 8 Tf
+1 0 0 1 531.25604 829.89 Tm
+(made with lpdf.io) Tj
+ET
+endstream
+endobj
+
+7 0 obj
+<<
+  /Length 4824
+>>
+stream
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 782.89 Tm
+(Page numbering and running headers deserve a separate treatment. They are not part of the content) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 769.69 Tm
+<666C6F772097207468657920617265206368726F6D652C20696E20746865206F6C64204E657473636170652073656E7365206F662074686520776F72643A206669786564206465636F726174696F6E207468617420737572726F756E647320746865> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 756.49 Tm
+(document. The cleanest way to express this is a small annotation that marks a child as chrome, telling) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 743.29004 Tm
+(the paginator to render it identically on every output page and reserve its space from the flow budget.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 730.09 Tm
+(Combined with a simple substitution for) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 242.403 730.09 Tm
+({page}) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 279.69302 730.09 Tm
+(and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 301.09903 730.09 Tm
+({pages}) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 344.50504 730.09 Tm
+(tokens, this gives authors a letterhead, a) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 716.89 Tm
+(continuation header, and a page-number footer with three extra attributes and no new primitives.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 695.69 Tm
+(None of this is conceptually difficult, and none of it is trivial to get right. The subtleties come out in the) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 682.49 Tm
+(long tail of cases: what happens when a chrome element is taller than a page; what happens when the) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 669.29004 Tm
+(only flow content on a page is itself an indivisible atomic block; what happens when a long text block) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 656.08997 Tm
+(ends exactly on a page boundary and a single trailing line would otherwise orphan itself. Each of these) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 642.89 Tm
+(cases has a best answer; each of them has been debated at length by the few people in the world who) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 629.69 Tm
+(care deeply about this kind of thing.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 608.49 Tm
+(What ties the whole project together is a commitment to boring predictability. Authors should not have) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 595.29 Tm
+(to read the implementation to understand what happens to their content at a page break. The engine) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 582.08997 Tm
+<73686F756C6420646F20746865207468696E6720746865792065787065637465642C2065766572792074696D652C20616E64207768656E2069742063616E6E6F742097207768656E2074686520636F6E74656E742066756E64616D656E74616C6C79> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 568.89 Tm
+<646F6573206E6F742066697420972069742073686F756C642070726F64756365206120636C656172207369676E616C20726174686572207468616E2073696C656E746C792064726F7070696E6720706978656C73206F6E2074686520666C6F6F722E20546861742C> Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 555.69 Tm
+(ultimately, is the revolution: not new primitives, but a new level of trust between author and engine.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 534.49 Tm
+(A lot has been written about the technical underpinnings of these systems, and readers interested in) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 521.29 Tm
+(the deeper mechanics will find entire books on the topic of hyphenation alone. This article does not) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 508.08997 Tm
+(aim to be exhaustive. Its purpose is simpler: to produce enough text, arranged on a single page, that) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 494.88998 Tm
+(the layout engine has no choice but to demonstrate its pagination behaviour. If you are reading this) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 48 481.69 Tm
+(paragraph on the second page of the rendered PDF, the demonstration is working as intended.) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F2 9 Tf
+1 0 0 1 48 462.49 Tm
+<9720656E64206F662061727469636C652097> Tj
+ET
+BT
+0.6666667 0.6666667 0.6666667 rg
+/F0 8 Tf
+1 0 0 1 531.25604 829.89 Tm
+(made with lpdf.io) Tj
+ET
+endstream
+endobj
+
+8 0 obj
+<<
+  /Type /Annot
+  /Subtype /Link
+  /Rect [531.25604 829.89 591.28 837.89]
+  /Border [0 0 0]
+  /A <<
+    /Type /Action
+    /S /URI
+    /URI (https://lpdf.io)
+  >>
+>>
+endobj
+
+9 0 obj
+<<
+  /Type /Annot
+  /Subtype /Link
+  /Rect [531.25604 829.89 591.28 837.89]
+  /Border [0 0 0]
+  /A <<
+    /Type /Action
+    /S /URI
+    /URI (https://lpdf.io)
+  >>
+>>
+endobj
+
+10 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+11 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica-Bold
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+12 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica-Oblique
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+xref
+0 13
+0000000000 65535 f
+0000000016 00000 n
+0000000070 00000 n
+0000000309 00000 n
+0000000379 00000 n
+0000000591 00000 n
+0000000803 00000 n
+0000008913 00000 n
+0000013792 00000 n
+0000013975 00000 n
+0000014158 00000 n
+0000014265 00000 n
+0000014377 00000 n
+trailer
+<<
+  /Size 13
+  /Root 1 0 R
+  /Info 2 0 R
+>>
+startxref
+14492
+%%EOF

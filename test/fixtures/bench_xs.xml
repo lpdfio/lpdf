@@ -3,32 +3,30 @@
 <lpdf version="1">
   <document size="a4" margin="40pt">
     <meta title="Benchmark Fixture XS" />
-    <pages>
-      <page>
-        <layout>
-        <stack gap="l">
-          <text font-size="xl" font="Helvetica-Bold">Page 1 1</text>
-          <stack gap="m">
-          <text font-size="xl" font="Helvetica-Bold">Section 1 2</text>
-            <text font-size="m">Paragraph 3. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 4. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 5. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-          </stack>
-          <stack gap="m">
-          <text font-size="xl" font="Helvetica-Bold">Section 2 6</text>
-            <text font-size="m">Paragraph 7. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 8. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 9. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-          </stack>
-          <stack gap="m">
-          <text font-size="xl" font="Helvetica-Bold">Section 3 10</text>
-            <text font-size="m">Paragraph 11. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 12. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 13. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-          </stack>
+    <section>
+      <layout>
+      <stack gap="l">
+        <text font-size="xl" font="Helvetica-Bold">Page 1 1</text>
+        <stack gap="m">
+        <text font-size="xl" font="Helvetica-Bold">Section 1 2</text>
+          <text font-size="m">Paragraph 3. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 4. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 5. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
         </stack>
-        </layout>
-      </page>
-    </pages>
+        <stack gap="m">
+        <text font-size="xl" font="Helvetica-Bold">Section 2 6</text>
+          <text font-size="m">Paragraph 7. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 8. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 9. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+        </stack>
+        <stack gap="m">
+        <text font-size="xl" font="Helvetica-Bold">Section 3 10</text>
+          <text font-size="m">Paragraph 11. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 12. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 13. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+        </stack>
+      </stack>
+      </layout>
+    </section>
   </document>
 </lpdf>

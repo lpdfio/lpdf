@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf"/>
+      <color name="accent"   value="#e8f0fc"/>
+      <color name="muted"    value="#737373"/>
+      <color name="rule"     value="#dde3ed"/>
+      <color name="surface"  value="#ffffff"/>
+    </colors>
+  </tokens>
+  <document size="a4" margin="40pt">
+    <meta title="lpdf Showcase — Canvas Overlay (DRAFT watermark)"
+          subject="Layout + canvas overlay"/>
+
+    <!-- layout + canvas: canvas is overlaid on top of layout content -->
+    <section>
+      <layout>
+        <stack gap="xl">
+          <stack gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Invoice #2024-001</text>
+            <text font-size="m" color="muted">Canvas overlay demo — DRAFT watermark</text>
+          </stack>
+
+          <divider color="rule" thickness="s"/>
+
+          <flank gap="m">
+            <stack gap="xs">
+              <text font-size="s" color="muted">Bill To</text>
+              <text font-size="m" font="Helvetica-Bold">Acme Corporation</text>
+              <text font-size="m">123 Business Park</text>
+              <text font-size="m">London, EC1A 1BB</text>
+            </stack>
+            <stack gap="xs" align="end">
+              <text font-size="s" color="muted">Invoice Date</text>
+              <text font-size="m">22 April 2026</text>
+              <text font-size="s" color="muted">Due Date</text>
+              <text font-size="m" font="Helvetica-Bold">22 May 2026</text>
+            </stack>
+          </flank>
+
+          <table cols="3fr 1fr 1fr" border="s rule" stripe="accent" gap="xs" padding="s">
+            <thead background="primary">
+              <td><text font="Helvetica-Bold" color="surface">Description</text></td>
+              <td><text font="Helvetica-Bold" color="surface" align="right">Qty</text></td>
+              <td><text font="Helvetica-Bold" color="surface" align="right">Amount</text></td>
+            </thead>
+            <tr>
+              <td><text>Professional Services — Phase 1</text></td>
+              <td><text align="right">1</text></td>
+              <td><text align="right">£5,000.00</text></td>
+            </tr>
+            <tr>
+              <td><text>Professional Services — Phase 2</text></td>
+              <td><text align="right">1</text></td>
+              <td><text align="right">£3,500.00</text></td>
+            </tr>
+            <tr>
+              <td><text>Expenses</text></td>
+              <td><text align="right">1</text></td>
+              <td><text align="right">£250.00</text></td>
+            </tr>
+          </table>
+
+          <stack align="end" gap="xs">
+            <text font-size="xl" font="Helvetica-Bold">Total: £8,750.00</text>
+          </stack>
+        </stack>
+      </layout>
+
+      <!-- Canvas overlay: DRAFT watermark rendered on top of layout content -->
+      <canvas>
+        <layer page="each" opacity="0.08">
+          <!-- Diagonal DRAFT text centred on the page -->
+          <text anchor="center" font-size="120pt" font="Helvetica-Bold" color="primary"
+                align="center">
+            DRAFT
+          </text>
+        </layer>
+        <!-- Border stamp in the top-right corner -->
+        <layer page="each">
+          <rect anchor="top-right" x="-30pt" y="30pt" w="80pt" h="30pt"
+                fill="#e74c3c" radius="4pt"/>
+          <text anchor="top-right" x="-30pt" y="30pt" font-size="10pt"
+                font="Helvetica-Bold" color="surface" align="center" w="80pt">
+            DRAFT
+          </text>
+        </layer>
+      </canvas>
+    </section>
+  </document>
+</lpdf>

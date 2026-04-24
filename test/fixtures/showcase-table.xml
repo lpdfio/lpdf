@@ -1,64 +1,62 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <lpdf version="1">
   <document size="a4" margin="40pt">
-    <pages>
-      <page>
-        <layout>
-        <!-- Basic table with header, stripe, border, and mixed column widths -->
-        <table cols="2fr 1fr 1fr 1fr" border="0.5pt #cccccc" stripe="#f5f5f5">
+    <section>
+      <layout>
+      <!-- Basic table with header, stripe, border, and mixed column widths -->
+      <table cols="2fr 1fr 1fr 1fr" border="0.5pt #cccccc" stripe="#f5f5f5">
 
-          <thead background="#e8ecf0">
-            <td padding="5pt 8pt"><text font-size="s">Description</text></td>
-            <td padding="5pt 8pt"><text font-size="s">Qty</text></td>
-            <td padding="5pt 8pt"><text font-size="s">Unit price</text></td>
-            <td padding="5pt 8pt" align="end"><text font-size="s">Total</text></td>
-          </thead>
+        <thead background="#e8ecf0">
+          <td padding="5pt 8pt"><text font-size="s">Description</text></td>
+          <td padding="5pt 8pt"><text font-size="s">Qty</text></td>
+          <td padding="5pt 8pt"><text font-size="s">Unit price</text></td>
+          <td padding="5pt 8pt" align="end"><text font-size="s">Total</text></td>
+        </thead>
 
-          <tr>
-            <td padding="5pt 8pt">
-              <text font-size="s">Consulting services – Q1 2026 including design, development, and code review</text>
-            </td>
-            <td padding="5pt 8pt"><text font-size="s">4</text></td>
-            <td padding="5pt 8pt"><text font-size="s">$1,250.00</text></td>
-            <td padding="5pt 8pt" align="end"><text font-size="s">$5,000.00</text></td>
-          </tr>
+        <tr>
+          <td padding="5pt 8pt">
+            <text font-size="s">Consulting services – Q1 2026 including design, development, and code review</text>
+          </td>
+          <td padding="5pt 8pt"><text font-size="s">4</text></td>
+          <td padding="5pt 8pt"><text font-size="s">$1,250.00</text></td>
+          <td padding="5pt 8pt" align="end"><text font-size="s">$5,000.00</text></td>
+        </tr>
 
-          <tr>
-            <td padding="5pt 8pt"><text font-size="s">Design assets</text></td>
-            <td padding="5pt 8pt"><text font-size="s">1</text></td>
-            <td padding="5pt 8pt"><text font-size="s">$800.00</text></td>
-            <td padding="5pt 8pt" align="end"><text font-size="s">$800.00</text></td>
-          </tr>
+        <tr>
+          <td padding="5pt 8pt"><text font-size="s">Design assets</text></td>
+          <td padding="5pt 8pt"><text font-size="s">1</text></td>
+          <td padding="5pt 8pt"><text font-size="s">$800.00</text></td>
+          <td padding="5pt 8pt" align="end"><text font-size="s">$800.00</text></td>
+        </tr>
 
-          <tr>
-            <td padding="5pt 8pt"><text font-size="s">Hosting (annual)</text></td>
-            <td padding="5pt 8pt"><text font-size="s">1</text></td>
-            <td padding="5pt 8pt"><text font-size="s">$360.00</text></td>
-            <td padding="5pt 8pt" align="end"><text font-size="s">$360.00</text></td>
-          </tr>
+        <tr>
+          <td padding="5pt 8pt"><text font-size="s">Hosting (annual)</text></td>
+          <td padding="5pt 8pt"><text font-size="s">1</text></td>
+          <td padding="5pt 8pt"><text font-size="s">$360.00</text></td>
+          <td padding="5pt 8pt" align="end"><text font-size="s">$360.00</text></td>
+        </tr>
 
-        </table>
+      </table>
 
-        <!-- Borderless table with percentage columns and no header -->
-        <stack gap="m" padding="0 0 0 0">
-          <text font-size="s"> </text>
-        </stack>
+      <!-- Borderless table with percentage columns and no header -->
+      <stack gap="m" padding="0 0 0 0">
+        <text font-size="s"> </text>
+      </stack>
 
-        <table cols="50% 25% 25%">
-          <tr background="#f0f0f0">
-            <td padding="4pt 6pt"><text font-size="s">Item A</text></td>
-            <td padding="4pt 6pt"><text font-size="s">10</text></td>
-            <td padding="4pt 6pt" align="end"><text font-size="s">$100</text></td>
-          </tr>
-          <tr>
-            <td padding="4pt 6pt"><text font-size="s">Item B</text></td>
-            <td padding="4pt 6pt"><text font-size="s">5</text></td>
-            <td padding="4pt 6pt" align="end"><text font-size="s">$50</text></td>
-          </tr>
-        </table>
+      <table cols="50% 25% 25%">
+        <tr background="#f0f0f0">
+          <td padding="4pt 6pt"><text font-size="s">Item A</text></td>
+          <td padding="4pt 6pt"><text font-size="s">10</text></td>
+          <td padding="4pt 6pt" align="end"><text font-size="s">$100</text></td>
+        </tr>
+        <tr>
+          <td padding="4pt 6pt"><text font-size="s">Item B</text></td>
+          <td padding="4pt 6pt"><text font-size="s">5</text></td>
+          <td padding="4pt 6pt" align="end"><text font-size="s">$50</text></td>
+        </tr>
+      </table>
 
-        </layout>
-      </page>
-    </pages>
+      </layout>
+    </section>
   </document>
 </lpdf>

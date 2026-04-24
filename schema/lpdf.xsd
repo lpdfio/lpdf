@@ -16,10 +16,17 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- e.g. "10pt" or "10.5pt" -->
+  <!-- e.g. "10pt", "25.4mm", or "1in" (non-negative) -->
   <xs:simpleType name="PtValue">
     <xs:restriction base="xs:string">
-      <xs:pattern value="\d+(\.\d+)?pt"/>
+      <xs:pattern value="\d+(\.\d+)?(pt|mm|in)"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Same as PtValue but allows a leading minus for coordinates and offsets -->
+  <xs:simpleType name="SignedPtValue">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="-?\d+(\.\d+)?(pt|mm|in)"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -137,14 +144,65 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- Page chrome: valid on direct children of <page>. "page" = rendered on
-       every output page; "first" = rendered on page 1 only. Must be placed at
-       the top or bottom of the page child list; any non-repeat siblings
-       between them form the paginated flow. -->
-  <xs:simpleType name="Repeat">
+  <!-- Nine reference points on the page (vertical-first naming) -->
+  <xs:simpleType name="Anchor">
     <xs:restriction base="xs:string">
-      <xs:enumeration value="page"/>
-      <xs:enumeration value="first"/>
+      <xs:enumeration value="top-left"/>
+      <xs:enumeration value="top-center"/>
+      <xs:enumeration value="top-right"/>
+      <xs:enumeration value="center-left"/>
+      <xs:enumeration value="center"/>
+      <xs:enumeration value="center-right"/>
+      <xs:enumeration value="bottom-left"/>
+      <xs:enumeration value="bottom-center"/>
+      <xs:enumeration value="bottom-right"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Keyword or numeric page range (section-relative) -->
+  <xs:simpleType name="PageScope">
+    <xs:union>
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="each"/>
+          <xs:enumeration value="first"/>
+          <xs:enumeration value="last"/>
+          <xs:enumeration value="odd"/>
+          <xs:enumeration value="even"/>
+        </xs:restriction>
+      </xs:simpleType>
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <!-- matches: 1  |  1-3  |  1-last  |  1,3  |  1,3-5,7-last -->
+          <xs:pattern value="[1-9]\d*(-([1-9]\d*|last))?(,[1-9]\d*(-([1-9]\d*|last))?)*"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:union>
+  </xs:simpleType>
+
+  <xs:simpleType name="LineCap">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="butt"/>
+      <xs:enumeration value="round"/>
+      <xs:enumeration value="square"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="FillRule">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="nonzero"/>
+      <xs:enumeration value="evenodd"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Pin positions for layout regions; top/bottom implemented in Phase 2;
+       left/right schema-valid but implementation deferred. -->
+  <xs:simpleType name="RegionPin">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="top"/>
+      <xs:enumeration value="bottom"/>
+      <xs:enumeration value="left"/>
+      <xs:enumeration value="right"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -209,7 +267,6 @@
     <xs:attribute name="background" type="Color"/>
     <xs:attribute name="border"     type="BorderValue"/>
     <xs:attribute name="radius"     type="TokenScaleOrPt"/>
-    <xs:attribute name="repeat"     type="Repeat"/>
     <xs:attribute name="debug"      type="xs:boolean"/>
     <xs:attributeGroup ref="DataBindingAttrs"/>
   </xs:attributeGroup>
@@ -223,10 +280,186 @@
     <xs:attribute name="background" type="Color"/>
     <xs:attribute name="border"     type="BorderValue"/>
     <xs:attribute name="radius"     type="TokenScaleOrPt"/>
-    <xs:attribute name="repeat"     type="Repeat"/>
     <xs:attribute name="debug"      type="xs:boolean"/>
     <xs:attributeGroup ref="DataBindingAttrs"/>
   </xs:attributeGroup>
+
+  <!-- ============================================================
+       Canvas primitives — named group of flat drawing elements.
+       <layer> is not in this group; nesting is not permitted.
+  ============================================================ -->
+
+  <!-- Shared fill/stroke attributes for canvas primitives -->
+  <xs:attributeGroup name="CanvasFillStrokeAttrs">
+    <xs:attribute name="fill"         type="Color"/>
+    <xs:attribute name="stroke"       type="Color"/>
+    <xs:attribute name="stroke-width" type="PtValue"/>
+    <xs:attribute name="stroke-dash"  type="xs:string"/>
+    <xs:attribute name="opacity">
+      <xs:simpleType>
+        <xs:restriction base="xs:decimal">
+          <xs:minInclusive value="0"/>
+          <xs:maxInclusive value="1"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+  </xs:attributeGroup>
+
+  <!-- Positioning rule (enforced by parser, not XSD 1.0):
+       anchor OR (x AND y) must be present.
+       When anchor is present, x/y are signed offsets from that reference point. -->
+  <xs:group name="CanvasPrimitives">
+    <xs:choice>
+
+      <!-- rect -->
+      <xs:element name="rect">
+        <xs:complexType>
+          <xs:attribute name="x"      type="SignedPtValue"/>
+          <xs:attribute name="y"      type="SignedPtValue"/>
+          <xs:attribute name="w"      type="PtValue" use="required"/>
+          <xs:attribute name="h"      type="PtValue" use="required"/>
+          <xs:attribute name="anchor" type="Anchor"/>
+          <xs:attribute name="radius" type="PtValue"/>
+          <xs:attributeGroup ref="CanvasFillStrokeAttrs"/>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- circle -->
+      <xs:element name="circle">
+        <xs:complexType>
+          <xs:attribute name="cx"     type="SignedPtValue"/>
+          <xs:attribute name="cy"     type="SignedPtValue"/>
+          <xs:attribute name="r"      type="PtValue" use="required"/>
+          <xs:attribute name="anchor" type="Anchor"/>
+          <xs:attributeGroup ref="CanvasFillStrokeAttrs"/>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- ellipse -->
+      <xs:element name="ellipse">
+        <xs:complexType>
+          <xs:attribute name="cx"     type="SignedPtValue"/>
+          <xs:attribute name="cy"     type="SignedPtValue"/>
+          <xs:attribute name="rx"     type="PtValue" use="required"/>
+          <xs:attribute name="ry"     type="PtValue" use="required"/>
+          <xs:attribute name="anchor" type="Anchor"/>
+          <xs:attributeGroup ref="CanvasFillStrokeAttrs"/>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- line (no anchor — x1/y1/x2/y2 always required) -->
+      <xs:element name="line">
+        <xs:complexType>
+          <xs:attribute name="x1"          type="SignedPtValue" use="required"/>
+          <xs:attribute name="y1"          type="SignedPtValue" use="required"/>
+          <xs:attribute name="x2"          type="SignedPtValue" use="required"/>
+          <xs:attribute name="y2"          type="SignedPtValue" use="required"/>
+          <xs:attribute name="stroke"       type="Color"/>
+          <xs:attribute name="stroke-width" type="PtValue"/>
+          <xs:attribute name="stroke-dash"  type="xs:string"/>
+          <xs:attribute name="line-cap"     type="LineCap"/>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- path (no anchor — SVG-compatible d attribute) -->
+      <xs:element name="path">
+        <xs:complexType>
+          <xs:attribute name="d"            type="xs:string" use="required"/>
+          <xs:attribute name="fill"         type="Color"/>
+          <xs:attribute name="stroke"       type="Color"/>
+          <xs:attribute name="fill-rule"    type="FillRule"/>
+          <xs:attribute name="stroke-width" type="PtValue"/>
+          <xs:attribute name="stroke-dash"  type="xs:string"/>
+          <xs:attribute name="line-cap"     type="LineCap"/>
+          <xs:attribute name="opacity">
+            <xs:simpleType>
+              <xs:restriction base="xs:decimal">
+                <xs:minInclusive value="0"/>
+                <xs:maxInclusive value="1"/>
+              </xs:restriction>
+            </xs:simpleType>
+          </xs:attribute>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- text — absolutely positioned; <span> children for mixed runs -->
+      <xs:element name="text">
+        <xs:complexType mixed="true">
+          <xs:choice minOccurs="0" maxOccurs="unbounded">
+            <xs:element ref="span"/>
+          </xs:choice>
+          <xs:attribute name="x"           type="SignedPtValue"/>
+          <xs:attribute name="y"           type="SignedPtValue"/>
+          <xs:attribute name="anchor"      type="Anchor"/>
+          <xs:attribute name="font"        type="xs:string"/>
+          <xs:attribute name="font-size"   type="TokenScaleOrPt"/>
+          <xs:attribute name="color"       type="Color"/>
+          <xs:attribute name="align"       type="TextAlignH"/>
+          <xs:attribute name="w"           type="PtValue"/>
+          <xs:attribute name="line-height">
+            <xs:simpleType>
+              <xs:restriction base="xs:decimal">
+                <xs:minInclusive value="0"/>
+              </xs:restriction>
+            </xs:simpleType>
+          </xs:attribute>
+          <xs:attribute name="opacity">
+            <xs:simpleType>
+              <xs:restriction base="xs:decimal">
+                <xs:minInclusive value="0"/>
+                <xs:maxInclusive value="1"/>
+              </xs:restriction>
+            </xs:simpleType>
+          </xs:attribute>
+          <xs:attributeGroup ref="DataBindingAttrs"/>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- img — absolutely positioned; w and h required (no auto-sizing) -->
+      <xs:element name="img">
+        <xs:complexType>
+          <xs:attribute name="name"   type="xs:string" use="required"/>
+          <xs:attribute name="x"      type="SignedPtValue"/>
+          <xs:attribute name="y"      type="SignedPtValue"/>
+          <xs:attribute name="w"      type="PtValue" use="required"/>
+          <xs:attribute name="h"      type="PtValue" use="required"/>
+          <xs:attribute name="anchor" type="Anchor"/>
+          <xs:attributeGroup ref="DataBindingAttrs"/>
+        </xs:complexType>
+      </xs:element>
+
+    </xs:choice>
+  </xs:group>
+
+  <!-- Canvas wrapper: contains absolute-coordinate content.
+       Coordinates are top-left origin, y-down, relative to the full page.
+       Page targeting is via <layer page="…">; bare primitives are not permitted. -->
+  <xs:element name="canvas">
+    <xs:complexType>
+      <xs:sequence>
+        <!-- layer: graphics state scope (page, opacity, transform, clip).
+             All primitives must be inside a <layer>. Cannot nest. -->
+        <xs:element name="layer" minOccurs="0" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:group ref="CanvasPrimitives" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+            <xs:attribute name="page"      type="PageScope"/>
+            <xs:attribute name="opacity">
+              <xs:simpleType>
+                <xs:restriction base="xs:decimal">
+                  <xs:minInclusive value="0"/>
+                  <xs:maxInclusive value="1"/>
+                </xs:restriction>
+              </xs:simpleType>
+            </xs:attribute>
+            <xs:attribute name="transform" type="xs:string"/>
+            <xs:attribute name="clip"      type="xs:string"/>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
 
 
   <!-- ============================================================
@@ -330,17 +563,58 @@
 
   <xs:element name="layout">
     <xs:complexType>
-      <xs:sequence>
-        <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
-      </xs:sequence>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:group ref="LayoutContent"/>
+        <!-- Pinned region: reserves a slot at the specified edge of the content area.
+             pin="top|bottom" implemented in this phase.
+             pin="left|right" schema-valid but deferred (requires w attribute).
+             Only valid as a direct child of <layout>, not inside containers.
+             At most one region per pin per physical page (parser-enforced). -->
+        <xs:element name="region">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+            <xs:attribute name="pin"   type="RegionPin" use="required"/>
+            <xs:attribute name="page"  type="PageScope"/>
+            <!-- w required for pin="left|right"; ignored for pin="top|bottom" (parser-enforced) -->
+            <xs:attribute name="w"     type="PtValue"/>
+            <xs:attribute name="debug" type="xs:boolean"/>
+          </xs:complexType>
+        </xs:element>
+      </xs:choice>
     </xs:complexType>
   </xs:element>
 
-  <xs:element name="page">
+  <!-- document: holds default page settings; contains one or more sections.
+       Single-section shorthand: if <document> contains <layout> or <canvas>
+       directly (no <section> children), treated as an implicit single section.
+       Mixing direct <layout>/<canvas> with explicit <section> children is a parse error. -->
+  <xs:element name="document">
     <xs:complexType>
       <xs:sequence>
-        <xs:element ref="layout" minOccurs="0" maxOccurs="1"/>
+        <xs:element ref="meta" minOccurs="0"/>
+        <xs:choice>
+          <!-- Explicit multi-section form -->
+          <xs:sequence>
+            <xs:element ref="section" maxOccurs="unbounded"/>
+          </xs:sequence>
+          <!-- Single-section shorthand: layout and/or canvas directly in document -->
+          <xs:sequence>
+            <xs:choice minOccurs="0">
+              <xs:sequence>
+                <xs:element ref="layout"/>
+                <xs:element ref="canvas" minOccurs="0"/>
+              </xs:sequence>
+              <xs:sequence>
+                <xs:element ref="canvas"/>
+                <xs:element ref="layout" minOccurs="0"/>
+              </xs:sequence>
+            </xs:choice>
+          </xs:sequence>
+        </xs:choice>
       </xs:sequence>
+      <xs:attribute name="font"        type="xs:string"/>
       <xs:attribute name="size"        type="PageSize"/>
       <xs:attribute name="orientation" type="Orientation"/>
       <xs:attribute name="margin"      type="SpacingValue"/>
@@ -349,23 +623,29 @@
     </xs:complexType>
   </xs:element>
 
-  <xs:element name="document">
+  <!-- section: a content boundary with its own auto-pagination.
+       Attributes override document-level defaults for this section only.
+       title becomes a PDF outline entry (bookmark).
+       Four valid content combinations; document order = paint order. -->
+  <xs:element name="section">
     <xs:complexType>
-      <xs:sequence>
-        <xs:element ref="meta" minOccurs="0"/>
-        <xs:element name="pages">
-          <xs:complexType>
-            <xs:sequence>
-              <xs:element ref="page" maxOccurs="unbounded"/>
-            </xs:sequence>
-          </xs:complexType>
-        </xs:element>
-      </xs:sequence>
-      <xs:attribute name="font"        type="xs:string"/>
+      <xs:choice minOccurs="0">
+        <!-- layout only, or layout + canvas overlay (layout painted first) -->
+        <xs:sequence>
+          <xs:element ref="layout"/>
+          <xs:element ref="canvas" minOccurs="0"/>
+        </xs:sequence>
+        <!-- canvas only, or canvas underlay + layout (canvas painted first) -->
+        <xs:sequence>
+          <xs:element ref="canvas"/>
+          <xs:element ref="layout" minOccurs="0"/>
+        </xs:sequence>
+      </xs:choice>
       <xs:attribute name="size"        type="PageSize"/>
       <xs:attribute name="orientation" type="Orientation"/>
       <xs:attribute name="margin"      type="SpacingValue"/>
       <xs:attribute name="background"  type="Color"/>
+      <xs:attribute name="title"       type="xs:string"/>
       <xs:attribute name="debug"       type="xs:boolean"/>
     </xs:complexType>
   </xs:element>
@@ -471,7 +751,6 @@
       </xs:sequence>
       <xs:attribute name="href"   type="xs:anyURI" use="required"/>
       <xs:attribute name="gap"    type="SpacingOrToken"/>
-      <xs:attribute name="repeat" type="Repeat"/>
       <xs:attribute name="debug"  type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
@@ -489,7 +768,6 @@
       </xs:attribute>
       <xs:attribute name="color"     type="Color"/>
       <xs:attribute name="thickness" type="TokenScaleOrPt"/>
-      <xs:attribute name="repeat"    type="Repeat"/>
       <xs:attribute name="debug"     type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
@@ -518,7 +796,6 @@
       <xs:attribute name="background" type="Color"/>
       <xs:attribute name="border"     type="BorderValue"/>
       <xs:attribute name="radius"     type="TokenScaleOrPt"/>
-      <xs:attribute name="repeat"     type="Repeat"/>
       <xs:attribute name="debug"      type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
@@ -552,7 +829,6 @@
       <xs:attribute name="hrt"        type="xs:boolean"/>
       <xs:attribute name="color"      type="Color"/>
       <xs:attribute name="background" type="Color"/>
-      <xs:attribute name="repeat"     type="Repeat"/>
       <xs:attribute name="debug"      type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
@@ -568,7 +844,6 @@
       <xs:attribute name="color"     type="Color"/>
       <xs:attribute name="align"     type="TextAlignH"/>
       <xs:attribute name="width"     type="TokenScaleOrPt"/>
-      <xs:attribute name="repeat"    type="Repeat"/>
       <xs:attribute name="debug"     type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
@@ -637,7 +912,6 @@
       <xs:attribute name="background" type="Color"/>
       <xs:attribute name="width"      type="TokenScaleOrPt"/>
       <xs:attribute name="height"     type="HeightValue"/>
-      <xs:attribute name="repeat"     type="Repeat"/>
       <xs:attribute name="debug"      type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
@@ -672,7 +946,6 @@
       <xs:attribute name="action-url" type="xs:anyURI"/>
       <xs:attribute name="width"      type="TokenScaleOrPt"/>
       <xs:attribute name="height"     type="PtValue"/>
-      <xs:attribute name="repeat"     type="Repeat"/>
       <xs:attribute name="debug"      type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>

@@ -27,10 +27,10 @@ pub struct CanvasDocument {
     pub fonts:       HashMap<String, FontDef>,
     pub font_widths: HashMap<String, FontWidths>,
     pub images:      HashMap<String, String>,
-    pub pages:       Vec<CanvasPage>,
+    pub sections:    Vec<CanvasSection>,
 }
 
-pub struct CanvasPage {
+pub struct CanvasSection {
     pub width:      f32,
     pub height:     f32,
     pub margin:     [f32; 4],
@@ -250,19 +250,19 @@ pub fn parse_canvas_tree(json: &str) -> Result<CanvasDocument, String> {
         None
     };
 
-    // ── Pages ─────────────────────────────────────────────────────────────────
-    let page_arr = root.get("pages").and_then(|v| v.as_array())
-        .ok_or("canvas tree JSON 'pages' must be an array")?;
+    // ── Sections ──────────────────────────────────────────────────────────────
+    let section_arr = root.get("nodes").and_then(|v| v.as_array())
+        .ok_or("canvas tree JSON must have a 'nodes' array")?;
 
-    let mut pages: Vec<CanvasPage> = Vec::new();
-    for child in page_arr {
-        if child.get("type").and_then(|v| v.as_str()) != Some("canvas-page") {
-            return Err("canvas document pages must all be canvas-page nodes".into());
+    let mut sections: Vec<CanvasSection> = Vec::new();
+    for child in section_arr {
+        if child.get("type").and_then(|v| v.as_str()) != Some("canvas-section") {
+            return Err("canvas document nodes must all be canvas-section nodes".into());
         }
-        pages.push(parse_canvas_page(child, doc_size, doc_margin, doc_background.clone(), &tokens, &asset_images)?);
+        sections.push(parse_canvas_section(child, doc_size, doc_margin, doc_background.clone(), &tokens, &asset_images)?);
     }
-    if pages.is_empty() {
-        return Err("canvas document must have at least one page".into());
+    if sections.is_empty() {
+        return Err("canvas document must have at least one section".into());
     }
 
     Ok(CanvasDocument {
@@ -270,18 +270,18 @@ pub fn parse_canvas_tree(json: &str) -> Result<CanvasDocument, String> {
         fonts:       asset_fonts,
         font_widths: asset_font_widths,
         images:      asset_images,
-        pages,
+        sections,
     })
 }
 
-fn parse_canvas_page(
+fn parse_canvas_section(
     json:           &serde_json::Value,
     doc_size:       (f32, f32),
     doc_margin:     [f32; 4],
     doc_background: Option<String>,
     tokens:         &Tokens,
     asset_images:   &HashMap<String, String>,
-) -> Result<CanvasPage, String> {
+) -> Result<CanvasSection, String> {
     use crate::parse::parse_page_size;
 
     let mut size   = doc_size;
@@ -308,13 +308,13 @@ fn parse_canvas_page(
     }
 
     let mut nodes: Vec<CanvasNode> = Vec::new();
-    if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
+    if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
         for child in arr {
             nodes.push(parse_canvas_node(child, tokens, asset_images)?);
         }
     }
 
-    Ok(CanvasPage { width: size.0, height: size.1, margin, background: bg, nodes })
+    Ok(CanvasSection { width: size.0, height: size.1, margin, background: bg, nodes })
 }
 
 fn jf(json: &serde_json::Value, key: &str) -> Option<f32> {
@@ -361,13 +361,13 @@ fn parse_canvas_node(
             let line_height = jf(json, "line-height").unwrap_or(1.2);
             let width = jf(json, "width");
 
-            // Plain content attr takes priority; children = mixed runs fallback.
+            // Plain content attr takes priority; nodes = mixed runs fallback.
             let (content, runs) = if let Some(c) = js(json, "content") {
                 (c.to_string(), vec![])
-            } else if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
+            } else if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
                 let runs = arr.iter().filter_map(|child| {
                     if child.get("type").and_then(|v| v.as_str()) == Some("canvas-run") {
-                        let text = child.get("children").and_then(|v| v.as_array())
+                        let text = child.get("nodes").and_then(|v| v.as_array())
                             .and_then(|a| a.first())
                             .and_then(|v| v.as_str())
                             .unwrap_or("")
@@ -507,7 +507,7 @@ fn parse_canvas_node(
                 });
 
             let mut children: Vec<CanvasNode> = Vec::new();
-            if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
+            if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
                 for child in arr {
                     children.push(parse_canvas_node(child, tokens, asset_images)?);
                 }
@@ -528,22 +528,22 @@ fn parse_canvas_node(
 /// that target a specific page are lifted out and appended to that page's
 /// node list.  Pages are auto-created (as empty pages with the document
 /// defaults) if `N` exceeds the current page count.
-pub fn layout_canvas_pages(doc: &CanvasDocument) -> Vec<RenderPage> {
-    // Phase 1: build base pages from the document's page list.
-    let mut pages: Vec<RenderPage> = doc.pages.iter().map(|p| RenderPage {
-        width:      p.width,
-        height:     p.height,
-        margin:     p.margin,
-        background: p.background.clone(),
+pub fn layout_canvas_sections(doc: &CanvasDocument) -> Vec<RenderPage> {
+    // Phase 1: build base pages from the document's section list.
+    let mut pages: Vec<RenderPage> = doc.sections.iter().map(|s| RenderPage {
+        width:      s.width,
+        height:     s.height,
+        margin:     s.margin,
+        background: s.background.clone(),
         nodes:      Vec::new(),
     }).collect();
 
-    // Phase 2: walk pages, convert canvas nodes to render nodes, handle page targeting.
-    for (page_idx, canvas_page) in doc.pages.iter().enumerate() {
+    // Phase 2: walk sections, convert canvas nodes to render nodes, handle page targeting.
+    for (section_idx, canvas_section) in doc.sections.iter().enumerate() {
         let mut deferred: Vec<(usize, RenderNode)> = Vec::new();
-        for node in &canvas_page.nodes {
-            let render_nodes = layout_canvas_node(node, canvas_page, &mut deferred);
-            pages[page_idx].nodes.extend(render_nodes);
+        for node in &canvas_section.nodes {
+            let render_nodes = layout_canvas_node(node, canvas_section, &mut deferred);
+            pages[section_idx].nodes.extend(render_nodes);
         }
         // Apply deferred page-targeted layers.
         for (target_page, render_node) in deferred {
@@ -571,7 +571,7 @@ pub fn layout_canvas_pages(doc: &CanvasDocument) -> Vec<RenderPage> {
 /// Page-targeted layers are pushed to `deferred` instead of returned inline.
 fn layout_canvas_node(
     node:     &CanvasNode,
-    page:     &CanvasPage,
+    page:     &CanvasSection,
     deferred: &mut Vec<(usize, RenderNode)>,
 ) -> Vec<RenderNode> {
     match node {
@@ -654,7 +654,7 @@ fn layout_canvas_node(
                 children.extend(layout_canvas_node(child, page, &mut layer_deferred));
             }
             // Nested deferred layers: propagate up (they'll be placed by the
-            // outer layout_canvas_pages loop).
+            // outer layout_canvas_sections loop).
             deferred.extend(layer_deferred);
 
             let render_layer = RenderNode::CanvasLayer(RenderCanvasLayer {

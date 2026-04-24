@@ -1,0 +1,247 @@
+%PDF-1.7
+%€€€€
+
+1 0 obj
+<<
+  /Type /Catalog
+  /Pages 3 0 R
+>>
+endobj
+
+2 0 obj
+<<
+  /Title <FEFF004300650072007400690066006900630061007400650020006F006600200043006F006D0070006C006500740069006F006E002020140020004A0061006E006500200044006F0065>
+  /Producer (lpdf.io (free))
+>>
+endobj
+
+3 0 obj
+<<
+  /Type /Pages
+  /Kids [4 0 R]
+  /Count 1
+>>
+endobj
+
+4 0 obj
+<<
+  /Type /Page
+  /Parent 3 0 R
+  /MediaBox [0 0 792 612]
+  /Resources <<
+    /Font <<
+      /F0 7 0 R
+      /F1 8 0 R
+      /F2 9 0 R
+    >>
+  >>
+  /Contents 5 0 R
+  /Annots [6 0 R]
+>>
+endobj
+
+5 0 obj
+<<
+  /Length 1986
+>>
+stream
+1 1 1 rg
+0 0 792 612 re
+f
+q
+0.72156864 0.5254902 0.043137256 RG
+2 w
+0 0 792 612 re
+S
+Q
+q
+0.72156864 0.5254902 0.043137256 RG
+0.5 w
+20 20 752 572 re
+S
+Q
+BT
+0.3529412 0.3529412 0.3529412 rg
+/F1 9 Tf
+1 0 0 1 360.9945 432.90002 Tm
+(PRESENTED BY) Tj
+ET
+BT
+0.101960786 0.1764706 0.3529412 rg
+/F1 20 Tf
+1 0 0 1 321.53 409.1 Tm
+(Acme Academy) Tj
+ET
+q
+0.83137256 0.7254902 0.47843137 RG
+0.5 w
+34 390.85 m
+758 390.85 l
+S
+Q
+BT
+0.101960786 0.1764706 0.3529412 rg
+/F2 28 Tf
+1 0 0 1 249.77 360.6 Tm
+(Certificate of Completion) Tj
+ET
+q
+0.83137256 0.7254902 0.47843137 RG
+0.5 w
+34 352.75 m
+758 352.75 l
+S
+Q
+q
+0.83137256 0.7254902 0.47843137 RG
+1 w
+34 338 m
+758 338 l
+S
+Q
+BT
+0.3529412 0.3529412 0.3529412 rg
+/F0 9 Tf
+1 0 0 1 322.974 314.5 Tm
+(This certificate is proudly awarded to) Tj
+ET
+BT
+0.101960786 0.1764706 0.3529412 rg
+/F2 28 Tf
+1 0 0 1 341.176 280.7 Tm
+(Jane Doe) Tj
+ET
+BT
+0.3529412 0.3529412 0.3529412 rg
+/F0 9 Tf
+1 0 0 1 342.234 262.1 Tm
+(for successfully completing) Tj
+ET
+BT
+0.101960786 0.1764706 0.3529412 rg
+/F1 14 Tf
+1 0 0 1 266.857 242.30002 Tm
+(Advanced Rust Systems Programming) Tj
+ET
+BT
+0.3529412 0.3529412 0.3529412 rg
+/F0 9 Tf
+1 0 0 1 225.18901 226.50003 Tm
+(a 40-hour course covering memory safety, async runtimes, and WebAssembly targets) Tj
+ET
+q
+0.83137256 0.7254902 0.47843137 RG
+0.5 w
+34 210.45001 m
+758 210.45001 l
+S
+Q
+q
+0.101960786 0.1764706 0.3529412 RG
+0.5 w
+34 195.95001 m
+109.033005 195.95001 l
+S
+Q
+BT
+0.101960786 0.1764706 0.3529412 rg
+/F1 9 Tf
+1 0 0 1 42.5005 184.70001 Tm
+(April 12, 2026) Tj
+ET
+BT
+0.3529412 0.3529412 0.3529412 rg
+/F0 9 Tf
+1 0 0 1 34 171.90002 Tm
+(Date of completion) Tj
+ET
+q
+0.101960786 0.1764706 0.3529412 RG
+0.5 w
+686.486 195.95001 m
+758 195.95001 l
+S
+Q
+BT
+0.101960786 0.1764706 0.3529412 rg
+/F1 9 Tf
+1 0 0 1 686.486 184.70001 Tm
+(Dr. Alice Morrow) Tj
+ET
+BT
+0.3529412 0.3529412 0.3529412 rg
+/F0 9 Tf
+1 0 0 1 687.989 171.90002 Tm
+(Program Director) Tj
+ET
+BT
+0.6666667 0.6666667 0.6666667 rg
+/F0 8 Tf
+1 0 0 1 727.976 600 Tm
+(made with lpdf.io) Tj
+ET
+endstream
+endobj
+
+6 0 obj
+<<
+  /Type /Annot
+  /Subtype /Link
+  /Rect [727.976 600 788 608]
+  /Border [0 0 0]
+  /A <<
+    /Type /Action
+    /S /URI
+    /URI (https://lpdf.io)
+  >>
+>>
+endobj
+
+7 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+8 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica-Bold
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+9 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Times-BoldItalic
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+xref
+0 10
+0000000000 65535 f
+0000000016 00000 n
+0000000070 00000 n
+0000000281 00000 n
+0000000345 00000 n
+0000000548 00000 n
+0000002589 00000 n
+0000002761 00000 n
+0000002867 00000 n
+0000002978 00000 n
+trailer
+<<
+  /Size 10
+  /Root 1 0 R
+  /Info 2 0 R
+>>
+startxref
+3091
+%%EOF

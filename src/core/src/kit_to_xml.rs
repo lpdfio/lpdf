@@ -194,7 +194,7 @@ fn render_span(node: &Value) -> String {
     let attrs_s = attrs_str(attrs, &[]);
 
     let content: String = node
-        .get("children")
+        .get("nodes")
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
@@ -217,7 +217,7 @@ fn render_text_node(node: &Value, depth: usize) -> String {
     let attrs  = node.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
     let attrs_s = attrs_str(attrs, &[]);
 
-    let children = match node.get("children").and_then(|v| v.as_array()) {
+    let children = match node.get("nodes").and_then(|v| v.as_array()) {
         Some(c) if !c.is_empty() => c,
         _ => return format!("{pad}<text{}/>", attrs_s),
     };
@@ -253,7 +253,7 @@ fn render_node(node: &Value, depth: usize) -> String {
 
     // Container nodes (stack, flank, split, cluster, grid, frame, link,
     // table, thead, tr, td)
-    let children = node.get("children").and_then(|v| v.as_array());
+    let children = node.get("nodes").and_then(|v| v.as_array());
     match children {
         Some(arr) if !arr.is_empty() => {
             let children_str = arr
@@ -267,34 +267,136 @@ fn render_node(node: &Value, depth: usize) -> String {
     }
 }
 
-fn render_page(page: &Value, depth: usize) -> String {
+fn render_canvas_primitive(node: &Value, depth: usize) -> String {
+    let node_type = node.get("type").and_then(|v| v.as_str()).unwrap_or("");
+    let pad       = "  ".repeat(depth);
+    let empty     = serde_json::Map::new();
+    let attrs     = node.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
+
+    // Strip the "canvas-" prefix to get the XML tag name
+    let tag = node_type.strip_prefix("canvas-").unwrap_or(node_type);
+
+    match tag {
+        "text" => {
+            let attrs_s = attrs_str(attrs, &["content", "runs"]);
+            let content = attrs.get("content").and_then(|v| v.as_str()).unwrap_or("");
+            if let Some(runs) = node.get("runs").and_then(|v| v.as_array()) {
+                let inner_pad = "  ".repeat(depth + 1);
+                let runs_str: String = runs.iter().map(|r| {
+                    let text  = r.get("text") .and_then(|v| v.as_str()).unwrap_or("");
+                    let font  = r.get("font") .and_then(|v| v.as_str());
+                    let color = r.get("color").and_then(|v| v.as_str());
+                    let mut span_attrs = String::new();
+                    if let Some(f) = font  { span_attrs.push_str(&format!(" font=\"{}\"", escape_attr(f))); }
+                    if let Some(c) = color { span_attrs.push_str(&format!(" color=\"{}\"", escape_attr(c))); }
+                    format!("{inner_pad}<span{span_attrs}>{}</span>", escape_text(text))
+                }).collect::<Vec<_>>().join("\n");
+                format!("{pad}<text{attrs_s}>\n{runs_str}\n{pad}</text>")
+            } else if content.is_empty() {
+                format!("{pad}<text{attrs_s}/>")
+            } else {
+                format!("{pad}<text{attrs_s}>{}</text>", escape_text(content))
+            }
+        }
+        _ => {
+            let attrs_s = attrs_str(attrs, &[]);
+            format!("{pad}<{tag}{attrs_s}/>")
+        }
+    }
+}
+
+fn render_canvas_layer(layer: &Value, depth: usize) -> String {
+    let pad     = "  ".repeat(depth);
+    let empty   = serde_json::Map::new();
+    let attrs   = layer.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
+    let attrs_s = attrs_str(attrs, &[]);
+    let nodes   = layer.get("nodes").and_then(|v| v.as_array());
+    match nodes {
+        Some(arr) if !arr.is_empty() => {
+            let prims: String = arr.iter()
+                .map(|n| render_canvas_primitive(n, depth + 1))
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!("{pad}<layer{attrs_s}>\n{prims}\n{pad}</layer>")
+        }
+        _ => format!("{pad}<layer{attrs_s}/>"),
+    }
+}
+
+fn render_section(section: &Value, depth: usize) -> String {
     let pad     = "  ".repeat(depth);
     let inner   = "  ".repeat(depth + 1);
     let empty   = serde_json::Map::new();
-    let attrs   = page.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
+    let attrs   = section.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
     let attrs_s = attrs_str(attrs, &[]);
 
-    // page.children must contain at most one "layout" node
-    let layout_children = page
-        .get("children")
-        .and_then(|v| v.as_array())
-        .and_then(|arr| {
-            arr.iter().find(|c| c.get("type").and_then(|v| v.as_str()) == Some("layout"))
-        })
-        .and_then(|layout| layout.get("children"))
-        .and_then(|v| v.as_array());
+    let children = section.get("nodes").and_then(|v| v.as_array());
+    let Some(children) = children else {
+        return format!("{pad}<section{attrs_s}/>");
+    };
 
-    match layout_children {
-        Some(arr) if !arr.is_empty() => {
-            let nodes_str = arr
-                .iter()
-                .map(|c| render_node(c, depth + 2))
-                .collect::<Vec<_>>()
-                .join("\n");
-            format!("{pad}<page{attrs_s}>\n{inner}<layout>\n{nodes_str}\n{inner}</layout>\n{pad}</page>")
+    let mut parts: Vec<String> = Vec::new();
+    for child in children {
+        let kind = child.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        let nodes = child.get("nodes").and_then(|v| v.as_array());
+        match kind {
+            "layout" => {
+                match nodes {
+                    Some(arr) if !arr.is_empty() => {
+                        let content: String = arr.iter()
+                            .map(|n| render_layout_node(n, depth + 2))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        parts.push(format!("{inner}<layout>\n{content}\n{inner}</layout>"));
+                    }
+                    _ => parts.push(format!("{inner}<layout/>")),
+                }
+            }
+            "canvas" => {
+                match nodes {
+                    Some(arr) if !arr.is_empty() => {
+                        let layers_str: String = arr.iter()
+                            .map(|l| render_canvas_layer(l, depth + 2))
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        parts.push(format!("{inner}<canvas>\n{layers_str}\n{inner}</canvas>"));
+                    }
+                    _ => parts.push(format!("{inner}<canvas/>")),
+                }
+            }
+            _ => {}
         }
-        _ => format!("{pad}<page{attrs_s}/>"),
     }
+
+    if parts.is_empty() {
+        format!("{pad}<section{attrs_s}/>")
+    } else {
+        format!("{pad}<section{attrs_s}>\n{}\n{pad}</section>", parts.join("\n"))
+    }
+}
+
+// Helper: render a layout node that may be a layout-region or a regular node
+fn render_layout_node(node: &Value, depth: usize) -> String {
+    let node_type = node.get("type").and_then(|v| v.as_str()).unwrap_or("stack");
+    if node_type == "layout-region" {
+        let pad     = "  ".repeat(depth);
+        let _inner  = "  ".repeat(depth + 1);
+        let empty   = serde_json::Map::new();
+        let attrs   = node.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
+        let attrs_s = attrs_str(attrs, &[]);
+        let nodes   = node.get("nodes").and_then(|v| v.as_array());
+        return match nodes {
+            Some(arr) if !arr.is_empty() => {
+                let content: String = arr.iter()
+                    .map(|n| render_node(n, depth + 1))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                format!("{pad}<region{attrs_s}>\n{content}\n{pad}</region>")
+            }
+            _ => format!("{pad}<region{attrs_s}/>"),
+        };
+    }
+    render_node(node, depth)
 }
 
 // ── Public entry point ────────────────────────────────────────────────────────
@@ -353,17 +455,14 @@ pub fn kit_to_xml(json: &str) -> Result<String, String> {
         }
     }
 
-    // <pages>
-    let page_arr = root
-        .get("children")
+    // sections
+    let nodes_arr = root.get("nodes")
         .and_then(|v| v.as_array())
-        .ok_or("kit JSON must have a 'children' array")?;
+        .ok_or("kit JSON must have a 'nodes' array")?;
 
-    lines.push("    <pages>".into());
-    for page in page_arr {
-        lines.push(render_page(page, 3));
+    for section in nodes_arr {
+        lines.push(render_section(section, 2));
     }
-    lines.push("    </pages>".into());
 
     lines.push("  </document>".into());
     lines.push("</lpdf>".into());
@@ -377,9 +476,9 @@ pub fn kit_to_xml(json: &str) -> Result<String, String> {
 mod tests {
     use super::*;
 
-    /// Minimal document JSON with one empty page.
+    /// Minimal document JSON with one empty section.
     fn minimal_doc() -> &'static str {
-        r#"{"version":1,"type":"document","attrs":{},"children":[{"type":"page","attrs":{},"children":[]}]}"#
+        r#"{"version":1,"type":"document","attrs":{},"nodes":[{"type":"section","attrs":{},"nodes":[]}]}"#
     }
 
     // ── Structural output ─────────────────────────────────────────────────────
@@ -398,19 +497,17 @@ mod tests {
     }
 
     #[test]
-    fn output_contains_document_and_pages() {
+    fn output_contains_document_and_section() {
         let xml = kit_to_xml(minimal_doc()).unwrap();
         assert!(xml.contains("<document>") || xml.contains("<document "));
-        assert!(xml.contains("<pages>"));
-        assert!(xml.contains("</pages>"));
+        assert!(xml.contains("<section") || xml.contains("<section/>"));
         assert!(xml.contains("</document>"));
     }
 
     #[test]
-    fn empty_page_rendered() {
+    fn empty_section_rendered() {
         let xml = kit_to_xml(minimal_doc()).unwrap();
-        // Empty page — either self-closing or open+close
-        assert!(xml.contains("<page/>") || xml.contains("<page>") || xml.contains("<page "));
+        assert!(xml.contains("<section/>") || xml.contains("<section>") || xml.contains("<section "));
     }
 
     // ── Document-level attrs ──────────────────────────────────────────────────
@@ -421,7 +518,7 @@ mod tests {
             "version": 1,
             "type": "document",
             "attrs": { "size": "a4", "margin": "28pt" },
-            "children": [{"type":"page","attrs":{},"children":[]}]
+            "nodes": [{"type":"section","attrs":{},"nodes":[]}]
         }"#;
         let xml = kit_to_xml(json).unwrap();
         assert!(xml.contains(r#"size="a4""#));
@@ -441,7 +538,7 @@ mod tests {
                     "text":  { "body": "12pt" }
                 }
             },
-            "children": [{"type":"page","attrs":{},"children":[]}]
+            "nodes": [{"type":"section","attrs":{},"nodes":[]}]
         }"#;
         let xml = kit_to_xml(json).unwrap();
         assert!(xml.contains("<tokens>"));
@@ -459,7 +556,7 @@ mod tests {
                     "colors": { "primary": "#1763cf", "surface": "#f5f5f5" }
                 }
             },
-            "children": [{"type":"page","attrs":{},"children":[]}]
+            "nodes": [{"type":"section","attrs":{},"nodes":[]}]
         }"##;
         let xml = kit_to_xml(json).unwrap();
         assert!(xml.contains("<colors>"));
@@ -478,7 +575,7 @@ mod tests {
                     "fonts": { "heading": { "builtin": "Helvetica-Bold" } }
                 }
             },
-            "children": [{"type":"page","attrs":{},"children":[]}]
+            "nodes": [{"type":"section","attrs":{},"nodes":[]}]
         }"#;
         let xml = kit_to_xml(json).unwrap();
 
@@ -504,7 +601,7 @@ mod tests {
                     "fonts": { "body": { "src": "/fonts/MyFont.ttf" } }
                 }
             },
-            "children": [{"type":"page","attrs":{},"children":[]}]
+            "nodes": [{"type":"section","attrs":{},"nodes":[]}]
         }"#;
         let xml = kit_to_xml(json).unwrap();
 
@@ -529,7 +626,7 @@ mod tests {
                     }
                 }
             },
-            "children": [{"type":"page","attrs":{},"children":[]}]
+            "nodes": [{"type":"section","attrs":{},"nodes":[]}]
         }"#;
         let xml = kit_to_xml(json).unwrap();
         assert!(xml.contains(r#"core="Helvetica-Bold""#));
@@ -546,7 +643,7 @@ mod tests {
             "attrs": {
                 "meta": { "title": "My Document", "author": "Alice" }
             },
-            "children": [{"type":"page","attrs":{},"children":[]}]
+            "nodes": [{"type":"section","attrs":{},"nodes":[]}]
         }"#;
         let xml = kit_to_xml(json).unwrap();
         assert!(xml.contains("<meta "));
@@ -562,18 +659,17 @@ mod tests {
             "version": 1,
             "type": "document",
             "attrs": {},
-            "children": [{
-                "type": "page",
+            "nodes": [{
+                "type": "section",
                 "attrs": {},
-                "children": [{
+                "nodes": [{
                     "type": "layout",
-                    "attrs": {},
-                    "children": [{
+                    "nodes": [{
                         "type": "stack",
                         "attrs": { "gap": "m" },
-                        "children": [
-                            { "type": "frame", "attrs": { "height": "40pt" }, "children": [] },
-                            { "type": "frame", "attrs": { "height": "40pt" }, "children": [] }
+                        "nodes": [
+                            { "type": "frame", "attrs": { "height": "40pt" }, "nodes": [] },
+                            { "type": "frame", "attrs": { "height": "40pt" }, "nodes": [] }
                         ]
                     }]
                 }]
@@ -593,16 +689,15 @@ mod tests {
             "version": 1,
             "type": "document",
             "attrs": {},
-            "children": [{
-                "type": "page",
+            "nodes": [{
+                "type": "section",
                 "attrs": {},
-                "children": [{
+                "nodes": [{
                     "type": "layout",
-                    "attrs": {},
-                    "children": [{
+                    "nodes": [{
                         "type": "text",
                         "attrs": {},
-                        "children": ["Hello world"]
+                        "nodes": ["Hello world"]
                     }]
                 }]
             }]
@@ -618,18 +713,17 @@ mod tests {
             "version": 1,
             "type": "document",
             "attrs": {},
-            "children": [{
-                "type": "page",
+            "nodes": [{
+                "type": "section",
                 "attrs": {},
-                "children": [{
+                "nodes": [{
                     "type": "layout",
-                    "attrs": {},
-                    "children": [{
+                    "nodes": [{
                         "type": "text",
                         "attrs": {},
-                        "children": [
+                        "nodes": [
                             "Total: ",
-                            { "type": "span", "attrs": { "bold": "true" }, "children": ["$100"] }
+                            { "type": "span", "attrs": { "bold": "true" }, "nodes": ["$100"] }
                         ]
                     }]
                 }]
@@ -646,13 +740,12 @@ mod tests {
             "version": 1,
             "type": "document",
             "attrs": {},
-            "children": [{
-                "type": "page",
+            "nodes": [{
+                "type": "section",
                 "attrs": {},
-                "children": [{
+                "nodes": [{
                     "type": "layout",
-                    "attrs": {},
-                    "children": [{ "type": "divider", "attrs": { "color": "#ccc" }, "children": [] }]
+                    "nodes": [{ "type": "divider", "attrs": { "color": "#ccc" }, "nodes": [] }]
                 }]
             }]
         }"##;
@@ -669,7 +762,7 @@ mod tests {
             "version": 1,
             "type": "document",
             "attrs": { "meta": { "title": "A & B <test>" } },
-            "children": [{"type":"page","attrs":{},"children":[]}]
+            "nodes": [{"type":"section","attrs":{},"nodes":[]}]
         }"#;
         let xml = kit_to_xml(json).unwrap();
         assert!(xml.contains("A &amp; B &lt;test&gt;"));
@@ -681,13 +774,12 @@ mod tests {
             "version": 1,
             "type": "document",
             "attrs": {},
-            "children": [{
-                "type": "page",
+            "nodes": [{
+                "type": "section",
                 "attrs": {},
-                "children": [{
+                "nodes": [{
                     "type": "layout",
-                    "attrs": {},
-                    "children": [{ "type": "text", "attrs": {}, "children": ["5 < 10 & 3 > 1"] }]
+                    "nodes": [{ "type": "text", "attrs": {}, "nodes": ["5 < 10 & 3 > 1"] }]
                 }]
             }]
         }"#;
@@ -699,13 +791,13 @@ mod tests {
 
     #[test]
     fn rejects_wrong_version() {
-        let json = r#"{"version":2,"type":"document","attrs":{},"children":[]}"#;
+        let json = r#"{"version":2,"type":"document","attrs":{},"nodes":[]}"#;
         assert!(kit_to_xml(json).is_err());
     }
 
     #[test]
     fn rejects_wrong_type() {
-        let json = r#"{"version":1,"type":"page","attrs":{},"children":[]}"#;
+        let json = r#"{"version":1,"type":"page","attrs":{},"nodes":[]}"#;
         assert!(kit_to_xml(json).is_err());
     }
 
@@ -715,7 +807,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_missing_children() {
+    fn rejects_missing_nodes() {
         let json = r#"{"version":1,"type":"document","attrs":{}}"#;
         assert!(kit_to_xml(json).is_err());
     }
@@ -738,16 +830,15 @@ mod tests {
                 },
                 "meta": { "title": "Roundtrip Test" }
             },
-            "children": [{
-                "type": "page",
+            "nodes": [{
+                "type": "section",
                 "attrs": {},
-                "children": [{
+                "nodes": [{
                     "type": "layout",
-                    "attrs": {},
-                    "children": [{
+                    "nodes": [{
                         "type": "text",
                         "attrs": {},
-                        "children": ["Hello roundtrip"]
+                        "nodes": ["Hello roundtrip"]
                     }]
                 }]
             }]
@@ -758,7 +849,8 @@ mod tests {
         let result = crate::parse::parse(&xml);
         assert!(result.is_ok(), "XML produced by kit_to_xml failed parse: {:?}", result.err());
         let doc = result.unwrap();
-        assert_eq!(doc.pages.len(), 1);
-        assert_eq!(doc.pages[0].children.len(), 1);
+        let pages = doc.section_layouts();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].children.len(), 1);
     }
 }

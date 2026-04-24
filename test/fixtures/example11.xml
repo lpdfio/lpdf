@@ -12,74 +12,72 @@
   </tokens>
   <document size="letter" margin="48pt">
     <meta title="Quarterly Investor Update — Q1 2026" />
-    <pages>
-      <page>
-        <layout>
+    <section>
+      <layout>
 
-        <!-- letterhead: only on page 1 -->
-        <frame repeat="first" background="brand-soft" padding="m" radius="s">
-          <split align="center">
-            <stack gap="xs">
-              <text font-size="l" font="Helvetica-Bold" color="brand">Helios Robotics, Inc.</text>
-              <text font-size="xs" color="text-muted">1200 Market Street · San Francisco, CA 94102</text>
-            </stack>
-            <stack gap="xs" align="end">
-              <text font-size="xs" color="text-muted">Investor Relations</text>
-              <text font-size="xs" color="text-muted">ir@heliosrobotics.example</text>
-            </stack>
-          </split>
-        </frame>
+      <!-- letterhead: only on page 1 -->
+      <frame repeat="first" background="brand-soft" padding="m" radius="s">
+        <split align="center">
+          <stack gap="xs">
+            <text font-size="l" font="Helvetica-Bold" color="brand">Helios Robotics, Inc.</text>
+            <text font-size="xs" color="text-muted">1200 Market Street · San Francisco, CA 94102</text>
+          </stack>
+          <stack gap="xs" align="end">
+            <text font-size="xs" color="text-muted">Investor Relations</text>
+            <text font-size="xs" color="text-muted">ir@heliosrobotics.example</text>
+          </stack>
+        </split>
+      </frame>
 
-        <!-- running header: every page (including page 1, below the letterhead) -->
-        <stack repeat="page" gap="xs">
-          <split align="center">
-            <text font-size="xs" font="Helvetica-Bold" color="ink">QUARTERLY INVESTOR UPDATE</text>
-            <text font-size="xs" color="text-muted">Q1 2026 · Confidential</text>
-          </split>
-          <divider color="rule" thickness="xs" />
-        </stack>
+      <!-- running header: every page (including page 1, below the letterhead) -->
+      <stack repeat="page" gap="xs">
+        <split align="center">
+          <text font-size="xs" font="Helvetica-Bold" color="ink">QUARTERLY INVESTOR UPDATE</text>
+          <text font-size="xs" color="text-muted">Q1 2026 · Confidential</text>
+        </split>
+        <divider color="rule" thickness="xs" />
+      </stack>
 
-        <!-- paginated flow -->
-        <stack gap="m">
+      <!-- paginated flow -->
+      <stack gap="m">
 
-          <text font-size="xxl" font="Helvetica-Bold" color="ink">A Letter to Our Shareholders</text>
-          <text font-size="s" color="text-muted" font="Helvetica-Oblique">From the desk of the Chief Executive Officer · April 13, 2026</text>
+        <text font-size="xxl" font="Helvetica-Bold" color="ink">A Letter to Our Shareholders</text>
+        <text font-size="s" color="text-muted" font="Helvetica-Oblique">From the desk of the Chief Executive Officer · April 13, 2026</text>
 
-          <text font-size="m">Dear shareholders, the first quarter of 2026 was, by almost every measure that matters to us, the strongest period in the company's history. Revenue grew forty-two percent year over year, gross margin expanded by three hundred basis points, and we ended the quarter with more than four hundred million dollars in cash and equivalents on the balance sheet. None of these numbers happened by accident, and none of them happened because of any single person or team. They are the cumulative result of a thousand small decisions made by an extraordinary group of engineers, operators, and partners over the past eighteen months.</text>
+        <text font-size="m">Dear shareholders, the first quarter of 2026 was, by almost every measure that matters to us, the strongest period in the company's history. Revenue grew forty-two percent year over year, gross margin expanded by three hundred basis points, and we ended the quarter with more than four hundred million dollars in cash and equivalents on the balance sheet. None of these numbers happened by accident, and none of them happened because of any single person or team. They are the cumulative result of a thousand small decisions made by an extraordinary group of engineers, operators, and partners over the past eighteen months.</text>
 
-          <text font-size="m">In this letter I want to do three things. First, I want to walk through the operating highlights of the quarter in some detail, because I believe shareholders deserve to understand the business at the same level of granularity that the management team does. Second, I want to share the strategic themes that will shape our investment posture for the remainder of the fiscal year. Third, I want to be candid about the risks we see on the horizon, both the ones we can control and the ones we cannot.</text>
+        <text font-size="m">In this letter I want to do three things. First, I want to walk through the operating highlights of the quarter in some detail, because I believe shareholders deserve to understand the business at the same level of granularity that the management team does. Second, I want to share the strategic themes that will shape our investment posture for the remainder of the fiscal year. Third, I want to be candid about the risks we see on the horizon, both the ones we can control and the ones we cannot.</text>
 
-          <text font-size="m">On the operating side, the headline story is our manufacturing throughput. We exited the quarter producing units at a rate roughly sixty percent above where we entered it, and we did so without expanding our manufacturing footprint or our line headcount. The credit here belongs to the operations team, who spent the better part of eighteen months redesigning our subassembly flow to remove the bottlenecks that capped our production line through most of 2025. Those changes are now fully in place, and the throughput numbers reflect the new steady state rather than a one-off acceleration.</text>
+        <text font-size="m">On the operating side, the headline story is our manufacturing throughput. We exited the quarter producing units at a rate roughly sixty percent above where we entered it, and we did so without expanding our manufacturing footprint or our line headcount. The credit here belongs to the operations team, who spent the better part of eighteen months redesigning our subassembly flow to remove the bottlenecks that capped our production line through most of 2025. Those changes are now fully in place, and the throughput numbers reflect the new steady state rather than a one-off acceleration.</text>
 
-          <text font-size="m">Our gross margin expansion was driven by two distinct forces. The first is component cost, where the supply chain team negotiated meaningful price reductions on three of our top five bill-of-materials items, in part by consolidating volume with a smaller number of strategic partners. The second is yield, where we have brought first-pass yield on our flagship product line from the high eighties to the mid nineties over the past nine months. Both of these are durable improvements, and we expect the margin profile to hold through at least the next two quarters.</text>
+        <text font-size="m">Our gross margin expansion was driven by two distinct forces. The first is component cost, where the supply chain team negotiated meaningful price reductions on three of our top five bill-of-materials items, in part by consolidating volume with a smaller number of strategic partners. The second is yield, where we have brought first-pass yield on our flagship product line from the high eighties to the mid nineties over the past nine months. Both of these are durable improvements, and we expect the margin profile to hold through at least the next two quarters.</text>
 
-          <text font-size="m">On the strategic front, the theme for the remainder of the year is geographic expansion. We have built the manufacturing capacity, the operating discipline, and the cash position needed to enter two new markets in the second half, and we intend to use them. The two markets in question — which I will name in our Q2 call once the relevant regulatory filings are public — represent a combined total addressable market roughly twice the size of our current served market. Entering them well will require disciplined execution on regulatory engagement, channel partnership, and in-market support, and we are staffing each of these workstreams accordingly.</text>
+        <text font-size="m">On the strategic front, the theme for the remainder of the year is geographic expansion. We have built the manufacturing capacity, the operating discipline, and the cash position needed to enter two new markets in the second half, and we intend to use them. The two markets in question — which I will name in our Q2 call once the relevant regulatory filings are public — represent a combined total addressable market roughly twice the size of our current served market. Entering them well will require disciplined execution on regulatory engagement, channel partnership, and in-market support, and we are staffing each of these workstreams accordingly.</text>
 
-          <text font-size="m">A second strategic theme is software. We have spent the past two years quietly building a fleet-management platform that allows our customers to monitor, update, and orchestrate their deployed units from a single console. That platform is now in pilot with seven of our largest customers, and the early signal is strong: not only are pilot customers using the platform daily, they are asking us for features we had not anticipated, which is generally the surest sign that a product has found a real need. We expect to take the platform to general availability in the third quarter, and we expect it to be a meaningful contributor to revenue in 2027.</text>
+        <text font-size="m">A second strategic theme is software. We have spent the past two years quietly building a fleet-management platform that allows our customers to monitor, update, and orchestrate their deployed units from a single console. That platform is now in pilot with seven of our largest customers, and the early signal is strong: not only are pilot customers using the platform daily, they are asking us for features we had not anticipated, which is generally the surest sign that a product has found a real need. We expect to take the platform to general availability in the third quarter, and we expect it to be a meaningful contributor to revenue in 2027.</text>
 
-          <text font-size="m">On the risks. The most significant near-term risk we see is component concentration. Although our supply chain consolidation has improved our cost structure, it has also increased our dependence on a small number of partners for critical components. We are actively working to qualify second sources for the most concentrated items, but this work takes quarters, not weeks, and in the interim a major disruption at one of our key partners would meaningfully affect our ability to ship. We are managing this risk with elevated safety stock and with active engagement at the executive level with each of these partners.</text>
+        <text font-size="m">On the risks. The most significant near-term risk we see is component concentration. Although our supply chain consolidation has improved our cost structure, it has also increased our dependence on a small number of partners for critical components. We are actively working to qualify second sources for the most concentrated items, but this work takes quarters, not weeks, and in the interim a major disruption at one of our key partners would meaningfully affect our ability to ship. We are managing this risk with elevated safety stock and with active engagement at the executive level with each of these partners.</text>
 
-          <text font-size="m">A second risk is the macroeconomic environment in our two new target markets. Both markets are exposed to cycles that do not move in lockstep with our existing geographies, and a downturn in either one during our launch year would slow our ramp. We have stress-tested our entry plan against a range of scenarios and remain confident in the long-term opportunity, but we want shareholders to understand that the near-term revenue contribution from these markets could vary by a factor of two or more depending on conditions on the ground.</text>
+        <text font-size="m">A second risk is the macroeconomic environment in our two new target markets. Both markets are exposed to cycles that do not move in lockstep with our existing geographies, and a downturn in either one during our launch year would slow our ramp. We have stress-tested our entry plan against a range of scenarios and remain confident in the long-term opportunity, but we want shareholders to understand that the near-term revenue contribution from these markets could vary by a factor of two or more depending on conditions on the ground.</text>
 
-          <text font-size="m">A third risk, harder to quantify but no less real, is talent. The competition for senior engineering and operations talent in our segment is the most intense it has been in my career, and although we have continued to hire well, we cannot take that for granted. We are investing in our internal development and promotion pipeline, in our compensation philosophy, and in the working environment that has allowed us to retain the people we have. None of these investments will pay back in a single quarter, but in aggregate they are what allow a company of this kind to compound over a decade rather than a year.</text>
+        <text font-size="m">A third risk, harder to quantify but no less real, is talent. The competition for senior engineering and operations talent in our segment is the most intense it has been in my career, and although we have continued to hire well, we cannot take that for granted. We are investing in our internal development and promotion pipeline, in our compensation philosophy, and in the working environment that has allowed us to retain the people we have. None of these investments will pay back in a single quarter, but in aggregate they are what allow a company of this kind to compound over a decade rather than a year.</text>
 
-          <text font-size="m">In closing, I want to thank you, our shareholders, for the trust you have placed in this management team and in this company. The quarter we just delivered is a credit to every employee at Helios, and the years ahead — if we execute the way we know how to execute — will look much like this one, only larger. We have a great deal of work in front of us, and we are eager to get on with it.</text>
+        <text font-size="m">In closing, I want to thank you, our shareholders, for the trust you have placed in this management team and in this company. The quarter we just delivered is a credit to every employee at Helios, and the years ahead — if we execute the way we know how to execute — will look much like this one, only larger. We have a great deal of work in front of us, and we are eager to get on with it.</text>
 
-          <text font-size="s" color="text-muted" font="Helvetica-Oblique">Sincerely, the Office of the CEO · Helios Robotics, Inc.</text>
+        <text font-size="s" color="text-muted" font="Helvetica-Oblique">Sincerely, the Office of the CEO · Helios Robotics, Inc.</text>
 
-        </stack>
+      </stack>
 
-        <!-- running footer: every page, with auto page numbers -->
-        <stack repeat="page" gap="xs">
-          <divider color="rule" thickness="xs" />
-          <split align="center">
-            <text font-size="xs" color="text-muted">Helios Robotics, Inc. · Confidential</text>
-            <text font-size="xs" color="text-muted">Page <span font="Helvetica-Bold">{page}</span> of <span font="Helvetica-Bold">{pages}</span></text>
-          </split>
-        </stack>
+      <!-- running footer: every page, with auto page numbers -->
+      <stack repeat="page" gap="xs">
+        <divider color="rule" thickness="xs" />
+        <split align="center">
+          <text font-size="xs" color="text-muted">Helios Robotics, Inc. · Confidential</text>
+          <text font-size="xs" color="text-muted">Page <span font="Helvetica-Bold">{page}</span> of <span font="Helvetica-Bold">{pages}</span></text>
+        </split>
+      </stack>
 
-        </layout>
-      </page>
-    </pages>
+      </layout>
+    </section>
   </document>
 </lpdf>

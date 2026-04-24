@@ -6,1758 +6,1756 @@
     <font name="heading" core="Helvetica-Bold"/>
   </assets>
   <document size="a4" margin="48pt" font="body">
-    <pages>
-      <page>
-        <layout>
-        <stack gap="l">
+    <section>
+      <layout>
+      <stack gap="l">
 
-          <!-- document header -->
+        <!-- document header -->
+        <flank>
+          <text font="heading" font-size="xl">Report</text>
+          <text data-value="invoice_number" align="right">INV-0</text>
+        </flank>
+        <text data-value="company" font="heading">Company Name</text>
+        <divider/>
+
+        <!-- section 1 -->
+        <stack gap="m">
           <flank>
-            <text font="heading" font-size="xl">Report</text>
-            <text data-value="invoice_number" align="right">INV-0</text>
+            <text font="heading" font-size="l" data-value="sections[0].title">Section 1</text>
+            <text data-value="sections[0].ref" align="right">REF-001</text>
           </flank>
-          <text data-value="company" font="heading">Company Name</text>
-          <divider/>
-
-          <!-- section 1 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[0].title">Section 1</text>
-              <text data-value="sections[0].ref" align="right">REF-001</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[0].client">Client 1</text>
-              <text data-value="sections[0].address">Address 1</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[0].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[0].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[0].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[0].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[0].client">Client 1</text>
+            <text data-value="sections[0].address">Address 1</text>
           </stack>
           <divider/>
-
-          <!-- section 2 -->
-          <stack gap="m">
+          <stack data-source="sections[0].items" gap="xs">
             <flank>
-              <text font="heading" font-size="l" data-value="sections[1].title">Section 2</text>
-              <text data-value="sections[1].ref" align="right">REF-002</text>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
             </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[1].client">Client 2</text>
-              <text data-value="sections[1].address">Address 2</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[1].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[1].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[1].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[1].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
           </stack>
           <divider/>
-
-          <!-- section 3 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[2].title">Section 3</text>
-              <text data-value="sections[2].ref" align="right">REF-003</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[2].client">Client 3</text>
-              <text data-value="sections[2].address">Address 3</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[2].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[2].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[2].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[2].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 4 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[3].title">Section 4</text>
-              <text data-value="sections[3].ref" align="right">REF-004</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[3].client">Client 4</text>
-              <text data-value="sections[3].address">Address 4</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[3].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[3].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[3].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[3].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 5 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[4].title">Section 5</text>
-              <text data-value="sections[4].ref" align="right">REF-005</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[4].client">Client 5</text>
-              <text data-value="sections[4].address">Address 5</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[4].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[4].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[4].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[4].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 6 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[5].title">Section 6</text>
-              <text data-value="sections[5].ref" align="right">REF-006</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[5].client">Client 6</text>
-              <text data-value="sections[5].address">Address 6</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[5].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[5].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[5].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[5].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 7 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[6].title">Section 7</text>
-              <text data-value="sections[6].ref" align="right">REF-007</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[6].client">Client 7</text>
-              <text data-value="sections[6].address">Address 7</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[6].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[6].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[6].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[6].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 8 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[7].title">Section 8</text>
-              <text data-value="sections[7].ref" align="right">REF-008</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[7].client">Client 8</text>
-              <text data-value="sections[7].address">Address 8</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[7].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[7].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[7].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[7].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 9 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[8].title">Section 9</text>
-              <text data-value="sections[8].ref" align="right">REF-009</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[8].client">Client 9</text>
-              <text data-value="sections[8].address">Address 9</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[8].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[8].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[8].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[8].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 10 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[9].title">Section 10</text>
-              <text data-value="sections[9].ref" align="right">REF-010</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[9].client">Client 10</text>
-              <text data-value="sections[9].address">Address 10</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[9].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[9].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[9].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[9].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 11 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[10].title">Section 11</text>
-              <text data-value="sections[10].ref" align="right">REF-011</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[10].client">Client 11</text>
-              <text data-value="sections[10].address">Address 11</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[10].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[10].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[10].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[10].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 12 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[11].title">Section 12</text>
-              <text data-value="sections[11].ref" align="right">REF-012</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[11].client">Client 12</text>
-              <text data-value="sections[11].address">Address 12</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[11].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[11].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[11].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[11].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 13 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[12].title">Section 13</text>
-              <text data-value="sections[12].ref" align="right">REF-013</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[12].client">Client 13</text>
-              <text data-value="sections[12].address">Address 13</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[12].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[12].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[12].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[12].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 14 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[13].title">Section 14</text>
-              <text data-value="sections[13].ref" align="right">REF-014</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[13].client">Client 14</text>
-              <text data-value="sections[13].address">Address 14</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[13].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[13].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[13].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[13].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 15 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[14].title">Section 15</text>
-              <text data-value="sections[14].ref" align="right">REF-015</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[14].client">Client 15</text>
-              <text data-value="sections[14].address">Address 15</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[14].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[14].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[14].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[14].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 16 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[15].title">Section 16</text>
-              <text data-value="sections[15].ref" align="right">REF-016</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[15].client">Client 16</text>
-              <text data-value="sections[15].address">Address 16</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[15].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[15].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[15].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[15].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 17 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[16].title">Section 17</text>
-              <text data-value="sections[16].ref" align="right">REF-017</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[16].client">Client 17</text>
-              <text data-value="sections[16].address">Address 17</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[16].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[16].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[16].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[16].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 18 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[17].title">Section 18</text>
-              <text data-value="sections[17].ref" align="right">REF-018</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[17].client">Client 18</text>
-              <text data-value="sections[17].address">Address 18</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[17].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[17].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[17].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[17].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 19 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[18].title">Section 19</text>
-              <text data-value="sections[18].ref" align="right">REF-019</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[18].client">Client 19</text>
-              <text data-value="sections[18].address">Address 19</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[18].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[18].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[18].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[18].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 20 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[19].title">Section 20</text>
-              <text data-value="sections[19].ref" align="right">REF-020</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[19].client">Client 20</text>
-              <text data-value="sections[19].address">Address 20</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[19].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[19].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[19].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[19].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 21 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[20].title">Section 21</text>
-              <text data-value="sections[20].ref" align="right">REF-021</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[20].client">Client 21</text>
-              <text data-value="sections[20].address">Address 21</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[20].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[20].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[20].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[20].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 22 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[21].title">Section 22</text>
-              <text data-value="sections[21].ref" align="right">REF-022</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[21].client">Client 22</text>
-              <text data-value="sections[21].address">Address 22</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[21].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[21].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[21].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[21].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 23 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[22].title">Section 23</text>
-              <text data-value="sections[22].ref" align="right">REF-023</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[22].client">Client 23</text>
-              <text data-value="sections[22].address">Address 23</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[22].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[22].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[22].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[22].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 24 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[23].title">Section 24</text>
-              <text data-value="sections[23].ref" align="right">REF-024</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[23].client">Client 24</text>
-              <text data-value="sections[23].address">Address 24</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[23].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[23].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[23].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[23].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 25 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[24].title">Section 25</text>
-              <text data-value="sections[24].ref" align="right">REF-025</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[24].client">Client 25</text>
-              <text data-value="sections[24].address">Address 25</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[24].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[24].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[24].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[24].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 26 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[25].title">Section 26</text>
-              <text data-value="sections[25].ref" align="right">REF-026</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[25].client">Client 26</text>
-              <text data-value="sections[25].address">Address 26</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[25].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[25].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[25].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[25].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 27 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[26].title">Section 27</text>
-              <text data-value="sections[26].ref" align="right">REF-027</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[26].client">Client 27</text>
-              <text data-value="sections[26].address">Address 27</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[26].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[26].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[26].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[26].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 28 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[27].title">Section 28</text>
-              <text data-value="sections[27].ref" align="right">REF-028</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[27].client">Client 28</text>
-              <text data-value="sections[27].address">Address 28</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[27].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[27].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[27].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[27].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 29 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[28].title">Section 29</text>
-              <text data-value="sections[28].ref" align="right">REF-029</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[28].client">Client 29</text>
-              <text data-value="sections[28].address">Address 29</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[28].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[28].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[28].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[28].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 30 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[29].title">Section 30</text>
-              <text data-value="sections[29].ref" align="right">REF-030</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[29].client">Client 30</text>
-              <text data-value="sections[29].address">Address 30</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[29].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[29].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[29].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[29].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 31 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[30].title">Section 31</text>
-              <text data-value="sections[30].ref" align="right">REF-031</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[30].client">Client 31</text>
-              <text data-value="sections[30].address">Address 31</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[30].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[30].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[30].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[30].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 32 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[31].title">Section 32</text>
-              <text data-value="sections[31].ref" align="right">REF-032</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[31].client">Client 32</text>
-              <text data-value="sections[31].address">Address 32</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[31].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[31].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[31].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[31].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 33 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[32].title">Section 33</text>
-              <text data-value="sections[32].ref" align="right">REF-033</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[32].client">Client 33</text>
-              <text data-value="sections[32].address">Address 33</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[32].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[32].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[32].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[32].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 34 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[33].title">Section 34</text>
-              <text data-value="sections[33].ref" align="right">REF-034</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[33].client">Client 34</text>
-              <text data-value="sections[33].address">Address 34</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[33].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[33].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[33].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[33].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 35 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[34].title">Section 35</text>
-              <text data-value="sections[34].ref" align="right">REF-035</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[34].client">Client 35</text>
-              <text data-value="sections[34].address">Address 35</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[34].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[34].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[34].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[34].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 36 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[35].title">Section 36</text>
-              <text data-value="sections[35].ref" align="right">REF-036</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[35].client">Client 36</text>
-              <text data-value="sections[35].address">Address 36</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[35].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[35].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[35].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[35].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 37 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[36].title">Section 37</text>
-              <text data-value="sections[36].ref" align="right">REF-037</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[36].client">Client 37</text>
-              <text data-value="sections[36].address">Address 37</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[36].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[36].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[36].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[36].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 38 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[37].title">Section 38</text>
-              <text data-value="sections[37].ref" align="right">REF-038</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[37].client">Client 38</text>
-              <text data-value="sections[37].address">Address 38</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[37].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[37].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[37].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[37].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 39 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[38].title">Section 39</text>
-              <text data-value="sections[38].ref" align="right">REF-039</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[38].client">Client 39</text>
-              <text data-value="sections[38].address">Address 39</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[38].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[38].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[38].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[38].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 40 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[39].title">Section 40</text>
-              <text data-value="sections[39].ref" align="right">REF-040</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[39].client">Client 40</text>
-              <text data-value="sections[39].address">Address 40</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[39].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[39].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[39].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[39].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 41 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[40].title">Section 41</text>
-              <text data-value="sections[40].ref" align="right">REF-041</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[40].client">Client 41</text>
-              <text data-value="sections[40].address">Address 41</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[40].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[40].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[40].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[40].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 42 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[41].title">Section 42</text>
-              <text data-value="sections[41].ref" align="right">REF-042</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[41].client">Client 42</text>
-              <text data-value="sections[41].address">Address 42</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[41].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[41].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[41].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[41].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 43 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[42].title">Section 43</text>
-              <text data-value="sections[42].ref" align="right">REF-043</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[42].client">Client 43</text>
-              <text data-value="sections[42].address">Address 43</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[42].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[42].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[42].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[42].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 44 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[43].title">Section 44</text>
-              <text data-value="sections[43].ref" align="right">REF-044</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[43].client">Client 44</text>
-              <text data-value="sections[43].address">Address 44</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[43].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[43].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[43].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[43].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 45 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[44].title">Section 45</text>
-              <text data-value="sections[44].ref" align="right">REF-045</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[44].client">Client 45</text>
-              <text data-value="sections[44].address">Address 45</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[44].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[44].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[44].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[44].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 46 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[45].title">Section 46</text>
-              <text data-value="sections[45].ref" align="right">REF-046</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[45].client">Client 46</text>
-              <text data-value="sections[45].address">Address 46</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[45].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[45].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[45].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[45].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 47 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[46].title">Section 47</text>
-              <text data-value="sections[46].ref" align="right">REF-047</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[46].client">Client 47</text>
-              <text data-value="sections[46].address">Address 47</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[46].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[46].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[46].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[46].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 48 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[47].title">Section 48</text>
-              <text data-value="sections[47].ref" align="right">REF-048</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[47].client">Client 48</text>
-              <text data-value="sections[47].address">Address 48</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[47].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[47].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[47].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[47].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 49 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[48].title">Section 49</text>
-              <text data-value="sections[48].ref" align="right">REF-049</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[48].client">Client 49</text>
-              <text data-value="sections[48].address">Address 49</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[48].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[48].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[48].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[48].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 50 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[49].title">Section 50</text>
-              <text data-value="sections[49].ref" align="right">REF-050</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[49].client">Client 50</text>
-              <text data-value="sections[49].address">Address 50</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[49].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[49].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[49].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[49].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 51 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[50].title">Section 51</text>
-              <text data-value="sections[50].ref" align="right">REF-051</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[50].client">Client 51</text>
-              <text data-value="sections[50].address">Address 51</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[50].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[50].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[50].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[50].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 52 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[51].title">Section 52</text>
-              <text data-value="sections[51].ref" align="right">REF-052</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[51].client">Client 52</text>
-              <text data-value="sections[51].address">Address 52</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[51].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[51].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[51].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[51].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 53 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[52].title">Section 53</text>
-              <text data-value="sections[52].ref" align="right">REF-053</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[52].client">Client 53</text>
-              <text data-value="sections[52].address">Address 53</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[52].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[52].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[52].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[52].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 54 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[53].title">Section 54</text>
-              <text data-value="sections[53].ref" align="right">REF-054</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[53].client">Client 54</text>
-              <text data-value="sections[53].address">Address 54</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[53].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[53].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[53].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[53].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 55 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[54].title">Section 55</text>
-              <text data-value="sections[54].ref" align="right">REF-055</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[54].client">Client 55</text>
-              <text data-value="sections[54].address">Address 55</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[54].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[54].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[54].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[54].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
-          <!-- section 56 -->
-          <stack gap="m">
-            <flank>
-              <text font="heading" font-size="l" data-value="sections[55].title">Section 56</text>
-              <text data-value="sections[55].ref" align="right">REF-056</text>
-            </flank>
-            <stack gap="xs">
-              <text font="heading" data-value="sections[55].client">Client 56</text>
-              <text data-value="sections[55].address">Address 56</text>
-            </stack>
-            <divider/>
-            <stack data-source="sections[55].items" gap="xs">
-              <flank>
-                <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
-            </stack>
-            <divider/>
-            <flank>
-              <text font="heading">Total</text>
-              <text data-value="sections[55].total" align="right" font="heading">$0.00</text>
-            </flank>
-            <frame data-if="sections[55].paid" background="#dcfce7" padding="xs" radius="xs">
-              <text align="center" color="#166534">Paid</text>
-            </frame>
-            <frame data-if-not="sections[55].paid" background="#fef9c3" padding="xs" radius="xs">
-              <text align="center" color="#854d0e">Pending</text>
-            </frame>
-          </stack>
-          <divider/>
-
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[0].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[0].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[0].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
         </stack>
-        </layout>
-      </page>
-    </pages>
+        <divider/>
+
+        <!-- section 2 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[1].title">Section 2</text>
+            <text data-value="sections[1].ref" align="right">REF-002</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[1].client">Client 2</text>
+            <text data-value="sections[1].address">Address 2</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[1].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[1].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[1].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[1].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 3 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[2].title">Section 3</text>
+            <text data-value="sections[2].ref" align="right">REF-003</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[2].client">Client 3</text>
+            <text data-value="sections[2].address">Address 3</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[2].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[2].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[2].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[2].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 4 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[3].title">Section 4</text>
+            <text data-value="sections[3].ref" align="right">REF-004</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[3].client">Client 4</text>
+            <text data-value="sections[3].address">Address 4</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[3].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[3].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[3].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[3].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 5 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[4].title">Section 5</text>
+            <text data-value="sections[4].ref" align="right">REF-005</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[4].client">Client 5</text>
+            <text data-value="sections[4].address">Address 5</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[4].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[4].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[4].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[4].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 6 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[5].title">Section 6</text>
+            <text data-value="sections[5].ref" align="right">REF-006</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[5].client">Client 6</text>
+            <text data-value="sections[5].address">Address 6</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[5].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[5].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[5].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[5].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 7 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[6].title">Section 7</text>
+            <text data-value="sections[6].ref" align="right">REF-007</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[6].client">Client 7</text>
+            <text data-value="sections[6].address">Address 7</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[6].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[6].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[6].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[6].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 8 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[7].title">Section 8</text>
+            <text data-value="sections[7].ref" align="right">REF-008</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[7].client">Client 8</text>
+            <text data-value="sections[7].address">Address 8</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[7].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[7].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[7].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[7].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 9 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[8].title">Section 9</text>
+            <text data-value="sections[8].ref" align="right">REF-009</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[8].client">Client 9</text>
+            <text data-value="sections[8].address">Address 9</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[8].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[8].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[8].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[8].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 10 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[9].title">Section 10</text>
+            <text data-value="sections[9].ref" align="right">REF-010</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[9].client">Client 10</text>
+            <text data-value="sections[9].address">Address 10</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[9].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[9].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[9].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[9].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 11 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[10].title">Section 11</text>
+            <text data-value="sections[10].ref" align="right">REF-011</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[10].client">Client 11</text>
+            <text data-value="sections[10].address">Address 11</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[10].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[10].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[10].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[10].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 12 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[11].title">Section 12</text>
+            <text data-value="sections[11].ref" align="right">REF-012</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[11].client">Client 12</text>
+            <text data-value="sections[11].address">Address 12</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[11].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[11].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[11].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[11].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 13 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[12].title">Section 13</text>
+            <text data-value="sections[12].ref" align="right">REF-013</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[12].client">Client 13</text>
+            <text data-value="sections[12].address">Address 13</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[12].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[12].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[12].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[12].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 14 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[13].title">Section 14</text>
+            <text data-value="sections[13].ref" align="right">REF-014</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[13].client">Client 14</text>
+            <text data-value="sections[13].address">Address 14</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[13].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[13].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[13].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[13].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 15 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[14].title">Section 15</text>
+            <text data-value="sections[14].ref" align="right">REF-015</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[14].client">Client 15</text>
+            <text data-value="sections[14].address">Address 15</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[14].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[14].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[14].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[14].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 16 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[15].title">Section 16</text>
+            <text data-value="sections[15].ref" align="right">REF-016</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[15].client">Client 16</text>
+            <text data-value="sections[15].address">Address 16</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[15].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[15].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[15].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[15].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 17 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[16].title">Section 17</text>
+            <text data-value="sections[16].ref" align="right">REF-017</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[16].client">Client 17</text>
+            <text data-value="sections[16].address">Address 17</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[16].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[16].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[16].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[16].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 18 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[17].title">Section 18</text>
+            <text data-value="sections[17].ref" align="right">REF-018</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[17].client">Client 18</text>
+            <text data-value="sections[17].address">Address 18</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[17].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[17].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[17].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[17].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 19 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[18].title">Section 19</text>
+            <text data-value="sections[18].ref" align="right">REF-019</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[18].client">Client 19</text>
+            <text data-value="sections[18].address">Address 19</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[18].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[18].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[18].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[18].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 20 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[19].title">Section 20</text>
+            <text data-value="sections[19].ref" align="right">REF-020</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[19].client">Client 20</text>
+            <text data-value="sections[19].address">Address 20</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[19].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[19].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[19].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[19].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 21 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[20].title">Section 21</text>
+            <text data-value="sections[20].ref" align="right">REF-021</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[20].client">Client 21</text>
+            <text data-value="sections[20].address">Address 21</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[20].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[20].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[20].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[20].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 22 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[21].title">Section 22</text>
+            <text data-value="sections[21].ref" align="right">REF-022</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[21].client">Client 22</text>
+            <text data-value="sections[21].address">Address 22</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[21].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[21].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[21].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[21].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 23 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[22].title">Section 23</text>
+            <text data-value="sections[22].ref" align="right">REF-023</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[22].client">Client 23</text>
+            <text data-value="sections[22].address">Address 23</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[22].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[22].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[22].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[22].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 24 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[23].title">Section 24</text>
+            <text data-value="sections[23].ref" align="right">REF-024</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[23].client">Client 24</text>
+            <text data-value="sections[23].address">Address 24</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[23].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[23].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[23].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[23].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 25 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[24].title">Section 25</text>
+            <text data-value="sections[24].ref" align="right">REF-025</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[24].client">Client 25</text>
+            <text data-value="sections[24].address">Address 25</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[24].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[24].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[24].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[24].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 26 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[25].title">Section 26</text>
+            <text data-value="sections[25].ref" align="right">REF-026</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[25].client">Client 26</text>
+            <text data-value="sections[25].address">Address 26</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[25].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[25].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[25].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[25].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 27 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[26].title">Section 27</text>
+            <text data-value="sections[26].ref" align="right">REF-027</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[26].client">Client 27</text>
+            <text data-value="sections[26].address">Address 27</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[26].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[26].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[26].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[26].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 28 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[27].title">Section 28</text>
+            <text data-value="sections[27].ref" align="right">REF-028</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[27].client">Client 28</text>
+            <text data-value="sections[27].address">Address 28</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[27].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[27].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[27].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[27].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 29 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[28].title">Section 29</text>
+            <text data-value="sections[28].ref" align="right">REF-029</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[28].client">Client 29</text>
+            <text data-value="sections[28].address">Address 29</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[28].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[28].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[28].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[28].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 30 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[29].title">Section 30</text>
+            <text data-value="sections[29].ref" align="right">REF-030</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[29].client">Client 30</text>
+            <text data-value="sections[29].address">Address 30</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[29].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[29].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[29].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[29].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 31 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[30].title">Section 31</text>
+            <text data-value="sections[30].ref" align="right">REF-031</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[30].client">Client 31</text>
+            <text data-value="sections[30].address">Address 31</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[30].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[30].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[30].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[30].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 32 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[31].title">Section 32</text>
+            <text data-value="sections[31].ref" align="right">REF-032</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[31].client">Client 32</text>
+            <text data-value="sections[31].address">Address 32</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[31].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[31].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[31].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[31].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 33 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[32].title">Section 33</text>
+            <text data-value="sections[32].ref" align="right">REF-033</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[32].client">Client 33</text>
+            <text data-value="sections[32].address">Address 33</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[32].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[32].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[32].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[32].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 34 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[33].title">Section 34</text>
+            <text data-value="sections[33].ref" align="right">REF-034</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[33].client">Client 34</text>
+            <text data-value="sections[33].address">Address 34</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[33].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[33].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[33].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[33].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 35 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[34].title">Section 35</text>
+            <text data-value="sections[34].ref" align="right">REF-035</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[34].client">Client 35</text>
+            <text data-value="sections[34].address">Address 35</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[34].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[34].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[34].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[34].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 36 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[35].title">Section 36</text>
+            <text data-value="sections[35].ref" align="right">REF-036</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[35].client">Client 36</text>
+            <text data-value="sections[35].address">Address 36</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[35].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[35].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[35].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[35].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 37 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[36].title">Section 37</text>
+            <text data-value="sections[36].ref" align="right">REF-037</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[36].client">Client 37</text>
+            <text data-value="sections[36].address">Address 37</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[36].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[36].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[36].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[36].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 38 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[37].title">Section 38</text>
+            <text data-value="sections[37].ref" align="right">REF-038</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[37].client">Client 38</text>
+            <text data-value="sections[37].address">Address 38</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[37].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[37].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[37].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[37].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 39 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[38].title">Section 39</text>
+            <text data-value="sections[38].ref" align="right">REF-039</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[38].client">Client 39</text>
+            <text data-value="sections[38].address">Address 39</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[38].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[38].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[38].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[38].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 40 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[39].title">Section 40</text>
+            <text data-value="sections[39].ref" align="right">REF-040</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[39].client">Client 40</text>
+            <text data-value="sections[39].address">Address 40</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[39].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[39].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[39].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[39].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 41 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[40].title">Section 41</text>
+            <text data-value="sections[40].ref" align="right">REF-041</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[40].client">Client 41</text>
+            <text data-value="sections[40].address">Address 41</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[40].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[40].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[40].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[40].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 42 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[41].title">Section 42</text>
+            <text data-value="sections[41].ref" align="right">REF-042</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[41].client">Client 42</text>
+            <text data-value="sections[41].address">Address 42</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[41].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[41].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[41].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[41].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 43 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[42].title">Section 43</text>
+            <text data-value="sections[42].ref" align="right">REF-043</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[42].client">Client 43</text>
+            <text data-value="sections[42].address">Address 43</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[42].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[42].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[42].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[42].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 44 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[43].title">Section 44</text>
+            <text data-value="sections[43].ref" align="right">REF-044</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[43].client">Client 44</text>
+            <text data-value="sections[43].address">Address 44</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[43].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[43].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[43].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[43].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 45 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[44].title">Section 45</text>
+            <text data-value="sections[44].ref" align="right">REF-045</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[44].client">Client 45</text>
+            <text data-value="sections[44].address">Address 45</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[44].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[44].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[44].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[44].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 46 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[45].title">Section 46</text>
+            <text data-value="sections[45].ref" align="right">REF-046</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[45].client">Client 46</text>
+            <text data-value="sections[45].address">Address 46</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[45].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[45].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[45].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[45].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 47 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[46].title">Section 47</text>
+            <text data-value="sections[46].ref" align="right">REF-047</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[46].client">Client 47</text>
+            <text data-value="sections[46].address">Address 47</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[46].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[46].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[46].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[46].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 48 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[47].title">Section 48</text>
+            <text data-value="sections[47].ref" align="right">REF-048</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[47].client">Client 48</text>
+            <text data-value="sections[47].address">Address 48</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[47].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[47].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[47].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[47].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 49 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[48].title">Section 49</text>
+            <text data-value="sections[48].ref" align="right">REF-049</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[48].client">Client 49</text>
+            <text data-value="sections[48].address">Address 49</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[48].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[48].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[48].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[48].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 50 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[49].title">Section 50</text>
+            <text data-value="sections[49].ref" align="right">REF-050</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[49].client">Client 50</text>
+            <text data-value="sections[49].address">Address 50</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[49].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[49].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[49].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[49].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 51 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[50].title">Section 51</text>
+            <text data-value="sections[50].ref" align="right">REF-051</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[50].client">Client 51</text>
+            <text data-value="sections[50].address">Address 51</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[50].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[50].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[50].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[50].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 52 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[51].title">Section 52</text>
+            <text data-value="sections[51].ref" align="right">REF-052</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[51].client">Client 52</text>
+            <text data-value="sections[51].address">Address 52</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[51].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[51].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[51].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[51].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 53 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[52].title">Section 53</text>
+            <text data-value="sections[52].ref" align="right">REF-053</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[52].client">Client 53</text>
+            <text data-value="sections[52].address">Address 53</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[52].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[52].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[52].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[52].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 54 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[53].title">Section 54</text>
+            <text data-value="sections[53].ref" align="right">REF-054</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[53].client">Client 54</text>
+            <text data-value="sections[53].address">Address 54</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[53].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[53].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[53].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[53].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 55 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[54].title">Section 55</text>
+            <text data-value="sections[54].ref" align="right">REF-055</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[54].client">Client 55</text>
+            <text data-value="sections[54].address">Address 55</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[54].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[54].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[54].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[54].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+        <!-- section 56 -->
+        <stack gap="m">
+          <flank>
+            <text font="heading" font-size="l" data-value="sections[55].title">Section 56</text>
+            <text data-value="sections[55].ref" align="right">REF-056</text>
+          </flank>
+          <stack gap="xs">
+            <text font="heading" data-value="sections[55].client">Client 56</text>
+            <text data-value="sections[55].address">Address 56</text>
+          </stack>
+          <divider/>
+          <stack data-source="sections[55].items" gap="xs">
+            <flank>
+              <text data-value="description">Item</text>
+              <text data-value="amount" align="right">$0.00</text>
+            </flank>
+          </stack>
+          <divider/>
+          <flank>
+            <text font="heading">Total</text>
+            <text data-value="sections[55].total" align="right" font="heading">$0.00</text>
+          </flank>
+          <frame data-if="sections[55].paid" background="#dcfce7" padding="xs" radius="xs">
+            <text align="center" color="#166534">Paid</text>
+          </frame>
+          <frame data-if-not="sections[55].paid" background="#fef9c3" padding="xs" radius="xs">
+            <text align="center" color="#854d0e">Pending</text>
+          </frame>
+        </stack>
+        <divider/>
+
+      </stack>
+      </layout>
+    </section>
   </document>
 </lpdf>

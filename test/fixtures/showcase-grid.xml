@@ -13,185 +13,183 @@
   </tokens>
   <document size="a4" margin="40pt">
     <meta title="lpdf Showcase — Grid" subject="Layout primitives" />
-    <pages>
 
       <!-- Grid -->
-      <page background="surface">
-        <layout>
-        <stack gap="xl">
+    <section background="surface">
+      <layout>
+      <stack gap="xl">
 
-          <stack gap="xs">
-            <text font-size="xxl" font="Helvetica-Bold" color="primary">Grid</text>
-            <text font-size="m" color="muted">Multi-column layout — children placed into equal-width columns, rows stretch to tallest cell</text>
-          </stack>
-
-          <!-- cols -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">cols</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">cols="2"</text>
-              <grid debug="true" cols="2" gap="s" background="bg" padding="s">
-                <stack background="accent" padding="s"><text font-size="m">Cell 1</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Cell 2</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Cell 3</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Cell 4</text></stack>
-              </grid>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">cols="3"</text>
-              <grid debug="true" cols="3" gap="s" background="bg" padding="s">
-                <stack background="accent" padding="s"><text font-size="m">Cell 1</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Cell 2</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Cell 3</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Cell 4</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Cell 5</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Cell 6</text></stack>
-              </grid>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">cols="4"</text>
-              <grid debug="true" cols="4" gap="s" background="bg" padding="s">
-                <stack background="accent" padding="s"><text font-size="m">Cell 1</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Cell 2</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Cell 3</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Cell 4</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Cell 5</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Cell 6</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Cell 7</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Cell 8</text></stack>
-              </grid>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">cols="3" — rows stretch to tallest cell in the row</text>
-              <grid debug="true" cols="3" gap="s" background="bg" padding="s">
-                <stack background="accent" padding="s"><text font-size="m">Short</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Taller</text><text font-size="m">cell</text><text font-size="m">content</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Short</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Short</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Short</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Short</text></stack>
-              </grid>
-            </stack>
-          </stack>
-
-          <!-- col-width (auto-fit) -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">col-width (auto-fit)</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">col-width="100pt" — fit as many ≥100pt columns as possible</text>
-              <grid debug="true" col-width="100pt" gap="s" background="bg" padding="s">
-                <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Delta</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Epsilon</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Zeta</text></stack>
-              </grid>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">col-width="150pt" — fewer, wider columns</text>
-              <grid debug="true" col-width="150pt" gap="s" background="bg" padding="s">
-                <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Delta</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Epsilon</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Zeta</text></stack>
-              </grid>
-            </stack>
-          </stack>
-
-          <!-- gap -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">gap</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">gap="xs"</text>
-              <grid debug="true" cols="3" gap="xs" background="bg" padding="s">
-                <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
-              </grid>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">gap="m"</text>
-              <grid debug="true" cols="3" gap="m" background="bg" padding="s">
-                <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
-              </grid>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">gap="xl"</text>
-              <grid debug="true" cols="3" gap="xl" background="bg" padding="s">
-                <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
-              </grid>
-            </stack>
-          </stack>
-
-          <!-- padding -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">padding</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">padding="xs"</text>
-              <grid debug="true" cols="3" gap="s" padding="xs" background="bg">
-                <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
-              </grid>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">padding="l"</text>
-              <grid debug="true" cols="3" gap="s" padding="l" background="bg">
-                <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
-              </grid>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">padding="20pt 8pt" (vertical · horizontal)</text>
-              <grid debug="true" cols="3" gap="s" padding="20pt 8pt" background="bg">
-                <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
-              </grid>
-            </stack>
-          </stack>
-
-          <!-- border · radius -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">border · radius</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">border="xs rule" radius="xs"</text>
-              <grid cols="3" gap="s" padding="s" border="xs rule" radius="xs">
-                <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
-              </grid>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">border="s primary" radius="l"</text>
-              <grid cols="3" gap="s" padding="m" border="s primary" radius="l">
-                <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
-                <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
-              </grid>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">background="accent" radius="m" padding="m"</text>
-              <grid cols="3" gap="s" background="accent" radius="m" padding="m">
-                <stack background="surface" padding="s" radius="xs"><text font-size="m">Alpha</text></stack>
-                <stack background="surface" padding="s" radius="xs"><text font-size="m">Beta</text></stack>
-                <stack background="surface" padding="s" radius="xs"><text font-size="m">Gamma</text></stack>
-              </grid>
-            </stack>
-          </stack>
-
+        <stack gap="xs">
+          <text font-size="xxl" font="Helvetica-Bold" color="primary">Grid</text>
+          <text font-size="m" color="muted">Multi-column layout — children placed into equal-width columns, rows stretch to tallest cell</text>
         </stack>
-        </layout>
-      </page>
 
-    </pages>
+        <!-- cols -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">cols</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">cols="2"</text>
+            <grid debug="true" cols="2" gap="s" background="bg" padding="s">
+              <stack background="accent" padding="s"><text font-size="m">Cell 1</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Cell 2</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Cell 3</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Cell 4</text></stack>
+            </grid>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">cols="3"</text>
+            <grid debug="true" cols="3" gap="s" background="bg" padding="s">
+              <stack background="accent" padding="s"><text font-size="m">Cell 1</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Cell 2</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Cell 3</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Cell 4</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Cell 5</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Cell 6</text></stack>
+            </grid>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">cols="4"</text>
+            <grid debug="true" cols="4" gap="s" background="bg" padding="s">
+              <stack background="accent" padding="s"><text font-size="m">Cell 1</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Cell 2</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Cell 3</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Cell 4</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Cell 5</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Cell 6</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Cell 7</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Cell 8</text></stack>
+            </grid>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">cols="3" — rows stretch to tallest cell in the row</text>
+            <grid debug="true" cols="3" gap="s" background="bg" padding="s">
+              <stack background="accent" padding="s"><text font-size="m">Short</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Taller</text><text font-size="m">cell</text><text font-size="m">content</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Short</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Short</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Short</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Short</text></stack>
+            </grid>
+          </stack>
+        </stack>
+
+        <!-- col-width (auto-fit) -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">col-width (auto-fit)</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">col-width="100pt" — fit as many ≥100pt columns as possible</text>
+            <grid debug="true" col-width="100pt" gap="s" background="bg" padding="s">
+              <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Delta</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Epsilon</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Zeta</text></stack>
+            </grid>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">col-width="150pt" — fewer, wider columns</text>
+            <grid debug="true" col-width="150pt" gap="s" background="bg" padding="s">
+              <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Delta</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Epsilon</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Zeta</text></stack>
+            </grid>
+          </stack>
+        </stack>
+
+        <!-- gap -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">gap</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">gap="xs"</text>
+            <grid debug="true" cols="3" gap="xs" background="bg" padding="s">
+              <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
+            </grid>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">gap="m"</text>
+            <grid debug="true" cols="3" gap="m" background="bg" padding="s">
+              <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
+            </grid>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">gap="xl"</text>
+            <grid debug="true" cols="3" gap="xl" background="bg" padding="s">
+              <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
+            </grid>
+          </stack>
+        </stack>
+
+        <!-- padding -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">padding</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">padding="xs"</text>
+            <grid debug="true" cols="3" gap="s" padding="xs" background="bg">
+              <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
+            </grid>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">padding="l"</text>
+            <grid debug="true" cols="3" gap="s" padding="l" background="bg">
+              <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
+            </grid>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">padding="20pt 8pt" (vertical · horizontal)</text>
+            <grid debug="true" cols="3" gap="s" padding="20pt 8pt" background="bg">
+              <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
+            </grid>
+          </stack>
+        </stack>
+
+        <!-- border · radius -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">border · radius</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">border="xs rule" radius="xs"</text>
+            <grid cols="3" gap="s" padding="s" border="xs rule" radius="xs">
+              <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
+            </grid>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">border="s primary" radius="l"</text>
+            <grid cols="3" gap="s" padding="m" border="s primary" radius="l">
+              <stack background="accent" padding="s"><text font-size="m">Alpha</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Beta</text></stack>
+              <stack background="accent" padding="s"><text font-size="m">Gamma</text></stack>
+            </grid>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">background="accent" radius="m" padding="m"</text>
+            <grid cols="3" gap="s" background="accent" radius="m" padding="m">
+              <stack background="surface" padding="s" radius="xs"><text font-size="m">Alpha</text></stack>
+              <stack background="surface" padding="s" radius="xs"><text font-size="m">Beta</text></stack>
+              <stack background="surface" padding="s" radius="xs"><text font-size="m">Gamma</text></stack>
+            </grid>
+          </stack>
+        </stack>
+
+      </stack>
+      </layout>
+    </section>
+
   </document>
 </lpdf>

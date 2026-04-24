@@ -82,9 +82,29 @@ pub fn apply(doc: &mut Document, json_data: &str) -> Result<(), String> {
     let root: Value = serde_json::from_str(json_data)
         .map_err(|e| format!("data JSON parse error: {e}"))?;
 
-    for page in &mut doc.pages {
-        let children = std::mem::take(&mut page.children);
-        page.children = apply_nodes(children, &[], &root);
+    for section in &mut doc.sections {
+        for sc in &mut section.children {
+            if let crate::parse::SectionChild::Layout(layout) = sc {
+                // Expand the flat content list (data-source loops can expand nodes).
+                let content_nodes = std::mem::take(&mut layout.children);
+                let mut new_children = Vec::new();
+                for lc in content_nodes {
+                    match lc {
+                        crate::parse::LayoutChild::Content(node) => {
+                            let mut out = Vec::new();
+                            apply_single_node(node, &[], &root, &mut out);
+                            for n in out { new_children.push(crate::parse::LayoutChild::Content(n)); }
+                        }
+                        crate::parse::LayoutChild::Region(mut region) => {
+                            let children = std::mem::take(&mut region.children);
+                            region.children = apply_nodes(children, &[], &root);
+                            new_children.push(crate::parse::LayoutChild::Region(region));
+                        }
+                    }
+                }
+                layout.children = new_children;
+            }
+        }
     }
 
     Ok(())
@@ -179,7 +199,7 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, out: &mut Vec<N
 mod tests {
     use super::*;
     use crate::parse::{
-        Align, BarcodeEcLevel, DataAttrs, Direction, HeightMode, Justify, Meta, NodeKind, Page,
+        Align, BarcodeEcLevel, DataAttrs, Direction, HeightMode, Justify, Meta, NodeKind,
         Paginate, Repeat, TextAlign,
     };
     use std::collections::HashMap;
@@ -255,19 +275,36 @@ mod tests {
     }
 
     fn make_doc(children: Vec<Node>) -> Document {
+        use crate::parse::{Section, SectionChild, Layout, LayoutChild, SectionOptions};
+        let layout = Layout {
+            children: children.into_iter().map(LayoutChild::Content).collect(),
+        };
         Document {
             meta: Meta::default(),
             fonts: HashMap::new(),
             images: HashMap::new(),
-            pages: vec![Page {
-                width: 595.28,
-                height: 841.89,
-                margin: [0.0; 4],
-                background: None,
-                debug: false,
-                children,
+            page_width: 595.28,
+            page_height: 841.89,
+            margin: [0.0; 4],
+            background: None,
+            debug: false,
+            sections: vec![Section {
+                children: vec![SectionChild::Layout(layout)],
+                options: SectionOptions { size: Some((595.28, 841.89)), ..SectionOptions::default() },
             }],
             font_widths: HashMap::new(),
+        }
+    }
+
+    /// Extract the flat content nodes from the first section's first layout child.
+    fn layout_children(doc: &Document) -> Vec<Node> {
+        use crate::parse::{SectionChild, LayoutChild};
+        if let SectionChild::Layout(ref l) = doc.sections[0].children[0] {
+            l.children.iter().filter_map(|lc| {
+                if let LayoutChild::Content(n) = lc { Some(n.clone()) } else { None }
+            }).collect()
+        } else {
+            Vec::new()
         }
     }
 
@@ -279,7 +316,7 @@ mod tests {
         n.data_attrs = Some(Box::new(DataAttrs { data_value: Some("name".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
         apply(&mut doc, r#"{"name":"Acme Inc"}"#).unwrap();
-        assert_eq!(doc.pages[0].children[0].text_runs[0].text, "Acme Inc");
+        assert_eq!(layout_children(&doc)[0].text_runs[0].text, "Acme Inc");
     }
 
     #[test]
@@ -288,7 +325,7 @@ mod tests {
         n.data_attrs = Some(Box::new(DataAttrs { data_value: Some("customer.name".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
         apply(&mut doc, r#"{"customer":{"name":"Acme Inc"}}"#).unwrap();
-        assert_eq!(doc.pages[0].children[0].text_runs[0].text, "Acme Inc");
+        assert_eq!(layout_children(&doc)[0].text_runs[0].text, "Acme Inc");
     }
 
     #[test]
@@ -297,7 +334,7 @@ mod tests {
         n.data_attrs = Some(Box::new(DataAttrs { data_value: Some("nonexistent".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
         apply(&mut doc, r#"{}"#).unwrap();
-        assert!(doc.pages[0].children[0].text_runs.is_empty());
+        assert!(layout_children(&doc)[0].text_runs.is_empty());
     }
 
     #[test]
@@ -313,10 +350,11 @@ mod tests {
             r#"{"items":[{"label":"A"},{"label":"B"},{"label":"C"}]}"#,
         )
         .unwrap();
-        assert_eq!(doc.pages[0].children.len(), 3);
-        assert_eq!(doc.pages[0].children[0].children[0].text_runs[0].text, "A");
-        assert_eq!(doc.pages[0].children[1].children[0].text_runs[0].text, "B");
-        assert_eq!(doc.pages[0].children[2].children[0].text_runs[0].text, "C");
+        let ch = layout_children(&doc);
+        assert_eq!(ch.len(), 3);
+        assert_eq!(ch[0].children[0].text_runs[0].text, "A");
+        assert_eq!(ch[1].children[0].text_runs[0].text, "B");
+        assert_eq!(ch[2].children[0].text_runs[0].text, "C");
     }
 
     #[test]
@@ -326,7 +364,7 @@ mod tests {
         container.children = vec![text_node("item")];
         let mut doc = make_doc(vec![container]);
         apply(&mut doc, r#"{"items":[]}"#).unwrap();
-        assert_eq!(doc.pages[0].children.len(), 0);
+        assert_eq!(layout_children(&doc).len(), 0);
     }
 
     #[test]
@@ -335,7 +373,7 @@ mod tests {
         n.data_attrs = Some(Box::new(DataAttrs { data_if: Some("isPremium".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
         apply(&mut doc, r#"{"isPremium":true}"#).unwrap();
-        assert_eq!(doc.pages[0].children.len(), 1);
+        assert_eq!(layout_children(&doc).len(), 1);
     }
 
     #[test]
@@ -344,7 +382,7 @@ mod tests {
         n.data_attrs = Some(Box::new(DataAttrs { data_if: Some("isPremium".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
         apply(&mut doc, r#"{"isPremium":false}"#).unwrap();
-        assert_eq!(doc.pages[0].children.len(), 0);
+        assert_eq!(layout_children(&doc).len(), 0);
     }
 
     #[test]
@@ -353,7 +391,7 @@ mod tests {
         n.data_attrs = Some(Box::new(DataAttrs { data_if_not: Some("isPaid".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
         apply(&mut doc, r#"{"isPaid":false}"#).unwrap();
-        assert_eq!(doc.pages[0].children.len(), 1);
+        assert_eq!(layout_children(&doc).len(), 1);
     }
 
     #[test]
@@ -362,7 +400,7 @@ mod tests {
         n.data_attrs = Some(Box::new(DataAttrs { data_if_not: Some("isPaid".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
         apply(&mut doc, r#"{"isPaid":true}"#).unwrap();
-        assert_eq!(doc.pages[0].children.len(), 0);
+        assert_eq!(layout_children(&doc).len(), 0);
     }
 
     #[test]
@@ -378,9 +416,10 @@ mod tests {
             r#"{"items":[{"isHighlighted":true},{"isHighlighted":false}]}"#,
         )
         .unwrap();
-        assert_eq!(doc.pages[0].children.len(), 2);
-        assert_eq!(doc.pages[0].children[0].children.len(), 1); // flag shown
-        assert_eq!(doc.pages[0].children[1].children.len(), 0); // flag hidden
+        let ch = layout_children(&doc);
+        assert_eq!(ch.len(), 2);
+        assert_eq!(ch[0].children.len(), 1); // flag shown
+        assert_eq!(ch[1].children.len(), 0); // flag hidden
     }
 
     #[test]
@@ -396,14 +435,9 @@ mod tests {
             r#"{"items":[{"description":"Consulting"},{"description":"Design"}]}"#,
         )
         .unwrap();
-        assert_eq!(
-            doc.pages[0].children[0].children[0].text_runs[0].text,
-            "Consulting"
-        );
-        assert_eq!(
-            doc.pages[0].children[1].children[0].text_runs[0].text,
-            "Design"
-        );
+        let ch = layout_children(&doc);
+        assert_eq!(ch[0].children[0].text_runs[0].text, "Consulting");
+        assert_eq!(ch[1].children[0].text_runs[0].text, "Design");
     }
 
     #[test]
@@ -431,7 +465,8 @@ mod tests {
         )
         .unwrap();
         // outer_loop → 1 item → outer_container → inner_loop → 1 note → inner_template → inner_child
-        let outer_item     = &doc.pages[0].children[0]; // outer_loop template (Stack)
+        let ch = layout_children(&doc);
+        let outer_item     = &ch[0]; // outer_loop template (Stack)
         let outer_cont     = &outer_item.children[0];   // outer_container
         let inner_expanded = &outer_cont.children[0];   // inner_loop template clone
         let inner_templ    = &inner_expanded.children[0]; // inner_template
@@ -453,7 +488,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            doc.pages[0].children[0].children[0].text_runs[0].text,
+            layout_children(&doc)[0].children[0].text_runs[0].text,
             "Acme Inc"
         );
     }
@@ -465,7 +500,7 @@ mod tests {
         n.data_attrs = Some(Box::new(DataAttrs { data_value: Some("../../../name".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
         apply(&mut doc, r#"{"name":"Safe"}"#).unwrap();
-        assert_eq!(doc.pages[0].children[0].text_runs[0].text, "Safe");
+        assert_eq!(layout_children(&doc)[0].text_runs[0].text, "Safe");
     }
 
     #[test]
@@ -473,7 +508,7 @@ mod tests {
         let n = text_node("Static text");
         let mut doc = make_doc(vec![n]);
         apply(&mut doc, r#"{"name":"Acme"}"#).unwrap();
-        assert_eq!(doc.pages[0].children[0].text_runs[0].text, "Static text");
+        assert_eq!(layout_children(&doc)[0].text_runs[0].text, "Static text");
     }
 
     #[test]

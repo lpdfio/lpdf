@@ -1,0 +1,1012 @@
+%PDF-1.7
+%€€€€
+
+1 0 obj
+<<
+  /Type /Catalog
+  /Pages 3 0 R
+>>
+endobj
+
+2 0 obj
+<<
+  /Title (Benchmark Fixture S)
+  /Producer (lpdf.io (free))
+>>
+endobj
+
+3 0 obj
+<<
+  /Type /Pages
+  /Kids [4 0 R 5 0 R 6 0 R 7 0 R]
+  /Count 4
+>>
+endobj
+
+4 0 obj
+<<
+  /Type /Page
+  /Parent 3 0 R
+  /MediaBox [0 0 595.28 841.89]
+  /Resources <<
+    /Font <<
+      /F0 16 0 R
+      /F1 17 0 R
+    >>
+  >>
+  /Contents 8 0 R
+  /Annots [12 0 R]
+>>
+endobj
+
+5 0 obj
+<<
+  /Type /Page
+  /Parent 3 0 R
+  /MediaBox [0 0 595.28 841.89]
+  /Resources <<
+    /Font <<
+      /F0 16 0 R
+      /F1 17 0 R
+    >>
+  >>
+  /Contents 9 0 R
+  /Annots [13 0 R]
+>>
+endobj
+
+6 0 obj
+<<
+  /Type /Page
+  /Parent 3 0 R
+  /MediaBox [0 0 595.28 841.89]
+  /Resources <<
+    /Font <<
+      /F0 16 0 R
+      /F1 17 0 R
+    >>
+  >>
+  /Contents 10 0 R
+  /Annots [14 0 R]
+>>
+endobj
+
+7 0 obj
+<<
+  /Type /Page
+  /Parent 3 0 R
+  /MediaBox [0 0 595.28 841.89]
+  /Resources <<
+    /Font <<
+      /F0 16 0 R
+      /F1 17 0 R
+    >>
+  >>
+  /Contents 11 0 R
+  /Annots [15 0 R]
+>>
+endobj
+
+8 0 obj
+<<
+  /Length 4292
+>>
+stream
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 20 Tf
+1 0 0 1 40 781.89 Tm
+(Page 1 1) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 20 Tf
+1 0 0 1 40 743.89 Tm
+(Section 1 2) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 720.89 Tm
+(Paragraph 3. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 707.69 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 694.49 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 673.29004 Tm
+(Paragraph 4. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 660.09 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 646.89 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 625.69 Tm
+(Paragraph 5. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 612.49 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 599.29004 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 40 572.09 Tm
+(Field 6) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 517.979 572.09 Tm
+(Value 6) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 40 544.89 Tm
+(Field 7) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 517.979 544.89 Tm
+(Value 7) Tj
+ET
+q
+0 0 0 RG
+1 w
+40 528.19 m
+555.28 528.19 l
+S
+Q
+q
+0.94509804 0.9607843 0.9764706 rg
+0.8862745 0.9098039 0.9411765 RG
+0.5 w
+44 460.89 m
+551.28 460.89 l
+553.48926 460.89 555.28 462.68082 555.28 464.89 c
+555.28 509.69 l
+555.28 511.8992 553.48926 513.69 551.28 513.69 c
+44 513.69 l
+41.790802 513.69 40 511.8992 40 509.69 c
+40 464.89 l
+40 462.68082 41.790802 460.89 44 460.89 c
+h
+B
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 48 494.69 Tm
+(Callout 8) Tj
+ET
+BT
+0.39215687 0.45490196 0.54509807 rg
+/F0 9 Tf
+1 0 0 1 48 481.49 Tm
+(This callout box highlights item 8 in the document flow and exercises background, border, padding, and radius rendering in) Tj
+ET
+BT
+0.39215687 0.45490196 0.54509807 rg
+/F0 9 Tf
+1 0 0 1 48 470.69 Tm
+(the layout engine.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 20 Tf
+1 0 0 1 40 426.89 Tm
+(Section 2 9) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 403.89 Tm
+(Paragraph 10. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 390.69 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 377.49002 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 356.29 Tm
+(Paragraph 11. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 343.09 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 329.89 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 308.69 Tm
+(Paragraph 12. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 295.49 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 282.28998 Tm
+(the available width.) Tj
+ET
+BT
+0.6666667 0.6666667 0.6666667 rg
+/F0 8 Tf
+1 0 0 1 531.25604 829.89 Tm
+(made with lpdf.io) Tj
+ET
+endstream
+endobj
+
+9 0 obj
+<<
+  /Length 4308
+>>
+stream
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 20 Tf
+1 0 0 1 40 781.89 Tm
+(Page 2 13) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 20 Tf
+1 0 0 1 40 743.89 Tm
+(Section 1 14) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 720.89 Tm
+(Paragraph 15. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 707.69 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 694.49 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 673.29004 Tm
+(Paragraph 16. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 660.09 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 646.89 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 625.69 Tm
+(Paragraph 17. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 612.49 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 599.29004 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 40 572.09 Tm
+(Field 18) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 511.86304 572.09 Tm
+(Value 18) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 40 544.89 Tm
+(Field 19) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 511.86304 544.89 Tm
+(Value 19) Tj
+ET
+q
+0 0 0 RG
+1 w
+40 528.19 m
+555.28 528.19 l
+S
+Q
+q
+0.94509804 0.9607843 0.9764706 rg
+0.8862745 0.9098039 0.9411765 RG
+0.5 w
+44 460.89 m
+551.28 460.89 l
+553.48926 460.89 555.28 462.68082 555.28 464.89 c
+555.28 509.69 l
+555.28 511.8992 553.48926 513.69 551.28 513.69 c
+44 513.69 l
+41.790802 513.69 40 511.8992 40 509.69 c
+40 464.89 l
+40 462.68082 41.790802 460.89 44 460.89 c
+h
+B
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 48 494.69 Tm
+(Callout 20) Tj
+ET
+BT
+0.39215687 0.45490196 0.54509807 rg
+/F0 9 Tf
+1 0 0 1 48 481.49 Tm
+(This callout box highlights item 20 in the document flow and exercises background, border, padding, and radius rendering in) Tj
+ET
+BT
+0.39215687 0.45490196 0.54509807 rg
+/F0 9 Tf
+1 0 0 1 48 470.69 Tm
+(the layout engine.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 20 Tf
+1 0 0 1 40 426.89 Tm
+(Section 2 21) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 403.89 Tm
+(Paragraph 22. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 390.69 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 377.49002 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 356.29 Tm
+(Paragraph 23. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 343.09 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 329.89 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 308.69 Tm
+(Paragraph 24. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 295.49 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 282.28998 Tm
+(the available width.) Tj
+ET
+BT
+0.6666667 0.6666667 0.6666667 rg
+/F0 8 Tf
+1 0 0 1 531.25604 829.89 Tm
+(made with lpdf.io) Tj
+ET
+endstream
+endobj
+
+10 0 obj
+<<
+  /Length 4308
+>>
+stream
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 20 Tf
+1 0 0 1 40 781.89 Tm
+(Page 3 25) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 20 Tf
+1 0 0 1 40 743.89 Tm
+(Section 1 26) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 720.89 Tm
+(Paragraph 27. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 707.69 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 694.49 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 673.29004 Tm
+(Paragraph 28. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 660.09 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 646.89 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 625.69 Tm
+(Paragraph 29. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 612.49 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 599.29004 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 40 572.09 Tm
+(Field 30) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 511.86304 572.09 Tm
+(Value 30) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 40 544.89 Tm
+(Field 31) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 511.86304 544.89 Tm
+(Value 31) Tj
+ET
+q
+0 0 0 RG
+1 w
+40 528.19 m
+555.28 528.19 l
+S
+Q
+q
+0.94509804 0.9607843 0.9764706 rg
+0.8862745 0.9098039 0.9411765 RG
+0.5 w
+44 460.89 m
+551.28 460.89 l
+553.48926 460.89 555.28 462.68082 555.28 464.89 c
+555.28 509.69 l
+555.28 511.8992 553.48926 513.69 551.28 513.69 c
+44 513.69 l
+41.790802 513.69 40 511.8992 40 509.69 c
+40 464.89 l
+40 462.68082 41.790802 460.89 44 460.89 c
+h
+B
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 48 494.69 Tm
+(Callout 32) Tj
+ET
+BT
+0.39215687 0.45490196 0.54509807 rg
+/F0 9 Tf
+1 0 0 1 48 481.49 Tm
+(This callout box highlights item 32 in the document flow and exercises background, border, padding, and radius rendering in) Tj
+ET
+BT
+0.39215687 0.45490196 0.54509807 rg
+/F0 9 Tf
+1 0 0 1 48 470.69 Tm
+(the layout engine.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 20 Tf
+1 0 0 1 40 426.89 Tm
+(Section 2 33) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 403.89 Tm
+(Paragraph 34. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 390.69 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 377.49002 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 356.29 Tm
+(Paragraph 35. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 343.09 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 329.89 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 308.69 Tm
+(Paragraph 36. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 295.49 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 282.28998 Tm
+(the available width.) Tj
+ET
+BT
+0.6666667 0.6666667 0.6666667 rg
+/F0 8 Tf
+1 0 0 1 531.25604 829.89 Tm
+(made with lpdf.io) Tj
+ET
+endstream
+endobj
+
+11 0 obj
+<<
+  /Length 4308
+>>
+stream
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 20 Tf
+1 0 0 1 40 781.89 Tm
+(Page 4 37) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 20 Tf
+1 0 0 1 40 743.89 Tm
+(Section 1 38) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 720.89 Tm
+(Paragraph 39. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 707.69 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 694.49 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 673.29004 Tm
+(Paragraph 40. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 660.09 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 646.89 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 625.69 Tm
+(Paragraph 41. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 612.49 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 599.29004 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 40 572.09 Tm
+(Field 42) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 511.86304 572.09 Tm
+(Value 42) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 40 544.89 Tm
+(Field 43) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 511.86304 544.89 Tm
+(Value 43) Tj
+ET
+q
+0 0 0 RG
+1 w
+40 528.19 m
+555.28 528.19 l
+S
+Q
+q
+0.94509804 0.9607843 0.9764706 rg
+0.8862745 0.9098039 0.9411765 RG
+0.5 w
+44 460.89 m
+551.28 460.89 l
+553.48926 460.89 555.28 462.68082 555.28 464.89 c
+555.28 509.69 l
+555.28 511.8992 553.48926 513.69 551.28 513.69 c
+44 513.69 l
+41.790802 513.69 40 511.8992 40 509.69 c
+40 464.89 l
+40 462.68082 41.790802 460.89 44 460.89 c
+h
+B
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 48 494.69 Tm
+(Callout 44) Tj
+ET
+BT
+0.39215687 0.45490196 0.54509807 rg
+/F0 9 Tf
+1 0 0 1 48 481.49 Tm
+(This callout box highlights item 44 in the document flow and exercises background, border, padding, and radius rendering in) Tj
+ET
+BT
+0.39215687 0.45490196 0.54509807 rg
+/F0 9 Tf
+1 0 0 1 48 470.69 Tm
+(the layout engine.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 20 Tf
+1 0 0 1 40 426.89 Tm
+(Section 2 45) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 403.89 Tm
+(Paragraph 46. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 390.69 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 377.49002 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 356.29 Tm
+(Paragraph 47. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 343.09 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 329.89 Tm
+(the available width.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 308.69 Tm
+(Paragraph 48. The layout engine processes each node in the document tree, computing sizes and) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 295.49 Tm
+(positions. Each text node is measured using font advance-width tables and line-breaking rules applied to) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 40 282.28998 Tm
+(the available width.) Tj
+ET
+BT
+0.6666667 0.6666667 0.6666667 rg
+/F0 8 Tf
+1 0 0 1 531.25604 829.89 Tm
+(made with lpdf.io) Tj
+ET
+endstream
+endobj
+
+12 0 obj
+<<
+  /Type /Annot
+  /Subtype /Link
+  /Rect [531.25604 829.89 591.28 837.89]
+  /Border [0 0 0]
+  /A <<
+    /Type /Action
+    /S /URI
+    /URI (https://lpdf.io)
+  >>
+>>
+endobj
+
+13 0 obj
+<<
+  /Type /Annot
+  /Subtype /Link
+  /Rect [531.25604 829.89 591.28 837.89]
+  /Border [0 0 0]
+  /A <<
+    /Type /Action
+    /S /URI
+    /URI (https://lpdf.io)
+  >>
+>>
+endobj
+
+14 0 obj
+<<
+  /Type /Annot
+  /Subtype /Link
+  /Rect [531.25604 829.89 591.28 837.89]
+  /Border [0 0 0]
+  /A <<
+    /Type /Action
+    /S /URI
+    /URI (https://lpdf.io)
+  >>
+>>
+endobj
+
+15 0 obj
+<<
+  /Type /Annot
+  /Subtype /Link
+  /Rect [531.25604 829.89 591.28 837.89]
+  /Border [0 0 0]
+  /A <<
+    /Type /Action
+    /S /URI
+    /URI (https://lpdf.io)
+  >>
+>>
+endobj
+
+16 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+17 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica-Bold
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+xref
+0 18
+0000000000 65535 f
+0000000016 00000 n
+0000000070 00000 n
+0000000152 00000 n
+0000000234 00000 n
+0000000430 00000 n
+0000000626 00000 n
+0000000823 00000 n
+0000001020 00000 n
+0000005367 00000 n
+0000009730 00000 n
+0000014094 00000 n
+0000018458 00000 n
+0000018642 00000 n
+0000018826 00000 n
+0000019010 00000 n
+0000019194 00000 n
+0000019301 00000 n
+trailer
+<<
+  /Size 18
+  /Root 1 0 R
+  /Info 2 0 R
+>>
+startxref
+19413
+%%EOF

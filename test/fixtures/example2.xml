@@ -13,104 +13,102 @@
   </tokens>
   <document size="a4" margin="0pt">
     <meta title="Resume — Jane Doe" author="Jane Doe" />
-    <pages>
-      <page margin="0pt 18pt 0pt 0pt">
-        <layout>
-        <split gap="0pt" align="stretch" height="full">
+    <section margin="0pt 18pt 0pt 0pt">
+      <layout>
+      <split gap="0pt" align="stretch" height="full">
 
-          <!-- sidebar -->
-          <stack width="170pt" background="surface-alt" height="full">
-            <stack gap="l" padding="l">
+        <!-- sidebar -->
+        <stack width="170pt" background="surface-alt" height="full">
+          <stack gap="l" padding="l">
 
-              <!-- name -->
-              <stack gap="xs">
-                <text font-size="xl" font="Helvetica-Bold" color="#1763cf">Jane Doe</text>
-                <text font-size="s" color="#737373">Senior Software Engineer</text>
-              </stack>
-
-              <divider color="#c8d6ee" thickness="xs" />
-
-              <!-- contact -->
-              <stack gap="s">
-                <text font-size="s" font="Helvetica-Bold">Contact</text>
-                <text font-size="s" color="#737373">jane@example.com</text>
-                <text font-size="s" color="#737373">+1 555 000 1234</text>
-                <text font-size="s" color="#737373">github.com/janedoe</text>
-                <text font-size="s" color="#737373">San Francisco, CA</text>
-              </stack>
-
-              <divider color="#c8d6ee" thickness="xs" />
-
-              <!-- skills -->
-              <stack gap="s">
-                <text font-size="s" font="Helvetica-Bold">Skills</text>
-                <text font-size="s" color="#737373">Rust · WebAssembly</text>
-                <text font-size="s" color="#737373">TypeScript · Node.js</text>
-                <text font-size="s" color="#737373">PostgreSQL · Redis</text>
-                <text font-size="s" color="#737373">Docker · Kubernetes</text>
-              </stack>
-
-              <divider color="#c8d6ee" thickness="xs" />
-
-              <!-- education -->
-              <stack gap="s">
-                <text font-size="s" font="Helvetica-Bold">Education</text>
-                <text font-size="s" font="Helvetica-Bold">B.S. Computer Science</text>
-                <text font-size="s" color="#737373">MIT, 2014</text>
-              </stack>
-
+            <!-- name -->
+            <stack gap="xs">
+              <text font-size="xl" font="Helvetica-Bold" color="#1763cf">Jane Doe</text>
+              <text font-size="s" color="#737373">Senior Software Engineer</text>
             </stack>
-          </stack>
 
-          <!-- main content -->
-          <stack padding="l" gap="l" height="fill">
+            <divider color="#c8d6ee" thickness="xs" />
 
-            <!-- profile -->
+            <!-- contact -->
             <stack gap="s">
-              <text font-size="l" font="Helvetica-Bold">Profile</text>
-              <divider color="#1763cf" thickness="xs" />
-              <text font-size="m">Software engineer with 10 years of experience building high-performance distributed systems. Specialising in Rust, WebAssembly, and developer tooling. Proven track record of leading cross-functional teams and shipping products used by millions of people worldwide.</text>
+              <text font-size="s" font="Helvetica-Bold">Contact</text>
+              <text font-size="s" color="#737373">jane@example.com</text>
+              <text font-size="s" color="#737373">+1 555 000 1234</text>
+              <text font-size="s" color="#737373">github.com/janedoe</text>
+              <text font-size="s" color="#737373">San Francisco, CA</text>
             </stack>
 
-            <!-- experience -->
-            <stack gap="m">
-              <text font-size="l" font="Helvetica-Bold">Experience</text>
-              <divider color="#1763cf" thickness="xs" />
+            <divider color="#c8d6ee" thickness="xs" />
 
-              <!-- job 1 -->
-              <stack gap="xs">
-                <flank gap="m" align="center" end="true">
-                  <text font-size="m" font="Helvetica-Bold">Staff Engineer — Acme Corp</text>
-                  <text font-size="s" color="#737373">2021 – Present</text>
-                </flank>
-                <text font-size="s" color="#737373">Led architecture of a real-time data pipeline processing 50 million events per day. Reduced p99 latency by 40% through custom memory allocators and lock-free queues written in Rust.</text>
-              </stack>
+            <!-- skills -->
+            <stack gap="s">
+              <text font-size="s" font="Helvetica-Bold">Skills</text>
+              <text font-size="s" color="#737373">Rust · WebAssembly</text>
+              <text font-size="s" color="#737373">TypeScript · Node.js</text>
+              <text font-size="s" color="#737373">PostgreSQL · Redis</text>
+              <text font-size="s" color="#737373">Docker · Kubernetes</text>
+            </stack>
 
-              <!-- job 2 -->
-              <stack gap="xs">
-                <flank gap="m" align="center" end="true">
-                  <text font-size="m" font="Helvetica-Bold">Senior Engineer — Bright Labs</text>
-                  <text font-size="s" color="#737373">2017 – 2021</text>
-                </flank>
-                <text font-size="s" color="#737373">Built and maintained a multi-tenant SaaS platform serving 8,000 customers. Migrated a monolithic Rails application to microservices, cutting deployment time from 45 minutes to under 3 minutes.</text>
-              </stack>
+            <divider color="#c8d6ee" thickness="xs" />
 
-              <!-- job 3 -->
-              <stack gap="xs">
-                <flank gap="m" align="center" end="true">
-                  <text font-size="m" font="Helvetica-Bold">Software Engineer — Orion Systems</text>
-                  <text font-size="s" color="#737373">2014 – 2017</text>
-                </flank>
-                <text font-size="s" color="#737373">Developed embedded firmware for IoT sensors in C and Rust. Delivered SDK integrations for AWS IoT and Azure IoT Hub adopted by three enterprise clients in the first year of release.</text>
-              </stack>
+            <!-- education -->
+            <stack gap="s">
+              <text font-size="s" font="Helvetica-Bold">Education</text>
+              <text font-size="s" font="Helvetica-Bold">B.S. Computer Science</text>
+              <text font-size="s" color="#737373">MIT, 2014</text>
+            </stack>
 
+          </stack>
+        </stack>
+
+        <!-- main content -->
+        <stack padding="l" gap="l" height="fill">
+
+          <!-- profile -->
+          <stack gap="s">
+            <text font-size="l" font="Helvetica-Bold">Profile</text>
+            <divider color="#1763cf" thickness="xs" />
+            <text font-size="m">Software engineer with 10 years of experience building high-performance distributed systems. Specialising in Rust, WebAssembly, and developer tooling. Proven track record of leading cross-functional teams and shipping products used by millions of people worldwide.</text>
+          </stack>
+
+          <!-- experience -->
+          <stack gap="m">
+            <text font-size="l" font="Helvetica-Bold">Experience</text>
+            <divider color="#1763cf" thickness="xs" />
+
+            <!-- job 1 -->
+            <stack gap="xs">
+              <flank gap="m" align="center" end="true">
+                <text font-size="m" font="Helvetica-Bold">Staff Engineer — Acme Corp</text>
+                <text font-size="s" color="#737373">2021 – Present</text>
+              </flank>
+              <text font-size="s" color="#737373">Led architecture of a real-time data pipeline processing 50 million events per day. Reduced p99 latency by 40% through custom memory allocators and lock-free queues written in Rust.</text>
+            </stack>
+
+            <!-- job 2 -->
+            <stack gap="xs">
+              <flank gap="m" align="center" end="true">
+                <text font-size="m" font="Helvetica-Bold">Senior Engineer — Bright Labs</text>
+                <text font-size="s" color="#737373">2017 – 2021</text>
+              </flank>
+              <text font-size="s" color="#737373">Built and maintained a multi-tenant SaaS platform serving 8,000 customers. Migrated a monolithic Rails application to microservices, cutting deployment time from 45 minutes to under 3 minutes.</text>
+            </stack>
+
+            <!-- job 3 -->
+            <stack gap="xs">
+              <flank gap="m" align="center" end="true">
+                <text font-size="m" font="Helvetica-Bold">Software Engineer — Orion Systems</text>
+                <text font-size="s" color="#737373">2014 – 2017</text>
+              </flank>
+              <text font-size="s" color="#737373">Developed embedded firmware for IoT sensors in C and Rust. Delivered SDK integrations for AWS IoT and Azure IoT Hub adopted by three enterprise clients in the first year of release.</text>
             </stack>
 
           </stack>
 
-        </split>
-        </layout>
-      </page>
-    </pages>
+        </stack>
+
+      </split>
+      </layout>
+    </section>
   </document>
 </lpdf>

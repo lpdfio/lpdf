@@ -13,63 +13,61 @@
   </tokens>
   <document size="letter" orientation="landscape" margin="0pt">
     <meta title="Certificate of Completion — Jane Doe" />
-    <pages>
-      <page background="surface">
-        <layout>
+    <section background="surface">
+      <layout>
 
-        <!-- outer border frame -->
-        <frame border="l gold" padding="xl" height="full">
-          <frame border="xs gold" padding="l" height="full">
+      <!-- outer border frame -->
+      <frame border="l gold" padding="xl" height="full">
+        <frame border="xs gold" padding="l" height="full">
 
-            <stack gap="l" align="center" justify="center" height="full">
+          <stack gap="l" align="center" justify="center" height="full">
 
-              <!-- issuer -->
-              <stack gap="xs" align="center">
-                <text font-size="s" font="Helvetica-Bold" color="text-muted">PRESENTED BY</text>
-                <text font-size="xl" font="Helvetica-Bold" color="navy">Acme Academy</text>
-              </stack>
-
-              <!-- certificate title -->
-              <stack gap="xs" align="center">
-                <divider color="rule" thickness="xs" />
-                <text font-size="xxl" font="Times-BoldItalic" color="navy">Certificate of Completion</text>
-                <divider color="rule" thickness="xs" />
-              </stack>
-
-              <divider color="rule" thickness="s" />
-
-              <!-- recipient -->
-              <stack gap="s" align="center">
-                <text font-size="s" color="text-muted">This certificate is proudly awarded to</text>
-                <text font-size="xxl" font="Times-BoldItalic" color="navy">Jane Doe</text>
-                <text font-size="s" color="text-muted">for successfully completing</text>
-                <text font-size="l" font="Helvetica-Bold" color="navy">Advanced Rust Systems Programming</text>
-                <text font-size="s" color="text-muted">a 40-hour course covering memory safety, async runtimes, and WebAssembly targets</text>
-              </stack>
-
-              <divider color="rule" thickness="xs" />
-
-              <!-- date + signature row -->
-              <split gap="xxl" align="end">
-                <stack gap="xs" align="center">
-                  <divider color="navy" thickness="xs" />
-                  <text font-size="s" font="Helvetica-Bold" color="navy">April 12, 2026</text>
-                  <text font-size="s" color="text-muted">Date of completion</text>
-                </stack>
-                <stack gap="xs" align="center">
-                  <divider color="navy" thickness="xs" />
-                  <text font-size="s" font="Helvetica-Bold" color="navy">Dr. Alice Morrow</text>
-                  <text font-size="s" color="text-muted">Program Director</text>
-                </stack>
-              </split>
-
+            <!-- issuer -->
+            <stack gap="xs" align="center">
+              <text font-size="s" font="Helvetica-Bold" color="text-muted">PRESENTED BY</text>
+              <text font-size="xl" font="Helvetica-Bold" color="navy">Acme Academy</text>
             </stack>
 
-          </frame>
-        </frame>
+            <!-- certificate title -->
+            <stack gap="xs" align="center">
+              <divider color="rule" thickness="xs" />
+              <text font-size="xxl" font="Times-BoldItalic" color="navy">Certificate of Completion</text>
+              <divider color="rule" thickness="xs" />
+            </stack>
 
-        </layout>
-      </page>
-    </pages>
+            <divider color="rule" thickness="s" />
+
+            <!-- recipient -->
+            <stack gap="s" align="center">
+              <text font-size="s" color="text-muted">This certificate is proudly awarded to</text>
+              <text font-size="xxl" font="Times-BoldItalic" color="navy">Jane Doe</text>
+              <text font-size="s" color="text-muted">for successfully completing</text>
+              <text font-size="l" font="Helvetica-Bold" color="navy">Advanced Rust Systems Programming</text>
+              <text font-size="s" color="text-muted">a 40-hour course covering memory safety, async runtimes, and WebAssembly targets</text>
+            </stack>
+
+            <divider color="rule" thickness="xs" />
+
+            <!-- date + signature row -->
+            <split gap="xxl" align="end">
+              <stack gap="xs" align="center">
+                <divider color="navy" thickness="xs" />
+                <text font-size="s" font="Helvetica-Bold" color="navy">April 12, 2026</text>
+                <text font-size="s" color="text-muted">Date of completion</text>
+              </stack>
+              <stack gap="xs" align="center">
+                <divider color="navy" thickness="xs" />
+                <text font-size="s" font="Helvetica-Bold" color="navy">Dr. Alice Morrow</text>
+                <text font-size="s" color="text-muted">Program Director</text>
+              </stack>
+            </split>
+
+          </stack>
+
+        </frame>
+      </frame>
+
+      </layout>
+    </section>
   </document>
 </lpdf>

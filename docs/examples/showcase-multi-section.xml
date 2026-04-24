@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf"/>
+      <color name="accent"   value="#e8f0fc"/>
+      <color name="muted"    value="#737373"/>
+      <color name="rule"     value="#dde3ed"/>
+      <color name="surface"  value="#ffffff"/>
+    </colors>
+  </tokens>
+  <document size="a4" margin="40pt">
+    <meta title="lpdf Showcase — Multi-Section Document"
+          subject="Cover (canvas), TOC (layout), body (layout+canvas)"/>
+
+    <!-- Section 1: Cover page — canvas only -->
+    <section title="Cover" background="#1763cf">
+      <canvas>
+        <layer>
+          <!-- Full-page background (section has background="#1763cf") -->
+          <!-- Central logo area -->
+          <rect anchor="center" y="-60pt" w="120pt" h="120pt" radius="12pt"
+                fill="surface" opacity="0.15"/>
+          <!-- Title -->
+          <text anchor="center" y="40pt" font-size="28pt" font="Helvetica-Bold"
+                color="surface" align="center">
+            Annual Report
+          </text>
+          <text anchor="center" y="80pt" font-size="16pt"
+                color="surface" align="center" opacity="0.8">
+            2026
+          </text>
+          <!-- Bottom bar -->
+          <rect anchor="bottom-left" w="595.28pt" h="60pt" fill="#0f3e8a"/>
+          <text anchor="bottom-center" y="-18pt" font-size="11pt"
+                color="surface" align="center" opacity="0.7">
+            lpdf.io · PDF Generation API
+          </text>
+          <!-- Decorative lines -->
+          <line x1="40pt"      y1="400pt" x2="555.28pt" y2="400pt"
+                stroke="surface" stroke-width="0.5pt" opacity="0.3"/>
+          <line x1="40pt"      y1="406pt" x2="555.28pt" y2="406pt"
+                stroke="surface" stroke-width="0.5pt" opacity="0.15"/>
+        </layer>
+      </canvas>
+    </section>
+
+    <!-- Section 2: Table of Contents — layout only -->
+    <section title="Table of Contents">
+      <layout>
+        <stack gap="xl">
+          <stack gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">
+              Table of Contents
+            </text>
+            <divider color="rule" thickness="s"/>
+          </stack>
+
+          <table cols="1fr 60pt" gap="s">
+            <tr>
+              <td><text font-size="m" font="Helvetica-Bold">1. Executive Summary</text></td>
+              <td><text font-size="m" align="right" color="muted">3</text></td>
+            </tr>
+            <tr>
+              <td><text font-size="m" font="Helvetica-Bold">2. Financial Overview</text></td>
+              <td><text font-size="m" align="right" color="muted">5</text></td>
+            </tr>
+            <tr>
+              <td><text font-size="m" font="Helvetica-Bold">3. Market Analysis</text></td>
+              <td><text font-size="m" align="right" color="muted">9</text></td>
+            </tr>
+            <tr>
+              <td><text font-size="m" font="Helvetica-Bold">4. Product Roadmap</text></td>
+              <td><text font-size="m" align="right" color="muted">14</text></td>
+            </tr>
+            <tr>
+              <td><text font-size="m" font="Helvetica-Bold">5. Conclusion</text></td>
+              <td><text font-size="m" align="right" color="muted">18</text></td>
+            </tr>
+          </table>
+        </stack>
+      </layout>
+    </section>
+
+    <!-- Section 3: Body — layout with canvas overlay (page numbers + CONFIDENTIAL stamp) -->
+    <section title="Executive Summary" orientation="portrait">
+      <layout>
+        <stack gap="xl">
+          <stack gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">
+              1. Executive Summary
+            </text>
+            <text font-size="m" color="muted">
+              This section uses a layout+canvas combination: the layout provides flow
+              content while the canvas layer overlays page numbering and a confidential
+              stamp on every page.
+            </text>
+          </stack>
+
+          <divider color="rule" thickness="s"/>
+
+          <text font-size="m">
+            Each section in this document demonstrates a different section content model:
+          </text>
+
+          <stack gap="s" padding="m" background="accent" radius="6pt">
+            <text font-size="m" font="Helvetica-Bold" color="primary">Section content models</text>
+            <text font-size="m">
+              <span font="Helvetica-Bold">Canvas only</span>: Section 1 (cover page) —
+              full-bleed design with no layout flow.
+            </text>
+            <text font-size="m">
+              <span font="Helvetica-Bold">Layout only</span>: Section 2 (TOC) —
+              standard paginated content.
+            </text>
+            <text font-size="m">
+              <span font="Helvetica-Bold">Layout + Canvas overlay</span>: Section 3 (this) —
+              layout with page number and confidential stamp overlaid.
+            </text>
+          </stack>
+
+          <text font-size="m">
+            The <span font="Helvetica-Bold">title</span> attribute on each
+            <span font="Helvetica-Bold">&lt;section&gt;</span> produces a PDF outline
+            bookmark entry, enabling navigation in PDF viewers.
+          </text>
+
+          <text font-size="m">
+            Section-level attributes (<span font="Helvetica-Bold">size</span>,
+            <span font="Helvetica-Bold">orientation</span>,
+            <span font="Helvetica-Bold">margin</span>,
+            <span font="Helvetica-Bold">background</span>) override the document defaults
+            for that section only. Section 1 uses
+            <span font="Helvetica-Bold">background="#1763cf"</span> to produce the blue
+            cover, while Sections 2 and 3 inherit the white document default.
+          </text>
+        </stack>
+      </layout>
+
+      <!-- Canvas overlay: page-number stamp on all pages, CONFIDENTIAL on even pages -->
+      <canvas>
+        <layer page="each">
+          <text anchor="bottom-center" y="-15pt" font-size="9pt"
+                color="muted" align="center">
+            Confidential — Annual Report 2026
+          </text>
+        </layer>
+        <layer page="even" opacity="0.06">
+          <text anchor="center" font-size="80pt" font="Helvetica-Bold"
+                color="primary" align="center">
+            CONFIDENTIAL
+          </text>
+        </layer>
+      </canvas>
+    </section>
+  </document>
+</lpdf>

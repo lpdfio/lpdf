@@ -14,140 +14,138 @@
   </tokens>
   <document size="a4" margin="40pt">
     <meta title="Invoice #1042" author="Acme Corp" subject="Invoice" />
-    <pages>
-      <page background="surface">
-        <layout>
-        <stack gap="l" height="full" justify="between">
+    <section background="surface">
+      <layout>
+      <stack gap="l" height="full" justify="between">
 
-          <!-- header: logo area + invoice label -->
-          <flank gap="m" align="start" end="true">
+        <!-- header: logo area + invoice label -->
+        <flank gap="m" align="start" end="true">
+          <stack gap="xs">
+            <text font-size="xl" font="Helvetica-Bold" color="primary">Acme Corp</text>
+            <text font-size="s" color="text-muted">123 Business Ave, Suite 4</text>
+            <text font-size="s" color="text-muted">San Francisco, CA 94107</text>
+            <text font-size="s" color="text-muted">billing@acmecorp.example</text>
+          </stack>
+          <stack gap="xs" align="end">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">INVOICE</text>
+            <text font-size="s" color="text-muted"># 1042</text>
+          </stack>
+        </flank>
+
+        <divider color="rule" thickness="xs" />
+
+        <!-- bill-to + invoice meta -->
+        <split gap="l" align="start">
+          <stack gap="xs">
+            <text font-size="s" font="Helvetica-Bold" color="text-muted">BILL TO</text>
+            <text font-size="m" font="Helvetica-Bold">Bright Labs LLC</text>
+            <text font-size="s" color="text-muted">456 Client Street</text>
+            <text font-size="s" color="text-muted">Austin, TX 78701</text>
+            <text font-size="s" color="text-muted">accounts@brightlabs.example</text>
+          </stack>
+          <stack gap="xs" align="end">
+            <flank gap="m" align="center" end="true">
+              <text font-size="s" color="text-muted">Issue date</text>
+              <text font-size="s">April 1, 2026</text>
+            </flank>
+            <flank gap="m" align="center" end="true">
+              <text font-size="s" color="text-muted">Due date</text>
+              <text font-size="s" font="Helvetica-Bold">April 30, 2026</text>
+            </flank>
+            <flank gap="m" align="center" end="true">
+              <text font-size="s" color="text-muted">Payment terms</text>
+              <text font-size="s">Net 30</text>
+            </flank>
+          </stack>
+        </split>
+
+        <divider color="rule" thickness="xs" />
+
+        <!-- line items table header -->
+        <frame background="accent" padding="s" radius="xs">
+          <split gap="m" align="center">
             <stack gap="xs">
-              <text font-size="xl" font="Helvetica-Bold" color="primary">Acme Corp</text>
-              <text font-size="s" color="text-muted">123 Business Ave, Suite 4</text>
-              <text font-size="s" color="text-muted">San Francisco, CA 94107</text>
-              <text font-size="s" color="text-muted">billing@acmecorp.example</text>
-            </stack>
-            <stack gap="xs" align="end">
-              <text font-size="xxl" font="Helvetica-Bold" color="primary">INVOICE</text>
-              <text font-size="s" color="text-muted"># 1042</text>
-            </stack>
-          </flank>
-
-          <divider color="rule" thickness="xs" />
-
-          <!-- bill-to + invoice meta -->
-          <split gap="l" align="start">
-            <stack gap="xs">
-              <text font-size="s" font="Helvetica-Bold" color="text-muted">BILL TO</text>
-              <text font-size="m" font="Helvetica-Bold">Bright Labs LLC</text>
-              <text font-size="s" color="text-muted">456 Client Street</text>
-              <text font-size="s" color="text-muted">Austin, TX 78701</text>
-              <text font-size="s" color="text-muted">accounts@brightlabs.example</text>
-            </stack>
-            <stack gap="xs" align="end">
               <flank gap="m" align="center" end="true">
-                <text font-size="s" color="text-muted">Issue date</text>
-                <text font-size="s">April 1, 2026</text>
-              </flank>
-              <flank gap="m" align="center" end="true">
-                <text font-size="s" color="text-muted">Due date</text>
-                <text font-size="s" font="Helvetica-Bold">April 30, 2026</text>
-              </flank>
-              <flank gap="m" align="center" end="true">
-                <text font-size="s" color="text-muted">Payment terms</text>
-                <text font-size="s">Net 30</text>
+                <text font-size="s" font="Helvetica-Bold">Description</text>
+                <text width="30pt" font-size="s" font="Helvetica-Bold" align="right">Qty</text>
+                <text width="60pt" font-size="s" font="Helvetica-Bold" align="right">Unit price</text>
+                <text width="60pt" font-size="s" font="Helvetica-Bold" align="right">Amount</text>
               </flank>
             </stack>
           </split>
+        </frame>
 
-          <divider color="rule" thickness="xs" />
+        <!-- line items -->
+        <stack gap="xs" height="fill">
 
-          <!-- line items table header -->
-          <frame background="accent" padding="s" radius="xs">
-            <split gap="m" align="center">
-              <stack gap="xs">
-                <flank gap="m" align="center" end="true">
-                  <text font-size="s" font="Helvetica-Bold">Description</text>
-                  <text width="30pt" font-size="s" font="Helvetica-Bold" align="right">Qty</text>
-                  <text width="60pt" font-size="s" font="Helvetica-Bold" align="right">Unit price</text>
-                  <text width="60pt" font-size="s" font="Helvetica-Bold" align="right">Amount</text>
-                </flank>
-              </stack>
-            </split>
-          </frame>
-
-          <!-- line items -->
-          <stack gap="xs" height="fill">
-
-            <!-- item 1 -->
-            <flank gap="m" align="center" end="true">
-              <stack gap="xs">
-                <text font-size="m">Platform license — Pro tier (annual)</text>
-                <text font-size="s" color="text-muted">Covers unlimited users, SSO, audit logs</text>
-              </stack>
-              <text width="30pt" font-size="m" align="right">1</text>
-              <text width="60pt" font-size="m" align="right">$4,800.00</text>
-              <text width="60pt" font-size="m" font="Helvetica-Bold" align="right">$4,800.00</text>
-            </flank>
-            <divider color="rule" thickness="xs" />
-
-            <!-- item 2 -->
-            <flank gap="m" align="center" end="true">
-              <stack gap="xs">
-                <text font-size="m">Implementation &amp; onboarding</text>
-                <text font-size="s" color="text-muted">8 hours at contracted hourly rate</text>
-              </stack>
-              <text width="30pt" font-size="m" align="right">8</text>
-              <text width="60pt" font-size="m" align="right">$200.00</text>
-              <text width="60pt" font-size="m" font="Helvetica-Bold" align="right">$1,600.00</text>
-            </flank>
-            <divider color="rule" thickness="xs" />
-
-            <!-- item 3 -->
-            <flank gap="m" align="center" end="true">
-              <stack gap="xs">
-                <text font-size="m">Priority support add-on (12 months)</text>
-                <text font-size="s" color="text-muted">24/7 SLA, 4-hour response guarantee</text>
-              </stack>
-              <text width="20pt" font-size="m" align="right">1</text>
-              <text width="60pt" font-size="m" align="right">$600.00</text>
-              <text width="60pt" font-size="m" font="Helvetica-Bold" align="right">$600.00</text>
-            </flank>
-            <divider color="rule" thickness="xs" />
-
-          </stack>
-
-          <!-- totals -->
-           <cluster justify="end">
-            <stack gap="xs" width="200pt">
-              <flank gap="m" align="center" end="true">
-                <text font-size="s" color="text-muted">Subtotal</text>
-                <text font-size="s" align="right">$7,000.00</text>
-              </flank>
-              <flank gap="m" align="center" end="true">
-                <text font-size="s" color="text-muted">Tax (8.625%)</text>
-                <text font-size="s" align="right">$603.75</text>
-              </flank>
-              <divider color="rule" thickness="xs" />
-              <flank gap="m" align="center" end="true">
-                <text font-size="l" font="Helvetica-Bold">Total due</text>
-                <text font-size="l" font="Helvetica-Bold" color="primary" align="right">$7,603.75</text>
-              </flank>
+          <!-- item 1 -->
+          <flank gap="m" align="center" end="true">
+            <stack gap="xs">
+              <text font-size="m">Platform license — Pro tier (annual)</text>
+              <text font-size="s" color="text-muted">Covers unlimited users, SSO, audit logs</text>
             </stack>
-          </cluster>
-
+            <text width="30pt" font-size="m" align="right">1</text>
+            <text width="60pt" font-size="m" align="right">$4,800.00</text>
+            <text width="60pt" font-size="m" font="Helvetica-Bold" align="right">$4,800.00</text>
+          </flank>
           <divider color="rule" thickness="xs" />
 
-          <!-- footer: payment instructions -->
-          <stack gap="xs">
-            <text font-size="s" font="Helvetica-Bold">Payment instructions</text>
-            <text font-size="s" color="text-muted">Wire transfer to: First National Bank · Routing 021000021 · Account 987654321 · Ref: INV-1042</text>
-            <text font-size="s" color="text-muted">Late payments incur 1.5% per month. Thank you for your business.</text>
-          </stack>
+          <!-- item 2 -->
+          <flank gap="m" align="center" end="true">
+            <stack gap="xs">
+              <text font-size="m">Implementation &amp; onboarding</text>
+              <text font-size="s" color="text-muted">8 hours at contracted hourly rate</text>
+            </stack>
+            <text width="30pt" font-size="m" align="right">8</text>
+            <text width="60pt" font-size="m" align="right">$200.00</text>
+            <text width="60pt" font-size="m" font="Helvetica-Bold" align="right">$1,600.00</text>
+          </flank>
+          <divider color="rule" thickness="xs" />
+
+          <!-- item 3 -->
+          <flank gap="m" align="center" end="true">
+            <stack gap="xs">
+              <text font-size="m">Priority support add-on (12 months)</text>
+              <text font-size="s" color="text-muted">24/7 SLA, 4-hour response guarantee</text>
+            </stack>
+            <text width="20pt" font-size="m" align="right">1</text>
+            <text width="60pt" font-size="m" align="right">$600.00</text>
+            <text width="60pt" font-size="m" font="Helvetica-Bold" align="right">$600.00</text>
+          </flank>
+          <divider color="rule" thickness="xs" />
 
         </stack>
-        </layout>
-      </page>
-    </pages>
+
+        <!-- totals -->
+         <cluster justify="end">
+          <stack gap="xs" width="200pt">
+            <flank gap="m" align="center" end="true">
+              <text font-size="s" color="text-muted">Subtotal</text>
+              <text font-size="s" align="right">$7,000.00</text>
+            </flank>
+            <flank gap="m" align="center" end="true">
+              <text font-size="s" color="text-muted">Tax (8.625%)</text>
+              <text font-size="s" align="right">$603.75</text>
+            </flank>
+            <divider color="rule" thickness="xs" />
+            <flank gap="m" align="center" end="true">
+              <text font-size="l" font="Helvetica-Bold">Total due</text>
+              <text font-size="l" font="Helvetica-Bold" color="primary" align="right">$7,603.75</text>
+            </flank>
+          </stack>
+        </cluster>
+
+        <divider color="rule" thickness="xs" />
+
+        <!-- footer: payment instructions -->
+        <stack gap="xs">
+          <text font-size="s" font="Helvetica-Bold">Payment instructions</text>
+          <text font-size="s" color="text-muted">Wire transfer to: First National Bank · Routing 021000021 · Account 987654321 · Ref: INV-1042</text>
+          <text font-size="s" color="text-muted">Late payments incur 1.5% per month. Thank you for your business.</text>
+        </stack>
+
+      </stack>
+      </layout>
+    </section>
   </document>
 </lpdf>

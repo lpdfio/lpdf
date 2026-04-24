@@ -578,7 +578,7 @@ mod tests {
     // ── Full-pipeline tests (require render_xml_to_pdf_bytes) ─────────────────
 
     fn minimal_xml() -> &'static str {
-        r#"<lpdf version="1"><document size="a4" margin="28pt"><pages><page><layout><text size="m">Hello</text></layout></page></pages></document></lpdf>"#
+        r#"<lpdf version="1"><document size="a4" margin="28pt"><section><layout><text size="m">Hello</text></layout></section></document></lpdf>"#
     }
 
     fn encrypt_minimal(user_pw: &str, owner_pw: &str) -> Vec<u8> {

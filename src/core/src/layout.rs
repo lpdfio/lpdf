@@ -1,4 +1,4 @@
-use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Direction, FieldKind, HeightMode, Justify, Node, NodeKind, Page, Paginate, Repeat, TextAlign, TextRun};
+use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Direction, FieldKind, HeightMode, Justify, Node, NodeKind, SectionLayout, Paginate, Repeat, TextAlign, TextRun};
 use crate::render::{RenderBarcode, RenderBox, RenderField, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind};
 use crate::tokens::FontWidths;
 use std::cell::RefCell;
@@ -24,7 +24,7 @@ pub type ImageMeta = HashMap<String, (u32, u32)>;
 /// Fill in concrete `width_constraint` and `img_height_constraint` for every
 /// `NodeKind::Img` node in a page tree, using `meta` for aspect-ratio derivation.
 ///
-/// Call this on every `Page` *before* calling `layout_page`. After the pass,
+/// Call this on every `SectionLayout` *before* calling `layout_page`. After the pass,
 /// `layout_img` can read `.width_constraint.unwrap_or(avail_w)` and
 /// `.img_height_constraint.unwrap_or(w)` safely.
 pub fn prefill_image_sizes(nodes: &mut Vec<Node>, meta: &ImageMeta) {
@@ -57,7 +57,7 @@ fn prefill_node(node: &mut Node, meta: &ImageMeta) {
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
-pub fn layout_page(page: &Page) -> Vec<RenderPage> {
+pub fn layout_page(page: &SectionLayout) -> Vec<RenderPage> {
     let mut pages = layout_page_impl(page);
     for rp in &mut pages {
         apply_debug_overlay(&mut rp.nodes);
@@ -81,7 +81,7 @@ pub fn layout_page(page: &Page) -> Vec<RenderPage> {
     pages
 }
 
-fn layout_page_impl(page: &Page) -> Vec<RenderPage> {
+fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
     let [mt, mr, mb, ml] = page.margin;
     let avail_x = ml;
     let avail_y = mt;
@@ -2677,7 +2677,8 @@ mod tests {
 
     fn engine_render(xml: &str) -> serde_json::Value {
         let doc = parse(xml).unwrap();
-        let pages: Vec<_> = doc.pages.iter().flat_map(layout_page).collect();
+        let lp = doc.section_layouts();
+        let pages: Vec<_> = lp.iter().flat_map(layout_page).collect();
         let json_str =
             crate::render::pages_to_json(&pages, serde_json::Value::Null, serde_json::Value::Null);
         serde_json::from_str(&json_str).unwrap()
@@ -2685,10 +2686,10 @@ mod tests {
 
     fn minimal(body: &str) -> String {
         if body.is_empty() {
-            r#"<lpdf version="1"><document size="a4" margin="28pt"><pages><page/></pages></document></lpdf>"#.to_string()
+            r#"<lpdf version="1"><document size="a4" margin="28pt"><section><layout/></section></document></lpdf>"#.to_string()
         } else {
             format!(
-                r#"<lpdf version="1"><document size="a4" margin="28pt"><pages><page><layout>{body}</layout></page></pages></document></lpdf>"#
+                r#"<lpdf version="1"><document size="a4" margin="28pt"><section><layout>{body}</layout></section></document></lpdf>"#
             )
         }
     }
@@ -2716,7 +2717,7 @@ mod tests {
             r#"<stack gap="m"><frame height="20pt" /><frame height="30pt" /></stack>"#,
         ));
         let stack = &tree["pages"][0]["nodes"][0];
-        let children = stack["children"].as_array().unwrap();
+        let children = stack["nodes"].as_array().unwrap();
         assert_eq!(children.len(), 2);
 
         let first_y = children[0]["y"].as_f64().unwrap();
@@ -2734,7 +2735,7 @@ mod tests {
         </grid>"#;
         let tree = engine_render(&minimal(body));
         let grid = &tree["pages"][0]["nodes"][0];
-        let children = grid["children"].as_array().unwrap();
+        let children = grid["nodes"].as_array().unwrap();
         assert_eq!(children.len(), 3);
 
         // All three should be on the same row (same y)
@@ -2768,7 +2769,7 @@ mod tests {
         let tree = engine_render(&minimal(r#"<text size="m">Hello world</text>"#));
         let node = &tree["pages"][0]["nodes"][0];
         assert_eq!(node["type"], "box");
-        let kids = node["children"].as_array().unwrap();
+        let kids = node["nodes"].as_array().unwrap();
         assert!(!kids.is_empty());
         assert_eq!(kids[0]["type"], "text");
         // Plain same-font words on the same line are merged into one RenderText
@@ -2787,7 +2788,7 @@ mod tests {
         </split>"#;
         let tree = engine_render(&minimal(body));
         let split = &tree["pages"][0]["nodes"][0];
-        let children = split["children"].as_array().unwrap();
+        let children = split["nodes"].as_array().unwrap();
         let w0 = children[0]["width"].as_f64().unwrap();
         let w1 = children[1]["width"].as_f64().unwrap();
         let avail_w = 595.28 - 28.0 * 2.0;
@@ -2804,7 +2805,7 @@ mod tests {
         </stack>"#;
         let tree = engine_render(&minimal(body));
         let stack = &tree["pages"][0]["nodes"][0];
-        let children = stack["children"].as_array().unwrap();
+        let children = stack["nodes"].as_array().unwrap();
         let fill_h = children[1]["height"].as_f64().unwrap();
         // avail = 841.89 - 28*2 = 785.89; fixed=50; gap=8; fill = 785.89 - 50 - 8
         let expected = 841.89 - 56.0 - 50.0 - 8.0;
@@ -2975,9 +2976,6 @@ mod tests {
             if v["type"] == "text" {
                 if let Some(s) = v["content"].as_str() { out.push(s.to_string()); }
             }
-            if let Some(arr) = v["children"].as_array() {
-                for c in arr { walk(c, out); }
-            }
             if let Some(arr) = v["nodes"].as_array() {
                 for c in arr { walk(c, out); }
             }
@@ -3001,7 +2999,7 @@ mod tests {
         let tree = engine_render(&minimal(body));
         let stack = &tree["pages"][0]["nodes"][0];
         assert_eq!(stack["type"], "box");
-        let children = stack["children"].as_array().unwrap();
+        let children = stack["nodes"].as_array().unwrap();
         // 2 frames + 4 red self lines + 8 blue child lines = 14
         assert_eq!(children.len(), 14, "expected 14 children, got {}", children.len());
         // The last 12 entries are lines
@@ -3046,8 +3044,8 @@ mod tests {
 
         // Frame children geometry identical
         for i in 0..2 {
-            let c_clean = &stack_clean["children"][i];
-            let c_debug = &stack_debug["children"][i];
+            let c_clean = &stack_clean["nodes"][i];
+            let c_debug = &stack_debug["nodes"][i];
             assert_eq!(c_clean["x"], c_debug["x"], "child[{i}] x differs");
             assert_eq!(c_clean["y"], c_debug["y"], "child[{i}] y differs");
             assert_eq!(c_clean["height"], c_debug["height"], "child[{i}] height differs");
@@ -3066,7 +3064,7 @@ mod tests {
         </stack>"##;
         let tree = engine_render(&minimal(body));
         let stack = &tree["pages"][0]["nodes"][0];
-        let children = stack["children"].as_array().unwrap();
+        let children = stack["nodes"].as_array().unwrap();
 
         // stack: 2 frames + 4 red self + 4 blue (only frame[0], not frame[1] since it's debug_self)
         assert_eq!(children.len(), 10, "expected 10 children (2 frames + 4 red + 4 blue), got {}", children.len());
@@ -3082,7 +3080,7 @@ mod tests {
 
         // The flagged frame child (index 1) must have its own 4 red self-lines
         let frame2 = &children[1];
-        let frame2_children = frame2["children"].as_array().unwrap();
+        let frame2_children = frame2["nodes"].as_array().unwrap();
         assert_eq!(frame2_children.len(), 4, "flagged frame should have 4 self-lines");
         for i in 0..4 {
             assert_eq!(frame2_children[i]["color"], "#ff0033", "frame2 child[{i}] should be red");
@@ -3090,7 +3088,7 @@ mod tests {
 
         // The unflagged frame child (index 0) must have no children
         let frame1 = &children[0];
-        assert!(frame1["children"].as_array().map(|a| a.is_empty()).unwrap_or(true),
+        assert!(frame1["nodes"].as_array().map(|a| a.is_empty()).unwrap_or(true),
             "unflagged frame should have no children");
     }
 
@@ -3106,7 +3104,7 @@ mod tests {
         ];
         for &(size, exp_w, exp_h) in cases {
             let xml = format!(
-                r#"<lpdf version="1"><document size="{size}" margin="0pt"><pages><page /></pages></document></lpdf>"#
+                r#"<lpdf version="1"><document size="{size}" margin="0pt"><section><layout/></section></document></lpdf>"#
             );
             let tree = engine_render(&xml);
             let w = tree["pages"][0]["width"].as_f64().unwrap();
@@ -3124,7 +3122,7 @@ mod tests {
         // last child is the fill and takes all remaining width on the right.
         let body = r#"<flank gap="0pt"><frame width="100pt" height="20pt" /><frame height="20pt" /></flank>"#;
         let tree = engine_render(&minimal(body));
-        let children = tree["pages"][0]["nodes"][0]["children"].as_array().unwrap();
+        let children = tree["pages"][0]["nodes"][0]["nodes"].as_array().unwrap();
         assert_eq!(children.len(), 2);
 
         let margin  = 28.0_f64;
@@ -3146,7 +3144,7 @@ mod tests {
         // end=true: fill child (first in XML) goes left, flank child (second, 100pt) goes right.
         let body = r#"<flank gap="0pt" end="true"><frame height="20pt" /><frame width="100pt" height="20pt" /></flank>"#;
         let tree = engine_render(&minimal(body));
-        let children = tree["pages"][0]["nodes"][0]["children"].as_array().unwrap();
+        let children = tree["pages"][0]["nodes"][0]["nodes"].as_array().unwrap();
         assert_eq!(children.len(), 2);
 
         let margin  = 28.0_f64;
@@ -3169,7 +3167,7 @@ mod tests {
     fn span_underline_emits_line_decoration() {
         let body = r#"<text size="m"><span underline="true">hello</span></text>"#;
         let tree = engine_render(&minimal(body));
-        let kids = tree["pages"][0]["nodes"][0]["children"].as_array().unwrap();
+        let kids = tree["pages"][0]["nodes"][0]["nodes"].as_array().unwrap();
         // span atom produces a text node + an underline line node
         let types: Vec<&str> = kids.iter().filter_map(|k| k["type"].as_str()).collect();
         assert!(types.contains(&"text"), "no text node; got {:?}", types);
@@ -3180,7 +3178,7 @@ mod tests {
     fn span_strike_emits_line_decoration() {
         let body = r#"<text size="m"><span strike="true">hello</span></text>"#;
         let tree = engine_render(&minimal(body));
-        let kids = tree["pages"][0]["nodes"][0]["children"].as_array().unwrap();
+        let kids = tree["pages"][0]["nodes"][0]["nodes"].as_array().unwrap();
         let types: Vec<&str> = kids.iter().filter_map(|k| k["type"].as_str()).collect();
         assert!(types.contains(&"text"), "no text node; got {:?}", types);
         assert!(types.contains(&"line"), "no strikethrough line; got {:?}", types);
@@ -3190,10 +3188,10 @@ mod tests {
     fn span_href_wraps_in_link_node() {
         let body = r#"<text size="m"><span href="https://example.com">click here</span></text>"#;
         let tree = engine_render(&minimal(body));
-        let kids = tree["pages"][0]["nodes"][0]["children"].as_array().unwrap();
+        let kids = tree["pages"][0]["nodes"][0]["nodes"].as_array().unwrap();
         let link = kids.iter().find(|k| k["type"] == "link").expect("no link node in children");
         assert_eq!(link["url"], "https://example.com");
-        assert!(!link["children"].as_array().unwrap().is_empty());
+        assert!(!link["nodes"].as_array().unwrap().is_empty());
     }
 
     // ── Custom document tokens ────────────────────────────────────────────────
@@ -3207,16 +3205,16 @@ mod tests {
                 <space xs="1pt" s="2pt" m="50pt" l="100pt" xl="200pt" xxl="400pt" />
             </tokens>
             <document size="a4" margin="0pt">
-                <pages><page><layout>
+                <section><layout>
                     <stack gap="m">
                         <frame height="20pt" />
                         <frame height="20pt" />
                     </stack>
-                </layout></page></pages>
+                </layout></section>
             </document>
         </lpdf>"#;
         let tree = engine_render(xml);
-        let children = tree["pages"][0]["nodes"][0]["children"].as_array().unwrap();
+        let children = tree["pages"][0]["nodes"][0]["nodes"].as_array().unwrap();
         let y0 = children[0]["y"].as_f64().unwrap();
         let y1 = children[1]["y"].as_f64().unwrap();
         // second child y = first y + first height (20) + custom gap (50)
@@ -3235,9 +3233,9 @@ mod tests {
                 </colors>
             </tokens>
             <document size="a4" margin="0pt">
-                <pages><page><layout>
+                <section><layout>
                     <frame height="20pt" background="primary" />
-                </layout></page></pages>
+                </layout></section>
             </document>
         </lpdf>"##;
         let tree = engine_render(xml);

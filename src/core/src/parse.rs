@@ -8,10 +8,300 @@ pub struct Document {
     pub meta:        Meta,
     pub fonts:       HashMap<String, FontDef>,
     pub images:      HashMap<String, String>,
-    pub pages:       Vec<Page>,
-    /// Caller-supplied glyph width tables for custom fonts (tree path or
-    /// injected via `set_font_metrics` before the WASM call).
+    /// Caller-supplied glyph width tables.
     pub font_widths: HashMap<String, FontWidths>,
+    // Document-level page defaults (inherited by each section unless overridden)
+    pub page_width:  f32,
+    pub page_height: f32,
+    pub margin:      [f32; 4],
+    pub background:  Option<String>,
+    pub debug:       bool,
+    /// Sections — always ≥ 1.  Single-section shorthand is normalised here.
+    pub sections:    Vec<Section>,
+}
+
+impl Document {
+    /// Derive a flat `Vec<SectionLayout>` from sections for use with the layout engine.
+    /// Each section's layout child is converted to one `SectionLayout`.  Canvas children are
+    /// ignored here — they are rendered separately via the canvas pipeline.
+    pub fn section_layouts(&self) -> Vec<SectionLayout> {
+        let mut result = Vec::new();
+        for section in &self.sections {
+            let width  = section.options.size.map(|(w, _)| w).unwrap_or(self.page_width);
+            let height = section.options.size.map(|(_, h)| h).unwrap_or(self.page_height);
+            let margin = section.options.margin.unwrap_or(self.margin);
+            let bg     = section.options.background.clone()
+                            .or_else(|| self.background.clone());
+            let debug  = section.options.debug.unwrap_or(self.debug);
+
+            // Collect layout nodes including regions converted to Repeat::Page nodes.
+            let mut children: Vec<Node> = Vec::new();
+            for sc in &section.children {
+                if let SectionChild::Layout(layout) = sc {
+                    for lc in &layout.children {
+                        match lc {
+                            LayoutChild::Content(node) => children.push(node.clone()),
+                            LayoutChild::Region(reg)   => children.push(region_to_compat_node(reg)),
+                        }
+                    }
+                }
+            }
+            result.push(SectionLayout { width, height, margin, background: bg, debug, children });
+        }
+        result
+    }
+}
+
+/// Convert a `LayoutRegion` to a `Node` that the existing layout engine can handle.
+/// `pin="top|bottom"` → `Repeat::Page` (renders on every produced page).
+/// `pin="top", page="first"` → `Repeat::First`.
+fn region_to_compat_node(reg: &LayoutRegion) -> Node {
+    let repeat = match &reg.page {
+        None                         => Repeat::Page,
+        Some(PageScope::Each)        => Repeat::Page,
+        Some(PageScope::First)       => Repeat::First,
+        _                            => Repeat::Page,
+    };
+    Node {
+        kind:     NodeKind::Stack,
+        repeat,
+        debug:    reg.debug,
+        children: reg.children.clone(),
+        ..Node::layout_default()
+    }
+}
+
+// ── New section / canvas types ────────────────────────────────────────────────
+// Canvas rendering is not yet implemented; fields are read in a future phase.
+
+/// A page-range within a `PageScope`.  `end = None` means "last".
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct PageRange {
+    pub start: u32,
+    pub end:   Option<u32>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum PageScope {
+    Each,
+    First,
+    Last,
+    Odd,
+    Even,
+    Pages(Vec<PageRange>),
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum Anchor {
+    TopLeft, TopCenter, TopRight,
+    CenterLeft, Center, CenterRight,
+    BottomLeft, BottomCenter, BottomRight,
+}
+
+/// Coordinate mode for canvas primitives.
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub enum CanvasPosition {
+    /// Absolute page coordinates (top-left origin, y-down).
+    Absolute { x: f32, y: f32 },
+    /// Anchor reference point + signed offset (x+ = right, y+ = down).
+    Anchored  { anchor: Anchor, dx: f32, dy: f32 },
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct CanvasRect {
+    pub pos:          CanvasPosition,
+    pub w:            f32,
+    pub h:            f32,
+    pub fill:         Option<String>,
+    pub stroke:       Option<String>,
+    pub stroke_width: Option<f32>,
+    pub stroke_dash:  Option<String>,
+    pub radius:       Option<f32>,
+    pub opacity:      Option<f32>,
+}
+
+/// Circle: `pos` is the centre point.
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct CanvasCircle {
+    pub pos:          CanvasPosition,
+    pub r:            f32,
+    pub fill:         Option<String>,
+    pub stroke:       Option<String>,
+    pub stroke_width: Option<f32>,
+    pub stroke_dash:  Option<String>,
+    pub opacity:      Option<f32>,
+}
+
+/// Ellipse: `pos` is the centre point (cx/cy).
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct CanvasEllipse {
+    pub pos:          CanvasPosition,
+    pub rx:           f32,
+    pub ry:           f32,
+    pub fill:         Option<String>,
+    pub stroke:       Option<String>,
+    pub stroke_width: Option<f32>,
+    pub stroke_dash:  Option<String>,
+    pub opacity:      Option<f32>,
+}
+
+/// Line: no anchor — absolute coordinates always required.
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct CanvasLine {
+    pub x1:           f32,
+    pub y1:           f32,
+    pub x2:           f32,
+    pub y2:           f32,
+    pub stroke:       Option<String>,
+    pub stroke_width: Option<f32>,
+    pub stroke_dash:  Option<String>,
+    pub line_cap:     Option<String>,
+}
+
+/// Path: no anchor — coordinates are embedded in the SVG `d` string.
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct CanvasPath {
+    pub d:            String,
+    pub fill:         Option<String>,
+    pub stroke:       Option<String>,
+    pub fill_rule:    Option<String>,
+    pub stroke_width: Option<f32>,
+    pub stroke_dash:  Option<String>,
+    pub line_cap:     Option<String>,
+    pub opacity:      Option<f32>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct CanvasTextRun {
+    pub text:  String,
+    pub font:  Option<String>,
+    pub color: Option<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct CanvasText {
+    pub pos:         CanvasPosition,
+    pub font:        Option<String>,
+    pub font_size:   Option<f32>,
+    pub color:       Option<String>,
+    pub align:       Option<String>,
+    pub w:           Option<f32>,
+    pub line_height: Option<f32>,
+    pub opacity:     Option<f32>,
+    /// Plain text content (empty when `runs` is non-empty).
+    pub content:     String,
+    /// Mixed-run children from `<span>` elements.
+    pub runs:        Vec<CanvasTextRun>,
+    pub data_attrs:  Option<Box<DataAttrs>>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct CanvasImg {
+    pub name:       String,
+    pub pos:        CanvasPosition,
+    pub w:          f32,
+    pub h:          f32,
+    pub data_attrs: Option<Box<DataAttrs>>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub enum CanvasPrimitive {
+    Rect(CanvasRect),
+    Circle(CanvasCircle),
+    Ellipse(CanvasEllipse),
+    Line(CanvasLine),
+    Path(CanvasPath),
+    Text(CanvasText),
+    Img(CanvasImg),
+}
+
+/// Graphics-state scope inside a `<canvas>`.  Contains only flat primitives
+/// (no nested layers).  Document order of layers is paint order (first = bottom).
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct CanvasLayer {
+    pub children:  Vec<CanvasPrimitive>,
+    pub page:      Option<PageScope>,
+    pub opacity:   Option<f32>,
+    pub transform: Option<String>,
+    pub clip:      Option<String>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct Canvas {
+    pub layers: Vec<CanvasLayer>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum RegionPin { Top, Bottom, Left, Right }
+
+/// A pinned chrome slot inside a `<layout>`.
+/// Only valid as a direct child of `<layout>`, not inside containers.
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct LayoutRegion {
+    pub pin:      RegionPin,
+    pub page:     Option<PageScope>,
+    /// `w` is required for `Left`/`Right`; ignored for `Top`/`Bottom`.
+    pub w:        Option<f32>,
+    pub children: Vec<Node>,
+    pub debug:    bool,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub enum LayoutChild {
+    Content(Node),
+    Region(LayoutRegion),
+}
+
+/// Root-level layout wrapper.
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct Layout {
+    pub children: Vec<LayoutChild>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub enum SectionChild {
+    Layout(Layout),
+    Canvas(Canvas),
+}
+
+/// Per-section overrides; `None` fields inherit document-level defaults.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Default)]
+pub struct SectionOptions {
+    pub size:       Option<(f32, f32)>,
+    pub margin:     Option<[f32; 4]>,
+    pub background: Option<String>,
+    pub debug:      Option<bool>,
+    pub title:      Option<String>,
+}
+
+/// A content boundary with its own auto-pagination.
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct Section {
+    /// In document order: first child is painted first (bottom).
+    pub children: Vec<SectionChild>,
+    pub options:  SectionOptions,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -24,7 +314,7 @@ pub struct Meta {
 }
 
 #[derive(Debug, Clone)]
-pub struct Page {
+pub struct SectionLayout {
     pub width: f32,
     pub height: f32,
     pub margin: [f32; 4], // top, right, bottom, left
@@ -120,7 +410,7 @@ pub struct Node {
 }
 
 /// How a node relates to page pagination.
-/// Only meaningful on direct children of `<page>`.
+/// Only meaningful on direct children of `<layout>`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Repeat {
     /// Ordinary flow node — paginated normally.
@@ -237,7 +527,7 @@ pub enum TextAlign {
 
 /// A node as produced by the XML/JSON parser, before font inheritance is
 /// resolved.  `font` and `font_size` may be `None` (meaning "inherit from
-/// parent").  The `resolve_doc` pass converts this into a `Document` of
+/// parent").  Font resolution happens in `resolve_node` during section parsing.
 /// concrete `Node` values.
 struct ParsedNode {
     kind: NodeKind,
@@ -291,23 +581,6 @@ struct ParsedNode {
     children: Vec<ParsedNode>,
 }
 
-struct ParsedPage {
-    width: f32,
-    height: f32,
-    margin: [f32; 4],
-    background: Option<String>,
-    debug: bool,
-    children: Vec<ParsedNode>,
-}
-
-struct ParsedDocument {
-    meta:        Meta,
-    fonts:       HashMap<String, FontDef>,
-    font_widths: HashMap<String, FontWidths>,
-    images:      HashMap<String, String>,
-    pages:       Vec<ParsedPage>,
-    doc_font:    Option<String>, // from <document font="...">
-}
 
 impl ParsedNode {
     fn default_for(kind: NodeKind) -> Self {
@@ -385,46 +658,27 @@ fn resolve_font_alias(name: &str, fonts: &HashMap<String, FontDef>) -> String {
     }
 }
 
-/// Convert a `ParsedDocument` into a resolved `Document` by propagating
-/// `font` and `font_size` values down the node tree.
-fn resolve_doc(parsed: ParsedDocument) -> Document {
-    let root_font = parsed.doc_font
-        .as_deref()
-        .map(|f| resolve_font_alias(f, &parsed.fonts))
-        .unwrap_or_else(|| "Helvetica".to_string());
-    let root_size = 11.0_f32;
-
-    // Build resolved_fonts keyed by the concrete name (not the alias).
-    let mut resolved_fonts: HashMap<String, FontDef> = HashMap::new();
-    for (_alias, def) in &parsed.fonts {
-        let key = match def {
-            FontDef::Core(name) => name.clone(),
-            FontDef::Ref(k)     => k.clone(),
-        };
-        resolved_fonts.insert(key, def.clone());
-    }
-
-    let pages = parsed.pages.into_iter().map(|page| {
-        let children = page.children
-            .into_iter()
-            .map(|n| resolve_node(n, &root_font, root_size, &parsed.fonts))
-            .collect();
-        Page {
-            width:      page.width,
-            height:     page.height,
-            margin:     page.margin,
-            background: page.background,
-            debug:      page.debug,
-            children,
+/// `Node::layout_default()` — used by region_to_compat_node.
+impl Node {
+    pub fn layout_default() -> Node {
+        Node {
+            kind: NodeKind::Stack,
+            gap: 0.0, padding: [0.0; 4], background: None, border: None, radius: 0.0,
+            height_mode: HeightMode::Auto, width_constraint: None,
+            repeat: Repeat::None, paginate: Paginate::None, debug: false,
+            align: Align::Stretch, justify: Justify::Start, end: false, equal: false,
+            cols: 1, col_width: None, direction: Direction::Horizontal,
+            color: None, thickness: 1.0, text_runs: Vec::new(),
+            font: "Helvetica".to_string(), font_size: 11.0, text_color: None,
+            text_align: TextAlign::Left, url: None, image_name: None,
+            img_height_constraint: None, barcode_type: None, barcode_data: None,
+            barcode_ec: BarcodeEcLevel::M, barcode_hrt: false, barcode_color: None,
+            barcode_bg: None, table_cols: String::new(), stripe: None,
+            field_kind: None, field_name: None, field_value: None, field_label: None,
+            field_options: Vec::new(), field_required: false, field_readonly: false,
+            field_checked: false, field_max_len: None, field_group: None,
+            field_action_url: None, data_attrs: None, children: Vec::new(),
         }
-    }).collect();
-
-    Document {
-        meta:        parsed.meta,
-        fonts:       resolved_fonts,
-        font_widths: parsed.font_widths,
-        images:      parsed.images,
-        pages,
     }
 }
 
@@ -536,7 +790,6 @@ pub fn parse(xml: &str) -> Result<Document, String> {
     }
 
     let mut meta          = Meta::default();
-    let mut pages: Vec<ParsedPage> = Vec::new();
     let mut doc_size      = (595.28_f32, 841.89_f32); // a4
     let mut doc_margin    = [0.0_f32; 4];
     let mut doc_background: Option<String> = None;
@@ -570,54 +823,57 @@ pub fn parse(xml: &str) -> Result<Document, String> {
                     doc_debug = v == "true";
                 }
 
-                let mut found_pages_elem = false;
+                let mut sections_xml: Vec<Section> = Vec::new();
                 for doc_child in elems(&child) {
                     match doc_child.tag_name().name() {
                         "meta" => meta = parse_meta(&doc_child),
-                        "pages" => {
-                            found_pages_elem = true;
-                            for page_elem in elems(&doc_child) {
-                                match page_elem.tag_name().name() {
-                                    "page" => pages.push(parse_page(
-                                        &page_elem,
-                                        doc_size,
-                                        doc_margin,
-                                        doc_background.clone(),
-                                        doc_debug,
-                                        &tokens,
-                                        &asset_images,
-                                    )?),
-                                    other => return Err(format!(
-                                        "unexpected element in <pages>: <{other}>"
-                                    )),
-                                }
-                            }
-                            if pages.is_empty() {
-                                return Err("<pages> must contain at least one <page>".into());
-                            }
+                        "section" => {
+                            sections_xml.push(parse_section_elem(
+                                &doc_child,
+                                doc_size,
+                                doc_margin,
+                                doc_background.clone(),
+                                doc_debug,
+                                doc_font.as_deref(),
+                                &tokens,
+                                &asset_fonts,
+                                &asset_images,
+                            )?);
                         }
                         other => return Err(format!(
                             "unexpected element in <document>: <{other}>"
                         )),
                     }
                 }
-                if !found_pages_elem {
-                    return Err("<document> is missing a <pages> element".into());
+                if sections_xml.is_empty() {
+                    return Err("<document> must contain at least one <section>".into());
                 }
+                let mut resolved_fonts: HashMap<String, FontDef> = HashMap::new();
+                for (_alias, def) in &asset_fonts {
+                    let key = match def {
+                        FontDef::Core(n) => n.clone(),
+                        FontDef::Ref(k)  => k.clone(),
+                    };
+                    resolved_fonts.insert(key, def.clone());
+                }
+                return Ok(Document {
+                    meta,
+                    fonts:       resolved_fonts,
+                    font_widths: HashMap::new(),
+                    images:      asset_images,
+                    page_width:  doc_size.0,
+                    page_height: doc_size.1,
+                    margin:      doc_margin,
+                    background:  doc_background,
+                    debug:       doc_debug,
+                    sections:    sections_xml,
+                });
             }
             other => return Err(format!("unexpected element in <lpdf>: <{other}>")),
         }
     }
 
-    let parsed = ParsedDocument {
-        meta,
-        fonts:       asset_fonts,
-        font_widths: HashMap::new(),
-        images:      asset_images,
-        pages,
-        doc_font,
-    };
-    Ok(resolve_doc(parsed))
+    Err("<lpdf> must contain a <document> element".into())
 }
 
 // ── Assets ────────────────────────────────────────────────────────────────────
@@ -716,8 +972,8 @@ fn parse_scale_row(elem: &roxmltree::Node) -> Result<[f32; 6], String> {
 // ── Page / meta ───────────────────────────────────────────────────────────────
 
 /// Apply size/orientation/margin/background/debug overrides from an attribute
-/// source onto the running page-defaults.  Works for both XML `<page>` elements
-/// and JSON page nodes via the `Attrs` trait.  Returns the resolved `debug` flag.
+/// source onto the running section-defaults.  Works for both XML `<section>` elements
+/// and JSON section nodes via the `Attrs` trait.  Returns the resolved `debug` flag.
 fn apply_page_overrides(
     size:       &mut (f32, f32),
     margin:     &mut [f32; 4],
@@ -751,39 +1007,6 @@ fn parse_meta(elem: &roxmltree::Node) -> Meta {
     }
 }
 
-fn parse_page(
-    elem:           &roxmltree::Node,
-    doc_size:       (f32, f32),
-    doc_margin:     [f32; 4],
-    doc_background: Option<String>,
-    doc_debug:      bool,
-    tokens:         &Tokens,
-    asset_images:   &HashMap<String, String>,
-) -> Result<ParsedPage, String> {
-    if elem.attribute("font-size").is_some() {
-        return Err("<page> does not allow font-size".into());
-    }
-    let mut size       = doc_size;
-    let mut margin     = doc_margin;
-    let mut background = doc_background;
-    let debug = apply_page_overrides(&mut size, &mut margin, &mut background, elem, tokens, doc_debug)?;
-
-    let mut children = Vec::new();
-    for child in elems(elem) {
-        match child.tag_name().name() {
-            "layout" => {
-                for layout_child in elems(&child) {
-                    children.push(parse_node(&layout_child, tokens, asset_images)?);
-                }
-            }
-            other => return Err(format!(
-                "unexpected element in <page>: <{other}>; wrap layout content in <layout>"
-            )),
-        }
-    }
-
-    Ok(ParsedPage { width: size.0, height: size.1, margin, background, debug, children })
-}
 
 pub fn parse_page_size(val: &str) -> Result<(f32, f32), String> {
     match val {
@@ -805,6 +1028,438 @@ pub fn parse_page_size(val: &str) -> Result<(f32, f32), String> {
             }
         }
     }
+}
+
+/// Convert a measurement string with a unit suffix to points.
+/// Supported: `pt`, `mm`, `in`.  Bare numbers are treated as `pt`.
+pub fn parse_measurement(s: &str) -> Result<f32, String> {
+    let s = s.trim();
+    if let Some(v) = s.strip_suffix("mm") {
+        let n: f32 = v.trim().parse().map_err(|_| format!("invalid measurement: '{s}'"))?;
+        Ok(n * 72.0 / 25.4)
+    } else if let Some(v) = s.strip_suffix("in") {
+        let n: f32 = v.trim().parse().map_err(|_| format!("invalid measurement: '{s}'"))?;
+        Ok(n * 72.0)
+    } else if let Some(v) = s.strip_suffix("pt") {
+        v.trim().parse().map_err(|_| format!("invalid measurement: '{s}'"))
+    } else {
+        s.parse().map_err(|_| format!("invalid measurement: '{s}'"))
+    }
+}
+
+/// Parse a `PageScope` from its string representation.
+/// Keywords: `each`, `first`, `last`, `odd`, `even`.
+/// Numeric: comma-separated ranges where each is `N`, `N-M`, or `N-last`.
+pub fn parse_page_scope(s: &str) -> Result<PageScope, String> {
+    let s = s.trim();
+    match s {
+        "each"  => return Ok(PageScope::Each),
+        "first" => return Ok(PageScope::First),
+        "last"  => return Ok(PageScope::Last),
+        "odd"   => return Ok(PageScope::Odd),
+        "even"  => return Ok(PageScope::Even),
+        _       => {}
+    }
+    // Numeric range(s): "1", "2-4", "1,3-5", "2-last"
+    let mut ranges = Vec::new();
+    for part in s.split(',') {
+        let part = part.trim();
+        if part.is_empty() { continue; }
+        if let Some((a, b)) = part.split_once('-') {
+            let start: u32 = a.trim().parse()
+                .map_err(|_| format!("invalid page scope '{s}': '{a}' is not a number"))?;
+            let end = if b.trim() == "last" {
+                None
+            } else {
+                let n: u32 = b.trim().parse()
+                    .map_err(|_| format!("invalid page scope '{s}': '{b}' is not a number or 'last'"))?;
+                Some(n)
+            };
+            ranges.push(PageRange { start, end });
+        } else {
+            let n: u32 = part.parse()
+                .map_err(|_| format!("invalid page scope '{s}': '{part}' is not a number"))?;
+            ranges.push(PageRange { start: n, end: Some(n) });
+        }
+    }
+    if ranges.is_empty() {
+        return Err(format!("invalid page scope: '{s}'"));
+    }
+    Ok(PageScope::Pages(ranges))
+}
+
+/// Parse a signed measurement (allows negative values) to points.
+pub fn parse_signed_measurement(s: &str) -> Result<f32, String> {
+    let s = s.trim();
+    let neg = s.starts_with('-');
+    let inner = if neg { &s[1..] } else { s };
+    let val = parse_measurement(inner)?;
+    Ok(if neg { -val } else { val })
+}
+
+/// Parse `anchor` attribute to `Anchor`.
+pub fn parse_anchor(s: &str) -> Result<Anchor, String> {
+    match s {
+        "top-left"      => Ok(Anchor::TopLeft),
+        "top-center"    => Ok(Anchor::TopCenter),
+        "top-right"     => Ok(Anchor::TopRight),
+        "center-left"   => Ok(Anchor::CenterLeft),
+        "center"        => Ok(Anchor::Center),
+        "center-right"  => Ok(Anchor::CenterRight),
+        "bottom-left"   => Ok(Anchor::BottomLeft),
+        "bottom-center" => Ok(Anchor::BottomCenter),
+        "bottom-right"  => Ok(Anchor::BottomRight),
+        other => Err(format!("invalid anchor: '{other}'")),
+    }
+}
+
+/// Parse canvas position from element attributes.
+/// If `anchor` is present → `Anchored`.  Otherwise → `Absolute`.
+fn parse_canvas_position(elem: &roxmltree::Node) -> Result<CanvasPosition, String> {
+    if let Some(a) = elem.attribute("anchor") {
+        let anchor = parse_anchor(a)?;
+        let dx = elem.attribute("x")
+            .map(parse_signed_measurement)
+            .transpose()?
+            .unwrap_or(0.0);
+        let dy = elem.attribute("y")
+            .map(parse_signed_measurement)
+            .transpose()?
+            .unwrap_or(0.0);
+        Ok(CanvasPosition::Anchored { anchor, dx, dy })
+    } else {
+        let x = elem.attribute("x")
+            .map(parse_signed_measurement)
+            .transpose()?
+            .unwrap_or(0.0);
+        let y = elem.attribute("y")
+            .map(parse_signed_measurement)
+            .transpose()?
+            .unwrap_or(0.0);
+        Ok(CanvasPosition::Absolute { x, y })
+    }
+}
+
+/// Parse a canvas `<rect>` element.
+fn parse_canvas_rect(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
+    let pos          = parse_canvas_position(elem)?;
+    let w            = parse_measurement(elem.attribute("w").unwrap_or("0pt"))?;
+    let h            = parse_measurement(elem.attribute("h").unwrap_or("0pt"))?;
+    let fill         = opt_canvas_color(elem, "fill", tokens)?;
+    let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
+    let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
+    let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
+    let radius       = elem.attribute("radius").map(parse_measurement).transpose()?;
+    let opacity      = elem.attribute("opacity").map(|v| v.parse::<f32>().map_err(|_| format!("invalid opacity '{v}'"))).transpose()?;
+    Ok(CanvasPrimitive::Rect(CanvasRect { pos, w, h, fill, stroke, stroke_width, stroke_dash, radius, opacity }))
+}
+
+fn parse_canvas_circle(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
+    let pos          = parse_canvas_position(elem)?;
+    let r            = parse_measurement(elem.attribute("r").unwrap_or("0pt"))?;
+    let fill         = opt_canvas_color(elem, "fill", tokens)?;
+    let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
+    let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
+    let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
+    let opacity      = elem.attribute("opacity").map(|v| v.parse::<f32>().map_err(|_| format!("invalid opacity '{v}'"))).transpose()?;
+    Ok(CanvasPrimitive::Circle(CanvasCircle { pos, r, fill, stroke, stroke_width, stroke_dash, opacity }))
+}
+
+fn parse_canvas_ellipse(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
+    let pos          = parse_canvas_position(elem)?;
+    let rx           = parse_measurement(elem.attribute("rx").unwrap_or("0pt"))?;
+    let ry           = parse_measurement(elem.attribute("ry").unwrap_or("0pt"))?;
+    let fill         = opt_canvas_color(elem, "fill", tokens)?;
+    let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
+    let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
+    let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
+    let opacity      = elem.attribute("opacity").map(|v| v.parse::<f32>().map_err(|_| format!("invalid opacity '{v}'"))).transpose()?;
+    Ok(CanvasPrimitive::Ellipse(CanvasEllipse { pos, rx, ry, fill, stroke, stroke_width, stroke_dash, opacity }))
+}
+
+fn parse_canvas_line(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
+    let x1           = parse_signed_measurement(elem.attribute("x1").unwrap_or("0pt"))?;
+    let y1           = parse_signed_measurement(elem.attribute("y1").unwrap_or("0pt"))?;
+    let x2           = parse_signed_measurement(elem.attribute("x2").unwrap_or("0pt"))?;
+    let y2           = parse_signed_measurement(elem.attribute("y2").unwrap_or("0pt"))?;
+    let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
+    let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
+    let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
+    let line_cap     = elem.attribute("line-cap").map(str::to_string);
+    Ok(CanvasPrimitive::Line(CanvasLine { x1, y1, x2, y2, stroke, stroke_width, stroke_dash, line_cap }))
+}
+
+fn parse_canvas_path(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
+    let d            = elem.attribute("d").unwrap_or("").to_string();
+    let fill         = opt_canvas_color(elem, "fill", tokens)?;
+    let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
+    let fill_rule    = elem.attribute("fill-rule").map(str::to_string);
+    let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
+    let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
+    let line_cap     = elem.attribute("line-cap").map(str::to_string);
+    let opacity      = elem.attribute("opacity").map(|v| v.parse::<f32>().map_err(|_| format!("invalid opacity '{v}'"))).transpose()?;
+    Ok(CanvasPrimitive::Path(CanvasPath { d, fill, stroke, fill_rule, stroke_width, stroke_dash, line_cap, opacity }))
+}
+
+fn parse_canvas_text_elem(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
+    let pos        = parse_canvas_position(elem)?;
+    let font       = elem.attribute("font").map(str::to_string);
+    let font_size  = elem.attribute("font-size").map(parse_measurement).transpose()?;
+    let color      = opt_canvas_color(elem, "color", tokens)?;
+    let align      = elem.attribute("align").map(str::to_string);
+    let w          = elem.attribute("w").map(parse_measurement).transpose()?;
+    let line_height = elem.attribute("line-height").map(parse_measurement).transpose()?;
+    let opacity    = elem.attribute("opacity").map(|v| v.parse::<f32>().map_err(|_| format!("invalid opacity '{v}'"))).transpose()?;
+
+    let mut content = String::new();
+    let mut runs    = Vec::new();
+
+    for child in elem.children() {
+        if child.is_text() {
+            let txt = child.text().unwrap_or("").split_whitespace().collect::<Vec<_>>().join(" ");
+            if !txt.is_empty() { content.push_str(&txt); }
+        } else if child.is_element() && child.tag_name().name() == "span" {
+            let span_text = child.children()
+                .filter(|n| n.is_text())
+                .filter_map(|n| n.text())
+                .collect::<String>()
+                .split_whitespace().collect::<Vec<_>>().join(" ");
+            runs.push(CanvasTextRun {
+                text:  span_text,
+                font:  child.attribute("font").map(str::to_string),
+                color: if let Some(c) = child.attribute("color") {
+                    Some(tokens.resolve_color(c)?)
+                } else { None },
+            });
+        }
+    }
+
+    let data_attrs = parse_canvas_data_attrs(elem);
+    Ok(CanvasPrimitive::Text(CanvasText {
+        pos, font, font_size, color, align, w, line_height, opacity,
+        content, runs, data_attrs,
+    }))
+}
+
+fn parse_canvas_img_elem(
+    elem: &roxmltree::Node,
+    asset_images: &HashMap<String, String>,
+) -> Result<CanvasPrimitive, String> {
+    let name_raw = elem.attribute("name")
+        .ok_or("<img> (canvas) missing required attribute 'name'")?;
+    validate_img_asset(name_raw, asset_images, "<assets>")?;
+    let name    = asset_images[name_raw].clone();
+    let pos     = parse_canvas_position(elem)?;
+    let w       = parse_measurement(elem.attribute("w").unwrap_or("0pt"))?;
+    let h       = parse_measurement(elem.attribute("h").unwrap_or("0pt"))?;
+    let data_attrs = parse_canvas_data_attrs(elem);
+    Ok(CanvasPrimitive::Img(CanvasImg { name, pos, w, h, data_attrs }))
+}
+
+fn parse_canvas_data_attrs(elem: &roxmltree::Node) -> Option<Box<DataAttrs>> {
+    let dv  = elem.attribute("data-value").map(str::to_owned);
+    let ds  = elem.attribute("data-source").map(str::to_owned);
+    let di  = elem.attribute("data-if").map(str::to_owned);
+    let din = elem.attribute("data-if-not").map(str::to_owned);
+    if dv.is_some() || ds.is_some() || di.is_some() || din.is_some() {
+        Some(Box::new(DataAttrs { data_value: dv, data_source: ds, data_if: di, data_if_not: din }))
+    } else {
+        None
+    }
+}
+
+/// Resolve an optional color attribute, returning `None` if absent.
+fn opt_canvas_color(
+    elem:   &roxmltree::Node,
+    attr:   &str,
+    tokens: &Tokens,
+) -> Result<Option<String>, String> {
+    elem.attribute(attr).map(|v| tokens.resolve_color(v)).transpose()
+}
+
+/// Parse a `<canvas>` element into a `Canvas`.
+fn parse_canvas_elem(
+    elem:         &roxmltree::Node,
+    tokens:       &Tokens,
+    asset_images: &HashMap<String, String>,
+) -> Result<Canvas, String> {
+    let mut layers = Vec::new();
+    for child in elems(elem) {
+        match child.tag_name().name() {
+            "layer" => layers.push(parse_canvas_layer_elem(&child, tokens, asset_images)?),
+            other   => return Err(format!("<canvas> only accepts <layer> children, got <{other}>")),
+        }
+    }
+    Ok(Canvas { layers })
+}
+
+fn parse_canvas_layer_elem(
+    elem:         &roxmltree::Node,
+    tokens:       &Tokens,
+    asset_images: &HashMap<String, String>,
+) -> Result<CanvasLayer, String> {
+    let page = elem.attribute("page")
+        .map(parse_page_scope)
+        .transpose()?;
+    let opacity = elem.attribute("opacity")
+        .map(|v| v.parse::<f32>().map_err(|_| format!("invalid layer opacity '{v}'")))
+        .transpose()?;
+    let transform = elem.attribute("transform").map(str::to_string);
+    let clip      = elem.attribute("clip").map(str::to_string);
+
+    let mut children = Vec::new();
+    for child in elems(elem) {
+        children.push(parse_canvas_primitive_elem(&child, tokens, asset_images)?);
+    }
+    Ok(CanvasLayer { children, page, opacity, transform, clip })
+}
+
+fn parse_canvas_primitive_elem(
+    elem:         &roxmltree::Node,
+    tokens:       &Tokens,
+    asset_images: &HashMap<String, String>,
+) -> Result<CanvasPrimitive, String> {
+    match elem.tag_name().name() {
+        "rect"    => parse_canvas_rect(elem, tokens),
+        "circle"  => parse_canvas_circle(elem, tokens),
+        "ellipse" => parse_canvas_ellipse(elem, tokens),
+        "line"    => parse_canvas_line(elem, tokens),
+        "path"    => parse_canvas_path(elem, tokens),
+        "text"    => parse_canvas_text_elem(elem, tokens),
+        "img"     => parse_canvas_img_elem(elem, asset_images),
+        other => Err(format!("unknown canvas primitive: <{other}>")),
+    }
+}
+
+/// Parse a `<layout>` element that may contain `<region>` and layout nodes.
+#[allow(dead_code)]
+fn parse_layout_with_regions(
+    elem:         &roxmltree::Node,
+    tokens:       &Tokens,
+    asset_images: &HashMap<String, String>,
+) -> Result<Layout, String> {
+    let mut children = Vec::new();
+    for child in elems(elem) {
+        if child.tag_name().name() == "region" {
+            children.push(LayoutChild::Region(parse_region_elem(&child, tokens, asset_images)?));
+        } else {
+            children.push(LayoutChild::Content(resolve_parsed_node(
+                parse_node(&child, tokens, asset_images)?,
+                "Helvetica", 11.0, &HashMap::new(),
+            )));
+        }
+    }
+    Ok(Layout { children })
+}
+
+/// Thin wrapper: resolve a ParsedNode in isolation (used during XML parse of sections
+/// where we haven't yet done the full resolve_doc pass).  The caller should use
+/// `resolve_doc` for proper font inheritance; this is only used to convert
+/// `ParsedNode` → `Node` when the context font is already known to be the default.
+fn resolve_parsed_node(
+    n:     ParsedNode,
+    font:  &str,
+    size:  f32,
+    fonts: &HashMap<String, FontDef>,
+) -> Node {
+    resolve_node(n, font, size, fonts)
+}
+
+fn parse_region_elem(
+    elem:         &roxmltree::Node,
+    tokens:       &Tokens,
+    asset_images: &HashMap<String, String>,
+) -> Result<LayoutRegion, String> {
+    let pin_str = elem.attribute("pin")
+        .ok_or("<region> missing required attribute 'pin'")?;
+    let pin = match pin_str {
+        "top"    => RegionPin::Top,
+        "bottom" => RegionPin::Bottom,
+        "left"   => RegionPin::Left,
+        "right"  => RegionPin::Right,
+        other => return Err(format!("<region> invalid pin '{other}'; use top, bottom, left, or right")),
+    };
+    let page = elem.attribute("page").map(parse_page_scope).transpose()?;
+    let w    = elem.attribute("w").map(parse_measurement).transpose()?;
+    let debug = elem.attribute("debug").map(|v| v == "true").unwrap_or(false);
+
+    let mut children = Vec::new();
+    for child in elems(elem) {
+        children.push(resolve_parsed_node(
+            parse_node(&child, tokens, asset_images)?,
+            "Helvetica", 11.0, &HashMap::new(),
+        ));
+    }
+    Ok(LayoutRegion { pin, page, w, children, debug })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn parse_section_elem(
+    elem:           &roxmltree::Node,
+    doc_size:       (f32, f32),
+    doc_margin:     [f32; 4],
+    doc_background: Option<String>,
+    doc_debug:      bool,
+    doc_font:       Option<&str>,
+    tokens:         &Tokens,
+    asset_fonts:    &HashMap<String, FontDef>,
+    asset_images:   &HashMap<String, String>,
+) -> Result<Section, String> {
+    // Inherit doc-level defaults, then apply section overrides.
+    let mut size       = doc_size;
+    let mut margin     = doc_margin;
+    let mut background = doc_background;
+    let debug = apply_page_overrides(&mut size, &mut margin, &mut background, elem, tokens, doc_debug)?;
+    let title = elem.attribute("title").map(str::to_string);
+
+    let root_font = doc_font
+        .map(|f| resolve_font_alias(f, asset_fonts))
+        .unwrap_or_else(|| "Helvetica".to_string());
+    let root_size = 11.0_f32;
+
+    let mut children: Vec<SectionChild> = Vec::new();
+    for child in elems(elem) {
+        match child.tag_name().name() {
+            "layout" => {
+                // Inline layout: build a Layout from its children (may include <region>).
+                let mut lc: Vec<LayoutChild> = Vec::new();
+                for layout_child in elems(&child) {
+                    if layout_child.tag_name().name() == "region" {
+                        lc.push(LayoutChild::Region(parse_region_elem(&layout_child, tokens, asset_images)?));
+                    } else {
+                        lc.push(LayoutChild::Content(resolve_parsed_node(
+                            parse_node(&layout_child, tokens, asset_images)?,
+                            &root_font, root_size, asset_fonts,
+                        )));
+                    }
+                }
+                children.push(SectionChild::Layout(Layout { children: lc }));
+            }
+            "canvas" => {
+                children.push(SectionChild::Canvas(
+                    parse_canvas_elem(&child, tokens, asset_images)?
+                ));
+            }
+            other => return Err(format!(
+                "<section> only accepts <layout> or <canvas> children, got <{other}>"
+            )),
+        }
+    }
+
+    if children.is_empty() {
+        return Err("<section> must have at least one <layout> or <canvas> child".into());
+    }
+
+    Ok(Section {
+        children,
+        options: SectionOptions {
+            size:       if size != doc_size { Some(size) } else { None },
+            margin:     Some(margin),
+            background,
+            debug:      Some(debug),
+            title,
+        },
+    })
 }
 
 // ── Node parsing ──────────────────────────────────────────────────────────────
@@ -1428,7 +2083,6 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     };
 
     // ── Document-level page defaults ──────────────────────────────────────────
-    let doc_font   = attrs.get("font")       .and_then(|v| v.as_str()).map(str::to_string);
     let doc_size_str  = attrs.get("size")       .and_then(|v| v.as_str());
     let doc_orient    = attrs.get("orientation").and_then(|v| v.as_str());
     let doc_margin_s  = attrs.get("margin")     .and_then(|v| v.as_str());
@@ -1455,26 +2109,41 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     let doc_debug = attrs.get("debug").and_then(|v| v.as_str())
         .map(|v| v == "true").unwrap_or(false);
 
-    // ── Pages ─────────────────────────────────────────────────────────────────
-    let page_arr = root.get("children").and_then(|v| v.as_array())
-        .ok_or("tree JSON 'children' must be an array")?;
+    // ── Sections ──────────────────────────────────────────────────────────────
+    let nodes_arr = root.get("nodes")
+        .and_then(|v| v.as_array())
+        .ok_or("tree JSON must have a 'nodes' array")?;
 
-    let mut pages: Vec<ParsedPage> = Vec::new();
-    for child in page_arr {
-        if child.get("type").and_then(|v| v.as_str()) != Some("page") {
-            return Err("document children must all be page nodes".into());
-        }
-        pages.push(parse_tree_page(
-            child, doc_size, doc_margin, doc_background.clone(),
-            doc_debug, &tokens, &asset_images,
+    let mut sections: Vec<Section> = Vec::new();
+    for sec_json in nodes_arr {
+        sections.push(parse_tree_section(
+            sec_json, doc_size, doc_margin, doc_background.clone(),
+            doc_debug, &tokens, &asset_fonts, &asset_images,
         )?);
     }
-    if pages.is_empty() {
-        return Err("document must have at least one page".into());
+    if sections.is_empty() {
+        return Err("document must have at least one section".into());
     }
-
-    let parsed = ParsedDocument { meta, fonts: asset_fonts, font_widths: asset_font_widths, images: asset_images, pages, doc_font };
-    Ok(resolve_doc(parsed))
+    let mut resolved_fonts: HashMap<String, FontDef> = HashMap::new();
+    for (_alias, def) in &asset_fonts {
+        let key = match def {
+            FontDef::Core(n) => n.clone(),
+            FontDef::Ref(k)  => k.clone(),
+        };
+        resolved_fonts.insert(key, def.clone());
+    }
+    Ok(Document {
+        meta,
+        fonts:       resolved_fonts,
+        font_widths: asset_font_widths,
+        images:      asset_images,
+        page_width:  doc_size.0,
+        page_height: doc_size.1,
+        margin:      doc_margin,
+        background:  doc_background,
+        debug:       doc_debug,
+        sections,
+    })
 }
 
 pub fn parse_tree_tokens_pub(
@@ -1513,39 +2182,280 @@ pub fn parse_tree_tokens_pub(
     Ok(())
 }
 
-fn parse_tree_page(
+
+#[allow(clippy::too_many_arguments)]
+fn parse_tree_section(
     json:           &serde_json::Value,
     doc_size:       (f32, f32),
     doc_margin:     [f32; 4],
     doc_background: Option<String>,
     doc_debug:      bool,
     tokens:         &Tokens,
+    asset_fonts:    &HashMap<String, FontDef>,
     asset_images:   &HashMap<String, String>,
-) -> Result<ParsedPage, String> {
+) -> Result<Section, String> {
     let mut size       = doc_size;
     let mut margin     = doc_margin;
     let mut background = doc_background;
     let a = JsonAttrs(json);
     let debug = apply_page_overrides(&mut size, &mut margin, &mut background, &a, tokens, doc_debug)?;
+    let title = jattr(json, "title").map(str::to_string);
 
-    let children = if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
-        // page.children must contain at most one "layout" node; its children are the layout nodes.
-        let mut result = Vec::new();
+    let root_font = "Helvetica";
+    let root_size = 11.0_f32;
+
+    let mut children: Vec<SectionChild> = Vec::new();
+    if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
         for child in arr {
-            if child.get("type").and_then(|v| v.as_str()) == Some("layout") {
-                if let Some(layout_arr) = child.get("children").and_then(|v| v.as_array()) {
-                    for lc in layout_arr {
-                        result.push(parse_tree_node(lc, tokens, asset_images)?);
+            let kind = child.get("type").and_then(|v| v.as_str());
+            match kind {
+                Some("layout") => {
+                    let mut lc: Vec<LayoutChild> = Vec::new();
+                    if let Some(nodes) = child.get("nodes").and_then(|v| v.as_array()) {
+                        for n in nodes {
+                            if n.get("type").and_then(|v| v.as_str()) == Some("layout-region") {
+                                lc.push(LayoutChild::Region(parse_tree_region(n, tokens, asset_images)?));
+                            } else {
+                                lc.push(LayoutChild::Content(
+                                    resolve_parsed_node(
+                                        parse_tree_node(n, tokens, asset_images)?,
+                                        root_font, root_size, asset_fonts,
+                                    )
+                                ));
+                            }
+                        }
                     }
+                    children.push(SectionChild::Layout(Layout { children: lc }));
                 }
+                Some("canvas") => {
+                    let mut layers = Vec::new();
+                    if let Some(nodes) = child.get("nodes").and_then(|v| v.as_array()) {
+                        for layer_json in nodes {
+                            layers.push(parse_tree_canvas_layer(layer_json, tokens, asset_images)?);
+                        }
+                    }
+                    children.push(SectionChild::Canvas(Canvas { layers }));
+                }
+                other => return Err(format!(
+                    "section child 'type' must be 'layout' or 'canvas', got {:?}", other
+                )),
             }
         }
-        result
-    } else {
-        vec![]
+    }
+
+    if children.is_empty() {
+        return Err("section must have at least one layout or canvas child".into());
+    }
+
+    Ok(Section {
+        children,
+        options: SectionOptions {
+            size:       if size != doc_size { Some(size) } else { None },
+            margin:     Some(margin),
+            background,
+            debug:      Some(debug),
+            title,
+        },
+    })
+}
+
+fn parse_tree_region(
+    json:         &serde_json::Value,
+    tokens:       &Tokens,
+    asset_images: &HashMap<String, String>,
+) -> Result<LayoutRegion, String> {
+    let pin_str = jattr(json, "pin")
+        .ok_or("layout-region missing 'pin' attribute")?;
+    let pin = match pin_str {
+        "top"    => RegionPin::Top,
+        "bottom" => RegionPin::Bottom,
+        "left"   => RegionPin::Left,
+        "right"  => RegionPin::Right,
+        other => return Err(format!("layout-region invalid pin '{other}'")),
+    };
+    let page  = jattr(json, "page").map(parse_page_scope).transpose()?;
+    let w     = jattr(json, "w").map(parse_measurement).transpose()?;
+    let debug = jattr(json, "debug").map(|v| v == "true").unwrap_or(false);
+
+    let mut children = Vec::new();
+    if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
+        for n in arr {
+            children.push(resolve_parsed_node(
+                parse_tree_node(n, tokens, asset_images)?,
+                "Helvetica", 11.0, &HashMap::new(),
+            ));
+        }
+    }
+    Ok(LayoutRegion { pin, page, w, children, debug })
+}
+
+fn parse_tree_canvas_layer(
+    json:         &serde_json::Value,
+    tokens:       &Tokens,
+    asset_images: &HashMap<String, String>,
+) -> Result<CanvasLayer, String> {
+    let page = jattr(json, "page").map(parse_page_scope).transpose()?;
+    let opacity = jattr(json, "opacity")
+        .map(|v| v.parse::<f32>().map_err(|_| format!("invalid layer opacity '{v}'")))
+        .transpose()?;
+    let transform = jattr(json, "transform").map(str::to_string);
+    let clip      = jattr(json, "clip").map(str::to_string);
+
+    let mut children = Vec::new();
+    if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
+        for n in arr {
+            children.push(parse_tree_canvas_primitive(n, tokens, asset_images)?);
+        }
+    }
+    Ok(CanvasLayer { children, page, opacity, transform, clip })
+}
+
+fn parse_tree_canvas_primitive(
+    json:         &serde_json::Value,
+    tokens:       &Tokens,
+    asset_images: &HashMap<String, String>,
+) -> Result<CanvasPrimitive, String> {
+    let type_str = json.get("type").and_then(|v| v.as_str())
+        .ok_or("canvas primitive missing 'type'")?;
+    // Strip optional "canvas-" prefix (JSON wire format uses "canvas-rect" etc.)
+    let type_str = type_str.strip_prefix("canvas-").unwrap_or(type_str);
+
+    let get_attr = |k: &str| jattr(json, k);
+    let get_color = |k: &str| -> Result<Option<String>, String> {
+        get_attr(k).map(|v| tokens.resolve_color(v)).transpose()
+    };
+    let get_f32 = |k: &str| -> Result<Option<f32>, String> {
+        get_attr(k).map(parse_measurement).transpose()
+    };
+    let get_f32_signed = |k: &str| -> Result<Option<f32>, String> {
+        get_attr(k).map(parse_signed_measurement).transpose()
+    };
+    let get_pos = || -> Result<CanvasPosition, String> {
+        if let Some(a) = get_attr("anchor") {
+            let anchor = parse_anchor(a)?;
+            let dx = get_f32_signed("x")?.unwrap_or(0.0);
+            let dy = get_f32_signed("y")?.unwrap_or(0.0);
+            Ok(CanvasPosition::Anchored { anchor, dx, dy })
+        } else {
+            let x = get_f32_signed("x")?.unwrap_or(0.0);
+            let y = get_f32_signed("y")?.unwrap_or(0.0);
+            Ok(CanvasPosition::Absolute { x, y })
+        }
+    };
+    let get_opacity = || -> Result<Option<f32>, String> {
+        get_attr("opacity").map(|v| v.parse::<f32>().map_err(|_| format!("invalid opacity '{v}'"))).transpose()
     };
 
-    Ok(ParsedPage { width: size.0, height: size.1, margin, background, debug, children })
+    match type_str {
+        "rect" => Ok(CanvasPrimitive::Rect(CanvasRect {
+            pos: get_pos()?,
+            w:            get_f32("w")?.unwrap_or(0.0),
+            h:            get_f32("h")?.unwrap_or(0.0),
+            fill:         get_color("fill")?,
+            stroke:       get_color("stroke")?,
+            stroke_width: get_f32("stroke-width")?,
+            stroke_dash:  get_attr("stroke-dash").map(str::to_string),
+            radius:       get_f32("radius")?,
+            opacity:      get_opacity()?,
+        })),
+        "circle" => Ok(CanvasPrimitive::Circle(CanvasCircle {
+            pos: get_pos()?,
+            r:            get_f32("r")?.unwrap_or(0.0),
+            fill:         get_color("fill")?,
+            stroke:       get_color("stroke")?,
+            stroke_width: get_f32("stroke-width")?,
+            stroke_dash:  get_attr("stroke-dash").map(str::to_string),
+            opacity:      get_opacity()?,
+        })),
+        "ellipse" => Ok(CanvasPrimitive::Ellipse(CanvasEllipse {
+            pos: get_pos()?,
+            rx:           get_f32("rx")?.unwrap_or(0.0),
+            ry:           get_f32("ry")?.unwrap_or(0.0),
+            fill:         get_color("fill")?,
+            stroke:       get_color("stroke")?,
+            stroke_width: get_f32("stroke-width")?,
+            stroke_dash:  get_attr("stroke-dash").map(str::to_string),
+            opacity:      get_opacity()?,
+        })),
+        "line" => Ok(CanvasPrimitive::Line(CanvasLine {
+            x1:           get_f32_signed("x1")?.unwrap_or(0.0),
+            y1:           get_f32_signed("y1")?.unwrap_or(0.0),
+            x2:           get_f32_signed("x2")?.unwrap_or(0.0),
+            y2:           get_f32_signed("y2")?.unwrap_or(0.0),
+            stroke:       get_color("stroke")?,
+            stroke_width: get_f32("stroke-width")?,
+            stroke_dash:  get_attr("stroke-dash").map(str::to_string),
+            line_cap:     get_attr("line-cap").map(str::to_string),
+        })),
+        "path" => Ok(CanvasPrimitive::Path(CanvasPath {
+            d:            get_attr("d").unwrap_or("").to_string(),
+            fill:         get_color("fill")?,
+            stroke:       get_color("stroke")?,
+            fill_rule:    get_attr("fill-rule").map(str::to_string),
+            stroke_width: get_f32("stroke-width")?,
+            stroke_dash:  get_attr("stroke-dash").map(str::to_string),
+            line_cap:     get_attr("line-cap").map(str::to_string),
+            opacity:      get_opacity()?,
+        })),
+        "canvas-text" | "text" => {
+            let content = json.get("text").and_then(|v| v.as_str())
+                .unwrap_or("").to_string();
+            let runs = if let Some(arr) = json.get("runs").and_then(|v| v.as_array()) {
+                arr.iter().map(|r| {
+                    let text = r.get("text").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let font = r.get("attrs").and_then(|a| a.get("font")).and_then(|v| v.as_str()).map(str::to_string);
+                    let color = r.get("attrs").and_then(|a| a.get("color")).and_then(|v| v.as_str())
+                        .map(|c| tokens.resolve_color(c))
+                        .transpose()?;
+                    Ok(CanvasTextRun { text, font, color })
+                }).collect::<Result<Vec<_>, String>>()?
+            } else { Vec::new() };
+            let data_attrs = {
+                let dv  = get_attr("data-value").map(str::to_owned);
+                let ds  = get_attr("data-source").map(str::to_owned);
+                let di  = get_attr("data-if").map(str::to_owned);
+                let din = get_attr("data-if-not").map(str::to_owned);
+                if dv.is_some() || ds.is_some() || di.is_some() || din.is_some() {
+                    Some(Box::new(DataAttrs { data_value: dv, data_source: ds, data_if: di, data_if_not: din }))
+                } else { None }
+            };
+            Ok(CanvasPrimitive::Text(CanvasText {
+                pos: get_pos()?,
+                font:        get_attr("font").map(str::to_string),
+                font_size:   get_f32("font-size")?,
+                color:       get_color("color")?,
+                align:       get_attr("align").map(str::to_string),
+                w:           get_f32("w")?,
+                line_height: get_f32("line-height")?,
+                opacity:     get_opacity()?,
+                content, runs, data_attrs,
+            }))
+        }
+        "img" => {
+            let name_raw = get_attr("src").or_else(|| get_attr("name"))
+                .ok_or("canvas-img missing 'src' or 'name'")?;
+            let name = asset_images.get(name_raw)
+                .ok_or_else(|| format!("canvas-img unknown asset '{name_raw}'"))?
+                .clone();
+            let data_attrs = {
+                let dv  = get_attr("data-value").map(str::to_owned);
+                let ds  = get_attr("data-source").map(str::to_owned);
+                let di  = get_attr("data-if").map(str::to_owned);
+                let din = get_attr("data-if-not").map(str::to_owned);
+                if dv.is_some() || ds.is_some() || di.is_some() || din.is_some() {
+                    Some(Box::new(DataAttrs { data_value: dv, data_source: ds, data_if: di, data_if_not: din }))
+                } else { None }
+            };
+            Ok(CanvasPrimitive::Img(CanvasImg {
+                name,
+                pos: get_pos()?,
+                w:   get_f32("w")?.unwrap_or(0.0),
+                h:   get_f32("h")?.unwrap_or(0.0),
+                data_attrs,
+            }))
+        }
+        other => Err(format!("unknown canvas primitive type: '{other}'")),
+    }
 }
 
 fn parse_tree_node(
@@ -1594,7 +2504,7 @@ fn parse_tree_node(
                 _         => TextAlign::Left,
             };
 
-            if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
+            if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
                 for (i, child) in arr.iter().enumerate() {
                     let leading = i > 0;
                     if let Some(s) = child.as_str() {
@@ -1609,7 +2519,7 @@ fn parse_tree_node(
                         }
                     } else if child.get("type").and_then(|v| v.as_str()) == Some("span") {
                         let span_text: String = child
-                            .get("children").and_then(|v| v.as_array())
+                            .get("nodes").and_then(|v| v.as_array())
                             .map(|arr| {
                                 arr.iter()
                                    .filter_map(|v| v.as_str())
@@ -1664,7 +2574,7 @@ fn parse_tree_node(
 
     // ── Layout children ───────────────────────────────────────────────────────
     if !matches!(kind, NodeKind::Divider | NodeKind::Img | NodeKind::Barcode | NodeKind::Field) {
-        if let Some(arr) = json.get("children").and_then(|v| v.as_array()) {
+        if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
             for child in arr {
                 let child_node = parse_tree_node(child, tokens, asset_images)?;
                 match kind {
@@ -1708,12 +2618,10 @@ mod tests {
 
     fn minimal(body: &str) -> String {
         if body.is_empty() {
-            format!(
-                r#"<lpdf version="1"><document size="a4" margin="28pt"><pages><page/></pages></document></lpdf>"#
-            )
+            r#"<lpdf version="1"><document size="a4" margin="28pt"><section><layout/></section></document></lpdf>"#.to_string()
         } else {
             format!(
-                r#"<lpdf version="1"><document size="a4" margin="28pt"><pages><page><layout>{body}</layout></page></pages></document></lpdf>"#
+                r#"<lpdf version="1"><document size="a4" margin="28pt"><section><layout>{body}</layout></section></document></lpdf>"#
             )
         }
     }
@@ -1721,16 +2629,18 @@ mod tests {
     #[test]
     fn parse_empty_page() {
         let doc = parse(&minimal("")).unwrap();
-        assert_eq!(doc.pages.len(), 1);
-        assert_eq!(doc.pages[0].width, 595.28);
-        assert_eq!(doc.pages[0].height, 841.89);
-        assert_eq!(doc.pages[0].margin, [28.0; 4]);
+        let pages = doc.section_layouts();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].width, 595.28);
+        assert_eq!(pages[0].height, 841.89);
+        assert_eq!(pages[0].margin, [28.0; 4]);
     }
 
     #[test]
     fn parse_frame_with_background() {
         let doc = parse(&minimal(r#"<frame background="primary" />"#)).unwrap();
-        let node = &doc.pages[0].children[0];
+        let pages = doc.section_layouts();
+        let node = &pages[0].children[0];
         assert_eq!(node.background.as_deref(), Some("#1763cf"));
     }
 
@@ -1740,7 +2650,8 @@ mod tests {
             r#"<stack gap="m"><frame /><frame /></stack>"#,
         ))
         .unwrap();
-        let stack = &doc.pages[0].children[0];
+        let pages = doc.section_layouts();
+        let stack = &pages[0].children[0];
         assert_eq!(stack.gap, 8.0);
         assert_eq!(stack.children.len(), 2);
     }
@@ -1748,7 +2659,8 @@ mod tests {
     #[test]
     fn parse_divider() {
         let doc = parse(&minimal(r##"<divider color="#e0e0e0" thickness="xs" />"##)).unwrap();
-        let d = &doc.pages[0].children[0];
+        let pages = doc.section_layouts();
+        let d = &pages[0].children[0];
         assert_eq!(d.kind, NodeKind::Divider);
         assert_eq!(d.thickness, 0.5);
         assert_eq!(d.color.as_deref(), Some("#e0e0e0"));
@@ -1757,14 +2669,16 @@ mod tests {
     #[test]
     fn parse_grid_cols() {
         let doc = parse(&minimal(r#"<grid cols="3" gap="m" />"#)).unwrap();
-        let g = &doc.pages[0].children[0];
+        let pages = doc.section_layouts();
+        let g = &pages[0].children[0];
         assert_eq!(g.cols, 3);
     }
 
     #[test]
     fn parse_text_node() {
         let doc = parse(&minimal(r#"<text font-size="m" color="text">Hello world</text>"#)).unwrap();
-        let t = &doc.pages[0].children[0];
+        let pages = doc.section_layouts();
+        let t = &pages[0].children[0];
         assert_eq!(t.kind, NodeKind::Text);
         assert_eq!(t.font_size, 11.0);
         assert_eq!(t.text_runs.len(), 1);
@@ -1777,24 +2691,26 @@ mod tests {
             <assets>
                 <font name="body" core="Helvetica-Oblique"/>
             </assets>
-            <document size="a4" font="body"><pages><page><layout>
+            <document size="a4" font="body"><section><layout>
                 <text>Hello</text>
-            </layout></page></pages></document>
+            </layout></section></document>
         </lpdf>"#;
         let doc = parse(xml).unwrap();
-        let t = &doc.pages[0].children[0];
+        let pages = doc.section_layouts();
+        let t = &pages[0].children[0];
         assert_eq!(t.font, "Helvetica-Oblique");
     }
 
     #[test]
     fn font_size_inheritance() {
         let xml = r#"<lpdf version="1">
-            <document size="a4"><pages><page><layout>
+            <document size="a4"><section><layout>
                 <stack font-size="14pt"><text>Hello</text></stack>
-            </layout></page></pages></document>
+            </layout></section></document>
         </lpdf>"#;
         let doc = parse(xml).unwrap();
-        let stack = &doc.pages[0].children[0];
+        let pages = doc.section_layouts();
+        let stack = &pages[0].children[0];
         let text  = &stack.children[0];
         assert_eq!(text.font_size, 14.0);
     }
@@ -1805,12 +2721,13 @@ mod tests {
             <assets>
                 <image name="logo"/>
             </assets>
-            <document size="a4"><pages><page><layout>
+            <document size="a4"><section><layout>
                 <img name="logo" width="100pt"/>
-            </layout></page></pages></document>
+            </layout></section></document>
         </lpdf>"#;
         let doc = parse(xml).unwrap();
-        let img = &doc.pages[0].children[0];
+        let pages = doc.section_layouts();
+        let img = &pages[0].children[0];
         assert_eq!(img.kind, NodeKind::Img);
         assert_eq!(img.image_name.as_deref(), Some("logo"));
     }
@@ -1843,32 +2760,321 @@ mod tests {
                     <color name="primary" value="#ff0000" />
                 </colors>
             </tokens>
-            <document size="a4"><pages><page><layout><frame background="primary" /></layout></page></pages></document>
+            <document size="a4"><section><layout><frame background="primary" /></layout></section></document>
         </lpdf>"##;
         let doc = parse(xml).unwrap();
         assert_eq!(
-            doc.pages[0].children[0].background.as_deref(),
+            doc.section_layouts()[0].children[0].background.as_deref(),
             Some("#ff0000")
         );
     }
 
     #[test]
     fn landscape_swaps_dimensions() {
-        let xml = r#"<lpdf version="1"><document size="a4" orientation="landscape"><pages><page /></pages></document></lpdf>"#;
+        let xml = r#"<lpdf version="1"><document size="a4" orientation="landscape"><section><layout/></section></document></lpdf>"#;
         let doc = parse(xml).unwrap();
-        assert_eq!(doc.pages[0].width, 841.89);
-        assert_eq!(doc.pages[0].height, 595.28);
+        let pages = doc.section_layouts();
+        assert_eq!(pages[0].width, 841.89);
+        assert_eq!(pages[0].height, 595.28);
     }
 
     #[test]
     fn height_fixed_pt() {
         let doc = parse(&minimal(r#"<frame height="28pt" />"#)).unwrap();
-        assert_eq!(doc.pages[0].children[0].height_mode, HeightMode::Fixed(28.0));
+        assert_eq!(doc.section_layouts()[0].children[0].height_mode, HeightMode::Fixed(28.0));
     }
 
     #[test]
     fn height_fill_mode() {
         let doc = parse(&minimal(r#"<frame height="fill" />"#)).unwrap();
-        assert_eq!(doc.pages[0].children[0].height_mode, HeightMode::Fill);
+        assert_eq!(doc.section_layouts()[0].children[0].height_mode, HeightMode::Fill);
+    }
+
+    // ── New Phase-2 unit tests ──────────────────────────────────────────────
+
+    // §5.2.1 parse_measurement
+    #[test]
+    fn measurement_pt() {
+        assert!((parse_measurement("72pt").unwrap() - 72.0).abs() < 0.01);
+    }
+    #[test]
+    fn measurement_mm() {
+        let v = parse_measurement("25.4mm").unwrap();
+        assert!((v - 72.0).abs() < 0.01, "25.4mm should be ~72pt, got {v}");
+    }
+    #[test]
+    fn measurement_in() {
+        let v = parse_measurement("1in").unwrap();
+        assert!((v - 72.0).abs() < 0.01, "1in should be 72pt, got {v}");
+    }
+    #[test]
+    fn measurement_invalid() {
+        assert!(parse_measurement("abc").is_err());
+    }
+
+    // §5.2.2 parse_page_scope keywords
+    #[test]
+    fn page_scope_keyword_each()  { assert_eq!(parse_page_scope("each").unwrap(),  PageScope::Each); }
+    #[test]
+    fn page_scope_keyword_first() { assert_eq!(parse_page_scope("first").unwrap(), PageScope::First); }
+    #[test]
+    fn page_scope_keyword_last()  { assert_eq!(parse_page_scope("last").unwrap(),  PageScope::Last); }
+    #[test]
+    fn page_scope_keyword_odd()   { assert_eq!(parse_page_scope("odd").unwrap(),   PageScope::Odd); }
+    #[test]
+    fn page_scope_keyword_even()  { assert_eq!(parse_page_scope("even").unwrap(),  PageScope::Even); }
+
+    // §5.2.3 parse_page_scope numeric
+    #[test]
+    fn page_scope_single_number() {
+        assert_eq!(
+            parse_page_scope("1").unwrap(),
+            PageScope::Pages(vec![PageRange { start: 1, end: Some(1) }])
+        );
+    }
+    #[test]
+    fn page_scope_range() {
+        assert_eq!(
+            parse_page_scope("2-4").unwrap(),
+            PageScope::Pages(vec![PageRange { start: 2, end: Some(4) }])
+        );
+    }
+    #[test]
+    fn page_scope_last_range() {
+        assert_eq!(
+            parse_page_scope("3-last").unwrap(),
+            PageScope::Pages(vec![PageRange { start: 3, end: None }])
+        );
+    }
+    #[test]
+    fn page_scope_comma_list() {
+        let ps = parse_page_scope("1,3-5").unwrap();
+        assert_eq!(ps, PageScope::Pages(vec![
+            PageRange { start: 1, end: Some(1) },
+            PageRange { start: 3, end: Some(5) },
+        ]));
+    }
+
+    // §5.2.4 parse_anchor
+    #[test]
+    fn anchor_all_values() {
+        let pairs = [
+            ("top-left",      Anchor::TopLeft),
+            ("top-center",    Anchor::TopCenter),
+            ("top-right",     Anchor::TopRight),
+            ("center-left",   Anchor::CenterLeft),
+            ("center",        Anchor::Center),
+            ("center-right",  Anchor::CenterRight),
+            ("bottom-left",   Anchor::BottomLeft),
+            ("bottom-center", Anchor::BottomCenter),
+            ("bottom-right",  Anchor::BottomRight),
+        ];
+        for (s, expected) in pairs {
+            assert_eq!(parse_anchor(s).unwrap(), expected, "anchor '{s}'");
+        }
+    }
+    #[test]
+    fn anchor_invalid() { assert!(parse_anchor("middle").is_err()); }
+
+    // §5.2.5 XML section parsing
+    #[test]
+    fn parse_section_layout_only() {
+        let xml = r#"<lpdf version="1">
+            <document size="a4" margin="0pt">
+                <section>
+                    <layout><stack gap="m"><text>Hello</text></stack></layout>
+                </section>
+            </document>
+        </lpdf>"#;
+        let doc = parse(xml).unwrap();
+        assert_eq!(doc.sections.len(), 1);
+        let sc = &doc.sections[0];
+        assert_eq!(sc.children.len(), 1);
+        assert!(matches!(sc.children[0], SectionChild::Layout(_)));
+    }
+
+    #[test]
+    fn parse_section_canvas_only() {
+        let xml = r##"<lpdf version="1">
+            <document size="a4" margin="0pt">
+                <section>
+                    <canvas>
+                        <layer><rect w="100pt" h="50pt" fill="#ff0000"/></layer>
+                    </canvas>
+                </section>
+            </document>
+        </lpdf>"##;
+        let doc = parse(xml).unwrap();
+        assert_eq!(doc.sections.len(), 1);
+        assert!(matches!(doc.sections[0].children[0], SectionChild::Canvas(_)));
+        if let SectionChild::Canvas(ref cv) = doc.sections[0].children[0] {
+            assert_eq!(cv.layers.len(), 1);
+            assert_eq!(cv.layers[0].children.len(), 1);
+        }
+    }
+
+    #[test]
+    fn parse_section_layout_plus_canvas() {
+        let xml = r##"<lpdf version="1">
+            <document size="a4" margin="0pt">
+                <section>
+                    <layout><text>Body</text></layout>
+                    <canvas><layer page="each"><rect w="100pt" h="5pt" fill="#000000"/></layer></canvas>
+                </section>
+            </document>
+        </lpdf>"##;
+        let doc = parse(xml).unwrap();
+        assert_eq!(doc.sections[0].children.len(), 2);
+    }
+
+    #[test]
+    fn parse_multi_section() {
+        let xml = r##"<lpdf version="1">
+            <document size="a4" margin="0pt">
+                <section title="Cover"><canvas><layer><rect w="100pt" h="100pt" fill="#000"/></layer></canvas></section>
+                <section title="Body"><layout><text>Hello</text></layout></section>
+            </document>
+        </lpdf>"##;
+        let doc = parse(xml).unwrap();
+        assert_eq!(doc.sections.len(), 2);
+        assert_eq!(doc.sections[0].options.title.as_deref(), Some("Cover"));
+        assert_eq!(doc.sections[1].options.title.as_deref(), Some("Body"));
+    }
+
+    // §5.2.6 region parsing
+    #[test]
+    fn parse_layout_region_top() {
+        let xml = r#"<lpdf version="1">
+            <document size="a4" margin="0pt">
+                <section>
+                    <layout>
+                        <region pin="top" page="each"><text>Header</text></region>
+                        <text>Body</text>
+                    </layout>
+                </section>
+            </document>
+        </lpdf>"#;
+        let doc = parse(xml).unwrap();
+        let layout = match &doc.sections[0].children[0] {
+            SectionChild::Layout(l) => l,
+            _ => panic!("expected layout"),
+        };
+        assert_eq!(layout.children.len(), 2);
+        assert!(matches!(layout.children[0], LayoutChild::Region(_)));
+        if let LayoutChild::Region(ref r) = layout.children[0] {
+            assert_eq!(r.pin, RegionPin::Top);
+            assert_eq!(r.page, Some(PageScope::Each));
+        }
+    }
+
+    #[test]
+    fn section_layouts_from_section() {
+        let xml = r#"<lpdf version="1">
+            <document size="a4" margin="28pt">
+                <section>
+                    <layout><text>Hello</text></layout>
+                </section>
+            </document>
+        </lpdf>"#;
+        let doc = parse(xml).unwrap();
+        let pages = doc.section_layouts();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].children.len(), 1);
+        assert_eq!(pages[0].children[0].kind, NodeKind::Text);
+    }
+
+    // §5.2.8 canvas layer page scope
+    #[test]
+    fn canvas_layer_page_scope() {
+        let xml = r##"<lpdf version="1">
+            <document size="a4" margin="0pt">
+                <section>
+                    <canvas>
+                        <layer page="odd"><rect w="10pt" h="10pt" fill="#000"/></layer>
+                        <layer page="2-4"><rect w="10pt" h="10pt" fill="#000"/></layer>
+                    </canvas>
+                </section>
+            </document>
+        </lpdf>"##;
+        let doc = parse(xml).unwrap();
+        if let SectionChild::Canvas(ref cv) = doc.sections[0].children[0] {
+            assert_eq!(cv.layers[0].page, Some(PageScope::Odd));
+            assert_eq!(cv.layers[1].page, Some(PageScope::Pages(vec![PageRange { start: 2, end: Some(4) }])));
+        } else {
+            panic!("expected canvas");
+        }
+    }
+
+    // §5.2.9 canvas primitives
+    #[test]
+    fn canvas_rect_absolute_pos() {
+        let xml = r##"<lpdf version="1">
+            <document size="a4" margin="0pt">
+                <section>
+                    <canvas>
+                        <layer>
+                            <rect x="10pt" y="20pt" w="100pt" h="50pt" fill="#ff0000" radius="4pt" opacity="0.5"/>
+                        </layer>
+                    </canvas>
+                </section>
+            </document>
+        </lpdf>"##;
+        let doc = parse(xml).unwrap();
+        if let SectionChild::Canvas(ref cv) = doc.sections[0].children[0] {
+            if let CanvasPrimitive::Rect(ref r) = cv.layers[0].children[0] {
+                assert!(matches!(r.pos, CanvasPosition::Absolute { .. }));
+                assert!((r.w - 100.0).abs() < 0.01);
+                assert_eq!(r.fill.as_deref(), Some("#ff0000"));
+                assert!((r.radius.unwrap() - 4.0).abs() < 0.01);
+                assert!((r.opacity.unwrap() - 0.5).abs() < 0.01);
+            } else { panic!("expected rect"); }
+        } else { panic!("expected canvas"); }
+    }
+
+    #[test]
+    fn canvas_rect_anchored_pos() {
+        let xml = r##"<lpdf version="1">
+            <document size="a4" margin="0pt">
+                <section>
+                    <canvas>
+                        <layer>
+                            <rect anchor="center" x="10pt" y="-5pt" w="50pt" h="20pt" fill="#000"/>
+                        </layer>
+                    </canvas>
+                </section>
+            </document>
+        </lpdf>"##;
+        let doc = parse(xml).unwrap();
+        if let SectionChild::Canvas(ref cv) = doc.sections[0].children[0] {
+            if let CanvasPrimitive::Rect(ref r) = cv.layers[0].children[0] {
+                assert!(matches!(r.pos, CanvasPosition::Anchored { anchor: Anchor::Center, dx, dy }
+                    if (dx - 10.0).abs() < 0.01 && (dy + 5.0).abs() < 0.01
+                ));
+            } else { panic!("expected rect"); }
+        } else { panic!("expected canvas"); }
+    }
+
+    #[test]
+    fn canvas_text_with_spans() {
+        let xml = r#"<lpdf version="1">
+            <document size="a4" margin="0pt">
+                <section>
+                    <canvas>
+                        <layer>
+                            <text anchor="center" font-size="12pt">Hello <span font="Helvetica-Bold">world</span></text>
+                        </layer>
+                    </canvas>
+                </section>
+            </document>
+        </lpdf>"#;
+        let doc = parse(xml).unwrap();
+        if let SectionChild::Canvas(ref cv) = doc.sections[0].children[0] {
+            if let CanvasPrimitive::Text(ref t) = cv.layers[0].children[0] {
+                assert!(matches!(t.pos, CanvasPosition::Anchored { anchor: Anchor::Center, .. }));
+                assert!((t.font_size.unwrap() - 12.0).abs() < 0.01);
+                assert_eq!(t.runs.len(), 1);
+                assert_eq!(t.runs[0].font.as_deref(), Some("Helvetica-Bold"));
+            } else { panic!("expected text"); }
+        } else { panic!("expected canvas"); }
     }
 }

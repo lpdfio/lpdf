@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf"/>
+      <color name="accent"   value="#e8f0fc"/>
+      <color name="muted"    value="#737373"/>
+      <color name="rule"     value="#dde3ed"/>
+    </colors>
+  </tokens>
+  <document size="a4" margin="40pt">
+    <meta title="lpdf Showcase — Canvas Layer (opacity, transform, page scope)"
+          subject="Layer attributes and page targeting"/>
+
+    <section>
+      <canvas>
+        <!-- Layer 1: all pages, full opacity — background grid -->
+        <layer page="each">
+          <!-- Subtle grid lines -->
+          <line x1="0pt"      y1="200pt"   x2="595.28pt" y2="200pt"   stroke="rule" stroke-width="0.5pt"/>
+          <line x1="0pt"      y1="400pt"   x2="595.28pt" y2="400pt"   stroke="rule" stroke-width="0.5pt"/>
+          <line x1="0pt"      y1="600pt"   x2="595.28pt" y2="600pt"   stroke="rule" stroke-width="0.5pt"/>
+          <line x1="150pt"    y1="0pt"     x2="150pt"    y2="841.89pt" stroke="rule" stroke-width="0.5pt"/>
+          <line x1="300pt"    y1="0pt"     x2="300pt"    y2="841.89pt" stroke="rule" stroke-width="0.5pt"/>
+          <line x1="450pt"    y1="0pt"     x2="450pt"    y2="841.89pt" stroke="rule" stroke-width="0.5pt"/>
+        </layer>
+
+        <!-- Layer 2: first page only — title decoration -->
+        <layer page="first">
+          <rect anchor="top-left" w="595.28pt" h="8pt" fill="primary"/>
+          <rect anchor="bottom-left" w="595.28pt" h="4pt" fill="primary"/>
+          <text anchor="top-center" y="20pt" font-size="20pt" font="Helvetica-Bold"
+                color="primary" align="center">
+            Canvas Layer Showcase
+          </text>
+        </layer>
+
+        <!-- Layer 3: reduced opacity, all pages -->
+        <layer opacity="0.3">
+          <text anchor="center" font-size="60pt" font="Helvetica-Bold"
+                color="primary" align="center">
+            SAMPLE
+          </text>
+        </layer>
+
+        <!-- Layer 4: last page only — end mark -->
+        <layer page="last">
+          <text anchor="bottom-center" y="-20pt" font-size="9pt"
+                color="muted" align="center">
+            — End of Document —
+          </text>
+        </layer>
+
+        <!-- Layer 5: odd pages only — left margin marker -->
+        <layer page="odd">
+          <rect anchor="center-left" w="4pt" h="60pt" fill="accent"/>
+        </layer>
+
+        <!-- Layer 6: even pages only — right margin marker -->
+        <layer page="even">
+          <rect anchor="center-right" w="4pt" h="60pt" fill="primary" opacity="0.4"/>
+        </layer>
+
+        <!-- Layer 7: numeric range — pages 2-3 only -->
+        <layer page="2-3">
+          <text anchor="top-right" x="-40pt" y="40pt" font-size="9pt"
+                color="muted" align="right">
+            pages 2–3
+          </text>
+        </layer>
+
+        <!-- Layer 8: transform demo (rotation via transform attribute) -->
+        <layer transform="rotate(45 297.64 421)">
+          <rect x="247.64pt" y="396pt" w="100pt" h="50pt"
+                fill="accent" stroke="primary" stroke-width="1pt" opacity="0.6"/>
+        </layer>
+
+        <!-- Layer 9: line and path primitives -->
+        <layer>
+          <!-- SVG-compatible path -->
+          <path d="M 40 700 L 200 700 L 120 760 Z"
+                fill="accent" stroke="primary" stroke-width="1.5pt" fill-rule="nonzero"/>
+          <!-- Diagonal cross -->
+          <line x1="300pt" y1="700pt" x2="400pt" y2="780pt" stroke="muted" stroke-width="1pt"/>
+          <line x1="400pt" y1="700pt" x2="300pt" y2="780pt" stroke="muted" stroke-width="1pt"/>
+        </layer>
+      </canvas>
+    </section>
+  </document>
+</lpdf>

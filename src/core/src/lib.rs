@@ -165,17 +165,18 @@ impl LpdfEngine {
         }
 
         let meta = pdf::build_image_meta(&self.images);
-        for page in &mut doc.pages {
-            layout::prefill_image_sizes(&mut page.children, &meta);
+        {
+            let mut lp = doc.section_layouts();
+            for page in &mut lp {
+                layout::prefill_image_sizes(&mut page.children, &meta);
+            }
         }
 
-        // Install font width tables so the layout engine can measure custom
-        // fonts accurately. Engine-level widths (from set_font_metrics) are used
-        // for the XML path; there are no doc-level widths for XML input.
         layout::set_font_widths(self.font_widths.clone());
 
+        let lp2 = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
-            doc.pages.iter().flat_map(layout::layout_page).collect();
+            lp2.iter().flat_map(layout::layout_page).collect();
 
         let status = license::check(&self.license_key, self.now_unix);
         let wm: Option<(&str, Option<&str>)> = if status.is_licensed() {
@@ -237,7 +238,7 @@ impl LpdfEngine {
             merged.extend(canvas_doc.font_widths.iter().map(|(k, v)| (k.clone(), v.clone())));
             layout::set_font_widths(merged);
 
-            let pages = canvas::layout_canvas_pages(&canvas_doc);
+            let pages = canvas::layout_canvas_sections(&canvas_doc);
 
             let status = license::check(&self.license_key, self.now_unix);
             let wm: Option<(&str, Option<&str>)> = if status.is_licensed() {
@@ -286,18 +287,21 @@ impl LpdfEngine {
         }
 
         let meta = pdf::build_image_meta(&self.images);
-        for page in &mut doc.pages {
-            layout::prefill_image_sizes(&mut page.children, &meta);
+        {
+            let mut lp = doc.section_layouts();
+            for page in &mut lp {
+                layout::prefill_image_sizes(&mut page.children, &meta);
+            }
         }
 
         // Merge font widths: engine-level + doc-level (doc-level takes precedence).
-        // doc.font_widths is consumed here (doc is owned); no clone needed.
         let mut merged = self.font_widths.clone();
         merged.extend(std::mem::take(&mut doc.font_widths));
         layout::set_font_widths(merged);
 
+        let lp2 = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
-            doc.pages.iter().flat_map(layout::layout_page).collect();
+            lp2.iter().flat_map(layout::layout_page).collect();
 
         let status = license::check(&self.license_key, self.now_unix);
         let wm: Option<(&str, Option<&str>)> = if status.is_licensed() {
@@ -362,8 +366,9 @@ impl LpdfEngine {
     #[cfg(test)]
     pub(crate) fn render_xml_to_pdf_bytes(xml: &str) -> Result<Vec<u8>, String> {
         let doc = parse::parse(xml)?;
+        let lp = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
-            doc.pages.iter().flat_map(layout::layout_page).collect();
+            lp.iter().flat_map(layout::layout_page).collect();
         // Render as unlicensed (with watermark) to match what the adapters
         // produce when no valid license key is supplied — keeps snapshot hashes
         // consistent between the Rust tests and the adapter test suites.
@@ -413,8 +418,9 @@ pub fn bench_parse_tree(json: &str) -> Result<BenchDoc, String> {
 
 /// Layout + PDF write on a pre-parsed doc. Used by `layout` benchmarks.
 pub fn bench_render_doc(doc: BenchDoc) -> Result<Vec<u8>, String> {
+    let lp = doc.0.section_layouts();
     let pages: Vec<render::RenderPage> =
-        doc.0.pages.iter().flat_map(layout::layout_page).collect();
+        lp.iter().flat_map(layout::layout_page).collect();
     let wm = Some(("made with lpdf.io", Some("https://lpdf.io")));
     pdf::render_pdf(
         &pages, &doc.0.fonts,
@@ -433,8 +439,9 @@ pub fn bench_data_apply(doc: BenchDoc, json: &str) -> Result<BenchDoc, String> {
 /// Full pipeline: parse + layout + PDF write. Used by `end_to_end` benchmarks.
 pub fn bench_render_xml(xml: &str) -> Result<Vec<u8>, String> {
     let doc = parse::parse(xml)?;
+    let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
-        doc.pages.iter().flat_map(layout::layout_page).collect();
+        lp.iter().flat_map(layout::layout_page).collect();
     let wm = Some(("made with lpdf.io", Some("https://lpdf.io")));
     pdf::render_pdf(
         &pages, &doc.fonts,
@@ -450,8 +457,9 @@ pub fn bench_render_xml_with_font(
     font_bytes: &[u8],
 ) -> Result<Vec<u8>, String> {
     let doc = parse::parse(xml)?;
+    let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
-        doc.pages.iter().flat_map(layout::layout_page).collect();
+        lp.iter().flat_map(layout::layout_page).collect();
     let wm = Some(("made with lpdf.io", Some("https://lpdf.io")));
     let mut fonts = pdf::FontRegistry::new();
     fonts.register(font_name, font_bytes.to_vec());
@@ -469,8 +477,9 @@ pub fn bench_render_xml_with_image(
     image_bytes: &[u8],
 ) -> Result<Vec<u8>, String> {
     let doc = parse::parse(xml)?;
+    let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
-        doc.pages.iter().flat_map(layout::layout_page).collect();
+        lp.iter().flat_map(layout::layout_page).collect();
     let wm = Some(("made with lpdf.io", Some("https://lpdf.io")));
     let mut images = pdf::ImageRegistry::new();
     images.load(image_name, image_bytes.to_vec());
@@ -496,10 +505,10 @@ mod tests {
 
     fn minimal(body: &str) -> String {
         if body.is_empty() {
-            r#"<lpdf version="1"><document size="a4" margin="28pt"><pages><page/></pages></document></lpdf>"#.to_string()
+            r#"<lpdf version="1"><document size="a4" margin="28pt"><section><layout/></section></document></lpdf>"#.to_string()
         } else {
             format!(
-                r#"<lpdf version="1"><document size="a4" margin="28pt"><pages><page><layout>{body}</layout></page></pages></document></lpdf>"#
+                r#"<lpdf version="1"><document size="a4" margin="28pt"><section><layout>{body}</layout></section></document></lpdf>"#
             )
         }
     }
@@ -559,30 +568,28 @@ mod tests {
     fn full_page_example_renders_without_error() {
         let xml = r##"<lpdf version="1">
             <document size="a4" margin="28pt">
-                <pages>
-                    <page background="surface">
-                        <layout>
-                            <stack gap="m">
-                                <frame background="primary" padding="m" radius="s">
-                                    <flank gap="m" align="center" end="true">
-                                        <frame width="120pt" height="24pt" background="secondary" radius="xs" />
-                                        <frame width="80pt" height="14pt" background="surface" radius="xs" />
-                                    </flank>
+                <section background="surface">
+                    <layout>
+                        <stack gap="m">
+                            <frame background="primary" padding="m" radius="s">
+                                <flank gap="m" align="center" end="true">
+                                    <frame width="120pt" height="24pt" background="secondary" radius="xs" />
+                                    <frame width="80pt" height="14pt" background="surface" radius="xs" />
+                                </flank>
+                            </frame>
+                            <divider color="#e0e0e0" thickness="xs" />
+                            <grid cols="3" gap="m">
+                                <frame padding="s" border="xs #e0e0e0" radius="xs">
+                                    <stack gap="s">
+                                        <frame height="10pt" background="text-muted" radius="xs" />
+                                    </stack>
                                 </frame>
-                                <divider color="#e0e0e0" thickness="xs" />
-                                <grid cols="3" gap="m">
-                                    <frame padding="s" border="xs #e0e0e0" radius="xs">
-                                        <stack gap="s">
-                                            <frame height="10pt" background="text-muted" radius="xs" />
-                                        </stack>
-                                    </frame>
-                                    <frame padding="s" border="xs #e0e0e0" radius="xs" />
-                                    <frame padding="s" border="xs #e0e0e0" radius="xs" />
-                                </grid>
-                            </stack>
-                        </layout>
-                    </page>
-                </pages>
+                                <frame padding="s" border="xs #e0e0e0" radius="xs" />
+                                <frame padding="s" border="xs #e0e0e0" radius="xs" />
+                            </grid>
+                        </stack>
+                    </layout>
+                </section>
             </document>
         </lpdf>"##;
 
@@ -598,7 +605,7 @@ mod tests {
         let page = &result["pages"][0];
         let node = &page["nodes"][0];
         assert_eq!(node["type"], "box");
-        let kids = node["children"].as_array().unwrap();
+        let kids = node["nodes"].as_array().unwrap();
         assert!(!kids.is_empty());
         assert_eq!(kids[0]["type"], "text");
     }

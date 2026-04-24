@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf"/>
+      <color name="accent"   value="#e8f0fc"/>
+      <color name="muted"    value="#737373"/>
+      <color name="rule"     value="#dde3ed"/>
+    </colors>
+  </tokens>
+  <document size="a4" margin="40pt">
+    <meta title="lpdf Showcase — Canvas Rect/Circle/Ellipse" subject="Canvas primitives"/>
+
+    <!-- Canvas-only section: layers with rect, circle, ellipse primitives -->
+    <section>
+      <canvas>
+        <!-- Background layer: full-page colour block -->
+        <layer page="each">
+          <rect anchor="top-left" w="595.28pt" h="841.89pt" fill="#f5f7fa"/>
+        </layer>
+
+        <!-- Geometric shapes layer -->
+        <layer>
+          <!-- Rect: absolute coordinates -->
+          <rect x="40pt" y="40pt" w="200pt" h="80pt" fill="primary" radius="6pt"/>
+
+          <!-- Rect: anchor-based placement, bottom-right corner -->
+          <rect anchor="bottom-right" x="-40pt" y="-40pt" w="160pt" h="60pt"
+                fill="#ffffff" stroke="primary" stroke-width="2pt"/>
+
+          <!-- Circle: absolute centre -->
+          <circle cx="380pt" cy="120pt" r="50pt" fill="accent" stroke="primary" stroke-width="1.5pt"/>
+
+          <!-- Circle: anchor-based centre -->
+          <circle anchor="center" r="40pt" fill="#ffffff" stroke="primary"
+                  stroke-width="2pt" opacity="0.7"/>
+
+          <!-- Ellipse: absolute -->
+          <ellipse cx="150pt" cy="300pt" rx="100pt" ry="50pt" fill="accent"/>
+
+          <!-- Ellipse: anchor top-center -->
+          <ellipse anchor="top-center" cy="200pt" rx="80pt" ry="30pt"
+                   fill="primary" opacity="0.3"/>
+
+          <!-- Rounded rect: border only -->
+          <rect x="40pt" y="400pt" w="515.28pt" h="1pt" fill="rule"/>
+
+          <!-- Nested rects: card-like layout -->
+          <rect x="40pt" y="420pt" w="240pt" h="140pt" radius="8pt"
+                fill="#ffffff" stroke="rule" stroke-width="1pt"/>
+          <rect x="50pt" y="430pt" w="80pt" h="80pt" radius="4pt" fill="accent"/>
+          <rect x="50pt" y="520pt" w="220pt" h="1pt" fill="rule"/>
+
+          <rect x="315.28pt" y="420pt" w="240pt" h="140pt" radius="8pt"
+                fill="#ffffff" stroke="rule" stroke-width="1pt"/>
+          <ellipse cx="435.28pt" cy="490pt" rx="50pt" ry="30pt" fill="accent"/>
+        </layer>
+
+        <!-- Opacity demo layer -->
+        <layer opacity="0.5">
+          <rect x="40pt" y="600pt" w="120pt" h="120pt" fill="primary"/>
+          <rect x="80pt" y="640pt" w="120pt" h="120pt" fill="#e74c3c"/>
+          <rect x="120pt" y="680pt" w="120pt" h="120pt" fill="#2ecc71"/>
+        </layer>
+      </canvas>
+    </section>
+  </document>
+</lpdf>

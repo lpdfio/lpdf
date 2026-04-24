@@ -3,143 +3,141 @@
 <lpdf version="1">
   <document size="a4" margin="40pt">
     <meta title="Benchmark Fixture S" />
-    <pages>
-      <page>
-        <layout>
-        <stack gap="l">
-          <text font-size="xl" font="Helvetica-Bold">Page 1 1</text>
-          <stack gap="m">
-          <text font-size="xl" font="Helvetica-Bold">Section 1 2</text>
-            <text font-size="m">Paragraph 3. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 4. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 5. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-          </stack>
-          <flank>
-            <text font-size="m" font="Helvetica-Bold">Field 6</text>
-            <text font-size="m" align="right">Value 6</text>
-          </flank>
-          <flank>
-            <text font-size="m" font="Helvetica-Bold">Field 7</text>
-            <text font-size="m" align="right">Value 7</text>
-          </flank>
-          <divider/>
-          <frame background="#f1f5f9" border="xs #e2e8f0" padding="m" radius="s">
-            <stack gap="xs">
-              <text font-size="m" font="Helvetica-Bold">Callout 8</text>
-              <text font-size="s" color="#64748b">This callout box highlights item 8 in the document flow and exercises background, border, padding, and radius rendering in the layout engine.</text>
-            </stack>
-          </frame>
-          <stack gap="m">
-          <text font-size="xl" font="Helvetica-Bold">Section 2 9</text>
-            <text font-size="m">Paragraph 10. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 11. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 12. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-          </stack>
+    <section>
+      <layout>
+      <stack gap="l">
+        <text font-size="xl" font="Helvetica-Bold">Page 1 1</text>
+        <stack gap="m">
+        <text font-size="xl" font="Helvetica-Bold">Section 1 2</text>
+          <text font-size="m">Paragraph 3. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 4. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 5. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
         </stack>
-        </layout>
-      </page>
-      <page>
-        <layout>
-        <stack gap="l">
-          <text font-size="xl" font="Helvetica-Bold">Page 2 13</text>
-          <stack gap="m">
-          <text font-size="xl" font="Helvetica-Bold">Section 1 14</text>
-            <text font-size="m">Paragraph 15. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 16. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 17. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+        <flank>
+          <text font-size="m" font="Helvetica-Bold">Field 6</text>
+          <text font-size="m" align="right">Value 6</text>
+        </flank>
+        <flank>
+          <text font-size="m" font="Helvetica-Bold">Field 7</text>
+          <text font-size="m" align="right">Value 7</text>
+        </flank>
+        <divider/>
+        <frame background="#f1f5f9" border="xs #e2e8f0" padding="m" radius="s">
+          <stack gap="xs">
+            <text font-size="m" font="Helvetica-Bold">Callout 8</text>
+            <text font-size="s" color="#64748b">This callout box highlights item 8 in the document flow and exercises background, border, padding, and radius rendering in the layout engine.</text>
           </stack>
-          <flank>
-            <text font-size="m" font="Helvetica-Bold">Field 18</text>
-            <text font-size="m" align="right">Value 18</text>
-          </flank>
-          <flank>
-            <text font-size="m" font="Helvetica-Bold">Field 19</text>
-            <text font-size="m" align="right">Value 19</text>
-          </flank>
-          <divider/>
-          <frame background="#f1f5f9" border="xs #e2e8f0" padding="m" radius="s">
-            <stack gap="xs">
-              <text font-size="m" font="Helvetica-Bold">Callout 20</text>
-              <text font-size="s" color="#64748b">This callout box highlights item 20 in the document flow and exercises background, border, padding, and radius rendering in the layout engine.</text>
-            </stack>
-          </frame>
-          <stack gap="m">
-          <text font-size="xl" font="Helvetica-Bold">Section 2 21</text>
-            <text font-size="m">Paragraph 22. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 23. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 24. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-          </stack>
+        </frame>
+        <stack gap="m">
+        <text font-size="xl" font="Helvetica-Bold">Section 2 9</text>
+          <text font-size="m">Paragraph 10. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 11. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 12. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
         </stack>
-        </layout>
-      </page>
-      <page>
-        <layout>
-        <stack gap="l">
-          <text font-size="xl" font="Helvetica-Bold">Page 3 25</text>
-          <stack gap="m">
-          <text font-size="xl" font="Helvetica-Bold">Section 1 26</text>
-            <text font-size="m">Paragraph 27. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 28. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 29. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-          </stack>
-          <flank>
-            <text font-size="m" font="Helvetica-Bold">Field 30</text>
-            <text font-size="m" align="right">Value 30</text>
-          </flank>
-          <flank>
-            <text font-size="m" font="Helvetica-Bold">Field 31</text>
-            <text font-size="m" align="right">Value 31</text>
-          </flank>
-          <divider/>
-          <frame background="#f1f5f9" border="xs #e2e8f0" padding="m" radius="s">
-            <stack gap="xs">
-              <text font-size="m" font="Helvetica-Bold">Callout 32</text>
-              <text font-size="s" color="#64748b">This callout box highlights item 32 in the document flow and exercises background, border, padding, and radius rendering in the layout engine.</text>
-            </stack>
-          </frame>
-          <stack gap="m">
-          <text font-size="xl" font="Helvetica-Bold">Section 2 33</text>
-            <text font-size="m">Paragraph 34. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 35. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 36. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-          </stack>
+      </stack>
+      </layout>
+    </section>
+    <section>
+      <layout>
+      <stack gap="l">
+        <text font-size="xl" font="Helvetica-Bold">Page 2 13</text>
+        <stack gap="m">
+        <text font-size="xl" font="Helvetica-Bold">Section 1 14</text>
+          <text font-size="m">Paragraph 15. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 16. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 17. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
         </stack>
-        </layout>
-      </page>
-      <page>
-        <layout>
-        <stack gap="l">
-          <text font-size="xl" font="Helvetica-Bold">Page 4 37</text>
-          <stack gap="m">
-          <text font-size="xl" font="Helvetica-Bold">Section 1 38</text>
-            <text font-size="m">Paragraph 39. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 40. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 41. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+        <flank>
+          <text font-size="m" font="Helvetica-Bold">Field 18</text>
+          <text font-size="m" align="right">Value 18</text>
+        </flank>
+        <flank>
+          <text font-size="m" font="Helvetica-Bold">Field 19</text>
+          <text font-size="m" align="right">Value 19</text>
+        </flank>
+        <divider/>
+        <frame background="#f1f5f9" border="xs #e2e8f0" padding="m" radius="s">
+          <stack gap="xs">
+            <text font-size="m" font="Helvetica-Bold">Callout 20</text>
+            <text font-size="s" color="#64748b">This callout box highlights item 20 in the document flow and exercises background, border, padding, and radius rendering in the layout engine.</text>
           </stack>
-          <flank>
-            <text font-size="m" font="Helvetica-Bold">Field 42</text>
-            <text font-size="m" align="right">Value 42</text>
-          </flank>
-          <flank>
-            <text font-size="m" font="Helvetica-Bold">Field 43</text>
-            <text font-size="m" align="right">Value 43</text>
-          </flank>
-          <divider/>
-          <frame background="#f1f5f9" border="xs #e2e8f0" padding="m" radius="s">
-            <stack gap="xs">
-              <text font-size="m" font="Helvetica-Bold">Callout 44</text>
-              <text font-size="s" color="#64748b">This callout box highlights item 44 in the document flow and exercises background, border, padding, and radius rendering in the layout engine.</text>
-            </stack>
-          </frame>
-          <stack gap="m">
-          <text font-size="xl" font="Helvetica-Bold">Section 2 45</text>
-            <text font-size="m">Paragraph 46. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 47. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-            <text font-size="m">Paragraph 48. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
-          </stack>
+        </frame>
+        <stack gap="m">
+        <text font-size="xl" font="Helvetica-Bold">Section 2 21</text>
+          <text font-size="m">Paragraph 22. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 23. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 24. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
         </stack>
-        </layout>
-      </page>
-    </pages>
+      </stack>
+      </layout>
+    </section>
+    <section>
+      <layout>
+      <stack gap="l">
+        <text font-size="xl" font="Helvetica-Bold">Page 3 25</text>
+        <stack gap="m">
+        <text font-size="xl" font="Helvetica-Bold">Section 1 26</text>
+          <text font-size="m">Paragraph 27. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 28. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 29. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+        </stack>
+        <flank>
+          <text font-size="m" font="Helvetica-Bold">Field 30</text>
+          <text font-size="m" align="right">Value 30</text>
+        </flank>
+        <flank>
+          <text font-size="m" font="Helvetica-Bold">Field 31</text>
+          <text font-size="m" align="right">Value 31</text>
+        </flank>
+        <divider/>
+        <frame background="#f1f5f9" border="xs #e2e8f0" padding="m" radius="s">
+          <stack gap="xs">
+            <text font-size="m" font="Helvetica-Bold">Callout 32</text>
+            <text font-size="s" color="#64748b">This callout box highlights item 32 in the document flow and exercises background, border, padding, and radius rendering in the layout engine.</text>
+          </stack>
+        </frame>
+        <stack gap="m">
+        <text font-size="xl" font="Helvetica-Bold">Section 2 33</text>
+          <text font-size="m">Paragraph 34. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 35. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 36. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+        </stack>
+      </stack>
+      </layout>
+    </section>
+    <section>
+      <layout>
+      <stack gap="l">
+        <text font-size="xl" font="Helvetica-Bold">Page 4 37</text>
+        <stack gap="m">
+        <text font-size="xl" font="Helvetica-Bold">Section 1 38</text>
+          <text font-size="m">Paragraph 39. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 40. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 41. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+        </stack>
+        <flank>
+          <text font-size="m" font="Helvetica-Bold">Field 42</text>
+          <text font-size="m" align="right">Value 42</text>
+        </flank>
+        <flank>
+          <text font-size="m" font="Helvetica-Bold">Field 43</text>
+          <text font-size="m" align="right">Value 43</text>
+        </flank>
+        <divider/>
+        <frame background="#f1f5f9" border="xs #e2e8f0" padding="m" radius="s">
+          <stack gap="xs">
+            <text font-size="m" font="Helvetica-Bold">Callout 44</text>
+            <text font-size="s" color="#64748b">This callout box highlights item 44 in the document flow and exercises background, border, padding, and radius rendering in the layout engine.</text>
+          </stack>
+        </frame>
+        <stack gap="m">
+        <text font-size="xl" font="Helvetica-Bold">Section 2 45</text>
+          <text font-size="m">Paragraph 46. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 47. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+          <text font-size="m">Paragraph 48. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>
+        </stack>
+      </stack>
+      </layout>
+    </section>
   </document>
 </lpdf>

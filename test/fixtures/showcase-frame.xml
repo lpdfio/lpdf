@@ -13,133 +13,131 @@
   </tokens>
   <document size="a4" margin="40pt">
     <meta title="lpdf Showcase — Frame" subject="Layout primitives" />
-    <pages>
 
       <!-- Frame -->
-      <page background="surface">
-        <layout>
-        <stack gap="xl">
+    <section background="surface">
+      <layout>
+      <stack gap="xl">
 
-          <stack gap="xs">
-            <text font-size="xxl" font="Helvetica-Bold" color="primary">Frame</text>
-            <text font-size="m" color="muted">Single-child container — constrains child to frame width and always centers it horizontally and vertically</text>
-          </stack>
-
-          <!-- width -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">width</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">no width — frame fills its parent like a stack</text>
-              <frame debug="true" background="bg" padding="s">
-                <text font-size="m">Full-width frame — behaves like a stack</text>
-              </frame>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">width="200pt" — centered in parent</text>
-              <frame debug="true" width="200pt" background="bg" padding="s">
-                <text font-size="m">200pt wide, centered</text>
-              </frame>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">width="300pt" — centered in parent</text>
-              <frame debug="true" width="300pt" background="bg" padding="s">
-                <text font-size="m">300pt wide, centered</text>
-              </frame>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">multiple frames at different widths</text>
-              <stack background="bg" padding="s" gap="xs">
-                <frame debug="true" width="150pt" background="accent" padding="xs">
-                  <text font-size="m">150pt</text>
-                </frame>
-                <frame debug="true" width="250pt" background="accent" padding="xs">
-                  <text font-size="m">250pt</text>
-                </frame>
-                <frame debug="true" width="350pt" background="accent" padding="xs">
-                  <text font-size="m">350pt</text>
-                </frame>
-              </stack>
-            </stack>
-          </stack>
-
-          <!-- padding -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">padding</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">padding="xs"</text>
-              <frame debug="true" width="250pt" padding="xs" background="bg">
-                <text font-size="m">Tight padding</text>
-              </frame>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">padding="l"</text>
-              <frame debug="true" width="250pt" padding="l" background="bg">
-                <text font-size="m">Generous padding</text>
-              </frame>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">padding="20pt 8pt" (vertical · horizontal)</text>
-              <frame debug="true" width="250pt" padding="20pt 8pt" background="bg">
-                <text font-size="m">Asymmetric padding</text>
-              </frame>
-            </stack>
-          </stack>
-
-          <!-- fixed height · centering -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">fixed height · centering</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">height="80pt" — short child is centered vertically and horizontally (no attrs needed)</text>
-              <frame debug="true" width="300pt" height="80pt" background="bg" padding="s">
-                <text font-size="m">Centered in the frame</text>
-              </frame>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">height="80pt" — child narrower than frame: width="120pt" stack centered horizontally</text>
-              <frame debug="true" width="300pt" height="80pt" background="bg" padding="s">
-                <stack width="120pt" background="accent" padding="xs">
-                  <text font-size="m">120pt child</text>
-                </stack>
-              </frame>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">no height — frame grows to fit its child (centering is still horizontal)</text>
-              <frame debug="true" width="300pt" background="bg" padding="s">
-                <stack background="accent" padding="s" gap="xs">
-                  <text font-size="m">Child content</text>
-                  <text font-size="m">determines frame height</text>
-                </stack>
-              </frame>
-            </stack>
-          </stack>
-
-          <!-- border · radius -->
-          <stack gap="m">
-            <text font-size="l" font="Helvetica-Bold">border · radius</text>
-            <stack gap="xs">
-              <text font-size="m" color="muted">border="xs rule" radius="xs"</text>
-              <frame width="250pt" padding="s" border="xs rule" radius="xs">
-                <text font-size="m">Subtle card</text>
-              </frame>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">border="s primary" radius="l"</text>
-              <frame width="250pt" padding="m" border="s primary" radius="l">
-                <text font-size="m">Bold rounded border</text>
-              </frame>
-            </stack>
-            <stack gap="xs">
-              <text font-size="m" color="muted">background="accent" radius="m" padding="m"</text>
-              <frame width="250pt" background="accent" radius="m" padding="m">
-                <text font-size="m">Filled background with radius</text>
-              </frame>
-            </stack>
-          </stack>
-
+        <stack gap="xs">
+          <text font-size="xxl" font="Helvetica-Bold" color="primary">Frame</text>
+          <text font-size="m" color="muted">Single-child container — constrains child to frame width and always centers it horizontally and vertically</text>
         </stack>
-        </layout>
-      </page>
 
-    </pages>
+        <!-- width -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">width</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">no width — frame fills its parent like a stack</text>
+            <frame debug="true" background="bg" padding="s">
+              <text font-size="m">Full-width frame — behaves like a stack</text>
+            </frame>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">width="200pt" — centered in parent</text>
+            <frame debug="true" width="200pt" background="bg" padding="s">
+              <text font-size="m">200pt wide, centered</text>
+            </frame>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">width="300pt" — centered in parent</text>
+            <frame debug="true" width="300pt" background="bg" padding="s">
+              <text font-size="m">300pt wide, centered</text>
+            </frame>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">multiple frames at different widths</text>
+            <stack background="bg" padding="s" gap="xs">
+              <frame debug="true" width="150pt" background="accent" padding="xs">
+                <text font-size="m">150pt</text>
+              </frame>
+              <frame debug="true" width="250pt" background="accent" padding="xs">
+                <text font-size="m">250pt</text>
+              </frame>
+              <frame debug="true" width="350pt" background="accent" padding="xs">
+                <text font-size="m">350pt</text>
+              </frame>
+            </stack>
+          </stack>
+        </stack>
+
+        <!-- padding -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">padding</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">padding="xs"</text>
+            <frame debug="true" width="250pt" padding="xs" background="bg">
+              <text font-size="m">Tight padding</text>
+            </frame>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">padding="l"</text>
+            <frame debug="true" width="250pt" padding="l" background="bg">
+              <text font-size="m">Generous padding</text>
+            </frame>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">padding="20pt 8pt" (vertical · horizontal)</text>
+            <frame debug="true" width="250pt" padding="20pt 8pt" background="bg">
+              <text font-size="m">Asymmetric padding</text>
+            </frame>
+          </stack>
+        </stack>
+
+        <!-- fixed height · centering -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">fixed height · centering</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">height="80pt" — short child is centered vertically and horizontally (no attrs needed)</text>
+            <frame debug="true" width="300pt" height="80pt" background="bg" padding="s">
+              <text font-size="m">Centered in the frame</text>
+            </frame>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">height="80pt" — child narrower than frame: width="120pt" stack centered horizontally</text>
+            <frame debug="true" width="300pt" height="80pt" background="bg" padding="s">
+              <stack width="120pt" background="accent" padding="xs">
+                <text font-size="m">120pt child</text>
+              </stack>
+            </frame>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">no height — frame grows to fit its child (centering is still horizontal)</text>
+            <frame debug="true" width="300pt" background="bg" padding="s">
+              <stack background="accent" padding="s" gap="xs">
+                <text font-size="m">Child content</text>
+                <text font-size="m">determines frame height</text>
+              </stack>
+            </frame>
+          </stack>
+        </stack>
+
+        <!-- border · radius -->
+        <stack gap="m">
+          <text font-size="l" font="Helvetica-Bold">border · radius</text>
+          <stack gap="xs">
+            <text font-size="m" color="muted">border="xs rule" radius="xs"</text>
+            <frame width="250pt" padding="s" border="xs rule" radius="xs">
+              <text font-size="m">Subtle card</text>
+            </frame>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">border="s primary" radius="l"</text>
+            <frame width="250pt" padding="m" border="s primary" radius="l">
+              <text font-size="m">Bold rounded border</text>
+            </frame>
+          </stack>
+          <stack gap="xs">
+            <text font-size="m" color="muted">background="accent" radius="m" padding="m"</text>
+            <frame width="250pt" background="accent" radius="m" padding="m">
+              <text font-size="m">Filled background with radius</text>
+            </frame>
+          </stack>
+        </stack>
+
+      </stack>
+      </layout>
+    </section>
+
   </document>
 </lpdf>

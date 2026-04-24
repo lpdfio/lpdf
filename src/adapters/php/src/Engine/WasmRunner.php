@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Lpdf;
+namespace Lpdf\Engine;
 
-final class WasmRunner
+use Lpdf\Engine\EngineException;
+
+final readonly class WasmRunner
 {
     public function __construct(
         private readonly string $wasmBinary,
@@ -15,22 +17,22 @@ final class WasmRunner
     /**
      * @param  array<string, mixed> $payload  Already-built request array.
      * @return array<string, mixed>            Decoded response.
-     * @throws LpdfRenderException On process or render error.
+     * @throws EngineException On process or render error.
      */
     public function invoke(array $payload): array
     {
-        $cmd = escapeshellcmd($this->wasmRunner)
-             . ' run '
-             . escapeshellarg($this->wasmBinary);
-
-        $proc = proc_open($cmd, [
-            0 => ['pipe', 'r'],   // stdin
-            1 => ['pipe', 'w'],   // stdout
-            2 => ['pipe', 'w'],   // stderr
-        ], $pipes);
+        $proc = proc_open(
+            [$this->wasmRunner, 'run', $this->wasmBinary],
+            [
+                0 => ['pipe', 'r'],   // stdin
+                1 => ['pipe', 'w'],   // stdout
+                2 => ['pipe', 'w'],   // stderr
+            ],
+            $pipes,
+        );
 
         if ($proc === false) {
-            throw new LpdfRenderException('Failed to start WASI process.');
+            throw new EngineException('Failed to start WASI process.');
         }
 
         fwrite($pipes[0], json_encode($payload, JSON_THROW_ON_ERROR));
@@ -53,7 +55,7 @@ final class WasmRunner
                 fclose($pipes[1]);
                 fclose($pipes[2]);
                 proc_close($proc);
-                throw new LpdfRenderException("WASI process timed out after {$this->timeout} seconds.");
+                throw new EngineException("WASI process timed out after {$this->timeout} seconds.");
             }
             $sec  = (int) $remaining;
             $usec = (int)(($remaining - $sec) * 1_000_000);
@@ -74,13 +76,13 @@ final class WasmRunner
         proc_close($proc);
 
         if ($out === '') {
-            throw new LpdfRenderException("WASI process produced no output. Stderr: $err");
+            throw new EngineException("WASI process produced no output. Stderr: $err");
         }
 
         $response = json_decode($out, true, 512, JSON_THROW_ON_ERROR);
 
         if (isset($response['error'])) {
-            throw new LpdfRenderException("lpdf render error: {$response['error']}");
+            throw new EngineException("lpdf render error: {$response['error']}");
         }
 
         return $response;
