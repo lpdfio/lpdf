@@ -10,22 +10,20 @@ final readonly class ContainerNode extends Node
     /**
      * @param string               $type
      * @param array<string,string> $attrs
-     * @param Node[]               $children
+     * @param Node[]               $nodes
      */
     public function __construct(
         private string $type,
         private array  $attrs,
-        private array  $children,
+        private array  $nodes,
     ) {}
-
-    public function getType(): string { return $this->type; }
 
     public function jsonSerialize(): mixed
     {
         return [
             'type'  => $this->type,
             'attrs' => (object) $this->attrs,
-            'nodes' => $this->children,
+            'nodes' => $this->nodes,
         ];
     }
 }

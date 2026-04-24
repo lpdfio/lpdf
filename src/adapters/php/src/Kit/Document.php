@@ -13,11 +13,11 @@ final readonly class Document implements \JsonSerializable
 {
     /**
      * @param array<string,mixed>  $attrs     Flat string attrs plus optional 'tokens' and 'meta' sub-objects.
-     * @param SectionNode[]        $sections
+     * @param SectionNode[]        $nodes
      */
     public function __construct(
         private array $attrs,
-        private array $sections,
+        private array $nodes,
     ) {}
 
     public function jsonSerialize(): mixed
@@ -26,7 +26,7 @@ final readonly class Document implements \JsonSerializable
             'version'  => 1,
             'type'     => 'document',
             'attrs'    => (object) $this->attrs,
-            'nodes'    => $this->sections,
+            'nodes'    => $this->nodes,
         ];
     }
 }

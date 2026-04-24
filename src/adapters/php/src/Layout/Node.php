@@ -7,5 +7,4 @@ namespace Lpdf\Layout;
 /** Base class for all layout nodes. */
 abstract readonly class Node implements \JsonSerializable
 {
-    abstract public function getType(): string;
 }

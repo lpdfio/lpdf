@@ -13,21 +13,19 @@ final readonly class SpanNode extends Node
 {
     /**
      * @param array<string,string> $attrs
-     * @param string[]             $children
+     * @param string[]             $nodes
      */
     public function __construct(
         private array $attrs,
-        private array $children,
+        private array $nodes,
     ) {}
-
-    public function getType(): string { return 'span'; }
 
     public function jsonSerialize(): mixed
     {
         return [
             'type'  => 'span',
             'attrs' => (object) $this->attrs,
-            'nodes' => $this->children,
+            'nodes' => $this->nodes,
         ];
     }
 }

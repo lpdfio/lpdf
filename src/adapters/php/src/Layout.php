@@ -14,6 +14,9 @@ use Lpdf\Layout\DividerOptions;
 use Lpdf\Layout\FlankOptions;
 use Lpdf\Layout\FrameOptions;
 use Lpdf\Layout\GridOptions;
+use Lpdf\Layout\FieldNode;
+use Lpdf\Layout\FieldOptions;
+use Lpdf\Layout\FieldType;
 use Lpdf\Layout\ImgNode;
 use Lpdf\Layout\ImgOptions;
 use Lpdf\Layout\LinkOptions;
@@ -142,6 +145,24 @@ final class Layout
     public static function barcode(BarcodeOptions $options): BarcodeNode
     {
         return new BarcodeNode(self::optionsToAttrs($options));
+    }
+
+    /**
+     * Build an interactive form field node.
+     *
+     * @param  FieldType|string $type   Field type — {@see FieldType}.
+     * @param  string           $name   Unique field name within the document.
+     */
+    public static function field(
+        FieldType|string $type,
+        string           $name,
+        ?FieldOptions    $options = null,
+    ): FieldNode {
+        $attrs = array_merge(
+            ['type' => $type instanceof FieldType ? $type->value : $type, 'name' => $name],
+            self::optionsToAttrs($options),
+        );
+        return new FieldNode($attrs);
     }
 
     // ── Table helpers ─────────────────────────────────────────────────────────

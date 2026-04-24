@@ -10,9 +10,9 @@ final readonly class SpanOptions
         public ?string $font      = null,
         public ?string $fontSize  = null,
         public ?string $color     = null,
-        public ?string $bold      = null,
+        public ?bool   $bold      = null,
         public ?string $url       = null,
-        public ?string $underline = null,
-        public ?string $strike    = null,
+        public ?bool   $underline = null,
+        public ?bool   $strike    = null,
     ) {}
 }

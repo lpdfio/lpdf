@@ -20,8 +20,6 @@ final readonly class RegionNode extends Node
         private array $nodes,
     ) {}
 
-    public function getType(): string { return 'layout-region'; }
-
     public function jsonSerialize(): mixed
     {
         return [

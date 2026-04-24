@@ -14,8 +14,6 @@ final readonly class BarcodeNode extends Node
     /** @param array<string,string> $attrs */
     public function __construct(private array $attrs) {}
 
-    public function getType(): string { return 'barcode'; }
-
     public function jsonSerialize(): mixed
     {
         return [

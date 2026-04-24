@@ -9,9 +9,9 @@ use Lpdf\Shared\PageScope;
 /** @internal Use Canvas::layer() to construct. */
 final readonly class LayerNode extends Node
 {
-    /** @param Node[] $children */
+    /** @param Node[] $nodes */
     public function __construct(
-        private array         $children,
+        private array         $nodes,
         private ?LayerOptions $options = null,
     ) {}
 
@@ -30,7 +30,7 @@ final readonly class LayerNode extends Node
         return [
             'type'  => 'canvas-layer',
             'attrs' => (object) $attrs,
-            'nodes' => $this->children,
+            'nodes' => $this->nodes,
         ];
     }
 }

@@ -13,21 +13,19 @@ final readonly class TextNode extends Node
 {
     /**
      * @param array<string,string>       $attrs
-     * @param array<string|SpanNode>     $children
+     * @param array<string|SpanNode>     $nodes
      */
     public function __construct(
         private array $attrs,
-        private array $children,
+        private array $nodes,
     ) {}
-
-    public function getType(): string { return 'text'; }
 
     public function jsonSerialize(): mixed
     {
         return [
             'type'  => 'text',
             'attrs' => (object) $this->attrs,
-            'nodes' => $this->children,
+            'nodes' => $this->nodes,
         ];
     }
 }
