@@ -24,7 +24,7 @@ pub struct Document {
 impl Document {
     /// Derive a flat `Vec<SectionLayout>` from sections for use with the layout engine.
     /// Each section's layout child is converted to one `SectionLayout`.  Canvas children are
-    /// ignored here — they are rendered separately via the canvas pipeline.
+    /// collected into `underlays` (before first layout) or `overlays` (after) per document order.
     pub fn section_layouts(&self) -> Vec<SectionLayout> {
         let mut result = Vec::new();
         for section in &self.sections {
@@ -89,14 +89,12 @@ fn region_to_compat_node(reg: &LayoutRegion) -> Node {
 // ── New section / canvas types ────────────────────────────────────────────────
 
 /// A page-range within a `PageScope`.  `end = None` means "last".
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct PageRange {
     pub start: u32,
     pub end:   Option<u32>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum PageScope {
     Each,
@@ -107,24 +105,25 @@ pub enum PageScope {
     Pages(Vec<PageRange>),
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum RegionPin { Top, Bottom, Left, Right }
 
 /// A pinned chrome slot inside a `<layout>`.
 /// Only valid as a direct child of `<layout>`, not inside containers.
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct LayoutRegion {
+    /// Not yet used by `region_to_compat_node`; reserved for left/right pins.
+    #[allow(dead_code)]
     pub pin:      RegionPin,
     pub page:     Option<PageScope>,
     /// `w` is required for `Left`/`Right`; ignored for `Top`/`Bottom`.
+    /// Not yet used by `region_to_compat_node`.
+    #[allow(dead_code)]
     pub w:        Option<f32>,
     pub children: Vec<Node>,
     pub debug:    bool,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum LayoutChild {
     Content(Node),
@@ -132,13 +131,11 @@ pub enum LayoutChild {
 }
 
 /// Root-level layout wrapper.
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Layout {
     pub children: Vec<LayoutChild>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum SectionChild {
     Layout(Layout),
@@ -146,18 +143,18 @@ pub enum SectionChild {
 }
 
 /// Per-section overrides; `None` fields inherit document-level defaults.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Default)]
 pub struct SectionOptions {
     pub size:       Option<(f32, f32)>,
     pub margin:     Option<[f32; 4]>,
     pub background: Option<String>,
     pub debug:      Option<bool>,
+    /// Parsed but not yet surfaced to the render pipeline.
+    #[allow(dead_code)]
     pub title:      Option<String>,
 }
 
 /// A content boundary with its own auto-pagination.
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Section {
     /// In document order: first child is painted first (bottom).
@@ -958,27 +955,6 @@ pub fn parse_signed_measurement(s: &str) -> Result<f32, String> {
     let inner = if neg { &s[1..] } else { s };
     let val = parse_measurement(inner)?;
     Ok(if neg { -val } else { val })
-}
-
-/// Parse a `<layout>` element that may contain `<region>` and layout nodes.
-#[allow(dead_code)]
-fn parse_layout_with_regions(
-    elem:         &roxmltree::Node,
-    tokens:       &Tokens,
-    asset_images: &HashMap<String, String>,
-) -> Result<Layout, String> {
-    let mut children = Vec::new();
-    for child in elems(elem) {
-        if child.tag_name().name() == "region" {
-            children.push(LayoutChild::Region(parse_region_elem(&child, tokens, asset_images)?));
-        } else {
-            children.push(LayoutChild::Content(resolve_parsed_node(
-                parse_node(&child, tokens, asset_images)?,
-                "Helvetica", 11.0, &HashMap::new(),
-            )));
-        }
-    }
-    Ok(Layout { children })
 }
 
 /// Thin wrapper: resolve a ParsedNode in isolation (used during XML parse of sections

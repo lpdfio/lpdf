@@ -152,10 +152,6 @@ pub struct RenderCanvasText {
 pub struct RenderCanvasRun {
     pub text: String,
     pub font: Option<String>,
-    #[allow(dead_code)]
-    pub size: Option<f32>,
-    #[allow(dead_code)]
-    pub color: Option<String>,
 }
 
 pub struct RenderCanvasRect {

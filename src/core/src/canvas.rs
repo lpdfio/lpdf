@@ -95,6 +95,9 @@ pub struct CanvasPath {
 pub struct CanvasTextRun {
     pub text:  String,
     pub font:  Option<String>,
+    /// Per-run color is parsed for schema compliance; per-run color rendering
+    /// is not yet implemented in the PDF engine (uses block-level color).
+    #[allow(dead_code)]
     pub color: Option<String>,
 }
 
@@ -679,8 +682,6 @@ fn primitive_to_render_node(prim: &CanvasPrimitive, page_w: f32) -> RenderNode {
             let runs = t.runs.iter().map(|r| RenderCanvasRun {
                 text:  r.text.clone(),
                 font:  r.font.clone(),
-                size:  None,
-                color: r.color.clone(),
             }).collect();
             RenderNode::CanvasText(RenderCanvasText {
                 x:           t.x,
