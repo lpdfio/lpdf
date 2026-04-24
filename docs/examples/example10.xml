@@ -10,8 +10,7 @@
   </tokens>
   <document size="a4" margin="48pt">
     <meta title="Engineering Handbook — running header and page numbers" />
-    <pages>
-      <page>
+      <section>
         <layout>
 
         <!-- running header: rendered identically on every page -->
@@ -61,7 +60,6 @@
         </stack>
 
         </layout>
-      </page>
-    </pages>
+      </section>
   </document>
 </lpdf>

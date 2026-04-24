@@ -13,8 +13,7 @@
   </tokens>
   <document size="a4" margin="0pt">
     <meta title="Resume — Jane Doe" author="Jane Doe" />
-    <pages>
-      <page margin="0pt 18pt 0pt 0pt">
+      <section margin="0pt 18pt 0pt 0pt">
         <layout>
         <split gap="0pt" height="full">
 
@@ -110,7 +109,6 @@
 
         </split>
         </layout>
-      </page>
-    </pages>
+      </section>
   </document>
 </lpdf>

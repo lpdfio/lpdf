@@ -8,10 +8,13 @@ use Lpdf\Canvas;
 use Lpdf\Canvas\Clip;
 use Lpdf\Canvas\EllipseStyle;
 use Lpdf\Canvas\LayerOptions;
+use Lpdf\Canvas\LineCap;
+use Lpdf\Canvas\LineJoin;
 use Lpdf\Canvas\LineStyle;
 use Lpdf\Canvas\PathStyle;
 use Lpdf\Canvas\RectStyle;
 use Lpdf\Canvas\Run;
+use Lpdf\Canvas\TextAlign;
 use Lpdf\Canvas\TextStyle;
 use Lpdf\Canvas\Transform;
 use Lpdf\Engine;
@@ -77,7 +80,7 @@ $section1 = Kit::section(
                 Canvas::line(28, 192, 300, 192, new LineStyle(stroke: '#333333', strokeWidth: 1)),
 
                 // Thick round cap
-                Canvas::line(28, 210, 300, 210, new LineStyle(stroke: '#8e44ad', strokeWidth: 4, lineCap: 'round')),
+                Canvas::line(28, 210, 300, 210, new LineStyle(stroke: '#8e44ad', strokeWidth: 4, lineCap: LineCap::Round)),
 
                 // Dashed
                 Canvas::line(28, 228, 300, 228, new LineStyle(stroke: '#e67e22', strokeWidth: 2, strokeDash: [6, 3])),
@@ -107,7 +110,7 @@ $section1 = Kit::section(
                 Canvas::path('M 28 410 L 128 370 L 228 410 Z', new PathStyle(fill: '#8e44ad', stroke: '#6c3483', strokeWidth: 1)),
 
                 // Open path (chevron)
-                Canvas::path('M 250 410 L 310 375 L 370 410', new PathStyle(stroke: '#2980b9', strokeWidth: 3, lineCap: 'round', lineJoin: 'round')),
+                Canvas::path('M 250 410 L 310 375 L 370 410', new PathStyle(stroke: '#2980b9', strokeWidth: 3, lineCap: LineCap::Round, lineJoin: LineJoin::Round)),
 
                 // Bezier curve (cubic)
                 Canvas::path('M 400 410 C 420 365 500 365 520 410', new PathStyle(stroke: '#16a085', strokeWidth: 2, fill: '#d1f2eb')),
@@ -120,12 +123,12 @@ $section1 = Kit::section(
 
                 // Centered
                 Canvas::text(28, 474, 'Centered over 539 pt', new TextStyle(
-                    font: 'Helvetica', size: 12, color: '#2980b9', align: 'center', width: 539,
+                    font: 'Helvetica', size: 12, color: '#2980b9', align: TextAlign::Center, width: 539,
                 )),
 
                 // Right-aligned
                 Canvas::text(28, 494, 'Right-aligned over 539 pt', new TextStyle(
-                    font: 'Helvetica', size: 12, color: '#8e44ad', align: 'right', width: 539,
+                    font: 'Helvetica', size: 12, color: '#8e44ad', align: TextAlign::Right, width: 539,
                 )),
 
                 // Custom font

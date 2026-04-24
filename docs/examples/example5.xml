@@ -16,8 +16,7 @@
   <!-- Event ticket: 5.5in × 2in = 396pt × 144pt -->
   <document size="396pt 144pt" margin="0pt">
     <meta title="NorthStar Conf 2026 — Ticket" />
-    <pages>
-      <page background="surface">
+      <section background="surface">
         <layout>
 
         <split gap="0pt" height="full">
@@ -79,7 +78,6 @@
         </split>
 
         </layout>
-      </page>
-    </pages>
+      </section>
   </document>
 </lpdf>

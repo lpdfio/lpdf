@@ -16,8 +16,7 @@
   </tokens>
   <document size="a4" margin="40pt">
     <meta title="Platform Features" author="Acme Corp" subject="Product Overview" />
-    <pages>
-      <page background="surface">
+      <section background="surface">
         <layout>
         <stack gap="l">
 
@@ -188,7 +187,6 @@
 
         </stack>
         </layout>
-      </page>
-    </pages>
+      </section>
   </document>
 </lpdf>

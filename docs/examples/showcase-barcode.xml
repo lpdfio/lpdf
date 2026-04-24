@@ -13,9 +13,8 @@
   </tokens>
   <document size="a4" margin="40pt">
     <meta title="lpdf Showcase — Barcodes" subject="QR Code · Code 128 · EAN-13" />
-    <pages>
 
-      <page background="surface">
+      <section background="surface">
         <layout>
         <stack gap="xl">
 
@@ -125,10 +124,10 @@
 
         </stack>
         </layout>
-      </page>
+      </section>
 
       <!-- Inline in layouts -->
-      <page background="surface">
+      <section background="surface">
         <layout>
         <stack gap="xl">
 
@@ -197,8 +196,6 @@
 
         </stack>
         </layout>
-      </page>
-
-    </pages>
+      </section>
   </document>
 </lpdf>

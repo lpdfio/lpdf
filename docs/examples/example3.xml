@@ -14,8 +14,7 @@
   </tokens>
   <document size="a4" margin="40pt">
     <meta title="Invoice #1042" author="Acme Corp" subject="Invoice" />
-    <pages>
-      <page background="surface">
+      <section background="surface">
         <layout>
         <stack gap="l" height="full" justify="between">
 
@@ -147,7 +146,6 @@
 
         </stack>
         </layout>
-      </page>
-    </pages>
+      </section>
   </document>
 </lpdf>

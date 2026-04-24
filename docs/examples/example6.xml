@@ -13,10 +13,9 @@
   <!-- Standard business card: 3.5in × 2in = 252pt × 144pt -->
   <document size="252pt 144pt" margin="0pt">
     <meta title="Business Card — Jane Doe" />
-    <pages>
 
       <!-- Front -->
-      <page background="brand">
+      <section background="brand">
         <layout>
         <stack padding="l" gap="m" height="full" justify="between">
 
@@ -31,10 +30,10 @@
 
         </stack>
         </layout>
-      </page>
+      </section>
 
       <!-- Back -->
-      <page background="surface">
+      <section background="surface">
         <layout>
         <stack padding="l" gap="m" height="full" justify="between">
 
@@ -63,8 +62,6 @@
 
         </stack>
         </layout>
-      </page>
-
-    </pages>
+      </section>
   </document>
 </lpdf>

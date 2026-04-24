@@ -12,8 +12,7 @@
   </tokens>
   <document size="letter" margin="48pt">
     <meta title="Quarterly Investor Update — Q1 2026" />
-    <pages>
-      <page>
+      <section>
         <layout>
 
         <!-- letterhead: only on page 1 -->
@@ -79,7 +78,6 @@
         </stack>
 
         </layout>
-      </page>
-    </pages>
+      </section>
   </document>
 </lpdf>

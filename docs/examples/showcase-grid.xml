@@ -13,10 +13,9 @@
   </tokens>
   <document size="a4" margin="40pt">
     <meta title="lpdf Showcase — Grid" subject="Layout primitives" />
-    <pages>
 
       <!-- Grid -->
-      <page background="surface">
+      <section background="surface">
         <layout>
         <stack gap="xl">
 
@@ -190,8 +189,6 @@
 
         </stack>
         </layout>
-      </page>
-
-    </pages>
+      </section>
   </document>
 </lpdf>

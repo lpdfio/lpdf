@@ -13,8 +13,7 @@
   <!-- 4in × 6in shipping label = 288pt × 432pt -->
   <document size="288pt 432pt" margin="0pt">
     <meta title="Shipping Label — ORD-20260412-0087" />
-    <pages>
-      <page background="surface">
+      <section background="surface">
         <layout>
         <stack gap="0pt" height="full">
 
@@ -101,7 +100,6 @@
 
         </stack>
         </layout>
-      </page>
-    </pages>
+      </section>
   </document>
 </lpdf>

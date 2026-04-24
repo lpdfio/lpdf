@@ -14,9 +14,8 @@
   </tokens>
   <document>
     <meta title="Invoice #1042" author="Acme Corp" subject="Invoice"/>
-    <pages>
-      <page size="letter" margin="0">
-        <layout>
+    <section size="letter" margin="0pt">
+      <layout>
         <flank padding="l" background="surface">
           <stack gap="xs">
             <text font="heading" font-size="xxl" color="primary">INVOICE1</text>
@@ -74,8 +73,7 @@
         <stack padding="l">
           <text font="body" font-size="s" color="muted">Payment terms: net 30 days. Questions? <span color="primary" url="mailto:billing@acme.example">billing@acme.example</span></text>
         </stack>
-        </layout>
-      </page>
-    </pages>
+      </layout>
+    </section>
   </document>
 </lpdf>

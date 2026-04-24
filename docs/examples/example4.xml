@@ -13,8 +13,7 @@
   </tokens>
   <document size="letter" orientation="landscape" margin="0pt">
     <meta title="Certificate of Completion — Jane Doe" />
-    <pages>
-      <page background="surface">
+      <section background="surface">
         <layout>
 
         <!-- outer border frame -->
@@ -69,7 +68,6 @@
         </frame>
 
         </layout>
-      </page>
-    </pages>
+      </section>
   </document>
 </lpdf>

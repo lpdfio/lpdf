@@ -5,9 +5,8 @@
     <font name="heading" core="Helvetica-Bold"/>
   </assets>
   <document size="a4" margin="48pt" font="body">
-    <pages>
-      <page>
-        <layout>
+    <section>
+      <layout>
         <stack gap="m">
 
           <!-- header row: title + invoice number -->
@@ -51,8 +50,7 @@
           </frame>
 
         </stack>
-        </layout>
-      </page>
-    </pages>
+      </layout>
+    </section>
   </document>
 </lpdf>

@@ -3,8 +3,7 @@
   xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
   <document size="a4" margin="48pt">
     <meta title="Auto-pagination demo — flowing text article" />
-    <pages>
-      <page>
+      <section>
         <layout>
         <stack gap="m">
 
@@ -38,7 +37,6 @@
 
         </stack>
         </layout>
-      </page>
-    </pages>
+      </section>
   </document>
 </lpdf>
