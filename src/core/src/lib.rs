@@ -165,18 +165,15 @@ impl LpdfEngine {
         }
 
         let meta = pdf::build_image_meta(&self.images);
-        {
-            let mut lp = doc.section_layouts();
-            for page in &mut lp {
-                layout::prefill_image_sizes(&mut page.children, &meta);
-            }
+        let mut lp = doc.section_layouts();
+        for page in &mut lp {
+            layout::prefill_image_sizes(&mut page.children, &meta);
         }
 
         layout::set_font_widths(self.font_widths.clone());
 
-        let lp2 = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
-            lp2.iter().flat_map(layout::layout_page).collect();
+            lp.iter().flat_map(layout::layout_page).collect();
 
         let status = license::check(&self.license_key, self.now_unix);
         let wm: Option<(&str, Option<&str>)> = if status.is_licensed() {
@@ -236,11 +233,9 @@ impl LpdfEngine {
         }
 
         let meta = pdf::build_image_meta(&self.images);
-        {
-            let mut lp = doc.section_layouts();
-            for page in &mut lp {
-                layout::prefill_image_sizes(&mut page.children, &meta);
-            }
+        let mut lp = doc.section_layouts();
+        for page in &mut lp {
+            layout::prefill_image_sizes(&mut page.children, &meta);
         }
 
         // Merge font widths: engine-level + doc-level (doc-level takes precedence).
@@ -248,9 +243,8 @@ impl LpdfEngine {
         merged.extend(std::mem::take(&mut doc.font_widths));
         layout::set_font_widths(merged);
 
-        let lp2 = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
-            lp2.iter().flat_map(layout::layout_page).collect();
+            lp.iter().flat_map(layout::layout_page).collect();
 
         let status = license::check(&self.license_key, self.now_unix);
         let wm: Option<(&str, Option<&str>)> = if status.is_licensed() {

@@ -1,78 +1,45 @@
-import { RenderOptions } from './_shared';
-import { LpdfDocument } from './kit';
-export type { RenderOptions } from './_shared';
-export type { LpdfDocument, LpdfPageNode, LpdfNode, LpdfContainerNode, LpdfTextNode, LpdfSpanNode, LpdfDividerNode, LpdfImgNode, LpdfBarcodeNode, LpdfTokens, LpdfFontDef, LpdfMeta, StackInput, FlankInput, SplitInput, ClusterInput, GridInput, FrameInput, LinkInput, TextInput, SpanInput, DividerInput, ImgInput, BarcodeInput, PageInput, DocumentInput, StackOptions, FlankOptions, SplitOptions, ClusterOptions, GridOptions, FrameOptions, LinkOptions, TextOptions, SpanOptions, DividerOptions, ImgOptions, BarcodeOptions, PageOptions, DocumentOptions } from './kit';
-export { LpdfKit } from './kit';
+export * from './engine';
+export * from './kit';
+export * from './layout';
+export * from './canvas';
+export * from './_shared';
 export { kitToXml } from './kit-to-xml';
-/** Thrown when the lpdf engine returns a layout or parse error. */
-export declare class LpdfRenderError extends Error {
-    constructor(message: string);
-}
-/**
- * Stateful renderer. Construct once with the license key and optional shared
- * config; call `renderPdf` as many times as needed without repeating the key.
- */
-/** PDF permission flags for RC4-128 encryption. All flags default to `true` (allowed). */
-export interface EncryptPermissions {
-    print?: boolean;
-    modify?: boolean;
-    copy?: boolean;
-    annotate?: boolean;
-    fill_forms?: boolean;
-    accessibility?: boolean;
-    assemble?: boolean;
-    print_hq?: boolean;
-}
-/** RC4-128 encryption options passed to {@link LpdfEngine.setEncryption}. */
-export interface EncryptOptions {
-    /** Open password shown to readers. Empty string = no open password required. */
-    userPassword: string;
-    /** Owner (permissions) password. Required; must be non-empty. */
-    ownerPassword: string;
-    /** Permission flags applied to the document. Omitted flags default to `true`. */
-    permissions?: EncryptPermissions;
-}
-export declare class LpdfEngine {
-    private readonly _licenseKey;
-    private readonly _opts;
-    private readonly _fonts;
-    private readonly _images;
-    private _disposed;
-    private _encrypt;
-    constructor(licenseKey: string, options?: RenderOptions);
-    /**
-     * Register raw TTF/OTF bytes for a custom font name used in `<font src="…">`.
-     * Call before `renderPdf`. Returns `this` for chaining.
-     */
-    loadFont(name: string, bytes: Uint8Array): this;
-    /**
-     * Register raw image bytes (PNG or JPEG) for an image name used in `<img name="…">`.
-     * Call before `renderPdf`. Returns `this` for chaining.
-     */
-    loadImage(name: string, bytes: Uint8Array): this;
-    /**
-     * Configure RC4-128 encryption for all subsequent `renderPdf` calls.
-     * Returns `this` for chaining.
-     */
-    setEncryption(options: EncryptOptions): this;
-    /**
-     * Remove any previously configured encryption.
-     * Returns `this` for chaining.
-     */
-    clearEncryption(): this;
-    /**
-     * Release held resources. Idempotent. Subsequent `renderPdf` / `loadFont`
-     * calls after disposal will throw.
-     */
-    dispose(): void;
-    [Symbol.dispose](): void;
-    private _throwIfDisposed;
-    /**
-     * Render an lpdf XML string to PDF bytes (Node.js).
-     */
-    renderPdf(input: string, callOptions?: RenderOptions): Promise<Uint8Array>;
-    /**
-     * Render an `LpdfDocument` tree (built with `LpdfKit`) to PDF bytes (Node.js).
-     */
-    renderPdf(input: LpdfDocument, callOptions?: RenderOptions): Promise<Uint8Array>;
-}
+import { LpdfEngine } from './engine';
+export declare const Lpdf: Readonly<{
+    Engine: typeof LpdfEngine;
+    Kit: Readonly<{
+        layout: (nodes?: import("./layout").LpdfNode[]) => import("./kit").LpdfLayoutBlock;
+        canvas: (layers?: import("./canvas").LpdfCanvasLayerNode[]) => import("./kit").LpdfCanvasBlock;
+        section: (input?: import("./kit").SectionInput) => import("./kit").LpdfSectionNode;
+        document: (input?: import("./kit").DocumentInput) => import("./kit").LpdfDocument;
+    }>;
+    Layout: Readonly<{
+        stack: (nodes?: import("./layout").LpdfNode[], options?: import("./layout").StackOptions) => import("./layout").LpdfContainerNode;
+        flank: (nodes?: import("./layout").LpdfNode[], options?: import("./layout").FlankOptions) => import("./layout").LpdfContainerNode;
+        split: (nodes?: import("./layout").LpdfNode[], options?: import("./layout").SplitOptions) => import("./layout").LpdfContainerNode;
+        cluster: (nodes?: import("./layout").LpdfNode[], options?: import("./layout").ClusterOptions) => import("./layout").LpdfContainerNode;
+        grid: (nodes?: import("./layout").LpdfNode[], options?: import("./layout").GridOptions) => import("./layout").LpdfContainerNode;
+        frame: (nodes?: import("./layout").LpdfNode[], options?: import("./layout").FrameOptions) => import("./layout").LpdfContainerNode;
+        link: (nodes?: import("./layout").LpdfNode[], options?: import("./layout").LinkOptions) => import("./layout").LpdfContainerNode;
+        text: (nodes?: (string | import("./layout").LpdfSpanNode)[], options?: import("./layout").TextOptions) => import("./layout").LpdfTextNode;
+        span: (nodes?: string[], options?: import("./layout").SpanOptions) => import("./layout").LpdfSpanNode;
+        divider: (options?: import("./layout").DividerOptions) => import("./layout").LpdfDividerNode;
+        img: (options: import("./layout").ImgOptions) => import("./layout").LpdfImgNode;
+        barcode: (options: import("./layout").BarcodeOptions) => import("./layout").LpdfBarcodeNode;
+        table: (options: import("./layout").TableOptions, nodes?: (import("./layout").LpdfTheadNode | import("./layout").LpdfTrNode)[]) => import("./layout").LpdfTableNode;
+        thead: (nodes?: import("./layout").LpdfTdNode[], options?: import("./layout").TheadOptions) => import("./layout").LpdfTheadNode;
+        tr: (nodes?: import("./layout").LpdfTdNode[], options?: import("./layout").TrOptions) => import("./layout").LpdfTrNode;
+        td: (nodes?: import("./layout").LpdfNode[], options?: import("./layout").TdOptions) => import("./layout").LpdfTdNode;
+        region: (pin: string, nodes?: import("./layout").LpdfNode[], options?: import("./layout").RegionOptions) => import("./layout").LpdfRegionNode;
+    }>;
+    Canvas: Readonly<{
+        rect: (x: number, y: number, w: number, h: number, style?: import("./canvas").CanvasRectStyle) => import("./canvas").LpdfCanvasRectNode;
+        line: (x1: number, y1: number, x2: number, y2: number, style?: import("./canvas").CanvasLineStyle) => import("./canvas").LpdfCanvasLineNode;
+        ellipse: (cx: number, cy: number, rx: number, ry: number, style?: import("./canvas").CanvasEllipseStyle) => import("./canvas").LpdfCanvasEllipseNode;
+        circle: (cx: number, cy: number, r: number, style?: import("./canvas").CanvasEllipseStyle) => import("./canvas").LpdfCanvasCircleNode;
+        path: (d: string, style?: import("./canvas").CanvasPathStyle) => import("./canvas").LpdfCanvasPathNode;
+        text: (x: number, y: number, content: string, style?: import("./canvas").CanvasTextStyle, runs?: import("./canvas").CanvasRun[]) => import("./canvas").LpdfCanvasTextNode;
+        img: (x: number, y: number, w: number, h: number, name: string) => import("./canvas").LpdfCanvasImgNode;
+        layer: (nodes: import("./canvas").LpdfCanvasPrimitiveNode[], options?: import("./canvas").CanvasLayerOptions) => import("./canvas").LpdfCanvasLayerNode;
+    }>;
+}>;

@@ -278,17 +278,20 @@ fn render_canvas_primitive(node: &Value, depth: usize) -> String {
 
     match tag {
         "text" => {
-            let attrs_s = attrs_str(attrs, &["content", "runs"]);
-            let content = attrs.get("content").and_then(|v| v.as_str()).unwrap_or("");
+            let attrs_s = attrs_str(attrs, &[]);
+            let content = node.get("text").and_then(|v| v.as_str()).unwrap_or("");
             if let Some(runs) = node.get("runs").and_then(|v| v.as_array()) {
                 let inner_pad = "  ".repeat(depth + 1);
                 let runs_str: String = runs.iter().map(|r| {
-                    let text  = r.get("text") .and_then(|v| v.as_str()).unwrap_or("");
-                    let font  = r.get("font") .and_then(|v| v.as_str());
-                    let color = r.get("color").and_then(|v| v.as_str());
+                    let text      = r.get("text").and_then(|v| v.as_str()).unwrap_or("");
+                    let run_attrs = r.get("attrs");
+                    let font      = run_attrs.and_then(|a| a.get("font"))     .and_then(|v| v.as_str());
+                    let font_size = run_attrs.and_then(|a| a.get("font-size")).and_then(|v| v.as_str());
+                    let color     = run_attrs.and_then(|a| a.get("color"))    .and_then(|v| v.as_str());
                     let mut span_attrs = String::new();
-                    if let Some(f) = font  { span_attrs.push_str(&format!(" font=\"{}\"", escape_attr(f))); }
-                    if let Some(c) = color { span_attrs.push_str(&format!(" color=\"{}\"", escape_attr(c))); }
+                    if let Some(f)  = font      { span_attrs.push_str(&format!(" font=\"{}\"", escape_attr(f))); }
+                    if let Some(fs) = font_size { span_attrs.push_str(&format!(" font-size=\"{}\"", escape_attr(fs))); }
+                    if let Some(c)  = color     { span_attrs.push_str(&format!(" color=\"{}\"", escape_attr(c))); }
                     format!("{inner_pad}<span{span_attrs}>{}</span>", escape_text(text))
                 }).collect::<Vec<_>>().join("\n");
                 format!("{pad}<text{attrs_s}>\n{runs_str}\n{pad}</text>")

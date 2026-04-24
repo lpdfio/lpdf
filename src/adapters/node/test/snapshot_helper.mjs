@@ -21,6 +21,7 @@ export const EXAMPLES = [
   'showcase-grid', 'showcase-split', 'showcase-stack',
   'showcase-table', 'showcase-barcode', 'showcase-encryption', 'showcase-forms',
   'bench_xs', 'bench_s', 'bench_m', 'bench_l', 'bench_xl',
+  'showcase-canvas-layer', 'showcase-canvas-overlay', 'showcase-canvas-rect', 'showcase-canvas-text',
 ];
 
 /** Returns the contents of a fixture XML file by name (without extension). */

@@ -214,13 +214,13 @@ function __wbg_get_imports() {
       return ret;
     },
     __wbindgen_init_externref_table: function() {
-      const table2 = wasm.__wbindgen_externrefs;
-      const offset = table2.grow(4);
-      table2.set(0, void 0);
-      table2.set(offset + 0, void 0);
-      table2.set(offset + 1, null);
-      table2.set(offset + 2, true);
-      table2.set(offset + 3, false);
+      const table = wasm.__wbindgen_externrefs;
+      const offset = table.grow(4);
+      table.set(0, void 0);
+      table.set(offset + 0, void 0);
+      table.set(offset + 1, null);
+      table.set(offset + 2, true);
+      table.set(offset + 3, false);
     }
   };
   return {
@@ -391,101 +391,17 @@ function buildAttrs(options) {
   }
   return result;
 }
-function makeContainer(type, input) {
+function layout(nodes = []) {
+  return { type: "layout", nodes };
+}
+function canvas(layers = []) {
+  return { type: "canvas", nodes: layers };
+}
+function section(input = {}) {
   return {
-    type,
+    type: "section",
     attrs: buildAttrs(input.options ?? {}),
-    children: input.nodes ?? []
-  };
-}
-function stack(input = {}) {
-  return makeContainer("stack", input);
-}
-function flank(input = {}) {
-  return makeContainer("flank", input);
-}
-function split(input = {}) {
-  return makeContainer("split", input);
-}
-function cluster(input = {}) {
-  return makeContainer("cluster", input);
-}
-function grid(input = {}) {
-  return makeContainer("grid", input);
-}
-function frame(input = {}) {
-  return makeContainer("frame", input);
-}
-function link(input = {}) {
-  return makeContainer("link", input);
-}
-function table(input) {
-  return {
-    type: "table",
-    attrs: buildAttrs(input.options),
-    children: input.nodes ?? []
-  };
-}
-function thead(input = {}) {
-  return {
-    type: "thead",
-    attrs: buildAttrs(input.options ?? {}),
-    children: input.nodes ?? []
-  };
-}
-function tr(input = {}) {
-  return {
-    type: "tr",
-    attrs: buildAttrs(input.options ?? {}),
-    children: input.nodes ?? []
-  };
-}
-function td(input = {}) {
-  return {
-    type: "td",
-    attrs: buildAttrs(input.options ?? {}),
-    children: input.nodes ?? []
-  };
-}
-function text(input = {}) {
-  return {
-    type: "text",
-    attrs: buildAttrs(input.options ?? {}),
-    children: input.nodes ?? []
-  };
-}
-function span(input = {}) {
-  return {
-    type: "span",
-    attrs: buildAttrs(input.options ?? {}),
-    children: input.nodes ?? []
-  };
-}
-function divider(input = {}) {
-  return {
-    type: "divider",
-    attrs: buildAttrs(input.options ?? {})
-  };
-}
-function img(input) {
-  return {
-    type: "img",
-    attrs: buildAttrs(input.options)
-  };
-}
-function barcode(input) {
-  return {
-    type: "barcode",
-    attrs: buildAttrs(input.options)
-  };
-}
-function page(input = {}) {
-  const nodes = input.nodes ?? [];
-  const children = nodes.length > 0 ? [{ type: "layout", attrs: {}, children: nodes }] : [];
-  return {
-    type: "page",
-    attrs: buildAttrs(input.options ?? {}),
-    children
+    nodes: input.nodes ?? []
   };
 }
 function document(input = {}) {
@@ -499,28 +415,14 @@ function document(input = {}) {
     version: 1,
     type: "document",
     attrs,
-    children: input.nodes ?? []
+    nodes: input.sections ?? []
   };
 }
 var LpdfKit = Object.freeze({
-  stack,
-  flank,
-  split,
-  cluster,
-  grid,
-  frame,
-  link,
-  text,
-  span,
-  divider,
-  img,
-  barcode,
-  page,
-  document,
-  table,
-  thead,
-  tr,
-  td
+  layout,
+  canvas,
+  section,
+  document
 });
 
 // src/browser.ts

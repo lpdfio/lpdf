@@ -1,194 +1,34 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LpdfEngine = exports.LpdfRenderError = exports.kitToXml = exports.LpdfKit = void 0;
-const node_fs_1 = require("node:fs");
-// require() path is relative to the compiled output at dist/index.js.
-// dist/index.js → ../../../../dist/node/lpdf.js = project-root/dist/node/lpdf.js
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const wasmModule = require('../../../../dist/node/lpdf.js');
-const WasmEngine = wasmModule.LpdfEngine;
-var kit_1 = require("./kit");
-Object.defineProperty(exports, "LpdfKit", { enumerable: true, get: function () { return kit_1.LpdfKit; } });
+exports.Lpdf = exports.kitToXml = void 0;
+__exportStar(require("./engine"), exports);
+__exportStar(require("./kit"), exports);
+__exportStar(require("./layout"), exports);
+__exportStar(require("./canvas"), exports);
+__exportStar(require("./_shared"), exports);
 var kit_to_xml_1 = require("./kit-to-xml");
 Object.defineProperty(exports, "kitToXml", { enumerable: true, get: function () { return kit_to_xml_1.kitToXml; } });
-/** Thrown when the lpdf engine returns a layout or parse error. */
-class LpdfRenderError extends Error {
-    constructor(message) {
-        super(message);
-        this.name = 'LpdfRenderError';
-    }
-}
-exports.LpdfRenderError = LpdfRenderError;
-class LpdfEngine {
-    constructor(licenseKey, options = {}) {
-        this._fonts = new Map();
-        this._images = new Map();
-        this._disposed = false;
-        this._encrypt = null;
-        this._licenseKey = licenseKey;
-        this._opts = options;
-    }
-    /**
-     * Register raw TTF/OTF bytes for a custom font name used in `<font src="…">`.
-     * Call before `renderPdf`. Returns `this` for chaining.
-     */
-    loadFont(name, bytes) {
-        this._throwIfDisposed();
-        this._fonts.set(name, bytes);
-        return this;
-    }
-    /**
-     * Register raw image bytes (PNG or JPEG) for an image name used in `<img name="…">`.
-     * Call before `renderPdf`. Returns `this` for chaining.
-     */
-    loadImage(name, bytes) {
-        this._throwIfDisposed();
-        this._images.set(name, bytes);
-        return this;
-    }
-    /**
-     * Configure RC4-128 encryption for all subsequent `renderPdf` calls.
-     * Returns `this` for chaining.
-     */
-    setEncryption(options) {
-        this._throwIfDisposed();
-        this._encrypt = options;
-        return this;
-    }
-    /**
-     * Remove any previously configured encryption.
-     * Returns `this` for chaining.
-     */
-    clearEncryption() {
-        this._throwIfDisposed();
-        this._encrypt = null;
-        return this;
-    }
-    /**
-     * Release held resources. Idempotent. Subsequent `renderPdf` / `loadFont`
-     * calls after disposal will throw.
-     */
-    dispose() {
-        this._disposed = true;
-    }
-    [Symbol.dispose]() { this.dispose(); }
-    _throwIfDisposed() {
-        if (this._disposed)
-            throw new Error('LpdfEngine has been disposed.');
-    }
-    async renderPdf(input, callOptions = {}) {
-        this._throwIfDisposed();
-        // Merge fonts: instance-level loadFont() calls take precedence over the
-        // deprecated fontBytes option, which is kept for one-version compat.
-        const allFonts = new Map(this._fonts);
-        const extraBytes = { ...this._opts.fontBytes, ...callOptions.fontBytes };
-        for (const [name, bytes] of Object.entries(extraBytes)) {
-            if (!allFonts.has(name))
-                allFonts.set(name, bytes);
-        }
-        const engine = new WasmEngine(this._licenseKey);
-        const createdOn = callOptions.createdOn ?? this._opts.createdOn;
-        if (createdOn) {
-            engine.set_created_on(createdOn);
-        }
-        let pdf;
-        try {
-            if (typeof input === 'string') {
-                // XML path — auto-load fonts and images declared via src="…".
-                const xml = input;
-                for (const [key, src] of extractAssetSrcs(xml, 'font')) {
-                    if (!allFonts.has(key)) {
-                        try {
-                            allFonts.set(key, (0, node_fs_1.readFileSync)(src));
-                        }
-                        catch { /* not found; Rust falls back to Helvetica */ }
-                    }
-                }
-                for (const [name, bytes] of allFonts) {
-                    engine.load_font(name, bytes);
-                }
-                for (const [name, bytes] of this._images) {
-                    engine.load_image(name, bytes);
-                }
-                // Auto-load images declared via <image src="…"> that weren't pre-loaded.
-                for (const [key, src] of extractAssetSrcs(xml, 'image')) {
-                    if (!this._images.has(key)) {
-                        try {
-                            engine.load_image(key, (0, node_fs_1.readFileSync)(src));
-                        }
-                        catch { /* skip unresolvable image */ }
-                    }
-                }
-                if (this._encrypt) {
-                    const permsJson = JSON.stringify(this._encrypt.permissions ?? {});
-                    engine.set_encryption(this._encrypt.userPassword, this._encrypt.ownerPassword, permsJson);
-                }
-                const dataJson = callOptions.data != null ? JSON.stringify(callOptions.data) : null;
-                pdf = engine.render_pdf(xml, dataJson);
-            }
-            else {
-                // JSON (Kit tree) path — pass JSON directly to render_tree_pdf.
-                const json = JSON.stringify(input);
-                for (const [key, src] of extractFontSrcsFromJson(json)) {
-                    if (!allFonts.has(key)) {
-                        try {
-                            allFonts.set(key, (0, node_fs_1.readFileSync)(src));
-                        }
-                        catch { /* not found; Rust falls back to Helvetica */ }
-                    }
-                }
-                for (const [name, bytes] of allFonts) {
-                    engine.load_font(name, bytes);
-                }
-                for (const [name, bytes] of this._images) {
-                    engine.load_image(name, bytes);
-                }
-                if (this._encrypt) {
-                    const permsJson = JSON.stringify(this._encrypt.permissions ?? {});
-                    engine.set_encryption(this._encrypt.userPassword, this._encrypt.ownerPassword, permsJson);
-                }
-                pdf = engine.render_tree_pdf(json);
-            }
-        }
-        catch (e) {
-            engine.free();
-            const msg = e instanceof Error ? e.message : String(e);
-            throw new LpdfRenderError(msg);
-        }
-        engine.free();
-        return pdf;
-    }
-}
-exports.LpdfEngine = LpdfEngine;
-// ── Helpers ───────────────────────────────────────────────────────────────────
-/** Extract `ref??name → src` pairs from `<font>` or `<image>` tags in XML. */
-function extractAssetSrcs(xml, tag) {
-    const result = new Map();
-    const re = tag === 'font' ? /<font\s[^>]*>/g : /<image\s[^>]*>/g;
-    for (const match of xml.matchAll(re)) {
-        const t = match[0];
-        const name = /\bname="([^"]*)"/.exec(t)?.[1];
-        const ref = /\bref="([^"]*)"/.exec(t)?.[1];
-        const src = /\bsrc="([^"]*)"/.exec(t)?.[1];
-        const key = ref ?? name;
-        if (key && src)
-            result.set(key, src);
-    }
-    return result;
-}
-/** Extract `ref??name → src` pairs from `attrs.tokens.fonts[name].src` in a kit JSON string. */
-function extractFontSrcsFromJson(json) {
-    const result = new Map();
-    try {
-        const doc = JSON.parse(json);
-        const fonts = doc?.attrs?.tokens?.fonts ?? {};
-        for (const [name, def] of Object.entries(fonts)) {
-            if (def.src) {
-                const key = def.ref ?? name;
-                result.set(key, def.src);
-            }
-        }
-    }
-    catch { /* ignore */ }
-    return result;
-}
+const engine_1 = require("./engine");
+const kit_1 = require("./kit");
+const layout_1 = require("./layout");
+const canvas_1 = require("./canvas");
+exports.Lpdf = Object.freeze({
+    Engine: engine_1.LpdfEngine,
+    Kit: kit_1.LpdfKit,
+    Layout: layout_1.LpdfLayout,
+    Canvas: canvas_1.LpdfCanvas,
+});

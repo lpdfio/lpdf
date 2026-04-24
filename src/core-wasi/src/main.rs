@@ -186,11 +186,9 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     }
 
     let meta = pdf::build_image_meta(&image_registry);
-    {
-        let mut lp = doc.section_layouts();
-        for page in &mut lp {
-            layout::prefill_image_sizes(&mut page.children, &meta);
-        }
+    let mut lp = doc.section_layouts();
+    for page in &mut lp {
+        layout::prefill_image_sizes(&mut page.children, &meta);
     }
 
     // Auto-extract glyph advance-width metrics from the loaded font bytes.
@@ -207,7 +205,6 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     }
 
     layout::set_font_widths(doc.font_widths.clone());
-    let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> = lp.iter().flat_map(layout::layout_page).collect();
 
     let status = license::check(license_key, now_unix);

@@ -1606,8 +1606,11 @@ fn layout_link(
 fn layout_img(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
     // width_constraint and img_height_constraint are pre-filled by prefill_image_sizes.
     // If somehow missing, fall back to a square box at available width.
-    let w = node.width_constraint.unwrap_or(avail_w).min(avail_w);
-    let h = node.img_height_constraint.unwrap_or(w);
+    let pre_w = node.width_constraint.unwrap_or(avail_w);
+    let pre_h = node.img_height_constraint.unwrap_or(pre_w);
+    let w = pre_w.min(avail_w);
+    // If the width was clamped, scale height proportionally to preserve aspect ratio.
+    let h = if pre_w > 0.0 { pre_h * (w / pre_w) } else { pre_h };
     let name = node.image_name.clone().unwrap_or_default();
     (RenderNode::Image(RenderImage { x, y, width: w, height: h, name }), h)
 }

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf"/>
+      <color name="muted"    value="#737373"/>
+      <color name="rule"     value="#dde3ed"/>
+    </colors>
+  </tokens>
+  <document size="a4" margin="40pt">
+    <meta title="lpdf Showcase — Canvas Text" subject="Absolutely positioned text with anchors"/>
+
+    <section>
+      <canvas>
+        <!-- Anchor variant demonstrations -->
+        <layer>
+          <!-- Absolute positioning -->
+          <text x="40pt" y="60pt" font="Helvetica-Bold" font-size="24pt" color="primary">
+            Absolute x/y positioning
+          </text>
+          <text x="40pt" y="90pt" font-size="11pt" color="muted">
+            Coordinates are top-left origin, y-down.
+          </text>
+
+          <!-- Anchor: top-left (same as absolute x=0,y=0) -->
+          <text anchor="top-left" x="40pt" y="150pt" font-size="11pt">
+            anchor="top-left" x="40pt" y="150pt"
+          </text>
+
+          <!-- Anchor: top-center -->
+          <text anchor="top-center" y="180pt" font-size="11pt" align="center">
+            anchor="top-center" (horizontally centred)
+          </text>
+
+          <!-- Anchor: top-right -->
+          <text anchor="top-right" x="-40pt" y="210pt" font-size="11pt" align="right">
+            anchor="top-right" x="-40pt"
+          </text>
+
+          <!-- Divider line -->
+          <line x1="40pt" y1="240pt" x2="555.28pt" y2="240pt" stroke="rule" stroke-width="1pt"/>
+
+          <!-- Anchor: center-left -->
+          <text anchor="center-left" x="40pt" font-size="11pt" color="primary">
+            anchor="center-left" — vertically centred on page
+          </text>
+
+          <!-- Anchor: center -->
+          <text anchor="center" font-size="18pt" font="Helvetica-Bold" align="center"
+                opacity="0.15" color="primary">
+            CENTRED
+          </text>
+
+          <!-- Anchor: bottom-left, bottom-center, bottom-right -->
+          <text anchor="bottom-left"   x="40pt"  y="-60pt" font-size="10pt" color="muted">
+            bottom-left
+          </text>
+          <text anchor="bottom-center" y="-60pt" font-size="10pt" color="muted" align="center">
+            bottom-center
+          </text>
+          <text anchor="bottom-right"  x="-40pt" y="-60pt" font-size="10pt" color="muted" align="right">
+            bottom-right
+          </text>
+
+          <!-- Mixed-run text with spans -->
+          <text x="40pt" y="350pt" font-size="14pt">
+            Plain text with <span font="Helvetica-Bold" color="primary">bold span</span> and
+            <span color="#e74c3c">coloured span</span> inline.
+          </text>
+
+          <!-- Text with w= for wrapping -->
+          <text x="40pt" y="390pt" font-size="11pt" w="300pt" align="left" color="muted">
+            This text has a width constraint of 300pt and will wrap onto the next line
+            when it exceeds that width.
+          </text>
+
+          <!-- Opacity on text -->
+          <text x="40pt" y="480pt" font-size="36pt" font="Helvetica-Bold"
+                color="primary" opacity="0.2">
+            WATERMARK DEMO
+          </text>
+        </layer>
+      </canvas>
+    </section>
+  </document>
+</lpdf>

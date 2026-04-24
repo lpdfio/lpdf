@@ -21,3 +21,8 @@ export interface RenderOptions {
      */
     data?: Record<string, unknown> | null;
 }
+/**
+ * Page scope for canvas layers and layout regions.
+ * Numeric ranges (e.g. '2-4', '1,3-5', '2-last') remain as plain strings.
+ */
+export type PageScope = 'each' | 'first' | 'last' | 'odd' | 'even';
