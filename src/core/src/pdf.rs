@@ -2267,7 +2267,9 @@ fn assemble_pdf(
 
     // -- Content streams -------------------------------------------------------
     for (i, (content_bytes, _)) in rendered_pages.iter().enumerate() {
-        pdf.stream(content_ids[i], content_bytes);
+        let compressed = compress_to_vec_zlib(content_bytes, 6);
+        pdf.stream(content_ids[i], &compressed)
+           .filter(Filter::FlateDecode);
     }
 
     // -- Opacity ExtGState objects ---------------------------------------------
@@ -2675,7 +2677,9 @@ fn assemble_pdf(
 
                 // [3] ToUnicode CMap stream — enables text extraction.
                 let cmap_bytes = build_to_unicode_cmap(&fname, glyph_unicode);
-                pdf.stream(cmap_id, &cmap_bytes);
+                let cmap_compressed = compress_to_vec_zlib(&cmap_bytes, 6);
+                pdf.stream(cmap_id, &cmap_compressed)
+                   .filter(Filter::FlateDecode);
 
                 // [font_dict_id] Type0 composite font wrapper.
                 pdf.type0_font(fids.font_dict_id)

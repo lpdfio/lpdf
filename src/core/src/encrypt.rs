@@ -349,12 +349,38 @@ fn encrypt_hex_string(data: &mut [u8], open_pos: usize, end: usize, key: &[u8; 1
     pos + 1
 }
 
-fn encrypt_stream(data: &mut [u8], stream_kw: usize, end: usize, key: &[u8; 16]) -> usize {
+// Parse /Length N from the stream dict bytes (data[dict_start..stream_kw]).
+// Returns None if the key is absent or unparseable.
+fn parse_stream_length(data: &[u8], dict_start: usize, stream_kw: usize) -> Option<usize> {
+    let dict = &data[dict_start..stream_kw];
+    let pos = dict.windows(7).position(|w| w == b"/Length")?;
+    let after = skip_ws(&dict[pos + 7..]);
+    let (n, _) = read_u32(after)?;
+    Some(n as usize)
+}
+
+fn encrypt_stream(data: &mut [u8], stream_kw: usize, end: usize, key: &[u8; 16], length: Option<usize>) -> usize {
     // Skip "stream" + CRLF or LF
     let mut stream_start = stream_kw + 6;
     if stream_start < end && data[stream_start] == b'\r' { stream_start += 1; }
     if stream_start < end && data[stream_start] == b'\n' { stream_start += 1; }
 
+    if let Some(n) = length {
+        // Length-aware path: encrypt exactly n bytes, then skip the endstream marker.
+        // Required for compressed (binary) streams — scanning byte-by-byte for
+        // \nendstream is unsafe on zlib data that could contain that sequence by chance.
+        let stream_end = (stream_start + n).min(end);
+        rc4(key, &mut data[stream_start..stream_end]);
+        // PDF spec requires an EOL before endstream; skip optional \r and/or \n.
+        let mut pos = stream_end;
+        if pos < end && data[pos] == b'\r' { pos += 1; }
+        if pos < end && data[pos] == b'\n' { pos += 1; }
+        if pos + 9 <= end && &data[pos..pos + 9] == b"endstream" { pos += 9; }
+        return pos;
+    }
+
+    // Fallback: scan for \nendstream boundary.
+    // Safe only for uncompressed / ASCII stream content (e.g. objects with no /Filter).
     let mut pos = stream_start;
     while pos < end {
         // Check \r\nendstream before \nendstream to handle both terminators correctly
@@ -394,7 +420,11 @@ fn scan_body(data: &mut [u8], start: usize, end: usize, key: &[u8; 16]) {
                 if pos + 6 <= end && &data[pos..pos + 6] == b"stream" {
                     let next = pos + 6;
                     if next < end && (data[next] == b'\n' || data[next] == b'\r') {
-                        pos = encrypt_stream(data, pos, end, key);
+                        // Parse /Length from the dict preceding the stream keyword so that
+                        // encrypt_stream can encrypt exactly the right number of bytes without
+                        // scanning binary data for the \nendstream sentinel.
+                        let length = parse_stream_length(data, start, pos);
+                        pos = encrypt_stream(data, pos, end, key, length);
                     } else {
                         pos += 1;
                     }
