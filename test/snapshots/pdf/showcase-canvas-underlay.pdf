@@ -1,0 +1,255 @@
+%PDF-1.7
+%€€€€
+
+1 0 obj
+<<
+  /Type /Catalog
+  /Pages 3 0 R
+>>
+endobj
+
+2 0 obj
+<<
+  /Title <FEFF006C007000640066002000530068006F0077006300610073006500202014002000430061006E00760061007300200055006E006400650072006C0061007900200028006C0065007400740065007200680065006100640029>
+  /Subject (Canvas underlay + layout)
+  /Producer (lpdf.io (free))
+>>
+endobj
+
+3 0 obj
+<<
+  /Type /Pages
+  /Kids [4 0 R]
+  /Count 1
+>>
+endobj
+
+4 0 obj
+<<
+  /Type /Page
+  /Parent 3 0 R
+  /MediaBox [0 0 595.28 841.89]
+  /Resources <<
+    /Font <<
+      /F0 7 0 R
+      /F1 8 0 R
+    >>
+  >>
+  /Contents 5 0 R
+  /Annots [6 0 R]
+>>
+endobj
+
+5 0 obj
+<<
+  /Length 2680
+>>
+stream
+q
+q
+0.09019608 0.3882353 0.8117647 rg
+0 741.89 595.28 100 re
+f
+Q
+q
+0.9098039 0.9411765 0.9882353 rg
+0 737.89 595.28 4 re
+f
+Q
+q
+0.09019608 0.3882353 0.8117647 rg
+0 0 595.28 40 re
+f
+Q
+q
+0.0627451 0.3137255 0.6666667 rg
+495.28 841.89 m
+595.28 841.89 l
+595.28 761.89 l
+h
+f
+Q
+Q
+BT
+0.09019608 0.3882353 0.8117647 rg
+/F1 20 Tf
+1 0 0 1 50 701.89 Tm
+(Letter of Engagement) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 11 Tf
+1 0 0 1 50 684.89 Tm
+(22 April 2026) Tj
+ET
+q
+0.8666667 0.8901961 0.92941177 RG
+1 w
+50 662.19 m
+545.28 662.19 l
+S
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 50 630.69 Tm
+(Dear Client,) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 50 597.49 Tm
+(We are pleased to confirm our engagement to provide professional services as described herein. This) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 50 584.29004 Tm
+(letterhead demonstrates the canvas underlay feature, where the blue header and footer bands are) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 50 571.09 Tm
+(rendered as a canvas layer beneath the flowing layout content.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 50 537.89 Tm
+(The canvas layer is painted first (bottom), and the layout content flows over it. This is the) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 50 524.69 Tm
+(canvas underlay) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 139.265 524.69 Tm
+(pattern:) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 179.624 524.69 Tm
+(canvas ? layout) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 263.99402 524.69 Tm
+(in document order.) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 50 491.49002 Tm
+(The contrast is the) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 143.54399 491.49002 Tm
+(canvas overlay) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 225.48299 491.49002 Tm
+(pattern (layout ? canvas), demonstrated in) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 50 478.29 Tm
+(showcase-canvas-overlay.xml where a DRAFT watermark is painted on top of the invoice content.) Tj
+ET
+q
+0.8666667 0.8901961 0.92941177 RG
+1 w
+50 455.59003 m
+545.28 455.59003 l
+S
+Q
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F0 11 Tf
+1 0 0 1 50 424.09003 Tm
+(Yours faithfully,) Tj
+ET
+BT
+0.101960786 0.101960786 0.101960786 rg
+/F1 11 Tf
+1 0 0 1 50 340.89 Tm
+(The LPDF Team) Tj
+ET
+BT
+0.4509804 0.4509804 0.4509804 rg
+/F0 9 Tf
+1 0 0 1 50 309.69 Tm
+(lpdf.io) Tj
+ET
+BT
+0.6666667 0.6666667 0.6666667 rg
+/F0 8 Tf
+1 0 0 1 531.25604 829.89 Tm
+(made with lpdf.io) Tj
+ET
+endstream
+endobj
+
+6 0 obj
+<<
+  /Type /Annot
+  /Subtype /Link
+  /Rect [531.25604 829.89 591.28 837.89]
+  /Border [0 0 0]
+  /A <<
+    /Type /Action
+    /S /URI
+    /URI (https://lpdf.io)
+  >>
+>>
+endobj
+
+7 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+8 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /BaseFont /Helvetica-Bold
+  /Encoding /WinAnsiEncoding
+>>
+endobj
+
+xref
+0 9
+0000000000 65535 f
+0000000016 00000 n
+0000000070 00000 n
+0000000351 00000 n
+0000000415 00000 n
+0000000608 00000 n
+0000003343 00000 n
+0000003526 00000 n
+0000003632 00000 n
+trailer
+<<
+  /Size 9
+  /Root 1 0 R
+  /Info 2 0 R
+>>
+startxref
+3743
+%%EOF
