@@ -42,7 +42,7 @@ use Lpdf\Layout\TrOptions;
  * {@see Kit::layout()} (wrapping these nodes) to {@see Kit::section()},
  * and finally to {@see Engine::renderPdf()}.
  */
-final class Layout
+final class LpdfLayout
 {
     use AttrsHelper;
     // ── Container helpers ─────────────────────────────────────────────────────

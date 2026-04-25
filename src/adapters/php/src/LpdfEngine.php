@@ -8,7 +8,7 @@ use Lpdf\Kit\Document;
 use Lpdf\Engine\EngineException;
 use Lpdf\Engine\EngineOptions;
 use Lpdf\Engine\WasmRunner;
-final class Engine
+final class LpdfEngine
 {
     /** @var array<string, string> Font name → raw TTF/OTF bytes */
     private array $fonts = [];

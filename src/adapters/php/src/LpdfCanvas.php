@@ -29,7 +29,7 @@ use Lpdf\Canvas\TextStyle;
  *
  * Pass layers to {@see Kit::canvas()}, then include that block in {@see Kit::section()}.
  */
-final class Canvas
+final class LpdfCanvas
 {
     // ── Primitive helpers ─────────────────────────────────────────────────────
 

@@ -42,7 +42,7 @@ use Lpdf\Layout\Node;
  * $pdf = (new Engine('license-key'))->renderPdf($doc);
  * ```
  */
-final class Kit
+final class LpdfKit
 {
     use AttrsHelper;
     /**
