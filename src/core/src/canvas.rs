@@ -115,6 +115,11 @@ pub struct CanvasText {
     pub content:     String,
     /// Mixed-run children from `<span>` elements.
     pub runs:        Vec<CanvasTextRun>,
+    /// How `x` should be interpreted at render time:
+    /// 0 = left edge (default), 1 = horizontal centre, 2 = right edge.
+    pub anchor_col:  u8,
+    /// Per-element fill opacity (1.0 = fully opaque).
+    pub opacity:     f32,
 }
 
 #[derive(Debug, Clone)]
@@ -185,6 +190,23 @@ fn resolve_anchor(anchor: &Anchor, page_w: f32, page_h: f32) -> (f32, f32) {
 }
 
 // ── XML parse helpers ─────────────────────────────────────────────────────────
+
+/// Adjust `(x, y)` so that the named anchor point of a sized element (w × h)
+/// lands on the resolved coordinate.  For example, `anchor="center"` means the
+/// centre of the element should be at `(x, y)`, so we shift by `(-w/2, -h/2)`.
+fn apply_anchor_offset(anchor: &Anchor, x: f32, y: f32, w: f32, h: f32) -> (f32, f32) {
+    let ox = match anchor {
+        Anchor::TopCenter | Anchor::Center | Anchor::BottomCenter => w / 2.0,
+        Anchor::TopRight  | Anchor::CenterRight | Anchor::BottomRight => w,
+        _ => 0.0,
+    };
+    let oy = match anchor {
+        Anchor::CenterLeft | Anchor::Center | Anchor::CenterRight => h / 2.0,
+        Anchor::BottomLeft | Anchor::BottomCenter | Anchor::BottomRight => h,
+        _ => 0.0,
+    };
+    (x - ox, y - oy)
+}
 
 /// Parse canvas position from element attributes, resolving anchors immediately.
 /// Returns `(x, y)` in canvas top-down coordinates.
@@ -260,9 +282,14 @@ fn opt_canvas_color(
 }
 
 fn parse_canvas_rect(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_h: f32) -> Result<CanvasPrimitive, String> {
-    let (x, y)       = parse_canvas_position(elem, page_w, page_h)?;
     let w            = parse_measurement(elem.attribute("w").unwrap_or("0pt"))?;
     let h            = parse_measurement(elem.attribute("h").unwrap_or("0pt"))?;
+    let (rx, ry)     = parse_canvas_position(elem, page_w, page_h)?;
+    let (x, y)       = if let Some(a) = elem.attribute("anchor") {
+        apply_anchor_offset(&parse_anchor(a)?, rx, ry, w, h)
+    } else {
+        (rx, ry)
+    };
     let fill         = opt_canvas_color(elem, "fill", tokens)?;
     let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
     let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
@@ -316,6 +343,13 @@ fn parse_canvas_path(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPr
 }
 
 fn parse_canvas_text_elem(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_h: f32) -> Result<CanvasPrimitive, String> {
+    let anchor_col = if let Some(a) = elem.attribute("anchor") {
+        match parse_anchor(a)? {
+            Anchor::TopCenter | Anchor::Center | Anchor::BottomCenter => 1,
+            Anchor::TopRight  | Anchor::CenterRight | Anchor::BottomRight => 2,
+            _ => 0,
+        }
+    } else { 0 };
     let (x, y)      = parse_canvas_position(elem, page_w, page_h)?;
     let font        = elem.attribute("font").map(str::to_string);
     let font_size   = elem.attribute("font-size").map(parse_measurement).transpose()?;
@@ -323,7 +357,9 @@ fn parse_canvas_text_elem(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, 
     let align       = elem.attribute("align").map(str::to_string);
     let w           = elem.attribute("w").map(parse_measurement).transpose()?;
     let line_height = elem.attribute("line-height").map(parse_measurement).transpose()?;
-
+    let opacity     = elem.attribute("opacity")
+        .map(|v| v.parse::<f32>().map_err(|_| format!("invalid text opacity '{v}'")))
+        .transpose()?.unwrap_or(1.0);
 
     let mut content = String::new();
     let mut runs    = Vec::new();
@@ -350,7 +386,7 @@ fn parse_canvas_text_elem(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, 
 
     Ok(CanvasPrimitive::Text(CanvasText {
         x, y, font, font_size, color, align, w, line_height,
-        content, runs,
+        content, runs, anchor_col, opacity,
     }))
 }
 
@@ -363,10 +399,15 @@ fn parse_canvas_img_elem(
     let name_raw = elem.attribute("name")
         .ok_or("<img> (canvas) missing required attribute 'name'")?;
     validate_img_asset(name_raw, asset_images, "<assets>")?;
-    let name   = asset_images[name_raw].clone();
-    let (x, y) = parse_canvas_position(elem, page_w, page_h)?;
-    let w      = parse_measurement(elem.attribute("w").unwrap_or("0pt"))?;
-    let h      = parse_measurement(elem.attribute("h").unwrap_or("0pt"))?;
+    let name      = asset_images[name_raw].clone();
+    let w         = parse_measurement(elem.attribute("w").unwrap_or("0pt"))?;
+    let h         = parse_measurement(elem.attribute("h").unwrap_or("0pt"))?;
+    let (rx, ry)  = parse_canvas_position(elem, page_w, page_h)?;
+    let (x, y)    = if let Some(a) = elem.attribute("anchor") {
+        apply_anchor_offset(&parse_anchor(a)?, rx, ry, w, h)
+    } else {
+        (rx, ry)
+    };
     Ok(CanvasPrimitive::Img(CanvasImg { name, x, y, w, h }))
 }
 
@@ -548,7 +589,17 @@ fn parse_tree_canvas_primitive(
             line_cap:     get_attr("line-cap").map(str::to_string),
         })),
         "canvas-text" | "text" => {
+            let anchor_col = if let Some(a) = get_attr("anchor") {
+                match parse_anchor(a)? {
+                    Anchor::TopCenter | Anchor::Center | Anchor::BottomCenter => 1,
+                    Anchor::TopRight  | Anchor::CenterRight | Anchor::BottomRight => 2,
+                    _ => 0,
+                }
+            } else { 0 };
             let (x, y) = get_pos()?;
+            let opacity = get_attr("opacity")
+                .map(|v| v.parse::<f32>().map_err(|_| format!("invalid text opacity '{v}'")))
+                .transpose()?.unwrap_or(1.0);
             let content = json.get("text").and_then(|v| v.as_str())
                 .unwrap_or("").to_string();
             let runs = if let Some(arr) = json.get("runs").and_then(|v| v.as_array()) {
@@ -569,7 +620,7 @@ fn parse_tree_canvas_primitive(
                 align:       get_attr("align").map(str::to_string),
                 w:           get_f32("w")?,
                 line_height: get_f32("line-height")?,
-                content, runs,
+                content, runs, anchor_col, opacity,
             }))
         }
         "img" => {
@@ -693,6 +744,8 @@ fn primitive_to_render_node(prim: &CanvasPrimitive, page_w: f32) -> RenderNode {
                 line_height: t.line_height.unwrap_or(1.2),
                 width:       t.w.or(Some(page_w - t.x)),
                 content:     t.content.clone(),
+                anchor_col:  t.anchor_col,
+                opacity:     t.opacity,
                 runs,
             })
         }

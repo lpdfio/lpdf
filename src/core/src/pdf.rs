@@ -1420,6 +1420,12 @@ fn collect_used_opacities(nodes: &[RenderNode], out: &mut HashSet<u32>) {
                 }
                 collect_used_opacities(&l.children, out);
             }
+            RenderNode::CanvasText(t) => {
+                if (t.opacity - 1.0).abs() > 0.001 {
+                    let pct = (t.opacity * 100.0).round() as u32;
+                    if pct > 0 && pct < 100 { out.insert(pct); }
+                }
+            }
             RenderNode::Box(b)  => collect_used_opacities(&b.children, out),
             RenderNode::Link(l) => collect_used_opacities(&l.children, out),
             _                   => {}
@@ -1606,6 +1612,14 @@ fn draw_canvas_text(
     let lines: Vec<&str> = full_text.split('\n').collect();
     let line_gap = t.size * t.line_height;
 
+    let need_opacity = (t.opacity - 1.0).abs() > 0.001;
+    if need_opacity {
+        content.save_state();
+        let gs_name = opacity_gs_name(t.opacity);
+        let gs_bytes: Vec<u8> = gs_name.bytes().collect();
+        content.set_parameters(Name(&gs_bytes));
+    }
+
     for (line_idx, line) in lines.iter().enumerate() {
         let line_y = t.y + line_idx as f32 * line_gap;
         let pdf_y  = page_h - line_y - t.size;
@@ -1613,32 +1627,38 @@ fn draw_canvas_text(
         let text_w = default_font.text_width(line, t.size);
         let avail_w = t.width.unwrap_or(0.0);
 
-        let draw_x = match t.align.as_str() {
-            "right"  => t.x + avail_w - text_w,
-            "center" => t.x + (avail_w - text_w) / 2.0,
-            "justify" if !line.is_empty() => {
-                // Simple word-space justification: distribute extra space.
-                let word_count = line.split_whitespace().count();
-                if word_count > 1 {
-                    let extra = avail_w - text_w;
-                    let tw_pts = extra / (word_count - 1) as f32;
-                    // Set Tw (word spacing) and draw from t.x.
-                    content.begin_text();
-                    let (cr, cg, cb) = parse_hex(&t.color);
-                    content.set_fill_rgb(cr, cg, cb);
-                    let rname = default_font.resource_name.as_bytes().to_vec();
-                    content.set_font(Name(&rname), t.size);
-                    content.set_text_matrix([1.0, 0.0, 0.0, 1.0, t.x, pdf_y]);
-                    content.set_word_spacing(tw_pts);
-                    let encoded = default_font.encode_text(line);
-                    content.show(Str(&encoded));
-                    content.set_word_spacing(0.0);
-                    content.end_text();
-                    continue;
+        // anchor_col determines how x is interpreted:
+        //   0 = left edge (default): align within available width
+        //   1 = horizontal centre:   x is the midpoint of the text
+        //   2 = right edge:          x is the right edge of the text
+        let draw_x = match t.anchor_col {
+            1 => t.x - text_w / 2.0,
+            2 => t.x - text_w,
+            _ => match t.align.as_str() {
+                "right"  => t.x + avail_w - text_w,
+                "center" => t.x + (avail_w - text_w) / 2.0,
+                "justify" if !line.is_empty() => {
+                    let word_count = line.split_whitespace().count();
+                    if word_count > 1 {
+                        let extra = avail_w - text_w;
+                        let tw_pts = extra / (word_count - 1) as f32;
+                        content.begin_text();
+                        let (cr, cg, cb) = parse_hex(&t.color);
+                        content.set_fill_rgb(cr, cg, cb);
+                        let rname = default_font.resource_name.as_bytes().to_vec();
+                        content.set_font(Name(&rname), t.size);
+                        content.set_text_matrix([1.0, 0.0, 0.0, 1.0, t.x, pdf_y]);
+                        content.set_word_spacing(tw_pts);
+                        let encoded = default_font.encode_text(line);
+                        content.show(Str(&encoded));
+                        content.set_word_spacing(0.0);
+                        content.end_text();
+                        continue;
+                    }
+                    t.x
                 }
-                t.x
-            }
-            _ => t.x,
+                _ => t.x,
+            },
         };
 
         let (cr, cg, cb) = parse_hex(&t.color);
@@ -1650,6 +1670,10 @@ fn draw_canvas_text(
         content.set_text_matrix([1.0, 0.0, 0.0, 1.0, draw_x, pdf_y]);
         content.show(Str(&encoded));
         content.end_text();
+    }
+
+    if need_opacity {
+        content.restore_state();
     }
 }
 

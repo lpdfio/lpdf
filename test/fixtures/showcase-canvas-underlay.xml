@@ -2,9 +2,7 @@
 <lpdf version="1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
-  <assets>
-    <image name="logo" src="../assets/images/logo.png"/>
-  </assets>
+  
   <tokens>
     <colors>
       <color name="primary"  value="#1763cf"/>
@@ -56,6 +54,82 @@
 
           <text font-size="m">
             Dear Client,
+          </text>
+
+          <text font-size="m">
+            We are pleased to confirm our engagement to provide professional services as
+            described herein. This letterhead demonstrates the canvas underlay feature,
+            where the blue header and footer bands are rendered as a canvas layer beneath
+            the flowing layout content.
+          </text>
+
+          <text font-size="m">
+            The canvas layer is painted first (bottom), and the layout content flows over it.
+            This is the <span font="Helvetica-Bold">canvas underlay</span> pattern:
+            <span font="Helvetica-Bold">canvas → layout</span> in document order.
+          </text>
+
+          <text font-size="m">
+            The contrast is the <span font="Helvetica-Bold">canvas overlay</span> pattern
+            (layout → canvas), demonstrated in showcase-canvas-overlay.xml where a DRAFT
+            watermark is painted on top of the invoice content.
+          </text>
+
+          <text font-size="m">
+            We are pleased to confirm our engagement to provide professional services as
+            described herein. This letterhead demonstrates the canvas underlay feature,
+            where the blue header and footer bands are rendered as a canvas layer beneath
+            the flowing layout content.
+          </text>
+
+          <text font-size="m">
+            The canvas layer is painted first (bottom), and the layout content flows over it.
+            This is the <span font="Helvetica-Bold">canvas underlay</span> pattern:
+            <span font="Helvetica-Bold">canvas → layout</span> in document order.
+          </text>
+
+          <text font-size="m">
+            The contrast is the <span font="Helvetica-Bold">canvas overlay</span> pattern
+            (layout → canvas), demonstrated in showcase-canvas-overlay.xml where a DRAFT
+            watermark is painted on top of the invoice content.
+          </text>
+
+          <text font-size="m">
+            We are pleased to confirm our engagement to provide professional services as
+            described herein. This letterhead demonstrates the canvas underlay feature,
+            where the blue header and footer bands are rendered as a canvas layer beneath
+            the flowing layout content.
+          </text>
+
+          <text font-size="m">
+            The canvas layer is painted first (bottom), and the layout content flows over it.
+            This is the <span font="Helvetica-Bold">canvas underlay</span> pattern:
+            <span font="Helvetica-Bold">canvas → layout</span> in document order.
+          </text>
+
+          <text font-size="m">
+            The contrast is the <span font="Helvetica-Bold">canvas overlay</span> pattern
+            (layout → canvas), demonstrated in showcase-canvas-overlay.xml where a DRAFT
+            watermark is painted on top of the invoice content.
+          </text>
+
+          <text font-size="m">
+            We are pleased to confirm our engagement to provide professional services as
+            described herein. This letterhead demonstrates the canvas underlay feature,
+            where the blue header and footer bands are rendered as a canvas layer beneath
+            the flowing layout content.
+          </text>
+
+          <text font-size="m">
+            The canvas layer is painted first (bottom), and the layout content flows over it.
+            This is the <span font="Helvetica-Bold">canvas underlay</span> pattern:
+            <span font="Helvetica-Bold">canvas → layout</span> in document order.
+          </text>
+
+          <text font-size="m">
+            The contrast is the <span font="Helvetica-Bold">canvas overlay</span> pattern
+            (layout → canvas), demonstrated in showcase-canvas-overlay.xml where a DRAFT
+            watermark is painted on top of the invoice content.
           </text>
 
           <text font-size="m">

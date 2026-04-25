@@ -63,6 +63,28 @@ make example-php
 # Output: example/invoice-php.pdf
 ```
 
+## VS Code Extension
+
+The extension provides live preview, PDF export, code generation, and XSD-backed XML validation for `.lpdf` files.
+
+| Command | Description |
+|---|---|
+| `make build-adapter-vscode` | Compile TypeScript, copy WASM + schema |
+| `make package-adapter-vscode` | Package into `src/adapters/vscode/lpdf.vsix` |
+| `make install-adapter-vscode` | Package and install into VS Code |
+
+To update the extension after making changes (schema, WASM, or TypeScript source):
+
+```sh
+make install-adapter-vscode
+```
+
+Then **restart VS Code** (or run **Developer: Restart Extension Host** from the Command Palette) to load the new version. The install step automatically rebuilds and repackages before installing.
+
+> **Note:** `build-adapter-vscode` copies `schema/lpdf.xsd` from the project root into the extension. Always edit the canonical schema at `schema/lpdf.xsd`; changes made directly to `src/adapters/vscode/schema/lpdf.xsd` will be overwritten on the next build.
+
+---
+
 ## Verify
 
 After building, run the smoke tests against the compiled WASM:

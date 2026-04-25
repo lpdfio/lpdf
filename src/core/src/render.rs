@@ -147,6 +147,10 @@ pub struct RenderCanvasText {
     pub content: String,
     /// Mixed-style runs (if non-empty, overrides `content`).
     pub runs: Vec<RenderCanvasRun>,
+    /// How `x` should be interpreted: 0 = left edge, 1 = centre, 2 = right edge.
+    pub anchor_col: u8,
+    /// Fill opacity (1.0 = fully opaque).
+    pub opacity: f32,
 }
 
 pub struct RenderCanvasRun {

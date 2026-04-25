@@ -19,6 +19,7 @@ import { LpdfEngine } from '../dist/index.js';
   const examples = [
     'example1', 
     'example2',
+    'example-contract',
   ];
 
   // init engine

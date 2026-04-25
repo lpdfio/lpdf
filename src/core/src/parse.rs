@@ -2489,9 +2489,10 @@ mod tests {
         let doc = parse(xml).unwrap();
         if let SectionChild::Canvas(ref cv) = doc.sections[0].children[0] {
             if let CanvasPrimitive::Rect(ref r) = cv.layers[0].children[0] {
-                // A4 center = (297.64, 420.945), dx=10, dy=-5 → (307.64, 415.945)
-                assert!((r.x - 307.64).abs() < 0.5);
-                assert!((r.y - 415.94).abs() < 0.5);
+                // A4 center = (297.64, 420.945), dx=10, dy=-5 → anchor point (307.64, 415.945)
+                // rect is 50×20pt, so top-left = anchor - (w/2, h/2) = (282.64, 405.945)
+                assert!((r.x - 282.64).abs() < 0.5);
+                assert!((r.y - 405.94).abs() < 0.5);
             } else { panic!("expected rect"); }
         } else { panic!("expected canvas"); }
     }

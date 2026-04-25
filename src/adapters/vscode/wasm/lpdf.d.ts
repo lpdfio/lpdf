@@ -28,11 +28,15 @@ export class LpdfEngine {
      *
      * Any custom fonts referenced in `<font src="…">` declarations must have
      * their bytes registered via `load_font` before calling this method.
+     *
+     * `json_data` is an optional JSON string used to resolve `data-*`
+     * attributes in the template.  Pass `None` (or `null` / `undefined` from
+     * JavaScript) to render the template with its inline fallback content.
      */
-    render_pdf(xml: string): Uint8Array;
+    render_pdf(xml: string, json_data?: string | null): Uint8Array;
     render_tree(json: string): string;
     /**
-     * Render a JSON kit-tree document to PDF bytes.
+     * Render a JSON kit-tree or canvas-tree document to PDF bytes.
      *
      * This is the JSON counterpart of `render_pdf`. The Node adapter uses it
      * when an `LpdfDocument` Kit tree is passed to `renderPdf()`, avoiding an
