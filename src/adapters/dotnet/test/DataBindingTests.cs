@@ -1,3 +1,4 @@
+using Lpdf.Engine;
 using Xunit;
 
 namespace Lpdf.Tests;
@@ -10,7 +11,7 @@ namespace Lpdf.Tests;
 public class DataBindingTests
 {
     private static string Doc(string body) =>
-        $"""<lpdf version="1"><document><pages><page><layout>{body}</layout></page></pages></document></lpdf>""";
+        $"""<lpdf version="1"><document><section><layout>{body}</layout></section></document></lpdf>""";
 
     [Fact]
     public async Task DataValue_SubstitutesScalar()

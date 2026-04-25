@@ -4,6 +4,7 @@
 ///   dotnet run --project src/adapters/dotnet/example/LpdfExample.csproj
 
 using Lpdf;
+using Lpdf.Engine;
 
 var root    = Path.Combine(AppContext.BaseDirectory, "../../../../../../../example/");
 var docsExamples = Path.Combine(AppContext.BaseDirectory, "../../../../../../../docs/examples/");
@@ -14,7 +15,7 @@ var examples = new[] { "example1", "example2" };
 
 var engine = new LpdfEngine(
     licenseKey: "",
-    options: new RenderOptions { SrcFallback = File.ReadAllBytes });
+    options: new EngineOptions { SrcFallback = File.ReadAllBytes });
 
 engine.LoadFont("montserrat", await File.ReadAllBytesAsync(Path.Combine(root, "assets/fonts/Montserrat-Regular.ttf")));
 engine.LoadImage("logo", await File.ReadAllBytesAsync(Path.Combine(root, "assets/images/logo-lpdf.png")));
@@ -34,7 +35,7 @@ foreach (var example in examples)
     var encXml = await File.ReadAllTextAsync(Path.Combine(docsExamples, "showcase-encryption.xml"));
     const string outputFile = "encrypt-permissions-only-dotnet.pdf";
 
-    var encEngine = new LpdfEngine(licenseKey: "", options: new RenderOptions { SrcFallback = File.ReadAllBytes });
+    var encEngine = new LpdfEngine(licenseKey: "", options: new EngineOptions { SrcFallback = File.ReadAllBytes });
     encEngine.SetEncryption(new EncryptOptions
     {
         UserPassword  = "",
@@ -53,7 +54,7 @@ foreach (var example in examples)
     var encXml = await File.ReadAllTextAsync(Path.Combine(docsExamples, "showcase-encryption.xml"));
     const string outputFile = "encrypt-open-password-dotnet.pdf";
 
-    var encEngine = new LpdfEngine(licenseKey: "", options: new RenderOptions { SrcFallback = File.ReadAllBytes });
+    var encEngine = new LpdfEngine(licenseKey: "", options: new EngineOptions { SrcFallback = File.ReadAllBytes });
     encEngine.SetEncryption(new EncryptOptions
     {
         UserPassword  = "password",
@@ -74,7 +75,7 @@ foreach (var example in examples)
     var data     = System.Text.Json.JsonSerializer.Deserialize<object>(dataJson);
     const string outputFile = "example-data-dotnet.pdf";
 
-    var dataEngine = new LpdfEngine(licenseKey: "", options: new RenderOptions { SrcFallback = File.ReadAllBytes });
+    var dataEngine = new LpdfEngine(licenseKey: "", options: new EngineOptions { SrcFallback = File.ReadAllBytes });
     var bytes = await dataEngine.RenderPdf(xml, new RenderOptions { Data = data });
     await File.WriteAllBytesAsync(Path.Combine(root, $"result/{outputFile}"), bytes);
     Console.WriteLine($"output: {outputFile} ({bytes.Length:N0} bytes)");

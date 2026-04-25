@@ -1,3 +1,4 @@
+using Lpdf.Engine;
 using Xunit;
 
 namespace Lpdf.Tests;
@@ -58,7 +59,7 @@ public class SnapshotTests
 public class EngineFeatureTests
 {
     private static readonly string _minimalXml =
-        "<lpdf version=\"1\"><document><pages><page></page></pages></document></lpdf>";
+        "<lpdf version=\"1\"><document><section><layout></layout></section></document></lpdf>";
 
     [Fact]
     public async Task SetEncryption_ProducesEncryptedPdf()

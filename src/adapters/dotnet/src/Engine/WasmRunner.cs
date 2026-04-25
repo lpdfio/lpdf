@@ -4,9 +4,10 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Wasmtime;
+using WasmEngine = Wasmtime.Engine;
 using WasmModule = Wasmtime.Module;
 
-namespace Lpdf;
+namespace Lpdf.Engine;
 
 /// <summary>
 /// Thin wrapper around the Wasmtime.NET engine that loads the embedded
@@ -17,13 +18,13 @@ namespace Lpdf;
 internal sealed class WasmRunner : IDisposable
 {
     // The engine and module are expensive to create and thread-safe — share them.
-    private static readonly Engine      _engine;
+    private static readonly WasmEngine   _engine;
     private static readonly WasmModule  _module;
     private static readonly Linker      _linker;
 
     static WasmRunner()
     {
-        _engine = new Engine();
+        _engine = new WasmEngine();
         _module = WasmModule.FromBytes(_engine, "lpdf", LoadWasmBytes());
         _linker = new Linker(_engine);
         _linker.DefineWasi();
@@ -85,7 +86,7 @@ internal sealed class WasmRunner : IDisposable
         var root = doc.RootElement;
 
         if (root.TryGetProperty("error", out var errEl))
-            throw new LpdfRenderException(errEl.GetString() ?? "Unknown kit_to_xml error.");
+            throw new EngineException(errEl.GetString() ?? "Unknown kit_to_xml error.");
 
         if (!root.TryGetProperty("xml", out var xmlEl))
             throw new InvalidOperationException("WASM kit_to_xml response missing 'xml' field.");
@@ -111,7 +112,6 @@ internal sealed class WasmRunner : IDisposable
         var fonts  = ResolveAllFonts(input, fontBytes, srcFallback, isTree);
         var images = ResolveAllImages(input, imageBytes, srcFallback, isTree);
 
-        // Build the request object, including font bytes as base64.
         var fontsNode = new JsonObject();
         foreach (var (name, bytes) in fonts)
             fontsNode[name] = Convert.ToBase64String(bytes);
@@ -142,14 +142,13 @@ internal sealed class WasmRunner : IDisposable
             requestObj["data"] = JsonNode.Parse(dataJson);
 
         var requestBytes = Encoding.UTF8.GetBytes(requestObj.ToJsonString());
-
         var responseJson = RunWasm(requestBytes);
 
         using var doc = JsonDocument.Parse(responseJson);
         var root = doc.RootElement;
 
         if (root.TryGetProperty("error", out var errEl))
-            throw new LpdfRenderException(errEl.GetString() ?? "Unknown render error.");
+            throw new EngineException(errEl.GetString() ?? "Unknown render error.");
 
         if (!root.TryGetProperty("pdf", out var pdfEl))
             throw new InvalidOperationException("WASM render_pdf response missing 'pdf' field.");
@@ -158,12 +157,6 @@ internal sealed class WasmRunner : IDisposable
             ?? throw new InvalidOperationException("WASM render_pdf 'pdf' field is null."));
     }
 
-    /// <summary>
-    /// When <paramref name="srcFallback"/> is set, parses the XML or kit-JSON
-    /// directly to discover font <c>src</c> paths, then resolves them via the
-    /// callback. No WASM call is required — mirrors what the Node adapter does.
-    /// Returns the merged font bytes dictionary.
-    /// </summary>
     private static IReadOnlyDictionary<string, byte[]> ResolveAllFonts(
         string input,
         IReadOnlyDictionary<string, byte[]>? fontBytes,
@@ -174,23 +167,16 @@ internal sealed class WasmRunner : IDisposable
             return fontBytes ?? new Dictionary<string, byte[]>();
 
         var merged = new Dictionary<string, byte[]>(fontBytes ?? new Dictionary<string, byte[]>());
-
-        // Extract font src paths directly from the input — no WASM call needed.
         var srcPaths = isTree ? ExtractFontSrcsFromJson(input) : ExtractFontSrcsFromXml(input);
         foreach (var (name, src) in srcPaths)
         {
-            if (merged.ContainsKey(name)) continue;  // explicit FontBytes takes priority
+            if (merged.ContainsKey(name)) continue;
             try   { merged[name] = srcFallback(src); }
-            catch { /* skip unresolvable fonts — WASM will fall back to Helvetica */ }
+            catch { /* skip unresolvable fonts */ }
         }
-
         return merged;
     }
 
-    /// <summary>
-    /// Resolves image <c>src</c> paths from XML or kit-JSON via the fallback callback.
-    /// Returns the merged image bytes dictionary.
-    /// </summary>
     private static IReadOnlyDictionary<string, byte[]> ResolveAllImages(
         string input,
         IReadOnlyDictionary<string, byte[]>? imageBytes,
@@ -198,9 +184,7 @@ internal sealed class WasmRunner : IDisposable
         bool                                 isTree)
     {
         var merged = new Dictionary<string, byte[]>(imageBytes ?? new Dictionary<string, byte[]>());
-
-        if (srcFallback is null)
-            return merged;
+        if (srcFallback is null) return merged;
 
         var srcPaths = isTree ? ExtractImageSrcsFromJson(input) : ExtractImageSrcsFromXml(input);
         foreach (var (name, src) in srcPaths)
@@ -209,14 +193,9 @@ internal sealed class WasmRunner : IDisposable
             try   { merged[name] = srcFallback(src); }
             catch { /* skip unresolvable images */ }
         }
-
         return merged;
     }
 
-    /// <summary>
-    /// Extract <c>ref??name → src</c> pairs from <c>&lt;font name="…" src="…"&gt;</c>
-    /// tags in an lpdf XML string. Uses <c>ref</c> as the registry key when present.
-    /// </summary>
     private static Dictionary<string, string> ExtractFontSrcsFromXml(string xml)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -233,10 +212,6 @@ internal sealed class WasmRunner : IDisposable
         return result;
     }
 
-    /// <summary>
-    /// Extract <c>ref??name → src</c> pairs from <c>&lt;image name="…" src="…"&gt;</c>
-    /// tags in an lpdf XML string.
-    /// </summary>
     private static Dictionary<string, string> ExtractImageSrcsFromXml(string xml)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -253,10 +228,6 @@ internal sealed class WasmRunner : IDisposable
         return result;
     }
 
-    /// <summary>
-    /// Extract <c>ref??name → src</c> pairs from <c>attrs.tokens.fonts[name].src</c>
-    /// in an lpdf kit-JSON string. Uses <c>ref</c> as the registry key when present.
-    /// </summary>
     private static Dictionary<string, string> ExtractFontSrcsFromJson(string json)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -280,14 +251,10 @@ internal sealed class WasmRunner : IDisposable
                 }
             }
         }
-        catch { /* malformed JSON — no fonts to auto-load */ }
+        catch { /* malformed JSON */ }
         return result;
     }
 
-    /// <summary>
-    /// Extract <c>ref??name → src</c> pairs from <c>attrs.tokens.images[name].src</c>
-    /// in an lpdf kit-JSON string.
-    /// </summary>
     private static Dictionary<string, string> ExtractImageSrcsFromJson(string json)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -311,7 +278,7 @@ internal sealed class WasmRunner : IDisposable
                 }
             }
         }
-        catch { /* malformed JSON — no images to auto-load */ }
+        catch { /* malformed JSON */ }
         return result;
     }
 
@@ -340,7 +307,7 @@ internal sealed class WasmRunner : IDisposable
                 var start = instance.GetAction("_start")
                     ?? throw new InvalidOperationException("lpdf WASM module does not export '_start'.");
                 start();
-            } // store disposed here → WASI file handles released before we read
+            }
 
             return File.ReadAllText(outputPath, Encoding.UTF8);
         }
@@ -373,4 +340,3 @@ internal sealed class WasmRunner : IDisposable
         // _engine, _module, _linker are shared — not disposed here.
     }
 }
-

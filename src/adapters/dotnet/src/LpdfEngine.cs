@@ -1,92 +1,19 @@
 using System.Text.Json;
+using Lpdf.Engine;
+using Lpdf.Kit;
+using Lpdf.Shared;
 
 namespace Lpdf;
 
 /// <summary>
-/// PDF permission flags for RC4-128 encryption.
-/// All flags default to <c>true</c> (allowed); set to <c>false</c> to restrict.
-/// </summary>
-public sealed class EncryptPermissions
-{
-    /// <summary>Allow printing. Set to <c>false</c> to disable printing in viewers.</summary>
-    public bool Print         { get; init; } = true;
-    /// <summary>Allow content modification. Set to <c>false</c> to block edits.</summary>
-    public bool Modify        { get; init; } = true;
-    /// <summary>Allow text and graphic extraction. Set to <c>false</c> to block copying.</summary>
-    public bool Copy          { get; init; } = true;
-    /// <summary>Allow adding or modifying annotations. Set to <c>false</c> to block annotations.</summary>
-    public bool Annotate      { get; init; } = true;
-    /// <summary>Allow form field filling. Set to <c>false</c> to disable form input.</summary>
-    public bool FillForms     { get; init; } = true;
-    /// <summary>Allow accessibility tools (screen readers). Set to <c>false</c> to restrict.</summary>
-    public bool Accessibility { get; init; } = true;
-    /// <summary>Allow page insertion, deletion, and rotation. Set to <c>false</c> to block assembly.</summary>
-    public bool Assemble      { get; init; } = true;
-    /// <summary>Allow high-quality printing. Set to <c>false</c> to degrade print resolution.</summary>
-    public bool PrintHq       { get; init; } = true;
-}
-
-/// <summary>
-/// RC4-128 encryption options passed to <see cref="LpdfEngine.SetEncryption"/>.
-/// </summary>
-public sealed class EncryptOptions
-{
-    /// <summary>Open password shown to readers. Empty string = no open password required.</summary>
-    public string UserPassword  { get; init; } = "";
-    /// <summary>Owner (permissions) password. Required; must be non-empty.</summary>
-    public string OwnerPassword { get; init; } = "";
-    /// <summary>Permission flags applied to the document.</summary>
-    public EncryptPermissions Permissions { get; init; } = new();
-}
-
-/// <summary>
-/// Options shared across multiple <see cref="LpdfEngine.RenderPdf(string, RenderOptions?)"/> calls.
-/// </summary>
-public sealed class RenderOptions
-{
-    /// <summary>
-    /// Pre-loaded font bytes for custom fonts referenced via <c>fonts src="…"</c>.
-    /// Keys are the font token names used in the document; values are raw TTF/OTF bytes.
-    /// </summary>
-    public IReadOnlyDictionary<string, byte[]>? FontBytes { get; init; }
-
-    /// <summary>
-    /// Pre-loaded image bytes for images referenced via <c>&lt;img name="…"&gt;</c>.
-    /// Keys are the image names declared in <c>&lt;assets&gt;</c>; values are raw PNG/JPEG bytes.
-    /// </summary>
-    public IReadOnlyDictionary<string, byte[]>? ImageBytes { get; init; }
-
-    /// <summary>
-    /// File-read callback for resolving font <c>src</c> paths at render time.
-    /// On the server this can be set to <c>System.IO.File.ReadAllBytes</c>.
-    /// In sandboxed environments supply all bytes via <see cref="FontBytes"/>.
-    /// </summary>
-    public Func<string, byte[]>? SrcFallback { get; init; }
-
-    /// <summary>
-    /// Optional ISO 8601 creation timestamp (e.g. <c>"2024-06-01T12:00:00"</c>).
-    /// When provided, written as <c>/CreationDate</c> in the PDF info dictionary.
-    /// Omitting this keeps builds reproducible (no embedded timestamp).
-    /// </summary>
-    public string? CreatedOn { get; init; }
-
-    /// <summary>
-    /// Optional data object for resolving <c>data-*</c> binding attributes in the
-    /// XML template.  Pass <see langword="null"/> or omit to render with inline
-    /// fallback content.  Only applies when rendering an XML string.
-    /// </summary>
-    public object? Data { get; init; }
-}
-
-/// <summary>
 /// Stateful lpdf renderer.
 /// Construct once with a license key; call <see cref="RenderPdf(string, RenderOptions?)"/>
-/// or <see cref="RenderPdf(LpdfDocument, RenderOptions?)"/> as many times as needed.
+/// or <see cref="RenderPdf(Document, RenderOptions?)"/> as many times as needed.
 /// </summary>
 public sealed class LpdfEngine : IDisposable
 {
     private readonly string         _licenseKey;
-    private readonly RenderOptions  _opts;
+    private readonly EngineOptions  _engineOpts;
     private readonly WasmRunner     _wasm;
     private readonly Dictionary<string, byte[]> _fonts  = new();
     private readonly Dictionary<string, byte[]> _images = new();
@@ -97,11 +24,11 @@ public sealed class LpdfEngine : IDisposable
     ///   Your lpdf license key. Pass an empty string to render in evaluation
     ///   mode (produces a visible watermark).
     /// </param>
-    /// <param name="options">Shared render options applied to every call.</param>
-    public LpdfEngine(string licenseKey, RenderOptions? options = null)
+    /// <param name="options">Engine-level options applied to every call (e.g. <c>SrcFallback</c>).</param>
+    public LpdfEngine(string licenseKey, EngineOptions? options = null)
     {
         _licenseKey = licenseKey ?? throw new ArgumentNullException(nameof(licenseKey));
-        _opts       = options ?? new RenderOptions();
+        _engineOpts = options ?? new EngineOptions();
         _wasm       = new WasmRunner();
     }
 
@@ -146,47 +73,43 @@ public sealed class LpdfEngine : IDisposable
 
     /// <summary>Render an lpdf XML string to PDF bytes.</summary>
     /// <param name="xml">Full lpdf XML document string.</param>
-    /// <param name="callOptions">Per-call overrides merged with the constructor options.</param>
+    /// <param name="callOptions">Per-call options (data, fonts, images, timestamp).</param>
     public Task<byte[]> RenderPdf(string xml, RenderOptions? callOptions = null)
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(xml);
-        var merged = Merge(callOptions);
-        var createdOn = callOptions?.CreatedOn ?? _opts.CreatedOn;
+        var (fontBytes, imageBytes) = MergeAssets(callOptions);
         var encryptJson = BuildEncryptJson();
-        var dataJson = BuildDataJson(callOptions?.Data);
+        var dataJson    = BuildDataJson(callOptions?.Data);
         return Task.Run(() =>
-            _wasm.RenderPdf(xml, _licenseKey, merged.FontBytes, merged.ImageBytes, merged.SrcFallback, encryptJson, createdOn, dataJson));
+            _wasm.RenderPdf(xml, _licenseKey, fontBytes, imageBytes,
+                _engineOpts.SrcFallback, encryptJson, callOptions?.CreatedOn, dataJson));
     }
 
-    /// <summary>Render an <see cref="LpdfDocument"/> tree (built with <see cref="LpdfKit"/>) to PDF bytes.</summary>
+    /// <summary>Render a <see cref="Document"/> tree (built with <see cref="LpdfKit"/>) to PDF bytes.</summary>
     /// <param name="document">Document tree produced by <c>LpdfKit.Document(…)</c>.</param>
-    /// <param name="callOptions">Per-call overrides merged with the constructor options.</param>
-    public Task<byte[]> RenderPdf(LpdfDocument document, RenderOptions? callOptions = null)
+    /// <param name="callOptions">Per-call options (fonts, images, timestamp).</param>
+    public Task<byte[]> RenderPdf(Document document, RenderOptions? callOptions = null)
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(document);
-        var merged = Merge(callOptions);
-        var json   = JsonSerializer.Serialize(document, LpdfDocumentJson.Options);
-        var createdOn = callOptions?.CreatedOn ?? _opts.CreatedOn;
+        var json = JsonSerializer.Serialize(document, DocumentJson.Options);
+        var (fontBytes, imageBytes) = MergeAssets(callOptions);
         var encryptJson = BuildEncryptJson();
         return Task.Run(() =>
-            _wasm.RenderTreePdf(json, _licenseKey, merged.FontBytes, merged.ImageBytes, merged.SrcFallback, encryptJson, createdOn));
+            _wasm.RenderTreePdf(json, _licenseKey, fontBytes, imageBytes,
+                _engineOpts.SrcFallback, encryptJson, callOptions?.CreatedOn));
     }
 
     /// <summary>
-    /// Convert an <see cref="LpdfDocument"/> tree (built with <see cref="LpdfKit"/>) to an lpdf XML string.
+    /// Convert a <see cref="Document"/> tree (built with <see cref="LpdfKit"/>) to an lpdf XML string.
     /// </summary>
-    /// <remarks>
-    /// The serialisation is performed by the Rust core running as a WASI subprocess,
-    /// so the output is identical to the XML produced by the other adapters.
-    /// </remarks>
     /// <param name="document">Document tree produced by <c>LpdfKit.Document(…)</c>.</param>
     /// <returns>A well-formed XML string with an <c>&lt;?xml ...?&gt;</c> declaration.</returns>
-    public Task<string> KitToXml(LpdfDocument document)
+    public Task<string> KitToXml(Document document)
     {
         ArgumentNullException.ThrowIfNull(document);
-        var json = JsonSerializer.Serialize(document, LpdfDocumentJson.Options);
+        var json = JsonSerializer.Serialize(document, DocumentJson.Options);
         return Task.Run(() => _wasm.KitToXml(json));
     }
 
@@ -220,15 +143,12 @@ public sealed class LpdfEngine : IDisposable
         return JsonSerializer.Serialize(data);
     }
 
-    private RenderOptions Merge(RenderOptions? call)
+    private (IReadOnlyDictionary<string, byte[]>? fonts, IReadOnlyDictionary<string, byte[]>? images)
+        MergeAssets(RenderOptions? call)
     {
-        if (call is null && _fonts.Count == 0 && _images.Count == 0) return _opts;
-        return new RenderOptions
-        {
-            FontBytes   = MergeDicts(MergeDicts(_opts.FontBytes, call?.FontBytes), _fonts.Count > 0 ? _fonts : null),
-            ImageBytes  = MergeDicts(MergeDicts(_opts.ImageBytes, call?.ImageBytes), _images.Count > 0 ? _images : null),
-            SrcFallback = call?.SrcFallback ?? _opts.SrcFallback,
-        };
+        var fonts  = MergeDicts(call?.FontBytes, _fonts.Count > 0 ? _fonts : null);
+        var images = MergeDicts(call?.ImageBytes, _images.Count > 0 ? _images : null);
+        return (fonts, images);
     }
 
     private static IReadOnlyDictionary<string, byte[]>? MergeDicts(
@@ -253,7 +173,4 @@ public sealed class LpdfEngine : IDisposable
         _wasm.Dispose();
     }
 }
-
-/// <summary>Thrown when the lpdf engine returns a layout or parse error.</summary>
-public sealed class LpdfRenderException(string message) : Exception(message);
 
