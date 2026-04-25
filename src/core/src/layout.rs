@@ -2682,7 +2682,7 @@ mod tests {
     use crate::parse::parse;
 
     fn engine_render(xml: &str) -> serde_json::Value {
-        let doc = parse(xml).unwrap();
+        let mut doc = parse(xml).unwrap();
         let lp = doc.section_layouts();
         let pages: Vec<_> = lp.iter().flat_map(layout_page).collect();
         let json_str =

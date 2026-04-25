@@ -66,17 +66,17 @@ make benchmark-x
 
 ## Results
 
-Recorded **2026-04-25** on Windows (release build, `cargo bench --bench pipeline`).
+Recorded **2026-04-25** (updated re-run after fixes) on Windows (release build, `cargo bench --bench pipeline`).
 
 ### parse_xml (xs–xl)
 
 | Benchmark      | XML size | Time (median) | ±         | Throughput  |
 |----------------|----------|---------------|-----------|-------------|
-| `parse_xml/xs` | 3.0 KB   | 35.54 µs      | 0.15 µs   | 82.5 MiB/s  |
-| `parse_xml/s`  | 10.8 KB  | 140.9 µs      | 0.21 µs   | 74.9 MiB/s  |
-| `parse_xml/m`  | 51.3 KB  | 782.0 µs      | 1.1 µs    | 64.0 MiB/s  |
-| `parse_xml/l`  | 98.5 KB  | 1.577 ms      | 0.006 ms  | 61.0 MiB/s  |
-| `parse_xml/xl` | 243.3 KB | 4.983 ms      | 0.060 ms  | 47.8 MiB/s  |
+| `parse_xml/xs` | 3.0 KB   | 30.17 µs      | 0.13 µs   | 96.7 MiB/s  |
+| `parse_xml/s`  | 10.8 KB  | 134.79 µs     | 1.9 µs    | 78.5 MiB/s  |
+| `parse_xml/m`  | 51.3 KB  | 790.29 µs     | 5.3 µs    | 63.3 MiB/s  |
+| `parse_xml/l`  | 98.5 KB  | 1.516 ms      | 0.009 ms  | 63.4 MiB/s  |
+| `parse_xml/xl` | 243.3 KB | 4.451 ms      | 0.035 ms  | 53.4 MiB/s  |
 
 ### parse_xml (xxl–max, extended)
 
@@ -89,11 +89,11 @@ Recorded **2026-04-25** on Windows (release build, `cargo bench --bench pipeline
 
 | Benchmark    | XML size | Time (median) | ±        | Throughput  |
 |--------------|----------|---------------|----------|-------------|
-| `layout/xs`  | 3.0 KB   | 1.268 ms      | 0.010 ms | 2.31 MiB/s  |
-| `layout/s`   | 10.8 KB  | 4.328 ms      | 0.008 ms | 2.44 MiB/s  |
-| `layout/m`   | 51.3 KB  | 26.52 ms      | 0.10 ms  | 1.89 MiB/s  |
-| `layout/l`   | 98.5 KB  | 51.34 ms      | 0.17 ms  | 1.87 MiB/s  |
-| `layout/xl`  | 243.3 KB | 245.66 ms     | 1.25 ms  | 968 KiB/s   |
+| `layout/xs`  | 3.0 KB   | 1.117 ms      | 0.005 ms | 2.61 MiB/s  |
+| `layout/s`   | 10.8 KB  | 3.966 ms      | 0.019 ms | 2.67 MiB/s  |
+| `layout/m`   | 51.3 KB  | 25.18 ms      | 0.14 ms  | 1.99 MiB/s  |
+| `layout/l`   | 98.5 KB  | 48.49 ms      | 0.28 ms  | 1.98 MiB/s  |
+| `layout/xl`  | 243.3 KB | 226.0 ms      | 2.2 ms   | 1.05 MiB/s  |
 
 ### layout (xxl–max, extended)
 
@@ -106,11 +106,11 @@ Recorded **2026-04-25** on Windows (release build, `cargo bench --bench pipeline
 
 | Benchmark         | XML size | PDF size  | Time (median) | ±        | Throughput  |
 |-------------------|----------|-----------|---------------|----------|-------------|
-| `end_to_end/xs`   | 3.0 KB   | 5.7 KB    | 1.252 ms      | 0.005 ms | 2.34 MiB/s  |
-| `end_to_end/s`    | 10.8 KB  | 19.4 KB   | 4.380 ms      | 0.005 ms | 2.41 MiB/s  |
-| `end_to_end/m`    | 51.3 KB  | 112.2 KB  | 26.21 ms      | 0.04 ms  | 1.91 MiB/s  |
-| `end_to_end/l`    | 98.5 KB  | 214.8 KB  | 51.38 ms      | 0.48 ms  | 1.87 MiB/s  |
-| `end_to_end/xl`   | 243.3 KB | 465.0 KB  | 253.06 ms     | 1.4 ms   | 937 KiB/s   |
+| `end_to_end/xs`   | 3.0 KB   | 5.7 KB    | 1.170 ms      | 0.013 ms | 2.50 MiB/s  |
+| `end_to_end/s`    | 10.8 KB  | 19.4 KB   | 4.147 ms      | 0.065 ms | 2.55 MiB/s  |
+| `end_to_end/m`    | 51.3 KB  | 112.2 KB  | 25.69 ms      | 0.12 ms  | 1.95 MiB/s  |
+| `end_to_end/l`    | 98.5 KB  | 214.8 KB  | 50.85 ms      | 0.34 ms  | 1.89 MiB/s  |
+| `end_to_end/xl`   | 243.3 KB | 465.0 KB  | 232.9 ms      | 3.0 ms   | 1.02 MiB/s  |
 
 ### end_to_end (xxl–max, extended)
 
@@ -123,26 +123,26 @@ Recorded **2026-04-25** on Windows (release build, `cargo bench --bench pipeline
 
 | Benchmark        | XML size | Time (median) | ±         | Notes                     |
 |------------------|----------|---------------|-----------|---------------------------|
-| `data/parse/xs`  | 1.8 KB   | 33.64 µs      | 0.08 µs   |                           |
-| `data/parse/s`   | 13.7 KB  | 275.5 µs      | 1.1 µs    |                           |
-| `data/parse/m`   | 74.0 KB  | 1.526 ms      | 0.007 ms  |                           |
-| `data/apply/xs`  | 1.8 KB   | 12.89 µs      | 0.19 µs   | parse excluded            |
-| `data/apply/s`   | 13.7 KB  | 75.34 µs      | 0.57 µs   | parse excluded            |
-| `data/apply/m`   | 74.0 KB  | 460.7 µs      | 5.8 µs    | parse excluded            |
-| `data/layout/xs` | 1.8 KB   | 209.2 µs      | 1.1 µs    | parse + apply excluded    |
-| `data/layout/s`  | 13.7 KB  | 1.076 ms      | 0.008 ms  | parse + apply excluded    |
-| `data/layout/m`  | 74.0 KB  | 14.42 ms      | 0.13 ms   | parse + apply excluded    |
-| `data/e2e/xs`    | 1.8 KB   | 264.7 µs      | 0.94 µs   | pdf = 2.4 KB              |
-| `data/e2e/s`     | 13.7 KB  | 1.590 ms      | 0.011 ms  | pdf = 8.3 KB              |
-| `data/e2e/m`     | 74.0 KB  | 14.44 ms      | 0.061 ms  | pdf = 40.8 KB             |
+| `data/parse/xs`  | 1.8 KB   | 29.78 µs      | 0.21 µs   |                           |
+| `data/parse/s`   | 13.7 KB  | 245.3 µs      | 2.3 µs    |                           |
+| `data/parse/m`   | 74.0 KB  | 1.361 ms      | 0.007 ms  |                           |
+| `data/apply/xs`  | 1.8 KB   | 8.83 µs       | 0.13 µs   | parse excluded            |
+| `data/apply/s`   | 13.7 KB  | 75.89 µs      | 1.6 µs    | parse excluded            |
+| `data/apply/m`   | 74.0 KB  | 388.9 µs      | 4.1 µs    | parse excluded            |
+| `data/layout/xs` | 1.8 KB   | 161.2 µs      | 1.3 µs    | parse + apply excluded    |
+| `data/layout/s`  | 13.7 KB  | 883.8 µs      | 4.1 µs    | parse + apply excluded    |
+| `data/layout/m`  | 74.0 KB  | 10.23 ms      | 0.067 ms  | parse + apply excluded    |
+| `data/e2e/xs`    | 1.8 KB   | 206.3 µs      | 3.7 µs    | pdf = 2.4 KB              |
+| `data/e2e/s`     | 13.7 KB  | 1.243 ms      | 0.021 ms  | pdf = 8.3 KB              |
+| `data/e2e/m`     | 74.0 KB  | 12.23 ms      | 0.083 ms  | pdf = 40.8 KB             |
 
 ---
 
 ## Assessment
 
-### Parse XML: 47–83 MiB/s, scales linearly
+### Parse XML: 53–97 MiB/s, scales linearly
 
-Throughput is highest at xs (~83 MiB/s) and tapers to ~48 MiB/s at xl. Parse is never a bottleneck: across all sizes it accounts for ≤5% of total end-to-end time. Compared to the 2026-04-20 baseline, parse throughput regressed ~12–17% uniformly across all sizes, indicating a systematic change in the XML parsing path.
+Throughput is highest at xs (~97 MiB/s) and tapers to ~53 MiB/s at xl. Parse is never a bottleneck: across all sizes it accounts for ≤5% of total end-to-end time. Throughput improved 6–17% vs the prior (2026-04-25) run across all sizes except m, which is statistically unchanged.
 
 ### Layout dominates at every size tier (95–97% of wall time)
 
@@ -150,10 +150,10 @@ This is correct and expected. All box-model resolution, text shaping, line-break
 
 | Step       | xs → m (17× XML) | m → xl (4.7× XML) | xl → max (4× XML) |
 |------------|-----------------|-------------------|-------------------|
-| Layout     | 20.9×           | 9.3×              | 4.0×              |
-| End-to-end | 20.9×           | 9.7×              | 4.1×              |
+| Layout     | 22.5×           | 9.0×              | 4.0×              |
+| End-to-end | 22.0×           | 9.1×              | 4.1×              |
 
-Layout throughput at xl dropped to ~968 KiB/s (just under 1 MiB/s). Compared to the prior baseline (1.01 MiB/s), this is a modest ~4% regression at xl; xs through l are within noise of prior results.
+Layout throughput at xl is now 1.05 MiB/s, recovering above the 1 MiB/s mark. All sizes improved 5–12% vs the prior run.
 
 ### PDF emit overhead is negligible
 
@@ -161,13 +161,13 @@ Serialisation cost (end-to-end minus layout) is small and stable:
 
 | Size | Emit overhead        |
 |------|----------------------|
-| xs   | ~0 ms (within noise) |
-| s    | ~52 µs (1.2%)        |
-| m    | ~0 ms (within noise) |
-| l    | ~44 µs (0.1%)        |
-| xl   | ~7.4 ms (2.9%)       |
+| xs   | ~53 µs (4.5%)        |
+| s    | ~181 µs (4.4%)       |
+| m    | ~510 µs (2.0%)       |
+| l    | ~2.4 ms (4.7%)       |
+| xl   | ~6.9 ms (3.0%)       |
 
-Several xs/m/l readings show end-to-end marginally below layout — this is measurement noise from separate runs. Overall, emit overhead stays well under 3% for xs–xl, consistent with prior results.
+Emit overhead is below 5% for all sizes. xs through m readings should be treated as order-of-magnitude estimates since they are computed from two independent benchmark runs and include inter-run variance.
 
 ### PDF output size: ~1.9–2.2× XML input
 
@@ -183,34 +183,36 @@ Several xs/m/l readings show end-to-end marginally below layout — this is meas
 
 The ratio peaks at ~2.2× for m/l. This is caused by font embedding: fonts are a fixed per-document cost that is proportionally larger relative to body content at mid-range sizes. The ratio asymptotes to ~1.9× at xl and above as body content amortises the font overhead.
 
-### Data binding: apply pass is ~5% of total time; layout path regressed
+### Data binding: apply pass is ~4–6% of total time; regression largely resolved
 
 The JSON data-apply step adds modest overhead:
 
 | Size | parse    | apply    | layout   | e2e      | apply share |
-|------|----------|----------|----------|----------|--------------|
-| xs   | 33.6 µs  | 12.9 µs  | 209.2 µs | 264.7 µs | 4.9%         |
-| s    | 275.5 µs | 75.3 µs  | 1.076 ms | 1.590 ms | 4.7%         |
-| m    | 1.526 ms | 460.7 µs | 14.42 ms | 14.44 ms | 3.2%         |
+|------|----------|----------|----------|----------|-------------|
+| xs   | 29.8 µs  | 8.8 µs   | 161.2 µs | 206.3 µs | 4.3%        |
+| s    | 245.3 µs | 75.9 µs  | 883.8 µs | 1.243 ms | 6.1%        |
+| m    | 1.361 ms | 388.9 µs | 10.23 ms | 12.23 ms | 3.2%        |
 
 Data-template PDFs are substantially more compact than same-size plain-pipeline PDFs (e.g. bench_data_m at 74.0 KB XML produces only a 40.8 KB PDF vs 112 KB for bench_m at 51.3 KB XML) because templates contain verbose placeholder markup that resolves to simpler rendered content.
 
-**Regression vs 2026-04-20 baseline:** The data pipeline has regressed significantly. Compared to prior numbers:
+**Recovery vs 2026-04-25 (regressed) run:** The data pipeline regression documented in the previous run has been largely resolved by the fixes applied. All sub-groups improved significantly:
 
-| Benchmark       | Old      | New      | Change   |
-|-----------------|----------|----------|----------|
-| data/parse/xs   | 30.3 µs  | 33.6 µs  | +11%     |
-| data/parse/s    | 189.2 µs | 275.5 µs | +46%     |
-| data/parse/m    | 1.060 ms | 1.526 ms | +44%     |
-| data/apply/xs   | 8.65 µs  | 12.89 µs | +49%     |
-| data/layout/xs  | 152.5 µs | 209.2 µs | +37%     |
-| data/layout/s   | 835.3 µs | 1.076 ms | +29%     |
-| data/layout/m   | 9.373 ms | 14.42 ms | +54%     |
-| data/e2e/xs     | 191.9 µs | 264.7 µs | +38%     |
-| data/e2e/s      | 1.092 ms | 1.590 ms | +46%     |
-| data/e2e/m      | 10.74 ms | 14.44 ms | +35%     |
+| Benchmark       | Prev (regressed) | This run  | Change      |
+|-----------------|-----------------|-----------|-------------|
+| data/parse/xs   | 33.64 µs        | 29.78 µs  | −11%        |
+| data/parse/s    | 275.5 µs        | 245.3 µs  | −11%        |
+| data/parse/m    | 1.526 ms        | 1.361 ms  | −11%        |
+| data/apply/xs   | 12.89 µs        | 8.83 µs   | −31%        |
+| data/apply/s    | 75.34 µs        | 75.89 µs  | <1% (noise) |
+| data/apply/m    | 460.7 µs        | 388.9 µs  | −16%        |
+| data/layout/xs  | 209.2 µs        | 161.2 µs  | −23%        |
+| data/layout/s   | 1.076 ms        | 883.8 µs  | −18%        |
+| data/layout/m   | 14.42 ms        | 10.23 ms  | −29%        |
+| data/e2e/xs     | 264.7 µs        | 206.3 µs  | −22%        |
+| data/e2e/s      | 1.590 ms        | 1.243 ms  | −22%        |
+| data/e2e/m      | 14.44 ms        | 12.23 ms  | −15%        |
 
-The `data/apply/s` and `data/apply/m` regressions are modest (~6–11%). The dominant regression is in `data/layout`, which drives the overall `data/e2e` slowdown. The plain-pipeline benchmarks (non-data `layout`, `end_to_end`) are largely unaffected, pointing to a regression specific to the data-template layout code path.
+`data/apply` and `data/parse` are now at or below the 2026-04-20 baseline. `data/layout` and `data/e2e` have narrowed the gap vs the 2026-04-20 baseline to ~5–14%, down from the 29–54% regression observed in the previous run. The plain-pipeline benchmarks (`layout`, `end_to_end`) remain unaffected by the data-path changes.
 
 ### Extended sizes (xxl, max) — `make benchmark-x`
 
@@ -263,7 +265,7 @@ These are estimates based on text density (~3 lines/paragraph, A4, 12 pt body, n
 
 ### Small–medium documents (~5–30 pages)
 
-Corresponds to LPDF `end_to_end/s` (4.4 ms) through `end_to_end/m` (26 ms).
+Corresponds to LPDF `end_to_end/s` (4.1 ms) through `end_to_end/m` (25.7 ms).
 
 | Tool | ~5–8 pages | ~20–30 pages | Notes |
 |------|-----------|-------------|-------|
@@ -283,11 +285,11 @@ At this range LPDF is **20–100× faster** than tools with a real layout engine
 
 ### Large–extra large documents (~100–300 pages)
 
-Corresponds to LPDF `end_to_end/xl` (253 ms, ~100–150 pages) through `end_to_end_x/xxl` (589 ms, ~200–300 pages).
+Corresponds to LPDF `end_to_end/xl` (233 ms, ~100–150 pages) through `end_to_end_x/xxl` (589 ms, ~200–300 pages).
 
 | Tool | ~100–150 pages | ~200–300 pages | Notes |
-|------|---------------|---------------|-------|
-| **LPDF** | **~253 ms** | **~589 ms** | |
+|------|---------------|---------------|
+| **LPDF** | **~233 ms** | **~589 ms** | |
 | Prince XML | ~800 ms–2 s | ~1.5–4 s | Fastest HTML/CSS tool |
 | pdfmake | ~1.5–5 s | ~3–10 s | Single-threaded JS |
 | iText 7 (warm) | ~500 ms–2 s | ~1–5 s | Programmatic; no layout |

@@ -851,7 +851,7 @@ mod tests {
         // parse::parse is in the parent crate — use the re-exported path
         let result = crate::parse::parse(&xml);
         assert!(result.is_ok(), "XML produced by kit_to_xml failed parse: {:?}", result.err());
-        let doc = result.unwrap();
+        let mut doc = result.unwrap();
         let pages = doc.section_layouts();
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0].children.len(), 1);

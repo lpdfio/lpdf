@@ -251,7 +251,7 @@ struct LpdfEngine;
 #[cfg(test)]
 impl LpdfEngine {
     fn render_xml_to_pdf_bytes(xml: &str) -> Result<Vec<u8>, String> {
-        let doc = parse::parse(xml)?;
+        let mut doc = parse::parse(xml)?;
         let lp = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
             lp.iter().flat_map(layout::layout_page).collect();

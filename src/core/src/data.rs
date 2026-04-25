@@ -84,16 +84,17 @@ pub fn apply(doc: &mut Document, json_data: &str) -> Result<(), String> {
 
     for section in &mut doc.sections {
         for sc in &mut section.children {
-            if let crate::parse::SectionChild::Layout(layout) = sc {
+            if let crate::parse::SectionChild::Layout(layout_children) = sc {
                 // Expand the flat content list (data-source loops can expand nodes).
-                let content_nodes = std::mem::take(&mut layout.children);
-                let mut new_children = Vec::new();
+                let content_nodes = std::mem::take(layout_children);
+                let mut new_children = Vec::with_capacity(content_nodes.len());
+                let mut out = Vec::new();
                 for lc in content_nodes {
                     match lc {
                         crate::parse::LayoutChild::Content(node) => {
-                            let mut out = Vec::new();
+                            out.clear();
                             apply_single_node(node, &[], &root, &mut out);
-                            for n in out { new_children.push(crate::parse::LayoutChild::Content(n)); }
+                            new_children.extend(out.drain(..).map(crate::parse::LayoutChild::Content));
                         }
                         crate::parse::LayoutChild::Region(mut region) => {
                             let children = std::mem::take(&mut region.children);
@@ -102,7 +103,7 @@ pub fn apply(doc: &mut Document, json_data: &str) -> Result<(), String> {
                         }
                     }
                 }
-                layout.children = new_children;
+                *layout_children = new_children;
             }
         }
     }
@@ -147,8 +148,7 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, out: &mut Vec<N
     // 3. data-source: expand into one copy per array element.
     if let Some(ref path) = ds {
         if let Some(Value::Array(items)) = resolve_path(path, stack, root) {
-            let items: Vec<Value> = items.clone();
-            for item in &items {
+            for item in items {
                 let mut new_stack = stack.to_vec();
                 new_stack.push(item);
                 let mut template = node.clone();
@@ -275,10 +275,8 @@ mod tests {
     }
 
     fn make_doc(children: Vec<Node>) -> Document {
-        use crate::parse::{Section, SectionChild, Layout, LayoutChild, SectionOptions};
-        let layout = Layout {
-            children: children.into_iter().map(LayoutChild::Content).collect(),
-        };
+        use crate::parse::{Section, SectionChild, LayoutChild, SectionOptions};
+        let layout_children: Vec<LayoutChild> = children.into_iter().map(LayoutChild::Content).collect();
         Document {
             meta: Meta::default(),
             fonts: HashMap::new(),
@@ -289,7 +287,7 @@ mod tests {
             background: None,
             debug: false,
             sections: vec![Section {
-                children: vec![SectionChild::Layout(layout)],
+                children: vec![SectionChild::Layout(layout_children)],
                 options: SectionOptions { size: Some((595.28, 841.89)), ..SectionOptions::default() },
             }],
             font_widths: HashMap::new(),
@@ -299,8 +297,8 @@ mod tests {
     /// Extract the flat content nodes from the first section's first layout child.
     fn layout_children(doc: &Document) -> Vec<Node> {
         use crate::parse::{SectionChild, LayoutChild};
-        if let SectionChild::Layout(ref l) = doc.sections[0].children[0] {
-            l.children.iter().filter_map(|lc| {
+        if let SectionChild::Layout(ref lc_vec) = doc.sections[0].children[0] {
+            lc_vec.iter().filter_map(|lc| {
                 if let LayoutChild::Content(n) = lc { Some(n.clone()) } else { None }
             }).collect()
         } else {

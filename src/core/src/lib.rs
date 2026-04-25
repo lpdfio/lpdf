@@ -308,7 +308,7 @@ impl LpdfEngine {
     /// Render XML to PDF bytes without WASM error types — used by tests.
     #[cfg(test)]
     pub(crate) fn render_xml_to_pdf_bytes(xml: &str) -> Result<Vec<u8>, String> {
-        let doc = parse::parse(xml)?;
+        let mut doc = parse::parse(xml)?;
         let lp = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
             lp.iter().flat_map(layout::layout_page).collect();
@@ -360,7 +360,7 @@ pub fn bench_parse_tree(json: &str) -> Result<BenchDoc, String> {
 }
 
 /// Layout + PDF write on a pre-parsed doc. Used by `layout` benchmarks.
-pub fn bench_render_doc(doc: BenchDoc) -> Result<Vec<u8>, String> {
+pub fn bench_render_doc(mut doc: BenchDoc) -> Result<Vec<u8>, String> {
     let lp = doc.0.section_layouts();
     let pages: Vec<render::RenderPage> =
         lp.iter().flat_map(layout::layout_page).collect();
@@ -381,7 +381,7 @@ pub fn bench_data_apply(doc: BenchDoc, json: &str) -> Result<BenchDoc, String> {
 
 /// Full pipeline: parse + layout + PDF write. Used by `end_to_end` benchmarks.
 pub fn bench_render_xml(xml: &str) -> Result<Vec<u8>, String> {
-    let doc = parse::parse(xml)?;
+    let mut doc = parse::parse(xml)?;
     let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
         lp.iter().flat_map(layout::layout_page).collect();
@@ -399,7 +399,7 @@ pub fn bench_render_xml_with_font(
     font_name: &str,
     font_bytes: &[u8],
 ) -> Result<Vec<u8>, String> {
-    let doc = parse::parse(xml)?;
+    let mut doc = parse::parse(xml)?;
     let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
         lp.iter().flat_map(layout::layout_page).collect();
@@ -419,7 +419,7 @@ pub fn bench_render_xml_with_image(
     image_name: &str,
     image_bytes: &[u8],
 ) -> Result<Vec<u8>, String> {
-    let doc = parse::parse(xml)?;
+    let mut doc = parse::parse(xml)?;
     let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
         lp.iter().flat_map(layout::layout_page).collect();

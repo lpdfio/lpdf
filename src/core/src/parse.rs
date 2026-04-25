@@ -25,13 +25,13 @@ impl Document {
     /// Derive a flat `Vec<SectionLayout>` from sections for use with the layout engine.
     /// Each section's layout child is converted to one `SectionLayout`.  Canvas children are
     /// collected into `underlays` (before first layout) or `overlays` (after) per document order.
-    pub fn section_layouts(&self) -> Vec<SectionLayout> {
+    pub fn section_layouts(&mut self) -> Vec<SectionLayout> {
         let mut result = Vec::new();
-        for section in &self.sections {
+        for section in std::mem::take(&mut self.sections) {
             let width  = section.options.size.map(|(w, _)| w).unwrap_or(self.page_width);
             let height = section.options.size.map(|(_, h)| h).unwrap_or(self.page_height);
             let margin = section.options.margin.unwrap_or(self.margin);
-            let bg     = section.options.background.clone()
+            let bg     = section.options.background
                             .or_else(|| self.background.clone());
             let debug  = section.options.debug.unwrap_or(self.debug);
 
@@ -41,22 +41,22 @@ impl Document {
             let mut underlays: Vec<canvas::CanvasLayer> = Vec::new();
             let mut overlays:  Vec<canvas::CanvasLayer> = Vec::new();
             let mut seen_layout = false;
-            for sc in &section.children {
+            for sc in section.children {
                 match sc {
-                    SectionChild::Layout(layout) => {
+                    SectionChild::Layout(layout_children) => {
                         seen_layout = true;
-                        for lc in &layout.children {
+                        for lc in layout_children {
                             match lc {
-                                LayoutChild::Content(node) => children.push(node.clone()),
+                                LayoutChild::Content(node) => children.push(node),
                                 LayoutChild::Region(reg)   => children.push(region_to_compat_node(reg)),
                             }
                         }
                     }
                     SectionChild::Canvas(cv) => {
                         if seen_layout {
-                            overlays.extend(cv.layers.iter().cloned());
+                            overlays.extend(cv.layers);
                         } else {
-                            underlays.extend(cv.layers.iter().cloned());
+                            underlays.extend(cv.layers);
                         }
                     }
                 }
@@ -70,8 +70,8 @@ impl Document {
 /// Convert a `LayoutRegion` to a `Node` that the existing layout engine can handle.
 /// `pin="top|bottom"` → `Repeat::Page` (renders on every produced page).
 /// `pin="top", page="first"` → `Repeat::First`.
-fn region_to_compat_node(reg: &LayoutRegion) -> Node {
-    let repeat = match &reg.page {
+fn region_to_compat_node(reg: LayoutRegion) -> Node {
+    let repeat = match reg.page {
         None                         => Repeat::Page,
         Some(PageScope::Each)        => Repeat::Page,
         Some(PageScope::First)       => Repeat::First,
@@ -81,7 +81,7 @@ fn region_to_compat_node(reg: &LayoutRegion) -> Node {
         kind:     NodeKind::Stack,
         repeat,
         debug:    reg.debug,
-        children: reg.children.clone(),
+        children: reg.children,
         ..Node::layout_default()
     }
 }
@@ -130,15 +130,9 @@ pub enum LayoutChild {
     Region(LayoutRegion),
 }
 
-/// Root-level layout wrapper.
-#[derive(Debug, Clone)]
-pub struct Layout {
-    pub children: Vec<LayoutChild>,
-}
-
 #[derive(Debug, Clone)]
 pub enum SectionChild {
-    Layout(Layout),
+    Layout(Vec<LayoutChild>),
     Canvas(Canvas),
 }
 
@@ -974,6 +968,9 @@ fn parse_region_elem(
     elem:         &roxmltree::Node,
     tokens:       &Tokens,
     asset_images: &HashMap<String, String>,
+    asset_fonts:  &HashMap<String, FontDef>,
+    root_font:    &str,
+    root_size:    f32,
 ) -> Result<LayoutRegion, String> {
     let pin_str = elem.attribute("pin")
         .ok_or("<region> missing required attribute 'pin'")?;
@@ -992,7 +989,7 @@ fn parse_region_elem(
     for child in elems(elem) {
         children.push(resolve_parsed_node(
             parse_node(&child, tokens, asset_images)?,
-            "Helvetica", 11.0, &HashMap::new(),
+            root_font, root_size, asset_fonts,
         ));
     }
     Ok(LayoutRegion { pin, page, w, children, debug })
@@ -1030,7 +1027,7 @@ fn parse_section_elem(
                 let mut lc: Vec<LayoutChild> = Vec::new();
                 for layout_child in elems(&child) {
                     if layout_child.tag_name().name() == "region" {
-                        lc.push(LayoutChild::Region(parse_region_elem(&layout_child, tokens, asset_images)?));
+                        lc.push(LayoutChild::Region(parse_region_elem(&layout_child, tokens, asset_images, asset_fonts, &root_font, root_size)?));
                     } else {
                         lc.push(LayoutChild::Content(resolve_parsed_node(
                             parse_node(&layout_child, tokens, asset_images)?,
@@ -1038,7 +1035,7 @@ fn parse_section_elem(
                         )));
                     }
                 }
-                children.push(SectionChild::Layout(Layout { children: lc }));
+                children.push(SectionChild::Layout(lc));
             }
             "canvas" => {
                 children.push(SectionChild::Canvas(
@@ -1819,7 +1816,7 @@ fn parse_tree_section(
                     if let Some(nodes) = child.get("nodes").and_then(|v| v.as_array()) {
                         for n in nodes {
                             if n.get("type").and_then(|v| v.as_str()) == Some("layout-region") {
-                                lc.push(LayoutChild::Region(parse_tree_region(n, tokens, asset_images)?));
+                                lc.push(LayoutChild::Region(parse_tree_region(n, tokens, asset_images, asset_fonts)?));
                             } else {
                                 lc.push(LayoutChild::Content(
                                     resolve_parsed_node(
@@ -1830,7 +1827,7 @@ fn parse_tree_section(
                             }
                         }
                     }
-                    children.push(SectionChild::Layout(Layout { children: lc }));
+                    children.push(SectionChild::Layout(lc));
                 }
                 Some("canvas") => {
                     let mut layers = Vec::new();
@@ -1868,6 +1865,7 @@ fn parse_tree_region(
     json:         &serde_json::Value,
     tokens:       &Tokens,
     asset_images: &HashMap<String, String>,
+    asset_fonts:  &HashMap<String, FontDef>,
 ) -> Result<LayoutRegion, String> {
     let pin_str = jattr(json, "pin")
         .ok_or("layout-region missing 'pin' attribute")?;
@@ -1887,7 +1885,7 @@ fn parse_tree_region(
         for n in arr {
             children.push(resolve_parsed_node(
                 parse_tree_node(n, tokens, asset_images)?,
-                "Helvetica", 11.0, &HashMap::new(),
+                "Helvetica", 11.0, asset_fonts,
             ));
         }
     }
@@ -2064,7 +2062,7 @@ mod tests {
 
     #[test]
     fn parse_empty_page() {
-        let doc = parse(&minimal("")).unwrap();
+        let mut doc = parse(&minimal("")).unwrap();
         let pages = doc.section_layouts();
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0].width, 595.28);
@@ -2074,7 +2072,7 @@ mod tests {
 
     #[test]
     fn parse_frame_with_background() {
-        let doc = parse(&minimal(r#"<frame background="primary" />"#)).unwrap();
+        let mut doc = parse(&minimal(r#"<frame background="primary" />"#)).unwrap();
         let pages = doc.section_layouts();
         let node = &pages[0].children[0];
         assert_eq!(node.background.as_deref(), Some("#1763cf"));
@@ -2082,7 +2080,7 @@ mod tests {
 
     #[test]
     fn parse_stack_gap_and_children() {
-        let doc = parse(&minimal(
+        let mut doc = parse(&minimal(
             r#"<stack gap="m"><frame /><frame /></stack>"#,
         ))
         .unwrap();
@@ -2094,7 +2092,7 @@ mod tests {
 
     #[test]
     fn parse_divider() {
-        let doc = parse(&minimal(r##"<divider color="#e0e0e0" thickness="xs" />"##)).unwrap();
+        let mut doc = parse(&minimal(r##"<divider color="#e0e0e0" thickness="xs" />"##)).unwrap();
         let pages = doc.section_layouts();
         let d = &pages[0].children[0];
         assert_eq!(d.kind, NodeKind::Divider);
@@ -2104,7 +2102,7 @@ mod tests {
 
     #[test]
     fn parse_grid_cols() {
-        let doc = parse(&minimal(r#"<grid cols="3" gap="m" />"#)).unwrap();
+        let mut doc = parse(&minimal(r#"<grid cols="3" gap="m" />"#)).unwrap();
         let pages = doc.section_layouts();
         let g = &pages[0].children[0];
         assert_eq!(g.cols, 3);
@@ -2112,7 +2110,7 @@ mod tests {
 
     #[test]
     fn parse_text_node() {
-        let doc = parse(&minimal(r#"<text font-size="m" color="text">Hello world</text>"#)).unwrap();
+        let mut doc = parse(&minimal(r#"<text font-size="m" color="text">Hello world</text>"#)).unwrap();
         let pages = doc.section_layouts();
         let t = &pages[0].children[0];
         assert_eq!(t.kind, NodeKind::Text);
@@ -2131,7 +2129,7 @@ mod tests {
                 <text>Hello</text>
             </layout></section></document>
         </lpdf>"#;
-        let doc = parse(xml).unwrap();
+        let mut doc = parse(xml).unwrap();
         let pages = doc.section_layouts();
         let t = &pages[0].children[0];
         assert_eq!(t.font, "Helvetica-Oblique");
@@ -2144,7 +2142,7 @@ mod tests {
                 <stack font-size="14pt"><text>Hello</text></stack>
             </layout></section></document>
         </lpdf>"#;
-        let doc = parse(xml).unwrap();
+        let mut doc = parse(xml).unwrap();
         let pages = doc.section_layouts();
         let stack = &pages[0].children[0];
         let text  = &stack.children[0];
@@ -2161,7 +2159,7 @@ mod tests {
                 <img name="logo" width="100pt"/>
             </layout></section></document>
         </lpdf>"#;
-        let doc = parse(xml).unwrap();
+        let mut doc = parse(xml).unwrap();
         let pages = doc.section_layouts();
         let img = &pages[0].children[0];
         assert_eq!(img.kind, NodeKind::Img);
@@ -2198,7 +2196,7 @@ mod tests {
             </tokens>
             <document size="a4"><section><layout><frame background="primary" /></layout></section></document>
         </lpdf>"##;
-        let doc = parse(xml).unwrap();
+        let mut doc = parse(xml).unwrap();
         assert_eq!(
             doc.section_layouts()[0].children[0].background.as_deref(),
             Some("#ff0000")
@@ -2208,7 +2206,7 @@ mod tests {
     #[test]
     fn landscape_swaps_dimensions() {
         let xml = r#"<lpdf version="1"><document size="a4" orientation="landscape"><section><layout/></section></document></lpdf>"#;
-        let doc = parse(xml).unwrap();
+        let mut doc = parse(xml).unwrap();
         let pages = doc.section_layouts();
         assert_eq!(pages[0].width, 841.89);
         assert_eq!(pages[0].height, 595.28);
@@ -2216,13 +2214,13 @@ mod tests {
 
     #[test]
     fn height_fixed_pt() {
-        let doc = parse(&minimal(r#"<frame height="28pt" />"#)).unwrap();
+        let mut doc = parse(&minimal(r#"<frame height="28pt" />"#)).unwrap();
         assert_eq!(doc.section_layouts()[0].children[0].height_mode, HeightMode::Fixed(28.0));
     }
 
     #[test]
     fn height_fill_mode() {
-        let doc = parse(&minimal(r#"<frame height="fill" />"#)).unwrap();
+        let mut doc = parse(&minimal(r#"<frame height="fill" />"#)).unwrap();
         assert_eq!(doc.section_layouts()[0].children[0].height_mode, HeightMode::Fill);
     }
 
@@ -2399,9 +2397,9 @@ mod tests {
             SectionChild::Layout(l) => l,
             _ => panic!("expected layout"),
         };
-        assert_eq!(layout.children.len(), 2);
-        assert!(matches!(layout.children[0], LayoutChild::Region(_)));
-        if let LayoutChild::Region(ref r) = layout.children[0] {
+        assert_eq!(layout.len(), 2);
+        assert!(matches!(layout[0], LayoutChild::Region(_)));
+        if let LayoutChild::Region(ref r) = layout[0] {
             assert_eq!(r.pin, RegionPin::Top);
             assert_eq!(r.page, Some(PageScope::Each));
         }
@@ -2416,7 +2414,7 @@ mod tests {
                 </section>
             </document>
         </lpdf>"#;
-        let doc = parse(xml).unwrap();
+        let mut doc = parse(xml).unwrap();
         let pages = doc.section_layouts();
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0].children.len(), 1);

@@ -59,7 +59,7 @@ pub(crate) fn parse_permissions_json(json: &str) -> super::encrypt::Permissions 
 ///   doc-level widths; doc-level takes precedence.
 /// - The WASI binary uses doc-level widths only.
 pub(crate) fn render_doc_shared(
-    doc: super::parse::Document,
+    mut doc: super::parse::Document,
     font_widths: HashMap<String, super::tokens::FontWidths>,
     license_key: &str,
     now_unix: i64,
