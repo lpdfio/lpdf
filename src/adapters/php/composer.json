@@ -2,7 +2,7 @@
   "name": "lpdf/lpdf",
   "description": "PHP adapter for the lpdf document rendering engine",
   "type": "library",
-  "license": "proprietary",
+  "license": "AGPL-3.0-or-later OR LicenseRef-Commercial",
   "require": {
     "php": ">=8.2"
   },

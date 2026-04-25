@@ -2,6 +2,7 @@
   "name": "lpdf",
   "displayName": "lpdf",
   "description": "Layout-first PDF authoring — lpdf library companion with live editor, preview, export, and codegen for TypeScript, C#, Python & PHP",
+  "license": "AGPL-3.0-or-later OR LicenseRef-Commercial",
   "publisher": "lpdf",
   "version": "0.5.0",
   "icon": "media/icon.png",

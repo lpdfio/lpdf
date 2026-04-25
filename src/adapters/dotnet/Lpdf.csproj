@@ -12,7 +12,8 @@
     <Version>0.1.0</Version>
     <Authors>lpdf.io</Authors>
     <Description>lpdf .NET adapter — render PDF from an lpdf document tree or XML.</Description>
-    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <RepositoryUrl>https://github.com/codesensedev/lpdf</RepositoryUrl>
   </PropertyGroup>
 
@@ -33,6 +34,11 @@
   <!-- Embed the pre-built WASI binary so callers don't need to manage a separate file -->
   <ItemGroup>
     <EmbeddedResource Include="wasm\lpdf.wasm" />
+  </ItemGroup>
+
+  <!-- Required for PackageLicenseFile — include LICENSE at the package root -->
+  <ItemGroup>
+    <None Include="LICENSE" Pack="true" PackagePath="" />
   </ItemGroup>
 
 </Project>

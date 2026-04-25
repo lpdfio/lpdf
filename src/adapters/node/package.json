@@ -20,6 +20,7 @@
     "build:browser": "node build-browser.mjs",
     "test":          "node --test test/render.test.mjs"
   },
+  "license": "AGPL-3.0-or-later OR LicenseRef-Commercial",
   "files": [
     "dist/"
   ],
