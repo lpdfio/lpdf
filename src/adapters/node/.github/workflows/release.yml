@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  repository_dispatch:
+    types: [core-release]
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Resolve version ──────────────────────────────────────────────────────
+      # When triggered by core dispatch: use payload version.
+      # When triggered by a direct adapter tag: derive core version (strip patch → .0).
+      - name: Resolve version
+        run: |
+          ADAPTER_TAG="${{ github.event.client_payload.version || github.ref_name }}"
+          CORE_TAG=$(echo "$ADAPTER_TAG" | sed 's/\.[0-9]*$/.0/')
+          VERSION="${ADAPTER_TAG#v}"
+          echo "ADAPTER_TAG=$ADAPTER_TAG"   >> "$GITHUB_ENV"
+          echo "CORE_TAG=$CORE_TAG"         >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION"           >> "$GITHUB_ENV"
+
+      # ── Download wasm-pack artifacts from core release ───────────────────────
+      - name: Download wasm-pack artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p wasm
+          for attempt in 1 2 3; do
+            gh release download "$CORE_TAG" \
+              --repo lpdfio/lpdf \
+              --pattern "lpdf.js" \
+              --pattern "lpdf_bg.wasm" \
+              --dir wasm && break
+            echo "Attempt $attempt failed — retrying in 10s..."
+            sleep 10
+          done
+
+      # ── Build ────────────────────────────────────────────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install and build
+        run: npm ci && npm run build
+
+      # ── Test ─────────────────────────────────────────────────────────────────
+      - name: Test
+        run: npm test
+
+      # ── Set package version ──────────────────────────────────────────────────
+      - name: Bump package version
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      # ── Publish to npm ───────────────────────────────────────────────────────
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -2,10 +2,11 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LpdfEngine = exports.LpdfRenderError = void 0;
 const node_fs_1 = require("node:fs");
-// require() path is relative to the compiled output at dist/index.js.
-// dist/index.js → ../../../../dist/node/lpdf.js = project-root/dist/node/lpdf.js
+// require() path is relative to the compiled output at dist/engine.js.
+// In the published package, wasm-pack artifacts live in dist/wasm/.
+// In the monorepo, `npm run build` copies them there from <root>/dist/node/.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const wasmModule = require('../../../../dist/node/lpdf.js');
+const wasmModule = require('./wasm/lpdf.js');
 const WasmEngine = wasmModule.LpdfEngine;
 /** Thrown when the lpdf engine returns a layout or parse error. */
 class LpdfRenderError extends Error {

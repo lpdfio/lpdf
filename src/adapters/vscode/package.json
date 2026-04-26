@@ -1,14 +1,15 @@
 {
   "name": "lpdf",
-  "displayName": "lpdf",
-  "description": "Layout-first PDF authoring — lpdf library companion with live editor, preview, export, and codegen for TypeScript, C#, Python & PHP",
-  "license": "AGPL-3.0-or-later OR LicenseRef-Commercial",
-  "publisher": "lpdf",
-  "version": "0.5.0",
+  "displayName": "LPDF (Preview)",
+  "description": "VS Code extension for lpdf — pixel-perfect, lightweight, and consistent PDF rendering",
+  "license": "SEE LICENSE IN LICENSE",
+  "publisher": "lpdfio",
+  "version": "0.5.1",
+  "preview": true,
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/codesensedev/lpdf"
+    "url": "https://github.com/lpdfio/lpdf-vscode"
   },
   "engines": {
     "vscode": "^1.85.0"

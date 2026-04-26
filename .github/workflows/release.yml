@@ -1,0 +1,160 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  id-token: write      # required for GitHub Attestations (OIDC)
+  attestations: write  # required for actions/attest-build-provenance
+
+jobs:
+  # ── 1. Tests ────────────────────────────────────────────────────────────────
+  test:
+    name: Rust tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --manifest-path src/core/Cargo.toml
+      - run: cargo test --manifest-path src/core-wasi/Cargo.toml
+
+  # ── 2. Build artifacts ──────────────────────────────────────────────────────
+  build:
+    name: Build artifacts
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown,wasm32-wasip1
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build wasm-pack (node target)
+        run: wasm-pack build src/core --target nodejs --out-dir ../../dist/node
+
+      - name: Build WASI binary
+        run: |
+          cargo build \
+            --manifest-path src/core-wasi/Cargo.toml \
+            --release \
+            --target wasm32-wasip1
+          mkdir -p artifacts
+          cp target/wasm32-wasip1/release/lpdf-wasi.wasm artifacts/
+          cp dist/node/lpdf.js       artifacts/
+          cp dist/node/lpdf_bg.wasm  artifacts/
+
+      # TODO: add when src/core-ffi is implemented
+      # - name: Install cross (for aarch64 cross-compilation)
+      #   uses: taiki-e/install-action@v2
+      #   with:
+      #     tool: cross
+      # - name: Build FFI (x86_64-linux)
+      #   run: |
+      #     cargo build --manifest-path src/core-ffi/Cargo.toml --release \
+      #       --target x86_64-unknown-linux-gnu
+      #     cp target/x86_64-unknown-linux-gnu/release/liblpdf.so \
+      #        artifacts/liblpdf-linux-x86_64.so
+      # - name: Build FFI (aarch64-linux)
+      #   run: |
+      #     cross build --manifest-path src/core-ffi/Cargo.toml --release \
+      #       --target aarch64-unknown-linux-gnu
+      #     cp target/aarch64-unknown-linux-gnu/release/liblpdf.so \
+      #        artifacts/liblpdf-linux-aarch64.so
+
+      - name: Generate SHA256SUMS
+        working-directory: artifacts
+        run: sha256sum lpdf-wasi.wasm lpdf.js lpdf_bg.wasm > SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: artifacts/
+
+  # ── 3. Publish GitHub Release + dispatch to adapters ────────────────────────
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    environment: release   # optional manual-approval gate — remove if not needed
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: artifacts/
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            artifacts/lpdf-wasi.wasm
+            artifacts/lpdf.js
+            artifacts/lpdf_bg.wasm
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --draft \
+            --title "${{ github.ref_name }}" \
+            --generate-notes
+
+      - name: Upload release artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            artifacts/lpdf-wasi.wasm \
+            artifacts/lpdf.js \
+            artifacts/lpdf_bg.wasm \
+            artifacts/SHA256SUMS
+
+      - name: Publish release (draft → live)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ github.ref_name }}" --draft=false
+
+      # Mint a short-lived GitHub App token for PHP adapter git-push steps.
+      # The App needs Contents:write on lpdf-php and lpdf-php-ffi.
+      - name: Mint GitHub App token (PHP adapters)
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.LPDF_RELEASE_APP_ID }}
+          private-key: ${{ secrets.LPDF_RELEASE_APP_PRIVATE_KEY }}
+          repositories: lpdf-php,lpdf-php-ffi
+
+      - name: Dispatch to adapter repos
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WRITE_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          # Non-PHP adapters — no git write access needed
+          for repo in lpdf-js lpdf-dotnet lpdf-python lpdf-vscode; do
+            gh api "repos/lpdfio/$repo/dispatches" \
+              --method POST \
+              -f event_type=core-release \
+              -f "client_payload[version]=$VERSION"
+          done
+
+          # PHP adapters — include write_token for git-push step
+          for repo in lpdf-php lpdf-php-ffi; do
+            gh api "repos/lpdfio/$repo/dispatches" \
+              --method POST \
+              -f event_type=core-release \
+              -f "client_payload[version]=$VERSION" \
+              -f "client_payload[write_token]=$WRITE_TOKEN"
+          done

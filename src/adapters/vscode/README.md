@@ -1,10 +1,10 @@
 # lpdf for VS Code
 
-**Layout-first PDF authoring, right inside your editor.**
+**Structure-first PDF authoring, right inside your editor.**
 
 lpdf lets you define PDF documents using a layout model — stacks, flanks, grids, frames — instead of placing elements at explicit coordinates. Author visually, bind live data, and convert your template to typed code in any supported language.
 
-![lpdf demo](https://raw.githubusercontent.com/codesensedev/lpdf/master/src/adapters/vscode/media/demo.gif)
+![lpdf demo](https://raw.githubusercontent.com/lpdfio/lpdf-vscode/HEAD/media/demo.gif)
 
 ---
 
@@ -69,9 +69,13 @@ The WASM renderer, visual editor, PDF preview, and codegen all run locally. No s
 
 ---
 
-## Get a License
+## License
+
+Free for individuals, open-source projects, non-profits, and organizations with annual gross revenue under 1,000,000 USD (Community License). A paid license is required for production use by larger organizations.
 
 Visit [lpdf.io/pricing](https://lpdf.io/pricing) to purchase a license. Once you have a key, set it in VS Code Settings under `lpdf.licenseKey`.
+
+See [LICENSE](LICENSE) for full terms.
 
 ---
 

@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  repository_dispatch:
+    types: [core-release]
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Resolve version ──────────────────────────────────────────────────────
+      - name: Resolve version
+        run: |
+          ADAPTER_TAG="${{ github.event.client_payload.version || github.ref_name }}"
+          CORE_TAG=$(echo "$ADAPTER_TAG" | sed 's/\.[0-9]*$/.0/')
+          VERSION="${ADAPTER_TAG#v}"
+          echo "ADAPTER_TAG=$ADAPTER_TAG"   >> "$GITHUB_ENV"
+          echo "CORE_TAG=$CORE_TAG"         >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION"           >> "$GITHUB_ENV"
+
+      # ── Download WASI binary from core release ───────────────────────────────
+      - name: Download lpdf-wasi.wasm
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p wasm
+          for attempt in 1 2 3; do
+            gh release download "$CORE_TAG" \
+              --repo lpdfio/lpdf \
+              --pattern "lpdf-wasi.wasm" \
+              --dir wasm && break
+            echo "Attempt $attempt failed — retrying in 10s..."
+            sleep 10
+          done
+          mv wasm/lpdf-wasi.wasm wasm/lpdf.wasm   # csproj embeds as lpdf.wasm
+
+      # ── Build and test ───────────────────────────────────────────────────────
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Set version in csproj
+        run: sed -i "s|<Version>.*</Version>|<Version>$VERSION</Version>|" Lpdf.csproj
+
+      - name: Restore
+        run: dotnet restore Lpdf.sln
+
+      - name: Build
+        run: dotnet build Lpdf.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test Lpdf.sln --no-build -c Release
+
+      # ── Pack and publish ──────────────────────────────────────────────────────
+      - name: Pack
+        run: dotnet pack Lpdf.csproj -c Release --no-build -o nupkg
+
+      - name: Publish to NuGet
+        run: |
+          dotnet nuget push nupkg/*.nupkg \
+            --api-key "${{ secrets.NUGET_API_KEY }}" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate

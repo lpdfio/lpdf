@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  repository_dispatch:
+    types: [core-release]
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # ── SECURITY: mask the write_token before ANY other step ────────────────
+      # The token arrives in client_payload (not secrets.*) so GitHub Actions
+      # will NOT automatically redact it. This step must be first.
+      - name: Mask write token
+        if: github.event.client_payload.write_token != ''
+        run: echo "::add-mask::${{ github.event.client_payload.write_token }}"
+
+      - uses: actions/checkout@v4
+
+      # ── Resolve version ──────────────────────────────────────────────────────
+      - name: Resolve version
+        run: |
+          ADAPTER_TAG="${{ github.event.client_payload.version || github.ref_name }}"
+          CORE_TAG=$(echo "$ADAPTER_TAG" | sed 's/\.[0-9]*$/.0/')
+          VERSION="${ADAPTER_TAG#v}"
+          echo "ADAPTER_TAG=$ADAPTER_TAG"   >> "$GITHUB_ENV"
+          echo "CORE_TAG=$CORE_TAG"         >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION"           >> "$GITHUB_ENV"
+
+      # ── Download WASI binary from core release ───────────────────────────────
+      # PHP adapter expects resources/lpdf-wasi.wasm
+      - name: Download lpdf-wasi.wasm
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p resources
+          for attempt in 1 2 3; do
+            gh release download "$CORE_TAG" \
+              --repo lpdfio/lpdf \
+              --pattern "lpdf-wasi.wasm" \
+              --dir resources && break
+            echo "Attempt $attempt failed — retrying in 10s..."
+            sleep 10
+          done
+
+      # ── Install wasmtime runtime ─────────────────────────────────────────────
+      - name: Install wasmtime
+        run: |
+          curl -sSf https://wasmtime.dev/install.sh | bash
+          echo "$HOME/.wasmtime/bin" >> "$GITHUB_PATH"
+
+      # ── Install PHP and dependencies ─────────────────────────────────────────
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer
+
+      - name: Install composer dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      # ── Test ─────────────────────────────────────────────────────────────────
+      - name: Test
+        run: php vendor/bin/phpunit test
+
+      # ── Commit new wasm, tag, and push ───────────────────────────────────────
+      # Packagist is triggered by git tags — there is no separate publish step.
+      # The write_token (GitHub App, short-lived) authorises the push.
+      # On direct tag triggers (adapter patch), GITHUB_TOKEN is used instead.
+      - name: Set git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Log release version
+        run: |
+          # composer.json does not carry a version field (Packagist reads the tag).
+          # Nothing to update; the tag itself is the version signal.
+          echo "Version: $VERSION (tag: $ADAPTER_TAG)"
+
+      - name: Commit updated wasm binary
+        run: |
+          git add resources/lpdf-wasi.wasm
+          git diff --cached --quiet || git commit -m "release: $ADAPTER_TAG"
+
+      - name: Tag and push (dispatch — use write_token)
+        if: github.event_name == 'repository_dispatch'
+        run: |
+          git tag "$ADAPTER_TAG"
+          git remote set-url origin \
+            "https://x-access-token:${{ github.event.client_payload.write_token }}@github.com/lpdfio/lpdf-php.git"
+          git push origin HEAD:main
+          git push origin "$ADAPTER_TAG"
+
+      - name: Tag and push (direct tag — use GITHUB_TOKEN)
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # On direct tag push the tag already exists; just push the wasm commit.
+          git push origin HEAD:main

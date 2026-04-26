@@ -1,0 +1,52 @@
+# Third-Party Licenses
+
+This extension includes the following third-party open-source components.
+
+---
+
+## pdf.js (pdfjs-dist)
+
+Used for: PDF rendering in the preview panel.
+License: Apache-2.0
+Homepage: https://mozilla.github.io/pdf.js/
+Source: https://github.com/mozilla/pdf.js
+
+    Copyright 2012 Mozilla Foundation
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+---
+
+## lpdf-wasi.wasm (compiled Rust crates)
+
+The bundled WebAssembly binary is compiled from Rust and statically links
+the following crates. All are licensed under MIT OR Apache-2.0 (or compatible
+permissive terms) and do not impose any copyleft obligations.
+
+| Crate            | License                     |
+|------------------|-----------------------------|
+| serde            | MIT OR Apache-2.0           |
+| serde_json       | MIT OR Apache-2.0           |
+| roxmltree        | MIT OR Apache-2.0           |
+| pdf-writer       | MIT OR Apache-2.0           |
+| ttf-parser       | MIT OR Apache-2.0           |
+| subsetter        | MIT OR Apache-2.0           |
+| base64           | MIT OR Apache-2.0           |
+| miniz_oxide      | MIT OR Zlib OR Apache-2.0   |
+| qrcode           | MIT OR Apache-2.0           |
+| md-5             | MIT OR Apache-2.0           |
+| ed25519-dalek    | MIT OR Apache-2.0           |
+| curve25519-dalek | MIT OR Apache-2.0           |
+| wasm-bindgen     | MIT OR Apache-2.0           |
+
+Full license texts are available at https://crates.io for each crate listed.
