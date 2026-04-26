@@ -63,26 +63,6 @@ make example-php
 # Output: example/invoice-php.pdf
 ```
 
-## VS Code Extension
-
-The extension provides live preview, PDF export, code generation, and XSD-backed XML validation for `.lpdf` files.
-
-| Command | Description |
-|---|---|
-| `make build-adapter-vscode` | Compile TypeScript, copy WASM + schema |
-| `make package-adapter-vscode` | Package into `src/adapters/vscode/lpdf.vsix` |
-| `make install-adapter-vscode` | Package and install into VS Code |
-
-To update the extension after making changes (schema, WASM, or TypeScript source):
-
-```sh
-make install-adapter-vscode
-```
-
-Then **restart VS Code** (or run **Developer: Restart Extension Host** from the Command Palette) to load the new version. The install step automatically rebuilds and repackages before installing.
-
-> **Note:** `build-adapter-vscode` copies `schema/lpdf.xsd` from the project root into the extension. Always edit the canonical schema at `schema/lpdf.xsd`; changes made directly to `src/adapters/vscode/schema/lpdf.xsd` will be overwritten on the next build.
-
 ---
 
 ## Verify
@@ -94,24 +74,3 @@ node test/verify-wasm.mjs        # Node.js
 # open test/verify-wasm.html     # browser (requires a local HTTP server)
 ```
 
-## Structure
-
-```
-src/core/            Rust crate — layout engine, compiled to .wasm
-src/core-wasi/       Rust crate — WASI CLI wrapper
-
-src/adapters/node/   Node.js / browser adapter (TypeScript)
-src/adapters/dotnet/ .NET adapter (C#)
-src/adapters/php/    PHP adapter (runs WASM via Docker)
-
-dist/node/           wasm-pack output for Node.js (generated)
-dist/web/            wasm-pack output for browsers (generated)
-dist/wasi/           WASI binary (generated)
-
-test/                smoke tests and snapshot fixtures
-
-schema/              lpdf XML schema (XSD)
-
-example/             output folder for generated example PDFs
-var/                 design documents and architecture notes
-```
