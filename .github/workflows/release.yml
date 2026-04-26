@@ -41,6 +41,9 @@ jobs:
       - name: Build wasm-pack (node target)
         run: wasm-pack build src/core --target nodejs --out-dir ../../dist/node
 
+      - name: Build wasm-pack (web target)
+        run: wasm-pack build src/core --target web --out-dir ../../dist/web
+
       - name: Build WASI binary
         run: |
           cargo build \
@@ -51,6 +54,7 @@ jobs:
           cp target/wasm32-wasip1/release/lpdf-wasi.wasm artifacts/
           cp dist/node/lpdf.js       artifacts/
           cp dist/node/lpdf_bg.wasm  artifacts/
+          cp dist/web/lpdf.js        artifacts/lpdf-web.js
 
       # TODO: add when src/core-ffi is implemented
       # - name: Install cross (for aarch64 cross-compilation)
@@ -72,7 +76,7 @@ jobs:
 
       - name: Generate SHA256SUMS
         working-directory: artifacts
-        run: sha256sum lpdf-wasi.wasm lpdf.js lpdf_bg.wasm > SHA256SUMS
+        run: sha256sum lpdf-wasi.wasm lpdf.js lpdf_bg.wasm lpdf-web.js > SHA256SUMS
 
       - uses: actions/upload-artifact@v4
         with:
@@ -101,6 +105,7 @@ jobs:
             artifacts/lpdf-wasi.wasm
             artifacts/lpdf.js
             artifacts/lpdf_bg.wasm
+            artifacts/lpdf-web.js
 
       - name: Create draft release
         env:
@@ -119,6 +124,7 @@ jobs:
             artifacts/lpdf-wasi.wasm \
             artifacts/lpdf.js \
             artifacts/lpdf_bg.wasm \
+            artifacts/lpdf-web.js \
             artifacts/SHA256SUMS
 
       - name: Publish release (draft → live)
