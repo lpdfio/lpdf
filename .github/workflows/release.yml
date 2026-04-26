@@ -140,7 +140,7 @@ jobs:
         with:
           app-id: ${{ vars.LPDF_RELEASE_APP_ID }}
           private-key: ${{ secrets.LPDF_RELEASE_APP_PRIVATE_KEY }}
-          repositories: lpdf-php,lpdf-php-ffi
+          repositories: lpdf-php
 
       - name: Dispatch to adapter repos
         env:
@@ -157,7 +157,7 @@ jobs:
           done
 
           # PHP adapters — include write_token for git-push step
-          for repo in lpdf-php lpdf-php-ffi; do
+          for repo in lpdf-php; do
             gh api "repos/lpdfio/$repo/dispatches" \
               --method POST \
               -f event_type=core-release \
