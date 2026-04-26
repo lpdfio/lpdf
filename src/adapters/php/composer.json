@@ -1,8 +1,16 @@
 {
-  "name": "lpdf/lpdf",
-  "description": "PHP adapter for the lpdf document rendering engine",
+  "name": "lpdfio/lpdf",
+  "description": "PHP adapter for lpdf — pixel-perfect, lightweight, and consistent PDF rendering",
   "type": "library",
-  "license": "AGPL-3.0-or-later OR LicenseRef-Commercial",
+  "license": "proprietary",
+  "homepage": "https://lpdf.io",
+  "authors": [
+    {"name": "lpdf.io", "email": "support@lpdf.io", "homepage": "https://lpdf.io"}
+  ],
+  "support": {
+    "source": "https://github.com/lpdfio/lpdf-php",
+    "issues": "https://github.com/lpdfio/lpdf-php/issues"
+  },
   "require": {
     "php": ">=8.2"
   },

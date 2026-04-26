@@ -1,7 +1,7 @@
-# lpdf Individual Contributor License Agreement
+# LPDF Individual Contributor License Agreement
 
-Thank you for your interest in contributing to lpdf ("Project"), maintained by
-lpdfio ("Licensor").
+Thank you for your interest in contributing to LPDF ("Project"), maintained by
+Codesense LLC ("Licensor").
 
 This Contributor License Agreement ("CLA") clarifies the intellectual property
 rights granted with contributions to the Project. By submitting a contribution
@@ -11,10 +11,10 @@ you accept the terms below.
 
 ## Why a CLA?
 
-lpdf is dual-licensed under AGPL-3.0-or-later and a Commercial License. To
-offer contributions under the commercial license, Licensor must hold the right
-to do so. This CLA grants Licensor that right while you retain ownership of
-your contribution.
+LPDF is released under a custom tiered license (Community, Professional, and
+Enterprise). To relicense contributions under current and future license terms,
+Licensor must hold the right to do so. This CLA grants Licensor that right
+while you retain ownership of your contribution.
 
 ---
 
@@ -34,7 +34,7 @@ You grant Licensor a perpetual, worldwide, non-exclusive, royalty-free,
 irrevocable copyright license to reproduce, prepare derivative works of,
 publicly display, publicly perform, sublicense, and distribute your
 Contributions and derivative works, under any license terms Licensor chooses,
-including the AGPL-3.0-or-later and the lpdf Commercial License.
+including the current and future versions of the LPDF License.
 
 ---
 
@@ -66,7 +66,7 @@ By submitting a Contribution you represent that:
   received permission to submit the Contribution, or your employer has signed a
   Corporate CLA with Licensor.
 - The Contribution does not include code subject to a license incompatible with
-  AGPL-3.0-or-later or the lpdf Commercial License.
+  the LPDF License.
 - You are not aware of any patent claims that would be infringed by
   incorporating the Contribution into the Project.
 
@@ -84,7 +84,7 @@ Contribution in the Project.
 Add the following line to your pull request description or a comment:
 
 ```
-I have read and agree to the lpdf CLA.
+I have read and agree to the LPDF CLA.
 ```
 
 For corporate contributors, contact **legal@lpdf.io** to arrange a Corporate

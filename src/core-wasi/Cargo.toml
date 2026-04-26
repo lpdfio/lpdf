@@ -2,8 +2,9 @@
 name = "lpdf-wasi"
 version = "0.0.0"
 edition = "2024"
-description = "lpdf — WASI binary entrypoint for the .NET adapter"
-license = "AGPL-3.0-or-later OR LicenseRef-Commercial"
+description = "lpdf — WASI binary entrypoint (all adapters)"
+repository = "https://github.com/lpdfio/lpdf"
+license-file = "../core/LICENSE"
 
 [[bin]]
 name = "lpdf-wasi"

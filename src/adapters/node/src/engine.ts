@@ -17,10 +17,11 @@ interface IWasmModule {
   LpdfEngine: new (licenseKey: string) => IWasmEngine;
   kit_to_xml: (json: string) => string;
 }
-// require() path is relative to the compiled output at dist/index.js.
-// dist/index.js → ../../../../dist/node/lpdf.js = project-root/dist/node/lpdf.js
+// require() path is relative to the compiled output at dist/engine.js.
+// In the published package, wasm-pack artifacts live in dist/wasm/.
+// In the monorepo, `npm run build` copies them there from <root>/dist/node/.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const wasmModule = require('../../../../dist/node/lpdf.js') as IWasmModule;
+const wasmModule = require('./wasm/lpdf.js') as IWasmModule;
 const WasmEngine = wasmModule.LpdfEngine;
 
 /** Thrown when the lpdf engine returns a layout or parse error. */

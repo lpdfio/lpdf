@@ -3,8 +3,8 @@ name = "lpdf"
 version = "0.0.0"
 edition = "2024"
 description = "lpdf — PDF layout engine (WASM)"
-repository = "https://github.com/codesensedev/lpdf"
-license = "AGPL-3.0-or-later OR LicenseRef-Commercial"
+repository = "https://github.com/lpdfio/lpdf"
+license-file = "LICENSE"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

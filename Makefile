@@ -8,7 +8,8 @@ SHELL := C:/PROGRA~1/Git/bin/sh.exe
         benchmark benchmark-x gen-fixtures \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-all \
         build-all test-all example-all \
-        example-node example-dotnet example-php example-python
+        example-node example-dotnet example-php example-python \
+        clone-adapters
 
 build-wasm:
 	@echo ""
@@ -67,6 +68,7 @@ build-adapter-node:
 	@echo "-------------------------------"
 	@echo ">>> Building Node adapter..."
 	@echo ""
+	mkdir -p src/adapters/node/wasm && cp dist/node/lpdf.js dist/node/lpdf.d.ts dist/node/lpdf_bg.wasm src/adapters/node/wasm/
 	cd src/adapters/node && npm install && npm run build
 
 test-adapter-node: build-adapter-node
@@ -138,6 +140,17 @@ build-all: build-wasm build-wasi build-adapter-node build-adapter-dotnet build-a
 test-all: test-wasm test-wasi test-adapter-node test-adapter-dotnet test-adapter-php test-adapter-python
 
 example-all: example-node example-dotnet example-php example-python
+
+clone-adapters:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Cloning adapter repos into src/adapters/..."
+	@echo ""
+	git clone https://github.com/lpdfio/lpdf-js     src/adapters/node
+	git clone https://github.com/lpdfio/lpdf-dotnet src/adapters/dotnet
+	git clone https://github.com/lpdfio/lpdf-python src/adapters/python
+	git clone https://github.com/lpdfio/lpdf-php    src/adapters/php
+	git clone https://github.com/lpdfio/lpdf-vscode src/adapters/vscode
 
 clean-wasm:
 	@echo ""
@@ -276,7 +289,7 @@ package-adapter-vscode: build-adapter-vscode
 	@echo "-------------------------------"
 	@echo ">>> Packaging VS Code extension..."
 	@echo ""
-	cd src/adapters/vscode && npx vsce package --out lpdf.vsix --baseContentUrl https://github.com/codesensedev/lpdf/raw/HEAD/src/adapters/vscode
+	cd src/adapters/vscode && npx vsce package --out lpdf.vsix --baseContentUrl https://github.com/lpdfio/lpdf-vscode/raw/HEAD
 
 install-adapter-vscode: package-adapter-vscode
 	@echo ""

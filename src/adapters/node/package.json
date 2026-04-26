@@ -1,7 +1,7 @@
 {
-  "name": "lpdf",
-  "version": "0.1.0",
-  "description": "lpdf adapter — XML → PDF via Rust/WASM core (Node.js + browser)",
+  "name": "@lpdfio/lpdf",
+  "version": "0.0.0",
+  "description": "Node.js adapter for lpdf — pixel-perfect, lightweight, and consistent PDF rendering",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -15,12 +15,19 @@
     }
   },
   "scripts": {
-    "build":         "tsc && node build-browser.mjs",
+    "build":         "tsc && node build-browser.mjs && node -e \"require('node:fs').cpSync('./wasm', './dist/wasm', {recursive:true})\"",
     "build:node":    "tsc",
     "build:browser": "node build-browser.mjs",
     "test":          "node --test test/render.test.mjs"
   },
-  "license": "AGPL-3.0-or-later OR LicenseRef-Commercial",
+  "author": "lpdf.io",
+  "homepage": "https://lpdf.io",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lpdfio/lpdf-js"
+  },
+  "keywords": ["pdf", "wasm", "xml", "document", "lpdf"],
+  "license": "SEE LICENSE IN LICENSE",
   "files": [
     "dist/"
   ],
