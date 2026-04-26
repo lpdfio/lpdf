@@ -2,6 +2,7 @@
 /src/core/target
 
 bin
+!src/core/src/bin/
 obj
 node_modules
 var
@@ -9,5 +10,7 @@ var
 __pycache__/
 *.pyc
 *.pyo
+
+src/adapters/
 
 .claude
