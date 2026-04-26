@@ -68,7 +68,7 @@ build-adapter-node:
 	@echo "-------------------------------"
 	@echo ">>> Building Node adapter..."
 	@echo ""
-	mkdir -p src/adapters/node/wasm && cp dist/node/lpdf.js dist/node/lpdf.d.ts dist/node/lpdf_bg.wasm src/adapters/node/wasm/
+	mkdir -p src/adapters/node/wasm && cp dist/node/lpdf.js dist/node/lpdf.d.ts dist/node/lpdf_bg.wasm src/adapters/node/wasm/ && cp dist/web/lpdf.js src/adapters/node/wasm/lpdf-web.js
 	cd src/adapters/node && npm install && npm run build
 
 test-adapter-node: build-adapter-node
