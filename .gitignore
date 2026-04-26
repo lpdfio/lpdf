@@ -13,5 +13,6 @@ __pycache__/
 
 src/adapters/
 src/demos/
+src/internal/
 
 .claude
