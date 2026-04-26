@@ -1,6 +1,6 @@
 <lpdf version="1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  xsi:noNamespaceSchemaLocation="../../docs/schema/lpdf.xsd">
   <tokens>
     <colors>
       <color name="brand"       value="#e63946" />
