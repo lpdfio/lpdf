@@ -1,6 +1,9 @@
 # lpdf
 
-A declarative XML language for defining PDF layouts. A core layout engine compiles XML into a resolved render tree (absolute positions, sizes); thin adapters translate that tree into calls on whatever PDF library the consumer already uses.
+LPDF is an accurate, efficient, cross-platform PDF engine.
+
+Describe your document structure programmatically with the Kit, or declaratively in XML. LPDF handles the rest — layout, absolute positioning, fonts, images, compression, and optimization — producing compact, pixel-perfect PDF output. Identical input, identical output, on every platform.
+
 
 See [var/LPDF.md](var/LPDF.md) for full design notes.
 

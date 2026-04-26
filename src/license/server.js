@@ -33,7 +33,7 @@ const PUB_FILE    = path.join(KEYS_DIR,  "public.hex");
 const CSV_FILE    = path.join(__dirname, "licenses.csv");
 const PUBLIC_DIR  = path.join(__dirname, "public");
 
-const VALID_PLANS = ["starter", "business", "scale"];
+const VALID_PLANS = ["community", "professional", "enterprise"];
 const CSV_HEADER  = "id,cid,email,plan,iat,exp,token\n";
 
 // ---------------------------------------------------------------------------

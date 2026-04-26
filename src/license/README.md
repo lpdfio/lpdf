@@ -109,7 +109,7 @@ The core engine (`src/core/src/license.rs`) verifies tokens offline using the em
 | Token state | Engine behaviour |
 |---|---|
 | Empty string | Free mode — no warning |
-| Valid, not expired | Licensed mode — no watermark, producer `lpdf.io` |
+| Valid, not expired | Licensed mode — no attribution label, producer `lpdf.io` |
 | Valid, expired | Free mode — `license_warning` in JSON output |
 | Invalid signature | Free mode — `license_warning` in JSON output |
 | Malformed / bad Base64 | Free mode — `license_warning` in JSON output |

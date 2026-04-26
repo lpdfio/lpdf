@@ -1,13 +1,14 @@
 # LPDF License
 
 Copyright © 2026 Codesense LLC
+
 License inquiries: license@lpdf.io
 
 ---
 
 ## Choosing Your License
 
-LPDF is available under two license types: a free Community License for individuals and qualifying organizations, and paid licenses for larger commercial use. All license tiers receive the complete feature set — no capabilities are gated behind paid plans.
+LPDF is available under three license tiers: a free Community License for individuals and qualifying organizations, a Professional License for mid-size commercial use, and an Enterprise License for larger organizations. All license tiers receive the complete feature set — no capabilities are gated behind paid plans.
 
 ### Equal Features Across All Tiers
 
@@ -33,16 +34,19 @@ Companies and organizations whose total annual gross revenue did not exceed **1,
 
 Organizations whose revenue crosses the 1,000,000 USD threshold have a **90-day grace period** following the close of their fiscal year to obtain a Professional or Enterprise license. During this grace period, continued use is permitted.
 
-### Larger Businesses
+### Mid-Size Businesses
 
-Companies and organizations whose total annual gross revenue exceeded **1,000,000 USD** in the most recent 12-month fiscal year must obtain a Professional or Enterprise license to use LPDF in production environments.
+Companies and organizations whose total annual gross revenue exceeded **1,000,000 USD** but did not exceed **10,000,000 USD** in the most recent 12-month fiscal year must obtain a Professional License to use LPDF in production environments.
 
 "Production environment" means any environment in which the Software processes real user data or supports live business operations, including staging environments accessible by end users.
 
-- **Professional License** — for organizations with up to 10 developers using LPDF
-- **Enterprise License** — for organizations with more than 10 developers using LPDF
+Organizations whose revenue crosses the 1,000,000 USD threshold have a **90-day grace period** following the close of their fiscal year to obtain a Professional or Enterprise license. During this grace period, continued use is permitted.
 
-"Developer" means any individual who writes, modifies, or reviews code that directly integrates or calls the Software's API, including but not limited to software engineers and technical leads. The term does not include QA engineers whose sole interaction is executing pre-written test suites, or DevOps engineers whose sole interaction is deploying pre-packaged artifacts.
+### Larger Businesses
+
+Companies and organizations whose total annual gross revenue exceeded **10,000,000 USD** in the most recent 12-month fiscal year must obtain an Enterprise License to use LPDF in production environments.
+
+Organizations whose revenue crosses the 10,000,000 USD threshold have a **90-day grace period** following the close of their fiscal year to obtain an Enterprise license. During this grace period, continued use under a Professional License is permitted.
 
 ### Supporting LPDF
 
@@ -68,9 +72,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ---
 
-## LPDF Professional and Enterprise License
+## LPDF Professional License
 
-*Applies to: companies and organizations with annual gross revenue exceeding 1,000,000 USD.*
+*Applies to: companies and organizations with annual gross revenue exceeding 1,000,000 USD and not exceeding 10,000,000 USD.*
 
 ### Conduct
 
@@ -86,15 +90,15 @@ Subject to payment of the applicable license fee, Codesense LLC grants the licen
 - Distribute the Software as part of compiled or packaged commercial products
 - Deploy the Software across unlimited servers, environments, and infrastructure
 
-**Professional License** grants these rights to up to 10 developers (as defined above) within the licensee's organization.
-
-**Enterprise License** grants these rights to all developers within the licensee's organization with no developer-count limit.
-
 ### License Fees and Evaluation
 
 A license fee is required for use of LPDF in production environments (as defined above). Evaluation and testing in non-production environments is permitted without a license for a period not exceeding 30 days.
 
 Upon payment, the licensee receives a perpetual license for the version of LPDF current at the time of purchase, plus one year of updates, new features, and security patches. Continued access to new versions after the first year requires annual renewal. Cancellation of renewal does not affect the perpetual license for the version already held.
+
+### Support
+
+Professional License holders receive email support from Codesense LLC.
 
 ### Ownership and Modifications
 
@@ -128,4 +132,65 @@ Notwithstanding the foregoing, either party may seek injunctive or other equitab
 
 ---
 
-For license purchases and inquiries: **license@lpdf.io** | lpdf.io/privacy
+## LPDF Enterprise License
+
+*Applies to: companies and organizations with annual gross revenue exceeding 10,000,000 USD.*
+
+### Conduct
+
+Licensees agree not to make false statements of fact about LPDF, Codesense LLC, or its contributors that are intended to cause material harm to the reputation of the project or the company. This clause does not restrict good-faith criticism, bug reports, public discussion of software deficiencies, or reviews based on the licensee's genuine experience.
+
+License rights may not be rented, leased, or transferred to any third party.
+
+### License Grant
+
+Subject to payment of the applicable license fee, Codesense LLC grants the licensee a non-exclusive, worldwide, royalty-free license to:
+
+- Use, copy, modify, and integrate the Software into unlimited applications and projects
+- Distribute the Software as part of compiled or packaged commercial products
+- Deploy the Software across unlimited servers, environments, and infrastructure
+- Issue license keys to wholly owned subsidiaries and controlled entities
+
+### License Fees and Evaluation
+
+A license fee is required for use of LPDF in production environments (as defined above). Evaluation and testing in non-production environments is permitted without a license for a period not exceeding 30 days.
+
+Upon payment, the licensee receives a perpetual license for the version of LPDF current at the time of purchase, plus one year of updates, new features, and security patches. Continued access to new versions after the first year requires annual renewal. Cancellation of renewal does not affect the perpetual license for the version already held.
+
+### Support
+
+Enterprise License holders receive priority support with a defined SLA from Codesense LLC.
+
+### Contract
+
+Enterprise licensees may request a Master Service Agreement (MSA) in place of the standard Terms of Service. Invoice billing is available upon request.
+
+### Ownership and Modifications
+
+Codesense LLC retains all ownership, copyright, and intellectual property rights in the Software at all times. This license grants rights to use the Software; it does not transfer ownership of any kind.
+
+All modifications to the Software made by the licensee remain the intellectual property of the licensee. Codesense LLC claims no ownership over licensee modifications unless they are voluntarily submitted as contributions to the LPDF project under a separate Contributor License Agreement.
+
+### Copyright
+
+All copies, modifications, and distributions of the Software must retain the original copyright notice. Licensees may not remove, alter, or obscure any copyright, trademark, or attribution notices included in the Software.
+
+### Data and Privacy
+
+Codesense LLC does not collect, process, or retain any data that the licensee processes through the Software. All data processed by LPDF remains solely within the licensee's infrastructure. For more information, see the Codesense LLC Privacy Policy at lpdf.io/privacy.
+
+### Export Compliance
+
+The Software may be subject to export control laws and regulations, including the U.S. Export Administration Regulations (EAR) and sanctions programs administered by OFAC. The licensee is solely responsible for complying with all applicable export control and sanctions laws in connection with the licensee's use of the Software.
+
+### Disclaimer of Warranty
+
+THIS SOFTWARE IS PROVIDED "AS IS," WITHOUT A WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL CODESENSE LLC OR ITS CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. IN NO EVENT SHALL CODESENSE LLC'S TOTAL CUMULATIVE LIABILITY TO ANY PARTY EXCEED THE GREATER OF (A) THE FEES PAID BY THAT PARTY TO CODESENSE LLC IN THE TWELVE MONTHS PRECEDING THE CLAIM, OR (B) ONE HUNDRED US DOLLARS (USD 100).
+
+### Governing Law and Dispute Resolution
+
+This license is governed by and construed in accordance with the laws of the State of Delaware, United States, without regard to its conflict of law provisions.
+
+Any dispute arising out of or relating to this license or the Software shall be resolved by binding arbitration administered by the American Arbitration Association under its Commercial Arbitration Rules. The arbitration shall take place in **Plano, Texas**. Judgment on the award rendered by the arbitrator may be entered in any court of competent jurisdiction.
+
+Notwithstanding the foregoing, either party may seek injunctive or other equitable relief in any court of competent jurisdiction to prevent the actual or threatened infringement, misappropriation, or violation of a party's intellectual property rights.
