@@ -132,23 +132,23 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "${{ github.ref_name }}" --draft=false
 
-      # Mint a short-lived GitHub App token for PHP adapter git-push steps.
-      # The App needs Contents:write on lpdf-php and lpdf-php-ffi.
-      - name: Mint GitHub App token (PHP adapters)
+      # Mint a short-lived GitHub App token for all adapter dispatches.
+      # The App needs Contents:write on lpdf-php (for git-push) and
+      # repository_dispatch access on all adapter repos.
+      - name: Mint GitHub App token
         id: app-token
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ vars.LPDF_RELEASE_APP_ID }}
           private-key: ${{ secrets.LPDF_RELEASE_APP_PRIVATE_KEY }}
-          repositories: lpdf-php
+          repositories: lpdf-js,lpdf-dotnet,lpdf-python,lpdf-vscode,lpdf-php
 
       - name: Dispatch to adapter repos
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          WRITE_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ github.ref_name }}
         run: |
-          # Non-PHP adapters — no git write access needed
+          # Non-PHP adapters
           for repo in lpdf-js lpdf-dotnet lpdf-python lpdf-vscode; do
             gh api "repos/lpdfio/$repo/dispatches" \
               --method POST \
@@ -156,11 +156,11 @@ jobs:
               -f "client_payload[version]=$VERSION"
           done
 
-          # PHP adapters — include write_token for git-push step
+          # PHP adapter — include write_token for git-push step
           for repo in lpdf-php; do
             gh api "repos/lpdfio/$repo/dispatches" \
               --method POST \
               -f event_type=core-release \
               -f "client_payload[version]=$VERSION" \
-              -f "client_payload[write_token]=$WRITE_TOKEN"
+              -f "client_payload[write_token]=$GH_TOKEN"
           done
