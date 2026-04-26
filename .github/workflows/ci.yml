@@ -18,7 +18,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Test core
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
         run: cargo test --manifest-path src/core/Cargo.toml
 
       - name: Test wasi
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
         run: cargo test --manifest-path src/core-wasi/Cargo.toml

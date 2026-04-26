@@ -9,39 +9,32 @@
 //! zero-downtime key rotation:
 //!
 //! 1. Generate a new keypair with `npm start` in `src/license/`.
-//! 2. Add the new key as the **first** entry in `TRUSTED_KEYS`.
+//! 2. Prepend the new hex key to `LPDF_PUBLIC_KEY` (comma-separated).
 //! 3. Rebuild and deploy the binary.
 //! 4. Reissue tokens to customers (signed with the new private key).
 //! 5. After the grace period remove the old key, rebuild, and deploy again.
 //!
 //! # Local test setup
 //! Run `npm start` inside `src/license/` once to auto-generate a keypair.
-//! The server prints a Rust constant — add it to `TRUSTED_KEYS` and rebuild.
+//! The server prints a hex string — set it as `LPDF_PUBLIC_KEY` in your
+//! shell and rebuild.  See `build.rs` for full instructions.
 //! The server's `keys/private.hex` is gitignored; never commit it.
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use ed25519_dalek::{Signature, VerifyingKey, Verifier};
 
 // ---------------------------------------------------------------------------
-// Trusted public keys
+// Trusted public keys — injected at compile time via build.rs
 // ---------------------------------------------------------------------------
-
-/// All trusted Ed25519 public keys, newest first.
-///
-/// A token is accepted if it verifies against **any** entry.  To rotate keys:
-///  1. Prepend the new key here.
-///  2. Rebuild and deploy.
-///  3. Reissue tokens to customers.
-///  4. After the grace period, remove the old key and rebuild.
-pub const TRUSTED_KEYS: &[[u8; 32]] = &[
-    // dev key — replace with production key before release
-    [
-        0xff, 0x7c, 0xde, 0x34, 0xb1, 0x6b, 0xbf, 0xbe,
-        0x78, 0x02, 0xfb, 0x7b, 0xbe, 0xa1, 0xf9, 0x45,
-        0x43, 0xa5, 0x5a, 0xea, 0xd9, 0x30, 0x6d, 0xb2,
-        0x70, 0x76, 0x55, 0x3d, 0x81, 0xf5, 0xf8, 0xc7,
-    ],
-];
+//
+// `TRUSTED_KEYS` is generated from the `LPDF_PUBLIC_KEY` environment variable
+// by `build.rs` and written to `$OUT_DIR/trusted_keys.rs`.  See `build.rs`
+// for rotation instructions and local development setup.
+//
+// A token is accepted if it verifies against **any** entry, which enables
+// zero-downtime key rotation: prepend the new key, deploy, reissue tokens,
+// then remove the old key after the grace period and deploy again.
+include!(concat!(env!("OUT_DIR"), "/trusted_keys.rs"));
 
 // ---------------------------------------------------------------------------
 // Status type

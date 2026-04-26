@@ -1,6 +1,11 @@
 SHELL := C:/PROGRA~1/Git/bin/sh.exe
 .SHELLFLAGS := -c
 
+# Auto-load the local dev public key if LPDF_PUBLIC_KEY is not already set.
+# Requires src/license/keys/public.hex — run `npm start` in src/license/ once to generate it.
+LPDF_PUBLIC_KEY ?= $(shell cat src/license/keys/public.hex 2>/dev/null | tr -d '[:space:]')
+export LPDF_PUBLIC_KEY
+
 .PHONY: build-wasm build-wasi test-wasm test-wasi \
         build-adapter-node build-adapter-dotnet build-adapter-php build-adapter-python \
         build-adapter-vscode package-adapter-vscode install-adapter-vscode \

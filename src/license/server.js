@@ -64,14 +64,16 @@ function loadPubKey() {
 }
 
 function printRustConstant(pubKeyBytes) {
-  const hex = [...pubKeyBytes].map(b => `0x${b.toString(16).padStart(2, "0")}`);
-  const rows = [];
-  for (let i = 0; i < hex.length; i += 8) {
-    rows.push("    " + hex.slice(i, i + 8).join(", "));
-  }
+  const hexEnv = toHex(pubKeyBytes);
   console.log("\n─────────────────────────────────────────────────────────");
-  console.log("Paste this into src/core/src/license.rs then rebuild:\n");
-  console.log(`pub const PUBLIC_KEY_BYTES: [u8; 32] = [\n${rows.join(",\n")},\n];`);
+  console.log("Set this environment variable then rebuild:\n");
+  console.log(`  export LPDF_PUBLIC_KEY=${hexEnv}\n`);
+  console.log("For CI / GitHub Actions, add it as a repository secret");
+  console.log("named LPDF_PUBLIC_KEY and add to every cargo step:\n");
+  console.log("  env:");
+  console.log("    LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}");
+  console.log("\nFor key rotation, prepend the new key (comma-separated):");
+  console.log(`  LPDF_PUBLIC_KEY=<new_key>,${hexEnv}`);
   console.log("─────────────────────────────────────────────────────────\n");
 }
 

@@ -12,5 +12,6 @@ __pycache__/
 *.pyo
 
 src/adapters/
+src/demos/
 
 .claude
