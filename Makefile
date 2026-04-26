@@ -230,12 +230,12 @@ example-php:
 	docker run --rm \
 		-v "$(CURDIR)/src/adapters/php/example://app/src/adapters/php/example" \
 		-v "$(CURDIR)/example://app/example" \
-		-v "$(CURDIR)/docs://app/docs" \
+		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-w //app lpdf-php php src/adapters/php/example/encrypt-permissions-only.php
 	docker run --rm \
 		-v "$(CURDIR)/src/adapters/php/example://app/src/adapters/php/example" \
 		-v "$(CURDIR)/example://app/example" \
-		-v "$(CURDIR)/docs://app/docs" \
+		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-w //app lpdf-php php src/adapters/php/example/encrypt-open-password.php
 	docker run --rm \
 		-v "$(CURDIR)/src/adapters/php/example://app/src/adapters/php/example" \
@@ -263,14 +263,14 @@ example-python:
 		-v "$(CURDIR)/src/adapters/python/lpdf://app/lpdf" \
 		-v "$(CURDIR)/src/adapters/python/example://app/example" \
 		-v "$(CURDIR)/example://app/example-data" \
-		-v "$(CURDIR)/docs://app/docs" \
+		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-v "$(CURDIR)/src/adapters/python/resources://app/resources" \
 		-w //app lpdf-python python example/encrypt-permissions-only.py
 	docker run --rm \
 		-v "$(CURDIR)/src/adapters/python/lpdf://app/lpdf" \
 		-v "$(CURDIR)/src/adapters/python/example://app/example" \
 		-v "$(CURDIR)/example://app/example-data" \
-		-v "$(CURDIR)/docs://app/docs" \
+		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-v "$(CURDIR)/src/adapters/python/resources://app/resources" \
 		-w //app lpdf-python python example/encrypt-open-password.py
 	docker run --rm \
