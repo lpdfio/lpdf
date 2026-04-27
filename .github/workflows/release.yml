@@ -105,6 +105,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Stamp vscode adapter version
+        run: |
+          SEMVER="${{ github.ref_name }}"
+          SEMVER="${SEMVER#v}"
+          jq --arg v "$SEMVER" '.version = $v' src/adapters/vscode/package.json \
+            > src/adapters/vscode/package.json.tmp
+          mv src/adapters/vscode/package.json.tmp src/adapters/vscode/package.json
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
