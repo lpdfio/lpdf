@@ -6,6 +6,9 @@ use crate::parse::{Document, Node, TextRun};
 
 /// Walk a dot-separated path through a JSON value, returning `None` if any
 /// segment is absent.
+///
+/// Each dot-segment may carry a trailing `[n]` bracket index, e.g.
+/// `sections[0].title` is parsed as key `sections`, index `0`, key `title`.
 fn resolve_dotpath<'a>(path: &str, value: &'a Value) -> Option<&'a Value> {
     if path.is_empty() {
         return Some(value);
@@ -15,7 +18,27 @@ fn resolve_dotpath<'a>(path: &str, value: &'a Value) -> Option<&'a Value> {
         if segment.is_empty() {
             continue;
         }
-        current = current.get(segment)?;
+        // Split off any trailing bracket indices: "sections[0][1]" → key "sections", indices [0, 1]
+        let mut part = segment;
+        // Resolve the key portion (everything before the first '[')
+        if let Some(bracket_pos) = part.find('[') {
+            let key = &part[..bracket_pos];
+            part = &part[bracket_pos..];
+            if !key.is_empty() {
+                current = current.get(key)?;
+            }
+        } else {
+            current = current.get(part)?;
+            continue;
+        }
+        // Resolve consecutive bracket indices
+        while part.starts_with('[') {
+            let close = part.find(']')?;
+            let idx_str = &part[1..close];
+            let idx: usize = idx_str.parse().ok()?;
+            current = current.get(idx)?;
+            part = &part[close + 1..];
+        }
     }
     Some(current)
 }
