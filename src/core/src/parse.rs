@@ -623,7 +623,10 @@ pub fn parse(xml: &str) -> Result<Document, String> {
 
     let root = doc.root_element();
     if root.tag_name().name() != "lpdf" {
-        return Err("root element must be <lpdf>".into());
+        return Err(format!(
+            "<{}>{}: root element must be <lpdf>",
+            root.tag_name().name(), node_loc(&root)
+        ));
     }
 
     // ── Pass 0: collect <assets> ─────────────────────────────────────────────
@@ -695,12 +698,16 @@ pub fn parse(xml: &str) -> Result<Document, String> {
                             )?);
                         }
                         other => return Err(format!(
-                            "unexpected element in <document>: <{other}>"
+                            "<{}>{}: unexpected element in <document>",
+                            other, node_loc(&doc_child)
                         )),
                     }
                 }
                 if sections_xml.is_empty() {
-                    return Err("<document> must contain at least one <section>".into());
+                    return Err(format!(
+                        "<document>{}: must contain at least one <section>",
+                        node_loc(&child)
+                    ));
                 }
                 let mut resolved_fonts: HashMap<String, FontDef> = HashMap::new();
                 for (_alias, def) in &asset_fonts {
@@ -723,11 +730,11 @@ pub fn parse(xml: &str) -> Result<Document, String> {
                     sections:    sections_xml,
                 });
             }
-            other => return Err(format!("unexpected element in <lpdf>: <{other}>")),
+            other => return Err(format!("<{}>{}: unexpected element in <lpdf>", other, node_loc(&child))),
         }
     }
 
-    Err("<lpdf> must contain a <document> element".into())
+    Err(format!("<lpdf>{}: must contain a <document> element", node_loc(&root)))
 }
 
 // ── Assets ────────────────────────────────────────────────────────────────────
@@ -759,7 +766,8 @@ fn parse_assets_elem(
                 } else if let Some(r) = child.attribute("ref") {
                     if is_url(r) {
                         return Err(format!(
-                            "<font name=\"{name}\"> ref must be a registry key, not a URL"
+                            "<font>{}: ref must be a registry key, not a URL",
+                            node_loc(&child)
                         ));
                     }
                     FontDef::Ref(r.to_string())
@@ -777,7 +785,7 @@ fn parse_assets_elem(
                 // src is an adapter-level hint only — ignored by the Rust parser.
                 images.insert(name, key);
             }
-            other => return Err(format!("unknown element in <assets>: <{other}>")),
+            other => return Err(format!("<{}>{}: unknown element in <assets>", other, node_loc(&child))),
         }
     }
     Ok(())
@@ -804,7 +812,7 @@ fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), 
                     }
                 }
             }
-            other => return Err(format!("unknown element in <tokens>: <{other}>")),
+            other => return Err(format!("<{}>{}: unknown element in <tokens>", other, node_loc(&child))),
         }
     }
     Ok(())
@@ -972,14 +980,13 @@ fn parse_region_elem(
     root_font:    &str,
     root_size:    f32,
 ) -> Result<LayoutRegion, String> {
-    let pin_str = elem.attribute("pin")
-        .ok_or("<region> missing required attribute 'pin'")?;
-    let pin = match pin_str {
+    let pin_str = req_attr(elem, "pin")?;
+    let pin = match pin_str.as_str() {
         "top"    => RegionPin::Top,
         "bottom" => RegionPin::Bottom,
         "left"   => RegionPin::Left,
         "right"  => RegionPin::Right,
-        other => return Err(format!("<region> invalid pin '{other}'; use top, bottom, left, or right")),
+        other => return Err(format!("<region>{}: invalid pin '{other}' — use top, bottom, left, or right", node_loc(elem))),
     };
     let page = elem.attribute("page").map(parse_page_scope).transpose()?;
     let w    = elem.attribute("w").map(parse_measurement).transpose()?;
@@ -1043,13 +1050,17 @@ fn parse_section_elem(
                 ));
             }
             other => return Err(format!(
-                "<section> only accepts <layout> or <canvas> children, got <{other}>"
+                "<{}>{}: unexpected child in <section> — expected <layout> or <canvas>",
+                other, node_loc(&child)
             )),
         }
     }
 
     if children.is_empty() {
-        return Err("<section> must have at least one <layout> or <canvas> child".into());
+        return Err(format!(
+            "<section>{}: must have at least one <layout> or <canvas> child",
+            node_loc(elem)
+        ));
     }
 
     Ok(Section {
@@ -1089,12 +1100,14 @@ fn parse_node(
         "thead"   => NodeKind::TableHead,
         "tr"      => NodeKind::TableRow,
         "td"      => NodeKind::TableCell,
-        other     => return Err(format!("unknown layout element: <{other}>")),
+        other     => return Err(format!("<{}>{}: unknown element", other, node_loc(elem))),
     };
 
     let mut node = ParsedNode::default_for(kind.clone());
-    apply_box_attrs(&mut node, elem, tokens)?;
-    apply_layout_kind_attrs(&mut node, elem, tokens)?;
+    apply_box_attrs(&mut node, elem, tokens)
+        .map_err(|e| format!("<{}>{}: {e}", tag, node_loc(elem)))?;
+    apply_layout_kind_attrs(&mut node, elem, tokens)
+        .map_err(|e| format!("<{}>{}: {e}", tag, node_loc(elem)))?;
 
     // data-binding attributes (valid on any element; boxed to keep Node lean)
     {
@@ -1170,18 +1183,21 @@ fn parse_node(
         NodeKind::Link => {
             node.url = Some(
                 elem.attribute("href")
-                    .ok_or_else(|| "<link> requires an href attribute".to_string())?
+                    .ok_or_else(|| format!("<link>{}: missing required attribute 'href'", node_loc(elem)))?
                     .to_string(),
             );
         }
         NodeKind::Img => {
-            apply_img_attrs(&mut node, elem, asset_images, "<assets>")?;
+            apply_img_attrs(&mut node, elem, asset_images, "<assets>")
+                .map_err(|e| format!("<{}>{}: {e}", tag, node_loc(elem)))?;
         }
         NodeKind::Barcode => {
-            apply_barcode_attrs(&mut node, elem, tokens)?;
+            apply_barcode_attrs(&mut node, elem, tokens)
+                .map_err(|e| format!("<{}>{}: {e}", tag, node_loc(elem)))?;
         }
         NodeKind::Field => {
-            apply_field_attrs(&mut node, elem, tokens)?;
+            apply_field_attrs(&mut node, elem, tokens)
+                .map_err(|e| format!("<{}>{}: {e}", tag, node_loc(elem)))?;
         }
         _ => {}
     }
@@ -1194,16 +1210,16 @@ fn parse_node(
                 NodeKind::Table => {
                     if !matches!(child_node.kind, NodeKind::TableHead | NodeKind::TableRow) {
                         return Err(format!(
-                            "<table> children must be <thead> or <tr>, got <{}>",
-                            child.tag_name().name()
+                            "<table>{}: child <{}> is not allowed here — expected <thead> or <tr>",
+                            node_loc(elem), child.tag_name().name()
                         ));
                     }
                 }
                 NodeKind::TableHead | NodeKind::TableRow => {
                     if child_node.kind != NodeKind::TableCell {
                         return Err(format!(
-                            "<thead> and <tr> children must be <td>, got <{}>",
-                            child.tag_name().name()
+                            "<{}>{}: child <{}> is not allowed here — expected <td>",
+                            tag, node_loc(elem), child.tag_name().name()
                         ));
                     }
                 }
@@ -1213,8 +1229,8 @@ fn parse_node(
         }
         if kind == NodeKind::Frame && node.children.len() > 1 {
             return Err(format!(
-                "frame accepts at most one child; got {}",
-                node.children.len()
+                "<frame>{}: accepts at most one child; got {}",
+                node_loc(elem), node.children.len()
             ));
         }
     }
@@ -1228,7 +1244,7 @@ fn parse_align(val: &str) -> Result<Align, String> {
         "center" => Ok(Align::Center),
         "end" => Ok(Align::End),
         "stretch" => Ok(Align::Stretch),
-        other => Err(format!("invalid align value: '{other}'")),
+        other => Err(format!("invalid align value: '{other}' — expected start, center, end, or stretch")),
     }
 }
 
@@ -1238,7 +1254,7 @@ fn parse_justify(val: &str) -> Result<Justify, String> {
         "center" => Ok(Justify::Center),
         "end" => Ok(Justify::End),
         "between" => Ok(Justify::Between),
-        other => Err(format!("invalid justify value: '{other}'")),
+        other => Err(format!("invalid justify value: '{other}' — expected start, center, end, or between")),
     }
 }
 
@@ -1263,13 +1279,19 @@ pub(crate) fn elems<'a>(
     node.children().filter(|n| n.is_element())
 }
 
+/// Format the source position of an XML element as " at line N, col M".
+fn node_loc(elem: &roxmltree::Node) -> String {
+    let pos = elem.document().text_pos_at(elem.range().start);
+    format!(" at line {}, col {}", pos.row, pos.col)
+}
+
 fn req_attr(elem: &roxmltree::Node, name: &str) -> Result<String, String> {
     elem.attribute(name)
         .map(|s| s.to_string())
         .ok_or_else(|| {
             format!(
-                "<{}> missing required attribute '{name}'",
-                elem.tag_name().name()
+                "<{}>{}: missing required attribute '{name}'",
+                elem.tag_name().name(), node_loc(elem)
             )
         })
 }
@@ -1307,7 +1329,7 @@ fn parse_height_mode(v: &str) -> Result<HeightMode, String> {
         "fill" => Ok(HeightMode::Fill),
         other  => parse_pt(other)
             .map(HeightMode::Fixed)
-            .ok_or_else(|| format!("invalid height value: '{other}'")),
+            .ok_or_else(|| format!("invalid height value: '{other}' — expected full, fill, or a pt value like 28pt")),
     }
 }
 
@@ -2183,7 +2205,7 @@ mod tests {
     fn unknown_element_errors() {
         let result = parse(&minimal("<unknown />"));
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("unknown layout element"));
+        assert!(result.unwrap_err().contains("unknown"));
     }
 
     #[test]
@@ -2520,5 +2542,231 @@ mod tests {
                 assert_eq!(t.runs[0].font.as_deref(), Some("Helvetica-Bold"));
             } else { panic!("expected text"); }
         } else { panic!("expected canvas"); }
+    }
+
+    // ── Error quality tests ───────────────────────────────────────────────────
+    // Each test asserts: element name, line/col position, and the specific
+    // problem are all present — proving the message is self-sufficient.
+
+    // Category 1 — Unknown element
+
+    #[test]
+    fn err_unknown_element() {
+        let err = parse(&minimal("<box />")).unwrap_err();
+        assert!(err.contains("<box>"),    "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("unknown"), "{err}");
+    }
+
+    // Category 2 — Invalid attribute value
+
+    #[test]
+    fn err_invalid_align() {
+        let err = parse(&minimal(r#"<stack align="middle" />"#)).unwrap_err();
+        assert!(err.contains("<stack>"),  "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("middle"),   "{err}");
+        assert!(err.contains("start"),    "{err}"); // allowed values present
+    }
+
+    #[test]
+    fn err_invalid_justify() {
+        let err = parse(&minimal(r#"<stack justify="around" />"#)).unwrap_err();
+        assert!(err.contains("<stack>"),  "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("around"),   "{err}");
+        assert!(err.contains("start"),    "{err}"); // allowed values present
+    }
+
+    #[test]
+    fn err_invalid_height() {
+        let err = parse(&minimal(r#"<frame height="big" />"#)).unwrap_err();
+        assert!(err.contains("<frame>"),  "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("big"),      "{err}");
+        assert!(err.contains("fill"),     "{err}"); // allowed values present
+    }
+
+    #[test]
+    fn err_invalid_repeat() {
+        let err = parse(&minimal(r#"<stack repeat="never" />"#)).unwrap_err();
+        assert!(err.contains("<stack>"),  "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("never"),    "{err}");
+        assert!(err.contains("page"),     "{err}"); // allowed values present
+    }
+
+    #[test]
+    fn err_invalid_paginate() {
+        let err = parse(&minimal(r#"<stack paginate="always" />"#)).unwrap_err();
+        assert!(err.contains("<stack>"),  "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("always"),   "{err}");
+        assert!(err.contains("break-before"), "{err}"); // allowed values present
+    }
+
+    #[test]
+    fn err_cluster_rejects_justify_between() {
+        let err = parse(&minimal(r#"<cluster justify="between" />"#)).unwrap_err();
+        assert!(err.contains("<cluster>"), "{err}");
+        assert!(err.contains("at line"),  "{err}");
+        assert!(err.contains("between"),   "{err}");
+    }
+
+    #[test]
+    fn err_frame_rejects_gap() {
+        let err = parse(&minimal(r#"<frame gap="m" />"#)).unwrap_err();
+        assert!(err.contains("<frame>"),  "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("gap"),      "{err}");
+    }
+
+    #[test]
+    fn err_barcode_invalid_type() {
+        let err = parse(&minimal(r#"<barcode type="pdf417" data="x" />"#)).unwrap_err();
+        assert!(err.contains("<barcode>"), "{err}");
+        assert!(err.contains("at line"),  "{err}");
+        assert!(err.contains("pdf417"),    "{err}");
+        assert!(err.contains("qr"),        "{err}"); // allowed values present
+    }
+
+    #[test]
+    fn err_barcode_invalid_ec() {
+        let err = parse(&minimal(r#"<barcode type="qr" data="x" size="100pt" ec="Z" />"#)).unwrap_err();
+        assert!(err.contains("<barcode>"), "{err}");
+        assert!(err.contains("at line"),  "{err}");
+        assert!(err.contains("Z"),         "{err}");
+        assert!(err.contains("L"),         "{err}"); // allowed values present
+    }
+
+    #[test]
+    fn err_field_invalid_type() {
+        let err = parse(&minimal(r#"<field type="slider" name="x" />"#)).unwrap_err();
+        assert!(err.contains("<field>"),  "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("slider"),   "{err}");
+        assert!(err.contains("text"),     "{err}"); // allowed values present
+    }
+
+    #[test]
+    fn err_region_invalid_pin() {
+        let xml = r#"<lpdf version="1"><document size="a4" margin="28pt">
+  <section><layout>
+    <region pin="center" />
+  </layout></section></document></lpdf>"#;
+        let err = parse(xml).unwrap_err();
+        assert!(err.contains("<region>"), "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("center"),   "{err}");
+        assert!(err.contains("top"),      "{err}"); // allowed values present
+    }
+
+    // Category 3 — Missing required attribute
+
+    #[test]
+    fn err_missing_attr_img_name() {
+        let err = parse(&minimal("<img />")).unwrap_err();
+        assert!(err.contains("<img>"),    "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("name"),     "{err}");
+    }
+
+    #[test]
+    fn err_missing_attr_barcode_type() {
+        let err = parse(&minimal("<barcode />")).unwrap_err();
+        assert!(err.contains("<barcode>"), "{err}");
+        assert!(err.contains("at line"),  "{err}");
+        assert!(err.contains("type"),      "{err}");
+    }
+
+    #[test]
+    fn err_missing_attr_barcode_size() {
+        let err = parse(&minimal(r#"<barcode type="qr" data="x" />"#)).unwrap_err();
+        assert!(err.contains("<barcode>"), "{err}");
+        assert!(err.contains("at line"),  "{err}");
+        assert!(err.contains("size"),      "{err}");
+    }
+
+    #[test]
+    fn err_missing_attr_field_type() {
+        let err = parse(&minimal("<field />")).unwrap_err();
+        assert!(err.contains("<field>"),  "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("type"),     "{err}");
+    }
+
+    #[test]
+    fn err_missing_attr_field_name() {
+        let err = parse(&minimal(r#"<field type="text" />"#)).unwrap_err();
+        assert!(err.contains("<field>"),  "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("name"),     "{err}");
+    }
+
+    #[test]
+    fn err_missing_attr_link_href() {
+        let err = parse(&minimal("<link />")).unwrap_err();
+        assert!(err.contains("<link>"),   "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("href"),     "{err}");
+    }
+
+    #[test]
+    fn err_missing_attr_region_pin() {
+        let xml = r#"<lpdf version="1"><document size="a4" margin="28pt">
+  <section><layout>
+    <region />
+  </layout></section></document></lpdf>"#;
+        let err = parse(xml).unwrap_err();
+        assert!(err.contains("<region>"), "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("pin"),      "{err}");
+    }
+
+    #[test]
+    fn err_missing_attr_asset_font_name() {
+        let xml = r#"<lpdf version="1">
+  <assets><font core="Helvetica" /></assets>
+  <document size="a4"><section><layout /></section></document>
+</lpdf>"#;
+        let err = parse(xml).unwrap_err();
+        assert!(err.contains("<font>"),   "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("name"),     "{err}");
+    }
+
+    // Category 4 — Wrong nesting / structural
+
+    #[test]
+    fn err_frame_too_many_children() {
+        let err = parse(&minimal("<frame><stack /><stack /></frame>")).unwrap_err();
+        assert!(err.contains("<frame>"),  "{err}");
+        assert!(err.contains("at line"), "{err}");
+    }
+
+    #[test]
+    fn err_table_bad_child() {
+        let err = parse(&minimal("<table><stack /></table>")).unwrap_err();
+        assert!(err.contains("<table>"),  "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("stack"),    "{err}");
+    }
+
+    #[test]
+    fn err_tr_bad_child() {
+        let err = parse(&minimal("<table><tr><stack /></tr></table>")).unwrap_err();
+        assert!(err.contains("<tr>"),     "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("stack"),    "{err}");
+    }
+
+    // Category 5 — Asset reference
+
+    #[test]
+    fn err_img_unknown_asset() {
+        let err = parse(&minimal(r#"<img name="ghost" />"#)).unwrap_err();
+        assert!(err.contains("<img>"),    "{err}");
+        assert!(err.contains("at line"), "{err}");
+        assert!(err.contains("ghost"),    "{err}");
     }
 }
