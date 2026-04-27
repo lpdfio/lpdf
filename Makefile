@@ -2,8 +2,8 @@ SHELL := C:/PROGRA~1/Git/bin/sh.exe
 .SHELLFLAGS := -c
 
 # Auto-load the local dev public key if LPDF_PUBLIC_KEY is not already set.
-# Requires src/license/keys/public.hex — run `npm start` in src/license/ once to generate it.
-LPDF_PUBLIC_KEY ?= $(shell cat src/license/keys/public.hex 2>/dev/null | tr -d '[:space:]')
+# Requires src/internal/license/keys/public.hex — run `npm start` in src/internal/license/ once to generate it.
+LPDF_PUBLIC_KEY ?= $(shell cat src/internal/license/keys/public.hex 2>/dev/null | tr -d '[:space:]')
 export LPDF_PUBLIC_KEY
 
 .PHONY: build-wasm build-wasi test-wasm test-wasi \
@@ -286,7 +286,7 @@ build-adapter-vscode: build-wasm
 	@echo ">>> Building VS Code adapter..."
 	@echo ""
 	mkdir -p src/adapters/vscode/wasm && mkdir -p src/adapters/vscode/schema
-	cp dist/node/lpdf.js      src/adapters/vscode/wasm/ && cp dist/node/lpdf_bg.wasm src/adapters/vscode/wasm/ && cp dist/node/lpdf.d.ts src/adapters/vscode/wasm/ && cp schema/lpdf.xsd src/adapters/vscode/schema/
+	cp dist/node/lpdf.js      src/adapters/vscode/wasm/ && cp dist/node/lpdf_bg.wasm src/adapters/vscode/wasm/ && cp dist/node/lpdf.d.ts src/adapters/vscode/wasm/ && cp docs/schema/lpdf.xsd src/adapters/vscode/schema/
 	cd src/adapters/vscode && npm install && npm run build
 
 package-adapter-vscode: build-adapter-vscode
