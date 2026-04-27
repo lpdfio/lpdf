@@ -1055,8 +1055,20 @@ fn draw_node(
                 "right"  => t.x - text_w,
                 "center" => t.x - text_w / 2.0,
                 // "left" and "justify" — anchor is already the left edge.
-                // Justify word-spacing is not applied to kit text (no avail_w).
                 _        => t.x,
+            };
+
+            // Compute word-spacing for justified lines.
+            let word_spacing = if t.text_align == "justify" && t.line_width > 0.0 {
+                let word_count = t.content.split_whitespace().count();
+                if word_count > 1 {
+                    let extra = t.line_width - text_w;
+                    (extra / (word_count - 1) as f32).max(0.0)
+                } else {
+                    0.0
+                }
+            } else {
+                0.0
             };
 
             // Layout y = top of the text block; PDF baseline = top − font-size.
@@ -1069,7 +1081,9 @@ fn draw_node(
             content.set_font(Name(&rname), t.size);
             // set_text_matrix positions the text origin precisely.
             content.set_text_matrix([1.0, 0.0, 0.0, 1.0, draw_x, pdf_y]);
+            if word_spacing > 0.0 { content.set_word_spacing(word_spacing); }
             content.show(Str(&encoded));
+            if word_spacing > 0.0 { content.set_word_spacing(0.0); }
             content.end_text();
         }
 

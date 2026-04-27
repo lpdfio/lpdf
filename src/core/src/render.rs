@@ -116,6 +116,9 @@ pub struct RenderText {
     pub size: f32,
     pub color: String,
     pub text_align: String,
+    /// Available line width; used by the PDF renderer to compute word-spacing
+    /// for `text_align = "justify"`. Set to 0.0 for non-layout text nodes.
+    pub line_width: f32,
 }
 
 pub struct RenderLink {
@@ -313,6 +316,7 @@ fn node_to_json(node: &RenderNode) -> Value {
             "size":       r2(t.size),
             "color":      t.color,
             "text_align": t.text_align,
+            "line_width": r2(t.line_width),
         }),
         RenderNode::Link(l) => json!({
             "type":     "link",

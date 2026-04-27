@@ -360,8 +360,22 @@ fn split_into_pages(
                 queue.push_front(node);
             } else {
                 needs_break_after = node.paginate == Paginate::BreakAfter;
+                // Detect silently-ignored keep-next (only when debug=true): the
+                // next sibling doesn't fit after this node AND both together
+                // exceed a full page, so the constraint cannot be honoured.
+                let warn_keep_next = node.debug
+                    && node.paginate == Paginate::KeepNext
+                    && queue.front().map_or(false, |next| {
+                        let next_h = measure_height(next, avail_w, page_budget(pages.len()));
+                        let remaining_for_next = remaining - h - gap;
+                        next_h > remaining_for_next + 0.5
+                            && h + gap + next_h > page_budget(pages.len()) + 0.5
+                    });
                 pages.last_mut().expect("pages is non-empty").push(node);
                 used_h += gap_before + h;
+                if warn_keep_next {
+                    queue.push_front(make_keep_next_warning());
+                }
             }
         } else {
             let target = remaining.max(0.0);
@@ -427,6 +441,29 @@ fn split_into_pages(
     pages
 }
 
+/// Construct a small red diagnostic text node injected into the layout stream
+/// when `paginate="keep-next"` is set on a `debug="true"` node but cannot be
+/// honoured because both this node and its next sibling together exceed a full
+/// page height.
+fn make_keep_next_warning() -> Node {
+    Node {
+        kind: NodeKind::Text,
+        text_runs: vec![TextRun {
+            text: "[lpdf] keep-next ignored: both nodes exceed page height".to_string(),
+            leading_space: false,
+            font: None,
+            color: Some("#cc0000".to_string()),
+            href: None,
+            underline: false,
+            strike: false,
+        }],
+        font: "Helvetica".to_string(),
+        font_size: 7.0,
+        text_color: Some("#cc0000".to_string()),
+        ..Node::layout_default()
+    }
+}
+
 /// The result of trying to split a node at a given height target.
 enum SplitOutcome {
     /// Split succeeded: `first` fits within `target_h`; `rest` are the overflow nodes.
@@ -447,7 +484,7 @@ enum SplitOutcome {
 /// - **Cluster**: split between wrapped rows (items within a row are atomic).
 /// - **Text**: split line-by-line, reconstructing runs on each half.
 ///
-/// Everything else (Frame, Flank, Split, Divider, Link, or any Fixed/Full/Fill
+/// Everything else (Frame, Flank, Split, Divider, or any Fixed/Full/Fill
 /// height node) returns `Atomic`. Frame is atomic by design — it represents a
 /// card-like enclosure that should not be cut.
 fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
@@ -467,7 +504,8 @@ fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> 
         NodeKind::Cluster => split_cluster(node, avail_w, target_h),
         NodeKind::Text    => split_text(node, avail_w, target_h),
         NodeKind::Table   => split_table(node, avail_w, target_h, full_page_h),
-        // Frame, Flank, Split, Divider, Link — atomic by design.
+        NodeKind::Link    => split_stack(node, avail_w, target_h, full_page_h),
+        // Frame, Flank, Split, Divider — atomic by design.
         _                 => SplitOutcome::Atomic,
     }
 }
@@ -512,9 +550,26 @@ fn split_stack(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Sp
             }
         }
     } else {
-        let first = Node { children: node.children[..split_idx].to_vec(), ..node.clone() };
-        let rest  = Node { children: node.children[split_idx..].to_vec(), ..node.clone() };
-        SplitOutcome::First(first, vec![rest])
+        // Some children fit; attempt to split the overflowing child into the
+        // remaining space before falling back to a hard cut at the boundary.
+        let remaining_for_child = (inner_target - chunk_h - gap).max(0.0);
+        match split_node_at(&node.children[split_idx], inner_w, remaining_for_child, inner_full) {
+            SplitOutcome::First(child_first, child_rest) => {
+                let mut first_children = node.children[..split_idx].to_vec();
+                first_children.push(child_first);
+                let mut rest_children: Vec<Node> = child_rest;
+                rest_children.extend_from_slice(&node.children[split_idx + 1..]);
+                let first = Node { children: first_children, ..node.clone() };
+                let rest  = Node { children: rest_children, ..node.clone() };
+                SplitOutcome::First(first, vec![rest])
+            }
+            // Unsplittable or nothing fits — fall back to hard cut before it.
+            SplitOutcome::NothingFits(_) | SplitOutcome::Atomic => {
+                let first = Node { children: node.children[..split_idx].to_vec(), ..node.clone() };
+                let rest  = Node { children: node.children[split_idx..].to_vec(), ..node.clone() };
+                SplitOutcome::First(first, vec![rest])
+            }
+        }
     }
 }
 
@@ -857,8 +912,19 @@ fn split_text(node: &Node, avail_w: f32, target_h: f32) -> SplitOutcome {
     if max_lines == 0 {
         return SplitOutcome::NothingFits(vec![node.clone()]);
     }
-    let first_atoms: Vec<SplitAtom> = lines[..max_lines].iter().flatten().cloned().collect();
-    let rest_atoms:  Vec<SplitAtom> = lines[max_lines..].iter().flatten().cloned().collect();
+    // Widow protection: if the last line of the first fragment has ≤ 2 atoms
+    // (a single word, an article, or a very short 2-word straggler), pull it
+    // back to the continuation page so the page does not end mid-phrase.
+    let split_at = if max_lines > 1 && lines[max_lines - 1].len() <= 2 {
+        max_lines - 1
+    } else {
+        max_lines
+    };
+    if split_at == 0 {
+        return SplitOutcome::NothingFits(vec![node.clone()]);
+    }
+    let first_atoms: Vec<SplitAtom> = lines[..split_at].iter().flatten().cloned().collect();
+    let rest_atoms:  Vec<SplitAtom> = lines[split_at..].iter().flatten().cloned().collect();
     let first = Node { text_runs: atoms_to_runs(&first_atoms), ..node.clone() };
     let rest  = Node { text_runs: atoms_to_runs(&rest_atoms),  ..node.clone() };
     SplitOutcome::First(first, vec![rest])
@@ -945,10 +1011,13 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
         } else {
             lines.push(std::mem::take(&mut cur_line));
             cur_w = aw;
-            // First atom of a fresh line has no leading space visually.
-            let mut first = atom;
-            first.leading_space = false;
-            cur_line.push(first);
+            // Do NOT strip leading_space here. The gap calculation above already
+            // handles "no space before the first atom on an empty line" via the
+            // `cur_line.is_empty()` guard.  Stripping leading_space would cause
+            // atoms_to_runs to silently merge this atom with the previous plain
+            // run without a space when reconstructing split-fragment TextRuns
+            // (e.g. "tokens," + "this" → "tokens,this").
+            cur_line.push(atom);
         }
     }
     if !cur_line.is_empty() { lines.push(cur_line); }
@@ -2009,9 +2078,11 @@ fn layout_divider(
 // Source: Adobe AFM files for the 14 standard PDF built-in fonts.
 
 pub(crate) fn builtin_char_advance(font: &str, c: char) -> Option<u16> {
-    let idx = (c as u32).checked_sub(32)? as usize;
-    if idx >= 95 { return None; }
+    let cp = c as u32;
 
+    // ── ASCII range U+0020..=U+007E ──────────────────────────────────────────
+    if (32..=126).contains(&cp) {
+        let idx = (cp - 32) as usize;
     #[rustfmt::skip]
     static HELVETICA: [u16; 95] = [
     //  sp    !    "    #    $    %    &    '    (    )    *    +    ,    -    .    /
@@ -2108,16 +2179,103 @@ pub(crate) fn builtin_char_advance(font: &str, c: char) -> Option<u16> {
        500, 500, 389, 389, 278, 556, 444, 667, 500, 444, 389, 348, 220, 348, 570,
     ];
 
-    let table: &[u16; 95] = match font {
-        "Helvetica" | "Helvetica-Oblique"         => &HELVETICA,
-        "Helvetica-Bold" | "Helvetica-BoldOblique" => &HELVETICA_BOLD,
-        "Times-Roman"                              => &TIMES_ROMAN,
-        "Times-Bold"                               => &TIMES_BOLD,
-        "Times-Italic"                             => &TIMES_ITALIC,
-        "Times-BoldItalic"                         => &TIMES_BOLD_ITALIC,
+        let table: &[u16; 95] = match font {
+            "Helvetica" | "Helvetica-Oblique"          => &HELVETICA,
+            "Helvetica-Bold" | "Helvetica-BoldOblique" => &HELVETICA_BOLD,
+            "Times-Roman"                              => &TIMES_ROMAN,
+            "Times-Bold"                               => &TIMES_BOLD,
+            "Times-Italic"                             => &TIMES_ITALIC,
+            "Times-BoldItalic"                         => &TIMES_BOLD_ITALIC,
+            _ => return None,
+        };
+        return Some(table[idx]);
+    }
+
+    // ── Extended WinAnsiEncoding characters (U+0080 and above) ──────────────
+    // AFM widths (per 1/1000 em) for the standard PDF built-in Type 1 fonts.
+    // Sources: Adobe standard AFM files for Helvetica and Times-Roman families.
+    let hv = matches!(font, "Helvetica"|"Helvetica-Oblique"|"Helvetica-Bold"|"Helvetica-BoldOblique");
+    let tr = matches!(font, "Times-Roman"|"Times-Bold"|"Times-Italic"|"Times-BoldItalic");
+    if !hv && !tr { return None; }
+
+    // Helper: select between Helvetica and Times values.
+    macro_rules! hv_tr { ($h:expr, $t:expr) => { if hv { $h } else { $t } }; }
+
+    Some(match c {
+        // ── Typographic punctuation ──────────────────────────────────────────
+        '\u{2013}' => hv_tr!(556,  500), // en dash –
+        '\u{2014}' => 1000,              // em dash —  (1 em in all standard fonts)
+        '\u{2018}' | '\u{2019}' => hv_tr!(222, 333), // ' '  left/right single quotation mark
+        '\u{201C}' | '\u{201D}' => hv_tr!(333, 444), // " "  left/right double quotation mark
+        '\u{201A}' | '\u{201E}' => hv_tr!(222, 333), // ‚ „  low-9 quotation marks
+        '\u{2026}' => 1000,              // …  ellipsis
+        '\u{2022}' => hv_tr!(556, 500), // •  bullet
+        '\u{2020}' | '\u{2021}' => hv_tr!(556, 500), // † ‡  dagger / double dagger
+        '\u{2030}' => 1000,              // ‰  per mille
+        '\u{2039}' | '\u{203A}' => hv_tr!(278, 333), // ‹ ›  single guillemets
+        '\u{00AB}' | '\u{00BB}' => hv_tr!(556, 500), // «  »  guillemots
+        '\u{2122}' => hv_tr!(1000, 980), // ™  trademark
+        '\u{00A9}' | '\u{00AE}' => hv_tr!(737, 760), // © ®  copyright / registered
+        '\u{00B0}' => hv_tr!(400, 400),  // °  degree
+        '\u{00B1}' => hv_tr!(584, 564),  // ±  plus-minus
+        '\u{00D7}' | '\u{00F7}' => hv_tr!(584, 564), // × ÷  multiply / divide
+        '\u{00A0}' => hv_tr!(278, 250),  // non-breaking space
+        '\u{00AD}' => hv_tr!(333, 333),  // soft hyphen (same as hyphen)
+        '\u{20AC}' => hv_tr!(556, 500),  // €  euro
+        '\u{0192}' => hv_tr!(556, 500),  // ƒ  florin
+        '\u{02C6}' | '\u{02DC}' => hv_tr!(333, 333), // ˆ ˜  circumflex / tilde accent
+        // ── Letterlike symbols ───────────────────────────────────────────────
+        '\u{00A6}' => hv_tr!(260, 200),  // ¦  broken bar
+        '\u{00A7}' => hv_tr!(556, 500),  // §  section
+        '\u{00B6}' => hv_tr!(556, 556),  // ¶  pilcrow
+        '\u{00B7}' => hv_tr!(278, 250),  // ·  middle dot
+        '\u{00A2}' => hv_tr!(556, 500),  // ¢  cent
+        '\u{00A3}' => hv_tr!(556, 500),  // £  sterling
+        '\u{00A5}' => hv_tr!(556, 500),  // ¥  yen
+        '\u{00B9}' | '\u{00B2}' | '\u{00B3}' => hv_tr!(333, 300), // superscripts 1 2 3
+        '\u{00BC}' | '\u{00BD}' | '\u{00BE}' => hv_tr!(834, 750), // fractions ¼ ½ ¾
+        '\u{00AA}' => hv_tr!(370, 276),  // ª  ordinal feminine
+        '\u{00BA}' => hv_tr!(365, 310),  // º  ordinal masculine
+        '\u{00AC}' => hv_tr!(584, 564),  // ¬  logical not
+        // ── OE / oe ligatures, special letters ───────────────────────────────
+        '\u{0152}' => hv_tr!(1000, 1000), // Œ
+        '\u{0153}' => hv_tr!( 833,  722), // œ
+        '\u{0160}' => hv_tr!( 667,  556), // Š
+        '\u{0161}' => hv_tr!( 500,  389), // š
+        '\u{017D}' => hv_tr!( 611,  611), // Ž
+        '\u{017E}' => hv_tr!( 500,  444), // ž
+        '\u{0178}' => hv_tr!( 667,  722), // Ÿ
+        '\u{00DF}' => hv_tr!( 611,  500), // ß  sharp S
+        // ── Accented uppercase letters ───────────────────────────────────────
+        '\u{00C0}'..='\u{00C5}' => hv_tr!(667, 722), // À Á Â Ã Ä Å  (A-variants)
+        '\u{00C6}' => hv_tr!(1000, 889),              // Æ
+        '\u{00C7}' => hv_tr!( 722, 667),              // Ç
+        '\u{00C8}'..='\u{00CB}' => hv_tr!(667, 611),  // È É Ê Ë  (E-variants)
+        '\u{00CC}'..='\u{00CF}' => hv_tr!(278, 333),  // Ì Í Î Ï  (I-variants)
+        '\u{00D0}' => hv_tr!(722, 722),               // Ð
+        '\u{00D1}' => hv_tr!(722, 722),               // Ñ
+        '\u{00D2}'..='\u{00D6}' => hv_tr!(778, 722),  // Ò Ó Ô Õ Ö  (O-variants)
+        '\u{00D8}' => hv_tr!(778, 722),               // Ø
+        '\u{00D9}'..='\u{00DC}' => hv_tr!(722, 722),  // Ù Ú Û Ü  (U-variants)
+        '\u{00DD}' => hv_tr!(667, 722),               // Ý
+        '\u{00DE}' => hv_tr!(667, 556),               // Þ
+        // ── Accented lowercase letters ───────────────────────────────────────
+        '\u{00E0}'..='\u{00E5}' => hv_tr!(556, 444),  // à á â ã ä å  (a-variants)
+        '\u{00E6}' => hv_tr!(889, 667),               // æ
+        '\u{00E7}' => hv_tr!(500, 444),               // ç
+        '\u{00E8}'..='\u{00EB}' => hv_tr!(556, 444),  // è é ê ë  (e-variants)
+        '\u{00EC}'..='\u{00EF}' => hv_tr!(222, 278),  // ì í î ï  (i-variants)
+        '\u{00F0}' => hv_tr!(556, 500),               // ð
+        '\u{00F1}' => hv_tr!(556, 500),               // ñ
+        '\u{00F2}'..='\u{00F6}' => hv_tr!(556, 500),  // ò ó ô õ ö  (o-variants)
+        '\u{00F8}' => hv_tr!(556, 500),               // ø
+        '\u{00F9}'..='\u{00FC}' => hv_tr!(556, 500),  // ù ú û ü  (u-variants)
+        '\u{00FD}' | '\u{00FF}' => hv_tr!(500, 500),  // ý ÿ
+        '\u{00FE}' => hv_tr!(556, 500),               // þ
+        // fi / fl ligatures
+        '\u{FB01}' | '\u{FB02}' => hv_tr!(500, 556),
         _ => return None,
-    };
-    Some(table[idx])
+    })
 }
 
 /// Measure the advance width (in pt) of a string at the given font and size.
@@ -2330,6 +2488,10 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
 
         let mut cur_x = line_anchor_x;
 
+        // For justify, the last line is left-aligned (not stretched).
+        let is_last_line  = li + 1 == lines.len();
+        let eff_align_str = if align_str == "justify" && is_last_line { "left" } else { align_str };
+
         // Merge consecutive plain (no href/underline/strike) atoms that share the
         // same font and color into a single RenderText.  This lets pdf-lib render
         // each group with its real glyph metrics instead of accumulating the error
@@ -2352,7 +2514,7 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
                         x: grp_x, y: line_y,
                         content: std::mem::take(&mut grp_text),
                         font: grp_font.clone(), size: font_size, color: grp_clr.clone(),
-                        text_align: align_str.to_string(),
+                        text_align: eff_align_str.to_string(), line_width: avail_w,
                     }));
                 }
                 if grp_text.is_empty() {
@@ -2371,7 +2533,7 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
                         x: grp_x, y: line_y,
                         content: std::mem::take(&mut grp_text),
                         font: grp_font.clone(), size: font_size, color: grp_clr.clone(),
-                        text_align: align_str.to_string(),
+                        text_align: eff_align_str.to_string(), line_width: avail_w,
                     }));
                 }
 
@@ -2381,7 +2543,7 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
                     size: font_size, color: atom.color.clone(),
                     // Decorated atoms (spans) always use their computed cur_x as a
                     // left-edge anchor; alignment has already been applied at the line level.
-                    text_align: "left".to_string(),
+                    text_align: "left".to_string(), line_width: 0.0,
                 })];
 
                 if atom.underline {
@@ -2418,7 +2580,7 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
                 x: grp_x, y: line_y,
                 content: grp_text,
                 font: grp_font, size: font_size, color: grp_clr,
-                text_align: align_str.to_string(),
+                text_align: eff_align_str.to_string(), line_width: avail_w,
             }));
         }
     }
