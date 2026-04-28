@@ -1,6 +1,6 @@
-# LPDF Versioning
+# Lpdf Versioning
 
-LPDF uses `MAJOR.MINOR.PATCH` version numbers across all packages.  The
+Lpdf uses `MAJOR.MINOR.PATCH` version numbers across all packages.  The
 semantics differ from standard semver — this is intentional and explained
 below.
 

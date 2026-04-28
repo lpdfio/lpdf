@@ -1,11 +1,8 @@
-# lpdf
+# Lpdf
 
-LPDF is an accurate, efficient, cross-platform PDF engine.
+Lpdf is an accurate, efficient, cross-platform PDF engine.
 
-Describe your document structure programmatically with the Kit, or declaratively in XML. LPDF handles the rest — layout, absolute positioning, fonts, images, compression, and optimization — producing compact, pixel-perfect PDF output. Identical input, identical output, on every platform.
-
-
-See [var/LPDF.md](var/LPDF.md) for full design notes.
+Describe your document structure programmatically with the Kit, or declaratively in XML. Lpdf handles the rest — layout, absolute positioning, fonts, images, compression, and optimization — producing compact, pixel-perfect PDF output. Identical input, identical output, on every platform.
 
 ## Build
 

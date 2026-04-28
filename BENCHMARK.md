@@ -227,13 +227,13 @@ A 1 MB XML document renders to a 1.85 MB PDF in under 1 second. The xxl result h
 
 ## Competitor comparison
 
-> **Methodology note:** LPDF numbers are from this run (Windows, 5-year-old Intel i7, release build). Competitor numbers are **estimates** derived from published benchmarks, official documentation, and community reports — not a controlled head-to-head. Warm-start figures are shown (cold JVM/interpreter start adds 500 ms–2 s for Java/Python tools). Input complexity and hardware vary; treat the order-of-magnitude comparisons as directionally reliable, not precise.
+> **Methodology note:** Lpdf numbers are from this run (Windows, 5-year-old Intel i7, release build). Competitor numbers are **estimates** derived from published benchmarks, official documentation, and community reports — not a controlled head-to-head. Warm-start figures are shown (cold JVM/interpreter start adds 500 ms–2 s for Java/Python tools). Input complexity and hardware vary; treat the order-of-magnitude comparisons as directionally reliable, not precise.
 
 ### Tool overview
 
 | Tool | Input format | Layout engine | Runtime | License |
 |------|-------------|---------------|---------|---------|
-| **LPDF** | XML (declarative) | ✓ Full — box model, text shaping, pagination | Rust / WASM / WASI | Commercial |
+| **Lpdf** | XML (declarative) | ✓ Full — box model, text shaping, pagination | Rust / WASM / WASI | Commercial |
 | Apache FOP | XSL-FO (XML) | ✓ Full | JVM | Apache 2.0 |
 | Prince XML | HTML / CSS | ✓ Full | Native binary | Commercial (~$500–3800/server) |
 | WeasyPrint | HTML / CSS | ✓ Full | CPython | BSD |
@@ -243,7 +243,7 @@ A 1 MB XML document renders to a 1.85 MB PDF in under 1 second. The xxl result h
 | wkhtmltopdf | HTML / CSS | ✓ (Qt WebKit) | Native (deprecated) | LGPL |
 | iText 7 | Programmatic | ✗ Manual positioning | JVM / .NET | AGPL / Commercial |
 
-Apache FOP is the closest architectural analog to LPDF: both accept XML with a declarative layout vocabulary. Prince XML is the quality/speed benchmark for HTML→PDF.
+Apache FOP is the closest architectural analog to Lpdf: both accept XML with a declarative layout vocabulary. Prince XML is the quality/speed benchmark for HTML→PDF.
 
 ---
 
@@ -265,11 +265,11 @@ These are estimates based on text density (~3 lines/paragraph, A4, 12 pt body, n
 
 ### Small–medium documents (~5–30 pages)
 
-Corresponds to LPDF `end_to_end/s` (4.1 ms) through `end_to_end/m` (25.7 ms).
+Corresponds to Lpdf `end_to_end/s` (4.1 ms) through `end_to_end/m` (25.7 ms).
 
 | Tool | ~5–8 pages | ~20–30 pages | Notes |
 |------|-----------|-------------|-------|
-| **LPDF** | **~4 ms** | **~26 ms** | |
+| **Lpdf** | **~4 ms** | **~26 ms** | |
 | iText 7 (warm) | ~15–50 ms | ~50–200 ms | No layout engine; manual API |
 | pdfmake | ~40–150 ms | ~150–600 ms | Pure JS; client + server |
 | ReportLab Platypus | ~60–200 ms | ~200 ms–1 s | CPython |
@@ -279,17 +279,17 @@ Corresponds to LPDF `end_to_end/s` (4.1 ms) through `end_to_end/m` (25.7 ms).
 | wkhtmltopdf | ~500 ms–1 s | ~1–3 s | Deprecated; unstable |
 | Puppeteer (warm) | ~400 ms–1 s | ~1–4 s | Persistent browser process |
 
-At this range LPDF is **20–100× faster** than tools with a real layout engine (WeasyPrint, FOP, pdfmake, ReportLab). The gap is primarily explained by the difference between a compiled native/WASM engine and an interpreted runtime — not algorithmic differences.
+At this range Lpdf is **20–100× faster** than tools with a real layout engine (WeasyPrint, FOP, pdfmake, ReportLab). The gap is primarily explained by the difference between a compiled native/WASM engine and an interpreted runtime — not algorithmic differences.
 
 ---
 
 ### Large–extra large documents (~100–300 pages)
 
-Corresponds to LPDF `end_to_end/xl` (233 ms, ~100–150 pages) through `end_to_end_x/xxl` (589 ms, ~200–300 pages).
+Corresponds to Lpdf `end_to_end/xl` (233 ms, ~100–150 pages) through `end_to_end_x/xxl` (589 ms, ~200–300 pages).
 
 | Tool | ~100–150 pages | ~200–300 pages | Notes |
 |------|---------------|---------------|
-| **LPDF** | **~233 ms** | **~589 ms** | |
+| **Lpdf** | **~233 ms** | **~589 ms** | |
 | Prince XML | ~800 ms–2 s | ~1.5–4 s | Fastest HTML/CSS tool |
 | pdfmake | ~1.5–5 s | ~3–10 s | Single-threaded JS |
 | iText 7 (warm) | ~500 ms–2 s | ~1–5 s | Programmatic; no layout |
@@ -299,13 +299,13 @@ Corresponds to LPDF `end_to_end/xl` (233 ms, ~100–150 pages) through `end_to_e
 | wkhtmltopdf | ~5–20 s | ~15–60 s+ | Often crashes or OOM |
 | Puppeteer (warm) | ~8–30 s | ~20–90 s | Each page renders in browser |
 
-At large sizes the gap widens: **5–60× faster** than tools with comparable layout quality (FOP, WeasyPrint, Prince). Layout cost in interpreted runtimes grows super-linearly due to GC pressure and single-threaded line-breaking; LPDF's Rust allocator and arena-based layout tree scale near-linearly to 1 MB+.
+At large sizes the gap widens: **5–60× faster** than tools with comparable layout quality (FOP, WeasyPrint, Prince). Layout cost in interpreted runtimes grows super-linearly due to GC pressure and single-threaded line-breaking; Lpdf's Rust allocator and arena-based layout tree scale near-linearly to 1 MB+.
 
 ---
 
 ### Key deployment advantages not reflected in timing
 
-| Factor | LPDF | JVM tools (FOP, iText) | Python tools | Browser tools |
+| Factor | Lpdf | JVM tools (FOP, iText) | Python tools | Browser tools |
 |--------|------|----------------------|--------------|---------------|
 | Cold start | < 5 ms (WASM init) | 500 ms–2 s JVM | 100–500 ms | 2–5 s Chrome launch |
 | Memory footprint | ~20–50 MB | ~200–500 MB | ~50–150 MB | ~300–800 MB |
