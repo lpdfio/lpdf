@@ -1,3 +1,5 @@
+<p align="center"><img src="lpdf-logo.svg" height="48" alt="Lpdf"></p>
+
 # Lpdf
 
 Lpdf is an accurate, efficient, cross-platform PDF engine.
