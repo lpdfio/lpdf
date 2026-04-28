@@ -1,4 +1,4 @@
-<p align="center"><img src="lpdf-logo.svg" height="48" alt="Lpdf"></p>
+<p align="center"><img src="lpdf-light.png" height="48" alt="Lpdf"></p>
 
 # Lpdf
 
