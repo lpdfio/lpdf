@@ -1,6 +1,6 @@
-# LPDF Individual Contributor License Agreement
+# Lpdf Individual Contributor License Agreement
 
-Thank you for your interest in contributing to LPDF ("Project"), maintained by
+Thank you for your interest in contributing to Lpdf ("Project"), maintained by
 Codesense LLC ("Licensor").
 
 This Contributor License Agreement ("CLA") clarifies the intellectual property
@@ -11,7 +11,7 @@ you accept the terms below.
 
 ## Why a CLA?
 
-LPDF is released under a custom tiered license (Community, Professional, and
+Lpdf is released under a custom tiered license (Community, Professional, and
 Enterprise). To relicense contributions under current and future license terms,
 Licensor must hold the right to do so. This CLA grants Licensor that right
 while you retain ownership of your contribution.
@@ -22,8 +22,8 @@ while you retain ownership of your contribution.
 
 **"You"** means the individual submitting a contribution.
 
-**"Contribution"** means any original work of authorship — including code,
-documentation, tests, or configuration — submitted to the Project via a pull
+**"Contribution"** means any original work of authorship â€” including code,
+documentation, tests, or configuration â€” submitted to the Project via a pull
 request, issue, email, or any other channel.
 
 ---
@@ -34,7 +34,7 @@ You grant Licensor a perpetual, worldwide, non-exclusive, royalty-free,
 irrevocable copyright license to reproduce, prepare derivative works of,
 publicly display, publicly perform, sublicense, and distribute your
 Contributions and derivative works, under any license terms Licensor chooses,
-including the current and future versions of the LPDF License.
+including the current and future versions of the Lpdf License.
 
 ---
 
@@ -51,7 +51,7 @@ Contribution alone or in combination with the Project.
 ## 4. You Retain Ownership
 
 You retain ownership of your Contributions. This CLA does not transfer
-copyright to Licensor — it grants a license only. You are free to use your
+copyright to Licensor â€” it grants a license only. You are free to use your
 Contributions in any other project or context.
 
 ---
@@ -66,7 +66,7 @@ By submitting a Contribution you represent that:
   received permission to submit the Contribution, or your employer has signed a
   Corporate CLA with Licensor.
 - The Contribution does not include code subject to a license incompatible with
-  the LPDF License.
+  the Lpdf License.
 - You are not aware of any patent claims that would be infringed by
   incorporating the Contribution into the Project.
 
@@ -84,7 +84,7 @@ Contribution in the Project.
 Add the following line to your pull request description or a comment:
 
 ```
-I have read and agree to the LPDF CLA.
+I have read and agree to the Lpdf CLA.
 ```
 
 For corporate contributors, contact **legal@lpdf.io** to arrange a Corporate
