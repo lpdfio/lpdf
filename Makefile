@@ -210,7 +210,7 @@ example-node:
 	@echo "-------------------------------"
 	@echo ">>> Running Node example..."
 	@echo ""
-	cd src/adapters/node && npx ts-node example/example.ts && npx ts-node example/encrypt-permissions-only.ts && npx ts-node example/encrypt-open-password.ts && npx ts-node example/example-data.ts
+	cd src/adapters/node && npx ts-node example/example.ts&& npx ts-node example/example2.ts && npx ts-node example/encrypt-permissions-only.ts && npx ts-node example/encrypt-open-password.ts && npx ts-node example/example-data.ts
 
 example-dotnet:
 	@echo ""
@@ -226,6 +226,7 @@ example-php:
 	@echo ""
 	docker run --rm \
 		-v "$(CURDIR)/src/adapters/php/example://app/src/adapters/php/example" \
+		-v "$(CURDIR)/src/adapters/php/lpdf-light.png://app/src/adapters/php/lpdf-light.png" \
 		-v "$(CURDIR)/example://app/example" \
 		-v "$(CURDIR)/docs://app/docs" \
 		-w //app lpdf-php php src/adapters/php/example/example.php
@@ -258,6 +259,7 @@ example-python:
 	docker run --rm \
 		-v "$(CURDIR)/src/adapters/python/lpdf://app/lpdf" \
 		-v "$(CURDIR)/src/adapters/python/example://app/example" \
+		-v "$(CURDIR)/src/adapters/python/lpdf-light.png://app/lpdf-light.png" \
 		-v "$(CURDIR)/example://app/example-data" \
 		-v "$(CURDIR)/src/adapters/python/resources://app/resources" \
 		-w //app lpdf-python python example/example.py

@@ -27,12 +27,23 @@
         "cargo search": true,
         "cargo metadata": true,
         "npm run build": true,
-        "cargo bench": true
+        "cargo bench": true,
+        "/^node --test test/render\\.test\\.mjs 2>&1$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "wasm-pack": true,
+        "/^cd c:\\\\workspace\\\\projects\\\\lpdf\\\\src\\\\adapters\\\\node ; node --test test/render\\.test\\.mjs 2>&1$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "Tee-Object": true
     },
     "typescript.tsdk": "src/adapters/vscode/node_modules/typescript/lib",
+    "liveServer.settings.root": "/pages",
     "xml.fileAssociations": [
         {
-            "systemId": "${workspaceFolder}/schema/lpdf.xsd",
+            "systemId": "${workspaceFolder}/docs/schema/lpdf.xsd",
             "pattern": "**/*.xml"
         },
         {
