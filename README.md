@@ -2,77 +2,145 @@
 
 # Lpdf
 
-Lpdf is an accurate, efficient, cross-platform PDF engine.
+**PDF as Code, on every platform.**
 
-Describe your document structure programmatically with the Kit, or declaratively in XML. Lpdf handles the rest — layout, absolute positioning, fonts, images, compression, and optimization — producing compact, pixel-perfect PDF output. Identical input, identical output, on every platform.
+Describe your document structure in code using the programming Kit, or XML. Every PDF is compact, pixel-perfect, and identical across platforms.
 
-## Build
+---
 
-Requires [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/) and a Rust toolchain with the `wasm32-unknown-unknown` and `wasm32-wasip1` targets:
+## Architecture
 
-```sh
-rustup target add wasm32-unknown-unknown
-rustup target add wasm32-wasip1
-```
+The core engine is written in Rust and compiled to two targets:
 
-| Command | Description |
-|---|---|
-| `make build-wasm` | Build WASM for Node.js and browser (`dist/node`, `dist/web`) |
-| `make build-wasi` | Build WASI binary (`dist/wasi/lpdf.wasm`) |
-| `make test-wasm` | Run core Rust unit tests |
-| `make test-wasi` | Run WASI crate tests |
-| `make build-adapter-node` | Install and build the Node.js adapter |
-| `make test-adapter-node` | Build and test the Node.js adapter |
-| `make build-adapter-dotnet` | Build the .NET adapter |
-| `make test-adapter-dotnet` | Build and test the .NET adapter |
-| `make build-adapter-php` | Build the PHP Docker image |
-| `make test-adapter-php` | Build and run PHP tests via Docker |
-| `make build-adapter-python` | Build the Python Docker image |
-| `make test-adapter-python` | Build and run Python tests via Docker |
-| `make build-all` | Build everything (WASM + WASI + all adapters) |
-| `make test-all` | Run all tests across all adapters |
-| `make example-all` | Run all examples |
-| `make clean-wasm` | Remove WASM build artifacts (`dist/node`, `dist/web`) |
-| `make clean-wasi` | Remove WASI build artifacts (`dist/wasi`) |
-| `make clean-adapter-node` | Remove Node.js adapter build artifacts |
-| `make clean-adapter-dotnet` | Remove .NET adapter build artifacts |
-| `make clean-adapter-php` | Remove PHP Docker image |
-| `make clean-adapter-python` | Remove Python Docker image |
-| `make clean` | Remove all build artifacts |
+- **WASM** — for Node.js and browser runtimes (embedded in the adapter package)
+- **WASI** — a portable `.wasm` binary for server runtimes (Python, PHP, .NET) via [Wasmtime](https://wasmtime.dev)
 
-## Examples
+All adapters expose the same two interfaces:
 
-Each example reads `invoice.xml` from the project root and writes the PDF to `example/`. Run `make adapter-<name>` first to ensure the adapter is built.
+- **`renderPdf(xml)`** — render a PDF from an XML document string
+- **Kit API** — build documents programmatically using `LpdfKit` and `LpdfLayout` without writing XML
+
+The XML schema is published at [`https://lpdf.io/schema/lpdf.xsd`](https://lpdf.io/schema/lpdf.xsd).
+
+---
+
+## Adapters
 
 ### Node.js
 
-```sh
-make example-node
-# Output: example/invoice-node.pdf
+**[github.com/lpdfio/lpdf-js](https://github.com/lpdfio/lpdf-js)** · [npmjs.com/package/@lpdfio/lpdf](https://www.npmjs.com/package/@lpdfio/lpdf)
+
+```bash
+npm install @lpdfio/lpdf
 ```
 
-### .NET
+```js
+const { LpdfEngine } = require('@lpdfio/lpdf');
+const fs = require('node:fs');
 
-```sh
-make example-dotnet
-# Output: example/invoice-dotnet.pdf
-```
-
-### PHP
-
-```sh
-make example-php
-# Output: example/invoice-php.pdf
+const engine = new LpdfEngine();
+const xml = fs.readFileSync('document.xml', 'utf8');
+const pdf = await engine.renderPdf(xml);
+fs.writeFileSync('output.pdf', pdf);
 ```
 
 ---
 
-## Verify
+### Python
 
-After building, run the smoke tests against the compiled WASM:
+**[github.com/lpdfio/lpdf-python](https://github.com/lpdfio/lpdf-python)** · [pypi.org/project/lpdfio-lpdf](https://pypi.org/project/lpdfio-lpdf/)
 
-```sh
-node test/verify-wasm.mjs        # Node.js
-# open test/verify-wasm.html     # browser (requires a local HTTP server)
+```bash
+pip install lpdfio-lpdf
 ```
+
+```python
+from lpdf import LpdfEngine
+
+engine = LpdfEngine()
+xml = open("document.xml").read()
+pdf = engine.render_pdf(xml)
+open("output.pdf", "wb").write(pdf)
+```
+
+---
+
+### PHP
+
+**[github.com/lpdfio/lpdf-php](https://github.com/lpdfio/lpdf-php)** · [packagist.org/packages/lpdfio/lpdf](https://packagist.org/packages/lpdfio/lpdf)
+
+```bash
+composer require lpdfio/lpdf
+```
+
+```php
+use Lpdf\LpdfEngine;
+
+$engine = new LpdfEngine();
+$xml = file_get_contents('document.xml');
+$pdf = $engine->renderPdf($xml);
+file_put_contents('output.pdf', $pdf);
+```
+
+---
+
+### .NET
+
+**[github.com/lpdfio/lpdf-dotnet](https://github.com/lpdfio/lpdf-dotnet)** · [nuget.org/packages/Lpdfio.Lpdf](https://www.nuget.org/packages/Lpdfio.Lpdf)
+
+```bash
+dotnet add package Lpdfio.Lpdf
+```
+
+```csharp
+using Lpdf;
+
+var engine = new LpdfEngine();
+var xml = await File.ReadAllTextAsync("document.xml");
+var pdf = await engine.RenderPdf(xml);
+await File.WriteAllBytesAsync("output.pdf", pdf);
+```
+
+---
+
+## Kit API
+
+All adapters also expose a fluent builder API for constructing documents in code, without XML. Each adapter ships equivalent `LpdfKit` and `LpdfLayout` classes in its native style.
+
+```js
+// Node.js — same concepts apply across all adapters
+const { LpdfEngine, LpdfKit, LpdfLayout } = require('@lpdfio/lpdf');
+
+const engine = new LpdfEngine();
+const doc = LpdfKit.document({
+  sections: [
+    LpdfKit.section({
+      nodes: [
+        LpdfKit.layout([
+          LpdfLayout.stack([
+            LpdfLayout.text(['Invoice #1001'], { fontSize: '24pt', bold: 'true' }),
+            LpdfLayout.text(['Due: 2025-06-01']),
+          ]),
+        ]),
+      ],
+    }),
+  ],
+});
+const pdf = await engine.renderKit(doc);
+```
+
+---
+
+## VS Code Extension
+
+**[marketplace.visualstudio.com](https://marketplace.visualstudio.com/items?itemName=lpdfio.lpdf)**
+
+Preview, design, and export PDFs directly in VS Code — entirely offline. Supports live XML preview and PDF export via the command palette.
+
+---
+
+## Docs
+
+[lpdf.io/docs](https://lpdf.io/docs) · [lpdf.io](https://lpdf.io)
+
 
