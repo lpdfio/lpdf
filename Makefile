@@ -14,7 +14,7 @@ export LPDF_PUBLIC_KEY
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
-        clone-adapters
+        clone-adapters sync-license check-license
 
 build-wasm:
 	@echo ""
@@ -302,3 +302,26 @@ install-adapter-vscode: package-adapter-vscode
 	@echo ">>> Installing VS Code extension..."
 	@echo ""
 	code.cmd --install-extension src/adapters/vscode/lpdf.vsix --force
+
+sync-license:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Syncing LICENSE from root to all copies..."
+	@echo ""
+	cp LICENSE src/core/LICENSE
+	cp LICENSE pages/content/LICENSE.md
+	@test -d src/adapters/node    && cp LICENSE src/adapters/node/LICENSE    || true
+	@test -d src/adapters/dotnet  && cp LICENSE src/adapters/dotnet/LICENSE  || true
+	@test -d src/adapters/php     && cp LICENSE src/adapters/php/LICENSE     || true
+	@test -d src/adapters/python  && cp LICENSE src/adapters/python/LICENSE  || true
+	@test -d src/adapters/vscode  && cp LICENSE src/adapters/vscode/LICENSE  || true
+	@echo "Done. Commit changes in each adapter repo separately."
+
+check-license:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking LICENSE copies are in sync..."
+	@echo ""
+	@diff LICENSE src/core/LICENSE          || (echo "ERROR: src/core/LICENSE differs from root LICENSE" && exit 1)
+	@diff LICENSE pages/content/LICENSE.md  || (echo "ERROR: pages/content/LICENSE.md differs from root LICENSE" && exit 1)
+	@echo "OK"
