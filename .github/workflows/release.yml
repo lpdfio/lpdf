@@ -177,13 +177,3 @@ jobs:
               -f "client_payload[version]=$VERSION" \
               -f "client_payload[write_token]=$GH_TOKEN"
           done
-
-      - name: Notify Packagist
-        env:
-          PACKAGIST_USERNAME: ${{ vars.PACKAGIST_USERNAME }}
-          PACKAGIST_API_TOKEN: ${{ secrets.PACKAGIST_API_TOKEN }}
-        run: |
-          curl -sf -X POST \
-            "https://packagist.org/api/update-package?username=$PACKAGIST_USERNAME&apiToken=$PACKAGIST_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"repository":{"url":"https://github.com/lpdfio/lpdf-php"}}'
