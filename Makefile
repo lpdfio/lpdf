@@ -1,5 +1,7 @@
-SHELL := C:/PROGRA~1/Git/bin/sh.exe
-.SHELLFLAGS := -c
+ifeq ($(OS),Windows_NT)
+    SHELL := C:/PROGRA~1/Git/bin/sh.exe
+    .SHELLFLAGS := -c
+endif
 
 # Auto-load the local dev public key if LPDF_PUBLIC_KEY is not already set.
 # Requires src/internal/license/keys/public.hex — run `npm start` in src/internal/license/ once to generate it.
