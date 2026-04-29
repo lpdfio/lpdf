@@ -4,7 +4,7 @@
 
 **PDF as Code, on every platform.**
 
-Describe your document structure in code using the programming Kit, or XML. Every PDF is compact, pixel-perfect, and identical across platforms.
+Describe your document structure in code using the programming Kit or XML. Every PDF is compact, pixel-perfect, and identical across platforms.
 
 ---
 
