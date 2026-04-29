@@ -308,13 +308,13 @@ sync-license:
 	@echo "-------------------------------"
 	@echo ">>> Syncing LICENSE from root to all copies..."
 	@echo ""
-	cp LICENSE src/core/LICENSE
-	cp LICENSE pages/content/LICENSE.md
-	@test -d src/adapters/node    && cp LICENSE src/adapters/node/LICENSE    || true
-	@test -d src/adapters/dotnet  && cp LICENSE src/adapters/dotnet/LICENSE  || true
-	@test -d src/adapters/php     && cp LICENSE src/adapters/php/LICENSE     || true
-	@test -d src/adapters/python  && cp LICENSE src/adapters/python/LICENSE  || true
-	@test -d src/adapters/vscode  && cp LICENSE src/adapters/vscode/LICENSE  || true
+	@$(SHELL) -c "cp LICENSE src/core/LICENSE"
+	@$(SHELL) -c "cp LICENSE pages/content/LICENSE.md"
+	@$(SHELL) -c "test -d src/adapters/node    && cp LICENSE src/adapters/node/LICENSE    || true"
+	@$(SHELL) -c "test -d src/adapters/dotnet  && cp LICENSE src/adapters/dotnet/LICENSE  || true"
+	@$(SHELL) -c "test -d src/adapters/php     && cp LICENSE src/adapters/php/LICENSE     || true"
+	@$(SHELL) -c "test -d src/adapters/python  && cp LICENSE src/adapters/python/LICENSE  || true"
+	@$(SHELL) -c "test -d src/adapters/vscode  && cp LICENSE src/adapters/vscode/LICENSE  || true"
 	@echo "Done. Commit changes in each adapter repo separately."
 
 check-license:
@@ -322,6 +322,6 @@ check-license:
 	@echo "-------------------------------"
 	@echo ">>> Checking LICENSE copies are in sync..."
 	@echo ""
-	@diff LICENSE src/core/LICENSE          || (echo "ERROR: src/core/LICENSE differs from root LICENSE" && exit 1)
-	@diff LICENSE pages/content/LICENSE.md  || (echo "ERROR: pages/content/LICENSE.md differs from root LICENSE" && exit 1)
+	@$(SHELL) -c "diff LICENSE src/core/LICENSE          || (echo 'ERROR: src/core/LICENSE differs from root LICENSE' && exit 1)"
+	@$(SHELL) -c "diff LICENSE pages/content/LICENSE.md  || (echo 'ERROR: pages/content/LICENSE.md differs from root LICENSE' && exit 1)"
 	@echo "OK"
