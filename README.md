@@ -161,7 +161,6 @@ Preview, design, and export PDFs directly in VS Code — entirely offline. Suppo
 
 [lpdf.io/docs](https://lpdf.io/docs)
 
-
 --
 
 Dual-licensed: Community License (free) and Commercial License (paid). See [LICENSE](LICENSE) for full terms.

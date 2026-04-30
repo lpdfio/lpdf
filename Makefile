@@ -290,7 +290,7 @@ build-adapter-vscode: build-wasm
 	@echo ">>> Building VS Code adapter..."
 	@echo ""
 	mkdir -p src/adapters/vscode/wasm && mkdir -p src/adapters/vscode/schema
-	cp dist/node/lpdf.js      src/adapters/vscode/wasm/ && cp dist/node/lpdf_bg.wasm src/adapters/vscode/wasm/ && cp dist/node/lpdf.d.ts src/adapters/vscode/wasm/ && cp docs/schema/lpdf.xsd src/adapters/vscode/schema/
+	cp dist/node/lpdf.js      src/adapters/vscode/wasm/ && cp dist/node/lpdf_bg.wasm src/adapters/vscode/wasm/ && cp dist/node/lpdf.d.ts src/adapters/vscode/wasm/ && cp pages/schema/lpdf.xsd src/adapters/vscode/schema/
 	cd src/adapters/vscode && npm install && npm run build
 
 package-adapter-vscode: build-adapter-vscode
