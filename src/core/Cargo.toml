@@ -51,3 +51,7 @@ harness = false
 name              = "gen_fixtures"
 path              = "src/bin/gen_fixtures.rs"
 required-features = []
+
+[[bin]]
+name = "codegen"
+path = "src/bin/codegen.rs"

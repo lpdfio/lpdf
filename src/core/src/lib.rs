@@ -1,3 +1,4 @@
+pub mod codegen;
 mod canvas;
 mod data;
 mod encrypt;
@@ -179,7 +180,7 @@ impl LpdfEngine {
         let wm: Option<(&str, Option<&str>)> = if status.is_licensed() {
             None
         } else {
-            Some(("made with lpdf.io", Some("https://lpdf.io")))
+            Some(("Made with lpdf.io", Some("https://lpdf.io")))
         };
 
         let bytes = pdf::render_pdf(
@@ -250,7 +251,7 @@ impl LpdfEngine {
         let wm: Option<(&str, Option<&str>)> = if status.is_licensed() {
             None
         } else {
-            Some(("made with lpdf.io", Some("https://lpdf.io")))
+            Some(("Made with lpdf.io", Some("https://lpdf.io")))
         };
 
         let bytes = pdf::render_pdf(
@@ -315,7 +316,7 @@ impl LpdfEngine {
         // Render as unlicensed (with watermark) to match what the adapters
         // produce when no valid license key is supplied — keeps snapshot hashes
         // consistent between the Rust tests and the adapter test suites.
-        let wm = Some(("made with lpdf.io", Some("https://lpdf.io")));
+        let wm = Some(("Made with lpdf.io", Some("https://lpdf.io")));
         pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, wm, None, false)
     }
 
@@ -343,6 +344,30 @@ pub fn kit_to_xml(json: &str) -> Result<String, JsValue> {
     kit_to_xml::kit_to_xml(json).map_err(|e| JsValue::from_str(&e))
 }
 
+/// Generate SDK source code from an LPDF XML string.
+///
+/// `options_json` is a JSON object with:
+/// - `target`: `"js"` (required)
+/// - `indent`: `2` or `4` (optional, default `4`)
+///
+/// Returns the generated source code as a string.
+#[wasm_bindgen]
+pub fn codegen_wasm(xml: &str, options_json: &str) -> Result<String, JsValue> {
+    #[derive(serde::Deserialize)]
+    struct Opts {
+        target: String,
+        #[serde(default = "default_indent")]
+        indent: u8,
+    }
+    fn default_indent() -> u8 { 4 }
+
+    let opts: Opts = serde_json::from_str(options_json)
+        .map_err(|e| JsValue::from_str(&format!("options parse error: {e}")))?;
+
+    codegen::codegen(xml, &codegen::CodegenOptions { target: opts.target, indent: opts.indent })
+        .map_err(|e| JsValue::from_str(&e))
+}
+
 // ── Public bench API ─────────────────────────────────────────────────────────
 // No cfg gate: these live in the rlib so bench binaries can link them.
 
@@ -364,7 +389,7 @@ pub fn bench_render_doc(mut doc: BenchDoc) -> Result<Vec<u8>, String> {
     let lp = doc.0.section_layouts();
     let pages: Vec<render::RenderPage> =
         lp.iter().flat_map(layout::layout_page).collect();
-    let wm = Some(("made with lpdf.io", Some("https://lpdf.io")));
+    let wm = Some(("Made with lpdf.io", Some("https://lpdf.io")));
     pdf::render_pdf(
         &pages, &doc.0.fonts,
         &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
@@ -385,7 +410,7 @@ pub fn bench_render_xml(xml: &str) -> Result<Vec<u8>, String> {
     let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
         lp.iter().flat_map(layout::layout_page).collect();
-    let wm = Some(("made with lpdf.io", Some("https://lpdf.io")));
+    let wm = Some(("Made with lpdf.io", Some("https://lpdf.io")));
     pdf::render_pdf(
         &pages, &doc.fonts,
         &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
@@ -403,7 +428,7 @@ pub fn bench_render_xml_with_font(
     let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
         lp.iter().flat_map(layout::layout_page).collect();
-    let wm = Some(("made with lpdf.io", Some("https://lpdf.io")));
+    let wm = Some(("Made with lpdf.io", Some("https://lpdf.io")));
     let mut fonts = pdf::FontRegistry::new();
     fonts.register(font_name, font_bytes.to_vec());
     pdf::render_pdf(
@@ -423,7 +448,7 @@ pub fn bench_render_xml_with_image(
     let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
         lp.iter().flat_map(layout::layout_page).collect();
-    let wm = Some(("made with lpdf.io", Some("https://lpdf.io")));
+    let wm = Some(("Made with lpdf.io", Some("https://lpdf.io")));
     let mut images = pdf::ImageRegistry::new();
     images.load(image_name, image_bytes.to_vec());
     pdf::render_pdf(

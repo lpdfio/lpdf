@@ -100,7 +100,7 @@ pub(crate) fn render_doc_shared(
     } else {
         serde_json::json!({
             "type": "lpdf:watermark",
-            "text": "made with lpdf.io",
+            "text": "Made with lpdf.io",
             "url":  "https://lpdf.io"
         })
     };

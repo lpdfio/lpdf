@@ -41,46 +41,35 @@ use std::{env, fs, path::Path};
 fn main() {
     println!("cargo:rerun-if-env-changed=LPDF_PUBLIC_KEY");
 
-    let raw = env::var("LPDF_PUBLIC_KEY").unwrap_or_else(|_| {
-        // No key set — abort with a clear, actionable message.
-        panic!(
-            "\n\
-            ┌─────────────────────────────────────────────────────────────────┐\n\
-            │  LPDF_PUBLIC_KEY is not set.                                    │\n\
-            │                                                                 │\n\
-            │  For local development:                                         │\n\
-            │    cd src/license && npm start                                  │\n\
-            │    export LPDF_PUBLIC_KEY=$(cat src/license/keys/public.hex)    │\n\
-            │                                                                 │\n\
-            │  For CI / GitHub Actions, add to your workflow step:            │\n\
-            │    env:                                                         │\n\
-            │      LPDF_PUBLIC_KEY: ${{{{ secrets.LPDF_PUBLIC_KEY }}}}         │\n\
-            └─────────────────────────────────────────────────────────────────┘"
-        )
-    });
+    // If LPDF_PUBLIC_KEY is not set, emit an empty key slice.  License
+    // verification will fail at runtime when a token is supplied, but binaries
+    // that never call render (e.g. codegen) can be built without the key.
+    let raw = env::var("LPDF_PUBLIC_KEY").unwrap_or_default();
+    let raw = raw.trim();
 
-    // Parse comma-separated hex keys.
-    let keys: Vec<[u8; 32]> = raw
-        .split(',')
-        .enumerate()
-        .map(|(i, s)| {
-            let s = s.trim();
-            assert!(
-                s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit()),
-                "LPDF_PUBLIC_KEY entry {} must be a 64-character lowercase hex string (got {:?})",
-                i + 1,
-                s
-            );
-            let mut out = [0u8; 32];
-            for (j, byte) in out.iter_mut().enumerate() {
-                *byte = u8::from_str_radix(&s[j * 2..j * 2 + 2], 16)
-                    .expect("invalid hex digit");
-            }
-            out
-        })
-        .collect();
-
-    assert!(!keys.is_empty(), "LPDF_PUBLIC_KEY must contain at least one key");
+    // Parse comma-separated hex keys (skip if empty).
+    let keys: Vec<[u8; 32]> = if raw.is_empty() {
+        vec![]
+    } else {
+        raw.split(',')
+            .enumerate()
+            .map(|(i, s)| {
+                let s = s.trim();
+                assert!(
+                    s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit()),
+                    "LPDF_PUBLIC_KEY entry {} must be a 64-character lowercase hex string (got {:?})",
+                    i + 1,
+                    s
+                );
+                let mut out = [0u8; 32];
+                for (j, byte) in out.iter_mut().enumerate() {
+                    *byte = u8::from_str_radix(&s[j * 2..j * 2 + 2], 16)
+                        .expect("invalid hex digit");
+                }
+                out
+            })
+            .collect()
+    };
 
     // Emit the Rust source file.
     let mut src = String::from("pub const TRUSTED_KEYS: &[[u8; 32]] = &[\n");

@@ -121,6 +121,12 @@ pub fn check(token: &str, now_unix: i64) -> LicenseStatus {
         Ok(s)  => s,
         Err(_) => return LicenseStatus::Malformed,
     };
+
+    // If the binary was built without a public key, no token can be verified.
+    if TRUSTED_KEYS.is_empty() {
+        return LicenseStatus::InvalidSignature;
+    }
+
     let verified = TRUSTED_KEYS.iter().any(|key_bytes| {
         VerifyingKey::from_bytes(key_bytes)
             .map(|vk| vk.verify(&payload_bytes, &signature).is_ok())

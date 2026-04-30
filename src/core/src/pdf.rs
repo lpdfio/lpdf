@@ -2197,7 +2197,7 @@ fn assemble_pdf(
         if !meta.subject.is_empty()  { info.subject(TextStr(&meta.subject)); }
         if !meta.creator.is_empty()  { info.creator(TextStr(&meta.creator)); }
         if !meta.keywords.is_empty() { info.keywords(TextStr(&meta.keywords)); }
-        info.producer(TextStr(if licensed { "lpdf.io" } else { "lpdf.io (free)" }));
+        info.producer(TextStr(if licensed { "lpdf.io" } else { "lpdf.io (unregistered)" }));
 
         // created_on: write as a raw PDF date string if provided.
         // Format expected: ISO 8601 "YYYY-MM-DDTHH:mm:ss" → "D:YYYYMMDDHHmmss"
@@ -2721,7 +2721,7 @@ fn assemble_pdf(
 ///                  light grey (`#aaaaaa`), 4 pt from the page edge.
 /// - `created_on` – Optional ISO 8601 date string written to `/CreationDate`.
 /// - `licensed`   – `true` when a valid commercial license token was supplied.
-///                  Controls the `/Producer` field (`lpdf.io` vs `lpdf.io (free)`).
+///                  Controls the `/Producer` field (`lpdf.io` vs `lpdf.io (unregistered)`).
 pub fn render_pdf(
     pages:          &[RenderPage],
     font_defs:      &HashMap<String, FontDef>,

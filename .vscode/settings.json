@@ -41,14 +41,5 @@
     },
     "typescript.tsdk": "src/adapters/vscode/node_modules/typescript/lib",
     "liveServer.settings.root": "/pages",
-    "xml.fileAssociations": [
-        {
-            "systemId": "${workspaceFolder}/docs/schema/lpdf.xsd",
-            "pattern": "**/*.xml"
-        },
-        {
-            "systemId": "file:///c%3A/Users/codes/.vscode/extensions/lpdf.lpdf-0.4.1/schema/lpdf.xsd",
-            "pattern": "**/*.xml"
-        }
-    ]
+    "xml.fileAssociations": []
 }

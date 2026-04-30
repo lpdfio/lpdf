@@ -211,7 +211,7 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     let watermark = if status.is_licensed() {
         None
     } else {
-        Some(("made with lpdf.io", Some("https://lpdf.io")))
+        Some(("Made with lpdf.io", Some("https://lpdf.io")))
     };
     let watermark_ref = watermark.map(|(t, u)| (t, u));
 
@@ -255,7 +255,7 @@ impl LpdfEngine {
         let lp = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
             lp.iter().flat_map(layout::layout_page).collect();
-        let wm = Some(("made with lpdf.io", Some("https://lpdf.io")));
+        let wm = Some(("Made with lpdf.io", Some("https://lpdf.io")));
         pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, wm, None, false)
     }
 }

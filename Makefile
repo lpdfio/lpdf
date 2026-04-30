@@ -12,7 +12,7 @@ export LPDF_PUBLIC_KEY
         build-adapter-node build-adapter-dotnet build-adapter-php build-adapter-python \
         build-adapter-vscode package-adapter-vscode install-adapter-vscode \
         test-adapter-node test-adapter-dotnet test-adapter-php test-adapter-python \
-        benchmark benchmark-x gen-fixtures \
+        benchmark benchmark-x gen-fixtures codegen \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
@@ -41,7 +41,7 @@ test-wasm:
 	@echo ""
 	cargo test --manifest-path src/core/Cargo.toml
 
-test-wasi:
+test-wasi: test-wasm
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Running WASI tests..."
@@ -70,7 +70,19 @@ gen-fixtures:
 	@echo ""
 	cargo run --manifest-path src/core/Cargo.toml --bin gen_fixtures -- --all --data --out test/fixtures
 
-build-adapter-node:
+codegen:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Running codegen..."
+	@echo ""
+	@if [ -z "$(INPUT)" ]; then echo "ERROR: INPUT is required. Usage: make codegen INPUT=invoice.xml TARGET=js OUTPUT=out/invoice.ts"; exit 1; fi
+	@if [ -z "$(TARGET)" ]; then echo "ERROR: TARGET is required. Usage: make codegen INPUT=invoice.xml TARGET=js OUTPUT=out/invoice.ts"; exit 1; fi
+	cargo run --manifest-path src/core/Cargo.toml --bin codegen -- \
+		--input $(INPUT) \
+		--target $(TARGET) \
+		$(if $(OUTPUT),--output $(OUTPUT))
+
+build-adapter-node: build-wasm
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Building Node adapter..."
