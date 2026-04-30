@@ -2,91 +2,52 @@
 
 # Lpdf
 
-**PDF as Code, on every platform.**
+**PDF as Code on every platform**
 
-Describe your document structure in code using the programming Kit or XML. Every PDF is compact, pixel-perfect, and identical across platforms.
+You describe a document as code or XML. Lpdf renders a compact, pixel-perfect PDF — identical across platforms.
 
----
+## SDKs
 
-## Architecture
-
-The core engine is written in Rust and compiled to two targets:
-
-- **WASM** — for Node.js and browser runtimes (embedded in the adapter package)
-- **WASI** — a portable `.wasm` binary for server runtimes (Python, PHP, .NET) via [Wasmtime](https://wasmtime.dev)
-
-All adapters expose the same two interfaces:
-
-- **`renderPdf(xml)`** — render a PDF from an XML document string
-- **Kit API** — build documents programmatically using `LpdfKit` and `LpdfLayout` without writing XML
-
-The XML schema is published at [`https://lpdf.io/schema/lpdf.xsd`](https://lpdf.io/schema/lpdf.xsd).
-
----
-
-## Adapters
+Lpdf runs on Node.js, browser, .NET, PHP, and Python. Under the hood, a single Rust core compiles to two targets: **WASM** (embedded in the JS SDK) and **WASI** (a portable binary for server runtimes via [Wasmtime](https://wasmtime.dev)).
 
 ### Node.js
 
-**[github.com/lpdfio/lpdf-js](https://github.com/lpdfio/lpdf-js)** · [npmjs.com/package/@lpdfio/lpdf](https://www.npmjs.com/package/@lpdfio/lpdf)
+[github.com/lpdfio/lpdf-js](https://github.com/lpdfio/lpdf-js)  -  [npmjs.com/package/@lpdfio/lpdf](https://www.npmjs.com/package/@lpdfio/lpdf)  -  [lpdf.io/docs/js](https://lpdf.io/docs/js)
 
 ```bash
 npm install @lpdfio/lpdf
 ```
 
-```js
-const { LpdfEngine } = require('@lpdfio/lpdf');
-const fs = require('node:fs');
+```ts
+import { L, NoAttr } from 'lpdf'
 
-const engine = new LpdfEngine();
-const xml = fs.readFileSync('document.xml', 'utf8');
-const pdf = await engine.renderPdf(xml);
-fs.writeFileSync('output.pdf', pdf);
+const engine = L.engine()
+
+const doc = L.document({ size: 'letter', margin: '48pt' }, [
+    L.section(NoAttr, [
+        L.layout(NoAttr, [
+            L.stack({ gap: '24pt' }, [
+                L.split(NoAttr, [
+                    L.text({ fontSize: '8pt', color: '#888888' }, ['ACME CORP']),
+                    L.text({ fontSize: '22pt', bold: 'true' }, ['Project Proposal']),
+                ]),
+                L.divider({ thickness: 'xs' }),
+                L.text({ fontSize: '13pt', bold: 'true' }, ['Scope of Work']),
+                L.flank({ gap: '12pt', align: 'start' }, [
+                    L.text({ color: '#888888', width: '24pt' }, ['01']),
+                    L.text(NoAttr, ['Discovery & Research']),
+                ]),
+            ]),
+        ]),
+    ]),
+])
+
+const pdf = await engine.render(doc)
 ```
-
----
-
-### Python
-
-**[github.com/lpdfio/lpdf-python](https://github.com/lpdfio/lpdf-python)** · [pypi.org/project/lpdfio-lpdf](https://pypi.org/project/lpdfio-lpdf/)
-
-```bash
-pip install lpdfio-lpdf
-```
-
-```python
-from lpdf import LpdfEngine
-
-engine = LpdfEngine()
-xml = open("document.xml").read()
-pdf = engine.render_pdf(xml)
-open("output.pdf", "wb").write(pdf)
-```
-
----
-
-### PHP
-
-**[github.com/lpdfio/lpdf-php](https://github.com/lpdfio/lpdf-php)** · [packagist.org/packages/lpdfio/lpdf](https://packagist.org/packages/lpdfio/lpdf)
-
-```bash
-composer require lpdfio/lpdf
-```
-
-```php
-use Lpdf\LpdfEngine;
-
-$engine = new LpdfEngine();
-$xml = file_get_contents('document.xml');
-$pdf = $engine->renderPdf($xml);
-file_put_contents('output.pdf', $pdf);
-```
-
----
 
 ### .NET
 
-**[github.com/lpdfio/lpdf-dotnet](https://github.com/lpdfio/lpdf-dotnet)** · [nuget.org/packages/Lpdfio.Lpdf](https://www.nuget.org/packages/Lpdfio.Lpdf)
+[github.com/lpdfio/lpdf-dotnet](https://github.com/lpdfio/lpdf-dotnet)  -  [nuget.org/packages/Lpdfio.Lpdf](https://www.nuget.org/packages/Lpdfio.Lpdf)  -  [lpdf.io/docs/dotnet](https://lpdf.io/docs/dotnet)
 
 ```bash
 dotnet add package Lpdfio.Lpdf
@@ -95,41 +56,100 @@ dotnet add package Lpdfio.Lpdf
 ```csharp
 using Lpdf;
 
-var engine = new LpdfEngine();
-var xml = await File.ReadAllTextAsync("document.xml");
-var pdf = await engine.RenderPdf(xml);
-await File.WriteAllBytesAsync("output.pdf", pdf);
-```
+var engine = L.Engine();
 
----
-
-## Kit API
-
-All adapters also expose a fluent builder API for constructing documents in code, without XML. Each adapter ships equivalent `LpdfKit` and `LpdfLayout` classes in its native style.
-
-```js
-// Node.js — same concepts apply across all adapters
-const { LpdfEngine, LpdfKit, LpdfLayout } = require('@lpdfio/lpdf');
-
-const engine = new LpdfEngine();
-const doc = LpdfKit.document({
-  sections: [
-    LpdfKit.section({
-      nodes: [
-        LpdfKit.layout([
-          LpdfLayout.stack([
-            LpdfLayout.text(['Invoice #1001'], { fontSize: '24pt', bold: 'true' }),
-            LpdfLayout.text(['Due: 2025-06-01']),
-          ]),
+var doc = L.Document(new() { Size = "letter", Margin = "48pt" }, [
+    L.Section(NoAttr, [
+        L.Layout(NoAttr, [
+            L.Stack(new() { Gap = "24pt" }, [
+                L.Split(NoAttr, [
+                    L.Text(new() { FontSize = "8pt", Color = "#888888" }, ["ACME CORP"]),
+                    L.Text(new() { FontSize = "22pt", Bold = "true" }, ["Project Proposal"]),
+                ]),
+                L.Divider(new() { Thickness = "xs" }),
+                L.Text(new() { FontSize = "13pt", Bold = "true" }, ["Scope of Work"]),
+                L.Flank(new() { Gap = "12pt", Align = "start" }, [
+                    L.Text(new() { Color = "#888888", Width = "24pt" }, ["01"]),
+                    L.Text(NoAttr, ["Discovery & Research"]),
+                ]),
+            ]),
         ]),
-      ],
-    }),
-  ],
-});
-const pdf = await engine.renderKit(doc);
+    ]),
+]);
+
+var pdf = await engine.Render(doc);
 ```
 
----
+### PHP
+
+[github.com/lpdfio/lpdf-php](https://github.com/lpdfio/lpdf-php)  -  [packagist.org/packages/lpdfio/lpdf](https://packagist.org/packages/lpdfio/lpdf)  -  [lpdf.io/docs/php](https://lpdf.io/docs/php)
+
+```bash
+composer require lpdfio/lpdf
+```
+
+```php
+use Lpdf\L;
+use const Lpdf\NoAttr;
+
+$engine = L::engine();
+
+$doc = L::document(new DocumentAttr(size: 'letter', margin: '48pt'), [
+    L::section(NoAttr, [
+        L::layout(NoAttr, [
+            L::stack(new StackAttr(gap: '24pt'), [
+                L::split(NoAttr, [
+                    L::text(new TextAttr(fontSize: '8pt', color: '#888888'), ['ACME CORP']),
+                    L::text(new TextAttr(fontSize: '22pt', bold: 'true'), ['Project Proposal']),
+                ]),
+                L::divider(new DividerAttr(thickness: 'xs')),
+                L::text(new TextAttr(fontSize: '13pt', bold: 'true'), ['Scope of Work']),
+                L::flank(new FlankAttr(gap: '12pt', align: 'start'), [
+                    L::text(new TextAttr(color: '#888888', width: '24pt'), ['01']),
+                    L::text(NoAttr, ['Discovery & Research']),
+                ]),
+            ]),
+        ]),
+    ]),
+]);
+
+$pdf = $engine->render($doc);
+```
+
+### Python
+
+[github.com/lpdfio/lpdf-python](https://github.com/lpdfio/lpdf-python)  -  [pypi.org/project/lpdfio-lpdf](https://pypi.org/project/lpdfio-lpdf/)  -  [lpdf.io/docs/python](https://lpdf.io/docs/python)
+
+```bash
+pip install lpdfio-lpdf
+```
+
+```python
+from lpdf import L, NoAttr
+
+engine = L.engine()
+
+doc = L.document(DocumentAttr(size='letter', margin='48pt'), [
+    L.section(NoAttr, [
+        L.layout(NoAttr, [
+            L.stack(StackAttr(gap='24pt'), [
+                L.split(NoAttr, [
+                    L.text(TextAttr(font_size='8pt', color='#888888'), ['ACME CORP']),
+                    L.text(TextAttr(font_size='22pt', bold='true'), ['Project Proposal']),
+                ]),
+                L.divider(DividerAttr(thickness='xs')),
+                L.text(TextAttr(font_size='13pt', bold='true'), ['Scope of Work']),
+                L.flank(FlankAttr(gap='12pt', align='start'), [
+                    L.text(TextAttr(color='#888888', width='24pt'), ['01']),
+                    L.text(NoAttr, ['Discovery & Research']),
+                ]),
+            ]),
+        ]),
+    ]),
+])
+
+pdf = engine.render(doc)
+```
 
 ## VS Code Extension
 
@@ -137,10 +157,11 @@ const pdf = await engine.renderKit(doc);
 
 Preview, design, and export PDFs directly in VS Code — entirely offline. Supports live XML preview and PDF export via the command palette.
 
----
-
 ## Docs
 
-[lpdf.io/docs](https://lpdf.io/docs) · [lpdf.io](https://lpdf.io)
+[lpdf.io/docs](https://lpdf.io/docs)
 
 
+--
+
+Dual-licensed: Community License (free) and Commercial License (paid). See [LICENSE](LICENSE) for full terms.
