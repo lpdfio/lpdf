@@ -522,7 +522,7 @@
         <xs:element name="border" type="TokenScaleRow" minOccurs="0"/>
         <xs:element name="radius" type="TokenScaleRow" minOccurs="0"/>
         <xs:element name="width"  type="TokenScaleRow" minOccurs="0"/>
-        <xs:element name="text"   type="TokenScaleRow" minOccurs="0"/>
+        <xs:element name="text-size" type="TokenScaleRow" minOccurs="0"/>
         <!-- "grid" and "space" share the same shape -->
         <xs:element name="grid"   type="TokenScaleRow" minOccurs="0"/>
         <xs:element name="colors" minOccurs="0">

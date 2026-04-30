@@ -2,7 +2,7 @@
 <lpdf version="1">
 
   <tokens>
-    <text xs="5.5pt" s="6.5pt" m="8pt" l="10pt" xl="14pt" xxl="20pt"/>
+    <text-size xs="5.5pt" s="6.5pt" m="8pt" l="10pt" xl="14pt" xxl="20pt"/>
     <space xs="2pt" s="3pt" m="5pt" l="8pt" xl="14pt" xxl="28pt"/>
     <colors>
       <color name="primary"  value="#003087"/>

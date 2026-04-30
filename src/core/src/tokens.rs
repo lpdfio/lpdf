@@ -7,7 +7,7 @@ pub struct Tokens {
     pub radius: [f32; 6],
     pub width: [f32; 6],
     pub grid_col: [f32; 6],
-    pub text: [f32; 6],
+    pub text_size: [f32; 6],
     pub colors: HashMap<String, String>,
 }
 
@@ -108,7 +108,7 @@ impl Tokens {
     /// Text size: scale token, pt value, or plain number
     pub fn resolve_text_size(&self, val: &str) -> Result<f32, String> {
         if let Some(i) = scale_idx(val) {
-            return Ok(self.text[i]);
+            return Ok(self.text_size[i]);
         }
         if let Some(v) = parse_pt(val) {
             return Ok(v);
@@ -193,7 +193,7 @@ impl Default for Tokens {
             radius: [2.0, 4.0, 6.0, 10.0, 16.0, 24.0],
             width: [120.0, 200.0, 280.0, 360.0, 440.0, 515.0],
             grid_col: [60.0, 100.0, 140.0, 180.0, 220.0, 280.0],
-            text: [7.0, 9.0, 11.0, 14.0, 20.0, 28.0],
+            text_size: [7.0, 9.0, 11.0, 14.0, 20.0, 28.0],
             colors,
         }
     }

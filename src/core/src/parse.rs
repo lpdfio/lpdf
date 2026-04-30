@@ -800,7 +800,7 @@ fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), 
             "border" => tokens.border   = parse_scale_row(&child)?,
             "radius" => tokens.radius   = parse_scale_row(&child)?,
             "width"  => tokens.width    = parse_scale_row(&child)?,
-            "text"   => tokens.text     = parse_scale_row(&child)?,
+            "text-size" => tokens.text_size = parse_scale_row(&child)?,
             "grid"   => tokens.grid_col = parse_scale_row(&child)?,
             "colors" => {
                 for color_elem in elems(&child) {
@@ -1793,7 +1793,7 @@ pub fn parse_tree_tokens_pub(
     apply_scale("radius", &mut tokens.radius)?;
     apply_scale("width",  &mut tokens.width)?;
     apply_scale("grid",   &mut tokens.grid_col)?;
-    apply_scale("text",   &mut tokens.text)?;
+    apply_scale("text-size", &mut tokens.text_size)?;
 
     if let Some(colors) = obj.get("colors").and_then(|v| v.as_object()) {
         for (k, v) in colors {

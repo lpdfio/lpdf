@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <lpdf version="1">
   <tokens>
-    <text xs="7pt" s="9pt" m="11pt" l="14pt" xl="20pt" xxl="28pt" />
+    <text-size xs="7pt" s="9pt" m="11pt" l="14pt" xl="20pt" xxl="28pt" />
     <space xs="4pt" s="8pt" m="12pt" l="24pt" xl="40pt" xxl="64pt"/>
     <colors>
       <color name="primary" value="#1763cf"/>
