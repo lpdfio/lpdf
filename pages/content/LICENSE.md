@@ -10,13 +10,19 @@ License inquiries: license@lpdf.io
 
 Lpdf is available under three license tiers: a free Community License for individuals and qualifying organizations, a Professional License for mid-size commercial use, and an Enterprise License for larger organizations. All license tiers receive the complete feature set — no capabilities are gated behind paid plans.
 
+### Definitions
+
+"Production environment" means any environment in which the Software processes real user data or supports live business operations, including staging environments accessible by end users.
+
 ### Equal Features Across All Tiers
 
 Every user of Lpdf, regardless of license tier, has access to the same library, the same layout engine, the same adapters, and the same output quality. Licensing determines the terms of use, not the features available.
 
 ### Transitive Dependency
 
-If Lpdf is pulled in as an indirect dependency of another library or framework rather than used directly in your project, the Community License applies automatically, regardless of your organization's revenue.
+If Lpdf is pulled in as an indirect dependency of another library or framework rather than used directly in your project, the Community License terms apply automatically with respect to revenue thresholds — no upgrade to a Professional or Enterprise License is required solely on account of the indirect dependency. 
+
+The author of the wrapping library or framework is responsible for obtaining a valid license key; end users of that library or framework are not required to obtain a separate Lpdf license key for their indirect use. 
 
 This exemption does not apply if the dependency was introduced, created, or controlled by the licensee's organization for the purpose of circumventing license requirements.
 
@@ -38,8 +44,6 @@ Organizations whose revenue crosses the 1,000,000 USD threshold have a **90-day 
 
 Companies and organizations whose total annual gross revenue exceeded **1,000,000 USD** but did not exceed **10,000,000 USD** in the most recent 12-month fiscal year must obtain a Professional License to use Lpdf in production environments.
 
-"Production environment" means any environment in which the Software processes real user data or supports live business operations, including staging environments accessible by end users.
-
 ### Larger Businesses
 
 Companies and organizations whose total annual gross revenue exceeded **10,000,000 USD** in the most recent 12-month fiscal year must obtain an Enterprise License to use Lpdf in production environments.
@@ -49,6 +53,20 @@ Organizations whose revenue crosses the 10,000,000 USD threshold have a **90-day
 ### Supporting Lpdf
 
 Paid licenses directly fund the continued development, maintenance, and improvement of Lpdf. If your organization has grown beyond the Community threshold, purchasing a license is the most direct way to ensure Lpdf continues to exist and improve.
+
+---
+
+## Unregistered Use
+
+Use of the Software without a valid license key ("Unregistered Use") is permitted solely for evaluation and local testing. It does not constitute a license for use in a production environment, commercial deployment, or distribution.
+
+Unregistered Use is subject to the following restrictions:
+
+(a) **Attribution.** Each document rendered shall include an attribution notice in the form specified in the Software documentation. This notice may not be suppressed, removed, or obscured.
+
+(b) **Input Limit.** Each render call is limited to input not exceeding 1 megabyte (1,048,576 bytes) of raw XML or JSON. Input exceeding this limit will be rejected by the Software.
+
+Both restrictions are lifted upon obtaining a valid license key. Community keys are available at no cost at lpdf.io.
 
 ---
 
