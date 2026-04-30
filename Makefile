@@ -135,7 +135,7 @@ test-adapter-python: build-adapter-python
 	@echo ">>> Testing Python adapter..."
 	@echo ""
 	docker run --rm \
-		-v "$(CURDIR)/src/adapters/python/lpdf://app/lpdf" \
+		-v "$(CURDIR)/src/adapters/python/src/lpdf://app/lpdf" \
 		-v "$(CURDIR)/src/adapters/python/tests://app/tests" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-v "$(CURDIR)/test/snapshots://app/test/snapshots" \
@@ -257,28 +257,28 @@ example-python:
 	@echo ">>> Running Python example..."
 	@echo ""
 	docker run --rm \
-		-v "$(CURDIR)/src/adapters/python/lpdf://app/lpdf" \
+		-v "$(CURDIR)/src/adapters/python/src/lpdf://app/lpdf" \
 		-v "$(CURDIR)/src/adapters/python/example://app/example" \
 		-v "$(CURDIR)/src/adapters/python/lpdf-light.png://app/lpdf-light.png" \
 		-v "$(CURDIR)/example://app/example-data" \
 		-v "$(CURDIR)/src/adapters/python/resources://app/resources" \
 		-w //app lpdf-python python example/example.py
 	docker run --rm \
-		-v "$(CURDIR)/src/adapters/python/lpdf://app/lpdf" \
+		-v "$(CURDIR)/src/adapters/python/src/lpdf://app/lpdf" \
 		-v "$(CURDIR)/src/adapters/python/example://app/example" \
 		-v "$(CURDIR)/example://app/example-data" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-v "$(CURDIR)/src/adapters/python/resources://app/resources" \
 		-w //app lpdf-python python example/encrypt-permissions-only.py
 	docker run --rm \
-		-v "$(CURDIR)/src/adapters/python/lpdf://app/lpdf" \
+		-v "$(CURDIR)/src/adapters/python/src/lpdf://app/lpdf" \
 		-v "$(CURDIR)/src/adapters/python/example://app/example" \
 		-v "$(CURDIR)/example://app/example-data" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-v "$(CURDIR)/src/adapters/python/resources://app/resources" \
 		-w //app lpdf-python python example/encrypt-open-password.py
 	docker run --rm \
-		-v "$(CURDIR)/src/adapters/python/lpdf://app/lpdf" \
+		-v "$(CURDIR)/src/adapters/python/src/lpdf://app/lpdf" \
 		-v "$(CURDIR)/src/adapters/python/example://app/example" \
 		-v "$(CURDIR)/example://app/example-data" \
 		-v "$(CURDIR)/src/adapters/python/resources://app/resources" \
