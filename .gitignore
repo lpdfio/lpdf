@@ -1,22 +1,14 @@
 .vscode
+.claude
+.github/skills
+local
 
 /target
 /src/core/target
 
-bin
-!src/core/src/bin/
-obj
 node_modules
-var
-
-__pycache__/
-*.pyc
-*.pyo
 
 src/adapters/
 src/demos/
 src/internal/
 src/public
-
-.claude
-skills
