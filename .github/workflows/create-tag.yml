@@ -1,7 +1,7 @@
 name: Create release tag
 
-# Method B from LPDF-repo.md — creates the tag that triggers release.yml.
-# Method A: create the tag manually from the GitHub Releases UI.
+# Creates the tag that triggers release.yml.
+# Create the tag manually from the GitHub Releases UI.
 
 on:
   workflow_dispatch:

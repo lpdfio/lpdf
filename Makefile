@@ -17,31 +17,26 @@ export LPDF_PUBLIC_KEY
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
         clone-adapters sync-license check-license \
-        build-pages build-codemirror
+        build-pages
 
 # ── Pages demo bundle ─────────────────────────────────────────────────────────
 # Copies the browser adapter (browser.js) and the WASM binary into the pages
 # asset tree so the home-page demo component can be served without traversing
 # outside the pages root.  Depends on build-sdk-node so the source files
 # are guaranteed to exist before the copy.
+# Also runs `npm run build` inside src/pages/ which bundles CodeMirror and
+# all other authored JS assets via src/pages/src/build.mjs.
 build-pages: build-sdk-node
 	@echo ""
 	@echo "-------------------------------"
-	@echo ">>> Bundling pages demo assets..."
+	@echo ">>> Bundling pages assets..."
 	@echo ""
-	mkdir -p src/public/pages/assets/js/lpdf 
-	&& cp src/sdk/node/dist/browser.js src/public/pages/assets/js/lpdf/browser.js 
-	&& cp src/sdk/node/dist/wasm/lpdf-web.js src/public/pages/assets/js/lpdf/lpdf-web.js 
-	&& cp dist/web/lpdf_bg.wasm src/public/pages/assets/js/lpdf/lpdf_bg.wasm
-	@echo ">>> src/public/pages/assets/js/lpdf/ updated."
-
-build-codemirror:
-	@echo ""
-	@echo "-------------------------------"
-	@echo ">>> Bundling CodeMirror for pages demo..."
-	@echo ""
-	cd src/public/pages/build && npm install && npm run build
-	@echo ">>> src/public/pages/assets/js/codemirror.min.js updated."
+	mkdir -p src/pages/www/assets/js/lpdf
+	cp src/sdk/node/dist/browser.js          src/pages/www/assets/js/lpdf/browser.js
+	cp src/sdk/node/dist/wasm/lpdf-web.js    src/pages/www/assets/js/lpdf/lpdf-web.js
+	cp dist/web/lpdf_bg.wasm                 src/pages/www/assets/js/lpdf/lpdf_bg.wasm
+	cd src/pages && npm install && npm run build
+	@echo ">>> src/pages/www/assets/js/ updated."
 
 build-wasm:
 	@echo ""

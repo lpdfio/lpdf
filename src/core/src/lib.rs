@@ -344,7 +344,7 @@ pub fn kit_to_xml(json: &str) -> Result<String, JsValue> {
     kit_to_xml::kit_to_xml(json).map_err(|e| JsValue::from_str(&e))
 }
 
-/// Generate SDK source code from an LPDF XML string.
+/// Generate SDK source code from an Lpdf XML string.
 ///
 /// `options_json` is a JSON object with:
 /// - `target`: `"js"` (required)

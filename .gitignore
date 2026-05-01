@@ -8,10 +8,11 @@ local
 
 node_modules
 
-dev
+dev/
 src/demos/
-src/internal
+src/license/
 src/pages/
 src/portal/
 src/sdk/
 src/vscode/
+tmp/

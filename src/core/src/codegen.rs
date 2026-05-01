@@ -1,6 +1,6 @@
 //! # codegen
 //!
-//! XML → SDK code generator. Walks an LPDF XML document and emits idiomatic
+//! XML → SDK code generator. Walks an Lpdf XML document and emits idiomatic
 //! source code for the requested target language.
 //!
 //! ## Supported targets
@@ -31,7 +31,7 @@ impl Default for CodegenOptions {
     }
 }
 
-/// Generate SDK source code from an LPDF XML string.
+/// Generate SDK source code from an Lpdf XML string.
 ///
 /// Returns the generated source as a `String`, or an error message.
 pub fn codegen(xml: &str, options: &CodegenOptions) -> Result<String, String> {
