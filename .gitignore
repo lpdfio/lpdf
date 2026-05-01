@@ -8,6 +8,7 @@ local
 
 node_modules
 
+dev
 src/demos/
 src/internal
 src/pages/
