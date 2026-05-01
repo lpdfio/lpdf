@@ -4,8 +4,8 @@ ifeq ($(OS),Windows_NT)
 endif
 
 # Auto-load the local dev public key if LPDF_PUBLIC_KEY is not already set.
-# Requires src/internal/license/keys/public.hex — run `npm start` in src/internal/license/ once to generate it.
-LPDF_PUBLIC_KEY ?= $(shell cat src/internal/license/keys/public.hex 2>/dev/null | tr -d '[:space:]')
+# Requires src/license/keys/public.hex — run `npm start` in src/license/ once to generate it.
+LPDF_PUBLIC_KEY ?= $(shell cat src/license/keys/public.hex 2>/dev/null | tr -d '[:space:]')
 export LPDF_PUBLIC_KEY
 
 .PHONY: build-wasm build-wasi test-wasm test-wasi \
@@ -174,7 +174,7 @@ test-sdk-python: build-sdk-python
 		-v "$(CURDIR)/src/sdk/python/resources://app/resources" \
 		-w //app lpdf-python python -m pytest tests -v
 
-build-all: build-wasm build-wasi build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python
+build-all: clean-all build-wasm build-wasi build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python
 
 test-all: test-wasm test-wasi test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python
 
