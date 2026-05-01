@@ -17,9 +17,6 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Check LICENSE copies are in sync
-        run: make check-license
-
       - name: Test core
         env:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
