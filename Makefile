@@ -16,7 +16,32 @@ export LPDF_PUBLIC_KEY
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
-        clone-adapters sync-license check-license
+        clone-adapters sync-license check-license \
+        build-pages build-codemirror
+
+# ── Pages demo bundle ─────────────────────────────────────────────────────────
+# Copies the browser adapter (browser.js) and the WASM binary into the pages
+# asset tree so the home-page demo component can be served without traversing
+# outside the pages root.  Depends on build-adapter-node so the source files
+# are guaranteed to exist before the copy.
+build-pages: build-adapter-node
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Bundling pages demo assets..."
+	@echo ""
+	mkdir -p src/public/pages/assets/js/lpdf 
+	&& cp src/sdk/node/dist/browser.js src/public/pages/assets/js/lpdf/browser.js 
+	&& cp src/sdk/node/dist/wasm/lpdf-web.js src/public/pages/assets/js/lpdf/lpdf-web.js 
+	&& cp dist/web/lpdf_bg.wasm src/public/pages/assets/js/lpdf/lpdf_bg.wasm
+	@echo ">>> src/public/pages/assets/js/lpdf/ updated."
+
+build-codemirror:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Bundling CodeMirror for pages demo..."
+	@echo ""
+	cd src/public/pages/build && npm install && npm run build
+	@echo ">>> src/public/pages/assets/js/codemirror.min.js updated."
 
 build-wasm:
 	@echo ""
@@ -87,38 +112,38 @@ build-adapter-node: build-wasm
 	@echo "-------------------------------"
 	@echo ">>> Building Node adapter..."
 	@echo ""
-	mkdir -p src/adapters/node/wasm && cp dist/node/lpdf.js dist/node/lpdf.d.ts dist/node/lpdf_bg.wasm src/adapters/node/wasm/ && cp dist/web/lpdf.js src/adapters/node/wasm/lpdf-web.js
-	cd src/adapters/node && npm install && npm run build
+	mkdir -p src/sdk/node/wasm && cp dist/node/lpdf.js dist/node/lpdf.d.ts dist/node/lpdf_bg.wasm src/sdk/node/wasm/ && cp dist/web/lpdf.js src/sdk/node/wasm/lpdf-web.js
+	cd src/sdk/node && npm install && npm run build
 
 test-adapter-node: build-adapter-node
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Testing Node adapter..."
 	@echo ""
-	cd src/adapters/node && npm test
+	cd src/sdk/node && npm test
 
 build-adapter-dotnet: build-wasi
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Building .NET adapter..."
 	@echo ""
-	mkdir -p src/adapters/dotnet/wasm && cp dist/wasi/lpdf.wasm src/adapters/dotnet/wasm/lpdf.wasm
-	cd src/adapters/dotnet && dotnet build Lpdf.csproj -c Release
+	mkdir -p src/sdk/dotnet/wasm && cp dist/wasi/lpdf.wasm src/sdk/dotnet/wasm/lpdf.wasm
+	cd src/sdk/dotnet && dotnet build Lpdf.csproj -c Release
 
 test-adapter-dotnet: build-adapter-dotnet
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Testing .NET adapter..."
 	@echo ""
-	cd src/adapters/dotnet && dotnet test
+	cd src/sdk/dotnet && dotnet test
 
 build-adapter-php: build-wasi
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Building PHP adapter..."
 	@echo ""
-	mkdir -p src/adapters/php/resources && cp dist/wasi/lpdf.wasm src/adapters/php/resources/lpdf-wasi.wasm
-	docker build -t lpdf-php src/adapters/php
+	mkdir -p src/sdk/php/resources && cp dist/wasi/lpdf.wasm src/sdk/php/resources/lpdf-wasi.wasm
+	docker build -t lpdf-php src/sdk/php
 
 test-adapter-php: build-adapter-php
 	@echo ""
@@ -126,11 +151,11 @@ test-adapter-php: build-adapter-php
 	@echo ">>> Testing PHP adapter..."
 	@echo ""
 	docker run --rm \
-		-v "$(CURDIR)/src/adapters/php/src://app/src" \
-		-v "$(CURDIR)/src/adapters/php/test://app/test" \
+		-v "$(CURDIR)/src/sdk/php/src://app/src" \
+		-v "$(CURDIR)/src/sdk/php/test://app/test" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-v "$(CURDIR)/test/snapshots://app/test/snapshots" \
-		-v "$(CURDIR)/src/adapters/php/resources://app/resources" \
+		-v "$(CURDIR)/src/sdk/php/resources://app/resources" \
 		-w //app lpdf-php php vendor/bin/phpunit test
 
 build-adapter-python: build-wasi
@@ -138,8 +163,8 @@ build-adapter-python: build-wasi
 	@echo "-------------------------------"
 	@echo ">>> Building Python adapter..."
 	@echo ""
-	mkdir -p src/adapters/python/resources && cp dist/wasi/lpdf.wasm src/adapters/python/resources/lpdf-wasi.wasm
-	docker build -t lpdf-python src/adapters/python
+	mkdir -p src/sdk/python/resources && cp dist/wasi/lpdf.wasm src/sdk/python/resources/lpdf-wasi.wasm
+	docker build -t lpdf-python src/sdk/python
 
 test-adapter-python: build-adapter-python
 	@echo ""
@@ -147,11 +172,11 @@ test-adapter-python: build-adapter-python
 	@echo ">>> Testing Python adapter..."
 	@echo ""
 	docker run --rm \
-		-v "$(CURDIR)/src/adapters/python/src/lpdf://app/lpdf" \
-		-v "$(CURDIR)/src/adapters/python/tests://app/tests" \
+		-v "$(CURDIR)/src/sdk/python/src/lpdf://app/lpdf" \
+		-v "$(CURDIR)/src/sdk/python/tests://app/tests" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-v "$(CURDIR)/test/snapshots://app/test/snapshots" \
-		-v "$(CURDIR)/src/adapters/python/resources://app/resources" \
+		-v "$(CURDIR)/src/sdk/python/resources://app/resources" \
 		-w //app lpdf-python python -m pytest tests -v
 
 build-all: build-wasm build-wasi build-adapter-node build-adapter-dotnet build-adapter-php build-adapter-python
@@ -163,13 +188,13 @@ example-all: example-node example-dotnet example-php example-python
 clone-adapters:
 	@echo ""
 	@echo "-------------------------------"
-	@echo ">>> Cloning adapter repos into src/adapters/..."
+	@echo ">>> Cloning adapter repos into src/sdk/..."
 	@echo ""
-	git clone https://github.com/lpdfio/lpdf-js     src/adapters/node
-	git clone https://github.com/lpdfio/lpdf-dotnet src/adapters/dotnet
-	git clone https://github.com/lpdfio/lpdf-python src/adapters/python
-	git clone https://github.com/lpdfio/lpdf-php    src/adapters/php
-	git clone https://github.com/lpdfio/lpdf-vscode src/adapters/vscode
+	git clone https://github.com/lpdfio/lpdf-js     src/sdk/node
+	git clone https://github.com/lpdfio/lpdf-dotnet src/sdk/dotnet
+	git clone https://github.com/lpdfio/lpdf-python src/sdk/python
+	git clone https://github.com/lpdfio/lpdf-php    src/sdk/php
+	git clone https://github.com/lpdfio/lpdf-vscode src/sdk/vscode
 
 clean-wasm:
 	@echo ""
@@ -192,14 +217,14 @@ clean-adapter-node:
 	@echo "-------------------------------"
 	@echo ">>> Cleaning Node adapter..."
 	@echo ""
-	rm -rf src/adapters/node/dist src/adapters/node/node_modules
+	rm -rf src/sdk/node/dist src/sdk/node/node_modules
 
 clean-adapter-dotnet:
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Cleaning .NET adapter..."
 	@echo ""
-	cd src/adapters/dotnet && dotnet clean
+	cd src/sdk/dotnet && dotnet clean
 
 clean-adapter-php:
 	@echo ""
@@ -222,14 +247,14 @@ example-node:
 	@echo "-------------------------------"
 	@echo ">>> Running Node example..."
 	@echo ""
-	cd src/adapters/node && npx ts-node example/example.ts&& npx ts-node example/example2.ts && npx ts-node example/encrypt-permissions-only.ts && npx ts-node example/encrypt-open-password.ts && npx ts-node example/example-data.ts
+	cd src/sdk/node && npx ts-node example/example.ts&& npx ts-node example/example2.ts && npx ts-node example/encrypt-permissions-only.ts && npx ts-node example/encrypt-open-password.ts && npx ts-node example/example-data.ts
 
 example-dotnet:
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Running .NET example..."
 	@echo ""
-	dotnet run --project src/adapters/dotnet/example/LpdfExample.csproj
+	dotnet run --project src/sdk/dotnet/example/LpdfExample.csproj
 
 example-php:
 	@echo ""
@@ -237,31 +262,31 @@ example-php:
 	@echo ">>> Running PHP example..."
 	@echo ""
 	docker run --rm \
-		-v "$(CURDIR)/src/adapters/php/example://app/src/adapters/php/example" \
-		-v "$(CURDIR)/src/adapters/php/lpdf-light.png://app/src/adapters/php/lpdf-light.png" \
+		-v "$(CURDIR)/src/sdk/php/example://app/src/sdk/php/example" \
+		-v "$(CURDIR)/src/sdk/php/lpdf-light.png://app/src/sdk/php/lpdf-light.png" \
 		-v "$(CURDIR)/example://app/example" \
 		-v "$(CURDIR)/docs://app/docs" \
-		-w //app lpdf-php php src/adapters/php/example/example.php
+		-w //app lpdf-php php src/sdk/php/example/example.php
 	docker run --rm \
-		-v "$(CURDIR)/src/adapters/php/example://app/src/adapters/php/example" \
+		-v "$(CURDIR)/src/sdk/php/example://app/src/sdk/php/example" \
 		-v "$(CURDIR)/example://app/example" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
-		-w //app lpdf-php php src/adapters/php/example/encrypt-permissions-only.php
+		-w //app lpdf-php php src/sdk/php/example/encrypt-permissions-only.php
 	docker run --rm \
-		-v "$(CURDIR)/src/adapters/php/example://app/src/adapters/php/example" \
+		-v "$(CURDIR)/src/sdk/php/example://app/src/sdk/php/example" \
 		-v "$(CURDIR)/example://app/example" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
-		-w //app lpdf-php php src/adapters/php/example/encrypt-open-password.php
+		-w //app lpdf-php php src/sdk/php/example/encrypt-open-password.php
 	docker run --rm \
-		-v "$(CURDIR)/src/adapters/php/example://app/src/adapters/php/example" \
+		-v "$(CURDIR)/src/sdk/php/example://app/src/sdk/php/example" \
 		-v "$(CURDIR)/example://app/example" \
 		-v "$(CURDIR)/docs://app/docs" \
-		-w //app lpdf-php php src/adapters/php/example/example-data.php
+		-w //app lpdf-php php src/sdk/php/example/example-data.php
 	docker run --rm \
-		-v "$(CURDIR)/src/adapters/php/example://app/src/adapters/php/example" \
+		-v "$(CURDIR)/src/sdk/php/example://app/src/sdk/php/example" \
 		-v "$(CURDIR)/example://app/example" \
 		-v "$(CURDIR)/docs://app/docs" \
-		-w //app lpdf-php php src/adapters/php/example/example_canvas.php
+		-w //app lpdf-php php src/sdk/php/example/example_canvas.php
 
 example-python:
 	@echo ""
@@ -269,31 +294,31 @@ example-python:
 	@echo ">>> Running Python example..."
 	@echo ""
 	docker run --rm \
-		-v "$(CURDIR)/src/adapters/python/src/lpdf://app/lpdf" \
-		-v "$(CURDIR)/src/adapters/python/example://app/example" \
-		-v "$(CURDIR)/src/adapters/python/lpdf-light.png://app/lpdf-light.png" \
+		-v "$(CURDIR)/src/sdk/python/src/lpdf://app/lpdf" \
+		-v "$(CURDIR)/src/sdk/python/example://app/example" \
+		-v "$(CURDIR)/src/sdk/python/lpdf-light.png://app/lpdf-light.png" \
 		-v "$(CURDIR)/example://app/example-data" \
-		-v "$(CURDIR)/src/adapters/python/resources://app/resources" \
+		-v "$(CURDIR)/src/sdk/python/resources://app/resources" \
 		-w //app lpdf-python python example/example.py
 	docker run --rm \
-		-v "$(CURDIR)/src/adapters/python/src/lpdf://app/lpdf" \
-		-v "$(CURDIR)/src/adapters/python/example://app/example" \
+		-v "$(CURDIR)/src/sdk/python/src/lpdf://app/lpdf" \
+		-v "$(CURDIR)/src/sdk/python/example://app/example" \
 		-v "$(CURDIR)/example://app/example-data" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
-		-v "$(CURDIR)/src/adapters/python/resources://app/resources" \
+		-v "$(CURDIR)/src/sdk/python/resources://app/resources" \
 		-w //app lpdf-python python example/encrypt-permissions-only.py
 	docker run --rm \
-		-v "$(CURDIR)/src/adapters/python/src/lpdf://app/lpdf" \
-		-v "$(CURDIR)/src/adapters/python/example://app/example" \
+		-v "$(CURDIR)/src/sdk/python/src/lpdf://app/lpdf" \
+		-v "$(CURDIR)/src/sdk/python/example://app/example" \
 		-v "$(CURDIR)/example://app/example-data" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
-		-v "$(CURDIR)/src/adapters/python/resources://app/resources" \
+		-v "$(CURDIR)/src/sdk/python/resources://app/resources" \
 		-w //app lpdf-python python example/encrypt-open-password.py
 	docker run --rm \
-		-v "$(CURDIR)/src/adapters/python/src/lpdf://app/lpdf" \
-		-v "$(CURDIR)/src/adapters/python/example://app/example" \
+		-v "$(CURDIR)/src/sdk/python/src/lpdf://app/lpdf" \
+		-v "$(CURDIR)/src/sdk/python/example://app/example" \
 		-v "$(CURDIR)/example://app/example-data" \
-		-v "$(CURDIR)/src/adapters/python/resources://app/resources" \
+		-v "$(CURDIR)/src/sdk/python/resources://app/resources" \
 		-w //app lpdf-python python example/example-data.py
 
 build-adapter-vscode: build-wasm
@@ -301,23 +326,23 @@ build-adapter-vscode: build-wasm
 	@echo "-------------------------------"
 	@echo ">>> Building VS Code adapter..."
 	@echo ""
-	mkdir -p src/adapters/vscode/wasm && mkdir -p src/adapters/vscode/schema
-	cp dist/node/lpdf.js      src/adapters/vscode/wasm/ && cp dist/node/lpdf_bg.wasm src/adapters/vscode/wasm/ && cp dist/node/lpdf.d.ts src/adapters/vscode/wasm/ && cp pages/schema/lpdf.xsd src/adapters/vscode/schema/
-	cd src/adapters/vscode && npm install && npm run build
+	mkdir -p src/sdk/vscode/wasm && mkdir -p src/sdk/vscode/schema
+	cp dist/node/lpdf.js      src/sdk/vscode/wasm/ && cp dist/node/lpdf_bg.wasm src/sdk/vscode/wasm/ && cp dist/node/lpdf.d.ts src/sdk/vscode/wasm/ && cp schema/lpdf.xsd src/sdk/vscode/schema/
+	cd src/sdk/vscode && npm install && npm run build
 
 package-adapter-vscode: build-adapter-vscode
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Packaging VS Code extension..."
 	@echo ""
-	cd src/adapters/vscode && npx vsce package --out lpdf.vsix --baseContentUrl https://github.com/lpdfio/lpdf-vscode/raw/HEAD
+	cd src/sdk/vscode && npx vsce package --out lpdf.vsix --baseContentUrl https://github.com/lpdfio/lpdf-vscode/raw/HEAD
 
 install-adapter-vscode: package-adapter-vscode
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Installing VS Code extension..."
 	@echo ""
-	code.cmd --install-extension src/adapters/vscode/lpdf.vsix --force
+	code.cmd --install-extension src/sdk/vscode/lpdf.vsix --force
 
 sync-license:
 	@echo ""
@@ -325,12 +350,12 @@ sync-license:
 	@echo ">>> Syncing LICENSE from root to all copies..."
 	@echo ""
 	@$(SHELL) -c "cp LICENSE src/core/LICENSE"
-	@$(SHELL) -c "cp LICENSE pages/content/LICENSE.md"
-	@$(SHELL) -c "test -d src/adapters/node    && cp LICENSE src/adapters/node/LICENSE    || true"
-	@$(SHELL) -c "test -d src/adapters/dotnet  && cp LICENSE src/adapters/dotnet/LICENSE  || true"
-	@$(SHELL) -c "test -d src/adapters/php     && cp LICENSE src/adapters/php/LICENSE     || true"
-	@$(SHELL) -c "test -d src/adapters/python  && cp LICENSE src/adapters/python/LICENSE  || true"
-	@$(SHELL) -c "test -d src/adapters/vscode  && cp LICENSE src/adapters/vscode/LICENSE  || true"
+	@$(SHELL) -c "cp LICENSE src/public/pages/content/LICENSE.md"
+	@$(SHELL) -c "test -d src/sdk/node    && cp LICENSE src/sdk/node/LICENSE    || true"
+	@$(SHELL) -c "test -d src/sdk/dotnet  && cp LICENSE src/sdk/dotnet/LICENSE  || true"
+	@$(SHELL) -c "test -d src/sdk/php     && cp LICENSE src/sdk/php/LICENSE     || true"
+	@$(SHELL) -c "test -d src/sdk/python  && cp LICENSE src/sdk/python/LICENSE  || true"
+	@$(SHELL) -c "test -d src/sdk/vscode  && cp LICENSE src/sdk/vscode/LICENSE  || true"
 	@echo "Done. Commit changes in each adapter repo separately."
 
 check-license:
@@ -339,5 +364,5 @@ check-license:
 	@echo ">>> Checking LICENSE copies are in sync..."
 	@echo ""
 	@$(SHELL) -c "diff LICENSE src/core/LICENSE          || (echo 'ERROR: src/core/LICENSE differs from root LICENSE' && exit 1)"
-	@$(SHELL) -c "diff LICENSE pages/content/LICENSE.md  || (echo 'ERROR: pages/content/LICENSE.md differs from root LICENSE' && exit 1)"
+	@$(SHELL) -c "diff LICENSE src/public/pages/content/LICENSE.md  || (echo 'ERROR: src/public/pages/content/LICENSE.md differs from root LICENSE' && exit 1)"
 	@echo "OK"

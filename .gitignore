@@ -8,7 +8,9 @@ local
 
 node_modules
 
-src/adapters/
 src/demos/
-src/internal/
-src/public
+src/internal
+src/pages/
+src/portal/
+src/sdk/
+src/vscode/
