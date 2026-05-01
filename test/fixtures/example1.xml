@@ -1,6 +1,6 @@
 <lpdf version="1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:noNamespaceSchemaLocation="../../docs/schema/lpdf.xsd">
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
   <document size="a4" margin="40pt">
     <meta title="Getting Started with lpdf" />
     <section>
