@@ -197,7 +197,7 @@ clean-wasm:
 	@echo ">>> Cleaning WASM artifacts..."
 	@echo ""
 	cargo clean --manifest-path src/core/Cargo.toml
-	rm -rf dist/node dist/web
+	powershell -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 'dist/node','dist/web'"
 
 clean-wasi:
 	@echo ""
@@ -205,14 +205,14 @@ clean-wasi:
 	@echo ">>> Cleaning WASI artifacts..."
 	@echo ""
 	cargo clean --manifest-path src/core-wasi/Cargo.toml
-	rm -rf dist/wasi
+	powershell -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 'dist/wasi'"
 
 clean-adapter-node:
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Cleaning Node adapter..."
 	@echo ""
-	rm -rf src/sdk/node/dist src/sdk/node/node_modules
+	powershell -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 'src/sdk/node/dist','src/sdk/node/node_modules'"
 
 clean-adapter-dotnet:
 	@echo ""
