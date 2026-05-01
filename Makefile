@@ -9,9 +9,9 @@ LPDF_PUBLIC_KEY ?= $(shell cat src/internal/license/keys/public.hex 2>/dev/null 
 export LPDF_PUBLIC_KEY
 
 .PHONY: build-wasm build-wasi test-wasm test-wasi \
-        build-adapter-node build-adapter-dotnet build-adapter-php build-adapter-python \
-        build-adapter-vscode package-adapter-vscode install-adapter-vscode \
-        test-adapter-node test-adapter-dotnet test-adapter-php test-adapter-python \
+        build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python \
+        build-vscode package-vscode install-vscode \
+        test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python \
         benchmark benchmark-x gen-fixtures codegen \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-all \
         build-all test-all example-all \
@@ -22,9 +22,9 @@ export LPDF_PUBLIC_KEY
 # ── Pages demo bundle ─────────────────────────────────────────────────────────
 # Copies the browser adapter (browser.js) and the WASM binary into the pages
 # asset tree so the home-page demo component can be served without traversing
-# outside the pages root.  Depends on build-adapter-node so the source files
+# outside the pages root.  Depends on build-sdk-node so the source files
 # are guaranteed to exist before the copy.
-build-pages: build-adapter-node
+build-pages: build-sdk-node
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Bundling pages demo assets..."
@@ -107,7 +107,7 @@ codegen:
 		--target $(TARGET) \
 		$(if $(OUTPUT),--output $(OUTPUT))
 
-build-adapter-node: build-wasm
+build-sdk-node: build-wasm
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Building Node adapter..."
@@ -115,14 +115,14 @@ build-adapter-node: build-wasm
 	mkdir -p src/sdk/node/wasm && cp dist/node/lpdf.js dist/node/lpdf.d.ts dist/node/lpdf_bg.wasm src/sdk/node/wasm/ && cp dist/web/lpdf.js src/sdk/node/wasm/lpdf-web.js
 	cd src/sdk/node && npm install && npm run build
 
-test-adapter-node: build-adapter-node
+test-sdk-node: build-sdk-node
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Testing Node adapter..."
 	@echo ""
 	cd src/sdk/node && npm test
 
-build-adapter-dotnet: build-wasi
+build-sdk-dotnet: build-wasi
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Building .NET adapter..."
@@ -130,14 +130,14 @@ build-adapter-dotnet: build-wasi
 	mkdir -p src/sdk/dotnet/wasm && cp dist/wasi/lpdf.wasm src/sdk/dotnet/wasm/lpdf.wasm
 	cd src/sdk/dotnet && dotnet build Lpdf.csproj -c Release
 
-test-adapter-dotnet: build-adapter-dotnet
+test-sdk-dotnet: build-sdk-dotnet
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Testing .NET adapter..."
 	@echo ""
 	cd src/sdk/dotnet && dotnet test
 
-build-adapter-php: build-wasi
+build-sdk-php: build-wasi
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Building PHP adapter..."
@@ -145,7 +145,7 @@ build-adapter-php: build-wasi
 	mkdir -p src/sdk/php/resources && cp dist/wasi/lpdf.wasm src/sdk/php/resources/lpdf-wasi.wasm
 	docker build -t lpdf-php src/sdk/php
 
-test-adapter-php: build-adapter-php
+test-sdk-php: build-sdk-php
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Testing PHP adapter..."
@@ -158,7 +158,7 @@ test-adapter-php: build-adapter-php
 		-v "$(CURDIR)/src/sdk/php/resources://app/resources" \
 		-w //app lpdf-php php vendor/bin/phpunit test
 
-build-adapter-python: build-wasi
+build-sdk-python: build-wasi
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Building Python adapter..."
@@ -166,7 +166,7 @@ build-adapter-python: build-wasi
 	mkdir -p src/sdk/python/resources && cp dist/wasi/lpdf.wasm src/sdk/python/resources/lpdf-wasi.wasm
 	docker build -t lpdf-python src/sdk/python
 
-test-adapter-python: build-adapter-python
+test-sdk-python: build-sdk-python
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Testing Python adapter..."
@@ -179,9 +179,9 @@ test-adapter-python: build-adapter-python
 		-v "$(CURDIR)/src/sdk/python/resources://app/resources" \
 		-w //app lpdf-python python -m pytest tests -v
 
-build-all: build-wasm build-wasi build-adapter-node build-adapter-dotnet build-adapter-php build-adapter-python
+build-all: build-wasm build-wasi build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python
 
-test-all: test-wasm test-wasi test-adapter-node test-adapter-dotnet test-adapter-php test-adapter-python
+test-all: test-wasm test-wasi test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python
 
 example-all: example-node example-dotnet example-php example-python
 
@@ -321,7 +321,7 @@ example-python:
 		-v "$(CURDIR)/src/sdk/python/resources://app/resources" \
 		-w //app lpdf-python python example/example-data.py
 
-build-adapter-vscode: build-wasm
+build-vscode: build-wasm
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Building VS Code adapter..."
@@ -330,14 +330,14 @@ build-adapter-vscode: build-wasm
 	cp dist/node/lpdf.js      src/sdk/vscode/wasm/ && cp dist/node/lpdf_bg.wasm src/sdk/vscode/wasm/ && cp dist/node/lpdf.d.ts src/sdk/vscode/wasm/ && cp schema/lpdf.xsd src/sdk/vscode/schema/
 	cd src/sdk/vscode && npm install && npm run build
 
-package-adapter-vscode: build-adapter-vscode
+package-vscode: build-vscode
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Packaging VS Code extension..."
 	@echo ""
 	cd src/sdk/vscode && npx vsce package --out lpdf.vsix --baseContentUrl https://github.com/lpdfio/lpdf-vscode/raw/HEAD
 
-install-adapter-vscode: package-adapter-vscode
+install-vscode: package-vscode
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Installing VS Code extension..."
