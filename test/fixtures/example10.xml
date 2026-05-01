@@ -14,7 +14,7 @@
       <layout>
 
       <!-- running header: rendered identically on every page -->
-      <stack repeat="page" gap="xs">
+      <stack gap="xs">
         <split align="center">
           <text font-size="s" font="Helvetica-Bold" color="ink">ACME ENGINEERING HANDBOOK</text>
           <text font-size="s" color="text-muted">Revision 2026.04</text>
@@ -51,7 +51,7 @@
       </stack>
 
       <!-- running footer: page numbers via {page}/{pages} substitution -->
-      <stack repeat="page" gap="xs">
+      <stack gap="xs">
         <divider color="rule" thickness="xs" />
         <split align="center">
           <text font-size="xs" color="text-muted">© 2026 Acme Engineering</text>

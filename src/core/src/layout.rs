@@ -1,4 +1,5 @@
-use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Direction, FieldKind, HeightMode, Justify, Node, NodeKind, SectionLayout, Paginate, Repeat, TextAlign, TextRun};
+use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Direction, FieldKind, HeightMode, Justify, Node, NodeKind, SectionLayout, Paginate, TextAlign, TextRun};
+use crate::page_scope::{chrome_in_budget, page_scope_indices};
 use crate::render::{RenderBarcode, RenderBox, RenderField, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind};
 use crate::tokens::FontWidths;
 use crate::canvas;
@@ -98,7 +99,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
             page.children[0].height_mode,
             HeightMode::Full | HeightMode::Fill
         )
-        && page.children[0].repeat == Repeat::None
+        && page.children[0].page_scope.is_none()
     {
         let (nodes, _) = layout_stack(
             &page.children, avail_x, avail_y, avail_w, Some(avail_h),
@@ -115,11 +116,11 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
 
     // ── Partition direct children into chrome (top/bottom) and flow ──────────
     let mut lead = 0usize;
-    while lead < page.children.len() && page.children[lead].repeat != Repeat::None {
+    while lead < page.children.len() && page.children[lead].page_scope.is_some() {
         lead += 1;
     }
     let mut trail_start = page.children.len();
-    while trail_start > lead && page.children[trail_start - 1].repeat != Repeat::None {
+    while trail_start > lead && page.children[trail_start - 1].page_scope.is_some() {
         trail_start -= 1;
     }
     let top_chrome: &[Node] = &page.children[..lead];
@@ -153,8 +154,8 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
     }
 
     // ── Measure chrome heights ────────────────────────────────────────────────
-    // "always" = sum of page-repeat only (used on every page)
-    // "first"  = sum of every chrome (used on page 1 if repeat="first" is present)
+    // "always" = sum of chrome that appears on pages 2+ (exclude First-only nodes)
+    // "first"  = sum of all chrome (used on page 1)
     let top_always_h = measure_chrome_height(top_chrome, avail_w, false);
     let top_first_h  = measure_chrome_height(top_chrome, avail_w, true);
     let bot_always_h = measure_chrome_height(bot_chrome, avail_w, false);
@@ -174,11 +175,11 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
         let page_num = idx + 1;
 
         let top_here: Vec<Node> = top_chrome.iter()
-            .filter(|n| n.repeat == Repeat::Page || (is_first && n.repeat == Repeat::First))
+            .filter(|n| page_scope_indices(&n.page_scope, total_pages).contains(&idx))
             .map(|n| substitute_page_tokens(n, page_num, total_pages))
             .collect();
         let bot_here: Vec<Node> = bot_chrome.iter()
-            .filter(|n| n.repeat == Repeat::Page || (is_first && n.repeat == Repeat::First))
+            .filter(|n| page_scope_indices(&n.page_scope, total_pages).contains(&idx))
             .map(|n| substitute_page_tokens(n, page_num, total_pages))
             .collect();
 
@@ -220,9 +221,11 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
     // Guarantee at least one page, even if flow is empty but chrome exists.
     if pages_out.is_empty() {
         let top_here: Vec<Node> = top_chrome.iter()
+            .filter(|n| page_scope_indices(&n.page_scope, 1).contains(&0))
             .map(|n| substitute_page_tokens(n, 1, 1))
             .collect();
         let bot_here: Vec<Node> = bot_chrome.iter()
+            .filter(|n| page_scope_indices(&n.page_scope, 1).contains(&0))
             .map(|n| substitute_page_tokens(n, 1, 1))
             .collect();
         let (top_nodes, _) = layout_stack(&top_here, avail_x, avail_y, avail_w, None, 0.0, &Align::Stretch, &Justify::Start);
@@ -252,12 +255,14 @@ fn measure_stack_height(nodes: &[Node], avail_w: f32) -> f32 {
     h
 }
 
-/// Height of chrome nodes on a given page. When `include_first` is false,
-/// repeat="first" nodes are excluded (i.e. what later pages look like).
+/// Height of chrome nodes for budget estimation.  When `include_first` is false,
+/// `First`-scoped nodes are excluded (i.e. what later pages look like).
+/// Unknown-count scopes (`Last`/`Odd`/`Even`/`Pages`) are always included
+/// conservatively to prevent page overflow.
 fn measure_chrome_height(chrome: &[Node], avail_w: f32, include_first: bool) -> f32 {
     if chrome.is_empty() { return 0.0; }
     let selected: Vec<Node> = chrome.iter()
-        .filter(|n| n.repeat == Repeat::Page || (include_first && n.repeat == Repeat::First))
+        .filter(|n| chrome_in_budget(&n.page_scope, include_first))
         .cloned()
         .collect();
     measure_stack_height(&selected, avail_w)
@@ -3086,16 +3091,15 @@ mod tests {
 
     #[test]
     fn repeat_page_renders_on_every_page() {
-        // A footer marked repeat="page" must appear on every generated page.
+        // A region pinned to bottom with no page= (defaults to each) must appear on every page.
         let filler = r#"<frame height="120pt" />"#;
         let body = format!(
-            r#"{}<text repeat="page" size="s">FOOTER</text>"#,
+            r#"<region pin="bottom"><text size="s">FOOTER</text></region>{}"#,
             filler.repeat(10)
         );
         let tree = engine_render(&minimal(&body));
         let pages = tree["pages"].as_array().unwrap();
         assert!(pages.len() >= 2);
-        // Every page must contain a text node whose content starts with "FOOTER".
         for (i, p) in pages.iter().enumerate() {
             let found = find_text_content(p).iter().any(|t| t.contains("FOOTER"));
             assert!(found, "page {} missing footer", i + 1);
@@ -3106,7 +3110,7 @@ mod tests {
     fn repeat_first_renders_only_on_first_page() {
         let filler = r#"<frame height="120pt" />"#;
         let body = format!(
-            r#"<text repeat="first" size="s">COVER HEADER</text>{}"#,
+            r#"<region pin="top" page="first"><text size="s">COVER HEADER</text></region>{}"#,
             filler.repeat(10)
         );
         let tree = engine_render(&minimal(&body));
@@ -3122,7 +3126,7 @@ mod tests {
     fn page_number_tokens_substituted_per_page() {
         let filler = r#"<frame height="120pt" />"#;
         let body = format!(
-            r#"{}<text repeat="page" size="s">Page {{page}} of {{pages}}</text>"#,
+            r#"<region pin="bottom"><text size="s">Page {{page}} of {{pages}}</text></region>{}"#,
             filler.repeat(10)
         );
         let tree = engine_render(&minimal(&body));

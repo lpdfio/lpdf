@@ -126,3 +126,5 @@ fn showcase_canvas_underlay() { run_snapshot("showcase-canvas-underlay"); }
 fn showcase_canvas_layer()    { run_snapshot("showcase-canvas-layer"); }
 #[test]
 fn showcase_region_chrome()  { run_snapshot("showcase-region-chrome"); }
+#[test]
+fn showcase_region_page_scope() { run_snapshot("showcase-region-page-scope"); }

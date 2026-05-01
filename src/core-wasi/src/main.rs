@@ -34,6 +34,8 @@ mod encrypt;
 mod shared;
 #[path = "../../core/src/kit_to_xml.rs"]
 mod kit_to_xml;
+#[path = "../../core/src/page_scope.rs"]
+mod page_scope;
 #[path = "../../core/src/canvas.rs"]
 mod canvas;
 

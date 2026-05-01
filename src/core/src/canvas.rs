@@ -13,6 +13,7 @@ use crate::parse::{
     parse_measurement, parse_signed_measurement, parse_page_scope,
     elems, validate_img_asset, jattr,
 };
+use crate::page_scope::page_scope_indices;
 use crate::render::{
     RenderCanvasEllipse, RenderCanvasImage, RenderCanvasLayer,
     RenderCanvasLine, RenderCanvasPath, RenderCanvasRect, RenderCanvasRun, RenderCanvasText,
@@ -649,30 +650,6 @@ fn stroke_dash_to_vec(s: &str) -> Option<Vec<f32>> {
 
 fn line_cap_to_u8(s: &str) -> u8 {
     match s { "round" => 1, "square" => 2, _ => 0 }
-}
-
-/// Return the 0-based indices of all render pages within a section that a
-/// layer's page-scope targets.  `n` is the total number of section pages.
-fn page_scope_indices(scope: &Option<PageScope>, n: usize) -> Vec<usize> {
-    if n == 0 { return Vec::new(); }
-    match scope {
-        None | Some(PageScope::Each) => (0..n).collect(),
-        Some(PageScope::First)       => vec![0],
-        Some(PageScope::Last)        => vec![n - 1],
-        Some(PageScope::Odd)         => (0..n).filter(|i| i % 2 == 0).collect(),
-        Some(PageScope::Even)        => (0..n).filter(|i| i % 2 == 1).collect(),
-        Some(PageScope::Pages(ranges)) => {
-            let mut out = Vec::new();
-            for range in ranges {
-                let start = (range.start as usize).saturating_sub(1);
-                let end   = range.end.map(|e| e as usize).unwrap_or(n);
-                for i in start..end.min(n) {
-                    out.push(i);
-                }
-            }
-            out
-        }
-    }
 }
 
 fn primitive_to_render_node(prim: &CanvasPrimitive, page_w: f32) -> RenderNode {

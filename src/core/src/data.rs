@@ -221,10 +221,7 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, out: &mut Vec<N
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parse::{
-        Align, BarcodeEcLevel, DataAttrs, Direction, HeightMode, Justify, Meta, NodeKind,
-        Paginate, Repeat, TextAlign,
-    };
+    use crate::parse::{Align, BarcodeEcLevel, DataAttrs, Direction, HeightMode, Justify, Meta, NodeKind, Paginate, TextAlign};
     use std::collections::HashMap;
 
     // ── Node / Document builders ──────────────────────────────────────────────
@@ -239,7 +236,7 @@ mod tests {
             radius: 0.0,
             height_mode: HeightMode::Auto,
             width_constraint: None,
-            repeat: Repeat::None,
+            page_scope: None,
             paginate: Paginate::None,
             debug: false,
             align: Align::Stretch,

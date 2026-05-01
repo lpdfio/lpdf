@@ -35,7 +35,7 @@ impl Document {
                             .or_else(|| self.background.clone());
             let debug  = section.options.debug.unwrap_or(self.debug);
 
-            // Collect layout nodes including regions converted to Repeat::Page nodes.
+            // Collect layout nodes including page_scope chrome nodes and canvas layers.
             // Canvas layers before the first <layout> become underlays; after → overlays.
             let mut children: Vec<Node> = Vec::new();
             let mut underlays: Vec<canvas::CanvasLayer> = Vec::new();
@@ -67,21 +67,14 @@ impl Document {
     }
 }
 
-/// Convert a `LayoutRegion` to a `Node` that the existing layout engine can handle.
-/// `pin="top|bottom"` → `Repeat::Page` (renders on every produced page).
-/// `pin="top", page="first"` → `Repeat::First`.
+/// Convert a `LayoutRegion` to a `Node` that the layout engine can handle.
+/// The `page_scope` is passed through directly so all PageScope variants work correctly.
 fn region_to_compat_node(reg: LayoutRegion) -> Node {
-    let repeat = match reg.page {
-        None                         => Repeat::Page,
-        Some(PageScope::Each)        => Repeat::Page,
-        Some(PageScope::First)       => Repeat::First,
-        _                            => Repeat::Page,
-    };
     Node {
-        kind:     NodeKind::Stack,
-        repeat,
-        debug:    reg.debug,
-        children: reg.children,
+        kind:       NodeKind::Stack,
+        page_scope: Some(reg.page.unwrap_or(PageScope::Each)),
+        debug:      reg.debug,
+        children:   reg.children,
         ..Node::layout_default()
     }
 }
@@ -210,7 +203,7 @@ pub struct Node {
     pub radius: f32,
     pub height_mode: HeightMode,
     pub width_constraint: Option<f32>,
-    pub repeat: Repeat,
+    pub page_scope: Option<PageScope>,
     pub paginate: Paginate,
     pub debug: bool,
     // layout-specific
@@ -261,18 +254,6 @@ pub struct Node {
     /// carry no `data-*` attributes, saving 96 bytes per node.
     pub data_attrs: Option<Box<DataAttrs>>,
     pub children: Vec<Node>,
-}
-
-/// How a node relates to page pagination.
-/// Only meaningful on direct children of `<layout>`.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Repeat {
-    /// Ordinary flow node — paginated normally.
-    None,
-    /// Page chrome — rendered on every generated page at the same position.
-    Page,
-    /// First-page chrome — rendered only on page 1; its space is reclaimed on later pages.
-    First,
 }
 
 /// Pagination hint set via `paginate="…"` on any node.
@@ -392,7 +373,7 @@ struct ParsedNode {
     radius: f32,
     height_mode: HeightMode,
     width_constraint: Option<f32>,
-    repeat: Repeat,
+    page_scope: Option<PageScope>,
     paginate: Paginate,
     debug: bool,
     align: Align,
@@ -447,7 +428,7 @@ impl ParsedNode {
             radius: 0.0,
             height_mode: HeightMode::Auto,
             width_constraint: None,
-            repeat: Repeat::None,
+            page_scope: None,
             paginate: Paginate::None,
             debug: false,
             align: Align::Stretch,
@@ -519,7 +500,7 @@ impl Node {
             kind: NodeKind::Stack,
             gap: 0.0, padding: [0.0; 4], background: None, border: None, radius: 0.0,
             height_mode: HeightMode::Auto, width_constraint: None,
-            repeat: Repeat::None, paginate: Paginate::None, debug: false,
+            page_scope: None, paginate: Paginate::None, debug: false,
             align: Align::Stretch, justify: Justify::Start, end: false, equal: false,
             cols: 1, col_width: None, direction: Direction::Horizontal,
             color: None, thickness: 1.0, text_runs: Vec::new(),
@@ -570,7 +551,7 @@ fn resolve_node(
         radius:                n.radius,
         height_mode:           n.height_mode,
         width_constraint:      n.width_constraint,
-        repeat:                n.repeat,
+        page_scope:            n.page_scope,
         paginate:              n.paginate,
         debug:                 n.debug,
         align:                 n.align,
@@ -1333,16 +1314,6 @@ fn parse_height_mode(v: &str) -> Result<HeightMode, String> {
     }
 }
 
-fn parse_repeat_attr(v: &str) -> Result<Repeat, String> {
-    match v {
-        "page"  => Ok(Repeat::Page),
-        "first" => Ok(Repeat::First),
-        other   => Err(format!(
-            "invalid repeat value: '{other}' (expected 'page' or 'first')"
-        )),
-    }
-}
-
 fn parse_paginate_attr(v: &str) -> Result<Paginate, String> {
     match v {
         "no"           => Ok(Paginate::No),
@@ -1373,7 +1344,6 @@ fn apply_box_attrs(
         if let Some(v) = a.get("height") { node.height_mode = parse_height_mode(v)?; }
     }
     if let Some(v) = a.get("width")  { node.width_constraint = Some(tokens.resolve_width(v)?); }
-    if let Some(v) = a.get("repeat")   { node.repeat   = parse_repeat_attr(v)?; }
     if let Some(v) = a.get("paginate") { node.paginate = parse_paginate_attr(v)?; }
     node.debug = a.get("debug").map(|v| v == "true").unwrap_or(false);
     Ok(())
@@ -2585,15 +2555,6 @@ mod tests {
         assert!(err.contains("at line"), "{err}");
         assert!(err.contains("big"),      "{err}");
         assert!(err.contains("fill"),     "{err}"); // allowed values present
-    }
-
-    #[test]
-    fn err_invalid_repeat() {
-        let err = parse(&minimal(r#"<stack repeat="never" />"#)).unwrap_err();
-        assert!(err.contains("<stack>"),  "{err}");
-        assert!(err.contains("at line"), "{err}");
-        assert!(err.contains("never"),    "{err}");
-        assert!(err.contains("page"),     "{err}"); // allowed values present
     }
 
     #[test]

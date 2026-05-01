@@ -5,6 +5,7 @@ mod encrypt;
 mod kit_to_xml;
 mod layout;
 mod license;
+mod page_scope;
 mod parse;
 mod pdf;
 mod render;

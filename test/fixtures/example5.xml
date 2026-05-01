@@ -19,7 +19,7 @@
     <section background="surface">
       <layout>
 
-      <split gap="0pt" align="stretch" height="full">
+      <split gap="0pt" align="start" height="full">
 
         <!-- main ticket body -->
         <stack padding="m" gap="s" height="full" justify="between">

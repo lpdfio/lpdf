@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf"/>
+      <color name="accent"  value="#e8f0fc"/>
+      <color name="muted"   value="#737373"/>
+      <color name="rule"    value="#dde3ed"/>
+      <color name="surface" value="#ffffff"/>
+    </colors>
+  </tokens>
+  <document size="a4" margin="0pt">
+    <meta title="lpdf Showcase — Region PageScope (all variants)"
+          subject="Layout region page= each, first, last, odd, even, numeric range"/>
+
+    <section margin="0pt">
+      <layout>
+        <!-- page="each" — header on all pages -->
+        <region pin="top" page="each">
+          <stack background="primary" padding="8pt 40pt">
+            <text font-size="m" font="Helvetica-Bold" color="surface">Header — every page (each)</text>
+          </stack>
+        </region>
+
+        <!-- page="first" — banner on page 1 only -->
+        <region pin="top" page="first">
+          <stack background="accent" padding="6pt 40pt">
+            <text font-size="s" color="primary">First-page banner (first)</text>
+          </stack>
+        </region>
+
+        <!-- page="last" — footer on last page only -->
+        <region pin="bottom" page="last">
+          <stack padding="6pt 40pt">
+            <text font-size="s" color="muted">Last-page footer (last)</text>
+          </stack>
+        </region>
+
+        <!-- page="odd" — alternate header on odd pages (1, 3, 5…) -->
+        <region pin="top" page="odd">
+          <stack padding="4pt 40pt">
+            <text font-size="xs" color="muted">Odd-page sub-header (odd)</text>
+          </stack>
+        </region>
+
+        <!-- page="even" — alternate header on even pages (2, 4, 6…) -->
+        <region pin="top" page="even">
+          <stack padding="4pt 40pt">
+            <text font-size="xs" color="muted">Even-page sub-header (even)</text>
+          </stack>
+        </region>
+
+        <!-- page="2-3" — footer only on pages 2 and 3 -->
+        <region pin="bottom" page="2-3">
+          <stack padding="4pt 40pt">
+            <text font-size="xs" color="muted">Pages 2–3 only footer (2-3)</text>
+          </stack>
+        </region>
+
+        <!-- Flow content: enough paragraphs to produce 4+ pages -->
+        <stack gap="m" padding="40pt">
+          <text font-size="xl" font="Helvetica-Bold" color="primary">Region PageScope Demo</text>
+          <text font-size="m" color="muted">
+            This fixture exercises all PageScope variants on layout regions.
+            Scroll through multiple pages to verify correct chrome placement.
+          </text>
+          <divider color="rule" thickness="xs"/>
+          <text font-size="m">Page 1 of content — the first-page banner and odd sub-header should appear above, and the even sub-header should not.</text>
+          <text font-size="m">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.</text>
+          <text font-size="m">Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum.</text>
+          <text font-size="m">Dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</text>
+          <text font-size="m">Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium totam rem aperiam eaque ipsa quae ab illo inventore veritatis.</text>
+          <text font-size="m">Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.</text>
+          <text font-size="m">Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet consectetur adipisci velit, sed quia non numquam eius modi tempora incidunt.</text>
+          <text font-size="m">At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias.</text>
+          <text font-size="m">Nam libero tempore cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est.</text>
+          <text font-size="m">Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae.</text>
+          <text font-size="m">Itaque earum rerum hic tenetur a sapiente delectus ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat.</text>
+          <text font-size="m">Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium totam rem aperiam.</text>
+          <text font-size="m">On page 2 the first-page banner should be absent. The even sub-header should appear and the odd sub-header should not. The pages-2-3 footer should appear.</text>
+          <text font-size="m">Lorem ipsum dolor sit amet second block consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim.</text>
+          <text font-size="m">Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate.</text>
+          <text font-size="m">Dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est.</text>
+          <text font-size="m">Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium totam rem aperiam eaque ipsa.</text>
+          <text font-size="m">Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione.</text>
+          <text font-size="m">Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet consectetur adipisci velit, sed quia non numquam eius modi.</text>
+          <text font-size="m">At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti.</text>
+          <text font-size="m">Nam libero tempore cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus.</text>
+          <text font-size="m">Page 3 content — odd sub-header should appear, even should not. Pages-2-3 footer should appear. Last-page footer should not (unless this is the final page).</text>
+          <text font-size="m">Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint.</text>
+          <text font-size="m">Itaque earum rerum hic tenetur a sapiente delectus ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis.</text>
+          <text font-size="m">Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium totam rem aperiam eaque.</text>
+          <text font-size="m">Page 4 content — even sub-header should appear, odd should not. Pages-2-3 footer should not appear. Last-page footer should appear on the final page.</text>
+          <text font-size="m">Lorem ipsum dolor sit amet fourth block consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</text>
+          <text font-size="m">Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit.</text>
+          <text font-size="m">Dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit.</text>
+          <text font-size="m">Final paragraph confirming the last-page footer should now be visible at the bottom of this page.</text>
+        </stack>
+      </layout>
+    </section>
+  </document>
+</lpdf>

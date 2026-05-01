@@ -16,7 +16,7 @@
       <layout>
 
       <!-- letterhead: only on page 1 -->
-      <frame repeat="first" background="brand-soft" padding="m" radius="s">
+      <frame background="brand-soft" padding="m" radius="s">
         <split align="center">
           <stack gap="xs">
             <text font-size="l" font="Helvetica-Bold" color="brand">Helios Robotics, Inc.</text>
@@ -30,7 +30,7 @@
       </frame>
 
       <!-- running header: every page (including page 1, below the letterhead) -->
-      <stack repeat="page" gap="xs">
+      <stack gap="xs">
         <split align="center">
           <text font-size="xs" font="Helvetica-Bold" color="ink">QUARTERLY INVESTOR UPDATE</text>
           <text font-size="xs" color="text-muted">Q1 2026 · Confidential</text>
@@ -69,7 +69,7 @@
       </stack>
 
       <!-- running footer: every page, with auto page numbers -->
-      <stack repeat="page" gap="xs">
+      <stack gap="xs">
         <divider color="rule" thickness="xs" />
         <split align="center">
           <text font-size="xs" color="text-muted">Helios Robotics, Inc. · Confidential</text>
