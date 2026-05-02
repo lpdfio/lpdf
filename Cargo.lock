@@ -480,6 +480,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "lpdf-cli"
+version = "0.0.0"
+dependencies = [
+ "lpdf",
+]
+
+[[package]]
 name = "lpdf-wasi"
 version = "0.0.0"
 dependencies = [

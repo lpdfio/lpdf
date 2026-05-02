@@ -1,3 +1,3 @@
 [workspace]
-members = ["src/core", "src/core-wasi"]
+members = ["src/core", "src/core-wasi", "src/cli"]
 resolver = "2"

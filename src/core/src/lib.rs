@@ -307,6 +307,33 @@ impl LpdfEngine {
 
 // Private helpers — not exported to WASM.
 impl LpdfEngine {
+    /// Render XML to PDF bytes — native API used by the CLI and tests.
+    ///
+    /// Applies the license watermark when `license_key` is empty or invalid.
+    /// No custom fonts or images are resolved; built-in fonts only.
+    pub fn render_xml_to_pdf(xml: &str, license_key: &str) -> Result<Vec<u8>, String> {
+        let mut doc = parse::parse(xml)?;
+        let lp = doc.section_layouts();
+        let pages: Vec<render::RenderPage> =
+            lp.iter().flat_map(layout::layout_page).collect();
+        let status = license::check(license_key, 0);
+        let wm: Option<(&str, Option<&str>)> = if status.is_licensed() {
+            None
+        } else {
+            Some(("Made with lpdf.io", Some("https://lpdf.io")))
+        };
+        pdf::render_pdf(
+            &pages,
+            &doc.fonts,
+            &pdf::FontRegistry::new(),
+            &pdf::ImageRegistry::new(),
+            &doc.meta,
+            wm,
+            None,
+            status.is_licensed(),
+        )
+    }
+
     /// Render XML to PDF bytes without WASM error types — used by tests.
     #[cfg(test)]
     pub(crate) fn render_xml_to_pdf_bytes(xml: &str) -> Result<Vec<u8>, String> {

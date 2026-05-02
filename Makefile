@@ -8,7 +8,7 @@ endif
 LPDF_PUBLIC_KEY ?= $(shell cat src/license/keys/public.hex 2>/dev/null | tr -d '[:space:]')
 export LPDF_PUBLIC_KEY
 
-.PHONY: build-wasm build-wasi test-wasm test-wasi \
+.PHONY: build-wasm build-wasi build-cli test-wasm test-wasi \
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python \
@@ -53,6 +53,18 @@ build-wasi:
 	@echo ""
 	cargo build --manifest-path src/core-wasi/Cargo.toml --release --target wasm32-wasip1
 	mkdir -p dist/wasi && cp target/wasm32-wasip1/release/lpdf-wasi.wasm dist/wasi/lpdf.wasm
+
+build-cli:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Building CLI (native)..."
+	@echo ""
+	cargo build --manifest-path src/cli/Cargo.toml --release
+ifeq ($(OS),Windows_NT)
+	mkdir -p bin && cp target/release/lpdf.exe bin/lpdf.exe
+else
+	mkdir -p bin && cp target/release/lpdf bin/lpdf
+endif
 
 test-wasm:
 	@echo ""
@@ -189,7 +201,7 @@ clone-adapters:
 	git clone https://github.com/lpdfio/lpdf-dotnet src/sdk/dotnet
 	git clone https://github.com/lpdfio/lpdf-python src/sdk/python
 	git clone https://github.com/lpdfio/lpdf-php    src/sdk/php
-	git clone https://github.com/lpdfio/lpdf-vscode src/sdk/vscode
+	git clone https://github.com/lpdfio/lpdf-vscode src/vscode
 
 clean-wasm:
 	@echo ""
@@ -321,23 +333,23 @@ build-vscode: build-wasm
 	@echo "-------------------------------"
 	@echo ">>> Building VS Code adapter..."
 	@echo ""
-	mkdir -p src/sdk/vscode/wasm && mkdir -p src/sdk/vscode/schema
-	cp dist/node/lpdf.js      src/sdk/vscode/wasm/ && cp dist/node/lpdf_bg.wasm src/sdk/vscode/wasm/ && cp dist/node/lpdf.d.ts src/sdk/vscode/wasm/ && cp schema/lpdf.xsd src/sdk/vscode/schema/
-	cd src/sdk/vscode && npm install && npm run build
+	mkdir -p src/vscode/wasm && mkdir -p src/vscode/schema
+	cp dist/node/lpdf.js      src/vscode/wasm/ && cp dist/node/lpdf_bg.wasm src/vscode/wasm/ && cp dist/node/lpdf.d.ts src/vscode/wasm/ && cp schema/lpdf.xsd src/vscode/schema/
+	cd src/vscode && npm install && npm run build
 
 package-vscode: build-vscode
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Packaging VS Code extension..."
 	@echo ""
-	cd src/sdk/vscode && npx vsce package --out lpdf.vsix --baseContentUrl https://github.com/lpdfio/lpdf-vscode/raw/HEAD
+	cd src/vscode && npx vsce package --out lpdf.vsix --baseContentUrl https://github.com/lpdfio/lpdf-vscode/raw/HEAD
 
 install-vscode: package-vscode
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Installing VS Code extension..."
 	@echo ""
-	code.cmd --install-extension src/sdk/vscode/lpdf.vsix --force
+	code.cmd --install-extension src/vscode/lpdf.vsix --force
 
 sync-license:
 	@echo ""
@@ -350,7 +362,7 @@ sync-license:
 	@$(SHELL) -c "test -d src/sdk/dotnet  && cp LICENSE src/sdk/dotnet/LICENSE  || true"
 	@$(SHELL) -c "test -d src/sdk/php     && cp LICENSE src/sdk/php/LICENSE     || true"
 	@$(SHELL) -c "test -d src/sdk/python  && cp LICENSE src/sdk/python/LICENSE  || true"
-	@$(SHELL) -c "test -d src/sdk/vscode  && cp LICENSE src/sdk/vscode/LICENSE  || true"
+	@$(SHELL) -c "test -d src/vscode  && cp LICENSE src/vscode/LICENSE  || true"
 	@echo "Done. Commit changes in each adapter repo separately."
 
 check-license:
