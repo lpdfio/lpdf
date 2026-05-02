@@ -186,7 +186,7 @@ test-sdk-python: build-sdk-python
 		-v "$(CURDIR)/src/sdk/python/resources://app/resources" \
 		-w //app lpdf-python python -m pytest tests -v
 
-build-all: clean-all build-wasm build-wasi build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python
+build-all: clean-all build-wasm build-wasi build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python build-vscode build-pages
 
 test-all: test-wasm test-wasi test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python
 
