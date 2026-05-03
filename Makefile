@@ -17,26 +17,7 @@ export LPDF_PUBLIC_KEY
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
         clone-adapters sync-license check-license \
-        build-pages
-
-# ── Pages demo bundle ─────────────────────────────────────────────────────────
-# Copies the browser adapter (browser.js) and the WASM binary into the pages
-# asset tree so the home-page demo component can be served without traversing
-# outside the pages root.  Depends on build-sdk-node so the source files
-# are guaranteed to exist before the copy.
-# Also runs `npm run build` inside src/pages/ which bundles CodeMirror and
-# all other authored JS assets via src/pages/src/build.mjs.
-build-pages: build-sdk-node
-	@echo ""
-	@echo "-------------------------------"
-	@echo ">>> Bundling pages assets..."
-	@echo ""
-	mkdir -p src/pages/www/assets/js/lpdf
-	cp src/sdk/node/dist/browser.js          src/pages/www/assets/js/lpdf/browser.js
-	cp src/sdk/node/dist/wasm/lpdf-web.js    src/pages/www/assets/js/lpdf/lpdf-web.js
-	cp dist/web/lpdf_bg.wasm                 src/pages/www/assets/js/lpdf/lpdf_bg.wasm
-	cd src/pages && npm install && npm run build
-	@echo ">>> src/pages/www/assets/js/ updated."
+        build-portal-ui build-pages
 
 build-wasm:
 	@echo ""
@@ -373,3 +354,24 @@ check-license:
 	@$(SHELL) -c "diff LICENSE src/core/LICENSE          || (echo 'ERROR: src/core/LICENSE differs from root LICENSE' && exit 1)"
 	@$(SHELL) -c "diff LICENSE src/public/pages/content/LICENSE.md  || (echo 'ERROR: src/public/pages/content/LICENSE.md differs from root LICENSE' && exit 1)"
 	@echo "OK"
+
+# ── Portal UI bundle ───────────────────────────────────────────────────────────
+build-portal-ui:
+	cd src/portal/ui && npm run build
+
+# ── Pages asset sync ──────────────────────────────────────────────────────────
+# Copies the Vite-built pages bundle and the demo assets into the pages asset tree.
+# No npm build needed in src/pages — all JS now comes from the portal Vite build.
+build-pages: build-portal-ui
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Copying pages assets..."
+	@echo ""
+	cp src/portal/ui/dist/lpdf-pages.js src/pages/www/assets/js/lpdf-pages.js && \
+	echo ">>> src/pages/www/assets/js/lpdf-pages.js updated." && \
+	rm -rf tmp/lpdf-demo && mkdir -p tmp/lpdf-demo && \
+	cp -r src/portal/demo/. tmp/lpdf-demo/ && \
+	cp src/portal/ui/dist/lpdf-demo.js tmp/lpdf-demo/lpdf-demo.js && \
+	rm -rf src/pages/www/assets/js/lpdf-demo && \
+	cp -r tmp/lpdf-demo src/pages/www/assets/js/lpdf-demo && \
+	echo ">>> src/pages/www/assets/js/lpdf-demo updated."
