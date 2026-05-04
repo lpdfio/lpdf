@@ -1,6 +1,7 @@
 .vscode
 .claude
 .github/skills
+.lpdf
 local
 
 /target
@@ -9,7 +10,6 @@ local
 node_modules
 
 bin/
-dev/
 src/demos/
 src/license/
 src/pages/
