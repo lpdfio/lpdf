@@ -338,7 +338,7 @@ sync-license:
 	@echo ">>> Syncing LICENSE from root to all copies..."
 	@echo ""
 	@$(SHELL) -c "cp LICENSE src/core/LICENSE"
-	@$(SHELL) -c "cp LICENSE src/public/pages/content/LICENSE.md"
+	@$(SHELL) -c "cp LICENSE src/pages/www/content/LICENSE.md"
 	@$(SHELL) -c "test -d src/sdk/node    && cp LICENSE src/sdk/node/LICENSE    || true"
 	@$(SHELL) -c "test -d src/sdk/dotnet  && cp LICENSE src/sdk/dotnet/LICENSE  || true"
 	@$(SHELL) -c "test -d src/sdk/php     && cp LICENSE src/sdk/php/LICENSE     || true"
@@ -352,7 +352,7 @@ check-license:
 	@echo ">>> Checking LICENSE copies are in sync..."
 	@echo ""
 	@$(SHELL) -c "diff LICENSE src/core/LICENSE          || (echo 'ERROR: src/core/LICENSE differs from root LICENSE' && exit 1)"
-	@$(SHELL) -c "diff LICENSE src/public/pages/content/LICENSE.md  || (echo 'ERROR: src/public/pages/content/LICENSE.md differs from root LICENSE' && exit 1)"
+	@$(SHELL) -c "diff LICENSE src/pages/www/content/LICENSE.md  || (echo 'ERROR: src/pages/www/content/LICENSE.md differs from root LICENSE' && exit 1)"
 	@echo "OK"
 
 # ── Portal UI bundle ───────────────────────────────────────────────────────────
@@ -369,6 +369,11 @@ build-pages: build-portal-ui
 	@echo ""
 	cp src/portal/ui/dist/lpdf-pages.js src/pages/www/assets/js/lpdf-pages.js && \
 	echo ">>> src/pages/www/assets/js/lpdf-pages.js updated." && \
+	cp src/portal/ui/dist/lpdf-docs.js src/pages/www/assets/js/lpdf-docs.js && \
+	echo ">>> src/pages/www/assets/js/lpdf-docs.js updated." && \
+	cp dist/web/lpdf.js src/portal/demo/lpdf-web.js && \
+	cp dist/web/lpdf_bg.wasm src/portal/demo/lpdf_bg.wasm && \
+	echo ">>> src/portal/demo WASM updated." && \
 	rm -rf tmp/lpdf-demo && mkdir -p tmp/lpdf-demo && \
 	cp -r src/portal/demo/. tmp/lpdf-demo/ && \
 	cp src/portal/ui/dist/lpdf-demo.js tmp/lpdf-demo/lpdf-demo.js && \

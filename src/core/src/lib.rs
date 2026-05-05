@@ -396,6 +396,33 @@ pub fn codegen_wasm(xml: &str, options_json: &str) -> Result<String, JsValue> {
         .map_err(|e| JsValue::from_str(&e))
 }
 
+/// Generate SDK source code from one or more bare Lpdf XML elements (a fragment).
+///
+/// Unlike `codegen_wasm`, this accepts a snippet without the `<lpdf>` wrapper and
+/// returns just the node expression(s) — no imports, no engine setup, no boilerplate.
+/// Ideal for documentation code examples where the same XML snippet should be shown
+/// in multiple target languages.
+///
+/// `options_json` accepts the same shape as `codegen_wasm`:
+/// - `target`: `"js"`, `"dotnet"`, `"php"`, or `"python"` (required)
+/// - `indent`: `2` or `4` (optional, default `4`)
+#[wasm_bindgen]
+pub fn codegen_fragment_wasm(xml: &str, options_json: &str) -> Result<String, JsValue> {
+    #[derive(serde::Deserialize)]
+    struct Opts {
+        target: String,
+        #[serde(default = "default_indent")]
+        indent: u8,
+    }
+    fn default_indent() -> u8 { 4 }
+
+    let opts: Opts = serde_json::from_str(options_json)
+        .map_err(|e| JsValue::from_str(&format!("options parse error: {e}")))?;
+
+    codegen::codegen_fragment(xml, &codegen::CodegenOptions { target: opts.target, indent: opts.indent })
+        .map_err(|e| JsValue::from_str(&e))
+}
+
 // ── Public bench API ─────────────────────────────────────────────────────────
 // No cfg gate: these live in the rlib so bench binaries can link them.
 

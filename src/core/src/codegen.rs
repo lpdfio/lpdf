@@ -58,6 +58,49 @@ pub fn codegen(xml: &str, options: &CodegenOptions) -> Result<String, String> {
     }
 }
 
+/// Generate SDK source code from one or more Lpdf XML element nodes (a fragment).
+///
+/// Unlike [`codegen`], this accepts a bare snippet — one or more lpdf elements
+/// **without** the `<lpdf>` wrapper.  The output is just the node expression(s)
+/// with no imports, no engine setup, and no boilerplate, making it suitable for
+/// inline documentation code examples.
+///
+/// Multiple top-level elements are emitted one per line.
+/// Returns an error if the XML is malformed or the target is unsupported.
+pub fn codegen_fragment(xml: &str, options: &CodegenOptions) -> Result<String, String> {
+    // Wrap in a synthetic root so the parser gets a single-root document.
+    let wrapped = format!("<_f_>{xml}</_f_>");
+    let doc = Document::parse(&wrapped).map_err(|e| format!("XML parse error: {e}"))?;
+    let root = doc.root_element();
+
+    let elements: Vec<Node> = root.children().filter(|n| n.is_element()).collect();
+    if elements.is_empty() {
+        return Err("no elements found in fragment".into());
+    }
+
+    let lines: Vec<String> = match options.target.as_str() {
+        "js" => {
+            let emitter = JsEmitter { indent: options.indent };
+            elements.iter().map(|n| emitter.emit_node(n, 0, false)).collect()
+        }
+        "dotnet" => {
+            let emitter = DotnetEmitter { indent: options.indent };
+            elements.iter().map(|n| emitter.emit_node(n, 0, false)).collect()
+        }
+        "php" => {
+            let emitter = PhpEmitter { indent: options.indent };
+            elements.iter().map(|n| emitter.emit_node(n, 0, false)).collect()
+        }
+        "python" => {
+            let emitter = PythonEmitter { indent: options.indent };
+            elements.iter().map(|n| emitter.emit_node(n, 0, false)).collect()
+        }
+        other => return Err(format!("Unknown target: '{other}'. Supported: js, dotnet, php, python")),
+    };
+
+    Ok(lines.join("\n"))
+}
+
 // ── Name conversion helpers ───────────────────────────────────────────────────
 
 /// Convert a kebab-case XML attribute name to camelCase (JS/PHP style).
@@ -2136,5 +2179,84 @@ mod tests {
         assert_eq!(to_snake_case("stroke-width"), "stroke_width");
         assert_eq!(to_snake_case("hrt"),           "hrt");
         assert_eq!(to_snake_case("data-if-not"),  "data_if_not");
+    }
+
+    // ── codegen_fragment ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_fragment_js_single_node() {
+        let xml = r#"<text font-size="12pt">Hello</text>"#;
+        let opts = CodegenOptions { target: "js".into(), indent: 4 };
+        let out  = codegen_fragment(xml, &opts).unwrap();
+        assert_eq!(out.trim(), "L.text({ fontSize: '12pt' }, ['Hello'])");
+        // No boilerplate
+        assert!(!out.contains("import"));
+        assert!(!out.contains("engine"));
+    }
+
+    #[test]
+    fn test_fragment_js_multiple_nodes() {
+        let xml = r#"<text>A</text><text>B</text>"#;
+        let opts = CodegenOptions { target: "js".into(), indent: 4 };
+        let out  = codegen_fragment(xml, &opts).unwrap();
+        assert!(out.contains("L.text(NoAttr, ['A'])"));
+        assert!(out.contains("L.text(NoAttr, ['B'])"));
+    }
+
+    #[test]
+    fn test_fragment_dotnet_single_node() {
+        let xml = r#"<text font-size="12pt">Hello</text>"#;
+        let opts = CodegenOptions { target: "dotnet".into(), indent: 4 };
+        let out  = codegen_fragment(xml, &opts).unwrap();
+        assert_eq!(out.trim(), r#"L.Text(new() { FontSize = "12pt" }, ["Hello"])"#);
+        assert!(!out.contains("using Lpdf"));
+    }
+
+    #[test]
+    fn test_fragment_php_single_node() {
+        let xml = r#"<text font-size="12pt">Hello</text>"#;
+        let opts = CodegenOptions { target: "php".into(), indent: 4 };
+        let out  = codegen_fragment(xml, &opts).unwrap();
+        assert_eq!(out.trim(), "L::text(new TextAttr(fontSize: '12pt'), ['Hello'])");
+        assert!(!out.contains("<?php"));
+    }
+
+    #[test]
+    fn test_fragment_python_single_node() {
+        let xml = r#"<text font-size="12pt">Hello</text>"#;
+        let opts = CodegenOptions { target: "python".into(), indent: 4 };
+        let out  = codegen_fragment(xml, &opts).unwrap();
+        assert_eq!(out.trim(), "L.text(TextAttr(font_size='12pt'), ['Hello'])");
+        assert!(!out.contains("import"));
+    }
+
+    #[test]
+    fn test_fragment_nested() {
+        let xml = r#"<stack><text>A</text><text>B</text></stack>"#;
+        let opts = CodegenOptions { target: "js".into(), indent: 4 };
+        let out  = codegen_fragment(xml, &opts).unwrap();
+        assert!(out.contains("L.stack("));
+        assert!(out.contains("L.text(NoAttr, ['A'])"));
+        assert!(out.contains("L.text(NoAttr, ['B'])"));
+    }
+
+    #[test]
+    fn test_fragment_empty_errors() {
+        let opts = CodegenOptions { target: "js".into(), indent: 4 };
+        assert!(codegen_fragment("", &opts).is_err());
+        assert!(codegen_fragment("   ", &opts).is_err());
+    }
+
+    #[test]
+    fn test_fragment_invalid_xml_errors() {
+        let opts = CodegenOptions { target: "js".into(), indent: 4 };
+        assert!(codegen_fragment("<text>unclosed", &opts).is_err());
+    }
+
+    #[test]
+    fn test_fragment_unknown_target_errors() {
+        let xml = r#"<text>Hello</text>"#;
+        let opts = CodegenOptions { target: "ruby".into(), indent: 4 };
+        assert!(codegen_fragment(xml, &opts).is_err());
     }
 }

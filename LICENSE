@@ -60,13 +60,11 @@ Paid licenses directly fund the continued development, maintenance, and improvem
 
 Use of the Software without a valid license key ("Unregistered Use") is permitted solely for evaluation and local testing. It does not constitute a license for use in a production environment, commercial deployment, or distribution.
 
-Unregistered Use is subject to the following restrictions:
+Unregistered Use is subject to the following restriction:
 
-(a) **Attribution.** Each document rendered shall include an attribution notice in the form specified in the Software documentation. This notice may not be suppressed, removed, or obscured.
+**Attribution.** Each document rendered shall include an attribution notice in the form specified in the Software documentation. This notice may not be suppressed, removed, or obscured.
 
-(b) **Input Limit.** Each render call is limited to input not exceeding 1 megabyte (1,048,576 bytes) of raw XML or JSON. Input exceeding this limit will be rejected by the Software.
-
-Both restrictions are lifted upon obtaining a valid license key. Community keys are available at no cost at lpdf.io.
+This restriction is lifted upon obtaining a valid license key. Community keys are available at no cost at lpdf.io.
 
 ---
 
@@ -77,6 +75,10 @@ Both restrictions are lifted upon obtaining a valid license key. Community keys 
 Permission is hereby granted, free of charge, to any person or qualifying organization obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. Any redistribution of the Software must be made under the terms of this Community License and may not be sublicensed under different terms.
+
+### License Key
+
+A license key issued under this license may be used by you, your employees, and contractors working on your behalf on your projects. You may not share, distribute, or otherwise make your license key available to individuals or organizations outside your own. Any person or organization outside your own that wishes to use Lpdf must obtain their own license key at lpdf.io.
 
 All modifications to the Software made by the licensee remain the intellectual property of the licensee. Codesense LLC claims no ownership over modifications unless they are voluntarily submitted as contributions to the Lpdf project under a separate Contributor License Agreement.
 
@@ -100,7 +102,7 @@ THE SOFTWARE IS PROVIDED "AS IS," WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 Licensees agree not to make false statements of fact about Lpdf, Codesense LLC, or its contributors that are intended to cause material harm to the reputation of the project or the company. This clause does not restrict good-faith criticism, bug reports, public discussion of software deficiencies, or reviews based on the licensee's genuine experience.
 
-License rights may not be rented, leased, or transferred to any third party.
+License rights may not be rented, leased, or transferred to any third party. A license key issued under this license may be used by the licensee's employees and contractors working on the licensee's behalf; the licensee may not share or distribute a license key to individuals or organizations outside their own, who must obtain their own license key.
 
 ### License Grant
 
@@ -164,7 +166,7 @@ Notwithstanding the foregoing, either party may seek injunctive or other equitab
 
 Licensees agree not to make false statements of fact about Lpdf, Codesense LLC, or its contributors that are intended to cause material harm to the reputation of the project or the company. This clause does not restrict good-faith criticism, bug reports, public discussion of software deficiencies, or reviews based on the licensee's genuine experience.
 
-License rights may not be rented, leased, or transferred to any third party, except as expressly permitted under the subsidiary grant below.
+License rights may not be rented, leased, or transferred to any third party, except as expressly permitted under the subsidiary grant below. A license key issued under this license may be used by the licensee's employees, contractors, and personnel of Controlled Entities as defined below; the licensee may not share or distribute a license key to individuals or organizations outside their own, who must obtain their own license key.
 
 ### License Grant
 
