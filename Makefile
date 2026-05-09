@@ -371,6 +371,8 @@ build-pages: build-portal-ui
 	echo ">>> src/pages/www/assets/js/lpdf-pages.js updated." && \
 	cp src/portal/ui/dist/lpdf-docs.js src/pages/www/assets/js/lpdf-docs.js && \
 	echo ">>> src/pages/www/assets/js/lpdf-docs.js updated." && \
+	cp src/portal/ui/dist/lpdf-checkout.js src/pages/www/assets/js/lpdf-checkout.js && \
+	echo ">>> src/pages/www/assets/js/lpdf-checkout.js updated." && \
 	cp dist/web/lpdf.js src/portal/demo/lpdf-web.js && \
 	cp dist/web/lpdf_bg.wasm src/portal/demo/lpdf_bg.wasm && \
 	echo ">>> src/portal/demo WASM updated." && \

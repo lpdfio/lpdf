@@ -4,6 +4,26 @@
 //! - Payload  : UTF-8 JSON, Base64url-encoded (no padding).
 //! - Signature: Ed25519 signature over the raw payload bytes, Base64url-encoded.
 //!
+//! ## Token claims
+//!
+//! | Claim  | Type    | Required        | Description                                      |
+//! |--------|---------|-----------------|--------------------------------------------------|
+//! | `tier` | string  | all tiers       | `"community"`, `"professional"`, `"enterprise"` |
+//! | `v`    | integer | all tiers       | Major version the key was issued for             |
+//! | `exp`  | integer | community / pro | Unix timestamp; absent on enterprise tokens      |
+//!
+//! ## Validation logic
+//!
+//! 1. Verify Ed25519 signature.
+//! 2. Check `v == LPDF_MAJOR_VERSION` — all tiers; mismatch → [`LicenseStatus::VersionMismatch`].
+//! 3. If tier is not enterprise, check `exp > now_unix` → [`LicenseStatus::Expired`].
+//!
+//! Enterprise keys have no date expiry; the ongoing contract is the enforcement
+//! mechanism.  All keys become invalid on major version change — the customer
+//! generates a new key from the portal as part of their upgrade.
+//!
+//! ## Signing-key rotation
+//!
 //! Trusted public keys are embedded in `TRUSTED_KEYS` below.  A token is
 //! valid if it verifies against **any** of those keys.  This supports
 //! zero-downtime key rotation:
@@ -36,6 +56,11 @@ use ed25519_dalek::{Signature, VerifyingKey, Verifier};
 // then remove the old key after the grace period and deploy again.
 include!(concat!(env!("OUT_DIR"), "/trusted_keys.rs"));
 
+// Major version embedded at compile time.  A key token's `v` claim must match
+// this value or validation fails for all tiers.
+// TODO: inject via build.rs reading LPDF_MAJOR_VERSION env var (same pattern as LPDF_PUBLIC_KEY).
+const LPDF_MAJOR_VERSION: u32 = 1;
+
 // ---------------------------------------------------------------------------
 // Status type
 // ---------------------------------------------------------------------------
@@ -43,12 +68,14 @@ include!(concat!(env!("OUT_DIR"), "/trusted_keys.rs"));
 /// Result of checking a license token.
 #[derive(Debug, PartialEq)]
 pub enum LicenseStatus {
-    /// Token is valid and not expired.  Inner value is the plan name.
+    /// Token is valid and not expired.  Inner value is the tier name.
     Licensed(String),
     /// No token was supplied — expected free-mode usage, no warning needed.
     Free,
     /// Token carried a valid signature but has passed its `exp` timestamp.
     Expired,
+    /// Token was issued for a different major version of lpdf.
+    VersionMismatch,
     /// Token is present but has an invalid Ed25519 signature.
     InvalidSignature,
     /// Token is present but cannot be parsed (bad Base64, bad JSON, missing fields).
@@ -65,6 +92,9 @@ impl LicenseStatus {
     /// supplied.  Returns `None` for expected states (free / expired).
     pub fn warning(&self) -> Option<&'static str> {
         match self {
+            LicenseStatus::VersionMismatch => {
+                Some("license key was issued for a different major version — generate a new key in the portal")
+            }
             LicenseStatus::InvalidSignature => {
                 Some("license token has an invalid signature — running in free mode")
             }
@@ -142,21 +172,33 @@ pub fn check(token: &str, now_unix: i64) -> LicenseStatus {
         Err(_) => return LicenseStatus::Malformed,
     };
 
-    let exp = match claims["exp"].as_i64() {
-        Some(n) => n,
+    let ver = match claims["v"].as_u64() {
+        Some(n) => n as u32,
         None    => return LicenseStatus::Malformed,
     };
-    let plan = match claims["plan"].as_str() {
+    let tier = match claims["tier"].as_str() {
         Some(s) => s.to_string(),
         None    => return LicenseStatus::Malformed,
     };
 
-    // ── Expiry check ─────────────────────────────────────────────────────────
-    if now_unix > 0 && now_unix > exp {
-        return LicenseStatus::Expired;
+    // ── Version check — all tiers ────────────────────────────────────────────
+    if ver != LPDF_MAJOR_VERSION {
+        return LicenseStatus::VersionMismatch;
     }
 
-    LicenseStatus::Licensed(plan)
+    // ── Expiry check — Community and Pro only ────────────────────────────────
+    // Enterprise keys carry no `exp` claim; the contract governs date-based use.
+    if !tier.eq_ignore_ascii_case("enterprise") {
+        let exp = match claims["exp"].as_i64() {
+            Some(n) => n,
+            None    => return LicenseStatus::Malformed,
+        };
+        if now_unix > 0 && now_unix > exp {
+            return LicenseStatus::Expired;
+        }
+    }
+
+    LicenseStatus::Licensed(tier)
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +227,7 @@ mod tests {
     #[test]
     fn valid_base64_bad_sig_is_invalid_signature() {
         // Valid base64url payload + sig bytes, but signature doesn't match any trusted key.
-        let payload = URL_SAFE_NO_PAD.encode(b"{\"plan\":\"starter\",\"exp\":9999999999}");
+        let payload = URL_SAFE_NO_PAD.encode(b"{\"tier\":\"community\",\"v\":1,\"exp\":9999999999}");
         let sig     = URL_SAFE_NO_PAD.encode(&[0u8; 64]);
         let token   = format!("{payload}.{sig}");
         assert_eq!(check(&token, 0), LicenseStatus::InvalidSignature);
@@ -198,8 +240,9 @@ mod tests {
     }
 
     #[test]
-    fn invalid_and_malformed_have_warnings() {
+    fn invalid_malformed_and_version_mismatch_have_warnings() {
         assert!(LicenseStatus::InvalidSignature.warning().is_some());
         assert!(LicenseStatus::Malformed.warning().is_some());
+        assert!(LicenseStatus::VersionMismatch.warning().is_some());
     }
 }
