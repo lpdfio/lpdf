@@ -36,6 +36,7 @@
 //!   env:
 //!     LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
 
+use sha2::{Digest, Sha256};
 use std::{env, fs, path::Path};
 
 fn main() {
@@ -60,7 +61,7 @@ fn main() {
     });
 
     // Parse comma-separated hex keys.
-    let keys: Vec<[u8; 32]> = raw
+    let keys: Vec<([u8; 8], [u8; 32])> = raw
         .split(',')
         .enumerate()
         .map(|(i, s)| {
@@ -71,28 +72,38 @@ fn main() {
                 i + 1,
                 s
             );
-            let mut out = [0u8; 32];
-            for (j, byte) in out.iter_mut().enumerate() {
+            let mut key = [0u8; 32];
+            for (j, byte) in key.iter_mut().enumerate() {
                 *byte = u8::from_str_radix(&s[j * 2..j * 2 + 2], 16)
                     .expect("invalid hex digit");
             }
-            out
+            let hash = Sha256::digest(key);
+            let mut fingerprint = [0u8; 8];
+            fingerprint.copy_from_slice(&hash[..8]);
+            (fingerprint, key)
         })
         .collect();
 
     assert!(!keys.is_empty(), "LPDF_PUBLIC_KEY must contain at least one key");
 
     // Emit the Rust source file.
-    let mut src = String::from("pub const TRUSTED_KEYS: &[[u8; 32]] = &[\n");
-    for key in &keys {
-        src.push_str("    [");
+    let mut src = String::from("pub const TRUSTED_KEYS_WITH_KID: &[([u8; 8], [u8; 32])] = &[\n");
+    for (fingerprint, key) in &keys {
+        src.push_str("    ([");
+        for (i, b) in fingerprint.iter().enumerate() {
+            if i > 0 {
+                src.push_str(", ");
+            }
+            src.push_str(&format!("0x{b:02x}"));
+        }
+        src.push_str("], [");
         for (i, b) in key.iter().enumerate() {
             if i > 0 {
                 src.push_str(", ");
             }
             src.push_str(&format!("0x{b:02x}"));
         }
-        src.push_str("],\n");
+        src.push_str("]),\n");
     }
     src.push_str("];\n");
 

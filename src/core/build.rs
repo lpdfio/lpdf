@@ -5,11 +5,15 @@
 //! public key), and writes `$OUT_DIR/trusted_keys.rs`:
 //!
 //! ```rust
-//! pub const TRUSTED_KEYS: &[[u8; 32]] = &[
-//!     [0xab, 0xcd, ...],
-//!     // ...
+//! pub const TRUSTED_KEYS_WITH_KID: &[([u8; 8], [u8; 32])] = &[
+//!     ([0x..], [0xab, 0xcd, ...]),
 //! ];
 //! ```
+//!
+//! Each entry is a `(fingerprint, key_bytes)` tuple.  The fingerprint is the
+//! first 8 bytes of SHA-256(public_key_bytes), hex-encoded in tokens as `kid`.
+//! Tokens must include a `kid` claim to resolve to the matching key; tokens
+//! without `kid` are rejected as malformed.
 //!
 //! This file is `include!`d by `src/license.rs`, keeping the key out of
 //! version control entirely.
@@ -17,7 +21,6 @@
 //! # Multiple keys / rotation
 //!
 //! Separate keys with commas: `LPDF_PUBLIC_KEY=<key1>,<key2>`.
-//! A token is accepted if it verifies against any key in the list.
 //! During rotation: prepend the new key, redeploy, reissue tokens, then
 //! remove the old key after the grace period and redeploy again.
 //!
@@ -36,6 +39,7 @@
 //!   env:
 //!     LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
 
+use sha2::{Digest, Sha256};
 use std::{env, fs, path::Path};
 
 fn main() {
@@ -48,7 +52,7 @@ fn main() {
     let raw = raw.trim();
 
     // Parse comma-separated hex keys (skip if empty).
-    let keys: Vec<[u8; 32]> = if raw.is_empty() {
+    let keys: Vec<([u8; 8], [u8; 32])> = if raw.is_empty() {
         vec![]
     } else {
         raw.split(',')
@@ -61,27 +65,37 @@ fn main() {
                     i + 1,
                     s
                 );
-                let mut out = [0u8; 32];
-                for (j, byte) in out.iter_mut().enumerate() {
+                let mut key = [0u8; 32];
+                for (j, byte) in key.iter_mut().enumerate() {
                     *byte = u8::from_str_radix(&s[j * 2..j * 2 + 2], 16)
                         .expect("invalid hex digit");
                 }
-                out
+                let hash = Sha256::digest(key);
+                let mut fingerprint = [0u8; 8];
+                fingerprint.copy_from_slice(&hash[..8]);
+                (fingerprint, key)
             })
             .collect()
     };
 
     // Emit the Rust source file.
-    let mut src = String::from("pub const TRUSTED_KEYS: &[[u8; 32]] = &[\n");
-    for key in &keys {
-        src.push_str("    [");
+    let mut src = String::from("pub const TRUSTED_KEYS_WITH_KID: &[([u8; 8], [u8; 32])] = &[\n");
+    for (fingerprint, key) in &keys {
+        src.push_str("    ([");
+        for (i, b) in fingerprint.iter().enumerate() {
+            if i > 0 {
+                src.push_str(", ");
+            }
+            src.push_str(&format!("0x{b:02x}"));
+        }
+        src.push_str("], [");
         for (i, b) in key.iter().enumerate() {
             if i > 0 {
                 src.push_str(", ");
             }
             src.push_str(&format!("0x{b:02x}"));
         }
-        src.push_str("],\n");
+        src.push_str("]),\n");
     }
     src.push_str("];\n");
 

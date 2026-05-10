@@ -31,9 +31,12 @@ qrcode = { version = "0.14", default-features = false }
 # MD5 for RC4-128 PDF encryption key derivation — WASM-compatible, no_std
 md-5 = "0.10"
 
-[dev-dependencies]
+[build-dependencies]
 sha2 = "0.10"
+
+[dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
+sha2 = "0.10"
 
 [[bench]]
 name    = "pipeline"

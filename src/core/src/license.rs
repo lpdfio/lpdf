@@ -11,10 +11,11 @@
 //! | `tier` | string  | all tiers       | `"community"`, `"professional"`, `"enterprise"` |
 //! | `v`    | integer | all tiers       | Major version the key was issued for             |
 //! | `exp`  | integer | community / pro | Unix timestamp; absent on enterprise tokens      |
+//! | `kid`  | string  | all tiers       | 16-char hex fingerprint of the signing key       |
 //!
 //! ## Validation logic
 //!
-//! 1. Verify Ed25519 signature.
+//! 1. Verify Ed25519 signature (using `kid` for direct key lookup if present).
 //! 2. Check `v == LPDF_MAJOR_VERSION` — all tiers; mismatch → [`LicenseStatus::VersionMismatch`].
 //! 3. If tier is not enterprise, check `exp > now_unix` → [`LicenseStatus::Expired`].
 //!
@@ -24,9 +25,12 @@
 //!
 //! ## Signing-key rotation
 //!
-//! Trusted public keys are embedded in `TRUSTED_KEYS` below.  A token is
-//! valid if it verifies against **any** of those keys.  This supports
-//! zero-downtime key rotation:
+//! Trusted public keys are embedded in `TRUSTED_KEYS_WITH_KID` below, each
+//! paired with its 8-byte SHA-256 fingerprint.  Tokens must include a `kid`
+//! claim (16-char lowercase hex of the fingerprint) to identify the signing
+//! key; tokens without `kid` are rejected as malformed.
+//!
+//! Rotation procedure:
 //!
 //! 1. Generate a new keypair with `npm start` in `src/license/`.
 //! 2. Prepend the new hex key to `LPDF_PUBLIC_KEY` (comma-separated).
@@ -47,13 +51,10 @@ use ed25519_dalek::{Signature, VerifyingKey, Verifier};
 // Trusted public keys — injected at compile time via build.rs
 // ---------------------------------------------------------------------------
 //
-// `TRUSTED_KEYS` is generated from the `LPDF_PUBLIC_KEY` environment variable
-// by `build.rs` and written to `$OUT_DIR/trusted_keys.rs`.  See `build.rs`
-// for rotation instructions and local development setup.
-//
-// A token is accepted if it verifies against **any** entry, which enables
-// zero-downtime key rotation: prepend the new key, deploy, reissue tokens,
-// then remove the old key after the grace period and deploy again.
+// `TRUSTED_KEYS_WITH_KID` is generated from `LPDF_PUBLIC_KEY` by `build.rs`
+// and written to `$OUT_DIR/trusted_keys.rs`.  Each entry is a
+// `(fingerprint, key_bytes)` tuple where `fingerprint` is SHA-256(key)[..8].
+// See `build.rs` for rotation instructions and local development setup.
 include!(concat!(env!("OUT_DIR"), "/trusted_keys.rs"));
 
 // Major version embedded at compile time.  A key token's `v` claim must match
@@ -146,32 +147,45 @@ pub fn check(token: &str, now_unix: i64) -> LicenseStatus {
         Err(_) => return LicenseStatus::Malformed,
     };
 
-    // ── Verify Ed25519 signature against all trusted keys ───────────────────
-    let signature = match Signature::from_slice(&sig_bytes) {
-        Ok(s)  => s,
-        Err(_) => return LicenseStatus::Malformed,
-    };
-
-    // If the binary was built without a public key, no token can be verified.
-    if TRUSTED_KEYS.is_empty() {
-        return LicenseStatus::InvalidSignature;
-    }
-
-    let verified = TRUSTED_KEYS.iter().any(|key_bytes| {
-        VerifyingKey::from_bytes(key_bytes)
-            .map(|vk| vk.verify(&payload_bytes, &signature).is_ok())
-            .unwrap_or(false)
-    });
-    if !verified {
-        return LicenseStatus::InvalidSignature;
-    }
-
-    // ── Parse JSON claims ────────────────────────────────────────────────────
+    // ── Parse JSON claims (untrusted — used only for kid-based key selection) ─
     let claims: serde_json::Value = match serde_json::from_slice(&payload_bytes) {
         Ok(v)  => v,
         Err(_) => return LicenseStatus::Malformed,
     };
 
+    // ── Verify Ed25519 signature ─────────────────────────────────────────────
+    let signature = match Signature::from_slice(&sig_bytes) {
+        Ok(s)  => s,
+        Err(_) => return LicenseStatus::Malformed,
+    };
+
+    if TRUSTED_KEYS_WITH_KID.is_empty() {
+        return LicenseStatus::InvalidSignature;
+    }
+
+    let kid = match claims["kid"].as_str() {
+        Some(s) => match parse_kid_hex(s) {
+            Some(b) => b,
+            None    => return LicenseStatus::Malformed,
+        },
+        None => return LicenseStatus::Malformed,
+    };
+
+    let verified = TRUSTED_KEYS_WITH_KID
+        .iter()
+        .find(|(fp, _)| *fp == kid)
+        .map(|(_, key_bytes)| {
+            VerifyingKey::from_bytes(key_bytes)
+                .map(|vk| vk.verify(&payload_bytes, &signature).is_ok())
+                .unwrap_or(false)
+        })
+        .unwrap_or(false);
+
+    if !verified {
+        return LicenseStatus::InvalidSignature;
+    }
+
+    // ── Parse trusted claims (signature verified) ────────────────────────────
     let ver = match claims["v"].as_u64() {
         Some(n) => n as u32,
         None    => return LicenseStatus::Malformed,
@@ -201,6 +215,17 @@ pub fn check(token: &str, now_unix: i64) -> LicenseStatus {
     LicenseStatus::Licensed(tier)
 }
 
+fn parse_kid_hex(s: &str) -> Option<[u8; 8]> {
+    if s.len() != 16 {
+        return None;
+    }
+    let mut out = [0u8; 8];
+    for (i, byte) in out.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).ok()?;
+    }
+    Some(out)
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -227,10 +252,19 @@ mod tests {
     #[test]
     fn valid_base64_bad_sig_is_invalid_signature() {
         // Valid base64url payload + sig bytes, but signature doesn't match any trusted key.
-        let payload = URL_SAFE_NO_PAD.encode(b"{\"tier\":\"community\",\"v\":1,\"exp\":9999999999}");
+        // kid is a valid 16-char hex fingerprint that won't match any embedded key.
+        let payload = URL_SAFE_NO_PAD.encode(b"{\"tier\":\"community\",\"v\":1,\"exp\":9999999999,\"kid\":\"deadbeefdeadbeef\"}");
         let sig     = URL_SAFE_NO_PAD.encode(&[0u8; 64]);
         let token   = format!("{payload}.{sig}");
         assert_eq!(check(&token, 0), LicenseStatus::InvalidSignature);
+    }
+
+    #[test]
+    fn invalid_kid_hex_is_malformed() {
+        let payload = URL_SAFE_NO_PAD.encode(b"{\"tier\":\"community\",\"v\":1,\"exp\":9999999999,\"kid\":\"nothex!\"}");
+        let sig     = URL_SAFE_NO_PAD.encode(&[0u8; 64]);
+        let token   = format!("{payload}.{sig}");
+        assert_eq!(check(&token, 0), LicenseStatus::Malformed);
     }
 
     #[test]
