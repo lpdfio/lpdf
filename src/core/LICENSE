@@ -14,7 +14,7 @@ Lpdf is available under three license tiers: a free Community License for indivi
 
 "Production environment" means any environment in which the Software processes real user data or supports live business operations, including staging environments accessible by end users.
 
-"Production Context" means a distinct, independently operated system, application, or automated workflow that uses the Software in a production environment, where "independently operated" means it serves a separate and identifiable purpose, user base, or business function. For the avoidance of doubt: multiple delivery channels (web, mobile, desktop, API) of the same system serving the same purpose and user base constitute a single Production Context; all internal business operations of an organization where the organization's own personnel are the sole end users constitute a single Production Context regardless of the number of internal systems or services involved; a service or component that operates exclusively as part of a larger system and has no independent production deployment is not a separate Production Context.
+"Production System" means a distinct, independently operated system, application, or automated workflow that uses the Software in a production environment, where "independently operated" means it serves a separate and identifiable purpose, user base, or business function. For the avoidance of doubt: multiple delivery channels (web, mobile, desktop, API) of the same system serving the same purpose and user base constitute a single Production System; all internal business operations of an organization where the organization's own personnel are the sole end users constitute a single Production System regardless of the number of internal systems or services involved; a service or component that operates exclusively as part of a larger system and has no independent production deployment is not a separate Production System.
 
 ### Equal Features Across All Tiers
 
@@ -44,11 +44,11 @@ Organizations whose revenue crosses the 1,000,000 USD threshold have a **90-day 
 
 ### Mid-Size Businesses
 
-Companies and organizations whose total annual gross revenue exceeded **1,000,000 USD** but did not exceed **10,000,000 USD** in the most recent 12-month fiscal year must obtain a Professional License for each Production Context in which they use the Software.
+Companies and organizations whose total annual gross revenue exceeded **1,000,000 USD** but did not exceed **10,000,000 USD** in the most recent 12-month fiscal year must obtain a Professional License for each Production System in which they use the Software.
 
 ### Larger Businesses
 
-Companies and organizations whose total annual gross revenue exceeded **10,000,000 USD** in the most recent 12-month fiscal year must obtain an Enterprise License for each Production Context in which they use the Software.
+Companies and organizations whose total annual gross revenue exceeded **10,000,000 USD** in the most recent 12-month fiscal year must obtain an Enterprise License for each Production System in which they use the Software.
 
 Organizations whose revenue crosses the 10,000,000 USD threshold have a **90-day grace period** following the close of their fiscal year to obtain an Enterprise license. During this grace period, continued use under a Professional License is permitted. The licensee remains subject to the terms of their existing Professional License and does not gain Enterprise rights until an Enterprise License is obtained.
 
@@ -84,7 +84,7 @@ A license key issued under this license may be used by you, your employees, and 
 
 All modifications to the Software made by the licensee remain the intellectual property of the licensee. Codesense LLC claims no ownership over modifications unless they are voluntarily submitted as contributions to the Lpdf project under a separate Contributor License Agreement.
 
-If your organization's annual gross revenue exceeds 1,000,000 USD, your rights under this Community License to use the Software in commercial Production Contexts are automatically terminated upon expiration of the 90-day grace period described above, and you must obtain a Professional or Enterprise license for each such Production Context. Use under this Community License by individuals, open-source projects, and non-profit organizations is not subject to revenue thresholds and is unaffected by this provision.
+If your organization's annual gross revenue exceeds 1,000,000 USD, your rights under this Community License to use the Software in commercial Production Systems are automatically terminated upon expiration of the 90-day grace period described above, and you must obtain a Professional or Enterprise license for each such Production System. Use under this Community License by individuals, open-source projects, and non-profit organizations is not subject to revenue thresholds and is unaffected by this provision.
 
 ### License Key Expiration
 
@@ -112,19 +112,19 @@ License rights may not be rented, leased, or transferred to any third party. A l
 
 ### License Grant
 
-Subject to payment of the applicable license fee per Production Context, Codesense LLC grants the licensee a non-exclusive, worldwide, royalty-free license to use the Software within a single licensed Production Context:
+Subject to payment of the applicable license fee per Production System, Codesense LLC grants the licensee a non-exclusive, worldwide, royalty-free license to use the Software within a single licensed Production System:
 
-- Use, copy, modify, and integrate the Software into the licensed Production Context
-- Deploy the Software across any number of servers, environments, and infrastructure serving that Production Context
-- Distribute the Software as a component of the licensed Production Context
+- Use, copy, modify, and integrate the Software into the licensed Production System
+- Deploy the Software across any number of servers, environments, and infrastructure serving that Production System
+- Distribute the Software as a component of the licensed Production System
 
-A separate license is required for each additional Production Context in which the licensee uses the Software in a production environment.
+A separate license is required for each additional Production System in which the licensee uses the Software in a production environment.
 
-**Tier compliance.** Licensee is responsible for ensuring their use of the Software complies with the applicable license tier at all times. If the licensee's annual gross revenue crosses 10,000,000 USD, the licensee must obtain an Enterprise License for each affected Production Context within 90 days of the close of the fiscal year in which the threshold was crossed. Use of a Professional License key while qualifying for the Enterprise tier is a material breach of this Agreement.
+**Tier compliance.** Licensee is responsible for ensuring their use of the Software complies with the applicable license tier at all times. If the licensee's annual gross revenue crosses 10,000,000 USD, the licensee must obtain an Enterprise License for each affected Production System within 90 days of the close of the fiscal year in which the threshold was crossed. Use of a Professional License key while qualifying for the Enterprise tier is a material breach of this Agreement.
 
 ### License Fees and Evaluation
 
-A license fee is required per Production Context for use of the Software in a production environment (as defined above). Evaluation and testing in non-production environments is permitted without a license for a period not exceeding 30 days.
+A license fee is required per Production System for use of the Software in a production environment (as defined above). Evaluation and testing in non-production environments is permitted without a license for a period not exceeding 30 days.
 
 Upon payment, the licensee receives a perpetual license for the version of Lpdf current at the time of purchase, plus one year of updates, new features, and security patches. Continued access to new versions after the first year requires annual renewal. Cancellation of renewal does not affect the perpetual license for the version already held.
 
@@ -180,25 +180,25 @@ Notwithstanding the foregoing, either party may seek injunctive or other equitab
 
 Licensees agree not to make false statements of fact about Lpdf, Codesense LLC, or its contributors that are intended to cause material harm to the reputation of the project or the company. This clause does not restrict good-faith criticism, bug reports, public discussion of software deficiencies, or reviews based on the licensee's genuine experience.
 
-License rights may not be rented, leased, or transferred to any third party. A license key issued under this license may be used by the licensee's employees, contractors, and personnel of Controlled Entities (as defined in the License Grant below) working on Production Contexts licensed by the licensee. The licensee may not share or distribute a license key for use in Production Contexts not licensed by the licensee; any Production Context operated independently by a Controlled Entity requires its own license obtained by that entity.
+License rights may not be rented, leased, or transferred to any third party. A license key issued under this license may be used by the licensee's employees, contractors, and personnel of Controlled Entities (as defined in the License Grant below) working on Production Systems licensed by the licensee. The licensee may not share or distribute a license key for use in Production Systems not licensed by the licensee; any Production System operated independently by a Controlled Entity requires its own license obtained by that entity.
 
 ### License Grant
 
-Subject to payment of the applicable license fee per Production Context, Codesense LLC grants the licensee a non-exclusive, worldwide, royalty-free license for an unlimited number of developers within the licensee's organization to use the Software within a single licensed Production Context:
+Subject to payment of the applicable license fee per Production System, Codesense LLC grants the licensee a non-exclusive, worldwide, royalty-free license for an unlimited number of developers within the licensee's organization to use the Software within a single licensed Production System:
 
-- Use, copy, modify, and integrate the Software into the licensed Production Context
-- Deploy the Software across any number of servers, environments, and infrastructure serving that Production Context
-- Distribute the Software as a component of the licensed Production Context
+- Use, copy, modify, and integrate the Software into the licensed Production System
+- Deploy the Software across any number of servers, environments, and infrastructure serving that Production System
+- Distribute the Software as a component of the licensed Production System
 
-A separate license is required for each additional Production Context in which the licensee uses the Software in a production environment.
+A separate license is required for each additional Production System in which the licensee uses the Software in a production environment.
 
-**Controlled Entities.** "Controlled Entities" means wholly owned subsidiaries and entities in which the licensee holds more than 50% ownership or voting control. Personnel of Controlled Entities may use license keys issued under this license solely for Production Contexts licensed by the licensee. This does not extend the license to Production Contexts operated independently by a Controlled Entity; each such Production Context requires its own license obtained by the Controlled Entity at the tier applicable to that entity's annual gross revenue.
+**Controlled Entities.** "Controlled Entities" means wholly owned subsidiaries and entities in which the licensee holds more than 50% ownership or voting control. Personnel of Controlled Entities may use license keys issued under this license solely for Production Systems licensed by the licensee. This does not extend the license to Production Systems operated independently by a Controlled Entity; each such Production System requires its own license obtained by the Controlled Entity at the tier applicable to that entity's annual gross revenue.
 
-**Tier compliance.** Licensee is responsible for ensuring their use of the Software complies with the applicable license tier at all times. Each Controlled Entity using the Software must qualify for the tier under which they operate. If a Controlled Entity's annual gross revenue would independently qualify that entity for a different tier, that entity must obtain its own license at the applicable tier for any Production Context it independently operates.
+**Tier compliance.** Licensee is responsible for ensuring their use of the Software complies with the applicable license tier at all times. Each Controlled Entity using the Software must qualify for the tier under which they operate. If a Controlled Entity's annual gross revenue would independently qualify that entity for a different tier, that entity must obtain its own license at the applicable tier for any Production System it independently operates.
 
 ### License Fees and Evaluation
 
-A license fee is required per Production Context for use of the Software in a production environment (as defined above). Evaluation and testing in non-production environments is permitted without a license for a period not exceeding 30 days.
+A license fee is required per Production System for use of the Software in a production environment (as defined above). Evaluation and testing in non-production environments is permitted without a license for a period not exceeding 30 days.
 
 Upon payment, the licensee receives a perpetual license for the major version of Lpdf current at the time of purchase, plus access to updates, new features, and security patches within that major version for the duration of the active subscription. Cancellation of renewal does not affect the perpetual license for the major version already held.
 
