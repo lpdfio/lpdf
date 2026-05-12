@@ -17,7 +17,7 @@ export LPDF_PUBLIC_KEY
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
         clone-adapters sync-license check-license \
-        build-portal-ui build-pages
+        build-portal-ui build-pages meta-pages
 
 build-wasm:
 	@echo ""
@@ -356,13 +356,26 @@ check-license:
 	@echo "OK"
 
 # ── Portal UI bundle ───────────────────────────────────────────────────────────
+# CI=true tells build.mjs to bake __PORTAL_URL__ / __PAGES_URL__ sentinels
+# instead of falling through to .env.local values.  The deploy workflows own
+# the sed replacement for each environment.
 build-portal-ui:
-	cd src/portal/ui && npm run build
+	cd src/portal/ui && CI=true npm run build
+
+# ── Pages SEO meta sync ───────────────────────────────────────────────────────
+meta-pages:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Syncing SEO meta from sitemap.yaml..."
+	@echo ""
+	node src/pages/update-meta.mjs
 
 # ── Pages asset sync ──────────────────────────────────────────────────────────
-# Copies the Vite-built pages bundle and the demo assets into the pages asset tree.
-# No npm build needed in src/pages — all JS now comes from the portal Vite build.
-build-pages: build-portal-ui
+# Builds the portal UI (without CI=true so .env.local values are baked in) then
+# copies the resulting bundles and demo assets into the pages asset tree.
+# The pages site itself has no build step — all JS comes from the portal Vite build.
+build-pages:
+	cd src/portal/ui && npm run build
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Copying pages assets..."
