@@ -17,7 +17,7 @@ export LPDF_PUBLIC_KEY
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
         clone-adapters sync-license check-license \
-        build-portal-ui build-pages meta-pages
+        build-portal-ui build-pages dev-pages meta-pages
 
 build-wasm:
 	@echo ""
@@ -371,14 +371,38 @@ meta-pages:
 	node src/pages/update-meta.mjs
 
 # ── Pages asset sync ──────────────────────────────────────────────────────────
-# Builds the portal UI (without CI=true so .env.local values are baked in) then
-# copies the resulting bundles and demo assets into the pages asset tree.
-# The pages site itself has no build step — all JS comes from the portal Vite build.
-build-pages:
-	cd src/portal/ui && npm run build
+# Copies the Vite-built pages bundle and the demo assets into the pages asset tree.
+# No npm build needed in src/pages — all JS now comes from the portal Vite build.
+# CI=true bakes in sentinels; the deploy workflow replaces them via sed.
+build-pages: build-portal-ui
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Copying pages assets..."
+	@echo ""
+	cp src/portal/ui/dist/lpdf-pages.js src/pages/www/assets/js/lpdf-pages.js && \
+	echo ">>> src/pages/www/assets/js/lpdf-pages.js updated." && \
+	cp src/portal/ui/dist/lpdf-docs.js src/pages/www/assets/js/lpdf-docs.js && \
+	echo ">>> src/pages/www/assets/js/lpdf-docs.js updated." && \
+	cp src/portal/ui/dist/lpdf-checkout.js src/pages/www/assets/js/lpdf-checkout.js && \
+	echo ">>> src/pages/www/assets/js/lpdf-checkout.js updated." && \
+	cp dist/web/lpdf.js src/portal/demo/lpdf-web.js && \
+	cp dist/web/lpdf_bg.wasm src/portal/demo/lpdf_bg.wasm && \
+	echo ">>> src/portal/demo WASM updated." && \
+	rm -rf tmp/lpdf-demo && mkdir -p tmp/lpdf-demo && \
+	cp -r src/portal/demo/. tmp/lpdf-demo/ && \
+	cp src/portal/ui/dist/lpdf-demo.js tmp/lpdf-demo/lpdf-demo.js && \
+	rm -rf src/pages/www/assets/js/lpdf-demo && \
+	cp -r tmp/lpdf-demo src/pages/www/assets/js/lpdf-demo && \
+	echo ">>> src/pages/www/assets/js/lpdf-demo updated."
+
+# Local-dev variant: builds without CI=true so .env.local values are baked in.
+# Use this to test pages locally. Do NOT commit the output — run make build-pages
+# before committing to restore sentinel values for CI deployment.
+dev-pages:
+	cd src/portal/ui && npm run build
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Copying pages assets (local dev)..."
 	@echo ""
 	cp src/portal/ui/dist/lpdf-pages.js src/pages/www/assets/js/lpdf-pages.js && \
 	echo ">>> src/pages/www/assets/js/lpdf-pages.js updated." && \
