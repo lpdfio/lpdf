@@ -178,19 +178,13 @@ impl LpdfEngine {
             lp.iter().flat_map(layout::layout_page).collect();
 
         let status = license::check(&self.license_key, self.now_unix);
-        let wm: Option<(&str, Option<&str>)> = if status.is_licensed() {
-            None
-        } else {
-            Some(("Made with lpdf.io", Some("https://lpdf.io")))
-        };
-
+        // An unlicensed status draws the attribution line on every page.
         let bytes = pdf::render_pdf(
             &pages,
             &doc.fonts,
             &self.fonts,
             &self.images,
             &doc.meta,
-            wm,
             self.created_on.as_deref(),
             status.is_licensed(),
         )
@@ -249,19 +243,13 @@ impl LpdfEngine {
             lp.iter().flat_map(layout::layout_page).collect();
 
         let status = license::check(&self.license_key, self.now_unix);
-        let wm: Option<(&str, Option<&str>)> = if status.is_licensed() {
-            None
-        } else {
-            Some(("Made with lpdf.io", Some("https://lpdf.io")))
-        };
-
+        // An unlicensed status draws the attribution line on every page.
         let bytes = pdf::render_pdf(
             &pages,
             &doc.fonts,
             &self.fonts,
             &self.images,
             &doc.meta,
-            wm,
             self.created_on.as_deref(),
             status.is_licensed(),
         )
@@ -309,7 +297,7 @@ impl LpdfEngine {
 impl LpdfEngine {
     /// Render XML to PDF bytes — native API used by the CLI and tests.
     ///
-    /// Applies the license watermark when `license_key` is empty or invalid.
+    /// Draws the attribution line when `license_key` is empty or invalid.
     /// No custom fonts or images are resolved; built-in fonts only.
     pub fn render_xml_to_pdf(xml: &str, license_key: &str) -> Result<Vec<u8>, String> {
         let mut doc = parse::parse(xml)?;
@@ -317,18 +305,12 @@ impl LpdfEngine {
         let pages: Vec<render::RenderPage> =
             lp.iter().flat_map(layout::layout_page).collect();
         let status = license::check(license_key, 0);
-        let wm: Option<(&str, Option<&str>)> = if status.is_licensed() {
-            None
-        } else {
-            Some(("Made with lpdf.io", Some("https://lpdf.io")))
-        };
         pdf::render_pdf(
             &pages,
             &doc.fonts,
             &pdf::FontRegistry::new(),
             &pdf::ImageRegistry::new(),
             &doc.meta,
-            wm,
             None,
             status.is_licensed(),
         )
@@ -341,11 +323,10 @@ impl LpdfEngine {
         let lp = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
             lp.iter().flat_map(layout::layout_page).collect();
-        // Render as unlicensed (with watermark) to match what the adapters
+        // Render as unlicensed (with the attribution line) to match what the adapters
         // produce when no valid license key is supplied — keeps snapshot hashes
         // consistent between the Rust tests and the adapter test suites.
-        let wm = Some(("Made with lpdf.io", Some("https://lpdf.io")));
-        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, wm, None, false)
+        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, None, false)
     }
 
     fn render_doc(&self, mut doc: parse::Document) -> String {
@@ -444,11 +425,11 @@ pub fn bench_render_doc(mut doc: BenchDoc) -> Result<Vec<u8>, String> {
     let lp = doc.0.section_layouts();
     let pages: Vec<render::RenderPage> =
         lp.iter().flat_map(layout::layout_page).collect();
-    let wm = Some(("Made with lpdf.io", Some("https://lpdf.io")));
+    // Unlicensed, so benchmarks include the cost of the attribution line.
     pdf::render_pdf(
         &pages, &doc.0.fonts,
         &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
-        &doc.0.meta, wm, None, false,
+        &doc.0.meta, None, false,
     )
 }
 
@@ -465,11 +446,11 @@ pub fn bench_render_xml(xml: &str) -> Result<Vec<u8>, String> {
     let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
         lp.iter().flat_map(layout::layout_page).collect();
-    let wm = Some(("Made with lpdf.io", Some("https://lpdf.io")));
+    // Unlicensed, so benchmarks include the cost of the attribution line.
     pdf::render_pdf(
         &pages, &doc.fonts,
         &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
-        &doc.meta, wm, None, false,
+        &doc.meta, None, false,
     )
 }
 
@@ -483,13 +464,13 @@ pub fn bench_render_xml_with_font(
     let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
         lp.iter().flat_map(layout::layout_page).collect();
-    let wm = Some(("Made with lpdf.io", Some("https://lpdf.io")));
     let mut fonts = pdf::FontRegistry::new();
     fonts.register(font_name, font_bytes.to_vec());
+    // Unlicensed, so benchmarks include the cost of the attribution line.
     pdf::render_pdf(
         &pages, &doc.fonts,
         &fonts, &pdf::ImageRegistry::new(),
-        &doc.meta, wm, None, false,
+        &doc.meta, None, false,
     )
 }
 
@@ -503,13 +484,13 @@ pub fn bench_render_xml_with_image(
     let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
         lp.iter().flat_map(layout::layout_page).collect();
-    let wm = Some(("Made with lpdf.io", Some("https://lpdf.io")));
     let mut images = pdf::ImageRegistry::new();
     images.load(image_name, image_bytes.to_vec());
+    // Unlicensed, so benchmarks include the cost of the attribution line.
     pdf::render_pdf(
         &pages, &doc.fonts,
         &pdf::FontRegistry::new(), &images,
-        &doc.meta, wm, None, false,
+        &doc.meta, None, false,
     )
 }
 
@@ -557,6 +538,34 @@ mod tests {
         assert_eq!(result["watermark"]["type"], "lpdf:watermark");
         // Should carry a warning
         assert!(result["license_warning"].is_string());
+    }
+
+    // Page content streams are compressed, but font and annotation dictionaries are
+    // written as plain text, so their entries can be found by a byte search.
+    fn pdf_contains(pdf: &[u8], needle: &[u8]) -> bool {
+        pdf.windows(needle.len()).any(|w| w == needle)
+    }
+
+    #[test]
+    fn unlicensed_pdf_embeds_the_attribution_face_and_links_to_lpdf() {
+        let pdf = LpdfEngine::render_xml_to_pdf(&minimal(""), "").unwrap();
+        assert!(pdf_contains(&pdf, pdf::ATTRIBUTION_FONT_KEY.as_bytes()));
+        assert!(pdf_contains(&pdf, b"https://lpdf.io"));
+    }
+
+    #[test]
+    fn licensed_pdf_carries_no_attribution() {
+        // A signed key cannot be minted in a unit test, so render with `licensed` set directly.
+        let mut doc = parse::parse(&minimal("")).unwrap();
+        let lp = doc.section_layouts();
+        let pages: Vec<render::RenderPage> =
+            lp.iter().flat_map(layout::layout_page).collect();
+        let pdf = pdf::render_pdf(
+            &pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
+            &doc.meta, None, true,
+        ).unwrap();
+        assert!(!pdf_contains(&pdf, pdf::ATTRIBUTION_FONT_KEY.as_bytes()));
+        assert!(!pdf_contains(&pdf, b"https://lpdf.io"));
     }
 
     #[test]

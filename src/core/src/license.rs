@@ -10,18 +10,25 @@
 //! |--------|---------|-----------------|--------------------------------------------------|
 //! | `tier` | string  | all tiers       | `"community"`, `"professional"`, `"enterprise"` |
 //! | `v`    | integer | all tiers       | Major version the key was issued for             |
-//! | `exp`  | integer | community / pro | Unix timestamp; absent on enterprise tokens      |
+//! | `exp`  | integer | community / pro | Unix timestamp; optional on enterprise tokens     |
 //! | `kid`  | string  | all tiers       | 16-char hex fingerprint of the signing key       |
 //!
 //! ## Validation logic
 //!
 //! 1. Verify Ed25519 signature (using `kid` for direct key lookup if present).
 //! 2. Check `v == LPDF_MAJOR_VERSION` — all tiers; mismatch → [`LicenseStatus::VersionMismatch`].
-//! 3. If tier is not enterprise, check `exp > now_unix` → [`LicenseStatus::Expired`].
+//! 3. Check `exp > now_unix` wherever `exp` is present → [`LicenseStatus::Expired`].
 //!
-//! Enterprise keys have no date expiry; the ongoing contract is the enforcement
-//! mechanism.  All keys become invalid on major version change — the customer
-//! generates a new key from the portal as part of their upgrade.
+//! Expiry is gated on the **presence of the claim**, not on the tier. The portal
+//! decides a key's mode when it mints it, and `exp` records that decision; both
+//! sides then read the same signal instead of each hard-coding a list of tier
+//! names that has to be kept in step.
+//!
+//! An enterprise key may be either: dated, or version-locked with no `exp` at
+//! all, where the ongoing contract is the enforcement mechanism. Community and
+//! professional keys must always carry one. All keys, dated or not, become
+//! invalid on major version change — the customer generates a new key from the
+//! portal as part of their upgrade.
 //!
 //! ## Signing-key rotation
 //!
@@ -200,19 +207,37 @@ pub fn check(token: &str, now_unix: i64) -> LicenseStatus {
         return LicenseStatus::VersionMismatch;
     }
 
-    // ── Expiry check — Community and Pro only ────────────────────────────────
-    // Enterprise keys carry no `exp` claim; the contract governs date-based use.
-    if !tier.eq_ignore_ascii_case("enterprise") {
-        let exp = match claims["exp"].as_i64() {
-            Some(n) => n,
-            None    => return LicenseStatus::Malformed,
-        };
-        if now_unix > 0 && now_unix > exp {
-            return LicenseStatus::Expired;
-        }
+    // ── Expiry check — presence-gated, every tier ────────────────────────────
+    if let Some(status) = expiry_status(&tier, claims["exp"].as_i64(), now_unix) {
+        return status;
     }
 
     LicenseStatus::Licensed(tier)
+}
+
+/// A token's date standing, from its tier and its `exp` claim.
+///
+/// `exp` is enforced wherever it appears, whatever the tier: the claim itself is the
+/// discriminator, so the engine and the portal that mints the key agree by construction
+/// rather than by both hard-coding the same list of tier names. Gating on the tier instead
+/// meant an enterprise key could carry a date that nothing checked.
+///
+/// Only enterprise may omit `exp` — those keys are version-locked and the contract governs
+/// date-based use. A community or professional token without one stays [`Malformed`] rather
+/// than becoming perpetual, which is what keeps a portal bug from minting a key that never
+/// lapses. Claims are signed, so this is an integrity check, not a defence against tampering.
+///
+/// `now_unix` of `0` means "no clock" — WASM and WASI have no system time — and skips the
+/// comparison rather than treating every key as expired.
+///
+/// Split out from [`check`] so the rules can be tested without a signed token.
+fn expiry_status(tier: &str, exp: Option<i64>, now_unix: i64) -> Option<LicenseStatus> {
+    match exp {
+        Some(exp) if now_unix > 0 && now_unix > exp => Some(LicenseStatus::Expired),
+        Some(_) => None,
+        None if tier.eq_ignore_ascii_case("enterprise") => None,
+        None => Some(LicenseStatus::Malformed),
+    }
 }
 
 fn parse_kid_hex(s: &str) -> Option<[u8; 8]> {
@@ -265,6 +290,46 @@ mod tests {
         let sig     = URL_SAFE_NO_PAD.encode(&[0u8; 64]);
         let token   = format!("{payload}.{sig}");
         assert_eq!(check(&token, 0), LicenseStatus::Malformed);
+    }
+
+    // ── Expiry rules ─────────────────────────────────────────────────────────
+    // The surrounding verification needs a real signature to exercise, so these go through
+    // `expiry_status` directly. `NOW` is an arbitrary clock reading, `EXP` an hour earlier.
+    const NOW: i64 = 1_800_000_000;
+    const EXP: i64 = NOW - 3_600;
+
+    #[test]
+    fn a_dated_enterprise_key_expires_like_any_other() {
+        // The whole point of the change: this used to return Licensed for ever.
+        assert_eq!(expiry_status("enterprise", Some(EXP), NOW), Some(LicenseStatus::Expired));
+    }
+
+    #[test]
+    fn an_enterprise_key_with_no_date_is_version_locked_not_expired() {
+        assert_eq!(expiry_status("enterprise", None, NOW), None);
+    }
+
+    #[test]
+    fn a_community_or_pro_key_with_no_date_stays_malformed() {
+        // Not perpetual: a portal bug that dropped `exp` must not mint a key that never lapses.
+        assert_eq!(expiry_status("community", None, NOW), Some(LicenseStatus::Malformed));
+        assert_eq!(expiry_status("professional", None, NOW), Some(LicenseStatus::Malformed));
+    }
+
+    #[test]
+    fn a_key_still_inside_its_term_passes() {
+        assert_eq!(expiry_status("professional", Some(NOW + 3_600), NOW), None);
+    }
+
+    #[test]
+    fn expiry_is_skipped_when_the_host_has_no_clock() {
+        // WASM and WASI pass 0; a past date must not fail there.
+        assert_eq!(expiry_status("community", Some(EXP), 0), None);
+    }
+
+    #[test]
+    fn the_tier_name_is_matched_case_insensitively() {
+        assert_eq!(expiry_status("Enterprise", None, NOW), None);
     }
 
     #[test]

@@ -13,7 +13,6 @@ bin/
 src/demos/
 src/license/
 src/pages/
-src/portal/
 src/sdk/
 src/vscode/
 tmp/

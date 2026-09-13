@@ -1,0 +1,265 @@
+# yaml-language-server: $schema=../../schema/lpdf.schema.json
+version: 1
+
+tokens:
+  colors:
+    primary:     "#1763cf"
+    surface:     "#ffffff"
+    surface-alt: "#f5f7fa"
+    text:        "#1a1a1a"
+    text-muted:  "#737373"
+    rule:        "#dde3ed"
+    accent:      "#e8f0fc"
+
+document:
+  size: a4
+  margin: 40pt
+  meta:
+    title: "Invoice #1042"
+    author: Acme Corp
+    subject: Invoice
+  sections:
+    - background: surface
+      layout:
+        - stack:
+            attr: { gap: l, height: full, justify: between }
+            nodes:
+
+              # header: logo area + invoice label
+              - flank:
+                  attr: { gap: m, align: start, end: true }
+                  nodes:
+                    - stack:
+                        attr: { gap: xs }
+                        nodes:
+                          - text:
+                              attr: { font-size: xl, font: Helvetica-Bold, color: primary }
+                              _: Acme Corp
+                          - text:
+                              attr: { font-size: s, color: text-muted }
+                              _: "123 Business Ave, Suite 4"
+                          - text:
+                              attr: { font-size: s, color: text-muted }
+                              _: "San Francisco, CA 94107"
+                          - text:
+                              attr: { font-size: s, color: text-muted }
+                              _: billing@acmecorp.example
+                    - stack:
+                        attr: { gap: xs, align: end }
+                        nodes:
+                          - text:
+                              attr: { font-size: xxl, font: Helvetica-Bold, color: primary }
+                              _: INVOICE
+                          - text:
+                              attr: { font-size: s, color: text-muted }
+                              _: "# 1042"
+
+              - divider: { attr: { color: rule, thickness: xs } }
+
+              # bill-to + invoice meta
+              - split:
+                  attr: { gap: l, align: start }
+                  nodes:
+                    - stack:
+                        attr: { gap: xs }
+                        nodes:
+                          - text:
+                              attr: { font-size: s, font: Helvetica-Bold, color: text-muted }
+                              _: BILL TO
+                          - text:
+                              attr: { font-size: m, font: Helvetica-Bold }
+                              _: Bright Labs LLC
+                          - text:
+                              attr: { font-size: s, color: text-muted }
+                              _: "456 Client Street"
+                          - text:
+                              attr: { font-size: s, color: text-muted }
+                              _: "Austin, TX 78701"
+                          - text:
+                              attr: { font-size: s, color: text-muted }
+                              _: accounts@brightlabs.example
+                    - stack:
+                        attr: { gap: xs, align: end }
+                        nodes:
+                          - flank:
+                              attr: { gap: m, align: center, end: true }
+                              nodes:
+                                - text:
+                                    attr: { font-size: s, color: text-muted }
+                                    _: Issue date
+                                - text:
+                                    attr: { font-size: s }
+                                    _: "April 1, 2026"
+                          - flank:
+                              attr: { gap: m, align: center, end: true }
+                              nodes:
+                                - text:
+                                    attr: { font-size: s, color: text-muted }
+                                    _: Due date
+                                - text:
+                                    attr: { font-size: s, font: Helvetica-Bold }
+                                    _: "April 30, 2026"
+                          - flank:
+                              attr: { gap: m, align: center, end: true }
+                              nodes:
+                                - text:
+                                    attr: { font-size: s, color: text-muted }
+                                    _: Payment terms
+                                - text:
+                                    attr: { font-size: s }
+                                    _: Net 30
+
+              - divider: { attr: { color: rule, thickness: xs } }
+
+              # line items table header
+              - frame:
+                  attr: { background: accent, padding: s, radius: xs }
+                  nodes:
+                    - split:
+                        attr: { gap: m, align: center }
+                        nodes:
+                          - stack:
+                              attr: { gap: xs }
+                              nodes:
+                                - flank:
+                                    attr: { gap: m, align: center, end: true }
+                                    nodes:
+                                      - text:
+                                          attr: { font-size: s, font: Helvetica-Bold }
+                                          _: Description
+                                      - text:
+                                          attr: { font-size: s, font: Helvetica-Bold, align: right, width: 30pt }
+                                          _: Qty
+                                      - text:
+                                          attr: { font-size: s, font: Helvetica-Bold, align: right, width: 60pt }
+                                          _: Unit price
+                                      - text:
+                                          attr: { font-size: s, font: Helvetica-Bold, align: right, width: 60pt }
+                                          _: Amount
+
+              # line items
+              - stack:
+                  attr: { gap: xs, height: fill }
+                  nodes:
+
+                    # item 1
+                    - flank:
+                        attr: { gap: m, align: center, end: true }
+                        nodes:
+                          - stack:
+                              attr: { gap: xs }
+                              nodes:
+                                - text:
+                                    attr: { font-size: m }
+                                    _: "Platform license — Pro tier (annual)"
+                                - text:
+                                    attr: { font-size: s, color: text-muted }
+                                    _: "Covers unlimited users, SSO, audit logs"
+                          - text:
+                              attr: { font-size: m, align: right, width: 30pt }
+                              _: "1"
+                          - text:
+                              attr: { font-size: m, align: right, width: 60pt }
+                              _: $4,800.00
+                          - text:
+                              attr: { font-size: m, font: Helvetica-Bold, align: right, width: 60pt }
+                              _: $4,800.00
+                    - divider: { attr: { color: rule, thickness: xs } }
+
+                    # item 2
+                    - flank:
+                        attr: { gap: m, align: center, end: true }
+                        nodes:
+                          - stack:
+                              attr: { gap: xs }
+                              nodes:
+                                - text:
+                                    attr: { font-size: m }
+                                    _: "Implementation & onboarding"
+                                - text:
+                                    attr: { font-size: s, color: text-muted }
+                                    _: "8 hours at contracted hourly rate"
+                          - text:
+                              attr: { font-size: m, align: right, width: 30pt }
+                              _: "8"
+                          - text:
+                              attr: { font-size: m, align: right, width: 60pt }
+                              _: $200.00
+                          - text:
+                              attr: { font-size: m, font: Helvetica-Bold, align: right, width: 60pt }
+                              _: $1,600.00
+                    - divider: { attr: { color: rule, thickness: xs } }
+
+                    # item 3
+                    - flank:
+                        attr: { gap: m, align: center, end: true }
+                        nodes:
+                          - stack:
+                              attr: { gap: xs }
+                              nodes:
+                                - text:
+                                    attr: { font-size: m }
+                                    _: "Priority support add-on (12 months)"
+                                - text:
+                                    attr: { font-size: s, color: text-muted }
+                                    _: "24/7 SLA, 4-hour response guarantee"
+                          - text:
+                              attr: { font-size: m, align: right, width: 20pt }
+                              _: "1"
+                          - text:
+                              attr: { font-size: m, align: right, width: 60pt }
+                              _: $600.00
+                          - text:
+                              attr: { font-size: m, font: Helvetica-Bold, align: right, width: 60pt }
+                              _: $600.00
+                    - divider: { attr: { color: rule, thickness: xs } }
+
+              # totals
+              - cluster:
+                  attr: { justify: end }
+                  nodes:
+                    - stack:
+                        attr: { gap: xs, width: 200pt }
+                        nodes:
+                          - flank:
+                              attr: { gap: m, align: center, end: true }
+                              nodes:
+                                - text:
+                                    attr: { font-size: s, color: text-muted }
+                                    _: Subtotal
+                                - text:
+                                    attr: { font-size: s, align: right }
+                                    _: $7,000.00
+                          - flank:
+                              attr: { gap: m, align: center, end: true }
+                              nodes:
+                                - text:
+                                    attr: { font-size: s, color: text-muted }
+                                    _: "Tax (8.625%)"
+                                - text:
+                                    attr: { font-size: s, align: right }
+                                    _: $603.75
+                          - divider: { attr: { color: rule, thickness: xs } }
+                          - flank:
+                              attr: { gap: m, align: center, end: true }
+                              nodes:
+                                - text:
+                                    attr: { font-size: l, font: Helvetica-Bold }
+                                    _: Total due
+                                - text:
+                                    attr: { font-size: l, font: Helvetica-Bold, color: primary, align: right }
+                                    _: $7,603.75
+
+              - divider: { attr: { color: rule, thickness: xs } }
+
+              # footer: payment instructions
+              - stack:
+                  attr: { gap: xs }
+                  nodes:
+                    - text: { attr: { font-size: s, font: Helvetica-Bold }, _: Payment instructions }
+                    - text:
+                        attr: { font-size: s, color: text-muted }
+                        _: "Wire transfer to: First National Bank · Routing 021000021 · Account 987654321 · Ref: INV-1042"
+                    - text:
+                        attr: { font-size: s, color: text-muted }
+                        _: Late payments incur 1.5% per month. Thank you for your business.

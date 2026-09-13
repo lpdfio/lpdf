@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=../../schema/lpdf.schema.json
+version: 1
+
+document:
+  size: a4
+  margin: 40pt
+  meta:
+    title: Getting Started with lpdf
+  sections:
+    - layout:
+        - stack:
+            attr: { gap: l }
+            nodes:
+              # title
+              - text:
+                  attr: { font-size: xxl, font: Helvetica-Bold }
+                  _: Getting Started with lpdf
+
+              # paragraph 1 — mixed content with an inline link
+              - text:
+                  attr: { font-size: m }
+                  runs:
+                    - span:
+                        attr: { href: https://lpdf.io, font: Helvetica-Bold }
+                        _: lpdf
+                    - " is a declarative PDF layout engine that maps XML directly\
+                      \ to PDF primitives. It runs natively in Rust on the server\
+                      \ and compiles to WebAssembly for use in the browser, with\
+                      \ no runtime dependencies and a single function call that\
+                      \ converts XML to a PDF binary."
+
+              # paragraph 2
+              - text:
+                  attr: { font-size: m }
+                  _: >-
+                    The layout model provides five composable primitives — stack,
+                    flank, split, cluster, and grid — each handling a specific
+                    axis of composition. Any primitive can nest inside any other,
+                    giving you the flexibility to build anything from a simple
+                    one-page document to a complex multi-page report without
+                    writing a single line of imperative code.

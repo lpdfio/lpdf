@@ -32,7 +32,7 @@
 use std::collections::{HashMap, HashSet};
 
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
-use pdf_writer::types::{ActionType, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, HighlightEffect, LineCapStyle, LineJoinStyle, Predictor};
+use pdf_writer::types::{ActionType, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, HighlightEffect, LineCapStyle, LineJoinStyle, Predictor, TextRenderingMode};
 use ttf_parser::Face;
 use miniz_oxide::deflate::compress_to_vec_zlib;
 use miniz_oxide::inflate::decompress_to_vec_zlib;
@@ -1855,18 +1855,23 @@ struct AllocatedIds {
 /// Collect every font name referenced in `pages`, prepare each for embedding,
 /// and return a stable (sorted) name list together with the prepared-font map.
 ///
-/// Helvetica is always included so the optional watermark always has a font.
+/// Helvetica is always included so the attribution's leading words always have a
+/// font. The attribution's name face is added only when `attribution` is set, so a
+/// licensed document embeds nothing for it.
 fn prepare_fonts(
-    pages:     &[RenderPage],
-    font_defs: &HashMap<String, FontDef>,
-    registry:  &FontRegistry,
-    watermark: Option<(&str, Option<&str>)>,
+    pages:       &[RenderPage],
+    font_defs:   &HashMap<String, FontDef>,
+    registry:    &FontRegistry,
+    attribution: bool,
 ) -> (Vec<String>, HashMap<String, PreparedFont>) {
     let mut used_font_names: HashSet<String> = HashSet::new();
     for page in pages {
         collect_used_fonts(&page.nodes, &mut used_font_names);
     }
     used_font_names.insert("Helvetica".to_string());
+    if attribution {
+        used_font_names.insert(ATTRIBUTION_FONT_KEY.to_string());
+    }
 
     // Sort names so resource IDs (F0, F1, …) are assigned deterministically.
     let mut sorted_font_names: Vec<String> = used_font_names.into_iter().collect();
@@ -1881,10 +1886,11 @@ fn prepare_fonts(
         for page in pages {
             collect_chars_for_font(&page.nodes, name, &mut used);
         }
-        if name == "Helvetica" {
-            if let Some((wtext, _)) = watermark {
-                used.extend(wtext.chars());
-            }
+        if attribution && name == "Helvetica" {
+            used.extend(ATTRIBUTION_PREFIX.chars());
+        }
+        if name == ATTRIBUTION_FONT_KEY {
+            used.extend(ATTRIBUTION_NAME.chars());
         }
         chars_per_font.insert(name.clone(), used);
     }
@@ -1894,7 +1900,13 @@ fn prepare_fonts(
     for (idx, name) in sorted_font_names.iter().enumerate() {
         let resource_name = format!("F{idx}");
         let used_chars    = chars_per_font.get(name).unwrap_or(&empty_chars);
-        let kind          = resolve_font_kind(name, font_defs, registry, used_chars);
+        // The attribution face ships inside the engine, so it never depends on the
+        // document's font declarations or on bytes the caller registered.
+        let kind = if name == ATTRIBUTION_FONT_KEY {
+            prepare_truetype_font(ATTRIBUTION_FONT, used_chars)
+        } else {
+            resolve_font_kind(name, font_defs, registry, used_chars)
+        };
         fonts.insert(name.clone(), PreparedFont { resource_name, kind });
     }
 
@@ -1934,7 +1946,7 @@ fn build_content_streams(
     pages:         &[RenderPage],
     fonts:         &HashMap<String, PreparedFont>,
     image_res_map: &HashMap<String, String>,
-    watermark:     Option<(&str, Option<&str>)>,
+    attribution:   bool,
 ) -> Vec<(Vec<u8>, Vec<AnnotData>)> {
     let mut rendered_pages: Vec<(Vec<u8>, Vec<AnnotData>)> = Vec::new();
 
@@ -1953,43 +1965,146 @@ fn build_content_streams(
         // Draw all render-tree nodes.
         draw_nodes(&mut content, &mut annots, &page.nodes, fonts, image_res_map, page.height);
 
-        // Draw optional watermark — top-right corner, 8 pt Helvetica, grey.
-        if let Some((wtext, wurl)) = watermark {
-            let wfont  = fonts.get("Helvetica")
-                .expect("Helvetica always present after prepare_fonts");
-            let wsize  = 8.0_f32;
-            let wpad   = 4.0_f32;  // distance from page edge
-            let tw     = wfont.text_width(wtext, wsize);
-            let wx     = page.width - wpad - tw;
-            // In PDF bottom-up coords: baseline = height - pad - size
-            let pdf_wy = page.height - wpad - wsize;
-
-            let encoded = wfont.encode_text(wtext);
-            let rname   = wfont.resource_name.as_bytes().to_vec();
-            let (wr, wg, wb) = parse_hex("#aaaaaa");
-
-            content.begin_text();
-            content.set_fill_rgb(wr, wg, wb);
-            content.set_font(Name(&rname), wsize);
-            content.set_text_matrix([1.0, 0.0, 0.0, 1.0, wx, pdf_wy]);
-            content.show(Str(&encoded));
-            content.end_text();
-
-            if let Some(url) = wurl {
-                annots.push(AnnotData {
-                    x1:  wx,
-                    y1:  pdf_wy,
-                    x2:  wx + tw,
-                    y2:  pdf_wy + wsize,
-                    url: url.to_string(),
-                });
-            }
+        // Drawn last so it sits above the page's own content.
+        if attribution {
+            draw_attribution(&mut content, &mut annots, fonts, page.width, page.height);
         }
 
         rendered_pages.push((content.finish(), annots));
     }
 
     rendered_pages
+}
+
+// ── Unregistered-use attribution ──────────────────────────────────────────────
+//
+// Drawn on every page of an unlicensed render. Deliberately small: the words are a
+// quiet grey and only the mark carries the brand orange, so the line reads as a
+// credit and never competes with the customer's document.
+
+/// Words set before the mark, in Helvetica so they need no embedded font.
+const ATTRIBUTION_PREFIX: &str = "Made with";
+
+/// Product name set after the mark, in the lpdf.io wordmark face.
+pub(crate) const ATTRIBUTION_NAME: &str = "Lpdf";
+
+/// Target of the single link annotation covering the whole line.
+const ATTRIBUTION_URL: &str = "https://lpdf.io";
+
+/// Font-map key for the wordmark face. Specific enough that no document's own font
+/// declarations are expected to collide with it.
+pub(crate) const ATTRIBUTION_FONT_KEY: &str = "Radley-LpdfAttribution";
+
+/// Radley Regular cut down to the glyphs of `ATTRIBUTION_NAME`: about 2 KB inside the
+/// engine rather than the full 93 KB face. See `assets/fonts/README.md`.
+pub(crate) const ATTRIBUTION_FONT: &[u8] = include_bytes!("../assets/fonts/radley-attribution.ttf");
+
+/// Radley's cap height as a share of the em (1302 of 2048 units, OS/2 `sCapHeight`),
+/// used to centre the name's capitals on the mark.
+const ATTRIBUTION_CAP_HEIGHT: f32 = 1302.0 / 2048.0;
+
+/// Neutral dark grey for the words: about 5.7:1 on white paper, legible without
+/// drawing the eye.
+const ATTRIBUTION_TEXT_COLOR: &str = "#666666";
+
+/// lpdf brand orange, as in `lpdf-mark.svg`.
+const ATTRIBUTION_MARK_COLOR: &str = "#d76f04";
+
+/// The lpdf mark from `lpdf-mark.svg`: two parallelograms in a 100 × 100 box with y
+/// pointing down, drawn as vector paths so it needs no image object.
+const LPDF_MARK: [[(f32, f32); 4]; 2] = [
+    [(0.0, 33.03), (33.03, 0.0), (33.03, 62.452), (0.0, 95.482)],
+    [(4.518, 100.0), (37.548, 66.97), (100.0, 66.97), (66.97, 100.0)],
+];
+
+/// Draw "Made with", the lpdf mark and "Lpdf" right-aligned in the page's top-right
+/// corner, and cover the whole line with one link to lpdf.io.
+///
+/// The line sits 12 pt in from the edges because desktop printers cannot reach the
+/// outer 12–18 pt of a sheet; any closer and printed copies lose it.
+fn draw_attribution(
+    content: &mut Content,
+    annots:  &mut Vec<AnnotData>,
+    fonts:   &HashMap<String, PreparedFont>,
+    page_w:  f32,
+    page_h:  f32,
+) {
+    const PAD:         f32 = 12.0;
+    const PREFIX_SIZE: f32 = 8.0;
+    // A point larger than the words, because a serif reads smaller than Helvetica
+    // at the same size.
+    const NAME_SIZE:   f32 = 9.0;
+    const MARK_SIZE:   f32 = 9.0;
+    const GAP:         f32 = 3.0;
+    // Radley ships no bold. Stroking the outline as well as filling it thickens the
+    // glyphs, the way browsers synthesise the 600 weight the lpdf.io wordmark asks for.
+    const BOLD_STROKE: f32 = NAME_SIZE * 0.04;
+
+    let (Some(prefix_font), Some(name_font)) =
+        (fonts.get("Helvetica"), fonts.get(ATTRIBUTION_FONT_KEY))
+    else {
+        return;
+    };
+
+    let prefix_w = prefix_font.text_width(ATTRIBUTION_PREFIX, PREFIX_SIZE);
+    // The stroke grows each glyph by half its width on either side.
+    let name_w   = name_font.text_width(ATTRIBUTION_NAME, NAME_SIZE) + BOLD_STROKE;
+    let line_w   = prefix_w + GAP + MARK_SIZE + GAP + name_w;
+
+    // The mark fills [PAD, PAD + MARK_SIZE] measured down from the top edge, and both
+    // runs of text share one baseline placed so the name's capitals centre on the mark.
+    let left     = page_w - PAD - line_w;
+    let baseline = page_h - (PAD + (MARK_SIZE + NAME_SIZE * ATTRIBUTION_CAP_HEIGHT) / 2.0);
+    let mark_x   = left + prefix_w + GAP;
+    let name_x   = mark_x + MARK_SIZE + GAP + BOLD_STROKE / 2.0;
+
+    let (tr, tg, tb) = parse_hex(ATTRIBUTION_TEXT_COLOR);
+    let (mr, mg, mb) = parse_hex(ATTRIBUTION_MARK_COLOR);
+
+    // Its own graphics state, so the colours, stroke width and text rendering mode set
+    // here cannot leak into anything drawn later on the page.
+    content.save_state();
+
+    content.set_fill_rgb(tr, tg, tb);
+    content.begin_text();
+    content.set_font(Name(prefix_font.resource_name.as_bytes()), PREFIX_SIZE);
+    content.set_text_matrix([1.0, 0.0, 0.0, 1.0, left, baseline]);
+    content.show(Str(&prefix_font.encode_text(ATTRIBUTION_PREFIX)));
+    content.end_text();
+
+    let scale = MARK_SIZE / 100.0;
+    content.set_fill_rgb(mr, mg, mb);
+    for shape in &LPDF_MARK {
+        let (x0, y0) = shape[0];
+        content.move_to(mark_x + x0 * scale, page_h - (PAD + y0 * scale));
+        for &(x, y) in &shape[1..] {
+            content.line_to(mark_x + x * scale, page_h - (PAD + y * scale));
+        }
+        content.close_path();
+    }
+    content.fill_nonzero();
+
+    content.set_fill_rgb(tr, tg, tb);
+    content.set_stroke_rgb(tr, tg, tb);
+    content.set_line_width(BOLD_STROKE);
+    content.begin_text();
+    content.set_text_rendering_mode(TextRenderingMode::FillStroke);
+    content.set_font(Name(name_font.resource_name.as_bytes()), NAME_SIZE);
+    content.set_text_matrix([1.0, 0.0, 0.0, 1.0, name_x, baseline]);
+    content.show(Str(&name_font.encode_text(ATTRIBUTION_NAME)));
+    content.end_text();
+
+    content.restore_state();
+
+    // One target for the whole line, with slack below and above so the name's
+    // descender and a fingertip both land inside it.
+    annots.push(AnnotData {
+        x1:  left,
+        y1:  page_h - (PAD + MARK_SIZE + 3.0),
+        x2:  page_w - PAD,
+        y2:  page_h - (PAD - 2.0),
+        url: ATTRIBUTION_URL.to_string(),
+    });
 }
 
 // ── Step 3: ID allocation ─────────────────────────────────────────────────────
@@ -2717,27 +2832,29 @@ fn assemble_pdf(
 /// - `font_defs`  – Font name → definition from the document's `<fonts>` section.
 /// - `registry`   – Raw font bytes for custom fonts (populated via `load_font`).
 /// - `meta`       – Document metadata (title, author, subject, etc.).
-/// - `watermark`  – Optional `(text, url)`.  Drawn top-right at 8 pt Helvetica,
-///                  light grey (`#aaaaaa`), 4 pt from the page edge.
 /// - `created_on` – Optional ISO 8601 date string written to `/CreationDate`.
 /// - `licensed`   – `true` when a valid commercial license token was supplied.
-///                  Controls the `/Producer` field (`lpdf.io` vs `lpdf.io (unregistered)`).
+///                  Controls the `/Producer` field (`lpdf.io` vs `lpdf.io (unregistered)`),
+///                  and when `false` draws the attribution line ("Made with", the lpdf
+///                  mark, "Lpdf") in every page's top-right corner.
 pub fn render_pdf(
     pages:          &[RenderPage],
     font_defs:      &HashMap<String, FontDef>,
     registry:       &FontRegistry,
     image_registry: &ImageRegistry,
     meta:           &Meta,
-    watermark:      Option<(&str, Option<&str>)>,
     created_on:     Option<&str>,
     licensed:       bool,
 ) -> Result<Vec<u8>, String> {
+    // The attribution is the licence signal itself, so it follows `licensed` rather
+    // than a separate flag every caller would have to keep in step.
+    let attribution = !licensed;
     let (sorted_font_names, fonts) =
-        prepare_fonts(pages, font_defs, registry, watermark);
+        prepare_fonts(pages, font_defs, registry, attribution);
     let (sorted_image_names, image_res_map) =
         prepare_images(pages, image_registry);
     let rendered_pages =
-        build_content_streams(pages, &fonts, &image_res_map, watermark);
+        build_content_streams(pages, &fonts, &image_res_map, attribution);
     let fields = collect_render_fields(pages);
     let ids =
         allocate_ids(pages, &rendered_pages, &fonts, &sorted_font_names, &sorted_image_names, image_registry, &fields);
@@ -2746,4 +2863,29 @@ pub fn render_pdf(
         image_registry, &image_res_map, rendered_pages, ids, &fields,
         meta, created_on, licensed,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bundled_attribution_face_has_every_glyph_of_the_name() {
+        // The face is a cut-down copy: changing the name without regenerating it would
+        // draw empty .notdef boxes instead of letters.
+        let face = Face::parse(ATTRIBUTION_FONT, 0).expect("bundled attribution face parses");
+        for c in ATTRIBUTION_NAME.chars() {
+            assert!(face.glyph_index(c).is_some(), "attribution face has no glyph for {c:?}");
+        }
+    }
+
+    #[test]
+    fn attribution_cap_height_matches_the_bundled_face() {
+        // The constant positions the baseline; a regenerated face with other metrics
+        // would otherwise misalign the name against the mark without any error.
+        let face = Face::parse(ATTRIBUTION_FONT, 0).expect("bundled attribution face parses");
+        let cap_height = face.capital_height().expect("face declares a cap height") as f32
+            / face.units_per_em() as f32;
+        assert_eq!(cap_height, ATTRIBUTION_CAP_HEIGHT);
+    }
 }

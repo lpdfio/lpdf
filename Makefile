@@ -17,7 +17,7 @@ export LPDF_PUBLIC_KEY
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
         clone-adapters sync-license check-license \
-        build-portal-ui build-pages dev-pages meta-pages
+        build-portal-ui build-pages-demo build-pages dev-pages meta-pages
 
 build-wasm:
 	@echo ""
@@ -362,6 +362,11 @@ check-license:
 build-portal-ui:
 	cd src/portal/ui && CI=true npm run build
 
+# ── Pages demo bundle ─────────────────────────────────────────────────────────
+# Builds the standalone demo sub-project in src/pages/ui/.
+build-pages-demo:
+	cd src/pages/ui && CI=true npm run build
+
 # ── Pages SEO meta sync ───────────────────────────────────────────────────────
 meta-pages:
 	@echo ""
@@ -371,10 +376,9 @@ meta-pages:
 	node src/pages/update-meta.mjs
 
 # ── Pages asset sync ──────────────────────────────────────────────────────────
-# Copies the Vite-built pages bundle and the demo assets into the pages asset tree.
-# No npm build needed in src/pages — all JS now comes from the portal Vite build.
+# Copies portal IIFE bundles and the demo bundle+assets into the pages asset tree.
 # CI=true bakes in sentinels; the deploy workflow replaces them via sed.
-build-pages: build-portal-ui
+build-pages: build-portal-ui build-pages-demo
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Copying pages assets..."
@@ -383,14 +387,14 @@ build-pages: build-portal-ui
 	echo ">>> src/pages/www/assets/js/lpdf-pages.js updated." && \
 	cp src/portal/ui/dist/lpdf-docs.js src/pages/www/assets/js/lpdf-docs.js && \
 	echo ">>> src/pages/www/assets/js/lpdf-docs.js updated." && \
-	cp src/portal/ui/dist/lpdf-checkout.js src/pages/www/assets/js/lpdf-checkout.js && \
-	echo ">>> src/pages/www/assets/js/lpdf-checkout.js updated." && \
-	cp dist/web/lpdf.js src/portal/demo/lpdf-web.js && \
-	cp dist/web/lpdf_bg.wasm src/portal/demo/lpdf_bg.wasm && \
-	echo ">>> src/portal/demo WASM updated." && \
+	cp src/portal/ui/dist/codesense-shared.js src/pages/www/assets/js/codesense-shared.js && \
+	echo ">>> src/pages/www/assets/js/codesense-shared.js updated." && \
+	cp dist/web/lpdf.js src/pages/ui/demo/lpdf-web.js && \
+	cp dist/web/lpdf_bg.wasm src/pages/ui/demo/lpdf_bg.wasm && \
+	echo ">>> src/pages/ui/demo WASM updated." && \
 	rm -rf tmp/lpdf-demo && mkdir -p tmp/lpdf-demo && \
-	cp -r src/portal/demo/. tmp/lpdf-demo/ && \
-	cp src/portal/ui/dist/lpdf-demo.js tmp/lpdf-demo/lpdf-demo.js && \
+	cp -r src/pages/ui/demo/. tmp/lpdf-demo/ && \
+	cp src/pages/ui/dist/lpdf-demo.js tmp/lpdf-demo/lpdf-demo.js && \
 	rm -rf src/pages/www/assets/js/lpdf-demo && \
 	cp -r tmp/lpdf-demo src/pages/www/assets/js/lpdf-demo && \
 	echo ">>> src/pages/www/assets/js/lpdf-demo updated."
@@ -400,6 +404,7 @@ build-pages: build-portal-ui
 # before committing to restore sentinel values for CI deployment.
 dev-pages:
 	cd src/portal/ui && npm run build
+	cd src/pages/ui && npm run build
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Copying pages assets (local dev)..."
@@ -408,14 +413,14 @@ dev-pages:
 	echo ">>> src/pages/www/assets/js/lpdf-pages.js updated." && \
 	cp src/portal/ui/dist/lpdf-docs.js src/pages/www/assets/js/lpdf-docs.js && \
 	echo ">>> src/pages/www/assets/js/lpdf-docs.js updated." && \
-	cp src/portal/ui/dist/lpdf-checkout.js src/pages/www/assets/js/lpdf-checkout.js && \
-	echo ">>> src/pages/www/assets/js/lpdf-checkout.js updated." && \
-	cp dist/web/lpdf.js src/portal/demo/lpdf-web.js && \
-	cp dist/web/lpdf_bg.wasm src/portal/demo/lpdf_bg.wasm && \
-	echo ">>> src/portal/demo WASM updated." && \
+	cp src/portal/ui/dist/codesense-shared.js src/pages/www/assets/js/codesense-shared.js && \
+	echo ">>> src/pages/www/assets/js/codesense-shared.js updated." && \
+	cp dist/web/lpdf.js src/pages/ui/demo/lpdf-web.js && \
+	cp dist/web/lpdf_bg.wasm src/pages/ui/demo/lpdf_bg.wasm && \
+	echo ">>> src/pages/ui/demo WASM updated." && \
 	rm -rf tmp/lpdf-demo && mkdir -p tmp/lpdf-demo && \
-	cp -r src/portal/demo/. tmp/lpdf-demo/ && \
-	cp src/portal/ui/dist/lpdf-demo.js tmp/lpdf-demo/lpdf-demo.js && \
+	cp -r src/pages/ui/demo/. tmp/lpdf-demo/ && \
+	cp src/pages/ui/dist/lpdf-demo.js tmp/lpdf-demo/lpdf-demo.js && \
 	rm -rf src/pages/www/assets/js/lpdf-demo && \
 	cp -r tmp/lpdf-demo src/pages/www/assets/js/lpdf-demo && \
 	echo ">>> src/pages/www/assets/js/lpdf-demo updated."

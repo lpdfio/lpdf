@@ -98,9 +98,10 @@ pub(crate) fn render_doc_shared(
     let watermark = if status.is_licensed() {
         serde_json::Value::Null
     } else {
+        // Mirrors the line pdf.rs draws on unlicensed PDFs: "Made with", the lpdf mark, "Lpdf".
         serde_json::json!({
             "type": "lpdf:watermark",
-            "text": "Made with lpdf.io",
+            "text": "Made with Lpdf",
             "url":  "https://lpdf.io"
         })
     };
