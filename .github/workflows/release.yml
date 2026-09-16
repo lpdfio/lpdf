@@ -120,10 +120,23 @@ jobs:
             artifacts/lpdf_bg.wasm
             artifacts/lpdf-web.js
 
+      # Only create a release when the tag doesn't already have one. GitHub does
+      # NOT enforce one release per tag for DRAFTS — an unguarded
+      # `gh release create --draft` on a tag you already published through the
+      # Releases UI silently creates a second, draft release object beside it,
+      # carrying --generate-notes text instead of your own. That is what
+      # happened on v0.14.0.
+      #
+      # So this path is only for a bare `git push origin vX.Y.0` with no release
+      # behind it; there, --generate-notes is the right default.
       - name: Create draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            echo "Release ${{ github.ref_name }} already exists — leaving its notes alone"
+            exit 0
+          fi
           gh release create "${{ github.ref_name }}" \
             --draft \
             --title "${{ github.ref_name }}" \
