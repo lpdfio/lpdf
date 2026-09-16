@@ -1,4 +1,4 @@
-<p align="center"><img src="lpdf-light.png" height="48" alt="Lpdf"></p>
+<img src="https://raw.githubusercontent.com/lpdfio/lpdf/main/lpdf-mark.svg" height="48" alt="Lpdf" />
 
 # Lpdf
 
