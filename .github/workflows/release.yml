@@ -177,3 +177,62 @@ jobs:
               -f "client_payload[version]=$VERSION" \
               -f "client_payload[write_token]=$GH_TOKEN"
           done
+
+      # ── Changelog ───────────────────────────────────────────────────────────
+      # Prepends this release's human-typed notes to CHANGELOG.md on main.
+      #
+      # Runs LAST, after the adapter dispatch, so a failure here cannot block
+      # the cascade — the release has already shipped and the adapters have
+      # already been told.
+      #
+      # It DOES fail the job on error, deliberately: this path is unproven, and
+      # a step that warns-and-passes on its first ever run is undiagnosable.
+      # Once a full core release has exercised it end to end, relax it to
+      # warn-only per changelog-plan.md ("Failure policy").
+      - name: Update CHANGELOG.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # The release body is whatever a human typed when publishing.
+          BODY=$(gh release view "$TAG" --json body        -q .body        | tr -d '\r')
+          DATE=$(gh release view "$TAG" --json publishedAt -q .publishedAt | cut -c1-10)
+          if [ -z "$DATE" ]; then
+            echo "::error::$TAG has no publishedAt — is the release still a draft?"
+            exit 1
+          fi
+
+          # The job checked out the tag (detached). Move to main's tip so the
+          # changelog commit lands on the branch regardless of where the tag is.
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch --depth=1 origin main
+          git checkout -B main FETCH_HEAD
+
+          if ! head -n 1 CHANGELOG.md | grep -qx '# Changelog'; then
+            echo "::error::CHANGELOG.md must start with a '# Changelog' line"
+            exit 1
+          fi
+
+          # Re-runs must not duplicate an entry.
+          if grep -q "^## $TAG " CHANGELOG.md; then
+            echo "$TAG is already in CHANGELOG.md — nothing to do"
+            exit 0
+          fi
+
+          # Prepend only. Never reformat or reorder what is already there —
+          # the file is hand-editable by design.
+          {
+            echo "# Changelog"
+            echo
+            echo "## $TAG — $DATE"
+            if [ -n "$BODY" ]; then printf '%s\n' "$BODY"; fi
+            tail -n +2 CHANGELOG.md
+          } > CHANGELOG.next
+          mv CHANGELOG.next CHANGELOG.md
+
+          git add CHANGELOG.md
+          git diff --cached --quiet || git commit -m "changelog: $TAG"
+          git push origin main
