@@ -8,6 +8,10 @@ endif
 LPDF_PUBLIC_KEY ?= $(shell cat src/license/keys/public.hex 2>/dev/null | tr -d '[:space:]')
 export LPDF_PUBLIC_KEY
 
+# Sibling checkouts outside this repo: the lpdf.io site, and the portal UI that builds its bundles.
+PAGES_DIR     ?= ../codesense/pages/lpdf
+PORTAL_UI_DIR ?= ../codesense/portal/ui
+
 .PHONY: build-wasm build-wasi build-cli test-wasm test-wasi \
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python \
         build-vscode package-vscode install-vscode \
@@ -338,13 +342,13 @@ sync-license:
 	@echo ">>> Syncing LICENSE from root to all copies..."
 	@echo ""
 	@$(SHELL) -c "cp LICENSE src/core/LICENSE"
-	@$(SHELL) -c "cp LICENSE src/pages/www/content/LICENSE.md"
+	@$(SHELL) -c "test -d '$(PAGES_DIR)'  && cp LICENSE '$(PAGES_DIR)/www/content/LICENSE.md' || true"
 	@$(SHELL) -c "test -d src/sdk/node    && cp LICENSE src/sdk/node/LICENSE    || true"
 	@$(SHELL) -c "test -d src/sdk/dotnet  && cp LICENSE src/sdk/dotnet/LICENSE  || true"
 	@$(SHELL) -c "test -d src/sdk/php     && cp LICENSE src/sdk/php/LICENSE     || true"
 	@$(SHELL) -c "test -d src/sdk/python  && cp LICENSE src/sdk/python/LICENSE  || true"
-	@$(SHELL) -c "test -d src/vscode  && cp LICENSE src/vscode/LICENSE  || true"
-	@echo "Done. Commit changes in each adapter repo separately."
+# src/vscode is not synced: the extension has its own two-part LICENSE (MIT code + engine terms).
+	@echo "Done. Commit changes in the pages repo and each adapter repo separately."
 
 check-license:
 	@echo ""
@@ -352,20 +356,24 @@ check-license:
 	@echo ">>> Checking LICENSE copies are in sync..."
 	@echo ""
 	@$(SHELL) -c "diff LICENSE src/core/LICENSE          || (echo 'ERROR: src/core/LICENSE differs from root LICENSE' && exit 1)"
-	@$(SHELL) -c "diff LICENSE src/pages/www/content/LICENSE.md  || (echo 'ERROR: src/pages/www/content/LICENSE.md differs from root LICENSE' && exit 1)"
+	@$(SHELL) -c "test ! -d '$(PAGES_DIR)'  || diff LICENSE '$(PAGES_DIR)/www/content/LICENSE.md' || (echo 'ERROR: $(PAGES_DIR)/www/content/LICENSE.md differs from root LICENSE' && exit 1)"
+	@$(SHELL) -c "test ! -d src/sdk/node    || diff LICENSE src/sdk/node/LICENSE    || (echo 'ERROR: src/sdk/node/LICENSE differs from root LICENSE' && exit 1)"
+	@$(SHELL) -c "test ! -d src/sdk/dotnet  || diff LICENSE src/sdk/dotnet/LICENSE  || (echo 'ERROR: src/sdk/dotnet/LICENSE differs from root LICENSE' && exit 1)"
+	@$(SHELL) -c "test ! -d src/sdk/php     || diff LICENSE src/sdk/php/LICENSE     || (echo 'ERROR: src/sdk/php/LICENSE differs from root LICENSE' && exit 1)"
+	@$(SHELL) -c "test ! -d src/sdk/python  || diff LICENSE src/sdk/python/LICENSE  || (echo 'ERROR: src/sdk/python/LICENSE differs from root LICENSE' && exit 1)"
 	@echo "OK"
 
 # ── Portal UI bundle ───────────────────────────────────────────────────────────
-# CI=true tells build.mjs to bake __PORTAL_URL__ / __PAGES_URL__ sentinels
-# instead of falling through to .env.local values.  The deploy workflows own
-# the sed replacement for each environment.
+# build:pages writes lpdf-pages.js / lpdf-docs.js straight into the pages asset
+# tree with __PORTAL_URL__ / __PAGES_URL__ sentinels, ignoring .env.local.  The
+# pages deploy workflow owns the sed replacement for each environment.
 build-portal-ui:
-	cd src/portal/ui && CI=true npm run build
+	cd "$(PORTAL_UI_DIR)" && npm run build:pages
 
 # ── Pages demo bundle ─────────────────────────────────────────────────────────
-# Builds the standalone demo sub-project in src/pages/ui/.
+# Builds the standalone demo sub-project in $(PAGES_DIR)/ui/.
 build-pages-demo:
-	cd src/pages/ui && CI=true npm run build
+	cd "$(PAGES_DIR)/ui" && CI=true npm run build
 
 # ── Pages SEO meta sync ───────────────────────────────────────────────────────
 meta-pages:
@@ -373,54 +381,49 @@ meta-pages:
 	@echo "-------------------------------"
 	@echo ">>> Syncing SEO meta from sitemap.yaml..."
 	@echo ""
-	node src/pages/update-meta.mjs
+	node "$(PAGES_DIR)/update-meta.mjs"
 
 # ── Pages asset sync ──────────────────────────────────────────────────────────
-# Copies portal IIFE bundles and the demo bundle+assets into the pages asset tree.
-# CI=true bakes in sentinels; the deploy workflow replaces them via sed.
+# Copies the browser WASM build and the demo bundle+assets into the pages asset tree.
+# The portal bundles are already in place: build-portal-ui writes them there.
 build-pages: build-portal-ui build-pages-demo
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Copying pages assets..."
 	@echo ""
-	cp src/portal/ui/dist/lpdf-pages.js src/pages/www/assets/js/lpdf-pages.js && \
-	echo ">>> src/pages/www/assets/js/lpdf-pages.js updated." && \
-	cp src/portal/ui/dist/lpdf-docs.js src/pages/www/assets/js/lpdf-docs.js && \
-	echo ">>> src/pages/www/assets/js/lpdf-docs.js updated." && \
-	cp src/portal/ui/dist/codesense-shared.js src/pages/www/assets/js/codesense-shared.js && \
-	echo ">>> src/pages/www/assets/js/codesense-shared.js updated." && \
-	cp dist/web/lpdf.js src/pages/ui/demo/lpdf-web.js && \
-	cp dist/web/lpdf_bg.wasm src/pages/ui/demo/lpdf_bg.wasm && \
-	echo ">>> src/pages/ui/demo WASM updated." && \
+	@test -d "$(PAGES_DIR)/www" || (echo "ERROR: pages checkout not found at $(PAGES_DIR)" && exit 1)
+	cp dist/web/lpdf.js "$(PAGES_DIR)/ui/demo/lpdf-web.js" && \
+	cp dist/web/lpdf_bg.wasm "$(PAGES_DIR)/ui/demo/lpdf_bg.wasm" && \
+	echo ">>> $(PAGES_DIR)/ui/demo WASM updated." && \
 	rm -rf tmp/lpdf-demo && mkdir -p tmp/lpdf-demo && \
-	cp -r src/pages/ui/demo/. tmp/lpdf-demo/ && \
-	cp src/pages/ui/dist/lpdf-demo.js tmp/lpdf-demo/lpdf-demo.js && \
-	rm -rf src/pages/www/assets/js/lpdf-demo && \
-	cp -r tmp/lpdf-demo src/pages/www/assets/js/lpdf-demo && \
-	echo ">>> src/pages/www/assets/js/lpdf-demo updated."
+	cp -r "$(PAGES_DIR)/ui/demo/." tmp/lpdf-demo/ && \
+	cp "$(PAGES_DIR)/ui/dist/lpdf-demo.js" tmp/lpdf-demo/lpdf-demo.js && \
+	rm -rf "$(PAGES_DIR)/www/assets/js/lpdf-demo" && \
+	cp -r tmp/lpdf-demo "$(PAGES_DIR)/www/assets/js/lpdf-demo" && \
+	echo ">>> $(PAGES_DIR)/www/assets/js/lpdf-demo updated."
 
-# Local-dev variant: builds without CI=true so .env.local values are baked in.
-# Use this to test pages locally. Do NOT commit the output — run make build-pages
-# before committing to restore sentinel values for CI deployment.
+# Local-dev variant: a plain portal build bakes .env.local values in, so its
+# bundles are copied over the committed ones.  Use this to test pages locally.
+# Do NOT commit the output — run make build-pages before committing to restore
+# sentinel values for CI deployment.
 dev-pages:
-	cd src/portal/ui && npm run build
-	cd src/pages/ui && npm run build
+	@test -d "$(PAGES_DIR)/www" || (echo "ERROR: pages checkout not found at $(PAGES_DIR)" && exit 1)
+	cd "$(PORTAL_UI_DIR)" && npm run build
+	cd "$(PAGES_DIR)/ui" && npm run build
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Copying pages assets (local dev)..."
 	@echo ""
-	cp src/portal/ui/dist/lpdf-pages.js src/pages/www/assets/js/lpdf-pages.js && \
-	echo ">>> src/pages/www/assets/js/lpdf-pages.js updated." && \
-	cp src/portal/ui/dist/lpdf-docs.js src/pages/www/assets/js/lpdf-docs.js && \
-	echo ">>> src/pages/www/assets/js/lpdf-docs.js updated." && \
-	cp src/portal/ui/dist/codesense-shared.js src/pages/www/assets/js/codesense-shared.js && \
-	echo ">>> src/pages/www/assets/js/codesense-shared.js updated." && \
-	cp dist/web/lpdf.js src/pages/ui/demo/lpdf-web.js && \
-	cp dist/web/lpdf_bg.wasm src/pages/ui/demo/lpdf_bg.wasm && \
-	echo ">>> src/pages/ui/demo WASM updated." && \
+	cp "$(PORTAL_UI_DIR)/dist/lpdf-pages.js" "$(PAGES_DIR)/www/assets/js/lpdf-pages.js" && \
+	echo ">>> $(PAGES_DIR)/www/assets/js/lpdf-pages.js updated." && \
+	cp "$(PORTAL_UI_DIR)/dist/lpdf-docs.js" "$(PAGES_DIR)/www/assets/js/lpdf-docs.js" && \
+	echo ">>> $(PAGES_DIR)/www/assets/js/lpdf-docs.js updated." && \
+	cp dist/web/lpdf.js "$(PAGES_DIR)/ui/demo/lpdf-web.js" && \
+	cp dist/web/lpdf_bg.wasm "$(PAGES_DIR)/ui/demo/lpdf_bg.wasm" && \
+	echo ">>> $(PAGES_DIR)/ui/demo WASM updated." && \
 	rm -rf tmp/lpdf-demo && mkdir -p tmp/lpdf-demo && \
-	cp -r src/pages/ui/demo/. tmp/lpdf-demo/ && \
-	cp src/pages/ui/dist/lpdf-demo.js tmp/lpdf-demo/lpdf-demo.js && \
-	rm -rf src/pages/www/assets/js/lpdf-demo && \
-	cp -r tmp/lpdf-demo src/pages/www/assets/js/lpdf-demo && \
-	echo ">>> src/pages/www/assets/js/lpdf-demo updated."
+	cp -r "$(PAGES_DIR)/ui/demo/." tmp/lpdf-demo/ && \
+	cp "$(PAGES_DIR)/ui/dist/lpdf-demo.js" tmp/lpdf-demo/lpdf-demo.js && \
+	rm -rf "$(PAGES_DIR)/www/assets/js/lpdf-demo" && \
+	cp -r tmp/lpdf-demo "$(PAGES_DIR)/www/assets/js/lpdf-demo" && \
+	echo ">>> $(PAGES_DIR)/www/assets/js/lpdf-demo updated."
