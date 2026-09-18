@@ -22,8 +22,8 @@ while you retain ownership of your contribution.
 
 **"You"** means the individual submitting a contribution.
 
-**"Contribution"** means any original work of authorship â€” including code,
-documentation, tests, or configuration â€” submitted to the Project via a pull
+**"Contribution"** means any original work of authorship — including code,
+documentation, tests, or configuration — submitted to the Project via a pull
 request, issue, email, or any other channel.
 
 ---
@@ -51,7 +51,7 @@ Contribution alone or in combination with the Project.
 ## 4. You Retain Ownership
 
 You retain ownership of your Contributions. This CLA does not transfer
-copyright to Licensor â€” it grants a license only. You are free to use your
+copyright to Licensor — it grants a license only. You are free to use your
 Contributions in any other project or context.
 
 ---
@@ -87,5 +87,5 @@ Add the following line to your pull request description or a comment:
 I have read and agree to the Lpdf CLA.
 ```
 
-For corporate contributors, contact **legal@lpdf.io** to arrange a Corporate
+For corporate contributors, contact **license@lpdf.io** to arrange a Corporate
 CLA before submitting contributions on behalf of your organisation.
