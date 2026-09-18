@@ -129,12 +129,16 @@ test-sdk-dotnet: build-sdk-dotnet
 	@echo ""
 	cd src/sdk/dotnet && dotnet test
 
+# The PHP repo commits resources/lpdf-wasi.wasm, the release build that Packagist serves.
+# A local build trusts only the dev key, so it must never land there: local runs mount it
+# over the image's copy instead.
+PHP_WASM_MOUNT = -v "$(CURDIR)/dist/wasi/lpdf.wasm://app/resources/lpdf-wasi.wasm"
+
 build-sdk-php: build-wasi
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Building PHP adapter..."
 	@echo ""
-	mkdir -p src/sdk/php/resources && cp dist/wasi/lpdf.wasm src/sdk/php/resources/lpdf-wasi.wasm
 	docker build -t lpdf-php src/sdk/php
 
 test-sdk-php: build-sdk-php
@@ -147,7 +151,7 @@ test-sdk-php: build-sdk-php
 		-v "$(CURDIR)/src/sdk/php/test://app/test" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-v "$(CURDIR)/test/snapshots://app/test/snapshots" \
-		-v "$(CURDIR)/src/sdk/php/resources://app/resources" \
+		$(PHP_WASM_MOUNT) \
 		-w //app lpdf-php php vendor/bin/phpunit test
 
 build-sdk-python: build-wasi
@@ -254,27 +258,32 @@ example-php:
 	@echo ">>> Running PHP example..."
 	@echo ""
 	docker run --rm \
+		$(PHP_WASM_MOUNT) \
 		-v "$(CURDIR)/src/sdk/php/example://app/src/sdk/php/example" \
 		-v "$(CURDIR)/src/sdk/php/lpdf-light.png://app/src/sdk/php/lpdf-light.png" \
 		-v "$(CURDIR)/example://app/example" \
 		-v "$(CURDIR)/docs://app/docs" \
 		-w //app lpdf-php php src/sdk/php/example/example.php
 	docker run --rm \
+		$(PHP_WASM_MOUNT) \
 		-v "$(CURDIR)/src/sdk/php/example://app/src/sdk/php/example" \
 		-v "$(CURDIR)/example://app/example" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-w //app lpdf-php php src/sdk/php/example/encrypt-permissions-only.php
 	docker run --rm \
+		$(PHP_WASM_MOUNT) \
 		-v "$(CURDIR)/src/sdk/php/example://app/src/sdk/php/example" \
 		-v "$(CURDIR)/example://app/example" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-w //app lpdf-php php src/sdk/php/example/encrypt-open-password.php
 	docker run --rm \
+		$(PHP_WASM_MOUNT) \
 		-v "$(CURDIR)/src/sdk/php/example://app/src/sdk/php/example" \
 		-v "$(CURDIR)/example://app/example" \
 		-v "$(CURDIR)/docs://app/docs" \
 		-w //app lpdf-php php src/sdk/php/example/example-data.php
 	docker run --rm \
+		$(PHP_WASM_MOUNT) \
 		-v "$(CURDIR)/src/sdk/php/example://app/src/sdk/php/example" \
 		-v "$(CURDIR)/example://app/example" \
 		-v "$(CURDIR)/docs://app/docs" \

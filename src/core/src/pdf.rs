@@ -1976,7 +1976,7 @@ fn build_content_streams(
     rendered_pages
 }
 
-// ── Unregistered-use attribution ──────────────────────────────────────────────
+// ── Unlicensed-use attribution ────────────────────────────────────────────────
 //
 // Drawn on every page of an unlicensed render. Deliberately small: the words are a
 // quiet grey and only the mark carries the brand orange, so the line reads as a
@@ -2265,7 +2265,6 @@ fn assemble_pdf(
     fields:             &[(usize, RenderField)],
     meta:               &Meta,
     created_on:         Option<&str>,
-    licensed:           bool,
 ) -> Result<Vec<u8>, String> {
     let AllocatedIds {
         catalog_id, info_id, pages_id,
@@ -2312,7 +2311,8 @@ fn assemble_pdf(
         if !meta.subject.is_empty()  { info.subject(TextStr(&meta.subject)); }
         if !meta.creator.is_empty()  { info.creator(TextStr(&meta.creator)); }
         if !meta.keywords.is_empty() { info.keywords(TextStr(&meta.keywords)); }
-        info.producer(TextStr(if licensed { "lpdf.io" } else { "lpdf.io (unregistered)" }));
+        // The same for every render: an unlicensed one is already marked by its attribution line.
+        info.producer(TextStr("Lpdf (lpdf.io)"));
 
         // created_on: write as a raw PDF date string if provided.
         // Format expected: ISO 8601 "YYYY-MM-DDTHH:mm:ss" → "D:YYYYMMDDHHmmss"
@@ -2834,8 +2834,7 @@ fn assemble_pdf(
 /// - `meta`       – Document metadata (title, author, subject, etc.).
 /// - `created_on` – Optional ISO 8601 date string written to `/CreationDate`.
 /// - `licensed`   – `true` when a valid commercial license token was supplied.
-///                  Controls the `/Producer` field (`lpdf.io` vs `lpdf.io (unregistered)`),
-///                  and when `false` draws the attribution line ("Made with", the lpdf
+///                  When `false`, draws the attribution line ("Made with", the lpdf
 ///                  mark, "Lpdf") in every page's top-right corner.
 pub fn render_pdf(
     pages:          &[RenderPage],
@@ -2861,7 +2860,7 @@ pub fn render_pdf(
     assemble_pdf(
         pages, &fonts, &sorted_font_names, &sorted_image_names,
         image_registry, &image_res_map, rendered_pages, ids, &fields,
-        meta, created_on, licensed,
+        meta, created_on,
     )
 }
 

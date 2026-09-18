@@ -166,10 +166,8 @@ pub fn check(token: &str, now_unix: i64) -> LicenseStatus {
         Err(_) => return LicenseStatus::Malformed,
     };
 
-    if TRUSTED_KEYS_WITH_KID.is_empty() {
-        return LicenseStatus::InvalidSignature;
-    }
-
+    // Before the trusted-key check: a token with a bad `kid` is malformed whichever
+    // keys this build embeds, including none (a build without LPDF_PUBLIC_KEY).
     let kid = match claims["kid"].as_str() {
         Some(s) => match parse_kid_hex(s) {
             Some(b) => b,
@@ -177,6 +175,10 @@ pub fn check(token: &str, now_unix: i64) -> LicenseStatus {
         },
         None => return LicenseStatus::Malformed,
     };
+
+    if TRUSTED_KEYS_WITH_KID.is_empty() {
+        return LicenseStatus::InvalidSignature;
+    }
 
     let verified = TRUSTED_KEYS_WITH_KID
         .iter()
