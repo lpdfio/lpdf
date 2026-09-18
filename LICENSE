@@ -76,19 +76,41 @@ This restriction is lifted upon obtaining a valid license key. Community keys ar
 
 ---
 
+## Terms for Every License
+
+These terms apply to all use of the Software: under the Community, Professional and Enterprise Licenses, and as Unlicensed Use. Where a permission elsewhere in this document is broader, these terms limit it.
+
+### Trademarks
+
+"Lpdf" and the Lpdf logo are trademarks of Codesense LLC and are not licensed under any part of this document. You may use the name only to state accurately that a product uses or works with Lpdf. A modified version of the Software may not be distributed under the name Lpdf, under a confusingly similar name, or with the Lpdf logo. This does not affect the attribution notice the Software places in rendered documents.
+
+### License Key Verification
+
+You may not remove, disable, bypass, or otherwise circumvent the license key verification in the Software or the attribution notice it produces, and you may not distribute a version of the Software in which either has been removed, disabled, bypassed, or circumvented. A modified version of the Software requires the same license as the original. Use of a version in which the license key verification or the attribution notice has been circumvented is not licensed under any tier.
+
+### Copies From Others
+
+A copy of the Software obtained from anyone other than Codesense LLC, modified or not, and whether provided free of charge or for a fee, conveys no rights beyond those of the Community License, and does not replace a Professional or Enterprise License where one is required. Copies that Codesense LLC publishes itself, including its packages on public package registries, are obtained from Codesense LLC. Professional and Enterprise rights are granted only by Codesense LLC, through a license purchased from it. No one who distributes a copy of the Software may represent that it carries any other rights. This does not limit the right of a Professional or Enterprise licensee to distribute the Software as a component of its licensed Production System.
+
+### Feedback
+
+Codesense LLC welcomes bug reports, suggestions, and other feedback about Lpdf, through its issue tracker, discussions, email, or any other channel. By giving feedback, you grant Codesense LLC a perpetual, irrevocable, worldwide, royalty-free right to use it for any purpose, including in any version of Lpdf under any license, without any obligation to you, including credit or compensation. Codesense LLC alone decides whether and how feedback is acted on. Codesense LLC does not accept code contributions except under a separate written agreement, and giving feedback does not make you a contributor to Lpdf or give you any rights in it.
+
+---
+
 ## Lpdf Community License
 
 *Applies to: individuals, open-source projects, non-profit organizations, and companies with annual gross revenue under 1,000,000 USD; and to any organization, whatever its revenue, for use in non-production environments.*
 
 Permission is hereby granted, free of charge, to any person or qualifying organization obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. Any redistribution of the Software must be made under the terms of this Community License and may not be sublicensed under different terms.
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. Any redistribution of the Software must be made under the terms of this Community License and may not be sublicensed under different terms. This permission is subject to the Terms for Every License above.
 
 ### License Key
 
 A license key issued under this license may be used by you, your employees, and contractors working on your behalf on your projects. You may not share, distribute, or otherwise make your license key available to individuals or organizations outside your own. Any person or organization outside your own that wishes to use Lpdf must obtain their own license key at lpdf.io.
 
-All modifications to the Software made by the licensee remain the intellectual property of the licensee. Codesense LLC claims no ownership over modifications unless they are voluntarily submitted as contributions to the Lpdf project under a separate Contributor License Agreement.
+All modifications to the Software made by the licensee remain the intellectual property of the licensee. Codesense LLC claims no ownership over modifications.
 
 If your organization's annual gross revenue exceeds 1,000,000 USD, your rights under this Community License to use the Software in commercial Production Systems are automatically terminated upon expiration of the 90-day grace period described above, and you must obtain a Professional or Enterprise license for each such Production System. Use under this Community License by individuals, open-source projects, and non-profit organizations is not subject to revenue thresholds and is unaffected by this provision. Your rights under this Community License for use in non-production environments are also unaffected.
 
@@ -150,7 +172,7 @@ Codesense LLC may, upon 30 days' written notice and no more than once per calend
 
 Codesense LLC retains all ownership, copyright, and intellectual property rights in the Software at all times. This license grants rights to use the Software; it does not transfer ownership of any kind.
 
-All modifications to the Software made by the licensee remain the intellectual property of the licensee. Codesense LLC claims no ownership over licensee modifications unless they are voluntarily submitted as contributions to the Lpdf project under a separate Contributor License Agreement.
+All modifications to the Software made by the licensee remain the intellectual property of the licensee. Codesense LLC claims no ownership over licensee modifications.
 
 ### Copyright
 
@@ -228,7 +250,7 @@ Codesense LLC may, upon 30 days' written notice and no more than once per calend
 
 Codesense LLC retains all ownership, copyright, and intellectual property rights in the Software at all times. This license grants rights to use the Software; it does not transfer ownership of any kind.
 
-All modifications to the Software made by the licensee remain the intellectual property of the licensee. Codesense LLC claims no ownership over licensee modifications unless they are voluntarily submitted as contributions to the Lpdf project under a separate Contributor License Agreement.
+All modifications to the Software made by the licensee remain the intellectual property of the licensee. Codesense LLC claims no ownership over licensee modifications.
 
 ### Copyright
 
