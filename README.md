@@ -157,6 +157,15 @@ pdf = engine.render(doc)
 
 Preview, design, and export PDFs directly in VS Code — entirely offline. Supports live XML preview and PDF export via the command palette.
 
+## Versioning
+
+All Lpdf packages share one version scheme: the first two numbers are the engine, and the last number counts changes to that package only.
+
+- An engine release, such as `0.22.0`, ships all four SDKs and the VS Code extension at `0.22.0`.
+- A change to one package alone ships as that package's next number, such as PHP `0.22.1` and `0.22.2`, while the others stay at `0.22.0`.
+
+So every Lpdf package at `0.22.x` runs engine `0.22`. To stay on one engine and still get a package's own fixes, pin with `~0.22.0`, or your package manager's equivalent.
+
 ## Docs
 
 [lpdf.io/docs](https://lpdf.io/docs)
