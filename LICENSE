@@ -58,11 +58,11 @@ Paid licenses directly fund the continued development, maintenance, and improvem
 
 ---
 
-## Unregistered Use
+## Unlicensed Use
 
-Use of the Software without a valid license key ("Unregistered Use") is permitted solely for evaluation and local testing. It does not constitute a license for use in a production environment, commercial deployment, or distribution.
+Use of the Software without a valid license key ("Unlicensed Use") is permitted solely for evaluation and local testing. It does not constitute a license for use in a production environment, commercial deployment, or distribution.
 
-Unregistered Use is subject to the following restriction:
+Unlicensed Use is subject to the following restriction:
 
 **Attribution.** Each document rendered shall include an attribution notice in the form specified in the Software documentation. This notice may not be suppressed, removed, or obscured.
 
@@ -88,7 +88,7 @@ If your organization's annual gross revenue exceeds 1,000,000 USD, your rights u
 
 ### License Key Expiration
 
-License keys issued under this license are valid for one year from the date of issuance. Before expiry, a new key must be generated from the portal and deployed in place of the expiring key. A key may be renewed at no cost provided the licensee continues to qualify under this Community License. Use of an expired key is treated as Unregistered Use — documents rendered without a valid key will include an attribution notice as described above.
+License keys issued under this license are valid for one year from the date of issuance. Before expiry, a new key must be generated from the portal and deployed in place of the expiring key. A key may be renewed at no cost provided the licensee continues to qualify under this Community License. Use of an expired key is treated as Unlicensed Use — documents rendered without a valid key will include an attribution notice as described above.
 
 ### Governing Law
 
@@ -128,7 +128,7 @@ A license fee is required per Production System for use of the Software in a pro
 
 Upon payment, the licensee receives a perpetual license for the version of Lpdf current at the time of purchase, plus one year of updates, new features, and security patches. Continued access to new versions after the first year requires annual renewal. Cancellation of renewal does not affect the perpetual license for the version already held.
 
-License keys issued under this license are valid for one year and are renewed automatically upon annual payment. An expired key reverts to Unregistered Use behavior — documents rendered without a valid key will include an attribution notice. A valid key is required to exercise the license grant in any production environment.
+License keys issued under this license are valid for one year and are renewed automatically upon annual payment. An expired key reverts to Unlicensed Use behavior — documents rendered without a valid key will include an attribution notice. A valid key is required to exercise the license grant in any production environment.
 
 **Active subscription required.** The license grant is contingent on an active subscription in good standing. A technically valid key does not authorize use of the Software after the subscription has expired or been cancelled. Use of any key following subscription lapse — including keys that remain technically valid — constitutes unauthorized use and a material breach of this Agreement. If a payment for the license is refunded in full or reversed through a chargeback, the license is treated as though that payment had never been made, including any perpetual license it bought, and no key issued under the license since that payment authorizes use of the Software in any environment, production or non-production. If a chargeback is later reversed, this no longer applies. None of this prevents the licensee from obtaining a Community License where they qualify for one.
 
