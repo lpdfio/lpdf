@@ -8,7 +8,7 @@ License inquiries: license@lpdf.io
 
 ## Choosing Your License
 
-Lpdf is available under three license tiers: a free Community License for individuals and qualifying organizations, a Professional License for mid-size commercial use, and an Enterprise License for larger organizations. All license tiers receive the complete feature set — no capabilities are gated behind paid plans.
+Lpdf is available under three license tiers: a free Community License for individuals and qualifying organizations, a Professional License for mid-size commercial use, and an Enterprise License for larger organizations. Which tier applies matters only in production: use in non-production environments is covered by the Community License for every organization, whatever its revenue. All license tiers receive the complete feature set — no capabilities are gated behind paid plans.
 
 ### Definitions
 
@@ -27,6 +27,10 @@ If Lpdf is pulled in as an indirect dependency of another library or framework r
 The author of the wrapping library or framework is responsible for obtaining a valid license key; end users of that library or framework are not required to obtain a separate Lpdf license key for their indirect use. 
 
 This exemption does not apply if the dependency was introduced, created, or controlled by the licensee's organization for the purpose of circumventing license requirements.
+
+### Non-Production Use
+
+Use of the Software in non-production environments is covered by the Community License for any organization, whatever its annual gross revenue, with no time limit. The revenue thresholds below determine which license is required for use in a production environment.
 
 ### Individuals and Open-Source Projects
 
@@ -60,7 +64,9 @@ Paid licenses directly fund the continued development, maintenance, and improvem
 
 ## Unlicensed Use
 
-Use of the Software without a valid license key ("Unlicensed Use") is permitted solely for evaluation and local testing. It does not constitute a license for use in a production environment, commercial deployment, or distribution.
+Use of the Software without a valid license key, including with an expired key or after the license under which a key was issued has ended ("Unlicensed Use"), is permitted in non-production environments by anyone, with no time limit, and in production environments by those who qualify for the Community License.
+
+Unlicensed Use is not a substitute for a Professional or Enterprise License. An organization that requires one for a Production System may not use the Software in that Production System without it, whether or not the attribution notice appears.
 
 Unlicensed Use is subject to the following restriction:
 
@@ -72,7 +78,7 @@ This restriction is lifted upon obtaining a valid license key. Community keys ar
 
 ## Lpdf Community License
 
-*Applies to: individuals, open-source projects, non-profit organizations, and companies with annual gross revenue under 1,000,000 USD.*
+*Applies to: individuals, open-source projects, non-profit organizations, and companies with annual gross revenue under 1,000,000 USD; and to any organization, whatever its revenue, for use in non-production environments.*
 
 Permission is hereby granted, free of charge, to any person or qualifying organization obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
@@ -84,11 +90,11 @@ A license key issued under this license may be used by you, your employees, and 
 
 All modifications to the Software made by the licensee remain the intellectual property of the licensee. Codesense LLC claims no ownership over modifications unless they are voluntarily submitted as contributions to the Lpdf project under a separate Contributor License Agreement.
 
-If your organization's annual gross revenue exceeds 1,000,000 USD, your rights under this Community License to use the Software in commercial Production Systems are automatically terminated upon expiration of the 90-day grace period described above, and you must obtain a Professional or Enterprise license for each such Production System. Use under this Community License by individuals, open-source projects, and non-profit organizations is not subject to revenue thresholds and is unaffected by this provision.
+If your organization's annual gross revenue exceeds 1,000,000 USD, your rights under this Community License to use the Software in commercial Production Systems are automatically terminated upon expiration of the 90-day grace period described above, and you must obtain a Professional or Enterprise license for each such Production System. Use under this Community License by individuals, open-source projects, and non-profit organizations is not subject to revenue thresholds and is unaffected by this provision. Your rights under this Community License for use in non-production environments are also unaffected.
 
 ### License Key Expiration
 
-License keys issued under this license are valid for one year from the date of issuance. Before expiry, a new key must be generated from the portal and deployed in place of the expiring key. A key may be renewed at no cost provided the licensee continues to qualify under this Community License. Use of an expired key is treated as Unlicensed Use — documents rendered without a valid key will include an attribution notice as described above.
+This Community License runs for a term of one year, and license keys issued under it are valid until 7 days after the end of the term in which they are issued. The term may be renewed from the portal at no cost provided the licensee continues to qualify under this Community License; use in non-production environments always qualifies. After each renewal, new keys are generated from the portal and deployed in place of the previous ones. Use of an expired key is treated as Unlicensed Use — documents rendered without a valid key will include an attribution notice as described above.
 
 ### Governing Law
 
@@ -122,15 +128,15 @@ A separate license is required for each additional Production System in which th
 
 **Tier compliance.** Licensee is responsible for ensuring their use of the Software complies with the applicable license tier at all times. If the licensee's annual gross revenue crosses 10,000,000 USD, the licensee must obtain an Enterprise License for each affected Production System within 90 days of the close of the fiscal year in which the threshold was crossed. Use of a Professional License key while qualifying for the Enterprise tier is a material breach of this Agreement.
 
-### License Fees and Evaluation
+### License Fees and Subscription
 
-A license fee is required per Production System for use of the Software in a production environment (as defined above). Evaluation and testing in non-production environments is permitted without a license for a period not exceeding 30 days.
+A license fee is required per Production System for use of the Software in a production environment (as defined above). Use in non-production environments needs no paid license, at any revenue and for any length of time: it is covered by the Community License, or is Unlicensed Use if no valid license key is installed.
 
-Upon payment, the licensee receives a perpetual license for the version of Lpdf current at the time of purchase, plus one year of updates, new features, and security patches. Continued access to new versions after the first year requires annual renewal. Cancellation of renewal does not affect the perpetual license for the version already held.
+Upon payment, the licensee receives a license for the term of the subscription, covering every version of Lpdf, and every update, new feature, and security patch, released while the subscription is active. The license does not continue after the subscription ends, and it grants no perpetual right to any version.
 
-License keys issued under this license are valid for one year and are renewed automatically upon annual payment. An expired key reverts to Unlicensed Use behavior — documents rendered without a valid key will include an attribution notice. A valid key is required to exercise the license grant in any production environment.
+License keys issued under this license are valid until 30 days after the end of the subscription term in which they are issued. The subscription renews automatically upon annual payment; after each renewal, new keys are generated from the portal and deployed in place of the previous ones. An expired key reverts to Unlicensed Use behavior — documents rendered without a valid key will include an attribution notice. A valid key is required to exercise the license grant in any production environment.
 
-**Active subscription required.** The license grant is contingent on an active subscription in good standing. A technically valid key does not authorize use of the Software after the subscription has expired or been cancelled. Use of any key following subscription lapse — including keys that remain technically valid — constitutes unauthorized use and a material breach of this Agreement. If a payment for the license is refunded in full or reversed through a chargeback, the license is treated as though that payment had never been made, including any perpetual license it bought, and no key issued under the license since that payment authorizes use of the Software in any environment, production or non-production. If a chargeback is later reversed, this no longer applies. None of this prevents the licensee from obtaining a Community License where they qualify for one.
+**Active subscription required.** The license grant is contingent on an active subscription in good standing. A subscription renewed within 30 days after its term ends is treated as never having lapsed, including for use during those 30 days. Otherwise, once the subscription has expired or been cancelled, further use of the Software is Unlicensed Use, which does not permit use in a Production System that requires this license. Keys issued under the license may no longer be used, including keys that remain technically valid, and using one is a material breach of this Agreement. If a payment for the license is refunded in full or reversed through a chargeback, the license is treated as though that payment had never been made, and no key issued under the license since that payment authorizes use of the Software in any environment, production or non-production. If a chargeback is later reversed, this no longer applies. None of this prevents the licensee from obtaining a Community License where they qualify for one.
 
 ### Support
 
@@ -196,15 +202,15 @@ A separate license is required for each additional Production System in which th
 
 **Tier compliance.** Licensee is responsible for ensuring their use of the Software complies with the applicable license tier at all times. Each Controlled Entity using the Software must qualify for the tier under which they operate. If a Controlled Entity's annual gross revenue would independently qualify that entity for a different tier, that entity must obtain its own license at the applicable tier for any Production System it independently operates.
 
-### License Fees and Evaluation
+### License Fees and Subscription
 
-A license fee is required per Production System for use of the Software in a production environment (as defined above). Evaluation and testing in non-production environments is permitted without a license for a period not exceeding 30 days.
+A license fee is required per Production System for use of the Software in a production environment (as defined above). Use in non-production environments needs no paid license, at any revenue and for any length of time: it is covered by the Community License, or is Unlicensed Use if no valid license key is installed.
 
-Upon payment, the licensee receives a perpetual license for the major version of Lpdf current at the time of purchase, plus access to updates, new features, and security patches within that major version for the duration of the active subscription. Cancellation of renewal does not affect the perpetual license for the major version already held.
+Upon payment, the licensee receives a license for the term of the subscription, covering every version of Lpdf, and every update, new feature, and security patch, released while the subscription is active. The license does not continue after the subscription ends, and it grants no perpetual right to any version, whatever keys remain technically valid.
 
 **License keys.** License keys issued under this license are locked to the major version of Lpdf current at the time of generation and carry no date expiry. While the subscription is active and in good standing, the licensee may generate new keys for the current major version from the portal at any time. When a new major version of Lpdf is released, a new key must be generated from the portal to use that version; keys generated for a prior major version continue to function with that version only. The right to generate new keys requires an active subscription; key generation rights terminate upon subscription lapse.
 
-**Active subscription required.** The license grant is contingent on an active subscription in good standing. A technically valid key does not authorize use of the Software after the subscription has expired or been cancelled. Use of any key following subscription lapse — including keys that carry no date expiry and remain technically valid — constitutes unauthorized use and a material breach of this Agreement. If a payment for the license is refunded in full or reversed through a chargeback, the license is treated as though that payment had never been made, including the perpetual license for any major version it bought, and no key issued under the license since that payment — including keys that carry no date expiry — authorizes use of the Software in any environment, production or non-production. If a chargeback is later reversed, this no longer applies. None of this prevents the licensee from obtaining a Community License where they qualify for one.
+**Active subscription required.** The license grant is contingent on an active subscription in good standing. A subscription renewed within 60 days after its term ends is treated as never having lapsed, including for use during those 60 days. Otherwise, once the subscription has expired or been cancelled, further use of the Software is Unlicensed Use, which does not permit use in a Production System that requires this license. Keys issued under the license may no longer be used, including keys that carry no date expiry and remain technically valid, and using one is a material breach of this Agreement. If a payment for the license is refunded in full or reversed through a chargeback, the license is treated as though that payment had never been made, and no key issued under the license since that payment — including keys that carry no date expiry — authorizes use of the Software in any environment, production or non-production. If a chargeback is later reversed, this no longer applies. None of this prevents the licensee from obtaining a Community License where they qualify for one.
 
 ### Support
 
