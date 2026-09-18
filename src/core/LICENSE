@@ -130,7 +130,7 @@ Upon payment, the licensee receives a perpetual license for the version of Lpdf 
 
 License keys issued under this license are valid for one year and are renewed automatically upon annual payment. An expired key reverts to Unregistered Use behavior — documents rendered without a valid key will include an attribution notice. A valid key is required to exercise the license grant in any production environment.
 
-**Active subscription required.** The license grant is contingent on an active subscription in good standing. A technically valid key does not authorize use of the Software after the subscription has expired or been cancelled. Use of any key following subscription lapse — including keys that remain technically valid — constitutes unauthorized use and a material breach of this Agreement.
+**Active subscription required.** The license grant is contingent on an active subscription in good standing. A technically valid key does not authorize use of the Software after the subscription has expired or been cancelled. Use of any key following subscription lapse — including keys that remain technically valid — constitutes unauthorized use and a material breach of this Agreement. If a payment for the license is refunded in full or reversed through a chargeback, the license is treated as though that payment had never been made, including any perpetual license it bought, and no key issued under the license since that payment authorizes use of the Software in any environment, production or non-production. If a chargeback is later reversed, this no longer applies. None of this prevents the licensee from obtaining a Community License where they qualify for one.
 
 ### Support
 
@@ -152,7 +152,7 @@ All copies, modifications, and distributions of the Software must retain the ori
 
 ### Data and Privacy
 
-Codesense LLC does not collect, process, or retain any data that the licensee processes through the Software. All data processed by Lpdf remains solely within the licensee's infrastructure. For more information, see the Codesense LLC Privacy Policy at lpdf.io/privacy.
+Codesense LLC does not collect, process, or retain any data that the licensee processes through the Software. All data processed by Lpdf remains solely within the licensee's infrastructure.
 
 ### Export Compliance
 
@@ -204,15 +204,15 @@ Upon payment, the licensee receives a perpetual license for the major version of
 
 **License keys.** License keys issued under this license are locked to the major version of Lpdf current at the time of generation and carry no date expiry. While the subscription is active and in good standing, the licensee may generate new keys for the current major version from the portal at any time. When a new major version of Lpdf is released, a new key must be generated from the portal to use that version; keys generated for a prior major version continue to function with that version only. The right to generate new keys requires an active subscription; key generation rights terminate upon subscription lapse.
 
-**Active subscription required.** The license grant is contingent on an active subscription in good standing. A technically valid key does not authorize use of the Software after the subscription has expired or been cancelled. Use of any key following subscription lapse — including keys that carry no date expiry and remain technically valid — constitutes unauthorized use and a material breach of this Agreement.
+**Active subscription required.** The license grant is contingent on an active subscription in good standing. A technically valid key does not authorize use of the Software after the subscription has expired or been cancelled. Use of any key following subscription lapse — including keys that carry no date expiry and remain technically valid — constitutes unauthorized use and a material breach of this Agreement. If a payment for the license is refunded in full or reversed through a chargeback, the license is treated as though that payment had never been made, including the perpetual license for any major version it bought, and no key issued under the license since that payment — including keys that carry no date expiry — authorizes use of the Software in any environment, production or non-production. If a chargeback is later reversed, this no longer applies. None of this prevents the licensee from obtaining a Community License where they qualify for one.
 
 ### Support
 
-Enterprise License holders receive priority support from Codesense LLC. Supported response times and escalation procedures are defined in the Enterprise Support Policy at lpdf.io/support/enterprise. Custom SLA terms may be negotiated as part of a Master Service Agreement.
+Enterprise License holders receive priority support from Codesense LLC. Supported response times and escalation procedures are defined at lpdf.io/support. Custom SLA terms may be negotiated as part of a Master Service Agreement.
 
 ### Contract
 
-Enterprise licensees may request a Master Service Agreement (MSA) in place of the standard Terms of Service available at lpdf.io/terms. To initiate an MSA request, contact license@lpdf.io. The standard terms govern until a fully executed MSA is in place. Invoice billing is available upon request.
+Enterprise licensees may request a Master Service Agreement (MSA) in place of the standard terms of this license. To initiate an MSA request, contact license@lpdf.io. The standard terms govern until a fully executed MSA is in place. Invoice billing is available upon request.
 
 ### Audit
 
@@ -230,7 +230,7 @@ All copies, modifications, and distributions of the Software must retain the ori
 
 ### Data and Privacy
 
-Codesense LLC does not collect, process, or retain any data that the licensee processes through the Software. All data processed by Lpdf remains solely within the licensee's infrastructure. For more information, see the Codesense LLC Privacy Policy at lpdf.io/privacy.
+Codesense LLC does not collect, process, or retain any data that the licensee processes through the Software. All data processed by Lpdf remains solely within the licensee's infrastructure.
 
 ### Export Compliance
 
@@ -250,6 +250,8 @@ Notwithstanding the foregoing, either party may seek injunctive or other equitab
 
 ---
 
+Licenses are purchased, renewed and managed, and license keys issued, through the Codesense portal at my.codesense.dev, under its Terms of Service and Refund Policy.
+
 For license purchases and inquiries: license@lpdf.io
 
-Privacy Policy: lpdf.io/privacy | Terms of Service: lpdf.io/terms | Support: lpdf.io/support
+Support: lpdf.io/support
