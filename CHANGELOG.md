@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.19.0 — 2026-09-19
+- First release using release candidate
+
 ## v0.18.0 — 2026-09-19
 
 ## v0.17.0 — 2026-09-18
