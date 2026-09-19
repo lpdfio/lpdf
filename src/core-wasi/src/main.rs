@@ -2,11 +2,14 @@
 ///
 /// Protocol (stdin → stdout):
 /// ```json
-/// { "method": "render" | "render_tree" | "render_pdf" | "render_tree_pdf", "key": "…", "input": "…xml or json…" }
+/// { "method": "render" | "render_tree" | "render_pdf" | "render_tree_pdf" | "check_license",
+///   "key": "…", "input": "…xml or json…", "now": 1790812800 }
 /// ```
 /// - `render` / `render_tree` return the RenderTree JSON string directly.
 /// - `render_pdf` / `render_tree_pdf` return `{ "pdf": "<base64>" }` on success
 ///   or `{ "error": "…" }` on failure.
+/// - `check_license` reports what `key` is — `{ "status": "licensed", … }` — and takes no
+///   `input`. `now` is the host's clock in seconds; without it expiry is not checked.
 ///
 /// For `render_pdf` / `render_tree_pdf`, custom font bytes can be supplied:
 /// ```json
@@ -57,6 +60,13 @@ fn dispatch(input: &str) -> String {
     let method   = req["method"].as_str().unwrap_or("render");
     let key      = req["key"]   .as_str().unwrap_or("");
     let now_unix = req["now"]   .as_i64().unwrap_or(0);
+
+    // Answered before `input` is required: this method asks about the key itself, and there is
+    // no document to render.
+    if method == "check_license" {
+        return license::report_json(key, now_unix);
+    }
+
     let body   = match req["input"].as_str() {
         Some(s) => s,
         None    => return r#"{"error":"request missing 'input' field"}"#.to_string(),

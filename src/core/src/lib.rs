@@ -4,7 +4,9 @@ mod data;
 mod encrypt;
 mod kit_to_xml;
 mod layout;
-mod license;
+// Public for native consumers — the CLI's `license` command reports a key's standing from the
+// typed result rather than parsing the JSON one back.
+pub mod license;
 mod page_scope;
 mod parse;
 mod pdf;
@@ -299,12 +301,17 @@ impl LpdfEngine {
     ///
     /// Draws the attribution line when `license_key` is empty or invalid.
     /// No custom fonts or images are resolved; built-in fonts only.
-    pub fn render_xml_to_pdf(xml: &str, license_key: &str) -> Result<Vec<u8>, String> {
+    ///
+    /// `now_unix` is the caller's clock, in seconds, used to check the key's expiry; `0` skips
+    /// that check. The core compiles to wasm, which has no clock of its own, so the time can
+    /// only come from the host — the same reason `LpdfEngine::set_now` exists. This used to
+    /// hard-code `0`, which meant an expired key rendered without the attribution line for ever.
+    pub fn render_xml_to_pdf(xml: &str, license_key: &str, now_unix: i64) -> Result<Vec<u8>, String> {
         let mut doc = parse::parse(xml)?;
         let lp = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
             lp.iter().flat_map(layout::layout_page).collect();
-        let status = license::check(license_key, 0);
+        let status = license::check(license_key, now_unix);
         pdf::render_pdf(
             &pages,
             &doc.fonts,
@@ -341,6 +348,27 @@ impl LpdfEngine {
 }
 
 // ── Standalone exports ────────────────────────────────────────────────────────
+
+/// What this build of the engine makes of a license key, as JSON.
+///
+/// ```json
+/// { "status": "licensed", "product": "lpdf", "tier": "professional",
+///   "expires": "2027-09-19T00:00:00Z", "license": "L-7K3M9Q", "key": 3 }
+/// ```
+///
+/// `status` is one of `licensed`, `free`, `expired`, `version_mismatch`, `wrong_product`,
+/// `unknown_key`, `bad_signature` or `malformed`. The remaining fields appear only once the
+/// signature verified — see [`license::report_json`].
+///
+/// A free function, not a method: asking what a key is should not require building an engine.
+/// `now_unix` is the caller's clock in seconds, since wasm has none; `0` skips the expiry check.
+///
+/// The answer is this build's. An engine older than the key, or one built for another
+/// environment, answers `unknown_key` — which is the useful part, not a caveat.
+#[wasm_bindgen]
+pub fn check_license(token: &str, now_unix: i64) -> String {
+    license::report_json(token, now_unix)
+}
 
 /// Convert a JSON kit-tree (produced by `LpdfKit` in any adapter) to an lpdf
 /// XML string.
@@ -548,7 +576,7 @@ mod tests {
 
     #[test]
     fn unlicensed_pdf_embeds_the_attribution_face_and_links_to_lpdf() {
-        let pdf = LpdfEngine::render_xml_to_pdf(&minimal(""), "").unwrap();
+        let pdf = LpdfEngine::render_xml_to_pdf(&minimal(""), "", 0).unwrap();
         assert!(pdf_contains(&pdf, pdf::ATTRIBUTION_FONT_KEY.as_bytes()));
         assert!(pdf_contains(&pdf, b"https://lpdf.io"));
     }

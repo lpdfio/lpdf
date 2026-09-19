@@ -21,6 +21,7 @@ fn main() {
     match args.get(1).map(String::as_str) {
         Some("codegen")   => cmd_codegen(&args[2..]),
         Some("convert")   => cmd_convert(&args[2..]),
+        Some("license")   => cmd_license(&args[2..]),
         Some("benchmark") => cmd_benchmark(&args[2..]),
         Some("--help") | Some("-h") => print_top_help(),
         Some(other) => {
@@ -135,7 +136,7 @@ fn cmd_convert(args: &[String]) {
     let xml = read_file(&input_path);
 
     let t0 = Instant::now();
-    let pdf_bytes = lpdf::LpdfEngine::render_xml_to_pdf(&xml, &license).unwrap_or_else(|e| {
+    let pdf_bytes = lpdf::LpdfEngine::render_xml_to_pdf(&xml, &license, now_unix()).unwrap_or_else(|e| {
         eprintln!("Render error: {e}");
         process::exit(1);
     });
@@ -174,7 +175,106 @@ fn cmd_convert(args: &[String]) {
     }
 }
 
+// ── Subcommand: license ───────────────────────────────────────────────────────
+
+/// Reports what this build of the engine makes of a license key.
+///
+/// The engine's own verdict, not a second opinion written beside it: the same code the renderer
+/// runs decides, so "the key works" here means the attribution line will be gone there. A key
+/// the portal considers perfectly good still reads `unknown_key` in an engine that does not
+/// trust the key it was signed with, which is the answer worth having.
+///
+/// Exits 0 only for a licensed key, so a deployment script can gate on it.
+fn cmd_license(args: &[String]) {
+    let mut token: String = std::env::var("LPDF_LICENSE").unwrap_or_default();
+    let mut as_json = false;
+
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--help" | "-h" => { print_license_help(); return; }
+            "--json" => { as_json = true; }
+            other if other.starts_with('-') => {
+                eprintln!("Unknown argument: {other}");
+                process::exit(1);
+            }
+            other => { token = other.to_owned(); }
+        }
+        i += 1;
+    }
+
+    if token.is_empty() {
+        eprintln!("No license key given. Pass one as an argument or set LPDF_LICENSE.");
+        process::exit(1);
+    }
+
+    let now = now_unix();
+
+    if as_json {
+        println!("{}", lpdf::check_license(&token, now));
+    }
+
+    let report = lpdf::license::report(&token, now);
+    if !as_json {
+        print_license_report(&report);
+    }
+
+    if !report.status.is_licensed() {
+        process::exit(1);
+    }
+}
+
+/// The engine's report as lines a person reads, with the status said in words.
+///
+/// Only the fields the key actually carries are printed: a token signed before license numbers
+/// existed has none, and inventing a placeholder would look like a key with a blank license.
+fn print_license_report(report: &lpdf::license::LicenseReport) {
+    let status = report.status.code();
+    println!("{:<10} {}  ({status})", "Status:", explain(status));
+
+    let Some(claims) = &report.claims else { return };
+
+    println!("{:<10} {}", "Product:", claims.product);
+    println!("{:<10} {}", "Tier:", claims.tier);
+    match claims.expires_iso() {
+        Some(expires) => println!("{:<10} {expires}", "Expires:"),
+        // Not "never": the key dies on the next major version instead of on a date.
+        None          => println!("{:<10} no date — valid for this major version", "Expires:"),
+    }
+    if let Some(license) = &claims.license {
+        println!("{:<10} {license}", "License:");
+    }
+    if let Some(number) = claims.key {
+        println!("{:<10} #{number}", "Key:");
+    }
+}
+
+/// What each status means for the person holding the key — what will happen, and what to do.
+fn explain(status: &str) -> &'static str {
+    match status {
+        "licensed"         => "Valid. PDFs render without the attribution line.",
+        "free"             => "No key given. PDFs render with the attribution line.",
+        "expired"          => "Past its date. Renew the license and generate a new key.",
+        "version_mismatch" => "Issued for a different major version of lpdf. Generate a new key.",
+        "wrong_product"    => "Issued for a different Codesense product.",
+        "unknown_key"      => "Signed by a key this build of lpdf does not trust. Check the key came from your portal account, and that this lpdf is not older than the key.",
+        "bad_signature"    => "The signature does not match the key's contents. It has been altered in transit.",
+        _                  => "Not a license key this engine can read.",
+    }
+}
+
+fn now_unix() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
 fn cmd_convert_batch(input_dir: &PathBuf, output_dir: &PathBuf, license: &str) {
+    // One reading for the whole batch: a run that straddles a key's expiry should produce one
+    // kind of PDF, not attributed ones after some file in the middle.
+    let now = now_unix();
+
     std::fs::create_dir_all(output_dir).unwrap_or_else(|e| {
         eprintln!("Failed to create output directory '{}': {e}", output_dir.display());
         process::exit(1);
@@ -208,7 +308,7 @@ fn cmd_convert_batch(input_dir: &PathBuf, output_dir: &PathBuf, license: &str) {
         };
 
         let t0 = Instant::now();
-        let pdf_bytes = match lpdf::LpdfEngine::render_xml_to_pdf(&xml, license) {
+        let pdf_bytes = match lpdf::LpdfEngine::render_xml_to_pdf(&xml, license, now) {
             Ok(b) => b,
             Err(e) => { eprintln!("Skipping '{}': {e}", xml_path.display()); continue; }
         };
@@ -363,7 +463,9 @@ fn cmd_benchmark(args: &[String]) {
 
         for _ in 0..repeat {
             let t0 = Instant::now();
-            match lpdf::LpdfEngine::render_xml_to_pdf(&xml, "") {
+            // Unlicensed, so the timing includes drawing the attribution line; the clock is
+            // therefore irrelevant here.
+            match lpdf::LpdfEngine::render_xml_to_pdf(&xml, "", 0) {
                 Ok(b) => { last_size = b.len(); }
                 Err(e) => { eprintln!("Error in '{}': {e}", xml_path.display()); break; }
             }
@@ -400,6 +502,7 @@ fn print_top_help() {
     eprintln!("Subcommands:");
     eprintln!("  codegen     Generate SDK source code from an LPDF XML file");
     eprintln!("  convert     Render an LPDF XML file to PDF");
+    eprintln!("  license     Check what this build of lpdf makes of a license key");
     eprintln!("  benchmark   Benchmark rendering performance across XML files");
     eprintln!();
     eprintln!("Run `lpdf <subcommand> --help` for subcommand options.");
@@ -421,6 +524,17 @@ fn print_benchmark_help() {
     eprintln!("Options:");
     eprintln!("  --input   <file.xml|dir>   XML file or folder of XML files to benchmark");
     eprintln!("  --repeat  <n>              Number of render iterations per file (default: 100)");
+}
+
+fn print_license_help() {
+    eprintln!("Usage: lpdf license <token> [--json]");
+    eprintln!();
+    eprintln!("Reports what this build of lpdf makes of a license key: whether it is valid, and");
+    eprintln!("which license and key it is. Exits 0 only when the key is valid here.");
+    eprintln!();
+    eprintln!("Options:");
+    eprintln!("  <token>       The license key (or set LPDF_LICENSE env var)");
+    eprintln!("  --json        Print the engine's report as JSON");
 }
 
 fn print_convert_help() {
