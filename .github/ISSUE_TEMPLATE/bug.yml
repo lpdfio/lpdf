@@ -1,0 +1,66 @@
+name: Bug report
+description: Wrong output, an error or a crash, in the engine, an SDK or the VS Code extension.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The smallest XML that shows the bug is the most useful thing you can send. The same XML reproduces a bug in every SDK and in the extension, so it's the fastest way to a fix.
+
+        Remove license keys and private data first. A reduced sample with the same structure is enough.
+
+        A security problem? Don't open an issue. See the [security policy](https://github.com/lpdfio/lpdf/security/policy).
+  - type: textarea
+    id: xml
+    attributes:
+      label: Smallest XML that shows the bug
+      description: Cut the document down until removing anything else would make the bug go away. For a problem with the docs or the portal, write "n/a".
+      render: xml
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where did it happen?
+      options:
+        - Engine (the PDF output, in any SDK)
+        - JavaScript / Node SDK
+        - .NET SDK
+        - PHP SDK
+        - Python SDK
+        - VS Code extension
+        - Docs (lpdf.io)
+        - License portal (my.codesense.dev)
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Lpdf version
+      placeholder: "e.g. @lpdfio/lpdf 0.19.0"
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime and OS
+      placeholder: "e.g. Node 22 on Windows 11"
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: The full error message and stack trace, or a screenshot of the wrong output. You can drag the PDF in.
+    validations:
+      required: true
+  - type: textarea
+    id: code
+    attributes:
+      label: Code, if the bug is in an SDK call
+      description: Only the calls that matter, without your application around them.

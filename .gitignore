@@ -11,6 +11,7 @@ node_modules
 
 bin/
 src/demos/
+src/github/
 src/license/
 src/pages/
 src/sdk/

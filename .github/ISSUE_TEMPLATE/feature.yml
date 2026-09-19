@@ -1,0 +1,42 @@
+name: Feature request
+description: A specific change or addition you'd like in Lpdf.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For an open-ended idea, or to see whether others want the same, start in [Discussions](https://github.com/lpdfio/lpdf/discussions) under Ideas instead.
+
+        A suggestion is feedback under the [Lpdf license](https://github.com/lpdfio/lpdf/blob/main/LICENSE): Codesense may use it freely, and decides what gets built.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The document or workflow, and where Lpdf gets in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would help?
+      description: An XML or API sketch is welcome. Please don't attach code patches; we don't accept them.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of Lpdf?
+      options:
+        - Engine (layout, the XML schema, the PDF output)
+        - JavaScript / Node SDK
+        - .NET SDK
+        - PHP SDK
+        - Python SDK
+        - VS Code extension
+        - Docs (lpdf.io)
+        - License portal (my.codesense.dev)
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: workaround
+    attributes:
+      label: How do you handle it today?

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question
+    url: https://github.com/lpdfio/lpdf/discussions
+    about: How to do something with Lpdf. Ask in Discussions, under Q&A.
+  - name: Security vulnerability
+    url: https://github.com/lpdfio/lpdf/security/policy
+    about: Report it privately, never in a public issue.
+  - name: Paid support, licensing or billing
+    url: https://lpdf.io/support
+    about: Professional and Enterprise support, and license or billing questions, go by email.
