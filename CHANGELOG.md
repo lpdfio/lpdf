@@ -1,5 +1,7 @@
 # Changelog
 
+## v0.17.0 — 2026-09-18
+
 ## v0.16.0 — 2026-09-17
 - Another release to test if changelog from core is populated on sdk changelogs 
 
