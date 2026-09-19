@@ -21,7 +21,8 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
         clone-adapters sync-license check-license \
-        build-portal-ui build-pages-demo build-pages dev-pages meta-pages
+        build-portal-ui build-pages-demo build-pages dev-pages meta-pages \
+        rc-next rc-check
 
 build-wasm:
 	@echo ""
@@ -371,6 +372,23 @@ check-license:
 	@$(SHELL) -c "test ! -d src/sdk/php     || diff LICENSE src/sdk/php/LICENSE     || (echo 'ERROR: src/sdk/php/LICENSE differs from root LICENSE' && exit 1)"
 	@$(SHELL) -c "test ! -d src/sdk/python  || diff LICENSE src/sdk/python/LICENSE  || (echo 'ERROR: src/sdk/python/LICENSE differs from root LICENSE' && exit 1)"
 	@echo "OK"
+
+# ── Release candidate ─────────────────────────────────────────────────────────
+# Interactive: works out the next vX.Y.0-rc.N from GitHub's tags, shows the
+# commit and what changed, and pushes the tag only after you confirm. The push
+# starts release.yml's RC job; nothing reaches a package registry.
+# Lpdf-devcycle.md §4.2.
+#   make rc-next                  next minor after the latest release
+#   make rc-next VERSION=v1.0.0   a specific version, e.g. a major bump
+rc-next:
+	@$(SHELL) scripts/rc-next.sh "$(VERSION)"
+
+# Read-only status of a release candidate: core's run and the five rc.yml runs,
+# what failed and why, and, when all passed, the pre-filled release link.
+#   make rc-check                   the newest RC on GitHub
+#   make rc-check RC=v0.19.0-rc.2   a specific one
+rc-check:
+	@node scripts/rc-check.mjs "$(RC)"
 
 # ── Portal UI bundle ───────────────────────────────────────────────────────────
 # build:pages writes lpdf-pages.js / lpdf-docs.js straight into the pages asset

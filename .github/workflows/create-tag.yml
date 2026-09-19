@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version tag (e.g. v1.3.0) — core releases are always MAJOR.MINOR.0'
+        description: 'Release tag: v1.3.0-rc.1 for a release candidate, then v1.3.0 on the same commit. Core releases are always MAJOR.MINOR.0'
         required: true
         type: string
 
@@ -19,10 +19,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # vX.Y.0-rc.N first (publishes nothing), then vX.Y.0 on the same commit.
+      # release.yml refuses a vX.Y.0 with no RC on its commit.
       - name: Validate version format
         run: |
-          if ! echo "${{ inputs.version }}" | grep -qE '^v[0-9]+\.[0-9]+\.0$'; then
-            echo "Error: version must match vMAJOR.MINOR.0 — core patch is always 0"
+          if ! echo "${{ inputs.version }}" | grep -qE '^v[0-9]+\.[0-9]+\.0(-rc\.[0-9]+)?$'; then
+            echo "Error: version must match vMAJOR.MINOR.0 or vMAJOR.MINOR.0-rc.N — core patch is always 0"
             exit 1
           fi
 

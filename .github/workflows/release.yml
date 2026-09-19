@@ -1,6 +1,18 @@
 name: Release
 run-name: Release ${{ github.ref_name }}
 
+# Two kinds of tag run through this workflow (Lpdf-devcycle.md §4.2):
+#
+#   vX.Y.0-rc.N   Release candidate. Tests, builds, and publishes the engine as
+#                 a GitHub PRE-release, then sends `core-rc` to the five SDK and
+#                 extension repos. Their rc.yml builds and tests against it and
+#                 publishes nothing. No approval gate, no changelog.
+#
+#   vX.Y.0        The real release. Refuses to run unless a vX.Y.0-rc.N tag
+#                 points at the same commit (see "Require a release candidate"),
+#                 then the approval gate, the GitHub Release, and `core-release`
+#                 to the five repos, which publish to their registries.
+
 on:
   push:
     tags: ['v*']
@@ -17,6 +29,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # A final vX.Y.0 must have had a release candidate on the same commit, so
+      # nothing public is the first run of anything. Checked first, so a
+      # missing RC fails in seconds — before tests, build or the approval gate.
+      # It proves an RC was cut, not that its five rc.yml runs passed; check
+      # those before publishing. Skipped for RC tags themselves.
+      - name: Require a release candidate
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          HEAD_SHA=$(git rev-parse HEAD)
+          # Glob refspec: fetches every vX.Y.0-rc.N tag; matching none is not an error.
+          git fetch --no-tags --depth=1 origin "+refs/tags/${TAG}-rc.*:refs/tags/${TAG}-rc.*" || true
+          FOUND=""
+          for t in $(git tag -l "${TAG}-rc.*"); do
+            if [ "$(git rev-parse "$t^{commit}")" = "$HEAD_SHA" ]; then FOUND="$t"; fi
+          done
+          if [ -z "$FOUND" ]; then
+            echo "::error::No release candidate for $TAG on this commit ($HEAD_SHA). Push ${TAG}-rc.1 on this commit, check the five RC runs, then release $TAG. Delete this tag and its GitHub Release first if they were created."
+            exit 1
+          fi
+          echo "Release candidate $FOUND is on this commit."
+
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Test core
@@ -96,10 +132,101 @@ jobs:
           name: release-artifacts
           path: artifacts/
 
-  # ── 3. Publish GitHub Release + dispatch to adapters ────────────────────────
+  # ── 3a. Release candidate: pre-release + dispatch core-rc ───────────────────
+  # Runs for vX.Y.0-rc.N only. Nothing here reaches a package registry: the
+  # pre-release is never GitHub's "latest" (which the SDKs' ci.yml fallbacks
+  # read), and the five repos answer `core-rc` with build + test only.
+  rc:
+    name: Publish release candidate
+    needs: build
+    if: ${{ contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag is vX.Y.0-rc.N
+        run: |
+          if ! echo "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.0-rc\.[0-9]+$'; then
+            echo "::error::'$TAG' is not a release-candidate tag. Use vX.Y.0-rc.N, e.g. v0.17.0-rc.1."
+            exit 1
+          fi
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: artifacts/
+
+      # A pushed tag has no release yet; one created in the Releases UI does.
+      # Either way it ends up a pre-release, even if the UI checkbox was missed.
+      - name: Create pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FINAL="${TAG%-rc.*}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --prerelease --draft=false
+          else
+            gh release create "$TAG" \
+              --prerelease \
+              --title "$TAG" \
+              --notes "Release candidate for $FINAL. Nothing from it is published to a package registry."
+          fi
+
+      # --clobber: re-running the job replaces the assets instead of failing.
+      - name: Upload release artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "$TAG" \
+            artifacts/lpdf-wasi.wasm \
+            artifacts/lpdf.js \
+            artifacts/lpdf_bg.wasm \
+            artifacts/lpdf-web.js \
+            artifacts/SHA256SUMS \
+            --clobber
+
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.LPDF_RELEASE_APP_ID }}
+          private-key: ${{ secrets.LPDF_RELEASE_APP_PRIVATE_KEY }}
+          repositories: lpdf-js,lpdf-dotnet,lpdf-python,lpdf-vscode,lpdf-php
+
+      # `core-rc`, not `core-release`: only each repo's rc.yml listens to it.
+      # No write_token for php — the RC path pushes nothing.
+      - name: Dispatch core-rc to adapter repos
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          for repo in lpdf-js lpdf-dotnet lpdf-python lpdf-php lpdf-vscode; do
+            gh api "repos/lpdfio/$repo/dispatches" \
+              --method POST \
+              -f event_type=core-rc \
+              -f "client_payload[version]=$TAG"
+          done
+
+      - name: Summary
+        run: |
+          {
+            echo "### Release candidate $TAG"
+            echo
+            echo "Check all five runs, and install the extension's .vsix by hand. Then release ${TAG%-rc.*} from this commit."
+            echo
+            for repo in lpdf-js lpdf-dotnet lpdf-python lpdf-php lpdf-vscode; do
+              echo "- [$repo](https://github.com/lpdfio/$repo/actions/workflows/rc.yml)"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── 3b. Publish GitHub Release + dispatch to adapters ───────────────────────
+  # Final vX.Y.0 only. RC tags take job 3a instead.
   release:
     name: Publish release
     needs: build
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     environment: release   # optional manual-approval gate — remove if not needed
     steps:

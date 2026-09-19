@@ -45,6 +45,12 @@ new engine.  Nobody releases the SDKs or the extension by hand.
 Every core release updates every package — none skips one, and none waits
 for its own schedule.
 
+Each core release is preceded by a **release candidate**, `vX.Y.0-rc.N`, on
+the same commit.  It publishes the engine as a GitHub pre-release and has the
+five repos build and test against it (their `rc.yml`), publishing nothing.
+Core refuses `vX.Y.0` unless an RC tag points at its commit.  RC tags exist
+in core only.  No package ever carries an `-rc` version.
+
 ### Package release — `vX.Y.Z`, one package ships
 
 Publish `vX.Y.Z` (Z ≥ 1) in **one** SDK repo or the extension repo, through
@@ -137,12 +143,13 @@ All five ship core 1.3.0.
   The release's typed notes are what the changelog step writes to
   `CHANGELOG.md`.  A package tag pushed without a release fails that step
   (`changelog-plan.md`, case 3).
-- **Known gap: the engine download falls back silently.**  If core `vX.Y.0`
-  can't be downloaded after three tries, every package's `release.yml`
-  downloads the *latest* core release instead and carries on.  A package tag
-  whose core doesn't exist (a typo, or tagging before core is out) then ships
-  a different engine than its version says.  The fallback belongs in `ci.yml`
-  only; `release.yml` should fail instead.
+- **The engine download never falls back.**  If core `vX.Y.0` can't be
+  downloaded after three tries, the package's `release.yml` fails instead of
+  taking another engine.  So a package tag whose core doesn't exist (a typo,
+  or tagging before core is out) stops the release rather than shipping a
+  different engine than its version says.  Only `ci.yml` falls back to the
+  latest core, because CI builds without a release tag.  (Fixed 2026-09-18.
+  Before that, `release.yml` fell back silently.)
 
 ---
 
