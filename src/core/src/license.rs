@@ -83,8 +83,10 @@ const PRODUCT: &str = "lpdf";
 pub enum LicenseStatus {
     /// Token is valid and not expired.  Inner value is the tier name.
     Licensed(String),
-    /// No token was supplied — expected free-mode usage, no warning needed.
-    Free,
+    /// No token was supplied — expected free-mode usage, no warning needed.  Named for the
+    /// input, like every other variant here, rather than for the rendering mode it leads to:
+    /// `free` read like a tier, and the cheapest tier, community, is licensed.
+    NoKey,
     /// Token carried a valid signature but has passed its `exp` timestamp.
     Expired,
     /// Token was issued for a different major version of lpdf.
@@ -109,7 +111,7 @@ impl LicenseStatus {
     }
 
     /// Human-readable warning for conditions that indicate a bad token was
-    /// supplied.  Returns `None` for expected states (free / expired).
+    /// supplied.  Returns `None` for expected states (no key / expired).
     pub fn warning(&self) -> Option<&'static str> {
         match self {
             LicenseStatus::VersionMismatch => {
@@ -139,7 +141,7 @@ impl LicenseStatus {
     pub fn code(&self) -> &'static str {
         match self {
             LicenseStatus::Licensed(_)     => "licensed",
-            LicenseStatus::Free            => "free",
+            LicenseStatus::NoKey           => "no_key",
             LicenseStatus::Expired         => "expired",
             LicenseStatus::VersionMismatch => "version_mismatch",
             LicenseStatus::WrongProduct    => "wrong_product",
@@ -209,7 +211,7 @@ impl From<LicenseStatus> for LicenseReport {
 /// `now_unix` is the current Unix timestamp in seconds, supplied by the host
 /// (WASM/WASI have no system clock).  Pass `0` to skip expiry checking.
 ///
-/// An empty `token` returns [`LicenseStatus::Free`] immediately.  An invalid
+/// An empty `token` returns [`LicenseStatus::NoKey`] immediately.  An invalid
 /// or malformed token always falls back to free mode (PDF still renders) and
 /// carries an optional [`LicenseStatus::warning`] string the caller can
 /// surface in the output.
@@ -224,7 +226,7 @@ pub fn check(token: &str, now_unix: i64) -> LicenseStatus {
 /// whether to draw the attribution line.
 pub fn report(token: &str, now_unix: i64) -> LicenseReport {
     if token.is_empty() {
-        return LicenseReport::from(LicenseStatus::Free);
+        return LicenseReport::from(LicenseStatus::NoKey);
     }
 
     // ── Split <payload>.<signature> ──────────────────────────────────────────
@@ -473,8 +475,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn empty_token_is_free() {
-        assert_eq!(check("", 0), LicenseStatus::Free);
+    fn empty_token_is_no_key() {
+        assert_eq!(check("", 0), LicenseStatus::NoKey);
     }
 
     #[test]
@@ -520,8 +522,8 @@ mod tests {
     }
 
     #[test]
-    fn report_json_of_no_token_is_free() {
-        assert_eq!(report_json("", 0), r#"{"status":"free"}"#);
+    fn report_json_of_no_token_is_no_key() {
+        assert_eq!(report_json("", 0), r#"{"status":"no_key"}"#);
     }
 
     /// The token the portal's signer must produce, byte for byte, from a fixed seed and fixed
@@ -630,8 +632,8 @@ mod tests {
     }
 
     #[test]
-    fn free_and_expired_have_no_warning() {
-        assert!(LicenseStatus::Free.warning().is_none());
+    fn no_key_and_expired_have_no_warning() {
+        assert!(LicenseStatus::NoKey.warning().is_none());
         assert!(LicenseStatus::Expired.warning().is_none());
     }
 

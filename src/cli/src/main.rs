@@ -253,7 +253,7 @@ fn print_license_report(report: &lpdf::license::LicenseReport) {
 fn explain(status: &str) -> &'static str {
     match status {
         "licensed"         => "Valid. PDFs render without the attribution line.",
-        "free"             => "No key given. PDFs render with the attribution line.",
+        "no_key"           => "No key given. PDFs render with the attribution line.",
         "expired"          => "Past its date. Renew the license and generate a new key.",
         "version_mismatch" => "Issued for a different major version of lpdf. Generate a new key.",
         "wrong_product"    => "Issued for a different Codesense product.",
