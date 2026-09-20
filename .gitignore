@@ -10,6 +10,7 @@ local
 node_modules
 
 bin/
+src/api/
 src/demos/
 src/github/
 src/license/
