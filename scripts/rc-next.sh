@@ -18,6 +18,10 @@ REMOTE=origin
 BRANCH=main
 REPO_URL=https://github.com/lpdfio/lpdf
 REPOS="lpdf-js lpdf-dotnet lpdf-php lpdf-python lpdf-vscode"
+# Dispatched the same core-rc event, but private, so the raw.githubusercontent
+# preflight below cannot see it. Listed for the links and the summary only.
+PRIVATE_REPOS="lpdf-api"
+ALL_REPOS="$REPOS $PRIVATE_REPOS"
 
 fail() { printf 'rc-next: %s\n' "$*" >&2; exit 1; }
 
@@ -119,7 +123,7 @@ fi
 
 echo ""
 echo "Pushing the tag starts release.yml on GitHub: tests, build, a GitHub"
-echo "pre-release, then core-rc to $(echo "$REPOS" | sed 's/ /, /g')."
+echo "pre-release, then core-rc to $(echo "$ALL_REPOS" | sed 's/ /, /g')."
 echo "Nothing is published to a package registry."
 echo ""
 printf 'Push %s? [y/N] ' "$NEW"
@@ -141,13 +145,13 @@ fi
 echo ""
 echo "Pushed $NEW."
 echo ""
-echo "  Check progress:  make rc-check   (all six runs, what failed, and the release link once green)"
+echo "  Check progress:  make rc-check   (core and the five public repos; lpdf-api is private, so check its run by hand)"
 echo "  Follow the run:  $REPO_URL/actions/workflows/release.yml"
 echo "  RC runs:"
-for r in $REPOS; do
+for r in $ALL_REPOS; do
   echo "    https://github.com/lpdfio/$r/actions/workflows/rc.yml"
 done
 echo ""
-echo "When all five are green and the .vsix checks out, publish $TARGET on the"
+echo "When all six are green and the .vsix checks out, publish $TARGET on the"
 echo "same commit. This opens the release form with tag and commit filled in:"
 echo "  $REPO_URL/releases/new?tag=$TARGET&target=$SHA&title=$TARGET"

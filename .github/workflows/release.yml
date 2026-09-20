@@ -194,14 +194,18 @@ jobs:
         with:
           app-id: ${{ vars.LPDF_RELEASE_APP_ID }}
           private-key: ${{ secrets.LPDF_RELEASE_APP_PRIVATE_KEY }}
-          repositories: lpdf-js,lpdf-dotnet,lpdf-python,lpdf-vscode,lpdf-php
+          repositories: lpdf-js,lpdf-dotnet,lpdf-python,lpdf-vscode,lpdf-php,lpdf-api
 
       # `core-rc`, not `core-release`: only each repo's rc.yml listens to it.
+      #
+      # lpdf-api is not an adapter: it is the private repo holding the engine's Lambda, and its
+      # rc.yml deploys this RC to lpdf-api-pre rather than building a package. It listens for the
+      # same event, so it belongs on the same list.
       - name: Dispatch core-rc to adapter repos
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          for repo in lpdf-js lpdf-dotnet lpdf-python lpdf-php lpdf-vscode; do
+          for repo in lpdf-js lpdf-dotnet lpdf-python lpdf-php lpdf-vscode lpdf-api; do
             gh api "repos/lpdfio/$repo/dispatches" \
               --method POST \
               -f event_type=core-rc \
@@ -213,9 +217,9 @@ jobs:
           {
             echo "### Release candidate $TAG"
             echo
-            echo "Check all five runs, and install the extension's .vsix by hand. Then release ${TAG%-rc.*} from this commit."
+            echo "Check all six runs, and install the extension's .vsix by hand. Then release ${TAG%-rc.*} from this commit."
             echo
-            for repo in lpdf-js lpdf-dotnet lpdf-python lpdf-php lpdf-vscode; do
+            for repo in lpdf-js lpdf-dotnet lpdf-python lpdf-php lpdf-vscode lpdf-api; do
               echo "- [$repo](https://github.com/lpdfio/$repo/actions/workflows/rc.yml)"
             done
           } >> "$GITHUB_STEP_SUMMARY"
