@@ -1,5 +1,5 @@
 name: Release
-run-name: Release ${{ github.ref_name }}
+run-name: "${{ contains(github.ref_name, '-') && format('RC {0}: build and test, Pre-release + notify SDKs, VSCode, Api', github.ref_name) || format('Release {0}: build and test, GitHub release + notify SDKs, VSCode, Api', github.ref_name) }}"
 
 # Two kinds of tag run through this workflow (Lpdf-devcycle.md §4.2):
 #
