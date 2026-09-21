@@ -292,20 +292,25 @@ jobs:
       # Sending a repository_dispatch needs Contents:write on each adapter
       # repo. The adapters push with their own GITHUB_TOKEN, never this one:
       # it is revoked when this job ends, before any of them gets to push.
+      #
+      # lpdf-api is not an adapter: it is the private repo holding the engine's Lambda, and its
+      # release.yml deploys this release to lpdf-api-prod rather than publishing a package. It
+      # listens for the same event, so it belongs on the same list — see job "rc" above for the
+      # same reasoning on the RC side.
       - name: Mint GitHub App token
         id: app-token
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ vars.LPDF_RELEASE_APP_ID }}
           private-key: ${{ secrets.LPDF_RELEASE_APP_PRIVATE_KEY }}
-          repositories: lpdf-js,lpdf-dotnet,lpdf-python,lpdf-vscode,lpdf-php
+          repositories: lpdf-js,lpdf-dotnet,lpdf-python,lpdf-vscode,lpdf-php,lpdf-api
 
       - name: Dispatch to adapter repos
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ github.ref_name }}
         run: |
-          for repo in lpdf-js lpdf-dotnet lpdf-python lpdf-php lpdf-vscode; do
+          for repo in lpdf-js lpdf-dotnet lpdf-python lpdf-php lpdf-vscode lpdf-api; do
             gh api "repos/lpdfio/$repo/dispatches" \
               --method POST \
               -f event_type=core-release \
