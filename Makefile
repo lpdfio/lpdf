@@ -427,7 +427,11 @@ build-pages: build-portal-ui build-pages-demo
 	cp "$(PAGES_DIR)/ui/dist/lpdf-demo.js" tmp/lpdf-demo/lpdf-demo.js && \
 	rm -rf "$(PAGES_DIR)/www/assets/js/lpdf-demo" && \
 	cp -r tmp/lpdf-demo "$(PAGES_DIR)/www/assets/js/lpdf-demo" && \
-	echo ">>> $(PAGES_DIR)/www/assets/js/lpdf-demo updated."
+	echo ">>> $(PAGES_DIR)/www/assets/js/lpdf-demo updated." && \
+	mkdir -p "$(PAGES_DIR)/www/schema/1" && \
+	cp schema/lpdf.xsd "$(PAGES_DIR)/www/schema/1/lpdf.xsd" && \
+	cp schema/lpdf.xsd "$(PAGES_DIR)/www/schema/lpdf.xsd" && \
+	echo ">>> $(PAGES_DIR)/www/schema updated (versioned at /1/, latest at the root)."
 
 # Local-dev variant: a plain portal build bakes .env.local values in, so its
 # bundles are copied over the committed ones.  Use this to test pages locally.
@@ -453,4 +457,8 @@ dev-pages:
 	cp "$(PAGES_DIR)/ui/dist/lpdf-demo.js" tmp/lpdf-demo/lpdf-demo.js && \
 	rm -rf "$(PAGES_DIR)/www/assets/js/lpdf-demo" && \
 	cp -r tmp/lpdf-demo "$(PAGES_DIR)/www/assets/js/lpdf-demo" && \
-	echo ">>> $(PAGES_DIR)/www/assets/js/lpdf-demo updated."
+	echo ">>> $(PAGES_DIR)/www/assets/js/lpdf-demo updated." && \
+	mkdir -p "$(PAGES_DIR)/www/schema/1" && \
+	cp schema/lpdf.xsd "$(PAGES_DIR)/www/schema/1/lpdf.xsd" && \
+	cp schema/lpdf.xsd "$(PAGES_DIR)/www/schema/lpdf.xsd" && \
+	echo ">>> $(PAGES_DIR)/www/schema updated (versioned at /1/, latest at the root)."
