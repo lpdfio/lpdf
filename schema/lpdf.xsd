@@ -262,8 +262,16 @@
     <xs:attribute name="font"       type="xs:string"/>
     <xs:attribute name="font-size"  type="TokenScaleOrPt"/>
     <xs:attribute name="gap"        type="TokenScaleOrPt"/>
-    <xs:attribute name="padding"    type="SpacingOrToken"/>
-    <xs:attribute name="height"     type="HeightValue"/>
+    <xs:attribute name="padding"    type="SpacingOrToken">
+      <xs:annotation>
+        <xs:documentation>Space between the edge of the box and its content, written like CSS: one value for all sides, two for top-bottom and left-right, three for top, left-right and bottom, four for top, right, bottom and left.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="height"     type="HeightValue">
+      <xs:annotation>
+        <xs:documentation>Height of the box. Leave it out to size to the content. A length fixes it; fill takes what is left after its siblings (shared equally if several use fill); full takes all the height available. Any of these stops the box splitting across pages.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
     <xs:attribute name="background" type="Color"/>
     <xs:attribute name="border"     type="BorderValue"/>
     <xs:attribute name="radius"     type="TokenScaleOrPt"/>
@@ -275,8 +283,16 @@
   <xs:attributeGroup name="FrameBoxAttrs">
     <xs:attribute name="font"       type="xs:string"/>
     <xs:attribute name="font-size"  type="TokenScaleOrPt"/>
-    <xs:attribute name="padding"    type="SpacingOrToken"/>
-    <xs:attribute name="height"     type="HeightValue"/>
+    <xs:attribute name="padding"    type="SpacingOrToken">
+      <xs:annotation>
+        <xs:documentation>Space between the edge of the box and its content, written like CSS: one value for all sides, two for top-bottom and left-right, three for top, left-right and bottom, four for top, right, bottom and left.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="height"     type="HeightValue">
+      <xs:annotation>
+        <xs:documentation>Height of the box. Leave it out to size to the content. A length fixes it; fill takes what is left after its siblings (shared equally if several use fill); full takes all the height available. Any of these stops the box splitting across pages.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
     <xs:attribute name="background" type="Color"/>
     <xs:attribute name="border"     type="BorderValue"/>
     <xs:attribute name="radius"     type="TokenScaleOrPt"/>
@@ -384,6 +400,9 @@
 
       <!-- text — absolutely positioned; <span> children for mixed runs -->
       <xs:element name="text">
+        <xs:annotation>
+          <xs:documentation>Text at an exact position on the page: either x and y, or an anchor with optional offsets.</xs:documentation>
+        </xs:annotation>
         <xs:complexType mixed="true">
           <xs:choice minOccurs="0" maxOccurs="unbounded">
             <xs:element ref="span"/>
@@ -435,11 +454,17 @@
        Coordinates are top-left origin, y-down, relative to the full page.
        Page targeting is via <layer page="…">; bare primitives are not permitted. -->
   <xs:element name="canvas">
+    <xs:annotation>
+      <xs:documentation>Draws at exact positions on the page, independent of the flowing layout: watermarks, stamps, page furniture. Coordinates start at the top left corner of the whole page, not the margin, and y grows downward. Shapes must sit inside a layer.</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <!-- layer: graphics state scope (page, opacity, transform, clip).
              All primitives must be inside a <layer>. Cannot nest. -->
         <xs:element name="layer" minOccurs="0" maxOccurs="unbounded">
+          <xs:annotation>
+            <xs:documentation>Groups canvas shapes and sets what applies to all of them: which pages they appear on, opacity, transform and clip. Layers cannot be nested.</xs:documentation>
+          </xs:annotation>
           <xs:complexType>
             <xs:sequence>
               <xs:group ref="CanvasPrimitives" minOccurs="0" maxOccurs="unbounded"/>
@@ -562,6 +587,9 @@
   </xs:element>
 
   <xs:element name="layout">
+    <xs:annotation>
+      <xs:documentation>The flowing content of a section. Elements stack down the page, and a new page starts when one runs out of room. Put headers and footers in a region, which sits outside the flow.</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:choice minOccurs="0" maxOccurs="unbounded">
         <xs:group ref="LayoutContent"/>
@@ -571,12 +599,23 @@
              Only valid as a direct child of <layout>, not inside containers.
              At most one region per pin per physical page (parser-enforced). -->
         <xs:element name="region">
+          <xs:annotation>
+            <xs:documentation>Pins content to the top or bottom edge of pages, outside the normal flow, for headers and footers. It reserves that space on every page it appears on. Only allowed directly inside layout, and one per pin on a page.</xs:documentation>
+          </xs:annotation>
           <xs:complexType>
             <xs:sequence>
               <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
             </xs:sequence>
-            <xs:attribute name="pin"   type="RegionPin" use="required"/>
-            <xs:attribute name="page"  type="PageScope"/>
+            <xs:attribute name="pin"   type="RegionPin" use="required">
+              <xs:annotation>
+                <xs:documentation>Which edge the region sticks to. top and bottom work. left and right pass validation but are not implemented yet.</xs:documentation>
+              </xs:annotation>
+            </xs:attribute>
+            <xs:attribute name="page"  type="PageScope">
+              <xs:annotation>
+                <xs:documentation>Which pages show the region: each, first, last, odd, even, or a range such as 2-last. Defaults to each.</xs:documentation>
+              </xs:annotation>
+            </xs:attribute>
             <!-- w required for pin="left|right"; ignored for pin="top|bottom" (parser-enforced) -->
             <xs:attribute name="w"     type="PtValue"/>
             <xs:attribute name="debug" type="xs:boolean"/>
@@ -591,6 +630,9 @@
        directly (no <section> children), treated as an implicit single section.
        Mixing direct <layout>/<canvas> with explicit <section> children is a parse error. -->
   <xs:element name="document">
+    <xs:annotation>
+      <xs:documentation>The whole document, and the page settings every section starts from: size, orientation, margin and font. For a single section, layout and canvas can go directly inside; otherwise use sections.</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:element ref="meta" minOccurs="0"/>
@@ -628,6 +670,9 @@
        title becomes a PDF outline entry (bookmark).
        Four valid content combinations; document order = paint order. -->
   <xs:element name="section">
+    <xs:annotation>
+      <xs:documentation>A run of pages with its own settings, which override the document's. Each section paginates on its own, and its title becomes a PDF bookmark.</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:choice minOccurs="0">
         <!-- layout only, or layout + canvas overlay (layout painted first) -->
@@ -668,6 +713,9 @@
   ============================================================ -->
 
   <xs:element name="stack">
+    <xs:annotation>
+      <xs:documentation>Places children top to bottom, each at the full width, with gap between them. Can split across pages between children.</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
@@ -680,30 +728,47 @@
   </xs:element>
 
   <xs:element name="flank">
+    <xs:annotation>
+      <xs:documentation>One row where the children keep their own width except one, which fills the rest. By default the last child fills; set end to true and the first fills. Never splits across pages.</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
       </xs:sequence>
       <xs:attributeGroup ref="BoxAttrs"/>
       <xs:attribute name="align" type="Align"/>
-      <xs:attribute name="end"   type="xs:boolean"/>
+      <xs:attribute name="end"   type="xs:boolean">
+        <xs:annotation>
+          <xs:documentation>false (the default): every child but the last keeps its own width at the left, and the last fills the rest. true: the first child fills, and the others keep their own width at the right.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attribute name="width" type="TokenScaleOrPt"/>
     </xs:complexType>
   </xs:element>
 
   <xs:element name="split">
+    <xs:annotation>
+      <xs:documentation>Two children side by side; any further children are ignored. By default each keeps its own width, the first at the left edge and the second at the right. With equal set to true they take half the width each. Never splits across pages.</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
       </xs:sequence>
       <xs:attributeGroup ref="BoxAttrs"/>
       <xs:attribute name="align" type="Align"/>
-      <xs:attribute name="equal" type="xs:boolean"/>
+      <xs:attribute name="equal" type="xs:boolean">
+        <xs:annotation>
+          <xs:documentation>false (the default): each child keeps its own width, the first at the left edge and the second at the right edge. true: the two children share the width in equal halves.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attribute name="width" type="TokenScaleOrPt"/>
     </xs:complexType>
   </xs:element>
 
   <xs:element name="cluster">
+    <xs:annotation>
+      <xs:documentation>A row that wraps: children sit side by side, and continue on the next line when they run out of width. Splits across pages between lines.</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
@@ -716,6 +781,9 @@
   </xs:element>
 
   <xs:element name="grid">
+    <xs:annotation>
+      <xs:documentation>Fills a fixed number of equal columns from left to right, then starts a new row. A row never splits across pages. For data with a header row, use table.</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
@@ -735,6 +803,9 @@
   </xs:element>
 
   <xs:element name="frame">
+    <xs:annotation>
+      <xs:documentation>A box around a single child, which it centres. Never splits across pages: if it does not fit, the whole box moves to the next page.</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="1"/>
@@ -835,6 +906,9 @@
   </xs:element>
 
   <xs:element name="text">
+    <xs:annotation>
+      <xs:documentation>A block of wrapping text. Use span children to style parts of it. Splits across pages between lines.</xs:documentation>
+    </xs:annotation>
     <xs:complexType mixed="true">
       <xs:choice minOccurs="0" maxOccurs="unbounded">
         <xs:element ref="span"/>
@@ -897,6 +971,9 @@
 
   <!-- <table>: tabular layout with explicit column widths -->
   <xs:element name="table">
+    <xs:annotation>
+      <xs:documentation>Rows and cells in columns whose widths are set by cols. The thead row repeats at the top of every page, and rows move between pages whole.</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:element ref="thead" minOccurs="0" maxOccurs="1"/>
@@ -904,7 +981,11 @@
       </xs:sequence>
       <!-- cols: space-separated column widths — fr, pt, % units.
            Example: "2fr 1fr 120pt 20%" -->
-      <xs:attribute name="cols"       type="xs:string" use="required"/>
+      <xs:attribute name="cols"       type="xs:string" use="required">
+        <xs:annotation>
+          <xs:documentation>Column widths, separated by spaces, in fr, pt or % units: for example 2fr 1fr 120pt 20%.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attribute name="border"     type="BorderValue"/>
       <xs:attribute name="stripe"     type="Color"/>
       <xs:attribute name="gap"        type="TokenScaleOrPt"/>
