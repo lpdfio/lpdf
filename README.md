@@ -10,9 +10,18 @@ You describe a document as code or XML. Lpdf renders a compact, pixel-perfect PD
 
 Lpdf runs on Node.js, browser, .NET, PHP, and Python. Under the hood, a single Rust core compiles to two targets: **WASM** (embedded in the JS SDK) and **WASI** (a portable binary for server runtimes via [Wasmtime](https://wasmtime.dev)).
 
-### Node.js
+### Version Requirements
 
-[github.com/lpdfio/lpdf-js](https://github.com/lpdfio/lpdf-js)  -  [npmjs.com/package/@lpdfio/lpdf](https://www.npmjs.com/package/@lpdfio/lpdf)  -  [lpdf.io/docs/js](https://lpdf.io/docs/js)
+| Language | Minimum | Rationale |
+|----------|---------|-----------|
+| Node.js  | 20      | LTS release; EOL 2026-04-30 |
+| .NET     | 8.0     | LTS release; EOL 2026-11-10 |
+| PHP      | 8.3     | Current stable; EOL 2025-11-25 |
+| Python   | 3.10    | Stable with extended support; EOL 2026-10-05 |
+
+### Node.js (20.0+)
+
+[github.com/lpdfio/lpdf-js](https://github.com/lpdfio/lpdf-js)  -  [npmjs.com/package/@lpdfio/lpdf](https://www.npmjs.com/package/@lpdfio/lpdf)  -  [lpdf.io/docs/js](https://lpdf.io/docs/js?utm_source=readme&utm_medium=referral&utm_campaign=sdk-node)
 
 ```bash
 npm install @lpdfio/lpdf
@@ -45,9 +54,9 @@ const doc = L.document({ size: 'letter', margin: '48pt' }, [
 const pdf = await engine.render(doc)
 ```
 
-### .NET
+### .NET (8.0+)
 
-[github.com/lpdfio/lpdf-dotnet](https://github.com/lpdfio/lpdf-dotnet)  -  [nuget.org/packages/Lpdfio.Lpdf](https://www.nuget.org/packages/Lpdfio.Lpdf)  -  [lpdf.io/docs/dotnet](https://lpdf.io/docs/dotnet)
+[github.com/lpdfio/lpdf-dotnet](https://github.com/lpdfio/lpdf-dotnet)  -  [nuget.org/packages/Lpdfio.Lpdf](https://www.nuget.org/packages/Lpdfio.Lpdf)  -  [lpdf.io/docs/dotnet](https://lpdf.io/docs/dotnet?utm_source=readme&utm_medium=referral&utm_campaign=sdk-dotnet)
 
 ```bash
 dotnet add package Lpdfio.Lpdf
@@ -80,9 +89,9 @@ var doc = L.Document(new() { Size = "letter", Margin = "48pt" }, [
 var pdf = await engine.Render(doc);
 ```
 
-### PHP
+### PHP (8.3+)
 
-[github.com/lpdfio/lpdf-php](https://github.com/lpdfio/lpdf-php)  -  [packagist.org/packages/lpdfio/lpdf](https://packagist.org/packages/lpdfio/lpdf)  -  [lpdf.io/docs/php](https://lpdf.io/docs/php)
+[github.com/lpdfio/lpdf-php](https://github.com/lpdfio/lpdf-php)  -  [packagist.org/packages/lpdfio/lpdf](https://packagist.org/packages/lpdfio/lpdf)  -  [lpdf.io/docs/php](https://lpdf.io/docs/php?utm_source=readme&utm_medium=referral&utm_campaign=sdk-php)
 
 ```bash
 composer require lpdfio/lpdf
@@ -116,9 +125,9 @@ $doc = L::document(new DocumentAttr(size: 'letter', margin: '48pt'), [
 $pdf = $engine->render($doc);
 ```
 
-### Python
+### Python (3.10+)
 
-[github.com/lpdfio/lpdf-python](https://github.com/lpdfio/lpdf-python)  -  [pypi.org/project/lpdfio-lpdf](https://pypi.org/project/lpdfio-lpdf/)  -  [lpdf.io/docs/python](https://lpdf.io/docs/python)
+[github.com/lpdfio/lpdf-python](https://github.com/lpdfio/lpdf-python)  -  [pypi.org/project/lpdfio-lpdf](https://pypi.org/project/lpdfio-lpdf/)  -  [lpdf.io/docs/python](https://lpdf.io/docs/python?utm_source=readme&utm_medium=referral&utm_campaign=sdk-python)
 
 ```bash
 pip install lpdfio-lpdf
@@ -157,18 +166,9 @@ pdf = engine.render(doc)
 
 Preview, design, and export PDFs directly in VS Code — entirely offline. Supports live XML preview and PDF export via the command palette.
 
-## Versioning
-
-All Lpdf packages share one version scheme: the first two numbers are the engine, and the last number counts changes to that package only.
-
-- An engine release, such as `0.22.0`, ships all four SDKs and the VS Code extension at `0.22.0`.
-- A change to one package alone ships as that package's next number, such as PHP `0.22.1` and `0.22.2`, while the others stay at `0.22.0`.
-
-So every Lpdf package at `0.22.x` runs engine `0.22`. To stay on one engine and still get a package's own fixes, pin with `~0.22.0`, or your package manager's equivalent.
-
 ## Docs
 
-[lpdf.io/docs](https://lpdf.io/docs)
+[lpdf.io/docs](https://lpdf.io/docs?utm_source=readme&utm_medium=referral&utm_campaign=core)
 
 ## Issues
 
