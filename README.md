@@ -27,8 +27,8 @@ Lpdf runs on Node.js, browser, .NET, PHP, and Python. Under the hood, a single R
 npm install @lpdfio/lpdf
 ```
 
-```ts
-import { L, NoAttr } from 'lpdf'
+```js
+const { L, NoAttr } = require('@lpdfio/lpdf')
 
 const engine = L.engine()
 
@@ -51,7 +51,7 @@ const doc = L.document({ size: 'letter', margin: '48pt' }, [
     ]),
 ])
 
-const pdf = await engine.render(doc)
+engine.render(doc).then((pdf) => require('node:fs').writeFileSync('proposal.pdf', pdf))
 ```
 
 ### .NET (8.0+)
@@ -64,6 +64,7 @@ dotnet add package Lpdfio.Lpdf
 
 ```csharp
 using Lpdf;
+using static Lpdf.L;
 
 var engine = L.Engine();
 
@@ -99,6 +100,11 @@ composer require lpdfio/lpdf
 
 ```php
 use Lpdf\L;
+use Lpdf\Kit\DocumentAttr;
+use Lpdf\Layout\DividerAttr;
+use Lpdf\Layout\FlankAttr;
+use Lpdf\Layout\StackAttr;
+use Lpdf\Layout\TextAttr;
 use const Lpdf\NoAttr;
 
 $engine = L::engine();
@@ -134,7 +140,7 @@ pip install lpdfio-lpdf
 ```
 
 ```python
-from lpdf import L, NoAttr
+from lpdf import L, NoAttr, DocumentAttr, StackAttr, TextAttr, DividerAttr, FlankAttr
 
 engine = L.engine()
 
