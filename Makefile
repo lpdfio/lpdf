@@ -21,7 +21,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
         clone-adapters sync-license check-license \
-        build-portal-ui build-pages-demo build-pages dev-pages meta-pages \
+        build-portal-ui build-pages-demo build-pages build-pages-docs check-pages-docs stamp-pages-docs dev-pages meta-pages \
         rc-next rc-check
 
 build-wasm:
@@ -410,9 +410,35 @@ meta-pages:
 	@echo ""
 	node "$(PAGES_DIR)/update-meta.mjs"
 
+# ── Pages docs stamp ──────────────────────────────────────────────────────────
+# Records which core the docs describe (the last release, how far this checkout is past it, the commit)
+# in docs-site/engine.json. The docs header shows it beside the revision of the pages build. Commit the
+# file with the assets it describes. build-pages and dev-pages run this, since they are what copy the
+# engine into the pages tree.
+stamp-pages-docs:
+	@test -d "$(PAGES_DIR)/docs-site" || (echo "ERROR: docs-site not found at $(PAGES_DIR)/docs-site" && exit 1)
+	node scripts/stamp-docs.mjs "$(PAGES_DIR)/docs-site/engine.json"
+
+# ── Pages docs site ───────────────────────────────────────────────────────────
+# The Starlight docs in $(PAGES_DIR)/docs-site. The pages deploy workflow builds them itself; this is for
+# looking at them locally, where lpdf.local/docs serves docs-site/dist. The code tabs and the example
+# check read the demo WASM that build-pages copies into the pages tree, so after an engine change run
+# build-pages first.
+build-pages-docs:
+	@test -d "$(PAGES_DIR)/docs-site" || (echo "ERROR: docs-site not found at $(PAGES_DIR)/docs-site" && exit 1)
+	cd "$(PAGES_DIR)/docs-site" && (test -d node_modules || npm ci) && npm run build
+
+# Renders every XML example in the docs with the engine copy in the pages tree, and fails if the engine
+# rejects one. It needs no npm install.
+check-pages-docs:
+	@test -d "$(PAGES_DIR)/docs-site" || (echo "ERROR: docs-site not found at $(PAGES_DIR)/docs-site" && exit 1)
+	cd "$(PAGES_DIR)/docs-site" && npm run check
+
 # ── Pages asset sync ──────────────────────────────────────────────────────────
 # Copies the browser WASM build and the demo bundle+assets into the pages asset tree.
 # The portal bundles are already in place: build-portal-ui writes them there.
+# It ends by stamping the docs with this core and rendering their examples with the refreshed engine,
+# so an engine change that breaks one fails here, and the docs get fixed in the same change.
 build-pages: build-portal-ui build-pages-demo
 	@echo ""
 	@echo "-------------------------------"
@@ -432,6 +458,12 @@ build-pages: build-portal-ui build-pages-demo
 	cp schema/lpdf.xsd "$(PAGES_DIR)/www/schema/1/lpdf.xsd" && \
 	cp schema/lpdf.xsd "$(PAGES_DIR)/www/schema/lpdf.xsd" && \
 	echo ">>> $(PAGES_DIR)/www/schema updated (versioned at /1/, latest at the root)."
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Stamping the docs with this core, and checking their examples against it..."
+	@echo ""
+	@$(MAKE) --no-print-directory stamp-pages-docs
+	@$(MAKE) --no-print-directory check-pages-docs
 
 # Local-dev variant: a plain portal build bakes .env.local values in, so its
 # bundles are copied over the committed ones.  Use this to test pages locally.
@@ -462,3 +494,9 @@ dev-pages:
 	cp schema/lpdf.xsd "$(PAGES_DIR)/www/schema/1/lpdf.xsd" && \
 	cp schema/lpdf.xsd "$(PAGES_DIR)/www/schema/lpdf.xsd" && \
 	echo ">>> $(PAGES_DIR)/www/schema updated (versioned at /1/, latest at the root)."
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Stamping and building the docs site (local dev)..."
+	@echo ""
+	@$(MAKE) --no-print-directory stamp-pages-docs
+	@$(MAKE) --no-print-directory build-pages-docs
