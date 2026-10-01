@@ -526,6 +526,9 @@ pub fn bench_render_xml_with_image(
 mod snapshot_tests;
 
 #[cfg(test)]
+mod attribute_effects;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
