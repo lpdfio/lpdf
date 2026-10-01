@@ -35,10 +35,10 @@
     <xs:union memberTypes="TokenScale PtValue"/>
   </xs:simpleType>
 
-  <!-- e.g. "10pt" | "10pt 12pt" | "10pt 12pt 8pt" | "10pt 12pt 8pt 6pt" -->
+  <!-- e.g. "10pt" | "10pt 12pt" | "10pt 12pt 8pt" | "10pt 12pt 8pt 6pt". A bare 0 needs no unit. -->
   <xs:simpleType name="SpacingValue">
     <xs:restriction base="xs:string">
-      <xs:pattern value="\d+(\.\d+)?pt( \d+(\.\d+)?pt){0,3}"/>
+      <xs:pattern value="(0|\d+(\.\d+)?pt)( (0|\d+(\.\d+)?pt)){0,3}"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -92,7 +92,7 @@
   <!-- e.g. "s #ccc", "m primary", or "1.5pt #ccc" -->
   <xs:simpleType name="BorderValue">
     <xs:restriction base="xs:string">
-      <xs:pattern value="(\d+(\.\d+)?pt|xs|s|m|l|xl|2xl) .+"/>
+      <xs:pattern value="(\d+(\.\d+)?pt|xs|s|m|l|xl|xxl) .+"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -626,35 +626,16 @@
   </xs:element>
 
   <!-- document: holds default page settings; contains one or more sections.
-       Single-section shorthand: if <document> contains <layout> or <canvas>
-       directly (no <section> children), treated as an implicit single section.
-       Mixing direct <layout>/<canvas> with explicit <section> children is a parse error. -->
+       layout and canvas go inside a section, never directly in document: the engine
+       stops with "unexpected element in <document>". -->
   <xs:element name="document">
     <xs:annotation>
-      <xs:documentation>The whole document, and the page settings every section starts from: size, orientation, margin and font. For a single section, layout and canvas can go directly inside; otherwise use sections.</xs:documentation>
+      <xs:documentation>The whole document, and the page settings every section starts from: size, orientation, margin and font. It holds an optional meta element and at least one section.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:element ref="meta" minOccurs="0"/>
-        <xs:choice>
-          <!-- Explicit multi-section form -->
-          <xs:sequence>
-            <xs:element ref="section" maxOccurs="unbounded"/>
-          </xs:sequence>
-          <!-- Single-section shorthand: layout and/or canvas directly in document -->
-          <xs:sequence>
-            <xs:choice minOccurs="0">
-              <xs:sequence>
-                <xs:element ref="layout"/>
-                <xs:element ref="canvas" minOccurs="0"/>
-              </xs:sequence>
-              <xs:sequence>
-                <xs:element ref="canvas"/>
-                <xs:element ref="layout" minOccurs="0"/>
-              </xs:sequence>
-            </xs:choice>
-          </xs:sequence>
-        </xs:choice>
+        <xs:element ref="section" maxOccurs="unbounded"/>
       </xs:sequence>
       <xs:attribute name="font"        type="xs:string"/>
       <xs:attribute name="size"        type="PageSize"/>
@@ -667,11 +648,11 @@
 
   <!-- section: a content boundary with its own auto-pagination.
        Attributes override document-level defaults for this section only.
-       title becomes a PDF outline entry (bookmark).
+       title is read but not yet written to the PDF: there is no outline.
        Four valid content combinations; document order = paint order. -->
   <xs:element name="section">
     <xs:annotation>
-      <xs:documentation>A run of pages with its own settings, which override the document's. Each section paginates on its own, and its title becomes a PDF bookmark.</xs:documentation>
+      <xs:documentation>A run of pages with its own settings, which override the document's. Each section paginates on its own. Its title is accepted but not yet used: the PDF has no bookmarks.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:choice minOccurs="0">
