@@ -179,6 +179,9 @@ pub struct TextRun {
     pub href:         Option<String>,
     pub underline:    bool,
     pub strike:       bool,
+    /// Set on a `<span bold>` while parsing. `resolve_node` folds it into `font` and the field is `false`
+    /// from then on.
+    pub bold:         bool,
 }
 
 /// Data-binding attributes.  Boxed on `Node` so that the common case (no
@@ -386,6 +389,7 @@ struct ParsedNode {
     color: Option<String>,
     thickness: f32,
     text_runs: Vec<TextRun>,
+    bold: bool,                 // `<text bold>`, folded into `font` by `resolve_node`
     font:      Option<String>,  // None = inherit
     font_size: Option<f32>,     // None = inherit
     text_color: Option<String>,
@@ -441,6 +445,7 @@ impl ParsedNode {
             color: None,
             thickness: 1.0,
             text_runs: Vec::new(),
+            bold: false,
             font: None,
             font_size: None,
             text_color: None,
@@ -517,24 +522,44 @@ impl Node {
     }
 }
 
+/// The bold face of a built-in font. A font with no bold face, a custom font or one that is already
+/// bold, comes back unchanged.
+fn bold_variant(font: &str) -> String {
+    match font {
+        "Helvetica"         => "Helvetica-Bold",
+        "Helvetica-Oblique" => "Helvetica-BoldOblique",
+        "Times-Roman"       => "Times-Bold",
+        "Times-Italic"      => "Times-BoldItalic",
+        "Courier"           => "Courier-Bold",
+        "Courier-Oblique"   => "Courier-BoldOblique",
+        other               => other,
+    }
+    .to_string()
+}
+
 fn resolve_node(
     n:            ParsedNode,
     current_font: &str,
     current_size: f32,
     fonts:        &HashMap<String, FontDef>,
 ) -> Node {
-    let font_raw  = n.font.as_deref().unwrap_or(current_font);
-    let font      = resolve_font_alias(font_raw, fonts);
-    let font_size = n.font_size.unwrap_or(current_size);
+    let font_raw   = n.font.as_deref().unwrap_or(current_font);
+    let inherited  = resolve_font_alias(font_raw, fonts);
+    let font       = if n.bold { bold_variant(&inherited) } else { inherited.clone() };
+    let font_size  = n.font_size.unwrap_or(current_size);
+    let node_bold  = n.bold;
 
-    // Resolve span-level font aliases.
+    // Resolve span-level font aliases and fold bold into the font. A span with no font of its own keeps
+    // inheriting the text's font, which is already bold when the text is.
     let text_runs = n.text_runs.into_iter().map(|run| {
-        if let Some(ref alias) = run.font {
-            let resolved = resolve_font_alias(alias, fonts);
-            TextRun { font: Some(resolved), ..run }
-        } else {
-            run
-        }
+        let own = run.font.as_deref().map(|alias| resolve_font_alias(alias, fonts));
+        let font = match (own, run.bold) {
+            (Some(f), true)  => Some(bold_variant(&f)),
+            (Some(f), false) => Some(if node_bold { bold_variant(&f) } else { f }),
+            (None, true)     => Some(bold_variant(&inherited)),
+            (None, false)    => None,
+        };
+        TextRun { font, bold: false, ..run }
     }).collect();
 
     let children = n.children
@@ -732,6 +757,87 @@ fn validate_asset_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// The definition of a `<font>` asset. `core` names a built-in font; otherwise the font is a registry
+/// key, `ref` or, with no `ref`, the asset's own name. `location` says where the asset was written.
+fn font_asset_def(
+    core:     Option<&str>,
+    ref_key:  Option<&str>,
+    name:     &str,
+    location: &str,
+) -> Result<FontDef, String> {
+    if let Some(core) = core {
+        return Ok(FontDef::Core(core.to_string()));
+    }
+    match ref_key {
+        Some(key) if is_url(key) => Err(format!(
+            "<font>{location}: ref must be a registry key, not a URL"
+        )),
+        Some(key) => Ok(FontDef::Ref(key.to_string())),
+        None => Ok(FontDef::Ref(name.to_string())),
+    }
+}
+
+/// The objects in `assets.<kind>` of a kit tree. They carry the attributes of the `<font>` and `<image>`
+/// elements, so an asset is declared the same way in XML and in a tree.
+fn tree_asset_entries<'a>(
+    assets: &'a serde_json::Map<String, serde_json::Value>,
+    kind:   &str,
+) -> Result<Vec<&'a serde_json::Map<String, serde_json::Value>>, String> {
+    match assets.get(kind) {
+        None => Ok(Vec::new()),
+        Some(serde_json::Value::Array(items)) => items
+            .iter()
+            .map(|item| {
+                item.as_object()
+                    .ok_or_else(|| format!("assets.{kind}: every entry must be an object"))
+            })
+            .collect(),
+        Some(_) => Err(format!("assets.{kind} must be a list")),
+    }
+}
+
+/// Read the `assets` of a kit tree into the same maps the XML parser fills from `<assets>`. A font
+/// may also carry `widths`, glyph advance widths for layout, which XML has no attribute for.
+fn parse_tree_assets(
+    assets: &serde_json::Map<String, serde_json::Value>,
+    fonts:  &mut HashMap<String, FontDef>,
+    images: &mut HashMap<String, String>,
+    widths: &mut HashMap<String, FontWidths>,
+) -> Result<(), String> {
+    for font in tree_asset_entries(assets, "fonts")? {
+        let name = tree_asset_name(font, "fonts")?;
+        let text = |key: &str| font.get(key).and_then(|v| v.as_str());
+        let def = font_asset_def(text("core"), text("ref"), &name, &format!(" '{name}'"))?;
+        if let Some(w) = font.get("widths").and_then(|v| v.as_object()) {
+            let default = w.get("default").and_then(|v| v.as_u64()).unwrap_or(500) as u16;
+            let ascii: Vec<u16> = w.get("ascii")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().map(|n| n.as_u64().unwrap_or(500) as u16).collect())
+                .unwrap_or_default();
+            widths.insert(name.clone(), FontWidths { default, ascii });
+        }
+        fonts.insert(name, def);
+    }
+    for image in tree_asset_entries(assets, "images")? {
+        let name = tree_asset_name(image, "images")?;
+        let key = image.get("ref").and_then(|v| v.as_str()).unwrap_or(&name).to_string();
+        images.insert(name, key);
+    }
+    Ok(())
+}
+
+fn tree_asset_name(
+    entry: &serde_json::Map<String, serde_json::Value>,
+    kind:  &str,
+) -> Result<String, String> {
+    let name = entry
+        .get("name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("assets.{kind}: every entry needs a 'name'"))?;
+    validate_asset_name(name)?;
+    Ok(name.to_string())
+}
+
 fn parse_assets_elem(
     elem:         &roxmltree::Node,
     fonts:        &mut HashMap<String, FontDef>,
@@ -742,20 +848,12 @@ fn parse_assets_elem(
             "font" => {
                 let name = req_attr(&child, "name")?;
                 validate_asset_name(&name)?;
-                let def = if let Some(b) = child.attribute("core") {
-                    FontDef::Core(b.to_string())
-                } else if let Some(r) = child.attribute("ref") {
-                    if is_url(r) {
-                        return Err(format!(
-                            "<font>{}: ref must be a registry key, not a URL",
-                            node_loc(&child)
-                        ));
-                    }
-                    FontDef::Ref(r.to_string())
-                } else {
-                    // No ref: use name as the registry key.
-                    FontDef::Ref(name.clone())
-                };
+                let def = font_asset_def(
+                    child.attribute("core"),
+                    child.attribute("ref"),
+                    &name,
+                    &node_loc(&child),
+                )?;
                 // src is an adapter-level hint only — ignored by the Rust parser.
                 fonts.insert(name, def);
             }
@@ -1119,6 +1217,7 @@ fn parse_node(
                 "justify" => TextAlign::Justify,
                 _         => TextAlign::Left,
             };
+            node.bold = elem.attribute("bold").map(|v| v == "true").unwrap_or(false);
             // Mixed content: text nodes → plain runs; <span> elements → styled runs.
             let mut prev_ended_space = false;
             for child in elem.children() {
@@ -1131,7 +1230,7 @@ fn parse_node(
                             text: words.join(" "),
                             leading_space: leading,
                             font: None, color: None, href: None,
-                            underline: false, strike: false,
+                            underline: false, strike: false, bold: false,
                         });
                     }
                     prev_ended_space = raw.ends_with(char::is_whitespace);
@@ -1155,6 +1254,7 @@ fn parse_node(
                             href:      child.attribute("href").map(|s| s.to_string()),
                             underline: child.attribute("underline").map(|v| v == "true").unwrap_or(false),
                             strike:    child.attribute("strike").map(|v| v == "true").unwrap_or(false),
+                            bold:      child.attribute("bold").map(|v| v == "true").unwrap_or(false),
                         });
                     }
                     prev_ended_space = raw_span.ends_with(char::is_whitespace);
@@ -1626,35 +1726,7 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     let mut asset_images:      HashMap<String, String>     = HashMap::new();
     let mut asset_font_widths: HashMap<String, FontWidths> = HashMap::new();
     if let Some(assets) = attrs.get("assets").and_then(|v| v.as_object()) {
-        if let Some(fonts_obj) = assets.get("fonts").and_then(|v| v.as_object()) {
-            for (name, def) in fonts_obj {
-                let font_def = if let Some(b) = def.get("core").and_then(|v| v.as_str()) {
-                    FontDef::Core(b.to_string())
-                } else if let Some(r) = def.get("ref").and_then(|v| v.as_str()) {
-                    FontDef::Ref(r.to_string())
-                } else {
-                    return Err(format!("asset font '{name}' needs 'core' or 'ref'"));
-                };
-                // Optional caller-supplied glyph widths for accurate layout.
-                if let Some(w) = def.get("widths").and_then(|v| v.as_object()) {
-                    let default = w.get("default").and_then(|v| v.as_u64()).unwrap_or(500) as u16;
-                    let ascii: Vec<u16> = w.get("ascii")
-                        .and_then(|v| v.as_array())
-                        .map(|arr| arr.iter().map(|n| n.as_u64().unwrap_or(500) as u16).collect())
-                        .unwrap_or_default();
-                    asset_font_widths.insert(name.clone(), FontWidths { default, ascii });
-                }
-                asset_fonts.insert(name.clone(), font_def);
-            }
-        }
-        if let Some(images_obj) = assets.get("images").and_then(|v| v.as_object()) {
-            for (name, def) in images_obj {
-                let key = def.get("ref").and_then(|v| v.as_str())
-                    .unwrap_or(name)
-                    .to_string();
-                asset_images.insert(name.clone(), key);
-            }
-        }
+        parse_tree_assets(assets, &mut asset_fonts, &mut asset_images, &mut asset_font_widths)?;
     }
 
     // ── Tokens ────────────────────────────────────────────────────────────────
@@ -1807,7 +1879,7 @@ fn parse_tree_section(
                     let mut lc: Vec<LayoutChild> = Vec::new();
                     if let Some(nodes) = child.get("nodes").and_then(|v| v.as_array()) {
                         for n in nodes {
-                            if n.get("type").and_then(|v| v.as_str()) == Some("layout-region") {
+                            if n.get("type").and_then(|v| v.as_str()) == Some("region") {
                                 lc.push(LayoutChild::Region(parse_tree_region(n, tokens, asset_images, asset_fonts)?));
                             } else {
                                 lc.push(LayoutChild::Content(
@@ -1860,13 +1932,13 @@ fn parse_tree_region(
     asset_fonts:  &HashMap<String, FontDef>,
 ) -> Result<LayoutRegion, String> {
     let pin_str = jattr(json, "pin")
-        .ok_or("layout-region missing 'pin' attribute")?;
+        .ok_or("region missing 'pin' attribute")?;
     let pin = match pin_str {
         "top"    => RegionPin::Top,
         "bottom" => RegionPin::Bottom,
         "left"   => RegionPin::Left,
         "right"  => RegionPin::Right,
-        other => return Err(format!("layout-region invalid pin '{other}'")),
+        other => return Err(format!("region invalid pin '{other}'")),
     };
     let page  = jattr(json, "page").map(parse_page_scope).transpose()?;
     let w     = jattr(json, "w").map(parse_measurement).transpose()?;
@@ -1923,12 +1995,13 @@ fn parse_tree_node(
                 Some(v) => tokens.resolve_color(v)?,
                 None    => tokens.resolve_color("text").unwrap_or_else(|_| "#1a1a1a".into()),
             });
-            node.text_align = match jattr(json, "text-align").or_else(|| jattr(json, "align")).unwrap_or("left") {
+            node.text_align = match jattr(json, "align").unwrap_or("left") {
                 "center"  => TextAlign::Center,
                 "right"   => TextAlign::Right,
                 "justify" => TextAlign::Justify,
                 _         => TextAlign::Left,
             };
+            node.bold = jattr(json, "bold").map(|v| v == "true").unwrap_or(false);
 
             if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
                 for (i, child) in arr.iter().enumerate() {
@@ -1940,7 +2013,7 @@ fn parse_tree_node(
                                 text: words.join(" "),
                                 leading_space: leading,
                                 font: None, color: None, href: None,
-                                underline: false, strike: false,
+                                underline: false, strike: false, bold: false,
                             });
                         }
                     } else if child.get("type").and_then(|v| v.as_str()) == Some("span") {
@@ -1961,17 +2034,15 @@ fn parse_tree_node(
                                 Some(v) => Some(tokens.resolve_color(v)?),
                                 None    => None,
                             };
-                            let href = jattr(child, "url")
-                                .or_else(|| jattr(child, "href"))
-                                .map(str::to_string);
                             node.text_runs.push(TextRun {
                                 text: span_text,
                                 leading_space: leading,
                                 font:      jattr(child, "font").map(str::to_string),
                                 color,
-                                href,
+                                href:      jattr(child, "href").map(str::to_string),
                                 underline: jattr(child, "underline").map(|v| v == "true").unwrap_or(false),
                                 strike:    jattr(child, "strike")   .map(|v| v == "true").unwrap_or(false),
+                                bold:      jattr(child, "bold")     .map(|v| v == "true").unwrap_or(false),
                             });
                         }
                     }
@@ -1981,8 +2052,8 @@ fn parse_tree_node(
         }
         NodeKind::Link => {
             node.url = Some(
-                jattr(json, "url")
-                    .ok_or("<link> node requires a 'url' attribute")?
+                jattr(json, "href")
+                    .ok_or("<link> missing required attribute 'href'")?
                     .to_string(),
             );
         }

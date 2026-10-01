@@ -516,20 +516,54 @@
 
   <!-- Font asset: either a built-in PDF core font (core=) or a registry key (ref=) -->
   <xs:element name="font">
+    <xs:annotation>
+        <xs:documentation>Declares a font that text can be set in by name, with the font attribute. A built-in PDF font is named by core; any other font is a file the SDK reads from src, or one loaded on the engine under ref or, with no ref, under the font's own name.</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
-      <xs:attribute name="name" type="xs:string"  use="required"/>
-      <xs:attribute name="core" type="BuiltinFont"/>
-      <xs:attribute name="ref"  type="xs:string"/>
-      <xs:attribute name="src"  type="xs:anyURI"/>
+    <xs:attribute name="name" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>The name that the font attribute of a text uses to pick this font: lowercase letters, digits and -, starting with a letter.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="core" type="BuiltinFont">
+      <xs:annotation>
+        <xs:documentation>A built-in PDF font, which needs no file.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="ref" type="xs:string">
+      <xs:annotation>
+        <xs:documentation>The key the font was loaded under on the engine, when that is not its name.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="src" type="xs:anyURI">
+      <xs:annotation>
+        <xs:documentation>A path the SDK reads the font file from, when the font was not loaded on the engine.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
     </xs:complexType>
   </xs:element>
 
   <!-- Image asset declared in <assets> -->
   <xs:element name="image">
+    <xs:annotation>
+        <xs:documentation>Declares an image that an img refers to by name. The SDK reads the file from src, or the image was loaded on the engine under ref or, with no ref, under its own name.</xs:documentation>
+    </xs:annotation>
     <xs:complexType>
-      <xs:attribute name="name" type="xs:string" use="required"/>
-      <xs:attribute name="ref"  type="xs:string"/>
-      <xs:attribute name="src"  type="xs:anyURI"/>
+    <xs:attribute name="name" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>The name that the name attribute of an img uses to pick this image: lowercase letters, digits and -, starting with a letter.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="ref" type="xs:string">
+      <xs:annotation>
+        <xs:documentation>The key the image was loaded under on the engine, when that is not its name.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="src" type="xs:anyURI">
+      <xs:annotation>
+        <xs:documentation>A path the SDK reads the image file from, when the image was not loaded on the engine.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
     </xs:complexType>
   </xs:element>
 
@@ -803,6 +837,8 @@
       </xs:sequence>
       <xs:attribute name="href"   type="xs:anyURI" use="required"/>
       <xs:attribute name="gap"    type="SpacingOrToken"/>
+      <xs:attribute name="width"  type="TokenScaleOrPt"/>
+      <xs:attribute name="height" type="HeightValue"/>
       <xs:attribute name="debug"  type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
@@ -828,6 +864,7 @@
   <xs:element name="span">
     <xs:complexType mixed="true">
       <xs:attribute name="font"      type="xs:string"/>
+      <xs:attribute name="bold"      type="xs:boolean"/>
       <xs:attribute name="color"     type="Color"/>
       <xs:attribute name="href"      type="xs:anyURI"/>
       <xs:attribute name="underline" type="xs:boolean"/>
@@ -896,6 +933,11 @@
       </xs:choice>
       <xs:attribute name="font-size" type="TokenScaleOrPt"/>
       <xs:attribute name="font"      type="xs:string"/>
+      <xs:attribute name="bold" type="xs:boolean">
+        <xs:annotation>
+          <xs:documentation>Use the bold face of the font. It applies to the 14 built-in fonts: Helvetica becomes Helvetica-Bold, Times-Roman becomes Times-Bold, Courier becomes Courier-Bold, and the oblique and italic faces their bold forms. A custom font has no bold face to pick, so name one in font.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attribute name="color"     type="Color"/>
       <xs:attribute name="align"     type="TextAlignH"/>
       <xs:attribute name="width"     type="TokenScaleOrPt"/>
@@ -1008,6 +1050,8 @@
       <xs:attribute name="action-url" type="xs:anyURI"/>
       <xs:attribute name="width"      type="TokenScaleOrPt"/>
       <xs:attribute name="height"     type="PtValue"/>
+      <xs:attribute name="background" type="Color"/>
+      <xs:attribute name="border"     type="BorderValue"/>
       <xs:attribute name="debug"      type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>

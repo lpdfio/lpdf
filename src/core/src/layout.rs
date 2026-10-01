@@ -461,6 +461,7 @@ fn make_keep_next_warning() -> Node {
             href: None,
             underline: false,
             strike: false,
+            bold: false,
         }],
         font: "Helvetica".to_string(),
         font_size: 7.0,
@@ -1048,6 +1049,7 @@ fn atoms_to_runs(atoms: &[SplitAtom]) -> Vec<TextRun> {
                 href: atom.href.clone(),
                 underline: atom.underline,
                 strike: atom.strike,
+                bold: false,
             });
         } else {
             // Try to append to the last plain run.
@@ -1068,6 +1070,7 @@ fn atoms_to_runs(atoms: &[SplitAtom]) -> Vec<TextRun> {
                     href: None,
                     underline: false,
                     strike: false,
+                    bold: false,
                 });
             }
         }

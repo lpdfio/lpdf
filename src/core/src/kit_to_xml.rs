@@ -5,11 +5,9 @@
 /// implementation so the output stays in sync with the XML schema owned by
 /// `parse.rs`. A schema change only needs one Rust update.
 ///
-/// Key differences vs the legacy TypeScript `kitToXml`:
-/// - `tokens.fonts` with `builtin` → `<assets><font … core="…"/>` (flat, valid XML)
-/// - `tokens.fonts` with `src`     → `<assets><font … ref="<alias>" src="…"/>` (flat, valid XML)
-/// - The `<tokens>` block never contains a `<fonts>` child (which `parse.rs`
-///   would reject as an unknown element).
+/// A tree writes the attributes of every element under the names the schema gives them. The `assets`
+/// of the document are lists of objects that carry the attributes of the `<font>` and `<image>`
+/// elements, and become the `<assets>` block before `<tokens>`, the order the schema gives them.
 use serde_json::Value;
 
 // ── XML escaping ──────────────────────────────────────────────────────────────
@@ -89,87 +87,45 @@ fn render_tokens(tokens: &serde_json::Map<String, Value>, depth: usize) -> Strin
         }
     }
 
-    // NOTE: tokens.fonts are intentionally NOT emitted inside <tokens> because
-    // parse.rs rejects <fonts> as an unknown element there. They are emitted
-    // as flat <font> children of <assets> instead (see render_assets below).
-
     lines.push(format!("{pad}</tokens>"));
     lines.join("\n")
 }
 
-// ── Assets block (fonts and images derived from tokens) ──────────────────────
+// ── Assets block ──────────────────────────────────────────────────────────────
 
-fn render_assets(tokens: &serde_json::Map<String, Value>, depth: usize) -> Option<String> {
-    let fonts  = tokens.get("fonts") .and_then(|v| v.as_object());
-    let images = tokens.get("images").and_then(|v| v.as_object());
-    if fonts.map_or(true, |f| f.is_empty()) && images.map_or(true, |i| i.is_empty()) {
-        return None;
-    }
+/// The attributes of the `<font>` and `<image>` elements, in the order the schema lists them.
+const FONT_ATTRS:  [&str; 4] = ["name", "core", "ref", "src"];
+const IMAGE_ATTRS: [&str; 3] = ["name", "ref", "src"];
 
+fn render_asset(tag: &str, attrs: &[&str], entry: &Value, pad: &str) -> Option<String> {
+    let entry = entry.as_object()?;
+    let written: String = attrs
+        .iter()
+        .filter_map(|key| {
+            let value = entry.get(*key)?.as_str()?;
+            Some(format!(" {key}=\"{}\"", escape_attr(value)))
+        })
+        .collect();
+    Some(format!("{pad}<{tag}{written}/>"))
+}
+
+fn render_assets(assets: &serde_json::Map<String, Value>, depth: usize) -> Option<String> {
     let pad      = "  ".repeat(depth);
     let item_pad = "  ".repeat(depth + 1);
-    let mut lines: Vec<String> = vec![format!("{pad}<assets>")];
+    let mut items: Vec<String> = Vec::new();
 
-    if let Some(fonts) = fonts {
-        for (name, def) in fonts {
-            if let Some(obj) = def.as_object() {
-                if let Some(builtin) = obj.get("builtin").and_then(|v| v.as_str()) {
-                    // builtin PDF core font → core= attribute
-                    lines.push(format!(
-                        "{item_pad}<font name=\"{}\" core=\"{}\"/>",
-                        escape_attr(name),
-                        escape_attr(builtin)
-                    ));
-                } else if let Some(src) = obj.get("src").and_then(|v| v.as_str()) {
-                    // custom font with src — preserve src= and emit ref= (alias == name)
-                    let ref_key = obj.get("ref").and_then(|v| v.as_str()).unwrap_or(name);
-                    lines.push(format!(
-                        "{item_pad}<font name=\"{}\" ref=\"{}\" src=\"{}\"/>",
-                        escape_attr(name),
-                        escape_attr(ref_key),
-                        escape_attr(src)
-                    ));
-                } else if let Some(ref_key) = obj.get("ref").and_then(|v| v.as_str()) {
-                    lines.push(format!(
-                        "{item_pad}<font name=\"{}\" ref=\"{}\"/>",
-                        escape_attr(name),
-                        escape_attr(ref_key)
-                    ));
-                }
-            }
-        }
+    for (kind, tag, attrs) in [("fonts", "font", &FONT_ATTRS[..]), ("images", "image", &IMAGE_ATTRS[..])] {
+        let entries = assets.get(kind).and_then(|v| v.as_array()).into_iter().flatten();
+        items.extend(entries.filter_map(|entry| render_asset(tag, attrs, entry, &item_pad)));
     }
 
-    if let Some(images) = images {
-        for (name, def) in images {
-            let ref_key = def.get("ref").and_then(|v| v.as_str()).unwrap_or(name);
-            if let Some(src) = def.get("src").and_then(|v| v.as_str()) {
-                if ref_key == name {
-                    lines.push(format!(
-                        "{item_pad}<image name=\"{}\" src=\"{}\"/>",
-                        escape_attr(name),
-                        escape_attr(src)
-                    ));
-                } else {
-                    lines.push(format!(
-                        "{item_pad}<image name=\"{}\" ref=\"{}\" src=\"{}\"/>",
-                        escape_attr(name),
-                        escape_attr(ref_key),
-                        escape_attr(src)
-                    ));
-                }
-            } else {
-                lines.push(format!(
-                    "{item_pad}<image name=\"{}\" ref=\"{}\"/>",
-                    escape_attr(name),
-                    escape_attr(ref_key)
-                ));
-            }
-        }
+    if items.is_empty() {
+        return None;
     }
-
-    lines.push(format!("{pad}</assets>"));
-    Some(lines.join("\n"))
+    Some(format!("{pad}<assets>
+{}
+{pad}</assets>", items.join("
+")))
 }
 
 // ── Meta element ──────────────────────────────────────────────────────────────
@@ -273,38 +229,10 @@ fn render_canvas_primitive(node: &Value, depth: usize) -> String {
     let empty     = serde_json::Map::new();
     let attrs     = node.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
 
-    // Strip the "canvas-" prefix to get the XML tag name
-    let tag = node_type.strip_prefix("canvas-").unwrap_or(node_type);
-
-    match tag {
-        "text" => {
-            let attrs_s = attrs_str(attrs, &[]);
-            let content = node.get("text").and_then(|v| v.as_str()).unwrap_or("");
-            if let Some(runs) = node.get("runs").and_then(|v| v.as_array()) {
-                let inner_pad = "  ".repeat(depth + 1);
-                let runs_str: String = runs.iter().map(|r| {
-                    let text      = r.get("text").and_then(|v| v.as_str()).unwrap_or("");
-                    let run_attrs = r.get("attrs");
-                    let font      = run_attrs.and_then(|a| a.get("font"))     .and_then(|v| v.as_str());
-                    let font_size = run_attrs.and_then(|a| a.get("font-size")).and_then(|v| v.as_str());
-                    let color     = run_attrs.and_then(|a| a.get("color"))    .and_then(|v| v.as_str());
-                    let mut span_attrs = String::new();
-                    if let Some(f)  = font      { span_attrs.push_str(&format!(" font=\"{}\"", escape_attr(f))); }
-                    if let Some(fs) = font_size { span_attrs.push_str(&format!(" font-size=\"{}\"", escape_attr(fs))); }
-                    if let Some(c)  = color     { span_attrs.push_str(&format!(" color=\"{}\"", escape_attr(c))); }
-                    format!("{inner_pad}<span{span_attrs}>{}</span>", escape_text(text))
-                }).collect::<Vec<_>>().join("\n");
-                format!("{pad}<text{attrs_s}>\n{runs_str}\n{pad}</text>")
-            } else if content.is_empty() {
-                format!("{pad}<text{attrs_s}/>")
-            } else {
-                format!("{pad}<text{attrs_s}>{}</text>", escape_text(content))
-            }
-        }
-        _ => {
-            let attrs_s = attrs_str(attrs, &[]);
-            format!("{pad}<{tag}{attrs_s}/>")
-        }
+    match node_type {
+        // Canvas text has the same content as layout text: strings, and span children for styled runs.
+        "text" => render_text_node(node, depth),
+        tag => format!("{pad}<{tag}{}/>", attrs_str(attrs, &[])),
     }
 }
 
@@ -378,10 +306,10 @@ fn render_section(section: &Value, depth: usize) -> String {
     }
 }
 
-// Helper: render a layout node that may be a layout-region or a regular node
+// Helper: render a layout node that may be a region or a regular node
 fn render_layout_node(node: &Value, depth: usize) -> String {
     let node_type = node.get("type").and_then(|v| v.as_str()).unwrap_or("stack");
-    if node_type == "layout-region" {
+    if node_type == "region" {
         let pad     = "  ".repeat(depth);
         let _inner  = "  ".repeat(depth + 1);
         let empty   = serde_json::Map::new();
@@ -421,15 +349,23 @@ pub fn kit_to_xml(json: &str) -> Result<String, String> {
     let empty = serde_json::Map::new();
     let attrs = root.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
 
-    // Document-level attrs (skip tokens, meta — handled separately below)
-    let doc_attrs_s = attrs_str(attrs, &["tokens", "meta"]);
+    // Document-level attrs (skip assets, tokens, meta — written as elements below)
+    let doc_attrs_s = attrs_str(attrs, &["assets", "tokens", "meta"]);
 
     let mut lines: Vec<String> = vec![
         r#"<?xml version="1.0" encoding="UTF-8"?>"#.into(),
         r#"<lpdf version="1">"#.into(),
     ];
 
-    // <tokens> (scales + colors only; fonts move to <assets>)
+    // <assets>, then <tokens>, as the schema orders them
+    if let Some(assets_xml) = attrs
+        .get("assets")
+        .and_then(|v| v.as_object())
+        .and_then(|assets| render_assets(assets, 1))
+    {
+        lines.push(assets_xml);
+    }
+
     if let Some(tokens) = attrs.get("tokens").and_then(|v| v.as_object()) {
         let has_scales = TOKEN_SCALES.iter().any(|s| {
             tokens.get(*s).and_then(|v| v.as_object()).map_or(false, |m| !m.is_empty())
@@ -441,11 +377,6 @@ pub fn kit_to_xml(json: &str) -> Result<String, String> {
 
         if has_scales || has_colors {
             lines.push(render_tokens(tokens, 1));
-        }
-
-        // <assets> (fonts from tokens.fonts)
-        if let Some(assets_xml) = render_assets(tokens, 1) {
-            lines.push(assets_xml);
         }
     }
 
@@ -566,74 +497,48 @@ mod tests {
         assert!(xml.contains(r#"name="primary""#) && xml.contains(r##"value="#1763cf""##));
     }
 
-    // ── Fonts in <assets>, NOT in <tokens> ───────────────────────────────────
+    // ── Assets ────────────────────────────────────────────────────────────────
 
     #[test]
-    fn builtin_font_placed_in_assets_not_tokens() {
+    fn fonts_and_images_are_written_under_the_schema_attribute_names() {
         let json = r#"{
             "version": 1,
             "type": "document",
             "attrs": {
-                "tokens": {
-                    "fonts": { "heading": { "builtin": "Helvetica-Bold" } }
+                "assets": {
+                    "fonts": [
+                        { "name": "heading", "core": "Helvetica-Bold" },
+                        { "name": "body", "ref": "body-font", "src": "/fonts/Body.ttf" }
+                    ],
+                    "images": [{ "name": "logo", "src": "logo.png" }]
                 }
             },
             "nodes": [{"type":"section","attrs":{},"nodes":[]}]
         }"#;
         let xml = kit_to_xml(json).unwrap();
-
-        // Must appear in <assets><fonts>
-        assert!(xml.contains("<assets>"), "missing <assets>");
-        assert!(xml.contains(r#"core="Helvetica-Bold""#), "missing core= attribute");
-        assert!(xml.contains(r#"name="heading""#), "missing name= attribute");
-
-        // Must NOT appear inside <tokens>
-        if let (Some(tok_start), Some(tok_end)) = (xml.find("<tokens>"), xml.find("</tokens>")) {
-            let fonts_in_tokens = xml[tok_start..tok_end].contains("<fonts>");
-            assert!(!fonts_in_tokens, "<fonts> must not appear inside <tokens>");
-        }
+        assert!(xml.contains(r#"<font name="heading" core="Helvetica-Bold"/>"#), "{xml}");
+        assert!(xml.contains(r#"<font name="body" ref="body-font" src="/fonts/Body.ttf"/>"#), "{xml}");
+        assert!(xml.contains(r#"<image name="logo" src="logo.png"/>"#), "{xml}");
     }
 
     #[test]
-    fn custom_font_src_uses_ref_alias_not_filepath() {
-        let json = r#"{
+    fn assets_come_before_tokens_and_are_not_document_attributes() {
+        let json = r##"{
             "version": 1,
             "type": "document",
             "attrs": {
-                "tokens": {
-                    "fonts": { "body": { "src": "/fonts/MyFont.ttf" } }
-                }
+                "size": "a4",
+                "assets": { "images": [{ "name": "logo" }] },
+                "tokens": { "colors": { "primary": "#1763cf" } }
             },
             "nodes": [{"type":"section","attrs":{},"nodes":[]}]
-        }"#;
+        }"##;
         let xml = kit_to_xml(json).unwrap();
-
-        // ref= must be the alias name ("body"), not the file path
-        assert!(xml.contains(r#"ref="body""#), "expected ref=\"body\"");
-        // ref= must NOT be the file path
-        assert!(!xml.contains(r#"ref="/fonts/MyFont.ttf""#), "ref must not be the file path");
-        // src= should be preserved so adapters can auto-load the font bytes
-        assert!(xml.contains("src="), "expected src= to be preserved");
-    }
-
-    #[test]
-    fn both_builtin_and_src_fonts_in_assets() {
-        let json = r#"{
-            "version": 1,
-            "type": "document",
-            "attrs": {
-                "tokens": {
-                    "fonts": {
-                        "heading": { "builtin": "Helvetica-Bold" },
-                        "body":    { "src": "/fonts/Body.ttf" }
-                    }
-                }
-            },
-            "nodes": [{"type":"section","attrs":{},"nodes":[]}]
-        }"#;
-        let xml = kit_to_xml(json).unwrap();
-        assert!(xml.contains(r#"core="Helvetica-Bold""#));
-        assert!(xml.contains(r#"ref="body""#));
+        let assets = xml.find("<assets>").expect("assets");
+        let tokens = xml.find("<tokens>").expect("tokens");
+        let document = xml.find("<document").expect("document");
+        assert!(assets < tokens && tokens < document, "{xml}");
+        assert!(xml.contains(r#"<document size="a4">"#), "{xml}");
     }
 
     // ── Meta ──────────────────────────────────────────────────────────────────
@@ -708,6 +613,277 @@ mod tests {
         let xml = kit_to_xml(json).unwrap();
         assert!(xml.contains("<text>Hello world</text>") || xml.contains("<text "));
         assert!(xml.contains("Hello world"));
+    }
+
+    // The render pipeline as the engine runs it, unlicensed. Built on the modules both crates share.
+    fn render_document(mut doc: crate::parse::Document) -> Vec<u8> {
+        let layouts = doc.section_layouts();
+        let pages: Vec<crate::render::RenderPage> = layouts.iter().flat_map(crate::layout::layout_page).collect();
+        crate::pdf::render_pdf(
+            &pages, &doc.fonts,
+            &crate::pdf::FontRegistry::new(), &crate::pdf::ImageRegistry::new(),
+            &doc.meta, None, false,
+        )
+        .unwrap()
+    }
+
+    fn render_xml(xml: &str) -> Vec<u8> {
+        render_document(crate::parse::parse(xml).unwrap())
+    }
+
+    fn render_tree(json: &str) -> Vec<u8> {
+        render_document(crate::parse::parse_tree(json).unwrap())
+    }
+
+    /// One layout child, as JSON, in a minimal document.
+    fn doc_with_layout_child(child: &str) -> String {
+        format!(
+            r#"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
+                {{"type":"layout","nodes":[{child}]}}]}}]}}"#
+        )
+    }
+
+    /// One text node, with the given attrs, in a minimal document.
+    fn doc_with_text_attrs(attrs: &str) -> String {
+        doc_with_layout_child(&format!(r#"{{"type":"text","attrs":{attrs},"nodes":["Hello"]}}"#))
+    }
+
+    /// One canvas primitive, as JSON, in a minimal document.
+    fn doc_with_canvas_child(child: &str) -> String {
+        format!(
+            r#"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
+                {{"type":"canvas","nodes":[{{"type":"layer","attrs":{{}},"nodes":[{child}]}}]}}]}}]}}"#
+        )
+    }
+
+    /// The PDF the builder's tree renders to, and the PDF its XML renders to.
+    fn rendered_both_ways(kit: &str) -> (Vec<u8>, Vec<u8>) {
+        let from_tree = render_tree(kit);
+        let from_xml = render_xml(&kit_to_xml(kit).unwrap());
+        (from_tree, from_xml)
+    }
+
+    /// A minimal document that declares `assets` and holds one text in the font `heading`.
+    fn doc_with_assets_and_text(assets: &str) -> String {
+        format!(
+            r#"{{"version":1,"type":"document","attrs":{{"assets":{assets}}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
+                {{"type":"layout","nodes":[{{"type":"text","attrs":{{"font":"heading"}},"nodes":["Hello"]}}]}}]}}]}}"#
+        )
+    }
+
+    #[test]
+    fn a_tree_declares_fonts_and_images_like_the_assets_element() {
+        let json = doc_with_assets_and_text(
+            r#"{"fonts":[{"name":"heading","core":"Times-Bold"},{"name":"body","src":"/fonts/Body.ttf"}],
+                "images":[{"name":"logo","ref":"company-logo"}]}"#,
+        );
+        let doc = crate::parse::parse_tree(&json).unwrap();
+        // The document's fonts are keyed by what the font resolves to, not by the name it was given.
+        assert!(matches!(doc.fonts.get("Times-Bold"), Some(crate::tokens::FontDef::Core(f)) if f == "Times-Bold"));
+        assert!(matches!(doc.fonts.get("body"), Some(crate::tokens::FontDef::Ref(r)) if r == "body"));
+        assert_eq!(doc.images.get("logo").map(String::as_str), Some("company-logo"));
+    }
+
+    #[test]
+    fn a_font_declared_in_a_tree_is_the_font_the_text_is_set_in() {
+        let kit = doc_with_assets_and_text(r#"{"fonts":[{"name":"heading","core":"Times-Bold"}]}"#);
+        let (from_tree, from_xml) = rendered_both_ways(&kit);
+        assert_eq!(from_tree, from_xml);
+        assert!(from_tree.windows(10).any(|w| w == b"Times-Bold"), "the text is not set in Times-Bold");
+    }
+
+    #[test]
+    fn a_tree_asset_without_a_name_is_rejected() {
+        let json = doc_with_assets_and_text(r#"{"images":[{"src":"logo.png"}]}"#);
+        let err = crate::parse::parse_tree(&json).err().expect("an asset needs a name");
+        assert!(err.contains("assets.images") && err.contains("name"), "{err}");
+    }
+
+    #[test]
+    fn tree_assets_that_are_not_a_list_are_rejected() {
+        let json = doc_with_assets_and_text(r#"{"fonts":{"heading":{"core":"Times-Bold"}}}"#);
+        let err = crate::parse::parse_tree(&json).err().expect("assets are lists");
+        assert!(err.contains("assets.fonts must be a list"), "{err}");
+    }
+
+    #[test]
+    fn a_tree_font_that_is_a_url_is_rejected() {
+        let json = doc_with_assets_and_text(r#"{"fonts":[{"name":"heading","ref":"https://example.com/f.ttf"}]}"#);
+        let err = crate::parse::parse_tree(&json).err().expect("a URL is not a registry key");
+        assert!(err.contains("registry key"), "{err}");
+    }
+
+    #[test]
+    fn attribute_names_are_written_as_they_are() {
+        let xml = kit_to_xml(&doc_with_text_attrs(r#"{"align":"right","bold":"true"}"#)).unwrap();
+        assert!(xml.contains(r#"<text align="right" bold="true">"#), "{xml}");
+    }
+
+    #[test]
+    fn text_from_the_builder_renders_the_same_from_the_tree_and_from_the_xml() {
+        let kit = doc_with_text_attrs(r#"{"align":"right","bold":"true"}"#);
+        let (from_tree, from_xml) = rendered_both_ways(&kit);
+        assert_eq!(from_tree, from_xml);
+    }
+
+    #[test]
+    fn right_aligned_text_differs_from_left_aligned() {
+        let right = render_xml(&kit_to_xml(&doc_with_text_attrs(r#"{"align":"right"}"#)).unwrap());
+        let plain = render_xml(&kit_to_xml(&doc_with_text_attrs("{}")).unwrap());
+        assert_ne!(right, plain);
+    }
+
+    #[test]
+    fn text_align_is_not_an_alias_for_align() {
+        let aliased = render_tree(&doc_with_text_attrs(r#"{"text-align":"right"}"#));
+        let plain = render_tree(&doc_with_text_attrs("{}"));
+        assert_eq!(aliased, plain);
+    }
+
+    #[test]
+    fn bold_text_differs_from_regular_text() {
+        let bold = render_xml(&kit_to_xml(&doc_with_text_attrs(r#"{"bold":"true"}"#)).unwrap());
+        let plain = render_xml(&kit_to_xml(&doc_with_text_attrs("{}")).unwrap());
+        assert_ne!(bold, plain);
+    }
+
+    #[test]
+    fn bold_text_is_the_same_as_naming_the_bold_font() {
+        let bold = render_xml(&kit_to_xml(&doc_with_text_attrs(r#"{"bold":"true"}"#)).unwrap());
+        let named = render_xml(&kit_to_xml(&doc_with_text_attrs(r#"{"font":"Helvetica-Bold"}"#)).unwrap());
+        assert_eq!(bold, named);
+    }
+
+    #[test]
+    fn bold_span_is_written_and_renders() {
+        let json = doc_with_layout_child(
+            r#"{"type":"text","attrs":{},"nodes":["a ",{"type":"span","attrs":{"bold":"true"},"nodes":["b"]}]}"#,
+        );
+        assert!(kit_to_xml(&json).unwrap().contains(r#"<span bold="true">b</span>"#));
+        let (from_tree, from_xml) = rendered_both_ways(&json);
+        assert_eq!(from_tree, from_xml);
+    }
+
+    #[test]
+    fn link_is_written_with_href() {
+        let json = doc_with_layout_child(
+            r#"{"type":"link","attrs":{"href":"https://lpdf.io"},"nodes":[{"type":"text","attrs":{},"nodes":["x"]}]}"#,
+        );
+        assert!(kit_to_xml(&json).unwrap().contains(r#"<link href="https://lpdf.io">"#));
+        let (from_tree, from_xml) = rendered_both_ways(&json);
+        assert_eq!(from_tree, from_xml);
+    }
+
+    #[test]
+    fn link_url_is_not_an_alias_for_href() {
+        let json = doc_with_layout_child(
+            r#"{"type":"link","attrs":{"url":"https://lpdf.io"},"nodes":[{"type":"text","attrs":{},"nodes":["x"]}]}"#,
+        );
+        let err = crate::parse::parse_tree(&json).err().expect("a link with url and no href is rejected");
+        assert!(err.contains("href"), "{err}");
+    }
+
+    #[test]
+    fn region_is_written_as_region() {
+        let json = doc_with_layout_child(
+            r#"{"type":"region","attrs":{"pin":"top"},"nodes":[{"type":"text","attrs":{},"nodes":["Header"]}]}"#,
+        );
+        let xml = kit_to_xml(&json).unwrap();
+        assert!(xml.contains(r#"<region pin="top">"#), "{xml}");
+        let (from_tree, from_xml) = rendered_both_ways(&json);
+        assert_eq!(from_tree, from_xml);
+    }
+
+    #[test]
+    fn canvas_primitives_are_written_under_their_schema_names() {
+        let json = doc_with_canvas_child(
+            r##"{"type":"rect","attrs":{"x":"50pt","y":"50pt","w":"100pt","h":"60pt","fill":"#ff0000","radius":"8pt"}}"##,
+        );
+        let xml = kit_to_xml(&json).unwrap();
+        assert!(xml.contains("<rect "), "{xml}");
+        for attr in [r#"x="50pt""#, r#"y="50pt""#, r#"w="100pt""#, r#"h="60pt""#, r##"fill="#ff0000""##, r#"radius="8pt""#] {
+            assert!(xml.contains(attr), "{attr} missing from {xml}");
+        }
+        assert!(!xml.contains("canvas-rect"), "{xml}");
+        let (from_tree, from_xml) = rendered_both_ways(&json);
+        assert_eq!(from_tree, from_xml);
+    }
+
+    #[test]
+    fn canvas_text_is_written_with_its_content_and_span_children() {
+        let json = doc_with_canvas_child(
+            r##"{"type":"text","attrs":{"x":"50pt","y":"50pt"},"nodes":["Hello",{"type":"span","attrs":{"color":"#ff0000"},"nodes":["world"]}]}"##,
+        );
+        let xml = kit_to_xml(&json).unwrap();
+        assert!(xml.contains(r##"<span color="#ff0000">world</span>"##), "{xml}");
+        let (from_tree, from_xml) = rendered_both_ways(&json);
+        assert_eq!(from_tree, from_xml);
+    }
+
+    #[test]
+    fn circle_and_ellipse_are_positioned_by_cx_and_cy() {
+        for (shape, size) in [("circle", r#""r":"40pt""#), ("ellipse", r#""rx":"40pt","ry":"20pt""#)] {
+            let at = |cx: &str| {
+                doc_with_canvas_child(&format!(
+                    r##"{{"type":"{shape}","attrs":{{"cx":"{cx}","cy":"200pt",{size},"fill":"#ff0000"}}}}"##
+                ))
+            };
+            let (tree_left, xml_left) = rendered_both_ways(&at("100pt"));
+            let (tree_right, xml_right) = rendered_both_ways(&at("300pt"));
+            assert_eq!(tree_left, xml_left, "{shape}: the tree and the XML render differently");
+            assert_eq!(tree_right, xml_right, "{shape}: the tree and the XML render differently");
+            assert_ne!(tree_left, tree_right, "{shape} does not move with cx");
+        }
+    }
+
+    #[test]
+    fn circle_x_and_y_are_not_its_position() {
+        let at = |x: &str| {
+            doc_with_canvas_child(&format!(
+                r##"{{"type":"circle","attrs":{{"x":"{x}","y":"200pt","r":"40pt","fill":"#ff0000"}}}}"##
+            ))
+        };
+        let (left, _) = rendered_both_ways(&at("100pt"));
+        let (right, _) = rendered_both_ways(&at("300pt"));
+        assert_eq!(left, right, "x moved a circle, but a circle's position is cx and cy");
+    }
+
+    #[test]
+    fn an_anchored_rect_is_placed_the_same_from_the_tree_and_from_the_xml() {
+        for anchor in ["top-right", "center", "bottom-center", "bottom-left"] {
+            let kit = doc_with_canvas_child(&format!(
+                r##"{{"type":"rect","attrs":{{"anchor":"{anchor}","x":"-18pt","y":"18pt","w":"80pt","h":"24pt","fill":"#ff0000"}}}}"##
+            ));
+            let (from_tree, from_xml) = rendered_both_ways(&kit);
+            assert_eq!(from_tree, from_xml, "{anchor}: the tree and the XML place the rect differently");
+        }
+    }
+
+    #[test]
+    fn an_anchored_image_is_placed_the_same_from_the_tree_and_from_the_xml() {
+        for anchor in ["top-right", "center", "bottom-center", "bottom-left"] {
+            let kit = format!(
+                r#"{{"version":1,"type":"document","attrs":{{"assets":{{"images":[{{"name":"logo"}}]}}}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
+                    {{"type":"canvas","nodes":[{{"type":"layer","attrs":{{}},"nodes":[
+                        {{"type":"img","attrs":{{"name":"logo","anchor":"{anchor}","x":"-18pt","y":"18pt","w":"80pt","h":"24pt"}}}}]}}]}}]}}]}}"#
+            );
+            let from_tree = crate::parse::parse_tree(&kit).unwrap();
+            let from_xml = crate::parse::parse(&kit_to_xml(&kit).unwrap()).unwrap();
+            assert_eq!(
+                format!("{:?}", from_tree.sections),
+                format!("{:?}", from_xml.sections),
+                "{anchor}: the tree and the XML place the image differently"
+            );
+        }
+    }
+
+    #[test]
+    fn canvas_image_is_read_by_name() {
+        let json = doc_with_canvas_child(
+            r#"{"type":"img","attrs":{"name":"logo","x":"10pt","y":"10pt","w":"50pt","h":"50pt"}}"#,
+        );
+        let err = crate::parse::parse_tree(&json).err().expect("an undeclared asset is rejected");
+        assert!(err.contains("logo"), "{err}");
     }
 
     #[test]
@@ -828,9 +1004,9 @@ mod tests {
                 "margin": "28pt",
                 "tokens": {
                     "space": { "xs": "2pt", "s": "4pt", "m": "8pt", "l": "16pt", "xl": "24pt", "xxl": "40pt" },
-                    "colors": { "primary": "#1763cf" },
-                    "fonts": { "heading": { "builtin": "Helvetica-Bold" } }
+                    "colors": { "primary": "#1763cf" }
                 },
+                "assets": { "fonts": [{ "name": "heading", "core": "Helvetica-Bold" }] },
                 "meta": { "title": "Roundtrip Test" }
             },
             "nodes": [{

@@ -204,6 +204,7 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, out: &mut Vec<N
                 href:      None,
                 underline: false,
                 strike:    false,
+                bold:      false,
             }]
         };
         if let Some(d) = &mut node.data_attrs {
@@ -290,6 +291,7 @@ mod tests {
             href: None,
             underline: false,
             strike: false,
+            bold: false,
         }];
         n
     }

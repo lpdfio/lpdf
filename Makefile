@@ -16,7 +16,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python \
-        benchmark benchmark-x gen-fixtures codegen \
+        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
@@ -178,7 +178,25 @@ test-sdk-python: build-sdk-python
 
 build-all: clean-all build-wasm build-wasi build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python build-vscode build-pages
 
-test-all: test-wasm test-wasi test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python
+# The attribute classes and constants of the four SDKs follow from schema/lpdf.xsd. gen-sdk-api writes them;
+# check-sdk-api fails if a generated file differs from what the schema gives, or if any SDK class, written by
+# hand or generated, has other attributes than the schema's element.
+gen-sdk-api:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Generating the SDK attribute classes and constants from the schema..."
+	@echo ""
+	node scripts/gen-sdk-api.mjs
+
+check-sdk-api:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking the SDKs against the schema..."
+	@echo ""
+	node scripts/gen-sdk-api.mjs --check
+	node scripts/check-sdk-parity.mjs
+
+test-all: check-sdk-api test-wasm test-wasi test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python
 
 example-all: example-node example-dotnet example-php example-python
 
