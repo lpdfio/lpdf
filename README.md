@@ -21,7 +21,7 @@ Lpdf runs on Node.js, browser, .NET, PHP, and Python. Under the hood, a single R
 
 ### Node.js (20.0+)
 
-[github.com/lpdfio/lpdf-js](https://github.com/lpdfio/lpdf-js)  -  [npmjs.com/package/@lpdfio/lpdf](https://www.npmjs.com/package/@lpdfio/lpdf)  -  [lpdf.io/docs](https://lpdf.io/docs/?sdk=js&p=install&utm_campaign=sdk-node&utm_medium=referral&utm_source=readme)
+[github.com/lpdfio/lpdf-js](https://github.com/lpdfio/lpdf-js)  -  [npmjs.com/package/@lpdfio/lpdf](https://www.npmjs.com/package/@lpdfio/lpdf)  -  [lpdf.io/docs](https://lpdf.io/docs/install/?sdk=js&utm_campaign=sdk-node&utm_medium=referral&utm_source=readme)
 
 ```bash
 npm install @lpdfio/lpdf
@@ -56,7 +56,7 @@ const pdf = await engine.render(doc)
 
 ### .NET (8.0+)
 
-[github.com/lpdfio/lpdf-dotnet](https://github.com/lpdfio/lpdf-dotnet)  -  [nuget.org/packages/Lpdfio.Lpdf](https://www.nuget.org/packages/Lpdfio.Lpdf)  -  [lpdf.io/docs](https://lpdf.io/docs/?sdk=dotnet&p=install&utm_campaign=sdk-dotnet&utm_medium=referral&utm_source=readme)
+[github.com/lpdfio/lpdf-dotnet](https://github.com/lpdfio/lpdf-dotnet)  -  [nuget.org/packages/Lpdfio.Lpdf](https://www.nuget.org/packages/Lpdfio.Lpdf)  -  [lpdf.io/docs](https://lpdf.io/docs/install/?sdk=dotnet&utm_campaign=sdk-dotnet&utm_medium=referral&utm_source=readme)
 
 ```bash
 dotnet add package Lpdfio.Lpdf
@@ -91,7 +91,7 @@ var pdf = await engine.Render(doc);
 
 ### PHP (8.3+)
 
-[github.com/lpdfio/lpdf-php](https://github.com/lpdfio/lpdf-php)  -  [packagist.org/packages/lpdfio/lpdf](https://packagist.org/packages/lpdfio/lpdf)  -  [lpdf.io/docs](https://lpdf.io/docs/?sdk=php&p=install&utm_campaign=sdk-php&utm_medium=referral&utm_source=readme)
+[github.com/lpdfio/lpdf-php](https://github.com/lpdfio/lpdf-php)  -  [packagist.org/packages/lpdfio/lpdf](https://packagist.org/packages/lpdfio/lpdf)  -  [lpdf.io/docs](https://lpdf.io/docs/install/?sdk=php&utm_campaign=sdk-php&utm_medium=referral&utm_source=readme)
 
 ```bash
 composer require lpdfio/lpdf
@@ -127,7 +127,7 @@ $pdf = $engine->render($doc);
 
 ### Python (3.10+)
 
-[github.com/lpdfio/lpdf-python](https://github.com/lpdfio/lpdf-python)  -  [pypi.org/project/lpdfio-lpdf](https://pypi.org/project/lpdfio-lpdf/)  -  [lpdf.io/docs](https://lpdf.io/docs/?sdk=python&p=install&utm_campaign=sdk-python&utm_medium=referral&utm_source=readme)
+[github.com/lpdfio/lpdf-python](https://github.com/lpdfio/lpdf-python)  -  [pypi.org/project/lpdfio-lpdf](https://pypi.org/project/lpdfio-lpdf/)  -  [lpdf.io/docs](https://lpdf.io/docs/install/?sdk=python&utm_campaign=sdk-python&utm_medium=referral&utm_source=readme)
 
 ```bash
 pip install lpdfio-lpdf
