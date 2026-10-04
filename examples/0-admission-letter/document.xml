@@ -1,0 +1,111 @@
+<lpdf version="1">
+  <assets>
+    <font name="bold" core="Helvetica-Bold" />
+  </assets>
+
+  <tokens>
+    <colors>
+      <color name="primary" value="#2f6b4f" />
+      <color name="surface" value="#ffffff" />
+    </colors>
+  </tokens>
+
+  <document size="letter" margin="64pt">
+    <meta title="Offer of admission" author="Linden Vale University" />
+    <section>
+
+      <!-- the logo: drawn on the canvas, behind the letter, at the top left corner of the text area.
+           Coordinates are in points from the top left of the page, so 64pt is the margin. It is a crest,
+           as a university has: a shield with an inner outline, and on it a star over an open book over
+           the initials. The shield is one path, the same height as the four lines of the letterhead -->
+      <canvas>
+        <layer>
+          <path fill="primary" d="M 64 64 L 120 64 L 120 96 C 120 114 104 126 92 132 C 80 126 64 114 64 96 Z" />
+          <path stroke="surface" stroke-width="1pt" d="M 69 69 L 115 69 L 115 96 C 115 111 102 121 92 126 C 82 121 69 111 69 96 Z" />
+          <path fill="surface" d="M 92.0 72.5 L 93.6 76.8 L 98.2 77.0 L 94.6 79.8 L 95.8 84.3 L 92.0 81.7 L 88.2 84.3 L 89.4 79.8 L 85.8 77.0 L 90.4 76.8 Z" />
+          <path fill="surface" d="M 91 106 C 85 102 76 101 72 102.5 L 72 88 C 76 86.5 85 87 91 91 Z" />
+          <path fill="surface" d="M 93 106 C 99 102 108 101 112 102.5 L 112 88 C 108 86.5 99 87 93 91 Z" />
+          <line x1="75pt" y1="92pt" x2="88pt" y2="94pt" stroke="primary" stroke-width="0.9pt" />
+          <line x1="75pt" y1="96pt" x2="88pt" y2="98pt" stroke="primary" stroke-width="0.9pt" />
+          <line x1="75pt" y1="100pt" x2="88pt" y2="102pt" stroke="primary" stroke-width="0.9pt" />
+          <line x1="109pt" y1="92pt" x2="96pt" y2="94pt" stroke="primary" stroke-width="0.9pt" />
+          <line x1="109pt" y1="96pt" x2="96pt" y2="98pt" stroke="primary" stroke-width="0.9pt" />
+          <line x1="109pt" y1="100pt" x2="96pt" y2="102pt" stroke="primary" stroke-width="0.9pt" />
+          <text x="64pt" y="110pt" w="56pt" font="bold" font-size="8pt" color="surface" align="center">LV</text>
+        </layer>
+      </canvas>
+
+      <layout>
+        <stack gap="l">
+
+          <!-- letterhead: the logo is at the left on the same row, and each line is aligned to the right edge -->
+          <stack gap="xs">
+            <text align="right" font-size="xl" bold="true">Linden Vale University</text>
+            <text align="right">Office of Admissions</text>
+            <text align="right">1 College Walk, Linden Vale, NY 12999</text>
+            <text align="right">admissions@lindenvale.example</text>
+          </stack>
+
+          <text>March 14, 2027</text>
+
+          <!-- recipient -->
+          <stack gap="xs">
+            <text>Ms. Amara Okafor</text>
+            <text>18 Cedar Road</text>
+            <text>Hartley, NY 12998</text>
+          </stack>
+
+          <stack gap="xs">
+            <text bold="true" font-size="l">Offer of admission: B.S. in Computer Science</text>
+            <text font-size="s">Application reference LV-2027-04817</text>
+          </stack>
+
+          <!-- body: the gap between paragraphs is the blank line -->
+          <stack gap="m">
+            <text>Dear Amara,</text>
+            <text>
+              Congratulations. On behalf of the admissions committee, it is my pleasure to offer you
+              a place in the four-year B.S. in Computer Science program at Linden Vale University.
+              Your application was one of the strongest we read this year.
+            </text>
+            <text>
+              We are also delighted to tell you that you have been awarded the Founders
+              Scholarship, which covers your full tuition for all four years.
+            </text>
+
+            <!-- the offer in four lines: a bold label, then the value -->
+            <stack gap="xs">
+              <text><span bold="true">Program: </span>B.S. in Computer Science (four years, full time)</text>
+              <text><span bold="true">Starts: </span>August 30, 2027</text>
+              <text><span bold="true">Tuition: </span>Covered in full by the Founders Scholarship</text>
+              <text><span bold="true">Reply by: </span>May 1, 2027</text>
+            </stack>
+
+            <text>
+              The offer is conditional on your final transcript: you must complete your senior
+              year with a B average or better, including Mathematics. The scholarship continues
+              each year that you remain in good academic standing.
+            </text>
+            <text>
+              To accept, sign in to the applicant portal at
+              <span href="https://apply.lindenvale.example" underline="true">apply.lindenvale.example</span>
+              and choose Accept offer. If you have questions, reply to this letter or write to
+              <span href="mailto:admissions@lindenvale.example" underline="true">admissions@lindenvale.example</span>.
+            </text>
+            <text>We hope to welcome you in August.</text>
+          </stack>
+
+          <!-- sign-off: a larger gap leaves room to sign -->
+          <stack gap="xl">
+            <text>Sincerely,</text>
+            <stack gap="xs">
+              <text bold="true">Dr. Helen Marsh</text>
+              <text>Director of Admissions</text>
+            </stack>
+          </stack>
+
+        </stack>
+      </layout>
+    </section>
+  </document>
+</lpdf>

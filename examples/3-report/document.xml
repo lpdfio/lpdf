@@ -1,0 +1,841 @@
+<lpdf version="1">
+  <!--
+    A report on where the world's data centers are, in two kinds: the cloud regions of Amazon,
+    Microsoft and Google, and the AI campuses built since 2024. The figures, the tables and the
+    sentences about them come from document.json, as in the invoice. What this adds:
+
+      pagination   nothing here says where a page ends. Content flows, a row or an image moves to
+                   the next page whole, and the table header repeats at the top of each page
+      images       declare them in <assets>, place them with <img>. Their size is yours to set
+      region       text pinned to the top or bottom of every page, outside the flow. The one
+                   written first is the header, the one written last is the footer
+      page scope   page="each", "first" or "2-last" says which pages a region or a canvas layer
+                   is on. {page} and {pages} become the page number and the page count, counted
+                   within a section: a report that numbers its pages is one section
+      sections     each section sets its own page. The last one here is tabloid, landscape, and
+                   holds only a canvas: a world map drawn as paths, with a marker for each site
+      paginate     paginate="no" on a box keeps it whole: a heading stack moves to the next page
+                   with its paragraph instead of stranding the heading. It is set on each section
+                   of text here, and the tables are left to split, their header repeating
+
+    The prose is written for this data. Change the data and the sentences stay as they are, but
+    check where the pages break when the content changes. The map is generated from the same
+    data: its land outlines are Natural Earth and its markers sit at town or metro level, so do
+    not edit it by hand.
+  -->
+  <assets>
+    <font  name="bold" core="Helvetica-Bold" />
+    <image name="cloud-regions-by-area" src="assets/cloud-regions-by-area.png" />
+    <image name="ai-campuses-by-power"  src="assets/ai-campuses-by-power.png" />
+  </assets>
+
+  <!-- blue is the cloud, orange is AI: one hue for each kind, here and on the map -->
+  <tokens>
+    <colors>
+      <color name="primary"    value="#1d4ed8" />
+      <color name="surface"    value="#ffffff" />
+      <color name="accent"     value="#eef3fd" />
+      <color name="ai"         value="#c2410c" />
+      <color name="ai-soft"    value="#fdf1ea" />
+      <color name="land"       value="#e2e8f2" />
+      <color name="text-muted" value="#667085" />
+      <color name="rule"       value="#dde3ed" />
+    </colors>
+  </tokens>
+
+  <document size="letter" margin="54pt">
+    <meta title="Data Centers Worldwide" subject="Cloud regions and AI campuses" author="Brightwork Studio" />
+    <section background="surface">
+
+      <!-- behind the layout. Each layer says which pages it is on: a tall band and two soft
+           circles on the first page, a thin band on every other page -->
+      <canvas>
+        <layer page="first">
+          <rect anchor="top-left" w="612pt" h="162pt" fill="primary" />
+        </layer>
+        <layer page="first" opacity="0.12">
+          <circle cx="540pt" cy="40pt" r="90pt" fill="surface" />
+          <circle cx="470pt" cy="150pt" r="46pt" fill="surface" />
+        </layer>
+        <layer page="2-last">
+          <rect anchor="top-left" w="612pt" h="8pt" fill="primary" />
+        </layer>
+      </canvas>
+
+      <layout>
+
+        <!-- the header: pages 2 to the last. It is first in the layout, so it is the header -->
+        <region pin="top" page="2-last">
+          <stack gap="xs">
+            <flank end="true" align="center">
+              <text font-size="s" bold="true" color="primary">Brightwork Studio</text>
+              <text font-size="s" color="text-muted" data-value="report.title">Data Centers Worldwide</text>
+            </flank>
+            <divider color="rule" thickness="xs" />
+          </stack>
+        </region>
+
+
+        <!-- the title, on the band. The stack is as tall as the band below the margin: 162pt less 54pt -->
+        <stack gap="xs" height="122pt">
+          <text font-size="s" bold="true" color="surface">BRIGHTWORK STUDIO</text>
+          <text font-size="xxl" bold="true" color="surface" data-value="report.title">Data Centers Worldwide</text>
+          <text color="surface" data-value="report.period">Cloud regions and AI campuses, October 2026</text>
+        </stack>
+
+        <stack gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
+          <text font-size="l" bold="true" color="primary">Summary</text>
+          <divider color="primary" thickness="xs" />
+          <text>
+            Two kinds of data center are growing at once, and they are built for different
+            reasons. Cloud regions are the established kind: Amazon, Microsoft and Google list
+            132 between them, in 76 metro areas across six areas of the world.
+            AI campuses are the new kind: single sites that draw hundreds of megawatts. Epoch AI
+            tracks 93, and the 72 that are already running draw 13.7 GW of IT
+            power, 86% of it in the United States.
+          </text>
+        </stack>
+
+        <grid cols="4" gap="m" padding="0pt 0pt 14pt 0pt">
+          <stack gap="xs">
+            <text font-size="xl" bold="true" color="primary" data-value="summary.regions">132</text>
+            <text font-size="s" color="text-muted">Cloud regions</text>
+          </stack>
+          <stack gap="xs">
+            <text font-size="xl" bold="true" color="primary" data-value="summary.zones">353</text>
+            <text font-size="s" color="text-muted">Availability zones</text>
+          </stack>
+          <stack gap="xs">
+            <text font-size="xl" bold="true" color="ai" data-value="summary.running">72</text>
+            <text font-size="s" color="text-muted">AI campuses running</text>
+          </stack>
+          <stack gap="xs">
+            <text font-size="xl" bold="true" color="ai" data-value="summary.power">13.7 GW</text>
+            <text font-size="s" color="text-muted">AI IT power today</text>
+          </stack>
+        </grid>
+
+        <!-- two images side by side: split equal gives each half the width -->
+        <split equal="true" gap="m" padding="0pt 0pt 14pt 0pt">
+          <img name="cloud-regions-by-area" width="246pt" height="176pt" />
+          <img name="ai-campuses-by-power"  width="246pt" height="176pt" />
+        </split>
+
+        <!-- the two kinds, side by side -->
+        <stack gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
+          <text font-size="l" bold="true" color="primary">Two kinds of data center</text>
+          <divider color="primary" thickness="xs" />
+          <split equal="true" gap="m" align="start">
+            <stack gap="s" padding="m" background="accent" radius="m">
+              <text bold="true" color="primary">Cloud region</text>
+              <text font-size="s">
+                A group of data centers in one metro area, split into zones that fail
+                independently.
+              </text>
+              <text font-size="s">
+                Rented by the hour. Customers pick a region for speed, or for the law: some data
+                must stay in its country.
+              </text>
+              <text font-size="s" color="text-muted">
+                Counted in regions and zones. The providers do not publish building counts.
+              </text>
+            </stack>
+            <stack gap="s" padding="m" background="ai-soft" radius="m">
+              <text bold="true" color="ai">AI campus</text>
+              <text font-size="s">
+                One site built around a single very large cluster of accelerator chips, to train
+                and run AI models.
+              </text>
+              <text font-size="s">
+                Placed where a lot of power can be had quickly, not where the customers are.
+              </text>
+              <text font-size="s" color="text-muted">
+                Counted in megawatts of IT power. The figures are Epoch AI's estimates, from
+                permits, satellite images and company statements.
+              </text>
+            </stack>
+          </split>
+        </stack>
+
+        <stack gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
+          <text font-size="l" bold="true" color="primary">Cloud regions</text>
+          <divider color="primary" thickness="xs" />
+          <text>
+            Counts are as listed in each provider's documentation in October 2026. The three
+            lists overlap on purpose: the same metro areas, such as Northern Virginia, London,
+            Tokyo and Singapore, appear in all three. 35 of the 76 metro areas
+            have regions from more than one provider.
+          </text>
+        </stack>
+
+        <table cols="3fr 2fr 2fr 8fr" stripe="accent" padding="0pt 0pt 14pt 0pt">
+          <thead background="primary">
+            <td padding="s"><text font-size="s" bold="true" color="surface">Provider</text></td>
+            <td padding="s"><text font-size="s" bold="true" color="surface" align="right">Regions</text></td>
+            <td padding="s"><text font-size="s" bold="true" color="surface" align="right">Zones</text></td>
+            <td padding="s"><text font-size="s" bold="true" color="surface">Note</text></td>
+          </thead>
+          <tr data-source="providers">
+            <td padding="s"><text font-size="s" bold="true" data-value="provider">AWS</text></td>
+            <td padding="s"><text font-size="s" align="right" data-value="regions">34</text></td>
+            <td padding="s"><text font-size="s" align="right" data-value="zones">108</text></td>
+            <td padding="s"><text font-size="s" color="text-muted" data-value="note">Note</text></td>
+          </tr>
+          <tr>
+            <td padding="s"><text font-size="s" bold="true" color="primary">Total</text></td>
+            <td padding="s"><text font-size="s" bold="true" color="primary" align="right" data-value="summary.regions">132</text></td>
+            <td padding="s"><text font-size="s" bold="true" color="primary" align="right" data-value="summary.zones">353</text></td>
+            <td padding="s"><text font-size="s" color="text-muted" data-value="summary.metros">76 metro areas</text></td>
+          </tr>
+        </table>
+
+        <stack gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
+          <text>
+            Azure lists the most regions, but 17 of its 57 have no
+            availability zones and 8 are open only by request, so it lists fewer
+            zones than Google, which has 41 regions and 124 zones. Asia Pacific
+            has the most regions of any area, 43, ahead of Europe with 38 and
+            North America with 31. Africa and South America have the fewest.
+          </text>
+        </stack>
+
+        <stack gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
+          <text font-size="l" bold="true" color="ai">AI campuses</text>
+          <divider color="ai" thickness="xs" />
+          <text>
+            The largest running campus is Colossus 2, at 946 MW of IT power, ahead of Amazon New Carlisle
+            and Fairwater Atlanta. Most of the growth is still to come. If the plans hold, the 81
+            campuses on the map reach about 32 GW by 2029, more than twice what runs
+            today. Outside the United States, Johor in Malaysia is the biggest hub, with two
+            campuses and 895 MW, ahead of China with 731 MW. Planned power is Epoch
+            AI's estimate of the full build-out.
+          </text>
+          <text font-size="s" bold="true">Largest running campuses</text>
+        </stack>
+
+        <table cols="8fr 6fr 10fr 5fr 5fr" stripe="ai-soft" padding="0pt 0pt 14pt 0pt">
+          <thead background="ai">
+            <td padding="s"><text font-size="s" bold="true" color="surface">Campus</text></td>
+            <td padding="s"><text font-size="s" bold="true" color="surface">Owner</text></td>
+            <td padding="s"><text font-size="s" bold="true" color="surface">Location</text></td>
+            <td padding="s"><text font-size="s" bold="true" color="surface" align="right">Today, MW</text></td>
+            <td padding="s"><text font-size="s" bold="true" color="surface" align="right">Planned, MW</text></td>
+          </thead>
+          <tr data-source="running">
+            <td padding="s"><text font-size="s" bold="true" data-value="name">Colossus 2</text></td>
+            <td padding="s"><text font-size="s" data-value="owner">SpaceXAI</text></td>
+            <td padding="s"><text font-size="s" color="text-muted" data-value="where">Memphis, TN</text></td>
+            <td padding="s"><text font-size="s" bold="true" align="right" data-value="now">946</text></td>
+            <td padding="s"><text font-size="s" align="right" data-value="planned">1,531</text></td>
+          </tr>
+        </table>
+
+        <stack gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
+          <text>
+            9 campuses show no running capacity yet. Most of them plan close to a
+            gigawatt or more by 2028: Meta's Hyperion in Louisiana, and the Stargate sites in
+            New Mexico, Texas, Michigan and Wisconsin and in Abu Dhabi.
+          </text>
+          <text font-size="s" bold="true">Under construction</text>
+        </stack>
+
+        <table cols="8fr 6fr 10fr 5fr 5fr" stripe="ai-soft" padding="0pt 0pt 14pt 0pt">
+          <thead background="ai">
+            <td padding="s"><text font-size="s" bold="true" color="surface">Campus</text></td>
+            <td padding="s"><text font-size="s" bold="true" color="surface">Owner</text></td>
+            <td padding="s"><text font-size="s" bold="true" color="surface">Location</text></td>
+            <td padding="s"><text font-size="s" bold="true" color="surface" align="right">Planned, MW</text></td>
+            <td padding="s"><text font-size="s" bold="true" color="surface" align="right">Expected</text></td>
+          </thead>
+          <tr data-source="building">
+            <td padding="s"><text font-size="s" bold="true" data-value="name">Meta Hyperion</text></td>
+            <td padding="s"><text font-size="s" data-value="owner">Meta</text></td>
+            <td padding="s"><text font-size="s" color="text-muted" data-value="where">Holly Ridge, LA</text></td>
+            <td padding="s"><text font-size="s" bold="true" align="right" data-value="planned">1,632</text></td>
+            <td padding="s"><text font-size="s" align="right" data-value="expected">2028</text></td>
+          </tr>
+        </table>
+
+        <stack gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
+          <text font-size="l" bold="true" color="primary">What it means</text>
+          <divider color="primary" thickness="xs" />
+          <text>
+            Cloud regions follow people. They sit in metro areas with many customers, and the lists
+            now include recent regions in new countries: Mexico, Chile, Malaysia, New Zealand
+            and Thailand.
+          </text>
+          <text>
+            AI campuses follow power. They tend to sit in smaller places such as Abilene, New Albany
+            and Pryor, where land is cheaper and large grid connections are available. That
+            concentrates them: 86% of running power is in one country.
+          </text>
+          <text>
+            The map on the last page shows both. Cloud regions spread across the metro areas of the
+            world. AI campuses cluster, and most of them are in the United States.
+          </text>
+        </stack>
+
+        <stack gap="m" paginate="no">
+          <text font-size="l" bold="true" color="primary">Sources and method</text>
+          <divider color="primary" thickness="xs" />
+          <text font-size="s">
+            Cloud regions: the AWS Regions table (docs.aws.amazon.com), the Azure regions list
+            (learn.microsoft.com) and the Google Cloud regions and zones table
+            (docs.cloud.google.com), read in October 2026. AWS's own tally is 39 regions and 124
+            availability zones, because it also counts regions that need a separate account,
+            such as GovCloud. We use the 34 in its account documentation.
+          </text>
+          <text font-size="s">
+            AI campuses: Epoch AI, "AI data centers", epoch.ai/data/ai-data-centers, licensed
+            CC BY 4.0, retrieved in October 2026. Epoch tracks 93 campuses. 81 are on
+            the map: the 72 that run today and the 9 under construction. The
+            other 12 draw no power yet and are left off.
+          </text>
+          <text font-size="s">
+            Epoch gives addresses, not coordinates. We placed each marker by hand, at town level
+            for campuses and metro level for cloud regions, so a marker can be off by a few
+            kilometers.
+          </text>
+        </stack>
+
+
+        <!-- the footer: every page. It is last in the layout, so it is the footer -->
+        <region pin="bottom" page="each">
+          <stack gap="xs">
+            <divider color="rule" thickness="xs" />
+            <flank end="true" align="center">
+              <text font-size="s" color="text-muted">Prepared for internal use. Figures as of October 2026.</text>
+              <text font-size="s" color="text-muted" align="right">Page {page} of {pages}</text>
+            </flank>
+          </stack>
+        </region>
+
+      </layout>
+    </section>
+
+    <!-- the map: tabloid, landscape, canvas only. Generated from the data: do not edit by hand -->
+    <section size="792pt 1224pt" orientation="landscape" background="surface">
+        <canvas>
+          <layer page="each">
+            <rect anchor="top-left" w="1224pt" h="8pt" fill="primary" />
+          </layer>
+          <layer>
+            <path fill="land" fill-rule="evenodd" d="M 431.8 602.7 L 430.0 601.4 L 429.6 602.8 L 427.6 603.9 L 419.2 602.0 L 411.5 598.1 L 406.3 594.2 L 417.6 598.6 L 418.4 596.9 L 418.5 594.5 L 420.5 593.1 L 422.6 593.5 L 426.5 597.8 L 430.8 599.9 L 434.9 600.7 L 434.3 602.5 Z M 446.0 590.7 L 444.2 592.3 L 442.3 590.7 L 445.0 588.6 L 447.6 589.5 L 448.9 588.0 L 451.6 589.6 L 451.1 590.9 L 447.6 591.9 Z M 806.9 579.2 L 808.3 580.3 L 810.9 580.7 L 810.7 581.4 L 809.4 583.1 L 805.0 583.3 L 806.5 579.9 Z M 1048.1 550.8 L 1045.9 555.2 L 1044.2 556.5 L 1042.3 559.4 L 1041.8 558.4 L 1038.3 561.0 L 1036.1 560.7 L 1037.1 551.9 L 1038.0 550.2 L 1041.9 551.8 L 1046.5 550.6 Z M 1122.4 554.1 L 1114.0 560.0 L 1113.9 561.8 L 1111.6 561.8 L 1108.2 563.2 L 1101.6 569.3 L 1096.0 572.0 L 1093.4 571.9 L 1092.4 570.7 L 1089.5 570.4 L 1089.9 569.1 L 1093.3 566.4 L 1099.4 562.8 L 1108.5 558.8 L 1116.2 553.2 L 1117.9 551.1 L 1121.1 549.4 L 1120.5 552.5 L 1123.5 551.0 L 1123.3 552.6 Z M 1136.9 538.6 L 1138.6 539.8 L 1140.4 540.1 L 1142.9 538.6 L 1144.2 539.1 L 1139.3 544.5 L 1137.1 544.4 L 1135.7 545.6 L 1135.0 547.2 L 1128.7 552.4 L 1125.5 553.8 L 1125.6 552.9 L 1124.7 552.3 L 1128.3 549.3 L 1128.6 547.3 L 1126.3 545.8 L 1127.2 544.4 L 1130.1 543.2 L 1133.5 537.9 L 1134.1 534.8 L 1132.9 529.9 L 1133.0 527.3 L 1134.3 527.0 L 1134.8 529.1 L 1136.7 530.0 L 1135.7 533.3 L 1135.8 537.3 L 1137.2 534.7 L 1138.0 535.7 Z M 1128.5 477.4 L 1127.1 473.5 L 1128.4 473.6 L 1129.8 474.9 L 1134.6 481.2 L 1133.1 482.1 L 1129.9 479.4 Z M 1171.0 466.3 L 1171.1 464.7 L 1172.6 463.4 L 1174.0 463.9 L 1174.9 463.3 L 1175.7 464.3 L 1174.7 466.3 L 1172.6 466.8 Z M 40.3 459.9 L 43.4 458.4 L 43.5 460.1 L 41.5 461.3 L 39.6 462.0 L 38.9 460.7 Z M 1178.0 459.9 L 1181.9 458.4 L 1181.1 460.1 L 1178.5 461.3 L 1176.3 462.0 L 1176.2 460.7 Z M 1142.4 460.0 L 1142.4 460.0 L 1141.3 460.5 L 1140.6 458.9 L 1140.9 457.9 Z M 1139.5 456.0 L 1140.0 453.2 L 1141.3 454.3 L 1141.3 454.3 L 1141.2 457.3 L 1140.4 456.8 L 1139.7 457.0 Z M 770.8 458.3 L 769.8 456.1 L 769.2 457.2 L 769.2 461.5 L 768.3 462.4 L 767.8 465.5 L 758.3 491.6 L 752.8 494.0 L 748.8 491.7 L 748.1 489.8 L 747.3 480.8 L 748.0 478.1 L 749.5 477.5 L 749.6 476.2 L 751.4 473.4 L 751.8 471.0 L 750.8 466.9 L 750.7 463.5 L 752.5 459.1 L 758.5 457.5 L 763.2 453.1 L 764.2 451.2 L 763.9 449.6 L 765.2 450.0 L 767.1 447.5 L 767.3 445.2 L 768.4 443.6 L 770.8 449.2 L 771.1 453.7 L 771.8 455.4 L 771.4 457.2 Z M 1072.4 454.5 L 1071.8 456.2 L 1072.0 461.2 L 1072.7 461.6 L 1072.9 464.8 L 1072.2 466.8 L 1072.7 469.3 L 1079.1 474.6 L 1078.5 475.5 L 1079.7 477.8 L 1079.8 481.9 L 1081.3 481.1 L 1082.1 482.7 L 1083.1 482.1 L 1082.5 486.0 L 1086.5 492.8 L 1086.4 495.8 L 1084.8 500.2 L 1085.1 503.4 L 1078.0 516.5 L 1075.3 519.9 L 1072.2 521.8 L 1063.7 531.5 L 1059.7 538.1 L 1057.3 539.4 L 1053.9 539.5 L 1045.8 544.0 L 1042.6 541.7 L 1044.0 539.8 L 1038.2 543.2 L 1030.7 540.3 L 1029.9 538.0 L 1030.7 533.3 L 1029.8 531.8 L 1027.2 531.3 L 1028.9 529.5 L 1029.3 526.8 L 1026.8 529.3 L 1023.8 530.0 L 1029.4 524.0 L 1030.3 521.2 L 1024.2 525.7 L 1021.8 528.6 L 1020.1 527.1 L 1021.0 525.1 L 1019.0 521.0 L 1019.9 520.2 L 1016.9 517.9 L 1014.8 517.8 L 1012.5 516.0 L 1006.9 516.3 L 998.6 518.9 L 995.8 518.7 L 989.0 521.5 L 986.0 524.9 L 981.4 525.3 L 979.0 524.7 L 974.5 525.2 L 972.0 527.2 L 971.2 527.1 L 967.5 529.3 L 963.3 529.1 L 959.5 526.1 L 960.3 523.9 L 962.8 522.6 L 964.3 518.6 L 964.3 510.5 L 965.0 508.4 L 964.7 504.9 L 963.7 503.4 L 964.1 500.5 L 963.1 495.9 L 964.0 497.5 L 963.8 494.1 L 965.7 496.6 L 966.1 494.7 L 964.8 489.5 L 967.3 484.5 L 967.4 482.4 L 969.2 479.7 L 968.9 482.5 L 970.7 480.0 L 978.1 475.8 L 979.5 475.5 L 980.3 475.9 L 986.6 473.0 L 988.3 473.1 L 991.8 472.0 L 997.2 466.4 L 998.0 462.9 L 1000.8 459.8 L 1001.6 463.0 L 1003.0 462.2 L 1002.2 460.5 L 1003.5 458.7 L 1004.8 459.5 L 1005.6 456.7 L 1008.6 453.4 L 1010.3 452.7 L 1010.5 451.7 L 1011.8 452.1 L 1012.0 451.2 L 1015.1 450.2 L 1017.2 451.9 L 1018.6 454.1 L 1022.5 454.5 L 1022.2 452.4 L 1024.1 449.4 L 1025.7 448.5 L 1025.3 447.5 L 1027.0 445.4 L 1029.1 444.1 L 1030.7 444.6 L 1033.4 443.9 L 1033.6 442.0 L 1031.4 440.7 L 1033.2 440.2 L 1036.7 442.6 L 1039.2 443.6 L 1040.2 443.2 L 1042.0 444.4 L 1046.0 442.9 L 1047.2 444.7 L 1044.7 448.2 L 1043.6 448.3 L 1043.7 449.8 L 1041.1 453.5 L 1041.1 454.6 L 1045.5 457.8 L 1048.8 461.3 L 1051.2 462.2 L 1051.5 463.4 L 1054.2 464.6 L 1056.5 463.4 L 1060.8 454.7 L 1061.0 449.7 L 1062.6 446.2 L 1062.2 444.9 L 1064.4 439.9 L 1065.7 438.5 L 1066.4 440.3 L 1066.3 442.6 L 1067.0 443.1 L 1067.0 444.6 L 1067.8 446.5 L 1067.4 450.0 L 1068.1 452.9 L 1070.4 451.5 L 1071.2 453.1 Z M 1127.6 437.7 L 1128.2 437.8 L 1128.2 437.8 L 1129.0 439.1 L 1126.7 439.1 L 1125.8 436.8 Z M 995.8 434.8 L 996.8 435.9 L 996.5 436.9 L 996.5 436.9 L 995.1 437.0 L 991.2 434.4 L 994.2 433.6 Z M 1121.1 433.2 L 1123.2 433.8 L 1124.5 435.5 L 1121.3 435.2 L 1120.7 434.7 Z M 1125.4 429.8 L 1126.2 432.8 L 1127.3 434.5 L 1127.3 434.5 L 1126.7 435.2 L 1124.7 432.0 L 1124.3 429.8 Z M 1007.2 433.4 L 1010.5 431.9 L 1011.0 431.0 L 1017.1 429.6 L 1018.2 430.1 L 1010.7 433.8 L 1008.4 436.5 L 1005.6 437.3 L 1005.6 435.6 Z M 988.2 432.0 L 984.2 432.4 L 985.5 430.3 L 987.3 430.3 L 988.2 429.0 L 989.3 429.9 L 991.3 429.6 L 991.9 431.2 Z M 994.6 430.2 L 997.1 429.5 L 999.1 430.6 L 1001.2 430.3 L 1004.2 429.0 L 1003.5 431.0 L 998.7 432.1 L 994.4 431.6 Z M 1117.1 426.5 L 1117.6 426.1 L 1121.4 428.7 L 1122.1 430.6 L 1118.2 427.7 Z M 1112.0 423.4 L 1113.8 425.0 L 1115.0 426.2 L 1115.0 426.2 L 1114.3 426.4 L 1113.0 425.6 L 1111.8 424.0 Z M 972.6 427.1 L 977.4 427.8 L 981.1 430.0 L 977.4 431.4 L 974.0 429.9 L 967.8 429.7 L 958.9 427.3 L 957.6 427.7 L 951.9 426.2 L 951.4 424.6 L 948.5 424.3 L 950.9 420.8 L 954.7 421.0 L 958.6 422.8 L 958.9 424.1 L 965.0 424.4 L 965.8 422.9 L 971.6 424.7 Z M 1041.9 419.1 L 1042.5 420.2 L 1042.4 422.0 L 1042.4 422.0 L 1040.6 424.5 L 1040.5 421.7 L 1041.1 420.4 Z M 1105.9 418.0 L 1106.4 417.6 L 1106.7 418.7 L 1110.4 423.2 L 1109.8 424.2 L 1108.9 424.6 L 1106.4 420.8 Z M 1092.0 422.4 L 1090.3 422.4 L 1087.7 421.3 L 1086.0 420.3 L 1086.3 419.1 L 1090.9 419.4 L 1092.0 417.5 L 1092.2 419.5 L 1094.0 419.2 L 1096.8 416.6 L 1096.6 414.4 L 1098.5 414.3 L 1099.2 414.9 L 1099.0 417.0 L 1097.8 419.3 L 1096.1 419.6 L 1095.5 420.6 L 1093.7 421.5 Z M 1018.3 410.6 L 1019.0 411.8 L 1019.0 411.8 L 1017.8 413.0 L 1015.6 412.3 L 1015.1 410.7 Z M 1023.3 411.7 L 1021.1 411.5 L 1022.0 409.5 L 1025.9 409.3 L 1029.4 410.4 L 1030.5 413.3 L 1027.8 411.7 L 1025.2 411.4 Z M 1098.1 411.8 L 1094.0 409.1 L 1095.0 408.2 L 1099.0 411.0 L 1101.4 413.7 L 1101.7 415.6 L 1100.6 416.6 L 1099.5 413.0 Z M 1051.8 405.3 L 1054.7 405.3 L 1059.7 407.9 L 1063.1 408.6 L 1074.4 413.3 L 1078.2 417.0 L 1078.6 419.2 L 1083.7 421.5 L 1084.4 423.5 L 1081.4 423.9 L 1081.9 426.3 L 1084.5 428.8 L 1086.2 432.7 L 1088.0 432.6 L 1087.7 434.2 L 1090.1 434.8 L 1089.1 435.5 L 1092.3 437.1 L 1091.8 438.2 L 1089.7 438.4 L 1089.0 437.5 L 1083.2 436.5 L 1079.4 432.1 L 1078.0 428.9 L 1074.0 427.2 L 1069.2 429.5 L 1069.3 432.2 L 1066.7 433.5 L 1061.7 432.7 L 1059.1 429.7 L 1055.9 429.0 L 1055.1 430.0 L 1051.0 430.1 L 1052.6 427.1 L 1054.7 426.1 L 1054.2 422.1 L 1052.9 418.9 L 1046.8 415.8 L 1044.2 415.5 L 1039.6 412.1 L 1038.5 413.9 L 1037.3 414.2 L 1036.7 411.2 L 1034.3 409.4 L 1037.8 408.1 L 1040.1 408.1 L 1039.8 407.2 L 1035.1 407.2 L 1033.9 405.0 L 1031.1 404.3 L 1029.7 402.4 L 1034.0 401.5 L 1035.7 400.3 L 1040.8 401.9 L 1042.1 409.2 L 1045.3 411.4 L 1048.1 407.5 Z M 999.5 397.6 L 996.7 398.1 L 996.2 400.9 L 999.0 404.2 L 1000.8 402.5 L 1006.8 401.2 L 1006.5 403.0 L 1005.1 402.4 L 1003.7 404.6 L 1000.8 406.0 L 1003.7 410.8 L 1003.1 412.0 L 1005.8 416.3 L 1005.7 418.7 L 1003.9 419.8 L 1002.7 418.5 L 1004.4 415.5 L 1001.2 416.9 L 1000.5 415.9 L 1000.9 414.5 L 998.7 412.3 L 999.1 408.7 L 996.9 409.8 L 996.9 419.4 L 994.8 420.0 L 993.5 418.9 L 994.6 415.5 L 994.2 411.9 L 992.9 411.9 L 992.0 409.3 L 993.4 406.9 L 996.2 396.9 L 998.9 394.1 L 1001.4 395.2 L 1005.4 395.7 L 1009.1 395.6 L 1012.2 392.9 L 1012.8 393.7 L 1010.3 397.4 L 1007.9 398.1 L 1004.8 397.4 Z M 1022.9 401.9 L 1022.0 402.3 L 1020.7 400.0 L 1019.7 395.2 L 1020.3 392.3 L 1021.4 390.9 L 1021.6 392.9 L 1023.5 393.3 L 1023.9 394.8 L 1023.7 398.0 L 1022.1 397.7 L 1021.6 399.9 Z M 938.8 412.4 L 936.4 409.3 L 932.5 401.4 L 929.7 398.3 L 927.5 392.2 L 924.6 389.9 L 922.9 386.7 L 916.9 380.6 L 916.6 378.7 L 923.6 379.5 L 934.0 391.2 L 937.3 391.3 L 940.0 393.8 L 941.9 396.9 L 944.3 398.6 L 943.1 401.6 L 946.0 403.0 L 947.6 407.6 L 950.0 408.0 L 951.5 410.3 L 950.1 420.6 L 946.6 420.7 L 944.0 417.6 L 940.1 414.6 Z M 988.1 401.9 L 985.0 404.5 L 984.9 408.2 L 983.5 413.8 L 983.0 412.5 L 979.3 414.2 L 978.2 411.9 L 975.9 411.7 L 974.3 410.5 L 970.5 411.8 L 969.4 410.1 L 964.6 409.8 L 964.2 404.9 L 962.7 403.8 L 961.1 400.7 L 961.1 394.0 L 962.9 391.5 L 965.3 392.8 L 967.7 392.1 L 968.3 389.0 L 973.5 387.5 L 978.4 380.8 L 983.3 376.2 L 984.8 373.3 L 986.0 373.3 L 987.8 375.2 L 988.1 376.8 L 992.9 378.9 L 992.8 380.4 L 990.6 380.6 L 991.3 382.4 L 989.0 383.7 L 987.3 387.0 L 989.7 390.5 L 989.2 392.2 L 992.8 395.6 L 989.1 396.1 L 988.0 398.6 Z M 1013.7 372.0 L 1012.4 373.8 L 1013.6 376.6 L 1012.8 378.3 L 1008.9 376.2 L 1007.8 373.5 L 1008.7 371.7 L 1006.5 370.0 L 1005.6 371.5 L 1004.1 371.4 L 1001.9 373.4 L 1001.3 372.3 L 1002.3 369.2 L 1005.8 366.8 L 1007.1 368.5 L 1009.5 367.4 L 1009.8 365.8 L 1012.1 365.7 L 1011.6 362.8 L 1014.4 364.6 L 1016.0 372.3 L 1015.2 375.7 Z M 867.4 362.6 L 869.7 364.6 L 873.1 371.1 L 872.8 375.0 L 871.5 376.0 L 868.7 376.9 L 867.1 373.9 L 866.3 368.6 Z M 415.6 359.1 L 418.2 358.8 L 417.9 361.5 L 414.7 361.6 L 415.6 360.6 Z M 1002.0 363.0 L 1003.2 361.0 L 1003.3 358.7 L 1005.1 358.4 L 1004.8 360.9 L 1006.8 357.4 L 1006.9 360.9 L 1004.2 365.6 Z M 990.9 360.5 L 992.2 356.9 L 993.1 359.9 L 989.8 364.5 L 985.8 368.0 L 989.3 363.1 Z M 1002.4 359.2 L 1000.5 360.3 L 999.5 354.9 L 1001.6 356.1 L 1003.6 356.1 L 1003.7 357.6 Z M 1011.0 360.6 L 1009.5 361.4 L 1009.1 358.8 L 1008.2 358.6 L 1007.4 356.4 L 1009.3 356.7 L 1009.1 355.3 L 1006.8 352.4 L 1009.9 352.5 L 1010.9 353.9 L 1012.3 358.1 L 1009.7 357.1 L 1009.9 358.3 Z M 996.6 349.2 L 997.9 350.5 L 997.9 350.5 L 997.4 353.7 L 995.8 351.9 L 993.9 349.1 Z M 997.2 332.9 L 998.8 335.6 L 998.5 338.7 L 996.8 339.9 L 996.8 342.9 L 997.9 345.9 L 999.6 346.3 L 1001.0 345.8 L 1005.2 347.9 L 1005.2 349.9 L 1006.3 350.8 L 1006.2 352.5 L 1003.5 350.7 L 1002.1 348.8 L 1001.5 350.1 L 999.1 347.9 L 996.3 348.4 L 994.6 347.6 L 994.6 346.1 L 995.4 345.1 L 994.4 344.3 L 994.2 345.6 L 991.6 341.9 L 990.9 338.3 L 992.4 339.5 L 991.8 333.7 L 992.2 330.4 L 994.1 330.4 L 996.2 331.4 L 997.0 330.5 L 997.5 331.4 Z M 400.2 330.8 L 400.7 330.3 L 403.3 330.3 L 404.8 330.6 L 405.3 331.4 L 404.4 332.3 L 400.2 332.4 Z M 365.6 330.5 L 369.8 330.7 L 371.3 331.6 L 371.8 332.6 L 368.5 333.3 L 365.2 331.4 Z M 391.3 326.2 L 392.2 326.1 L 392.6 327.4 L 394.3 327.3 L 394.1 328.5 L 395.5 328.6 L 396.9 330.0 L 395.5 331.5 L 394.1 330.7 L 391.7 330.6 L 389.8 331.5 L 389.4 330.6 L 388.3 331.2 L 386.8 333.7 L 386.0 333.1 L 386.0 332.1 L 383.9 331.4 L 380.5 331.4 L 379.0 332.1 L 377.4 331.0 L 377.8 329.8 L 383.0 330.6 L 384.3 329.7 L 383.0 328.1 L 383.2 326.7 L 381.3 326.1 L 382.1 325.1 L 386.7 325.9 L 387.1 325.2 L 389.6 325.2 Z M 954.8 325.5 L 958.1 324.4 L 959.9 324.5 L 960.9 325.9 L 959.8 327.6 L 959.4 329.7 L 957.0 331.5 L 954.2 330.3 L 953.6 327.1 Z M 121.5 325.9 L 122.7 323.8 L 124.5 324.8 L 125.3 326.6 L 122.0 328.8 L 121.4 328.3 L 121.7 327.3 Z M 370.5 318.6 L 372.2 320.3 L 375.0 321.0 L 374.7 322.1 L 377.0 322.2 L 379.2 323.7 L 378.7 324.6 L 367.7 325.3 L 370.1 323.3 L 368.9 322.3 L 367.0 322.0 L 366.0 321.0 L 365.6 318.8 L 363.8 319.0 L 360.2 317.2 L 356.2 316.6 L 355.2 315.9 L 356.5 315.0 L 353.5 314.8 L 350.9 316.7 L 349.6 316.8 L 349.0 317.7 L 346.1 317.7 L 350.4 314.4 L 355.3 312.9 L 360.4 313.2 L 363.2 314.5 L 364.2 315.9 L 367.2 315.4 L 368.2 316.3 Z M 369.2 305.4 L 370.1 305.5 L 370.7 308.6 L 370.4 310.8 L 369.6 311.0 L 369.2 308.8 L 368.2 307.8 Z M 987.3 307.9 L 989.1 305.1 L 990.8 306.2 L 989.7 317.5 L 987.4 314.3 L 986.4 311.6 Z M 371.3 299.3 L 371.2 300.3 L 371.2 300.3 L 367.8 300.9 L 367.8 299.5 L 369.3 299.2 Z M 371.6 299.0 L 371.6 298.6 L 373.8 300.2 L 373.8 300.2 L 372.8 302.9 L 372.3 302.4 L 372.7 300.5 Z M 1016.0 275.3 L 1016.0 277.4 L 1013.6 276.4 L 1013.0 274.6 L 1013.8 272.4 L 1015.7 272.8 L 1016.3 271.3 L 1018.9 272.1 L 1019.7 273.3 L 1018.9 275.6 L 1017.2 274.4 Z M 711.5 270.5 L 710.0 270.0 L 709.1 268.5 L 710.8 268.4 L 711.1 267.5 L 713.3 267.5 L 715.9 266.4 L 714.0 268.0 L 714.4 269.0 Z M 689.5 268.2 L 691.1 267.8 L 690.8 268.9 L 686.5 269.2 L 686.5 268.6 L 682.8 267.8 L 683.2 266.3 L 684.9 267.5 L 689.5 267.6 Z M 654.9 261.5 L 649.1 259.2 L 649.4 257.3 L 652.9 257.6 L 658.2 256.9 L 657.2 259.8 L 657.7 261.0 L 657.2 262.9 Z M 638.1 254.4 L 637.0 253.4 L 636.7 248.9 L 636.0 246.8 L 637.6 247.0 L 639.0 245.9 L 640.9 248.5 L 640.6 253.4 L 639.3 253.1 Z M 1031.2 270.1 L 1026.0 270.4 L 1023.3 274.6 L 1020.8 273.2 L 1019.5 270.4 L 1014.6 271.2 L 1011.7 273.0 L 1008.2 273.0 L 1012.3 275.8 L 1012.5 282.1 L 1011.1 283.7 L 1009.1 282.2 L 1008.7 278.9 L 1006.4 277.8 L 1004.2 275.2 L 1006.7 274.1 L 1007.4 271.7 L 1009.7 269.8 L 1010.9 267.3 L 1016.4 266.2 L 1019.9 266.9 L 1020.3 260.3 L 1023.0 262.1 L 1026.8 256.9 L 1026.5 252.4 L 1024.0 248.3 L 1024.0 245.9 L 1026.8 245.2 L 1031.0 250.4 L 1032.4 253.4 L 1031.4 257.1 L 1033.2 260.9 L 1033.4 263.9 L 1034.8 265.8 L 1034.3 268.4 Z M 637.5 240.6 L 639.3 239.2 L 640.0 242.4 L 640.0 242.4 L 639.1 245.2 L 637.7 244.5 L 637.0 242.0 Z M 1031.5 239.3 L 1030.9 243.0 L 1025.0 240.5 L 1025.5 244.5 L 1022.3 244.5 L 1020.0 240.9 L 1019.9 238.0 L 1022.9 237.8 L 1020.1 229.9 L 1025.7 233.7 L 1028.6 235.0 L 1031.1 235.7 L 1032.3 234.2 L 1035.3 238.3 Z M 431.6 228.4 L 428.4 226.9 L 428.0 225.7 L 429.4 224.5 L 429.9 226.3 L 434.6 226.7 L 432.8 228.2 Z M 432.0 214.0 L 435.4 214.9 L 437.9 216.4 L 437.8 217.1 L 433.0 216.0 L 430.9 214.3 Z M 255.3 215.5 L 255.4 214.5 L 252.9 213.9 L 253.0 211.9 L 253.7 211.1 L 260.0 212.8 L 260.6 215.7 L 262.6 217.2 L 262.6 219.2 L 260.9 219.7 L 257.2 218.1 L 257.1 216.8 Z M 455.1 215.3 L 457.3 216.3 L 458.8 215.4 L 461.4 216.5 L 459.9 219.2 L 462.0 218.6 L 462.3 222.7 L 460.3 225.9 L 457.3 225.4 L 458.6 222.4 L 457.9 221.9 L 453.9 225.1 L 452.2 225.0 L 454.6 223.3 L 452.1 222.4 L 443.5 222.5 L 443.3 221.4 L 445.4 220.1 L 444.5 219.2 L 447.4 217.0 L 451.8 211.3 L 454.1 209.2 L 456.9 208.0 L 458.1 208.2 L 452.5 214.5 L 454.7 213.3 L 456.4 214.1 Z M 247.9 206.1 L 246.7 201.7 L 247.2 200.2 L 248.2 199.1 L 249.1 199.5 L 252.0 199.2 L 248.4 203.2 L 249.0 206.1 Z M 1021.8 225.3 L 1023.3 227.8 L 1019.8 225.6 L 1019.6 228.4 L 1012.6 217.9 L 1008.5 210.4 L 1004.4 206.9 L 1001.3 202.1 L 1002.6 200.5 L 1000.4 198.9 L 1001.2 198.4 L 1007.0 204.1 L 1009.4 207.6 L 1020.1 217.5 L 1015.2 216.3 L 1016.7 221.5 Z M 585.5 200.1 L 591.4 195.7 L 593.7 195.5 L 596.6 197.7 L 595.0 200.1 L 595.4 202.6 L 593.2 205.8 L 588.2 207.9 L 584.3 207.3 L 586.7 203.6 Z M 645.4 192.3 L 646.3 194.0 L 646.3 194.0 L 644.9 196.8 L 641.9 194.9 L 641.5 193.4 Z M 202.4 186.4 L 205.9 186.1 L 206.1 187.2 L 198.6 190.1 L 198.0 189.2 L 198.9 187.6 Z M 606.0 189.7 L 603.6 192.8 L 606.4 193.0 L 609.0 197.5 L 610.8 198.0 L 613.3 203.4 L 616.6 204.1 L 616.3 206.4 L 614.9 207.4 L 616.0 209.2 L 613.5 211.1 L 609.8 211.1 L 605.0 212.1 L 603.7 211.4 L 601.9 213.0 L 599.3 212.6 L 597.3 214.0 L 595.8 213.3 L 600.0 209.5 L 602.5 208.7 L 598.2 208.2 L 597.4 206.7 L 600.3 205.6 L 598.9 203.7 L 599.4 201.4 L 603.5 201.7 L 603.9 199.7 L 602.1 197.5 L 598.8 196.9 L 598.2 195.9 L 599.2 194.4 L 598.4 193.4 L 596.9 195.1 L 596.8 191.7 L 595.5 190.0 L 596.6 186.4 L 598.7 183.6 L 604.0 183.6 L 601.1 187.3 L 606.8 186.9 Z M 177.0 177.7 L 178.7 178.0 L 177.7 179.3 L 177.7 179.3 L 175.6 179.8 L 174.5 179.2 L 173.8 178.3 Z M 404.9 172.0 L 406.4 171.0 L 407.4 171.1 L 407.7 171.7 L 405.8 173.5 L 404.8 173.2 L 404.6 172.2 Z M 398.7 169.2 L 402.2 169.3 L 401.8 169.9 L 401.8 169.9 L 397.9 171.7 L 396.1 171.7 L 396.0 170.8 Z M 181.2 168.0 L 177.9 169.0 L 176.4 167.7 L 173.6 167.6 L 175.1 166.4 L 176.0 167.0 L 178.0 166.7 L 179.1 167.5 Z M 403.1 163.2 L 405.5 164.2 L 404.9 165.7 L 406.9 165.5 L 408.1 166.6 L 405.3 167.6 L 401.8 166.8 L 401.1 165.3 L 393.1 168.8 L 393.3 166.8 L 389.7 167.2 L 392.8 165.5 L 397.1 160.0 L 398.7 160.3 L 398.4 161.7 L 400.0 161.2 L 401.0 162.0 Z M 566.7 166.7 L 564.4 167.3 L 554.2 165.8 L 556.9 164.3 L 551.6 162.7 L 556.2 162.1 L 556.2 161.2 L 551.1 160.4 L 553.1 158.3 L 556.9 157.8 L 560.5 160.0 L 564.5 158.3 L 567.6 159.2 L 571.8 157.5 L 575.9 157.7 L 575.1 159.8 L 577.8 162.0 L 574.3 164.5 Z M 426.3 151.8 L 427.7 152.7 L 426.5 154.5 L 424.4 155.5 L 421.6 155.6 L 421.8 154.1 L 423.8 152.3 Z M 177.9 158.1 L 180.1 155.7 L 186.3 156.2 L 187.7 159.2 L 183.6 160.6 L 179.1 161.0 L 175.5 164.2 L 173.7 164.8 L 171.5 164.7 L 170.8 163.6 L 168.5 162.6 L 169.6 161.2 L 167.7 160.7 L 164.3 161.1 L 164.3 160.0 L 166.3 158.8 L 162.4 159.6 L 161.7 161.1 L 158.6 162.5 L 153.7 163.9 L 150.7 163.7 L 150.9 165.4 L 149.3 168.1 L 149.5 169.0 L 146.6 171.3 L 142.6 170.5 L 129.8 173.4 L 117.1 177.8 L 114.4 179.4 L 116.2 177.0 L 99.8 192.2 L 82.4 210.2 L 102.1 190.0 L 123.8 170.4 L 109.4 183.1 L 112.7 180.1 L 94.9 197.1 L 74.3 219.4 L 55.1 244.4 L 38.3 271.2 L 53.4 246.8 L 44.3 260.9 L 46.0 258.2 L 36.0 275.4 L 36.0 522.5 L 39.2 528.4 L 36.0 522.5 L 36.0 275.4 L 52.1 248.8 L 70.8 223.7 L 55.1 244.3 L 42.7 263.6 L 54.6 245.1 L 66.3 229.3 L 53.2 247.1 L 46.0 258.1 L 62.5 234.3 L 51.3 249.9 L 41.6 265.4 L 58.8 239.2 L 78.5 214.6 L 77.1 216.2 L 90.6 201.5 L 104.5 187.7 L 105.6 186.7 L 91.5 200.5 L 115.9 177.3 L 113.4 179.5 L 137.6 159.1 L 116.4 176.8 L 97.1 194.9 L 112.0 180.8 L 106.9 185.5 L 127.4 167.4 L 159.3 142.8 L 130.0 165.3 L 128.9 166.1 L 148.2 150.9 L 140.3 157.0 L 167.4 137.1 L 138.3 158.6 L 142.8 155.0 L 166.5 137.7 L 159.1 142.9 L 173.7 132.9 L 188.9 123.6 L 168.7 136.3 L 169.8 135.5 L 170.5 135.0 L 148.7 150.6 L 152.0 149.6 L 152.7 147.5 L 155.7 146.2 L 162.2 147.0 L 167.5 146.8 L 172.5 148.3 L 177.1 152.1 L 179.8 155.3 L 177.2 157.3 Z M 1074.2 158.1 L 1070.8 155.7 L 1078.1 156.2 L 1086.5 159.2 L 1086.0 160.6 L 1082.4 161.0 L 1086.2 164.2 L 1086.0 164.8 L 1083.5 164.7 L 1075.7 162.6 L 1073.4 161.2 L 1070.3 160.7 L 1067.9 161.1 L 1065.2 160.0 L 1064.3 158.8 L 1062.2 159.6 L 1065.2 161.1 L 1065.4 162.5 L 1063.8 163.9 L 1060.2 163.7 L 1071.3 169.0 L 1073.4 171.3 L 1067.8 170.5 L 1063.3 173.0 L 1061.4 173.4 L 1058.2 177.8 L 1058.8 179.4 L 1052.8 177.0 L 1048.6 179.7 L 1046.1 178.4 L 1045.0 179.9 L 1041.1 179.4 L 1042.3 181.6 L 1042.2 184.9 L 1043.6 186.3 L 1047.3 187.1 L 1051.5 192.1 L 1049.1 192.2 L 1050.5 195.1 L 1052.9 196.7 L 1049.6 198.4 L 1051.9 202.5 L 1048.5 203.3 L 1050.5 206.9 L 1049.0 210.2 L 1033.2 194.8 L 1030.4 190.0 L 1030.9 188.0 L 1029.7 186.3 L 1033.1 185.6 L 1035.2 177.8 L 1037.2 175.1 L 1034.6 170.4 L 1031.8 170.7 L 1033.0 173.5 L 1029.9 177.1 L 1023.8 173.0 L 1018.3 174.2 L 1016.9 179.8 L 1021.0 181.9 L 1012.1 183.1 L 1010.1 180.6 L 1005.6 180.1 L 1003.8 181.8 L 995.2 181.2 L 987.4 182.2 L 979.8 197.1 L 984.4 197.5 L 987.3 199.7 L 990.5 200.5 L 991.0 198.8 L 994.2 199.0 L 1000.9 202.9 L 1003.1 205.9 L 1003.3 209.4 L 1005.9 213.7 L 1008.3 219.4 L 1007.3 224.7 L 1007.8 227.2 L 1004.0 237.8 L 1001.2 240.0 L 999.4 240.0 L 996.7 238.2 L 994.1 240.9 L 994.2 242.1 L 993.0 241.9 L 992.4 243.2 L 992.1 244.4 L 993.4 247.1 L 992.3 247.9 L 991.5 249.6 L 988.9 251.2 L 989.4 253.2 L 993.2 255.5 L 999.4 262.3 L 1001.1 266.5 L 1000.8 268.6 L 998.3 269.3 L 996.5 270.8 L 993.9 271.2 L 992.8 269.1 L 992.3 266.3 L 989.5 262.5 L 991.4 261.9 L 988.1 258.7 L 986.3 258.0 L 985.5 259.0 L 983.2 257.3 L 983.8 255.3 L 982.7 252.0 L 979.0 250.6 L 975.3 251.7 L 973.9 253.4 L 971.1 254.4 L 972.0 252.7 L 970.7 251.3 L 972.0 248.8 L 969.6 246.8 L 965.4 250.7 L 964.5 253.1 L 961.7 253.3 L 960.9 255.0 L 963.4 257.5 L 966.1 258.1 L 966.9 259.8 L 969.6 260.9 L 972.0 258.2 L 975.2 259.7 L 977.1 259.8 L 978.4 261.7 L 974.6 262.8 L 973.9 264.8 L 971.7 266.6 L 971.1 269.2 L 975.0 271.3 L 977.5 274.9 L 983.5 281.2 L 984.3 284.0 L 982.8 285.0 L 984.1 287.0 L 986.3 288.2 L 986.8 294.1 L 985.1 294.5 L 981.0 307.9 L 973.9 314.4 L 970.5 314.9 L 968.9 316.5 L 967.6 315.3 L 966.2 317.2 L 962.2 319.0 L 959.0 319.6 L 958.6 323.5 L 956.9 323.7 L 955.6 321.0 L 956.1 319.6 L 951.7 318.4 L 946.7 322.2 L 944.7 325.7 L 944.4 328.3 L 951.2 337.1 L 954.4 339.4 L 956.7 342.4 L 959.0 349.2 L 959.3 355.7 L 956.9 358.2 L 953.5 360.6 L 947.4 367.1 L 946.1 364.7 L 946.8 362.2 L 944.2 360.1 L 941.5 359.6 L 938.1 353.8 L 935.0 352.1 L 932.3 352.2 L 932.5 349.3 L 929.7 349.3 L 929.9 353.4 L 927.9 362.1 L 928.3 364.8 L 930.4 364.9 L 932.7 371.5 L 934.6 373.6 L 936.6 374.0 L 941.1 378.5 L 942.5 381.0 L 943.2 388.6 L 944.3 389.7 L 945.6 394.2 L 943.3 394.4 L 936.4 388.7 L 936.0 386.9 L 934.1 384.4 L 933.5 381.3 L 932.3 379.3 L 932.5 376.6 L 931.7 375.0 L 930.4 373.6 L 929.7 371.8 L 926.2 367.9 L 925.9 370.1 L 925.1 368.0 L 926.0 362.2 L 925.5 359.4 L 926.2 356.6 L 924.9 354.4 L 924.8 350.3 L 923.3 348.4 L 920.6 339.3 L 918.8 336.2 L 913.7 340.7 L 909.9 339.5 L 910.4 334.9 L 909.2 331.4 L 906.1 327.1 L 906.3 325.8 L 904.4 325.3 L 901.7 322.3 L 899.1 316.7 L 897.5 314.5 L 894.6 314.4 L 895.1 315.9 L 894.5 318.0 L 893.0 317.2 L 892.7 317.9 L 890.5 317.1 L 890.2 318.5 L 884.3 319.2 L 884.9 322.0 L 883.6 324.2 L 879.4 326.7 L 876.5 331.1 L 871.5 335.9 L 871.7 337.6 L 867.5 339.8 L 866.1 340.0 L 865.4 342.9 L 866.9 350.8 L 865.9 354.3 L 866.3 360.6 L 864.7 360.8 L 863.4 363.6 L 864.5 364.8 L 861.6 365.9 L 860.7 368.4 L 859.4 369.5 L 856.2 366.0 L 853.0 357.1 L 849.8 351.8 L 847.9 344.8 L 844.5 339.7 L 841.0 327.7 L 839.5 319.7 L 835.2 322.0 L 832.9 321.5 L 828.3 317.0 L 829.6 315.7 L 828.5 314.2 L 824.4 311.0 L 822.0 310.1 L 820.8 307.4 L 818.0 304.6 L 803.0 305.9 L 790.0 303.4 L 788.1 298.8 L 786.5 298.2 L 781.3 300.7 L 777.4 299.4 L 773.9 296.5 L 770.8 295.5 L 765.5 287.0 L 763.9 287.6 L 761.8 286.3 L 760.8 287.8 L 759.0 287.6 L 761.0 292.9 L 762.5 296.1 L 767.1 299.9 L 767.3 302.7 L 769.9 307.1 L 769.4 304.4 L 770.1 302.4 L 770.9 302.0 L 771.9 303.2 L 771.8 307.6 L 773.3 309.8 L 775.7 309.2 L 780.1 309.4 L 786.5 301.0 L 787.2 306.4 L 788.9 309.0 L 790.8 310.3 L 795.1 311.5 L 797.7 314.9 L 798.9 315.4 L 798.9 316.2 L 795.5 323.2 L 794.1 323.0 L 793.5 323.9 L 793.6 328.7 L 792.1 328.7 L 790.3 330.1 L 789.5 332.7 L 787.5 332.7 L 786.3 333.6 L 786.5 335.1 L 785.0 336.1 L 783.2 335.8 L 777.6 338.2 L 777.1 341.2 L 769.1 344.5 L 766.4 347.1 L 764.0 347.1 L 762.3 348.6 L 756.8 349.7 L 754.9 351.9 L 750.1 352.1 L 749.2 350.0 L 749.2 348.0 L 746.9 342.6 L 747.5 342.4 L 746.7 336.8 L 741.8 329.7 L 740.7 326.7 L 738.4 324.1 L 736.9 323.5 L 734.6 320.0 L 734.0 315.2 L 732.0 311.1 L 728.6 308.8 L 726.5 303.9 L 720.2 294.7 L 718.7 294.8 L 719.2 289.4 L 717.3 295.6 L 716.6 296.3 L 714.0 293.4 L 711.4 288.1 L 712.7 292.4 L 717.6 301.9 L 723.2 310.2 L 722.6 310.8 L 722.9 313.2 L 727.3 317.3 L 728.6 321.0 L 727.9 321.7 L 730.0 329.9 L 733.1 332.2 L 736.2 340.0 L 742.5 345.3 L 749.7 353.1 L 749.6 354.6 L 747.8 355.5 L 750.3 357.2 L 752.5 360.3 L 754.1 360.3 L 760.5 358.9 L 765.9 356.8 L 768.7 356.6 L 771.8 355.7 L 773.3 354.4 L 774.5 354.4 L 774.5 359.6 L 769.9 373.8 L 764.7 383.3 L 761.0 388.4 L 750.1 397.9 L 745.1 405.2 L 742.8 406.7 L 742.0 408.2 L 740.8 408.5 L 738.7 415.1 L 737.3 416.3 L 735.8 420.8 L 735.9 422.9 L 738.0 424.3 L 737.0 430.4 L 739.3 436.4 L 740.4 437.2 L 740.9 438.9 L 740.7 451.6 L 741.2 453.4 L 740.1 456.1 L 736.6 461.0 L 730.0 464.2 L 721.3 472.3 L 720.9 475.0 L 722.2 477.8 L 722.7 481.1 L 723.2 480.9 L 722.3 486.3 L 723.0 487.0 L 722.4 488.5 L 721.0 489.8 L 714.5 493.1 L 713.0 494.5 L 713.2 496.0 L 713.9 496.3 L 711.0 505.8 L 708.1 508.2 L 703.8 514.7 L 697.7 520.8 L 695.3 522.4 L 690.4 524.1 L 690.0 525.1 L 688.2 524.6 L 686.6 525.3 L 683.4 524.6 L 680.3 524.8 L 674.5 526.9 L 672.5 528.3 L 671.1 528.4 L 669.9 527.1 L 668.9 527.0 L 667.7 525.3 L 667.5 525.8 L 666.5 520.2 L 667.5 519.5 L 667.5 516.6 L 662.3 505.1 L 660.1 502.3 L 659.0 499.6 L 656.9 487.5 L 656.6 481.0 L 653.9 476.4 L 651.7 469.6 L 649.2 466.0 L 648.8 460.8 L 649.3 457.5 L 651.7 449.2 L 655.3 443.6 L 655.6 438.7 L 653.0 432.9 L 654.2 430.7 L 652.6 424.6 L 651.1 422.3 L 651.4 421.6 L 650.1 417.6 L 642.1 406.9 L 640.2 403.1 L 642.4 395.2 L 641.8 394.7 L 643.3 387.6 L 642.1 385.1 L 640.6 384.5 L 639.1 382.3 L 639.2 381.3 L 633.4 383.3 L 630.9 383.2 L 628.1 378.2 L 625.8 375.7 L 620.6 375.8 L 615.4 377.0 L 605.7 381.5 L 602.9 380.5 L 597.1 379.8 L 593.3 380.5 L 588.0 382.9 L 586.5 382.8 L 583.2 381.1 L 575.5 373.8 L 572.3 372.1 L 570.7 370.1 L 569.8 366.0 L 567.2 362.3 L 565.6 361.1 L 564.8 358.7 L 562.2 356.5 L 560.8 356.3 L 559.2 353.9 L 558.5 350.2 L 559.0 348.6 L 557.7 345.7 L 556.2 344.4 L 557.6 343.7 L 559.9 339.2 L 559.7 337.2 L 560.6 335.3 L 561.1 331.8 L 560.5 326.3 L 560.9 324.4 L 558.5 321.1 L 558.9 317.8 L 561.2 314.8 L 561.0 313.6 L 562.2 310.9 L 565.1 308.0 L 567.3 301.5 L 569.4 300.1 L 571.5 296.3 L 573.1 294.8 L 576.0 294.4 L 582.7 287.8 L 582.0 283.1 L 583.7 278.0 L 585.8 275.4 L 591.1 272.2 L 594.2 266.1 L 596.4 266.1 L 598.2 267.7 L 601.0 267.4 L 605.5 268.3 L 608.4 266.2 L 611.6 265.6 L 613.5 264.1 L 616.4 262.9 L 626.4 262.0 L 627.9 262.5 L 630.7 261.0 L 633.9 261.0 L 635.1 261.9 L 637.2 261.7 L 640.4 260.2 L 642.5 260.6 L 642.5 262.5 L 645.0 261.1 L 645.2 261.8 L 643.8 263.6 L 643.8 265.4 L 644.9 266.3 L 644.6 269.5 L 642.7 271.4 L 643.3 273.4 L 644.9 273.5 L 645.7 275.2 L 646.8 275.8 L 650.4 277.1 L 651.7 276.8 L 654.3 277.4 L 658.4 279.1 L 659.9 282.4 L 667.1 284.7 L 670.4 286.5 L 673.3 283.8 L 672.4 281.0 L 673.2 279.2 L 675.3 277.4 L 677.4 276.9 L 681.6 277.7 L 682.7 279.4 L 687.9 280.4 L 688.7 281.7 L 692.8 281.6 L 700.3 284.3 L 703.8 282.0 L 706.4 281.7 L 708.7 282.2 L 709.6 284.0 L 710.2 282.8 L 715.2 283.9 L 717.4 281.8 L 718.1 277.0 L 720.6 270.2 L 720.0 267.4 L 720.6 265.8 L 719.3 264.1 L 720.3 262.8 L 718.5 263.1 L 715.9 262.2 L 714.0 264.4 L 709.5 264.8 L 706.9 262.8 L 703.7 262.7 L 703.1 264.2 L 701.1 264.6 L 698.0 262.7 L 694.8 262.7 L 692.7 259.0 L 690.3 257.0 L 691.5 254.1 L 689.4 252.3 L 692.4 248.8 L 696.9 248.6 L 697.9 245.8 L 703.5 246.3 L 706.8 243.9 L 710.0 242.9 L 714.9 242.8 L 724.7 246.8 L 728.1 246.3 L 730.7 246.6 L 733.8 244.7 L 734.0 243.1 L 732.9 240.6 L 717.6 231.1 L 719.6 230.5 L 721.5 227.4 L 719.7 226.0 L 723.7 224.5 L 723.4 223.7 L 718.7 224.6 L 717.0 225.8 L 714.4 225.9 L 712.1 227.3 L 712.6 229.6 L 714.2 230.4 L 717.1 230.2 L 716.7 231.5 L 713.6 232.2 L 710.0 234.3 L 708.3 233.5 L 708.7 231.8 L 705.4 230.7 L 708.4 228.8 L 707.5 228.0 L 702.9 227.1 L 702.5 225.7 L 699.9 226.2 L 697.2 230.9 L 697.4 231.8 L 696.1 232.6 L 695.2 232.3 L 694.9 236.7 L 693.5 238.2 L 692.8 240.8 L 694.4 244.3 L 697.1 245.5 L 696.6 246.4 L 693.2 246.6 L 689.8 249.8 L 688.6 247.3 L 685.3 246.8 L 681.8 247.8 L 684.0 249.9 L 682.6 250.5 L 680.9 250.5 L 679.2 248.6 L 678.7 249.4 L 679.6 251.6 L 681.2 253.3 L 680.1 254.1 L 683.5 256.9 L 683.7 259.0 L 680.8 258.0 L 681.9 259.9 L 680.0 260.3 L 681.4 263.6 L 679.4 263.6 L 676.8 262.0 L 674.8 256.6 L 671.0 250.6 L 669.2 249.4 L 669.2 244.0 L 668.7 243.4 L 667.2 241.9 L 658.5 237.4 L 655.9 234.7 L 656.5 234.4 L 655.1 232.9 L 654.9 231.7 L 653.1 231.1 L 652.3 232.7 L 651.3 231.4 L 651.3 230.2 L 652.1 229.8 L 649.7 229.3 L 647.5 230.6 L 647.4 233.4 L 648.5 235.3 L 651.3 237.1 L 652.9 240.1 L 656.3 243.1 L 658.6 243.1 L 659.4 243.9 L 658.6 244.6 L 663.5 247.1 L 666.5 249.7 L 666.1 251.0 L 664.3 249.3 L 661.7 248.7 L 660.6 251.1 L 662.8 252.5 L 662.6 254.4 L 661.4 254.6 L 659.9 257.8 L 658.7 258.1 L 659.8 254.2 L 657.5 250.2 L 652.0 245.9 L 649.8 245.7 L 647.5 244.0 L 642.6 239.5 L 641.6 235.9 L 637.7 234.3 L 631.0 238.8 L 625.2 237.8 L 621.0 239.0 L 620.9 243.4 L 618.1 245.8 L 614.4 246.6 L 611.2 252.9 L 612.3 255.0 L 610.6 256.7 L 610.0 259.1 L 607.7 259.8 L 605.6 262.7 L 598.9 262.7 L 595.9 265.4 L 594.4 265.1 L 592.5 261.7 L 589.7 261.1 L 588.5 262.1 L 586.9 261.5 L 585.4 261.9 L 585.7 256.8 L 584.4 256.4 L 583.7 255.0 L 584.0 252.6 L 585.3 251.2 L 586.2 247.5 L 585.8 240.8 L 584.6 239.2 L 588.8 236.5 L 599.4 237.8 L 606.5 237.7 L 608.0 235.5 L 608.6 228.2 L 603.6 222.6 L 599.3 221.2 L 599.0 218.6 L 602.7 217.8 L 607.4 218.7 L 606.6 214.6 L 609.2 216.2 L 615.7 213.4 L 616.6 210.5 L 622.6 208.1 L 625.0 202.8 L 628.7 201.4 L 631.0 201.5 L 631.5 200.7 L 633.7 200.5 L 634.3 201.3 L 636.1 199.6 L 634.0 194.3 L 633.7 190.8 L 634.9 188.8 L 637.2 188.6 L 640.2 186.7 L 640.2 188.5 L 639.5 189.6 L 639.9 190.6 L 641.4 191.1 L 640.8 192.4 L 639.9 192.0 L 638.1 194.5 L 639.1 197.6 L 641.9 198.4 L 641.9 199.6 L 646.1 198.0 L 650.7 200.5 L 659.9 196.7 L 662.7 197.3 L 663.0 198.1 L 665.6 198.2 L 666.1 196.6 L 669.7 195.5 L 668.6 190.0 L 669.7 187.8 L 672.0 186.6 L 674.5 189.2 L 676.6 189.1 L 676.8 184.5 L 675.9 184.9 L 674.0 183.7 L 673.6 181.7 L 680.0 180.3 L 685.6 180.7 L 688.3 178.9 L 685.3 177.3 L 680.6 177.5 L 672.0 179.5 L 670.2 177.7 L 667.6 176.5 L 667.7 173.2 L 666.1 170.2 L 667.1 168.3 L 669.1 166.3 L 675.9 162.0 L 675.4 160.7 L 671.7 159.1 L 667.5 160.0 L 665.4 162.3 L 666.1 164.3 L 657.8 169.8 L 656.4 174.5 L 661.2 178.7 L 659.2 182.5 L 656.5 183.3 L 656.1 189.1 L 654.8 192.3 L 651.5 192.0 L 650.2 194.7 L 647.1 194.9 L 646.0 191.6 L 641.2 182.9 L 639.3 180.8 L 634.2 184.7 L 630.7 185.5 L 627.0 183.8 L 624.9 172.4 L 627.2 170.2 L 633.8 167.4 L 638.6 164.1 L 648.3 153.3 L 658.3 147.0 L 663.4 145.7 L 667.4 145.8 L 670.6 143.3 L 679.1 142.8 L 687.1 145.1 L 684.2 145.9 L 687.2 147.8 L 689.5 146.8 L 693.9 148.6 L 700.7 149.4 L 710.9 153.0 L 713.2 154.5 L 714.0 156.6 L 711.7 158.3 L 707.8 159.1 L 696.1 156.7 L 694.4 157.1 L 699.0 159.5 L 700.4 164.3 L 706.1 166.1 L 706.1 164.6 L 704.1 163.1 L 705.5 161.9 L 712.1 164.0 L 714.0 163.2 L 711.7 160.8 L 716.7 157.6 L 719.0 157.8 L 721.7 158.9 L 722.5 156.7 L 719.8 154.8 L 720.5 152.9 L 718.1 150.9 L 725.2 152.0 L 727.2 153.7 L 724.2 154.1 L 724.8 155.9 L 727.1 157.0 L 730.7 156.3 L 730.6 154.3 L 742.8 150.0 L 744.7 150.2 L 743.0 152.1 L 746.2 152.4 L 747.5 151.4 L 752.1 151.3 L 755.1 150.0 L 758.7 151.9 L 760.6 149.8 L 757.3 148.0 L 758.1 146.9 L 765.7 147.9 L 780.0 152.5 L 780.8 150.8 L 777.2 148.5 L 774.1 148.2 L 774.2 146.7 L 771.2 143.3 L 774.1 140.5 L 774.2 137.7 L 775.7 137.1 L 782.3 137.9 L 783.7 139.6 L 782.8 142.1 L 784.8 143.1 L 786.8 145.2 L 788.4 149.5 L 792.1 151.5 L 792.1 153.6 L 789.5 158.1 L 792.6 158.6 L 793.0 157.4 L 795.3 156.6 L 795.2 155.0 L 796.5 153.5 L 794.2 151.7 L 794.2 149.6 L 791.4 149.4 L 790.0 147.6 L 790.2 144.5 L 785.8 142.0 L 788.9 139.9 L 787.1 137.8 L 788.2 137.7 L 790.4 139.4 L 791.1 142.3 L 794.0 142.9 L 791.7 140.7 L 794.9 139.5 L 799.7 139.3 L 805.2 141.1 L 801.5 138.5 L 799.3 135.3 L 813.4 134.5 L 810.4 132.9 L 811.7 131.0 L 814.3 130.9 L 817.6 129.5 L 823.4 129.1 L 823.5 128.3 L 829.2 128.0 L 831.6 128.7 L 835.4 127.1 L 839.6 127.2 L 839.1 125.9 L 840.2 124.7 L 844.4 123.6 L 849.1 124.5 L 846.7 125.2 L 852.2 125.6 L 854.1 127.0 L 855.5 126.3 L 862.1 126.4 L 871.4 128.8 L 872.3 130.4 L 865.1 133.7 L 872.4 134.9 L 874.0 134.3 L 876.9 136.3 L 877.2 135.5 L 880.5 135.0 L 888.4 135.5 L 890.3 136.9 L 900.5 137.3 L 898.4 135.1 L 907.6 135.6 L 912.9 137.2 L 915.9 139.1 L 915.8 140.4 L 921.1 142.8 L 926.0 144.0 L 925.2 140.8 L 930.4 142.2 L 933.6 141.4 L 939.1 142.3 L 940.0 141.4 L 944.3 141.9 L 939.6 139.0 L 941.3 137.7 L 964.8 139.7 L 968.8 141.5 L 977.7 143.8 L 986.7 143.3 L 992.0 143.8 L 995.5 145.1 L 997.8 147.3 L 1001.8 148.2 L 1004.3 147.6 L 1013.8 148.1 L 1018.0 147.8 L 1025.5 150.6 L 1027.3 149.6 L 1023.0 147.5 L 1022.3 146.2 L 1031.1 147.0 L 1035.9 146.8 L 1044.7 148.3 L 1058.9 152.1 L 1069.3 155.3 L 1071.6 157.3 Z M 758.2 249.7 L 757.9 253.9 L 757.0 254.7 L 758.7 259.3 L 761.7 260.1 L 764.1 261.9 L 768.4 262.6 L 772.9 261.6 L 771.8 254.2 L 769.3 253.0 L 769.6 250.4 L 767.6 250.2 L 767.6 247.1 L 770.6 248.0 L 772.9 246.8 L 770.4 244.6 L 769.1 242.5 L 766.9 243.4 L 767.1 246.1 L 765.4 242.9 L 765.8 241.3 L 765.0 240.0 L 761.4 238.8 L 759.4 235.5 L 757.7 234.6 L 757.3 233.4 L 760.2 233.7 L 759.8 231.0 L 762.1 230.5 L 764.7 231.0 L 764.5 227.4 L 763.4 225.2 L 760.6 225.4 L 758.0 224.5 L 752.5 226.8 L 751.7 229.0 L 749.0 229.6 L 746.9 233.4 L 750.1 236.8 L 750.3 239.3 L 758.1 248.2 L 759.5 248.4 L 760.6 249.4 Z M 370.2 148.3 L 375.7 146.0 L 378.7 147.5 L 379.6 149.3 L 377.4 150.4 L 374.8 149.4 L 372.5 149.7 Z M 184.4 141.8 L 184.4 141.8 L 181.7 143.9 L 178.8 144.0 L 179.7 143.1 Z M 1039.6 141.8 L 1039.6 141.8 L 1042.3 143.9 L 1039.9 144.0 L 1038.2 143.1 Z M 188.4 143.0 L 181.7 143.9 L 184.9 141.7 L 189.2 142.5 Z M 1046.7 143.0 L 1045.2 143.7 L 1042.3 143.9 L 1039.6 141.8 L 1046.3 142.5 Z M 395.1 153.2 L 396.1 155.3 L 400.1 153.0 L 403.5 150.3 L 405.7 146.8 L 412.3 147.5 L 414.6 149.1 L 413.9 150.6 L 411.1 152.3 L 411.9 154.0 L 410.7 155.6 L 404.6 157.8 L 400.9 158.3 L 398.9 157.4 L 391.7 163.1 L 387.5 165.3 L 383.7 165.5 L 380.9 166.9 L 379.5 169.1 L 376.3 169.5 L 366.7 175.9 L 364.2 178.6 L 361.9 182.5 L 365.4 183.1 L 364.9 188.9 L 368.9 188.2 L 373.2 189.7 L 375.2 191.0 L 376.4 192.7 L 381.5 195.1 L 388.7 195.6 L 387.0 198.7 L 386.3 202.2 L 386.7 206.1 L 389.5 209.5 L 392.1 208.4 L 395.0 204.7 L 395.8 199.1 L 394.6 197.3 L 399.7 195.7 L 403.7 193.2 L 406.2 190.8 L 407.0 188.5 L 406.4 185.6 L 404.4 183.0 L 409.1 179.5 L 409.3 176.4 L 410.9 171.2 L 413.1 170.4 L 419.6 171.7 L 422.1 170.8 L 426.3 173.8 L 426.6 175.1 L 431.1 175.4 L 429.0 182.5 L 431.2 183.0 L 432.3 185.0 L 436.9 183.2 L 443.2 177.8 L 447.5 189.3 L 445.6 191.5 L 450.4 195.4 L 454.4 196.3 L 455.8 197.5 L 456.1 200.4 L 458.1 200.9 L 458.8 202.2 L 457.9 206.2 L 453.2 208.8 L 448.2 210.0 L 443.9 213.0 L 439.0 213.6 L 433.2 212.8 L 426.1 213.0 L 422.9 215.6 L 418.8 217.2 L 409.0 225.3 L 411.6 224.7 L 417.6 220.0 L 424.4 217.0 L 428.7 216.6 L 430.7 218.4 L 427.3 220.8 L 427.3 227.4 L 430.6 229.2 L 435.5 228.7 L 439.4 224.6 L 438.9 227.3 L 440.4 228.6 L 436.3 231.0 L 426.1 234.6 L 422.2 237.3 L 420.0 237.0 L 420.7 233.9 L 426.5 230.9 L 418.6 231.4 L 418.7 232.6 L 408.5 236.8 L 405.7 239.8 L 405.1 241.7 L 405.6 243.7 L 406.7 243.8 L 406.8 242.4 L 407.5 243.2 L 407.0 244.3 L 398.0 245.8 L 395.3 246.9 L 399.8 246.2 L 400.5 246.9 L 396.1 248.0 L 394.2 248.0 L 394.4 247.6 L 393.2 248.6 L 394.0 248.8 L 392.7 251.4 L 389.8 254.3 L 389.9 253.3 L 388.5 252.2 L 388.9 256.2 L 385.2 260.7 L 386.5 258.0 L 385.3 256.6 L 385.7 253.5 L 384.8 255.1 L 384.8 257.4 L 383.1 256.9 L 384.7 258.0 L 384.0 261.6 L 384.8 261.8 L 384.3 266.8 L 381.8 269.6 L 378.4 270.7 L 375.9 272.9 L 374.4 273.1 L 372.5 274.5 L 371.8 275.8 L 368.0 278.2 L 363.9 282.2 L 362.9 284.8 L 362.9 287.4 L 364.1 293.2 L 364.5 299.2 L 362.4 305.4 L 361.4 305.9 L 360.0 305.4 L 359.8 303.8 L 358.7 302.9 L 356.6 295.4 L 357.7 292.9 L 357.2 290.9 L 355.5 287.8 L 354.4 287.2 L 351.0 288.9 L 349.3 287.0 L 347.6 286.0 L 339.0 286.3 L 337.6 286.9 L 338.1 290.2 L 337.4 290.7 L 336.4 290.1 L 335.1 290.8 L 332.8 290.7 L 331.0 288.7 L 328.2 289.2 L 326.2 288.3 L 324.2 288.6 L 321.4 289.5 L 312.5 295.6 L 310.8 299.9 L 310.9 302.9 L 308.0 308.9 L 306.2 315.7 L 307.1 322.4 L 308.8 325.2 L 309.2 327.3 L 310.1 329.1 L 313.3 330.1 L 314.4 331.7 L 324.3 329.0 L 326.5 327.5 L 329.0 321.1 L 334.7 319.2 L 339.4 319.0 L 340.1 319.8 L 339.7 321.6 L 337.7 323.8 L 336.6 326.1 L 337.1 326.8 L 335.2 331.3 L 334.6 330.3 L 333.9 330.4 L 333.8 330.9 L 334.4 330.9 L 332.8 337.7 L 330.7 340.1 L 333.2 340.8 L 334.0 340.2 L 337.1 340.6 L 340.0 339.6 L 341.7 340.1 L 343.2 339.7 L 345.1 340.3 L 347.9 342.4 L 348.7 343.4 L 348.3 345.9 L 347.0 348.7 L 346.8 353.0 L 345.3 357.8 L 346.4 360.5 L 350.0 364.9 L 349.9 365.6 L 351.5 365.5 L 352.3 366.4 L 353.9 366.2 L 358.4 363.4 L 361.8 364.1 L 365.3 366.9 L 366.9 367.0 L 369.5 364.4 L 370.8 364.0 L 371.7 359.6 L 373.6 357.9 L 375.6 357.8 L 375.9 357.1 L 378.4 357.4 L 384.0 352.9 L 385.1 353.1 L 385.9 354.1 L 385.0 356.2 L 383.1 356.7 L 384.0 358.3 L 383.9 360.3 L 382.4 362.4 L 383.4 365.4 L 384.8 365.1 L 385.6 362.4 L 384.7 361.1 L 384.7 358.3 L 388.8 356.8 L 388.5 355.1 L 389.7 353.9 L 390.6 356.5 L 392.9 356.6 L 394.8 358.6 L 394.9 359.9 L 401.1 359.5 L 402.9 361.2 L 405.3 361.6 L 407.1 360.5 L 407.2 359.6 L 415.0 359.3 L 412.2 360.4 L 413.2 362.1 L 415.8 362.4 L 418.1 364.2 L 418.5 367.2 L 420.1 367.1 L 423.4 369.3 L 425.3 371.8 L 425.3 373.7 L 426.5 373.8 L 429.4 376.9 L 433.2 377.6 L 433.6 376.9 L 436.2 376.7 L 439.6 377.7 L 443.0 378.9 L 446.3 382.1 L 446.8 383.6 L 447.9 383.4 L 450.4 391.9 L 452.1 392.5 L 452.1 395.1 L 449.7 398.1 L 450.7 399.3 L 456.4 399.8 L 456.5 403.6 L 458.9 401.1 L 468.3 404.7 L 469.9 406.9 L 469.4 408.9 L 473.1 407.8 L 479.3 409.8 L 484.1 409.6 L 488.9 412.7 L 493.0 416.8 L 495.5 417.9 L 498.2 418.0 L 499.4 419.2 L 501.1 426.2 L 500.0 432.3 L 494.1 439.9 L 490.0 447.3 L 489.2 447.4 L 488.4 450.1 L 489.0 457.0 L 488.2 465.2 L 487.3 466.7 L 487.0 471.7 L 484.2 476.5 L 483.9 480.4 L 481.5 482.0 L 480.9 484.2 L 477.5 484.2 L 472.8 485.6 L 470.7 487.3 L 467.3 488.4 L 463.9 491.3 L 461.7 495.0 L 461.5 497.8 L 462.3 499.9 L 461.6 505.5 L 459.7 507.5 L 457.1 514.1 L 453.0 518.8 L 452.2 522.3 L 449.5 526.8 L 446.5 528.9 L 444.1 528.1 L 442.6 528.5 L 439.5 526.9 L 437.5 527.1 L 435.3 525.0 L 435.4 526.9 L 439.8 530.1 L 439.8 532.7 L 442.0 534.3 L 442.2 536.1 L 440.2 540.9 L 436.2 542.9 L 430.4 543.6 L 427.0 543.3 L 428.1 545.5 L 428.1 548.2 L 429.1 550.1 L 427.6 551.4 L 424.7 551.9 L 421.6 550.6 L 420.7 551.5 L 421.9 555.2 L 424.2 556.3 L 425.5 555.2 L 426.8 557.1 L 424.4 558.2 L 422.7 560.5 L 423.0 566.1 L 420.3 566.1 L 418.5 568.0 L 418.5 570.7 L 422.1 573.4 L 425.0 574.1 L 424.9 577.4 L 422.2 579.4 L 421.7 583.6 L 419.6 585.0 L 419.0 586.7 L 421.1 590.4 L 423.6 592.5 L 419.9 592.3 L 416.9 594.4 L 417.6 597.7 L 416.5 597.8 L 412.9 596.6 L 404.7 592.2 L 403.0 589.9 L 403.1 587.8 L 400.8 585.5 L 398.3 579.3 L 398.4 575.9 L 400.5 573.1 L 395.8 572.0 L 397.5 568.8 L 396.7 562.7 L 400.3 564.0 L 399.6 556.4 L 397.4 555.4 L 397.8 560.0 L 395.8 559.5 L 394.4 547.4 L 395.1 544.9 L 392.1 537.1 L 393.4 536.9 L 394.8 519.4 L 393.1 513.9 L 393.4 510.8 L 392.2 506.2 L 393.3 501.6 L 392.5 478.3 L 390.3 467.0 L 386.9 464.9 L 386.5 463.3 L 379.9 459.6 L 371.2 453.3 L 369.6 450.2 L 370.0 449.1 L 366.9 444.3 L 357.3 425.6 L 352.4 421.7 L 353.4 420.0 L 351.7 416.5 L 352.6 413.9 L 355.1 411.6 L 356.8 408.8 L 356.1 407.2 L 354.9 408.9 L 352.9 407.3 L 353.6 406.2 L 353.0 402.9 L 354.1 402.3 L 355.9 397.6 L 355.7 396.1 L 359.6 393.9 L 359.2 392.7 L 360.4 392.4 L 360.3 390.6 L 361.1 389.2 L 362.7 389.0 L 365.3 384.7 L 364.2 383.8 L 364.8 381.7 L 364.2 378.3 L 364.9 377.3 L 364.5 374.2 L 362.3 371.2 L 361.7 369.1 L 362.6 368.2 L 359.7 365.6 L 358.3 365.9 L 357.6 367.2 L 355.2 369.0 L 356.6 371.0 L 355.2 372.0 L 353.7 372.2 L 353.3 370.0 L 352.8 370.6 L 351.8 370.4 L 351.2 368.9 L 347.8 368.3 L 347.6 369.1 L 345.6 367.7 L 345.0 366.9 L 345.3 365.4 L 342.2 363.4 L 341.3 361.6 L 341.4 362.7 L 340.7 363.6 L 339.1 362.2 L 338.7 361.4 L 339.3 359.1 L 338.4 358.6 L 339.2 357.9 L 333.6 351.1 L 334.0 350.6 L 334.7 350.9 L 334.3 349.7 L 333.4 349.4 L 332.9 350.3 L 331.1 350.2 L 324.6 347.4 L 322.6 347.4 L 319.7 345.1 L 316.6 341.1 L 312.6 338.9 L 306.5 341.0 L 293.7 335.3 L 290.7 332.5 L 285.9 331.1 L 284.9 329.4 L 281.8 327.3 L 280.6 325.0 L 280.2 323.2 L 281.3 322.8 L 281.2 321.8 L 282.3 319.5 L 281.6 316.3 L 278.9 310.8 L 276.4 307.9 L 275.4 305.5 L 273.1 304.0 L 272.7 303.1 L 273.7 300.8 L 271.0 298.1 L 270.9 295.5 L 269.3 295.2 L 267.1 291.4 L 266.1 284.6 L 266.6 283.2 L 264.8 281.7 L 263.8 281.8 L 262.3 280.8 L 261.4 282.3 L 260.8 286.9 L 263.7 292.2 L 263.7 293.4 L 264.3 293.4 L 264.3 295.8 L 265.3 298.1 L 266.8 300.0 L 266.9 303.4 L 267.9 306.8 L 267.7 308.8 L 269.1 308.9 L 270.8 312.3 L 269.0 314.3 L 268.5 314.3 L 268.1 312.0 L 266.5 309.9 L 263.3 307.1 L 264.0 302.4 L 261.1 299.6 L 260.6 300.1 L 258.4 298.2 L 257.1 296.0 L 258.7 295.9 L 260.2 294.6 L 260.7 292.9 L 259.1 290.2 L 257.6 289.2 L 256.2 281.4 L 256.2 276.2 L 254.9 274.0 L 253.7 273.6 L 253.7 272.5 L 252.1 272.3 L 251.3 271.3 L 248.6 270.9 L 248.1 270.3 L 248.5 268.3 L 246.9 264.6 L 246.4 259.4 L 246.9 258.5 L 245.0 254.2 L 245.9 251.2 L 245.2 249.2 L 248.6 243.0 L 249.0 240.1 L 255.8 230.0 L 257.8 225.2 L 258.6 220.4 L 259.4 219.7 L 262.8 220.9 L 262.5 224.3 L 263.7 223.4 L 265.5 217.4 L 260.6 212.3 L 256.4 210.9 L 256.8 207.7 L 258.5 205.5 L 256.0 204.0 L 257.3 201.2 L 255.7 198.6 L 256.9 196.8 L 256.3 195.5 L 254.7 194.4 L 256.1 191.4 L 254.7 188.6 L 255.6 185.4 L 249.1 185.0 L 246.8 184.1 L 244.1 180.5 L 238.6 178.7 L 234.7 179.0 L 230.9 177.4 L 229.0 176.0 L 225.5 176.7 L 224.0 179.0 L 211.8 181.8 L 213.2 179.8 L 217.4 176.5 L 221.1 175.5 L 221.1 174.7 L 206.3 181.2 L 206.8 182.8 L 202.2 185.3 L 194.5 187.8 L 192.5 189.3 L 186.7 191.1 L 184.5 192.7 L 162.5 198.2 L 162.6 197.6 L 175.1 193.0 L 178.8 192.6 L 191.1 187.3 L 197.0 182.6 L 193.1 183.7 L 192.7 183.1 L 190.2 184.3 L 190.0 182.6 L 188.2 183.8 L 188.8 182.1 L 183.2 183.5 L 186.6 180.2 L 186.0 179.0 L 182.0 179.7 L 180.3 177.3 L 182.2 175.4 L 181.6 173.9 L 184.6 172.0 L 191.2 168.5 L 193.5 168.2 L 194.7 168.7 L 198.4 167.2 L 200.0 167.4 L 203.0 166.4 L 204.0 164.9 L 203.2 164.3 L 206.4 163.1 L 199.9 164.5 L 198.6 163.8 L 194.7 164.2 L 191.8 163.4 L 192.2 162.1 L 191.1 160.2 L 203.4 157.3 L 205.4 157.3 L 203.3 158.9 L 208.7 158.8 L 208.8 156.8 L 207.1 155.6 L 207.2 154.0 L 206.3 152.6 L 204.1 151.6 L 207.4 150.0 L 211.8 149.9 L 216.6 148.4 L 218.9 146.9 L 223.1 145.4 L 232.0 143.7 L 233.9 143.9 L 239.5 142.3 L 242.4 142.9 L 242.5 144.3 L 244.3 143.7 L 248.1 143.9 L 247.2 144.6 L 250.2 145.1 L 253.0 144.8 L 262.8 146.5 L 266.5 146.0 L 275.1 148.1 L 277.5 149.6 L 279.8 149.9 L 287.0 147.6 L 290.2 148.0 L 299.8 145.9 L 300.3 147.1 L 302.8 146.4 L 304.6 145.0 L 306.0 145.3 L 307.5 148.1 L 312.6 146.0 L 310.9 148.3 L 314.3 147.8 L 316.0 146.9 L 318.8 147.1 L 321.3 148.4 L 326.0 149.6 L 331.5 149.9 L 333.5 151.5 L 328.8 153.1 L 332.7 153.7 L 342.2 152.8 L 343.4 154.7 L 347.2 153.1 L 345.7 151.8 L 348.1 150.7 L 353.4 150.2 L 354.8 151.0 L 356.0 152.7 L 358.9 152.4 L 362.3 153.9 L 370.0 153.4 L 371.0 151.5 L 373.6 150.9 L 376.7 152.0 L 374.7 155.0 L 377.9 152.5 L 379.8 152.5 L 383.0 149.4 L 381.7 147.4 L 379.7 146.2 L 382.3 142.8 L 386.7 140.5 L 389.5 141.0 L 391.0 142.4 L 391.9 145.9 L 388.7 147.4 L 392.8 148.0 L 390.8 151.2 L 395.6 148.8 L 397.2 150.8 Z M 354.6 137.4 L 355.9 138.4 L 355.3 141.4 L 357.6 140.1 L 358.5 137.0 L 360.9 136.6 L 362.8 137.0 L 364.4 138.3 L 362.6 143.4 L 368.7 146.4 L 367.5 147.8 L 363.3 148.0 L 364.0 149.2 L 362.4 150.4 L 354.8 149.0 L 335.3 151.1 L 335.2 149.6 L 332.5 148.7 L 330.1 149.1 L 329.2 146.6 L 342.1 145.3 L 338.0 144.6 L 329.3 144.8 L 329.1 143.6 L 335.6 142.4 L 331.9 142.5 L 328.5 141.6 L 332.5 139.4 L 335.2 138.2 L 343.2 136.3 L 345.0 136.9 L 342.6 138.3 L 348.6 137.4 L 350.6 138.9 Z M 367.1 135.3 L 368.4 136.0 L 368.4 136.0 L 364.7 138.0 L 362.8 135.9 L 363.9 135.5 Z M 425.4 138.0 L 423.3 136.3 L 424.1 135.2 L 430.4 135.3 L 433.5 137.0 L 433.2 137.8 L 428.2 137.6 Z M 422.8 138.1 L 421.2 140.1 L 426.4 139.2 L 429.3 138.0 L 436.1 141.0 L 435.7 142.3 L 440.5 141.7 L 441.9 143.6 L 447.1 144.8 L 448.5 146.1 L 449.4 149.0 L 444.3 150.5 L 449.0 152.5 L 452.6 153.2 L 454.9 156.2 L 458.7 156.4 L 457.0 158.6 L 451.0 162.4 L 448.5 161.0 L 446.0 157.9 L 442.6 158.3 L 441.4 160.1 L 446.7 164.4 L 447.0 167.6 L 445.1 170.0 L 437.0 166.5 L 441.2 171.3 L 441.2 172.5 L 434.7 171.2 L 430.0 169.2 L 427.7 167.6 L 429.0 166.7 L 423.0 163.4 L 422.6 164.4 L 415.0 164.9 L 413.5 163.8 L 416.4 161.4 L 426.5 160.9 L 426.2 159.8 L 427.8 158.2 L 432.6 155.0 L 432.2 152.5 L 429.3 151.0 L 424.9 149.9 L 426.9 149.1 L 425.4 147.2 L 423.3 147.0 L 422.0 145.9 L 420.2 146.9 L 415.6 147.3 L 407.3 146.6 L 399.1 145.2 L 397.8 144.1 L 401.3 142.7 L 397.9 142.7 L 399.2 139.6 L 402.9 136.9 L 406.1 135.7 L 412.7 134.9 L 409.7 136.8 L 410.3 138.7 L 414.0 136.2 L 420.7 135.0 Z M 382.4 137.3 L 385.0 138.6 L 382.6 141.3 L 377.8 142.5 L 375.7 142.3 L 374.9 141.1 L 370.9 138.7 L 371.7 137.8 L 376.2 138.2 L 375.1 136.2 L 379.0 134.7 L 381.3 135.4 L 385.8 135.0 L 385.7 135.9 Z M 939.1 135.0 L 941.7 134.7 L 947.5 136.6 L 938.2 136.2 Z M 388.2 136.0 L 393.3 133.9 L 401.9 134.7 L 396.5 137.4 L 393.3 138.0 L 389.2 140.2 L 386.6 140.1 L 387.0 137.4 Z M 315.6 139.7 L 323.8 135.2 L 323.3 133.4 L 331.6 132.9 L 340.1 133.7 L 342.8 135.8 L 331.6 138.7 L 326.7 140.8 L 325.6 142.1 L 317.9 143.7 L 317.9 142.3 L 313.9 140.7 Z M 946.0 129.9 L 950.8 130.3 L 957.4 131.1 L 957.4 131.1 L 956.2 132.2 L 952.2 132.0 L 946.6 130.8 Z M 392.0 130.2 L 395.9 129.4 L 397.1 130.5 L 397.2 131.4 L 395.1 132.5 L 389.7 131.5 Z M 925.3 130.6 L 924.3 128.6 L 926.6 128.0 L 932.7 128.1 L 942.8 129.7 L 943.6 131.8 L 935.1 131.8 L 932.0 132.5 Z M 382.8 131.6 L 380.7 131.1 L 382.2 129.4 L 378.3 129.7 L 380.1 127.4 L 390.2 126.4 L 390.8 127.7 L 386.8 131.3 Z M 370.8 129.9 L 368.1 131.3 L 360.0 131.8 L 353.0 133.0 L 349.4 133.1 L 350.0 132.1 L 356.0 130.8 L 345.3 131.2 L 342.6 130.7 L 351.5 127.0 L 356.9 128.0 L 359.3 129.7 L 363.1 129.9 L 362.4 127.2 L 365.5 126.1 L 367.5 126.5 L 366.9 128.9 L 371.6 128.5 Z M 734.6 141.9 L 733.6 140.2 L 735.8 139.6 L 735.1 137.9 L 738.6 135.4 L 736.3 135.0 L 740.7 132.4 L 739.5 131.1 L 750.4 127.7 L 757.7 127.2 L 760.9 126.1 L 765.1 125.7 L 767.3 126.8 L 766.3 127.7 L 752.9 130.6 L 747.1 133.4 L 742.6 139.2 L 744.1 141.7 L 749.7 144.2 L 740.4 144.1 L 739.2 142.7 Z M 405.7 128.2 L 408.7 129.5 L 414.9 129.9 L 423.8 129.0 L 427.3 129.2 L 429.0 130.3 L 428.7 131.5 L 422.9 133.0 L 405.0 132.7 L 399.6 131.8 L 400.9 128.7 L 399.7 127.5 L 395.3 127.1 L 393.4 126.3 L 395.3 125.1 L 399.7 125.3 L 401.4 126.2 L 405.9 126.2 L 407.1 127.1 Z M 340.1 128.3 L 336.0 128.7 L 333.5 128.1 L 346.2 124.1 L 353.1 123.7 L 350.5 125.9 L 345.5 127.0 Z M 402.1 123.3 L 403.2 123.8 L 402.6 124.1 L 402.6 124.1 L 401.5 124.2 L 397.5 124.0 L 397.6 123.2 Z M 365.6 122.3 L 368.3 122.8 L 366.7 123.6 L 366.7 123.6 L 361.7 124.4 L 359.3 123.5 L 362.0 122.6 Z M 658.0 122.1 L 662.5 121.5 L 663.6 122.5 L 666.9 123.2 L 662.2 124.3 L 658.2 123.7 L 659.6 122.9 Z M 367.1 120.4 L 368.2 120.6 L 370.4 121.1 L 370.4 121.1 L 367.2 121.6 L 363.5 121.6 L 364.0 121.2 Z M 395.4 120.4 L 399.3 120.7 L 401.0 121.6 L 399.5 122.6 L 395.7 123.2 L 394.5 122.5 L 394.5 121.5 Z M 379.7 121.7 L 382.6 120.9 L 380.7 120.2 L 381.6 119.2 L 390.4 120.6 L 390.8 121.9 L 390.6 123.0 L 384.5 121.8 Z M 836.7 119.3 L 843.8 120.8 L 844.3 121.9 L 844.3 121.9 L 832.8 123.0 L 833.3 119.4 L 834.8 119.1 Z M 651.2 123.8 L 650.5 126.1 L 647.8 126.2 L 642.8 124.5 L 644.6 123.5 L 641.2 122.7 L 636.6 120.4 L 634.7 118.3 L 640.5 117.3 L 641.8 118.3 L 644.9 118.2 L 645.6 117.3 L 648.8 117.2 L 659.3 120.1 L 653.9 121.2 L 653.1 123.2 Z M 655.7 118.5 L 655.2 117.8 L 652.0 117.7 L 649.4 116.5 L 655.9 115.8 L 659.2 116.4 L 661.2 115.7 L 671.3 117.2 L 668.5 118.6 L 662.2 119.0 Z M 715.0 117.3 L 712.3 116.7 L 713.1 115.9 L 708.3 115.9 L 715.5 115.4 L 716.3 116.0 L 719.0 115.0 L 722.5 115.6 L 717.3 116.9 Z M 811.9 117.0 L 808.5 116.5 L 812.2 114.7 L 816.2 114.2 L 829.5 118.0 L 831.4 120.3 L 826.9 120.7 L 815.5 118.9 Z M 411.0 122.2 L 406.8 121.8 L 405.4 120.7 L 406.4 119.7 L 408.8 119.0 L 404.8 119.0 L 403.2 118.1 L 403.1 117.0 L 408.1 115.0 L 410.5 114.9 L 410.2 114.3 L 415.3 114.2 L 416.6 115.5 L 422.7 116.5 L 422.8 118.3 L 424.7 119.1 L 415.1 122.0 Z M 482.4 111.5 L 468.5 113.6 L 473.1 113.6 L 462.9 115.8 L 457.5 117.9 L 444.1 119.2 L 446.8 119.5 L 444.9 120.0 L 445.8 121.3 L 433.4 125.0 L 433.3 125.6 L 437.2 125.5 L 436.7 126.2 L 429.5 127.9 L 424.2 127.1 L 417.2 127.5 L 410.0 127.1 L 410.7 125.7 L 415.4 125.1 L 415.9 123.0 L 417.5 122.8 L 422.4 124.0 L 420.8 122.3 L 417.7 121.7 L 420.4 120.7 L 424.8 120.0 L 426.3 119.1 L 424.1 118.1 L 424.4 116.7 L 431.7 117.1 L 435.9 116.2 L 423.7 116.0 L 420.8 115.2 L 420.1 114.2 L 418.4 113.4 L 418.9 112.6 L 433.8 110.8 L 437.7 111.6 L 440.7 110.3 L 447.9 109.7 L 461.6 109.5 L 475.6 110.0 L 483.0 110.9 Z M 545.0 111.9 L 545.9 112.3 L 553.5 112.0 L 559.5 112.9 L 563.8 112.1 L 565.4 113.0 L 562.6 114.4 L 578.8 112.6 L 585.0 113.0 L 586.0 114.1 L 575.7 116.5 L 568.7 116.9 L 573.7 117.0 L 568.7 120.7 L 568.2 123.8 L 570.5 125.6 L 563.1 126.6 L 567.0 128.1 L 567.2 130.6 L 564.7 130.9 L 567.2 133.4 L 562.1 133.6 L 564.5 134.8 L 563.6 135.9 L 557.0 136.3 L 559.6 138.4 L 559.4 139.7 L 554.9 138.5 L 553.6 139.3 L 556.6 140.1 L 559.4 141.9 L 559.9 144.4 L 555.5 145.0 L 551.3 142.0 L 551.7 144.1 L 548.6 145.8 L 558.2 146.1 L 544.2 151.3 L 534.1 152.4 L 531.3 153.6 L 527.1 157.0 L 521.2 159.2 L 512.1 160.9 L 509.5 162.9 L 508.8 165.2 L 507.0 167.4 L 502.1 170.0 L 502.4 172.6 L 498.4 178.6 L 494.6 178.8 L 491.5 176.1 L 486.3 176.1 L 484.4 174.2 L 483.6 171.0 L 480.5 166.9 L 479.9 164.7 L 480.5 161.8 L 478.1 158.8 L 479.9 156.5 L 478.6 155.3 L 482.4 151.6 L 486.5 150.4 L 489.3 146.7 L 482.3 148.7 L 479.8 147.7 L 480.4 145.6 L 482.0 143.9 L 488.8 144.7 L 483.8 141.7 L 481.2 142.1 L 479.6 141.4 L 483.4 138.5 L 480.1 132.2 L 477.7 131.0 L 478.4 129.8 L 473.1 128.1 L 456.6 128.2 L 451.8 125.5 L 462.8 124.5 L 453.7 123.8 L 449.5 122.6 L 450.5 121.6 L 468.7 119.0 L 470.2 118.0 L 465.0 117.1 L 467.6 116.0 L 479.7 114.0 L 479.6 112.9 L 485.1 112.3 L 498.4 111.9 L 500.1 112.6 L 506.6 111.3 L 517.8 113.2 L 513.5 111.9 L 514.5 110.9 L 522.3 109.5 L 529.5 109.6 L 532.6 108.8 L 540.0 108.6 L 556.3 108.9 L 568.6 110.6 L 564.5 111.5 L 556.4 111.6 Z" />
+            <rect x="40pt" y="413.8pt" w="274pt" h="168.0pt" radius="4pt" fill="surface" stroke="rule" stroke-width="0.75pt" />
+            <path fill="land" fill-rule="evenodd" d="M 276.5 483.5 L 278.7 483.0 L 273.2 485.2 L 270.2 485.6 L 270.6 485.1 L 269.8 485.5 L 270.0 484.8 L 271.6 483.8 L 275.6 483.4 L 277.1 482.5 L 275.8 483.7 L 276.3 483.7 Z M 52.4 435.8 L 53.7 435.8 L 55.4 438.3 L 58.9 439.9 L 61.0 443.3 L 61.4 442.8 L 61.8 444.2 L 61.2 444.1 L 60.7 444.6 L 59.2 444.3 L 54.1 442.3 L 55.3 440.9 L 55.4 439.9 L 55.0 441.0 L 52.6 441.4 L 51.1 440.6 L 51.9 440.1 L 50.5 439.5 L 50.4 435.8 L 52.1 435.8 Z M 270.0 459.9 L 272.0 458.5 L 271.7 459.7 L 270.2 459.9 Z M 65.8 446.7 L 64.9 446.4 L 64.2 445.2 L 64.6 444.3 L 65.0 444.8 L 64.4 445.1 L 65.8 446.4 Z M 171.1 556.8 L 171.2 556.3 L 172.0 562.0 L 171.1 558.2 Z M 254.6 572.0 L 254.7 574.5 L 253.9 574.4 L 252.9 572.0 L 254.2 571.6 L 254.3 572.5 Z M 255.9 562.1 L 256.2 559.6 L 255.0 558.1 L 253.2 557.8 L 254.9 557.8 L 256.9 559.8 L 257.0 560.8 L 256.5 561.3 L 256.2 563.1 L 255.5 562.4 Z M 260.8 567.1 L 260.7 569.7 L 260.0 568.8 L 260.5 568.8 L 260.7 567.2 L 259.8 566.2 L 258.1 565.6 L 258.4 564.9 L 260.6 566.9 Z M 253.6 571.0 L 252.8 571.6 L 252.3 570.5 L 251.1 569.8 L 251.9 569.7 L 252.0 566.8 L 253.1 567.4 L 254.0 569.4 L 254.0 570.7 Z M 252.6 558.8 L 253.2 558.6 L 253.3 559.1 L 249.8 559.9 L 248.8 558.9 L 249.6 559.5 L 250.3 559.1 L 250.4 558.4 L 251.8 558.8 Z M 102.8 544.5 L 102.8 543.7 L 103.5 544.2 L 103.7 544.9 L 104.4 545.1 L 104.6 546.5 L 103.2 545.1 Z M 107.2 547.3 L 107.5 545.8 L 108.3 545.5 L 108.6 546.7 L 108.3 547.9 L 107.3 547.5 Z M 186.5 435.8 L 239.2 435.8 L 181.4 435.8 L 303.6 435.8 L 299.6 435.8 L 297.8 439.2 L 293.9 440.0 L 294.2 440.3 L 291.2 442.0 L 288.1 445.3 L 282.4 443.9 L 287.3 445.4 L 287.7 445.8 L 286.7 447.7 L 281.3 452.7 L 277.4 454.0 L 274.1 455.8 L 272.0 458.3 L 271.0 458.4 L 269.7 459.5 L 268.5 459.4 L 269.8 459.9 L 269.9 460.4 L 266.8 462.2 L 271.7 460.0 L 273.4 456.9 L 277.8 454.0 L 284.5 451.5 L 288.9 446.5 L 291.7 444.4 L 297.0 441.8 L 303.6 439.9 L 303.6 445.5 L 300.6 446.2 L 302.1 446.0 L 303.6 446.6 L 303.6 468.6 L 303.0 468.5 L 302.8 467.1 L 303.6 465.1 L 303.6 464.6 L 303.0 465.2 L 303.6 464.4 L 303.6 460.9 L 303.1 460.5 L 303.5 460.0 L 302.8 460.4 L 303.1 460.8 L 301.7 461.7 L 299.9 461.8 L 298.8 461.3 L 298.9 462.8 L 299.4 463.1 L 298.5 463.9 L 295.8 464.4 L 294.9 465.4 L 294.5 464.8 L 293.6 465.1 L 293.2 464.8 L 292.9 466.1 L 291.7 465.7 L 292.1 465.1 L 291.8 465.1 L 291.9 464.5 L 291.1 465.2 L 290.6 467.0 L 290.0 467.6 L 288.7 468.0 L 288.6 467.6 L 288.3 468.1 L 288.2 467.5 L 287.8 468.3 L 287.6 467.9 L 287.5 468.7 L 286.8 468.6 L 286.8 468.2 L 286.0 468.7 L 283.2 473.7 L 284.1 474.8 L 283.2 475.1 L 282.3 476.3 L 283.6 476.8 L 284.9 479.3 L 286.7 479.0 L 285.7 477.6 L 286.2 477.6 L 286.8 478.2 L 286.9 479.8 L 283.9 480.5 L 283.7 479.6 L 281.8 480.7 L 281.9 479.4 L 281.3 479.7 L 280.8 479.1 L 280.3 481.3 L 274.4 481.8 L 271.6 483.2 L 269.9 484.6 L 270.4 483.0 L 270.0 482.0 L 270.1 483.8 L 268.7 485.8 L 269.9 486.5 L 269.5 489.7 L 269.5 488.6 L 268.0 491.9 L 265.9 494.2 L 266.0 493.1 L 263.4 491.3 L 263.8 489.7 L 265.0 489.3 L 265.3 488.7 L 263.6 489.8 L 263.2 491.4 L 264.3 494.1 L 265.2 495.1 L 264.8 496.1 L 265.3 496.1 L 265.4 496.9 L 261.7 503.7 L 261.5 502.4 L 262.8 499.4 L 262.0 499.3 L 262.2 498.7 L 261.7 498.3 L 262.0 497.3 L 261.2 497.7 L 260.3 496.9 L 260.3 496.0 L 261.3 495.9 L 260.5 495.2 L 259.9 495.4 L 260.7 494.7 L 260.4 494.2 L 260.0 494.4 L 260.8 493.5 L 260.5 493.6 L 260.4 492.9 L 261.1 491.9 L 261.9 491.9 L 261.4 491.7 L 261.9 491.2 L 261.1 490.9 L 261.0 491.6 L 260.5 491.9 L 260.3 491.6 L 260.2 492.2 L 260.0 491.8 L 259.6 492.7 L 259.0 492.5 L 259.6 493.2 L 259.4 493.7 L 259.0 493.5 L 259.7 497.2 L 259.0 496.9 L 258.5 495.9 L 258.6 496.3 L 259.9 498.7 L 258.1 497.8 L 257.7 497.1 L 257.6 497.6 L 257.2 496.8 L 256.2 497.0 L 257.0 494.5 L 256.1 496.0 L 256.0 497.3 L 257.0 497.3 L 257.6 498.1 L 260.3 499.7 L 259.9 500.9 L 259.3 500.9 L 256.7 498.3 L 259.1 500.9 L 260.1 501.4 L 259.8 501.7 L 260.3 501.8 L 260.3 502.6 L 259.7 502.4 L 259.5 503.0 L 258.2 501.8 L 260.2 504.2 L 259.7 504.5 L 258.7 503.3 L 256.1 502.7 L 258.5 503.5 L 259.3 505.0 L 261.4 504.9 L 263.3 510.7 L 261.6 506.3 L 261.4 507.2 L 262.1 509.1 L 260.8 508.3 L 260.8 509.0 L 260.2 508.7 L 260.4 509.1 L 259.8 509.0 L 259.0 509.7 L 258.3 508.5 L 258.3 510.0 L 261.1 509.9 L 261.0 511.4 L 262.0 510.0 L 262.4 510.6 L 262.3 511.6 L 260.6 513.2 L 259.3 512.9 L 258.9 512.2 L 258.3 512.8 L 257.0 512.2 L 259.2 513.6 L 258.1 515.1 L 256.9 514.2 L 257.3 514.9 L 258.2 515.3 L 259.5 515.1 L 259.9 515.4 L 259.5 515.9 L 258.3 516.6 L 256.6 516.6 L 255.9 517.1 L 255.4 516.4 L 255.6 517.5 L 254.0 518.8 L 253.2 520.6 L 253.1 519.4 L 252.9 520.8 L 251.2 520.7 L 249.4 521.8 L 247.9 524.3 L 247.8 523.5 L 247.6 524.9 L 245.3 526.7 L 244.8 526.6 L 244.8 527.4 L 243.0 528.2 L 241.8 528.2 L 242.5 528.6 L 242.1 529.4 L 241.1 528.5 L 241.6 529.7 L 240.6 531.2 L 239.8 531.5 L 240.0 532.0 L 239.2 533.3 L 239.5 533.4 L 238.7 534.3 L 239.1 534.8 L 238.4 535.1 L 238.1 537.2 L 239.2 542.5 L 242.3 549.4 L 242.0 550.6 L 242.6 552.5 L 241.9 551.1 L 241.9 549.2 L 241.6 550.2 L 241.6 549.0 L 241.0 548.0 L 244.3 558.3 L 244.0 563.5 L 242.5 566.6 L 239.8 567.1 L 239.7 566.2 L 240.5 566.5 L 239.8 565.9 L 238.7 563.5 L 237.3 562.7 L 236.2 560.0 L 236.8 558.9 L 235.9 559.7 L 236.0 557.5 L 235.3 557.6 L 235.3 558.1 L 234.8 558.0 L 233.0 554.7 L 234.4 552.7 L 233.2 552.2 L 233.5 553.2 L 232.9 553.5 L 232.5 552.8 L 233.3 547.3 L 228.9 541.8 L 227.4 540.9 L 226.3 541.1 L 226.0 541.9 L 222.1 543.1 L 221.7 542.7 L 221.7 542.3 L 222.1 542.7 L 221.9 542.1 L 220.6 540.8 L 220.9 539.9 L 220.2 540.6 L 217.3 539.3 L 218.7 539.3 L 218.1 538.8 L 214.1 539.7 L 215.0 539.2 L 215.0 538.4 L 214.3 538.6 L 213.8 539.7 L 213.0 539.9 L 213.1 539.4 L 212.3 540.0 L 210.7 540.2 L 211.6 539.9 L 210.7 537.8 L 210.2 539.5 L 206.9 539.2 L 205.2 539.6 L 204.1 540.6 L 201.8 539.5 L 200.9 540.0 L 200.6 540.7 L 201.6 541.3 L 203.4 540.5 L 203.7 540.8 L 203.1 541.4 L 203.9 542.0 L 204.8 541.2 L 205.0 542.4 L 203.5 543.5 L 204.4 544.5 L 206.5 545.6 L 205.9 546.6 L 205.5 546.3 L 204.9 546.8 L 204.3 545.4 L 201.7 543.9 L 202.1 544.4 L 201.7 546.0 L 200.2 545.1 L 199.1 546.0 L 196.9 545.2 L 197.5 545.0 L 197.0 543.7 L 195.9 543.8 L 194.3 542.3 L 193.3 543.0 L 193.5 543.6 L 192.8 543.8 L 188.9 542.6 L 186.2 542.9 L 186.1 541.5 L 185.7 542.4 L 185.9 543.1 L 182.2 544.7 L 183.2 543.8 L 182.1 543.8 L 182.3 542.8 L 181.1 543.0 L 181.7 544.8 L 180.1 546.9 L 177.6 548.6 L 176.0 549.4 L 177.0 548.7 L 175.1 548.9 L 174.3 548.3 L 175.2 549.6 L 174.1 550.2 L 173.7 549.8 L 173.5 551.0 L 172.1 551.2 L 172.2 551.7 L 172.6 551.5 L 172.5 552.1 L 172.1 552.6 L 171.0 552.9 L 171.6 553.7 L 170.9 555.6 L 169.5 554.9 L 169.9 555.8 L 170.7 556.0 L 170.4 557.5 L 170.9 560.0 L 172.2 562.4 L 170.0 571.1 L 169.6 575.8 L 169.2 575.8 L 303.6 575.8 L 132.4 575.8 L 130.2 573.1 L 127.4 570.7 L 128.4 571.2 L 128.4 570.6 L 126.6 569.9 L 125.2 567.4 L 126.2 567.5 L 123.4 565.8 L 123.0 565.0 L 122.0 565.3 L 121.9 564.9 L 122.6 564.0 L 121.3 564.7 L 120.5 564.0 L 120.4 562.4 L 121.3 561.0 L 121.7 561.2 L 121.0 559.8 L 120.1 558.8 L 119.0 558.9 L 118.2 556.9 L 116.3 556.1 L 115.4 554.4 L 115.7 552.7 L 113.2 552.2 L 108.8 546.6 L 105.0 538.0 L 105.1 535.2 L 102.6 534.3 L 102.1 533.2 L 101.3 532.8 L 100.4 533.5 L 97.1 531.4 L 97.7 532.7 L 97.3 535.3 L 98.7 541.3 L 102.1 544.8 L 103.2 547.1 L 103.7 547.0 L 103.9 547.7 L 104.4 547.8 L 104.9 549.3 L 105.8 549.8 L 106.4 552.9 L 108.1 554.5 L 108.7 556.3 L 109.5 556.9 L 110.1 559.0 L 110.8 559.5 L 110.4 557.9 L 111.3 558.8 L 112.5 563.7 L 113.6 565.1 L 115.0 568.6 L 115.1 571.3 L 116.4 572.6 L 116.8 571.3 L 118.7 573.5 L 119.3 574.9 L 120.4 575.8 L 116.7 575.7 L 110.8 570.2 L 110.3 570.3 L 109.0 568.2 L 109.2 564.8 L 107.9 561.4 L 105.2 559.5 L 104.6 557.6 L 104.1 558.4 L 102.8 558.8 L 101.7 557.5 L 99.2 556.1 L 98.8 555.0 L 96.9 553.4 L 96.7 552.8 L 98.7 553.2 L 99.8 552.7 L 99.8 553.2 L 100.8 553.7 L 100.4 552.4 L 99.9 552.4 L 100.9 549.8 L 97.1 544.9 L 94.0 542.7 L 93.4 541.7 L 93.4 539.8 L 92.6 539.3 L 92.3 537.2 L 91.4 536.3 L 91.2 535.1 L 89.8 533.2 L 89.6 532.3 L 90.0 531.7 L 89.0 530.9 L 88.1 529.1 L 86.4 524.0 L 83.8 521.8 L 82.4 521.7 L 82.0 520.2 L 79.3 519.7 L 77.4 518.1 L 73.7 517.8 L 73.0 517.2 L 73.1 514.6 L 72.1 513.9 L 71.9 512.8 L 70.3 511.5 L 67.8 508.0 L 68.1 505.2 L 66.6 504.5 L 65.6 503.4 L 65.2 501.6 L 65.4 500.2 L 67.0 501.9 L 65.7 499.4 L 66.0 499.1 L 69.3 498.9 L 65.6 498.4 L 65.3 498.6 L 65.1 500.1 L 63.4 498.9 L 63.1 499.2 L 63.2 498.0 L 63.6 498.5 L 63.5 498.1 L 60.1 494.4 L 59.6 489.8 L 57.4 486.6 L 58.6 480.9 L 56.6 473.8 L 58.2 469.1 L 59.2 459.1 L 58.9 455.8 L 62.2 456.1 L 61.1 455.5 L 58.6 455.4 L 58.7 453.7 L 59.1 454.6 L 59.3 453.4 L 58.4 452.4 L 59.5 451.8 L 58.4 451.4 L 58.3 451.9 L 57.3 448.1 L 56.1 446.5 L 55.9 444.3 L 59.0 445.5 L 62.6 445.6 L 63.2 446.0 L 64.0 445.6 L 64.5 447.0 L 62.9 448.7 L 62.5 449.8 L 63.4 449.5 L 62.8 449.5 L 62.9 449.1 L 64.8 446.7 L 65.1 447.3 L 64.4 448.4 L 64.9 449.2 L 64.9 450.1 L 64.3 450.0 L 64.1 450.5 L 63.8 449.9 L 63.0 450.9 L 64.3 451.0 L 65.8 449.7 L 65.6 447.5 L 66.3 446.3 L 65.5 445.4 L 65.7 445.9 L 65.2 445.7 L 65.1 445.1 L 65.6 444.8 L 64.5 444.0 L 65.2 443.7 L 65.0 442.3 L 64.4 442.2 L 63.8 440.9 L 63.2 440.7 L 62.8 441.2 L 62.7 440.4 L 62.3 440.3 L 62.1 439.7 L 63.3 439.5 L 63.6 439.0 L 63.0 439.4 L 61.9 439.2 L 62.3 437.5 L 61.7 438.6 L 60.8 439.0 L 58.7 437.9 L 58.9 437.2 L 59.6 438.0 L 60.6 437.5 L 59.4 437.2 L 59.3 435.9 L 59.8 435.8 L 59.1 435.8 L 59.4 435.8 L 58.9 436.4 L 57.7 437.0 L 55.6 435.8 L 50.4 435.8 L 187.8 435.8 L 174.6 435.8 L 186.2 435.8 Z" />
+          </layer>
+          <layer>
+            <rect x="258.6pt" y="213.8pt" w="147.6pt" h="97.9pt" stroke="text-muted" stroke-width="0.6pt" stroke-dash="3 2" />
+            <line x1="258.6pt" y1="311.8pt" x2="177.0pt" y2="413.8pt" stroke="text-muted" stroke-width="0.6pt" stroke-dash="3 2" />
+          </layer>
+          <layer opacity="0.45">
+        <circle cx="382.3pt" cy="253.9pt" r="2.4pt" fill="primary" />
+        <circle cx="366.9pt" cy="250.5pt" r="2.4pt" fill="primary" />
+        <circle cx="247.9pt" cy="260.2pt" r="2.4pt" fill="primary" />
+        <circle cx="268.4pt" cy="228.9pt" r="2.4pt" fill="primary" />
+        <circle cx="667.7pt" cy="525.0pt" r="2.4pt" fill="primary" />
+        <circle cx="968.9pt" cy="316.2pt" r="2.4pt" fill="primary" />
+        <circle cx="859.7pt" cy="334.5pt" r="2.4pt" fill="primary" />
+        <circle cx="953.3pt" cy="421.9pt" r="2.4pt" fill="primary" />
+        <circle cx="937.3pt" cy="387.3pt" r="2.4pt" fill="primary" />
+        <circle cx="1044.0pt" cy="539.5pt" r="2.4pt" fill="primary" />
+        <circle cx="841.3pt" cy="328.2pt" r="2.4pt" fill="primary" />
+        <circle cx="1134.8pt" cy="535.9pt" r="2.4pt" fill="primary" />
+        <circle cx="1020.7pt" cy="270.0pt" r="2.4pt" fill="primary" />
+        <circle cx="990.8pt" cy="259.3pt" r="2.4pt" fill="primary" />
+        <circle cx="944.3pt" cy="394.0pt" r="2.4pt" fill="primary" />
+        <circle cx="1069.4pt" cy="524.8pt" r="2.4pt" fill="primary" />
+        <circle cx="989.6pt" cy="306.1pt" r="2.4pt" fill="primary" />
+        <circle cx="930.8pt" cy="348.0pt" r="2.4pt" fill="primary" />
+        <circle cx="1031.8pt" cy="266.4pt" r="2.4pt" fill="primary" />
+        <circle cx="400.4pt" cy="230.1pt" r="2.4pt" fill="primary" />
+        <circle cx="294.1pt" cy="210.1pt" r="2.4pt" fill="primary" />
+        <circle cx="636.3pt" cy="213.4pt" r="2.4pt" fill="primary" />
+        <circle cx="594.8pt" cy="201.9pt" r="2.4pt" fill="primary" />
+        <circle cx="611.6pt" cy="208.4pt" r="2.4pt" fill="primary" />
+        <circle cx="638.4pt" cy="230.3pt" r="2.4pt" fill="primary" />
+        <circle cx="618.6pt" cy="217.9pt" r="2.4pt" fill="primary" />
+        <circle cx="601.1pt" cy="248.8pt" r="2.4pt" fill="primary" />
+        <circle cx="659.6pt" cy="181.2pt" r="2.4pt" fill="primary" />
+        <circle cx="636.3pt" cy="223.3pt" r="2.4pt" fill="primary" />
+        <circle cx="717.9pt" cy="279.7pt" r="2.4pt" fill="primary" />
+        <circle cx="297.1pt" cy="322.6pt" r="2.4pt" fill="primary" />
+        <circle cx="768.6pt" cy="302.2pt" r="2.4pt" fill="primary" />
+        <circle cx="783.6pt" cy="305.4pt" r="2.4pt" fill="primary" />
+        <circle cx="466.6pt" cy="486.4pt" r="2.4pt" fill="primary" />
+        <circle cx="1060.8pt" cy="530.1pt" r="2.4pt" fill="primary" />
+        <circle cx="1060.8pt" cy="530.1pt" r="2.4pt" fill="primary" />
+        <circle cx="1069.4pt" cy="524.8pt" r="2.4pt" fill="primary" />
+        <circle cx="1044.0pt" cy="539.5pt" r="2.4pt" fill="primary" />
+        <circle cx="658.4pt" cy="220.3pt" r="2.4pt" fill="primary" />
+        <circle cx="624.1pt" cy="210.8pt" r="2.4pt" fill="primary" />
+        <circle cx="466.6pt" cy="486.4pt" r="2.4pt" fill="primary" />
+        <circle cx="477.1pt" cy="483.9pt" r="2.4pt" fill="primary" />
+        <circle cx="381.6pt" cy="236.9pt" r="2.4pt" fill="primary" />
+        <circle cx="408.7pt" cy="225.4pt" r="2.4pt" fill="primary" />
+        <circle cx="844.6pt" cy="330.3pt" r="2.4pt" fill="primary" />
+        <circle cx="337.6pt" cy="244.4pt" r="2.4pt" fill="primary" />
+        <circle cx="397.9pt" cy="523.3pt" r="2.4pt" fill="primary" />
+        <circle cx="646.0pt" cy="193.8pt" r="2.4pt" fill="primary" />
+        <circle cx="968.9pt" cy="316.2pt" r="2.4pt" fill="primary" />
+        <circle cx="382.3pt" cy="253.9pt" r="2.4pt" fill="primary" />
+        <circle cx="382.3pt" cy="253.9pt" r="2.4pt" fill="primary" />
+        <circle cx="618.6pt" cy="217.9pt" r="2.4pt" fill="primary" />
+        <circle cx="627.6pt" cy="238.2pt" r="2.4pt" fill="primary" />
+        <circle cx="649.0pt" cy="204.9pt" r="2.4pt" fill="primary" />
+        <circle cx="636.3pt" cy="213.4pt" r="2.4pt" fill="primary" />
+        <circle cx="859.7pt" cy="334.5pt" r="2.4pt" fill="primary" />
+        <circle cx="953.3pt" cy="421.9pt" r="2.4pt" fill="primary" />
+        <circle cx="717.9pt" cy="279.7pt" r="2.4pt" fill="primary" />
+        <circle cx="638.4pt" cy="230.3pt" r="2.4pt" fill="primary" />
+        <circle cx="1031.8pt" cy="266.4pt" r="2.4pt" fill="primary" />
+        <circle cx="1020.7pt" cy="270.0pt" r="2.4pt" fill="primary" />
+        <circle cx="990.8pt" cy="259.3pt" r="2.4pt" fill="primary" />
+        <circle cx="1000.6pt" cy="268.2pt" r="2.4pt" fill="primary" />
+        <circle cx="937.3pt" cy="387.3pt" r="2.4pt" fill="primary" />
+        <circle cx="297.1pt" cy="322.6pt" r="2.4pt" fill="primary" />
+        <circle cx="1134.8pt" cy="535.9pt" r="2.4pt" fill="primary" />
+        <circle cx="355.5pt" cy="243.4pt" r="2.4pt" fill="primary" />
+        <circle cx="594.8pt" cy="201.9pt" r="2.4pt" fill="primary" />
+        <circle cx="640.2pt" cy="179.3pt" r="2.4pt" fill="primary" />
+        <circle cx="627.1pt" cy="182.5pt" r="2.4pt" fill="primary" />
+        <circle cx="670.1pt" cy="205.9pt" r="2.4pt" fill="primary" />
+        <circle cx="772.0pt" cy="305.1pt" r="2.4pt" fill="primary" />
+        <circle cx="698.9pt" cy="496.2pt" r="2.4pt" fill="primary" />
+        <circle cx="667.7pt" cy="525.0pt" r="2.4pt" fill="primary" />
+        <circle cx="309.7pt" cy="289.7pt" r="2.4pt" fill="primary" />
+        <circle cx="866.9pt" cy="350.5pt" r="2.4pt" fill="primary" />
+        <circle cx="944.3pt" cy="394.0pt" r="2.4pt" fill="primary" />
+        <circle cx="601.1pt" cy="248.8pt" r="2.4pt" fill="primary" />
+        <circle cx="656.7pt" cy="176.7pt" r="2.4pt" fill="primary" />
+        <circle cx="636.3pt" cy="223.3pt" r="2.4pt" fill="primary" />
+        <circle cx="629.6pt" cy="227.6pt" r="2.4pt" fill="primary" />
+        <circle cx="781.2pt" cy="308.2pt" r="2.4pt" fill="primary" />
+        <circle cx="783.6pt" cy="305.4pt" r="2.4pt" fill="primary" />
+        <circle cx="611.6pt" cy="208.4pt" r="2.4pt" fill="primary" />
+        <circle cx="603.2pt" cy="208.6pt" r="2.4pt" fill="primary" />
+        <circle cx="304.1pt" cy="246.1pt" r="2.4pt" fill="primary" />
+        <circle cx="625.5pt" cy="205.4pt" r="2.4pt" fill="primary" />
+        <circle cx="841.3pt" cy="328.2pt" r="2.4pt" fill="primary" />
+        <circle cx="247.9pt" cy="260.2pt" r="2.4pt" fill="primary" />
+        <circle cx="270.5pt" cy="223.8pt" r="2.4pt" fill="primary" />
+        <circle cx="272.5pt" cy="274.7pt" r="2.4pt" fill="primary" />
+        <circle cx="698.9pt" cy="496.2pt" r="2.4pt" fill="primary" />
+        <circle cx="987.3pt" cy="309.6pt" r="2.4pt" fill="primary" />
+        <circle cx="968.9pt" cy="316.2pt" r="2.4pt" fill="primary" />
+        <circle cx="1031.8pt" cy="266.4pt" r="2.4pt" fill="primary" />
+        <circle cx="1020.7pt" cy="270.0pt" r="2.4pt" fill="primary" />
+        <circle cx="990.8pt" cy="259.3pt" r="2.4pt" fill="primary" />
+        <circle cx="841.3pt" cy="328.2pt" r="2.4pt" fill="primary" />
+        <circle cx="849.5pt" cy="292.7pt" r="2.4pt" fill="primary" />
+        <circle cx="944.3pt" cy="394.0pt" r="2.4pt" fill="primary" />
+        <circle cx="953.3pt" cy="421.9pt" r="2.4pt" fill="primary" />
+        <circle cx="930.8pt" cy="348.0pt" r="2.4pt" fill="primary" />
+        <circle cx="1069.4pt" cy="524.8pt" r="2.4pt" fill="primary" />
+        <circle cx="1044.0pt" cy="539.5pt" r="2.4pt" fill="primary" />
+        <circle cx="683.0pt" cy="177.0pt" r="2.4pt" fill="primary" />
+        <circle cx="659.6pt" cy="181.2pt" r="2.4pt" fill="primary" />
+        <circle cx="670.1pt" cy="205.9pt" r="2.4pt" fill="primary" />
+        <circle cx="601.1pt" cy="248.8pt" r="2.4pt" fill="primary" />
+        <circle cx="622.7pt" cy="212.2pt" r="2.4pt" fill="primary" />
+        <circle cx="611.6pt" cy="208.4pt" r="2.4pt" fill="primary" />
+        <circle cx="636.3pt" cy="213.4pt" r="2.4pt" fill="primary" />
+        <circle cx="630.7pt" cy="201.6pt" r="2.4pt" fill="primary" />
+        <circle cx="636.3pt" cy="223.3pt" r="2.4pt" fill="primary" />
+        <circle cx="638.4pt" cy="230.3pt" r="2.4pt" fill="primary" />
+        <circle cx="618.6pt" cy="217.9pt" r="2.4pt" fill="primary" />
+        <circle cx="772.0pt" cy="305.1pt" r="2.4pt" fill="primary" />
+        <circle cx="767.1pt" cy="300.8pt" r="2.4pt" fill="primary" />
+        <circle cx="717.9pt" cy="279.7pt" r="2.4pt" fill="primary" />
+        <circle cx="400.4pt" cy="230.1pt" r="2.4pt" fill="primary" />
+        <circle cx="381.6pt" cy="236.9pt" r="2.4pt" fill="primary" />
+        <circle cx="297.1pt" cy="322.6pt" r="2.4pt" fill="primary" />
+        <circle cx="466.6pt" cy="486.4pt" r="2.4pt" fill="primary" />
+        <circle cx="397.9pt" cy="523.3pt" r="2.4pt" fill="primary" />
+        <circle cx="330.6pt" cy="245.7pt" r="2.4pt" fill="primary" />
+        <circle cx="369.4pt" cy="275.6pt" r="2.4pt" fill="primary" />
+        <circle cx="382.3pt" cy="253.9pt" r="2.4pt" fill="primary" />
+        <circle cx="366.9pt" cy="250.5pt" r="2.4pt" fill="primary" />
+        <circle cx="318.1pt" cy="277.2pt" r="2.4pt" fill="primary" />
+        <circle cx="263.7pt" cy="229.8pt" r="2.4pt" fill="primary" />
+        <circle cx="254.6pt" cy="272.4pt" r="2.4pt" fill="primary" />
+        <circle cx="282.8pt" cy="247.5pt" r="2.4pt" fill="primary" />
+        <circle cx="266.7pt" cy="264.5pt" r="2.4pt" fill="primary" />
+          </layer>
+          <layer opacity="0.45">
+        <circle cx="255.1pt" cy="493.7pt" r="3.4pt" fill="primary" />
+        <circle cx="231.9pt" cy="488.8pt" r="3.4pt" fill="primary" />
+        <circle cx="67.5pt" cy="502.6pt" r="3.4pt" fill="primary" />
+        <circle cx="77.0pt" cy="457.8pt" r="3.4pt" fill="primary" />
+        <circle cx="271.6pt" cy="459.6pt" r="3.4pt" fill="primary" />
+        <circle cx="247.1pt" cy="469.3pt" r="3.4pt" fill="primary" />
+        <circle cx="281.6pt" cy="452.6pt" r="3.4pt" fill="primary" />
+        <circle cx="187.1pt" cy="480.2pt" r="3.4pt" fill="primary" />
+        <circle cx="255.1pt" cy="493.7pt" r="3.4pt" fill="primary" />
+        <circle cx="255.1pt" cy="493.7pt" r="3.4pt" fill="primary" />
+        <circle cx="212.3pt" cy="478.7pt" r="3.4pt" fill="primary" />
+        <circle cx="166.5pt" cy="544.5pt" r="3.4pt" fill="primary" />
+        <circle cx="139.8pt" cy="482.6pt" r="3.4pt" fill="primary" />
+        <circle cx="67.5pt" cy="502.6pt" r="3.4pt" fill="primary" />
+        <circle cx="76.4pt" cy="450.4pt" r="3.4pt" fill="primary" />
+        <circle cx="109.2pt" cy="523.2pt" r="3.4pt" fill="primary" />
+        <circle cx="271.6pt" cy="459.6pt" r="3.4pt" fill="primary" />
+        <circle cx="247.1pt" cy="469.3pt" r="3.4pt" fill="primary" />
+        <circle cx="177.6pt" cy="482.0pt" r="3.4pt" fill="primary" />
+        <circle cx="244.5pt" cy="524.5pt" r="3.4pt" fill="primary" />
+        <circle cx="255.1pt" cy="493.7pt" r="3.4pt" fill="primary" />
+        <circle cx="231.9pt" cy="488.8pt" r="3.4pt" fill="primary" />
+        <circle cx="173.6pt" cy="526.8pt" r="3.4pt" fill="primary" />
+        <circle cx="70.7pt" cy="459.0pt" r="3.4pt" fill="primary" />
+        <circle cx="83.2pt" cy="520.0pt" r="3.4pt" fill="primary" />
+        <circle cx="110.0pt" cy="484.6pt" r="3.4pt" fill="primary" />
+        <circle cx="96.2pt" cy="508.8pt" r="3.4pt" fill="primary" />
+          </layer>
+          <layer>
+        <circle cx="340.7pt" cy="268.7pt" r="7.5pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="356.2pt" cy="274.7pt" r="5.4pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="358.5pt" cy="244.1pt" r="8.2pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="326.2pt" cy="264.1pt" r="4.5pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="943.6pt" cy="393.7pt" r="4.9pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="367.6pt" cy="250.0pt" r="6.4pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="308.8pt" cy="278.4pt" r="6.0pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="943.9pt" cy="393.2pt" r="4.7pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="355.7pt" cy="240.4pt" r="8.7pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="366.8pt" cy="250.7pt" r="4.5pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="367.6pt" cy="250.1pt" r="4.3pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="273.2pt" cy="274.8pt" r="3.6pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="340.5pt" cy="268.7pt" r="4.4pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="330.6pt" cy="245.7pt" r="3.9pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="317.5pt" cy="275.6pt" r="4.1pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="381.4pt" cy="259.4pt" r="3.9pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="343.1pt" cy="232.9pt" r="3.6pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="338.5pt" cy="277.8pt" r="5.5pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="381.8pt" cy="255.1pt" r="3.9pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="271.6pt" cy="274.7pt" r="3.7pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="357.0pt" cy="256.7pt" r="3.6pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="332.1pt" cy="253.7pt" r="3.1pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="314.8pt" cy="283.4pt" r="3.6pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="367.5pt" cy="250.0pt" r="4.4pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="329.8pt" cy="245.9pt" r="4.6pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="327.5pt" cy="247.4pt" r="4.1pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="381.4pt" cy="259.4pt" r="3.6pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="263.7pt" cy="229.8pt" r="3.5pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="381.4pt" cy="259.5pt" r="3.9pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="349.6pt" cy="278.7pt" r="4.4pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="273.8pt" cy="237.5pt" r="3.4pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="304.1pt" cy="246.1pt" r="3.8pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="338.0pt" cy="278.5pt" r="5.9pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="350.7pt" cy="269.3pt" r="3.4pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="307.0pt" cy="273.5pt" r="5.0pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="337.1pt" cy="244.8pt" r="3.7pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="281.8pt" cy="249.2pt" r="3.3pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="317.2pt" cy="278.3pt" r="3.1pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="258.5pt" cy="252.0pt" r="4.2pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="367.8pt" cy="251.4pt" r="3.4pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="258.4pt" cy="230.0pt" r="3.6pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="611.9pt" cy="207.8pt" r="3.0pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="944.4pt" cy="246.6pt" r="5.6pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="382.3pt" cy="254.0pt" r="2.9pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="317.8pt" cy="278.1pt" r="3.5pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="329.9pt" cy="246.1pt" r="3.9pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="290.2pt" cy="269.6pt" r="3.8pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="329.4pt" cy="228.3pt" r="4.6pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="329.5pt" cy="246.3pt" r="2.9pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="941.6pt" cy="248.9pt" r="4.4pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="380.9pt" cy="260.1pt" r="3.2pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="944.9pt" cy="394.9pt" r="2.9pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="387.9pt" cy="246.5pt" r="3.5pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="359.0pt" cy="268.3pt" r="2.8pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="364.3pt" cy="273.6pt" r="2.8pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="973.3pt" cy="282.5pt" r="4.8pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="383.6pt" cy="238.1pt" r="2.7pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="309.1pt" cy="289.7pt" r="2.9pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="382.0pt" cy="255.0pt" r="4.4pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="383.6pt" cy="238.1pt" r="4.5pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="390.0pt" cy="252.3pt" r="2.7pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="633.0pt" cy="185.2pt" r="2.6pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="678.0pt" cy="176.8pt" r="3.4pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="1044.0pt" cy="539.5pt" r="2.6pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="272.6pt" cy="275.0pt" r="3.8pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="309.3pt" cy="289.6pt" r="2.6pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="308.9pt" cy="289.8pt" r="3.3pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="355.8pt" cy="269.7pt" r="2.4pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="948.9pt" cy="246.0pt" r="3.5pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="585.6pt" cy="257.9pt" r="3.9pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="356.6pt" cy="273.4pt" r="2.2pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="554.7pt" cy="165.8pt" r="2.1pt" stroke="ai" stroke-width="0.7pt" />
+        <circle cx="333.2pt" cy="278.7pt" r="7.7pt" stroke="ai" stroke-width="0.7pt" stroke-dash="2 1.5" />
+        <circle cx="654.6pt" cy="151.4pt" r="3.0pt" stroke="ai" stroke-width="0.7pt" stroke-dash="2 1.5" />
+        <circle cx="374.5pt" cy="246.0pt" r="3.8pt" stroke="ai" stroke-width="0.7pt" stroke-dash="2 1.5" />
+        <circle cx="367.1pt" cy="242.3pt" r="6.3pt" stroke="ai" stroke-width="0.7pt" stroke-dash="2 1.5" />
+        <circle cx="315.4pt" cy="285.1pt" r="6.0pt" stroke="ai" stroke-width="0.7pt" stroke-dash="2 1.5" />
+        <circle cx="287.2pt" cy="279.3pt" r="7.9pt" stroke="ai" stroke-width="0.7pt" stroke-dash="2 1.5" />
+        <circle cx="310.4pt" cy="277.5pt" r="7.2pt" stroke="ai" stroke-width="0.7pt" stroke-dash="2 1.5" />
+        <circle cx="781.6pt" cy="308.6pt" r="6.3pt" stroke="ai" stroke-width="0.7pt" stroke-dash="2 1.5" />
+        <circle cx="356.6pt" cy="237.8pt" r="6.1pt" stroke="ai" stroke-width="0.7pt" stroke-dash="2 1.5" />
+        <circle cx="202.0pt" cy="514.8pt" r="8.2pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="225.7pt" cy="523.2pt" r="5.9pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="217.0pt" cy="479.6pt" r="9.0pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="179.9pt" cy="508.2pt" r="4.9pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="232.7pt" cy="488.2pt" r="7.0pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="161.3pt" cy="528.5pt" r="6.6pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="211.2pt" cy="474.3pt" r="9.6pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="231.8pt" cy="489.1pt" r="5.0pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="232.7pt" cy="488.2pt" r="4.8pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="110.2pt" cy="523.4pt" r="4.0pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="201.7pt" cy="514.8pt" r="4.8pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="177.6pt" cy="482.0pt" r="4.3pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="172.2pt" cy="524.5pt" r="4.5pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="255.9pt" cy="501.6pt" r="4.3pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="189.1pt" cy="463.6pt" r="4.0pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="202.2pt" cy="527.7pt" r="6.1pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="254.9pt" cy="495.4pt" r="4.3pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="108.0pt" cy="523.3pt" r="4.1pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="220.3pt" cy="497.7pt" r="4.0pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="183.5pt" cy="493.4pt" r="3.5pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="171.3pt" cy="535.6pt" r="4.0pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="232.6pt" cy="488.1pt" r="4.8pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="176.6pt" cy="482.3pt" r="5.0pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="174.0pt" cy="484.4pt" r="4.5pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="255.9pt" cy="501.6pt" r="4.0pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="70.7pt" cy="459.0pt" r="3.8pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="255.9pt" cy="501.7pt" r="4.3pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="217.9pt" cy="528.9pt" r="4.9pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="90.8pt" cy="470.2pt" r="3.8pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="139.8pt" cy="482.6pt" r="4.1pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="201.8pt" cy="528.6pt" r="6.5pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="216.2pt" cy="515.6pt" r="3.8pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="156.7pt" cy="521.5pt" r="5.6pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="186.5pt" cy="480.7pt" r="4.0pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="109.5pt" cy="487.0pt" r="3.7pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="172.8pt" cy="528.3pt" r="3.4pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="77.8pt" cy="491.0pt" r="4.6pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="233.5pt" cy="490.2pt" r="3.7pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="63.1pt" cy="459.4pt" r="4.0pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="255.3pt" cy="493.9pt" r="3.2pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="173.6pt" cy="528.1pt" r="3.8pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="176.8pt" cy="482.5pt" r="4.3pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="131.7pt" cy="516.1pt" r="4.2pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="166.4pt" cy="457.0pt" r="5.1pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="176.4pt" cy="482.9pt" r="3.2pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="255.4pt" cy="502.5pt" r="3.5pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="260.3pt" cy="483.1pt" r="3.9pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="227.5pt" cy="514.2pt" r="3.1pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="236.7pt" cy="521.7pt" r="3.1pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="250.6pt" cy="471.0pt" r="3.0pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="165.6pt" cy="544.5pt" r="3.2pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="255.1pt" cy="495.2pt" r="4.8pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="250.6pt" cy="471.0pt" r="5.0pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="265.6pt" cy="491.5pt" r="2.9pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="109.5pt" cy="523.7pt" r="4.2pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="165.8pt" cy="544.3pt" r="2.9pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="165.4pt" cy="544.6pt" r="3.6pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="223.5pt" cy="516.2pt" r="2.6pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="225.9pt" cy="521.5pt" r="2.4pt" stroke="ai" stroke-width="0.8pt" />
+        <circle cx="195.1pt" cy="528.9pt" r="8.4pt" stroke="ai" stroke-width="0.8pt" stroke-dash="2 1.5" />
+        <circle cx="240.9pt" cy="482.4pt" r="4.2pt" stroke="ai" stroke-width="0.8pt" stroke-dash="2 1.5" />
+        <circle cx="228.6pt" cy="477.1pt" r="6.9pt" stroke="ai" stroke-width="0.8pt" stroke-dash="2 1.5" />
+        <circle cx="172.8pt" cy="538.0pt" r="6.6pt" stroke="ai" stroke-width="0.8pt" stroke-dash="2 1.5" />
+        <circle cx="131.6pt" cy="529.8pt" r="8.7pt" stroke="ai" stroke-width="0.8pt" stroke-dash="2 1.5" />
+        <circle cx="163.1pt" cy="527.2pt" r="7.9pt" stroke="ai" stroke-width="0.8pt" stroke-dash="2 1.5" />
+        <circle cx="211.3pt" cy="470.7pt" r="6.7pt" stroke="ai" stroke-width="0.8pt" stroke-dash="2 1.5" />
+          </layer>
+          <layer opacity="0.8">
+        <circle cx="340.7pt" cy="268.7pt" r="6.2pt" fill="ai" />
+        <circle cx="356.2pt" cy="274.7pt" r="5.4pt" fill="ai" />
+        <circle cx="358.5pt" cy="244.1pt" r="6.1pt" fill="ai" />
+        <circle cx="326.2pt" cy="264.1pt" r="4.5pt" fill="ai" />
+        <circle cx="943.6pt" cy="393.7pt" r="4.9pt" fill="ai" />
+        <circle cx="367.6pt" cy="250.0pt" r="4.9pt" fill="ai" />
+        <circle cx="308.8pt" cy="278.4pt" r="4.7pt" fill="ai" />
+        <circle cx="943.9pt" cy="393.2pt" r="4.7pt" fill="ai" />
+        <circle cx="355.7pt" cy="240.4pt" r="4.5pt" fill="ai" />
+        <circle cx="366.8pt" cy="250.7pt" r="4.2pt" fill="ai" />
+        <circle cx="367.6pt" cy="250.1pt" r="4.3pt" fill="ai" />
+        <circle cx="273.2pt" cy="274.8pt" r="3.6pt" fill="ai" />
+        <circle cx="340.5pt" cy="268.7pt" r="4.4pt" fill="ai" />
+        <circle cx="330.6pt" cy="245.7pt" r="3.9pt" fill="ai" />
+        <circle cx="317.5pt" cy="275.6pt" r="4.0pt" fill="ai" />
+        <circle cx="381.4pt" cy="259.4pt" r="3.9pt" fill="ai" />
+        <circle cx="343.1pt" cy="232.9pt" r="3.6pt" fill="ai" />
+        <circle cx="338.5pt" cy="277.8pt" r="4.1pt" fill="ai" />
+        <circle cx="381.8pt" cy="255.1pt" r="3.9pt" fill="ai" />
+        <circle cx="271.6pt" cy="274.7pt" r="3.7pt" fill="ai" />
+        <circle cx="357.0pt" cy="256.7pt" r="3.6pt" fill="ai" />
+        <circle cx="332.1pt" cy="253.7pt" r="3.1pt" fill="ai" />
+        <circle cx="314.8pt" cy="283.4pt" r="3.6pt" fill="ai" />
+        <circle cx="367.5pt" cy="250.0pt" r="3.8pt" fill="ai" />
+        <circle cx="329.8pt" cy="245.9pt" r="3.9pt" fill="ai" />
+        <circle cx="327.5pt" cy="247.4pt" r="3.4pt" fill="ai" />
+        <circle cx="381.4pt" cy="259.4pt" r="3.6pt" fill="ai" />
+        <circle cx="263.7pt" cy="229.8pt" r="3.5pt" fill="ai" />
+        <circle cx="381.4pt" cy="259.5pt" r="3.4pt" fill="ai" />
+        <circle cx="349.6pt" cy="278.7pt" r="3.5pt" fill="ai" />
+        <circle cx="273.8pt" cy="237.5pt" r="3.4pt" fill="ai" />
+        <circle cx="304.1pt" cy="246.1pt" r="3.4pt" fill="ai" />
+        <circle cx="338.0pt" cy="278.5pt" r="3.9pt" fill="ai" />
+        <circle cx="350.7pt" cy="269.3pt" r="3.4pt" fill="ai" />
+        <circle cx="307.0pt" cy="273.5pt" r="3.3pt" fill="ai" />
+        <circle cx="337.1pt" cy="244.8pt" r="3.7pt" fill="ai" />
+        <circle cx="281.8pt" cy="249.2pt" r="3.3pt" fill="ai" />
+        <circle cx="317.2pt" cy="278.3pt" r="3.1pt" fill="ai" />
+        <circle cx="258.5pt" cy="252.0pt" r="3.5pt" fill="ai" />
+        <circle cx="367.8pt" cy="251.4pt" r="3.4pt" fill="ai" />
+        <circle cx="258.4pt" cy="230.0pt" r="3.6pt" fill="ai" />
+        <circle cx="611.9pt" cy="207.8pt" r="3.0pt" fill="ai" />
+        <circle cx="944.4pt" cy="246.6pt" r="3.8pt" fill="ai" />
+        <circle cx="382.3pt" cy="254.0pt" r="2.9pt" fill="ai" />
+        <circle cx="317.8pt" cy="278.1pt" r="2.9pt" fill="ai" />
+        <circle cx="329.9pt" cy="246.1pt" r="3.9pt" fill="ai" />
+        <circle cx="290.2pt" cy="269.6pt" r="3.0pt" fill="ai" />
+        <circle cx="329.4pt" cy="228.3pt" r="2.8pt" fill="ai" />
+        <circle cx="329.5pt" cy="246.3pt" r="2.9pt" fill="ai" />
+        <circle cx="941.6pt" cy="248.9pt" r="3.6pt" fill="ai" />
+        <circle cx="380.9pt" cy="260.1pt" r="3.0pt" fill="ai" />
+        <circle cx="944.9pt" cy="394.9pt" r="2.9pt" fill="ai" />
+        <circle cx="387.9pt" cy="246.5pt" r="3.2pt" fill="ai" />
+        <circle cx="359.0pt" cy="268.3pt" r="2.8pt" fill="ai" />
+        <circle cx="364.3pt" cy="273.6pt" r="2.8pt" fill="ai" />
+        <circle cx="973.3pt" cy="282.5pt" r="3.5pt" fill="ai" />
+        <circle cx="383.6pt" cy="238.1pt" r="2.7pt" fill="ai" />
+        <circle cx="309.1pt" cy="289.7pt" r="2.9pt" fill="ai" />
+        <circle cx="382.0pt" cy="255.0pt" r="3.0pt" fill="ai" />
+        <circle cx="383.6pt" cy="238.1pt" r="2.6pt" fill="ai" />
+        <circle cx="390.0pt" cy="252.3pt" r="2.7pt" fill="ai" />
+        <circle cx="633.0pt" cy="185.2pt" r="2.6pt" fill="ai" />
+        <circle cx="678.0pt" cy="176.8pt" r="2.9pt" fill="ai" />
+        <circle cx="1044.0pt" cy="539.5pt" r="2.6pt" fill="ai" />
+        <circle cx="272.6pt" cy="275.0pt" r="2.8pt" fill="ai" />
+        <circle cx="309.3pt" cy="289.6pt" r="2.6pt" fill="ai" />
+        <circle cx="308.9pt" cy="289.8pt" r="2.4pt" fill="ai" />
+        <circle cx="355.8pt" cy="269.7pt" r="2.4pt" fill="ai" />
+        <circle cx="948.9pt" cy="246.0pt" r="3.5pt" fill="ai" />
+        <circle cx="585.6pt" cy="257.9pt" r="2.5pt" fill="ai" />
+        <circle cx="356.6pt" cy="273.4pt" r="2.2pt" fill="ai" />
+        <circle cx="554.7pt" cy="165.8pt" r="1.9pt" fill="ai" />
+        <circle cx="202.0pt" cy="514.8pt" r="6.8pt" fill="ai" />
+        <circle cx="225.7pt" cy="523.2pt" r="5.9pt" fill="ai" />
+        <circle cx="217.0pt" cy="479.6pt" r="6.7pt" fill="ai" />
+        <circle cx="179.9pt" cy="508.2pt" r="4.9pt" fill="ai" />
+        <circle cx="232.7pt" cy="488.2pt" r="5.3pt" fill="ai" />
+        <circle cx="161.3pt" cy="528.5pt" r="5.1pt" fill="ai" />
+        <circle cx="211.2pt" cy="474.3pt" r="4.9pt" fill="ai" />
+        <circle cx="231.8pt" cy="489.1pt" r="4.6pt" fill="ai" />
+        <circle cx="232.7pt" cy="488.2pt" r="4.8pt" fill="ai" />
+        <circle cx="110.2pt" cy="523.4pt" r="4.0pt" fill="ai" />
+        <circle cx="201.7pt" cy="514.8pt" r="4.8pt" fill="ai" />
+        <circle cx="177.6pt" cy="482.0pt" r="4.3pt" fill="ai" />
+        <circle cx="172.2pt" cy="524.5pt" r="4.4pt" fill="ai" />
+        <circle cx="255.9pt" cy="501.6pt" r="4.3pt" fill="ai" />
+        <circle cx="189.1pt" cy="463.6pt" r="4.0pt" fill="ai" />
+        <circle cx="202.2pt" cy="527.7pt" r="4.5pt" fill="ai" />
+        <circle cx="254.9pt" cy="495.4pt" r="4.3pt" fill="ai" />
+        <circle cx="108.0pt" cy="523.3pt" r="4.1pt" fill="ai" />
+        <circle cx="220.3pt" cy="497.7pt" r="4.0pt" fill="ai" />
+        <circle cx="183.5pt" cy="493.4pt" r="3.5pt" fill="ai" />
+        <circle cx="171.3pt" cy="535.6pt" r="4.0pt" fill="ai" />
+        <circle cx="232.6pt" cy="488.1pt" r="4.2pt" fill="ai" />
+        <circle cx="176.6pt" cy="482.3pt" r="4.3pt" fill="ai" />
+        <circle cx="174.0pt" cy="484.4pt" r="3.7pt" fill="ai" />
+        <circle cx="255.9pt" cy="501.6pt" r="4.0pt" fill="ai" />
+        <circle cx="70.7pt" cy="459.0pt" r="3.8pt" fill="ai" />
+        <circle cx="255.9pt" cy="501.7pt" r="3.7pt" fill="ai" />
+        <circle cx="217.9pt" cy="528.9pt" r="3.8pt" fill="ai" />
+        <circle cx="90.8pt" cy="470.2pt" r="3.8pt" fill="ai" />
+        <circle cx="139.8pt" cy="482.6pt" r="3.8pt" fill="ai" />
+        <circle cx="201.8pt" cy="528.6pt" r="4.3pt" fill="ai" />
+        <circle cx="216.2pt" cy="515.6pt" r="3.8pt" fill="ai" />
+        <circle cx="156.7pt" cy="521.5pt" r="3.7pt" fill="ai" />
+        <circle cx="186.5pt" cy="480.7pt" r="4.0pt" fill="ai" />
+        <circle cx="109.5pt" cy="487.0pt" r="3.7pt" fill="ai" />
+        <circle cx="172.8pt" cy="528.3pt" r="3.4pt" fill="ai" />
+        <circle cx="77.8pt" cy="491.0pt" r="3.9pt" fill="ai" />
+        <circle cx="233.5pt" cy="490.2pt" r="3.7pt" fill="ai" />
+        <circle cx="63.1pt" cy="459.4pt" r="4.0pt" fill="ai" />
+        <circle cx="255.3pt" cy="493.9pt" r="3.2pt" fill="ai" />
+        <circle cx="173.6pt" cy="528.1pt" r="3.2pt" fill="ai" />
+        <circle cx="176.8pt" cy="482.5pt" r="4.3pt" fill="ai" />
+        <circle cx="131.7pt" cy="516.1pt" r="3.3pt" fill="ai" />
+        <circle cx="166.4pt" cy="457.0pt" r="3.1pt" fill="ai" />
+        <circle cx="176.4pt" cy="482.9pt" r="3.2pt" fill="ai" />
+        <circle cx="255.4pt" cy="502.5pt" r="3.3pt" fill="ai" />
+        <circle cx="260.3pt" cy="483.1pt" r="3.5pt" fill="ai" />
+        <circle cx="227.5pt" cy="514.2pt" r="3.1pt" fill="ai" />
+        <circle cx="236.7pt" cy="521.7pt" r="3.1pt" fill="ai" />
+        <circle cx="250.6pt" cy="471.0pt" r="3.0pt" fill="ai" />
+        <circle cx="165.6pt" cy="544.5pt" r="3.2pt" fill="ai" />
+        <circle cx="255.1pt" cy="495.2pt" r="3.3pt" fill="ai" />
+        <circle cx="250.6pt" cy="471.0pt" r="2.8pt" fill="ai" />
+        <circle cx="265.6pt" cy="491.5pt" r="2.9pt" fill="ai" />
+        <circle cx="109.5pt" cy="523.7pt" r="3.1pt" fill="ai" />
+        <circle cx="165.8pt" cy="544.3pt" r="2.9pt" fill="ai" />
+        <circle cx="165.4pt" cy="544.6pt" r="2.7pt" fill="ai" />
+        <circle cx="223.5pt" cy="516.2pt" r="2.6pt" fill="ai" />
+        <circle cx="225.9pt" cy="521.5pt" r="2.4pt" fill="ai" />
+          </layer>
+          <layer>
+        <text x="950.5pt" y="389.1pt" font-size="8pt" color="ai" font="bold">Johor, Malaysia</text>
+        <text x="789.9pt" y="304.0pt" font-size="8pt" color="ai" font="bold">Abu Dhabi</text>
+        <text x="913.1pt" y="229.9pt" font-size="8pt" color="ai" font="bold">Ulanqab, China</text>
+        <text x="659.6pt" y="146.8pt" font-size="8pt" color="ai" font="bold">Narvik</text>
+        <text x="260.6pt" y="202.8pt" font-size="7pt" color="text-muted">United States, enlarged below left</text>
+        <text x="46.0pt" y="418.8pt" font-size="9pt" color="text-muted" font="bold">United States</text>
+        <text x="195.6pt" y="470.3pt" font-size="7pt" color="ai" font="bold">1</text>
+        <text x="187.9pt" y="510.8pt" font-size="7pt" color="ai" font="bold">3</text>
+        <text x="142.3pt" y="525.8pt" font-size="7pt" color="ai" font="bold">4</text>
+        <text x="230.7pt" y="497.2pt" font-size="7pt" color="ai" font="bold">5</text>
+        <text x="180.8pt" y="524.9pt" font-size="7pt" color="ai" font="bold">6</text>
+        <text x="149.2pt" y="528.2pt" font-size="7pt" color="ai" font="bold">7</text>
+        <text x="226.6pt" y="460.2pt" font-size="7pt" color="ai" font="bold">8</text>
+        <text x="209.3pt" y="453.9pt" font-size="7pt" color="ai" font="bold">9</text>
+        <text x="181.4pt" y="539.0pt" font-size="7pt" color="ai" font="bold">10</text>
+        <text x="262.2pt" y="497.6pt" font-size="7pt" color="ai" font="bold">14</text>
+          </layer>
+          <layer>
+        <text x="36.0pt" y="28.0pt" font-size="24pt" color="primary" font="bold">Where the data centers are</text>
+        <text x="36.0pt" y="62.0pt" font-size="11pt" color="text-muted">132 cloud regions in 76 metro areas, and 81 AI campuses.</text>
+        <circle cx="764.0pt" cy="28.0pt" r="3.2pt" fill="primary" />
+        <text x="774.0pt" y="23.0pt" font-size="8pt" color="text-muted">Cloud region (AWS, Azure or Google). Darker where regions share a metro area.</text>
+        <circle cx="764.0pt" cy="42.0pt" r="4.0pt" fill="ai" />
+        <text x="774.0pt" y="37.0pt" font-size="8pt" color="text-muted">AI campus running. Area follows IT power today.</text>
+        <circle cx="764.0pt" cy="56.0pt" r="5.2pt" stroke="ai" stroke-width="0.7pt" />
+        <text x="774.0pt" y="51.0pt" font-size="8pt" color="text-muted">Ring: planned IT power. Dashed: under construction.</text>
+          </layer>
+          <layer>
+            <line x1="36pt" y1="618pt" x2="1188pt" y2="618pt" stroke="rule" stroke-width="0.75pt" />
+        <text x="36.0pt" y="628.0pt" font-size="10pt" color="primary" font="bold">Cloud regions</text>
+        <text x="36.0pt" y="646.0pt" font-size="9pt" color="#1a1a1a">AWS: 34 regions, 108 zones</text>
+        <text x="36.0pt" y="660.0pt" font-size="9pt" color="#1a1a1a">Azure: 57 regions, 121 zones</text>
+        <text x="36.0pt" y="674.0pt" font-size="9pt" color="#1a1a1a">Google: 41 regions, 124 zones</text>
+        <text x="36.0pt" y="688.0pt" font-size="9pt" color="text-muted">132 regions in 76 metro areas.</text>
+        <text x="330.0pt" y="628.0pt" font-size="10pt" color="ai" font="bold">AI campuses</text>
+        <text x="330.0pt" y="646.0pt" font-size="9pt" color="#1a1a1a">72 running: 13.7 GW of IT power today.</text>
+        <text x="330.0pt" y="660.0pt" font-size="9pt" color="#1a1a1a">9 under construction. About 32 GW planned by 2029.</text>
+        <text x="330.0pt" y="674.0pt" font-size="9pt" color="#1a1a1a">86% of running power is in the United States.</text>
+        <text x="330.0pt" y="688.0pt" font-size="9pt" color="text-muted">Johor, Malaysia is next, with 895 MW.</text>
+        <text x="640.0pt" y="628.0pt" font-size="10pt" color="ai" font="bold">United States inset: IT power today / planned, MW</text>
+        <text x="640.0pt" y="646.0pt" font-size="8pt" color="#1a1a1a">1  Mount Pleasant, WI: 369 / 2,263</text>
+        <text x="640.0pt" y="659.0pt" font-size="8pt" color="#1a1a1a">2  New Carlisle, IN: 910 / 1,925</text>
+        <text x="640.0pt" y="672.0pt" font-size="8pt" color="#1a1a1a">3  Memphis, TN: 1,286 / 1,871</text>
+        <text x="640.0pt" y="685.0pt" font-size="8pt" color="#1a1a1a">4  Doña Ana County, NM: 0 / 1,750</text>
+        <text x="640.0pt" y="698.0pt" font-size="8pt" color="#1a1a1a">5  New Albany, OH: 1,017 / 1,693</text>
+        <text x="640.0pt" y="711.0pt" font-size="8pt" color="#1a1a1a">6  Holly Ridge, LA: 0 / 1,632</text>
+        <text x="640.0pt" y="724.0pt" font-size="8pt" color="#1a1a1a">7  Shackelford County, TX: 0 / 1,400</text>
+        <text x="830.0pt" y="646.0pt" font-size="8pt" color="#1a1a1a">8  Saline Township, MI: 0 / 988</text>
+        <text x="830.0pt" y="659.0pt" font-size="8pt" color="#1a1a1a">9  Port Washington, WI: 0 / 902</text>
+        <text x="830.0pt" y="672.0pt" font-size="8pt" color="#1a1a1a">10  Milam County, TX: 0 / 857</text>
+        <text x="830.0pt" y="685.0pt" font-size="8pt" color="#1a1a1a">11  Abilene, TX: 421 / 843</text>
+        <text x="830.0pt" y="698.0pt" font-size="8pt" color="#1a1a1a">12  Ridgeland, MS: 228 / 840</text>
+        <text x="830.0pt" y="711.0pt" font-size="8pt" color="#1a1a1a">13  Canton, MS: 284 / 683</text>
+        <text x="830.0pt" y="724.0pt" font-size="8pt" color="#1a1a1a">14  Sandston, VA: 562 / 658</text>
+        <text x="1040.0pt" y="628.0pt" font-size="10pt" color="text-muted" font="bold">About this map</text>
+        <text x="1040.0pt" y="646.0pt" font-size="8pt" color="text-muted">Markers sit at metro level for cloud</text>
+        <text x="1040.0pt" y="658.0pt" font-size="8pt" color="text-muted">regions and town level for AI campuses.</text>
+        <text x="1040.0pt" y="670.0pt" font-size="8pt" color="text-muted">Cloud regions: AWS, Azure and Google</text>
+        <text x="1040.0pt" y="682.0pt" font-size="8pt" color="text-muted">documentation. AI campuses: Epoch AI,</text>
+        <text x="1040.0pt" y="694.0pt" font-size="8pt" color="text-muted">CC BY 4.0. October 2026.</text>
+          </layer>
+        </canvas>
+    </section>
+  </document>
+</lpdf>

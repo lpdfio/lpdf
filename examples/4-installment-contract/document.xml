@@ -1,0 +1,1123 @@
+<lpdf version="1">
+  <!--
+    A retail installment contract, the kind a dealer signs with a buyer and sells on to a lender: four US Letter
+    pages, laid out as such forms are. The seller, the buyers, the lender, the vehicle and the figures are invented,
+    and the terms are written for this demonstration, so it is not a form to use. The boxed headings and the wording
+    under them in the disclosure statement, and the notice about holders, are the ones federal rules give. What this
+    adds to the brochure:
+
+      tokens           the size scale is small (xs is 7.5pt, s is 8.5pt, m is 10pt) so a page can hold a form. The size
+                       is set once, on the stack that holds a page, and every text inside inherits it
+      table            the parties are a table of boxed cells; the five boxes of the disclosure are cells of one row,
+                       the first two with a heavier border; the itemization is a table whose rows hold a label, a
+                       dollar sign and a box for the amount
+      leaders          a label followed by a divider in a flank fills the line, as a row of dots does on paper. The
+                       same flank with a label in front of the divider is how a blank to sign is drawn
+      typed entries    what is filled in is in a Courier font and a blue, as on a completed form, so the form and
+                       what is written on it are told apart
+      check boxes      a stack 7pt square with a border, and a background when it is ticked
+      paginate         paginate="break-before" on a page's stack starts the page at the top of a new one
+      canvas           the watermark, the initials boxes and the page number are on the canvas, with a page range:
+                       a region would reserve its space on every page, and these sit in the margins
+      transform        transform="rotate(-35 306 396)" on the watermark layer turns it about the middle of the page.
+                       The angle is in degrees, anticlockwise when negative; the two numbers after it are the pivot
+
+    The figures follow from the itemization: the amount financed is the unpaid balance of the cash price (the cash
+    price less the total down payment), plus the documentary fee, plus the amounts paid to others. The payment is the
+    level monthly payment for that amount at the annual percentage rate over the term. The finance charge is the
+    total of payments less the amount financed, and the total sale price is the total of payments plus the total down
+    payment.
+  -->
+  <assets>
+    <font name="body"    core="Helvetica" />
+    <font name="heading" core="Helvetica-Bold" />
+    <font name="typed"   core="Courier" />
+  </assets>
+
+  <tokens>
+    <colors>
+      <color name="primary" value="#111111" />
+      <color name="surface" value="#ffffff" />
+      <color name="faint"   value="#9a9a9a" />
+      <color name="rule"    value="#777777" />
+      <color name="entry"   value="#1b2a6b" />
+    </colors>
+    <space xs="1.5pt" s="3pt" m="6pt" l="11pt" xl="18pt" xxl="28pt" />
+    <text-size xs="7.5pt" s="8.5pt" m="10pt" l="12.5pt" xl="15pt" xxl="19pt" />
+  </tokens>
+
+  <document size="letter" margin="38pt 40pt 44pt 40pt" font="body">
+    <meta title="Retail Installment Contract (sample)" subject="A retail installment contract for a motor vehicle (a demonstration)" author="Lpdf" />
+    <section background="surface">
+
+      <canvas>
+        <layer page="each" opacity="0.13" transform="rotate(-35 306 396)">
+          <text anchor="center" y="-80pt" font="heading" font-size="130pt" color="primary" align="center">SAMPLE</text>
+        </layer>
+        <layer page="each">
+          <text x="400pt" y="22pt" w="172pt" font-size="7pt" color="primary" align="right">Sample form RIC-1. Not for use.</text>
+        </layer>
+        <layer page="1-3">
+          <line x1="40pt" y1="762pt" x2="86pt" y2="762pt" stroke="primary" stroke-width="0.5pt" />
+          <line x1="94pt" y1="762pt" x2="140pt" y2="762pt" stroke="primary" stroke-width="0.5pt" />
+          <text x="40pt" y="765pt" font-size="6pt" color="primary">Buyer initials</text>
+          <text x="94pt" y="765pt" font-size="6pt" color="primary">Co-buyer initials</text>
+        </layer>
+        <layer page="1"><text x="472pt" y="762pt" w="100pt" font-size="7pt" color="primary" align="right">Page 1 of 4</text></layer>
+        <layer page="2"><text x="472pt" y="762pt" w="100pt" font-size="7pt" color="primary" align="right">Page 2 of 4</text></layer>
+        <layer page="3"><text x="472pt" y="762pt" w="100pt" font-size="7pt" color="primary" align="right">Page 3 of 4</text></layer>
+        <layer page="4"><text x="472pt" y="762pt" w="100pt" font-size="7pt" color="primary" align="right">Page 4 of 4</text></layer>
+      </canvas>
+
+      <layout>
+
+        <!-- PAGE 1 -->
+        <stack gap="l" font-size="m">
+          <text font="heading" font-size="xxl" bold="true" align="center">RETAIL INSTALLMENT CONTRACT</text>
+          <stack gap="0pt">
+            <table cols="9fr 10fr 10fr">
+              <tr>
+                <td padding="1pt 3pt" border="xs primary" valign="top" height="34pt">
+                  <stack gap="0pt">
+                    <text font-size="s">SELLER &amp; CREDITOR</text>
+                    <text font="typed" font-size="10.5pt" color="entry">Larkspur Motors Inc.</text>
+                  </stack>
+                </td>
+                <td padding="1pt 3pt" border="xs primary" valign="top" height="34pt">
+                  <stack gap="0pt">
+                    <text font-size="s">BUYER'S NAME</text>
+                    <text font="typed" font-size="10.5pt" color="entry">Dana M. Whitfield</text>
+                  </stack>
+                </td>
+                <td padding="1pt 3pt" border="xs primary" valign="top" height="34pt">
+                  <stack gap="0pt">
+                    <text font-size="s">CO-BUYER'S NAME</text>
+                    <text font="typed" font-size="10.5pt" color="entry">Jordan T. Whitfield</text>
+                  </stack>
+                </td>
+              </tr>
+            </table>
+            <table cols="9fr 10fr 10fr">
+              <tr>
+                <td padding="1pt 3pt" border="xs primary" valign="top" height="34pt">
+                  <stack gap="0pt">
+                    <text font-size="s">BUSINESS ADDRESS</text>
+                    <text font="typed" font-size="10.5pt" color="entry">1180 Mill Road</text>
+                  </stack>
+                </td>
+                <td padding="1pt 3pt" border="xs primary" valign="top" height="34pt">
+                  <stack gap="0pt">
+                    <text font-size="s">RESIDENCE ADDRESS</text>
+                    <text font="typed" font-size="10.5pt" color="entry">412 Alder Court</text>
+                  </stack>
+                </td>
+                <td padding="1pt 3pt" border="xs primary" valign="top" height="34pt">
+                  <stack gap="0pt">
+                    <text font-size="s">RESIDENCE ADDRESS</text>
+                    <text font="typed" font-size="10.5pt" color="entry">412 Alder Court</text>
+                  </stack>
+                </td>
+              </tr>
+            </table>
+            <table cols="9fr 10fr 10fr">
+              <tr>
+                <td padding="1pt 3pt" border="xs primary" valign="top" height="34pt">
+                  <stack gap="0pt">
+                    <text font-size="s">CITY / STATE / ZIP</text>
+                    <text font="typed" font-size="10.5pt" color="entry">Dubuque, IA 52001</text>
+                  </stack>
+                </td>
+                <td padding="1pt 3pt" border="xs primary" valign="top" height="34pt">
+                  <stack gap="0pt">
+                    <text font-size="s">CITY / STATE / ZIP</text>
+                    <text font="typed" font-size="10.5pt" color="entry">Dubuque, IA 52002</text>
+                  </stack>
+                </td>
+                <td padding="1pt 3pt" border="xs primary" valign="top" height="34pt">
+                  <stack gap="0pt">
+                    <text font-size="s">CITY / STATE / ZIP</text>
+                    <text font="typed" font-size="10.5pt" color="entry">Dubuque, IA 52002</text>
+                  </stack>
+                </td>
+              </tr>
+            </table>
+          </stack>
+          <stack gap="s">
+            <text align="justify">Seller sells, and Buyer buys, the motor vehicle described below with its accessories and equipment, for the deferred price and on the terms of this contract. Buyer accepts delivery of the vehicle in satisfactory condition.</text>
+            <text bold="true">This page and the pages that follow are part of this contract.</text>
+          </stack>
+          <stack gap="0pt">
+            <table cols="30pt 38pt 70pt 28pt 56pt 44pt 1fr 44pt 44pt">
+              <thead>
+                <td padding="2pt 1pt" border="xs primary">
+                  <text font-size="s" align="center">Year</text>
+                </td>
+                <td padding="2pt 1pt" border="xs primary">
+                  <text font-size="s" align="center">New or Used</text>
+                </td>
+                <td padding="2pt 1pt" border="xs primary">
+                  <text font-size="s" align="center">Make</text>
+                </td>
+                <td padding="2pt 1pt" border="xs primary">
+                  <text font-size="s" align="center">No. Cyl.</text>
+                </td>
+                <td padding="2pt 1pt" border="xs primary">
+                  <text font-size="s" align="center">Model</text>
+                </td>
+                <td padding="2pt 1pt" border="xs primary">
+                  <text font-size="s" align="center">Model Type</text>
+                </td>
+                <td padding="2pt 1pt" border="xs primary">
+                  <text font-size="s" align="center">VIN</text>
+                </td>
+                <td padding="2pt 1pt" border="xs primary">
+                  <text font-size="s" align="center">Color of Top</text>
+                </td>
+                <td padding="2pt 1pt" border="xs primary">
+                  <text font-size="s" align="center">Color of Body</text>
+                </td>
+              </thead>
+              <tr>
+                <td padding="3pt 1pt" border="xs primary" height="28pt" valign="middle">
+                  <text font="typed" font-size="10.5pt" color="entry" align="center">2021</text>
+                </td>
+                <td padding="3pt 1pt" border="xs primary" height="28pt" valign="middle">
+                  <text font="typed" font-size="10.5pt" color="entry" align="center">Used</text>
+                </td>
+                <td padding="3pt 1pt" border="xs primary" height="28pt" valign="middle">
+                  <text font="typed" font-size="10.5pt" color="entry" align="center">Hartwell</text>
+                </td>
+                <td padding="3pt 1pt" border="xs primary" height="28pt" valign="middle">
+                  <text font="typed" font-size="10.5pt" color="entry" align="center">4</text>
+                </td>
+                <td padding="3pt 1pt" border="xs primary" height="28pt" valign="middle">
+                  <text font="typed" font-size="10.5pt" color="entry" align="center">Ridgeline</text>
+                </td>
+                <td padding="3pt 1pt" border="xs primary" height="28pt" valign="middle">
+                  <text font="typed" font-size="10.5pt" color="entry" align="center">SUV</text>
+                </td>
+                <td padding="3pt 1pt" border="xs primary" height="28pt" valign="middle">
+                  <text font="typed" font-size="8.5pt" color="entry" align="center">5HWKA3B28MN004567</text>
+                </td>
+                <td padding="3pt 1pt" border="xs primary" height="28pt" valign="middle">
+                  <text font="typed" font-size="10.5pt" color="entry" align="center">Black</text>
+                </td>
+                <td padding="3pt 1pt" border="xs primary" height="28pt" valign="middle">
+                  <text font="typed" font-size="10.5pt" color="entry" align="center">Silver</text>
+                </td>
+              </tr>
+            </table>
+            <stack gap="6pt" padding="5pt 6pt 6pt 6pt" border="xs primary">
+              <text font-size="s">Check all that apply:</text>
+              <cluster gap="l">
+                <flank align="center" gap="s">
+                  <stack width="7pt" height="7pt" border="xs primary" background="entry" />
+                  <text font-size="m">Automatic Transmission</text>
+                </flank>
+                <flank align="center" gap="s">
+                  <stack width="7pt" height="7pt" border="xs primary" background="entry" />
+                  <text font-size="m">AWD</text>
+                </flank>
+                <flank align="center" gap="s">
+                  <stack width="7pt" height="7pt" border="xs primary" background="entry" />
+                  <text font-size="m">A/C</text>
+                </flank>
+                <flank align="center" gap="s">
+                  <stack width="7pt" height="7pt" border="xs primary" background="entry" />
+                  <text font-size="m">Power Window</text>
+                </flank>
+                <flank align="center" gap="s">
+                  <stack width="7pt" height="7pt" border="xs primary" />
+                  <text font-size="m">Power Seat</text>
+                </flank>
+              </cluster>
+              <cluster gap="l">
+                <flank align="center" gap="s">
+                  <stack width="7pt" height="7pt" border="xs primary" />
+                  <text font-size="m">Manual Transmission</text>
+                </flank>
+                <flank align="center" gap="s">
+                  <stack width="7pt" height="7pt" border="xs primary" background="entry" />
+                  <text font-size="m">Sunroof</text>
+                </flank>
+                <flank align="center" gap="s">
+                  <stack width="7pt" height="7pt" border="xs primary" />
+                  <text font-size="m">Mag Wheels</text>
+                </flank>
+                <flank align="center" gap="s">
+                  <stack width="7pt" height="7pt" border="xs primary" background="entry" />
+                  <text font-size="m">Stereo</text>
+                </flank>
+                <flank align="center" gap="s">
+                  <stack width="7pt" height="7pt" border="xs primary" />
+                  <text font-size="m">CD</text>
+                </flank>
+                <flank align="end" gap="s">
+                  <text font-size="m">Other:</text>
+                  <text font="typed" font-size="9pt" color="entry">tow hitch</text>
+                  <divider color="rule" thickness="xs" />
+                </flank>
+              </cluster>
+            </stack>
+          </stack>
+          <stack gap="0pt" border="xs primary">
+            <stack padding="2pt 0pt">
+              <text font="heading" font-size="l" bold="true" align="center">FEDERAL TRUTH-IN-LENDING DISCLOSURE STATEMENT</text>
+            </stack>
+            <table cols="1fr 1fr 1fr 1fr 1fr">
+              <tr>
+                <td padding="3pt 4pt" border="m primary">
+                  <stack gap="s" height="142pt" justify="between">
+                    <stack gap="s">
+                      <text bold="true" font="heading">ANNUAL PERCENTAGE RATE</text>
+                      <text font-size="s">The cost of your credit as a yearly rate.</text>
+                    </stack>
+                    <flank align="end" gap="xs">
+                      <stack padding="1pt 3pt" border="xs rule">
+                        <text font="typed" font-size="10.5pt" color="entry" align="right">8.99</text>
+                      </stack>
+                      <text bold="true">%</text>
+                    </flank>
+                  </stack>
+                </td>
+                <td padding="3pt 4pt" border="m primary">
+                  <stack gap="s" height="142pt" justify="between">
+                    <stack gap="s">
+                      <text bold="true" font="heading">FINANCE CHARGE</text>
+                      <text font-size="s">The dollar amount the credit will cost you.</text>
+                    </stack>
+                    <flank align="end" gap="xs">
+                      <text bold="true">$</text>
+                      <stack padding="1pt 3pt" border="xs rule">
+                        <text font="typed" font-size="10.5pt" color="entry" align="right">5,539.80</text>
+                      </stack>
+                    </flank>
+                  </stack>
+                </td>
+                <td padding="3pt 4pt" border="xs primary">
+                  <stack gap="s" height="142pt" justify="between">
+                    <stack gap="s">
+                      <text bold="true" font="heading">AMOUNT FINANCED</text>
+                      <text font-size="s">The amount of credit provided to you or on your behalf.</text>
+                    </stack>
+                    <flank align="end" gap="xs">
+                      <text bold="true">$</text>
+                      <stack padding="1pt 3pt" border="xs rule">
+                        <text font="typed" font-size="10.5pt" color="entry" align="right">22,593.00</text>
+                      </stack>
+                    </flank>
+                  </stack>
+                </td>
+                <td padding="3pt 4pt" border="xs primary">
+                  <stack gap="s" height="142pt" justify="between">
+                    <stack gap="s">
+                      <text bold="true" font="heading">TOTAL OF PAYMENTS</text>
+                      <text font-size="s">The amount you will have paid after you have made all payments as scheduled.</text>
+                    </stack>
+                    <flank align="end" gap="xs">
+                      <text bold="true">$</text>
+                      <stack padding="1pt 3pt" border="xs rule">
+                        <text font="typed" font-size="10.5pt" color="entry" align="right">28,132.80</text>
+                      </stack>
+                    </flank>
+                  </stack>
+                </td>
+                <td padding="3pt 4pt" border="xs primary">
+                  <stack gap="s" height="142pt" justify="between">
+                    <stack gap="s">
+                      <text bold="true" font="heading">TOTAL SALE PRICE</text>
+                      <text font-size="s">The total cost of your purchase on credit, including your down payment of $3,200.00.</text>
+                    </stack>
+                    <flank align="end" gap="xs">
+                      <text bold="true">$</text>
+                      <stack padding="1pt 3pt" border="xs rule">
+                        <text font="typed" font-size="10.5pt" color="entry" align="right">31,332.80</text>
+                      </stack>
+                    </flank>
+                  </stack>
+                </td>
+              </tr>
+            </table>
+            <stack gap="s" padding="7pt 8pt 5pt 8pt">
+              <text font-size="s">Your payment schedule will be</text>
+              <table cols="80pt 110pt 1fr">
+                <thead>
+                  <td padding="1pt 3pt" border="xs primary">
+                    <text font-size="s">No. of Payments</text>
+                  </td>
+                  <td padding="1pt 3pt" border="xs primary">
+                    <text font-size="s">Amount of Payments</text>
+                  </td>
+                  <td padding="1pt 3pt" border="xs primary">
+                    <text font-size="s">When Payments Are Due</text>
+                  </td>
+                </thead>
+                <tr>
+                  <td padding="4pt 3pt" border="xs primary">
+                    <text font="typed" font-size="10.5pt" color="entry" align="center">60</text>
+                  </td>
+                  <td padding="4pt 3pt" border="xs primary">
+                    <flank align="end" gap="xs">
+                      <text>$</text>
+                      <text font="typed" font-size="10.5pt" color="entry" align="right">468.88</text>
+                    </flank>
+                  </td>
+                  <td padding="4pt 3pt" border="xs primary">
+                    <flank align="end" gap="s">
+                      <text>Monthly beginning</text>
+                      <text font="typed" font-size="10.5pt" color="entry">November 4, 2026</text>
+                    </flank>
+                  </td>
+                </tr>
+              </table>
+            </stack>
+            <divider color="primary" thickness="xs" />
+            <stack gap="l" padding="7pt 8pt 8pt 8pt">
+              <text><span bold="true">Security: </span>You are giving a security interest in the motor vehicle being purchased.</text>
+              <text><span bold="true">Late charge: </span>If any payment is 10 or more days late, you may be charged $10.00 or 5% of the payment, whichever is more.</text>
+              <text><span bold="true">Prepayment: </span>If you pay off early, you may be entitled to a refund of part of the finance charge.</text>
+              <text>See your contract terms on the following pages for any additional information about nonpayment, default, any required repayment in full before the scheduled date, prepayment refunds and penalties, and security interests.</text>
+            </stack>
+          </stack>
+          <text font-size="m" align="left">This contract may be assigned or sold by Seller to <span bold="true" underline="true">CEDAR RIDGE FINANCE LLC</span> whose office address is <span bold="true" underline="true">2200 Harbor Way, Suite 410, Cedar Rapids, IA 52401</span>, “Holder.”</text>
+        </stack>
+
+        <!-- PAGE 2 -->
+        <stack gap="xl" font-size="m" paginate="break-before">
+          <text font="heading" font-size="l" bold="true" align="center">ITEMIZATION OF AMOUNT FINANCED</text>
+          <table cols="1fr 7pt 80pt 7pt 80pt">
+            <tr>
+              <td padding="3pt 2pt 3pt 0pt" valign="bottom">
+                <flank align="end" gap="s">
+                  <text>1. Cash price</text>
+                  <divider color="faint" thickness="xs" />
+                </flank>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text>$</text>
+              </td>
+              <td padding="2.5pt 3pt" border="xs rule" valign="bottom">
+                <text font="typed" font-size="10.5pt" color="entry" align="right">22,400.00</text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="3pt 2pt 3pt 0pt" valign="bottom">
+                <text bold="true">2. Down payment</text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="3pt 2pt 3pt 14pt" valign="bottom">
+                <text font-size="s">Trade-in: <span font="typed" color="entry">2014 Corvane Strada, 4 cyl., VIN 3C4PQ7G12EW318842</span></text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="3pt 2pt 3pt 14pt" valign="bottom">
+                <flank align="end" gap="s">
+                  <text>Trade-in allowance</text>
+                  <divider color="faint" thickness="xs" />
+                </flank>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text>$</text>
+              </td>
+              <td padding="2.5pt 3pt" border="xs rule" valign="bottom">
+                <text font="typed" font-size="10.5pt" color="entry" align="right">3,000.00</text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="3pt 2pt 3pt 14pt" valign="bottom">
+                <flank align="end" gap="s">
+                  <text>Less amount owing</text>
+                  <divider color="faint" thickness="xs" />
+                </flank>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text>$</text>
+              </td>
+              <td padding="2.5pt 3pt" border="xs rule" valign="bottom">
+                <text font="typed" font-size="10.5pt" color="entry" align="right">800.00</text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="3pt 2pt 3pt 14pt" valign="bottom">
+                <flank align="end" gap="s">
+                  <text>Net equity</text>
+                  <divider color="faint" thickness="xs" />
+                </flank>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text>$</text>
+              </td>
+              <td padding="2.5pt 3pt" border="xs rule" valign="bottom">
+                <text font="typed" font-size="10.5pt" color="entry" align="right">2,200.00</text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="3pt 2pt 3pt 14pt" valign="bottom">
+                <flank align="end" gap="s">
+                  <text>Cash down payment</text>
+                  <divider color="faint" thickness="xs" />
+                </flank>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text>$</text>
+              </td>
+              <td padding="2.5pt 3pt" border="xs rule" valign="bottom">
+                <text font="typed" font-size="10.5pt" color="entry" align="right">1,000.00</text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="3pt 2pt 3pt 0pt" valign="bottom">
+                <flank align="end" gap="s">
+                  <text>3. Total down payment</text>
+                  <divider color="faint" thickness="xs" />
+                </flank>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text>$</text>
+              </td>
+              <td padding="2.5pt 3pt" border="xs rule" valign="bottom">
+                <text font="typed" font-size="10.5pt" color="entry" align="right">3,200.00</text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="3pt 2pt 3pt 0pt" valign="bottom">
+                <flank align="end" gap="s">
+                  <text>4. Unpaid balance of cash price (1 minus 3)</text>
+                  <divider color="faint" thickness="xs" />
+                </flank>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text>$</text>
+              </td>
+              <td padding="2.5pt 3pt" border="xs rule" valign="bottom">
+                <text font="typed" font-size="10.5pt" color="entry" align="right">19,200.00</text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="3pt 2pt 3pt 0pt" valign="bottom">
+                <flank align="end" gap="s">
+                  <text>5. Documentary fee (see below)</text>
+                  <divider color="faint" thickness="xs" />
+                </flank>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text>$</text>
+              </td>
+              <td padding="2.5pt 3pt" border="xs rule" valign="bottom">
+                <text font="typed" font-size="10.5pt" color="entry" align="right">200.00</text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="8pt 2pt 3pt 0pt" valign="bottom">
+                <text>6. Amounts paid to others on your behalf (we may keep part of these amounts):</text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="3pt 2pt 3pt 14pt" valign="bottom">
+                <flank align="end" gap="s">
+                  <text>Official fees: title and registration</text>
+                  <divider color="faint" thickness="xs" />
+                </flank>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text>$</text>
+              </td>
+              <td padding="2.5pt 3pt" border="xs rule" valign="bottom">
+                <text font="typed" font-size="10.5pt" color="entry" align="right">145.00</text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="3pt 2pt 3pt 14pt" valign="bottom">
+                <flank align="end" gap="s">
+                  <text>Taxes not included in the cash price</text>
+                  <divider color="faint" thickness="xs" />
+                </flank>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text>$</text>
+              </td>
+              <td padding="2.5pt 3pt" border="xs rule" valign="bottom">
+                <text font="typed" font-size="10.5pt" color="entry" align="right">1,358.00</text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="3pt 2pt 3pt 14pt" valign="bottom">
+                <flank align="end" gap="s">
+                  <text>To:</text>
+                  <text font="typed" font-size="9pt" color="entry">Ironwood Protection Co.</text>
+                  <text>for optional service contract</text>
+                  <divider color="faint" thickness="xs" />
+                </flank>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text>$</text>
+              </td>
+              <td padding="2.5pt 3pt" border="xs rule" valign="bottom">
+                <text font="typed" font-size="10.5pt" color="entry" align="right">1,195.00</text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="3pt 2pt 3pt 14pt" valign="bottom">
+                <flank align="end" gap="s">
+                  <text>To:</text>
+                  <text font="typed" font-size="9pt" color="entry">Ironwood Protection Co.</text>
+                  <text>for optional GAP coverage</text>
+                  <divider color="faint" thickness="xs" />
+                </flank>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text>$</text>
+              </td>
+              <td padding="2.5pt 3pt" border="xs rule" valign="bottom">
+                <text font="typed" font-size="10.5pt" color="entry" align="right">495.00</text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="3pt 2pt 3pt 14pt" valign="bottom">
+                <flank align="end" gap="s">
+                  <text>Optional credit life insurance (declined)</text>
+                  <divider color="faint" thickness="xs" />
+                </flank>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text>$</text>
+              </td>
+              <td padding="2.5pt 3pt" border="xs rule" valign="bottom">
+                <text font="typed" font-size="10.5pt" color="entry" align="right">0.00</text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="3pt 2pt 3pt 14pt" valign="bottom">
+                <flank align="end" gap="s">
+                  <text>Optional credit disability insurance (declined)</text>
+                  <divider color="faint" thickness="xs" />
+                </flank>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text>$</text>
+              </td>
+              <td padding="2.5pt 3pt" border="xs rule" valign="bottom">
+                <text font="typed" font-size="10.5pt" color="entry" align="right">0.00</text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="3pt 2pt 3pt 14pt" valign="bottom">
+                <flank align="end" gap="s">
+                  <text>Total of amounts paid to others</text>
+                  <divider color="faint" thickness="xs" />
+                </flank>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text>$</text>
+              </td>
+              <td padding="2.5pt 3pt" border="xs rule" valign="bottom">
+                <text font="typed" font-size="10.5pt" color="entry" align="right">3,193.00</text>
+              </td>
+            </tr>
+            <tr>
+              <td padding="3pt 2pt 3pt 0pt" valign="bottom">
+                <flank align="end" gap="s">
+                  <text>7. Amount financed (4 plus 5 plus 6)</text>
+                  <divider color="faint" thickness="xs" />
+                </flank>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 3pt" valign="bottom">
+                <text></text>
+              </td>
+              <td padding="2.5pt 1pt" valign="bottom">
+                <text>$</text>
+              </td>
+              <td padding="2.5pt 3pt" border="xs rule" valign="bottom">
+                <text font="typed" font-size="10.5pt" color="entry" align="right">22,593.00</text>
+              </td>
+            </tr>
+          </table>
+          <stack gap="l">
+            <text bold="true">A DOCUMENTARY FEE IS NOT A GOVERNMENT FEE.</text>
+            <text align="justify">It is charged by the Seller for handling the paperwork of the sale, and the law does not require it. Ask the Seller what the fee covers before you sign.</text>
+            <text>Buyer and Co-Buyer, together jointly and severally, promise to pay the Total of Payments shown on the first page to Holder, in <span font="typed" color="entry">60</span> monthly installments of $<span font="typed" color="entry">468.88</span> each, beginning on <span font="typed" color="entry">November 4, 2026</span> and continuing on the same day of each month until paid in full. The finance charge begins to accrue on <span font="typed" color="entry">October 4, 2026</span>, the date of this contract.</text>
+            <text align="justify">Any amount that is due and not paid within 15 days after its due date will bear interest at the Annual Percentage Rate shown on the first page, until it is paid or until the contract is paid in full.</text>
+            <text bold="true">ACCELERATION</text>
+            <text align="justify">If an installment is not paid in full when due, or if Buyer breaks another promise in this contract, Holder may declare the unpaid balance of the Total of Payments due at once. Holder will then credit Buyer with the part of the finance charge that has not been earned. Buyer is in default if the vehicle is lost, stolen, seized, or so badly damaged that it is not worth repairing; if Buyer lets the required insurance lapse; if Buyer gives false information to get credit; or if Buyer dies or becomes insolvent. Holder may take payment late without giving up its right to act on a later default.</text>
+          </stack>
+        </stack>
+
+        <!-- PAGE 3 -->
+        <stack gap="l" font-size="m" paginate="break-before">
+          <text font="heading" font-size="l" bold="true" align="center">ADDITIONAL AGREEMENTS OF BUYER</text>
+          <stack gap="9pt">
+            <flank align="start" gap="m">
+              <stack width="14pt">
+                <text bold="true">1.</text>
+              </stack>
+              <stack gap="s">
+                <text bold="true" font-size="s">PAYMENTS</text>
+                <text align="justify">Buyer pays each installment on or before its due date at the Holder’s address, or at any address the Holder gives in writing. A payment goes first to any late charge, then to interest, then to the unpaid balance. Taking a late payment does not waive the next one.</text>
+              </stack>
+            </flank>
+            <flank align="start" gap="m">
+              <stack width="14pt">
+                <text bold="true">2.</text>
+              </stack>
+              <stack gap="s">
+                <text bold="true" font-size="s">LATE CHARGE</text>
+                <text align="justify">If an installment is 10 or more days late, Buyer agrees to pay a late charge of 5% of the installment or $10.00, whichever is more. Where the law allows, Buyer also pays the reasonable cost of collecting an overdue amount, including court costs and attorneys’ fees.</text>
+              </stack>
+            </flank>
+            <flank align="start" gap="m">
+              <stack width="14pt">
+                <text bold="true">3.</text>
+              </stack>
+              <stack gap="s">
+                <text bold="true" font-size="s">PREPAYMENT</text>
+                <text align="justify">Buyer may pay all or part of the balance early at any time, without penalty. If Buyer pays the contract in full before the last installment is due, Buyer is entitled to a refund of the part of the finance charge that has not been earned, figured by the actuarial method. No refund is made if it would be less than $1.00.</text>
+              </stack>
+            </flank>
+            <flank align="start" gap="m">
+              <stack width="14pt">
+                <text bold="true">4.</text>
+              </stack>
+              <stack gap="s">
+                <text bold="true" font-size="s">SECURITY INTEREST</text>
+                <text align="justify">Seller keeps a security interest in the vehicle, its accessories and any insurance paid on it, until the Total of Payments and any amounts the Holder advances for taxes, repairs or insurance have been paid in full. Buyer will not sell, lease or give up the vehicle, or keep it outside the state for more than 30 days, without the Holder’s written consent.</text>
+              </stack>
+            </flank>
+            <flank align="start" gap="m">
+              <stack width="14pt">
+                <text bold="true">5.</text>
+              </stack>
+              <stack gap="s">
+                <text bold="true" font-size="s">INSURANCE</text>
+                <text align="justify">Buyer keeps the vehicle insured against fire, theft and collision for the whole term, with the Holder named as loss payee. Buyer may buy this insurance from any insurer or agent the Holder finds acceptable. If the insurance lapses, the Holder may buy it for Buyer and add the cost to the balance. Insurance other than the required insurance is optional and is not needed to get credit.</text>
+              </stack>
+            </flank>
+            <flank align="start" gap="m">
+              <stack width="14pt">
+                <text bold="true">6.</text>
+              </stack>
+              <stack gap="s">
+                <text bold="true" font-size="s">CARE OF THE VEHICLE</text>
+                <text align="justify">Buyer keeps the vehicle in good repair, pays the taxes, fees and fines charged on it, and keeps it free of liens other than the Holder’s. The Holder may inspect the vehicle at reasonable times.</text>
+              </stack>
+            </flank>
+            <flank align="start" gap="m">
+              <stack width="14pt">
+                <text bold="true">7.</text>
+              </stack>
+              <stack gap="s">
+                <text bold="true" font-size="s">DEFAULT AND REPOSSESSION</text>
+                <text align="justify">If Buyer is in default, the Holder may take the vehicle in the way the law allows. Before the Holder sells it, the Holder will give Buyer the notices the law requires, and Buyer may be entitled to get the vehicle back by paying what the law says is owed. Buyer is responsible for any amount still owed after the sale, and for the cost of taking, storing and selling the vehicle.</text>
+              </stack>
+            </flank>
+            <flank align="start" gap="m">
+              <stack width="14pt">
+                <text bold="true">8.</text>
+              </stack>
+              <stack gap="s">
+                <text bold="true" font-size="s">ASSIGNMENT</text>
+                <text align="justify">Seller may sell this contract to the Holder. The Holder then has all of Seller’s rights under it, and Buyer will pay the Holder. The federal notice below applies to every holder.</text>
+              </stack>
+            </flank>
+            <flank align="start" gap="m">
+              <stack width="14pt">
+                <text bold="true">9.</text>
+              </stack>
+              <stack gap="s">
+                <text bold="true" font-size="s">CHANGES</text>
+                <text align="justify">This contract can be changed only in a writing signed by the Holder. If part of it is found to be invalid, the rest stays in force. If the vehicle is not delivered when this contract is signed, Seller may add the vehicle’s identifying number and the due date of the first installment to Seller’s copy.</text>
+              </stack>
+            </flank>
+            <flank align="start" gap="m">
+              <stack width="14pt">
+                <text bold="true">10.</text>
+              </stack>
+              <stack gap="s">
+                <text bold="true" font-size="s">CO-BUYER</text>
+                <text align="justify">Each Buyer is responsible for the whole amount. The Holder may collect from either one, and may agree to renew or extend the contract with either one, without telling the other.</text>
+              </stack>
+            </flank>
+          </stack>
+          <stack padding="m" border="xs primary">
+            <text bold="true" align="justify">NOTICE. ANY HOLDER OF THIS CONSUMER CREDIT CONTRACT IS SUBJECT TO ALL CLAIMS AND DEFENSES WHICH THE DEBTOR COULD ASSERT AGAINST THE SELLER OF GOODS OR SERVICES OBTAINED PURSUANT HERETO OR WITH THE PROCEEDS HEREOF. RECOVERY HEREUNDER BY THE DEBTOR SHALL NOT EXCEED AMOUNTS PAID BY THE DEBTOR HEREUNDER.</text>
+          </stack>
+        </stack>
+
+        <!-- PAGE 4 -->
+        <stack gap="l" font-size="m" paginate="break-before">
+          <stack gap="m">
+            <text align="justify">If this contract is for the sale of a used motor vehicle, Buyer acknowledges receiving the original or a true copy of the “Buyer’s Guide” displayed on the vehicle.</text>
+            <text bold="true" align="justify">THE INFORMATION ON THE WINDOW FORM IS PART OF THIS CONTRACT, AND IT OVERRIDES ANY CONTRARY PROVISION IN THIS CONTRACT.</text>
+            <text bold="true" align="justify">Each Buyer acknowledges receiving a completed copy of this contract, signed by both Seller and Buyer.</text>
+          </stack>
+          <stack gap="m">
+            <text font="heading" font-size="m" bold="true" align="center">OPTIONAL PRODUCTS</text>
+            <text align="justify">None of the products below is needed to get credit, and Buyer may decline any of them. Buyer’s initials show the choice made for each.</text>
+            <table cols="1fr 80pt 110pt 70pt">
+              <thead>
+                <td padding="3pt 4pt" border="xs primary">
+                  <text font-size="s" align="left">Product</text>
+                </td>
+                <td padding="3pt 4pt" border="xs primary">
+                  <text font-size="s" align="right">Price</text>
+                </td>
+                <td padding="3pt 4pt" border="xs primary">
+                  <text font-size="s" align="left">Buyer’s choice</text>
+                </td>
+                <td padding="3pt 4pt" border="xs primary">
+                  <text font-size="s" align="center">Initials</text>
+                </td>
+              </thead>
+              <tr>
+                <td padding="4pt 4pt" border="xs primary" valign="middle">
+                  <stack gap="0pt">
+                    <text bold="true">Service contract</text>
+                    <text font-size="s" color="faint">Ironwood Protection Co., 60 months</text>
+                  </stack>
+                </td>
+                <td padding="4pt 4pt" border="xs primary" valign="middle">
+                  <text font="typed" font-size="10.5pt" color="entry" align="right">$1,195.00</text>
+                </td>
+                <td padding="4pt 6pt" border="xs primary" valign="middle">
+                  <cluster gap="l">
+                    <flank align="center" gap="s">
+                      <stack width="7pt" height="7pt" border="xs primary" background="entry" />
+                      <text font-size="m">Yes</text>
+                    </flank>
+                    <flank align="center" gap="s">
+                      <stack width="7pt" height="7pt" border="xs primary" />
+                      <text font-size="m">No</text>
+                    </flank>
+                  </cluster>
+                </td>
+                <td padding="4pt 4pt" border="xs primary" valign="middle">
+                  <text font="typed" font-size="10.5pt" color="entry" align="center">DMW</text>
+                </td>
+              </tr>
+              <tr>
+                <td padding="4pt 4pt" border="xs primary" valign="middle">
+                  <stack gap="0pt">
+                    <text bold="true">GAP coverage</text>
+                    <text font-size="s" color="faint">Ironwood Protection Co., for the term of the contract</text>
+                  </stack>
+                </td>
+                <td padding="4pt 4pt" border="xs primary" valign="middle">
+                  <text font="typed" font-size="10.5pt" color="entry" align="right">$495.00</text>
+                </td>
+                <td padding="4pt 6pt" border="xs primary" valign="middle">
+                  <cluster gap="l">
+                    <flank align="center" gap="s">
+                      <stack width="7pt" height="7pt" border="xs primary" background="entry" />
+                      <text font-size="m">Yes</text>
+                    </flank>
+                    <flank align="center" gap="s">
+                      <stack width="7pt" height="7pt" border="xs primary" />
+                      <text font-size="m">No</text>
+                    </flank>
+                  </cluster>
+                </td>
+                <td padding="4pt 4pt" border="xs primary" valign="middle">
+                  <text font="typed" font-size="10.5pt" color="entry" align="center">DMW</text>
+                </td>
+              </tr>
+              <tr>
+                <td padding="4pt 4pt" border="xs primary" valign="middle">
+                  <stack gap="0pt">
+                    <text bold="true">Credit life insurance</text>
+                    <text font-size="s" color="faint">Pays the balance if a Buyer dies</text>
+                  </stack>
+                </td>
+                <td padding="4pt 4pt" border="xs primary" valign="middle">
+                  <text font="typed" font-size="10.5pt" color="entry" align="right">$0.00</text>
+                </td>
+                <td padding="4pt 6pt" border="xs primary" valign="middle">
+                  <cluster gap="l">
+                    <flank align="center" gap="s">
+                      <stack width="7pt" height="7pt" border="xs primary" />
+                      <text font-size="m">Yes</text>
+                    </flank>
+                    <flank align="center" gap="s">
+                      <stack width="7pt" height="7pt" border="xs primary" background="entry" />
+                      <text font-size="m">No</text>
+                    </flank>
+                  </cluster>
+                </td>
+                <td padding="4pt 4pt" border="xs primary" valign="middle">
+                  <text font="typed" font-size="10.5pt" color="entry" align="center">DMW</text>
+                </td>
+              </tr>
+              <tr>
+                <td padding="4pt 4pt" border="xs primary" valign="middle">
+                  <stack gap="0pt">
+                    <text bold="true">Credit disability insurance</text>
+                    <text font-size="s" color="faint">Pays installments while a Buyer is disabled</text>
+                  </stack>
+                </td>
+                <td padding="4pt 4pt" border="xs primary" valign="middle">
+                  <text font="typed" font-size="10.5pt" color="entry" align="right">$0.00</text>
+                </td>
+                <td padding="4pt 6pt" border="xs primary" valign="middle">
+                  <cluster gap="l">
+                    <flank align="center" gap="s">
+                      <stack width="7pt" height="7pt" border="xs primary" />
+                      <text font-size="m">Yes</text>
+                    </flank>
+                    <flank align="center" gap="s">
+                      <stack width="7pt" height="7pt" border="xs primary" background="entry" />
+                      <text font-size="m">No</text>
+                    </flank>
+                  </cluster>
+                </td>
+                <td padding="4pt 4pt" border="xs primary" valign="middle">
+                  <text font="typed" font-size="10.5pt" color="entry" align="center">DMW</text>
+                </td>
+              </tr>
+            </table>
+          </stack>
+          <stack gap="l">
+            <text font="heading" font-size="m" bold="true" align="center">RETAIL INSTALLMENT CONTRACT</text>
+            <split equal="true" gap="xl">
+              <stack gap="l">
+                <flank align="end" gap="s">
+                  <text>Dated</text>
+                  <text font="typed" font-size="10.5pt" color="entry">October 4, 2026</text>
+                  <divider color="primary" thickness="xs" />
+                </flank>
+                <flank align="end" gap="s">
+                  <text>Seller</text>
+                  <divider color="primary" thickness="xs" />
+                </flank>
+                <flank align="end" gap="s">
+                  <text>By</text>
+                  <divider color="primary" thickness="xs" />
+                </flank>
+              </stack>
+              <stack gap="l">
+                <flank align="end" gap="s">
+                  <text>Buyer</text>
+                  <divider color="primary" thickness="xs" />
+                </flank>
+                <flank align="end" gap="s">
+                  <text>Co-Buyer</text>
+                  <divider color="primary" thickness="xs" />
+                </flank>
+                <flank align="end" gap="s">
+                  <text>Co-Buyer</text>
+                  <divider color="primary" thickness="xs" />
+                </flank>
+              </stack>
+            </split>
+          </stack>
+          <divider color="rule" thickness="xs" />
+          <stack gap="m">
+            <text font="heading" font-size="m" bold="true" align="center">ASSIGNMENT</text>
+            <text align="justify">For value received, Seller sells, assigns and transfers to Cedar Ridge Finance LLC, its successors and assigns (“Assignee”), all of Seller’s rights in the contract on the preceding pages and in the motor vehicle it describes. To persuade Assignee to buy the contract, Seller states that:</text>
+            <stack gap="xs" padding="0pt 0pt 0pt 12pt">
+              <flank align="start" gap="s">
+                <stack width="14pt">
+                  <text bold="true">1.</text>
+                </stack>
+                <text align="justify">the contract is genuine and correctly states the sale between Seller and Buyer;</text>
+              </flank>
+              <flank align="start" gap="s">
+                <stack width="14pt">
+                  <text bold="true">2.</text>
+                </stack>
+                <text align="justify">the vehicle has been delivered to and accepted by Buyer;</text>
+              </flank>
+              <flank align="start" gap="s">
+                <stack width="14pt">
+                  <text bold="true">3.</text>
+                </stack>
+                <text align="justify">the down payment was paid in full by Buyer, in cash or in trade, and none of it was lent or furnished by Seller;</text>
+              </flank>
+              <flank align="start" gap="s">
+                <stack width="14pt">
+                  <text bold="true">4.</text>
+                </stack>
+                <text align="justify">Seller had title to the vehicle and the right to sell it, and the vehicle is free of liens and claims;</text>
+              </flank>
+              <flank align="start" gap="s">
+                <stack width="14pt">
+                  <text bold="true">5.</text>
+                </stack>
+                <text align="justify">Seller has no notice of any claim or defense of Buyer, and knows of nothing that would impair the contract;</text>
+              </flank>
+              <flank align="start" gap="s">
+                <stack width="14pt">
+                  <text bold="true">6.</text>
+                </stack>
+                <text align="justify">each Buyer has the legal capacity to sign, and received a completed copy of the contract; and</text>
+              </flank>
+              <flank align="start" gap="s">
+                <stack width="14pt">
+                  <text bold="true">7.</text>
+                </stack>
+                <text align="justify">Seller has followed the Truth in Lending Act, Regulation Z and the other laws that apply to the sale.</text>
+              </flank>
+            </stack>
+            <text align="justify">Seller agrees to buy the contract back, at the unpaid balance plus any amount the Assignee has advanced, if any of these statements is untrue, or if Buyer asserts a claim or defense against the Assignee that arises from the sale.</text>
+            <stack padding="4pt 0pt 0pt 0pt">
+              <split equal="true" gap="xl">
+                <flank align="end" gap="s">
+                  <text>Seller</text>
+                  <divider color="primary" thickness="xs" />
+                </flank>
+                <flank align="end" gap="s">
+                  <text>Dated</text>
+                  <divider color="primary" thickness="xs" />
+                </flank>
+              </split>
+            </stack>
+            <stack padding="4pt 0pt 0pt 0pt">
+              <split equal="true" gap="xl">
+                <flank align="end" gap="s">
+                  <text>By</text>
+                  <divider color="primary" thickness="xs" />
+                </flank>
+                <flank align="end" gap="s">
+                  <text>Title</text>
+                  <divider color="primary" thickness="xs" />
+                </flank>
+              </split>
+            </stack>
+          </stack>
+          <stack gap="s" padding="m" border="xs primary">
+            <text bold="true" font-size="xs">NOTICE TO CO-SIGNER</text>
+            <text font-size="xs" align="justify">You are being asked to guarantee this debt. Think carefully before you do. If the borrower doesn’t pay the debt, you will have to. Be sure you can afford to pay if you have to, and that you want to accept this responsibility. You may have to pay up to the full amount of the debt if the borrower does not pay. You may also have to pay late fees or collection costs, which increase this amount. The creditor can collect this debt from you without first trying to collect from the borrower. The creditor can use the same collection methods against you that can be used against the borrower, such as suing you, garnishing your wages, etc. If this debt is ever in default, that fact may become a part of your credit record. This notice is not the contract that makes you liable for the debt.</text>
+          </stack>
+        </stack>
+
+      </layout>
+    </section>
+  </document>
+</lpdf>

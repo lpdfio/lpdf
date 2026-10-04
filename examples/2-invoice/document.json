@@ -1,0 +1,168 @@
+{
+  "seller": {
+    "name": "Brightwork Studio",
+    "street": "412 Harbor Street, Suite 3",
+    "city": "Portland, ME 04101",
+    "email": "billing@brightwork.example"
+  },
+  "customer": {
+    "name": "Harbor & Pine Co.",
+    "street": "88 Market Square",
+    "city": "Burlington, VT 05401",
+    "email": "accounts@harborpine.example"
+  },
+  "invoice": {
+    "number": "INV-1042",
+    "issued": "March 1, 2027",
+    "due": "March 31, 2027",
+    "terms": "Net 30",
+    "paid": false
+  },
+  "items": [
+    {
+      "description": "Brand identity package",
+      "detail": "Logo, color palette, type system",
+      "quantity": "1",
+      "unitPrice": "$3,200.00",
+      "amount": "$3,200.00"
+    },
+    {
+      "description": "Brand guidelines",
+      "detail": "Twenty-four page usage manual",
+      "quantity": "1",
+      "unitPrice": "$1,400.00",
+      "amount": "$1,400.00"
+    },
+    {
+      "description": "Stationery design",
+      "detail": "Letterhead, business card, envelope",
+      "quantity": "1",
+      "unitPrice": "$850.00",
+      "amount": "$850.00"
+    },
+    {
+      "description": "Website discovery",
+      "detail": "Workshops, sitemap, content audit",
+      "quantity": "1",
+      "unitPrice": "$1,800.00",
+      "amount": "$1,800.00"
+    },
+    {
+      "description": "Website design",
+      "detail": "Five page templates, desktop and mobile",
+      "quantity": "1",
+      "unitPrice": "$4,500.00",
+      "amount": "$4,500.00"
+    },
+    {
+      "description": "Website build",
+      "detail": "Responsive front end, content-managed",
+      "quantity": "1",
+      "unitPrice": "$5,200.00",
+      "amount": "$5,200.00"
+    },
+    {
+      "description": "Content migration",
+      "detail": "Per page, existing copy moved and formatted",
+      "quantity": "40",
+      "unitPrice": "$35.00",
+      "amount": "$1,400.00"
+    },
+    {
+      "description": "Copywriting",
+      "detail": "Hourly, billed as delivered",
+      "quantity": "24",
+      "unitPrice": "$95.00",
+      "amount": "$2,280.00"
+    },
+    {
+      "description": "Photography direction",
+      "detail": "Half-day shoot, twelve edited images",
+      "quantity": "1",
+      "unitPrice": "$1,200.00",
+      "amount": "$1,200.00"
+    },
+    {
+      "description": "Icon set",
+      "detail": "Custom icons, delivered as SVG",
+      "quantity": "24",
+      "unitPrice": "$45.00",
+      "amount": "$1,080.00"
+    },
+    {
+      "description": "Social media templates",
+      "detail": "Six layouts in two formats",
+      "quantity": "6",
+      "unitPrice": "$120.00",
+      "amount": "$720.00"
+    },
+    {
+      "description": "SEO setup",
+      "detail": "Metadata, sitemap, redirects",
+      "quantity": "1",
+      "unitPrice": "$650.00",
+      "amount": "$650.00"
+    },
+    {
+      "description": "Analytics setup",
+      "detail": "Tracking, goals, monthly report template",
+      "quantity": "1",
+      "unitPrice": "$400.00",
+      "amount": "$400.00"
+    },
+    {
+      "description": "Accessibility review",
+      "detail": "WCAG AA audit and fixes",
+      "quantity": "1",
+      "unitPrice": "$900.00",
+      "amount": "$900.00"
+    },
+    {
+      "description": "Staff training",
+      "detail": "Two sessions, recorded",
+      "quantity": "2",
+      "unitPrice": "$150.00",
+      "amount": "$300.00"
+    },
+    {
+      "description": "Project management",
+      "detail": "Hourly, across all work above",
+      "quantity": "18",
+      "unitPrice": "$85.00",
+      "amount": "$1,530.00"
+    },
+    {
+      "description": "Domain and SSL setup",
+      "detail": "Registration, certificates, DNS",
+      "quantity": "1",
+      "unitPrice": "$120.00",
+      "amount": "$120.00"
+    },
+    {
+      "description": "Launch support",
+      "detail": "Two weeks of fixes after go-live",
+      "quantity": "1",
+      "unitPrice": "$600.00",
+      "amount": "$600.00"
+    },
+    {
+      "description": "Hosting and maintenance",
+      "detail": "Twelve months, monthly rate",
+      "quantity": "12",
+      "unitPrice": "$40.00",
+      "amount": "$480.00"
+    },
+    {
+      "description": "Priority support",
+      "detail": "Twelve months, four hours a month",
+      "quantity": "12",
+      "unitPrice": "$60.00",
+      "amount": "$720.00"
+    }
+  ],
+  "subtotal": "$29,330.00",
+  "tax": { "label": "Sales tax (8%)", "amount": "$2,346.40" },
+  "total": "$31,676.40",
+  "payment": "ACH to Casco Federal Credit Union, routing 011000015, account 4400198273, reference INV-1042",
+  "notes": "Thank you for your business. A late fee of 1.5% a month applies after the due date."
+}

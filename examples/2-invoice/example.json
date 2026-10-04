@@ -1,0 +1,5 @@
+{
+  "label": "Invoice",
+  "description": "A two-page invoice filled from JSON: a repeating table, totals, a QR code, and page numbers.",
+  "fileName": "invoice"
+}

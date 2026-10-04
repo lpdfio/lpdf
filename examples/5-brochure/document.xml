@@ -1,0 +1,353 @@
+<lpdf version="1">
+  <!--
+    A brochure for a private investment firm, two A4 landscape pages: a cover and an inside page. The
+    firm, its companies and its figures are invented, and it is a sample, not an offer of anything. This
+    is the example where the canvas is the design and the layout sits on top of it. What this adds to
+    the contract:
+
+      fonts          two files, a display serif and a text sans, embedded: <font src> in <assets>, then
+                     font="display" or font="text". They are in assets/fonts, with notes on their licences
+                     (SIL Open Font License). Each has one weight, so the hierarchy is size and colour
+      canvas         the cover is a green panel, soft circles and rising bars drawn behind the text, and
+                     the text is placed over them. The layout does not know the shapes are there: the
+                     coordinates and the widths are agreed by hand
+      layers         one layer for each opacity: the panel is solid, the circles are at 0.14 and the bars
+                     at 0.6. A shape's own opacity is ignored, and a layer's is not
+      path           the curve over the bars: M and C, in points from the top left of the page
+      sections       a section can change the page settings: the cover has no margin so its panels reach
+                     the edge, and the inside page has 36pt
+      justify        justify="between" on a stack spreads its parts from top to bottom of its height
+      barcode        a QR code, dark on light so that it scans on the dark band
+
+    All the text is in the layout. Text on the canvas is one line only. A layer can also be turned with
+    transform, as the contract's watermark is; nothing is rotated here.
+  -->
+  <assets>
+    <font name="display" src="assets/fonts/Radley-Regular.ttf" />
+    <font name="text"    src="assets/fonts/Montserrat-Regular.ttf" />
+  </assets>
+
+  <!-- the greens are for panels and the sand for the page. Brass on the dark green is 4.2 to 1, enough
+       for shapes and large figures; small text there is brass-light (6.6 to 1) or on-primary (8.9 to
+       1). Small text on sand is brass-dark (5.9 to 1) or text-muted (5.4 to 1) -->
+  <tokens>
+    <colors>
+      <color name="primary"     value="#12372a" />
+      <color name="brass"       value="#b9893a" />
+      <color name="brass-light" value="#d9b36a" />
+      <color name="brass-dark"  value="#7a561a" />
+      <color name="sand"        value="#f6f1e7" />
+      <color name="surface"     value="#ffffff" />
+      <color name="ink"         value="#1d2420" />
+      <color name="text-muted"  value="#5b645f" />
+      <color name="on-primary"  value="#cdd8d1" />
+      <color name="rule"        value="#d8d0bf" />
+    </colors>
+    <space xs="2pt" s="4pt" m="8pt" l="14pt" xl="24pt" xxl="36pt" />
+    <text-size xs="7pt" s="8.5pt" m="10pt" l="18pt" xl="34pt" xxl="48pt" />
+  </tokens>
+
+  <document size="a4" orientation="landscape" margin="0pt" font="text">
+    <meta title="Coldwater Row Capital: brochure" subject="Investor brochure (sample)" author="Coldwater Row Capital" />
+
+    <!-- PAGE 1: the cover. A green panel to x=500, and the layout is two stacks, one on the panel and
+         one beside it. The page is 842 by 595 points -->
+    <section background="sand">
+
+      <canvas>
+        <layer>
+          <rect x="0pt" y="0pt" w="500pt" h="595pt" fill="primary" />
+          <rect x="500pt" y="0pt" w="4pt" h="595pt" fill="brass" />
+          <!-- the mark: three bars, beside the name -->
+          <rect x="48pt" y="62pt" w="6pt" h="10pt" fill="brass" />
+          <rect x="57pt" y="56pt" w="6pt" h="16pt" fill="brass" />
+          <rect x="66pt" y="48pt" w="6pt" h="24pt" fill="brass" />
+        </layer>
+        <layer opacity="0.14">
+          <circle cx="500pt" cy="575pt" r="210pt" fill="brass" />
+          <circle cx="60pt" cy="40pt" r="120pt" fill="brass" />
+        </layer>
+        <!-- eight bars rising from a baseline at y=520, a growing company -->
+        <layer opacity="0.6">
+          <rect x="48pt" y="504pt" w="30pt" h="16pt" fill="brass" />
+          <rect x="90pt" y="496pt" w="30pt" h="24pt" fill="brass" />
+          <rect x="132pt" y="486pt" w="30pt" h="34pt" fill="brass" />
+          <rect x="174pt" y="474pt" w="30pt" h="46pt" fill="brass" />
+          <rect x="216pt" y="460pt" w="30pt" h="60pt" fill="brass" />
+          <rect x="258pt" y="444pt" w="30pt" h="76pt" fill="brass" />
+          <rect x="300pt" y="428pt" w="30pt" h="92pt" fill="brass" />
+          <rect x="342pt" y="412pt" w="30pt" h="108pt" fill="brass" />
+        </layer>
+        <layer>
+          <path d="M 63 488 C 140 482, 250 448, 357 396" stroke="brass-light" stroke-width="2pt" />
+          <circle cx="357pt" cy="396pt" r="5pt" fill="brass-light" />
+        </layer>
+      </canvas>
+
+      <layout>
+        <split align="start">
+
+          <!-- on the panel: the name at the top, the headline in the middle, the lines of business at
+               the foot. The height is a little under the page so that it cannot start a second one -->
+          <stack width="500pt" height="594pt" padding="48pt" justify="between" font-size="m">
+            <stack gap="xs" padding="0pt 0pt 0pt 34pt">
+              <text font-size="m" color="sand">COLDWATER ROW</text>
+              <text font-size="xs" color="on-primary">CAPITAL PARTNERS</text>
+            </stack>
+
+            <stack gap="l" padding="0pt 0pt 44pt 0pt">
+              <stack gap="0pt">
+                <text font="display" font-size="xxl" color="sand">Capital that</text>
+                <text font="display" font-size="xxl" color="sand">grows.</text>
+              </stack>
+              <stack width="56pt" height="3pt" background="brass" />
+              <stack width="340pt">
+                <text color="on-primary">
+                  Coldwater Row finances established private companies with growth equity, senior
+                  credit and structured capital, and stays on as a partner for the long run.
+                </text>
+              </stack>
+            </stack>
+
+            <text font-size="s" color="on-primary">Growth equity   ·   Senior credit   ·   Structured capital</text>
+          </stack>
+
+          <!-- beside the panel, on the sand: three figures, a paragraph, and how to reach us -->
+          <stack width="342pt" height="594pt" padding="48pt 40pt" justify="between" font-size="m">
+            <stack gap="l">
+              <text font-size="xs" color="brass-dark">AT A GLANCE</text>
+              <stack gap="m">
+                <stack gap="xs">
+                  <text font="display" font-size="xl" color="primary">$1.9B</text>
+                  <text font-size="s" color="text-muted">in committed capital</text>
+                </stack>
+                <divider color="rule" thickness="xs" />
+                <stack gap="xs">
+                  <text font="display" font-size="xl" color="primary">46</text>
+                  <text font-size="s" color="text-muted">companies financed since 2009</text>
+                </stack>
+                <divider color="rule" thickness="xs" />
+                <stack gap="xs">
+                  <text font="display" font-size="xl" color="primary">6.5 years</text>
+                  <text font-size="s" color="text-muted">average time we stay invested</text>
+                </stack>
+              </stack>
+            </stack>
+
+            <text font-size="s" color="ink">
+              We back owners who want a partner, not an exit date. Each company has one point of
+              contact at Coldwater Row from the first call to the last board meeting.
+            </text>
+
+            <stack gap="s">
+              <divider color="brass" thickness="s" />
+              <text font-size="s" color="primary">partners@coldwaterrow.example</text>
+              <text font-size="s" color="text-muted">www.coldwaterrow.example</text>
+            </stack>
+          </stack>
+
+        </split>
+      </layout>
+    </section>
+
+    <!-- PAGE 2: the inside. 36pt margin, a green band across the foot, soft circles at the top right.
+         The content is two stacks of fixed height: 36 + 416 + 107 + 36 is the 595 of the page -->
+    <section background="sand" margin="36pt">
+
+      <canvas>
+        <layer>
+          <rect anchor="bottom-left" w="842pt" h="133pt" fill="primary" />
+          <rect x="0pt" y="462pt" w="842pt" h="3pt" fill="brass" />
+        </layer>
+        <layer opacity="0.12">
+          <circle cx="790pt" cy="10pt" r="110pt" fill="brass" />
+          <circle cx="700pt" cy="96pt" r="46pt" fill="brass" />
+        </layer>
+      </canvas>
+
+      <layout>
+        <stack gap="0pt" font-size="m">
+
+          <stack gap="l" height="416pt">
+
+            <flank end="true" align="end" gap="l">
+              <text font="display" font-size="30pt" color="primary">What we do</text>
+              <text font-size="s" color="text-muted">Three ways to finance a company, each with its own team.</text>
+            </flank>
+
+            <!-- three cards: a grid of equal columns, each a white box -->
+            <grid cols="3" gap="m">
+              <stack gap="s" padding="14pt" background="surface" border="xs rule" radius="6pt">
+                <flank align="end" gap="m">
+                  <text font="display" font-size="l" color="primary">Growth equity</text>
+                  <text font="display" font-size="l" color="brass">01</text>
+                </flank>
+                <text font-size="m" color="ink">
+                  Minority and control investments in profitable companies that mean to expand. We take
+                  a board seat, and we set no date to sell.
+                </text>
+                <divider color="rule" thickness="xs" />
+                <flank end="true" align="center">
+                  <text font-size="xs" color="text-muted">TYPICAL INVESTMENT</text>
+                  <text font-size="s" color="brass-dark" align="right">$20 to 120 million</text>
+                </flank>
+              </stack>
+              <stack gap="s" padding="14pt" background="surface" border="xs rule" radius="6pt">
+                <flank align="end" gap="m">
+                  <text font="display" font-size="l" color="primary">Senior credit</text>
+                  <text font="display" font-size="l" color="brass">02</text>
+                </flank>
+                <text font-size="m" color="ink">
+                  Secured loans, at a floating rate and for five to seven years, for acquisitions and
+                  refinancings. Repayment is set to the company's cash flow.
+                </text>
+                <divider color="rule" thickness="xs" />
+                <flank end="true" align="center">
+                  <text font-size="xs" color="text-muted">TYPICAL LOAN</text>
+                  <text font-size="s" color="brass-dark" align="right">$15 to 80 million</text>
+                </flank>
+              </stack>
+              <stack gap="s" padding="14pt" background="surface" border="xs rule" radius="6pt">
+                <flank align="end" gap="m">
+                  <text font="display" font-size="l" color="primary">Structured capital</text>
+                  <text font="display" font-size="l" color="brass">03</text>
+                </flank>
+                <text font-size="m" color="ink">
+                  Subordinated debt and preferred equity for the company that needs more than a bank
+                  will lend, and less change of ownership than equity brings.
+                </text>
+                <divider color="rule" thickness="xs" />
+                <flank end="true" align="center">
+                  <text font-size="xs" color="text-muted">TYPICAL INVESTMENT</text>
+                  <text font-size="s" color="brass-dark" align="right">$10 to 60 million</text>
+                </flank>
+              </stack>
+            </grid>
+
+            <split gap="xl" align="start">
+
+              <!-- selected companies: a table whose header row is the green of the cover -->
+              <stack gap="m" width="470pt">
+                <text font="display" font-size="l" color="primary">Selected companies</text>
+                <table cols="6fr 5fr 4fr 2fr" stripe="surface">
+                  <thead background="primary">
+                    <td padding="6pt 5pt"><text font-size="xs" color="sand">COMPANY</text></td>
+                    <td padding="6pt 5pt"><text font-size="xs" color="sand">SECTOR</text></td>
+                    <td padding="6pt 5pt"><text font-size="xs" color="sand">WE PROVIDED</text></td>
+                    <td padding="6pt 5pt"><text font-size="xs" color="sand" align="right">SINCE</text></td>
+                  </thead>
+                  <tr>
+                    <td padding="6pt 5pt"><text font-size="s" color="ink">Tidewater Marine Services</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted">Marine logistics</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted">Growth equity</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted" align="right">2016</text></td>
+                  </tr>
+                  <tr>
+                    <td padding="6pt 5pt"><text font-size="s" color="ink">Kiln &amp; Cooper Foods</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted">Specialty foods</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted">Structured capital</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted" align="right">2018</text></td>
+                  </tr>
+                  <tr>
+                    <td padding="6pt 5pt"><text font-size="s" color="ink">Brightleaf Dental Group</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted">Healthcare services</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted">Senior credit</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted" align="right">2019</text></td>
+                  </tr>
+                  <tr>
+                    <td padding="6pt 5pt"><text font-size="s" color="ink">Fenwick Precision Tooling</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted">Industrial manufacturing</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted">Structured capital</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted" align="right">2020</text></td>
+                  </tr>
+                  <tr>
+                    <td padding="6pt 5pt"><text font-size="s" color="ink">Aldermoor Software</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted">Vertical software</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted">Growth equity</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted" align="right">2021</text></td>
+                  </tr>
+                  <tr>
+                    <td padding="6pt 5pt"><text font-size="s" color="ink">Pennant Cold Storage</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted">Logistics</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted">Senior credit</text></td>
+                    <td padding="6pt 5pt"><text font-size="s" color="text-muted" align="right">2022</text></td>
+                  </tr>
+                </table>
+              </stack>
+
+              <!-- how we work: a number in a green circle, and two lines -->
+              <stack gap="m" width="270pt">
+                <text font="display" font-size="l" color="primary">How we work</text>
+                <stack gap="m">
+                  <flank align="start" gap="m">
+                    <stack width="22pt" height="22pt" radius="11pt" background="primary" justify="center">
+                      <text font-size="s" color="sand" align="center">1</text>
+                    </stack>
+                    <stack gap="xs">
+                      <text font="display" font-size="13pt" color="primary">Listen</text>
+                      <text font-size="s" color="text-muted">We meet the owners and read the numbers before we send terms.</text>
+                    </stack>
+                  </flank>
+                  <flank align="start" gap="m">
+                    <stack width="22pt" height="22pt" radius="11pt" background="primary" justify="center">
+                      <text font-size="s" color="sand" align="center">2</text>
+                    </stack>
+                    <stack gap="xs">
+                      <text font="display" font-size="13pt" color="primary">Structure</text>
+                      <text font-size="s" color="text-muted">One term sheet, set to the company's cash flow and not to a template.</text>
+                    </stack>
+                  </flank>
+                  <flank align="start" gap="m">
+                    <stack width="22pt" height="22pt" radius="11pt" background="primary" justify="center">
+                      <text font-size="s" color="sand" align="center">3</text>
+                    </stack>
+                    <stack gap="xs">
+                      <text font="display" font-size="13pt" color="primary">Close</text>
+                      <text font-size="s" color="text-muted">Usually in 45 to 60 days, with one team from first call to funding.</text>
+                    </stack>
+                  </flank>
+                  <flank align="start" gap="m">
+                    <stack width="22pt" height="22pt" radius="11pt" background="primary" justify="center">
+                      <text font-size="s" color="sand" align="center">4</text>
+                    </stack>
+                    <stack gap="xs">
+                      <text font="display" font-size="13pt" color="primary">Partner</text>
+                      <text font-size="s" color="text-muted">Quarterly reviews, a board seat where we invest, and no surprise fees.</text>
+                    </stack>
+                  </flank>
+                </stack>
+              </stack>
+
+            </split>
+          </stack>
+
+          <!-- on the green band: how to reach us, a QR code, and the small print -->
+          <stack gap="m" height="107pt" padding="18pt 0pt 0pt 0pt">
+            <grid cols="3" gap="xl">
+              <stack gap="xs">
+                <text font="display" font-size="l" color="sand">Talk to us.</text>
+                <text font-size="s" color="on-primary">Tell us what the company needs and when. A partner replies within two working days.</text>
+              </stack>
+              <stack gap="xs">
+                <text font-size="xs" color="brass-light">COLDWATER ROW CAPITAL PARTNERS</text>
+                <text font-size="s" color="sand">150 Commercial Street, Suite 900</text>
+                <text font-size="s" color="sand">Portland, ME 04101</text>
+                <text font-size="s" color="sand">(555) 010-0188   partners@coldwaterrow.example</text>
+              </stack>
+              <flank align="center" gap="m">
+                <barcode type="qr" data="https://www.coldwaterrow.example/contact" size="54pt" color="primary" background="surface" />
+                <text font-size="s" color="on-primary">Scan to book an introduction call.</text>
+              </flank>
+            </grid>
+            <text font-size="xs" color="on-primary">
+              Coldwater Row Capital is an invented firm in a sample made with Lpdf. This is not an offer
+              to sell, or a request to buy, any security or loan, and no figure here describes a real fund or company.
+            </text>
+          </stack>
+
+        </stack>
+      </layout>
+    </section>
+
+  </document>
+</lpdf>

@@ -1,0 +1,171 @@
+{
+  "report": {
+    "title": "Data Centers Worldwide",
+    "period": "Cloud regions and AI campuses, October 2026",
+    "prepared": "October 4, 2026"
+  },
+  "summary": {
+    "regions": "132",
+    "zones": "353",
+    "metros": "76 metro areas",
+    "running": "72",
+    "power": "13.7 GW"
+  },
+  "providers": [
+    {
+      "provider": "AWS",
+      "regions": "34",
+      "zones": "108",
+      "note": "The 34 in its account documentation. AWS counts 39 regions in all."
+    },
+    {
+      "provider": "Azure",
+      "regions": "57",
+      "zones": "121",
+      "note": "17 regions have no zones. 8 are open only by request."
+    },
+    {
+      "provider": "Google",
+      "regions": "41",
+      "zones": "124",
+      "note": "Four regions run their three zones from one or two buildings."
+    }
+  ],
+  "running": [
+    {
+      "name": "Colossus 2",
+      "owner": "SpaceXAI",
+      "where": "Memphis, TN",
+      "now": "946",
+      "planned": "1,531"
+    },
+    {
+      "name": "Amazon New Carlisle",
+      "owner": "Amazon",
+      "where": "New Carlisle, IN",
+      "now": "910",
+      "planned": "1,925"
+    },
+    {
+      "name": "Fairwater Atlanta",
+      "owner": "Microsoft",
+      "where": "Fayetteville, GA",
+      "now": "636",
+      "planned": "636"
+    },
+    {
+      "name": "DayOne Nusajaya",
+      "owner": "DayOne",
+      "where": "Johor, Malaysia",
+      "now": "473",
+      "planned": "473"
+    },
+    {
+      "name": "Meta Prometheus",
+      "owner": "Meta",
+      "where": "New Albany, OH",
+      "now": "471",
+      "planned": "1,022"
+    },
+    {
+      "name": "DayOne Kempas",
+      "owner": "DayOne",
+      "where": "Johor Bahru, Malaysia",
+      "now": "422",
+      "planned": "422"
+    },
+    {
+      "name": "Stargate Abilene",
+      "owner": "Oracle",
+      "where": "Abilene, TX",
+      "now": "421",
+      "planned": "843"
+    },
+    {
+      "name": "Fairwater Wisconsin",
+      "owner": "Microsoft",
+      "where": "Mount Pleasant, WI",
+      "now": "369",
+      "planned": "2,263"
+    },
+    {
+      "name": "Google Pryor",
+      "owner": "Google",
+      "where": "Pryor, OK",
+      "now": "368",
+      "planned": "368"
+    },
+    {
+      "name": "Colossus 1",
+      "owner": "SpaceXAI",
+      "where": "Memphis, TN",
+      "now": "340",
+      "planned": "340"
+    }
+  ],
+  "building": [
+    {
+      "name": "Stargate New Mexico",
+      "owner": "Oracle",
+      "where": "Doña Ana County, NM",
+      "planned": "1,750",
+      "expected": "2028"
+    },
+    {
+      "name": "Meta Hyperion",
+      "owner": "Meta",
+      "where": "Holly Ridge, LA",
+      "planned": "1,632",
+      "expected": "2028"
+    },
+    {
+      "name": "Stargate Shackelford",
+      "owner": "Oracle",
+      "where": "Shackelford County, TX",
+      "planned": "1,400",
+      "expected": "2028"
+    },
+    {
+      "name": "Stargate UAE",
+      "owner": "G42",
+      "where": "Abu Dhabi, UAE",
+      "planned": "1,000",
+      "expected": "2028"
+    },
+    {
+      "name": "Stargate Michigan",
+      "owner": "Oracle",
+      "where": "Saline Township, MI",
+      "planned": "988",
+      "expected": "2028"
+    },
+    {
+      "name": "Stargate Wisconsin",
+      "owner": "Oracle",
+      "where": "Port Washington, WI",
+      "planned": "902",
+      "expected": "2028"
+    },
+    {
+      "name": "Stargate Milam",
+      "owner": "Softbank",
+      "where": "Milam County, TX",
+      "planned": "857",
+      "expected": "2028"
+    },
+    {
+      "name": "Stargate Lordstown",
+      "owner": "Softbank",
+      "where": "Lordstown, OH",
+      "planned": "214",
+      "expected": "2027"
+    },
+    {
+      "name": "Microsoft Narvik Norway",
+      "owner": "Nscale",
+      "where": "Narvik, Norway",
+      "planned": "92",
+      "expected": "2026"
+    }
+  ]
+}

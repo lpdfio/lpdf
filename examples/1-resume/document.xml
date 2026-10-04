@@ -1,0 +1,202 @@
+<lpdf version="1">
+  <!--
+    A one-page résumé. What this adds to the letter:
+
+      tokens   name a colour or a size once, use the name everywhere. Change a <color> below
+               and the whole page follows. Sizes work the same way: gap="m" and font-size="s"
+               each read their own scale, so m is a different number for a gap and for a font
+      assets   declare the fonts you use, then pick one with font="..."
+      layout   split puts two columns side by side, flank puts a label beside a value,
+               cluster wraps tags onto new lines, grid makes equal columns
+  -->
+  <assets>
+    <!-- a serif for headings against a sans-serif for text; these two are built into every PDF.
+         To use your own font, declare it here: <font name="brand" src="fonts/Brand.ttf" /> -->
+    <font name="body"    core="Helvetica" />
+    <font name="heading" core="Times-Bold" />
+  </assets>
+
+  <tokens>
+    <colors>
+      <color name="primary"    value="#0f766e" />
+      <color name="surface"    value="#ffffff" />
+      <color name="surface-alt" value="#f0f5f4" />
+      <color name="text-muted" value="#5f6b6a" />
+      <color name="rule"       value="#cfdcda" />
+    </colors>
+    <space xs="2pt" s="5pt" m="9pt" l="16pt" xl="24pt" xxl="36pt" />
+    <text-size xs="7.5pt" s="9pt" m="10.5pt" l="14pt" xl="24pt" xxl="30pt" />
+  </tokens>
+
+  <document size="letter" margin="0pt" font="body">
+    <meta title="Résumé: Jordan Ellis" author="Jordan Ellis" />
+    <section background="surface">
+      <layout>
+        <split gap="0pt" height="full">
+
+          <!-- sidebar: its own background, as tall as the page -->
+          <stack width="190pt" height="full" padding="l" gap="l" background="surface-alt">
+
+            <stack gap="xs">
+              <text font="heading" font-size="xl" color="primary">Jordan Ellis</text>
+              <text font-size="s" color="text-muted">Senior Software Engineer</text>
+            </stack>
+
+            <divider color="rule" thickness="xs" />
+
+            <stack gap="s">
+              <text font="heading" font-size="m">Contact</text>
+              <text font-size="s" color="text-muted">jordan.ellis@example.com</text>
+              <text font-size="s" color="text-muted">+1 555 0142</text>
+              <text font-size="s" color="text-muted">Portland, OR</text>
+              <text font-size="s" color="text-muted">github.com/jordan-ellis</text>
+            </stack>
+
+            <divider color="rule" thickness="xs" />
+
+            <!-- a cluster wraps its children onto new lines, like words in a paragraph -->
+            <stack gap="s">
+              <text font="heading" font-size="m">Skills</text>
+              <cluster gap="s">
+                <frame padding="s" border="xs primary" radius="s"><text font-size="xs" color="primary">Rust</text></frame>
+                <frame padding="s" border="xs primary" radius="s"><text font-size="xs" color="primary">TypeScript</text></frame>
+                <frame padding="s" border="xs primary" radius="s"><text font-size="xs" color="primary">WebAssembly</text></frame>
+                <frame padding="s" border="xs primary" radius="s"><text font-size="xs" color="primary">PostgreSQL</text></frame>
+                <frame padding="s" border="xs primary" radius="s"><text font-size="xs" color="primary">Kubernetes</text></frame>
+                <frame padding="s" border="xs primary" radius="s"><text font-size="xs" color="primary">Go</text></frame>
+              </cluster>
+            </stack>
+
+            <divider color="rule" thickness="xs" />
+
+            <stack gap="s">
+              <text font="heading" font-size="m">Education</text>
+              <stack gap="xs">
+                <text font-size="s" bold="true">B.S. Computer Science</text>
+                <text font-size="s" color="text-muted">Oregon State University, 2014</text>
+              </stack>
+            </stack>
+
+            <divider color="rule" thickness="xs" />
+
+            <stack gap="s">
+              <text font="heading" font-size="m">Languages</text>
+              <text font-size="s" color="text-muted">English (native)</text>
+              <text font-size="s" color="text-muted">Spanish (professional)</text>
+            </stack>
+
+          </stack>
+
+          <!-- main column -->
+          <stack padding="xl" gap="l" height="fill">
+
+            <stack gap="s">
+              <text font="heading" font-size="l" color="primary">Profile</text>
+              <divider color="primary" thickness="xs" />
+              <text font-size="m">
+                Software engineer with ten years of experience building fast, reliable systems.
+                I like small teams, clear interfaces and code that is easy to delete.
+              </text>
+            </stack>
+
+            <!-- a grid makes equal columns: three figures, one per cell -->
+            <grid cols="3" gap="m">
+              <stack gap="xs">
+                <text font="heading" font-size="xl" color="primary">10 yrs</text>
+                <text font-size="s" color="text-muted">in production systems</text>
+              </stack>
+              <stack gap="xs">
+                <text font="heading" font-size="xl" color="primary">50M</text>
+                <text font-size="s" color="text-muted">events a day, one pipeline</text>
+              </stack>
+              <stack gap="xs">
+                <text font="heading" font-size="xl" color="primary">-40%</text>
+                <text font-size="s" color="text-muted">p99 latency after the rewrite</text>
+              </stack>
+            </grid>
+
+            <stack gap="m">
+              <text font="heading" font-size="l" color="primary">Experience</text>
+              <divider color="primary" thickness="xs" />
+              <stack gap="l">
+
+              <!-- end="true": the first child takes the space, the others sit at the right edge.
+                   A bullet is a flank too: a narrow marker, then text that fills the rest -->
+              <stack gap="s">
+                <flank end="true" gap="m" align="center">
+                  <text bold="true">Staff Engineer, Northwind Data</text>
+                  <text font-size="s" color="text-muted">2021 to present</text>
+                </flank>
+                <flank gap="s">
+                  <text width="8pt" color="primary">•</text>
+                  <text>Led the design of a streaming pipeline that handles fifty million events a day.</text>
+                </flank>
+                <flank gap="s">
+                  <text width="8pt" color="primary">•</text>
+                  <text>Cut p99 latency by forty percent with a custom allocator and lock-free queues.</text>
+                </flank>
+              </stack>
+
+              <stack gap="s">
+                <flank end="true" gap="m" align="center">
+                  <text bold="true">Senior Engineer, Brightside Labs</text>
+                  <text font-size="s" color="text-muted">2017 to 2021</text>
+                </flank>
+                <flank gap="s">
+                  <text width="8pt" color="primary">•</text>
+                  <text>Built a multi-tenant platform that serves eight thousand customers.</text>
+                </flank>
+                <flank gap="s">
+                  <text width="8pt" color="primary">•</text>
+                  <text>Moved a monolith to services and cut deploys from forty-five minutes to three.</text>
+                </flank>
+              </stack>
+
+              <stack gap="s">
+                <flank end="true" gap="m" align="center">
+                  <text bold="true">Software Engineer, Orion Systems</text>
+                  <text font-size="s" color="text-muted">2014 to 2017</text>
+                </flank>
+                <flank gap="s">
+                  <text width="8pt" color="primary">•</text>
+                  <text>Wrote firmware for IoT sensors in C and Rust.</text>
+                </flank>
+                <flank gap="s">
+                  <text width="8pt" color="primary">•</text>
+                  <text>Shipped the cloud SDKs that three enterprise customers adopted in the first year.</text>
+                </flank>
+              </stack>
+              </stack>
+            </stack>
+
+            <!-- cards: a grid of boxes, each a stack with its own background and border -->
+            <stack gap="m">
+              <text font="heading" font-size="l" color="primary">Selected projects</text>
+              <divider color="primary" thickness="xs" />
+              <grid cols="2" gap="m">
+                <stack gap="xs" padding="m" background="surface-alt" radius="s">
+                  <text bold="true">tinyqueue</text>
+                  <text font-size="s" color="text-muted">A lock-free queue for Rust, used by four open-source projects.</text>
+                </stack>
+                <stack gap="xs" padding="m" background="surface-alt" radius="s">
+                  <text bold="true">pgwatch</text>
+                  <text font-size="s" color="text-muted">A small tool that explains slow PostgreSQL queries in plain words.</text>
+                </stack>
+                <stack gap="xs" padding="m" background="surface-alt" radius="s">
+                  <text bold="true">Edge cache talk</text>
+                  <text font-size="s" color="text-muted">Gave a conference talk on tail latency and what causes it.</text>
+                </stack>
+                <stack gap="xs" padding="m" background="surface-alt" radius="s">
+                  <text bold="true">Mentoring</text>
+                  <text font-size="s" color="text-muted">Mentor in a program that places career changers in engineering roles.</text>
+                </stack>
+              </grid>
+            </stack>
+
+          </stack>
+
+        </split>
+      </layout>
+    </section>
+  </document>
+</lpdf>

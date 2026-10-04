@@ -22,6 +22,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         example-node example-dotnet example-php example-python \
         clone-adapters sync-license check-license \
         build-portal-ui build-pages-demo build-pages build-pages-docs check-pages-docs stamp-pages-docs dev-pages meta-pages \
+        sync-examples check-examples-sync build-demo-viewer \
         rc-next rc-check
 
 build-wasm:
@@ -437,6 +438,24 @@ stamp-pages-docs:
 	@test -d "$(PAGES_DIR)/docs-site" || (echo "ERROR: docs-site not found at $(PAGES_DIR)/docs-site" && exit 1)
 	node scripts/stamp-docs.mjs "$(PAGES_DIR)/docs-site/engine.json"
 
+# ── Examples ─────────────────────────────────────────────────────────────────
+# examples/ holds the seven examples, from the admission letter to the book, and is the one source of them. The VS Code
+# extension offers them as templates (src/vscode/templates), and the demo on lpdf.io and the docs show them (both in
+# $(PAGES_DIR)); sync-examples copies them to all three, and build-pages runs it. The docs build renders each one to
+# a PDF itself, with the engine of the site, for the viewer on its page. check-examples-sync fails if a copy is not what
+# sync-examples would write.
+sync-examples:
+	node scripts/sync-examples.mjs
+
+check-examples-sync:
+	node scripts/sync-examples.mjs --check
+
+# The demo's PDF viewer is the extension's, so a change to the viewer or its page reaches the demo through this.
+# It builds the extension's TypeScript, which has the function that makes the page, but not its engine.
+build-demo-viewer:
+	cd src/vscode && npm run build
+	node scripts/build-demo-viewer.mjs
+
 # ── Pages docs site ───────────────────────────────────────────────────────────
 # The Starlight docs in $(PAGES_DIR)/docs-site. The pages deploy workflow builds them itself; this is for
 # looking at them locally, where lpdf.local/docs serves docs-site/dist. The code tabs and the example
@@ -457,7 +476,7 @@ check-pages-docs:
 # The portal bundles are already in place: build-portal-ui writes them there.
 # It ends by stamping the docs with this core and rendering their examples with the refreshed engine,
 # so an engine change that breaks one fails here, and the docs get fixed in the same change.
-build-pages: build-portal-ui build-pages-demo
+build-pages: build-portal-ui sync-examples build-demo-viewer build-pages-demo
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Copying pages assets..."
@@ -487,7 +506,7 @@ build-pages: build-portal-ui build-pages-demo
 # bundles are copied over the committed ones.  Use this to test pages locally.
 # Do NOT commit the output — run make build-pages before committing to restore
 # sentinel values for CI deployment.
-dev-pages:
+dev-pages: sync-examples build-demo-viewer
 	@test -d "$(PAGES_DIR)/www" || (echo "ERROR: pages checkout not found at $(PAGES_DIR)" && exit 1)
 	cd "$(PORTAL_UI_DIR)" && npm run build
 	cd "$(PAGES_DIR)/ui" && npm run build
