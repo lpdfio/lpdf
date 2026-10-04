@@ -278,7 +278,7 @@ fn parse_transform(s: &str) -> Option<[f32; 6]> {
             let cos = rad.cos();
             let sin = rad.sin();
             let e = cx - cx * cos + cy * sin;
-            let f = cy + cx * sin - cy * cos;
+            let f = cy - cx * sin - cy * cos;
             return Some([cos, sin, -sin, cos, e, f]);
         }
     }

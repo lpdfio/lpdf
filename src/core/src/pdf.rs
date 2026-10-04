@@ -1349,22 +1349,15 @@ fn draw_node(
             content.save_state();
 
             // Apply optional CTM transform.
-            // The layer transform is in canvas (top-down) space; we need to
-            // convert the translation component to PDF (bottom-up) space.
-            // For scale-only / translate-only transforms this is sufficient.
+            // The matrix [a b c d e f] is written for canvas space (y down, origin at the top
+            // left), but the shapes inside the layer are already in PDF space (y up, origin at
+            // the bottom left). A point is (X, Y) there and (X, H - Y) on the canvas, so
+            // conjugating the canvas matrix with that flip gives the matrix the page needs:
+            //   X' = a X - c Y + (c H + e)
+            //   Y' = -b X + d Y + (H - d H - f)
             if let Some(ctm) = layer.transform {
-                // ctm = [sx, 0, 0, sy, tx, ty] in canvas coords
-                // In PDF coords ty flips: pdf_ty = page_h * (1 - sy) - ty * sy
-                // For a pure translate: pdf_ty = page_h - ty  (simplified)
-                // We apply a general CTM by converting y-translation:
                 let [a, b, c, d, e, f] = ctm;
-                // Negate y-axis scale and adjust translation.
-                // This converts from canvas (y-down) to PDF (y-up):
-                //   pdf_a = a, pdf_b = -b, pdf_c = -c, pdf_d = -d (no, wrong)
-                // Simpler: just emit the matrix. The canvas user is expected to
-                // work in canvas coords; we flip translation only.
-                let pdf_f = page_h - f;
-                content.transform([a, b, c, d, e, pdf_f]);
+                content.transform([a, -b, -c, d, c * page_h + e, page_h - d * page_h - f]);
             }
 
             // Apply optional clip rect.

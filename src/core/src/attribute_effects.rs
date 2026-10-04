@@ -106,7 +106,22 @@ const UNTESTED: &[(&str, &str)] = &[
         "image@src",
         "read by the SDKs, which load the file and hand it to the engine under the image's name or ref; the engine never sees it",
     ),
+    ("stack@paginate", PAGINATE),
+    ("flank@paginate", PAGINATE),
+    ("split@paginate", PAGINATE),
+    ("cluster@paginate", PAGINATE),
+    ("grid@paginate", PAGINATE),
+    ("frame@paginate", PAGINATE),
+    ("td@paginate", PAGINATE),
+    ("text@paginate", PAGINATE),
+    ("img@paginate", PAGINATE),
+    ("barcode@paginate", PAGINATE),
+    ("table@paginate", PAGINATE),
 ];
+
+/// Why `paginate` is untested here, which is the same for every element that has it.
+const PAGINATE: &str = "it moves content between pages and shows only where a page boundary falls at the box, which \
+    the document here has none of; layout::tests::paginate_* cover each value";
 
 // ── What to try for free text ─────────────────────────────────────────────────
 

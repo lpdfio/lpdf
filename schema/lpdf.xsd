@@ -123,6 +123,15 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <xs:simpleType name="Paginate">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="no"/>
+      <xs:enumeration value="break-before"/>
+      <xs:enumeration value="break-after"/>
+      <xs:enumeration value="keep-next"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="TextAlignH">
     <xs:restriction base="xs:string">
       <xs:enumeration value="left"/>
@@ -275,6 +284,11 @@
     <xs:attribute name="background" type="Color"/>
     <xs:attribute name="border"     type="BorderValue"/>
     <xs:attribute name="radius"     type="TokenScaleOrPt"/>
+    <xs:attribute name="paginate"   type="Paginate">
+      <xs:annotation>
+        <xs:documentation>Where the box falls in the page flow. no: never split the box, and move it whole to the next page when it does not fit. break-before: start it on a new page. break-after: start the next sibling on a new page. keep-next: keep it on one page with the sibling that follows, moving both to the next page if that sibling would not fit. break-before, break-after and keep-next take effect on the children of layout; on a box inside another box they are not applied. no applies at any depth.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
     <xs:attribute name="debug"      type="xs:boolean"/>
     <xs:attributeGroup ref="DataBindingAttrs"/>
   </xs:attributeGroup>
@@ -296,6 +310,11 @@
     <xs:attribute name="background" type="Color"/>
     <xs:attribute name="border"     type="BorderValue"/>
     <xs:attribute name="radius"     type="TokenScaleOrPt"/>
+    <xs:attribute name="paginate"   type="Paginate">
+      <xs:annotation>
+        <xs:documentation>Where the box falls in the page flow. no: never split the box, and move it whole to the next page when it does not fit. break-before: start it on a new page. break-after: start the next sibling on a new page. keep-next: keep it on one page with the sibling that follows, moving both to the next page if that sibling would not fit. break-before, break-after and keep-next take effect on the children of layout; on a box inside another box they are not applied. no applies at any depth.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
     <xs:attribute name="debug"      type="xs:boolean"/>
     <xs:attributeGroup ref="DataBindingAttrs"/>
   </xs:attributeGroup>
@@ -885,6 +904,7 @@
       <xs:attribute name="background" type="Color"/>
       <xs:attribute name="border"     type="BorderValue"/>
       <xs:attribute name="radius"     type="TokenScaleOrPt"/>
+      <xs:attribute name="paginate"   type="Paginate"/>
       <xs:attribute name="debug"      type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
@@ -918,6 +938,7 @@
       <xs:attribute name="hrt"        type="xs:boolean"/>
       <xs:attribute name="color"      type="Color"/>
       <xs:attribute name="background" type="Color"/>
+      <xs:attribute name="paginate"   type="Paginate"/>
       <xs:attribute name="debug"      type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
@@ -941,6 +962,7 @@
       <xs:attribute name="color"     type="Color"/>
       <xs:attribute name="align"     type="TextAlignH"/>
       <xs:attribute name="width"     type="TokenScaleOrPt"/>
+      <xs:attribute name="paginate"  type="Paginate"/>
       <xs:attribute name="debug"     type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
@@ -1016,6 +1038,7 @@
       <xs:attribute name="background" type="Color"/>
       <xs:attribute name="width"      type="TokenScaleOrPt"/>
       <xs:attribute name="height"     type="HeightValue"/>
+      <xs:attribute name="paginate"   type="Paginate"/>
       <xs:attribute name="debug"      type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>

@@ -3144,6 +3144,71 @@ mod tests {
         }
     }
 
+    // ── paginate ──────────────────────────────────────────────────────────────
+
+    /// The page, counted from 1, that holds the text `needle`, or None.
+    fn page_with(pages: &[serde_json::Value], needle: &str) -> Option<usize> {
+        pages.iter().position(|p| find_text_content(p).iter().any(|t| t.contains(needle))).map(|i| i + 1)
+    }
+
+    #[test]
+    fn paginate_break_before_starts_a_new_page() {
+        let flowing = engine_render(&minimal("<text>ONE</text><text>TWO</text>"));
+        assert_eq!(flowing["pages"].as_array().unwrap().len(), 1, "without paginate both fit on one page");
+
+        let tree = engine_render(&minimal(r#"<text>ONE</text><text paginate="break-before">TWO</text>"#));
+        let pages = tree["pages"].as_array().unwrap();
+        assert_eq!(pages.len(), 2);
+        assert_eq!(page_with(pages, "ONE"), Some(1));
+        assert_eq!(page_with(pages, "TWO"), Some(2));
+    }
+
+    #[test]
+    fn paginate_break_after_starts_the_next_sibling_on_a_new_page() {
+        let tree = engine_render(&minimal(r#"<text paginate="break-after">ONE</text><text>TWO</text>"#));
+        let pages = tree["pages"].as_array().unwrap();
+        assert_eq!(pages.len(), 2);
+        assert_eq!(page_with(pages, "ONE"), Some(1));
+        assert_eq!(page_with(pages, "TWO"), Some(2));
+    }
+
+    #[test]
+    fn paginate_keep_next_moves_a_box_with_the_sibling_that_does_not_fit() {
+        // 760pt of the page's 786 are used; the head fits, its sibling (200pt) does not, and both fit together on the next page.
+        let body = |attr: &str| {
+            format!(r#"<frame height="760pt" /><text {attr}>HEAD</text><frame height="200pt" /><text>TAIL</text>"#)
+        };
+        let loose = engine_render(&minimal(&body("")));
+        assert_eq!(page_with(loose["pages"].as_array().unwrap(), "HEAD"), Some(1), "the head is stranded without keep-next");
+
+        let kept = engine_render(&minimal(&body(r#"paginate="keep-next""#)));
+        assert_eq!(page_with(kept["pages"].as_array().unwrap(), "HEAD"), Some(2), "keep-next brings the head to the sibling's page");
+    }
+
+    #[test]
+    fn paginate_no_keeps_a_stack_whole() {
+        // 760pt used leaves room for one line of the stack, which splits between its children unless it is kept whole.
+        let body = |attr: &str| {
+            format!(r#"<frame height="760pt" /><stack {attr}><text>R1</text><text>R2</text><text>R3</text><text>R4</text></stack>"#)
+        };
+        let split = engine_render(&minimal(&body("")));
+        let pages = split["pages"].as_array().unwrap();
+        assert_eq!(page_with(pages, "R1"), Some(1), "an unkept stack splits, its first line on page 1");
+        assert_eq!(page_with(pages, "R4"), Some(2));
+
+        let whole = engine_render(&minimal(&body(r#"paginate="no""#)));
+        let pages = whole["pages"].as_array().unwrap();
+        assert_eq!(page_with(pages, "R1"), Some(2), "a stack that does not fit moves whole to the next page");
+        assert_eq!(page_with(pages, "R4"), Some(2));
+    }
+
+    #[test]
+    fn paginate_breaks_are_not_applied_to_a_box_inside_another_box() {
+        // The schema says so: break-before, break-after and keep-next act on the children of layout only.
+        let tree = engine_render(&minimal(r#"<stack><text>ONE</text><text paginate="break-before">TWO</text></stack>"#));
+        assert_eq!(tree["pages"].as_array().unwrap().len(), 1, "a break inside a stack is ignored");
+    }
+
     /// Helper: collect every "content" string of text nodes in a page tree.
     fn find_text_content(page: &serde_json::Value) -> Vec<String> {
         let mut out = Vec::new();
