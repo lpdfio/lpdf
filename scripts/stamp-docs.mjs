@@ -19,6 +19,16 @@ if (!out)
 
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
 
+// A clone that has not fetched the newest release tag would stamp the release before it.
+try
+{
+    git('fetch', '--tags', '--quiet', 'origin');
+}
+catch
+{
+    console.warn('WARNING: could not fetch tags, so the stamp may name an older release than the newest.');
+}
+
 // Release candidates are not releases: the docs describe a release.
 const release = git('describe', '--tags', '--match', 'v[0-9]*', '--exclude', '*-rc*', '--abbrev=0');
 const version = /^v(\d+)\.(\d+)\.\d+$/.exec(release);

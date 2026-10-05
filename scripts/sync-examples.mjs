@@ -178,7 +178,6 @@ function headerNotes(xml) {
 function docsPage(example) {
     const lineCount = example.xmlText.split('\n').length;
     const links = [
-        `[Open it in the demo](/?example=${example.id})`,
         `[document.xml](/docs/examples/${example.id}/document.xml)`,
     ];
     if (example.data) links.push(`[document.json](/docs/examples/${example.id}/document.json)`);
@@ -221,7 +220,7 @@ function docsPage(example) {
             '## The document',
             '',
             `The document is ${lineCount.toLocaleString('en-US')} lines, so it is not repeated here. ` +
-            'Open it in the demo to read it beside the PDF it makes, or download it above.',
+            'Download it above to read it beside the PDF it makes.',
             '',
         );
     }
