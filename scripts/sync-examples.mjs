@@ -178,7 +178,7 @@ function headerNotes(xml) {
 function docsPage(example) {
     const lineCount = example.xmlText.split('\n').length;
     const links = [
-        `[Open it in the demo](/home?example=${example.id})`,
+        `[Open it in the demo](/?example=${example.id})`,
         `[document.xml](/docs/examples/${example.id}/document.xml)`,
     ];
     if (example.data) links.push(`[document.json](/docs/examples/${example.id}/document.json)`);
