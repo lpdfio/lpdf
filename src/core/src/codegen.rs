@@ -165,6 +165,7 @@ fn js_layout_method(tag: &str) -> &'static str {
         "grid"     => "grid",
         "frame"    => "frame",
         "link"     => "link",
+        "bookmark" => "bookmark",
         "text"     => "text",
         "img"      => "img",
         "divider"  => "divider",
@@ -212,6 +213,7 @@ fn dotnet_layout_method(tag: &str) -> &'static str {
         "grid"     => "Grid",
         "frame"    => "Frame",
         "link"     => "Link",
+        "bookmark" => "Bookmark",
         "text"     => "Text",
         "img"      => "Img",
         "divider"  => "Divider",
@@ -1532,6 +1534,7 @@ fn python_layout_method(tag: &str) -> &'static str {
         "grid"     => "grid",
         "frame"    => "frame",
         "link"     => "link",
+        "bookmark" => "bookmark",
         "text"     => "text",
         "img"      => "img",
         "divider"  => "divider",
@@ -2272,5 +2275,23 @@ mod tests {
         let xml = r#"<text>Hello</text>"#;
         let opts = CodegenOptions { target: "ruby".into(), indent: 4 };
         assert!(codegen_fragment(xml, &opts).is_err());
+    }
+
+    #[test]
+    fn test_bookmark_and_toc_section_in_every_language() {
+        let xml = r#"<lpdf version="1"><document>
+            <section type="toc"><bookmark label="Contents"/><layout><text>Contents</text></layout></section>
+            <section><layout><bookmark label="Methods" level="2"/><text>Methods</text></layout></section>
+        </document></lpdf>"#;
+        for (target, bookmark, section) in [
+            ("js", "L.bookmark({ label: 'Methods', level: '2' })", "L.section({ type: 'toc' }"),
+            ("php", "L::bookmark(new BookmarkAttr(label: 'Methods', level: '2'))", "L::section(new SectionAttr(type: 'toc')"),
+            ("python", "L.bookmark(BookmarkAttr(label='Methods', level='2'))", "L.section(SectionAttr(type='toc')"),
+            ("dotnet", "L.Bookmark(new() { Label = \"Methods\", Level = \"2\" })", "L.Section(new() { Type = \"toc\" }"),
+        ] {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            assert!(out.contains(bookmark), "{target}: {out}");
+            assert!(out.contains(section), "{target}: {out}");
+        }
     }
 }

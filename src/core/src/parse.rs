@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use crate::tokens::{parse_pt, FontDef, FontWidths, Tokens};
 use crate::canvas::{self, Canvas};
 
@@ -61,7 +61,11 @@ impl Document {
                     }
                 }
             }
-            result.push(SectionLayout { width, height, margin, background: bg, debug, children, underlays, overlays });
+            result.push(SectionLayout {
+                width, height, margin, background: bg, debug, children, underlays, overlays,
+                bookmark: section.bookmark,
+                toc: section.options.toc,
+            });
         }
         result
     }
@@ -139,7 +143,25 @@ pub struct SectionOptions {
     /// Parsed but not yet surfaced to the render pipeline.
     #[allow(dead_code)]
     pub title:      Option<String>,
+    /// Set on the one `<section type="toc">` of a document.
+    pub toc:        Option<TocOptions>,
 }
+
+/// What a table of contents section needs once the other sections are laid out.
+#[derive(Debug, Clone)]
+pub struct TocOptions {
+    /// Left padding added to an entry per level below the first (`toc-indent-step`).
+    pub indent_step: f32,
+    /// The caller's data. The TOC section is bound after layout, with `$toc` added to it.
+    pub data:        Option<serde_json::Value>,
+}
+
+/// The key the bookmark list takes in the data a TOC section is bound with. It replaces a `$toc` key of the
+/// caller's own.
+pub const TOC_DATA_KEY: &str = "$toc";
+
+/// Default `toc-indent-step`.
+const DEFAULT_TOC_INDENT_STEP: f32 = 12.0;
 
 /// A content boundary with its own auto-pagination.
 #[derive(Debug, Clone)]
@@ -147,6 +169,22 @@ pub struct Section {
     /// In document order: first child is painted first (bottom).
     pub children: Vec<SectionChild>,
     pub options:  SectionOptions,
+    /// A `<bookmark>` directly inside `<section>`, which points at the section's first page.
+    pub bookmark: Option<Bookmark>,
+}
+
+/// An entry of the PDF outline and a named destination for `href="#id"` links.
+///
+/// A `<bookmark>` in a layout is carried by the element that follows it, so it lands on the page where
+/// that element starts.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Bookmark {
+    pub id:          String,
+    pub label:       String,
+    /// Outline depth, 1 to 6.
+    pub level:       u8,
+    /// `true` when the id came from `id=`, `false` when it was made from the label and may take a suffix.
+    pub explicit_id: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -168,6 +206,8 @@ pub struct SectionLayout {
     pub children: Vec<Node>,
     pub underlays: Vec<canvas::CanvasLayer>,
     pub overlays: Vec<canvas::CanvasLayer>,
+    pub bookmark: Option<Bookmark>,
+    pub toc: Option<TocOptions>,
 }
 
 #[derive(Debug, Clone)]
@@ -260,6 +300,8 @@ pub struct Node {
     /// Data-binding attributes; `None` for the vast majority of nodes that
     /// carry no `data-*` attributes, saving 96 bytes per node.
     pub data_attrs: Option<Box<DataAttrs>>,
+    /// The `<bookmark>` elements that come right before this node in the source.
+    pub bookmarks: Vec<Bookmark>,
     pub children: Vec<Node>,
 }
 
@@ -427,6 +469,7 @@ struct ParsedNode {
     field_group:      Option<String>,
     field_action_url: Option<String>,
     data_attrs: Option<Box<DataAttrs>>,
+    bookmarks: Vec<Bookmark>,
     children: Vec<ParsedNode>,
 }
 
@@ -485,6 +528,7 @@ impl ParsedNode {
             field_group:      None,
             field_action_url: None,
             data_attrs: None,
+            bookmarks: Vec::new(),
             children: Vec::new(),
         }
     }
@@ -530,7 +574,7 @@ impl Node {
             field_kind: None, field_name: None, field_value: None, field_label: None,
             field_options: Vec::new(), field_required: false, field_readonly: false,
             field_checked: false, field_max_len: None, field_group: None,
-            field_action_url: None, data_attrs: None, children: Vec::new(),
+            field_action_url: None, data_attrs: None, bookmarks: Vec::new(), children: Vec::new(),
         }
     }
 }
@@ -631,6 +675,7 @@ fn resolve_node(
         field_group:           n.field_group,
         field_action_url:      n.field_action_url,
         data_attrs:           n.data_attrs,
+        bookmarks:             n.bookmarks,
         children,
     }
 }
@@ -730,6 +775,7 @@ pub fn parse(xml: &str) -> Result<Document, String> {
                         node_loc(&child)
                     ));
                 }
+                check_sections(&mut sections_xml)?;
                 let mut resolved_fonts: HashMap<String, FontDef> = HashMap::new();
                 for (_alias, def) in &asset_fonts {
                     let key = match def {
@@ -1087,12 +1133,17 @@ fn parse_region_elem(
     let debug = elem.attribute("debug").map(|v| v == "true").unwrap_or(false);
 
     let mut children = Vec::new();
+    let mut pending = PendingBookmarks::default();
     for child in elems(elem) {
-        children.push(resolve_parsed_node(
-            parse_node(&child, tokens, asset_images)?,
-            root_font, root_size, asset_fonts,
-        ));
+        if child.tag_name().name() == "bookmark" {
+            pending.push(xml_bookmark(&child)?);
+            continue;
+        }
+        let mut node = parse_node(&child, tokens, asset_images)?;
+        pending.attach(&mut node);
+        children.push(resolve_parsed_node(node, root_font, root_size, asset_fonts));
     }
+    pending.finish("region").map_err(|e| format!("<region>{}: {e}", node_loc(elem)))?;
     Ok(LayoutRegion { pin, page, w, children, debug })
 }
 
@@ -1114,6 +1165,7 @@ fn parse_section_elem(
     let mut background = doc_background;
     let debug = apply_page_overrides(&mut size, &mut margin, &mut background, elem, tokens, doc_debug)?;
     let title = elem.attribute("title").map(str::to_string);
+    let toc = parse_section_toc(elem, tokens).map_err(|e| format!("<section>{}: {e}", node_loc(elem)))?;
 
     let root_font = doc_font
         .map(|f| resolve_font_alias(f, asset_fonts))
@@ -1121,21 +1173,25 @@ fn parse_section_elem(
     let root_size = 11.0_f32;
 
     let mut children: Vec<SectionChild> = Vec::new();
+    let mut bookmark: Option<Bookmark> = None;
     for child in elems(elem) {
         match child.tag_name().name() {
             "layout" => {
                 // Inline layout: build a Layout from its children (may include <region>).
                 let mut lc: Vec<LayoutChild> = Vec::new();
+                let mut pending = PendingBookmarks::default();
                 for layout_child in elems(&child) {
-                    if layout_child.tag_name().name() == "region" {
-                        lc.push(LayoutChild::Region(parse_region_elem(&layout_child, tokens, asset_images, asset_fonts, &root_font, root_size)?));
-                    } else {
-                        lc.push(LayoutChild::Content(resolve_parsed_node(
-                            parse_node(&layout_child, tokens, asset_images)?,
-                            &root_font, root_size, asset_fonts,
-                        )));
+                    match layout_child.tag_name().name() {
+                        "region" => lc.push(LayoutChild::Region(parse_region_elem(&layout_child, tokens, asset_images, asset_fonts, &root_font, root_size)?)),
+                        "bookmark" => pending.push(xml_bookmark(&layout_child)?),
+                        _ => {
+                            let mut node = parse_node(&layout_child, tokens, asset_images)?;
+                            pending.attach(&mut node);
+                            lc.push(LayoutChild::Content(resolve_parsed_node(node, &root_font, root_size, asset_fonts)));
+                        }
                     }
                 }
+                pending.finish("layout").map_err(|e| format!("<layout>{}: {e}", node_loc(&child)))?;
                 children.push(SectionChild::Layout(lc));
             }
             "canvas" => {
@@ -1143,8 +1199,17 @@ fn parse_section_elem(
                     canvas::parse_canvas_elem(&child, tokens, asset_images, size.0, size.1)?
                 ));
             }
+            "bookmark" => {
+                if bookmark.is_some() {
+                    return Err(format!(
+                        "<bookmark>{}: a <section> has one <bookmark> of its own; put the others inside its <layout>",
+                        node_loc(&child)
+                    ));
+                }
+                bookmark = Some(xml_bookmark(&child)?);
+            }
             other => return Err(format!(
-                "<{}>{}: unexpected child in <section> — expected <layout> or <canvas>",
+                "<{}>{}: unexpected child in <section> — expected <bookmark>, <layout> or <canvas>",
                 other, node_loc(&child)
             )),
         }
@@ -1165,8 +1230,14 @@ fn parse_section_elem(
             background,
             debug:      Some(debug),
             title,
+            toc,
         },
+        bookmark,
     })
+}
+
+fn xml_bookmark(elem: &roxmltree::Node) -> Result<Bookmark, String> {
+    parse_bookmark(elem).map_err(|e| format!("<bookmark>{}: {e}", node_loc(elem)))
 }
 
 // ── Node parsing ──────────────────────────────────────────────────────────────
@@ -1300,8 +1371,20 @@ fn parse_node(
 
     // ── Children (not for leaf nodes) ────────────────────────────────────────
     if !matches!(kind, NodeKind::Divider | NodeKind::Text | NodeKind::Img | NodeKind::Barcode | NodeKind::Field) {
+        let mut pending = PendingBookmarks::default();
         for child in elems(elem) {
-            let child_node = parse_node(&child, tokens, asset_images)?;
+            if child.tag_name().name() == "bookmark" {
+                if matches!(kind, NodeKind::Table | NodeKind::TableHead | NodeKind::TableRow) {
+                    return Err(format!(
+                        "<bookmark>{}: not allowed in <{tag}> — put it inside a <td>",
+                        node_loc(&child)
+                    ));
+                }
+                pending.push(xml_bookmark(&child)?);
+                continue;
+            }
+            let mut child_node = parse_node(&child, tokens, asset_images)?;
+            pending.attach(&mut child_node);
             match kind {
                 NodeKind::Table => {
                     if !matches!(child_node.kind, NodeKind::TableHead | NodeKind::TableRow) {
@@ -1323,6 +1406,7 @@ fn parse_node(
             }
             node.children.push(child_node);
         }
+        pending.finish(tag).map_err(|e| format!("<{tag}>{}: {e}", node_loc(elem)))?;
         if kind == NodeKind::Frame && node.children.len() > 1 {
             return Err(format!(
                 "<frame>{}: accepts at most one child; got {}",
@@ -1332,6 +1416,132 @@ fn parse_node(
     }
 
     Ok(node)
+}
+
+// ── Bookmarks and the table of contents ──────────────────────────────────────
+
+/// Read a `<bookmark>`. Its id is made from the label when `id=` is left out; `assign_bookmark_ids` settles
+/// repeats once the whole document is read.
+fn parse_bookmark(a: &impl Attrs) -> Result<Bookmark, String> {
+    let label = a.get("label").ok_or("missing required attribute 'label'")?.to_string();
+    let level = match a.get("level") {
+        None    => 1,
+        Some(v) => v.parse::<u8>().ok()
+            .filter(|level| (1..=6).contains(level))
+            .ok_or_else(|| format!("invalid level '{v}' — expected 1 to 6"))?,
+    };
+    let (id, explicit_id) = match a.get("id") {
+        // An empty id would be the target of href="#", which inside a $toc item means that item's entry.
+        Some("") => return Err("id must not be empty".into()),
+        Some(id) => (id.to_string(), true),
+        None     => (slug(&label), false),
+    };
+    Ok(Bookmark { id, label, level, explicit_id })
+}
+
+/// The id a bookmark gets from its label: lowercase, with every run of characters other than letters and
+/// digits turned into one hyphen. "§ 3.1 — Methods" becomes "3-1-methods".
+fn slug(label: &str) -> String {
+    let words: Vec<String> = label
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .map(str::to_lowercase)
+        .collect();
+    if words.is_empty() { "bookmark".to_string() } else { words.join("-") }
+}
+
+/// The bookmarks read in a list of children, waiting for the element they mark.
+#[derive(Default)]
+struct PendingBookmarks(Vec<Bookmark>);
+
+impl PendingBookmarks {
+    fn push(&mut self, bookmark: Bookmark) {
+        self.0.push(bookmark);
+    }
+
+    /// Hand the waiting bookmarks to `node`, the element that follows them.
+    fn attach(&mut self, node: &mut ParsedNode) {
+        node.bookmarks.append(&mut self.0);
+    }
+
+    /// Fails when bookmarks are left at the end of `container`, with no element after them to mark.
+    fn finish(self, container: &str) -> Result<(), String> {
+        match self.0.first() {
+            None           => Ok(()),
+            Some(bookmark) => Err(format!(
+                "<bookmark label=\"{}\"> is the last thing in <{container}>: a bookmark marks the element that follows it",
+                bookmark.label
+            )),
+        }
+    }
+}
+
+/// Read `type="toc"` and `toc-indent-step` on a section.
+fn parse_section_toc(a: &impl Attrs, tokens: &Tokens) -> Result<Option<TocOptions>, String> {
+    match a.get("type") {
+        None        => Ok(None),
+        Some("toc") => {
+            let indent_step = match a.get("toc-indent-step") {
+                Some(v) => tokens.resolve_space(v)?,
+                None    => DEFAULT_TOC_INDENT_STEP,
+            };
+            Ok(Some(TocOptions { indent_step, data: None }))
+        }
+        Some(other) => Err(format!("invalid type '{other}' — expected toc")),
+    }
+}
+
+/// Checks what spans sections once they are all read: one table of contents at most, and bookmark ids.
+fn check_sections(sections: &mut [Section]) -> Result<(), String> {
+    if sections.iter().filter(|s| s.options.toc.is_some()).count() > 1 {
+        return Err("only one <section type=\"toc\"> is allowed per document".into());
+    }
+    assign_bookmark_ids(sections)
+}
+
+/// Settle bookmark ids in source order. Two explicit ids that are the same are an error. An id made from a
+/// label takes a `-2`, `-3`… suffix when an explicit id or an earlier bookmark has it.
+fn assign_bookmark_ids(sections: &mut [Section]) -> Result<(), String> {
+    let mut bookmarks: Vec<&mut Bookmark> = Vec::new();
+    for section in sections.iter_mut() {
+        bookmarks.extend(section.bookmark.as_mut());
+        for child in &mut section.children {
+            if let SectionChild::Layout(layout_children) = child {
+                for layout_child in layout_children {
+                    match layout_child {
+                        LayoutChild::Content(node)  => collect_bookmarks(std::slice::from_mut(node), &mut bookmarks),
+                        LayoutChild::Region(region) => collect_bookmarks(&mut region.children, &mut bookmarks),
+                    }
+                }
+            }
+        }
+    }
+
+    let mut taken: HashSet<String> = HashSet::new();
+    for bookmark in bookmarks.iter().filter(|b| b.explicit_id) {
+        if !taken.insert(bookmark.id.clone()) {
+            return Err(format!("two bookmarks have the id '{}'", bookmark.id));
+        }
+    }
+    for bookmark in bookmarks.iter_mut().filter(|b| !b.explicit_id) {
+        let mut id = bookmark.id.clone();
+        let mut suffix = 2;
+        while taken.contains(&id) {
+            id = format!("{}-{suffix}", bookmark.id);
+            suffix += 1;
+        }
+        taken.insert(id.clone());
+        bookmark.id = id;
+    }
+    Ok(())
+}
+
+fn collect_bookmarks<'a>(nodes: &'a mut [Node], out: &mut Vec<&'a mut Bookmark>) {
+    for node in nodes {
+        let Node { bookmarks, children, .. } = node;
+        out.extend(bookmarks.iter_mut());
+        collect_bookmarks(children, out);
+    }
 }
 
 fn parse_align(val: &str) -> Result<Align, String> {
@@ -1817,6 +2027,7 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     if sections.is_empty() {
         return Err("document must have at least one section".into());
     }
+    check_sections(&mut sections)?;
     let mut resolved_fonts: HashMap<String, FontDef> = HashMap::new();
     for (_alias, def) in &asset_fonts {
         let key = match def {
@@ -1893,32 +2104,41 @@ fn parse_tree_section(
     let a = JsonAttrs(json);
     let debug = apply_page_overrides(&mut size, &mut margin, &mut background, &a, tokens, doc_debug)?;
     let title = jattr(json, "title").map(str::to_string);
+    let toc = parse_section_toc(&a, tokens).map_err(|e| format!("section: {e}"))?;
 
     let root_font = "Helvetica";
     let root_size = 11.0_f32;
 
     let mut children: Vec<SectionChild> = Vec::new();
+    let mut bookmark: Option<Bookmark> = None;
     if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
         for child in arr {
             let kind = child.get("type").and_then(|v| v.as_str());
             match kind {
                 Some("layout") => {
                     let mut lc: Vec<LayoutChild> = Vec::new();
+                    let mut pending = PendingBookmarks::default();
                     if let Some(nodes) = child.get("nodes").and_then(|v| v.as_array()) {
                         for n in nodes {
                             if n.get("type").and_then(|v| v.as_str()) == Some("region") {
                                 lc.push(LayoutChild::Region(parse_tree_region(n, tokens, asset_images, asset_fonts)?));
+                            } else if is_tree_bookmark(n) {
+                                pending.push(tree_bookmark(n)?);
                             } else {
-                                lc.push(LayoutChild::Content(
-                                    resolve_parsed_node(
-                                        parse_tree_node(n, tokens, asset_images)?,
-                                        root_font, root_size, asset_fonts,
-                                    )
-                                ));
+                                let mut node = parse_tree_node(n, tokens, asset_images)?;
+                                pending.attach(&mut node);
+                                lc.push(LayoutChild::Content(resolve_parsed_node(node, root_font, root_size, asset_fonts)));
                             }
                         }
                     }
+                    pending.finish("layout")?;
                     children.push(SectionChild::Layout(lc));
+                }
+                Some("bookmark") => {
+                    if bookmark.is_some() {
+                        return Err("a section has one bookmark of its own; put the others inside its layout".into());
+                    }
+                    bookmark = Some(tree_bookmark(child)?);
                 }
                 Some("canvas") => {
                     let mut layers = Vec::new();
@@ -1930,7 +2150,7 @@ fn parse_tree_section(
                     children.push(SectionChild::Canvas(Canvas { layers }));
                 }
                 other => return Err(format!(
-                    "section child 'type' must be 'layout' or 'canvas', got {:?}", other
+                    "section child 'type' must be 'bookmark', 'layout' or 'canvas', got {:?}", other
                 )),
             }
         }
@@ -1948,8 +2168,18 @@ fn parse_tree_section(
             background,
             debug:      Some(debug),
             title,
+            toc,
         },
+        bookmark,
     })
+}
+
+fn is_tree_bookmark(json: &serde_json::Value) -> bool {
+    json.get("type").and_then(|v| v.as_str()) == Some("bookmark")
+}
+
+fn tree_bookmark(json: &serde_json::Value) -> Result<Bookmark, String> {
+    parse_bookmark(&JsonAttrs(json)).map_err(|e| format!("bookmark: {e}"))
 }
 
 fn parse_tree_region(
@@ -1973,12 +2203,17 @@ fn parse_tree_region(
 
     let mut children = Vec::new();
     if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
+        let mut pending = PendingBookmarks::default();
         for n in arr {
-            children.push(resolve_parsed_node(
-                parse_tree_node(n, tokens, asset_images)?,
-                "Helvetica", 11.0, asset_fonts,
-            ));
+            if is_tree_bookmark(n) {
+                pending.push(tree_bookmark(n)?);
+                continue;
+            }
+            let mut node = parse_tree_node(n, tokens, asset_images)?;
+            pending.attach(&mut node);
+            children.push(resolve_parsed_node(node, "Helvetica", 11.0, asset_fonts));
         }
+        pending.finish("region")?;
     }
     Ok(LayoutRegion { pin, page, w, children, debug })
 }
@@ -2099,8 +2334,17 @@ fn parse_tree_node(
     // ── Layout children ───────────────────────────────────────────────────────
     if !matches!(kind, NodeKind::Divider | NodeKind::Img | NodeKind::Barcode | NodeKind::Field) {
         if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
+            let mut pending = PendingBookmarks::default();
             for child in arr {
-                let child_node = parse_tree_node(child, tokens, asset_images)?;
+                if is_tree_bookmark(child) {
+                    if matches!(kind, NodeKind::Table | NodeKind::TableHead | NodeKind::TableRow) {
+                        return Err(format!("bookmark not allowed in '{type_str}' — put it inside a 'td'"));
+                    }
+                    pending.push(tree_bookmark(child)?);
+                    continue;
+                }
+                let mut child_node = parse_tree_node(child, tokens, asset_images)?;
+                pending.attach(&mut child_node);
                 match kind {
                     NodeKind::Table => {
                         if !matches!(child_node.kind, NodeKind::TableHead | NodeKind::TableRow) {
@@ -2122,6 +2366,7 @@ fn parse_tree_node(
                 }
                 node.children.push(child_node);
             }
+            pending.finish(type_str)?;
         }
         if kind == NodeKind::Frame && node.children.len() > 1 {
             return Err(format!(
@@ -2838,5 +3083,155 @@ mod tests {
         assert!(err.contains("<img>"),    "{err}");
         assert!(err.contains("at line"), "{err}");
         assert!(err.contains("ghost"),    "{err}");
+    }
+
+    // ── Bookmarks and the table of contents ──────────────────────────────────
+
+    fn document(sections: &str) -> String {
+        format!(r#"<lpdf version="1"><document>{sections}</document></lpdf>"#)
+    }
+
+    /// The bookmarks of a one-section document, in source order.
+    fn bookmarks_of(body: &str) -> Vec<Bookmark> {
+        let mut doc = parse(&minimal(body)).unwrap();
+        let mut found = Vec::new();
+        fn walk(nodes: &[Node], found: &mut Vec<Bookmark>) {
+            for node in nodes {
+                found.extend(node.bookmarks.iter().cloned());
+                walk(&node.children, found);
+            }
+        }
+        walk(&doc.section_layouts()[0].children, &mut found);
+        found
+    }
+
+    #[test]
+    fn bookmark_is_carried_by_the_element_after_it() {
+        let mut doc = parse(&minimal(
+            r#"<text>Before</text><bookmark label="Methods" level="2"/><text>Methods</text>"#,
+        )).unwrap();
+        let children = &doc.section_layouts()[0].children;
+        assert_eq!(children.len(), 2, "a bookmark is not a node of its own");
+        assert!(children[0].bookmarks.is_empty());
+        assert_eq!(
+            children[1].bookmarks,
+            vec![Bookmark { id: "methods".into(), label: "Methods".into(), level: 2, explicit_id: false }]
+        );
+    }
+
+    #[test]
+    fn bookmark_inside_a_container_is_carried_by_the_child_after_it() {
+        let bookmarks = bookmarks_of(r#"<stack><text>A</text><bookmark label="Inner" id="inner"/><text>B</text></stack>"#);
+        assert_eq!(bookmarks.len(), 1);
+        assert_eq!(bookmarks[0].id, "inner");
+        assert_eq!(bookmarks[0].level, 1);
+    }
+
+    #[test]
+    fn bookmark_id_is_made_from_the_label() {
+        for (label, id) in [
+            ("Introduction", "introduction"),
+            ("Data Collection", "data-collection"),
+            ("§ 3.1 — Methods", "3-1-methods"),
+            ("Über  uns!", "über-uns"),
+            ("§ —", "bookmark"),
+        ] {
+            let bookmarks = bookmarks_of(&format!(r#"<bookmark label="{label}"/><text>x</text>"#));
+            assert_eq!(bookmarks[0].id, id, "label {label:?}");
+        }
+    }
+
+    #[test]
+    fn repeated_ids_made_from_labels_take_a_suffix() {
+        let bookmarks = bookmarks_of(
+            r#"<bookmark label="Introduction"/><text>a</text>
+               <bookmark label="Introduction"/><text>b</text>
+               <bookmark label="Notes" id="introduction-2"/><text>c</text>"#,
+        );
+        let ids: Vec<&str> = bookmarks.iter().map(|b| b.id.as_str()).collect();
+        // The explicit id is kept, so the second label-made id moves on to -3.
+        assert_eq!(ids, ["introduction", "introduction-3", "introduction-2"]);
+    }
+
+    #[test]
+    fn two_explicit_ids_that_are_the_same_are_an_error() {
+        let err = parse(&minimal(
+            r#"<bookmark label="A" id="same"/><text>a</text><bookmark label="B" id="same"/><text>b</text>"#,
+        )).unwrap_err();
+        assert!(err.contains("'same'"), "{err}");
+    }
+
+    #[test]
+    fn bookmark_rejects_a_level_outside_1_to_6_and_an_empty_id() {
+        for (attrs, expected) in [(r#"level="7""#, "level"), (r#"level="0""#, "level"), (r#"id="""#, "id")] {
+            let err = parse(&minimal(&format!(r#"<bookmark label="A" {attrs}/><text>a</text>"#))).unwrap_err();
+            assert!(err.contains("<bookmark>") && err.contains(expected), "{attrs}: {err}");
+        }
+    }
+
+    #[test]
+    fn bookmark_with_nothing_after_it_is_an_error() {
+        let err = parse(&minimal(r#"<stack><text>a</text><bookmark label="End"/></stack>"#)).unwrap_err();
+        assert!(err.contains("<stack>") && err.contains("End"), "{err}");
+    }
+
+    #[test]
+    fn bookmark_is_not_allowed_in_canvas_or_between_table_rows() {
+        let canvas = document(r#"<section><canvas><layer><bookmark label="A"/></layer></canvas></section>"#);
+        assert!(parse(&canvas).is_err());
+        let table = minimal(r#"<table cols="1fr"><bookmark label="A"/><tr><td><text>a</text></td></tr></table>"#);
+        let err = parse(&table).unwrap_err();
+        assert!(err.contains("<td>"), "{err}");
+    }
+
+    #[test]
+    fn section_has_one_bookmark_of_its_own() {
+        let mut doc = parse(&document(
+            r#"<section><bookmark label="Cover"/><canvas><layer/></canvas></section>"#,
+        )).unwrap();
+        let layouts = doc.section_layouts();
+        assert_eq!(layouts[0].bookmark.as_ref().map(|b| b.id.as_str()), Some("cover"));
+
+        let err = parse(&document(
+            r#"<section><bookmark label="A"/><bookmark label="B"/><layout><text>a</text></layout></section>"#,
+        )).unwrap_err();
+        assert!(err.contains("one <bookmark>"), "{err}");
+    }
+
+    #[test]
+    fn toc_section_reads_its_indent_step() {
+        for (attrs, step) in [(r#"toc-indent-step="20pt""#, 20.0), ("", DEFAULT_TOC_INDENT_STEP)] {
+            let mut doc = parse(&document(&format!(r#"<section type="toc" {attrs}><layout><text>a</text></layout></section>"#))).unwrap();
+            assert_eq!(doc.section_layouts()[0].toc.as_ref().map(|t| t.indent_step), Some(step), "{attrs}");
+        }
+        let err = parse(&document(r#"<section type="index"><layout><text>a</text></layout></section>"#)).unwrap_err();
+        assert!(err.contains("index"), "{err}");
+    }
+
+    #[test]
+    fn second_toc_section_is_an_error() {
+        let err = parse(&document(
+            r#"<section type="toc"><layout><text>a</text></layout></section>
+               <section type="toc"><layout><text>b</text></layout></section>"#,
+        )).unwrap_err();
+        assert!(err.contains("only one <section type=\"toc\">"), "{err}");
+    }
+
+    #[test]
+    fn tree_bookmarks_parse_as_the_xml_does() {
+        let json = r#"{"version":1,"type":"document","attrs":{},"nodes":[
+            {"type":"section","attrs":{"type":"toc"},"nodes":[
+                {"type":"bookmark","attrs":{"label":"Contents"}},
+                {"type":"layout","nodes":[{"type":"text","attrs":{},"nodes":["TOC"]}]}]},
+            {"type":"section","attrs":{},"nodes":[
+                {"type":"layout","nodes":[
+                    {"type":"bookmark","attrs":{"label":"Methods","level":"2"}},
+                    {"type":"text","attrs":{},"nodes":["Methods"]}]}]}]}"#;
+        let mut doc = parse_tree(json).unwrap();
+        let layouts = doc.section_layouts();
+        assert!(layouts[0].toc.is_some());
+        assert_eq!(layouts[0].bookmark.as_ref().map(|b| b.id.as_str()), Some("contents"));
+        assert_eq!(layouts[1].children[0].bookmarks[0].id, "methods");
+        assert_eq!(layouts[1].children[0].bookmarks[0].level, 2);
     }
 }

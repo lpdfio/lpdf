@@ -38,7 +38,7 @@ const EXPECTED = {
     CanvasImgAttr: attributes('img', 'primitives'),
 };
 for (const element of ['stack', 'flank', 'split', 'cluster', 'grid', 'frame', 'link', 'divider', 'span', 'img',
-    'barcode', 'text', 'td', 'thead', 'tr', 'table', 'field']) {
+    'barcode', 'text', 'td', 'thead', 'tr', 'table', 'field', 'bookmark']) {
     EXPECTED[`${element[0].toUpperCase()}${element.slice(1)}Attr`] = attributes(element);
 }
 for (const element of ['rect', 'circle', 'ellipse', 'line', 'path']) {

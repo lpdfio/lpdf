@@ -75,6 +75,18 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <xs:simpleType name="SectionType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="toc"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="BookmarkLevel">
+    <xs:restriction base="xs:positiveInteger">
+      <xs:maxInclusive value="6"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <!-- e.g. "#1763cf" or "#fff" -->
   <xs:simpleType name="ColorHex">
     <xs:restriction base="xs:string">
@@ -525,6 +537,7 @@
       <xs:element ref="table"/>
       <xs:element ref="barcode"/>
       <xs:element ref="field"/>
+      <xs:element ref="bookmark"/>
     </xs:choice>
   </xs:group>
 
@@ -705,27 +718,40 @@
        Four valid content combinations; document order = paint order. -->
   <xs:element name="section">
     <xs:annotation>
-      <xs:documentation>A run of pages with its own settings, which override the document's. Each section paginates on its own. Its title is accepted but not yet used: the PDF has no bookmarks.</xs:documentation>
+      <xs:documentation>A run of pages with its own settings, which override the document's. Each section paginates on its own. A bookmark as its first child marks its first page. Its title is accepted but not used: the outline takes its entries from bookmarks.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
-      <xs:choice minOccurs="0">
-        <!-- layout only, or layout + canvas overlay (layout painted first) -->
-        <xs:sequence>
-          <xs:element ref="layout"/>
-          <xs:element ref="canvas" minOccurs="0"/>
-        </xs:sequence>
-        <!-- canvas only, or canvas underlay + layout (canvas painted first) -->
-        <xs:sequence>
-          <xs:element ref="canvas"/>
-          <xs:element ref="layout" minOccurs="0"/>
-        </xs:sequence>
-      </xs:choice>
+      <xs:sequence>
+        <xs:element ref="bookmark" minOccurs="0"/>
+        <xs:choice minOccurs="0">
+          <!-- layout only, or layout + canvas overlay (layout painted first) -->
+          <xs:sequence>
+            <xs:element ref="layout"/>
+            <xs:element ref="canvas" minOccurs="0"/>
+          </xs:sequence>
+          <!-- canvas only, or canvas underlay + layout (canvas painted first) -->
+          <xs:sequence>
+            <xs:element ref="canvas"/>
+            <xs:element ref="layout" minOccurs="0"/>
+          </xs:sequence>
+        </xs:choice>
+      </xs:sequence>
       <xs:attribute name="size"        type="PageSize"/>
       <xs:attribute name="orientation" type="Orientation"/>
       <xs:attribute name="margin"      type="SpacingValue"/>
       <xs:attribute name="background"  type="Color"/>
       <xs:attribute name="title"       type="xs:string"/>
       <xs:attribute name="debug"       type="xs:boolean"/>
+      <xs:attribute name="type"        type="SectionType">
+        <xs:annotation>
+          <xs:documentation>toc makes the section the document's table of contents. It is laid out after the other sections, with the data $toc: one entry per bookmark outside it, with index, level, label, page, anchor and indent. Repeat an element over it with data-source="$toc". One section per document may be a table of contents.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="toc-indent-step" type="TokenScaleOrPt">
+        <xs:annotation>
+          <xs:documentation>In a table of contents, the left padding an entry gets for each level below the first. Defaults to 12pt.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
     </xs:complexType>
   </xs:element>
 
@@ -854,12 +880,39 @@
       <xs:sequence>
         <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
       </xs:sequence>
-      <xs:attribute name="href"   type="xs:anyURI" use="required"/>
+      <xs:attribute name="href"   type="xs:anyURI" use="required">
+        <xs:annotation>
+          <xs:documentation>Where the link goes: a URL, or #id to jump to the bookmark with that id. In an entry of a table of contents, # alone jumps to that entry's bookmark.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attribute name="gap"    type="SpacingOrToken"/>
       <xs:attribute name="width"  type="TokenScaleOrPt"/>
       <xs:attribute name="height" type="HeightValue"/>
       <xs:attribute name="debug"  type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="bookmark">
+    <xs:annotation>
+      <xs:documentation>An entry of the PDF's outline, the bookmark panel of a viewer, and a target for links with href="#id". It draws nothing and marks the element that follows it, so it is never left at the bottom of a page apart from that element. Directly inside a section, it marks the section's first page.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="label" type="xs:string" use="required">
+        <xs:annotation>
+          <xs:documentation>The text of the entry, in the outline and in a table of contents.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="level" type="BookmarkLevel">
+        <xs:annotation>
+          <xs:documentation>Depth in the outline, 1 to 6. Defaults to 1. An entry nests under the closest entry before it with a lower level.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="id" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>The name links use to jump here, as href="#id". Leave it out to make it from the label: lowercase, with other characters than letters and digits turned into hyphens, and -2, -3 added when an earlier bookmark has it. Two bookmarks may not have the same id.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
     </xs:complexType>
   </xs:element>
 
@@ -885,7 +938,11 @@
       <xs:attribute name="font"      type="xs:string"/>
       <xs:attribute name="bold"      type="xs:boolean"/>
       <xs:attribute name="color"     type="Color"/>
-      <xs:attribute name="href"      type="xs:anyURI"/>
+      <xs:attribute name="href"      type="xs:anyURI">
+        <xs:annotation>
+          <xs:documentation>Makes the span a link: a URL, or #id to jump to the bookmark with that id. In an entry of a table of contents, # alone jumps to that entry's bookmark.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attribute name="underline" type="xs:boolean"/>
       <xs:attribute name="strike"    type="xs:boolean"/>
     </xs:complexType>

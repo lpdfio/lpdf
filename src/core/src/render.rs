@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use serde_json::{json, Value};
 use crate::parse::FieldKind;
 
@@ -27,6 +29,55 @@ pub enum RenderNode {
     CanvasPath(RenderCanvasPath),
     CanvasImage(RenderCanvasImage),
     CanvasLayer(RenderCanvasLayer),
+    Anchor(RenderAnchor),
+}
+
+/// The place a bookmark marks: an entry of the PDF outline, and a named destination for `href="#id"` links.
+/// It draws nothing.
+pub struct RenderAnchor {
+    pub id:    String,
+    pub label: String,
+    /// Outline depth, 1 to 6.
+    pub level: u8,
+    /// Top of the marked element, from the top of the page.
+    pub y:     f32,
+}
+
+/// An anchor and the index of the page it is on.
+pub struct PlacedAnchor<'a> {
+    pub page:   usize,
+    pub anchor: &'a RenderAnchor,
+}
+
+/// The anchors of `pages` in document order. An id seen before is skipped: a node repeated on several pages,
+/// or split across them, marks the place it starts.
+pub fn placed_anchors(pages: &[RenderPage]) -> Vec<PlacedAnchor<'_>> {
+    let mut seen: HashSet<&str> = HashSet::new();
+    let mut out = Vec::new();
+    for (page, render_page) in pages.iter().enumerate() {
+        collect_anchors(&render_page.nodes, page, &mut seen, &mut out);
+    }
+    out
+}
+
+fn collect_anchors<'a>(
+    nodes: &'a [RenderNode],
+    page:  usize,
+    seen:  &mut HashSet<&'a str>,
+    out:   &mut Vec<PlacedAnchor<'a>>,
+) {
+    for node in nodes {
+        match node {
+            RenderNode::Anchor(anchor) => {
+                if seen.insert(anchor.id.as_str()) {
+                    out.push(PlacedAnchor { page, anchor });
+                }
+            }
+            RenderNode::Box(b)  => collect_anchors(&b.children, page, seen, out),
+            RenderNode::Link(l) => collect_anchors(&l.children, page, seen, out),
+            _ => {}
+        }
+    }
 }
 
 pub struct RenderBarcode {
@@ -260,20 +311,22 @@ fn page_to_json(page: &RenderPage) -> Value {
     })
 }
 
-/// Serialise a slice of nodes, skipping invisible zero-height empty boxes.
+/// Serialise a slice of nodes, skipping invisible zero-height empty boxes and anchors.
 fn nodes_to_json(nodes: &[RenderNode]) -> Vec<Value> {
     nodes.iter().filter(|n| !is_invisible(n)).map(node_to_json).collect()
 }
 
 fn is_invisible(node: &RenderNode) -> bool {
-    if let RenderNode::Box(b) = node {
-        b.height == 0.0 && b.width == 0.0
-            && b.fill.is_none()
-            && b.border_width == 0.0
-            && b.children.is_empty()
-            && !b.debug_self
-    } else {
-        false
+    match node {
+        RenderNode::Box(b) => {
+            b.height == 0.0 && b.width == 0.0
+                && b.fill.is_none()
+                && b.border_width == 0.0
+                && b.children.is_empty()
+                && !b.debug_self
+        }
+        RenderNode::Anchor(_) => true,
+        _ => false,
     }
 }
 
@@ -429,6 +482,8 @@ fn node_to_json(node: &RenderNode) -> Value {
             "opacity":  l.opacity,
             "nodes": nodes_to_json(&l.children),
         }),
+        // Filtered out by `is_invisible`: the JSON pages are what is drawn.
+        RenderNode::Anchor(_) => Value::Null,
     }
 }
 

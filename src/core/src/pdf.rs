@@ -32,13 +32,13 @@
 use std::collections::{HashMap, HashSet};
 
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
-use pdf_writer::types::{ActionType, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, HighlightEffect, LineCapStyle, LineJoinStyle, Predictor, TextRenderingMode};
+use pdf_writer::types::{ActionType, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, HighlightEffect, LineCapStyle, LineJoinStyle, PageMode, Predictor, TextRenderingMode};
 use ttf_parser::Face;
 use miniz_oxide::deflate::compress_to_vec_zlib;
 use miniz_oxide::inflate::decompress_to_vec_zlib;
 use subsetter::GlyphRemapper;
 
-use crate::render::{RenderField, RenderNode, RenderPage, RenderedBarcodeKind};
+use crate::render::{placed_anchors, PlacedAnchor, RenderField, RenderNode, RenderPage, RenderedBarcodeKind};
 use crate::parse::{FieldKind, Meta};
 use crate::tokens::FontDef;
 
@@ -1210,6 +1210,9 @@ fn draw_node(
         // not as content stream operations.  Nothing to draw here.
         RenderNode::Field(_) => {}
 
+        // Anchors become the outline and the named destinations; they draw nothing.
+        RenderNode::Anchor(_) => {}
+
         // ── Canvas Text ───────────────────────────────────────────────────────
         RenderNode::CanvasText(t) => {
             draw_canvas_text(content, fonts, t, page_h);
@@ -1841,6 +1844,17 @@ struct AllocatedIds {
     radio_parent_alloc: Vec<(String, Ref)>,        // (group_name, parent_dict_id)
     /// ExtGState objects for canvas layer opacity: (opacity_pct 1..99) → Ref.
     opacity_gs_ids:    Vec<(u32, Ref)>,
+    /// `None` when the document has no bookmarks.
+    outline:           Option<OutlineIds>,
+}
+
+/// The objects of the outline and the named destinations, allocated last so that a document without bookmarks
+/// keeps the ids it had before bookmarks existed.
+struct OutlineIds {
+    dests_id:   Ref,
+    outline_id: Ref,
+    /// One outline item per anchor, in the order of the anchors.
+    item_ids:   Vec<Ref>,
 }
 
 // ── Step 1a: Font preparation ─────────────────────────────────────────────────
@@ -2226,6 +2240,13 @@ fn allocate_ids(
     let opacity_gs_ids: Vec<(u32, Ref)> =
         sorted_opacities.iter().map(|&pct| (pct, alloc.next())).collect();
 
+    let anchor_count = placed_anchors(pages).len();
+    let outline = (anchor_count > 0).then(|| OutlineIds {
+        dests_id:   alloc.next(),
+        outline_id: alloc.next(),
+        item_ids:   (0..anchor_count).map(|_| alloc.next()).collect(),
+    });
+
     AllocatedIds {
         catalog_id,
         info_id,
@@ -2239,6 +2260,7 @@ fn allocate_ids(
         field_alloc,
         radio_parent_alloc,
         opacity_gs_ids,
+        outline,
     }
 }
 
@@ -2256,6 +2278,7 @@ fn assemble_pdf(
     rendered_pages:     Vec<(Vec<u8>, Vec<AnnotData>)>,
     ids:                AllocatedIds,
     fields:             &[(usize, RenderField)],
+    anchors:            &[PlacedAnchor],
     meta:               &Meta,
     created_on:         Option<&str>,
 ) -> Result<Vec<u8>, String> {
@@ -2264,6 +2287,7 @@ fn assemble_pdf(
         page_ids, content_ids, annot_ids,
         font_id_map, image_id_map, image_smask_ids,
         field_alloc, radio_parent_alloc, opacity_gs_ids,
+        outline,
     } = ids;
 
     let n = pages.len();
@@ -2273,6 +2297,12 @@ fn assemble_pdf(
     {
         let mut cat = pdf.catalog(catalog_id);
         cat.pages(pages_id);
+        if let Some(outline) = &outline {
+            cat.destinations(outline.dests_id);
+            cat.outlines(outline.outline_id);
+            // Open with the outline panel showing, as the bookmarks are there to be used.
+            cat.page_mode(PageMode::UseOutlines);
+        }
         if !fields.is_empty() {
             // Build root field refs list.
             let mut root_fields: Vec<Ref> = Vec::new();
@@ -2413,19 +2443,33 @@ fn assemble_pdf(
 
     // -- Link annotation objects -----------------------------------------------
     // Each link annotation is a separate indirect object.  Invisible border
-    // (0-width) so only the URI action fires; no visual box is drawn.
+    // (0-width) so only the action fires; no visual box is drawn.  An href of
+    // "#id" goes to the named destination of the bookmark with that id.
     for (i, (_, page_annots)) in rendered_pages.iter().enumerate() {
         for (j, ann) in page_annots.iter().enumerate() {
             let aid       = annot_ids[i][j];
-            let url_bytes = ann.url.as_bytes().to_vec();
             let mut aw    = pdf.annotation(aid);
             aw.subtype(AnnotationType::Link)
               .rect(Rect::new(ann.x1, ann.y1, ann.x2, ann.y2))
               .border(0.0, 0.0, 0.0, None);
-            aw.action()
-              .action_type(ActionType::Uri)
-              .uri(Str(&url_bytes));
+            match ann.url.strip_prefix('#') {
+                Some(id) => {
+                    aw.action()
+                      .action_type(ActionType::GoTo)
+                      .destination_named(Name(id.as_bytes()));
+                }
+                None => {
+                    aw.action()
+                      .action_type(ActionType::Uri)
+                      .uri(Str(ann.url.as_bytes()));
+                }
+            }
         }
+    }
+
+    // -- Outline and named destinations ------------------------------------------
+    if let Some(outline) = &outline {
+        write_outline(&mut pdf, outline, anchors, &page_ids, pages);
     }
 
     // -- AcroForm and field annotations ----------------------------------------
@@ -2845,16 +2889,95 @@ pub fn render_pdf(
         prepare_fonts(pages, font_defs, registry, attribution);
     let (sorted_image_names, image_res_map) =
         prepare_images(pages, image_registry);
-    let rendered_pages =
+    let anchors = placed_anchors(pages);
+    let mut rendered_pages =
         build_content_streams(pages, &fonts, &image_res_map, attribution);
+    drop_dangling_links(&mut rendered_pages, &anchors);
     let fields = collect_render_fields(pages);
     let ids =
         allocate_ids(pages, &rendered_pages, &fonts, &sorted_font_names, &sorted_image_names, image_registry, &fields);
     assemble_pdf(
         pages, &fonts, &sorted_font_names, &sorted_image_names,
-        image_registry, &image_res_map, rendered_pages, ids, &fields,
+        image_registry, &image_res_map, rendered_pages, ids, &fields, &anchors,
         meta, created_on,
     )
+}
+
+/// Remove the links to an id no bookmark has, such as an `href="#"` outside a table of contents.
+fn drop_dangling_links(rendered_pages: &mut [(Vec<u8>, Vec<AnnotData>)], anchors: &[PlacedAnchor]) {
+    let ids: HashSet<&str> = anchors.iter().map(|placed| placed.anchor.id.as_str()).collect();
+    for (_, annots) in rendered_pages.iter_mut() {
+        annots.retain(|ann| ann.url.strip_prefix('#').is_none_or(|id| ids.contains(id)));
+    }
+}
+
+/// Write the `/Dests` dictionary, a named destination per anchor, and the outline. The outline nests the
+/// anchors by level: an anchor's parent is the closest anchor before it with a lower level.
+fn write_outline(pdf: &mut Pdf, ids: &OutlineIds, anchors: &[PlacedAnchor], page_ids: &[Ref], pages: &[RenderPage]) {
+    {
+        let mut dests = pdf.destinations(ids.dests_id);
+        for placed in anchors {
+            let top = pages[placed.page].height - placed.anchor.y;
+            dests.insert(Name(placed.anchor.id.as_bytes()))
+                .page(page_ids[placed.page])
+                .xyz(0.0, top, None);
+        }
+    }
+
+    let n = anchors.len();
+    let mut parents: Vec<Option<usize>> = vec![None; n];
+    let mut ancestors: Vec<usize> = Vec::new();
+    for (i, placed) in anchors.iter().enumerate() {
+        while ancestors.last().is_some_and(|&a| anchors[a].anchor.level >= placed.anchor.level) {
+            ancestors.pop();
+        }
+        parents[i] = ancestors.last().copied();
+        ancestors.push(i);
+    }
+
+    let mut top_level: Vec<usize> = Vec::new();
+    let mut children: Vec<Vec<usize>> = vec![Vec::new(); n];
+    for (i, parent) in parents.iter().enumerate() {
+        match parent {
+            Some(p) => children[*p].push(i),
+            None    => top_level.push(i),
+        }
+    }
+    let mut prev: Vec<Option<usize>> = vec![None; n];
+    let mut next: Vec<Option<usize>> = vec![None; n];
+    for siblings in children.iter().chain(std::iter::once(&top_level)) {
+        for pair in siblings.windows(2) {
+            next[pair[0]] = Some(pair[1]);
+            prev[pair[1]] = Some(pair[0]);
+        }
+    }
+    // Every item is open, so an item's count is all of its descendants. A child comes after its parent, so a
+    // walk from the end has each count complete before it is added to the parent's.
+    let mut descendants: Vec<i32> = vec![0; n];
+    for i in (0..n).rev() {
+        if let Some(p) = parents[i] {
+            descendants[p] += 1 + descendants[i];
+        }
+    }
+
+    {
+        let mut root = pdf.outline(ids.outline_id);
+        if let (Some(&first), Some(&last)) = (top_level.first(), top_level.last()) {
+            root.first(ids.item_ids[first]).last(ids.item_ids[last]);
+        }
+        root.count(n as i32);
+    }
+    for (i, placed) in anchors.iter().enumerate() {
+        let mut item = pdf.outline_item(ids.item_ids[i]);
+        item.title(TextStr(&placed.anchor.label));
+        item.parent(parents[i].map_or(ids.outline_id, |p| ids.item_ids[p]));
+        if let Some(p) = prev[i] { item.prev(ids.item_ids[p]); }
+        if let Some(nx) = next[i] { item.next(ids.item_ids[nx]); }
+        if let (Some(&first), Some(&last)) = (children[i].first(), children[i].last()) {
+            item.first(ids.item_ids[first]).last(ids.item_ids[last]).count(descendants[i]);
+        }
+        item.dest_name(Name(placed.anchor.id.as_bytes()));
+    }
 }
 
 #[cfg(test)]
@@ -2879,5 +3002,80 @@ mod tests {
         let cap_height = face.capital_height().expect("face declares a cap height") as f32
             / face.units_per_em() as f32;
         assert_eq!(cap_height, ATTRIBUTION_CAP_HEIGHT);
+    }
+
+    // ── Bookmarks ─────────────────────────────────────────────────────────────
+
+    fn render(layout: &str) -> String {
+        let xml = format!(r#"<lpdf version="1"><document><section><layout>{layout}</layout></section></document></lpdf>"#);
+        let bytes = crate::LpdfEngine::render_xml_to_pdf_bytes(&xml).expect("renders");
+        String::from_utf8_lossy(&bytes).into_owned()
+    }
+
+    /// The number and the dictionary of the object whose text contains `needle`.
+    fn object_with(pdf: &str, needle: &str) -> (u32, String) {
+        let at = pdf.find(needle).unwrap_or_else(|| panic!("no {needle} in the PDF"));
+        let start = pdf[..at].rfind(" 0 obj").expect("inside an object");
+        let number_start = pdf[..start].rfind('\n').map_or(0, |i| i + 1);
+        let number = pdf[number_start..start].trim().parse().expect("an object number");
+        let end = at + pdf[at..].find("endobj").expect("an object end");
+        (number, pdf[start..end].to_string())
+    }
+
+    const THREE: &str = r#"<bookmark label="Methods"/><text>Methods</text>
+        <bookmark label="Data" level="2"/><text>Data</text>
+        <bookmark label="Results"/><text>Results</text>"#;
+
+    #[test]
+    fn bookmarks_make_an_outline_nested_by_level() {
+        let pdf = render(THREE);
+        let (methods, methods_dict) = object_with(&pdf, "/Title (Methods)");
+        let (data, data_dict) = object_with(&pdf, "/Title (Data)");
+        let (results, results_dict) = object_with(&pdf, "/Title (Results)");
+        let (_, root) = object_with(&pdf, "/Type /Outlines");
+
+        assert!(root.contains(&format!("/First {methods} 0 R")) && root.contains(&format!("/Last {results} 0 R")), "{root}");
+        assert!(root.contains("/Count 3"), "{root}");
+        assert!(methods_dict.contains(&format!("/First {data} 0 R")) && methods_dict.contains("/Count 1"), "{methods_dict}");
+        assert!(methods_dict.contains(&format!("/Next {results} 0 R")), "{methods_dict}");
+        assert!(data_dict.contains(&format!("/Parent {methods} 0 R")) && !data_dict.contains("/Next"), "{data_dict}");
+        assert!(results_dict.contains(&format!("/Prev {methods} 0 R")), "{results_dict}");
+        assert!(methods_dict.contains("/Dest /methods"), "{methods_dict}");
+    }
+
+    #[test]
+    fn catalog_names_the_outline_and_its_destinations() {
+        let pdf = render(THREE);
+        let (_, catalog) = object_with(&pdf, "/Type /Catalog");
+        assert!(catalog.contains("/Outlines") && catalog.contains("/Dests"), "{catalog}");
+        assert!(catalog.contains("/PageMode /UseOutlines"), "{catalog}");
+        let (_, dests) = object_with(&pdf, "/methods [");
+        assert!(dests.contains("/data [") && dests.contains("/results ["), "{dests}");
+        assert!(dests.contains("/XYZ"), "{dests}");
+    }
+
+    #[test]
+    fn link_to_a_bookmark_id_goes_to_its_destination() {
+        let pdf = render(r##"<link href="#results"><text>See results</text></link>
+            <text>Or <span href="#methods">the methods</span></text>
+            <bookmark label="Methods"/><text>Methods</text>
+            <bookmark label="Results"/><text>Results</text>"##);
+        let (_, link) = object_with(&pdf, "/D /results");
+        assert!(link.contains("/S /GoTo"), "{link}");
+        let (_, span) = object_with(&pdf, "/D /methods");
+        assert!(span.contains("/S /GoTo"), "{span}");
+    }
+
+    #[test]
+    fn link_to_an_id_no_bookmark_has_is_left_out() {
+        let pdf = render(r##"<link href="#nowhere"><text>Nowhere</text></link><link href="#"><text>Here</text></link>"##);
+        assert!(!pdf.contains("/GoTo"));
+        assert!(!pdf.contains("/Outlines"));
+    }
+
+    #[test]
+    fn document_without_bookmarks_has_no_outline() {
+        let pdf = render("<text>Plain</text>");
+        assert!(!pdf.contains("/Outlines") && !pdf.contains("/Dests") && !pdf.contains("/PageMode"));
     }
 }

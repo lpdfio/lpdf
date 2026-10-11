@@ -12,6 +12,7 @@ mod parse;
 mod pdf;
 mod render;
 mod shared;
+mod toc;
 mod tokens;
 
 use std::collections::HashMap;
@@ -177,7 +178,7 @@ impl LpdfEngine {
         layout::set_font_widths(self.font_widths.clone());
 
         let pages: Vec<render::RenderPage> =
-            lp.iter().flat_map(layout::layout_page).collect();
+            layout::layout_document(&lp);
 
         let status = license::check(&self.license_key, self.now_unix);
         // An unlicensed status draws the attribution line on every page.
@@ -242,7 +243,7 @@ impl LpdfEngine {
         layout::set_font_widths(merged);
 
         let pages: Vec<render::RenderPage> =
-            lp.iter().flat_map(layout::layout_page).collect();
+            layout::layout_document(&lp);
 
         let status = license::check(&self.license_key, self.now_unix);
         // An unlicensed status draws the attribution line on every page.
@@ -310,7 +311,7 @@ impl LpdfEngine {
         let mut doc = parse::parse(xml)?;
         let lp = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
-            lp.iter().flat_map(layout::layout_page).collect();
+            layout::layout_document(&lp);
         let status = license::check(license_key, now_unix);
         pdf::render_pdf(
             &pages,
@@ -329,7 +330,7 @@ impl LpdfEngine {
         let mut doc = parse::parse(xml)?;
         let lp = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
-            lp.iter().flat_map(layout::layout_page).collect();
+            layout::layout_document(&lp);
         // Render as unlicensed (with the attribution line) to match what the adapters
         // produce when no valid license key is supplied — keeps snapshot hashes
         // consistent between the Rust tests and the adapter test suites.
@@ -452,7 +453,7 @@ pub fn bench_parse_tree(json: &str) -> Result<BenchDoc, String> {
 pub fn bench_render_doc(mut doc: BenchDoc) -> Result<Vec<u8>, String> {
     let lp = doc.0.section_layouts();
     let pages: Vec<render::RenderPage> =
-        lp.iter().flat_map(layout::layout_page).collect();
+        layout::layout_document(&lp);
     // Unlicensed, so benchmarks include the cost of the attribution line.
     pdf::render_pdf(
         &pages, &doc.0.fonts,
@@ -473,7 +474,7 @@ pub fn bench_render_xml(xml: &str) -> Result<Vec<u8>, String> {
     let mut doc = parse::parse(xml)?;
     let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
-        lp.iter().flat_map(layout::layout_page).collect();
+        layout::layout_document(&lp);
     // Unlicensed, so benchmarks include the cost of the attribution line.
     pdf::render_pdf(
         &pages, &doc.fonts,
@@ -491,7 +492,7 @@ pub fn bench_render_xml_with_font(
     let mut doc = parse::parse(xml)?;
     let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
-        lp.iter().flat_map(layout::layout_page).collect();
+        layout::layout_document(&lp);
     let mut fonts = pdf::FontRegistry::new();
     fonts.register(font_name, font_bytes.to_vec());
     // Unlicensed, so benchmarks include the cost of the attribution line.
@@ -511,7 +512,7 @@ pub fn bench_render_xml_with_image(
     let mut doc = parse::parse(xml)?;
     let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
-        lp.iter().flat_map(layout::layout_page).collect();
+        layout::layout_document(&lp);
     let mut images = pdf::ImageRegistry::new();
     images.load(image_name, image_bytes.to_vec());
     // Unlicensed, so benchmarks include the cost of the attribution line.
@@ -590,7 +591,7 @@ mod tests {
         let mut doc = parse::parse(&minimal("")).unwrap();
         let lp = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
-            lp.iter().flat_map(layout::layout_page).collect();
+            layout::layout_document(&lp);
         let pdf = pdf::render_pdf(
             &pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
             &doc.meta, None, true,

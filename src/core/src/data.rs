@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use crate::parse::{Document, Node, TextRun};
+use crate::parse::{Document, Node, TextRun, TOC_DATA_KEY};
 
 // ── Path resolution ───────────────────────────────────────────────────────────
 
@@ -98,7 +98,8 @@ fn value_to_string(value: Option<&Value>) -> String {
 /// The pass is a pure tree transformation: it expands `data-source` loops,
 /// filters `data-if` / `data-if-not` conditionals, and substitutes
 /// `data-value` text content.  Layout and PDF emit receive a plain `Document`
-/// with no `data-*` attributes remaining.
+/// with no `data-*` attributes remaining, except in a table of contents
+/// section: it keeps the data and is bound by `apply_toc` once `$toc` exists.
 ///
 /// Returns an error if `json_data` is not valid JSON.
 pub fn apply(doc: &mut Document, json_data: &str) -> Result<(), String> {
@@ -106,6 +107,10 @@ pub fn apply(doc: &mut Document, json_data: &str) -> Result<(), String> {
         .map_err(|e| format!("data JSON parse error: {e}"))?;
 
     for section in &mut doc.sections {
+        if let Some(toc) = &mut section.options.toc {
+            toc.data = Some(root.clone());
+            continue;
+        }
         for sc in &mut section.children {
             if let crate::parse::SectionChild::Layout(layout_children) = sc {
                 // Expand the flat content list (data-source loops can expand nodes).
@@ -116,12 +121,12 @@ pub fn apply(doc: &mut Document, json_data: &str) -> Result<(), String> {
                     match lc {
                         crate::parse::LayoutChild::Content(node) => {
                             out.clear();
-                            apply_single_node(node, &[], &root, &mut out);
+                            apply_single_node(node, &[], &root, None, &mut out);
                             new_children.extend(out.drain(..).map(crate::parse::LayoutChild::Content));
                         }
                         crate::parse::LayoutChild::Region(mut region) => {
                             let children = std::mem::take(&mut region.children);
-                            region.children = apply_nodes(children, &[], &root);
+                            region.children = apply_nodes(children, &[], &root, None);
                             new_children.push(crate::parse::LayoutChild::Region(region));
                         }
                     }
@@ -134,12 +139,20 @@ pub fn apply(doc: &mut Document, json_data: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Bind the content of a table of contents section. `root` is the caller's data with `$toc` added. Each item
+/// that `data-source="$toc"` expands gets `(level - 1) × indent_step` more left padding, and its `href="#"`
+/// links point at its entry's bookmark.
+pub(crate) fn apply_toc(nodes: Vec<Node>, root: &Value, indent_step: f32) -> Vec<Node> {
+    apply_nodes(nodes, &[], root, Some(indent_step))
+}
+
 // ── Tree walking ──────────────────────────────────────────────────────────────
 
-fn apply_nodes(nodes: Vec<Node>, stack: &[&Value], root: &Value) -> Vec<Node> {
+/// `toc_indent_step` is set while binding a table of contents section; see `apply_toc`.
+fn apply_nodes(nodes: Vec<Node>, stack: &[&Value], root: &Value, toc_indent_step: Option<f32>) -> Vec<Node> {
     let mut out = Vec::with_capacity(nodes.len());
     for node in nodes {
-        apply_single_node(node, stack, root, &mut out);
+        apply_single_node(node, stack, root, toc_indent_step, &mut out);
     }
     out
 }
@@ -148,7 +161,7 @@ fn apply_nodes(nodes: Vec<Node>, stack: &[&Value], root: &Value) -> Vec<Node> {
 /// - 0 outputs: the node is filtered out by `data-if` / `data-if-not`
 /// - 1 output:  the normal case (data resolved and children recursed)
 /// - N outputs: the node has `data-source` and is expanded once per array item
-fn apply_single_node(node: Node, stack: &[&Value], root: &Value, out: &mut Vec<Node>) {
+fn apply_single_node(node: Node, stack: &[&Value], root: &Value, toc_indent_step: Option<f32>, out: &mut Vec<Node>) {
     let di  = node.data_attrs.as_ref().and_then(|d| d.data_if.as_deref()).map(str::to_owned);
     let din = node.data_attrs.as_ref().and_then(|d| d.data_if_not.as_deref()).map(str::to_owned);
     let ds  = node.data_attrs.as_ref().and_then(|d| d.data_source.as_deref()).map(str::to_owned);
@@ -171,6 +184,7 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, out: &mut Vec<N
     // 3. data-source: expand into one copy per array element.
     if let Some(ref path) = ds {
         if let Some(Value::Array(items)) = resolve_path(path, stack, root) {
+            let toc_entries = toc_indent_step.filter(|_| path == TOC_DATA_KEY);
             for item in items {
                 let mut new_stack = stack.to_vec();
                 new_stack.push(item);
@@ -182,7 +196,13 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, out: &mut Vec<N
                     d.data_if     = None;
                     d.data_if_not = None;
                 }
-                apply_single_node(template, &new_stack, root, out);
+                let first = out.len();
+                apply_single_node(template, &new_stack, root, toc_indent_step, out);
+                if let Some(indent_step) = toc_entries {
+                    for entry_node in &mut out[first..] {
+                        finish_toc_entry(entry_node, item, indent_step);
+                    }
+                }
             }
         }
         // Non-array value or missing path → node produces no output.
@@ -213,8 +233,32 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, out: &mut Vec<N
     }
 
     // 5. Recurse into children with the current scope.
-    node.children = apply_nodes(std::mem::take(&mut node.children), stack, root);
+    node.children = apply_nodes(std::mem::take(&mut node.children), stack, root, toc_indent_step);
     out.push(node);
+}
+
+/// Indent an item expanded from `$toc` by its entry's level, and point the item's `href="#"` links at the
+/// entry's bookmark.
+fn finish_toc_entry(node: &mut Node, entry: &Value, indent_step: f32) {
+    let level = entry.get("level").and_then(Value::as_u64).unwrap_or(1);
+    node.padding[3] += level.saturating_sub(1) as f32 * indent_step;
+    if let Some(anchor) = entry.get("anchor").and_then(Value::as_str) {
+        point_links_at(node, anchor);
+    }
+}
+
+fn point_links_at(node: &mut Node, anchor: &str) {
+    if node.url.as_deref() == Some("#") {
+        node.url = Some(anchor.to_string());
+    }
+    for run in &mut node.text_runs {
+        if run.href.as_deref() == Some("#") {
+            run.href = Some(anchor.to_string());
+        }
+    }
+    for child in &mut node.children {
+        point_links_at(child, anchor);
+    }
 }
 
 // ── Unit tests ────────────────────────────────────────────────────────────────
@@ -282,6 +326,7 @@ mod tests {
             field_group: None,
             field_action_url: None,
             data_attrs: None,
+            bookmarks: vec![],
             children: vec![],
         }
     }
@@ -316,6 +361,7 @@ mod tests {
             sections: vec![Section {
                 children: vec![SectionChild::Layout(layout_children)],
                 options: SectionOptions { size: Some((595.28, 841.89)), ..SectionOptions::default() },
+                bookmark: None,
             }],
             font_widths: HashMap::new(),
         }

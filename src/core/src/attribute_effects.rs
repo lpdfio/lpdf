@@ -70,7 +70,7 @@ const IGNORED: &[(&str, &str)] = &[
         "read and not used: a region is a header when it comes first in the layout and a footer when it comes last, whatever its pin says",
     ),
     ("region@w", "read and not used: it is for the left and right pins, which are not implemented"),
-    ("section@title", "read and not used: the PDF has no outline to put it in"),
+    ("section@title", "read and not used: the outline takes its entries from bookmarks"),
     ("divider@debug", "the debug outline is drawn for boxes, and a divider is not one"),
     ("field@debug", "the debug outline is drawn for boxes, and a field is not one"),
     ("img@font", "an image is laid out as the picture alone: the attribute is read and not used"),
@@ -143,6 +143,7 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
         ("font@ref", &["custom"]),
         ("image@ref", &["other"]),
         ("barcode@data", &["Another payload"]),
+        ("bookmark@id", &["chosen"]),
     ];
     if let Some((_, values)) = by_id.iter().find(|(key, _)| *key == id) {
         return Some(values);
@@ -372,7 +373,7 @@ fn render(xml: &str) -> Result<Vec<u8>, String> {
     catch_unwind(AssertUnwindSafe(|| {
         let mut doc = crate::parse::parse(xml)?;
         let layouts = doc.section_layouts();
-        let pages: Vec<crate::render::RenderPage> = layouts.iter().flat_map(crate::layout::layout_page).collect();
+        let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts);
         let mut fonts = crate::pdf::FontRegistry::new();
         fonts.register("custom", crate::pdf::ATTRIBUTION_FONT.to_vec());
         let mut images = crate::pdf::ImageRegistry::new();
@@ -410,6 +411,10 @@ impl Subject {
 }
 
 const IMAGES: &str = r#"<assets><image name="logo"/><image name="other"/></assets>"#;
+const BOOKMARKED: &str =
+    r#"<bookmark label="Methods"/><text>Methods</text><bookmark label="Data" level="2"/><text>Data</text>"#;
+/// The content of a table of contents: one text per entry.
+const TOC: &str = r#"<stack data-source="$toc"><text data-value="label">Entry</text></stack>"#;
 const TWO: &str = "<text>Alpha</text><text>Beta</text>";
 const FOUR: &str = "<text>A</text><text>B</text><text>C</text><text>D</text>";
 const ONE: &str = "<text>Alpha</text>";
@@ -460,7 +465,11 @@ fn subjects() -> Vec<Subject> {
     vec![
         // The document and its parts.
         Subject::new("document", |a, _| lpdf("", &format!("<document {a}><section><layout>{ONE}</layout></section></document>"))),
-        Subject::new("section", |a, _| lpdf("", &format!("<document><section {a}><layout>{ONE}</layout></section></document>"))),
+        // A second section has bookmarks, for a table of contents to list.
+        Subject::new("section", |a, c| {
+            lpdf("", &format!("<document><section {a}><layout>{c}</layout></section><section><layout>{BOOKMARKED}</layout></section></document>"))
+        })
+        .content(ONE),
         Subject::new("meta", |a, _| lpdf("", &format!("<document><meta {a}/><section><layout>{ONE}</layout></section></document>"))),
         Subject::new("font", |a, _| {
             lpdf(&format!("<assets><font {a}/></assets>"), r#"<document><section><layout><text font="body">Alpha</text></layout></section></document>"#)
@@ -505,6 +514,10 @@ fn subjects() -> Vec<Subject> {
         Subject::new("grid", |a, c| boxed("grid", a, c)).base(&[("cols", "2")]).content(FOUR),
         Subject::new("frame", |a, c| boxed("frame", a, c)).content(ONE),
         Subject::new("link", |a, c| boxed("link", a, c)).base(&[("href", "https://a.example")]).content(TWO),
+        // A bookmark shows in the outline. One before it gives a level something to nest under.
+        Subject::new("bookmark", |a, c| flow(&format!(r#"<bookmark label="First"/><text>Zero</text><bookmark {a}/>{c}"#)))
+            .base(&[("label", "Alpha")])
+            .content(ONE),
         // Layout leaves.
         Subject::new("divider", |a, _| flow(&format!("<text>Before</text><divider {a}/><text>After</text>"))),
         Subject::new("span", |a, _| flow(&format!("<text>Before <span {a}>middle</span> after</text>"))),
@@ -645,6 +658,10 @@ fn tweaks() -> HashMap<String, Tweak> {
 
     // A grid has either cols or col-width.
     add("grid@col-width", Tweak::default().remove("cols"));
+
+    // A table of contents shows in what it binds to $toc, and its indent on an entry below the first level.
+    add("section@type", Tweak::default().content(TOC));
+    add("section@toc-indent-step", Tweak::default().set("type", "toc").content(TOC));
 
     // Names that something is looked up by: a name nothing matches is an error, and the attribute was read.
     add("font@name", Tweak::default().error_counts());

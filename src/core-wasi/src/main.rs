@@ -41,6 +41,8 @@ mod kit_to_xml;
 mod page_scope;
 #[path = "../../core/src/canvas.rs"]
 mod canvas;
+#[path = "../../core/src/toc.rs"]
+mod toc;
 
 use std::io::Read;
 use base64::Engine as _;
@@ -217,7 +219,7 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     }
 
     layout::set_font_widths(doc.font_widths.clone());
-    let pages: Vec<render::RenderPage> = lp.iter().flat_map(layout::layout_page).collect();
+    let pages: Vec<render::RenderPage> = layout::layout_document(&lp);
 
     let status = license::check(license_key, now_unix);
     let created_on = req["created_on"].as_str();
@@ -260,7 +262,7 @@ impl LpdfEngine {
         let mut doc = parse::parse(xml)?;
         let lp = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
-            lp.iter().flat_map(layout::layout_page).collect();
+            layout::layout_document(&lp);
         // Unlicensed, as in the core stub, so both crates hash the same attributed bytes.
         pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, None, false)
     }
