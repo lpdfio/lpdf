@@ -19,7 +19,6 @@ const REPOS = ['lpdf-js', 'lpdf-dotnet', 'lpdf-php', 'lpdf-python', 'lpdf-vscode
 const REMOTE = 'origin'
 const BRANCH = 'main'
 const API = process.env.LPDF_GITHUB_API || 'https://api.github.com' // overridable for tests
-const WEB = 'https://github.com'
 const TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || ''
 // A dispatched run appears within seconds. After this long with no run, the
 // repo most likely has no rc.yml on main, or the dispatch failed.
@@ -217,9 +216,8 @@ function show(rows) {
     console.log('Before releasing:')
     console.log(`  1. Check the extension by hand: make rc-vsix RC=${tag} downloads its .vsix`)
     console.log('     and prints how to install it. Open an example, check preview and export.')
-    console.log(`  2. Publish ${final} on this RC's commit, with typed release notes. This opens`)
-    console.log('     the release form with tag and commit filled in:')
-    console.log(`     ${WEB}/${OWNER}/${CORE}/releases/new?tag=${final}&target=${sha}&title=${final}`)
+    console.log(`  2. Ask Claude for rc-draft: it drafts the ${final} release on this RC, or brings`)
+    console.log('     a waiting draft up to it. Review the draft, then publish it on GitHub.')
     if (mainSha && mainSha !== sha) {
         console.log('')
         console.log(`  Note: GitHub's ${BRANCH} has moved on since this RC. The release still goes`)

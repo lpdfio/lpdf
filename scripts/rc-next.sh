@@ -120,6 +120,19 @@ if [ -n "$LOCAL" ] && [ "$LOCAL" != "$SHA" ]; then
   echo "  Note: your local $BRANCH is $AHEAD ahead / $BEHIND behind GitHub. The RC"
   echo "        tags GitHub's $BRANCH; push first if your commits belong in it."
 fi
+# A draft release stays on the commit it was made for. gh shows drafts only when signed in with
+# push access, and finds none for a version without one: either way there's no note.
+DRAFT_AT=$(gh release view "$TARGET" --repo "${REPO_URL#https://github.com/}" --json isDraft,targetCommitish \
+  --jq 'select(.isDraft) | .targetCommitish' 2>/dev/null || true)
+if [ -n "$DRAFT_AT" ]; then
+  DRAFT_RC=""
+  for t in $(printf '%s\n' "$TAGS" | grep -E "^$TARGET_RE-rc\.[0-9]+\$" || true); do
+    if [ "$(git rev-parse --verify --quiet "refs/tags/$t^{commit}")" = "$DRAFT_AT" ]; then DRAFT_RC=" ($t)"; fi
+  done
+  echo ""
+  echo "  Note: a draft release for $TARGET is on $(printf '%s' "$DRAFT_AT" | cut -c1-7)$DRAFT_RC. Once this"
+  echo "        RC passes, ask Claude for rc-draft to bring the draft up to it."
+fi
 
 echo ""
 echo "Pushing the tag starts release.yml on GitHub: tests, build, a GitHub"
@@ -152,6 +165,6 @@ for r in $ALL_REPOS; do
   echo "    https://github.com/lpdfio/$r/actions/workflows/rc.yml"
 done
 echo ""
-echo "When all six are green and the .vsix checks out, publish $TARGET on the"
-echo "same commit. This opens the release form with tag and commit filled in:"
-echo "  $REPO_URL/releases/new?tag=$TARGET&target=$SHA&title=$TARGET"
+echo "When all six are green, ask Claude for rc-draft: it drafts the $TARGET release"
+echo "on this RC, or brings a waiting draft up to it. Check the .vsix (make rc-vsix),"
+echo "review the draft, and publish it on GitHub."
