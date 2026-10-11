@@ -1,8 +1,9 @@
-use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Direction, FieldKind, HeightMode, Justify, Node, NodeKind, SectionLayout, Paginate, TextAlign, TextRun};
+use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Direction, FieldKind, HeightMode, Justify, Node, NodeKind, SectionLayout, Paginate, TextAlign, TextRun};
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
-use crate::render::{RenderBarcode, RenderBox, RenderField, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind};
+use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderField, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind};
 use crate::tokens::FontWidths;
 use crate::canvas;
+use crate::toc;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -82,7 +83,21 @@ pub fn layout_page(page: &SectionLayout) -> Vec<RenderPage> {
     }
     canvas::apply_canvas_layers(&mut pages, &page.underlays, true);
     canvas::apply_canvas_layers(&mut pages, &page.overlays, false);
+    // The section's own bookmark points at the top of its first page, ahead of the bookmarks in its layout.
+    if let (Some(bookmark), Some(first)) = (&page.bookmark, pages.first_mut()) {
+        first.nodes.insert(0, anchor(bookmark, 0.0));
+    }
     pages
+}
+
+/// Lay out every section in document order. A table of contents section is laid out after the others, once
+/// their pages are known; see `toc`.
+pub fn layout_document(sections: &[SectionLayout]) -> Vec<RenderPage> {
+    let toc = sections.iter().enumerate().find_map(|(i, s)| s.toc.as_ref().map(|options| (i, options)));
+    match toc {
+        Some((toc_index, options)) => toc::layout_with_toc(sections, toc_index, options),
+        None                       => sections.iter().flat_map(layout_page).collect(),
+    }
 }
 
 fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
@@ -1116,7 +1131,7 @@ fn layout_node(
         None => (avail_w, x),
     };
 
-    match node.kind {
+    let (rendered, h) = match node.kind {
         NodeKind::Divider => layout_divider(node, node_x, y, node_w, avail_h),
         NodeKind::Text => layout_text(node, node_x, y, node_w),
         NodeKind::Link => layout_link(node, node_x, y, node_w, avail_h),
@@ -1124,6 +1139,40 @@ fn layout_node(
         NodeKind::Barcode => layout_barcode(node, node_x, y, node_w),
         NodeKind::Field => layout_field(node, node_x, y, node_w),
         _ => layout_container(node, node_x, y, node_w, avail_h),
+    };
+    if node.bookmarks.is_empty() {
+        return (rendered, h);
+    }
+    (with_anchors(rendered, &node.bookmarks, node_x, y, node_w, h), h)
+}
+
+fn anchor(bookmark: &Bookmark, y: f32) -> RenderNode {
+    RenderNode::Anchor(RenderAnchor {
+        id:    bookmark.id.clone(),
+        label: bookmark.label.clone(),
+        level: bookmark.level,
+        y,
+    })
+}
+
+/// Put an anchor for each bookmark at the top of `rendered`, inside it, so that the anchors move with it when
+/// its container shifts it. A leaf node is wrapped in a box that draws nothing.
+fn with_anchors(rendered: RenderNode, bookmarks: &[Bookmark], x: f32, y: f32, width: f32, height: f32) -> RenderNode {
+    let anchors = bookmarks.iter().map(|bookmark| anchor(bookmark, y));
+    match rendered {
+        RenderNode::Box(mut b) => {
+            b.children.splice(0..0, anchors);
+            RenderNode::Box(b)
+        }
+        RenderNode::Link(mut l) => {
+            l.children.splice(0..0, anchors);
+            RenderNode::Link(l)
+        }
+        leaf => RenderNode::Box(RenderBox {
+            x, y, width, height,
+            fill: None, border_width: 0.0, border_color: None, radius: 0.0, debug_self: false,
+            children: anchors.chain(std::iter::once(leaf)).collect(),
+        }),
     }
 }
 
@@ -1667,14 +1716,16 @@ fn layout_link(
     avail_h: Option<f32>,
 ) -> (RenderNode, f32) {
     let url = node.url.clone().unwrap_or_default();
+    // A link has no padding attribute; the padding is the indent a table of contents gives its entries.
+    let [pt, pr, pb, pl] = node.padding;
     let (children, content_h) = layout_stack(
-        &node.children, x, y, avail_w, avail_h,
+        &node.children, x + pl, y + pt, (avail_w - pl - pr).max(0.0), avail_h.map(|h| (h - pt - pb).max(0.0)),
         node.gap, &node.align, &Justify::Start,
     );
     let height = match &node.height_mode {
         HeightMode::Fixed(h) => *h,
-        HeightMode::Full | HeightMode::Fill => avail_h.unwrap_or(content_h),
-        HeightMode::Auto => content_h,
+        HeightMode::Full | HeightMode::Fill => avail_h.unwrap_or(content_h + pt + pb),
+        HeightMode::Auto => content_h + pt + pb,
     };
     (
         RenderNode::Link(RenderLink { url, x, y, width: avail_w, height, debug_self: node.debug, children }),
@@ -2724,6 +2775,10 @@ fn shift_y(node: RenderNode, dy: f32) -> RenderNode {
             f.y += dy;
             RenderNode::Field(f)
         }
+        RenderNode::Anchor(mut a) => {
+            a.y += dy;
+            RenderNode::Anchor(a)
+        }
         // Canvas nodes use absolute canvas coordinates; y-shifting is a no-op.
         other => other,
     }
@@ -3545,5 +3600,86 @@ mod tests {
         let tree = engine_render(xml);
         let fill = tree["pages"][0]["nodes"][0]["fill"].as_str().unwrap();
         assert_eq!(fill, "#abcdef");
+    }
+
+    // ── Bookmarks ─────────────────────────────────────────────────────────────
+
+    fn render_pages(xml: &str) -> Vec<RenderPage> {
+        layout_document(&parse(xml).unwrap().section_layouts())
+    }
+
+    /// The page index and top of the first text whose content is `content`.
+    fn text_at(pages: &[RenderPage], content: &str) -> (usize, f32) {
+        fn find(nodes: &[RenderNode], content: &str) -> Option<f32> {
+            nodes.iter().find_map(|node| match node {
+                RenderNode::Text(t) if t.content == content => Some(t.y),
+                RenderNode::Box(b) => find(&b.children, content),
+                RenderNode::Link(l) => find(&l.children, content),
+                _ => None,
+            })
+        }
+        pages.iter().enumerate()
+            .find_map(|(i, page)| find(&page.nodes, content).map(|y| (i, y)))
+            .unwrap_or_else(|| panic!("no text {content}"))
+    }
+
+    #[test]
+    fn bookmark_marks_the_page_and_height_where_its_element_starts() {
+        let lines: String = (1..=200).map(|n| {
+            let mark = if n == 150 { r#"<bookmark label="Line 150"/>"# } else { "" };
+            format!("{mark}<text>Line {n}</text>")
+        }).collect();
+        let pages = render_pages(&minimal(&lines));
+        let anchors = crate::render::placed_anchors(&pages);
+        assert_eq!(anchors.len(), 1);
+        let (page, y) = text_at(&pages, "Line 150");
+        assert!(page > 0, "the document needs more than a page for this test");
+        assert_eq!(anchors[0].page, page);
+        // The anchor is the top of the text's box; the text's first line starts there too.
+        assert!((anchors[0].anchor.y - y).abs() < 15.0, "anchor {} vs text {y}", anchors[0].anchor.y);
+    }
+
+    #[test]
+    fn bookmark_moves_to_the_next_page_with_its_element() {
+        // The filler leaves no room for the framed text, which moves to the second page with its bookmark.
+        let pages = render_pages(&minimal(
+            r#"<frame height="770pt"/><bookmark label="Moved"/><frame height="100pt"><text>Moved</text></frame>"#,
+        ));
+        let anchors = crate::render::placed_anchors(&pages);
+        assert_eq!(text_at(&pages, "Moved").0, 1);
+        assert_eq!(anchors[0].page, 1);
+        assert_eq!(anchors[0].anchor.y, 28.0, "the top margin of the second page");
+    }
+
+    #[test]
+    fn bookmark_on_a_leaf_moves_with_it_when_its_container_shifts_it() {
+        // A divider is a leaf, so its anchor sits in a box of its own around it. The flank centers the short
+        // stack against the tall frame after laying it out, which shifts the box down.
+        let pages = render_pages(&minimal(
+            r#"<flank align="center"><frame width="50pt" height="100pt"/><stack><bookmark label="Rule"/><divider/></stack></flank>"#,
+        ));
+        fn holder(nodes: &[RenderNode]) -> Option<(f32, f32)> {
+            nodes.iter().find_map(|node| match node {
+                RenderNode::Box(b) => b.children.iter()
+                    .find_map(|c| match c { RenderNode::Anchor(a) => Some((b.y, a.y)), _ => None })
+                    .or_else(|| holder(&b.children)),
+                _ => None,
+            })
+        }
+        let (box_y, anchor_y) = holder(&pages[0].nodes).expect("an anchor inside a box");
+        assert!(box_y > 28.0 + 30.0, "the stack is centered, at {box_y}");
+        assert_eq!(anchor_y, box_y);
+    }
+
+    #[test]
+    fn section_bookmark_marks_the_top_of_its_first_page() {
+        let pages = render_pages(
+            r#"<lpdf version="1"><document>
+                <section><layout><text>One</text></layout></section>
+                <section><bookmark label="Second"/><layout><text>Two</text></layout></section>
+            </document></lpdf>"#,
+        );
+        let anchors = crate::render::placed_anchors(&pages);
+        assert_eq!((anchors[0].page, anchors[0].anchor.y), (1, 0.0));
     }
 }

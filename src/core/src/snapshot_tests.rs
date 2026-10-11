@@ -132,3 +132,5 @@ fn showcase_canvas_text()     { run_snapshot("showcase-canvas-text"); }
 fn showcase_region_chrome()  { run_snapshot("showcase-region-chrome"); }
 #[test]
 fn showcase_region_page_scope() { run_snapshot("showcase-region-page-scope"); }
+#[test]
+fn showcase_toc() { run_snapshot("showcase-toc"); }

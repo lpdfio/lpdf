@@ -295,6 +295,10 @@ fn render_section(section: &Value, depth: usize) -> String {
                     _ => parts.push(format!("{inner}<canvas/>")),
                 }
             }
+            "bookmark" => {
+                let bookmark_attrs = child.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
+                parts.push(format!("{inner}<bookmark{}/>", attrs_str(bookmark_attrs, &[])));
+            }
             _ => {}
         }
     }
@@ -618,7 +622,7 @@ mod tests {
     // The render pipeline as the engine runs it, unlicensed. Built on the modules both crates share.
     fn render_document(mut doc: crate::parse::Document) -> Vec<u8> {
         let layouts = doc.section_layouts();
-        let pages: Vec<crate::render::RenderPage> = layouts.iter().flat_map(crate::layout::layout_page).collect();
+        let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts);
         crate::pdf::render_pdf(
             &pages, &doc.fonts,
             &crate::pdf::FontRegistry::new(), &crate::pdf::ImageRegistry::new(),
@@ -1037,5 +1041,26 @@ mod tests {
         let pages = doc.section_layouts();
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0].children.len(), 1);
+    }
+
+    #[test]
+    fn bookmarks_and_a_toc_section_render_the_same_from_a_tree_and_from_its_xml() {
+        let kit = r##"{"version":1,"type":"document","attrs":{},"nodes":[
+            {"type":"section","attrs":{"type":"toc","toc-indent-step":"20pt"},"nodes":[
+                {"type":"bookmark","attrs":{"label":"Contents"}},
+                {"type":"layout","nodes":[
+                    {"type":"link","attrs":{"href":"#methods"},"nodes":[{"type":"text","attrs":{},"nodes":["Methods"]}]}]}]},
+            {"type":"section","attrs":{},"nodes":[
+                {"type":"layout","nodes":[
+                    {"type":"bookmark","attrs":{"label":"Methods"}},
+                    {"type":"text","attrs":{},"nodes":["Methods"]},
+                    {"type":"stack","attrs":{},"nodes":[
+                        {"type":"bookmark","attrs":{"label":"Data","level":"2","id":"data"}},
+                        {"type":"text","attrs":{},"nodes":["Data"]}]}]}]}]}"##;
+        let xml = kit_to_xml(kit).unwrap();
+        assert!(xml.contains(r#"<bookmark label="Contents"/>"#), "{xml}");
+        let (from_tree, from_xml) = rendered_both_ways(kit);
+        assert!(String::from_utf8_lossy(&from_tree).contains("/Outlines"));
+        assert_eq!(from_tree, from_xml);
     }
 }

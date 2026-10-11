@@ -37,7 +37,7 @@ const SDK = {
 // `where` is how the schema declares the element (see loadSchema); `area` is the folder it lives in.
 const CLASSES = [
     ...['stack', 'flank', 'split', 'cluster', 'grid', 'frame', 'link', 'divider', 'span', 'img', 'barcode',
-        'text', 'td', 'thead', 'tr', 'table', 'field'].map((el) => ({ cls: `${pascal(el)}Attr`, el, where: 'global', area: 'layout' })),
+        'text', 'td', 'thead', 'tr', 'table', 'field', 'bookmark'].map((el) => ({ cls: `${pascal(el)}Attr`, el, where: 'global', area: 'layout' })),
     { cls: 'RegionAttr', el: 'region', where: 'layout', area: 'layout' },
     { cls: 'LayerAttr', el: 'layer', where: 'canvas', area: 'canvas' },
     ...['rect', 'circle', 'ellipse', 'line', 'path'].map((el) => ({ cls: `${pascal(el)}Attr`, el, where: 'primitives', area: 'canvas' })),
@@ -159,6 +159,8 @@ const CONSTANTS = [
       doc: 'The values of the `pin` attribute of a region.' },
     { name: 'Orientation', area: 'kit', file: 'orientation', values: () => schema.simpleTypeValues('Orientation'),
       doc: 'The values of the `orientation` attribute of a document or a section.' },
+    { name: 'SectionType', area: 'kit', file: 'section_type', values: () => schema.simpleTypeValues('SectionType'),
+      doc: 'The values of the `type` attribute of a section.' },
     { name: 'BuiltinFont', area: 'kit', file: 'builtin_font', values: () => schema.simpleTypeValues('BuiltinFont'),
       doc: 'The values of the `core` attribute of a font: the built-in PDF fonts, which need no file.' },
     { name: 'PageScope', area: 'shared', file: 'page_scope', values: () => schema.simpleTypeValues('PageScope'),

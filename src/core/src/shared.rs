@@ -67,7 +67,7 @@ pub(crate) fn render_doc_shared(
     super::layout::set_font_widths(font_widths);
     let section_layouts = doc.section_layouts();
     let pages: Vec<super::render::RenderPage> =
-        section_layouts.iter().flat_map(super::layout::layout_page).collect();
+        super::layout::layout_document(&section_layouts);
 
     let fonts: serde_json::Map<String, serde_json::Value> = doc.fonts
         .into_iter()

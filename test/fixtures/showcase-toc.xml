@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf"/>
+      <color name="accent"  value="#e8f0fc"/>
+      <color name="muted"   value="#737373"/>
+      <color name="rule"    value="#dde3ed"/>
+    </colors>
+  </tokens>
+  <document size="a4" margin="56pt">
+    <meta title="lpdf Showcase — Bookmarks and Table of Contents"
+          subject="bookmark, section type=toc and href=#id links"/>
+
+    <!-- Canvas-only cover: the section's own bookmark marks its page -->
+    <section margin="0pt">
+      <bookmark label="Cover"/>
+      <canvas>
+        <layer>
+          <rect x="0pt" y="0pt" w="595pt" h="842pt" fill="primary"/>
+          <text x="56pt" y="380pt" font-size="32pt" font="Helvetica-Bold" color="#ffffff">Annual Report</text>
+          <text x="56pt" y="420pt" font-size="14pt" color="accent">Bookmarks, internal links and a table of contents</text>
+        </layer>
+      </canvas>
+    </section>
+
+    <!-- Table of contents: laid out after the other sections, bound to $toc -->
+    <section type="toc" toc-indent-step="16pt">
+      <bookmark label="Contents" id="contents"/>
+      <layout>
+        <stack gap="m">
+          <text font-size="xl" font="Helvetica-Bold" color="primary">Contents</text>
+          <divider color="rule" thickness="xs"/>
+          <stack gap="xs">
+            <stack data-source="$toc">
+              <link href="#">
+                <split>
+                  <text data-value="label">Entry</text>
+                  <text data-value="page" color="muted">0</text>
+                </split>
+              </link>
+            </stack>
+          </stack>
+        </stack>
+      </layout>
+    </section>
+
+    <section>
+      <layout>
+        <bookmark label="Introduction"/>
+        <text font-size="l" font="Helvetica-Bold" color="primary">Introduction</text>
+        <text>
+          This document shows the bookmarks of a PDF: each heading has a bookmark before it, which puts it in the
+          viewer's bookmark panel and gives links a place to jump to. The contents page lists them with their page
+          numbers, which the engine works out after laying out the rest of the document.
+        </text>
+        <bookmark label="Background" level="2"/>
+        <text font-size="m" font="Helvetica-Bold">Background</text>
+        <text>
+          A bookmark draws nothing. It marks the element that follows it, so a heading pushed to the next page takes
+          its bookmark along. See <span href="#methods" color="primary" underline="true">Methods</span> for how
+          the numbers are found, or go back to the <span href="#contents" color="primary" underline="true">contents</span>.
+        </text>
+      </layout>
+    </section>
+
+    <section>
+      <layout>
+        <bookmark label="Methods"/>
+        <text font-size="l" font="Helvetica-Bold" color="primary">Methods</text>
+        <text>
+          The table of contents is laid out last. Its own length moves the pages after it, so it is laid out again
+          with that length counted, until the length holds.
+        </text>
+        <bookmark label="Data Collection" level="2"/>
+        <text font-size="m" font="Helvetica-Bold">Data Collection</text>
+        <text>Entries below the first level are indented by toc-indent-step for each level.</text>
+        <bookmark label="Sampling" level="3"/>
+        <text font-size="m" font="Helvetica-Bold">Sampling</text>
+        <text>A third level nests under the second, in the outline and in the contents.</text>
+      </layout>
+    </section>
+
+    <section>
+      <layout>
+        <bookmark label="Results"/>
+        <text font-size="l" font="Helvetica-Bold" color="primary">Results</text>
+        <text>Every entry in the contents is a link to its bookmark.</text>
+      </layout>
+    </section>
+
+  </document>
+</lpdf>
