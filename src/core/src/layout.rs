@@ -508,7 +508,7 @@ fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> 
         NodeKind::Stack   => split_stack(node, avail_w, target_h, full_page_h),
         NodeKind::Grid    => split_grid(node, avail_w, target_h, full_page_h),
         NodeKind::Cluster => split_cluster(node, avail_w, target_h),
-        NodeKind::Text    => split_text(node, avail_w, target_h),
+        NodeKind::Text    => split_text(node, avail_w, target_h, full_page_h),
         NodeKind::Table   => split_table(node, avail_w, target_h, full_page_h),
         NodeKind::Link    => split_stack(node, avail_w, target_h, full_page_h),
         // Frame, Flank, Split, Divider — atomic by design.
@@ -904,7 +904,11 @@ fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Sp
     SplitOutcome::First(first, vec![rest])
 }
 
-fn split_text(node: &Node, avail_w: f32, target_h: f32) -> SplitOutcome {
+/// Splits a text between lines, leaving at least `widows` lines for the next page and keeping at least
+/// `orphans` on this one. When this page cannot do both, the text moves on to the next page, where it fits
+/// whole or has more room. Only a text taller than a page, on a page too short to keep both rules, splits
+/// where the lines fit, because moving it on would change nothing and it would run past the end of the page.
+fn split_text(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
     let line_h  = node.font_size * 1.2;
     let lines   = wrap_text_split(node, avail_w);
     let n_lines = lines.len();
@@ -918,16 +922,16 @@ fn split_text(node: &Node, avail_w: f32, target_h: f32) -> SplitOutcome {
     if max_lines == 0 {
         return SplitOutcome::NothingFits(vec![node.clone()]);
     }
-    // Widow protection: if the last line of the first fragment has ≤ 2 atoms
-    // (a single word, an article, or a very short 2-word straggler), pull it
-    // back to the continuation page so the page does not end mid-phrase.
-    let split_at = if max_lines > 1 && lines[max_lines - 1].len() <= 2 {
-        max_lines - 1
-    } else {
-        max_lines
-    };
-    if split_at == 0 {
-        return SplitOutcome::NothingFits(vec![node.clone()]);
+    // Most lines this page may take and still leave `widows` for the next.
+    let widow_limit = n_lines.saturating_sub(node.widows);
+    let orphans     = node.orphans.max(1);
+    let mut split_at = max_lines.min(widow_limit);
+    if split_at < orphans {
+        let page_lines = ((full_page_h / line_h).floor().max(0.0)) as usize;
+        if n_lines <= page_lines || page_lines.min(widow_limit) >= orphans {
+            return SplitOutcome::NothingFits(vec![node.clone()]);
+        }
+        split_at = max_lines;
     }
     let first_atoms: Vec<SplitAtom> = lines[..split_at].iter().flatten().cloned().collect();
     let rest_atoms:  Vec<SplitAtom> = lines[split_at..].iter().flatten().cloned().collect();
@@ -3207,6 +3211,66 @@ mod tests {
         // The schema says so: break-before, break-after and keep-next act on the children of layout only.
         let tree = engine_render(&minimal(r#"<stack><text>ONE</text><text paginate="break-before">TWO</text></stack>"#));
         assert_eq!(tree["pages"].as_array().unwrap().len(), 1, "a break inside a stack is ignored");
+    }
+
+    // ── widows and orphans ────────────────────────────────────────────────────
+
+    /// The lines of a text on each page. The text has `lines` lines, each a word too wide to share its line, and a
+    /// frame before it leaves room for `room` of them on the first page (a page holds 785.89pt of 13.2pt lines).
+    fn lines_per_page(attrs: &str, lines: usize, room: usize) -> Vec<usize> {
+        let words: Vec<String> = (1..=lines).map(|n| format!("L{n:02}{}", "W".repeat(36))).collect();
+        let frame = 785.89 - 13.2 * room as f32 - 6.6;
+        let body = format!(r#"<frame height="{frame:.2}pt" /><text {attrs}>{}</text>"#, words.join(" "));
+        let tree = engine_render(&minimal(&body));
+        tree["pages"].as_array().unwrap().iter().map(|p| find_text_content(p).len()).collect()
+    }
+
+    #[test]
+    fn widows_and_orphans_pull_a_lone_last_line_back_to_the_next_page() {
+        // Room for 5 of 6 lines would leave 1 on the next page; by default it gets 2.
+        assert_eq!(lines_per_page("", 6, 5), vec![4, 2]);
+    }
+
+    #[test]
+    fn widows_and_orphans_move_a_text_whole_when_one_line_would_stay_behind() {
+        // Room for 1 of 6 lines would leave 1 on the first page; by default it keeps 2 or moves on.
+        assert_eq!(lines_per_page("", 6, 1), vec![0, 6]);
+    }
+
+    #[test]
+    fn widows_and_orphans_of_one_turn_protection_off() {
+        let off = r#"widows="1" orphans="1""#;
+        assert_eq!(lines_per_page(off, 6, 5), vec![5, 1], "a lone last line stays on the next page");
+        assert_eq!(lines_per_page(off, 6, 1), vec![1, 5], "a lone first line stays on the first page");
+    }
+
+    #[test]
+    fn widows_and_orphans_leave_a_text_too_short_to_split_whole() {
+        // 3 lines cannot give 2 to each page, so room for 2 of them moves all 3 on.
+        assert_eq!(lines_per_page("", 3, 2), vec![0, 3]);
+        assert_eq!(lines_per_page(r#"widows="1" orphans="1""#, 3, 2), vec![2, 1]);
+    }
+
+    #[test]
+    fn widows_attribute_sets_the_lines_kept_for_the_next_page() {
+        assert_eq!(lines_per_page("", 8, 6), vec![6, 2]);
+        assert_eq!(lines_per_page(r#"widows="3""#, 8, 6), vec![5, 3]);
+    }
+
+    #[test]
+    fn orphans_attribute_sets_the_lines_kept_on_the_first_page() {
+        assert_eq!(lines_per_page("", 8, 2), vec![2, 6]);
+        assert_eq!(lines_per_page(r#"orphans="3""#, 8, 2), vec![0, 8]);
+    }
+
+    #[test]
+    fn widows_and_orphans_split_where_the_lines_fit_when_no_page_could_keep_them() {
+        // At 300pt a page holds 2 lines, so 3 lines cannot be kept whole or split 2 and 2: moving on would only
+        // push the text past the end of the next page.
+        let tree = engine_render(&minimal(r#"<text font-size="300pt">L01 L02 L03</text>"#));
+        let lines: Vec<usize> =
+            tree["pages"].as_array().unwrap().iter().map(|p| find_text_content(p).len()).collect();
+        assert_eq!(lines, vec![2, 1]);
     }
 
     /// Helper: collect every "content" string of text nodes in a page tree.

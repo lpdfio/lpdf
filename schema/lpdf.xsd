@@ -962,6 +962,28 @@
       <xs:attribute name="color"     type="Color"/>
       <xs:attribute name="align"     type="TextAlignH"/>
       <xs:attribute name="width"     type="TokenScaleOrPt"/>
+      <xs:attribute name="widows">
+        <xs:annotation>
+          <xs:documentation>The fewest lines of the text that may stand alone at the top of the next page when it splits. Default 2. If fewer would be left, lines move from the first page to the next; 1 turns the protection off.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:positiveInteger">
+            <xs:minInclusive value="1"/>
+            <xs:maxInclusive value="10"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+      <xs:attribute name="orphans">
+        <xs:annotation>
+          <xs:documentation>The fewest lines of the text that may stand alone at the bottom of a page when it splits. Default 2. If fewer would fit, the whole text moves to the next page; 1 turns the protection off. When no split can keep both widows and orphans, even on an empty page, the text splits where the lines fit.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:positiveInteger">
+            <xs:minInclusive value="1"/>
+            <xs:maxInclusive value="10"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
       <xs:attribute name="paginate"  type="Paginate"/>
       <xs:attribute name="debug"     type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>

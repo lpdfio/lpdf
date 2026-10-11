@@ -226,6 +226,10 @@ pub struct Node {
     pub font_size: f32,
     pub text_color: Option<String>,
     pub text_align: TextAlign,
+    /// The fewest lines of a split text that may stand alone on the next page.
+    pub widows: usize,
+    /// The fewest lines of a split text that may stand alone on the page it starts on.
+    pub orphans: usize,
     // link
     pub url: Option<String>,
     // img (NodeKind::Img only)
@@ -258,6 +262,10 @@ pub struct Node {
     pub data_attrs: Option<Box<DataAttrs>>,
     pub children: Vec<Node>,
 }
+
+/// The lines of a split text kept together on each side of a page break when `widows` and `orphans` are not set.
+pub const DEFAULT_WIDOWS: usize = 2;
+pub const DEFAULT_ORPHANS: usize = 2;
 
 /// Pagination hint set via `paginate="…"` on any node.
 #[derive(Debug, Clone, PartialEq)]
@@ -394,6 +402,8 @@ struct ParsedNode {
     font_size: Option<f32>,     // None = inherit
     text_color: Option<String>,
     text_align: TextAlign,
+    widows: usize,
+    orphans: usize,
     url: Option<String>,
     image_name: Option<String>,
     img_height_constraint: Option<f32>,
@@ -450,6 +460,8 @@ impl ParsedNode {
             font_size: None,
             text_color: None,
             text_align: TextAlign::Left,
+            widows: DEFAULT_WIDOWS,
+            orphans: DEFAULT_ORPHANS,
             url: None,
             image_name: None,
             img_height_constraint: None,
@@ -510,7 +522,8 @@ impl Node {
             cols: 1, col_width: None, direction: Direction::Horizontal,
             color: None, thickness: 1.0, text_runs: Vec::new(),
             font: "Helvetica".to_string(), font_size: 11.0, text_color: None,
-            text_align: TextAlign::Left, url: None, image_name: None,
+            text_align: TextAlign::Left, widows: DEFAULT_WIDOWS, orphans: DEFAULT_ORPHANS,
+            url: None, image_name: None,
             img_height_constraint: None, barcode_type: None, barcode_data: None,
             barcode_ec: BarcodeEcLevel::M, barcode_hrt: false, barcode_color: None,
             barcode_bg: None, table_cols: String::new(), stripe: None,
@@ -593,6 +606,8 @@ fn resolve_node(
         font_size,
         text_color:            n.text_color,
         text_align:            n.text_align,
+        widows:                n.widows,
+        orphans:               n.orphans,
         url:                   n.url,
         image_name:            n.image_name,
         img_height_constraint: n.img_height_constraint,
@@ -1450,7 +1465,7 @@ fn apply_box_attrs(
 }
 
 /// Apply kind-specific layout attributes shared between the XML and JSON parsers.
-/// Text, Link, and Img are omitted — their content is format-specific.
+/// Link and Img are omitted, and Text keeps its runs to the parsers — their content is format-specific.
 fn apply_layout_kind_attrs(
     node:   &mut ParsedNode,
     a:      &impl Attrs,
@@ -1529,9 +1544,21 @@ fn apply_layout_kind_attrs(
                 other    => other,
             })?;
         }
-        NodeKind::Text | NodeKind::Link | NodeKind::Img | NodeKind::Barcode | NodeKind::Field => {}
+        NodeKind::Text => {
+            if let Some(v) = a.get("widows")  { node.widows  = parse_line_limit("widows", v)?; }
+            if let Some(v) = a.get("orphans") { node.orphans = parse_line_limit("orphans", v)?; }
+        }
+        NodeKind::Link | NodeKind::Img | NodeKind::Barcode | NodeKind::Field => {}
     }
     Ok(())
+}
+
+/// Read a `widows` or `orphans` value: a whole number of lines from 1 to 10.
+fn parse_line_limit(attr: &str, v: &str) -> Result<usize, String> {
+    match v.parse::<usize>() {
+        Ok(lines) if (1..=10).contains(&lines) => Ok(lines),
+        _ => Err(format!("invalid {attr} value: '{v}' — expected a whole number from 1 to 10")),
+    }
 }
 
 /// Apply `name` and `height` attributes for an `<img>` / `"img"` node.
@@ -2635,6 +2662,17 @@ mod tests {
         assert!(err.contains("at line"), "{err}");
         assert!(err.contains("always"),   "{err}");
         assert!(err.contains("break-before"), "{err}"); // allowed values present
+    }
+
+    #[test]
+    fn err_invalid_widows_and_orphans() {
+        for (attr, value) in [("widows", "0"), ("widows", "11"), ("orphans", "two"), ("orphans", "2.5")] {
+            let err = parse(&minimal(&format!(r#"<text {attr}="{value}">Words</text>"#))).unwrap_err();
+            assert!(err.contains("<text>"), "{err}");
+            assert!(err.contains("at line"), "{err}");
+            assert!(err.contains(&format!("invalid {attr} value: '{value}'")), "{err}");
+            assert!(err.contains("1 to 10"), "{err}"); // allowed values present
+        }
     }
 
     #[test]

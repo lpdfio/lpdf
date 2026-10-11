@@ -117,11 +117,17 @@ const UNTESTED: &[(&str, &str)] = &[
     ("img@paginate", PAGINATE),
     ("barcode@paginate", PAGINATE),
     ("table@paginate", PAGINATE),
+    ("text@widows", WIDOWS_AND_ORPHANS),
+    ("text@orphans", WIDOWS_AND_ORPHANS),
 ];
 
 /// Why `paginate` is untested here, which is the same for every element that has it.
 const PAGINATE: &str = "it moves content between pages and shows only where a page boundary falls at the box, which \
     the document here has none of; layout::tests::paginate_* cover each value";
+
+/// Why `widows` and `orphans` are untested here.
+const WIDOWS_AND_ORPHANS: &str = "they decide where a text splits between pages and show only where a page boundary falls \
+    inside the text, which the document here has none of; layout::tests::widows_and_orphans_* cover them";
 
 // ── What to try for free text ─────────────────────────────────────────────────
 

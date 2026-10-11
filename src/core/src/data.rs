@@ -222,7 +222,10 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, out: &mut Vec<N
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parse::{Align, BarcodeEcLevel, DataAttrs, Direction, HeightMode, Justify, Meta, NodeKind, Paginate, TextAlign};
+    use crate::parse::{
+        Align, BarcodeEcLevel, DataAttrs, DEFAULT_ORPHANS, DEFAULT_WIDOWS, Direction, HeightMode, Justify, Meta, NodeKind,
+        Paginate, TextAlign,
+    };
     use std::collections::HashMap;
 
     // ── Node / Document builders ──────────────────────────────────────────────
@@ -254,6 +257,8 @@ mod tests {
             font_size: 11.0,
             text_color: None,
             text_align: TextAlign::Left,
+            widows: DEFAULT_WIDOWS,
+            orphans: DEFAULT_ORPHANS,
             url: None,
             image_name: None,
             img_height_constraint: None,

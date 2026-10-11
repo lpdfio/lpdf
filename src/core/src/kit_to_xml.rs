@@ -707,6 +707,12 @@ mod tests {
     }
 
     #[test]
+    fn a_tree_text_with_widows_out_of_range_is_rejected() {
+        let err = crate::parse::parse_tree(&doc_with_text_attrs(r#"{"widows":"11"}"#)).err().expect("widows go from 1 to 10");
+        assert!(err.contains("invalid widows value: '11'"), "{err}");
+    }
+
+    #[test]
     fn a_tree_font_that_is_a_url_is_rejected() {
         let json = doc_with_assets_and_text(r#"{"fonts":[{"name":"heading","ref":"https://example.com/f.ttf"}]}"#);
         let err = crate::parse::parse_tree(&json).err().expect("a URL is not a registry key");
