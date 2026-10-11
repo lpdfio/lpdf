@@ -195,7 +195,6 @@ function show(rows) {
 
     const bad = rows.filter(r => ['FAILED', 'cancelled', 'MISSING'].includes(r.state))
     const busy = rows.filter(r => ['running', 'queued', 'waiting', 'not started'].includes(r.state))
-    const vscode = rows.find(r => r.repo === 'lpdf-vscode')
 
     if (bad.length) {
         console.log(`Not releasable: ${bad.map(r => `${r.repo} ${r.state.toLowerCase()}`).join(', ')}.`)
@@ -216,9 +215,8 @@ function show(rows) {
     }
     console.log('')
     console.log('Before releasing:')
-    console.log(`  1. The extension has no automated tests. Download lpdf-${tag} (the .vsix)`)
-    console.log(`     from ${vscode.run.html_url}`)
-    console.log('     then: code --install-extension lpdf.vsix, open an example, check preview and export.')
+    console.log(`  1. Check the extension by hand: make rc-vsix RC=${tag} downloads its .vsix`)
+    console.log('     and prints how to install it. Open an example, check preview and export.')
     console.log(`  2. Publish ${final} on this RC's commit, with typed release notes. This opens`)
     console.log('     the release form with tag and commit filled in:')
     console.log(`     ${WEB}/${OWNER}/${CORE}/releases/new?tag=${final}&target=${sha}&title=${final}`)

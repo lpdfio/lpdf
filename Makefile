@@ -23,7 +23,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         clone-adapters sync-license check-license \
         build-portal-ui build-pages-demo build-pages build-pages-docs check-pages-docs stamp-pages-docs dev-pages meta-pages \
         sync-examples check-examples-sync build-demo-viewer \
-        rc-next rc-check
+        rc-next rc-check rc-vsix
 
 build-wasm:
 	@echo ""
@@ -410,6 +410,13 @@ rc-next:
 #   make rc-check RC=v0.19.0-rc.2   a specific one
 rc-check:
 	@node scripts/rc-check.mjs "$(RC)"
+
+# Downloads the .vsix that lpdf-vscode's rc.yml built for a release candidate
+# into src/vscode/.rc/<tag>/, and prints how to install and check it. Needs gh.
+#   make rc-vsix                    the newest RC lpdf-vscode built
+#   make rc-vsix RC=v0.25.0-rc.2    a specific one
+rc-vsix:
+	@node scripts/rc-vsix.mjs "$(RC)"
 
 # ── Portal UI bundle ───────────────────────────────────────────────────────────
 # build:pages writes lpdf-pages.js / lpdf-docs.js straight into the pages asset
