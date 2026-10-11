@@ -216,8 +216,8 @@ function show(rows) {
     console.log('Before releasing:')
     console.log(`  1. Check the extension by hand: make rc-vsix RC=${tag} downloads its .vsix`)
     console.log('     and prints how to install it. Open an example, check preview and export.')
-    console.log(`  2. Ask Claude for rc-draft: it drafts the ${final} release on this RC, or brings`)
-    console.log('     a waiting draft up to it. Review the draft, then publish it on GitHub.')
+    console.log(`  2. Draft the ${final} release on this RC, or move a waiting draft to it.`)
+    console.log('     Review the draft, then publish it on GitHub.')
     if (mainSha && mainSha !== sha) {
         console.log('')
         console.log(`  Note: GitHub's ${BRANCH} has moved on since this RC. The release still goes`)

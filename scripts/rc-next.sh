@@ -131,7 +131,7 @@ if [ -n "$DRAFT_AT" ]; then
   done
   echo ""
   echo "  Note: a draft release for $TARGET is on $(printf '%s' "$DRAFT_AT" | cut -c1-7)$DRAFT_RC. Once this"
-  echo "        RC passes, ask Claude for rc-draft to bring the draft up to it."
+  echo "        RC passes, move the draft to it and add the new changes to its notes."
 fi
 
 echo ""
@@ -165,6 +165,6 @@ for r in $ALL_REPOS; do
   echo "    https://github.com/lpdfio/$r/actions/workflows/rc.yml"
 done
 echo ""
-echo "When all six are green, ask Claude for rc-draft: it drafts the $TARGET release"
-echo "on this RC, or brings a waiting draft up to it. Check the .vsix (make rc-vsix),"
-echo "review the draft, and publish it on GitHub."
+echo "When all six are green, draft the $TARGET release on this RC, or move a waiting"
+echo "draft to it. Check the .vsix (make rc-vsix), review the draft, and publish it"
+echo "on GitHub."
