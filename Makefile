@@ -358,12 +358,14 @@ package-vscode: build-vscode
 	@echo ""
 	cd src/vscode && npx vsce package --out lpdf.vsix --baseContentUrl https://github.com/lpdfio/lpdf-vscode/raw/HEAD
 
+# `code`, not code.cmd: the Mac has only `code`, and on Windows Git's sh runs the `code` script that sits next to
+# code.cmd. It has to be on PATH (on the Mac: "Install 'code' command in PATH" in VS Code's command palette).
 install-vscode: package-vscode
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Installing VS Code extension..."
 	@echo ""
-	code.cmd --install-extension src/vscode/lpdf.vsix --force
+	code --install-extension src/vscode/lpdf.vsix --force
 
 sync-license:
 	@echo ""
