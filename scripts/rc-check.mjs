@@ -97,10 +97,12 @@ async function api(path) {
     return res.json()
 }
 
-// A tag push run carries the tag as head_branch; runs come newest first.
+// A tag push run carries the tag as head_branch. The "Cut release candidate"
+// button (rc-next.yml) starts the run by hand on the tag instead, so any event
+// counts, and the run name "RC <tag>: …" matches too. Runs come newest first.
 async function findCoreRun() {
-    const runs = await api(`/repos/${OWNER}/${CORE}/actions/workflows/release.yml/runs?event=push&head_sha=${sha}&per_page=20`)
-    return runs?.workflow_runs.find(r => r.head_branch === tag) ?? null
+    const runs = await api(`/repos/${OWNER}/${CORE}/actions/workflows/release.yml/runs?head_sha=${sha}&per_page=20`)
+    return runs?.workflow_runs.find(r => r.head_branch === tag || (r.display_title || '').startsWith(`RC ${tag}:`)) ?? null
 }
 
 // rc.yml names each run "RC <tag>: …" (its run-name), which is how a run is
