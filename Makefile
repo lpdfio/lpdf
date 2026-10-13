@@ -397,7 +397,8 @@ check-license:
 # ── Release candidate ─────────────────────────────────────────────────────────
 # Interactive: works out the next vX.Y.0-rc.N from GitHub's tags, shows the
 # commit and what changed, and pushes the tag only after you confirm. The push
-# starts release.yml's RC job; nothing reaches a package registry.
+# starts release.yml's RC job; nothing reaches a package registry. The
+# "Cut release candidate" button on GitHub's Actions tab does the same.
 # Lpdf-devcycle.md §4.2.
 #   make rc-next                  next minor after the latest release
 #   make rc-next VERSION=v1.0.0   a specific version, e.g. a major bump

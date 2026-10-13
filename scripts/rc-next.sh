@@ -10,9 +10,24 @@
 #   make rc-next                  next minor after the latest release
 #   make rc-next VERSION=v1.0.0   a specific version, e.g. a major bump
 #
+#   --dry-run   show what would be tagged, and stop
+#   --yes       push without asking. The "Cut release candidate" button on
+#               GitHub's Actions tab (rc-next.yml) runs it this way
+#
 # Tags GitHub's main, never your local branch, and reads tags from GitHub
 # (git ls-remote), so stale or local-only tags can't skew the numbering.
 set -eu
+
+YES=""
+DRY_RUN=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --yes)     YES=1 ;;
+    --dry-run) DRY_RUN=1 ;;
+    *)         break ;;
+  esac
+  shift
+done
 
 REMOTE=origin
 BRANCH=main
@@ -82,7 +97,6 @@ fi
 NEW="$TARGET-rc.$N"
 
 # ── Show it ────────────────────────────────────────────────────────────────────
-SHORT=$(git rev-parse --short "$SHA")
 echo ""
 echo "-------------------------------"
 echo ">>> Next core release candidate"
@@ -112,8 +126,9 @@ if [ -n "$PREV_RC" ] && [ "${PREV_SHA:-}" = "$SHA" ]; then
   echo "  Note: $PREV_RC is already on this commit. A new RC would test the same"
   echo "        code. To retry after a flaky run, re-run that workflow instead."
 fi
+# Not with --yes: on GitHub there is no local work that could be missing.
 LOCAL=$(git rev-parse --verify --quiet "refs/heads/$BRANCH" || true)
-if [ -n "$LOCAL" ] && [ "$LOCAL" != "$SHA" ]; then
+if [ -z "$YES" ] && [ -n "$LOCAL" ] && [ "$LOCAL" != "$SHA" ]; then
   AHEAD=$(git rev-list --count "$SHA..$LOCAL" 2>/dev/null || echo "?")
   BEHIND=$(git rev-list --count "$LOCAL..$SHA" 2>/dev/null || echo "?")
   echo ""
@@ -135,16 +150,22 @@ if [ -n "$DRAFT_AT" ]; then
 fi
 
 echo ""
-echo "Pushing the tag starts release.yml on GitHub: tests, build, a GitHub"
-echo "pre-release, then core-rc to $(echo "$ALL_REPOS" | sed 's/ /, /g')."
-echo "Nothing is published to a package registry."
-echo ""
-printf 'Push %s? [y/N] ' "$NEW"
-read -r ANSWER || ANSWER=""
-case "$ANSWER" in
-  y|Y|yes|YES) ;;
-  *) echo "Nothing pushed."; exit 0 ;;
-esac
+if [ -n "$DRY_RUN" ]; then
+  echo "Dry run: nothing pushed."
+  exit 0
+fi
+if [ -z "$YES" ]; then
+  echo "Pushing the tag starts release.yml on GitHub: tests, build, a GitHub"
+  echo "pre-release, then core-rc to $(echo "$ALL_REPOS" | sed 's/ /, /g')."
+  echo "Nothing is published to a package registry."
+  echo ""
+  printf 'Push %s? [y/N] ' "$NEW"
+  read -r ANSWER || ANSWER=""
+  case "$ANSWER" in
+    y|Y|yes|YES) ;;
+    *) echo "Nothing pushed."; exit 0 ;;
+  esac
+fi
 
 # ── Tag and push ───────────────────────────────────────────────────────────────
 # Annotated, so the tag records who cut the RC and when. The core gate accepts
@@ -154,6 +175,10 @@ if ! git push --quiet "$REMOTE" "refs/tags/$NEW"; then
   git tag -d "$NEW" >/dev/null
   fail "push failed; the local tag was removed, nothing changed on GitHub"
 fi
+
+# A tag pushed with GitHub's GITHUB_TOKEN starts no workflow, so rc-next.yml
+# starts release.yml on the tag itself, and needs its name.
+[ -z "${GITHUB_OUTPUT:-}" ] || echo "tag=$NEW" >> "$GITHUB_OUTPUT"
 
 echo ""
 echo "Pushed $NEW."

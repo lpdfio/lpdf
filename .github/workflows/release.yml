@@ -12,10 +12,16 @@ run-name: "${{ contains(github.ref_name, '-') && format('RC {0}: build and test,
 #                 points at the same commit (see "Require a release candidate"),
 #                 then the approval gate, the GitHub Release, and `core-release`
 #                 to the five repos, which publish to their registries.
+#
+# The "Cut release candidate" button (rc-next.yml) starts this workflow by hand
+# on the RC tag it pushes, since a tag pushed with GITHUB_TOKEN starts nothing.
+# Run by hand, it builds release candidates only: a final release always comes
+# from a tag push, which publishing it on the Releases page makes.
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -28,6 +34,15 @@ jobs:
     name: Rust tests
     runs-on: ubuntu-latest
     steps:
+      # Run by hand, only on a release-candidate tag (see the top of this file).
+      - name: Check a manual run is on an RC tag
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          if ! echo "$GITHUB_REF" | grep -qE '^refs/tags/v[0-9]+\.[0-9]+\.0-rc\.[0-9]+$'; then
+            echo "::error::Run by hand, this workflow only builds a release candidate: pick a vX.Y.0-rc.N tag, not $GITHUB_REF_NAME. A final release comes from publishing it on the Releases page."
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
 
       # A final vX.Y.0 must have had a release candidate on the same commit, so
@@ -230,11 +245,11 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ── 3b. Publish GitHub Release + dispatch to adapters ───────────────────────
-  # Final vX.Y.0 only. RC tags take job 3a instead.
+  # Final vX.Y.0 only, and only from a tag push. RC tags take job 3a instead.
   release:
     name: Publish release
     needs: build
-    if: ${{ !contains(github.ref_name, '-') }}
+    if: ${{ github.event_name == 'push' && !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     environment: release   # optional manual-approval gate — remove if not needed
     steps:
