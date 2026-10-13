@@ -32,7 +32,7 @@ jobs:
   # ── 1. Tests ────────────────────────────────────────────────────────────────
   test:
     name: Rust tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # Run by hand, only on a release-candidate tag (see the top of this file).
       - name: Check a manual run is on an RC tag
@@ -83,7 +83,7 @@ jobs:
   build:
     name: Build artifacts
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
 
@@ -155,7 +155,7 @@ jobs:
     name: Publish release candidate
     needs: build
     if: ${{ contains(github.ref_name, '-') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The release App's key, which sends `core-rc` below, is a secret of this
     # environment, and only vX.Y.0-rc.N tags may use it: no branch's workflow
     # can read the key. The App can push to main past every lpdf repo's
@@ -250,7 +250,7 @@ jobs:
     name: Publish release
     needs: build
     if: ${{ github.event_name == 'push' && !contains(github.ref_name, '-') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: release   # optional manual-approval gate — remove if not needed
     steps:
       - uses: actions/checkout@v5

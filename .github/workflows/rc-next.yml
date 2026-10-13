@@ -34,7 +34,7 @@ permissions:
 jobs:
   cut:
     name: Cut release candidate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # The script tags GitHub's main whatever branch this runs from, but a
       # branch's copy of this workflow and the script may differ from main's.
