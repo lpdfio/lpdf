@@ -45,7 +45,7 @@ jobs:
           exit 1
 
       # Full history: the summary lists the commits since the last release.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
