@@ -212,7 +212,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.LPDF_RELEASE_APP_ID }}
+          client-id: ${{ vars.LPDF_RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.LPDF_RELEASE_APP_PRIVATE_KEY }}
           repositories: lpdf-js,lpdf-dotnet,lpdf-python,lpdf-vscode,lpdf-php,lpdf-api
 
@@ -321,7 +321,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.LPDF_RELEASE_APP_ID }}
+          client-id: ${{ vars.LPDF_RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.LPDF_RELEASE_APP_PRIVATE_KEY }}
           repositories: lpdf-js,lpdf-dotnet,lpdf-python,lpdf-vscode,lpdf-php,lpdf-api
 
@@ -345,7 +345,7 @@ jobs:
         id: app-token-main
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.LPDF_RELEASE_APP_ID }}
+          client-id: ${{ vars.LPDF_RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.LPDF_RELEASE_APP_PRIVATE_KEY }}
 
       # ── Changelog ───────────────────────────────────────────────────────────
