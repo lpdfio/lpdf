@@ -141,6 +141,11 @@ jobs:
     needs: build
     if: ${{ contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
+    # The release App's key, which sends `core-rc` below, is a secret of this
+    # environment, and only vX.Y.0-rc.N tags may use it: no branch's workflow
+    # can read the key. The App can push to main past every lpdf repo's
+    # ruleset, so the key is never a repo secret.
+    environment: rc
     env:
       TAG: ${{ github.ref_name }}
     steps:
@@ -290,8 +295,8 @@ jobs:
 
       # Mint a short-lived GitHub App token for all adapter dispatches.
       # Sending a repository_dispatch needs Contents:write on each adapter
-      # repo. The adapters push with their own GITHUB_TOKEN, never this one:
-      # it is revoked when this job ends, before any of them gets to push.
+      # repo. The adapters push with tokens they mint themselves, never this
+      # one: it is revoked when this job ends, before any of them gets to push.
       #
       # lpdf-api is not an adapter: it is the private repo holding the engine's Lambda, and its
       # release.yml deploys this release to lpdf-api-prod rather than publishing a package. It
@@ -317,6 +322,17 @@ jobs:
               -f "client_payload[version]=$VERSION"
           done
 
+      # main's ruleset takes changes through a PR only, and the release App is
+      # its one bypass actor. So the changelog commit below is pushed with a
+      # second token of the App, for this repo only; the dispatch token above
+      # stays scoped to the adapters.
+      - name: Mint GitHub App token for main
+        id: app-token-main
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.LPDF_RELEASE_APP_ID }}
+          private-key: ${{ secrets.LPDF_RELEASE_APP_PRIVATE_KEY }}
+
       # ── Changelog ───────────────────────────────────────────────────────────
       # Prepends this release's human-typed notes to CHANGELOG.md on main.
       #
@@ -331,6 +347,7 @@ jobs:
       - name: Update CHANGELOG.md
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APP_TOKEN: ${{ steps.app-token-main.outputs.token }}
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
@@ -374,4 +391,7 @@ jobs:
 
           git add CHANGELOG.md
           git diff --cached --quiet || git commit -m "changelog: $TAG"
-          git push origin main
+          # As the App: the empty extraheader drops the GITHUB_TOKEN header that
+          # checkout set, so git sends the App token from the URL instead.
+          git -c http.https://github.com/.extraheader= push \
+            "https://x-access-token:${APP_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" main
