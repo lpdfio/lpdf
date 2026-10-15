@@ -14,16 +14,16 @@
       <layout>
 
       <!-- running header: rendered identically on every page -->
-      <stack gap="xs">
+      <column gap="xs">
         <split align="center">
           <text font-size="s" font="Helvetica-Bold" color="ink">ACME ENGINEERING HANDBOOK</text>
           <text font-size="s" color="text-muted">Revision 2026.04</text>
         </split>
         <divider color="rule" thickness="xs" />
-      </stack>
+      </column>
 
       <!-- paginated flow content -->
-      <stack gap="m">
+      <column gap="m">
 
         <text font-size="xxl" font="Helvetica-Bold">Chapter 3 — Code Review</text>
         <text font-size="s" color="text-muted" font="Helvetica-Oblique">How we run reviews, why we run them this way, and what to expect as both author and reviewer.</text>
@@ -48,16 +48,16 @@
 
         <text font-size="s" color="text-muted" font="Helvetica-Oblique">— end of chapter —</text>
 
-      </stack>
+      </column>
 
       <!-- running footer: page numbers via {page}/{pages} substitution -->
-      <stack gap="xs">
+      <column gap="xs">
         <divider color="rule" thickness="xs" />
         <split align="center">
           <text font-size="xs" color="text-muted">© 2026 Acme Engineering</text>
           <text font-size="xs" color="text-muted">Page <span font="Helvetica-Bold">{page}</span> of <span font="Helvetica-Bold">{pages}</span></text>
         </split>
-      </stack>
+      </column>
 
       </layout>
     </section>

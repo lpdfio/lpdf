@@ -15,7 +15,7 @@
     <meta title="Shipping Label — ORD-20260412-0087" />
     <section background="surface">
       <layout>
-      <stack gap="0pt" height="full">
+      <column gap="0pt" height="full">
 
         <!-- carrier header -->
         <frame background="text" padding="m">
@@ -28,47 +28,47 @@
         </frame>
 
         <!-- ship-from / ship-to -->
-        <stack gap="0pt" border="xs rule">
+        <column gap="0pt" border="xs rule">
 
           <!-- from -->
           <frame padding="m" border="xs rule">
-            <stack gap="xs">
+            <column gap="xs">
               <text font-size="xs" font="Helvetica-Bold" color="text-muted">FROM</text>
               <text font-size="s" font="Helvetica-Bold">Acme Corp — Fulfillment Center</text>
               <text font-size="s">789 Warehouse Blvd</text>
               <text font-size="s">Oakland, CA 94601</text>
               <text font-size="s">US</text>
-            </stack>
+            </column>
           </frame>
 
           <!-- to -->
           <frame padding="m">
-            <stack gap="xs">
+            <column gap="xs">
               <text font-size="xs" font="Helvetica-Bold" color="text-muted">SHIP TO</text>
               <text font-size="l" font="Helvetica-Bold">Jane Doe</text>
               <text font-size="m">456 Elm Street, Apt 7B</text>
               <text font-size="m">Austin, TX 78701</text>
               <text font-size="m">US</text>
-            </stack>
+            </column>
           </frame>
 
-        </stack>
+        </column>
 
         <divider color="rule" thickness="s" />
 
         <!-- barcode placeholder + tracking -->
         <frame padding="m" height="fill">
-          <stack gap="s" align="center">
+          <column gap="s" align="center">
             <frame width="220pt" height="60pt" background="rule" radius="xs" />
             <text font-size="s" font="Courier-Bold">9400 1118 9922 3456 7890 12</text>
-          </stack>
+          </column>
         </frame>
 
         <divider color="rule" thickness="xs" />
 
         <!-- order details -->
         <frame padding="m">
-          <stack gap="s">
+          <column gap="s">
             <flank gap="m" align="center" end="true">
               <text font-size="xs" color="text-muted">ORDER</text>
               <text font-size="s" font="Helvetica-Bold">ORD-20260412-0087</text>
@@ -85,7 +85,7 @@
               <text font-size="xs" color="text-muted">SERVICE</text>
               <text font-size="s">Priority Mail 2-Day</text>
             </flank>
-          </stack>
+          </column>
         </frame>
 
         <divider color="rule" thickness="xs" />
@@ -98,7 +98,7 @@
           </flank>
         </frame>
 
-      </stack>
+      </column>
       </layout>
     </section>
   </document>

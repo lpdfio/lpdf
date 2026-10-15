@@ -22,14 +22,14 @@
       <split gap="0pt" align="start" height="full">
 
         <!-- main ticket body -->
-        <stack padding="m" gap="s" height="full" justify="between">
+        <column padding="m" gap="s" height="full" justify="between">
 
           <!-- top row: event name + badge -->
           <flank gap="m" align="start" end="true">
-            <stack gap="xs">
+            <column gap="xs">
               <text font-size="xs" font="Helvetica-Bold" color="brand">NORTHSTAR CONFERENCE 2026</text>
               <text font-size="xl" font="Helvetica-Bold" color="text">Full Access Pass</text>
-            </stack>
+            </column>
             <frame background="brand" padding="xs" radius="xs">
               <text font-size="xs" font="Helvetica-Bold" color="surface">GENERAL</text>
             </frame>
@@ -38,41 +38,41 @@
           <divider color="rule" thickness="xs" />
 
           <!-- details row -->
-          <cluster gap="l" align="center">
-            <stack gap="xs">
+          <row gap="l" align="center">
+            <column gap="xs">
               <text font-size="xs" color="text-muted">DATE</text>
               <text font-size="s" font="Helvetica-Bold">June 14–16, 2026</text>
-            </stack>
+            </column>
             <divider direction="vertical" color="rule" thickness="xs" />
-            <stack gap="xs">
+            <column gap="xs">
               <text font-size="xs" color="text-muted">VENUE</text>
               <text font-size="s" font="Helvetica-Bold">Moscone Center, SF</text>
-            </stack>
+            </column>
             <divider direction="vertical" color="rule" thickness="xs" />
-            <stack gap="xs">
+            <column gap="xs">
               <text font-size="xs" color="text-muted">DOOR</text>
               <text font-size="s" font="Helvetica-Bold">08:00 AM</text>
-            </stack>
-          </cluster>
+            </column>
+          </row>
 
           <!-- attendee -->
           <flank gap="m" align="end" end="true">
-            <stack gap="xs">
+            <column gap="xs">
               <text font-size="xs" color="text-muted">ATTENDEE</text>
               <text font-size="m" font="Helvetica-Bold">Jane Doe</text>
-            </stack>
+            </column>
             <text font-size="xs" color="text-muted"># GA-00842</text>
           </flank>
 
-        </stack>
+        </column>
 
         <!-- tear-off stub -->
         <frame width="90pt" background="stub-bg" padding="s" height="full">
-          <stack gap="s" align="center" justify="center" height="full">
+          <column gap="s" align="center" justify="center" height="full">
             <text font-size="xs" font="Helvetica-Bold" color="brand">NS26</text>
             <frame width="56pt" height="56pt" background="surface" radius="xs" />
             <text font-size="xs" color="surface">GA-00842</text>
-          </stack>
+          </column>
         </frame>
 
       </split>

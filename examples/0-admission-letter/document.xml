@@ -36,32 +36,32 @@
       </canvas>
 
       <layout>
-        <stack gap="l">
+        <column gap="l">
 
           <!-- letterhead: the logo is at the left on the same row, and each line is aligned to the right edge -->
-          <stack gap="xs">
+          <column gap="xs">
             <text align="right" font-size="xl" bold="true">Linden Vale University</text>
             <text align="right">Office of Admissions</text>
             <text align="right">1 College Walk, Linden Vale, NY 12999</text>
             <text align="right">admissions@lindenvale.example</text>
-          </stack>
+          </column>
 
           <text>March 14, 2027</text>
 
           <!-- recipient -->
-          <stack gap="xs">
+          <column gap="xs">
             <text>Ms. Amara Okafor</text>
             <text>18 Cedar Road</text>
             <text>Hartley, NY 12998</text>
-          </stack>
+          </column>
 
-          <stack gap="xs">
+          <column gap="xs">
             <text bold="true" font-size="l">Offer of admission: B.S. in Computer Science</text>
             <text font-size="s">Application reference LV-2027-04817</text>
-          </stack>
+          </column>
 
           <!-- body: the gap between paragraphs is the blank line -->
-          <stack gap="m">
+          <column gap="m">
             <text>Dear Amara,</text>
             <text>
               Congratulations. On behalf of the admissions committee, it is my pleasure to offer you
@@ -74,12 +74,12 @@
             </text>
 
             <!-- the offer in four lines: a bold label, then the value -->
-            <stack gap="xs">
+            <column gap="xs">
               <text><span bold="true">Program: </span>B.S. in Computer Science (four years, full time)</text>
               <text><span bold="true">Starts: </span>August 30, 2027</text>
               <text><span bold="true">Tuition: </span>Covered in full by the Founders Scholarship</text>
               <text><span bold="true">Reply by: </span>May 1, 2027</text>
-            </stack>
+            </column>
 
             <text>
               The offer is conditional on your final transcript: you must complete your senior
@@ -93,18 +93,18 @@
               <span href="mailto:admissions@lindenvale.example" underline="true">admissions@lindenvale.example</span>.
             </text>
             <text>We hope to welcome you in August.</text>
-          </stack>
+          </column>
 
           <!-- sign-off: a larger gap leaves room to sign -->
-          <stack gap="xl">
+          <column gap="xl">
             <text>Sincerely,</text>
-            <stack gap="xs">
+            <column gap="xs">
               <text bold="true">Dr. Helen Marsh</text>
               <text>Director of Admissions</text>
-            </stack>
-          </stack>
+            </column>
+          </column>
 
-        </stack>
+        </column>
       </layout>
     </section>
   </document>

@@ -75,7 +75,7 @@ impl Document {
 /// The `page_scope` is passed through directly so all PageScope variants work correctly.
 fn region_to_compat_node(reg: LayoutRegion) -> Node {
     Node {
-        kind:       NodeKind::Stack,
+        kind:       NodeKind::Column,
         page_scope: Some(reg.page.unwrap_or(PageScope::Each)),
         debug:      reg.debug,
         children:   reg.children,
@@ -326,14 +326,14 @@ pub enum Paginate {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeKind {
-    Stack,
+    Column,
     Flank,
     Table,
     TableHead,
     TableRow,
     TableCell,
     Split,
-    Cluster,
+    Row,
     Grid,
     Frame,
     Divider,
@@ -558,7 +558,7 @@ fn resolve_font_alias(name: &str, fonts: &HashMap<String, FontDef>) -> String {
 impl Node {
     pub fn layout_default() -> Node {
         Node {
-            kind: NodeKind::Stack,
+            kind: NodeKind::Column,
             gap: 0.0, padding: [0.0; 4], background: None, border: None, radius: 0.0,
             height_mode: HeightMode::Auto, width_constraint: None,
             page_scope: None, paginate: Paginate::None, debug: false,
@@ -1242,6 +1242,16 @@ fn xml_bookmark(elem: &roxmltree::Node) -> Result<Bookmark, String> {
 
 // ── Node parsing ──────────────────────────────────────────────────────────────
 
+/// What to write instead of a layout element the format no longer has, for the
+/// error a document using it gets.
+fn replaced_element_hint(tag: &str) -> Option<&'static str> {
+    match tag {
+        "stack"   => Some("renamed to <column>"),
+        "cluster" => Some("renamed to <row>"),
+        _         => None,
+    }
+}
+
 fn parse_node(
     elem:         &roxmltree::Node,
     tokens:       &Tokens,
@@ -1249,10 +1259,10 @@ fn parse_node(
 ) -> Result<ParsedNode, String> {
     let tag = elem.tag_name().name();
     let kind = match tag {
-        "stack"   => NodeKind::Stack,
+        "column"  => NodeKind::Column,
         "flank"   => NodeKind::Flank,
         "split"   => NodeKind::Split,
-        "cluster" => NodeKind::Cluster,
+        "row"     => NodeKind::Row,
         "grid"    => NodeKind::Grid,
         "frame"   => NodeKind::Frame,
         "divider" => NodeKind::Divider,
@@ -1265,7 +1275,10 @@ fn parse_node(
         "thead"   => NodeKind::TableHead,
         "tr"      => NodeKind::TableRow,
         "td"      => NodeKind::TableCell,
-        other     => return Err(format!("<{}>{}: unknown element", other, node_loc(elem))),
+        other     => return Err(match replaced_element_hint(other) {
+            Some(hint) => format!("<{}>{}: {hint}", other, node_loc(elem)),
+            None       => format!("<{}>{}: unknown element", other, node_loc(elem)),
+        }),
     };
 
     let mut node = ParsedNode::default_for(kind.clone());
@@ -1682,7 +1695,7 @@ fn apply_layout_kind_attrs(
     tokens: &Tokens,
 ) -> Result<(), String> {
     match node.kind {
-        NodeKind::Stack => {
+        NodeKind::Column => {
             node.align   = parse_align(a.get("align").unwrap_or("stretch"))?;
             node.justify = parse_justify(a.get("justify").unwrap_or("start"))?;
         }
@@ -1695,11 +1708,11 @@ fn apply_layout_kind_attrs(
             node.align = parse_align(a.get("align").unwrap_or("start"))?;
             node.equal = a.get("equal").map(|v| v == "true").unwrap_or(false);
         }
-        NodeKind::Cluster => {
+        NodeKind::Row => {
             node.align   = parse_align(a.get("align").unwrap_or("start"))?;
             let j_str = a.get("justify").unwrap_or("start");
             if j_str == "between" {
-                return Err("cluster does not support justify=\"between\"; use start, center, or end".into());
+                return Err("row does not support justify=\"between\"; use start, center, or end".into());
             }
             node.justify = parse_justify(j_str)?;
         }
@@ -2227,10 +2240,10 @@ fn parse_tree_node(
         .ok_or_else(|| "node missing 'type' field".to_string())?;
 
     let kind = match type_str {
-        "stack"   => NodeKind::Stack,
+        "column"  => NodeKind::Column,
         "flank"   => NodeKind::Flank,
         "split"   => NodeKind::Split,
-        "cluster" => NodeKind::Cluster,
+        "row"     => NodeKind::Row,
         "grid"    => NodeKind::Grid,
         "frame"   => NodeKind::Frame,
         "divider" => NodeKind::Divider,
@@ -2243,7 +2256,10 @@ fn parse_tree_node(
         "thead"   => NodeKind::TableHead,
         "tr"      => NodeKind::TableRow,
         "td"      => NodeKind::TableCell,
-        other => return Err(format!("unknown node type: '{other}'")),
+        other => return Err(match replaced_element_hint(other) {
+            Some(hint) => format!("node type '{other}': {hint}"),
+            None       => format!("unknown node type: '{other}'"),
+        }),
     };
 
     let mut node = ParsedNode::default_for(kind.clone());
@@ -2414,15 +2430,15 @@ mod tests {
     }
 
     #[test]
-    fn parse_stack_gap_and_children() {
+    fn parse_column_gap_and_children() {
         let mut doc = parse(&minimal(
-            r#"<stack gap="m"><frame /><frame /></stack>"#,
+            r#"<column gap="m"><frame /><frame /></column>"#,
         ))
         .unwrap();
         let pages = doc.section_layouts();
-        let stack = &pages[0].children[0];
-        assert_eq!(stack.gap, 8.0);
-        assert_eq!(stack.children.len(), 2);
+        let column = &pages[0].children[0];
+        assert_eq!(column.gap, 8.0);
+        assert_eq!(column.children.len(), 2);
     }
 
     #[test]
@@ -2474,13 +2490,13 @@ mod tests {
     fn font_size_inheritance() {
         let xml = r#"<lpdf version="1">
             <document size="a4"><section><layout>
-                <stack font-size="14pt"><text>Hello</text></stack>
+                <column font-size="14pt"><text>Hello</text></column>
             </layout></section></document>
         </lpdf>"#;
         let mut doc = parse(xml).unwrap();
         let pages = doc.section_layouts();
-        let stack = &pages[0].children[0];
-        let text  = &stack.children[0];
+        let column = &pages[0].children[0];
+        let text  = &column.children[0];
         assert_eq!(text.font_size, 14.0);
     }
 
@@ -2655,7 +2671,7 @@ mod tests {
         let xml = r#"<lpdf version="1">
             <document size="a4" margin="0pt">
                 <section>
-                    <layout><stack gap="m"><text>Hello</text></stack></layout>
+                    <layout><column gap="m"><text>Hello</text></column></layout>
                 </section>
             </document>
         </lpdf>"#;
@@ -2875,8 +2891,8 @@ mod tests {
 
     #[test]
     fn err_invalid_align() {
-        let err = parse(&minimal(r#"<stack align="middle" />"#)).unwrap_err();
-        assert!(err.contains("<stack>"),  "{err}");
+        let err = parse(&minimal(r#"<column align="middle" />"#)).unwrap_err();
+        assert!(err.contains("<column>"),  "{err}");
         assert!(err.contains("at line"), "{err}");
         assert!(err.contains("middle"),   "{err}");
         assert!(err.contains("start"),    "{err}"); // allowed values present
@@ -2884,8 +2900,8 @@ mod tests {
 
     #[test]
     fn err_invalid_justify() {
-        let err = parse(&minimal(r#"<stack justify="around" />"#)).unwrap_err();
-        assert!(err.contains("<stack>"),  "{err}");
+        let err = parse(&minimal(r#"<column justify="around" />"#)).unwrap_err();
+        assert!(err.contains("<column>"),  "{err}");
         assert!(err.contains("at line"), "{err}");
         assert!(err.contains("around"),   "{err}");
         assert!(err.contains("start"),    "{err}"); // allowed values present
@@ -2902,8 +2918,8 @@ mod tests {
 
     #[test]
     fn err_invalid_paginate() {
-        let err = parse(&minimal(r#"<stack paginate="always" />"#)).unwrap_err();
-        assert!(err.contains("<stack>"),  "{err}");
+        let err = parse(&minimal(r#"<column paginate="always" />"#)).unwrap_err();
+        assert!(err.contains("<column>"),  "{err}");
         assert!(err.contains("at line"), "{err}");
         assert!(err.contains("always"),   "{err}");
         assert!(err.contains("break-before"), "{err}"); // allowed values present
@@ -2921,11 +2937,21 @@ mod tests {
     }
 
     #[test]
-    fn err_cluster_rejects_justify_between() {
-        let err = parse(&minimal(r#"<cluster justify="between" />"#)).unwrap_err();
-        assert!(err.contains("<cluster>"), "{err}");
+    fn err_row_rejects_justify_between() {
+        let err = parse(&minimal(r#"<row justify="between" />"#)).unwrap_err();
+        assert!(err.contains("<row>"), "{err}");
         assert!(err.contains("at line"),  "{err}");
         assert!(err.contains("between"),   "{err}");
+    }
+
+    #[test]
+    fn err_renamed_layout_element_names_the_new_one() {
+        for (old, new) in [("stack", "<column>"), ("cluster", "<row>")] {
+            let err = parse(&minimal(&format!("<{old} />"))).unwrap_err();
+            assert!(err.contains(&format!("<{old}>")), "{err}");
+            assert!(err.contains("at line"), "{err}");
+            assert!(err.contains(new), "{err}");
+        }
     }
 
     #[test]
@@ -3054,25 +3080,25 @@ mod tests {
 
     #[test]
     fn err_frame_too_many_children() {
-        let err = parse(&minimal("<frame><stack /><stack /></frame>")).unwrap_err();
+        let err = parse(&minimal("<frame><column /><column /></frame>")).unwrap_err();
         assert!(err.contains("<frame>"),  "{err}");
         assert!(err.contains("at line"), "{err}");
     }
 
     #[test]
     fn err_table_bad_child() {
-        let err = parse(&minimal("<table><stack /></table>")).unwrap_err();
+        let err = parse(&minimal("<table><column /></table>")).unwrap_err();
         assert!(err.contains("<table>"),  "{err}");
         assert!(err.contains("at line"), "{err}");
-        assert!(err.contains("stack"),    "{err}");
+        assert!(err.contains("column"),    "{err}");
     }
 
     #[test]
     fn err_tr_bad_child() {
-        let err = parse(&minimal("<table><tr><stack /></tr></table>")).unwrap_err();
+        let err = parse(&minimal("<table><tr><column /></tr></table>")).unwrap_err();
         assert!(err.contains("<tr>"),     "{err}");
         assert!(err.contains("at line"), "{err}");
-        assert!(err.contains("stack"),    "{err}");
+        assert!(err.contains("column"),    "{err}");
     }
 
     // Category 5 — Asset reference
@@ -3121,7 +3147,7 @@ mod tests {
 
     #[test]
     fn bookmark_inside_a_container_is_carried_by_the_child_after_it() {
-        let bookmarks = bookmarks_of(r#"<stack><text>A</text><bookmark label="Inner" id="inner"/><text>B</text></stack>"#);
+        let bookmarks = bookmarks_of(r#"<column><text>A</text><bookmark label="Inner" id="inner"/><text>B</text></column>"#);
         assert_eq!(bookmarks.len(), 1);
         assert_eq!(bookmarks[0].id, "inner");
         assert_eq!(bookmarks[0].level, 1);
@@ -3171,8 +3197,8 @@ mod tests {
 
     #[test]
     fn bookmark_with_nothing_after_it_is_an_error() {
-        let err = parse(&minimal(r#"<stack><text>a</text><bookmark label="End"/></stack>"#)).unwrap_err();
-        assert!(err.contains("<stack>") && err.contains("End"), "{err}");
+        let err = parse(&minimal(r#"<column><text>a</text><bookmark label="End"/></column>"#)).unwrap_err();
+        assert!(err.contains("<column>") && err.contains("End"), "{err}");
     }
 
     #[test]

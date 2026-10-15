@@ -1,0 +1,161 @@
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf" />
+      <color name="surface"  value="#ffffff" />
+      <color name="bg"       value="#f5f7fa" />
+      <color name="accent"   value="#e8f0fc" />
+      <color name="muted"    value="#737373" />
+      <color name="rule"     value="#dde3ed" />
+    </colors>
+  </tokens>
+  <document size="a4" margin="40pt">
+    <meta title="lpdf Showcase — Stack" subject="Layout primitives" />
+
+      <!-- Column -->
+    <section background="surface">
+      <layout>
+      <column gap="xl">
+
+        <column gap="xs">
+          <text font-size="xxl" font="Helvetica-Bold" color="primary">Stack</text>
+          <text font-size="m" color="muted">Vertical flex layout — children stacked top-to-bottom</text>
+        </column>
+
+        <!-- align (cross-axis = horizontal) -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">align (cross-axis)</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">align="start" — children left, own width</text>
+            <column debug="true" align="start" gap="xs" background="bg" padding="s">
+              <text font-size="m">Short</text>
+              <text font-size="m">A much wider item</text>
+            </column>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">align="center" — children centered, own width</text>
+            <column debug="true" align="center" gap="xs" background="bg" padding="s">
+              <text font-size="m">Short</text>
+              <text font-size="m">A much wider item</text>
+            </column>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">align="end" — children right, own width</text>
+            <column debug="true" align="end" gap="xs" background="bg" padding="s">
+              <text font-size="m">Short</text>
+              <text font-size="m">A much wider item</text>
+            </column>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">align="stretch" (default) — children fill width</text>
+            <column debug="true" align="stretch" gap="xs" background="bg" padding="s">
+              <text font-size="m">Stretches to full width</text>
+              <text font-size="m">Same as container</text>
+            </column>
+          </column>
+        </column>
+
+        <!-- justify (main-axis = vertical, requires height) -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">justify (main-axis, needs fixed height)</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">justify="start" height="70pt"</text>
+            <column debug="true" justify="start" height="70pt" gap="xs" background="bg" padding="s">
+              <column background="accent" padding="xs"><text font-size="m">A</text></column>
+              <column background="accent" padding="xs"><text font-size="m">B</text></column>
+            </column>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">justify="center" height="70pt"</text>
+            <column debug="true" justify="center" height="70pt" gap="xs" background="bg" padding="s">
+              <column background="accent" padding="xs"><text font-size="m">A</text></column>
+              <column background="accent" padding="xs"><text font-size="m">B</text></column>
+            </column>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">justify="end" height="70pt"</text>
+            <column debug="true" justify="end" height="70pt" gap="xs" background="bg" padding="s">
+              <column background="accent" padding="xs"><text font-size="m">A</text></column>
+              <column background="accent" padding="xs"><text font-size="m">B</text></column>
+            </column>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">justify="between" height="70pt"</text>
+            <column debug="true" justify="between" height="70pt" background="bg" padding="s">
+              <column background="accent" padding="xs"><text font-size="m">A</text></column>
+              <column background="accent" padding="xs"><text font-size="m">B</text></column>
+            </column>
+          </column>
+        </column>
+
+        <!-- gap -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">gap</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">gap="xs"</text>
+            <column debug="true" gap="xs" background="bg" padding="s">
+              <text font-size="m">Alpha</text>
+              <text font-size="m">Beta</text>
+              <text font-size="m">Gamma</text>
+            </column>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">gap="m"</text>
+            <column debug="true" gap="m" background="bg" padding="s">
+              <text font-size="m">Alpha</text>
+              <text font-size="m">Beta</text>
+              <text font-size="m">Gamma</text>
+            </column>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">gap="xl"</text>
+            <column debug="true" gap="xl" background="bg" padding="s">
+              <text font-size="m">Alpha</text>
+              <text font-size="m">Beta</text>
+              <text font-size="m">Gamma</text>
+            </column>
+          </column>
+        </column>
+
+        <!-- padding -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">padding</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">padding="xs"</text>
+            <column debug="true" padding="xs" background="bg"><text font-size="m">Tight padding</text></column>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">padding="l"</text>
+            <column debug="true" padding="l" background="bg"><text font-size="m">Generous padding</text></column>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">padding="20pt 8pt" (vertical · horizontal)</text>
+            <column debug="true" padding="20pt 8pt" background="bg"><text font-size="m">Asymmetric padding</text></column>
+          </column>
+        </column>
+
+        <!-- border · radius -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">border · radius</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">border="xs rule" radius="xs"</text>
+            <column padding="s" border="xs rule" radius="xs"><text font-size="m">Subtle card</text></column>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">border="s primary" radius="l"</text>
+            <column padding="m" border="s primary" radius="l"><text font-size="m">Bold rounded border</text></column>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">background="accent" radius="m" padding="m"</text>
+            <column background="accent" radius="m" padding="m"><text font-size="m">Filled background with radius</text></column>
+          </column>
+        </column>
+
+      </column>
+      </layout>
+    </section>
+
+  </document>
+</lpdf>

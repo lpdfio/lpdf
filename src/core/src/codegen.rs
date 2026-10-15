@@ -158,10 +158,10 @@ fn js_layout_method(tag: &str) -> &'static str {
         "canvas"   => "canvas",
         "layer"    => "layer",
         "tokens"   => "tokens",
-        "stack"    => "stack",
+        "column"   => "column",
         "flank"    => "flank",
         "split"    => "split",
-        "cluster"  => "cluster",
+        "row"      => "row",
         "grid"     => "grid",
         "frame"    => "frame",
         "link"     => "link",
@@ -206,10 +206,10 @@ fn dotnet_layout_method(tag: &str) -> &'static str {
         "canvas"   => "Canvas",
         "layer"    => "Layer",
         "tokens"   => "Tokens",
-        "stack"    => "Stack",
+        "column"   => "Column",
         "flank"    => "Flank",
         "split"    => "Split",
-        "cluster"  => "Cluster",
+        "row"      => "Row",
         "grid"     => "Grid",
         "frame"    => "Frame",
         "link"     => "Link",
@@ -1527,10 +1527,10 @@ fn python_layout_method(tag: &str) -> &'static str {
         "canvas"   => "canvas",
         "layer"    => "layer",
         "tokens"   => "tokens",
-        "stack"    => "stack",
+        "column"   => "column",
         "flank"    => "flank",
         "split"    => "split",
-        "cluster"  => "cluster",
+        "row"      => "row",
         "grid"     => "grid",
         "frame"    => "frame",
         "link"     => "link",
@@ -1614,16 +1614,16 @@ mod tests {
   <document>
     <section>
       <layout>
-        <stack>
+        <column>
           <text>Hi</text>
-        </stack>
+        </column>
       </layout>
     </section>
   </document>
 </lpdf>"#;
         let opts = CodegenOptions { target: "js".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
-        assert!(out.contains("L.stack(NoAttr, ["));
+        assert!(out.contains("L.column(NoAttr, ["));
     }
 
     #[test]
@@ -1833,16 +1833,16 @@ mod tests {
   <document>
     <section>
       <layout>
-        <stack>
+        <column>
           <text>Hi</text>
-        </stack>
+        </column>
       </layout>
     </section>
   </document>
 </lpdf>"#;
         let opts = CodegenOptions { target: "dotnet".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
-        assert!(out.contains("L.Stack(NoAttr, ["));
+        assert!(out.contains("L.Column(NoAttr, ["));
     }
 
     #[test]
@@ -1957,16 +1957,16 @@ mod tests {
   <document>
     <section>
       <layout>
-        <stack>
+        <column>
           <text>Hi</text>
-        </stack>
+        </column>
       </layout>
     </section>
   </document>
 </lpdf>"#;
         let opts = CodegenOptions { target: "php".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
-        assert!(out.contains("L::stack(NoAttr, ["));
+        assert!(out.contains("L::column(NoAttr, ["));
     }
 
     #[test]
@@ -2070,16 +2070,16 @@ mod tests {
   <document>
     <section>
       <layout>
-        <stack>
+        <column>
           <text>Hi</text>
-        </stack>
+        </column>
       </layout>
     </section>
   </document>
 </lpdf>"#;
         let opts = CodegenOptions { target: "python".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
-        assert!(out.contains("L.stack(NoAttr, ["));
+        assert!(out.contains("L.column(NoAttr, ["));
     }
 
     #[test]
@@ -2175,17 +2175,17 @@ mod tests {
   <document>
     <section>
       <layout>
-        <stack>
+        <column>
           <text>A</text>
           <text>B</text>
-        </stack>
+        </column>
       </layout>
     </section>
   </document>
 </lpdf>"#;
         let opts = CodegenOptions { target: "python".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
-        // Last child of stack must not have trailing comma
+        // Last child of column must not have trailing comma
         assert!(!out.contains("L.text(NoAttr, ['B']),"));
         assert!(out.contains("L.text(NoAttr, ['B'])"));
     }
@@ -2249,10 +2249,10 @@ mod tests {
 
     #[test]
     fn test_fragment_nested() {
-        let xml = r#"<stack><text>A</text><text>B</text></stack>"#;
+        let xml = r#"<column><text>A</text><text>B</text></column>"#;
         let opts = CodegenOptions { target: "js".into(), indent: 4 };
         let out  = codegen_fragment(xml, &opts).unwrap();
-        assert!(out.contains("L.stack("));
+        assert!(out.contains("L.column("));
         assert!(out.contains("L.text(NoAttr, ['A'])"));
         assert!(out.contains("L.text(NoAttr, ['B'])"));
     }

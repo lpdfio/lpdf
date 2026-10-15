@@ -7,7 +7,7 @@
                each read their own scale, so m is a different number for a gap and for a font
       assets   declare the fonts you use, then pick one with font="..."
       layout   split puts two columns side by side, flank puts a label beside a value,
-               cluster wraps tags onto new lines, grid makes equal columns
+               row wraps tags onto new lines, grid makes equal columns
   -->
   <assets>
     <!-- a serif for headings against a sans-serif for text; these two are built into every PDF.
@@ -35,94 +35,94 @@
         <split gap="0pt" height="full">
 
           <!-- sidebar: its own background, as tall as the page -->
-          <stack width="190pt" height="full" padding="l" gap="l" background="surface-alt">
+          <column width="190pt" height="full" padding="l" gap="l" background="surface-alt">
 
-            <stack gap="xs">
+            <column gap="xs">
               <text font="heading" font-size="xl" color="primary">Jordan Ellis</text>
               <text font-size="s" color="text-muted">Senior Software Engineer</text>
-            </stack>
+            </column>
 
             <divider color="rule" thickness="xs" />
 
-            <stack gap="s">
+            <column gap="s">
               <text font="heading" font-size="m">Contact</text>
               <text font-size="s" color="text-muted">jordan.ellis@example.com</text>
               <text font-size="s" color="text-muted">+1 555 0142</text>
               <text font-size="s" color="text-muted">Portland, OR</text>
               <text font-size="s" color="text-muted">github.com/jordan-ellis</text>
-            </stack>
+            </column>
 
             <divider color="rule" thickness="xs" />
 
-            <!-- a cluster wraps its children onto new lines, like words in a paragraph -->
-            <stack gap="s">
+            <!-- a row wraps its children onto new lines, like words in a paragraph -->
+            <column gap="s">
               <text font="heading" font-size="m">Skills</text>
-              <cluster gap="s">
+              <row gap="s">
                 <frame padding="s" border="xs primary" radius="s"><text font-size="xs" color="primary">Rust</text></frame>
                 <frame padding="s" border="xs primary" radius="s"><text font-size="xs" color="primary">TypeScript</text></frame>
                 <frame padding="s" border="xs primary" radius="s"><text font-size="xs" color="primary">WebAssembly</text></frame>
                 <frame padding="s" border="xs primary" radius="s"><text font-size="xs" color="primary">PostgreSQL</text></frame>
                 <frame padding="s" border="xs primary" radius="s"><text font-size="xs" color="primary">Kubernetes</text></frame>
                 <frame padding="s" border="xs primary" radius="s"><text font-size="xs" color="primary">Go</text></frame>
-              </cluster>
-            </stack>
+              </row>
+            </column>
 
             <divider color="rule" thickness="xs" />
 
-            <stack gap="s">
+            <column gap="s">
               <text font="heading" font-size="m">Education</text>
-              <stack gap="xs">
+              <column gap="xs">
                 <text font-size="s" bold="true">B.S. Computer Science</text>
                 <text font-size="s" color="text-muted">Oregon State University, 2014</text>
-              </stack>
-            </stack>
+              </column>
+            </column>
 
             <divider color="rule" thickness="xs" />
 
-            <stack gap="s">
+            <column gap="s">
               <text font="heading" font-size="m">Languages</text>
               <text font-size="s" color="text-muted">English (native)</text>
               <text font-size="s" color="text-muted">Spanish (professional)</text>
-            </stack>
+            </column>
 
-          </stack>
+          </column>
 
           <!-- main column -->
-          <stack padding="xl" gap="l" height="fill">
+          <column padding="xl" gap="l" height="fill">
 
-            <stack gap="s">
+            <column gap="s">
               <text font="heading" font-size="l" color="primary">Profile</text>
               <divider color="primary" thickness="xs" />
               <text font-size="m">
                 Software engineer with ten years of experience building fast, reliable systems.
                 I like small teams, clear interfaces and code that is easy to delete.
               </text>
-            </stack>
+            </column>
 
             <!-- a grid makes equal columns: three figures, one per cell -->
             <grid cols="3" gap="m">
-              <stack gap="xs">
+              <column gap="xs">
                 <text font="heading" font-size="xl" color="primary">10 yrs</text>
                 <text font-size="s" color="text-muted">in production systems</text>
-              </stack>
-              <stack gap="xs">
+              </column>
+              <column gap="xs">
                 <text font="heading" font-size="xl" color="primary">50M</text>
                 <text font-size="s" color="text-muted">events a day, one pipeline</text>
-              </stack>
-              <stack gap="xs">
+              </column>
+              <column gap="xs">
                 <text font="heading" font-size="xl" color="primary">-40%</text>
                 <text font-size="s" color="text-muted">p99 latency after the rewrite</text>
-              </stack>
+              </column>
             </grid>
 
-            <stack gap="m">
+            <column gap="m">
               <text font="heading" font-size="l" color="primary">Experience</text>
               <divider color="primary" thickness="xs" />
-              <stack gap="l">
+              <column gap="l">
 
               <!-- end="true": the first child takes the space, the others sit at the right edge.
                    A bullet is a flank too: a narrow marker, then text that fills the rest -->
-              <stack gap="s">
+              <column gap="s">
                 <flank end="true" gap="m" align="center">
                   <text bold="true">Staff Engineer, Northwind Data</text>
                   <text font-size="s" color="text-muted">2021 to present</text>
@@ -135,9 +135,9 @@
                   <text width="8pt" color="primary">•</text>
                   <text>Cut p99 latency by forty percent with a custom allocator and lock-free queues.</text>
                 </flank>
-              </stack>
+              </column>
 
-              <stack gap="s">
+              <column gap="s">
                 <flank end="true" gap="m" align="center">
                   <text bold="true">Senior Engineer, Brightside Labs</text>
                   <text font-size="s" color="text-muted">2017 to 2021</text>
@@ -150,9 +150,9 @@
                   <text width="8pt" color="primary">•</text>
                   <text>Moved a monolith to services and cut deploys from forty-five minutes to three.</text>
                 </flank>
-              </stack>
+              </column>
 
-              <stack gap="s">
+              <column gap="s">
                 <flank end="true" gap="m" align="center">
                   <text bold="true">Software Engineer, Orion Systems</text>
                   <text font-size="s" color="text-muted">2014 to 2017</text>
@@ -165,35 +165,35 @@
                   <text width="8pt" color="primary">•</text>
                   <text>Shipped the cloud SDKs that three enterprise customers adopted in the first year.</text>
                 </flank>
-              </stack>
-              </stack>
-            </stack>
+              </column>
+              </column>
+            </column>
 
-            <!-- cards: a grid of boxes, each a stack with its own background and border -->
-            <stack gap="m">
+            <!-- cards: a grid of boxes, each a column with its own background and border -->
+            <column gap="m">
               <text font="heading" font-size="l" color="primary">Selected projects</text>
               <divider color="primary" thickness="xs" />
               <grid cols="2" gap="m">
-                <stack gap="xs" padding="m" background="surface-alt" radius="s">
+                <column gap="xs" padding="m" background="surface-alt" radius="s">
                   <text bold="true">tinyqueue</text>
                   <text font-size="s" color="text-muted">A lock-free queue for Rust, used by four open-source projects.</text>
-                </stack>
-                <stack gap="xs" padding="m" background="surface-alt" radius="s">
+                </column>
+                <column gap="xs" padding="m" background="surface-alt" radius="s">
                   <text bold="true">pgwatch</text>
                   <text font-size="s" color="text-muted">A small tool that explains slow PostgreSQL queries in plain words.</text>
-                </stack>
-                <stack gap="xs" padding="m" background="surface-alt" radius="s">
+                </column>
+                <column gap="xs" padding="m" background="surface-alt" radius="s">
                   <text bold="true">Edge cache talk</text>
                   <text font-size="s" color="text-muted">Gave a conference talk on tail latency and what causes it.</text>
-                </stack>
-                <stack gap="xs" padding="m" background="surface-alt" radius="s">
+                </column>
+                <column gap="xs" padding="m" background="surface-alt" radius="s">
                   <text bold="true">Mentoring</text>
                   <text font-size="s" color="text-muted">Mentor in a program that places career changers in engineering roles.</text>
-                </stack>
+                </column>
               </grid>
-            </stack>
+            </column>
 
-          </stack>
+          </column>
 
         </split>
       </layout>

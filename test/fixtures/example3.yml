@@ -21,7 +21,7 @@ document:
   sections:
     - background: surface
       layout:
-        - stack:
+        - column:
             attr: { gap: l, height: full, justify: between }
             nodes:
 
@@ -29,7 +29,7 @@ document:
               - flank:
                   attr: { gap: m, align: start, end: true }
                   nodes:
-                    - stack:
+                    - column:
                         attr: { gap: xs }
                         nodes:
                           - text:
@@ -44,7 +44,7 @@ document:
                           - text:
                               attr: { font-size: s, color: text-muted }
                               _: billing@acmecorp.example
-                    - stack:
+                    - column:
                         attr: { gap: xs, align: end }
                         nodes:
                           - text:
@@ -60,7 +60,7 @@ document:
               - split:
                   attr: { gap: l, align: start }
                   nodes:
-                    - stack:
+                    - column:
                         attr: { gap: xs }
                         nodes:
                           - text:
@@ -78,7 +78,7 @@ document:
                           - text:
                               attr: { font-size: s, color: text-muted }
                               _: accounts@brightlabs.example
-                    - stack:
+                    - column:
                         attr: { gap: xs, align: end }
                         nodes:
                           - flank:
@@ -118,7 +118,7 @@ document:
                     - split:
                         attr: { gap: m, align: center }
                         nodes:
-                          - stack:
+                          - column:
                               attr: { gap: xs }
                               nodes:
                                 - flank:
@@ -138,7 +138,7 @@ document:
                                           _: Amount
 
               # line items
-              - stack:
+              - column:
                   attr: { gap: xs, height: fill }
                   nodes:
 
@@ -146,7 +146,7 @@ document:
                     - flank:
                         attr: { gap: m, align: center, end: true }
                         nodes:
-                          - stack:
+                          - column:
                               attr: { gap: xs }
                               nodes:
                                 - text:
@@ -170,7 +170,7 @@ document:
                     - flank:
                         attr: { gap: m, align: center, end: true }
                         nodes:
-                          - stack:
+                          - column:
                               attr: { gap: xs }
                               nodes:
                                 - text:
@@ -194,7 +194,7 @@ document:
                     - flank:
                         attr: { gap: m, align: center, end: true }
                         nodes:
-                          - stack:
+                          - column:
                               attr: { gap: xs }
                               nodes:
                                 - text:
@@ -215,10 +215,10 @@ document:
                     - divider: { attr: { color: rule, thickness: xs } }
 
               # totals
-              - cluster:
+              - row:
                   attr: { justify: end }
                   nodes:
-                    - stack:
+                    - column:
                         attr: { gap: xs, width: 200pt }
                         nodes:
                           - flank:
@@ -253,7 +253,7 @@ document:
               - divider: { attr: { color: rule, thickness: xs } }
 
               # footer: payment instructions
-              - stack:
+              - column:
                   attr: { gap: xs }
                   nodes:
                     - text: { attr: { font-size: s, font: Helvetica-Bold }, _: Payment instructions }

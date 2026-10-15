@@ -37,7 +37,7 @@ const EXPECTED = {
     CanvasTextAttr: attributes('text', 'primitives'),
     CanvasImgAttr: attributes('img', 'primitives'),
 };
-for (const element of ['stack', 'flank', 'split', 'cluster', 'grid', 'frame', 'link', 'divider', 'span', 'img',
+for (const element of ['column', 'flank', 'split', 'row', 'grid', 'frame', 'link', 'divider', 'span', 'img',
     'barcode', 'text', 'td', 'thead', 'tr', 'table', 'field', 'bookmark']) {
     EXPECTED[`${element[0].toUpperCase()}${element.slice(1)}Attr`] = attributes(element);
 }

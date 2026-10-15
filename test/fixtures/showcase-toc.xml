@@ -30,20 +30,20 @@
     <section type="toc" toc-indent-step="16pt">
       <bookmark label="Contents" id="contents"/>
       <layout>
-        <stack gap="m">
+        <column gap="m">
           <text font-size="xl" font="Helvetica-Bold" color="primary">Contents</text>
           <divider color="rule" thickness="xs"/>
-          <stack gap="xs">
-            <stack data-source="$toc">
+          <column gap="xs">
+            <column data-source="$toc">
               <link href="#">
                 <split>
                   <text data-value="label">Entry</text>
                   <text data-value="page" color="muted">0</text>
                 </split>
               </link>
-            </stack>
-          </stack>
-        </stack>
+            </column>
+          </column>
+        </column>
       </layout>
     </section>
 

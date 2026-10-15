@@ -35,7 +35,7 @@ const engine = L.engine()
 const doc = L.document({ size: 'letter', margin: '48pt' }, [
     L.section(NoAttr, [
         L.layout(NoAttr, [
-            L.stack({ gap: '24pt' }, [
+            L.column({ gap: '24pt' }, [
                 L.split(NoAttr, [
                     L.text({ fontSize: '8pt', color: '#888888' }, ['ACME CORP']),
                     L.text({ fontSize: '22pt', bold: 'true' }, ['Project Proposal']),
@@ -71,7 +71,7 @@ var engine = L.Engine();
 var doc = L.Document(new() { Size = "letter", Margin = "48pt" }, [
     L.Section(NoAttr, [
         L.Layout(NoAttr, [
-            L.Stack(new() { Gap = "24pt" }, [
+            L.Column(new() { Gap = "24pt" }, [
                 L.Split(NoAttr, [
                     L.Text(new() { FontSize = "8pt", Color = "#888888" }, ["ACME CORP"]),
                     L.Text(new() { FontSize = "22pt", Bold = "true" }, ["Project Proposal"]),
@@ -101,9 +101,9 @@ composer require lpdfio/lpdf
 ```php
 use Lpdf\L;
 use Lpdf\Kit\DocumentAttr;
+use Lpdf\Layout\ColumnAttr;
 use Lpdf\Layout\DividerAttr;
 use Lpdf\Layout\FlankAttr;
-use Lpdf\Layout\StackAttr;
 use Lpdf\Layout\TextAttr;
 use const Lpdf\NoAttr;
 
@@ -112,7 +112,7 @@ $engine = L::engine();
 $doc = L::document(new DocumentAttr(size: 'letter', margin: '48pt'), [
     L::section(NoAttr, [
         L::layout(NoAttr, [
-            L::stack(new StackAttr(gap: '24pt'), [
+            L::column(new ColumnAttr(gap: '24pt'), [
                 L::split(NoAttr, [
                     L::text(new TextAttr(fontSize: '8pt', color: '#888888'), ['ACME CORP']),
                     L::text(new TextAttr(fontSize: '22pt', bold: 'true'), ['Project Proposal']),
@@ -140,14 +140,14 @@ pip install lpdfio-lpdf
 ```
 
 ```python
-from lpdf import L, NoAttr, DocumentAttr, StackAttr, TextAttr, DividerAttr, FlankAttr
+from lpdf import L, NoAttr, DocumentAttr, ColumnAttr, TextAttr, DividerAttr, FlankAttr
 
 engine = L.engine()
 
 doc = L.document(DocumentAttr(size='letter', margin='48pt'), [
     L.section(NoAttr, [
         L.layout(NoAttr, [
-            L.stack(StackAttr(gap='24pt'), [
+            L.column(ColumnAttr(gap='24pt'), [
                 L.split(NoAttr, [
                     L.text(TextAttr(font_size='8pt', color='#888888'), ['ACME CORP']),
                     L.text(TextAttr(font_size='22pt', bold='true'), ['Project Proposal']),

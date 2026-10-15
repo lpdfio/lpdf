@@ -19,48 +19,48 @@
       <layout>
         <!-- page="each" — header on all pages -->
         <region pin="top" page="each">
-          <stack background="primary" padding="8pt 40pt">
+          <column background="primary" padding="8pt 40pt">
             <text font-size="m" font="Helvetica-Bold" color="surface">Header — every page (each)</text>
-          </stack>
+          </column>
         </region>
 
         <!-- page="first" — banner on page 1 only -->
         <region pin="top" page="first">
-          <stack background="accent" padding="6pt 40pt">
+          <column background="accent" padding="6pt 40pt">
             <text font-size="s" color="primary">First-page banner (first)</text>
-          </stack>
+          </column>
         </region>
 
         <!-- page="last" — footer on last page only -->
         <region pin="bottom" page="last">
-          <stack padding="6pt 40pt">
+          <column padding="6pt 40pt">
             <text font-size="s" color="muted">Last-page footer (last)</text>
-          </stack>
+          </column>
         </region>
 
         <!-- page="odd" — alternate header on odd pages (1, 3, 5…) -->
         <region pin="top" page="odd">
-          <stack padding="4pt 40pt">
+          <column padding="4pt 40pt">
             <text font-size="xs" color="muted">Odd-page sub-header (odd)</text>
-          </stack>
+          </column>
         </region>
 
         <!-- page="even" — alternate header on even pages (2, 4, 6…) -->
         <region pin="top" page="even">
-          <stack padding="4pt 40pt">
+          <column padding="4pt 40pt">
             <text font-size="xs" color="muted">Even-page sub-header (even)</text>
-          </stack>
+          </column>
         </region>
 
         <!-- page="2-3" — footer only on pages 2 and 3 -->
         <region pin="bottom" page="2-3">
-          <stack padding="4pt 40pt">
+          <column padding="4pt 40pt">
             <text font-size="xs" color="muted">Pages 2–3 only footer (2-3)</text>
-          </stack>
+          </column>
         </region>
 
         <!-- Flow content: enough paragraphs to produce 4+ pages -->
-        <stack gap="m" padding="40pt">
+        <column gap="m" padding="40pt">
           <text font-size="xl" font="Helvetica-Bold" color="primary">Region PageScope Demo</text>
           <text font-size="m" color="muted">
             This fixture exercises all PageScope variants on layout regions.
@@ -97,7 +97,7 @@
           <text font-size="m">Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit.</text>
           <text font-size="m">Dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit.</text>
           <text font-size="m">Final paragraph confirming the last-page footer should now be visible at the bottom of this page.</text>
-        </stack>
+        </column>
       </layout>
     </section>
   </document>

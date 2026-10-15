@@ -5,7 +5,7 @@
     <meta title="Getting Started with lpdf" />
     <section>
       <layout>
-      <stack gap="l">
+      <column gap="l">
 
         <!-- title -->
         <text font-size="xxl" font="Helvetica-Bold">Getting Started with lpdf</text>
@@ -16,7 +16,7 @@
         <!-- paragraph 2 -->
         <text font-size="m">The layout model provides five composable primitives — stack, flank, split, cluster, and grid — each handling a specific axis of composition. Any primitive can nest inside any other, giving you the flexibility to build anything from a simple one-page document to a complex multi-page report without writing a single line of imperative code.</text>
 
-      </stack>
+      </column>
       </layout>
     </section>
   </document>

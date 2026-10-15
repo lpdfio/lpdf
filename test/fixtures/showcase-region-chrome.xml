@@ -19,7 +19,7 @@
     <layout>
       <!-- Pinned header: appears on every page -->
       <region pin="top" page="each">
-        <stack background="primary" padding="12pt 40pt" gap="xs">
+        <column background="primary" padding="12pt 40pt" gap="xs">
           <flank>
             <text font-size="l" font="Helvetica-Bold" color="surface">
               Annual Report 2026
@@ -28,36 +28,36 @@
               lpdf.io
             </text>
           </flank>
-        </stack>
+        </column>
         <divider color="accent" thickness="m"/>
       </region>
 
       <!-- Pinned footer: appears on every page -->
       <region pin="bottom" page="each">
         <divider color="rule" thickness="xs"/>
-        <stack padding="8pt 40pt" gap="xs">
+        <column padding="8pt 40pt" gap="xs">
           <flank>
             <text font-size="xs" color="muted">Confidential — For internal use only</text>
             <text font-size="xs" color="muted" align="right">
               lpdf.io · PDF generation API
             </text>
           </flank>
-        </stack>
+        </column>
       </region>
 
       <!-- Pinned "first page only" header variant -->
       <region pin="top" page="first">
         <!-- Additional first-page-only banner below the main header -->
-        <stack background="accent" padding="8pt 40pt">
+        <column background="accent" padding="8pt 40pt">
           <text font-size="s" color="primary" align="center">
             This banner appears on the first page only (region page="first")
           </text>
-        </stack>
+        </column>
       </region>
 
       <!-- Flow content fills the remaining area between header and footer -->
-      <stack gap="xl" padding="40pt">
-        <stack gap="xs">
+      <column gap="xl" padding="40pt">
+        <column gap="xs">
           <text font-size="xxl" font="Helvetica-Bold" color="primary">
             Region Chrome Demo
           </text>
@@ -65,7 +65,7 @@
             The header and footer are pinned regions that reserve space on every page.
             The flow content (this text) fills the remaining centre rectangle.
           </text>
-        </stack>
+        </column>
 
         <divider color="rule" thickness="xs"/>
 
@@ -88,12 +88,12 @@
         </text>
 
         <!-- Padding to force multi-page output -->
-        <stack height="400pt" background="accent" padding="m">
+        <column height="400pt" background="accent" padding="m">
           <text font-size="m" color="muted">
             Spacer block — forces content to continue on subsequent pages to demonstrate
             that the header and footer repeat correctly.
           </text>
-        </stack>
+        </column>
 
         <text font-size="m">
           You should see the header and footer on every page produced from this section.
@@ -106,7 +106,7 @@
           <span font="Helvetica-Bold">pin="right"</span> are schema-valid for forward
           compatibility but their implementation is deferred to a later phase.
         </text>
-      </stack>
+      </column>
     </layout>
   </section>
   </document>

@@ -15,13 +15,13 @@ fn font_xml(font_ref: &str) -> String {
     </assets>
     <pages>
       <page>
-        <stack gap="m">
+        <column gap="m">
           <text font="BenchFont" font-size="m">The quick brown fox jumps over the lazy dog.</text>
           <text font="BenchFont" font-size="m">Pack my box with five dozen liquor jugs.</text>
           <text font="BenchFont" font-size="m">How vexingly quick daft zebras jump!</text>
           <text font="BenchFont" font-size="m">The five boxing wizards jump quickly.</text>
           <text font="BenchFont" font-size="m">Sphinx of black quartz, judge my vow.</text>
-        </stack>
+        </column>
       </page>
     </pages>
   </document>
@@ -34,13 +34,13 @@ fn builtin_xml() -> String {
   <document size="a4" margin="40pt">
     <pages>
       <page>
-        <stack gap="m">
+        <column gap="m">
           <text font="Helvetica" font-size="m">The quick brown fox jumps over the lazy dog.</text>
           <text font="Helvetica" font-size="m">Pack my box with five dozen liquor jugs.</text>
           <text font="Helvetica" font-size="m">How vexingly quick daft zebras jump!</text>
           <text font="Helvetica" font-size="m">The five boxing wizards jump quickly.</text>
           <text font="Helvetica" font-size="m">Sphinx of black quartz, judge my vow.</text>
-        </stack>
+        </column>
       </page>
     </pages>
   </document>

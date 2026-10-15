@@ -5,7 +5,7 @@
     <meta title="Auto-pagination demo — flowing text article" />
     <section>
       <layout>
-      <stack gap="m">
+      <column gap="m">
 
         <text font-size="xxl" font="Helvetica-Bold">The Quiet Revolution in Declarative Layout</text>
         <text font-size="s" color="text-muted" font="Helvetica-Oblique">A long-form article that overflows a single page and flows naturally onto the next.</text>
@@ -35,7 +35,7 @@
 
         <text font-size="s" color="text-muted" font="Helvetica-Oblique">— end of article —</text>
 
-      </stack>
+      </column>
       </layout>
     </section>
   </document>

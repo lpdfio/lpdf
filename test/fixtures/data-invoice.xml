@@ -7,7 +7,7 @@
   <document size="a4" margin="48pt" font="body">
     <section>
       <layout>
-        <stack gap="m">
+        <column gap="m">
 
           <!-- header row: title + invoice number -->
           <flank>
@@ -16,20 +16,20 @@
           </flank>
 
           <!-- customer details -->
-          <stack gap="xs">
+          <column gap="xs">
             <text font="heading" data-value="customer.name">Acme Inc</text>
             <text data-value="customer.address">123 Main St</text>
-          </stack>
+          </column>
 
           <divider/>
 
           <!-- line items loop -->
-          <stack data-source="items" gap="xs">
+          <column data-source="items" gap="xs">
             <flank>
               <text data-value="description">Consulting Services</text>
               <text data-value="price" align="right">$1,200.00</text>
             </flank>
-          </stack>
+          </column>
 
           <divider/>
 
@@ -49,7 +49,7 @@
             <text align="center">Standard Customer</text>
           </frame>
 
-        </stack>
+        </column>
       </layout>
     </section>
   </document>
