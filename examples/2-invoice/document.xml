@@ -51,36 +51,36 @@
       </canvas>
 
       <layout>
-        <stack gap="l"  justify="between">
+        <column gap="l"  justify="between">
 
-          <stack gap="l">
+          <column gap="l">
 
             <!-- header: the seller beside the logo, and the invoice number -->
             <flank end="true" gap="m" align="start">
-              <stack gap="xs" padding="0pt 0pt 0pt 42pt">
+              <column gap="xs" padding="0pt 0pt 0pt 42pt">
                 <text font-size="xl" bold="true" color="primary" data-value="seller.name">Brightwork Studio</text>
                 <text font-size="s" color="text-muted" data-value="seller.street">412 Harbor Street, Suite 3</text>
                 <text font-size="s" color="text-muted" data-value="seller.city">Portland, ME 04101</text>
                 <text font-size="s" color="text-muted" data-value="seller.email">billing@brightwork.example</text>
-              </stack>
-              <stack gap="xs" align="end">
+              </column>
+              <column gap="xs" align="end">
                 <text font-size="xxl" bold="true" color="primary">INVOICE</text>
                 <text font-size="s" color="text-muted" data-value="invoice.number">INV-1042</text>
-              </stack>
+              </column>
             </flank>
 
             <divider color="rule" thickness="xs" />
 
             <!-- who pays it, and when -->
             <split gap="l" align="start">
-              <stack gap="xs">
+              <column gap="xs">
                 <text font-size="s" bold="true" color="text-muted">BILL TO</text>
                 <text bold="true" data-value="customer.name">Harbor &amp; Pine Co.</text>
                 <text font-size="s" color="text-muted" data-value="customer.street">88 Market Square</text>
                 <text font-size="s" color="text-muted" data-value="customer.city">Burlington, VT 05401</text>
                 <text font-size="s" color="text-muted" data-value="customer.email">accounts@harborpine.example</text>
-              </stack>
-              <stack gap="xs" align="end">
+              </column>
+              <column gap="xs" align="end">
                 <flank end="true" gap="m" align="center">
                   <text font-size="s" color="text-muted">Issue date</text>
                   <text font-size="s" data-value="invoice.issued">March 1, 2027</text>
@@ -93,7 +93,7 @@
                   <text font-size="s" color="text-muted">Payment terms</text>
                   <text font-size="s" data-value="invoice.terms">Net 30</text>
                 </flank>
-              </stack>
+              </column>
             </split>
 
             <!-- the line items: the header row stays as written, the row repeats for each item.
@@ -107,10 +107,10 @@
               </thead>
               <tr data-source="items">
                 <td padding="s">
-                  <stack gap="xs">
+                  <column gap="xs">
                     <text data-value="description">Brand identity package</text>
                     <text font-size="s" color="text-muted" data-value="detail">Logo, color palette, type system</text>
-                  </stack>
+                  </column>
                 </td>
                 <td padding="s"><text align="right" data-value="quantity">1</text></td>
                 <td padding="s"><text align="right" data-value="unitPrice">$3,200.00</text></td>
@@ -119,8 +119,8 @@
             </table>
 
             <!-- totals, at the right edge -->
-            <cluster justify="end">
-              <stack gap="xs" width="220pt">
+            <row justify="end">
+              <column gap="xs" width="220pt">
                 <flank end="true" gap="m" align="center">
                   <text font-size="s" color="text-muted">Subtotal</text>
                   <text font-size="s" align="right" data-value="subtotal">$9,130.00</text>
@@ -134,23 +134,23 @@
                   <text font-size="l" bold="true">Total due</text>
                   <text font-size="l" bold="true" color="primary-dark" align="right" data-value="total">$9,860.40</text>
                 </flank>
-              </stack>
-            </cluster>
+              </column>
+            </row>
 
-          </stack>
+          </column>
 
           <!-- the foot of the page: how to pay, and one of two notes depending on "paid" -->
-          <stack gap="m">
+          <column gap="m">
             <divider color="rule" thickness="xs" />
             <!-- how to pay, with a QR code at the right edge: the first child of a flank with end="true"
                  fills the row and the others keep their size. The code is the same on every invoice,
                  because data-value changes text and nothing else, so it cannot carry the number -->
             <flank end="true" gap="m" align="center">
-              <stack gap="xs">
+              <column gap="xs">
                 <text font-size="s" bold="true">Payment instructions</text>
                 <text font-size="s" color="text-muted" data-value="payment">ACH to Casco Federal Credit Union, routing 011000015, account 4400198273, reference INV-1042</text>
                 <text font-size="s" color="text-muted">Or scan the code to pay by card.</text>
-              </stack>
+              </column>
               <barcode type="qr" data="https://pay.brightwork.example" size="64pt" color="primary-dark" background="surface" />
             </flank>
 
@@ -162,20 +162,20 @@
             </frame>
 
             <text font-size="s" color="text-muted" data-if="notes" data-value="notes">Thank you for your business.</text>
-          </stack>
+          </column>
 
-        </stack>
+        </column>
 
         <!-- the footer: every page. It is last in the layout, so it is the footer. {page} and {pages}
              become the page number and the page count -->
         <region pin="bottom" page="each">
-          <stack gap="xs">
+          <column gap="xs">
             <divider color="rule" thickness="xs" />
             <flank end="true" align="center">
               <text font-size="s" color="text-muted" data-value="invoice.number">INV-1042</text>
               <text font-size="s" color="text-muted" align="right">Page {page} of {pages}</text>
             </flank>
-          </stack>
+          </column>
         </region>
 
       </layout>

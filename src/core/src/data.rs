@@ -412,7 +412,7 @@ mod tests {
     fn data_source_expands_array() {
         let mut child = text_node("item");
         child.data_attrs = Some(Box::new(DataAttrs { data_value: Some("label".to_owned()), ..DataAttrs::default() }));
-        let mut container = bare_node(NodeKind::Stack);
+        let mut container = bare_node(NodeKind::Column);
         container.data_attrs = Some(Box::new(DataAttrs { data_source: Some("items".to_owned()), ..DataAttrs::default() }));
         container.children = vec![child];
         let mut doc = make_doc(vec![container]);
@@ -430,7 +430,7 @@ mod tests {
 
     #[test]
     fn data_source_empty_array_removes_node() {
-        let mut container = bare_node(NodeKind::Stack);
+        let mut container = bare_node(NodeKind::Column);
         container.data_attrs = Some(Box::new(DataAttrs { data_source: Some("items".to_owned()), ..DataAttrs::default() }));
         container.children = vec![text_node("item")];
         let mut doc = make_doc(vec![container]);
@@ -478,7 +478,7 @@ mod tests {
     fn data_if_inside_source_per_item() {
         let mut flag = text_node("highlighted");
         flag.data_attrs = Some(Box::new(DataAttrs { data_if: Some("isHighlighted".to_owned()), ..DataAttrs::default() }));
-        let mut container = bare_node(NodeKind::Stack);
+        let mut container = bare_node(NodeKind::Column);
         container.data_attrs = Some(Box::new(DataAttrs { data_source: Some("items".to_owned()), ..DataAttrs::default() }));
         container.children = vec![flag];
         let mut doc = make_doc(vec![container]);
@@ -497,7 +497,7 @@ mod tests {
     fn data_value_inside_source() {
         let mut child = text_node("desc");
         child.data_attrs = Some(Box::new(DataAttrs { data_value: Some("description".to_owned()), ..DataAttrs::default() }));
-        let mut container = bare_node(NodeKind::Stack);
+        let mut container = bare_node(NodeKind::Column);
         container.data_attrs = Some(Box::new(DataAttrs { data_source: Some("items".to_owned()), ..DataAttrs::default() }));
         container.children = vec![child];
         let mut doc = make_doc(vec![container]);
@@ -517,15 +517,15 @@ mod tests {
         // child references ../description to read from the outer scope
         let mut inner_child = text_node("note");
         inner_child.data_attrs = Some(Box::new(DataAttrs { data_value: Some("../description".to_owned()), ..DataAttrs::default() }));
-        let mut inner_template = bare_node(NodeKind::Stack);
+        let mut inner_template = bare_node(NodeKind::Column);
         inner_template.children = vec![inner_child];
-        let mut inner_loop = bare_node(NodeKind::Stack);
+        let mut inner_loop = bare_node(NodeKind::Column);
         inner_loop.data_attrs = Some(Box::new(DataAttrs { data_source: Some("notes".to_owned()), ..DataAttrs::default() }));
         inner_loop.children = vec![inner_template];
 
-        let mut outer_container = bare_node(NodeKind::Stack);
+        let mut outer_container = bare_node(NodeKind::Column);
         outer_container.children = vec![inner_loop];
-        let mut outer_loop = bare_node(NodeKind::Stack);
+        let mut outer_loop = bare_node(NodeKind::Column);
         outer_loop.data_attrs = Some(Box::new(DataAttrs { data_source: Some("items".to_owned()), ..DataAttrs::default() }));
         outer_loop.children = vec![outer_container];
 
@@ -537,7 +537,7 @@ mod tests {
         .unwrap();
         // outer_loop → 1 item → outer_container → inner_loop → 1 note → inner_template → inner_child
         let ch = layout_children(&doc);
-        let outer_item     = &ch[0]; // outer_loop template (Stack)
+        let outer_item     = &ch[0]; // outer_loop template (Column)
         let outer_cont     = &outer_item.children[0];   // outer_container
         let inner_expanded = &outer_cont.children[0];   // inner_loop template clone
         let inner_templ    = &inner_expanded.children[0]; // inner_template
@@ -549,7 +549,7 @@ mod tests {
     fn root_path_anchor_inside_source() {
         let mut child = text_node("company");
         child.data_attrs = Some(Box::new(DataAttrs { data_value: Some("/company".to_owned()), ..DataAttrs::default() }));
-        let mut container = bare_node(NodeKind::Stack);
+        let mut container = bare_node(NodeKind::Column);
         container.data_attrs = Some(Box::new(DataAttrs { data_source: Some("items".to_owned()), ..DataAttrs::default() }));
         container.children = vec![child];
         let mut doc = make_doc(vec![container]);

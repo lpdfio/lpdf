@@ -634,7 +634,7 @@ mod tests {
             <document size="a4" margin="28pt">
                 <section background="surface">
                     <layout>
-                        <stack gap="m">
+                        <column gap="m">
                             <frame background="primary" padding="m" radius="s">
                                 <flank gap="m" align="center" end="true">
                                     <frame width="120pt" height="24pt" background="secondary" radius="xs" />
@@ -644,14 +644,14 @@ mod tests {
                             <divider color="#e0e0e0" thickness="xs" />
                             <grid cols="3" gap="m">
                                 <frame padding="s" border="xs #e0e0e0" radius="xs">
-                                    <stack gap="s">
+                                    <column gap="s">
                                         <frame height="10pt" background="text-muted" radius="xs" />
-                                    </stack>
+                                    </column>
                                 </frame>
                                 <frame padding="s" border="xs #e0e0e0" radius="xs" />
                                 <frame padding="s" border="xs #e0e0e0" radius="xs" />
                             </grid>
-                        </stack>
+                        </column>
                     </layout>
                 </section>
             </document>

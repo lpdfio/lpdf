@@ -3,7 +3,7 @@
     <meta title="Benchmark Large Fixture" />
     <section>
       <layout>
-      <stack gap="m">
+      <column gap="m">
         <text font-size="xl" font="Helvetica-Bold">Performance Benchmark Document</text>
         <text font-size="m">This document contains 50 paragraphs of text used to benchmark the lpdf layout engine. It exercises parse, layout, pagination splitting, and PDF rendering across roughly 20 pages.</text>
         <text font-size="m">Paragraph 1. The layout engine processes each node in the document tree, computing sizes and positions before emitting PDF content streams. Each text node is measured glyph by glyph using the advance width tables loaded from font metrics.</text>
@@ -56,7 +56,7 @@
         <text font-size="m">Paragraph 48. The cross-reference table lists the byte offset of every indirect object in the PDF file. A reader uses these offsets to seek directly to any object without scanning the file sequentially. The table is located by reading the startxref value at the end of the file.</text>
         <text font-size="m">Paragraph 49. PDF trailers carry a dictionary with the total object count, the root catalog reference, the information dictionary reference, and the file identifier array. The identifier is a pair of MD5 hashes used to distinguish document versions and to derive encryption keys.</text>
         <text font-size="m">Paragraph 50. This final paragraph marks the end of the benchmark fixture. The document intentionally spans multiple pages to exercise the pagination splitting logic on a realistic workload. Each paragraph adds measurable parse, layout, and render cost to the total pipeline time.</text>
-      </stack>
+      </column>
       </layout>
     </section>
   </document>

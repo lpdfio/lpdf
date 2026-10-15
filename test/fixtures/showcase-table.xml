@@ -39,9 +39,9 @@
       </table>
 
       <!-- Borderless table with percentage columns and no header -->
-      <stack gap="m" padding="0 0 0 0">
+      <column gap="m" padding="0 0 0 0">
         <text font-size="s"> </text>
-      </stack>
+      </column>
 
       <table cols="50% 25% 25%">
         <tr background="#f0f0f0">

@@ -108,7 +108,7 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- cross-axis alignment (stack cross-axis supports stretch) -->
+  <!-- cross-axis alignment (a column also supports stretch) -->
   <xs:simpleType name="AlignFull">
     <xs:restriction base="xs:string">
       <xs:enumeration value="start"/>
@@ -524,10 +524,10 @@
 
   <xs:group name="LayoutContent">
     <xs:choice>
-      <xs:element ref="stack"/>
+      <xs:element ref="column"/>
       <xs:element ref="flank"/>
       <xs:element ref="split"/>
-      <xs:element ref="cluster"/>
+      <xs:element ref="row"/>
       <xs:element ref="grid"/>
       <xs:element ref="frame"/>
       <xs:element ref="link"/>
@@ -772,7 +772,7 @@
        Layout elements
   ============================================================ -->
 
-  <xs:element name="stack">
+  <xs:element name="column">
     <xs:annotation>
       <xs:documentation>Places children top to bottom, each at the full width, with gap between them. Can split across pages between children.</xs:documentation>
     </xs:annotation>
@@ -825,9 +825,9 @@
     </xs:complexType>
   </xs:element>
 
-  <xs:element name="cluster">
+  <xs:element name="row">
     <xs:annotation>
-      <xs:documentation>A row that wraps: children sit side by side, and continue on the next line when they run out of width. Splits across pages between lines.</xs:documentation>
+      <xs:documentation>Children side by side, continuing on the next line when they run out of width. Splits across pages between lines.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
@@ -1051,7 +1051,7 @@
        Table elements
   ============================================================ -->
 
-  <!-- <td>: a table cell — container equivalent to stack -->
+  <!-- <td>: a table cell — container equivalent to column -->
   <xs:element name="td">
     <xs:complexType>
       <xs:sequence>

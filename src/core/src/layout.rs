@@ -116,7 +116,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
         )
         && page.children[0].page_scope.is_none()
     {
-        let (nodes, _) = layout_stack(
+        let (nodes, _) = layout_column(
             &page.children, avail_x, avail_y, avail_w, Some(avail_h),
             0.0, &Align::Stretch, &Justify::Start,
         );
@@ -153,7 +153,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
         return chunks
             .into_iter()
             .map(|chunk| {
-                let (nodes, _) = layout_stack(
+                let (nodes, _) = layout_column(
                     &chunk, avail_x, avail_y, avail_w, Some(avail_h),
                     0.0, &Align::Stretch, &Justify::Start,
                 );
@@ -199,15 +199,15 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
             .collect();
 
         // Top chrome laid out from y = mt down.
-        let (top_nodes, top_h) = layout_stack(
+        let (top_nodes, top_h) = layout_column(
             &top_here, avail_x, avail_y, avail_w, None,
             0.0, &Align::Stretch, &Justify::Start,
         );
 
         // Bottom chrome anchored to the bottom.
-        let bot_h = measure_stack_height(&bot_here, avail_w);
+        let bot_h = measure_column_height(&bot_here, avail_w);
         let bot_y = avail_y + avail_h - bot_h;
-        let (bot_nodes, _) = layout_stack(
+        let (bot_nodes, _) = layout_column(
             &bot_here, avail_x, bot_y, avail_w, None,
             0.0, &Align::Stretch, &Justify::Start,
         );
@@ -215,7 +215,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
         // Flow between chromes.
         let flow_y = avail_y + top_h;
         let flow_budget = if is_first { budget_first } else { budget_rest };
-        let (flow_nodes, _) = layout_stack(
+        let (flow_nodes, _) = layout_column(
             &chunk, avail_x, flow_y, avail_w, Some(flow_budget),
             0.0, &Align::Stretch, &Justify::Start,
         );
@@ -243,10 +243,10 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
             .filter(|n| page_scope_indices(&n.page_scope, 1).contains(&0))
             .map(|n| substitute_page_tokens(n, 1, 1))
             .collect();
-        let (top_nodes, _) = layout_stack(&top_here, avail_x, avail_y, avail_w, None, 0.0, &Align::Stretch, &Justify::Start);
-        let bot_h = measure_stack_height(&bot_here, avail_w);
+        let (top_nodes, _) = layout_column(&top_here, avail_x, avail_y, avail_w, None, 0.0, &Align::Stretch, &Justify::Start);
+        let bot_h = measure_column_height(&bot_here, avail_w);
         let bot_y = avail_y + avail_h - bot_h;
-        let (bot_nodes, _) = layout_stack(&bot_here, avail_x, bot_y, avail_w, None, 0.0, &Align::Stretch, &Justify::Start);
+        let (bot_nodes, _) = layout_column(&bot_here, avail_x, bot_y, avail_w, None, 0.0, &Align::Stretch, &Justify::Start);
         let mut all = top_nodes;
         all.extend(bot_nodes);
         pages_out.push(RenderPage {
@@ -259,11 +259,11 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
     pages_out
 }
 
-/// Total stack height of a list of nodes at a given width (uses the standard
-/// stack layout). Used to reserve top/bottom chrome space.
-fn measure_stack_height(nodes: &[Node], avail_w: f32) -> f32 {
+/// Total column height of a list of nodes at a given width (uses the standard
+/// column layout). Used to reserve top/bottom chrome space.
+fn measure_column_height(nodes: &[Node], avail_w: f32) -> f32 {
     if nodes.is_empty() { return 0.0; }
-    let (_, h) = layout_stack(
+    let (_, h) = layout_column(
         nodes, 0.0, 0.0, avail_w, None,
         0.0, &Align::Stretch, &Justify::Start,
     );
@@ -280,7 +280,7 @@ fn measure_chrome_height(chrome: &[Node], avail_w: f32, include_first: bool) -> 
         .filter(|n| chrome_in_budget(&n.page_scope, include_first))
         .cloned()
         .collect();
-    measure_stack_height(&selected, avail_w)
+    measure_column_height(&selected, avail_w)
 }
 
 // ── Page-number token substitution ────────────────────────────────────────────
@@ -318,7 +318,7 @@ fn substitute_in_text(s: &mut String, page: usize, total: usize) {
 /// every subsequent chunk gets `budget_rest` (this lets callers reserve
 /// different chrome on page 1 vs. later pages).
 ///
-/// Splittable: Stack (Auto), Grid, Cluster, Text.
+/// Splittable: Column (Auto), Grid, Row, Text.
 /// Atomic: Frame, Flank, Split, Divider, Link, plus anything with Fixed/Full/Fill.
 ///
 /// When a node doesn't fit and can't be split, it moves wholesale to the next
@@ -500,9 +500,9 @@ enum SplitOutcome {
 /// remainder continues on subsequent pages.
 ///
 /// Splittable node types (Auto height only):
-/// - **Stack**: split child-by-child; recurses into first child if that's what overflows.
+/// - **Column**: split child-by-child; recurses into first child if that's what overflows.
 /// - **Grid**: split row-by-row (rows are atomic; children inside a row are atomic).
-/// - **Cluster**: split between wrapped rows (items within a row are atomic).
+/// - **Row**: split between wrapped lines (items within a line are atomic).
 /// - **Text**: split line-by-line, reconstructing runs on each half.
 ///
 /// Everything else (Frame, Flank, Split, Divider, or any Fixed/Full/Fill
@@ -520,18 +520,18 @@ fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> 
     }
 
     match node.kind {
-        NodeKind::Stack   => split_stack(node, avail_w, target_h, full_page_h),
+        NodeKind::Column  => split_column(node, avail_w, target_h, full_page_h),
         NodeKind::Grid    => split_grid(node, avail_w, target_h, full_page_h),
-        NodeKind::Cluster => split_cluster(node, avail_w, target_h),
+        NodeKind::Row     => split_row(node, avail_w, target_h),
         NodeKind::Text    => split_text(node, avail_w, target_h, full_page_h),
         NodeKind::Table   => split_table(node, avail_w, target_h, full_page_h),
-        NodeKind::Link    => split_stack(node, avail_w, target_h, full_page_h),
+        NodeKind::Link    => split_column(node, avail_w, target_h, full_page_h),
         // Frame, Flank, Split, Divider — atomic by design.
         _                 => SplitOutcome::Atomic,
     }
 }
 
-fn split_stack(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
+fn split_column(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
     let [pt, pr, pb, pl] = node.padding;
     let inner_w      = (avail_w      - pl - pr).max(0.0);
     let inner_target = (target_h     - pt - pb).max(0.0);
@@ -637,16 +637,16 @@ fn split_grid(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Spl
     SplitOutcome::First(first, vec![rest])
 }
 
-/// Bucket items into wrapped rows first; the cluster splits between rows.
-/// Items inside a row are treated as atomic (the user's rule: cluster children
+/// Bucket items into wrapped lines first; the row splits between lines.
+/// Items inside a line are treated as atomic (the user's rule: row children
 /// never split).
-fn split_cluster(node: &Node, avail_w: f32, target_h: f32) -> SplitOutcome {
+fn split_row(node: &Node, avail_w: f32, target_h: f32) -> SplitOutcome {
     let [pt, pr, pb, pl] = node.padding;
     let inner_w      = (avail_w  - pl - pr).max(0.0);
     let inner_target = (target_h - pt - pb).max(0.0);
     let gap = node.gap;
 
-    // Bucket by width, same logic as layout_cluster's pass 1.
+    // Bucket by width, same logic as layout_row's pass 1.
     let mut rows: Vec<(usize, usize, f32)> = Vec::new(); // (start, end_exclusive, row_h)
     let mut row_start = 0usize;
     let mut cur_x     = 0.0_f32;
@@ -1238,7 +1238,7 @@ fn dispatch_children(
     avail_h: Option<f32>,
 ) -> (Vec<RenderNode>, f32) {
     match node.kind {
-        NodeKind::Stack => layout_stack(
+        NodeKind::Column => layout_column(
             &node.children, x, y, avail_w, avail_h,
             node.gap, &node.align, &node.justify,
         ),
@@ -1250,7 +1250,7 @@ fn dispatch_children(
             &node.children, x, y, avail_w, avail_h,
             node.gap, &node.align, node.equal,
         ),
-        NodeKind::Cluster => layout_cluster(
+        NodeKind::Row => layout_row(
             &node.children, x, y, avail_w,
             node.gap, &node.justify, &node.align,
         ),
@@ -1258,13 +1258,13 @@ fn dispatch_children(
             &node.children, x, y, avail_w,
             node.gap, node.cols, node.col_width,
         ),
-        NodeKind::Frame => layout_stack(
+        NodeKind::Frame => layout_column(
             // Frame always centers its single child (horizontally via Align::Center,
             // vertically via Justify::Center when avail_h is known).
             &node.children, x, y, avail_w, avail_h,
             0.0, &Align::Center, &Justify::Center,
         ),
-        NodeKind::Link => layout_stack(
+        NodeKind::Link => layout_column(
             &node.children, x, y, avail_w, avail_h,
             0.0, &Align::Stretch, &Justify::Start,
         ),
@@ -1272,7 +1272,7 @@ fn dispatch_children(
             &node.children, x, y, avail_w,
             node.gap, &node.table_cols, node.border.as_ref(), node.stripe.as_deref(),
         ),
-        NodeKind::TableHead | NodeKind::TableRow | NodeKind::TableCell => layout_stack(
+        NodeKind::TableHead | NodeKind::TableRow | NodeKind::TableCell => layout_column(
             &node.children, x, y, avail_w, avail_h,
             node.gap, &node.align, &node.justify,
         ),
@@ -1280,9 +1280,9 @@ fn dispatch_children(
     }
 }
 
-// ── Stack ─────────────────────────────────────────────────────────────────────
+// ── Column ────────────────────────────────────────────────────────────────────
 
-fn layout_stack(
+fn layout_column(
     children: &[Node],
     x: f32,
     y: f32,
@@ -1434,7 +1434,7 @@ fn layout_flank(
         return (vec![], 0.0);
     }
     if children.len() == 1 {
-        return layout_stack(children, x, y, avail_w, avail_h, gap, align, &Justify::Start);
+        return layout_column(children, x, y, avail_w, avail_h, gap, align, &Justify::Start);
     }
 
     let (fill_child, flank_children): (&Node, &[Node]) = if end {
@@ -1510,7 +1510,7 @@ fn layout_split(
     equal: bool,
 ) -> (Vec<RenderNode>, f32) {
     if children.len() < 2 {
-        return layout_stack(children, x, y, avail_w, avail_h, gap, align, &Justify::Start);
+        return layout_column(children, x, y, avail_w, avail_h, gap, align, &Justify::Start);
     }
 
     let (first, second) = (&children[0], &children[1]);
@@ -1548,9 +1548,9 @@ fn layout_split(
     (vec![first_node, second_node], row_h)
 }
 
-// ── Cluster ───────────────────────────────────────────────────────────────────
+// ── Row ───────────────────────────────────────────────────────────────────────
 
-fn layout_cluster(
+fn layout_row(
     children: &[Node],
     x: f32,
     y: f32,
@@ -1611,7 +1611,7 @@ fn layout_cluster(
             Justify::Start   => x,
             Justify::Center  => x + remaining_w / 2.0,
             Justify::End     => x + remaining_w,
-            Justify::Between => x, // not reachable for cluster; parse rejects it
+            Justify::Between => x, // not reachable for a row; parse rejects it
         };
 
         let mut item_x = row_start_x;
@@ -1718,7 +1718,7 @@ fn layout_link(
     let url = node.url.clone().unwrap_or_default();
     // A link has no padding attribute; the padding is the indent a table of contents gives its entries.
     let [pt, pr, pb, pl] = node.padding;
-    let (children, content_h) = layout_stack(
+    let (children, content_h) = layout_column(
         &node.children, x + pl, y + pt, (avail_w - pl - pr).max(0.0), avail_h.map(|h| (h - pt - pb).max(0.0)),
         node.gap, &node.align, &Justify::Start,
     );
@@ -2407,7 +2407,7 @@ fn measure_natural_w(node: &Node) -> f32 {
         _ => {
             let [_pt, pr, _pb, pl] = node.padding;
             let inner = match node.kind {
-                NodeKind::Stack => {
+                NodeKind::Column => {
                     // vertical: widest child
                     node.children.iter().map(measure_natural_w).fold(0.0_f32, f32::max)
                 }
@@ -2424,7 +2424,7 @@ fn measure_natural_w(node: &Node) -> f32 {
                     let gap_total = node.gap * (node.children.len().saturating_sub(1)) as f32;
                     children_w + gap_total
                 }
-                NodeKind::Cluster => {
+                NodeKind::Row => {
                     // treat as horizontal row (no wrap assumed for natural width)
                     let children_w: f32 = node.children.iter().map(measure_natural_w).sum();
                     let gap_total = node.gap * (node.children.len().saturating_sub(1)) as f32;
@@ -2946,13 +2946,13 @@ mod tests {
     }
 
     #[test]
-    fn stack_positions_children_sequentially() {
+    fn column_positions_children_sequentially() {
         // Two frames with fixed heights and a gap
         let tree = engine_render(&minimal(
-            r#"<stack gap="m"><frame height="20pt" /><frame height="30pt" /></stack>"#,
+            r#"<column gap="m"><frame height="20pt" /><frame height="30pt" /></column>"#,
         ));
-        let stack = &tree["pages"][0]["nodes"][0];
-        let children = stack["nodes"].as_array().unwrap();
+        let column = &tree["pages"][0]["nodes"][0];
+        let children = column["nodes"].as_array().unwrap();
         assert_eq!(children.len(), 2);
 
         let first_y = children[0]["y"].as_f64().unwrap();
@@ -3033,14 +3033,14 @@ mod tests {
     }
 
     #[test]
-    fn stack_fill_child_gets_remaining_height() {
-        let body = r#"<stack gap="m" height="full">
+    fn column_fill_child_gets_remaining_height() {
+        let body = r#"<column gap="m" height="full">
             <frame height="50pt" />
             <frame height="fill" />
-        </stack>"#;
+        </column>"#;
         let tree = engine_render(&minimal(body));
-        let stack = &tree["pages"][0]["nodes"][0];
-        let children = stack["nodes"].as_array().unwrap();
+        let column = &tree["pages"][0]["nodes"][0];
+        let children = column["nodes"].as_array().unwrap();
         let fill_h = children[1]["height"].as_f64().unwrap();
         // avail = 841.89 - 28*2 = 785.89; fixed=50; gap=8; fill = 785.89 - 50 - 8
         let expected = 841.89 - 56.0 - 50.0 - 8.0;
@@ -3059,11 +3059,11 @@ mod tests {
     }
 
     #[test]
-    fn wrapped_stack_overflow_splits_into_pages() {
-        // Common document pattern: a single <stack> wrapping many paragraphs.
+    fn wrapped_column_overflow_splits_into_pages() {
+        // Common document pattern: a single <column> wrapping many paragraphs.
         // Each frame child is 120pt; avail_h ≈ 785.89pt — 7 frames fit, 8 would not.
         let item = r#"<frame height="120pt" />"#;
-        let body = format!("<stack>{}</stack>", item.repeat(10));
+        let body = format!("<column>{}</column>", item.repeat(10));
         let tree = engine_render(&minimal(&body));
         let pages = tree["pages"].as_array().unwrap();
         // 10 × 120pt = 1200pt > 785.89pt — must produce multiple pages.
@@ -3141,14 +3141,14 @@ mod tests {
     }
 
     #[test]
-    fn cluster_splits_between_wrapped_rows() {
-        // Many fixed-height frames in a cluster produce many wrapped rows; the
-        // cluster breaks between rows rather than treating itself as atomic.
+    fn row_splits_between_wrapped_lines() {
+        // Many fixed-height frames in a row produce many wrapped rows; the
+        // row breaks between rows rather than treating itself as atomic.
         let item = r##"<frame width="180pt" height="100pt" background="#ddd" />"##;
-        let body = format!(r#"<cluster gap="m">{}</cluster>"#, item.repeat(40));
+        let body = format!(r#"<row gap="m">{}</row>"#, item.repeat(40));
         let tree = engine_render(&minimal(&body));
         let pages = tree["pages"].as_array().unwrap();
-        assert!(pages.len() >= 2, "cluster should split, got {} pages", pages.len());
+        assert!(pages.len() >= 2, "row should split, got {} pages", pages.len());
     }
 
     #[test]
@@ -3245,27 +3245,27 @@ mod tests {
     }
 
     #[test]
-    fn paginate_no_keeps_a_stack_whole() {
-        // 760pt used leaves room for one line of the stack, which splits between its children unless it is kept whole.
+    fn paginate_no_keeps_a_column_whole() {
+        // 760pt used leaves room for one line of the column, which splits between its children unless it is kept whole.
         let body = |attr: &str| {
-            format!(r#"<frame height="760pt" /><stack {attr}><text>R1</text><text>R2</text><text>R3</text><text>R4</text></stack>"#)
+            format!(r#"<frame height="760pt" /><column {attr}><text>R1</text><text>R2</text><text>R3</text><text>R4</text></column>"#)
         };
         let split = engine_render(&minimal(&body("")));
         let pages = split["pages"].as_array().unwrap();
-        assert_eq!(page_with(pages, "R1"), Some(1), "an unkept stack splits, its first line on page 1");
+        assert_eq!(page_with(pages, "R1"), Some(1), "an unkept column splits, its first line on page 1");
         assert_eq!(page_with(pages, "R4"), Some(2));
 
         let whole = engine_render(&minimal(&body(r#"paginate="no""#)));
         let pages = whole["pages"].as_array().unwrap();
-        assert_eq!(page_with(pages, "R1"), Some(2), "a stack that does not fit moves whole to the next page");
+        assert_eq!(page_with(pages, "R1"), Some(2), "a column that does not fit moves whole to the next page");
         assert_eq!(page_with(pages, "R4"), Some(2));
     }
 
     #[test]
     fn paginate_breaks_are_not_applied_to_a_box_inside_another_box() {
         // The schema says so: break-before, break-after and keep-next act on the children of layout only.
-        let tree = engine_render(&minimal(r#"<stack><text>ONE</text><text paginate="break-before">TWO</text></stack>"#));
-        assert_eq!(tree["pages"].as_array().unwrap().len(), 1, "a break inside a stack is ignored");
+        let tree = engine_render(&minimal(r#"<column><text>ONE</text><text paginate="break-before">TWO</text></column>"#));
+        assert_eq!(tree["pages"].as_array().unwrap().len(), 1, "a break inside a column is ignored");
     }
 
     // ── widows and orphans ────────────────────────────────────────────────────
@@ -3345,20 +3345,20 @@ mod tests {
 
     // ── Debug overlay tests ───────────────────────────────────────────────────
 
-    /// A stack with debug="true" containing two frames produces:
+    /// A column with debug="true" containing two frames produces:
     /// - the original 2 frame children
     /// - 4 red self-outline lines appended after content
     /// - 8 blue child-outline lines (4 per frame)
     #[test]
     fn debug_overlay_golden() {
-        let body = r##"<stack debug="true" gap="0pt">
+        let body = r##"<column debug="true" gap="0pt">
             <frame height="20pt" background="#aaa" />
             <frame height="30pt" background="#bbb" />
-        </stack>"##;
+        </column>"##;
         let tree = engine_render(&minimal(body));
-        let stack = &tree["pages"][0]["nodes"][0];
-        assert_eq!(stack["type"], "box");
-        let children = stack["nodes"].as_array().unwrap();
+        let column = &tree["pages"][0]["nodes"][0];
+        assert_eq!(column["type"], "box");
+        let children = column["nodes"].as_array().unwrap();
         // 2 frames + 4 red self lines + 8 blue child lines = 14
         assert_eq!(children.len(), 14, "expected 14 children, got {}", children.len());
         // The last 12 entries are lines
@@ -3380,31 +3380,31 @@ mod tests {
     /// Layout geometry is identical with and without debug="true".
     #[test]
     fn debug_overlay_does_not_affect_layout() {
-        let body_no_debug = r##"<stack gap="m">
+        let body_no_debug = r##"<column gap="m">
             <frame height="20pt" background="#aaa" />
             <frame height="30pt" background="#bbb" />
-        </stack>"##;
-        let body_debug = r##"<stack debug="true" gap="m">
+        </column>"##;
+        let body_debug = r##"<column debug="true" gap="m">
             <frame height="20pt" background="#aaa" />
             <frame height="30pt" background="#bbb" />
-        </stack>"##;
+        </column>"##;
 
         let t_clean = engine_render(&minimal(body_no_debug));
         let t_debug = engine_render(&minimal(body_debug));
 
-        let stack_clean = &t_clean["pages"][0]["nodes"][0];
-        let stack_debug = &t_debug["pages"][0]["nodes"][0];
+        let column_clean = &t_clean["pages"][0]["nodes"][0];
+        let column_debug = &t_debug["pages"][0]["nodes"][0];
 
         // Outer box geometry identical
-        assert_eq!(stack_clean["x"], stack_debug["x"]);
-        assert_eq!(stack_clean["y"], stack_debug["y"]);
-        assert_eq!(stack_clean["width"], stack_debug["width"]);
-        assert_eq!(stack_clean["height"], stack_debug["height"]);
+        assert_eq!(column_clean["x"], column_debug["x"]);
+        assert_eq!(column_clean["y"], column_debug["y"]);
+        assert_eq!(column_clean["width"], column_debug["width"]);
+        assert_eq!(column_clean["height"], column_debug["height"]);
 
         // Frame children geometry identical
         for i in 0..2 {
-            let c_clean = &stack_clean["nodes"][i];
-            let c_debug = &stack_debug["nodes"][i];
+            let c_clean = &column_clean["nodes"][i];
+            let c_debug = &column_debug["nodes"][i];
             assert_eq!(c_clean["x"], c_debug["x"], "child[{i}] x differs");
             assert_eq!(c_clean["y"], c_debug["y"], "child[{i}] y differs");
             assert_eq!(c_clean["height"], c_debug["height"], "child[{i}] height differs");
@@ -3417,20 +3417,20 @@ mod tests {
     /// - unflagged child gets 4 blue lines from parent
     #[test]
     fn debug_overlay_composition() {
-        let body = r##"<stack debug="true" gap="0pt">
+        let body = r##"<column debug="true" gap="0pt">
             <frame height="20pt" background="#aaa" />
             <frame height="30pt" background="#bbb" debug="true" />
-        </stack>"##;
+        </column>"##;
         let tree = engine_render(&minimal(body));
-        let stack = &tree["pages"][0]["nodes"][0];
-        let children = stack["nodes"].as_array().unwrap();
+        let column = &tree["pages"][0]["nodes"][0];
+        let children = column["nodes"].as_array().unwrap();
 
-        // stack: 2 frames + 4 red self + 4 blue (only frame[0], not frame[1] since it's debug_self)
+        // column: 2 frames + 4 red self + 4 blue (only frame[0], not frame[1] since it's debug_self)
         assert_eq!(children.len(), 10, "expected 10 children (2 frames + 4 red + 4 blue), got {}", children.len());
 
-        // red self-lines for stack
+        // red self-lines for column
         for i in 2..6 {
-            assert_eq!(children[i]["color"], "#ff0033", "child[{i}] should be red stack self-line");
+            assert_eq!(children[i]["color"], "#ff0033", "child[{i}] should be red column self-line");
         }
         // blue child-lines only for frame[0] (4 lines)
         for i in 6..10 {
@@ -3557,7 +3557,7 @@ mod tests {
 
     #[test]
     fn custom_tokens_space_scale_overrides_default() {
-        // Override the "m" space token to 50pt. A stack gap="m" should produce
+        // Override the "m" space token to 50pt. A column gap="m" should produce
         // a 50pt gap, not the default 8pt.
         let xml = r#"<lpdf version="1">
             <tokens>
@@ -3565,10 +3565,10 @@ mod tests {
             </tokens>
             <document size="a4" margin="0pt">
                 <section><layout>
-                    <stack gap="m">
+                    <column gap="m">
                         <frame height="20pt" />
                         <frame height="20pt" />
-                    </stack>
+                    </column>
                 </layout></section>
             </document>
         </lpdf>"#;
@@ -3654,9 +3654,9 @@ mod tests {
     #[test]
     fn bookmark_on_a_leaf_moves_with_it_when_its_container_shifts_it() {
         // A divider is a leaf, so its anchor sits in a box of its own around it. The flank centers the short
-        // stack against the tall frame after laying it out, which shifts the box down.
+        // column against the tall frame after laying it out, which shifts the box down.
         let pages = render_pages(&minimal(
-            r#"<flank align="center"><frame width="50pt" height="100pt"/><stack><bookmark label="Rule"/><divider/></stack></flank>"#,
+            r#"<flank align="center"><frame width="50pt" height="100pt"/><column><bookmark label="Rule"/><divider/></column></flank>"#,
         ));
         fn holder(nodes: &[RenderNode]) -> Option<(f32, f32)> {
             nodes.iter().find_map(|node| match node {
@@ -3667,7 +3667,7 @@ mod tests {
             })
         }
         let (box_y, anchor_y) = holder(&pages[0].nodes).expect("an anchor inside a box");
-        assert!(box_y > 28.0 + 30.0, "the stack is centered, at {box_y}");
+        assert!(box_y > 28.0 + 30.0, "the column is centered, at {box_y}");
         assert_eq!(anchor_y, box_y);
     }
 

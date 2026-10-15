@@ -17,31 +17,31 @@
       <!-- Front -->
     <section background="brand">
       <layout>
-      <stack padding="l" gap="m" height="full" justify="between">
+      <column padding="l" gap="m" height="full" justify="between">
 
         <!-- name + title -->
-        <stack gap="xs">
+        <column gap="xs">
           <text font-size="l" font="Helvetica-Bold" color="surface">Jane Doe</text>
           <text font-size="s" color="surface">Staff Engineer</text>
-        </stack>
+        </column>
 
         <!-- company -->
         <text font-size="m" font="Helvetica-Bold" color="surface">Acme Corp</text>
 
-      </stack>
+      </column>
       </layout>
     </section>
 
       <!-- Back -->
     <section background="surface">
       <layout>
-      <stack padding="l" gap="m" height="full" justify="between">
+      <column padding="l" gap="m" height="full" justify="between">
 
         <!-- company repeated small -->
         <text font-size="xs" font="Helvetica-Bold" color="brand">ACME CORP</text>
 
         <!-- contact details -->
-        <stack gap="s">
+        <column gap="s">
           <flank gap="s" align="center" end="true">
             <text font-size="s" color="text-muted">Email</text>
             <text font-size="s">jane@acmecorp.example</text>
@@ -54,13 +54,13 @@
             <text font-size="s" color="text-muted">Web</text>
             <text font-size="s">acmecorp.example</text>
           </flank>
-        </stack>
+        </column>
 
         <divider color="rule" thickness="xs" />
 
         <text font-size="xs" color="text-muted">123 Business Ave, Suite 4 · San Francisco, CA 94107</text>
 
-      </stack>
+      </column>
       </layout>
     </section>
 

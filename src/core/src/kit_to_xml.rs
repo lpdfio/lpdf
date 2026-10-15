@@ -195,7 +195,7 @@ fn render_text_node(node: &Value, depth: usize) -> String {
 }
 
 fn render_node(node: &Value, depth: usize) -> String {
-    let node_type = node.get("type").and_then(|v| v.as_str()).unwrap_or("stack");
+    let node_type = node.get("type").and_then(|v| v.as_str()).unwrap_or("column");
     let pad       = "  ".repeat(depth);
     let empty     = serde_json::Map::new();
     let attrs     = node.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
@@ -207,7 +207,7 @@ fn render_node(node: &Value, depth: usize) -> String {
         _ => {}
     }
 
-    // Container nodes (stack, flank, split, cluster, grid, frame, link,
+    // Container nodes (column, flank, split, row, grid, frame, link,
     // table, thead, tr, td)
     let children = node.get("nodes").and_then(|v| v.as_array());
     match children {
@@ -312,7 +312,7 @@ fn render_section(section: &Value, depth: usize) -> String {
 
 // Helper: render a layout node that may be a region or a regular node
 fn render_layout_node(node: &Value, depth: usize) -> String {
-    let node_type = node.get("type").and_then(|v| v.as_str()).unwrap_or("stack");
+    let node_type = node.get("type").and_then(|v| v.as_str()).unwrap_or("column");
     if node_type == "region" {
         let pad     = "  ".repeat(depth);
         let _inner  = "  ".repeat(depth + 1);
@@ -566,7 +566,7 @@ mod tests {
     // ── Node rendering ────────────────────────────────────────────────────────
 
     #[test]
-    fn stack_with_children_rendered() {
+    fn column_with_children_rendered() {
         let json = r#"{
             "version": 1,
             "type": "document",
@@ -577,7 +577,7 @@ mod tests {
                 "nodes": [{
                     "type": "layout",
                     "nodes": [{
-                        "type": "stack",
+                        "type": "column",
                         "attrs": { "gap": "m" },
                         "nodes": [
                             { "type": "frame", "attrs": { "height": "40pt" }, "nodes": [] },
@@ -590,8 +590,8 @@ mod tests {
         let xml = kit_to_xml(json).unwrap();
         assert!(xml.contains("<layout>"));
         assert!(xml.contains("</layout>"));
-        assert!(xml.contains(r#"<stack gap="m">"#));
-        assert!(xml.contains("</stack>"));
+        assert!(xml.contains(r#"<column gap="m">"#));
+        assert!(xml.contains("</column>"));
         assert!(xml.matches("<frame").count() >= 2);
     }
 
@@ -708,6 +708,15 @@ mod tests {
         let json = doc_with_assets_and_text(r#"{"fonts":{"heading":{"core":"Times-Bold"}}}"#);
         let err = crate::parse::parse_tree(&json).err().expect("assets are lists");
         assert!(err.contains("assets.fonts must be a list"), "{err}");
+    }
+
+    #[test]
+    fn a_tree_with_a_renamed_layout_type_names_the_new_one() {
+        for (old, new) in [("stack", "<column>"), ("cluster", "<row>")] {
+            let json = doc_with_layout_child(&format!(r#"{{"type":"{old}","attrs":{{}},"nodes":[]}}"#));
+            let err = crate::parse::parse_tree(&json).err().expect("the old name is rejected");
+            assert!(err.contains(&format!("'{old}'")) && err.contains(new), "{err}");
+        }
     }
 
     #[test]
@@ -1054,7 +1063,7 @@ mod tests {
                 {"type":"layout","nodes":[
                     {"type":"bookmark","attrs":{"label":"Methods"}},
                     {"type":"text","attrs":{},"nodes":["Methods"]},
-                    {"type":"stack","attrs":{},"nodes":[
+                    {"type":"column","attrs":{},"nodes":[
                         {"type":"bookmark","attrs":{"label":"Data","level":"2","id":"data"}},
                         {"type":"text","attrs":{},"nodes":["Data"]}]}]}]}]}"##;
         let xml = kit_to_xml(kit).unwrap();

@@ -17,14 +17,14 @@
 
     <section background="surface">
       <layout>
-      <stack gap="xl">
+      <column gap="xl">
 
         <!-- Header -->
         <flank align="center">
-          <stack gap="xs">
+          <column gap="xs">
             <text font-size="xxl" font="Helvetica-Bold" color="primary">Encryption</text>
             <text font-size="m" color="muted">RC4-128 · permission flags · open and owner passwords</text>
-          </stack>
+          </column>
           <frame padding="s" background="danger" radius="2pt">
             <text font-size="s" font="Helvetica-Bold" color="#ffffff">CONFIDENTIAL</text>
           </frame>
@@ -33,33 +33,33 @@
         <divider color="rule" thickness="0.5pt" />
 
         <!-- How it works -->
-        <stack gap="m">
+        <column gap="m">
           <text font-size="l" font="Helvetica-Bold" color="primary">How It Works</text>
           <text font-size="m">PDF encryption (RC4-128, algorithm V=2 R=3) is applied as a post-processing pass after document assembly. The engine derives a 128-bit file encryption key from the password and permission flags, then encrypts all string literals and stream bytes in-place. Object offsets stay valid because RC4 is length-preserving.</text>
-        </stack>
+        </column>
 
         <!-- API -->
-        <stack gap="m">
+        <column gap="m">
           <text font-size="l" font="Helvetica-Bold" color="primary">API</text>
           <text font-size="m" color="muted">Call setEncryption before renderPdf — the PDF bytes are then returned already encrypted.</text>
           <frame background="bg" padding="m" radius="4pt" border="0.5pt rule">
-            <stack gap="xs">
+            <column gap="xs">
               <text font-size="m" font="Helvetica-Bold">Permissions only (no open password)</text>
               <text font-size="m">engine.setEncryption("", "s3cr3t", { print: false, copy: false })</text>
               <text font-size="m" color="muted">File opens without prompting; cooperative viewers enforce the flags.</text>
-            </stack>
+            </column>
           </frame>
           <frame background="bg" padding="m" radius="4pt" border="0.5pt rule">
-            <stack gap="xs">
+            <column gap="xs">
               <text font-size="m" font="Helvetica-Bold">With open password</text>
               <text font-size="m">engine.setEncryption("password", "owner", { copy: false })</text>
               <text font-size="m" color="muted">Viewers prompt for the user password before displaying content.</text>
-            </stack>
+            </column>
           </frame>
-        </stack>
+        </column>
 
         <!-- Permission flags table -->
-        <stack gap="m">
+        <column gap="m">
           <text font-size="l" font="Helvetica-Bold" color="primary">Permission Flags</text>
           <table cols="1fr 2fr" border="0.5pt rule" stripe="bg">
             <thead background="accent">
@@ -95,17 +95,17 @@
               <td padding="s"><text font-size="m">High-quality printing degraded to low resolution</text></td>
             </tr>
           </table>
-        </stack>
+        </column>
 
         <!-- Caveat -->
         <frame background="accent" padding="m" radius="4pt" border="0.5pt rule">
-          <stack gap="xs">
+          <column gap="xs">
             <text font-size="m" font="Helvetica-Bold" color="primary">Note on strength</text>
             <text font-size="m">Permission flags are advisory — cooperative viewers honour them, but tools such as qpdf can strip them in seconds when the open password is empty. They are a deterrent, not a lock. For strong access control, pair with an open password.</text>
-          </stack>
+          </column>
         </frame>
 
-      </stack>
+      </column>
       </layout>
     </section>
 

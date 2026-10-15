@@ -14,7 +14,7 @@
                    within a section: a report that numbers its pages is one section
       sections     each section sets its own page. The last one here is tabloid, landscape, and
                    holds only a canvas: a world map drawn as paths, with a marker for each site
-      paginate     paginate="no" on a box keeps it whole: a heading stack moves to the next page
+      paginate     paginate="no" on a box keeps it whole: a heading column moves to the next page
                    with its paragraph instead of stranding the heading. It is set on each section
                    of text here, and the tables are left to split, their header repeating
 
@@ -66,24 +66,24 @@
 
         <!-- the header: pages 2 to the last. It is first in the layout, so it is the header -->
         <region pin="top" page="2-last">
-          <stack gap="xs">
+          <column gap="xs">
             <flank end="true" align="center">
               <text font-size="s" bold="true" color="primary">Brightwork Studio</text>
               <text font-size="s" color="text-muted" data-value="report.title">Data Centers Worldwide</text>
             </flank>
             <divider color="rule" thickness="xs" />
-          </stack>
+          </column>
         </region>
 
 
-        <!-- the title, on the band. The stack is as tall as the band below the margin: 162pt less 54pt -->
-        <stack gap="xs" height="122pt">
+        <!-- the title, on the band. The column is as tall as the band below the margin: 162pt less 54pt -->
+        <column gap="xs" height="122pt">
           <text font-size="s" bold="true" color="surface">BRIGHTWORK STUDIO</text>
           <text font-size="xxl" bold="true" color="surface" data-value="report.title">Data Centers Worldwide</text>
           <text color="surface" data-value="report.period">Cloud regions and AI campuses, October 2026</text>
-        </stack>
+        </column>
 
-        <stack gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
+        <column gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
           <text font-size="l" bold="true" color="primary">Summary</text>
           <divider color="primary" thickness="xs" />
           <text>
@@ -94,25 +94,25 @@
             tracks 93, and the 72 that are already running draw 13.7 GW of IT
             power, 86% of it in the United States.
           </text>
-        </stack>
+        </column>
 
         <grid cols="4" gap="m" padding="0pt 0pt 14pt 0pt">
-          <stack gap="xs">
+          <column gap="xs">
             <text font-size="xl" bold="true" color="primary" data-value="summary.regions">132</text>
             <text font-size="s" color="text-muted">Cloud regions</text>
-          </stack>
-          <stack gap="xs">
+          </column>
+          <column gap="xs">
             <text font-size="xl" bold="true" color="primary" data-value="summary.zones">353</text>
             <text font-size="s" color="text-muted">Availability zones</text>
-          </stack>
-          <stack gap="xs">
+          </column>
+          <column gap="xs">
             <text font-size="xl" bold="true" color="ai" data-value="summary.running">72</text>
             <text font-size="s" color="text-muted">AI campuses running</text>
-          </stack>
-          <stack gap="xs">
+          </column>
+          <column gap="xs">
             <text font-size="xl" bold="true" color="ai" data-value="summary.power">13.7 GW</text>
             <text font-size="s" color="text-muted">AI IT power today</text>
-          </stack>
+          </column>
         </grid>
 
         <!-- two images side by side: split equal gives each half the width -->
@@ -122,11 +122,11 @@
         </split>
 
         <!-- the two kinds, side by side -->
-        <stack gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
+        <column gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
           <text font-size="l" bold="true" color="primary">Two kinds of data center</text>
           <divider color="primary" thickness="xs" />
           <split equal="true" gap="m" align="start">
-            <stack gap="s" padding="m" background="accent" radius="m">
+            <column gap="s" padding="m" background="accent" radius="m">
               <text bold="true" color="primary">Cloud region</text>
               <text font-size="s">
                 A group of data centers in one metro area, split into zones that fail
@@ -139,8 +139,8 @@
               <text font-size="s" color="text-muted">
                 Counted in regions and zones. The providers do not publish building counts.
               </text>
-            </stack>
-            <stack gap="s" padding="m" background="ai-soft" radius="m">
+            </column>
+            <column gap="s" padding="m" background="ai-soft" radius="m">
               <text bold="true" color="ai">AI campus</text>
               <text font-size="s">
                 One site built around a single very large cluster of accelerator chips, to train
@@ -153,11 +153,11 @@
                 Counted in megawatts of IT power. The figures are Epoch AI's estimates, from
                 permits, satellite images and company statements.
               </text>
-            </stack>
+            </column>
           </split>
-        </stack>
+        </column>
 
-        <stack gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
+        <column gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
           <text font-size="l" bold="true" color="primary">Cloud regions</text>
           <divider color="primary" thickness="xs" />
           <text>
@@ -166,7 +166,7 @@
             Tokyo and Singapore, appear in all three. 35 of the 76 metro areas
             have regions from more than one provider.
           </text>
-        </stack>
+        </column>
 
         <table cols="3fr 2fr 2fr 8fr" stripe="accent" padding="0pt 0pt 14pt 0pt">
           <thead background="primary">
@@ -189,7 +189,7 @@
           </tr>
         </table>
 
-        <stack gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
+        <column gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
           <text>
             Azure lists the most regions, but 17 of its 57 have no
             availability zones and 8 are open only by request, so it lists fewer
@@ -197,9 +197,9 @@
             has the most regions of any area, 43, ahead of Europe with 38 and
             North America with 31. Africa and South America have the fewest.
           </text>
-        </stack>
+        </column>
 
-        <stack gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
+        <column gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
           <text font-size="l" bold="true" color="ai">AI campuses</text>
           <divider color="ai" thickness="xs" />
           <text>
@@ -211,7 +211,7 @@
             AI's estimate of the full build-out.
           </text>
           <text font-size="s" bold="true">Largest running campuses</text>
-        </stack>
+        </column>
 
         <table cols="8fr 6fr 10fr 5fr 5fr" stripe="ai-soft" padding="0pt 0pt 14pt 0pt">
           <thead background="ai">
@@ -230,14 +230,14 @@
           </tr>
         </table>
 
-        <stack gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
+        <column gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
           <text>
             9 campuses show no running capacity yet. Most of them plan close to a
             gigawatt or more by 2028: Meta's Hyperion in Louisiana, and the Stargate sites in
             New Mexico, Texas, Michigan and Wisconsin and in Abu Dhabi.
           </text>
           <text font-size="s" bold="true">Under construction</text>
-        </stack>
+        </column>
 
         <table cols="8fr 6fr 10fr 5fr 5fr" stripe="ai-soft" padding="0pt 0pt 14pt 0pt">
           <thead background="ai">
@@ -256,7 +256,7 @@
           </tr>
         </table>
 
-        <stack gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
+        <column gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
           <text font-size="l" bold="true" color="primary">What it means</text>
           <divider color="primary" thickness="xs" />
           <text>
@@ -273,9 +273,9 @@
             The map on the last page shows both. Cloud regions spread across the metro areas of the
             world. AI campuses cluster, and most of them are in the United States.
           </text>
-        </stack>
+        </column>
 
-        <stack gap="m" paginate="no">
+        <column gap="m" paginate="no">
           <text font-size="l" bold="true" color="primary">Sources and method</text>
           <divider color="primary" thickness="xs" />
           <text font-size="s">
@@ -296,18 +296,18 @@
             for campuses and metro level for cloud regions, so a marker can be off by a few
             kilometers.
           </text>
-        </stack>
+        </column>
 
 
         <!-- the footer: every page. It is last in the layout, so it is the footer -->
         <region pin="bottom" page="each">
-          <stack gap="xs">
+          <column gap="xs">
             <divider color="rule" thickness="xs" />
             <flank end="true" align="center">
               <text font-size="s" color="text-muted">Prepared for internal use. Figures as of October 2026.</text>
               <text font-size="s" color="text-muted" align="right">Page {page} of {pages}</text>
             </flank>
-          </stack>
+          </column>
         </region>
 
       </layout>

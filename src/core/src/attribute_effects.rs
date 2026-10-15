@@ -7,7 +7,7 @@
 //
 // Three more checks keep the test honest:
 // - For an enumeration or a boolean, every value but the default has to change the PDF too, so a value the
-//   engine does not implement (cluster align="stretch") is found as well as a whole attribute.
+//   engine does not implement (row align="stretch") is found as well as a whole attribute.
 // - What the engine does not use yet is listed in IGNORED and IGNORED_VALUES with the reason, and the test
 //   requires it to stay unused: the day it is implemented the test fails, and the entry goes.
 // - Every attribute of the schema has to be tested, listed in UNTESTED or be a data-binding attribute, and every
@@ -86,8 +86,8 @@ const IGNORED: &[(&str, &str)] = &[
 /// Values of an enumeration the engine does not use yet: `element@attribute=value`, and why. Each has to stay
 /// without effect, like the entries of IGNORED.
 const IGNORED_VALUES: &[(&str, &str)] = &[(
-    "cluster@align=stretch",
-    "a cluster does not stretch its children to the height of the line, so stretch places them as start does",
+    "row@align=stretch",
+    "a row does not stretch its children to the height of the line, so stretch places them as start does",
 )];
 
 /// Attributes that change the PDF file and not what a page shows: `element@attribute`, and why. The test cannot
@@ -106,10 +106,10 @@ const UNTESTED: &[(&str, &str)] = &[
         "image@src",
         "read by the SDKs, which load the file and hand it to the engine under the image's name or ref; the engine never sees it",
     ),
-    ("stack@paginate", PAGINATE),
+    ("column@paginate", PAGINATE),
     ("flank@paginate", PAGINATE),
     ("split@paginate", PAGINATE),
-    ("cluster@paginate", PAGINATE),
+    ("row@paginate", PAGINATE),
     ("grid@paginate", PAGINATE),
     ("frame@paginate", PAGINATE),
     ("td@paginate", PAGINATE),
@@ -414,7 +414,7 @@ const IMAGES: &str = r#"<assets><image name="logo"/><image name="other"/></asset
 const BOOKMARKED: &str =
     r#"<bookmark label="Methods"/><text>Methods</text><bookmark label="Data" level="2"/><text>Data</text>"#;
 /// The content of a table of contents: one text per entry.
-const TOC: &str = r#"<stack data-source="$toc"><text data-value="label">Entry</text></stack>"#;
+const TOC: &str = r#"<column data-source="$toc"><text data-value="label">Entry</text></column>"#;
 const TWO: &str = "<text>Alpha</text><text>Beta</text>";
 const FOUR: &str = "<text>A</text><text>B</text><text>C</text><text>D</text>";
 const ONE: &str = "<text>Alpha</text>";
@@ -490,16 +490,16 @@ fn subjects() -> Vec<Subject> {
         })
         .base(&[("name", "brand"), ("value", "#336699")]),
         // The token scale: each row is used by the attribute it scales.
-        Subject::new("tokens:space", |a, _| token_row("space", a, |s| format!(r#"<stack gap="{s}">{TWO}</stack>"#)))
+        Subject::new("tokens:space", |a, _| token_row("space", a, |s| format!(r#"<column gap="{s}">{TWO}</column>"#)))
             .base(&[("xs", "2pt"), ("s", "4pt"), ("m", "8pt"), ("l", "16pt"), ("xl", "24pt"), ("xxl", "32pt")]),
-        Subject::new("tokens:border", |a, _| token_row("border", a, |s| format!(r##"<stack border="{s} #000000">{TWO}</stack>"##)))
+        Subject::new("tokens:border", |a, _| token_row("border", a, |s| format!(r##"<column border="{s} #000000">{TWO}</column>"##)))
             .base(&[("xs", "1pt"), ("s", "2pt"), ("m", "3pt"), ("l", "4pt"), ("xl", "5pt"), ("xxl", "6pt")]),
         Subject::new("tokens:radius", |a, _| {
-            token_row("radius", a, |s| format!(r##"<stack background="#cccccc" radius="{s}" height="100pt">{TWO}</stack>"##))
+            token_row("radius", a, |s| format!(r##"<column background="#cccccc" radius="{s}" height="100pt">{TWO}</column>"##))
         })
         .base(&[("xs", "1pt"), ("s", "2pt"), ("m", "4pt"), ("l", "8pt"), ("xl", "12pt"), ("xxl", "16pt")]),
         Subject::new("tokens:width", |a, _| {
-            token_row("width", a, |s| format!(r##"<stack background="#cccccc" width="{s}">{TWO}</stack>"##))
+            token_row("width", a, |s| format!(r##"<column background="#cccccc" width="{s}">{TWO}</column>"##))
         })
         .base(&[("xs", "40pt"), ("s", "80pt"), ("m", "120pt"), ("l", "160pt"), ("xl", "200pt"), ("xxl", "240pt")]),
         Subject::new("tokens:text-size", |a, _| token_row("text-size", a, |s| format!(r#"<text font-size="{s}">Alpha</text>"#)))
@@ -507,10 +507,10 @@ fn subjects() -> Vec<Subject> {
         Subject::new("tokens:grid", |a, _| token_row("grid", a, |s| format!(r#"<grid col-width="{s}">{FOUR}</grid>"#)))
             .base(&[("xs", "40pt"), ("s", "80pt"), ("m", "120pt"), ("l", "160pt"), ("xl", "200pt"), ("xxl", "240pt")]),
         // Layout containers.
-        Subject::new("stack", |a, c| boxed("stack", a, c)).content(TWO),
+        Subject::new("column", |a, c| boxed("column", a, c)).content(TWO),
         Subject::new("flank", |a, c| boxed("flank", a, c)).content(TWO),
         Subject::new("split", |a, c| boxed("split", a, c)).content(TWO),
-        Subject::new("cluster", |a, c| boxed("cluster", a, c)).content(TWO),
+        Subject::new("row", |a, c| boxed("row", a, c)).content(TWO),
         Subject::new("grid", |a, c| boxed("grid", a, c)).base(&[("cols", "2")]).content(FOUR),
         Subject::new("frame", |a, c| boxed("frame", a, c)).content(ONE),
         Subject::new("link", |a, c| boxed("link", a, c)).base(&[("href", "https://a.example")]).content(TWO),
@@ -620,7 +620,7 @@ impl Tweak {
     }
 }
 
-const BOXES: [&str; 7] = ["stack", "flank", "split", "cluster", "grid", "frame", "td"];
+const BOXES: [&str; 7] = ["column", "flank", "split", "row", "grid", "frame", "td"];
 
 fn tweaks() -> HashMap<String, Tweak> {
     let mut t: HashMap<String, Tweak> = HashMap::new();
@@ -632,18 +632,18 @@ fn tweaks() -> HashMap<String, Tweak> {
     for element in BOXES.iter().chain(["img"].iter()) {
         add(&format!("{element}@radius"), Tweak::default().set("background", "#cccccc"));
     }
-    for element in ["stack", "flank", "split", "cluster", "grid", "frame", "table"] {
+    for element in ["column", "flank", "split", "row", "grid", "frame", "table"] {
         add(&format!("{element}@width"), Tweak::default().set("background", "#cccccc"));
     }
 
     // Alignment across the row or column needs children that differ in size.
     const NARROW: &str = "<text width=\"90pt\">Alpha</text><text width=\"90pt\">Beta</text>";
-    const UNEVEN: &str = "<stack background=\"#cccccc\"><text font-size=\"24pt\">Alpha</text></stack>\
-        <stack background=\"#cccccc\"><text font-size=\"8pt\">Beta, a little longer</text></stack>";
-    // A stack's children shrink to their text and sit at the start, the middle or the end of it; the
+    const UNEVEN: &str = "<column background=\"#cccccc\"><text font-size=\"24pt\">Alpha</text></column>\
+        <column background=\"#cccccc\"><text font-size=\"8pt\">Beta, a little longer</text></column>";
+    // A column's children shrink to their text and sit at the start, the middle or the end of it; the
     // texts here are aligned differently inside, so no two ways of placing them look alike.
     add(
-        "stack@align",
+        "column@align",
         Tweak::default()
             .content("<text align=\"left\">Alpha</text><text align=\"center\">Beta</text><text align=\"right\">Gamma</text>"),
     );
@@ -651,10 +651,10 @@ fn tweaks() -> HashMap<String, Tweak> {
     add("split@gap", Tweak::default().set("equal", "true"));
     add("flank@align", Tweak::default().content(UNEVEN));
     add("split@align", Tweak::default().content(UNEVEN));
-    add("cluster@align", Tweak::default().content(UNEVEN));
+    add("row@align", Tweak::default().content(UNEVEN));
     add("td@align", Tweak::default().content("<text width=\"40pt\">Alpha</text>"));
-    add("stack@justify", Tweak::default().set("height", "300pt"));
-    add("cluster@justify", Tweak::default().content(NARROW));
+    add("column@justify", Tweak::default().set("height", "300pt"));
+    add("row@justify", Tweak::default().content(NARROW));
 
     // A grid has either cols or col-width.
     add("grid@col-width", Tweak::default().remove("cols"));

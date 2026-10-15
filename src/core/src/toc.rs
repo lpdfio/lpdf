@@ -105,7 +105,7 @@ mod tests {
 
     /// A table of contents that lists each entry as its label and its page number.
     const TOC: &str = r#"<section type="toc"><layout>
-        <stack data-source="$toc"><text data-value="label">Label</text><text data-value="page">0</text></stack>
+        <column data-source="$toc"><text data-value="label">Label</text><text data-value="page">0</text></column>
     </layout></section>"#;
 
     #[test]
@@ -147,7 +147,7 @@ mod tests {
             .collect();
         let pages = render(&format!(
             r#"<section type="toc"><layout>
-                   <stack data-source="$toc"><flank><text data-value="label">Label</text><text data-value="page">0</text></flank></stack>
+                   <column data-source="$toc"><flank><text data-value="label">Label</text><text data-value="page">0</text></flank></column>
                </layout></section>
                <section><layout>{parts}</layout></section>"#
         ));
@@ -168,10 +168,10 @@ mod tests {
     fn link_to_hash_in_an_entry_points_at_its_bookmark() {
         let pages = render(
             r##"<section type="toc"><layout>
-                   <stack data-source="$toc">
+                   <column data-source="$toc">
                        <link href="#"><text data-value="label">Label</text></link>
                        <text>See <span href="#">there</span></text>
-                   </stack>
+                   </column>
                </layout></section>
                <section><layout>
                    <bookmark label="Alpha"/><text>Alpha</text>
@@ -196,7 +196,7 @@ mod tests {
     fn entries_are_indented_by_level() {
         let pages = render(
             r#"<section type="toc" toc-indent-step="20pt"><layout>
-                   <stack data-source="$toc"><text data-value="label">Label</text></stack>
+                   <column data-source="$toc"><text data-value="label">Label</text></column>
                </layout></section>
                <section><layout>
                    <bookmark label="Top"/><text>Top</text>
@@ -221,7 +221,7 @@ mod tests {
         let pages = render(
             r#"<section type="toc"><bookmark label="Contents"/><layout>
                    <bookmark label="Listed nowhere"/><text>Contents</text>
-                   <stack data-source="$toc"><text data-value="label">Label</text></stack>
+                   <column data-source="$toc"><text data-value="label">Label</text></column>
                </layout></section>
                <section><layout><bookmark label="Alpha"/><text>Alpha</text></layout></section>"#,
         );
@@ -235,7 +235,7 @@ mod tests {
         let mut doc = parse(&document(
             r#"<section type="toc"><layout>
                    <text data-value="title">Title</text>
-                   <stack data-source="$toc"><text data-value="label">Label</text></stack>
+                   <column data-source="$toc"><text data-value="label">Label</text></column>
                </layout></section>
                <section><layout><bookmark label="Alpha"/><text data-value="body">Body</text></layout></section>"#,
         )).unwrap();

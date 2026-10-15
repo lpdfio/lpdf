@@ -38,9 +38,9 @@
 //!
 //! | Depth | Elements added                                    |
 //! |-------|---------------------------------------------------|
-//! |  1    | stack + text only                                 |
+//! |  1    | column + text only                                |
 //! |  2    | + flank, divider, frame                           |
-//! |  3    | + grid (3-col), cluster, split                    |
+//! |  3    | + grid (3-col), row, split                        |
 //! |  4    | + table, nested grid                              |
 //! |  5    | + deep nested containers, spans, multi-col tables |
 
@@ -242,9 +242,9 @@ impl Gen {
         writeln!(self.buf, r#"          <divider/>"#).unwrap();
     }
 
-    // Depth-1 block: a stack of heading + paragraphs
-    fn block_stack(&mut self, idx: usize) {
-        writeln!(self.buf, r#"          <stack gap="m">"#).unwrap();
+    // Depth-1 block: a column of heading + paragraphs
+    fn block_column(&mut self, idx: usize) {
+        writeln!(self.buf, r#"          <column gap="m">"#).unwrap();
         self.heading(&format!("Section {idx}"));
         for _ in 0..3 {
             let n = self.next();
@@ -253,7 +253,7 @@ impl Gen {
                 r#"            <text font-size="m">Paragraph {n}. The layout engine processes each node in the document tree, computing sizes and positions. Each text node is measured using font advance-width tables and line-breaking rules applied to the available width.</text>"#
             ).unwrap();
         }
-        writeln!(self.buf, r#"          </stack>"#).unwrap();
+        writeln!(self.buf, r#"          </column>"#).unwrap();
     }
 
     // Depth-2: flank row (label + value)
@@ -274,10 +274,10 @@ impl Gen {
         writeln!(
             self.buf,
             r##"          <frame background="#f1f5f9" border="xs #e2e8f0" padding="m" radius="s">
-            <stack gap="xs">
+            <column gap="xs">
               <text font-size="m" font="Helvetica-Bold">Callout {n}</text>
               <text font-size="s" color="#64748b">This callout box highlights item {n} in the document flow and exercises background, border, padding, and radius rendering in the layout engine.</text>
-            </stack>
+            </column>
           </frame>"##
         ).unwrap();
     }
@@ -291,19 +291,19 @@ impl Gen {
             writeln!(
                 self.buf,
                 r##"            <frame background="#f8fafc" border="xs #e2e8f0" padding="m" radius="s">
-              <stack gap="s">
+              <column gap="s">
                 <text font-size="m" font="Helvetica-Bold">Grid {n}-{col}</text>
                 <text font-size="s" color="#475569">Card {cn}: column {col} of 3. Grid cells size to their content with equal column widths determined by the container.</text>
-              </stack>
+              </column>
             </frame>"##
             ).unwrap();
         }
         writeln!(self.buf, r#"          </grid>"#).unwrap();
     }
 
-    // Depth-3: cluster of badges
-    fn block_cluster(&mut self) {
-        writeln!(self.buf, r#"          <cluster gap="s">"#).unwrap();
+    // Depth-3: row of badges
+    fn block_row(&mut self) {
+        writeln!(self.buf, r#"          <row gap="s">"#).unwrap();
         for _ in 0..6 {
             let n = self.next();
             writeln!(
@@ -313,7 +313,7 @@ impl Gen {
             </frame>"##
             ).unwrap();
         }
-        writeln!(self.buf, r#"          </cluster>"#).unwrap();
+        writeln!(self.buf, r#"          </row>"#).unwrap();
     }
 
     // Depth-3: split row (left + right)
@@ -361,7 +361,7 @@ impl Gen {
         writeln!(
             self.buf,
             r##"          <frame background="#fff7ed" border="xs #fed7aa" padding="m" radius="s">
-            <stack gap="m">
+            <column gap="m">
               <text font-size="m" font="Helvetica-Bold">Nested container {n}</text>
               <grid cols="2" gap="s">"##
         ).unwrap();
@@ -369,27 +369,27 @@ impl Gen {
             let cn = self.next();
             writeln!(
                 self.buf,
-                r##"                <stack gap="xs">
+                r##"                <column gap="xs">
                   <text font-size="s" font="Helvetica-Bold">Sub {n}.{col}</text>
                   <text font-size="xs" color="#78350f">Detail {cn}: nested layout within a framed container with background, padding and border radius applied to the outer box.</text>
-                </stack>"##
+                </column>"##
             ).unwrap();
         }
         writeln!(
             self.buf,
             r#"              </grid>
-            </stack>
+            </column>
           </frame>"#
         ).unwrap();
     }
 
-    // Depth-5: deeply-nested structure (frame → grid → stack → flank → spans)
+    // Depth-5: deeply-nested structure (frame → grid → column → flank → spans)
     fn block_deep(&mut self) {
         let n = self.next();
         writeln!(
             self.buf,
             r##"          <frame background="#f0fdf4" border="xs #bbf7d0" padding="m" radius="m">
-            <stack gap="m">
+            <column gap="m">
               <text font-size="l" font="Helvetica-Bold">Deep section {n}</text>
               <grid cols="2" gap="m">"##
         ).unwrap();
@@ -397,7 +397,7 @@ impl Gen {
             let cn = self.next();
             writeln!(
                 self.buf,
-                r##"                <stack gap="s">
+                r##"                <column gap="s">
                   <flank>
                     <text font-size="m" font="Helvetica-Bold">Col {col} · {cn}</text>
                     <frame background="#dcfce7" padding="xs" radius="xs">
@@ -405,7 +405,7 @@ impl Gen {
                     </frame>
                   </flank>
                   <text font-size="s">Deeply nested content {cn}. <span font="Helvetica-Bold">Bold spans</span> and <span color="#2563eb">coloured spans</span> exercise the inline text-run splitting path in the layout engine alongside the nested container sizing logic.</text>
-                  <cluster gap="xs">"##
+                  <row gap="xs">"##
             ).unwrap();
             for t in 1..=3 {
                 let tn = self.next();
@@ -416,13 +416,13 @@ impl Gen {
                     </frame>"##
                 ).unwrap();
             }
-            writeln!(self.buf, r#"                  </cluster>"#).unwrap();
-            writeln!(self.buf, r#"                </stack>"#).unwrap();
+            writeln!(self.buf, r#"                  </row>"#).unwrap();
+            writeln!(self.buf, r#"                </column>"#).unwrap();
         }
         writeln!(
             self.buf,
             r#"              </grid>
-            </stack>
+            </column>
           </frame>"#
         ).unwrap();
     }
@@ -433,7 +433,7 @@ impl Gen {
     fn emit_section(&mut self, section_idx: usize) {
         writeln!(self.buf, r#"    <section>"#).unwrap();
         writeln!(self.buf, r#"      <layout>"#).unwrap();
-        writeln!(self.buf, r#"      <stack gap="l">"#).unwrap();
+        writeln!(self.buf, r#"      <column gap="l">"#).unwrap();
 
         // Always emit a heading + some body blocks
         self.heading(&format!("Section {section_idx}"));
@@ -441,27 +441,27 @@ impl Gen {
         match self.depth {
             1 => {
                 for i in 1..=3 {
-                    self.block_stack(i);
+                    self.block_column(i);
                 }
             }
             2 => {
-                self.block_stack(1);
+                self.block_column(1);
                 self.block_flank();
                 self.block_flank();
                 self.divider();
                 self.block_frame();
-                self.block_stack(2);
+                self.block_column(2);
             }
             3 => {
-                self.block_stack(1);
+                self.block_column(1);
                 self.divider();
                 self.block_grid();
                 self.block_split();
-                self.block_cluster();
+                self.block_row();
                 self.block_frame();
             }
             4 => {
-                self.block_stack(1);
+                self.block_column(1);
                 self.divider();
                 self.block_table();
                 self.divider();
@@ -474,11 +474,11 @@ impl Gen {
                 self.divider();
                 self.block_table();
                 self.block_nested_grid();
-                self.block_cluster();
+                self.block_row();
             }
         }
 
-        writeln!(self.buf, r#"      </stack>"#).unwrap();
+        writeln!(self.buf, r#"      </column>"#).unwrap();
         writeln!(self.buf, r#"      </layout>"#).unwrap();
         writeln!(self.buf, r#"    </section>"#).unwrap();
     }
@@ -577,7 +577,7 @@ fn build_data_xml(label: &str, n_sections: usize) -> String {
   <document size="a4" margin="48pt" font="body">
     <section>
       <layout>
-      <stack gap="l">
+      <column gap="l">
 
           <!-- document header -->
           <flank>
@@ -594,22 +594,22 @@ fn build_data_xml(label: &str, n_sections: usize) -> String {
         let si = format!("sections[{j}]", j = i - 1);
         buf.push_str(&format!(
             r##"          <!-- section {i} -->
-          <stack gap="m">
+          <column gap="m">
             <flank>
               <text font="heading" font-size="l" data-value="{si}.title">Section {i}</text>
               <text data-value="{si}.ref" align="right">REF-{i:03}</text>
             </flank>
-            <stack gap="xs">
+            <column gap="xs">
               <text font="heading" data-value="{si}.client">Client {i}</text>
               <text data-value="{si}.address">Address {i}</text>
-            </stack>
+            </column>
             <divider/>
-            <stack data-source="{si}.items" gap="xs">
+            <column data-source="{si}.items" gap="xs">
               <flank>
                 <text data-value="description">Item</text>
                 <text data-value="amount" align="right">$0.00</text>
               </flank>
-            </stack>
+            </column>
             <divider/>
             <flank>
               <text font="heading">Total</text>
@@ -621,7 +621,7 @@ fn build_data_xml(label: &str, n_sections: usize) -> String {
             <frame data-if-not="{si}.paid" background="#fef9c3" padding="xs" radius="xs">
               <text align="center" color="#854d0e">Pending</text>
             </frame>
-          </stack>
+          </column>
           <divider/>
 
 "##
@@ -629,7 +629,7 @@ fn build_data_xml(label: &str, n_sections: usize) -> String {
     }
 
     buf.push_str(
-        r#"      </stack>
+        r#"      </column>
       </layout>
     </section>
   </document>

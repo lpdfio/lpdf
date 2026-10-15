@@ -1,0 +1,211 @@
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf" />
+      <color name="surface"  value="#ffffff" />
+      <color name="bg"       value="#f5f7fa" />
+      <color name="accent"   value="#e8f0fc" />
+      <color name="muted"    value="#737373" />
+      <color name="rule"     value="#dde3ed" />
+    </colors>
+  </tokens>
+  <document size="a4" margin="40pt">
+    <meta title="lpdf Showcase — Cluster" subject="Layout primitives" />
+
+      <!-- Row -->
+    <section background="surface">
+      <layout>
+      <column gap="xl">
+
+        <column gap="xs">
+          <text font-size="xxl" font="Helvetica-Bold" color="primary">Cluster</text>
+          <text font-size="m" color="muted">Horizontal flex layout — children arranged left-to-right, wrapping across rows</text>
+        </column>
+
+        <!-- align (cross-axis = vertical) -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">align (cross-axis)</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">align="start" — items top-aligned</text>
+            <row debug="true" align="start" gap="s" background="bg" padding="s">
+              <column background="accent" padding="xs"><text font-size="m">Short</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Two</text><text font-size="m">lines</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Short</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">align="center" — items middle-aligned</text>
+            <row debug="true" align="center" gap="s" background="bg" padding="s">
+              <column background="accent" padding="xs"><text font-size="m">Short</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Two</text><text font-size="m">lines</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Short</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">align="end" — items bottom-aligned</text>
+            <row debug="true" align="end" gap="s" background="bg" padding="s">
+              <column background="accent" padding="xs"><text font-size="m">Short</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Two</text><text font-size="m">lines</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Short</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">align="stretch" — items fill row height</text>
+            <row debug="true" align="stretch" gap="s" background="bg" padding="s">
+              <column background="accent" padding="xs"><text font-size="m">Short</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Two</text><text font-size="m">lines</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Short</text></column>
+            </row>
+          </column>
+        </column>
+
+        <!-- justify (main-axis = horizontal) -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">justify (main-axis)</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">justify="start" (default)</text>
+            <row debug="true" justify="start" gap="s" background="bg" padding="s">
+              <column background="accent" padding="xs"><text font-size="m">Alpha</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Beta</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Gamma</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">justify="center"</text>
+            <row debug="true" justify="center" gap="s" background="bg" padding="s">
+              <column background="accent" padding="xs"><text font-size="m">Alpha</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Beta</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Gamma</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">justify="end"</text>
+            <row debug="true" justify="end" gap="s" background="bg" padding="s">
+              <column background="accent" padding="xs"><text font-size="m">Alpha</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Beta</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Gamma</text></column>
+            </row>
+          </column>
+        </column>
+
+        <!-- gap -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">gap</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">gap="xs"</text>
+            <row debug="true" gap="xs" background="bg" padding="s">
+              <column background="accent" padding="xs"><text font-size="m">Alpha</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Beta</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Gamma</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">gap="m"</text>
+            <row debug="true" gap="m" background="bg" padding="s">
+              <column background="accent" padding="xs"><text font-size="m">Alpha</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Beta</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Gamma</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">gap="xl"</text>
+            <row debug="true" gap="xl" background="bg" padding="s">
+              <column background="accent" padding="xs"><text font-size="m">Alpha</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Beta</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Gamma</text></column>
+            </row>
+          </column>
+        </column>
+
+        <!-- padding -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">padding</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">padding="xs"</text>
+            <row debug="true" padding="xs" background="bg">
+              <column background="accent" padding="xs"><text font-size="m">Alpha</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Beta</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">padding="l"</text>
+            <row debug="true" padding="l" background="bg">
+              <column background="accent" padding="xs"><text font-size="m">Alpha</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Beta</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">padding="20pt 8pt" (vertical · horizontal)</text>
+            <row debug="true" padding="20pt 8pt" background="bg">
+              <column background="accent" padding="xs"><text font-size="m">Alpha</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Beta</text></column>
+            </row>
+          </column>
+        </column>
+
+        <!-- border · radius -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">border · radius</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">border="xs rule" radius="xs"</text>
+            <row padding="s" gap="s" border="xs rule" radius="xs">
+              <column background="accent" padding="xs"><text font-size="m">Alpha</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Beta</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Gamma</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">border="s primary" radius="l"</text>
+            <row padding="m" gap="s" border="s primary" radius="l">
+              <column background="accent" padding="xs"><text font-size="m">Alpha</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Beta</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Gamma</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">background="accent" radius="m" padding="m"</text>
+            <row background="accent" radius="m" padding="m" gap="s">
+              <column background="surface" padding="xs" radius="xs"><text font-size="m">Alpha</text></column>
+              <column background="surface" padding="xs" radius="xs"><text font-size="m">Beta</text></column>
+              <column background="surface" padding="xs" radius="xs"><text font-size="m">Gamma</text></column>
+            </row>
+          </column>
+        </column>
+
+        <!-- wrapping -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">wrapping</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">Many items — cluster wraps across multiple rows</text>
+            <row debug="true" gap="s" background="bg" padding="s">
+              <column background="accent" padding="xs"><text font-size="m">Apple</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Banana</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Cherry</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Date</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Elderberry</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Fig</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Grape</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Honeydew</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Kiwi</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Lemon</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Mango</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Nectarine</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Orange</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Papaya</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Quince</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Raspberry</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Strawberry</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Tangerine</text></column>
+              <column background="accent" padding="xs"><text font-size="m">Watermelon</text></column>
+            </row>
+          </column>
+        </column>
+
+      </column>
+      </layout>
+    </section>
+
+  </document>
+</lpdf>

@@ -8,7 +8,7 @@ document:
     title: Getting Started with lpdf
   sections:
     - layout:
-        - stack:
+        - column:
             attr: { gap: l }
             nodes:
               # title

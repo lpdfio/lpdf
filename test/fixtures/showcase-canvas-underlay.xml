@@ -42,13 +42,13 @@
       <!-- Layout content flows over the underlay -->
       <layout>
         <!-- Spacer for the header band height -->
-        <stack height="60pt"/>
+        <column height="60pt"/>
 
-        <stack gap="xl" padding="0pt">
-          <stack gap="xs">
+        <column gap="xl" padding="0pt">
+          <column gap="xs">
             <text font-size="xl" font="Helvetica-Bold" color="primary">Letter of Engagement</text>
             <text font-size="m" color="muted">22 April 2026</text>
-          </stack>
+          </column>
 
           <divider color="rule" thickness="s"/>
 
@@ -154,10 +154,10 @@
           <divider color="rule" thickness="s"/>
 
           <text font-size="m">Yours faithfully,</text>
-          <stack height="30pt"/>
+          <column height="30pt"/>
           <text font-size="m" font="Helvetica-Bold">The LPDF Team</text>
           <text font-size="s" color="muted">lpdf.io</text>
-        </stack>
+        </column>
       </layout>
     </section>
   </document>

@@ -77,10 +77,10 @@ def block_xml(block, pad):
     if re.fullmatch(r'[\s*]+', block):
         return 'BREAK'
     if block.strip() == 'THE END':
-        return '%s<stack padding="22pt 0pt 0pt 0pt"><text font="heading" color="ink" align="center">THE END</text></stack>' % pad
+        return '%s<column padding="22pt 0pt 0pt 0pt"><text font="heading" color="ink" align="center">THE END</text></column>' % pad
     indents = [len(l) - len(l.lstrip(' ')) for l in lines]
     if min(indents) >= 5:
-        return ('%s<stack padding="0pt 0pt 0pt 20pt">\n%s  <text color="ink">%s</text>\n%s</stack>'
+        return ('%s<column padding="0pt 0pt 0pt 20pt">\n%s  <text color="ink">%s</text>\n%s</column>'
                 % (pad, pad, inline(block), pad))
     # verse: the lines are short. A wrapped paragraph fills its first line to about 70 characters, so a short
     # first line is verse, and so are three lines or more that are all under 63 (a two-line paragraph can be)
@@ -90,24 +90,24 @@ def block_xml(block, pad):
         for line, indent in zip(lines, indents):
             text = '<text color="ink">%s</text>' % inline(line)
             if indent:
-                rows.append('%s  <stack padding="0pt 0pt 0pt %dpt">%s</stack>' % (pad, indent * 3, text))
+                rows.append('%s  <column padding="0pt 0pt 0pt %dpt">%s</column>' % (pad, indent * 3, text))
             else:
                 rows.append('%s  %s' % (pad, text))
-        return '%s<stack gap="0pt" padding="0pt 0pt 0pt 14pt" paginate="no">\n%s\n%s</stack>' % (pad, '\n'.join(rows), pad)
+        return '%s<column gap="0pt" padding="0pt 0pt 0pt 14pt" paginate="no">\n%s\n%s</column>' % (pad, '\n'.join(rows), pad)
     return '%s<text color="ink">%s</text>' % (pad, inline(block))
 
 
 def chapter_xml(ch):
     pad = '        '
     out = [
-        '%s<stack gap="s" font-size="m" paginate="break-before">' % pad,
+        '%s<column gap="s" font-size="m" paginate="break-before">' % pad,
         '%s  <frame height="%dpt"><img name="chapter-%s" width="%dpt" height="%dpt" /></frame>'
         % (pad, FRAME_HEIGHT, ch['number'].lower(), round(PLATE_HEIGHT * IMAGES[ch['number']][1] / IMAGES[ch['number']][2]), PLATE_HEIGHT),
-        '%s  <stack gap="s" padding="8pt 0pt 18pt 0pt">' % pad,
+        '%s  <column gap="s" padding="8pt 0pt 18pt 0pt">' % pad,
         '%s    <text font-size="xs" color="muted">%s</text>' % (pad, roman_title(ch['number'])),
         '%s    <text font="heading" font-size="xl" color="ink">%s</text>' % (pad, esc(ch['title'])),
-        '%s    <stack width="26pt" height="1.5pt" background="gold-dark" />' % pad,
-        '%s  </stack>' % pad,
+        '%s    <column width="26pt" height="1.5pt" background="gold-dark" />' % pad,
+        '%s  </column>' % pad,
     ]
     previous_break = False
     blocks = [b for b in ch['blocks'] if not b.lstrip().startswith('[later editions')]   # verses that only later
@@ -116,9 +116,9 @@ def chapter_xml(ch):
             continue   # set below, with the paragraph before it
         xml = block_xml(block, pad + '  ')
         if n + 1 < len(blocks) and blocks[n + 1].strip() == 'THE END':
-            # the last paragraph and THE END in one stack that is never split, so that the end does not
-            # land alone on a page of its own (keep-next does not work between children of a stack)
-            xml = '%s  <stack gap="s" paginate="no">\n  %s\n  %s\n%s  </stack>' % (
+            # the last paragraph and THE END in one column that is never split, so that the end does not
+            # land alone on a page of its own (keep-next does not work between children of a column)
+            xml = '%s  <column gap="s" paginate="no">\n  %s\n  %s\n%s  </column>' % (
                 pad, xml, block_xml(blocks[n + 1], pad + '  '), pad)
         if xml == 'BREAK':
             if not previous_break:
@@ -127,7 +127,7 @@ def chapter_xml(ch):
             continue
         previous_break = False
         out.append(xml)
-    out.append('%s</stack>' % pad)
+    out.append('%s</column>' % pad)
     return '\n'.join(out)
 
 
@@ -262,29 +262,29 @@ xml = '''<lpdf version="1">
       <layout>
 
         <!-- the cover: the author at the top, the title, a line at the foot, with the watch between -->
-        <stack height="380pt" justify="between" padding="8pt 0pt 0pt 0pt">
-          <stack gap="xl">
+        <column height="380pt" justify="between" padding="8pt 0pt 0pt 0pt">
+          <column gap="xl">
             <text font-size="s" color="gold" align="center">LEWIS CARROLL</text>
-            <stack gap="xs">
+            <column gap="xs">
               <text font="heading" font-size="xxl" color="cream" align="center">Alice’s</text>
               <text font="heading" font-size="xxl" color="cream" align="center">Adventures</text>
               <text font="heading" font-size="xxl" color="cream" align="center">in Wonderland</text>
-            </stack>
-          </stack>
+            </column>
+          </column>
           <text font="italic" font-size="m" color="gold" align="center">With plates by Arthur Rackham</text>
-        </stack>
+        </column>
 
         <!-- the contents, on a page of its own -->
-        <stack gap="m" font-size="m" paginate="break-before" padding="26pt 0pt 0pt 0pt">
-          <stack gap="s">
+        <column gap="m" font-size="m" paginate="break-before" padding="26pt 0pt 0pt 0pt">
+          <column gap="s">
             <text font="heading" font-size="xl" color="ink">Contents</text>
-            <stack width="26pt" height="1.5pt" background="gold-dark" />
-          </stack>
+            <column width="26pt" height="1.5pt" background="gold-dark" />
+          </column>
           <table cols="2fr 11fr 2fr">
 %s
           </table>
           <text font="italic" font-size="s" color="muted">Illustrations by Arthur Rackham, 1907.</text>
-        </stack>
+        </column>
 
 %s
 
