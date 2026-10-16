@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.26.0 — 2026-10-16
+### Layout
+- **Breaking:** `<stack>` is now `<column>`, and `<cluster>` is now `<row>`, so each name says which way it lays out. Both work exactly as before, with the same attributes. A document that uses an old name fails with an error that names the new one, such as `<stack> at line 4, col 9: renamed to <column>`, and so does `"type": "stack"` in a JSON tree
+- **Breaking:** `<flank>` and `<split>` are removed, with their `end` and `equal` attributes, since a row now does what each did. `<flank>` becomes a `<row>` whose last child has `width="fill"` (its first child, for `end="true"`). `<split>` becomes `<row justify="between">`, and `<split equal="true">` a `<row>` with `width="fill"` on both children. A converted document renders the same PDF, except where a split's second child was wider than the space left: a row moves it to the next line, so give it `width="fill"`. A document that still uses either element fails with an error that says what to write instead
+- `width="fill"` on a child of a row takes the width its line leaves after the other children, shared equally when several on the line use it. A fill child never moves to the next line. In a column it takes the full width
+- `justify="between"` on a row puts each line's first child at the left edge, its last at the right, and the others evenly between
+
+### SDKs
+- **Breaking:** the `L` builder's `stack` and `cluster` are now `column` and `row`, with `ColumnAttr` and `RowAttr` in place of `StackAttr` and `ClusterAttr`. `flank` and `split` are removed, with `FlankAttr` and `SplitAttr`: use `row` with `width` set to `fill` or `justify` set to `between`, as under Layout
+
+### VS Code extension
+- Autocomplete and validation cover `column`, `row`, `width="fill"` and `justify="between"`, and the document templates use them
+
 ## v0.25.0 — 2026-10-11
 ### Documents
 - Bookmarks: `<bookmark>` adds an entry to the PDF's outline, the viewer's bookmark panel, nested by `level` (1 to 6). It marks the element that follows it, and directly inside a section it marks the section's first page
