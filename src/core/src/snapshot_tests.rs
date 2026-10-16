@@ -101,7 +101,7 @@ snapshot_test!(bench_xl);
 #[test]
 fn showcase_column() { run_snapshot("showcase-column"); }
 #[test]
-fn showcase_flank() { run_snapshot("showcase-flank"); }
+fn showcase_row_fill() { run_snapshot("showcase-row-fill"); }
 #[test]
 fn showcase_frame() { run_snapshot("showcase-frame"); }
 #[test]
@@ -109,7 +109,7 @@ fn showcase_grid() { run_snapshot("showcase-grid"); }
 #[test]
 fn showcase_row() { run_snapshot("showcase-row"); }
 #[test]
-fn showcase_split() { run_snapshot("showcase-split"); }
+fn showcase_row_between() { run_snapshot("showcase-row-between"); }
 #[test]
 fn showcase_table() { run_snapshot("showcase-table"); }
 #[test]

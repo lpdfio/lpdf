@@ -12,47 +12,60 @@
     </colors>
   </tokens>
   <document size="a4" margin="40pt">
-    <meta title="lpdf Showcase — Split" subject="Layout primitives" />
+    <meta title="lpdf Showcase — Row: between" subject="Layout primitives" />
 
-      <!-- Split -->
+      <!-- Row: between -->
     <section background="surface">
       <layout>
       <column gap="xl">
 
         <column gap="xs">
-          <text font-size="xxl" font="Helvetica-Bold" color="primary">Split</text>
-          <text font-size="m" color="muted">Two-column layout — first and second child placed side by side</text>
+          <text font-size="xxl" font="Helvetica-Bold" color="primary">Row: between</text>
+          <text font-size="m" color="muted">justify="between" spreads a line from edge to edge; two fill children share it in halves</text>
         </column>
 
-        <!-- equal -->
+        <!-- between -->
         <column gap="m">
-          <text font-size="l" font="Helvetica-Bold">equal</text>
+          <text font-size="l" font="Helvetica-Bold">justify="between"</text>
           <column gap="xs">
-            <text font-size="m" color="muted">equal="true" — both columns share width 50/50</text>
-            <row debug="true" gap="m" background="bg" padding="s">
-              <column width="fill" background="accent" padding="s"><text font-size="m">Left column — equal width</text></column>
-              <column width="fill" background="rule" padding="s"><text font-size="m">Right column — equal width</text></column>
-            </row>
-          </column>
-          <column gap="xs">
-            <text font-size="m" color="muted">equal="false" (default) — each child uses its natural width, spread to edges</text>
+            <text font-size="m" color="muted">each child keeps its natural width, the first at the left edge and the last at the right</text>
             <row justify="between" debug="true" background="bg" padding="s">
               <column background="accent" padding="s"><text font-size="m">Left</text></column>
               <column background="rule" padding="s"><text font-size="m">Right</text></column>
             </row>
           </column>
           <column gap="xs">
-            <text font-size="m" color="muted">equal="false" — first child has explicit width="120pt", second uses natural width</text>
+            <text font-size="m" color="muted">first child width="120pt", second its natural width</text>
             <row justify="between" debug="true" background="bg" padding="s">
               <column background="accent" padding="s" width="120pt"><text font-size="m">Fixed 120pt</text></column>
               <column background="rule" padding="s"><text font-size="m">Natural</text></column>
             </row>
           </column>
           <column gap="xs">
-            <text font-size="m" color="muted">equal="false" — second child has explicit width="100pt", first uses natural width</text>
+            <text font-size="m" color="muted">second child width="100pt", first its natural width</text>
             <row justify="between" debug="true" background="bg" padding="s">
               <column background="rule" padding="s"><text font-size="m">Natural</text></column>
               <column background="accent" padding="s" width="100pt"><text font-size="m">Fixed 100pt</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">three children — the middle one evenly between</text>
+            <row justify="between" debug="true" background="bg" padding="s">
+              <column background="accent" padding="s"><text font-size="m">Left</text></column>
+              <column background="rule" padding="s"><text font-size="m">Middle</text></column>
+              <column background="accent" padding="s"><text font-size="m">Right</text></column>
+            </row>
+          </column>
+        </column>
+
+        <!-- halves -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">width="fill" on both children</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">the two children share the width in halves; the sections below use them too</text>
+            <row debug="true" gap="m" background="bg" padding="s">
+              <column width="fill" background="accent" padding="s"><text font-size="m">Left column — equal width</text></column>
+              <column width="fill" background="rule" padding="s"><text font-size="m">Right column — equal width</text></column>
             </row>
           </column>
         </column>
