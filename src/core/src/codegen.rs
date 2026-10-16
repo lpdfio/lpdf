@@ -155,7 +155,6 @@ fn js_layout_method(tag: &str) -> &'static str {
         "document" => "document",
         "section"  => "section",
         "layout"   => "layout",
-        "canvas"   => "canvas",
         "layer"    => "layer",
         "tokens"   => "tokens",
         "column"   => "column",
@@ -201,7 +200,6 @@ fn dotnet_layout_method(tag: &str) -> &'static str {
         "document" => "Document",
         "section"  => "Section",
         "layout"   => "Layout",
-        "canvas"   => "Canvas",
         "layer"    => "Layer",
         "tokens"   => "Tokens",
         "column"   => "Column",
@@ -1520,7 +1518,6 @@ fn python_layout_method(tag: &str) -> &'static str {
         "document" => "document",
         "section"  => "section",
         "layout"   => "layout",
-        "canvas"   => "canvas",
         "layer"    => "layer",
         "tokens"   => "tokens",
         "column"   => "column",
@@ -1771,11 +1768,35 @@ mod tests {
     }
 
     #[test]
-    fn test_canvas_text_and_image_have_their_own_attribute_classes() {
-        let xml = r##"<lpdf version="1"><document><section><canvas><layer>
+    fn test_layers_are_section_children_before_and_after_the_layout() {
+        let xml = r##"<lpdf version="1"><document><section>
+            <layer page="first"><rect w="10pt" h="10pt"/></layer>
+            <layout><text>Body</text></layout>
+            <layer page="last"><rect w="10pt" h="10pt"/></layer>
+        </section></document></lpdf>"##;
+        for (target, layer, layout, section, canvas) in [
+            ("js", "L.layer(", "L.layout(", "L.section(", "L.canvas("),
+            ("python", "L.layer(", "L.layout(", "L.section(", "L.canvas("),
+            ("php", "L::layer(", "L::layout(", "L::section(", "L::canvas("),
+            ("dotnet", "L.Layer(", "L.Layout(", "L.Section(", "L.Canvas("),
+        ] {
+            let opts = CodegenOptions { target: target.into(), indent: 4 };
+            let out  = codegen(xml, &opts).unwrap();
+            let at = |call: &str| out.find(call).unwrap_or_else(|| panic!("{target}: no {call} in {out}"));
+            let first_layer = at(layer);
+            assert!(at(section) < first_layer, "{target}: {out}");
+            assert!(first_layer < at(layout), "{target}: {out}");
+            assert!(at(layout) < out.rfind(layer).unwrap(), "{target}: {out}");
+            assert!(!out.contains(canvas), "{target}: {out}");
+        }
+    }
+
+    #[test]
+    fn test_layer_text_and_image_have_their_own_attribute_classes() {
+        let xml = r##"<lpdf version="1"><document><section><layer>
             <text x="10pt" y="20pt">Hi</text>
             <img name="logo" x="0pt" y="0pt" w="10pt" h="10pt"/>
-        </layer></canvas></section></document></lpdf>"##;
+        </layer></section></document></lpdf>"##;
         for target in ["php", "python"] {
             let opts = CodegenOptions { target: target.into(), indent: 4 };
             let out  = codegen(xml, &opts).unwrap();

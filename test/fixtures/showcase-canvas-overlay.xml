@@ -15,7 +15,7 @@
     <meta title="lpdf Showcase — Canvas Overlay (DRAFT watermark)"
           subject="Layout + canvas overlay"/>
 
-    <!-- layout + canvas: canvas is overlaid on top of layout content -->
+    <!-- layout + layer: the layer is drawn over the layout content -->
   <section>
     <layout>
       <column gap="xl">
@@ -70,25 +70,23 @@
       </column>
     </layout>
 
-    <!-- Canvas overlay: DRAFT watermark rendered on top of layout content -->
-    <canvas>
-      <layer page="each" opacity="0.08">
-        <!-- Diagonal DRAFT text centred on the page -->
-        <text anchor="center" font-size="120pt" font="Helvetica-Bold" color="primary"
-              align="center">
-          DRAFT
-        </text>
-      </layer>
-      <!-- Border stamp in the top-right corner -->
-      <layer page="each">
-        <rect anchor="top-right" x="-30pt" y="30pt" w="80pt" h="30pt"
-              fill="#e74c3c" radius="4pt"/>
-        <text anchor="top-right" x="-30pt" y="30pt" font-size="10pt"
-              font="Helvetica-Bold" color="surface" align="center" w="80pt">
-          DRAFT
-        </text>
-      </layer>
-    </canvas>
+    <!-- A layer after the layout: DRAFT watermark rendered on top of layout content -->
+    <layer page="each" opacity="0.08">
+      <!-- Diagonal DRAFT text centred on the page -->
+      <text anchor="center" font-size="120pt" font="Helvetica-Bold" color="primary"
+            align="center">
+        DRAFT
+      </text>
+    </layer>
+    <!-- Border stamp in the top-right corner -->
+    <layer page="each">
+      <rect anchor="top-right" x="-30pt" y="30pt" w="80pt" h="30pt"
+            fill="#e74c3c" radius="4pt"/>
+      <text anchor="top-right" x="-30pt" y="30pt" font-size="10pt"
+            font="Helvetica-Bold" color="surface" align="center" w="80pt">
+        DRAFT
+      </text>
+    </layer>
   </section>
   </document>
 </lpdf>

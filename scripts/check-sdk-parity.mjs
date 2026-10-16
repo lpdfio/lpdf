@@ -33,7 +33,7 @@ const EXPECTED = {
     FontAttr: attributes('font'),
     ImageAttr: attributes('image'),
     RegionAttr: attributes('region', 'layout'),
-    LayerAttr: attributes('layer', 'canvas'),
+    LayerAttr: attributes('layer'),
     CanvasTextAttr: attributes('text', 'primitives'),
     CanvasImgAttr: attributes('img', 'primitives'),
 };
@@ -99,7 +99,9 @@ const scans = {
     python() {
         for (const file of files(path.join(repositories.python, 'src/lpdf'), '.py')) {
             for (const [, name, body] of read(file).matchAll(/^class (\w+)[^\n]*:\n((?:(?:    [^\n]*)?\n)+)/gm)) {
-                if (wanted(name)) found.python[name] = [...body.matchAll(/^    (\w+)\s*:\s*[^\n=]+/gm)].map((m) => m[1]).filter((n) => !n.startsWith('_')).map(kebab.snake);
+                // Without the docstring, whose wrapped lines can start with a word and a colon too.
+                const fields = body.replace(/"""[\s\S]*?"""/g, '');
+                if (wanted(name)) found.python[name] = [...fields.matchAll(/^    (\w+)\s*:\s*[^\n=]+/gm)].map((m) => m[1]).filter((n) => !n.startsWith('_')).map(kebab.snake);
             }
         }
     },

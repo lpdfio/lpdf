@@ -432,9 +432,9 @@ fn flow_with_images(inner: &str) -> String {
     lpdf(IMAGES, &format!("<document><section><layout>{inner}</layout></section></document>"))
 }
 
-/// A canvas of one layer, on a page of its own.
+/// One layer, on a page of its own.
 fn draw(layer: &str, shapes: &str) -> String {
-    lpdf(IMAGES, &format!("<document><section><canvas><layer {layer}>{shapes}</layer></canvas></section></document>"))
+    lpdf(IMAGES, &format!("<document><section><layer {layer}>{shapes}</layer></section></document>"))
 }
 
 /// Enough text for three pages, for what depends on the page.
@@ -538,7 +538,7 @@ fn subjects() -> Vec<Subject> {
             ))
         })
         .content(TWO),
-        // Regions and the canvas.
+        // Regions and layers.
         Subject::new("region", |a, _| {
             lpdf("", &format!("<document><section><layout><region {a}><text>Header</text></region>{}</layout></section></document>", pages()))
         })
@@ -547,7 +547,7 @@ fn subjects() -> Vec<Subject> {
             lpdf(
                 "",
                 &format!(
-                    r##"<document><section><canvas><layer {a}><rect x="50pt" y="50pt" w="100pt" h="60pt" fill="#ff0000"/></layer></canvas><layout>{}</layout></section></document>"##,
+                    r##"<document><section><layer {a}><rect x="50pt" y="50pt" w="100pt" h="60pt" fill="#ff0000"/></layer><layout>{}</layout></section></document>"##,
                     pages()
                 ),
             )

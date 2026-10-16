@@ -14,26 +14,24 @@
     <meta title="Offer of admission" author="Linden Vale University" />
     <section>
 
-      <!-- the logo: drawn on the canvas, behind the letter, at the top left corner of the text area.
+      <!-- the logo: drawn in a layer, behind the letter, at the top left corner of the text area.
            Coordinates are in points from the top left of the page, so 64pt is the margin. It is a crest,
            as a university has: a shield with an inner outline, and on it a star over an open book over
            the initials. The shield is one path, the same height as the four lines of the letterhead -->
-      <canvas>
-        <layer>
-          <path fill="primary" d="M 64 64 L 120 64 L 120 96 C 120 114 104 126 92 132 C 80 126 64 114 64 96 Z" />
-          <path stroke="surface" stroke-width="1pt" d="M 69 69 L 115 69 L 115 96 C 115 111 102 121 92 126 C 82 121 69 111 69 96 Z" />
-          <path fill="surface" d="M 92.0 72.5 L 93.6 76.8 L 98.2 77.0 L 94.6 79.8 L 95.8 84.3 L 92.0 81.7 L 88.2 84.3 L 89.4 79.8 L 85.8 77.0 L 90.4 76.8 Z" />
-          <path fill="surface" d="M 91 106 C 85 102 76 101 72 102.5 L 72 88 C 76 86.5 85 87 91 91 Z" />
-          <path fill="surface" d="M 93 106 C 99 102 108 101 112 102.5 L 112 88 C 108 86.5 99 87 93 91 Z" />
-          <line x1="75pt" y1="92pt" x2="88pt" y2="94pt" stroke="primary" stroke-width="0.9pt" />
-          <line x1="75pt" y1="96pt" x2="88pt" y2="98pt" stroke="primary" stroke-width="0.9pt" />
-          <line x1="75pt" y1="100pt" x2="88pt" y2="102pt" stroke="primary" stroke-width="0.9pt" />
-          <line x1="109pt" y1="92pt" x2="96pt" y2="94pt" stroke="primary" stroke-width="0.9pt" />
-          <line x1="109pt" y1="96pt" x2="96pt" y2="98pt" stroke="primary" stroke-width="0.9pt" />
-          <line x1="109pt" y1="100pt" x2="96pt" y2="102pt" stroke="primary" stroke-width="0.9pt" />
-          <text x="64pt" y="110pt" w="56pt" font="bold" font-size="8pt" color="surface" align="center">LV</text>
-        </layer>
-      </canvas>
+      <layer>
+        <path fill="primary" d="M 64 64 L 120 64 L 120 96 C 120 114 104 126 92 132 C 80 126 64 114 64 96 Z" />
+        <path stroke="surface" stroke-width="1pt" d="M 69 69 L 115 69 L 115 96 C 115 111 102 121 92 126 C 82 121 69 111 69 96 Z" />
+        <path fill="surface" d="M 92.0 72.5 L 93.6 76.8 L 98.2 77.0 L 94.6 79.8 L 95.8 84.3 L 92.0 81.7 L 88.2 84.3 L 89.4 79.8 L 85.8 77.0 L 90.4 76.8 Z" />
+        <path fill="surface" d="M 91 106 C 85 102 76 101 72 102.5 L 72 88 C 76 86.5 85 87 91 91 Z" />
+        <path fill="surface" d="M 93 106 C 99 102 108 101 112 102.5 L 112 88 C 108 86.5 99 87 93 91 Z" />
+        <line x1="75pt" y1="92pt" x2="88pt" y2="94pt" stroke="primary" stroke-width="0.9pt" />
+        <line x1="75pt" y1="96pt" x2="88pt" y2="98pt" stroke="primary" stroke-width="0.9pt" />
+        <line x1="75pt" y1="100pt" x2="88pt" y2="102pt" stroke="primary" stroke-width="0.9pt" />
+        <line x1="109pt" y1="92pt" x2="96pt" y2="94pt" stroke="primary" stroke-width="0.9pt" />
+        <line x1="109pt" y1="96pt" x2="96pt" y2="98pt" stroke="primary" stroke-width="0.9pt" />
+        <line x1="109pt" y1="100pt" x2="96pt" y2="102pt" stroke="primary" stroke-width="0.9pt" />
+        <text x="64pt" y="110pt" w="56pt" font="bold" font-size="8pt" color="surface" align="center">LV</text>
+      </layer>
 
       <layout>
         <column gap="l">

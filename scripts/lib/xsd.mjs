@@ -48,7 +48,7 @@ function documentation(node) {
 /**
  * Loads the schema. `element(name, where)` finds an element declaration: `where` is 'global' for a
  * top-level element, 'primitives' for a drawing primitive in the CanvasPrimitives group, or an element
- * name for one declared inside that element (`region` inside `layout`, `layer` inside `canvas`).
+ * name for one declared inside that element (`region` inside `layout`).
  */
 export function loadSchema(path) {
     const schema = parseXml(readFileSync(path, 'utf8'));

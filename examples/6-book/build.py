@@ -131,7 +131,7 @@ def chapter_xml(ch):
     return '\n'.join(out)
 
 
-# ---- the cover's watch, drawn on the canvas ----------------------------------------------------------------------
+# ---- the cover's watch, drawn in a layer -------------------------------------------------------------------------
 CX, CY = 153, 322
 
 
@@ -156,19 +156,19 @@ watch.append('<line x1="%dpt" y1="%dpt" x2="%.1fpt" y2="%.1fpt" stroke="gold" st
 watch.append('<line x1="%dpt" y1="%dpt" x2="%.1fpt" y2="%.1fpt" stroke="gold" stroke-width="1.4pt" line-cap="round" />' % (CX, CY, mx, my))
 watch.append('<circle cx="%dpt" cy="%dpt" r="3pt" fill="gold" />' % (CX, CY))
 
-# ---- headers: a canvas layer for each chapter, on the pages of that chapter after its first ----------------------
-# Drawn on the canvas, not as regions: Lpdf reserves room for every region whose page range it cannot count,
-# on every page, so twelve of them left no room for text. A canvas layer takes a page range and reserves nothing.
+# ---- headers: a layer for each chapter, on the pages of that chapter after its first -----------------------------
+# Drawn in layers, not as regions: Lpdf reserves room for every region whose page range it cannot count,
+# on every page, so twelve of them left no room for text. A layer takes a page range and reserves nothing.
 headers = []
 for i, ch in enumerate(chapters):
     first = starts[i] + 1
     last = (starts[i + 1] - 1) if i + 1 < len(chapters) else 'last'
     if last != 'last' and first > last:
         continue
-    headers.append('''        <layer page="%s-%s">
-          <text x="34pt" y="26pt" w="238pt" font-size="7pt" color="muted" align="center">%s  ·  %s</text>
-          <line x1="34pt" y1="38pt" x2="272pt" y2="38pt" stroke="rule" stroke-width="0.5pt" />
-        </layer>''' % (first, last, roman_title(ch['number']), esc(ch['title'].upper())))
+    headers.append('''      <layer page="%s-%s">
+        <text x="34pt" y="26pt" w="238pt" font-size="7pt" color="muted" align="center">%s  ·  %s</text>
+        <line x1="34pt" y1="38pt" x2="272pt" y2="38pt" stroke="rule" stroke-width="0.5pt" />
+      </layer>''' % (first, last, roman_title(ch['number']), esc(ch['title'].upper())))
 
 contents = []
 for i, ch in enumerate(chapters):
@@ -192,16 +192,16 @@ xml = '''<lpdf version="1">
       paginate       paginate="break-before" on a direct child of the layout starts a new page. Each
                      chapter, and the contents, is such a child, so each begins at the top of a page. On
                      a box inside another box it is ignored, and paginate="no" keeps a stanza whole
-      headers        the running head, the chapter's number and name, is a canvas layer with a page range:
+      headers        the running head, the chapter's number and name, is a layer with a page range:
                      page="4-9" shows it on those pages and no others. There is one for each chapter, and
-                     none on a chapter's first page, where the plate is. They are on the canvas and not
+                     none on a chapter's first page, where the plate is. They are layers and not
                      regions because Lpdf reserves room for every region whose pages it cannot count, on
                      every page: twelve regions left no room for text. A layer reserves nothing, so the
                      page's top margin, 56pt, holds the head, with 18pt between its rule and the text
       footer         a region, the last child of the layout: {page} on every page after the cover
       type           Crimson Text, a book face, in regular, italic and semibold, embedded from assets/fonts
                      (SIL Open Font License). The italic is used on the cover only: see the last paragraph
-      canvas         the cover is drawn: a panel, a frame and a pocket watch, from rects, circles and lines
+      layers         the cover is drawn in a layer: a panel, a frame and a pocket watch, from rects, circles and lines
       plates         each chapter opens with a picture in the top two-thirds of the page: an img inside a
                      frame 258pt tall, which centres it across and down, and the chapter's title begins
                      below it, at 66%% of the page height, with its text after it. The plates are by Arthur Rackham (1907, public
@@ -248,16 +248,14 @@ xml = '''<lpdf version="1">
     <section background="paper">
 
       <!-- the cover, on the first page only -->
-      <canvas>
-        <layer page="first">
-          <rect x="0pt" y="0pt" w="306pt" h="495pt" fill="cover" />
-          <rect x="14pt" y="14pt" w="278pt" h="467pt" stroke="gold" stroke-width="0.75pt" />
-          %s
-        </layer>
+      <layer page="first">
+        <rect x="0pt" y="0pt" w="306pt" h="495pt" fill="cover" />
+        <rect x="14pt" y="14pt" w="278pt" h="467pt" stroke="gold" stroke-width="0.75pt" />
+        %s
+      </layer>
 
-        <!-- the running heads, one layer for each chapter -->
+      <!-- the running heads, one layer for each chapter -->
 %s
-      </canvas>
 
       <layout>
 
@@ -297,7 +295,7 @@ xml = '''<lpdf version="1">
     </section>
   </document>
 </lpdf>
-''' % (','.join(str(n) for n in starts), '\n          '.join(watch), '\n'.join(headers),
+''' % (','.join(str(n) for n in starts), '\n        '.join(watch), '\n'.join(headers),
        '\n'.join(contents), '\n\n'.join(chapter_xml(ch) for ch in chapters))
 xml = xml.replace('@@IMAGES@@', images_xml)
 

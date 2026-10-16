@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use crate::tokens::{parse_pt, FontDef, FontWidths, Tokens};
-use crate::canvas::{self, Canvas};
+use crate::canvas;
 
 // ── Resolved document model (layout / render operate on these) ────────────────
 
@@ -23,8 +23,8 @@ pub struct Document {
 
 impl Document {
     /// Derive a flat `Vec<SectionLayout>` from sections for use with the layout engine.
-    /// Each section's layout child is converted to one `SectionLayout`.  Canvas children are
-    /// collected into `underlays` (before first layout) or `overlays` (after) per document order.
+    /// Each section's layout child is converted to one `SectionLayout`.  Its layers are
+    /// collected into `underlays` (before the layout) or `overlays` (after) per document order.
     pub fn section_layouts(&mut self) -> Vec<SectionLayout> {
         let mut result = Vec::new();
         for section in std::mem::take(&mut self.sections) {
@@ -35,8 +35,8 @@ impl Document {
                             .or_else(|| self.background.clone());
             let debug  = section.options.debug.unwrap_or(self.debug);
 
-            // Collect layout nodes including page_scope chrome nodes and canvas layers.
-            // Canvas layers before the first <layout> become underlays; after → overlays.
+            // Collect layout nodes including page_scope chrome nodes, and the layers.
+            // Layers before the <layout> become underlays; after → overlays.
             let mut children: Vec<Node> = Vec::new();
             let mut underlays: Vec<canvas::CanvasLayer> = Vec::new();
             let mut overlays:  Vec<canvas::CanvasLayer> = Vec::new();
@@ -52,11 +52,11 @@ impl Document {
                             }
                         }
                     }
-                    SectionChild::Canvas(cv) => {
+                    SectionChild::Layer(layer) => {
                         if seen_layout {
-                            overlays.extend(cv.layers);
+                            overlays.push(layer);
                         } else {
-                            underlays.extend(cv.layers);
+                            underlays.push(layer);
                         }
                     }
                 }
@@ -83,7 +83,7 @@ fn region_to_compat_node(reg: LayoutRegion) -> Node {
     }
 }
 
-// ── New section / canvas types ────────────────────────────────────────────────
+// ── Section types ─────────────────────────────────────────────────────────────
 
 /// A page-range within a `PageScope`.  `end = None` means "last".
 #[derive(Debug, Clone, PartialEq)]
@@ -130,7 +130,7 @@ pub enum LayoutChild {
 #[derive(Debug, Clone)]
 pub enum SectionChild {
     Layout(Vec<LayoutChild>),
-    Canvas(Canvas),
+    Layer(canvas::CanvasLayer),
 }
 
 /// Per-section overrides; `None` fields inherit document-level defaults.
@@ -1141,6 +1141,13 @@ fn parse_region_elem(
     Ok(LayoutRegion { pin, page, w, children, debug })
 }
 
+/// What to write instead of `<canvas>`, which the format no longer has.
+const CANVAS_REMOVED: &str =
+    "removed; put its <layer> elements directly in the <section>: before the <layout> to paint under it, after it to paint over it";
+
+/// What to write instead of a second `<layout>` in a section.
+const SECOND_LAYOUT: &str = "a <section> has at most one <layout>; put all of its flowing content in the first one";
+
 #[allow(clippy::too_many_arguments)]
 fn parse_section_elem(
     elem:           &roxmltree::Node,
@@ -1171,6 +1178,9 @@ fn parse_section_elem(
     for child in elems(elem) {
         match child.tag_name().name() {
             "layout" => {
+                if children.iter().any(|c| matches!(c, SectionChild::Layout(_))) {
+                    return Err(format!("<layout>{}: {SECOND_LAYOUT}", node_loc(&child)));
+                }
                 // Inline layout: build a Layout from its children (may include <region>).
                 let mut lc: Vec<LayoutChild> = Vec::new();
                 let mut pending = PendingBookmarks::default();
@@ -1188,11 +1198,12 @@ fn parse_section_elem(
                 pending.finish("layout").map_err(|e| format!("<layout>{}: {e}", node_loc(&child)))?;
                 children.push(SectionChild::Layout(lc));
             }
-            "canvas" => {
-                children.push(SectionChild::Canvas(
-                    canvas::parse_canvas_elem(&child, tokens, asset_images, size.0, size.1)?
+            "layer" => {
+                children.push(SectionChild::Layer(
+                    canvas::parse_layer_elem(&child, tokens, asset_images, size.0, size.1)?
                 ));
             }
+            "canvas" => return Err(format!("<canvas>{}: {CANVAS_REMOVED}", node_loc(&child))),
             "bookmark" => {
                 if bookmark.is_some() {
                     return Err(format!(
@@ -1203,7 +1214,7 @@ fn parse_section_elem(
                 bookmark = Some(xml_bookmark(&child)?);
             }
             other => return Err(format!(
-                "<{}>{}: unexpected child in <section> — expected <bookmark>, <layout> or <canvas>",
+                "<{}>{}: unexpected child in <section> — expected <bookmark>, <layer> or <layout>",
                 other, node_loc(&child)
             )),
         }
@@ -1211,7 +1222,7 @@ fn parse_section_elem(
 
     if children.is_empty() {
         return Err(format!(
-            "<section>{}: must have at least one <layout> or <canvas> child",
+            "<section>{}: must have at least one <layout> or <layer> child",
             node_loc(elem)
         ));
     }
@@ -2114,6 +2125,9 @@ fn parse_tree_section(
             let kind = child.get("type").and_then(|v| v.as_str());
             match kind {
                 Some("layout") => {
+                    if children.iter().any(|c| matches!(c, SectionChild::Layout(_))) {
+                        return Err(format!("node type 'layout': {SECOND_LAYOUT}"));
+                    }
                     let mut lc: Vec<LayoutChild> = Vec::new();
                     let mut pending = PendingBookmarks::default();
                     if let Some(nodes) = child.get("nodes").and_then(|v| v.as_array()) {
@@ -2138,24 +2152,21 @@ fn parse_tree_section(
                     }
                     bookmark = Some(tree_bookmark(child)?);
                 }
-                Some("canvas") => {
-                    let mut layers = Vec::new();
-                    if let Some(nodes) = child.get("nodes").and_then(|v| v.as_array()) {
-                        for layer_json in nodes {
-                            layers.push(canvas::parse_tree_canvas_layer(layer_json, tokens, asset_images, size.0, size.1)?);
-                        }
-                    }
-                    children.push(SectionChild::Canvas(Canvas { layers }));
+                Some("layer") => {
+                    children.push(SectionChild::Layer(
+                        canvas::parse_tree_layer(child, tokens, asset_images, size.0, size.1)?
+                    ));
                 }
+                Some("canvas") => return Err(format!("node type 'canvas': {CANVAS_REMOVED}")),
                 other => return Err(format!(
-                    "section child 'type' must be 'bookmark', 'layout' or 'canvas', got {:?}", other
+                    "section child 'type' must be 'bookmark', 'layer' or 'layout', got {:?}", other
                 )),
             }
         }
     }
 
     if children.is_empty() {
-        return Err("section must have at least one layout or canvas child".into());
+        return Err("section must have at least one layout or layer child".into());
     }
 
     Ok(Section {
@@ -2665,33 +2676,36 @@ mod tests {
         assert!(matches!(sc.children[0], SectionChild::Layout(_)));
     }
 
+    /// The layer a section child is, or a panic.
+    fn as_layer(child: &SectionChild) -> &canvas::CanvasLayer {
+        match child {
+            SectionChild::Layer(layer) => layer,
+            SectionChild::Layout(_)    => panic!("expected a layer"),
+        }
+    }
+
     #[test]
-    fn parse_section_canvas_only() {
+    fn parse_section_layers_only() {
         let xml = r##"<lpdf version="1">
             <document size="a4" margin="0pt">
                 <section>
-                    <canvas>
-                        <layer><rect w="100pt" h="50pt" fill="#ff0000"/></layer>
-                    </canvas>
+                    <layer><rect w="100pt" h="50pt" fill="#ff0000"/></layer>
                 </section>
             </document>
         </lpdf>"##;
         let doc = parse(xml).unwrap();
         assert_eq!(doc.sections.len(), 1);
-        assert!(matches!(doc.sections[0].children[0], SectionChild::Canvas(_)));
-        if let SectionChild::Canvas(ref cv) = doc.sections[0].children[0] {
-            assert_eq!(cv.layers.len(), 1);
-            assert_eq!(cv.layers[0].children.len(), 1);
-        }
+        assert_eq!(doc.sections[0].children.len(), 1);
+        assert_eq!(as_layer(&doc.sections[0].children[0]).children.len(), 1);
     }
 
     #[test]
-    fn parse_section_layout_plus_canvas() {
+    fn parse_section_layout_plus_layer() {
         let xml = r##"<lpdf version="1">
             <document size="a4" margin="0pt">
                 <section>
                     <layout><text>Body</text></layout>
-                    <canvas><layer page="each"><rect w="100pt" h="5pt" fill="#000000"/></layer></canvas>
+                    <layer page="each"><rect w="100pt" h="5pt" fill="#000000"/></layer>
                 </section>
             </document>
         </lpdf>"##;
@@ -2700,10 +2714,77 @@ mod tests {
     }
 
     #[test]
+    fn layers_before_the_layout_go_under_it_and_layers_after_it_over_it() {
+        let xml = r##"<lpdf version="1">
+            <document size="a4" margin="0pt">
+                <section>
+                    <layer page="first"><rect w="10pt" h="10pt" fill="#000"/></layer>
+                    <layer page="last"><rect w="10pt" h="10pt" fill="#000"/></layer>
+                    <layout><text>Body</text></layout>
+                    <layer page="odd"><rect w="10pt" h="10pt" fill="#000"/></layer>
+                    <layer page="even"><rect w="10pt" h="10pt" fill="#000"/></layer>
+                </section>
+            </document>
+        </lpdf>"##;
+        let mut doc = parse(xml).unwrap();
+        let layouts = doc.section_layouts();
+        let pages = |layers: &[canvas::CanvasLayer]| layers.iter().map(|l| l.page.clone()).collect::<Vec<_>>();
+        assert_eq!(pages(&layouts[0].underlays), vec![Some(PageScope::First), Some(PageScope::Last)]);
+        assert_eq!(pages(&layouts[0].overlays), vec![Some(PageScope::Odd), Some(PageScope::Even)]);
+    }
+
+    #[test]
+    fn canvas_is_an_error_that_says_where_its_layers_go() {
+        let err = parse(&document(r#"<section><canvas><layer/></canvas></section>"#)).unwrap_err();
+        assert!(err.contains("<canvas>") && err.contains("at line"), "{err}");
+        assert!(err.contains("<layer> elements directly in the <section>"), "{err}");
+    }
+
+    #[test]
+    fn second_layout_is_an_error() {
+        let err = parse(&document(
+            r#"<section><layout><text>a</text></layout><layer/><layout><text>b</text></layout></section>"#,
+        )).unwrap_err();
+        assert!(err.contains("<layout>") && err.contains("at line"), "{err}");
+        assert!(err.contains("at most one <layout>"), "{err}");
+    }
+
+    #[test]
+    fn tree_layers_parse_as_the_xml_does() {
+        let json = r##"{"version":1,"type":"document","attrs":{},"nodes":[
+            {"type":"section","attrs":{},"nodes":[
+                {"type":"layer","attrs":{"page":"first"},"nodes":[{"type":"rect","attrs":{"w":"10pt","h":"10pt"}}]},
+                {"type":"layout","nodes":[{"type":"text","attrs":{},"nodes":["Body"]}]},
+                {"type":"layer","attrs":{"page":"last"},"nodes":[]}]}]}"##;
+        let mut doc = parse_tree(json).unwrap();
+        let layouts = doc.section_layouts();
+        assert_eq!(layouts[0].underlays.len(), 1);
+        assert_eq!(layouts[0].underlays[0].page, Some(PageScope::First));
+        assert_eq!(layouts[0].underlays[0].children.len(), 1);
+        assert_eq!(layouts[0].overlays.len(), 1);
+        assert_eq!(layouts[0].overlays[0].page, Some(PageScope::Last));
+    }
+
+    #[test]
+    fn tree_canvas_and_second_layout_are_errors() {
+        let canvas = r#"{"version":1,"type":"document","attrs":{},"nodes":[
+            {"type":"section","attrs":{},"nodes":[{"type":"canvas","nodes":[{"type":"layer","attrs":{},"nodes":[]}]}]}]}"#;
+        let err = parse_tree(canvas).unwrap_err();
+        assert!(err.contains("'canvas'") && err.contains("<layer> elements directly in the <section>"), "{err}");
+
+        let layouts = r#"{"version":1,"type":"document","attrs":{},"nodes":[
+            {"type":"section","attrs":{},"nodes":[
+                {"type":"layout","nodes":[{"type":"text","attrs":{},"nodes":["a"]}]},
+                {"type":"layout","nodes":[{"type":"text","attrs":{},"nodes":["b"]}]}]}]}"#;
+        let err = parse_tree(layouts).unwrap_err();
+        assert!(err.contains("at most one <layout>"), "{err}");
+    }
+
+    #[test]
     fn parse_multi_section() {
         let xml = r##"<lpdf version="1">
             <document size="a4" margin="0pt">
-                <section title="Cover"><canvas><layer><rect w="100pt" h="100pt" fill="#000"/></layer></canvas></section>
+                <section title="Cover"><layer><rect w="100pt" h="100pt" fill="#000"/></layer></section>
                 <section title="Body"><layout><text>Hello</text></layout></section>
             </document>
         </lpdf>"##;
@@ -2755,105 +2836,90 @@ mod tests {
         assert_eq!(pages[0].children[0].kind, NodeKind::Text);
     }
 
-    // §5.2.8 canvas layer page scope
+    // §5.2.8 layer page scope
     #[test]
-    fn canvas_layer_page_scope() {
+    fn layer_page_scope() {
         let xml = r##"<lpdf version="1">
             <document size="a4" margin="0pt">
                 <section>
-                    <canvas>
-                        <layer page="odd"><rect w="10pt" h="10pt" fill="#000"/></layer>
-                        <layer page="2-4"><rect w="10pt" h="10pt" fill="#000"/></layer>
-                    </canvas>
+                    <layer page="odd"><rect w="10pt" h="10pt" fill="#000"/></layer>
+                    <layer page="2-4"><rect w="10pt" h="10pt" fill="#000"/></layer>
                 </section>
             </document>
         </lpdf>"##;
         let doc = parse(xml).unwrap();
-        if let SectionChild::Canvas(ref cv) = doc.sections[0].children[0] {
-            assert_eq!(cv.layers[0].page, Some(PageScope::Odd));
-            assert_eq!(cv.layers[1].page, Some(PageScope::Pages(vec![PageRange { start: 2, end: Some(4) }])));
-        } else {
-            panic!("expected canvas");
-        }
+        assert_eq!(as_layer(&doc.sections[0].children[0]).page, Some(PageScope::Odd));
+        assert_eq!(
+            as_layer(&doc.sections[0].children[1]).page,
+            Some(PageScope::Pages(vec![PageRange { start: 2, end: Some(4) }])),
+        );
     }
 
-    // §5.2.9 canvas primitives
+    // §5.2.9 layer primitives
     #[test]
-    fn canvas_rect_absolute_pos() {
+    fn layer_rect_absolute_pos() {
         use crate::canvas::CanvasPrimitive;
         let xml = r##"<lpdf version="1">
             <document size="a4" margin="0pt">
                 <section>
-                    <canvas>
-                        <layer>
-                            <rect x="10pt" y="20pt" w="100pt" h="50pt" fill="#ff0000" radius="4pt" opacity="0.5"/>
-                        </layer>
-                    </canvas>
+                    <layer>
+                        <rect x="10pt" y="20pt" w="100pt" h="50pt" fill="#ff0000" radius="4pt" opacity="0.5"/>
+                    </layer>
                 </section>
             </document>
         </lpdf>"##;
         let doc = parse(xml).unwrap();
-        if let SectionChild::Canvas(ref cv) = doc.sections[0].children[0] {
-            if let CanvasPrimitive::Rect(ref r) = cv.layers[0].children[0] {
-                assert!((r.x - 10.0).abs() < 0.01);
-                assert!((r.y - 20.0).abs() < 0.01);
-                assert!((r.w - 100.0).abs() < 0.01);
-                assert_eq!(r.fill.as_deref(), Some("#ff0000"));
-                assert!((r.radius.unwrap() - 4.0).abs() < 0.01);
-            } else { panic!("expected rect"); }
-        } else { panic!("expected canvas"); }
+        if let CanvasPrimitive::Rect(ref r) = as_layer(&doc.sections[0].children[0]).children[0] {
+            assert!((r.x - 10.0).abs() < 0.01);
+            assert!((r.y - 20.0).abs() < 0.01);
+            assert!((r.w - 100.0).abs() < 0.01);
+            assert_eq!(r.fill.as_deref(), Some("#ff0000"));
+            assert!((r.radius.unwrap() - 4.0).abs() < 0.01);
+        } else { panic!("expected rect"); }
     }
 
     #[test]
-    fn canvas_rect_anchored_pos() {
+    fn layer_rect_anchored_pos() {
         use crate::canvas::CanvasPrimitive;
         let xml = r##"<lpdf version="1">
             <document size="a4" margin="0pt">
                 <section>
-                    <canvas>
-                        <layer>
-                            <rect anchor="center" x="10pt" y="-5pt" w="50pt" h="20pt" fill="#000"/>
-                        </layer>
-                    </canvas>
+                    <layer>
+                        <rect anchor="center" x="10pt" y="-5pt" w="50pt" h="20pt" fill="#000"/>
+                    </layer>
                 </section>
             </document>
         </lpdf>"##;
         let doc = parse(xml).unwrap();
-        if let SectionChild::Canvas(ref cv) = doc.sections[0].children[0] {
-            if let CanvasPrimitive::Rect(ref r) = cv.layers[0].children[0] {
-                // A4 center = (297.64, 420.945), dx=10, dy=-5 → anchor point (307.64, 415.945)
-                // rect is 50×20pt, so top-left = anchor - (w/2, h/2) = (282.64, 405.945)
-                assert!((r.x - 282.64).abs() < 0.5);
-                assert!((r.y - 405.94).abs() < 0.5);
-            } else { panic!("expected rect"); }
-        } else { panic!("expected canvas"); }
+        if let CanvasPrimitive::Rect(ref r) = as_layer(&doc.sections[0].children[0]).children[0] {
+            // A4 center = (297.64, 420.945), dx=10, dy=-5 → anchor point (307.64, 415.945)
+            // rect is 50×20pt, so top-left = anchor - (w/2, h/2) = (282.64, 405.945)
+            assert!((r.x - 282.64).abs() < 0.5);
+            assert!((r.y - 405.94).abs() < 0.5);
+        } else { panic!("expected rect"); }
     }
 
     #[test]
-    fn canvas_text_with_spans() {
+    fn layer_text_with_spans() {
         use crate::canvas::CanvasPrimitive;
         let xml = r#"<lpdf version="1">
             <document size="a4" margin="0pt">
                 <section>
-                    <canvas>
-                        <layer>
-                            <text anchor="center" font-size="12pt">Hello <span font="Helvetica-Bold">world</span></text>
-                        </layer>
-                    </canvas>
+                    <layer>
+                        <text anchor="center" font-size="12pt">Hello <span font="Helvetica-Bold">world</span></text>
+                    </layer>
                 </section>
             </document>
         </lpdf>"#;
         let doc = parse(xml).unwrap();
-        if let SectionChild::Canvas(ref cv) = doc.sections[0].children[0] {
-            if let CanvasPrimitive::Text(ref t) = cv.layers[0].children[0] {
-                // A4 center = (297.64, 420.945)
-                assert!((t.x - 297.64).abs() < 0.5);
-                assert!((t.y - 420.94).abs() < 0.5);
-                assert!((t.font_size.unwrap() - 12.0).abs() < 0.01);
-                assert_eq!(t.runs.len(), 1);
-                assert_eq!(t.runs[0].font.as_deref(), Some("Helvetica-Bold"));
-            } else { panic!("expected text"); }
-        } else { panic!("expected canvas"); }
+        if let CanvasPrimitive::Text(ref t) = as_layer(&doc.sections[0].children[0]).children[0] {
+            // A4 center = (297.64, 420.945)
+            assert!((t.x - 297.64).abs() < 0.5);
+            assert!((t.y - 420.94).abs() < 0.5);
+            assert!((t.font_size.unwrap() - 12.0).abs() < 0.01);
+            assert_eq!(t.runs.len(), 1);
+            assert_eq!(t.runs[0].font.as_deref(), Some("Helvetica-Bold"));
+        } else { panic!("expected text"); }
     }
 
     // ── Error quality tests ───────────────────────────────────────────────────
@@ -3187,9 +3253,9 @@ mod tests {
     }
 
     #[test]
-    fn bookmark_is_not_allowed_in_canvas_or_between_table_rows() {
-        let canvas = document(r#"<section><canvas><layer><bookmark label="A"/></layer></canvas></section>"#);
-        assert!(parse(&canvas).is_err());
+    fn bookmark_is_not_allowed_in_a_layer_or_between_table_rows() {
+        let layer = document(r#"<section><layer><bookmark label="A"/></layer></section>"#);
+        assert!(parse(&layer).is_err());
         let table = minimal(r#"<table cols="1fr"><bookmark label="A"/><tr><td><text>a</text></td></tr></table>"#);
         let err = parse(&table).unwrap_err();
         assert!(err.contains("<td>"), "{err}");
@@ -3198,7 +3264,7 @@ mod tests {
     #[test]
     fn section_has_one_bookmark_of_its_own() {
         let mut doc = parse(&document(
-            r#"<section><bookmark label="Cover"/><canvas><layer/></canvas></section>"#,
+            r#"<section><bookmark label="Cover"/><layer/></section>"#,
         )).unwrap();
         let layouts = doc.section_layouts();
         assert_eq!(layouts[0].bookmark.as_ref().map(|b| b.id.as_str()), Some("cover"));
