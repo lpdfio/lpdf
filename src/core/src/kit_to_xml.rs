@@ -223,20 +223,20 @@ fn render_node(node: &Value, depth: usize) -> String {
     }
 }
 
-fn render_canvas_primitive(node: &Value, depth: usize) -> String {
+fn render_layer_primitive(node: &Value, depth: usize) -> String {
     let node_type = node.get("type").and_then(|v| v.as_str()).unwrap_or("");
     let pad       = "  ".repeat(depth);
     let empty     = serde_json::Map::new();
     let attrs     = node.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
 
     match node_type {
-        // Canvas text has the same content as layout text: strings, and span children for styled runs.
+        // Layer text has the same content as layout text: strings, and span children for styled runs.
         "text" => render_text_node(node, depth),
         tag => format!("{pad}<{tag}{}/>", attrs_str(attrs, &[])),
     }
 }
 
-fn render_canvas_layer(layer: &Value, depth: usize) -> String {
+fn render_layer(layer: &Value, depth: usize) -> String {
     let pad     = "  ".repeat(depth);
     let empty   = serde_json::Map::new();
     let attrs   = layer.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
@@ -245,7 +245,7 @@ fn render_canvas_layer(layer: &Value, depth: usize) -> String {
     match nodes {
         Some(arr) if !arr.is_empty() => {
             let prims: String = arr.iter()
-                .map(|n| render_canvas_primitive(n, depth + 1))
+                .map(|n| render_layer_primitive(n, depth + 1))
                 .collect::<Vec<_>>()
                 .join("\n");
             format!("{pad}<layer{attrs_s}>\n{prims}\n{pad}</layer>")
@@ -283,23 +283,15 @@ fn render_section(section: &Value, depth: usize) -> String {
                     _ => parts.push(format!("{inner}<layout/>")),
                 }
             }
-            "canvas" => {
-                match nodes {
-                    Some(arr) if !arr.is_empty() => {
-                        let layers_str: String = arr.iter()
-                            .map(|l| render_canvas_layer(l, depth + 2))
-                            .collect::<Vec<_>>()
-                            .join("\n");
-                        parts.push(format!("{inner}<canvas>\n{layers_str}\n{inner}</canvas>"));
-                    }
-                    _ => parts.push(format!("{inner}<canvas/>")),
-                }
-            }
+            "layer" => parts.push(render_layer(child, depth + 1)),
             "bookmark" => {
                 let bookmark_attrs = child.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
                 parts.push(format!("{inner}<bookmark{}/>", attrs_str(bookmark_attrs, &[])));
             }
-            _ => {}
+            "" => {}
+            // Any other child is written as it is, so that reading the XML reports it rather than the
+            // content being lost here: a `canvas` node, which the format no longer has, becomes `<canvas>`.
+            _ => parts.push(render_node(child, depth + 1)),
         }
     }
 
@@ -652,11 +644,11 @@ mod tests {
         doc_with_layout_child(&format!(r#"{{"type":"text","attrs":{attrs},"nodes":["Hello"]}}"#))
     }
 
-    /// One canvas primitive, as JSON, in a minimal document.
-    fn doc_with_canvas_child(child: &str) -> String {
+    /// One layer primitive, as JSON, in a minimal document.
+    fn doc_with_layer_child(child: &str) -> String {
         format!(
             r#"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
-                {{"type":"canvas","nodes":[{{"type":"layer","attrs":{{}},"nodes":[{child}]}}]}}]}}]}}"#
+                {{"type":"layer","attrs":{{}},"nodes":[{child}]}}]}}]}}"#
         )
     }
 
@@ -814,8 +806,8 @@ mod tests {
     }
 
     #[test]
-    fn canvas_primitives_are_written_under_their_schema_names() {
-        let json = doc_with_canvas_child(
+    fn layer_primitives_are_written_under_their_schema_names() {
+        let json = doc_with_layer_child(
             r##"{"type":"rect","attrs":{"x":"50pt","y":"50pt","w":"100pt","h":"60pt","fill":"#ff0000","radius":"8pt"}}"##,
         );
         let xml = kit_to_xml(&json).unwrap();
@@ -829,8 +821,8 @@ mod tests {
     }
 
     #[test]
-    fn canvas_text_is_written_with_its_content_and_span_children() {
-        let json = doc_with_canvas_child(
+    fn layer_text_is_written_with_its_content_and_span_children() {
+        let json = doc_with_layer_child(
             r##"{"type":"text","attrs":{"x":"50pt","y":"50pt"},"nodes":["Hello",{"type":"span","attrs":{"color":"#ff0000"},"nodes":["world"]}]}"##,
         );
         let xml = kit_to_xml(&json).unwrap();
@@ -843,7 +835,7 @@ mod tests {
     fn circle_and_ellipse_are_positioned_by_cx_and_cy() {
         for (shape, size) in [("circle", r#""r":"40pt""#), ("ellipse", r#""rx":"40pt","ry":"20pt""#)] {
             let at = |cx: &str| {
-                doc_with_canvas_child(&format!(
+                doc_with_layer_child(&format!(
                     r##"{{"type":"{shape}","attrs":{{"cx":"{cx}","cy":"200pt",{size},"fill":"#ff0000"}}}}"##
                 ))
             };
@@ -858,7 +850,7 @@ mod tests {
     #[test]
     fn circle_x_and_y_are_not_its_position() {
         let at = |x: &str| {
-            doc_with_canvas_child(&format!(
+            doc_with_layer_child(&format!(
                 r##"{{"type":"circle","attrs":{{"x":"{x}","y":"200pt","r":"40pt","fill":"#ff0000"}}}}"##
             ))
         };
@@ -870,7 +862,7 @@ mod tests {
     #[test]
     fn an_anchored_rect_is_placed_the_same_from_the_tree_and_from_the_xml() {
         for anchor in ["top-right", "center", "bottom-center", "bottom-left"] {
-            let kit = doc_with_canvas_child(&format!(
+            let kit = doc_with_layer_child(&format!(
                 r##"{{"type":"rect","attrs":{{"anchor":"{anchor}","x":"-18pt","y":"18pt","w":"80pt","h":"24pt","fill":"#ff0000"}}}}"##
             ));
             let (from_tree, from_xml) = rendered_both_ways(&kit);
@@ -883,8 +875,8 @@ mod tests {
         for anchor in ["top-right", "center", "bottom-center", "bottom-left"] {
             let kit = format!(
                 r#"{{"version":1,"type":"document","attrs":{{"assets":{{"images":[{{"name":"logo"}}]}}}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
-                    {{"type":"canvas","nodes":[{{"type":"layer","attrs":{{}},"nodes":[
-                        {{"type":"img","attrs":{{"name":"logo","anchor":"{anchor}","x":"-18pt","y":"18pt","w":"80pt","h":"24pt"}}}}]}}]}}]}}]}}"#
+                    {{"type":"layer","attrs":{{}},"nodes":[
+                        {{"type":"img","attrs":{{"name":"logo","anchor":"{anchor}","x":"-18pt","y":"18pt","w":"80pt","h":"24pt"}}}}]}}]}}]}}"#
             );
             let from_tree = crate::parse::parse_tree(&kit).unwrap();
             let from_xml = crate::parse::parse(&kit_to_xml(&kit).unwrap()).unwrap();
@@ -897,8 +889,34 @@ mod tests {
     }
 
     #[test]
-    fn canvas_image_is_read_by_name() {
-        let json = doc_with_canvas_child(
+    fn layers_are_written_before_and_after_the_layout_in_their_order() {
+        let json = r##"{"version":1,"type":"document","attrs":{},"nodes":[{"type":"section","attrs":{},"nodes":[
+            {"type":"layer","attrs":{"page":"first"},"nodes":[{"type":"rect","attrs":{"w":"100pt","h":"60pt","fill":"#ff0000"}}]},
+            {"type":"layout","nodes":[{"type":"text","attrs":{},"nodes":["Body"]}]},
+            {"type":"layer","attrs":{"page":"last"},"nodes":[{"type":"rect","attrs":{"w":"50pt","h":"30pt","fill":"#0000ff"}}]}]}]}"##;
+        let xml = kit_to_xml(json).unwrap();
+        let under = xml.find(r#"<layer page="first">"#).expect("the first layer is written");
+        let layout = xml.find("<layout>").expect("the layout is written");
+        let over = xml.find(r#"<layer page="last">"#).expect("the last layer is written");
+        assert!(under < layout && layout < over, "{xml}");
+        assert!(!xml.contains("<canvas"), "{xml}");
+        let (from_tree, from_xml) = rendered_both_ways(json);
+        assert_eq!(from_tree, from_xml);
+    }
+
+    #[test]
+    fn a_canvas_node_is_written_out_and_reading_it_says_where_its_layers_go() {
+        let json = r#"{"version":1,"type":"document","attrs":{},"nodes":[{"type":"section","attrs":{},"nodes":[
+            {"type":"canvas","nodes":[{"type":"layer","attrs":{},"nodes":[]}]}]}]}"#;
+        let xml = kit_to_xml(json).unwrap();
+        assert!(xml.contains("<canvas>"), "{xml}");
+        let err = crate::parse::parse(&xml).err().expect("<canvas> is rejected");
+        assert!(err.contains("<layer> elements directly in the <section>"), "{err}");
+    }
+
+    #[test]
+    fn layer_image_is_read_by_name() {
+        let json = doc_with_layer_child(
             r#"{"type":"img","attrs":{"name":"logo","x":"10pt","y":"10pt","w":"50pt","h":"50pt"}}"#,
         );
         let err = crate::parse::parse_tree(&json).err().expect("an undeclared asset is rejected");

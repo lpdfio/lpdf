@@ -3575,6 +3575,36 @@ mod tests {
         layout_document(&parse(xml).unwrap().section_layouts())
     }
 
+    // ── Layers ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn layers_before_the_layout_paint_under_it_and_layers_after_it_over_it() {
+        let lines: String = (1..=120).map(|n| format!("<text>Line {n}</text>")).collect();
+        let pages = render_pages(&format!(
+            r##"<lpdf version="1"><document size="a4" margin="28pt"><section>
+                <layer opacity="0.1"><rect w="10pt" h="10pt" fill="#000000"/></layer>
+                <layer opacity="0.2"><rect w="10pt" h="10pt" fill="#000000"/></layer>
+                <layout>{lines}</layout>
+                <layer opacity="0.3"><rect w="10pt" h="10pt" fill="#000000"/></layer>
+                <layer opacity="0.4" page="last"><rect w="10pt" h="10pt" fill="#000000"/></layer>
+            </section></document></lpdf>"##
+        ));
+        assert!(pages.len() > 1, "the layout should run to several pages");
+        for (i, page) in pages.iter().enumerate() {
+            let content: Vec<usize> = page.nodes.iter().enumerate()
+                .filter_map(|(k, n)| (!matches!(n, RenderNode::CanvasLayer(_))).then_some(k))
+                .collect();
+            let layers: Vec<(usize, f32)> = page.nodes.iter().enumerate()
+                .filter_map(|(k, n)| match n { RenderNode::CanvasLayer(l) => Some((k, l.opacity)), _ => None })
+                .collect();
+            let expected: &[f32] = if i + 1 == pages.len() { &[0.1, 0.2, 0.3, 0.4] } else { &[0.1, 0.2, 0.3] };
+            assert_eq!(layers.iter().map(|l| l.1).collect::<Vec<_>>(), expected, "page {i}");
+            let (first, last) = (content[0], content[content.len() - 1]);
+            assert!(layers[..2].iter().all(|l| l.0 < first), "page {i}: a layer before the layout is under it");
+            assert!(layers[2..].iter().all(|l| l.0 > last), "page {i}: a layer after the layout is over it");
+        }
+    }
+
     /// The page index and top of the first text whose content is `content`.
     fn text_at(pages: &[RenderPage], content: &str) -> (usize, f32) {
         fn find(nodes: &[RenderNode], content: &str) -> Option<f32> {

@@ -501,39 +501,28 @@
     </xs:choice>
   </xs:group>
 
-  <!-- Canvas wrapper: contains absolute-coordinate content.
+  <!-- layer: absolute-coordinate content, a direct child of <section>.
        Coordinates are top-left origin, y-down, relative to the full page.
-       Page targeting is via <layer page="…">; bare primitives are not permitted. -->
-  <xs:element name="canvas">
+       Graphics state scope (page, opacity, transform, clip). Cannot nest. -->
+  <xs:element name="layer">
     <xs:annotation>
-      <xs:documentation>Draws at exact positions on the page, independent of the flowing layout: watermarks, stamps, page furniture. Coordinates start at the top left corner of the whole page, not the margin, and y grows downward. Shapes must sit inside a layer.</xs:documentation>
+      <xs:documentation>Draws shapes at exact positions on the page, independent of the flowing layout: watermarks, stamps, page furniture. Coordinates start at the top left corner of the whole page, not the margin, and y grows downward. A layer before the section's layout paints under it, and one after paints over it. It sets what applies to all of its shapes: which pages they appear on, opacity, transform and clip. Layers cannot be nested.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
-        <!-- layer: graphics state scope (page, opacity, transform, clip).
-             All primitives must be inside a <layer>. Cannot nest. -->
-        <xs:element name="layer" minOccurs="0" maxOccurs="unbounded">
-          <xs:annotation>
-            <xs:documentation>Groups canvas shapes and sets what applies to all of them: which pages they appear on, opacity, transform and clip. Layers cannot be nested.</xs:documentation>
-          </xs:annotation>
-          <xs:complexType>
-            <xs:sequence>
-              <xs:group ref="CanvasPrimitives" minOccurs="0" maxOccurs="unbounded"/>
-            </xs:sequence>
-            <xs:attribute name="page"      type="PageScope"/>
-            <xs:attribute name="opacity">
-              <xs:simpleType>
-                <xs:restriction base="xs:decimal">
-                  <xs:minInclusive value="0"/>
-                  <xs:maxInclusive value="1"/>
-                </xs:restriction>
-              </xs:simpleType>
-            </xs:attribute>
-            <xs:attribute name="transform" type="xs:string"/>
-            <xs:attribute name="clip"      type="xs:string"/>
-          </xs:complexType>
-        </xs:element>
+        <xs:group ref="CanvasPrimitives" minOccurs="0" maxOccurs="unbounded"/>
       </xs:sequence>
+      <xs:attribute name="page"      type="PageScope"/>
+      <xs:attribute name="opacity">
+        <xs:simpleType>
+          <xs:restriction base="xs:decimal">
+            <xs:minInclusive value="0"/>
+            <xs:maxInclusive value="1"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+      <xs:attribute name="transform" type="xs:string"/>
+      <xs:attribute name="clip"      type="xs:string"/>
     </xs:complexType>
   </xs:element>
 
@@ -710,7 +699,7 @@
   </xs:element>
 
   <!-- document: holds default page settings; contains one or more sections.
-       layout and canvas go inside a section, never directly in document: the engine
+       layout and layers go inside a section, never directly in document: the engine
        stops with "unexpected element in <document>". -->
   <xs:element name="document">
     <xs:annotation>
@@ -733,26 +722,21 @@
   <!-- section: a content boundary with its own auto-pagination.
        Attributes override document-level defaults for this section only.
        title is read but not yet written to the PDF: there is no outline.
-       Four valid content combinations; document order = paint order. -->
+       Layers, then at most one layout, then layers; document order = paint order.
+       The layers after the layout sit in an optional group with it, so that a layer
+       matches only one particle (XSD 1.0's unique particle attribution). -->
   <xs:element name="section">
     <xs:annotation>
-      <xs:documentation>A run of pages with its own settings, which override the document's. Each section paginates on its own. A bookmark as its first child marks its first page. Its title is accepted but not used: the outline takes its entries from bookmarks.</xs:documentation>
+      <xs:documentation>A run of pages with its own settings, which override the document's. Each section paginates on its own. A bookmark as its first child marks its first page. It holds layers and at most one layout, painted in the order they are written: layers before the layout paint under it, and layers after it paint over it. A section with no layout is one page. Its title is accepted but not used: the outline takes its entries from bookmarks.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:element ref="bookmark" minOccurs="0"/>
-        <xs:choice minOccurs="0">
-          <!-- layout only, or layout + canvas overlay (layout painted first) -->
-          <xs:sequence>
-            <xs:element ref="layout"/>
-            <xs:element ref="canvas" minOccurs="0"/>
-          </xs:sequence>
-          <!-- canvas only, or canvas underlay + layout (canvas painted first) -->
-          <xs:sequence>
-            <xs:element ref="canvas"/>
-            <xs:element ref="layout" minOccurs="0"/>
-          </xs:sequence>
-        </xs:choice>
+        <xs:element ref="layer" minOccurs="0" maxOccurs="unbounded"/>
+        <xs:sequence minOccurs="0">
+          <xs:element ref="layout"/>
+          <xs:element ref="layer" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
       </xs:sequence>
       <xs:attribute name="size"        type="PageSize"/>
       <xs:attribute name="orientation" type="Orientation"/>

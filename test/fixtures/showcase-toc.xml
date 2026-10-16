@@ -14,16 +14,14 @@
     <meta title="lpdf Showcase — Bookmarks and Table of Contents"
           subject="bookmark, section type=toc and href=#id links"/>
 
-    <!-- Canvas-only cover: the section's own bookmark marks its page -->
+    <!-- Layer-only cover: the section's own bookmark marks its page -->
     <section margin="0pt">
       <bookmark label="Cover"/>
-      <canvas>
-        <layer>
-          <rect x="0pt" y="0pt" w="595pt" h="842pt" fill="primary"/>
-          <text x="56pt" y="380pt" font-size="32pt" font="Helvetica-Bold" color="#ffffff">Annual Report</text>
-          <text x="56pt" y="420pt" font-size="14pt" color="accent">Bookmarks, internal links and a table of contents</text>
-        </layer>
-      </canvas>
+      <layer>
+        <rect x="0pt" y="0pt" w="595pt" h="842pt" fill="primary"/>
+        <text x="56pt" y="380pt" font-size="32pt" font="Helvetica-Bold" color="#ffffff">Annual Report</text>
+        <text x="56pt" y="420pt" font-size="14pt" color="accent">Bookmarks, internal links and a table of contents</text>
+      </layer>
     </section>
 
     <!-- Table of contents: laid out after the other sections, bound to $toc -->

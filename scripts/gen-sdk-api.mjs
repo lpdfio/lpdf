@@ -39,7 +39,7 @@ const CLASSES = [
     ...['column', 'row', 'grid', 'frame', 'link', 'divider', 'span', 'img', 'barcode',
         'text', 'td', 'thead', 'tr', 'table', 'field', 'bookmark'].map((el) => ({ cls: `${pascal(el)}Attr`, el, where: 'global', area: 'layout' })),
     { cls: 'RegionAttr', el: 'region', where: 'layout', area: 'layout' },
-    { cls: 'LayerAttr', el: 'layer', where: 'canvas', area: 'canvas' },
+    { cls: 'LayerAttr', el: 'layer', where: 'global', area: 'canvas' },
     ...['rect', 'circle', 'ellipse', 'line', 'path'].map((el) => ({ cls: `${pascal(el)}Attr`, el, where: 'primitives', area: 'canvas' })),
     { cls: 'CanvasTextAttr', el: 'text', where: 'primitives', area: 'canvas' },
     { cls: 'CanvasImgAttr', el: 'img', where: 'primitives', area: 'canvas' },
@@ -78,7 +78,7 @@ function xmlDoc(text) {
 
 function summary(spec, element) {
     if (element.doc) return element.doc;
-    return `Attributes of the \`${spec.el}\` element${spec.area === 'canvas' && spec.where === 'primitives' ? ' on the canvas' : ''}.`;
+    return `Attributes of the \`${spec.el}\` element${spec.area === 'canvas' && spec.where === 'primitives' ? ' in a layer' : ''}.`;
 }
 
 /** Required attributes first, in schema order, then the optional ones in schema order. */

@@ -12,7 +12,7 @@
     format numbers and dates in the JSON, or in the code that writes it.
 
       table    columns sized by fr, a header row that repeats on every page, a row per item
-      canvas   drawn at fixed places on the page, here behind the layout: a colored band on every
+      layer    drawn at fixed places on the page, here behind the layout: a colored band on every
                page and a logo made of two shapes on the first. Change "paid" to true in the JSON
                and look at the bottom
       barcode  a QR code, here a link to pay online. Its size is set in points
@@ -39,16 +39,14 @@
 
       <!-- behind the layout, so it is written first. Coordinates are in points from the top left
            of the page, not of the margin, and each shape is one line -->
-      <canvas>
-        <layer page="each">
-          <rect anchor="top-left" w="612pt" h="12pt" fill="primary" />
-          <rect anchor="bottom-left" w="612pt" h="6pt" fill="primary" />
-        </layer>
-        <layer page="first">
-          <rect x="48pt" y="40pt" w="30pt" h="30pt" radius="8pt" fill="primary" />
-          <circle cx="63pt" cy="55pt" r="7pt" fill="surface" />
-        </layer>
-      </canvas>
+      <layer page="each">
+        <rect anchor="top-left" w="612pt" h="12pt" fill="primary" />
+        <rect anchor="bottom-left" w="612pt" h="6pt" fill="primary" />
+      </layer>
+      <layer page="first">
+        <rect x="48pt" y="40pt" w="30pt" h="30pt" radius="8pt" fill="primary" />
+        <circle cx="63pt" cy="55pt" r="7pt" fill="surface" />
+      </layer>
 
       <layout>
         <column gap="l"  justify="between">

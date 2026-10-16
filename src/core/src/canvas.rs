@@ -1,9 +1,9 @@
-/// Canvas — coordinate-based overlay/underlay rendering.
+/// Layers — coordinate-based overlay/underlay rendering.
 ///
-/// This module owns the canvas type model, XML and JSON parsers, and the
-/// function that stamps canvas layers onto already-laid-out `RenderPage`s.
+/// This module owns the layer type model, XML and JSON parsers, and the
+/// function that stamps layers onto already-laid-out `RenderPage`s.
 ///
-/// Canvas uses top-left origin, y-down coordinates.  The PDF render layer
+/// Layers use top-left origin, y-down coordinates.  The PDF render layer
 /// (`pdf.rs`) flips to bottom-up when emitting content streams.
 
 use std::collections::HashMap;
@@ -143,8 +143,9 @@ pub enum CanvasPrimitive {
     Img(CanvasImg),
 }
 
-/// Graphics-state scope inside a `<canvas>`.  Document order of layers is paint
-/// order (first = bottom).  Anchors and transforms are resolved at parse time.
+/// A `<layer>`: a graphics-state scope, a direct child of `<section>`.  Document
+/// order of layers is paint order (first = bottom).  Anchors and transforms are
+/// resolved at parse time.
 #[derive(Debug, Clone)]
 pub struct CanvasLayer {
     pub children:  Vec<CanvasPrimitive>,
@@ -152,11 +153,6 @@ pub struct CanvasLayer {
     pub opacity:   Option<f32>,
     /// Optional 6-element CTM [a b c d e f] in canvas (top-down) space.
     pub transform: Option<[f32; 6]>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Canvas {
-    pub layers: Vec<CanvasLayer>,
 }
 
 // ── Anchor helpers ────────────────────────────────────────────────────────────
@@ -442,7 +438,9 @@ fn parse_canvas_primitive_elem(
     }
 }
 
-fn parse_canvas_layer_elem(
+/// Parse a `<layer>` element.  `page_w` and `page_h` are the dimensions of the
+/// enclosing section page — needed to resolve anchor offsets.
+pub(crate) fn parse_layer_elem(
     elem:         &roxmltree::Node,
     tokens:       &Tokens,
     asset_images: &HashMap<String, String>,
@@ -464,30 +462,11 @@ fn parse_canvas_layer_elem(
     Ok(CanvasLayer { children, page, opacity, transform })
 }
 
-/// Parse a `<canvas>` element into a `Canvas`.  `page_w` and `page_h` are the
-/// dimensions of the enclosing section page — needed to resolve anchor offsets.
-pub(crate) fn parse_canvas_elem(
-    elem:         &roxmltree::Node,
-    tokens:       &Tokens,
-    asset_images: &HashMap<String, String>,
-    page_w:       f32,
-    page_h:       f32,
-) -> Result<Canvas, String> {
-    let mut layers = Vec::new();
-    for child in elems(elem) {
-        match child.tag_name().name() {
-            "layer" => layers.push(parse_canvas_layer_elem(&child, tokens, asset_images, page_w, page_h)?),
-            other   => return Err(format!("<canvas> only accepts <layer> children, got <{other}>")),
-        }
-    }
-    Ok(Canvas { layers })
-}
-
 // ── JSON parse path ───────────────────────────────────────────────────────────
 
-/// Parse a canvas layer from a JSON tree node.  `page_w`/`page_h` are the
+/// Parse a layer from a JSON tree node.  `page_w`/`page_h` are the
 /// section page dimensions for anchor resolution.
-pub(crate) fn parse_tree_canvas_layer(
+pub(crate) fn parse_tree_layer(
     json:         &serde_json::Value,
     tokens:       &Tokens,
     asset_images: &HashMap<String, String>,
@@ -772,7 +751,7 @@ fn layer_to_render_node(layer: &CanvasLayer, page_w: f32) -> RenderNode {
     })
 }
 
-/// Stamp canvas layers onto the render pages produced by `layout_page`.
+/// Stamp layers onto the render pages produced by `layout_page`.
 ///
 /// When `prepend = true` (underlays) the layer's render node is inserted at
 /// index 0 of the target page's node list so it paints beneath layout content.
