@@ -277,69 +277,70 @@ example-php:
 	@echo "-------------------------------"
 	@echo ">>> Running PHP example..."
 	@echo ""
+	mkdir -p tmp/sdk-examples
 	docker run --rm \
 		$(PHP_WASM_MOUNT) \
-		-v "$(CURDIR)/repos/lpdf-php/example://app/src/sdk/php/example" \
-		-v "$(CURDIR)/repos/lpdf-php/lpdf-light.png://app/src/sdk/php/lpdf-light.png" \
-		-v "$(CURDIR)/example://app/example" \
-		-v "$(CURDIR)/docs://app/docs" \
-		-w //app lpdf-php php src/sdk/php/example/example.php
+		-v "$(CURDIR)/repos/lpdf-php/example://app/repos/lpdf-php/example" \
+		-v "$(CURDIR)/examples://app/examples" \
+		-v "$(CURDIR)/tmp/sdk-examples://app/tmp/sdk-examples" \
+		-w //app lpdf-php php repos/lpdf-php/example/example.php
 	docker run --rm \
 		$(PHP_WASM_MOUNT) \
-		-v "$(CURDIR)/repos/lpdf-php/example://app/src/sdk/php/example" \
-		-v "$(CURDIR)/example://app/example" \
+		-v "$(CURDIR)/repos/lpdf-php/example://app/repos/lpdf-php/example" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
-		-w //app lpdf-php php src/sdk/php/example/encrypt-permissions-only.php
+		-v "$(CURDIR)/tmp/sdk-examples://app/tmp/sdk-examples" \
+		-w //app lpdf-php php repos/lpdf-php/example/encrypt-permissions-only.php
 	docker run --rm \
 		$(PHP_WASM_MOUNT) \
-		-v "$(CURDIR)/repos/lpdf-php/example://app/src/sdk/php/example" \
-		-v "$(CURDIR)/example://app/example" \
+		-v "$(CURDIR)/repos/lpdf-php/example://app/repos/lpdf-php/example" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
-		-w //app lpdf-php php src/sdk/php/example/encrypt-open-password.php
+		-v "$(CURDIR)/tmp/sdk-examples://app/tmp/sdk-examples" \
+		-w //app lpdf-php php repos/lpdf-php/example/encrypt-open-password.php
 	docker run --rm \
 		$(PHP_WASM_MOUNT) \
-		-v "$(CURDIR)/repos/lpdf-php/example://app/src/sdk/php/example" \
-		-v "$(CURDIR)/example://app/example" \
-		-v "$(CURDIR)/docs://app/docs" \
-		-w //app lpdf-php php src/sdk/php/example/example-data.php
+		-v "$(CURDIR)/repos/lpdf-php/example://app/repos/lpdf-php/example" \
+		-v "$(CURDIR)/examples://app/examples" \
+		-v "$(CURDIR)/tmp/sdk-examples://app/tmp/sdk-examples" \
+		-w //app lpdf-php php repos/lpdf-php/example/example-data.php
 	docker run --rm \
 		$(PHP_WASM_MOUNT) \
-		-v "$(CURDIR)/repos/lpdf-php/example://app/src/sdk/php/example" \
-		-v "$(CURDIR)/example://app/example" \
-		-v "$(CURDIR)/docs://app/docs" \
-		-w //app lpdf-php php src/sdk/php/example/example_canvas.php
+		-v "$(CURDIR)/repos/lpdf-php/example://app/repos/lpdf-php/example" \
+		-v "$(CURDIR)/tmp/sdk-examples://app/tmp/sdk-examples" \
+		-w //app lpdf-php php repos/lpdf-php/example/example_canvas.php
 
 example-python:
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Running Python example..."
 	@echo ""
+	mkdir -p tmp/sdk-examples
 	docker run --rm \
 		-v "$(CURDIR)/repos/lpdf-python/src/lpdf://app/lpdf" \
 		-v "$(CURDIR)/repos/lpdf-python/example://app/example" \
-		-v "$(CURDIR)/repos/lpdf-python/lpdf-light.png://app/lpdf-light.png" \
-		-v "$(CURDIR)/example://app/example-data" \
 		-v "$(CURDIR)/repos/lpdf-python/resources://app/resources" \
+		-v "$(CURDIR)/examples://app/examples" \
+		-v "$(CURDIR)/tmp/sdk-examples://app/tmp/sdk-examples" \
 		-w //app lpdf-python python example/example.py
 	docker run --rm \
 		-v "$(CURDIR)/repos/lpdf-python/src/lpdf://app/lpdf" \
 		-v "$(CURDIR)/repos/lpdf-python/example://app/example" \
-		-v "$(CURDIR)/example://app/example-data" \
-		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-v "$(CURDIR)/repos/lpdf-python/resources://app/resources" \
+		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
+		-v "$(CURDIR)/tmp/sdk-examples://app/tmp/sdk-examples" \
 		-w //app lpdf-python python example/encrypt-permissions-only.py
 	docker run --rm \
 		-v "$(CURDIR)/repos/lpdf-python/src/lpdf://app/lpdf" \
 		-v "$(CURDIR)/repos/lpdf-python/example://app/example" \
-		-v "$(CURDIR)/example://app/example-data" \
-		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-v "$(CURDIR)/repos/lpdf-python/resources://app/resources" \
+		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
+		-v "$(CURDIR)/tmp/sdk-examples://app/tmp/sdk-examples" \
 		-w //app lpdf-python python example/encrypt-open-password.py
 	docker run --rm \
 		-v "$(CURDIR)/repos/lpdf-python/src/lpdf://app/lpdf" \
 		-v "$(CURDIR)/repos/lpdf-python/example://app/example" \
-		-v "$(CURDIR)/example://app/example-data" \
 		-v "$(CURDIR)/repos/lpdf-python/resources://app/resources" \
+		-v "$(CURDIR)/examples://app/examples" \
+		-v "$(CURDIR)/tmp/sdk-examples://app/tmp/sdk-examples" \
 		-w //app lpdf-python python example/example-data.py
 
 build-vscode: build-wasm
