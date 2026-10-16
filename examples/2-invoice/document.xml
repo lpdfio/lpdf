@@ -56,8 +56,8 @@
           <column gap="l">
 
             <!-- header: the seller beside the logo, and the invoice number -->
-            <flank end="true" gap="m" align="start">
-              <column gap="xs" padding="0pt 0pt 0pt 42pt">
+            <row gap="m" align="start">
+              <column width="fill" gap="xs" padding="0pt 0pt 0pt 42pt">
                 <text font-size="xl" bold="true" color="primary" data-value="seller.name">Brightwork Studio</text>
                 <text font-size="s" color="text-muted" data-value="seller.street">412 Harbor Street, Suite 3</text>
                 <text font-size="s" color="text-muted" data-value="seller.city">Portland, ME 04101</text>
@@ -67,12 +67,12 @@
                 <text font-size="xxl" bold="true" color="primary">INVOICE</text>
                 <text font-size="s" color="text-muted" data-value="invoice.number">INV-1042</text>
               </column>
-            </flank>
+            </row>
 
             <divider color="rule" thickness="xs" />
 
             <!-- who pays it, and when -->
-            <split gap="l" align="start">
+            <row justify="between" gap="l" align="start">
               <column gap="xs">
                 <text font-size="s" bold="true" color="text-muted">BILL TO</text>
                 <text bold="true" data-value="customer.name">Harbor &amp; Pine Co.</text>
@@ -81,20 +81,20 @@
                 <text font-size="s" color="text-muted" data-value="customer.email">accounts@harborpine.example</text>
               </column>
               <column gap="xs" align="end">
-                <flank end="true" gap="m" align="center">
-                  <text font-size="s" color="text-muted">Issue date</text>
+                <row gap="m" align="center">
+                  <text width="fill" font-size="s" color="text-muted">Issue date</text>
                   <text font-size="s" data-value="invoice.issued">March 1, 2027</text>
-                </flank>
-                <flank end="true" gap="m" align="center">
-                  <text font-size="s" color="text-muted">Due date</text>
+                </row>
+                <row gap="m" align="center">
+                  <text width="fill" font-size="s" color="text-muted">Due date</text>
                   <text font-size="s" bold="true" data-value="invoice.due">March 31, 2027</text>
-                </flank>
-                <flank end="true" gap="m" align="center">
-                  <text font-size="s" color="text-muted">Payment terms</text>
+                </row>
+                <row gap="m" align="center">
+                  <text width="fill" font-size="s" color="text-muted">Payment terms</text>
                   <text font-size="s" data-value="invoice.terms">Net 30</text>
-                </flank>
+                </row>
               </column>
-            </split>
+            </row>
 
             <!-- the line items: the header row stays as written, the row repeats for each item.
                  Padding goes on the cells (td); on the table it would pad the whole table -->
@@ -121,19 +121,19 @@
             <!-- totals, at the right edge -->
             <row justify="end">
               <column gap="xs" width="220pt">
-                <flank end="true" gap="m" align="center">
-                  <text font-size="s" color="text-muted">Subtotal</text>
+                <row gap="m" align="center">
+                  <text width="fill" font-size="s" color="text-muted">Subtotal</text>
                   <text font-size="s" align="right" data-value="subtotal">$9,130.00</text>
-                </flank>
-                <flank end="true" gap="m" align="center">
-                  <text font-size="s" color="text-muted" data-value="tax.label">Sales tax (8%)</text>
+                </row>
+                <row gap="m" align="center">
+                  <text width="fill" font-size="s" color="text-muted" data-value="tax.label">Sales tax (8%)</text>
                   <text font-size="s" align="right" data-value="tax.amount">$730.40</text>
-                </flank>
+                </row>
                 <divider color="rule" thickness="xs" />
-                <flank end="true" gap="m" align="center">
-                  <text font-size="l" bold="true">Total due</text>
+                <row gap="m" align="center">
+                  <text width="fill" font-size="l" bold="true">Total due</text>
                   <text font-size="l" bold="true" color="primary-dark" align="right" data-value="total">$9,860.40</text>
-                </flank>
+                </row>
               </column>
             </row>
 
@@ -142,17 +142,17 @@
           <!-- the foot of the page: how to pay, and one of two notes depending on "paid" -->
           <column gap="m">
             <divider color="rule" thickness="xs" />
-            <!-- how to pay, with a QR code at the right edge: the first child of a flank with end="true"
-                 fills the row and the others keep their size. The code is the same on every invoice,
+            <!-- how to pay, with a QR code at the right edge: the first child has width="fill", so it
+                 takes what the row leaves and the others keep their size. The code is the same on every invoice,
                  because data-value changes text and nothing else, so it cannot carry the number -->
-            <flank end="true" gap="m" align="center">
-              <column gap="xs">
+            <row gap="m" align="center">
+              <column width="fill" gap="xs">
                 <text font-size="s" bold="true">Payment instructions</text>
                 <text font-size="s" color="text-muted" data-value="payment">ACH to Casco Federal Credit Union, routing 011000015, account 4400198273, reference INV-1042</text>
                 <text font-size="s" color="text-muted">Or scan the code to pay by card.</text>
               </column>
               <barcode type="qr" data="https://pay.brightwork.example" size="64pt" color="primary-dark" background="surface" />
-            </flank>
+            </row>
 
             <frame data-if="invoice.paid" background="accent" padding="s" radius="s">
               <text bold="true" color="primary-dark" align="center">Paid in full. Thank you.</text>
@@ -171,10 +171,10 @@
         <region pin="bottom" page="each">
           <column gap="xs">
             <divider color="rule" thickness="xs" />
-            <flank end="true" align="center">
-              <text font-size="s" color="text-muted" data-value="invoice.number">INV-1042</text>
+            <row align="center">
+              <text width="fill" font-size="s" color="text-muted" data-value="invoice.number">INV-1042</text>
               <text font-size="s" color="text-muted" align="right">Page {page} of {pages}</text>
-            </flank>
+            </row>
           </column>
         </region>
 

@@ -42,18 +42,18 @@
 
         <!-- contact details -->
         <column gap="s">
-          <flank gap="s" align="center" end="true">
-            <text font-size="s" color="text-muted">Email</text>
+          <row gap="s" align="center">
+            <text width="fill" font-size="s" color="text-muted">Email</text>
             <text font-size="s">jane@acmecorp.example</text>
-          </flank>
-          <flank gap="s" align="center" end="true">
-            <text font-size="s" color="text-muted">Phone</text>
+          </row>
+          <row gap="s" align="center">
+            <text width="fill" font-size="s" color="text-muted">Phone</text>
             <text font-size="s">+1 555 000 1234</text>
-          </flank>
-          <flank gap="s" align="center" end="true">
-            <text font-size="s" color="text-muted">Web</text>
+          </row>
+          <row gap="s" align="center">
+            <text width="fill" font-size="s" color="text-muted">Web</text>
             <text font-size="s">acmecorp.example</text>
-          </flank>
+          </row>
         </column>
 
         <divider color="rule" thickness="xs" />

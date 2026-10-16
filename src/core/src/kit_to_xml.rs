@@ -207,7 +207,7 @@ fn render_node(node: &Value, depth: usize) -> String {
         _ => {}
     }
 
-    // Container nodes (column, flank, split, row, grid, frame, link,
+    // Container nodes (column, row, grid, frame, link,
     // table, thead, tr, td)
     let children = node.get("nodes").and_then(|v| v.as_array());
     match children {

@@ -34,10 +34,10 @@
             </column>
           </frame>
         </grid>
-        <split>
+        <row justify="between">
           <text font-size="s" color="#64748b">Left side item 10</text>
           <text font-size="s" align="right" color="#64748b">Right side item 11</text>
-        </split>
+        </row>
         <row gap="s">
           <frame background="#dbeafe" padding="xs" radius="xs">
             <text font-size="xs" font="Helvetica-Bold" color="#1d4ed8">Tag 12</text>
@@ -98,10 +98,10 @@
             </column>
           </frame>
         </grid>
-        <split>
+        <row justify="between">
           <text font-size="s" color="#64748b">Left side item 28</text>
           <text font-size="s" align="right" color="#64748b">Right side item 29</text>
-        </split>
+        </row>
         <row gap="s">
           <frame background="#dbeafe" padding="xs" radius="xs">
             <text font-size="xs" font="Helvetica-Bold" color="#1d4ed8">Tag 30</text>
@@ -162,10 +162,10 @@
             </column>
           </frame>
         </grid>
-        <split>
+        <row justify="between">
           <text font-size="s" color="#64748b">Left side item 46</text>
           <text font-size="s" align="right" color="#64748b">Right side item 47</text>
-        </split>
+        </row>
         <row gap="s">
           <frame background="#dbeafe" padding="xs" radius="xs">
             <text font-size="xs" font="Helvetica-Bold" color="#1d4ed8">Tag 48</text>
@@ -226,10 +226,10 @@
             </column>
           </frame>
         </grid>
-        <split>
+        <row justify="between">
           <text font-size="s" color="#64748b">Left side item 64</text>
           <text font-size="s" align="right" color="#64748b">Right side item 65</text>
-        </split>
+        </row>
         <row gap="s">
           <frame background="#dbeafe" padding="xs" radius="xs">
             <text font-size="xs" font="Helvetica-Bold" color="#1d4ed8">Tag 66</text>
@@ -290,10 +290,10 @@
             </column>
           </frame>
         </grid>
-        <split>
+        <row justify="between">
           <text font-size="s" color="#64748b">Left side item 82</text>
           <text font-size="s" align="right" color="#64748b">Right side item 83</text>
-        </split>
+        </row>
         <row gap="s">
           <frame background="#dbeafe" padding="xs" radius="xs">
             <text font-size="xs" font="Helvetica-Bold" color="#1d4ed8">Tag 84</text>
@@ -354,10 +354,10 @@
             </column>
           </frame>
         </grid>
-        <split>
+        <row justify="between">
           <text font-size="s" color="#64748b">Left side item 100</text>
           <text font-size="s" align="right" color="#64748b">Right side item 101</text>
-        </split>
+        </row>
         <row gap="s">
           <frame background="#dbeafe" padding="xs" radius="xs">
             <text font-size="xs" font="Helvetica-Bold" color="#1d4ed8">Tag 102</text>
@@ -418,10 +418,10 @@
             </column>
           </frame>
         </grid>
-        <split>
+        <row justify="between">
           <text font-size="s" color="#64748b">Left side item 118</text>
           <text font-size="s" align="right" color="#64748b">Right side item 119</text>
-        </split>
+        </row>
         <row gap="s">
           <frame background="#dbeafe" padding="xs" radius="xs">
             <text font-size="xs" font="Helvetica-Bold" color="#1d4ed8">Tag 120</text>
@@ -482,10 +482,10 @@
             </column>
           </frame>
         </grid>
-        <split>
+        <row justify="between">
           <text font-size="s" color="#64748b">Left side item 136</text>
           <text font-size="s" align="right" color="#64748b">Right side item 137</text>
-        </split>
+        </row>
         <row gap="s">
           <frame background="#dbeafe" padding="xs" radius="xs">
             <text font-size="xs" font="Helvetica-Bold" color="#1d4ed8">Tag 138</text>
@@ -546,10 +546,10 @@
             </column>
           </frame>
         </grid>
-        <split>
+        <row justify="between">
           <text font-size="s" color="#64748b">Left side item 154</text>
           <text font-size="s" align="right" color="#64748b">Right side item 155</text>
-        </split>
+        </row>
         <row gap="s">
           <frame background="#dbeafe" padding="xs" radius="xs">
             <text font-size="xs" font="Helvetica-Bold" color="#1d4ed8">Tag 156</text>
@@ -610,10 +610,10 @@
             </column>
           </frame>
         </grid>
-        <split>
+        <row justify="between">
           <text font-size="s" color="#64748b">Left side item 172</text>
           <text font-size="s" align="right" color="#64748b">Right side item 173</text>
-        </split>
+        </row>
         <row gap="s">
           <frame background="#dbeafe" padding="xs" radius="xs">
             <text font-size="xs" font="Helvetica-Bold" color="#1d4ed8">Tag 174</text>
@@ -674,10 +674,10 @@
             </column>
           </frame>
         </grid>
-        <split>
+        <row justify="between">
           <text font-size="s" color="#64748b">Left side item 190</text>
           <text font-size="s" align="right" color="#64748b">Right side item 191</text>
-        </split>
+        </row>
         <row gap="s">
           <frame background="#dbeafe" padding="xs" radius="xs">
             <text font-size="xs" font="Helvetica-Bold" color="#1d4ed8">Tag 192</text>
@@ -738,10 +738,10 @@
             </column>
           </frame>
         </grid>
-        <split>
+        <row justify="between">
           <text font-size="s" color="#64748b">Left side item 208</text>
           <text font-size="s" align="right" color="#64748b">Right side item 209</text>
-        </split>
+        </row>
         <row gap="s">
           <frame background="#dbeafe" padding="xs" radius="xs">
             <text font-size="xs" font="Helvetica-Bold" color="#1d4ed8">Tag 210</text>
@@ -802,10 +802,10 @@
             </column>
           </frame>
         </grid>
-        <split>
+        <row justify="between">
           <text font-size="s" color="#64748b">Left side item 226</text>
           <text font-size="s" align="right" color="#64748b">Right side item 227</text>
-        </split>
+        </row>
         <row gap="s">
           <frame background="#dbeafe" padding="xs" radius="xs">
             <text font-size="xs" font="Helvetica-Bold" color="#1d4ed8">Tag 228</text>

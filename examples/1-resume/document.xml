@@ -6,8 +6,9 @@
                and the whole page follows. Sizes work the same way: gap="m" and font-size="s"
                each read their own scale, so m is a different number for a gap and for a font
       assets   declare the fonts you use, then pick one with font="..."
-      layout   split puts two columns side by side, flank puts a label beside a value,
-               row wraps tags onto new lines, grid makes equal columns
+      layout   row puts two columns side by side, a label beside a value, or tags that wrap
+               onto new lines; width="fill" gives a child what the others leave; grid makes
+               equal columns
   -->
   <assets>
     <!-- a serif for headings against a sans-serif for text; these two are built into every PDF.
@@ -32,7 +33,7 @@
     <meta title="Résumé: Jordan Ellis" author="Jordan Ellis" />
     <section background="surface">
       <layout>
-        <split gap="0pt" height="full">
+        <row gap="0pt" height="full">
 
           <!-- sidebar: its own background, as tall as the page -->
           <column width="190pt" height="full" padding="l" gap="l" background="surface-alt">
@@ -88,7 +89,7 @@
           </column>
 
           <!-- main column -->
-          <column padding="xl" gap="l" height="fill">
+          <column width="fill" padding="xl" gap="l" height="fill">
 
             <column gap="s">
               <text font="heading" font-size="l" color="primary">Profile</text>
@@ -120,51 +121,51 @@
               <divider color="primary" thickness="xs" />
               <column gap="l">
 
-              <!-- end="true": the first child takes the space, the others sit at the right edge.
-                   A bullet is a flank too: a narrow marker, then text that fills the rest -->
+              <!-- width="fill": the first child takes the space, the others sit at the right edge.
+                   A bullet is a row too: a narrow marker, then text that fills the rest -->
               <column gap="s">
-                <flank end="true" gap="m" align="center">
-                  <text bold="true">Staff Engineer, Northwind Data</text>
+                <row gap="m" align="center">
+                  <text width="fill" bold="true">Staff Engineer, Northwind Data</text>
                   <text font-size="s" color="text-muted">2021 to present</text>
-                </flank>
-                <flank gap="s">
+                </row>
+                <row gap="s">
                   <text width="8pt" color="primary">•</text>
-                  <text>Led the design of a streaming pipeline that handles fifty million events a day.</text>
-                </flank>
-                <flank gap="s">
+                  <text width="fill">Led the design of a streaming pipeline that handles fifty million events a day.</text>
+                </row>
+                <row gap="s">
                   <text width="8pt" color="primary">•</text>
-                  <text>Cut p99 latency by forty percent with a custom allocator and lock-free queues.</text>
-                </flank>
+                  <text width="fill">Cut p99 latency by forty percent with a custom allocator and lock-free queues.</text>
+                </row>
               </column>
 
               <column gap="s">
-                <flank end="true" gap="m" align="center">
-                  <text bold="true">Senior Engineer, Brightside Labs</text>
+                <row gap="m" align="center">
+                  <text width="fill" bold="true">Senior Engineer, Brightside Labs</text>
                   <text font-size="s" color="text-muted">2017 to 2021</text>
-                </flank>
-                <flank gap="s">
+                </row>
+                <row gap="s">
                   <text width="8pt" color="primary">•</text>
-                  <text>Built a multi-tenant platform that serves eight thousand customers.</text>
-                </flank>
-                <flank gap="s">
+                  <text width="fill">Built a multi-tenant platform that serves eight thousand customers.</text>
+                </row>
+                <row gap="s">
                   <text width="8pt" color="primary">•</text>
-                  <text>Moved a monolith to services and cut deploys from forty-five minutes to three.</text>
-                </flank>
+                  <text width="fill">Moved a monolith to services and cut deploys from forty-five minutes to three.</text>
+                </row>
               </column>
 
               <column gap="s">
-                <flank end="true" gap="m" align="center">
-                  <text bold="true">Software Engineer, Orion Systems</text>
+                <row gap="m" align="center">
+                  <text width="fill" bold="true">Software Engineer, Orion Systems</text>
                   <text font-size="s" color="text-muted">2014 to 2017</text>
-                </flank>
-                <flank gap="s">
+                </row>
+                <row gap="s">
                   <text width="8pt" color="primary">•</text>
-                  <text>Wrote firmware for IoT sensors in C and Rust.</text>
-                </flank>
-                <flank gap="s">
+                  <text width="fill">Wrote firmware for IoT sensors in C and Rust.</text>
+                </row>
+                <row gap="s">
                   <text width="8pt" color="primary">•</text>
-                  <text>Shipped the cloud SDKs that three enterprise customers adopted in the first year.</text>
-                </flank>
+                  <text width="fill">Shipped the cloud SDKs that three enterprise customers adopted in the first year.</text>
+                </row>
               </column>
               </column>
             </column>
@@ -195,7 +196,7 @@
 
           </column>
 
-        </split>
+        </row>
       </layout>
     </section>
   </document>

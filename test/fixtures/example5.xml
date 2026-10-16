@@ -19,21 +19,21 @@
     <section background="surface">
       <layout>
 
-      <split gap="0pt" align="start" height="full">
+      <row justify="between" gap="0pt" align="start" height="full">
 
         <!-- main ticket body -->
         <column padding="m" gap="s" height="full" justify="between">
 
           <!-- top row: event name + badge -->
-          <flank gap="m" align="start" end="true">
-            <column gap="xs">
+          <row gap="m" align="start">
+            <column width="fill" gap="xs">
               <text font-size="xs" font="Helvetica-Bold" color="brand">NORTHSTAR CONFERENCE 2026</text>
               <text font-size="xl" font="Helvetica-Bold" color="text">Full Access Pass</text>
             </column>
             <frame background="brand" padding="xs" radius="xs">
               <text font-size="xs" font="Helvetica-Bold" color="surface">GENERAL</text>
             </frame>
-          </flank>
+          </row>
 
           <divider color="rule" thickness="xs" />
 
@@ -56,13 +56,13 @@
           </row>
 
           <!-- attendee -->
-          <flank gap="m" align="end" end="true">
-            <column gap="xs">
+          <row gap="m" align="end">
+            <column width="fill" gap="xs">
               <text font-size="xs" color="text-muted">ATTENDEE</text>
               <text font-size="m" font="Helvetica-Bold">Jane Doe</text>
             </column>
             <text font-size="xs" color="text-muted"># GA-00842</text>
-          </flank>
+          </row>
 
         </column>
 
@@ -75,7 +75,7 @@
           </column>
         </frame>
 
-      </split>
+      </row>
 
       </layout>
     </section>

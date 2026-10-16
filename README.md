@@ -36,15 +36,15 @@ const doc = L.document({ size: 'letter', margin: '48pt' }, [
     L.section(NoAttr, [
         L.layout(NoAttr, [
             L.column({ gap: '24pt' }, [
-                L.split(NoAttr, [
+                L.row({ justify: 'between' }, [
                     L.text({ fontSize: '8pt', color: '#888888' }, ['ACME CORP']),
                     L.text({ fontSize: '22pt', bold: 'true' }, ['Project Proposal']),
                 ]),
                 L.divider({ thickness: 'xs' }),
                 L.text({ fontSize: '13pt', bold: 'true' }, ['Scope of Work']),
-                L.flank({ gap: '12pt', align: 'start' }, [
+                L.row({ gap: '12pt', align: 'start' }, [
                     L.text({ color: '#888888', width: '24pt' }, ['01']),
-                    L.text(NoAttr, ['Discovery & Research']),
+                    L.text({ width: 'fill' }, ['Discovery & Research']),
                 ]),
             ]),
         ]),
@@ -72,15 +72,15 @@ var doc = L.Document(new() { Size = "letter", Margin = "48pt" }, [
     L.Section(NoAttr, [
         L.Layout(NoAttr, [
             L.Column(new() { Gap = "24pt" }, [
-                L.Split(NoAttr, [
+                L.Row(new() { Justify = "between" }, [
                     L.Text(new() { FontSize = "8pt", Color = "#888888" }, ["ACME CORP"]),
                     L.Text(new() { FontSize = "22pt", Bold = "true" }, ["Project Proposal"]),
                 ]),
                 L.Divider(new() { Thickness = "xs" }),
                 L.Text(new() { FontSize = "13pt", Bold = "true" }, ["Scope of Work"]),
-                L.Flank(new() { Gap = "12pt", Align = "start" }, [
+                L.Row(new() { Gap = "12pt", Align = "start" }, [
                     L.Text(new() { Color = "#888888", Width = "24pt" }, ["01"]),
-                    L.Text(NoAttr, ["Discovery & Research"]),
+                    L.Text(new() { Width = "fill" }, ["Discovery & Research"]),
                 ]),
             ]),
         ]),
@@ -103,7 +103,7 @@ use Lpdf\L;
 use Lpdf\Kit\DocumentAttr;
 use Lpdf\Layout\ColumnAttr;
 use Lpdf\Layout\DividerAttr;
-use Lpdf\Layout\FlankAttr;
+use Lpdf\Layout\RowAttr;
 use Lpdf\Layout\TextAttr;
 use const Lpdf\NoAttr;
 
@@ -113,15 +113,15 @@ $doc = L::document(new DocumentAttr(size: 'letter', margin: '48pt'), [
     L::section(NoAttr, [
         L::layout(NoAttr, [
             L::column(new ColumnAttr(gap: '24pt'), [
-                L::split(NoAttr, [
+                L::row(new RowAttr(justify: 'between'), [
                     L::text(new TextAttr(fontSize: '8pt', color: '#888888'), ['ACME CORP']),
                     L::text(new TextAttr(fontSize: '22pt', bold: 'true'), ['Project Proposal']),
                 ]),
                 L::divider(new DividerAttr(thickness: 'xs')),
                 L::text(new TextAttr(fontSize: '13pt', bold: 'true'), ['Scope of Work']),
-                L::flank(new FlankAttr(gap: '12pt', align: 'start'), [
+                L::row(new RowAttr(gap: '12pt', align: 'start'), [
                     L::text(new TextAttr(color: '#888888', width: '24pt'), ['01']),
-                    L::text(NoAttr, ['Discovery & Research']),
+                    L::text(new TextAttr(width: 'fill'), ['Discovery & Research']),
                 ]),
             ]),
         ]),
@@ -140,7 +140,7 @@ pip install lpdfio-lpdf
 ```
 
 ```python
-from lpdf import L, NoAttr, DocumentAttr, ColumnAttr, TextAttr, DividerAttr, FlankAttr
+from lpdf import L, NoAttr, DocumentAttr, ColumnAttr, RowAttr, TextAttr, DividerAttr
 
 engine = L.engine()
 
@@ -148,15 +148,15 @@ doc = L.document(DocumentAttr(size='letter', margin='48pt'), [
     L.section(NoAttr, [
         L.layout(NoAttr, [
             L.column(ColumnAttr(gap='24pt'), [
-                L.split(NoAttr, [
+                L.row(RowAttr(justify='between'), [
                     L.text(TextAttr(font_size='8pt', color='#888888'), ['ACME CORP']),
                     L.text(TextAttr(font_size='22pt', bold='true'), ['Project Proposal']),
                 ]),
                 L.divider(DividerAttr(thickness='xs')),
                 L.text(TextAttr(font_size='13pt', bold='true'), ['Scope of Work']),
-                L.flank(FlankAttr(gap='12pt', align='start'), [
+                L.row(RowAttr(gap='12pt', align='start'), [
                     L.text(TextAttr(color='#888888', width='24pt'), ['01']),
-                    L.text(NoAttr, ['Discovery & Research']),
+                    L.text(TextAttr(width='fill'), ['Discovery & Research']),
                 ]),
             ]),
         ]),

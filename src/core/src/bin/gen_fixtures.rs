@@ -39,8 +39,8 @@
 //! | Depth | Elements added                                    |
 //! |-------|---------------------------------------------------|
 //! |  1    | column + text only                                |
-//! |  2    | + flank, divider, frame                           |
-//! |  3    | + grid (3-col), row, split                        |
+//! |  2    | + row with a fill child, divider, frame           |
+//! |  3    | + grid (3-col), row, row justified between        |
 //! |  4    | + table, nested grid                              |
 //! |  5    | + deep nested containers, spans, multi-col tables |
 
@@ -256,15 +256,15 @@ impl Gen {
         writeln!(self.buf, r#"          </column>"#).unwrap();
     }
 
-    // Depth-2: flank row (label + value)
-    fn block_flank(&mut self) {
+    // Depth-2: label + value, the value filling the rest
+    fn block_label_value(&mut self) {
         let n = self.next();
         writeln!(
             self.buf,
-            r#"          <flank>
+            r#"          <row>
             <text font-size="m" font="Helvetica-Bold">Field {n}</text>
-            <text font-size="m" align="right">Value {n}</text>
-          </flank>"#
+            <text width="fill" font-size="m" align="right">Value {n}</text>
+          </row>"#
         ).unwrap();
     }
 
@@ -316,16 +316,16 @@ impl Gen {
         writeln!(self.buf, r#"          </row>"#).unwrap();
     }
 
-    // Depth-3: split row (left + right)
-    fn block_split(&mut self) {
+    // Depth-3: left + right, at the two edges
+    fn block_edges(&mut self) {
         let n = self.next();
         let m = self.next();
         writeln!(
             self.buf,
-            r##"          <split>
+            r##"          <row justify="between">
             <text font-size="s" color="#64748b">Left side item {n}</text>
             <text font-size="s" align="right" color="#64748b">Right side item {m}</text>
-          </split>"##
+          </row>"##
         ).unwrap();
     }
 
@@ -383,7 +383,7 @@ impl Gen {
         ).unwrap();
     }
 
-    // Depth-5: deeply-nested structure (frame → grid → column → flank → spans)
+    // Depth-5: deeply-nested structure (frame → grid → column → row → spans)
     fn block_deep(&mut self) {
         let n = self.next();
         writeln!(
@@ -398,12 +398,12 @@ impl Gen {
             writeln!(
                 self.buf,
                 r##"                <column gap="s">
-                  <flank>
+                  <row>
                     <text font-size="m" font="Helvetica-Bold">Col {col} · {cn}</text>
-                    <frame background="#dcfce7" padding="xs" radius="xs">
+                    <frame width="fill" background="#dcfce7" padding="xs" radius="xs">
                       <text font-size="xs" color="#166534">Active</text>
                     </frame>
-                  </flank>
+                  </row>
                   <text font-size="s">Deeply nested content {cn}. <span font="Helvetica-Bold">Bold spans</span> and <span color="#2563eb">coloured spans</span> exercise the inline text-run splitting path in the layout engine alongside the nested container sizing logic.</text>
                   <row gap="xs">"##
             ).unwrap();
@@ -446,8 +446,8 @@ impl Gen {
             }
             2 => {
                 self.block_column(1);
-                self.block_flank();
-                self.block_flank();
+                self.block_label_value();
+                self.block_label_value();
                 self.divider();
                 self.block_frame();
                 self.block_column(2);
@@ -456,7 +456,7 @@ impl Gen {
                 self.block_column(1);
                 self.divider();
                 self.block_grid();
-                self.block_split();
+                self.block_edges();
                 self.block_row();
                 self.block_frame();
             }
@@ -580,10 +580,10 @@ fn build_data_xml(label: &str, n_sections: usize) -> String {
       <column gap="l">
 
           <!-- document header -->
-          <flank>
+          <row>
             <text font="heading" font-size="xl">Report</text>
-            <text data-value="invoice_number" align="right">INV-0</text>
-          </flank>
+            <text width="fill" data-value="invoice_number" align="right">INV-0</text>
+          </row>
           <text data-value="company" font="heading">Company Name</text>
           <divider/>
 
@@ -595,26 +595,26 @@ fn build_data_xml(label: &str, n_sections: usize) -> String {
         buf.push_str(&format!(
             r##"          <!-- section {i} -->
           <column gap="m">
-            <flank>
+            <row>
               <text font="heading" font-size="l" data-value="{si}.title">Section {i}</text>
-              <text data-value="{si}.ref" align="right">REF-{i:03}</text>
-            </flank>
+              <text width="fill" data-value="{si}.ref" align="right">REF-{i:03}</text>
+            </row>
             <column gap="xs">
               <text font="heading" data-value="{si}.client">Client {i}</text>
               <text data-value="{si}.address">Address {i}</text>
             </column>
             <divider/>
             <column data-source="{si}.items" gap="xs">
-              <flank>
+              <row>
                 <text data-value="description">Item</text>
-                <text data-value="amount" align="right">$0.00</text>
-              </flank>
+                <text width="fill" data-value="amount" align="right">$0.00</text>
+              </row>
             </column>
             <divider/>
-            <flank>
+            <row>
               <text font="heading">Total</text>
-              <text data-value="{si}.total" align="right" font="heading">$0.00</text>
-            </flank>
+              <text width="fill" data-value="{si}.total" align="right" font="heading">$0.00</text>
+            </row>
             <frame data-if="{si}.paid" background="#dcfce7" padding="xs" radius="xs">
               <text align="center" color="#166534">Paid</text>
             </frame>

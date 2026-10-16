@@ -36,10 +36,10 @@
           <column gap="xs">
             <column data-source="$toc">
               <link href="#">
-                <split>
+                <row justify="between">
                   <text data-value="label">Entry</text>
                   <text data-value="page" color="muted">0</text>
-                </split>
+                </row>
               </link>
             </column>
           </column>

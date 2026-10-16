@@ -15,7 +15,7 @@
     <meta title="Resume — Jane Doe" author="Jane Doe" />
     <section margin="0pt 18pt 0pt 0pt">
       <layout>
-      <split gap="0pt" align="start" height="full">
+      <row gap="0pt" align="start" height="full">
 
         <!-- sidebar -->
         <column width="170pt" background="surface-alt" height="full">
@@ -62,7 +62,7 @@
         </column>
 
         <!-- main content -->
-        <column padding="l" gap="l" height="fill">
+        <column width="fill" padding="l" gap="l" height="fill">
 
           <!-- profile -->
           <column gap="s">
@@ -78,28 +78,28 @@
 
             <!-- job 1 -->
             <column gap="xs">
-              <flank gap="m" align="center" end="true">
-                <text font-size="m" font="Helvetica-Bold">Staff Engineer — Acme Corp</text>
+              <row gap="m" align="center">
+                <text width="fill" font-size="m" font="Helvetica-Bold">Staff Engineer — Acme Corp</text>
                 <text font-size="s" color="#737373">2021 – Present</text>
-              </flank>
+              </row>
               <text font-size="s" color="#737373">Led architecture of a real-time data pipeline processing 50 million events per day. Reduced p99 latency by 40% through custom memory allocators and lock-free queues written in Rust.</text>
             </column>
 
             <!-- job 2 -->
             <column gap="xs">
-              <flank gap="m" align="center" end="true">
-                <text font-size="m" font="Helvetica-Bold">Senior Engineer — Bright Labs</text>
+              <row gap="m" align="center">
+                <text width="fill" font-size="m" font="Helvetica-Bold">Senior Engineer — Bright Labs</text>
                 <text font-size="s" color="#737373">2017 – 2021</text>
-              </flank>
+              </row>
               <text font-size="s" color="#737373">Built and maintained a multi-tenant SaaS platform serving 8,000 customers. Migrated a monolithic Rails application to microservices, cutting deployment time from 45 minutes to under 3 minutes.</text>
             </column>
 
             <!-- job 3 -->
             <column gap="xs">
-              <flank gap="m" align="center" end="true">
-                <text font-size="m" font="Helvetica-Bold">Software Engineer — Orion Systems</text>
+              <row gap="m" align="center">
+                <text width="fill" font-size="m" font="Helvetica-Bold">Software Engineer — Orion Systems</text>
                 <text font-size="s" color="#737373">2014 – 2017</text>
-              </flank>
+              </row>
               <text font-size="s" color="#737373">Developed embedded firmware for IoT sensors in C and Rust. Delivered SDK integrations for AWS IoT and Azure IoT Hub adopted by three enterprise clients in the first year of release.</text>
             </column>
 
@@ -107,7 +107,7 @@
 
         </column>
 
-      </split>
+      </row>
       </layout>
     </section>
   </document>

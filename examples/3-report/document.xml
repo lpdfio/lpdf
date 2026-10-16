@@ -67,10 +67,10 @@
         <!-- the header: pages 2 to the last. It is first in the layout, so it is the header -->
         <region pin="top" page="2-last">
           <column gap="xs">
-            <flank end="true" align="center">
-              <text font-size="s" bold="true" color="primary">Brightwork Studio</text>
+            <row align="center">
+              <text width="fill" font-size="s" bold="true" color="primary">Brightwork Studio</text>
               <text font-size="s" color="text-muted" data-value="report.title">Data Centers Worldwide</text>
-            </flank>
+            </row>
             <divider color="rule" thickness="xs" />
           </column>
         </region>
@@ -116,17 +116,17 @@
         </grid>
 
         <!-- two images side by side: split equal gives each half the width -->
-        <split equal="true" gap="m" padding="0pt 0pt 14pt 0pt">
-          <img name="cloud-regions-by-area" width="246pt" height="176pt" />
-          <img name="ai-campuses-by-power"  width="246pt" height="176pt" />
-        </split>
+        <row gap="m" padding="0pt 0pt 14pt 0pt">
+          <img name="cloud-regions-by-area" width="fill" height="176pt" />
+          <img name="ai-campuses-by-power"  width="fill" height="176pt" />
+        </row>
 
         <!-- the two kinds, side by side -->
         <column gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
           <text font-size="l" bold="true" color="primary">Two kinds of data center</text>
           <divider color="primary" thickness="xs" />
-          <split equal="true" gap="m" align="start">
-            <column gap="s" padding="m" background="accent" radius="m">
+          <row gap="m" align="start">
+            <column width="fill" gap="s" padding="m" background="accent" radius="m">
               <text bold="true" color="primary">Cloud region</text>
               <text font-size="s">
                 A group of data centers in one metro area, split into zones that fail
@@ -140,7 +140,7 @@
                 Counted in regions and zones. The providers do not publish building counts.
               </text>
             </column>
-            <column gap="s" padding="m" background="ai-soft" radius="m">
+            <column width="fill" gap="s" padding="m" background="ai-soft" radius="m">
               <text bold="true" color="ai">AI campus</text>
               <text font-size="s">
                 One site built around a single very large cluster of accelerator chips, to train
@@ -154,7 +154,7 @@
                 permits, satellite images and company statements.
               </text>
             </column>
-          </split>
+          </row>
         </column>
 
         <column gap="m" padding="0pt 0pt 14pt 0pt" paginate="no">
@@ -303,10 +303,10 @@
         <region pin="bottom" page="each">
           <column gap="xs">
             <divider color="rule" thickness="xs" />
-            <flank end="true" align="center">
-              <text font-size="s" color="text-muted">Prepared for internal use. Figures as of October 2026.</text>
+            <row align="center">
+              <text width="fill" font-size="s" color="text-muted">Prepared for internal use. Figures as of October 2026.</text>
               <text font-size="s" color="text-muted" align="right">Page {page} of {pages}</text>
-            </flank>
+            </row>
           </column>
         </region>
 
