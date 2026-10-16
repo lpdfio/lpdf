@@ -4,12 +4,12 @@ ifeq ($(OS),Windows_NT)
 endif
 
 # Auto-load the local dev public key if LPDF_PUBLIC_KEY is not already set.
-# Requires src/license/keys/public.hex — run `npm start` in src/license/ once to generate it.
-LPDF_PUBLIC_KEY ?= $(shell cat src/license/keys/public.hex 2>/dev/null | tr -d '[:space:]')
+# Requires repos/lpdf-license/keys/public.hex — run `npm start` in repos/lpdf-license/ once to generate it.
+LPDF_PUBLIC_KEY ?= $(shell cat repos/lpdf-license/keys/public.hex 2>/dev/null | tr -d '[:space:]')
 export LPDF_PUBLIC_KEY
 
-# Sibling checkouts outside this repo: the lpdf.io site, and the portal UI that builds its bundles.
-PAGES_DIR     ?= ../codesense/pages/lpdf
+# The lpdf.io site, checked out under repos/, and the portal UI outside this repo that builds its bundles.
+PAGES_DIR     ?= repos/lpdf-pages
 PORTAL_UI_DIR ?= ../codesense/portal/ui
 
 .PHONY: build-wasm build-wasi build-cli test-wasm test-wasi \
@@ -106,30 +106,30 @@ build-sdk-node: build-wasm
 	@echo "-------------------------------"
 	@echo ">>> Building Node adapter..."
 	@echo ""
-	mkdir -p src/sdk/node/wasm && cp dist/node/lpdf.js dist/node/lpdf.d.ts dist/node/lpdf_bg.wasm src/sdk/node/wasm/ && cp dist/web/lpdf.js src/sdk/node/wasm/lpdf-web.js
-	cd src/sdk/node && npm install && npm run build
+	mkdir -p repos/lpdf-js/wasm && cp dist/node/lpdf.js dist/node/lpdf.d.ts dist/node/lpdf_bg.wasm repos/lpdf-js/wasm/ && cp dist/web/lpdf.js repos/lpdf-js/wasm/lpdf-web.js
+	cd repos/lpdf-js && npm install && npm run build
 
 test-sdk-node: build-sdk-node
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Testing Node adapter..."
 	@echo ""
-	cd src/sdk/node && npm test
+	cd repos/lpdf-js && npm test
 
 build-sdk-dotnet: build-wasi
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Building .NET adapter..."
 	@echo ""
-	mkdir -p src/sdk/dotnet/wasm && cp dist/wasi/lpdf.wasm src/sdk/dotnet/wasm/lpdf.wasm
-	cd src/sdk/dotnet && dotnet build Lpdf.csproj -c Release
+	mkdir -p repos/lpdf-dotnet/wasm && cp dist/wasi/lpdf.wasm repos/lpdf-dotnet/wasm/lpdf.wasm
+	cd repos/lpdf-dotnet && dotnet build Lpdf.csproj -c Release
 
 test-sdk-dotnet: build-sdk-dotnet
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Testing .NET adapter..."
 	@echo ""
-	cd src/sdk/dotnet && dotnet test
+	cd repos/lpdf-dotnet && dotnet test
 
 # The PHP repo commits resources/lpdf-wasi.wasm, the release build that Packagist serves.
 # A local build trusts only the dev key, so it must never land there: local runs mount it
@@ -141,7 +141,7 @@ build-sdk-php: build-wasi
 	@echo "-------------------------------"
 	@echo ">>> Building PHP adapter..."
 	@echo ""
-	docker build -t lpdf-php src/sdk/php
+	docker build -t lpdf-php repos/lpdf-php
 
 test-sdk-php: build-sdk-php
 	@echo ""
@@ -149,8 +149,8 @@ test-sdk-php: build-sdk-php
 	@echo ">>> Testing PHP adapter..."
 	@echo ""
 	docker run --rm \
-		-v "$(CURDIR)/src/sdk/php/src://app/src" \
-		-v "$(CURDIR)/src/sdk/php/test://app/test" \
+		-v "$(CURDIR)/repos/lpdf-php/src://app/src" \
+		-v "$(CURDIR)/repos/lpdf-php/test://app/test" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-v "$(CURDIR)/test/snapshots://app/test/snapshots" \
 		$(PHP_WASM_MOUNT) \
@@ -161,8 +161,8 @@ build-sdk-python: build-wasi
 	@echo "-------------------------------"
 	@echo ">>> Building Python adapter..."
 	@echo ""
-	mkdir -p src/sdk/python/resources && cp dist/wasi/lpdf.wasm src/sdk/python/resources/lpdf-wasi.wasm
-	docker build -t lpdf-python src/sdk/python
+	mkdir -p repos/lpdf-python/resources && cp dist/wasi/lpdf.wasm repos/lpdf-python/resources/lpdf-wasi.wasm
+	docker build -t lpdf-python repos/lpdf-python
 
 test-sdk-python: build-sdk-python
 	@echo ""
@@ -170,11 +170,11 @@ test-sdk-python: build-sdk-python
 	@echo ">>> Testing Python adapter..."
 	@echo ""
 	docker run --rm \
-		-v "$(CURDIR)/src/sdk/python/src/lpdf://app/lpdf" \
-		-v "$(CURDIR)/src/sdk/python/tests://app/tests" \
+		-v "$(CURDIR)/repos/lpdf-python/src/lpdf://app/lpdf" \
+		-v "$(CURDIR)/repos/lpdf-python/tests://app/tests" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-v "$(CURDIR)/test/snapshots://app/test/snapshots" \
-		-v "$(CURDIR)/src/sdk/python/resources://app/resources" \
+		-v "$(CURDIR)/repos/lpdf-python/resources://app/resources" \
 		-w //app lpdf-python python -m pytest tests -v
 
 build-all: clean-all build-wasm build-wasi build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python build-vscode build-pages
@@ -204,13 +204,13 @@ example-all: example-node example-dotnet example-php example-python
 clone-adapters:
 	@echo ""
 	@echo "-------------------------------"
-	@echo ">>> Cloning adapter repos into src/sdk/..."
+	@echo ">>> Cloning adapter repos into repos/..."
 	@echo ""
-	git clone https://github.com/lpdfio/lpdf-js     src/sdk/node
-	git clone https://github.com/lpdfio/lpdf-dotnet src/sdk/dotnet
-	git clone https://github.com/lpdfio/lpdf-python src/sdk/python
-	git clone https://github.com/lpdfio/lpdf-php    src/sdk/php
-	git clone https://github.com/lpdfio/lpdf-vscode src/vscode
+	git clone https://github.com/lpdfio/lpdf-js     repos/lpdf-js
+	git clone https://github.com/lpdfio/lpdf-dotnet repos/lpdf-dotnet
+	git clone https://github.com/lpdfio/lpdf-python repos/lpdf-python
+	git clone https://github.com/lpdfio/lpdf-php    repos/lpdf-php
+	git clone https://github.com/lpdfio/lpdf-vscode repos/lpdf-vscode
 
 clean-wasm:
 	@echo ""
@@ -233,14 +233,14 @@ clean-adapter-node:
 	@echo "-------------------------------"
 	@echo ">>> Cleaning Node adapter..."
 	@echo ""
-	rm -rf src/sdk/node/dist src/sdk/node/node_modules
+	rm -rf repos/lpdf-js/dist repos/lpdf-js/node_modules
 
 clean-adapter-dotnet:
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Cleaning .NET adapter..."
 	@echo ""
-	cd src/sdk/dotnet && dotnet clean
+	cd repos/lpdf-dotnet && dotnet clean
 
 clean-adapter-php:
 	@echo ""
@@ -263,14 +263,14 @@ example-node:
 	@echo "-------------------------------"
 	@echo ">>> Running Node example..."
 	@echo ""
-	cd src/sdk/node && npx ts-node example/example.ts&& npx ts-node example/example2.ts && npx ts-node example/encrypt-permissions-only.ts && npx ts-node example/encrypt-open-password.ts && npx ts-node example/example-data.ts
+	cd repos/lpdf-js && npx ts-node example/example.ts&& npx ts-node example/example2.ts && npx ts-node example/encrypt-permissions-only.ts && npx ts-node example/encrypt-open-password.ts && npx ts-node example/example-data.ts
 
 example-dotnet:
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Running .NET example..."
 	@echo ""
-	dotnet run --project src/sdk/dotnet/example/LpdfExample.csproj
+	dotnet run --project repos/lpdf-dotnet/example/LpdfExample.csproj
 
 example-php:
 	@echo ""
@@ -279,32 +279,32 @@ example-php:
 	@echo ""
 	docker run --rm \
 		$(PHP_WASM_MOUNT) \
-		-v "$(CURDIR)/src/sdk/php/example://app/src/sdk/php/example" \
-		-v "$(CURDIR)/src/sdk/php/lpdf-light.png://app/src/sdk/php/lpdf-light.png" \
+		-v "$(CURDIR)/repos/lpdf-php/example://app/src/sdk/php/example" \
+		-v "$(CURDIR)/repos/lpdf-php/lpdf-light.png://app/src/sdk/php/lpdf-light.png" \
 		-v "$(CURDIR)/example://app/example" \
 		-v "$(CURDIR)/docs://app/docs" \
 		-w //app lpdf-php php src/sdk/php/example/example.php
 	docker run --rm \
 		$(PHP_WASM_MOUNT) \
-		-v "$(CURDIR)/src/sdk/php/example://app/src/sdk/php/example" \
+		-v "$(CURDIR)/repos/lpdf-php/example://app/src/sdk/php/example" \
 		-v "$(CURDIR)/example://app/example" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-w //app lpdf-php php src/sdk/php/example/encrypt-permissions-only.php
 	docker run --rm \
 		$(PHP_WASM_MOUNT) \
-		-v "$(CURDIR)/src/sdk/php/example://app/src/sdk/php/example" \
+		-v "$(CURDIR)/repos/lpdf-php/example://app/src/sdk/php/example" \
 		-v "$(CURDIR)/example://app/example" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-w //app lpdf-php php src/sdk/php/example/encrypt-open-password.php
 	docker run --rm \
 		$(PHP_WASM_MOUNT) \
-		-v "$(CURDIR)/src/sdk/php/example://app/src/sdk/php/example" \
+		-v "$(CURDIR)/repos/lpdf-php/example://app/src/sdk/php/example" \
 		-v "$(CURDIR)/example://app/example" \
 		-v "$(CURDIR)/docs://app/docs" \
 		-w //app lpdf-php php src/sdk/php/example/example-data.php
 	docker run --rm \
 		$(PHP_WASM_MOUNT) \
-		-v "$(CURDIR)/src/sdk/php/example://app/src/sdk/php/example" \
+		-v "$(CURDIR)/repos/lpdf-php/example://app/src/sdk/php/example" \
 		-v "$(CURDIR)/example://app/example" \
 		-v "$(CURDIR)/docs://app/docs" \
 		-w //app lpdf-php php src/sdk/php/example/example_canvas.php
@@ -315,31 +315,31 @@ example-python:
 	@echo ">>> Running Python example..."
 	@echo ""
 	docker run --rm \
-		-v "$(CURDIR)/src/sdk/python/src/lpdf://app/lpdf" \
-		-v "$(CURDIR)/src/sdk/python/example://app/example" \
-		-v "$(CURDIR)/src/sdk/python/lpdf-light.png://app/lpdf-light.png" \
+		-v "$(CURDIR)/repos/lpdf-python/src/lpdf://app/lpdf" \
+		-v "$(CURDIR)/repos/lpdf-python/example://app/example" \
+		-v "$(CURDIR)/repos/lpdf-python/lpdf-light.png://app/lpdf-light.png" \
 		-v "$(CURDIR)/example://app/example-data" \
-		-v "$(CURDIR)/src/sdk/python/resources://app/resources" \
+		-v "$(CURDIR)/repos/lpdf-python/resources://app/resources" \
 		-w //app lpdf-python python example/example.py
 	docker run --rm \
-		-v "$(CURDIR)/src/sdk/python/src/lpdf://app/lpdf" \
-		-v "$(CURDIR)/src/sdk/python/example://app/example" \
+		-v "$(CURDIR)/repos/lpdf-python/src/lpdf://app/lpdf" \
+		-v "$(CURDIR)/repos/lpdf-python/example://app/example" \
 		-v "$(CURDIR)/example://app/example-data" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
-		-v "$(CURDIR)/src/sdk/python/resources://app/resources" \
+		-v "$(CURDIR)/repos/lpdf-python/resources://app/resources" \
 		-w //app lpdf-python python example/encrypt-permissions-only.py
 	docker run --rm \
-		-v "$(CURDIR)/src/sdk/python/src/lpdf://app/lpdf" \
-		-v "$(CURDIR)/src/sdk/python/example://app/example" \
+		-v "$(CURDIR)/repos/lpdf-python/src/lpdf://app/lpdf" \
+		-v "$(CURDIR)/repos/lpdf-python/example://app/example" \
 		-v "$(CURDIR)/example://app/example-data" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
-		-v "$(CURDIR)/src/sdk/python/resources://app/resources" \
+		-v "$(CURDIR)/repos/lpdf-python/resources://app/resources" \
 		-w //app lpdf-python python example/encrypt-open-password.py
 	docker run --rm \
-		-v "$(CURDIR)/src/sdk/python/src/lpdf://app/lpdf" \
-		-v "$(CURDIR)/src/sdk/python/example://app/example" \
+		-v "$(CURDIR)/repos/lpdf-python/src/lpdf://app/lpdf" \
+		-v "$(CURDIR)/repos/lpdf-python/example://app/example" \
 		-v "$(CURDIR)/example://app/example-data" \
-		-v "$(CURDIR)/src/sdk/python/resources://app/resources" \
+		-v "$(CURDIR)/repos/lpdf-python/resources://app/resources" \
 		-w //app lpdf-python python example/example-data.py
 
 build-vscode: build-wasm
@@ -347,16 +347,16 @@ build-vscode: build-wasm
 	@echo "-------------------------------"
 	@echo ">>> Building VS Code adapter..."
 	@echo ""
-	mkdir -p src/vscode/wasm && mkdir -p src/vscode/schema
-	cp dist/node/lpdf.js      src/vscode/wasm/ && cp dist/node/lpdf_bg.wasm src/vscode/wasm/ && cp dist/node/lpdf.d.ts src/vscode/wasm/ && cp schema/lpdf.xsd src/vscode/schema/
-	cd src/vscode && npm install && npm run build
+	mkdir -p repos/lpdf-vscode/wasm && mkdir -p repos/lpdf-vscode/schema
+	cp dist/node/lpdf.js      repos/lpdf-vscode/wasm/ && cp dist/node/lpdf_bg.wasm repos/lpdf-vscode/wasm/ && cp dist/node/lpdf.d.ts repos/lpdf-vscode/wasm/ && cp schema/lpdf.xsd repos/lpdf-vscode/schema/
+	cd repos/lpdf-vscode && npm install && npm run build
 
 package-vscode: build-vscode
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Packaging VS Code extension..."
 	@echo ""
-	cd src/vscode && npx vsce package --out lpdf.vsix --baseContentUrl https://github.com/lpdfio/lpdf-vscode/raw/HEAD
+	cd repos/lpdf-vscode && npx vsce package --out lpdf.vsix --baseContentUrl https://github.com/lpdfio/lpdf-vscode/raw/HEAD
 
 # `code`, not code.cmd: the Mac has only `code`, and on Windows Git's sh runs the `code` script that sits next to
 # code.cmd. It has to be on PATH (on the Mac: "Install 'code' command in PATH" in VS Code's command palette).
@@ -365,7 +365,7 @@ install-vscode: package-vscode
 	@echo "-------------------------------"
 	@echo ">>> Installing VS Code extension..."
 	@echo ""
-	code --install-extension src/vscode/lpdf.vsix --force
+	code --install-extension repos/lpdf-vscode/lpdf.vsix --force
 
 sync-license:
 	@echo ""
@@ -374,11 +374,11 @@ sync-license:
 	@echo ""
 	@$(SHELL) -c "cp LICENSE src/core/LICENSE"
 	@$(SHELL) -c "test -d '$(PAGES_DIR)'  && cp LICENSE '$(PAGES_DIR)/www/content/LICENSE.md' || true"
-	@$(SHELL) -c "test -d src/sdk/node    && cp LICENSE src/sdk/node/LICENSE    || true"
-	@$(SHELL) -c "test -d src/sdk/dotnet  && cp LICENSE src/sdk/dotnet/LICENSE  || true"
-	@$(SHELL) -c "test -d src/sdk/php     && cp LICENSE src/sdk/php/LICENSE     || true"
-	@$(SHELL) -c "test -d src/sdk/python  && cp LICENSE src/sdk/python/LICENSE  || true"
-# src/vscode is not synced: the extension has its own two-part LICENSE (MIT code + engine terms).
+	@$(SHELL) -c "test -d repos/lpdf-js      && cp LICENSE repos/lpdf-js/LICENSE      || true"
+	@$(SHELL) -c "test -d repos/lpdf-dotnet  && cp LICENSE repos/lpdf-dotnet/LICENSE  || true"
+	@$(SHELL) -c "test -d repos/lpdf-php     && cp LICENSE repos/lpdf-php/LICENSE     || true"
+	@$(SHELL) -c "test -d repos/lpdf-python  && cp LICENSE repos/lpdf-python/LICENSE  || true"
+# repos/lpdf-vscode is not synced: the extension has its own two-part LICENSE (MIT code + engine terms).
 	@echo "Done. Commit changes in the pages repo and each adapter repo separately."
 
 check-license:
@@ -388,10 +388,10 @@ check-license:
 	@echo ""
 	@$(SHELL) -c "diff LICENSE src/core/LICENSE          || (echo 'ERROR: src/core/LICENSE differs from root LICENSE' && exit 1)"
 	@$(SHELL) -c "test ! -d '$(PAGES_DIR)'  || diff LICENSE '$(PAGES_DIR)/www/content/LICENSE.md' || (echo 'ERROR: $(PAGES_DIR)/www/content/LICENSE.md differs from root LICENSE' && exit 1)"
-	@$(SHELL) -c "test ! -d src/sdk/node    || diff LICENSE src/sdk/node/LICENSE    || (echo 'ERROR: src/sdk/node/LICENSE differs from root LICENSE' && exit 1)"
-	@$(SHELL) -c "test ! -d src/sdk/dotnet  || diff LICENSE src/sdk/dotnet/LICENSE  || (echo 'ERROR: src/sdk/dotnet/LICENSE differs from root LICENSE' && exit 1)"
-	@$(SHELL) -c "test ! -d src/sdk/php     || diff LICENSE src/sdk/php/LICENSE     || (echo 'ERROR: src/sdk/php/LICENSE differs from root LICENSE' && exit 1)"
-	@$(SHELL) -c "test ! -d src/sdk/python  || diff LICENSE src/sdk/python/LICENSE  || (echo 'ERROR: src/sdk/python/LICENSE differs from root LICENSE' && exit 1)"
+	@$(SHELL) -c "test ! -d repos/lpdf-js      || diff LICENSE repos/lpdf-js/LICENSE      || (echo 'ERROR: repos/lpdf-js/LICENSE differs from root LICENSE' && exit 1)"
+	@$(SHELL) -c "test ! -d repos/lpdf-dotnet  || diff LICENSE repos/lpdf-dotnet/LICENSE  || (echo 'ERROR: repos/lpdf-dotnet/LICENSE differs from root LICENSE' && exit 1)"
+	@$(SHELL) -c "test ! -d repos/lpdf-php     || diff LICENSE repos/lpdf-php/LICENSE     || (echo 'ERROR: repos/lpdf-php/LICENSE differs from root LICENSE' && exit 1)"
+	@$(SHELL) -c "test ! -d repos/lpdf-python  || diff LICENSE repos/lpdf-python/LICENSE  || (echo 'ERROR: repos/lpdf-python/LICENSE differs from root LICENSE' && exit 1)"
 	@echo "OK"
 
 # ── Release candidate ─────────────────────────────────────────────────────────
@@ -413,7 +413,7 @@ rc-check:
 	@node scripts/rc-check.mjs "$(RC)"
 
 # Downloads the .vsix that lpdf-vscode's rc.yml built for a release candidate
-# into src/vscode/.rc/<tag>/, and prints how to install and check it. Needs gh.
+# into repos/lpdf-vscode/.rc/<tag>/, and prints how to install and check it. Needs gh.
 #   make rc-vsix                    the newest RC lpdf-vscode built
 #   make rc-vsix RC=v0.25.0-rc.2    a specific one
 rc-vsix:
@@ -450,7 +450,7 @@ stamp-pages-docs:
 
 # ── Examples ─────────────────────────────────────────────────────────────────
 # examples/ holds the seven examples, from the admission letter to the book, and is the one source of them. The VS Code
-# extension offers them as templates (src/vscode/templates), and the demo on lpdf.io and the docs show them (both in
+# extension offers them as templates (repos/lpdf-vscode/templates), and the demo on lpdf.io and the docs show them (both in
 # $(PAGES_DIR)); sync-examples copies them to all three, and build-pages runs it. The docs build renders each one to
 # a PDF itself, with the engine of the site, for the viewer on its page. check-examples-sync fails if a copy is not what
 # sync-examples would write.
@@ -463,7 +463,7 @@ check-examples-sync:
 # The demo's PDF viewer is the extension's, so a change to the viewer or its page reaches the demo through this.
 # It builds the extension's TypeScript, which has the function that makes the page, but not its engine.
 build-demo-viewer:
-	cd src/vscode && npm run build
+	cd repos/lpdf-vscode && npm run build
 	node scripts/build-demo-viewer.mjs
 
 # ── Pages docs site ───────────────────────────────────────────────────────────

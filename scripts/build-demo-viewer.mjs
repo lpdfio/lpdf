@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Builds the PDF viewer page of the demo on lpdf.io from the viewer of the VS Code extension, so the two are one:
 //
-//   src/vscode/media/viewer/        the vendored PDF.js viewer, and the files that make it Lpdf's (lpdf-host.mjs,
+//   repos/lpdf-vscode/media/viewer/        the vendored PDF.js viewer, and the files that make it Lpdf's (lpdf-host.mjs,
 //                                   lpdf-toolbar.mjs, lpdf-theme.css, ...)
-//   src/vscode/dist/viewer-html.js  the function that builds the page the extension shows it in; compiled by
-//                                   `npm run build` in src/vscode
+//   repos/lpdf-vscode/dist/viewer-html.js  the function that builds the page the extension shows it in; compiled by
+//                                   `npm run build` in repos/lpdf-vscode
 //
 // What it writes, in <pages>/ui/demo/viewer/ (the demo copies that folder to lpdf.io):
 //
@@ -20,7 +20,7 @@
 // Usage: node scripts/build-demo-viewer.mjs            write the folder
 //        node scripts/build-demo-viewer.mjs --check    exit 1 if the folder is not what this would write
 //
-// The pages checkout is found at ../codesense/pages/lpdf, or at $PAGES_DIR or --pages <dir>.
+// The pages checkout is found at repos/lpdf-pages, or at $PAGES_DIR or --pages <dir>.
 
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -29,13 +29,13 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '..');
-const source = path.join(repo, 'src', 'vscode', 'media', 'viewer');
-const builtHtml = path.join(repo, 'src', 'vscode', 'dist', 'viewer-html.js');
+const source = path.join(repo, 'repos', 'lpdf-vscode', 'media', 'viewer');
+const builtHtml = path.join(repo, 'repos', 'lpdf-vscode', 'dist', 'viewer-html.js');
 
 const args = process.argv.slice(2);
 const check = args.includes('--check');
 const pagesArg = args.includes('--pages') ? args[args.indexOf('--pages') + 1] : undefined;
-const pagesDir = path.resolve(pagesArg ?? process.env.PAGES_DIR ?? path.join(repo, '..', 'codesense', 'pages', 'lpdf'));
+const pagesDir = path.resolve(pagesArg ?? process.env.PAGES_DIR ?? path.join(repo, 'repos', 'lpdf-pages'));
 const outDir = path.join(pagesDir, 'ui', 'demo', 'viewer');
 
 /** Files of the extension's viewer folder that are for the extension's maintainers, not for a page. */
@@ -49,7 +49,7 @@ function fail(message) {
 }
 
 if (!fs.existsSync(path.join(pagesDir, 'ui'))) fail(`the pages checkout is not at ${pagesDir}`);
-if (!fs.existsSync(builtHtml)) fail(`${path.relative(repo, builtHtml)} is missing: run npm run build in src/vscode`);
+if (!fs.existsSync(builtHtml)) fail(`${path.relative(repo, builtHtml)} is missing: run npm run build in repos/lpdf-vscode`);
 
 const { buildViewerHtml } = createRequire(import.meta.url)(builtHtml);
 

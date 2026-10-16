@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Copies the examples in examples/ to the three places that show them, so there is one source:
 //
-//   the extension   src/vscode/templates/<id>/    what Lpdf: New Document offers
+//   the extension   repos/lpdf-vscode/templates/<id>/    what Lpdf: New Document offers
 //   the demo        <pages>/ui/demo/examples/     the examples of the demo on lpdf.io, with index.json
 //   the docs        <pages>/www/docs/content/examples/<id>.md, and <pages>/docs-site/public/examples/<id>/
 //                   a page for each example, and the files it links to
@@ -23,7 +23,7 @@
 // Usage: node scripts/sync-examples.mjs            write the files
 //        node scripts/sync-examples.mjs --check    list the files that are not as this would write them, exit 1 if any
 //
-// The pages checkout is found at ../codesense/pages/lpdf, as the Makefile does, or at $PAGES_DIR or --pages <dir>.
+// The pages checkout is found at repos/lpdf-pages, as the Makefile does, or at $PAGES_DIR or --pages <dir>.
 // Without one, only the extension is synced.
 
 import fs from 'node:fs';
@@ -37,7 +37,7 @@ const examplesDir = path.join(repo, 'examples');
 const args = process.argv.slice(2);
 const check = args.includes('--check');
 const pagesArg = args.includes('--pages') ? args[args.indexOf('--pages') + 1] : undefined;
-const pagesDir = path.resolve(pagesArg ?? process.env.PAGES_DIR ?? path.join(repo, '..', 'codesense', 'pages', 'lpdf'));
+const pagesDir = path.resolve(pagesArg ?? process.env.PAGES_DIR ?? path.join(repo, 'repos', 'lpdf-pages'));
 
 /** A document of this many lines or fewer is shown whole in its docs page; a longer one is linked. */
 const INLINE_XML_MAX_LINES = 260;
@@ -125,7 +125,7 @@ function json(value) {
 }
 
 function extensionTarget(examples) {
-    const root = path.join(repo, 'src', 'vscode', 'templates');
+    const root = path.join(repo, 'repos', 'lpdf-vscode', 'templates');
     const files = new Map();
     for (const example of examples) {
         const prefix = `${example.id}/`;

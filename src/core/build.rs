@@ -26,10 +26,10 @@
 //!
 //! # Local development
 //!
-//! Run `npm start` inside `src/license/` once to generate a dev keypair.
+//! Run `npm start` inside `repos/lpdf-license/` once to generate a dev keypair.
 //! The server prints a hex string — set it in your shell:
 //!
-//!   export LPDF_PUBLIC_KEY=$(cat src/license/keys/public.hex)
+//!   export LPDF_PUBLIC_KEY=$(cat repos/lpdf-license/keys/public.hex)
 //!
 //! # CI / GitHub Actions
 //!

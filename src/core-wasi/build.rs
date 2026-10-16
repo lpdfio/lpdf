@@ -23,10 +23,10 @@
 //!
 //! # Local development
 //!
-//! Run `npm start` inside `src/license/` once to generate a dev keypair.
+//! Run `npm start` inside `repos/lpdf-license/` once to generate a dev keypair.
 //! The server prints a hex string — set it in your shell:
 //!
-//!   export LPDF_PUBLIC_KEY=$(cat src/license/keys/public.hex)
+//!   export LPDF_PUBLIC_KEY=$(cat repos/lpdf-license/keys/public.hex)
 //!
 //! # CI / GitHub Actions
 //!
@@ -46,17 +46,17 @@ fn main() {
         // No key set — abort with a clear, actionable message.
         panic!(
             "\n\
-            ┌─────────────────────────────────────────────────────────────────┐\n\
-            │  LPDF_PUBLIC_KEY is not set.                                    │\n\
-            │                                                                 │\n\
-            │  For local development:                                         │\n\
-            │    cd src/license && npm start                                  │\n\
-            │    export LPDF_PUBLIC_KEY=$(cat src/license/keys/public.hex)    │\n\
-            │                                                                 │\n\
-            │  For CI / GitHub Actions, add to your workflow step:            │\n\
-            │    env:                                                         │\n\
-            │      LPDF_PUBLIC_KEY: ${{{{ secrets.LPDF_PUBLIC_KEY }}}}         │\n\
-            └─────────────────────────────────────────────────────────────────┘"
+            ┌────────────────────────────────────────────────────────────────────────┐\n\
+            │  LPDF_PUBLIC_KEY is not set.                                           │\n\
+            │                                                                        │\n\
+            │  For local development:                                                │\n\
+            │    cd repos/lpdf-license && npm start                                  │\n\
+            │    export LPDF_PUBLIC_KEY=$(cat repos/lpdf-license/keys/public.hex)    │\n\
+            │                                                                        │\n\
+            │  For CI / GitHub Actions, add to your workflow step:                   │\n\
+            │    env:                                                                │\n\
+            │      LPDF_PUBLIC_KEY: ${{{{ secrets.LPDF_PUBLIC_KEY }}}}                   │\n\
+            └────────────────────────────────────────────────────────────────────────┘"
         )
     });
 

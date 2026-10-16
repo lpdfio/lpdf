@@ -39,14 +39,14 @@
 //!
 //! Rotation procedure:
 //!
-//! 1. Generate a new keypair with `npm start` in `src/license/`.
+//! 1. Generate a new keypair with `npm start` in `repos/lpdf-license/`.
 //! 2. Prepend the new hex key to `LPDF_PUBLIC_KEY` (comma-separated).
 //! 3. Rebuild and deploy the binary.
 //! 4. Reissue tokens to customers (signed with the new private key).
 //! 5. After the grace period remove the old key, rebuild, and deploy again.
 //!
 //! # Local test setup
-//! Run `npm start` inside `src/license/` once to auto-generate a keypair.
+//! Run `npm start` inside `repos/lpdf-license/` once to auto-generate a keypair.
 //! The server prints a hex string — set it as `LPDF_PUBLIC_KEY` in your
 //! shell and rebuild.  See `build.rs` for full instructions.
 //! The server's `keys/private.hex` is gitignored; never commit it.

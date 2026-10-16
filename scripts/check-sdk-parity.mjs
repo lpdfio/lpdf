@@ -6,7 +6,7 @@
 // The generated classes cannot drift while `make check-sdk-api` passes; this check also covers the
 // classes that are written by hand: the document, its sections, meta, assets and tokens.
 //
-// Usage: node scripts/check-sdk-parity.mjs                      the four SDKs under src/sdk; list the differences, exit 1 if any
+// Usage: node scripts/check-sdk-parity.mjs                      the four SDKs under repos/; list the differences, exit 1 if any
 //        node scripts/check-sdk-parity.mjs --sdk node=.          only the SDK in the given folder (an SDK repository's CI)
 
 import { readdirSync, readFileSync } from 'node:fs';
