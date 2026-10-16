@@ -20,14 +20,14 @@
       <!-- Pinned header: appears on every page -->
       <region pin="top" page="each">
         <column background="primary" padding="12pt 40pt" gap="xs">
-          <flank>
+          <row>
             <text font-size="l" font="Helvetica-Bold" color="surface">
               Annual Report 2026
             </text>
-            <text font-size="s" color="accent" align="right">
+            <text width="fill" font-size="s" color="accent" align="right">
               lpdf.io
             </text>
-          </flank>
+          </row>
         </column>
         <divider color="accent" thickness="m"/>
       </region>
@@ -36,12 +36,12 @@
       <region pin="bottom" page="each">
         <divider color="rule" thickness="xs"/>
         <column padding="8pt 40pt" gap="xs">
-          <flank>
+          <row>
             <text font-size="xs" color="muted">Confidential — For internal use only</text>
-            <text font-size="xs" color="muted" align="right">
+            <text width="fill" font-size="xs" color="muted" align="right">
               lpdf.io · PDF generation API
             </text>
-          </flank>
+          </row>
         </column>
       </region>
 

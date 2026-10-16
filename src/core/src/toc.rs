@@ -147,7 +147,7 @@ mod tests {
             .collect();
         let pages = render(&format!(
             r#"<section type="toc"><layout>
-                   <column data-source="$toc"><flank><text data-value="label">Label</text><text data-value="page">0</text></flank></column>
+                   <column data-source="$toc"><row><text data-value="label">Label</text><text width="fill" data-value="page">0</text></row></column>
                </layout></section>
                <section><layout>{parts}</layout></section>"#
         ));

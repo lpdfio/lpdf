@@ -107,8 +107,6 @@ const UNTESTED: &[(&str, &str)] = &[
         "read by the SDKs, which load the file and hand it to the engine under the image's name or ref; the engine never sees it",
     ),
     ("column@paginate", PAGINATE),
-    ("flank@paginate", PAGINATE),
-    ("split@paginate", PAGINATE),
     ("row@paginate", PAGINATE),
     ("grid@paginate", PAGINATE),
     ("frame@paginate", PAGINATE),
@@ -508,8 +506,6 @@ fn subjects() -> Vec<Subject> {
             .base(&[("xs", "40pt"), ("s", "80pt"), ("m", "120pt"), ("l", "160pt"), ("xl", "200pt"), ("xxl", "240pt")]),
         // Layout containers.
         Subject::new("column", |a, c| boxed("column", a, c)).content(TWO),
-        Subject::new("flank", |a, c| boxed("flank", a, c)).content(TWO),
-        Subject::new("split", |a, c| boxed("split", a, c)).content(TWO),
         Subject::new("row", |a, c| boxed("row", a, c)).content(TWO),
         Subject::new("grid", |a, c| boxed("grid", a, c)).base(&[("cols", "2")]).content(FOUR),
         Subject::new("frame", |a, c| boxed("frame", a, c)).content(ONE),
@@ -620,7 +616,7 @@ impl Tweak {
     }
 }
 
-const BOXES: [&str; 7] = ["column", "flank", "split", "row", "grid", "frame", "td"];
+const BOXES: [&str; 5] = ["column", "row", "grid", "frame", "td"];
 
 fn tweaks() -> HashMap<String, Tweak> {
     let mut t: HashMap<String, Tweak> = HashMap::new();
@@ -632,7 +628,7 @@ fn tweaks() -> HashMap<String, Tweak> {
     for element in BOXES.iter().chain(["img"].iter()) {
         add(&format!("{element}@radius"), Tweak::default().set("background", "#cccccc"));
     }
-    for element in ["column", "flank", "split", "row", "grid", "frame", "table"] {
+    for element in ["column", "row", "grid", "frame", "table"] {
         add(&format!("{element}@width"), Tweak::default().set("background", "#cccccc"));
     }
 
@@ -647,10 +643,6 @@ fn tweaks() -> HashMap<String, Tweak> {
         Tweak::default()
             .content("<text align=\"left\">Alpha</text><text align=\"center\">Beta</text><text align=\"right\">Gamma</text>"),
     );
-    // A split puts its children at the two edges, so a gap shows once they share the width.
-    add("split@gap", Tweak::default().set("equal", "true"));
-    add("flank@align", Tweak::default().content(UNEVEN));
-    add("split@align", Tweak::default().content(UNEVEN));
     add("row@align", Tweak::default().content(UNEVEN));
     add("td@align", Tweak::default().content("<text width=\"40pt\">Alpha</text>"));
     add("column@justify", Tweak::default().set("height", "300pt"));

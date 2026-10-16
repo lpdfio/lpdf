@@ -165,6 +165,17 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <!-- "fill", a token, or an explicit pt value e.g. "120pt" -->
+  <xs:simpleType name="WidthValue">
+    <xs:union memberTypes="WidthMode TokenScale PtValue"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="WidthMode">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="fill"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <!-- Nine reference points on the page (vertical-first naming) -->
   <xs:simpleType name="Anchor">
     <xs:restriction base="xs:string">
@@ -303,6 +314,15 @@
     </xs:attribute>
     <xs:attribute name="debug"      type="xs:boolean"/>
     <xs:attributeGroup ref="DataBindingAttrs"/>
+  </xs:attributeGroup>
+
+  <!-- width, on every element a row can hold -->
+  <xs:attributeGroup name="WidthAttr">
+    <xs:attribute name="width" type="WidthValue">
+      <xs:annotation>
+        <xs:documentation>Width of the element. A length fixes it. fill, in a row, takes the width its line leaves after the other children, shared equally if several on the line use fill, and never moves to the next line; in a column it takes the full width.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
   </xs:attributeGroup>
 
   <!-- Box attrs for frame — no gap (frame always centers its single child) -->
@@ -525,8 +545,6 @@
   <xs:group name="LayoutContent">
     <xs:choice>
       <xs:element ref="column"/>
-      <xs:element ref="flank"/>
-      <xs:element ref="split"/>
       <xs:element ref="row"/>
       <xs:element ref="grid"/>
       <xs:element ref="frame"/>
@@ -783,51 +801,13 @@
       <xs:attributeGroup ref="BoxAttrs"/>
       <xs:attribute name="align"   type="AlignFull"/>
       <xs:attribute name="justify" type="Justify"/>
-      <xs:attribute name="width"   type="TokenScaleOrPt"/>
-    </xs:complexType>
-  </xs:element>
-
-  <xs:element name="flank">
-    <xs:annotation>
-      <xs:documentation>One row where the children keep their own width except one, which fills the rest. By default the last child fills; set end to true and the first fills. Never splits across pages.</xs:documentation>
-    </xs:annotation>
-    <xs:complexType>
-      <xs:sequence>
-        <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
-      </xs:sequence>
-      <xs:attributeGroup ref="BoxAttrs"/>
-      <xs:attribute name="align" type="Align"/>
-      <xs:attribute name="end"   type="xs:boolean">
-        <xs:annotation>
-          <xs:documentation>false (the default): every child but the last keeps its own width at the left, and the last fills the rest. true: the first child fills, and the others keep their own width at the right.</xs:documentation>
-        </xs:annotation>
-      </xs:attribute>
-      <xs:attribute name="width" type="TokenScaleOrPt"/>
-    </xs:complexType>
-  </xs:element>
-
-  <xs:element name="split">
-    <xs:annotation>
-      <xs:documentation>Two children side by side; any further children are ignored. By default each keeps its own width, the first at the left edge and the second at the right. With equal set to true they take half the width each. Never splits across pages.</xs:documentation>
-    </xs:annotation>
-    <xs:complexType>
-      <xs:sequence>
-        <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
-      </xs:sequence>
-      <xs:attributeGroup ref="BoxAttrs"/>
-      <xs:attribute name="align" type="Align"/>
-      <xs:attribute name="equal" type="xs:boolean">
-        <xs:annotation>
-          <xs:documentation>false (the default): each child keeps its own width, the first at the left edge and the second at the right edge. true: the two children share the width in equal halves.</xs:documentation>
-        </xs:annotation>
-      </xs:attribute>
-      <xs:attribute name="width" type="TokenScaleOrPt"/>
+      <xs:attributeGroup ref="WidthAttr"/>
     </xs:complexType>
   </xs:element>
 
   <xs:element name="row">
     <xs:annotation>
-      <xs:documentation>Children side by side, continuing on the next line when they run out of width. Splits across pages between lines.</xs:documentation>
+      <xs:documentation>Children side by side, continuing on the next line when they run out of width. A child with width set to fill takes what its line leaves; justify set to between puts a line's first child at the left edge, its last at the right and the others evenly between. Splits across pages between lines.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
@@ -836,7 +816,7 @@
       <xs:attributeGroup ref="BoxAttrs"/>
       <xs:attribute name="align"   type="AlignFull"/>
       <xs:attribute name="justify" type="Justify"/>
-      <xs:attribute name="width"   type="TokenScaleOrPt"/>
+      <xs:attributeGroup ref="WidthAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -849,7 +829,7 @@
         <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
       </xs:sequence>
       <xs:attributeGroup ref="BoxAttrs"/>
-      <xs:attribute name="width" type="TokenScaleOrPt"/>
+      <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="col-width" type="TokenScaleOrPt"/>
       <xs:attribute name="cols">
         <xs:simpleType>
@@ -871,7 +851,7 @@
         <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="1"/>
       </xs:sequence>
       <xs:attributeGroup ref="FrameBoxAttrs"/>
-      <xs:attribute name="width" type="TokenScaleOrPt"/>
+      <xs:attributeGroup ref="WidthAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -886,7 +866,7 @@
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="gap"    type="SpacingOrToken"/>
-      <xs:attribute name="width"  type="TokenScaleOrPt"/>
+      <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="height" type="HeightValue"/>
       <xs:attribute name="debug"  type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
@@ -928,6 +908,7 @@
       </xs:attribute>
       <xs:attribute name="color"     type="Color"/>
       <xs:attribute name="thickness" type="TokenScaleOrPt"/>
+      <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="debug"     type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
@@ -953,7 +934,7 @@
       <!-- <img> uses a pt-only height constraint, not HeightMode (fill/full) -->
       <xs:attribute name="name"       type="xs:string"     use="required"/>
       <xs:attribute name="height"     type="PtValue"/>
-      <xs:attribute name="width"      type="TokenScaleOrPt"/>
+      <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="font"       type="xs:string"/>
       <xs:attribute name="font-size"  type="TokenScaleOrPt"/>
       <xs:attribute name="gap"        type="TokenScaleOrPt"/>
@@ -980,7 +961,7 @@
       </xs:attribute>
       <xs:attribute name="data"       type="xs:string"       use="required"/>
       <xs:attribute name="size"       type="TokenScaleOrPt"/>
-      <xs:attribute name="width"      type="TokenScaleOrPt"/>
+      <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="height"     type="PtValue"/>
       <xs:attribute name="ec">
         <xs:simpleType>
@@ -1018,7 +999,7 @@
       </xs:attribute>
       <xs:attribute name="color"     type="Color"/>
       <xs:attribute name="align"     type="TextAlignH"/>
-      <xs:attribute name="width"     type="TokenScaleOrPt"/>
+      <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="widows">
         <xs:annotation>
           <xs:documentation>The fewest lines of the text that may stand alone at the top of the next page when it splits. Default 2. If fewer would be left, lines move from the first page to the next; 1 turns the protection off.</xs:documentation>
@@ -1115,7 +1096,7 @@
       <xs:attribute name="gap"        type="TokenScaleOrPt"/>
       <xs:attribute name="padding"    type="SpacingOrToken"/>
       <xs:attribute name="background" type="Color"/>
-      <xs:attribute name="width"      type="TokenScaleOrPt"/>
+      <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="height"     type="HeightValue"/>
       <xs:attribute name="paginate"   type="Paginate"/>
       <xs:attribute name="debug"      type="xs:boolean"/>
@@ -1150,7 +1131,7 @@
       <xs:attribute name="readonly"   type="xs:boolean"/>
       <xs:attribute name="max-len"    type="xs:positiveInteger"/>
       <xs:attribute name="action-url" type="xs:anyURI"/>
-      <xs:attribute name="width"      type="TokenScaleOrPt"/>
+      <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="height"     type="PtValue"/>
       <xs:attribute name="background" type="Color"/>
       <xs:attribute name="border"     type="BorderValue"/>

@@ -1,0 +1,182 @@
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf" />
+      <color name="surface"  value="#ffffff" />
+      <color name="bg"       value="#f5f7fa" />
+      <color name="accent"   value="#e8f0fc" />
+      <color name="muted"    value="#737373" />
+      <color name="rule"     value="#dde3ed" />
+    </colors>
+  </tokens>
+  <document size="a4" margin="40pt">
+    <meta title="lpdf Showcase — Row: between" subject="Layout primitives" />
+
+      <!-- Row: between -->
+    <section background="surface">
+      <layout>
+      <column gap="xl">
+
+        <column gap="xs">
+          <text font-size="xxl" font="Helvetica-Bold" color="primary">Row: between</text>
+          <text font-size="m" color="muted">justify="between" spreads a line from edge to edge; two fill children share it in halves</text>
+        </column>
+
+        <!-- between -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">justify="between"</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">each child keeps its natural width, the first at the left edge and the last at the right</text>
+            <row justify="between" debug="true" background="bg" padding="s">
+              <column background="accent" padding="s"><text font-size="m">Left</text></column>
+              <column background="rule" padding="s"><text font-size="m">Right</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">first child width="120pt", second its natural width</text>
+            <row justify="between" debug="true" background="bg" padding="s">
+              <column background="accent" padding="s" width="120pt"><text font-size="m">Fixed 120pt</text></column>
+              <column background="rule" padding="s"><text font-size="m">Natural</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">second child width="100pt", first its natural width</text>
+            <row justify="between" debug="true" background="bg" padding="s">
+              <column background="rule" padding="s"><text font-size="m">Natural</text></column>
+              <column background="accent" padding="s" width="100pt"><text font-size="m">Fixed 100pt</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">three children — the middle one evenly between</text>
+            <row justify="between" debug="true" background="bg" padding="s">
+              <column background="accent" padding="s"><text font-size="m">Left</text></column>
+              <column background="rule" padding="s"><text font-size="m">Middle</text></column>
+              <column background="accent" padding="s"><text font-size="m">Right</text></column>
+            </row>
+          </column>
+        </column>
+
+        <!-- halves -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">width="fill" on both children</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">the two children share the width in halves; the sections below use them too</text>
+            <row debug="true" gap="m" background="bg" padding="s">
+              <column width="fill" background="accent" padding="s"><text font-size="m">Left column — equal width</text></column>
+              <column width="fill" background="rule" padding="s"><text font-size="m">Right column — equal width</text></column>
+            </row>
+          </column>
+        </column>
+
+        <!-- align (cross-axis = vertical) -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">align (cross-axis)</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">align="start" — columns top-aligned</text>
+            <row debug="true" align="start" gap="m" background="bg" padding="s">
+              <column width="fill" background="accent" padding="s"><text font-size="m">Short</text></column>
+              <column width="fill" background="rule" padding="s"><text font-size="m">Taller</text><text font-size="m">column</text><text font-size="m">content</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">align="center" — columns middle-aligned</text>
+            <row debug="true" align="center" gap="m" background="bg" padding="s">
+              <column width="fill" background="accent" padding="s"><text font-size="m">Short</text></column>
+              <column width="fill" background="rule" padding="s"><text font-size="m">Taller</text><text font-size="m">column</text><text font-size="m">content</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">align="end" — columns bottom-aligned</text>
+            <row debug="true" align="end" gap="m" background="bg" padding="s">
+              <column width="fill" background="accent" padding="s"><text font-size="m">Short</text></column>
+              <column width="fill" background="rule" padding="s"><text font-size="m">Taller</text><text font-size="m">column</text><text font-size="m">content</text></column>
+            </row>
+          </column>
+        </column>
+
+        <!-- gap -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">gap</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">gap="xs"</text>
+            <row debug="true" gap="xs" background="bg" padding="s">
+              <column width="fill" background="accent" padding="s"><text font-size="m">Left</text></column>
+              <column width="fill" background="rule" padding="s"><text font-size="m">Right</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">gap="m"</text>
+            <row debug="true" gap="m" background="bg" padding="s">
+              <column width="fill" background="accent" padding="s"><text font-size="m">Left</text></column>
+              <column width="fill" background="rule" padding="s"><text font-size="m">Right</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">gap="xl"</text>
+            <row debug="true" gap="xl" background="bg" padding="s">
+              <column width="fill" background="accent" padding="s"><text font-size="m">Left</text></column>
+              <column width="fill" background="rule" padding="s"><text font-size="m">Right</text></column>
+            </row>
+          </column>
+        </column>
+
+        <!-- padding -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">padding</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">padding="xs"</text>
+            <row debug="true" padding="xs" gap="m" background="bg">
+              <column width="fill" background="accent" padding="s"><text font-size="m">Left</text></column>
+              <column width="fill" background="rule" padding="s"><text font-size="m">Right</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">padding="l"</text>
+            <row debug="true" padding="l" gap="m" background="bg">
+              <column width="fill" background="accent" padding="s"><text font-size="m">Left</text></column>
+              <column width="fill" background="rule" padding="s"><text font-size="m">Right</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">padding="20pt 8pt" (vertical · horizontal)</text>
+            <row debug="true" padding="20pt 8pt" gap="m" background="bg">
+              <column width="fill" background="accent" padding="s"><text font-size="m">Left</text></column>
+              <column width="fill" background="rule" padding="s"><text font-size="m">Right</text></column>
+            </row>
+          </column>
+        </column>
+
+        <!-- border · radius -->
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">border · radius</text>
+          <column gap="xs">
+            <text font-size="m" color="muted">border="xs rule" radius="xs"</text>
+            <row padding="s" gap="m" border="xs rule" radius="xs">
+              <column width="fill" background="accent" padding="s"><text font-size="m">Left</text></column>
+              <column width="fill" background="bg" padding="s"><text font-size="m">Right</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">border="s primary" radius="l"</text>
+            <row padding="m" gap="m" border="s primary" radius="l">
+              <column width="fill" background="accent" padding="s"><text font-size="m">Left</text></column>
+              <column width="fill" background="bg" padding="s"><text font-size="m">Right</text></column>
+            </row>
+          </column>
+          <column gap="xs">
+            <text font-size="m" color="muted">background="accent" radius="m" padding="m"</text>
+            <row background="accent" radius="m" padding="m" gap="m">
+              <column width="fill" background="surface" padding="s" radius="xs"><text font-size="m">Left</text></column>
+              <column width="fill" background="surface" padding="s" radius="xs"><text font-size="m">Right</text></column>
+            </row>
+          </column>
+        </column>
+
+      </column>
+      </layout>
+    </section>
+
+  </document>
+</lpdf>

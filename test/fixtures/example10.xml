@@ -15,10 +15,10 @@
 
       <!-- running header: rendered identically on every page -->
       <column gap="xs">
-        <split align="center">
+        <row justify="between" align="center">
           <text font-size="s" font="Helvetica-Bold" color="ink">ACME ENGINEERING HANDBOOK</text>
           <text font-size="s" color="text-muted">Revision 2026.04</text>
-        </split>
+        </row>
         <divider color="rule" thickness="xs" />
       </column>
 
@@ -53,10 +53,10 @@
       <!-- running footer: page numbers via {page}/{pages} substitution -->
       <column gap="xs">
         <divider color="rule" thickness="xs" />
-        <split align="center">
+        <row justify="between" align="center">
           <text font-size="xs" color="text-muted">© 2026 Acme Engineering</text>
           <text font-size="xs" color="text-muted">Page <span font="Helvetica-Bold">{page}</span> of <span font="Helvetica-Bold">{pages}</span></text>
-        </split>
+        </row>
       </column>
 
       </layout>

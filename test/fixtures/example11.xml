@@ -17,7 +17,7 @@
 
       <!-- letterhead: only on page 1 -->
       <frame background="brand-soft" padding="m" radius="s">
-        <split align="center">
+        <row justify="between" align="center">
           <column gap="xs">
             <text font-size="l" font="Helvetica-Bold" color="brand">Helios Robotics, Inc.</text>
             <text font-size="xs" color="text-muted">1200 Market Street · San Francisco, CA 94102</text>
@@ -26,15 +26,15 @@
             <text font-size="xs" color="text-muted">Investor Relations</text>
             <text font-size="xs" color="text-muted">ir@heliosrobotics.example</text>
           </column>
-        </split>
+        </row>
       </frame>
 
       <!-- running header: every page (including page 1, below the letterhead) -->
       <column gap="xs">
-        <split align="center">
+        <row justify="between" align="center">
           <text font-size="xs" font="Helvetica-Bold" color="ink">QUARTERLY INVESTOR UPDATE</text>
           <text font-size="xs" color="text-muted">Q1 2026 · Confidential</text>
-        </split>
+        </row>
         <divider color="rule" thickness="xs" />
       </column>
 
@@ -71,10 +71,10 @@
       <!-- running footer: every page, with auto page numbers -->
       <column gap="xs">
         <divider color="rule" thickness="xs" />
-        <split align="center">
+        <row justify="between" align="center">
           <text font-size="xs" color="text-muted">Helios Robotics, Inc. · Confidential</text>
           <text font-size="xs" color="text-muted">Page <span font="Helvetica-Bold">{page}</span> of <span font="Helvetica-Bold">{pages}</span></text>
-        </split>
+        </row>
       </column>
 
       </layout>

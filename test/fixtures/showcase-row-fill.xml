@@ -12,50 +12,50 @@
     </colors>
   </tokens>
   <document size="a4" margin="40pt">
-    <meta title="lpdf Showcase — Flank" subject="Layout primitives" />
+    <meta title="lpdf Showcase — Row: fill" subject="Layout primitives" />
 
-      <!-- Flank -->
+      <!-- Row: fill -->
     <section background="surface">
       <layout>
       <column gap="xl">
 
         <column gap="xs">
-          <text font-size="xxl" font="Helvetica-Bold" color="primary">Flank</text>
-          <text font-size="m" color="muted">One child fills the remaining width; the other(s) shrink-wrap to their content</text>
+          <text font-size="xxl" font="Helvetica-Bold" color="primary">Row: fill</text>
+          <text font-size="m" color="muted">A child with width="fill" takes the width its line leaves; the others keep their own width</text>
         </column>
 
-        <!-- end (fill side) -->
+        <!-- which child fills -->
         <column gap="m">
-          <text font-size="l" font="Helvetica-Bold">end (which side fills)</text>
+          <text font-size="l" font="Helvetica-Bold">width="fill" (which child fills)</text>
           <column gap="xs">
-            <text font-size="m" color="muted">end="false" (default) — flank on left, fill on right</text>
-            <flank debug="true" gap="s" background="bg" padding="s">
+            <text font-size="m" color="muted">fill on the last child — the other on the left</text>
+            <row debug="true" gap="s" background="bg" padding="s">
               <column background="accent" padding="xs"><text font-size="m">Label</text></column>
-              <column background="rule" padding="xs"><text font-size="m">This content fills the remaining width</text></column>
-            </flank>
+              <column width="fill" background="rule" padding="xs"><text font-size="m">This content fills the remaining width</text></column>
+            </row>
           </column>
           <column gap="xs">
-            <text font-size="m" color="muted">end="true" — fill on left, flank on right</text>
-            <flank debug="true" end="true" gap="s" background="bg" padding="s">
-              <column background="rule" padding="xs"><text font-size="m">This content fills the remaining width</text></column>
+            <text font-size="m" color="muted">fill on the first child — the other on the right</text>
+            <row debug="true" gap="s" background="bg" padding="s">
+              <column width="fill" background="rule" padding="xs"><text font-size="m">This content fills the remaining width</text></column>
               <column background="accent" padding="xs"><text font-size="m">Action</text></column>
-            </flank>
+            </row>
           </column>
           <column gap="xs">
-            <text font-size="m" color="muted">end="false" — multiple flanks on left</text>
-            <flank debug="true" gap="s" background="bg" padding="s">
+            <text font-size="m" color="muted">fill on the last of three — two children on the left</text>
+            <row debug="true" gap="s" background="bg" padding="s">
               <column background="accent" padding="xs"><text font-size="m">Icon</text></column>
               <column background="accent" padding="xs"><text font-size="m">Label</text></column>
-              <column background="rule" padding="xs"><text font-size="m">Fill content stretches to fit</text></column>
-            </flank>
+              <column width="fill" background="rule" padding="xs"><text font-size="m">Fill content stretches to fit</text></column>
+            </row>
           </column>
           <column gap="xs">
-            <text font-size="m" color="muted">end="true" — multiple flanks on right</text>
-            <flank debug="true" end="true" gap="s" background="bg" padding="s">
-              <column background="rule" padding="xs"><text font-size="m">Fill content stretches to fit</text></column>
+            <text font-size="m" color="muted">fill on the first of three — two children on the right</text>
+            <row debug="true" gap="s" background="bg" padding="s">
+              <column width="fill" background="rule" padding="xs"><text font-size="m">Fill content stretches to fit</text></column>
               <column background="accent" padding="xs"><text font-size="m">Edit</text></column>
               <column background="accent" padding="xs"><text font-size="m">Delete</text></column>
-            </flank>
+            </row>
           </column>
         </column>
 
@@ -64,24 +64,24 @@
           <text font-size="l" font="Helvetica-Bold">align (cross-axis)</text>
           <column gap="xs">
             <text font-size="m" color="muted">align="start" — items top-aligned</text>
-            <flank debug="true" align="start" gap="s" background="bg" padding="s">
+            <row debug="true" align="start" gap="s" background="bg" padding="s">
               <column background="accent" padding="xs"><text font-size="m">Short</text></column>
-              <column background="rule" padding="xs"><text font-size="m">Fill</text><text font-size="m">Two lines</text><text font-size="m">Three lines</text></column>
-            </flank>
+              <column width="fill" background="rule" padding="xs"><text font-size="m">Fill</text><text font-size="m">Two lines</text><text font-size="m">Three lines</text></column>
+            </row>
           </column>
           <column gap="xs">
             <text font-size="m" color="muted">align="center" — items middle-aligned</text>
-            <flank debug="true" align="center" gap="s" background="bg" padding="s">
+            <row debug="true" align="center" gap="s" background="bg" padding="s">
               <column background="accent" padding="xs"><text font-size="m">Short</text></column>
-              <column background="rule" padding="xs"><text font-size="m">Fill</text><text font-size="m">Two lines</text><text font-size="m">Three lines</text></column>
-            </flank>
+              <column width="fill" background="rule" padding="xs"><text font-size="m">Fill</text><text font-size="m">Two lines</text><text font-size="m">Three lines</text></column>
+            </row>
           </column>
           <column gap="xs">
             <text font-size="m" color="muted">align="end" — items bottom-aligned</text>
-            <flank debug="true" align="end" gap="s" background="bg" padding="s">
+            <row debug="true" align="end" gap="s" background="bg" padding="s">
               <column background="accent" padding="xs"><text font-size="m">Short</text></column>
-              <column background="rule" padding="xs"><text font-size="m">Fill</text><text font-size="m">Two lines</text><text font-size="m">Three lines</text></column>
-            </flank>
+              <column width="fill" background="rule" padding="xs"><text font-size="m">Fill</text><text font-size="m">Two lines</text><text font-size="m">Three lines</text></column>
+            </row>
           </column>
         </column>
 
@@ -90,24 +90,24 @@
           <text font-size="l" font="Helvetica-Bold">gap</text>
           <column gap="xs">
             <text font-size="m" color="muted">gap="xs"</text>
-            <flank debug="true" gap="xs" background="bg" padding="s">
+            <row debug="true" gap="xs" background="bg" padding="s">
               <column background="accent" padding="xs"><text font-size="m">Label</text></column>
-              <column background="rule" padding="xs"><text font-size="m">Fill</text></column>
-            </flank>
+              <column width="fill" background="rule" padding="xs"><text font-size="m">Fill</text></column>
+            </row>
           </column>
           <column gap="xs">
             <text font-size="m" color="muted">gap="m"</text>
-            <flank debug="true" gap="m" background="bg" padding="s">
+            <row debug="true" gap="m" background="bg" padding="s">
               <column background="accent" padding="xs"><text font-size="m">Label</text></column>
-              <column background="rule" padding="xs"><text font-size="m">Fill</text></column>
-            </flank>
+              <column width="fill" background="rule" padding="xs"><text font-size="m">Fill</text></column>
+            </row>
           </column>
           <column gap="xs">
             <text font-size="m" color="muted">gap="xl"</text>
-            <flank debug="true" gap="xl" background="bg" padding="s">
+            <row debug="true" gap="xl" background="bg" padding="s">
               <column background="accent" padding="xs"><text font-size="m">Label</text></column>
-              <column background="rule" padding="xs"><text font-size="m">Fill</text></column>
-            </flank>
+              <column width="fill" background="rule" padding="xs"><text font-size="m">Fill</text></column>
+            </row>
           </column>
         </column>
 
@@ -116,24 +116,24 @@
           <text font-size="l" font="Helvetica-Bold">padding</text>
           <column gap="xs">
             <text font-size="m" color="muted">padding="xs"</text>
-            <flank debug="true" padding="xs" background="bg" gap="s">
+            <row debug="true" padding="xs" background="bg" gap="s">
               <column background="accent" padding="xs"><text font-size="m">Label</text></column>
-              <column background="rule" padding="xs"><text font-size="m">Fill</text></column>
-            </flank>
+              <column width="fill" background="rule" padding="xs"><text font-size="m">Fill</text></column>
+            </row>
           </column>
           <column gap="xs">
             <text font-size="m" color="muted">padding="l"</text>
-            <flank debug="true" padding="l" background="bg" gap="s">
+            <row debug="true" padding="l" background="bg" gap="s">
               <column background="accent" padding="xs"><text font-size="m">Label</text></column>
-              <column background="rule" padding="xs"><text font-size="m">Fill</text></column>
-            </flank>
+              <column width="fill" background="rule" padding="xs"><text font-size="m">Fill</text></column>
+            </row>
           </column>
           <column gap="xs">
             <text font-size="m" color="muted">padding="20pt 8pt" (vertical · horizontal)</text>
-            <flank debug="true" padding="20pt 8pt" background="bg" gap="s">
+            <row debug="true" padding="20pt 8pt" background="bg" gap="s">
               <column background="accent" padding="xs"><text font-size="m">Label</text></column>
-              <column background="rule" padding="xs"><text font-size="m">Fill</text></column>
-            </flank>
+              <column width="fill" background="rule" padding="xs"><text font-size="m">Fill</text></column>
+            </row>
           </column>
         </column>
 
@@ -142,24 +142,24 @@
           <text font-size="l" font="Helvetica-Bold">border · radius</text>
           <column gap="xs">
             <text font-size="m" color="muted">border="xs rule" radius="xs"</text>
-            <flank padding="s" gap="s" border="xs rule" radius="xs">
+            <row padding="s" gap="s" border="xs rule" radius="xs">
               <column background="accent" padding="xs"><text font-size="m">Label</text></column>
-              <column padding="xs"><text font-size="m">Fill content</text></column>
-            </flank>
+              <column width="fill" padding="xs"><text font-size="m">Fill content</text></column>
+            </row>
           </column>
           <column gap="xs">
             <text font-size="m" color="muted">border="s primary" radius="l"</text>
-            <flank padding="m" gap="s" border="s primary" radius="l">
+            <row padding="m" gap="s" border="s primary" radius="l">
               <column background="accent" padding="xs"><text font-size="m">Label</text></column>
-              <column padding="xs"><text font-size="m">Fill content</text></column>
-            </flank>
+              <column width="fill" padding="xs"><text font-size="m">Fill content</text></column>
+            </row>
           </column>
           <column gap="xs">
             <text font-size="m" color="muted">background="accent" radius="m" padding="m"</text>
-            <flank background="accent" radius="m" padding="m" gap="s">
+            <row background="accent" radius="m" padding="m" gap="s">
               <column background="surface" padding="xs" radius="xs"><text font-size="m">Label</text></column>
-              <column background="surface" padding="xs" radius="xs"><text font-size="m">Fill content</text></column>
-            </flank>
+              <column width="fill" background="surface" padding="xs" radius="xs"><text font-size="m">Fill content</text></column>
+            </row>
           </column>
         </column>
 

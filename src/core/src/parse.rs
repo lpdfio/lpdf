@@ -246,14 +246,13 @@ pub struct Node {
     pub radius: f32,
     pub height_mode: HeightMode,
     pub width_constraint: Option<f32>,
+    pub width_fill: bool,
     pub page_scope: Option<PageScope>,
     pub paginate: Paginate,
     pub debug: bool,
     // layout-specific
     pub align: Align,
     pub justify: Justify,
-    pub end: bool,
-    pub equal: bool,
     pub cols: u32,
     pub col_width: Option<f32>,
     // divider
@@ -327,12 +326,10 @@ pub enum Paginate {
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeKind {
     Column,
-    Flank,
     Table,
     TableHead,
     TableRow,
     TableCell,
-    Split,
     Row,
     Grid,
     Frame,
@@ -426,13 +423,12 @@ struct ParsedNode {
     radius: f32,
     height_mode: HeightMode,
     width_constraint: Option<f32>,
+    width_fill: bool,
     page_scope: Option<PageScope>,
     paginate: Paginate,
     debug: bool,
     align: Align,
     justify: Justify,
-    end: bool,
-    equal: bool,
     cols: u32,
     col_width: Option<f32>,
     direction: Direction,
@@ -485,13 +481,12 @@ impl ParsedNode {
             radius: 0.0,
             height_mode: HeightMode::Auto,
             width_constraint: None,
+            width_fill: false,
             page_scope: None,
             paginate: Paginate::None,
             debug: false,
             align: Align::Stretch,
             justify: Justify::Start,
-            end: false,
-            equal: false,
             cols: 1,
             col_width: None,
             direction: Direction::Horizontal,
@@ -560,9 +555,9 @@ impl Node {
         Node {
             kind: NodeKind::Column,
             gap: 0.0, padding: [0.0; 4], background: None, border: None, radius: 0.0,
-            height_mode: HeightMode::Auto, width_constraint: None,
+            height_mode: HeightMode::Auto, width_constraint: None, width_fill: false,
             page_scope: None, paginate: Paginate::None, debug: false,
-            align: Align::Stretch, justify: Justify::Start, end: false, equal: false,
+            align: Align::Stretch, justify: Justify::Start,
             cols: 1, col_width: None, direction: Direction::Horizontal,
             color: None, thickness: 1.0, text_runs: Vec::new(),
             font: "Helvetica".to_string(), font_size: 11.0, text_color: None,
@@ -633,13 +628,12 @@ fn resolve_node(
         radius:                n.radius,
         height_mode:           n.height_mode,
         width_constraint:      n.width_constraint,
+        width_fill:            n.width_fill,
         page_scope:            n.page_scope,
         paginate:              n.paginate,
         debug:                 n.debug,
         align:                 n.align,
         justify:               n.justify,
-        end:                   n.end,
-        equal:                 n.equal,
         cols:                  n.cols,
         col_width:             n.col_width,
         direction:             n.direction,
@@ -1248,6 +1242,8 @@ fn replaced_element_hint(tag: &str) -> Option<&'static str> {
     match tag {
         "stack"   => Some("renamed to <column>"),
         "cluster" => Some("renamed to <row>"),
+        "flank"   => Some("removed; use <row> with width=\"fill\" on the child that fills the rest"),
+        "split"   => Some("removed; use <row justify=\"between\">, or <row> with width=\"fill\" on both children for equal halves"),
         _         => None,
     }
 }
@@ -1260,8 +1256,6 @@ fn parse_node(
     let tag = elem.tag_name().name();
     let kind = match tag {
         "column"  => NodeKind::Column,
-        "flank"   => NodeKind::Flank,
-        "split"   => NodeKind::Split,
         "row"     => NodeKind::Row,
         "grid"    => NodeKind::Grid,
         "frame"   => NodeKind::Frame,
@@ -1681,7 +1675,11 @@ fn apply_box_attrs(
     if !matches!(node.kind, NodeKind::Img | NodeKind::Barcode | NodeKind::Field) {
         if let Some(v) = a.get("height") { node.height_mode = parse_height_mode(v)?; }
     }
-    if let Some(v) = a.get("width")  { node.width_constraint = Some(tokens.resolve_width(v)?); }
+    match a.get("width") {
+        Some("fill") => node.width_fill = true,
+        Some(v)      => node.width_constraint = Some(tokens.resolve_width(v)?),
+        None         => {}
+    }
     if let Some(v) = a.get("paginate") { node.paginate = parse_paginate_attr(v)?; }
     node.debug = a.get("debug").map(|v| v == "true").unwrap_or(false);
     Ok(())
@@ -1699,22 +1697,9 @@ fn apply_layout_kind_attrs(
             node.align   = parse_align(a.get("align").unwrap_or("stretch"))?;
             node.justify = parse_justify(a.get("justify").unwrap_or("start"))?;
         }
-        NodeKind::Flank => {
-            node.align   = parse_align(a.get("align").unwrap_or("start"))?;
-            node.justify = parse_justify(a.get("justify").unwrap_or("start"))?;
-            node.end     = a.get("end").map(|v| v == "true").unwrap_or(false);
-        }
-        NodeKind::Split => {
-            node.align = parse_align(a.get("align").unwrap_or("start"))?;
-            node.equal = a.get("equal").map(|v| v == "true").unwrap_or(false);
-        }
         NodeKind::Row => {
             node.align   = parse_align(a.get("align").unwrap_or("start"))?;
-            let j_str = a.get("justify").unwrap_or("start");
-            if j_str == "between" {
-                return Err("row does not support justify=\"between\"; use start, center, or end".into());
-            }
-            node.justify = parse_justify(j_str)?;
+            node.justify = parse_justify(a.get("justify").unwrap_or("start"))?;
         }
         NodeKind::Frame => {
             // Frame always centers its single child; these attrs are not supported.
@@ -1869,7 +1854,7 @@ fn apply_barcode_attrs(
             node.img_height_constraint = Some(pt);
         }
         BarcodeType::Code128 | BarcodeType::Ean13 => {
-            if let Some(w) = a.get("width") {
+            if let Some(w) = a.get("width").filter(|w| *w != "fill") {
                 node.width_constraint = Some(
                     tokens.resolve_width(w)
                           .map_err(|_| format!("<barcode> invalid width '{w}'"))?,
@@ -2241,8 +2226,6 @@ fn parse_tree_node(
 
     let kind = match type_str {
         "column"  => NodeKind::Column,
-        "flank"   => NodeKind::Flank,
-        "split"   => NodeKind::Split,
         "row"     => NodeKind::Row,
         "grid"    => NodeKind::Grid,
         "frame"   => NodeKind::Frame,
@@ -2937,16 +2920,18 @@ mod tests {
     }
 
     #[test]
-    fn err_row_rejects_justify_between() {
-        let err = parse(&minimal(r#"<row justify="between" />"#)).unwrap_err();
-        assert!(err.contains("<row>"), "{err}");
-        assert!(err.contains("at line"),  "{err}");
-        assert!(err.contains("between"),   "{err}");
+    fn row_takes_justify_between_and_children_width_fill() {
+        let mut doc = parse(&minimal(r#"<row justify="between"><text width="fill">A</text><text width="40pt">B</text></row>"#)).unwrap();
+        let layouts = doc.section_layouts();
+        let row = &layouts[0].children[0];
+        assert_eq!(row.justify, Justify::Between);
+        assert!(row.children[0].width_fill && row.children[0].width_constraint.is_none());
+        assert!(!row.children[1].width_fill && row.children[1].width_constraint == Some(40.0));
     }
 
     #[test]
     fn err_renamed_layout_element_names_the_new_one() {
-        for (old, new) in [("stack", "<column>"), ("cluster", "<row>")] {
+        for (old, new) in [("stack", "<column>"), ("cluster", "<row>"), ("flank", "width=\"fill\""), ("split", "justify=\"between\"")] {
             let err = parse(&minimal(&format!("<{old} />"))).unwrap_err();
             assert!(err.contains(&format!("<{old}>")), "{err}");
             assert!(err.contains("at line"), "{err}");

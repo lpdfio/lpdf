@@ -26,20 +26,20 @@
 
         <divider color="rule" thickness="s"/>
 
-        <flank gap="m">
+        <row gap="m">
           <column gap="xs">
             <text font-size="s" color="muted">Bill To</text>
             <text font-size="m" font="Helvetica-Bold">Acme Corporation</text>
             <text font-size="m">123 Business Park</text>
             <text font-size="m">London, EC1A 1BB</text>
           </column>
-          <column gap="xs" align="end">
+          <column width="fill" gap="xs" align="end">
             <text font-size="s" color="muted">Invoice Date</text>
             <text font-size="m">22 April 2026</text>
             <text font-size="s" color="muted">Due Date</text>
             <text font-size="m" font="Helvetica-Bold">22 May 2026</text>
           </column>
-        </flank>
+        </row>
 
         <table cols="3fr 1fr 1fr" border="s rule" stripe="accent" gap="xs" padding="s">
           <thead background="primary">

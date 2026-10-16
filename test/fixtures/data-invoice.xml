@@ -10,10 +10,10 @@
         <column gap="m">
 
           <!-- header row: title + invoice number -->
-          <flank>
+          <row>
             <text font="heading" font-size="20pt">Invoice</text>
-            <text data-value="invoice_number" align="right">INV-2026-001</text>
-          </flank>
+            <text width="fill" data-value="invoice_number" align="right">INV-2026-001</text>
+          </row>
 
           <!-- customer details -->
           <column gap="xs">
@@ -25,19 +25,19 @@
 
           <!-- line items loop -->
           <column data-source="items" gap="xs">
-            <flank>
+            <row>
               <text data-value="description">Consulting Services</text>
-              <text data-value="price" align="right">$1,200.00</text>
-            </flank>
+              <text width="fill" data-value="price" align="right">$1,200.00</text>
+            </row>
           </column>
 
           <divider/>
 
           <!-- total -->
-          <flank>
+          <row>
             <text font="heading">Total</text>
-            <text data-value="total" align="right" font="heading">$1,600.00</text>
-          </flank>
+            <text width="fill" data-value="total" align="right" font="heading">$1,600.00</text>
+          </row>
 
           <!-- premium badge (conditional) -->
           <frame data-if="customer.isPremium" background="#ffd700" padding="xs">

@@ -26,11 +26,11 @@ document:
             nodes:
 
               # header: logo area + invoice label
-              - flank:
-                  attr: { gap: m, align: start, end: true }
+              - row:
+                  attr: { gap: m, align: start }
                   nodes:
                     - column:
-                        attr: { gap: xs }
+                        attr: { width: fill, gap: xs }
                         nodes:
                           - text:
                               attr: { font-size: xl, font: Helvetica-Bold, color: primary }
@@ -57,8 +57,8 @@ document:
               - divider: { attr: { color: rule, thickness: xs } }
 
               # bill-to + invoice meta
-              - split:
-                  attr: { gap: l, align: start }
+              - row:
+                  attr: { justify: between, gap: l, align: start }
                   nodes:
                     - column:
                         attr: { gap: xs }
@@ -81,29 +81,29 @@ document:
                     - column:
                         attr: { gap: xs, align: end }
                         nodes:
-                          - flank:
-                              attr: { gap: m, align: center, end: true }
+                          - row:
+                              attr: { gap: m, align: center }
                               nodes:
                                 - text:
-                                    attr: { font-size: s, color: text-muted }
+                                    attr: { width: fill, font-size: s, color: text-muted }
                                     _: Issue date
                                 - text:
                                     attr: { font-size: s }
                                     _: "April 1, 2026"
-                          - flank:
-                              attr: { gap: m, align: center, end: true }
+                          - row:
+                              attr: { gap: m, align: center }
                               nodes:
                                 - text:
-                                    attr: { font-size: s, color: text-muted }
+                                    attr: { width: fill, font-size: s, color: text-muted }
                                     _: Due date
                                 - text:
                                     attr: { font-size: s, font: Helvetica-Bold }
                                     _: "April 30, 2026"
-                          - flank:
-                              attr: { gap: m, align: center, end: true }
+                          - row:
+                              attr: { gap: m, align: center }
                               nodes:
                                 - text:
-                                    attr: { font-size: s, color: text-muted }
+                                    attr: { width: fill, font-size: s, color: text-muted }
                                     _: Payment terms
                                 - text:
                                     attr: { font-size: s }
@@ -115,17 +115,17 @@ document:
               - frame:
                   attr: { background: accent, padding: s, radius: xs }
                   nodes:
-                    - split:
+                    - column:
                         attr: { gap: m, align: center }
                         nodes:
                           - column:
                               attr: { gap: xs }
                               nodes:
-                                - flank:
-                                    attr: { gap: m, align: center, end: true }
+                                - row:
+                                    attr: { gap: m, align: center }
                                     nodes:
                                       - text:
-                                          attr: { font-size: s, font: Helvetica-Bold }
+                                          attr: { width: fill, font-size: s, font: Helvetica-Bold }
                                           _: Description
                                       - text:
                                           attr: { font-size: s, font: Helvetica-Bold, align: right, width: 30pt }
@@ -143,11 +143,11 @@ document:
                   nodes:
 
                     # item 1
-                    - flank:
-                        attr: { gap: m, align: center, end: true }
+                    - row:
+                        attr: { gap: m, align: center }
                         nodes:
                           - column:
-                              attr: { gap: xs }
+                              attr: { width: fill, gap: xs }
                               nodes:
                                 - text:
                                     attr: { font-size: m }
@@ -167,11 +167,11 @@ document:
                     - divider: { attr: { color: rule, thickness: xs } }
 
                     # item 2
-                    - flank:
-                        attr: { gap: m, align: center, end: true }
+                    - row:
+                        attr: { gap: m, align: center }
                         nodes:
                           - column:
-                              attr: { gap: xs }
+                              attr: { width: fill, gap: xs }
                               nodes:
                                 - text:
                                     attr: { font-size: m }
@@ -191,11 +191,11 @@ document:
                     - divider: { attr: { color: rule, thickness: xs } }
 
                     # item 3
-                    - flank:
-                        attr: { gap: m, align: center, end: true }
+                    - row:
+                        attr: { gap: m, align: center }
                         nodes:
                           - column:
-                              attr: { gap: xs }
+                              attr: { width: fill, gap: xs }
                               nodes:
                                 - text:
                                     attr: { font-size: m }
@@ -221,30 +221,30 @@ document:
                     - column:
                         attr: { gap: xs, width: 200pt }
                         nodes:
-                          - flank:
-                              attr: { gap: m, align: center, end: true }
+                          - row:
+                              attr: { gap: m, align: center }
                               nodes:
                                 - text:
-                                    attr: { font-size: s, color: text-muted }
+                                    attr: { width: fill, font-size: s, color: text-muted }
                                     _: Subtotal
                                 - text:
                                     attr: { font-size: s, align: right }
                                     _: $7,000.00
-                          - flank:
-                              attr: { gap: m, align: center, end: true }
+                          - row:
+                              attr: { gap: m, align: center }
                               nodes:
                                 - text:
-                                    attr: { font-size: s, color: text-muted }
+                                    attr: { width: fill, font-size: s, color: text-muted }
                                     _: "Tax (8.625%)"
                                 - text:
                                     attr: { font-size: s, align: right }
                                     _: $603.75
                           - divider: { attr: { color: rule, thickness: xs } }
-                          - flank:
-                              attr: { gap: m, align: center, end: true }
+                          - row:
+                              attr: { gap: m, align: center }
                               nodes:
                                 - text:
-                                    attr: { font-size: l, font: Helvetica-Bold }
+                                    attr: { width: fill, font-size: l, font: Helvetica-Bold }
                                     _: Total due
                                 - text:
                                     attr: { font-size: l, font: Helvetica-Bold, color: primary, align: right }

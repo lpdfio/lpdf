@@ -85,7 +85,7 @@
       </canvas>
 
       <layout>
-        <split align="start">
+        <row align="start">
 
           <!-- on the panel: the name at the top, the headline in the middle, the lines of business at
                the foot. The height is a little under the page so that it cannot start a second one -->
@@ -113,7 +113,7 @@
           </column>
 
           <!-- beside the panel, on the sand: three figures, a paragraph, and how to reach us -->
-          <column width="342pt" height="594pt" padding="48pt 40pt" justify="between" font-size="m">
+          <column width="fill" height="594pt" padding="48pt 40pt" justify="between" font-size="m">
             <column gap="l">
               <text font-size="xs" color="brass-dark">AT A GLANCE</text>
               <column gap="m">
@@ -146,7 +146,7 @@
             </column>
           </column>
 
-        </split>
+        </row>
       </layout>
     </section>
 
@@ -170,61 +170,61 @@
 
           <column gap="l" height="416pt">
 
-            <flank end="true" align="end" gap="l">
-              <text font="display" font-size="30pt" color="primary">What we do</text>
+            <row align="end" gap="l">
+              <text width="fill" font="display" font-size="30pt" color="primary">What we do</text>
               <text font-size="s" color="text-muted">Three ways to finance a company, each with its own team.</text>
-            </flank>
+            </row>
 
             <!-- three cards: a grid of equal columns, each a white box -->
             <grid cols="3" gap="m">
               <column gap="s" padding="14pt" background="surface" border="xs rule" radius="6pt">
-                <flank align="end" gap="m">
+                <row align="end" gap="m">
                   <text font="display" font-size="l" color="primary">Growth equity</text>
-                  <text font="display" font-size="l" color="brass">01</text>
-                </flank>
+                  <text width="fill" font="display" font-size="l" color="brass">01</text>
+                </row>
                 <text font-size="m" color="ink">
                   Minority and control investments in profitable companies that mean to expand. We take
                   a board seat, and we set no date to sell.
                 </text>
                 <divider color="rule" thickness="xs" />
-                <flank end="true" align="center">
-                  <text font-size="xs" color="text-muted">TYPICAL INVESTMENT</text>
+                <row align="center">
+                  <text width="fill" font-size="xs" color="text-muted">TYPICAL INVESTMENT</text>
                   <text font-size="s" color="brass-dark" align="right">$20 to 120 million</text>
-                </flank>
+                </row>
               </column>
               <column gap="s" padding="14pt" background="surface" border="xs rule" radius="6pt">
-                <flank align="end" gap="m">
+                <row align="end" gap="m">
                   <text font="display" font-size="l" color="primary">Senior credit</text>
-                  <text font="display" font-size="l" color="brass">02</text>
-                </flank>
+                  <text width="fill" font="display" font-size="l" color="brass">02</text>
+                </row>
                 <text font-size="m" color="ink">
                   Secured loans, at a floating rate and for five to seven years, for acquisitions and
                   refinancings. Repayment is set to the company's cash flow.
                 </text>
                 <divider color="rule" thickness="xs" />
-                <flank end="true" align="center">
-                  <text font-size="xs" color="text-muted">TYPICAL LOAN</text>
+                <row align="center">
+                  <text width="fill" font-size="xs" color="text-muted">TYPICAL LOAN</text>
                   <text font-size="s" color="brass-dark" align="right">$15 to 80 million</text>
-                </flank>
+                </row>
               </column>
               <column gap="s" padding="14pt" background="surface" border="xs rule" radius="6pt">
-                <flank align="end" gap="m">
+                <row align="end" gap="m">
                   <text font="display" font-size="l" color="primary">Structured capital</text>
-                  <text font="display" font-size="l" color="brass">03</text>
-                </flank>
+                  <text width="fill" font="display" font-size="l" color="brass">03</text>
+                </row>
                 <text font-size="m" color="ink">
                   Subordinated debt and preferred equity for the company that needs more than a bank
                   will lend, and less change of ownership than equity brings.
                 </text>
                 <divider color="rule" thickness="xs" />
-                <flank end="true" align="center">
-                  <text font-size="xs" color="text-muted">TYPICAL INVESTMENT</text>
+                <row align="center">
+                  <text width="fill" font-size="xs" color="text-muted">TYPICAL INVESTMENT</text>
                   <text font-size="s" color="brass-dark" align="right">$10 to 60 million</text>
-                </flank>
+                </row>
               </column>
             </grid>
 
-            <split gap="xl" align="start">
+            <row justify="between" gap="xl" align="start">
 
               <!-- selected companies: a table whose header row is the green of the cover -->
               <column gap="m" width="470pt">
@@ -279,46 +279,46 @@
               <column gap="m" width="270pt">
                 <text font="display" font-size="l" color="primary">How we work</text>
                 <column gap="m">
-                  <flank align="start" gap="m">
+                  <row align="start" gap="m">
                     <column width="22pt" height="22pt" radius="11pt" background="primary" justify="center">
                       <text font-size="s" color="sand" align="center">1</text>
                     </column>
-                    <column gap="xs">
+                    <column width="fill" gap="xs">
                       <text font="display" font-size="13pt" color="primary">Listen</text>
                       <text font-size="s" color="text-muted">We meet the owners and read the numbers before we send terms.</text>
                     </column>
-                  </flank>
-                  <flank align="start" gap="m">
+                  </row>
+                  <row align="start" gap="m">
                     <column width="22pt" height="22pt" radius="11pt" background="primary" justify="center">
                       <text font-size="s" color="sand" align="center">2</text>
                     </column>
-                    <column gap="xs">
+                    <column width="fill" gap="xs">
                       <text font="display" font-size="13pt" color="primary">Structure</text>
                       <text font-size="s" color="text-muted">One term sheet, set to the company's cash flow and not to a template.</text>
                     </column>
-                  </flank>
-                  <flank align="start" gap="m">
+                  </row>
+                  <row align="start" gap="m">
                     <column width="22pt" height="22pt" radius="11pt" background="primary" justify="center">
                       <text font-size="s" color="sand" align="center">3</text>
                     </column>
-                    <column gap="xs">
+                    <column width="fill" gap="xs">
                       <text font="display" font-size="13pt" color="primary">Close</text>
                       <text font-size="s" color="text-muted">Usually in 45 to 60 days, with one team from first call to funding.</text>
                     </column>
-                  </flank>
-                  <flank align="start" gap="m">
+                  </row>
+                  <row align="start" gap="m">
                     <column width="22pt" height="22pt" radius="11pt" background="primary" justify="center">
                       <text font-size="s" color="sand" align="center">4</text>
                     </column>
-                    <column gap="xs">
+                    <column width="fill" gap="xs">
                       <text font="display" font-size="13pt" color="primary">Partner</text>
                       <text font-size="s" color="text-muted">Quarterly reviews, a board seat where we invest, and no surprise fees.</text>
                     </column>
-                  </flank>
+                  </row>
                 </column>
               </column>
 
-            </split>
+            </row>
           </column>
 
           <!-- on the green band: how to reach us, a QR code, and the small print -->
@@ -334,10 +334,10 @@
                 <text font-size="s" color="sand">Portland, ME 04101</text>
                 <text font-size="s" color="sand">(555) 010-0188   partners@coldwaterrow.example</text>
               </column>
-              <flank align="center" gap="m">
+              <row align="center" gap="m">
                 <barcode type="qr" data="https://www.coldwaterrow.example/contact" size="54pt" color="primary" background="surface" />
-                <text font-size="s" color="on-primary">Scan to book an introduction call.</text>
-              </flank>
+                <text width="fill" font-size="s" color="on-primary">Scan to book an introduction call.</text>
+              </row>
             </grid>
             <text font-size="xs" color="on-primary">
               Coldwater Row Capital is an invented firm in a sample made with Lpdf. This is not an offer

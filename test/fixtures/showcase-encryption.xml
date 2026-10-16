@@ -20,15 +20,15 @@
       <column gap="xl">
 
         <!-- Header -->
-        <flank align="center">
+        <row align="center">
           <column gap="xs">
             <text font-size="xxl" font="Helvetica-Bold" color="primary">Encryption</text>
             <text font-size="m" color="muted">RC4-128 · permission flags · open and owner passwords</text>
           </column>
-          <frame padding="s" background="danger" radius="2pt">
+          <frame width="fill" padding="s" background="danger" radius="2pt">
             <text font-size="s" font="Helvetica-Bold" color="#ffffff">CONFIDENTIAL</text>
           </frame>
-        </flank>
+        </row>
 
         <divider color="rule" thickness="0.5pt" />
 

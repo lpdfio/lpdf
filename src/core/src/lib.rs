@@ -636,10 +636,10 @@ mod tests {
                     <layout>
                         <column gap="m">
                             <frame background="primary" padding="m" radius="s">
-                                <flank gap="m" align="center" end="true">
+                                <row gap="m" align="center" justify="between">
                                     <frame width="120pt" height="24pt" background="secondary" radius="xs" />
                                     <frame width="80pt" height="14pt" background="surface" radius="xs" />
-                                </flank>
+                                </row>
                             </frame>
                             <divider color="#e0e0e0" thickness="xs" />
                             <grid cols="3" gap="m">

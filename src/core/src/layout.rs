@@ -319,7 +319,7 @@ fn substitute_in_text(s: &mut String, page: usize, total: usize) {
 /// different chrome on page 1 vs. later pages).
 ///
 /// Splittable: Column (Auto), Grid, Row, Text.
-/// Atomic: Frame, Flank, Split, Divider, Link, plus anything with Fixed/Full/Fill.
+/// Atomic: Frame, Divider, Link, plus anything with Fixed/Full/Fill.
 ///
 /// When a node doesn't fit and can't be split, it moves wholesale to the next
 /// page. If a single atomic node is taller than a full page, it is force-placed.
@@ -505,7 +505,7 @@ enum SplitOutcome {
 /// - **Row**: split between wrapped lines (items within a line are atomic).
 /// - **Text**: split line-by-line, reconstructing runs on each half.
 ///
-/// Everything else (Frame, Flank, Split, Divider, or any Fixed/Full/Fill
+/// Everything else (Frame, Divider, or any Fixed/Full/Fill
 /// height node) returns `Atomic`. Frame is atomic by design — it represents a
 /// card-like enclosure that should not be cut.
 fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
@@ -526,7 +526,7 @@ fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> 
         NodeKind::Text    => split_text(node, avail_w, target_h, full_page_h),
         NodeKind::Table   => split_table(node, avail_w, target_h, full_page_h),
         NodeKind::Link    => split_column(node, avail_w, target_h, full_page_h),
-        // Frame, Flank, Split, Divider — atomic by design.
+        // Frame, Divider — atomic by design.
         _                 => SplitOutcome::Atomic,
     }
 }
@@ -646,30 +646,46 @@ fn split_row(node: &Node, avail_w: f32, target_h: f32) -> SplitOutcome {
     let inner_target = (target_h - pt - pb).max(0.0);
     let gap = node.gap;
 
-    // Bucket by width, same logic as layout_row's pass 1.
-    let mut rows: Vec<(usize, usize, f32)> = Vec::new(); // (start, end_exclusive, row_h)
+    // Bucket by width, same logic as layout_row's pass 1: a fill child counts as no width.
+    let widths: Vec<Option<f32>> = node.children.iter().map(|c| row_child_w(c, inner_w)).collect();
+    let mut lines: Vec<(usize, usize)> = Vec::new(); // (start, end_exclusive)
     let mut row_start = 0usize;
     let mut cur_x     = 0.0_f32;
-    let mut row_h     = 0.0_f32;
-    for (i, child) in node.children.iter().enumerate() {
-        let cw  = child.width_constraint
-            .unwrap_or_else(|| measure_natural_w(child))
-            .min(inner_w);
-        let ch  = measure_height(child, cw, inner_target);
+    for (i, w) in widths.iter().enumerate() {
+        let cw  = w.unwrap_or(0.0);
         let adv = if i == row_start { cw } else { gap + cw };
         if i > row_start && cur_x + adv > inner_w + 0.01 {
-            rows.push((row_start, i, row_h));
+            lines.push((row_start, i));
             row_start = i;
             cur_x = cw;
-            row_h = ch;
         } else {
             cur_x += adv;
-            row_h = row_h.max(ch);
         }
     }
     if row_start < node.children.len() {
-        rows.push((row_start, node.children.len(), row_h));
+        lines.push((row_start, node.children.len()));
     }
+
+    // A line is as tall as its tallest child, a fill child measured at the width it gets.
+    let rows: Vec<(usize, usize, f32)> = lines
+        .into_iter()
+        .map(|(start, end)| {
+            let line = &widths[start..end];
+            let fixed_w: f32 = line.iter().flatten().sum();
+            let n_fill = line.iter().filter(|w| w.is_none()).count();
+            let fill_w = if n_fill > 0 {
+                (inner_w - fixed_w - gap * (end - start - 1) as f32).max(0.0) / n_fill as f32
+            } else {
+                0.0
+            };
+            let row_h = node.children[start..end]
+                .iter()
+                .zip(line)
+                .map(|(child, w)| measure_height(child, w.unwrap_or(fill_w), inner_target))
+                .fold(0.0_f32, f32::max);
+            (start, end, row_h)
+        })
+        .collect();
 
     let n_rows = rows.len();
     let mut split_row = 0usize;
@@ -1242,16 +1258,8 @@ fn dispatch_children(
             &node.children, x, y, avail_w, avail_h,
             node.gap, &node.align, &node.justify,
         ),
-        NodeKind::Flank => layout_flank(
-            &node.children, x, y, avail_w, avail_h,
-            node.gap, &node.align, node.end,
-        ),
-        NodeKind::Split => layout_split(
-            &node.children, x, y, avail_w, avail_h,
-            node.gap, &node.align, node.equal,
-        ),
         NodeKind::Row => layout_row(
-            &node.children, x, y, avail_w,
+            &node.children, x, y, avail_w, avail_h,
             node.gap, &node.justify, &node.align,
         ),
         NodeKind::Grid => layout_grid(
@@ -1406,155 +1414,43 @@ fn layout_column(
     (nodes, total_h)
 }
 
-// ── Flank ─────────────────────────────────────────────────────────────────────
-//
-// end=false (default, flanks at START):
-//   children[0..n-2] are the flank children (natural/explicit width) placed at the left;
-//   children[n-1] is the fill child and takes all remaining width on the right.
-//
-// end=true (flanks at END):
-//   children[0] is the fill child on the left;
-//   children[1..n] are flank children (natural/explicit width) placed at the right.
-//
-// The gap value is applied between every adjacent pair of items, so the total
-// gap consumed equals gap × n_flanks (one between each flank pair plus one
-// between the flank group and the fill child).
-
-fn layout_flank(
-    children: &[Node],
-    x: f32,
-    y: f32,
-    avail_w: f32,
-    avail_h: Option<f32>,
-    gap: f32,
-    align: &Align,
-    end: bool,
-) -> (Vec<RenderNode>, f32) {
-    if children.is_empty() {
-        return (vec![], 0.0);
-    }
-    if children.len() == 1 {
-        return layout_column(children, x, y, avail_w, avail_h, gap, align, &Justify::Start);
-    }
-
-    let (fill_child, flank_children): (&Node, &[Node]) = if end {
-        // fill on left, flanks on right
-        (&children[0], &children[1..])
-    } else {
-        // flanks on left, fill on right
-        (&children[children.len() - 1], &children[..children.len() - 1])
-    };
-
-    let n_flanks = flank_children.len();
-
-    // Measure each flank child's width (explicit constraint or natural content width).
-    let flank_ws: Vec<f32> = flank_children
-        .iter()
-        .map(|c| c.width_constraint.unwrap_or_else(|| measure_natural_w(c)).min(avail_w))
-        .collect();
-
-    // Total space consumed by flanks: their widths + (n_flanks - 1) internal gaps
-    // + 1 gap between the flank group and the fill child.
-    let flank_w_sum: f32 = flank_ws.iter().sum();
-    let total_gap = gap * n_flanks as f32; // (n_flanks - 1) + 1
-    let fill_w = (avail_w - flank_w_sum - total_gap).max(0.0);
-
-    let (fill_x, flanks_start_x) = if end {
-        (x, x + fill_w + gap)
-    } else {
-        (x + flank_w_sum + total_gap, x)
-    };
-
-    let mut render_nodes: Vec<RenderNode> = Vec::with_capacity(children.len());
-    let (fill_node, fill_h) = layout_node(fill_child, fill_x, y, fill_w, avail_h);
-
-    let mut flank_results: Vec<(RenderNode, f32)> = Vec::with_capacity(n_flanks);
-    let mut cur_x = flanks_start_x;
-    for (flank_child, &fw) in flank_children.iter().zip(flank_ws.iter()) {
-        let (node, h) = layout_node(flank_child, cur_x, y, fw, avail_h);
-        flank_results.push((node, h));
-        cur_x += fw + gap;
-    }
-
-    let row_h = flank_results
-        .iter()
-        .fold(fill_h, |acc, (_, h)| acc.max(*h));
-
-    let fill_node = shift_y_cross(fill_node, fill_h, row_h, align);
-
-    if end {
-        render_nodes.push(fill_node);
-        for (node, h) in flank_results {
-            render_nodes.push(shift_y_cross(node, h, row_h, align));
-        }
-    } else {
-        for (node, h) in flank_results {
-            render_nodes.push(shift_y_cross(node, h, row_h, align));
-        }
-        render_nodes.push(fill_node);
-    }
-
-    (render_nodes, row_h)
-}
-
-// ── Split ─────────────────────────────────────────────────────────────────────
-
-fn layout_split(
-    children: &[Node],
-    x: f32,
-    y: f32,
-    avail_w: f32,
-    avail_h: Option<f32>,
-    gap: f32,
-    align: &Align,
-    equal: bool,
-) -> (Vec<RenderNode>, f32) {
-    if children.len() < 2 {
-        return layout_column(children, x, y, avail_w, avail_h, gap, align, &Justify::Start);
-    }
-
-    let (first, second) = (&children[0], &children[1]);
-
-    let (first_w, second_w, second_x) = if equal {
-        let w = ((avail_w - gap) / 2.0).max(0.0);
-        (w, w, x + w + gap)
-    } else {
-        // Each child takes its natural width (or its explicit width constraint).
-        // First child is left-aligned; second child is right-aligned (spread apart).
-        let fw = first
-            .width_constraint
-            .unwrap_or_else(|| measure_natural_w(first))
-            .min(avail_w);
-        // Cap second child to the space remaining after the first child, so the
-        // pair can never overflow avail_w regardless of natural content width.
-        let sw_remaining = (avail_w - fw - gap).max(0.0);
-        let sw = second
-            .width_constraint
-            .unwrap_or_else(|| measure_natural_w(second))
-            .min(sw_remaining);
-        // Second child is pushed to the right edge; first keeps the minimum gap.
-        let sx = (x + avail_w - sw).max(x + fw + gap);
-        (fw, sw, sx)
-    };
-
-    let (first_node, first_h) = layout_node(first, x, y, first_w, avail_h);
-    let (second_node, second_h) =
-        layout_node(second, second_x, y, second_w, avail_h);
-
-    let row_h = first_h.max(second_h);
-    let first_node = shift_y_cross(first_node, first_h, row_h, align);
-    let second_node = shift_y_cross(second_node, second_h, row_h, align);
-
-    (vec![first_node, second_node], row_h)
-}
-
 // ── Row ───────────────────────────────────────────────────────────────────────
+//
+// Children sit side by side and wrap onto a new line when they run out of width.
+// A child with width="fill" counts as no width when lines are broken, so it never
+// wraps; it takes the width its line leaves, shared equally with the other fill
+// children of the line. justify="between" spreads a line's children from edge to
+// edge.
+//
+// A line with a fill child or justify="between" is laid out by
+// `layout_row_line_spread`, and any other line by `layout_row_line`. They place
+// children with different arithmetic, kept from the flank, split and cluster
+// layouts that the row replaced, so documents converted from them render the same
+// PDF byte for byte.
+
+/// A child of a row on its line.
+struct RowItem<'a> {
+    node:     &'a Node,
+    /// Its width, or `None` for a fill child.
+    w:        Option<f32>,
+    /// Where line breaking put it, from the row's left edge.
+    layout_x: f32,
+}
+
+/// The width a row gives `child`, or `None` when it fills the rest of its line.
+fn row_child_w(child: &Node, avail_w: f32) -> Option<f32> {
+    if child.width_fill {
+        return None;
+    }
+    Some(child.width_constraint.unwrap_or_else(|| measure_natural_w(child)).min(avail_w))
+}
 
 fn layout_row(
     children: &[Node],
     x: f32,
     y: f32,
     avail_w: f32,
+    avail_h: Option<f32>,
     gap: f32,
     justify: &Justify,
     align: &Align,
@@ -1563,84 +1459,144 @@ fn layout_row(
         return (vec![], 0.0);
     }
 
-    // ── Pass 1: measure children and bucket into rows ─────────────────────────
-    struct RowItem {
-        node:     RenderNode,
-        w:        f32,
-        h:        f32,
-        layout_x: f32, // x used when layout_node was called (for repositioning)
-    }
-
-    let mut rows: Vec<Vec<RowItem>> = Vec::new();
-    let mut current_row: Vec<RowItem> = Vec::new();
+    // ── Pass 1: break the children into lines ─────────────────────────────────
+    let mut lines: Vec<Vec<RowItem>> = Vec::new();
+    let mut current: Vec<RowItem> = Vec::new();
     let mut cur_x = x;
 
     for child in children {
-        let cw = child.width_constraint
-            .unwrap_or_else(|| measure_natural_w(child))
-            .min(avail_w);
-
-        // Wrap check before layout so we use the correct x position
-        if !current_row.is_empty() && cur_x + cw > x + avail_w + 0.01 {
-            rows.push(std::mem::take(&mut current_row));
+        let w = row_child_w(child, avail_w);
+        let cw = w.unwrap_or(0.0);
+        if !current.is_empty() && cur_x + cw > x + avail_w + 0.01 {
+            lines.push(std::mem::take(&mut current));
             cur_x = x;
         }
-
-        let layout_x = cur_x;
-        let (rn, h) = layout_node(child, layout_x, y, cw, None);
-        current_row.push(RowItem { node: rn, w: cw, h, layout_x });
+        current.push(RowItem { node: child, w, layout_x: cur_x });
         cur_x += cw + gap;
     }
-    if !current_row.is_empty() {
-        rows.push(current_row);
-    }
+    lines.push(current);
 
-    // ── Pass 2: apply justify + align and collect final nodes ─────────────────
+    // ── Pass 2: lay out each line ─────────────────────────────────────────────
     let mut nodes = Vec::new();
+    let mut line_hs = Vec::with_capacity(lines.len());
     let mut cur_y = y;
-    let mut total_h = 0.0_f32;
 
-    for row in rows {
-        let row_h = row.iter().map(|i| i.h).fold(0.0_f32, f32::max);
-        let row_w: f32 = row.iter().map(|i| i.w).sum::<f32>()
-            + gap * (row.len().saturating_sub(1)) as f32;
-
-        // Justify: compute starting x for this row
-        let remaining_w = (avail_w - row_w).max(0.0);
-        let row_start_x = match justify {
-            Justify::Start   => x,
-            Justify::Center  => x + remaining_w / 2.0,
-            Justify::End     => x + remaining_w,
-            Justify::Between => x, // not reachable for a row; parse rejects it
+    for line in &lines {
+        let spread = *justify == Justify::Between || line.iter().any(|item| item.w.is_none());
+        let line_h = if spread {
+            layout_row_line_spread(line, x, cur_y, avail_w, avail_h, gap, justify, align, &mut nodes)
+        } else {
+            layout_row_line(line, x, y, cur_y, avail_w, gap, justify, align, &mut nodes)
         };
-
-        let mut item_x = row_start_x;
-        for item in row {
-            // Cross-axis (vertical) alignment within this row
-            let dy_align = match align {
-                Align::Start | Align::Stretch => 0.0,
-                Align::Center => (row_h - item.h) / 2.0,
-                Align::End    => row_h - item.h,
-            };
-
-            // Compute deltas relative to where layout_node placed the node
-            let dx = item_x - item.layout_x;
-            let dy = (cur_y + dy_align) - y; // pass-1 used y as the y placeholder
-
-            let repositioned = shift_x(shift_y(item.node, dy), dx);
-            nodes.push(repositioned);
-            item_x += item.w + gap;
-        }
-
-        cur_y += row_h + gap;
-        total_h += row_h + gap;
+        line_hs.push(line_h);
+        cur_y += line_h + gap;
     }
 
-    if total_h > 0.0 {
-        total_h -= gap;
-    }
-
+    let total_h = match line_hs.as_slice() {
+        [line_h] => *line_h,
+        _ => line_hs.iter().map(|h| h + gap).sum::<f32>() - gap,
+    };
     (nodes, total_h)
+}
+
+/// Lay out a line of children of fixed width, justified start, center or end.
+/// Each child is laid out at the top of the row where line breaking put it, then
+/// moved to its line and its place in it.
+#[allow(clippy::too_many_arguments)]
+fn layout_row_line(
+    line: &[RowItem],
+    x: f32,
+    row_y: f32,
+    line_y: f32,
+    avail_w: f32,
+    gap: f32,
+    justify: &Justify,
+    align: &Align,
+    nodes: &mut Vec<RenderNode>,
+) -> f32 {
+    let laid: Vec<(RenderNode, f32, f32, f32)> = line
+        .iter()
+        .map(|item| {
+            let w = item.w.unwrap_or(0.0);
+            let (rn, h) = layout_node(item.node, item.layout_x, row_y, w, None);
+            (rn, w, h, item.layout_x)
+        })
+        .collect();
+
+    let line_h = laid.iter().map(|(_, _, h, _)| *h).fold(0.0_f32, f32::max);
+    let line_w: f32 = laid.iter().map(|(_, w, _, _)| *w).sum::<f32>()
+        + gap * (laid.len().saturating_sub(1)) as f32;
+
+    let remaining_w = (avail_w - line_w).max(0.0);
+    let mut item_x = match justify {
+        Justify::Start | Justify::Between => x,
+        Justify::Center => x + remaining_w / 2.0,
+        Justify::End    => x + remaining_w,
+    };
+
+    for (rn, w, h, layout_x) in laid {
+        let dy_align = match align {
+            Align::Start | Align::Stretch => 0.0,
+            Align::Center => (line_h - h) / 2.0,
+            Align::End    => line_h - h,
+        };
+        let dx = item_x - layout_x;
+        let dy = (line_y + dy_align) - row_y;
+        nodes.push(shift_x(shift_y(rn, dy), dx));
+        item_x += w + gap;
+    }
+
+    line_h
+}
+
+/// Lay out a line with fill children, or justified between, at its final place.
+/// The fill children share the width the others leave. Without them,
+/// justify="between" puts the first child at the left edge, the last at the right
+/// edge, and the others evenly between.
+#[allow(clippy::too_many_arguments)]
+fn layout_row_line_spread(
+    line: &[RowItem],
+    x: f32,
+    y: f32,
+    avail_w: f32,
+    avail_h: Option<f32>,
+    gap: f32,
+    justify: &Justify,
+    align: &Align,
+    nodes: &mut Vec<RenderNode>,
+) -> f32 {
+    let n = line.len();
+    let fixed_w: f32 = line.iter().filter_map(|item| item.w).sum();
+    let n_fill = line.iter().filter(|item| item.w.is_none()).count();
+    let left_w = (avail_w - fixed_w - gap * (n - 1) as f32).max(0.0);
+    let fill_w = if n_fill > 0 { left_w / n_fill as f32 } else { 0.0 };
+    let between = n_fill == 0 && *justify == Justify::Between && n > 1;
+    let extra_gap = if between { left_w / (n - 1) as f32 } else { 0.0 };
+
+    let mut laid: Vec<(RenderNode, f32)> = Vec::with_capacity(n);
+    let mut next_x = x;
+    let mut width_before = 0.0_f32;
+    let mut prev_end = x;
+
+    for (i, item) in line.iter().enumerate() {
+        let w = item.w.unwrap_or(fill_w);
+        let item_x = match item.w {
+            None => (x + width_before) + gap * i as f32,
+            Some(_) if between && i == n - 1 => ((x + avail_w) - w).max(prev_end + gap),
+            Some(_) => next_x,
+        };
+        laid.push(layout_node(item.node, item_x, y, w, avail_h));
+        next_x = match item.w {
+            None => (item_x + w) + gap,
+            Some(_) => next_x + (w + gap) + extra_gap,
+        };
+        width_before += w;
+        prev_end = item_x + w;
+    }
+
+    let line_h = laid.iter().fold(0.0_f32, |acc, (_, h)| acc.max(*h));
+    nodes.extend(laid.into_iter().map(|(rn, h)| shift_y_cross(rn, h, line_h, align)));
+    line_h
 }
 
 // ── Grid ──────────────────────────────────────────────────────────────────────
@@ -2381,8 +2337,7 @@ pub(crate) fn text_width(font: &str, text: &str, size: f32) -> f32 {
 ///
 /// For text nodes this is the width of all runs placed on a single line.
 /// For container nodes it is the widest child's natural width plus padding.
-/// This is used by `layout_flank` to shrink-wrap the flanking child when no
-/// explicit `width` is set.
+/// A row uses it for the width of a child without an explicit `width`.
 fn measure_natural_w(node: &Node) -> f32 {
     match node.kind {
         NodeKind::Text => {
@@ -2411,21 +2366,9 @@ fn measure_natural_w(node: &Node) -> f32 {
                     // vertical: widest child
                     node.children.iter().map(measure_natural_w).fold(0.0_f32, f32::max)
                 }
-                NodeKind::Flank => {
-                    // flank is horizontal: fill child takes natural width like the flanks for
-                    // measurement purposes (we can't shrink it to zero here).
-                    let children_w: f32 = node.children.iter().map(measure_natural_w).sum();
-                    let gap_total = node.gap * (node.children.len().saturating_sub(1)) as f32;
-                    children_w + gap_total
-                }
-                NodeKind::Split => {
-                    // horizontal: sum of children + gaps
-                    let children_w: f32 = node.children.iter().map(measure_natural_w).sum();
-                    let gap_total = node.gap * (node.children.len().saturating_sub(1)) as f32;
-                    children_w + gap_total
-                }
                 NodeKind::Row => {
-                    // treat as horizontal row (no wrap assumed for natural width)
+                    // treat as horizontal row (no wrap assumed for natural width); a fill
+                    // child counts its own natural width, since it can't shrink to zero here
                     let children_w: f32 = node.children.iter().map(measure_natural_w).sum();
                     let gap_total = node.gap * (node.children.len().saturating_sub(1)) as f32;
                     children_w + gap_total
@@ -2663,6 +2606,9 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
 
 /// Resolve child width given parent's available width and alignment.
 fn resolve_child_w(child: &Node, avail_w: f32, align: &Align) -> f32 {
+    if child.width_fill {
+        return avail_w;
+    }
     if let Some(w) = child.width_constraint {
         return w.min(avail_w);
     }
@@ -3016,14 +2962,14 @@ mod tests {
     }
 
     #[test]
-    fn split_equal_gives_half_widths() {
-        let body = r#"<split equal="true" gap="m">
-            <frame height="20pt" />
-            <frame height="20pt" />
-        </split>"#;
+    fn row_with_two_fill_children_gives_half_widths() {
+        let body = r#"<row gap="m">
+            <frame width="fill" height="20pt" />
+            <frame width="fill" height="20pt" />
+        </row>"#;
         let tree = engine_render(&minimal(body));
-        let split = &tree["pages"][0]["nodes"][0];
-        let children = split["nodes"].as_array().unwrap();
+        let row = &tree["pages"][0]["nodes"][0];
+        let children = row["nodes"].as_array().unwrap();
         let w0 = children[0]["width"].as_f64().unwrap();
         let w1 = children[1]["width"].as_f64().unwrap();
         let avail_w = 595.28 - 28.0 * 2.0;
@@ -3473,51 +3419,72 @@ mod tests {
         }
     }
 
-    // ── Flank layout ──────────────────────────────────────────────────────────
+    // ── Row: fill and between ─────────────────────────────────────────────────
+
+    /// The x, y and width of each child of the first node of the first page.
+    fn child_boxes(body: &str) -> Vec<(f64, f64, f64)> {
+        let tree = engine_render(&minimal(body));
+        tree["pages"][0]["nodes"][0]["nodes"].as_array().unwrap().iter()
+            .map(|c| (c["x"].as_f64().unwrap(), c["y"].as_f64().unwrap(), c["width"].as_f64().unwrap()))
+            .collect()
+    }
+
+    const MARGIN: f64 = 28.0;
+    const AVAIL_W: f64 = 595.28 - 2.0 * MARGIN;
 
     #[test]
-    fn flank_default_places_flanks_left_fill_right() {
-        // end=false (default): first child is the flank (explicit width=100pt),
-        // last child is the fill and takes all remaining width on the right.
-        let body = r#"<flank gap="0pt"><frame width="100pt" height="20pt" /><frame height="20pt" /></flank>"#;
-        let tree = engine_render(&minimal(body));
-        let children = tree["pages"][0]["nodes"][0]["nodes"].as_array().unwrap();
-        assert_eq!(children.len(), 2);
-
-        let margin  = 28.0_f64;
-        let avail_w = 595.28 - 2.0 * margin;
-
-        let flank_x = children[0]["x"].as_f64().unwrap();
-        let flank_w = children[0]["width"].as_f64().unwrap();
-        let fill_x  = children[1]["x"].as_f64().unwrap();
-        let fill_w  = children[1]["width"].as_f64().unwrap();
-
-        assert!((flank_x - margin).abs() < 0.1,              "flank_x={flank_x}");
-        assert!((flank_w - 100.0).abs() < 0.1,               "flank_w={flank_w}");
-        assert!((fill_x  - (margin + 100.0)).abs() < 0.1,    "fill_x={fill_x}");
-        assert!((fill_w  - (avail_w - 100.0)).abs() < 0.5,   "fill_w={fill_w}");
+    fn row_fill_child_takes_the_width_the_others_leave() {
+        let boxes = child_boxes(r#"<row gap="0pt"><frame width="100pt" height="20pt" /><frame width="fill" height="20pt" /></row>"#);
+        let [(x0, _, w0), (x1, _, w1)] = boxes[..] else { panic!("{boxes:?}") };
+        assert!((x0 - MARGIN).abs() < 0.1, "x0={x0}");
+        assert!((w0 - 100.0).abs() < 0.1, "w0={w0}");
+        assert!((x1 - (MARGIN + 100.0)).abs() < 0.1, "x1={x1}");
+        assert!((w1 - (AVAIL_W - 100.0)).abs() < 0.5, "w1={w1}");
     }
 
     #[test]
-    fn flank_end_true_places_fill_left_flanks_right() {
-        // end=true: fill child (first in XML) goes left, flank child (second, 100pt) goes right.
-        let body = r#"<flank gap="0pt" end="true"><frame height="20pt" /><frame width="100pt" height="20pt" /></flank>"#;
-        let tree = engine_render(&minimal(body));
-        let children = tree["pages"][0]["nodes"][0]["nodes"].as_array().unwrap();
-        assert_eq!(children.len(), 2);
+    fn row_fill_child_first_pushes_the_others_to_the_right() {
+        let boxes = child_boxes(r#"<row gap="0pt"><frame width="fill" height="20pt" /><frame width="100pt" height="20pt" /></row>"#);
+        let [(x0, _, w0), (x1, _, w1)] = boxes[..] else { panic!("{boxes:?}") };
+        assert!((x0 - MARGIN).abs() < 0.1, "x0={x0}");
+        assert!((w0 - (AVAIL_W - 100.0)).abs() < 0.5, "w0={w0}");
+        assert!((x1 - (MARGIN + AVAIL_W - 100.0)).abs() < 0.5, "x1={x1}");
+        assert!((w1 - 100.0).abs() < 0.1, "w1={w1}");
+    }
 
-        let margin  = 28.0_f64;
-        let avail_w = 595.28 - 2.0 * margin;
+    #[test]
+    fn row_fill_child_does_not_wrap() {
+        // 500pt leave 39.28pt on the line: the fill child takes them rather than a line of its own.
+        let boxes = child_boxes(r#"<row gap="0pt"><frame width="500pt" height="20pt" /><frame width="fill" height="20pt" /></row>"#);
+        let [(_, y0, _), (x1, y1, w1)] = boxes[..] else { panic!("{boxes:?}") };
+        assert_eq!(y0, y1, "the fill child is on the first line");
+        assert!((x1 - (MARGIN + 500.0)).abs() < 0.1, "x1={x1}");
+        assert!((w1 - (AVAIL_W - 500.0)).abs() < 0.5, "w1={w1}");
+    }
 
-        let fill_x  = children[0]["x"].as_f64().unwrap();
-        let fill_w  = children[0]["width"].as_f64().unwrap();
-        let flank_x = children[1]["x"].as_f64().unwrap();
-        let flank_w = children[1]["width"].as_f64().unwrap();
+    #[test]
+    fn row_fill_children_share_what_their_line_leaves() {
+        // The second 400pt frame wraps, and the two fill children share what it leaves on the second line.
+        let boxes = child_boxes(r#"<row gap="0pt">
+            <frame width="400pt" height="20pt" /><frame width="400pt" height="20pt" />
+            <frame width="fill" height="20pt" /><frame width="fill" height="20pt" />
+        </row>"#);
+        let [_, (x1, y1, _), (x2, y2, w2), (x3, y3, w3)] = boxes[..] else { panic!("{boxes:?}") };
+        assert!((y1 - (MARGIN + 20.0)).abs() < 0.1, "y1={y1}");
+        assert_eq!((y2, y3), (y1, y1), "the fill children are on the second line");
+        let share = (AVAIL_W - 400.0) / 2.0;
+        assert!((w2 - share).abs() < 0.5 && (w3 - share).abs() < 0.5, "w2={w2} w3={w3}");
+        assert!((x2 - (x1 + 400.0)).abs() < 0.1 && (x3 - (x2 + w2)).abs() < 0.1, "x2={x2} x3={x3}");
+    }
 
-        assert!((fill_x  - margin).abs() < 0.1,                      "fill_x={fill_x}");
-        assert!((fill_w  - (avail_w - 100.0)).abs() < 0.5,           "fill_w={fill_w}");
-        assert!((flank_x - (margin + avail_w - 100.0)).abs() < 0.5,  "flank_x={flank_x}");
-        assert!((flank_w - 100.0).abs() < 0.1,                       "flank_w={flank_w}");
+    #[test]
+    fn row_justify_between_puts_the_children_at_the_edges() {
+        let boxes = child_boxes(r#"<row justify="between"><frame width="100pt" height="20pt" /><frame width="50pt" height="20pt" /><frame width="100pt" height="20pt" /></row>"#);
+        let [(x0, _, _), (x1, _, _), (x2, _, w2)] = boxes[..] else { panic!("{boxes:?}") };
+        assert!((x0 - MARGIN).abs() < 0.1, "x0={x0}");
+        assert!((x2 + w2 - (MARGIN + AVAIL_W)).abs() < 0.1, "the last child ends at the right edge, x2={x2}");
+        let middle = MARGIN + 100.0 + (AVAIL_W - 250.0) / 2.0;
+        assert!((x1 - middle).abs() < 0.1, "the middle child is halfway between, x1={x1}");
     }
 
     // ── Span decoration ───────────────────────────────────────────────────────
@@ -3653,10 +3620,10 @@ mod tests {
 
     #[test]
     fn bookmark_on_a_leaf_moves_with_it_when_its_container_shifts_it() {
-        // A divider is a leaf, so its anchor sits in a box of its own around it. The flank centers the short
+        // A divider is a leaf, so its anchor sits in a box of its own around it. The row centers the short
         // column against the tall frame after laying it out, which shifts the box down.
         let pages = render_pages(&minimal(
-            r#"<flank align="center"><frame width="50pt" height="100pt"/><column><bookmark label="Rule"/><divider/></column></flank>"#,
+            r#"<row align="center"><frame width="50pt" height="100pt"/><column width="fill"><bookmark label="Rule"/><divider/></column></row>"#,
         ));
         fn holder(nodes: &[RenderNode]) -> Option<(f32, f32)> {
             nodes.iter().find_map(|node| match node {

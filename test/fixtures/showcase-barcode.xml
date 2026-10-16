@@ -43,7 +43,7 @@
                      color="#1a1a1a" background="#fff9e6" />
           </column>
 
-          <flank gap="m">
+          <row gap="m">
             <column gap="xs">
               <text font-size="s" color="muted">ec=L</text>
               <barcode type="qr" data="lpdf" ec="L" size="60pt" />
@@ -56,11 +56,11 @@
               <text font-size="s" color="muted">ec=Q</text>
               <barcode type="qr" data="lpdf" ec="Q" size="60pt" />
             </column>
-            <column gap="xs">
+            <column width="fill" gap="xs">
               <text font-size="s" color="muted">ec=H</text>
               <barcode type="qr" data="lpdf" ec="H" size="60pt" />
             </column>
-          </flank>
+          </row>
         </column>
 
         <!-- Code 128 -->
@@ -110,16 +110,16 @@
                      color="#1763cf" />
           </column>
 
-          <flank gap="xl" align="start">
+          <row gap="xl" align="start">
             <column gap="xs">
               <text font-size="s" color="muted">First digit 0 — LLLLLL parity</text>
               <barcode type="ean13" data="012345678905" width="120pt" height="50pt" />
             </column>
-            <column gap="xs">
+            <column width="fill" gap="xs">
               <text font-size="s" color="muted">First digit 5 — LGGLLG parity</text>
               <barcode type="ean13" data="590123412345" width="120pt" height="50pt" />
             </column>
-          </flank>
+          </row>
         </column>
 
       </column>
@@ -140,15 +140,15 @@
         <column gap="m">
           <text font-size="l" font="Helvetica-Bold">Card with QR</text>
           <frame background="bg" padding="m" radius="4pt" border="s #dde3ed">
-            <flank gap="l" align="center">
+            <row gap="l" align="center">
               <column gap="xs">
                 <text font-size="l" font="Helvetica-Bold">Product Label</text>
                 <text font-size="m" color="muted">SKU: LP-2024-001</text>
                 <text font-size="m" color="muted">Scan to view details online</text>
               </column>
-              <barcode type="qr" data="https://lpdf.dev/products/LP-2024-001"
+              <barcode width="fill" type="qr" data="https://lpdf.dev/products/LP-2024-001"
                        ec="M" size="80pt" />
-            </flank>
+            </row>
           </frame>
         </column>
 
@@ -172,7 +172,7 @@
         <!-- EAN-13 in a product grid -->
         <column gap="m">
           <text font-size="l" font="Helvetica-Bold">Product Barcodes</text>
-          <flank gap="m">
+          <row gap="m">
             <frame background="bg" padding="s" radius="3pt">
               <column gap="xs" align="center">
                 <text font-size="s" font="Helvetica-Bold" align="center">Product A</text>
@@ -185,13 +185,13 @@
                 <barcode type="ean13" data="590123412345" width="100pt" height="45pt" hrt="true" />
               </column>
             </frame>
-            <frame background="bg" padding="s" radius="3pt">
+            <frame width="fill" background="bg" padding="s" radius="3pt">
               <column gap="xs" align="center">
                 <text font-size="s" font="Helvetica-Bold" align="center">Product C</text>
                 <barcode type="ean13" data="400638133393" width="100pt" height="45pt" hrt="true" />
               </column>
             </frame>
-          </flank>
+          </row>
         </column>
 
       </column>
