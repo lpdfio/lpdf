@@ -6,7 +6,7 @@
 //   make rc-vsix                   the newest RC that lpdf-vscode built
 //   make rc-vsix RC=v0.25.0-rc.2   a specific one
 //
-// The file lands in src/vscode/.rc/<tag>/, which lpdf-vscode's *.vsix rule
+// The file lands in repos/lpdf-vscode/.rc/<tag>/, which lpdf-vscode's *.vsix rule
 // keeps out of git. Needs gh signed in: GitHub serves artifacts only with a
 // token, even from a public repo.
 
@@ -17,7 +17,7 @@ import { join } from 'node:path';
 const REPO = 'lpdfio/lpdf-vscode';
 // rc.yml names each run "RC <tag>: …", which is how a run is matched to its RC.
 const RUN_TITLE_RE = /^RC (v\d+\.\d+\.0-rc\.\d+):/;
-const DOWNLOADS = join(import.meta.dirname, '..', 'src', 'vscode', '.rc');
+const DOWNLOADS = join(import.meta.dirname, '..', 'repos', 'lpdf-vscode', '.rc');
 
 function fail(message)
 {

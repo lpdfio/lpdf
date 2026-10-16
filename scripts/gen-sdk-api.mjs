@@ -11,7 +11,7 @@
 // The constants are strings, so a value goes straight into an attribute: type: FieldType.Text in Node,
 // FieldAttr(type=FieldType.TEXT) in Python.
 //
-// Usage: node scripts/gen-sdk-api.mjs                      write the files of the four SDKs under src/sdk
+// Usage: node scripts/gen-sdk-api.mjs                      write the files of the four SDKs under repos/
 //        node scripts/gen-sdk-api.mjs --check              list the files that differ, exit 1 if any do
 //        node scripts/gen-sdk-api.mjs --check --sdk node=.  only the SDK in the given folder (an SDK repository's CI)
 
