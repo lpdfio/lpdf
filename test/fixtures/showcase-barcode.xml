@@ -68,7 +68,7 @@
           <text font-size="l" font="Helvetica-Bold">Code 128</text>
 
           <column gap="xs">
-            <text font-size="m" color="muted">Default — width 200pt, height 40pt</text>
+            <text font-size="m" color="muted">Width 200pt, height 40pt are a maximum — the height is the limit</text>
             <barcode type="code128" data="ABC-12345" width="200pt" height="40pt" />
           </column>
 
@@ -78,7 +78,7 @@
           </column>
 
           <column gap="xs">
-            <text font-size="m" color="muted">Narrow bars — width 160pt, height 30pt, custom colour</text>
+            <text font-size="m" color="muted">Width 160pt, height 30pt, custom colour — the height is the limit</text>
             <barcode type="code128" data="LPDF-2024" width="160pt" height="30pt"
                      color="#b00020" />
           </column>

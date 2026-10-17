@@ -115,6 +115,8 @@ fn showcase_table() { run_snapshot("showcase-table"); }
 #[test]
 fn showcase_barcode() { run_snapshot("showcase-barcode"); }
 #[test]
+fn showcase_barcode_fit() { run_snapshot("showcase-barcode-fit"); }
+#[test]
 fn showcase_forms() { run_snapshot("showcase-forms"); }
 #[test]
 fn showcase_encryption() { run_snapshot("showcase-encryption"); }

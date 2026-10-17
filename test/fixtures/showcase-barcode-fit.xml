@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf" />
+      <color name="muted"    value="#737373" />
+      <color name="rule"     value="#dde3ed" />
+      <color name="bg"       value="#f5f7fa" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Fitting Barcodes" subject="Width and height keep a barcode's proportions" />
+
+    <!-- A barcode is never stretched. One size sets the other; both are a maximum. Images follow the same
+         rule; the snapshot tests load none, so only barcodes are shown here. -->
+    <section>
+      <layout margin="40pt">
+        <column gap="xl">
+
+          <column gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Fitting barcodes</text>
+            <text font-size="m" color="muted">A barcode keeps its proportions. One size sets the other.</text>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">One size given</text>
+            <row gap="xl" align="start">
+              <column gap="xs">
+                <text font-size="s" color="muted">EAN-13, width 120pt</text>
+                <barcode type="ean13" data="590123412345" width="120pt" />
+              </column>
+              <column gap="xs">
+                <text font-size="s" color="muted">EAN-13, height 60pt</text>
+                <barcode type="ean13" data="590123412345" height="60pt" />
+              </column>
+              <column gap="xs">
+                <text font-size="s" color="muted">Code 128, height 60pt</text>
+                <barcode type="code128" data="ABC-12345" height="60pt" />
+              </column>
+            </row>
+            <row gap="xl" align="start">
+              <column gap="xs">
+                <text font-size="s" color="muted">Code 128, width 200pt</text>
+                <barcode type="code128" data="ABC-12345" width="200pt" />
+              </column>
+              <column gap="xs">
+                <text font-size="s" color="muted">QR code, height 60pt</text>
+                <barcode type="qr" data="https://lpdf.dev" height="60pt" />
+              </column>
+              <column gap="xs">
+                <text font-size="s" color="muted">No size: the standard EAN-13</text>
+                <barcode type="ean13" data="590123412345" />
+              </column>
+            </row>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Both given: a maximum</text>
+            <text font-size="m" color="muted">Each barcode takes the largest size that fits in a 150 × 70pt slot. A frame of that size centres it.</text>
+            <row gap="m" align="start">
+              <frame width="150pt" height="70pt" border="s rule" background="bg">
+                <barcode type="ean13" data="590123412345" width="150pt" height="70pt" />
+              </frame>
+              <frame width="150pt" height="70pt" border="s rule" background="bg">
+                <barcode type="code128" data="ABC-12345" width="150pt" height="70pt" />
+              </frame>
+              <frame width="150pt" height="70pt" border="s rule" background="bg">
+                <barcode type="qr" data="https://lpdf.dev" width="150pt" height="70pt" />
+              </frame>
+            </row>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">The parent's align places it</text>
+            <column gap="s" align="center">
+              <barcode type="ean13" data="590123412345" width="150pt" height="70pt" hrt="true" />
+              <text font-size="s" color="muted">Centred in the column</text>
+            </column>
+          </column>
+
+        </column>
+      </layout>
+
+      <!-- In a layer the anchor places the fitted barcode, so it touches the corner of its 120 × 120pt box. -->
+      <layer>
+        <rect anchor="bottom-left" x="40pt" y="-40pt" width="120pt" height="120pt" stroke="rule" stroke-width="1pt" />
+        <barcode-at type="ean13" data="590123412345" anchor="bottom-left" x="40pt" y="-40pt" width="120pt" height="120pt" />
+        <rect anchor="bottom-right" x="-40pt" y="-40pt" width="120pt" height="120pt" stroke="rule" stroke-width="1pt" />
+        <barcode-at type="code128" data="ABC-12345" anchor="bottom-right" x="-40pt" y="-40pt" width="120pt" height="120pt" />
+      </layer>
+    </section>
+  </document>
+</lpdf>
