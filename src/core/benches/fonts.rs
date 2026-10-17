@@ -2,8 +2,12 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use lpdf::{bench_render_xml, bench_render_xml_with_font};
 use std::path::PathBuf;
 
-fn fixtures_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test/fixtures")
+/// The font file the bench embeds: Crimson Text, which the repo already holds for its book example (SIL Open Font
+/// License, `OFL-CrimsonText.txt` beside it), so the bench has no fixture of its own to go missing.
+const FONT_FILE: &str = "CrimsonText-Regular.ttf";
+
+fn font_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/6-book/assets/fonts").join(FONT_FILE)
 }
 
 fn font_xml(font_ref: &str) -> String {
@@ -48,18 +52,16 @@ fn builtin_xml() -> String {
 }
 
 fn bench_subsetting(c: &mut Criterion) {
-    let font_path = fixtures_dir().join("bench_font.ttf");
-    let font_bytes = match std::fs::read(&font_path) {
-        Ok(b) => b,
-        Err(_) => {
-            eprintln!("skipping fonts bench: bench_font.ttf not found at {}", font_path.display());
-            eprintln!("  add a small public-domain TTF to test/fixtures/bench_font.ttf to enable this bench");
-            return;
-        }
-    };
+    let path = font_path();
+    let font_bytes = std::fs::read(&path)
+        .unwrap_or_else(|e| panic!("the font of the fonts bench, {}, can't be read: {e}", path.display()));
 
     let xml_builtin    = builtin_xml();
-    let xml_one_font   = font_xml("bench_font.ttf");
+    let xml_one_font   = font_xml(FONT_FILE);
+
+    // A font the engine leaves out would still render a page, and the bench would time nothing.
+    let embedded = bench_render_xml_with_font(&xml_one_font, "bench-font", &font_bytes).unwrap();
+    assert!(embedded.windows(b"/FontFile2".len()).any(|window| window == b"/FontFile2"), "the font is not embedded in the PDF");
 
     let mut group = c.benchmark_group("subsetting");
 
