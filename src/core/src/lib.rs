@@ -462,6 +462,29 @@ pub fn bench_render_doc(mut doc: BenchDoc) -> Result<Vec<u8>, String> {
     )
 }
 
+/// Layout + PDF write on a pre-parsed doc, with its images loaded and sized as `render_pdf` sizes them: the
+/// images of the flow and the `img-at` of the layers are fitted to the pictures' proportions. Used by the
+/// `layers` and `media` benchmarks, whose documents hold images.
+pub fn bench_render_doc_with_images(mut doc: BenchDoc, images: &[(&str, &[u8])]) -> Result<Vec<u8>, String> {
+    let mut registry = pdf::ImageRegistry::new();
+    for (name, bytes) in images {
+        registry.load(name, bytes.to_vec());
+    }
+    let meta = pdf::build_image_meta(&registry);
+    let mut lp = doc.0.section_layouts();
+    for page in &mut lp {
+        layout::prefill_section_image_sizes(page, &meta);
+    }
+    let pages: Vec<render::RenderPage> =
+        layout::layout_document(&lp);
+    // Unlicensed, so benchmarks include the cost of the attribution line.
+    pdf::render_pdf(
+        &pages, &doc.0.fonts,
+        &pdf::FontRegistry::new(), &registry,
+        &doc.0.meta, None, false,
+    )
+}
+
 /// Apply data binding to a pre-parsed doc. Used by staged `data/*` benchmarks.
 pub fn bench_data_apply(doc: BenchDoc, json: &str) -> Result<BenchDoc, String> {
     let mut inner = doc.0;

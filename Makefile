@@ -72,7 +72,7 @@ benchmark:
 	@echo "-------------------------------"
 	@echo ">>> Running benchmarks (xs–xl)..."
 	@echo ""
-	cargo bench --manifest-path src/core/Cargo.toml --bench pipeline --bench images --bench fonts -- "parse_xml/|layout/|end_to_end/|data/|subsetting/|image/"
+	cargo bench --manifest-path src/core/Cargo.toml --bench pipeline --bench images --bench fonts -- "parse_xml/|layout/|end_to_end/|data/|layers/|images/|qr/|linear/|subsetting/|image/"
 
 benchmark-x:
 	@echo ""
