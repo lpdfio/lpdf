@@ -33,7 +33,7 @@
     </colors>
   </tokens>
 
-  <document size="letter" margin="48pt">
+  <document size="letter">
     <meta title="Invoice" subject="Invoice" author="Brightwork Studio" />
     <section background="surface">
 
@@ -48,7 +48,7 @@
         <circle cx="63pt" cy="55pt" r="7pt" fill="surface" />
       </layer>
 
-      <layout>
+      <layout margin="48pt">
         <column gap="l"  justify="between">
 
           <column gap="l">

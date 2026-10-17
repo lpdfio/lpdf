@@ -272,15 +272,17 @@ fn render_section(section: &Value, depth: usize) -> String {
         let nodes = child.get("nodes").and_then(|v| v.as_array());
         match kind {
             "layout" => {
+                let layout_attrs = child.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
+                let layout_attrs_s = attrs_str(layout_attrs, &[]);
                 match nodes {
                     Some(arr) if !arr.is_empty() => {
                         let content: String = arr.iter()
                             .map(|n| render_layout_node(n, depth + 2))
                             .collect::<Vec<_>>()
                             .join("\n");
-                        parts.push(format!("{inner}<layout>\n{content}\n{inner}</layout>"));
+                        parts.push(format!("{inner}<layout{layout_attrs_s}>\n{content}\n{inner}</layout>"));
                     }
-                    _ => parts.push(format!("{inner}<layout/>")),
+                    _ => parts.push(format!("{inner}<layout{layout_attrs_s}/>")),
                 }
             }
             "layer" => parts.push(render_layer(child, depth + 1)),
@@ -447,12 +449,12 @@ mod tests {
         let json = r#"{
             "version": 1,
             "type": "document",
-            "attrs": { "size": "a4", "margin": "28pt" },
+            "attrs": { "size": "a4", "orientation": "landscape" },
             "nodes": [{"type":"section","attrs":{},"nodes":[]}]
         }"#;
         let xml = kit_to_xml(json).unwrap();
         assert!(xml.contains(r#"size="a4""#));
-        assert!(xml.contains(r#"margin="28pt""#));
+        assert!(xml.contains(r#"orientation="landscape""#));
     }
 
     // ── Tokens ────────────────────────────────────────────────────────────────
@@ -1038,7 +1040,6 @@ mod tests {
             "type": "document",
             "attrs": {
                 "size": "a4",
-                "margin": "28pt",
                 "tokens": {
                     "space": { "xs": "2pt", "s": "4pt", "m": "8pt", "l": "16pt", "xl": "24pt", "xxl": "40pt" },
                     "colors": { "primary": "#1763cf" }
@@ -1051,6 +1052,7 @@ mod tests {
                 "attrs": {},
                 "nodes": [{
                     "type": "layout",
+                    "attrs": { "margin": "28pt" },
                     "nodes": [{
                         "type": "text",
                         "attrs": {},
@@ -1068,6 +1070,7 @@ mod tests {
         let pages = doc.section_layouts();
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0].children.len(), 1);
+        assert_eq!(pages[0].margin, [28.0; 4]);
     }
 
     #[test]

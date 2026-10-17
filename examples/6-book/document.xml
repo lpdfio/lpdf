@@ -71,7 +71,7 @@
     <text-size xs="7pt" s="8pt" m="10pt" l="12pt" xl="18pt" xxl="30pt" />
   </tokens>
 
-  <document size="306pt 495pt" margin="56pt 34pt 44pt 34pt" font="body">
+  <document size="306pt 495pt" font="body">
     <meta title="Alice’s Adventures in Wonderland" subject="Pocket book" author="Lewis Carroll" />
     <section background="paper">
 
@@ -150,7 +150,7 @@
         <line x1="34pt" y1="38pt" x2="272pt" y2="38pt" stroke="rule" stroke-width="0.5pt" />
       </layer>
 
-      <layout>
+      <layout margin="56pt 34pt 44pt 34pt">
 
         <!-- the cover: the author at the top, the title, a line at the foot, with the watch between -->
         <column height="380pt" justify="between" padding="8pt 0pt 0pt 0pt">

@@ -10,7 +10,7 @@
       <color name="rule"     value="#dde3ed"/>
     </colors>
   </tokens>
-  <document size="a4" margin="40pt">
+  <document size="a4">
     <meta title="lpdf Showcase — Canvas Layer (opacity, transform, page scope)"
           subject="Layer attributes and page targeting"/>
 

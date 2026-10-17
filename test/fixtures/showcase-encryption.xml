@@ -12,11 +12,11 @@
       <color name="danger"   value="#c0392b" />
     </colors>
   </tokens>
-  <document size="a4" margin="40pt">
+  <document size="a4">
     <meta title="lpdf Showcase — Encryption" subject="RC4-128 · permission flags · owner password" />
 
     <section background="surface">
-      <layout>
+      <layout margin="40pt">
       <column gap="xl">
 
         <!-- Header -->

@@ -12,10 +12,10 @@
       <color name="accent"      value="#e8f0fc" />
     </colors>
   </tokens>
-  <document size="a4" margin="40pt">
+  <document size="a4">
     <meta title="Invoice #1042" author="Acme Corp" subject="Invoice" />
     <section background="surface">
-      <layout>
+      <layout margin="40pt">
       <column gap="l" height="full" justify="between">
 
         <!-- header: logo area + invoice label -->

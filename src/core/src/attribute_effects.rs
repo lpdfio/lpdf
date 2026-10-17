@@ -468,6 +468,7 @@ fn subjects() -> Vec<Subject> {
             lpdf("", &format!("<document><section {a}><layout>{c}</layout></section><section><layout>{BOOKMARKED}</layout></section></document>"))
         })
         .content(ONE),
+        Subject::new("layout", |a, c| lpdf("", &format!("<document><section><layout {a}>{c}</layout></section></document>"))).content(ONE),
         Subject::new("meta", |a, _| lpdf("", &format!("<document><meta {a}/><section><layout>{ONE}</layout></section></document>"))),
         Subject::new("font", |a, _| {
             lpdf(&format!("<assets><font {a}/></assets>"), r#"<document><section><layout><text font="body">Alpha</text></layout></section></document>"#)

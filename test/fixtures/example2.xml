@@ -11,10 +11,10 @@
       <color name="rule"        value="#c8d6ee" />
     </colors>
   </tokens>
-  <document size="a4" margin="0pt">
+  <document size="a4">
     <meta title="Resume — Jane Doe" author="Jane Doe" />
-    <section margin="0pt 18pt 0pt 0pt">
-      <layout>
+    <section>
+      <layout margin="0pt 18pt 0pt 0pt">
       <row gap="0pt" align="start" height="full">
 
         <!-- sidebar -->

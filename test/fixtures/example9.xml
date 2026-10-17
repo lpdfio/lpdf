@@ -1,10 +1,10 @@
 <lpdf version="1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
-  <document size="a4" margin="48pt">
+  <document size="a4">
     <meta title="Auto-pagination demo — flowing text article" />
     <section>
-      <layout>
+      <layout margin="48pt">
       <column gap="m">
 
         <text font-size="xxl" font="Helvetica-Bold">The Quiet Revolution in Declarative Layout</text>

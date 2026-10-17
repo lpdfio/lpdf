@@ -43,6 +43,7 @@ const CLASSES = [
     ...['rect', 'circle', 'ellipse', 'line', 'path'].map((el) => ({ cls: `${pascal(el)}Attr`, el, where: 'primitives', area: 'canvas' })),
     { cls: 'CanvasTextAttr', el: 'text', where: 'primitives', area: 'canvas' },
     { cls: 'CanvasImgAttr', el: 'img', where: 'primitives', area: 'canvas' },
+    { cls: 'LayoutAttr', el: 'layout', where: 'global', area: 'kit' },
     { cls: 'FontAttr', el: 'font', where: 'global', area: 'kit' },
     { cls: 'ImageAttr', el: 'image', where: 'global', area: 'kit' },
 ];

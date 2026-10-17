@@ -2867,10 +2867,10 @@ mod tests {
 
     fn minimal(body: &str) -> String {
         if body.is_empty() {
-            r#"<lpdf version="1"><document size="a4" margin="28pt"><section><layout/></section></document></lpdf>"#.to_string()
+            r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt"/></section></document></lpdf>"#.to_string()
         } else {
             format!(
-                r#"<lpdf version="1"><document size="a4" margin="28pt"><section><layout>{body}</layout></section></document></lpdf>"#
+                r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
             )
         }
     }
@@ -2880,6 +2880,19 @@ mod tests {
         let tree = engine_render(&minimal(""));
         assert_eq!(tree["pages"][0]["width"], 595.28);
         assert_eq!(tree["pages"][0]["height"], 841.89);
+    }
+
+    #[test]
+    fn a_layout_without_a_margin_places_its_content_36pt_from_the_page_edges() {
+        let tree = engine_render(
+            r#"<lpdf version="1"><document size="a4"><section><layout><frame height="20pt" /></layout></section></document></lpdf>"#,
+        );
+        let page = &tree["pages"][0];
+        assert_eq!(page["margin"], serde_json::json!([36.0, 36.0, 36.0, 36.0]));
+        let frame = &page["nodes"][0];
+        assert_eq!((frame["x"].as_f64(), frame["y"].as_f64()), (Some(36.0), Some(36.0)));
+        let width = frame["width"].as_f64().unwrap();
+        assert!((width - (595.28 - 72.0)).abs() < 0.01, "width={width}");
     }
 
     #[test]
@@ -3409,7 +3422,7 @@ mod tests {
         ];
         for &(size, exp_w, exp_h) in cases {
             let xml = format!(
-                r#"<lpdf version="1"><document size="{size}" margin="0pt"><section><layout/></section></document></lpdf>"#
+                r#"<lpdf version="1"><document size="{size}"><section><layout margin="0pt"/></section></document></lpdf>"#
             );
             let tree = engine_render(&xml);
             let w = tree["pages"][0]["width"].as_f64().unwrap();
@@ -3530,8 +3543,8 @@ mod tests {
             <tokens>
                 <space xs="1pt" s="2pt" m="50pt" l="100pt" xl="200pt" xxl="400pt" />
             </tokens>
-            <document size="a4" margin="0pt">
-                <section><layout>
+            <document size="a4">
+                <section><layout margin="0pt">
                     <column gap="m">
                         <frame height="20pt" />
                         <frame height="20pt" />
@@ -3558,8 +3571,8 @@ mod tests {
                     <color name="primary" value="#abcdef" />
                 </colors>
             </tokens>
-            <document size="a4" margin="0pt">
-                <section><layout>
+            <document size="a4">
+                <section><layout margin="0pt">
                     <frame height="20pt" background="primary" />
                 </layout></section>
             </document>
@@ -3581,10 +3594,10 @@ mod tests {
     fn layers_before_the_layout_paint_under_it_and_layers_after_it_over_it() {
         let lines: String = (1..=120).map(|n| format!("<text>Line {n}</text>")).collect();
         let pages = render_pages(&format!(
-            r##"<lpdf version="1"><document size="a4" margin="28pt"><section>
+            r##"<lpdf version="1"><document size="a4"><section>
                 <layer opacity="0.1"><rect w="10pt" h="10pt" fill="#000000"/></layer>
                 <layer opacity="0.2"><rect w="10pt" h="10pt" fill="#000000"/></layer>
-                <layout>{lines}</layout>
+                <layout margin="28pt">{lines}</layout>
                 <layer opacity="0.3"><rect w="10pt" h="10pt" fill="#000000"/></layer>
                 <layer opacity="0.4" page="last"><rect w="10pt" h="10pt" fill="#000000"/></layer>
             </section></document></lpdf>"##

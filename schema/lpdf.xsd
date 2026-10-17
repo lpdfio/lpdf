@@ -506,7 +506,7 @@
        Graphics state scope (page, opacity, transform, clip). Cannot nest. -->
   <xs:element name="layer">
     <xs:annotation>
-      <xs:documentation>Draws shapes at exact positions on the page, independent of the flowing layout: watermarks, stamps, page furniture. Coordinates start at the top left corner of the whole page, not the margin, and y grows downward. A layer before the section's layout paints under it, and one after paints over it. It sets what applies to all of its shapes: which pages they appear on, opacity, transform and clip. Layers cannot be nested.</xs:documentation>
+      <xs:documentation>Draws shapes at exact positions on the page, independent of the flowing layout: watermarks, stamps, page furniture. Coordinates start at the top left corner of the whole page, not inside the layout's margin, and y grows downward. A layer before the section's layout paints under it, and one after paints over it. It sets what applies to all of its shapes: which pages they appear on, opacity, transform and clip. Layers cannot be nested.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
@@ -695,6 +695,11 @@
           </xs:complexType>
         </xs:element>
       </xs:choice>
+      <xs:attribute name="margin" type="SpacingValue">
+        <xs:annotation>
+          <xs:documentation>The space between the page edges and the flowing content and its regions: one value for all four sides, or two to four in the order top, right, bottom, left. Defaults to 36pt. Layers ignore it and measure from the page edges.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
     </xs:complexType>
   </xs:element>
 
@@ -703,7 +708,7 @@
        stops with "unexpected element in <document>". -->
   <xs:element name="document">
     <xs:annotation>
-      <xs:documentation>The whole document, and the page settings every section starts from: size, orientation, margin and font. It holds an optional meta element and at least one section.</xs:documentation>
+      <xs:documentation>The whole document, and the page settings every section starts from: size, orientation, background and font. It holds an optional meta element and at least one section.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
@@ -713,7 +718,6 @@
       <xs:attribute name="font"        type="xs:string"/>
       <xs:attribute name="size"        type="PageSize"/>
       <xs:attribute name="orientation" type="Orientation"/>
-      <xs:attribute name="margin"      type="SpacingValue"/>
       <xs:attribute name="background"  type="Color"/>
       <xs:attribute name="debug"       type="xs:boolean"/>
     </xs:complexType>
@@ -740,7 +744,6 @@
       </xs:sequence>
       <xs:attribute name="size"        type="PageSize"/>
       <xs:attribute name="orientation" type="Orientation"/>
-      <xs:attribute name="margin"      type="SpacingValue"/>
       <xs:attribute name="background"  type="Color"/>
       <xs:attribute name="title"       type="xs:string"/>
       <xs:attribute name="debug"       type="xs:boolean"/>

@@ -14,10 +14,10 @@
       <color name="rule"        value="#e2e8f0" />
     </colors>
   </tokens>
-  <document size="a4" margin="40pt">
+  <document size="a4">
     <meta title="Platform Features" author="Acme Corp" subject="Product Overview" />
     <section background="surface">
-      <layout>
+      <layout margin="40pt">
       <column gap="l">
 
         <!-- page header -->

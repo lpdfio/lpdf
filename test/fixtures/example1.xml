@@ -1,10 +1,10 @@
 <lpdf version="1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
-  <document size="a4" margin="40pt">
+  <document size="a4">
     <meta title="Getting Started with lpdf" />
     <section>
-      <layout>
+      <layout margin="40pt">
       <column gap="l">
 
         <!-- title -->

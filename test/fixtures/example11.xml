@@ -10,10 +10,10 @@
       <color name="ink"         value="#0f172a" />
     </colors>
   </tokens>
-  <document size="letter" margin="48pt">
+  <document size="letter">
     <meta title="Quarterly Investor Update — Q1 2026" />
     <section>
-      <layout>
+      <layout margin="48pt">
 
       <!-- letterhead: only on page 1 -->
       <frame background="brand-soft" padding="m" radius="s">

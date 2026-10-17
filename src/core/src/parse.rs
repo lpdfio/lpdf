@@ -14,7 +14,6 @@ pub struct Document {
     // Document-level page defaults (inherited by each section unless overridden)
     pub page_width:  f32,
     pub page_height: f32,
-    pub margin:      [f32; 4],
     pub background:  Option<String>,
     pub debug:       bool,
     /// Sections — always ≥ 1.  Single-section shorthand is normalised here.
@@ -30,7 +29,6 @@ impl Document {
         for section in std::mem::take(&mut self.sections) {
             let width  = section.options.size.map(|(w, _)| w).unwrap_or(self.page_width);
             let height = section.options.size.map(|(_, h)| h).unwrap_or(self.page_height);
-            let margin = section.options.margin.unwrap_or(self.margin);
             let bg     = section.options.background
                             .or_else(|| self.background.clone());
             let debug  = section.options.debug.unwrap_or(self.debug);
@@ -40,11 +38,14 @@ impl Document {
             let mut children: Vec<Node> = Vec::new();
             let mut underlays: Vec<canvas::CanvasLayer> = Vec::new();
             let mut overlays:  Vec<canvas::CanvasLayer> = Vec::new();
+            // Only the flow keeps to a margin, so a section of layers alone has none.
+            let mut margin = [0.0_f32; 4];
             let mut seen_layout = false;
             for sc in section.children {
                 match sc {
-                    SectionChild::Layout(layout_children) => {
+                    SectionChild::Layout { margin: layout_margin, children: layout_children } => {
                         seen_layout = true;
+                        margin = layout_margin;
                         for lc in layout_children {
                             match lc {
                                 LayoutChild::Content(node) => children.push(node),
@@ -129,15 +130,21 @@ pub enum LayoutChild {
 
 #[derive(Debug, Clone)]
 pub enum SectionChild {
-    Layout(Vec<LayoutChild>),
+    /// The flow, and the margin it keeps from the page edges: top, right, bottom, left.
+    Layout { margin: [f32; 4], children: Vec<LayoutChild> },
     Layer(canvas::CanvasLayer),
 }
+
+/// The margin of a `<layout>` that sets none: half an inch on every side.
+const DEFAULT_LAYOUT_MARGIN: f32 = 36.0;
+
+/// What to write instead of `margin` on a document or a section, which no longer have one.
+const MARGIN_MOVED: &str = "margin moved to <layout>; set it there, in each section: only the flowing content keeps to a margin";
 
 /// Per-section overrides; `None` fields inherit document-level defaults.
 #[derive(Debug, Clone, Default)]
 pub struct SectionOptions {
     pub size:       Option<(f32, f32)>,
-    pub margin:     Option<[f32; 4]>,
     pub background: Option<String>,
     pub debug:      Option<bool>,
     /// Parsed but not yet surfaced to the render pipeline.
@@ -200,7 +207,7 @@ pub struct Meta {
 pub struct SectionLayout {
     pub width: f32,
     pub height: f32,
-    pub margin: [f32; 4], // top, right, bottom, left
+    pub margin: [f32; 4], // the layout's: top, right, bottom, left
     pub background: Option<String>,
     pub debug: bool,
     pub children: Vec<Node>,
@@ -708,7 +715,6 @@ pub fn parse(xml: &str) -> Result<Document, String> {
 
     let mut meta          = Meta::default();
     let mut doc_size      = (595.28_f32, 841.89_f32); // a4
-    let mut doc_margin    = [0.0_f32; 4];
     let mut doc_background: Option<String> = None;
     let mut doc_debug     = false;
     let mut doc_font: Option<String> = None;
@@ -730,8 +736,8 @@ pub fn parse(xml: &str) -> Result<Document, String> {
                 if let Some("landscape") = child.attribute("orientation") {
                     doc_size = (doc_size.1, doc_size.0);
                 }
-                if let Some(v) = child.attribute("margin") {
-                    doc_margin = tokens.resolve_spacing(v)?;
+                if child.attribute("margin").is_some() {
+                    return Err(format!("<document>{}: {MARGIN_MOVED}", node_loc(&child)));
                 }
                 if let Some(v) = child.attribute("background") {
                     doc_background = Some(tokens.resolve_color(v)?);
@@ -748,7 +754,6 @@ pub fn parse(xml: &str) -> Result<Document, String> {
                             sections_xml.push(parse_section_elem(
                                 &doc_child,
                                 doc_size,
-                                doc_margin,
                                 doc_background.clone(),
                                 doc_debug,
                                 doc_font.as_deref(),
@@ -785,7 +790,6 @@ pub fn parse(xml: &str) -> Result<Document, String> {
                     images:      asset_images,
                     page_width:  doc_size.0,
                     page_height: doc_size.1,
-                    margin:      doc_margin,
                     background:  doc_background,
                     debug:       doc_debug,
                     sections:    sections_xml,
@@ -967,12 +971,11 @@ fn parse_scale_row(elem: &roxmltree::Node) -> Result<[f32; 6], String> {
 
 // ── Page / meta ───────────────────────────────────────────────────────────────
 
-/// Apply size/orientation/margin/background/debug overrides from an attribute
+/// Apply size/orientation/background/debug overrides from an attribute
 /// source onto the running section-defaults.  Works for both XML `<section>` elements
 /// and JSON section nodes via the `Attrs` trait.  Returns the resolved `debug` flag.
 fn apply_page_overrides(
     size:       &mut (f32, f32),
-    margin:     &mut [f32; 4],
     background: &mut Option<String>,
     a:          &impl Attrs,
     tokens:     &Tokens,
@@ -984,13 +987,18 @@ fn apply_page_overrides(
     if a.get("orientation") == Some("landscape") {
         *size = (size.1, size.0);
     }
-    if let Some(v) = a.get("margin") {
-        *margin = tokens.resolve_spacing(v)?;
-    }
     if let Some(v) = a.get("background") {
         *background = Some(tokens.resolve_color(v)?);
     }
     Ok(a.get("debug").map(|v| v == "true").unwrap_or(doc_debug))
+}
+
+/// The margin a `<layout>` keeps from the page edges: its `margin`, or the default on every side.
+fn layout_margin(a: &impl Attrs, tokens: &Tokens) -> Result<[f32; 4], String> {
+    match a.get("margin") {
+        Some(v) => tokens.resolve_spacing(v),
+        None    => Ok([DEFAULT_LAYOUT_MARGIN; 4]),
+    }
 }
 
 fn parse_meta(elem: &roxmltree::Node) -> Meta {
@@ -1152,7 +1160,6 @@ const SECOND_LAYOUT: &str = "a <section> has at most one <layout>; put all of it
 fn parse_section_elem(
     elem:           &roxmltree::Node,
     doc_size:       (f32, f32),
-    doc_margin:     [f32; 4],
     doc_background: Option<String>,
     doc_debug:      bool,
     doc_font:       Option<&str>,
@@ -1160,11 +1167,13 @@ fn parse_section_elem(
     asset_fonts:    &HashMap<String, FontDef>,
     asset_images:   &HashMap<String, String>,
 ) -> Result<Section, String> {
+    if elem.attribute("margin").is_some() {
+        return Err(format!("<section>{}: {MARGIN_MOVED}", node_loc(elem)));
+    }
     // Inherit doc-level defaults, then apply section overrides.
     let mut size       = doc_size;
-    let mut margin     = doc_margin;
     let mut background = doc_background;
-    let debug = apply_page_overrides(&mut size, &mut margin, &mut background, elem, tokens, doc_debug)?;
+    let debug = apply_page_overrides(&mut size, &mut background, elem, tokens, doc_debug)?;
     let title = elem.attribute("title").map(str::to_string);
     let toc = parse_section_toc(elem, tokens).map_err(|e| format!("<section>{}: {e}", node_loc(elem)))?;
 
@@ -1178,9 +1187,10 @@ fn parse_section_elem(
     for child in elems(elem) {
         match child.tag_name().name() {
             "layout" => {
-                if children.iter().any(|c| matches!(c, SectionChild::Layout(_))) {
+                if children.iter().any(|c| matches!(c, SectionChild::Layout { .. })) {
                     return Err(format!("<layout>{}: {SECOND_LAYOUT}", node_loc(&child)));
                 }
+                let margin = layout_margin(&child, tokens).map_err(|e| format!("<layout>{}: {e}", node_loc(&child)))?;
                 // Inline layout: build a Layout from its children (may include <region>).
                 let mut lc: Vec<LayoutChild> = Vec::new();
                 let mut pending = PendingBookmarks::default();
@@ -1196,7 +1206,7 @@ fn parse_section_elem(
                     }
                 }
                 pending.finish("layout").map_err(|e| format!("<layout>{}: {e}", node_loc(&child)))?;
-                children.push(SectionChild::Layout(lc));
+                children.push(SectionChild::Layout { margin, children: lc });
             }
             "layer" => {
                 children.push(SectionChild::Layer(
@@ -1231,7 +1241,6 @@ fn parse_section_elem(
         children,
         options: SectionOptions {
             size:       if size != doc_size { Some(size) } else { None },
-            margin:     Some(margin),
             background,
             debug:      Some(debug),
             title,
@@ -1524,7 +1533,7 @@ fn assign_bookmark_ids(sections: &mut [Section]) -> Result<(), String> {
     for section in sections.iter_mut() {
         bookmarks.extend(section.bookmark.as_mut());
         for child in &mut section.children {
-            if let SectionChild::Layout(layout_children) = child {
+            if let SectionChild::Layout { children: layout_children, .. } = child {
                 for layout_child in layout_children {
                     match layout_child {
                         LayoutChild::Content(node)  => collect_bookmarks(std::slice::from_mut(node), &mut bookmarks),
@@ -1997,9 +2006,11 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     // ── Document-level page defaults ──────────────────────────────────────────
     let doc_size_str  = attrs.get("size")       .and_then(|v| v.as_str());
     let doc_orient    = attrs.get("orientation").and_then(|v| v.as_str());
-    let doc_margin_s  = attrs.get("margin")     .and_then(|v| v.as_str());
     let doc_bg_s      = attrs.get("background") .and_then(|v| v.as_str());
 
+    if attrs.contains_key("margin") {
+        return Err(format!("document: {MARGIN_MOVED}"));
+    }
     let mut doc_size = if let Some(s) = doc_size_str {
         parse_page_size(s)?
     } else {
@@ -2008,11 +2019,6 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     if doc_orient == Some("landscape") {
         doc_size = (doc_size.1, doc_size.0);
     }
-    let doc_margin = if let Some(s) = doc_margin_s {
-        tokens.resolve_spacing(s)?
-    } else {
-        [0.0_f32; 4]
-    };
     let doc_background = if let Some(s) = doc_bg_s {
         Some(tokens.resolve_color(s)?)
     } else {
@@ -2029,7 +2035,7 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     let mut sections: Vec<Section> = Vec::new();
     for sec_json in nodes_arr {
         sections.push(parse_tree_section(
-            sec_json, doc_size, doc_margin, doc_background.clone(),
+            sec_json, doc_size, doc_background.clone(),
             doc_debug, &tokens, &asset_fonts, &asset_images,
         )?);
     }
@@ -2052,7 +2058,6 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
         images:      asset_images,
         page_width:  doc_size.0,
         page_height: doc_size.1,
-        margin:      doc_margin,
         background:  doc_background,
         debug:       doc_debug,
         sections,
@@ -2096,22 +2101,22 @@ pub fn parse_tree_tokens_pub(
 }
 
 
-#[allow(clippy::too_many_arguments)]
 fn parse_tree_section(
     json:           &serde_json::Value,
     doc_size:       (f32, f32),
-    doc_margin:     [f32; 4],
     doc_background: Option<String>,
     doc_debug:      bool,
     tokens:         &Tokens,
     asset_fonts:    &HashMap<String, FontDef>,
     asset_images:   &HashMap<String, String>,
 ) -> Result<Section, String> {
+    if json.get("attrs").is_some_and(|attrs| attrs.get("margin").is_some()) {
+        return Err(format!("section: {MARGIN_MOVED}"));
+    }
     let mut size       = doc_size;
-    let mut margin     = doc_margin;
     let mut background = doc_background;
     let a = JsonAttrs(json);
-    let debug = apply_page_overrides(&mut size, &mut margin, &mut background, &a, tokens, doc_debug)?;
+    let debug = apply_page_overrides(&mut size, &mut background, &a, tokens, doc_debug)?;
     let title = jattr(json, "title").map(str::to_string);
     let toc = parse_section_toc(&a, tokens).map_err(|e| format!("section: {e}"))?;
 
@@ -2125,9 +2130,10 @@ fn parse_tree_section(
             let kind = child.get("type").and_then(|v| v.as_str());
             match kind {
                 Some("layout") => {
-                    if children.iter().any(|c| matches!(c, SectionChild::Layout(_))) {
+                    if children.iter().any(|c| matches!(c, SectionChild::Layout { .. })) {
                         return Err(format!("node type 'layout': {SECOND_LAYOUT}"));
                     }
+                    let margin = layout_margin(&JsonAttrs(child), tokens).map_err(|e| format!("layout: {e}"))?;
                     let mut lc: Vec<LayoutChild> = Vec::new();
                     let mut pending = PendingBookmarks::default();
                     if let Some(nodes) = child.get("nodes").and_then(|v| v.as_array()) {
@@ -2144,7 +2150,7 @@ fn parse_tree_section(
                         }
                     }
                     pending.finish("layout")?;
-                    children.push(SectionChild::Layout(lc));
+                    children.push(SectionChild::Layout { margin, children: lc });
                 }
                 Some("bookmark") => {
                     if bookmark.is_some() {
@@ -2173,7 +2179,6 @@ fn parse_tree_section(
         children,
         options: SectionOptions {
             size:       if size != doc_size { Some(size) } else { None },
-            margin:     Some(margin),
             background,
             debug:      Some(debug),
             title,
@@ -2397,10 +2402,10 @@ mod tests {
 
     fn minimal(body: &str) -> String {
         if body.is_empty() {
-            r#"<lpdf version="1"><document size="a4" margin="28pt"><section><layout/></section></document></lpdf>"#.to_string()
+            r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt"/></section></document></lpdf>"#.to_string()
         } else {
             format!(
-                r#"<lpdf version="1"><document size="a4" margin="28pt"><section><layout>{body}</layout></section></document></lpdf>"#
+                r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
             )
         }
     }
@@ -2663,9 +2668,9 @@ mod tests {
     #[test]
     fn parse_section_layout_only() {
         let xml = r#"<lpdf version="1">
-            <document size="a4" margin="0pt">
+            <document size="a4">
                 <section>
-                    <layout><column gap="m"><text>Hello</text></column></layout>
+                    <layout margin="0pt"><column gap="m"><text>Hello</text></column></layout>
                 </section>
             </document>
         </lpdf>"#;
@@ -2673,21 +2678,21 @@ mod tests {
         assert_eq!(doc.sections.len(), 1);
         let sc = &doc.sections[0];
         assert_eq!(sc.children.len(), 1);
-        assert!(matches!(sc.children[0], SectionChild::Layout(_)));
+        assert!(matches!(sc.children[0], SectionChild::Layout { .. }));
     }
 
     /// The layer a section child is, or a panic.
     fn as_layer(child: &SectionChild) -> &canvas::CanvasLayer {
         match child {
             SectionChild::Layer(layer) => layer,
-            SectionChild::Layout(_)    => panic!("expected a layer"),
+            SectionChild::Layout { .. } => panic!("expected a layer"),
         }
     }
 
     #[test]
     fn parse_section_layers_only() {
         let xml = r##"<lpdf version="1">
-            <document size="a4" margin="0pt">
+            <document size="a4">
                 <section>
                     <layer><rect w="100pt" h="50pt" fill="#ff0000"/></layer>
                 </section>
@@ -2702,9 +2707,9 @@ mod tests {
     #[test]
     fn parse_section_layout_plus_layer() {
         let xml = r##"<lpdf version="1">
-            <document size="a4" margin="0pt">
+            <document size="a4">
                 <section>
-                    <layout><text>Body</text></layout>
+                    <layout margin="0pt"><text>Body</text></layout>
                     <layer page="each"><rect w="100pt" h="5pt" fill="#000000"/></layer>
                 </section>
             </document>
@@ -2716,11 +2721,11 @@ mod tests {
     #[test]
     fn layers_before_the_layout_go_under_it_and_layers_after_it_over_it() {
         let xml = r##"<lpdf version="1">
-            <document size="a4" margin="0pt">
+            <document size="a4">
                 <section>
                     <layer page="first"><rect w="10pt" h="10pt" fill="#000"/></layer>
                     <layer page="last"><rect w="10pt" h="10pt" fill="#000"/></layer>
-                    <layout><text>Body</text></layout>
+                    <layout margin="0pt"><text>Body</text></layout>
                     <layer page="odd"><rect w="10pt" h="10pt" fill="#000"/></layer>
                     <layer page="even"><rect w="10pt" h="10pt" fill="#000"/></layer>
                 </section>
@@ -2781,11 +2786,61 @@ mod tests {
     }
 
     #[test]
+    fn a_layout_without_a_margin_keeps_36pt_from_the_page_edges() {
+        let mut doc = parse(&document("<section><layout><text>Body</text></layout></section>")).unwrap();
+        assert_eq!(doc.section_layouts()[0].margin, [36.0; 4]);
+
+        let json = r#"{"version":1,"type":"document","attrs":{},"nodes":[
+            {"type":"section","attrs":{},"nodes":[{"type":"layout","nodes":[{"type":"text","attrs":{},"nodes":["Body"]}]}]}]}"#;
+        assert_eq!(parse_tree(json).unwrap().section_layouts()[0].margin, [36.0; 4]);
+    }
+
+    #[test]
+    fn a_layout_reads_its_margin_in_xml_and_in_a_tree() {
+        let mut doc = parse(&document(r#"<section><layout margin="10pt 20pt"><text>Body</text></layout></section>"#)).unwrap();
+        assert_eq!(doc.section_layouts()[0].margin, [10.0, 20.0, 10.0, 20.0]);
+
+        let json = r#"{"version":1,"type":"document","attrs":{},"nodes":[
+            {"type":"section","attrs":{},"nodes":[
+                {"type":"layout","attrs":{"margin":"10pt 20pt"},"nodes":[{"type":"text","attrs":{},"nodes":["Body"]}]}]}]}"#;
+        assert_eq!(parse_tree(json).unwrap().section_layouts()[0].margin, [10.0, 20.0, 10.0, 20.0]);
+    }
+
+    #[test]
+    fn a_section_of_layers_alone_has_no_margin() {
+        let mut doc = parse(&document(r##"<section><layer><rect w="10pt" h="10pt" fill="#000"/></layer></section>"##)).unwrap();
+        assert_eq!(doc.section_layouts()[0].margin, [0.0; 4]);
+    }
+
+    #[test]
+    fn margin_on_a_document_or_a_section_is_an_error_that_names_the_layout() {
+        let on_document = r#"<lpdf version="1"><document margin="28pt"><section><layout/></section></document></lpdf>"#;
+        let on_section = document(r#"<section margin="28pt"><layout/></section>"#);
+        for (element, xml) in [("<document>", on_document.to_string()), ("<section>", on_section)] {
+            let err = parse(&xml).unwrap_err();
+            assert!(err.starts_with(element) && err.contains("at line"), "{err}");
+            assert!(err.contains("margin moved to <layout>"), "{err}");
+        }
+    }
+
+    #[test]
+    fn tree_margin_on_a_document_or_a_section_is_an_error_that_names_the_layout() {
+        let on_document = r#"{"version":1,"type":"document","attrs":{"margin":"28pt"},"nodes":[
+            {"type":"section","attrs":{},"nodes":[{"type":"layout","nodes":[]}]}]}"#;
+        let on_section = r#"{"version":1,"type":"document","attrs":{},"nodes":[
+            {"type":"section","attrs":{"margin":"28pt"},"nodes":[{"type":"layout","nodes":[]}]}]}"#;
+        for (element, json) in [("document", on_document), ("section", on_section)] {
+            let err = parse_tree(json).unwrap_err();
+            assert!(err.starts_with(element) && err.contains("margin moved to <layout>"), "{err}");
+        }
+    }
+
+    #[test]
     fn parse_multi_section() {
         let xml = r##"<lpdf version="1">
-            <document size="a4" margin="0pt">
+            <document size="a4">
                 <section title="Cover"><layer><rect w="100pt" h="100pt" fill="#000"/></layer></section>
-                <section title="Body"><layout><text>Hello</text></layout></section>
+                <section title="Body"><layout margin="0pt"><text>Hello</text></layout></section>
             </document>
         </lpdf>"##;
         let doc = parse(xml).unwrap();
@@ -2798,9 +2853,9 @@ mod tests {
     #[test]
     fn parse_layout_region_top() {
         let xml = r#"<lpdf version="1">
-            <document size="a4" margin="0pt">
+            <document size="a4">
                 <section>
-                    <layout>
+                    <layout margin="0pt">
                         <region pin="top" page="each"><text>Header</text></region>
                         <text>Body</text>
                     </layout>
@@ -2809,7 +2864,7 @@ mod tests {
         </lpdf>"#;
         let doc = parse(xml).unwrap();
         let layout = match &doc.sections[0].children[0] {
-            SectionChild::Layout(l) => l,
+            SectionChild::Layout { children, .. } => children,
             _ => panic!("expected layout"),
         };
         assert_eq!(layout.len(), 2);
@@ -2823,9 +2878,9 @@ mod tests {
     #[test]
     fn section_layouts_from_section() {
         let xml = r#"<lpdf version="1">
-            <document size="a4" margin="28pt">
+            <document size="a4">
                 <section>
-                    <layout><text>Hello</text></layout>
+                    <layout margin="28pt"><text>Hello</text></layout>
                 </section>
             </document>
         </lpdf>"#;
@@ -2840,7 +2895,7 @@ mod tests {
     #[test]
     fn layer_page_scope() {
         let xml = r##"<lpdf version="1">
-            <document size="a4" margin="0pt">
+            <document size="a4">
                 <section>
                     <layer page="odd"><rect w="10pt" h="10pt" fill="#000"/></layer>
                     <layer page="2-4"><rect w="10pt" h="10pt" fill="#000"/></layer>
@@ -2860,7 +2915,7 @@ mod tests {
     fn layer_rect_absolute_pos() {
         use crate::canvas::CanvasPrimitive;
         let xml = r##"<lpdf version="1">
-            <document size="a4" margin="0pt">
+            <document size="a4">
                 <section>
                     <layer>
                         <rect x="10pt" y="20pt" w="100pt" h="50pt" fill="#ff0000" radius="4pt" opacity="0.5"/>
@@ -2882,7 +2937,7 @@ mod tests {
     fn layer_rect_anchored_pos() {
         use crate::canvas::CanvasPrimitive;
         let xml = r##"<lpdf version="1">
-            <document size="a4" margin="0pt">
+            <document size="a4">
                 <section>
                     <layer>
                         <rect anchor="center" x="10pt" y="-5pt" w="50pt" h="20pt" fill="#000"/>
@@ -2903,7 +2958,7 @@ mod tests {
     fn layer_text_with_spans() {
         use crate::canvas::CanvasPrimitive;
         let xml = r#"<lpdf version="1">
-            <document size="a4" margin="0pt">
+            <document size="a4">
                 <section>
                     <layer>
                         <text anchor="center" font-size="12pt">Hello <span font="Helvetica-Bold">world</span></text>
@@ -3042,8 +3097,8 @@ mod tests {
 
     #[test]
     fn err_region_invalid_pin() {
-        let xml = r#"<lpdf version="1"><document size="a4" margin="28pt">
-  <section><layout>
+        let xml = r#"<lpdf version="1"><document size="a4">
+  <section><layout margin="28pt">
     <region pin="center" />
   </layout></section></document></lpdf>"#;
         let err = parse(xml).unwrap_err();
@@ -3105,8 +3160,8 @@ mod tests {
 
     #[test]
     fn err_missing_attr_region_pin() {
-        let xml = r#"<lpdf version="1"><document size="a4" margin="28pt">
-  <section><layout>
+        let xml = r#"<lpdf version="1"><document size="a4">
+  <section><layout margin="28pt">
     <region />
   </layout></section></document></lpdf>"#;
         let err = parse(xml).unwrap_err();

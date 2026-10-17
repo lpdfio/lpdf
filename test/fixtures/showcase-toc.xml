@@ -10,12 +10,12 @@
       <color name="rule"    value="#dde3ed"/>
     </colors>
   </tokens>
-  <document size="a4" margin="56pt">
+  <document size="a4">
     <meta title="lpdf Showcase — Bookmarks and Table of Contents"
           subject="bookmark, section type=toc and href=#id links"/>
 
     <!-- Layer-only cover: the section's own bookmark marks its page -->
-    <section margin="0pt">
+    <section>
       <bookmark label="Cover"/>
       <layer>
         <rect x="0pt" y="0pt" w="595pt" h="842pt" fill="primary"/>
@@ -27,7 +27,7 @@
     <!-- Table of contents: laid out after the other sections, bound to $toc -->
     <section type="toc" toc-indent-step="16pt">
       <bookmark label="Contents" id="contents"/>
-      <layout>
+      <layout margin="56pt">
         <column gap="m">
           <text font-size="xl" font="Helvetica-Bold" color="primary">Contents</text>
           <divider color="rule" thickness="xs"/>
@@ -46,7 +46,7 @@
     </section>
 
     <section>
-      <layout>
+      <layout margin="56pt">
         <bookmark label="Introduction"/>
         <text font-size="l" font="Helvetica-Bold" color="primary">Introduction</text>
         <text>
@@ -65,7 +65,7 @@
     </section>
 
     <section>
-      <layout>
+      <layout margin="56pt">
         <bookmark label="Methods"/>
         <text font-size="l" font="Helvetica-Bold" color="primary">Methods</text>
         <text>
@@ -82,7 +82,7 @@
     </section>
 
     <section>
-      <layout>
+      <layout margin="56pt">
         <bookmark label="Results"/>
         <text font-size="l" font="Helvetica-Bold" color="primary">Results</text>
         <text>Every entry in the contents is a link to its bookmark.</text>

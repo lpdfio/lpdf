@@ -112,7 +112,7 @@ pub fn apply(doc: &mut Document, json_data: &str) -> Result<(), String> {
             continue;
         }
         for sc in &mut section.children {
-            if let crate::parse::SectionChild::Layout(layout_children) = sc {
+            if let crate::parse::SectionChild::Layout { children: layout_children, .. } = sc {
                 // Expand the flat content list (data-source loops can expand nodes).
                 let content_nodes = std::mem::take(layout_children);
                 let mut new_children = Vec::with_capacity(content_nodes.len());
@@ -354,11 +354,10 @@ mod tests {
             images: HashMap::new(),
             page_width: 595.28,
             page_height: 841.89,
-            margin: [0.0; 4],
             background: None,
             debug: false,
             sections: vec![Section {
-                children: vec![SectionChild::Layout(layout_children)],
+                children: vec![SectionChild::Layout { margin: [0.0; 4], children: layout_children }],
                 options: SectionOptions { size: Some((595.28, 841.89)), ..SectionOptions::default() },
                 bookmark: None,
             }],
@@ -369,7 +368,7 @@ mod tests {
     /// Extract the flat content nodes from the first section's first layout child.
     fn layout_children(doc: &Document) -> Vec<Node> {
         use crate::parse::{SectionChild, LayoutChild};
-        if let SectionChild::Layout(ref lc_vec) = doc.sections[0].children[0] {
+        if let SectionChild::Layout { children: ref lc_vec, .. } = doc.sections[0].children[0] {
             lc_vec.iter().filter_map(|lc| {
                 if let LayoutChild::Content(n) = lc { Some(n.clone()) } else { None }
             }).collect()

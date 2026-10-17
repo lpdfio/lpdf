@@ -11,11 +11,11 @@
       <color name="rule"     value="#dde3ed" />
     </colors>
   </tokens>
-  <document size="a4" margin="40pt">
+  <document size="a4">
     <meta title="lpdf Showcase — Forms" subject="Interactive PDF forms" />
 
     <section background="surface">
-      <layout>
+      <layout margin="40pt">
       <column gap="xl">
 
         <column gap="xs">

@@ -11,10 +11,10 @@
       <color name="text-muted"  value="#5a5a5a" />
     </colors>
   </tokens>
-  <document size="letter" orientation="landscape" margin="0pt">
+  <document size="letter" orientation="landscape">
     <meta title="Certificate of Completion — Jane Doe" />
     <section background="surface">
-      <layout>
+      <layout margin="0pt">
 
       <!-- outer border frame -->
       <frame border="l gold" padding="xl" height="full">

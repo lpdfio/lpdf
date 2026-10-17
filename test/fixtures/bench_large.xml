@@ -1,8 +1,8 @@
 <lpdf version="1">
-  <document size="a4" margin="40pt">
+  <document size="a4">
     <meta title="Benchmark Large Fixture" />
     <section>
-      <layout>
+      <layout margin="40pt">
       <column gap="m">
         <text font-size="xl" font="Helvetica-Bold">Performance Benchmark Document</text>
         <text font-size="m">This document contains 50 paragraphs of text used to benchmark the lpdf layout engine. It exercises parse, layout, pagination splitting, and PDF rendering across roughly 20 pages.</text>

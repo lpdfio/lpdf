@@ -14,10 +14,10 @@
     </colors>
   </tokens>
   <!-- Event ticket: 5.5in × 2in = 396pt × 144pt -->
-  <document size="396pt 144pt" margin="0pt">
+  <document size="396pt 144pt">
     <meta title="NorthStar Conf 2026 — Ticket" />
     <section background="surface">
-      <layout>
+      <layout margin="0pt">
 
       <row justify="between" gap="0pt" align="start" height="full">
 
