@@ -46,7 +46,7 @@
     <text-size xs="7.5pt" s="8.5pt" m="10pt" l="12.5pt" xl="15pt" xxl="19pt" />
   </tokens>
 
-  <document size="letter" margin="38pt 40pt 44pt 40pt" font="body">
+  <document size="letter" font="body">
     <meta title="Retail Installment Contract (sample)" subject="A retail installment contract for a motor vehicle (a demonstration)" author="Lpdf" />
     <section background="surface">
 
@@ -67,7 +67,7 @@
       <layer page="3"><text x="472pt" y="762pt" w="100pt" font-size="7pt" color="primary" align="right">Page 3 of 4</text></layer>
       <layer page="4"><text x="472pt" y="762pt" w="100pt" font-size="7pt" color="primary" align="right">Page 4 of 4</text></layer>
 
-      <layout>
+      <layout margin="38pt 40pt 44pt 40pt">
 
         <!-- PAGE 1 -->
         <column gap="l" font-size="m">

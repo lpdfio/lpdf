@@ -14,8 +14,8 @@
       layers         one layer for each opacity: the panel is solid, the circles are at 0.14 and the bars
                      at 0.6. A shape's own opacity is ignored, and a layer's is not
       path           the curve over the bars: M and C, in points from the top left of the page
-      sections       a section can change the page settings: the cover has no margin so its panels reach
-                     the edge, and the inside page has 36pt
+      sections       each section has a layout of its own, and the margin is the layout's: the cover's is
+                     0pt so its panels reach the edge, and the inside page's is 36pt
       justify        justify="between" on a column spreads its parts from top to bottom of its height
       barcode        a QR code, dark on light so that it scans on the dark band
 
@@ -47,7 +47,7 @@
     <text-size xs="7pt" s="8.5pt" m="10pt" l="18pt" xl="34pt" xxl="48pt" />
   </tokens>
 
-  <document size="a4" orientation="landscape" margin="0pt" font="text">
+  <document size="a4" orientation="landscape" font="text">
     <meta title="Coldwater Row Capital: brochure" subject="Investor brochure (sample)" author="Coldwater Row Capital" />
 
     <!-- PAGE 1: the cover. A green panel to x=500, and the layout is two stacks, one on the panel and
@@ -82,7 +82,7 @@
         <circle cx="357pt" cy="396pt" r="5pt" fill="brass-light" />
       </layer>
 
-      <layout>
+      <layout margin="0pt">
         <row align="start">
 
           <!-- on the panel: the name at the top, the headline in the middle, the lines of business at
@@ -150,7 +150,7 @@
 
     <!-- PAGE 2: the inside. 36pt margin, a green band across the foot, soft circles at the top right.
          The content is two stacks of fixed height: 36 + 416 + 107 + 36 is the 595 of the page -->
-    <section background="sand" margin="36pt">
+    <section background="sand">
 
       <layer>
         <rect anchor="bottom-left" w="842pt" h="133pt" fill="primary" />
@@ -161,7 +161,7 @@
         <circle cx="700pt" cy="96pt" r="46pt" fill="brass" />
       </layer>
 
-      <layout>
+      <layout margin="36pt">
         <column gap="0pt" font-size="m">
 
           <column gap="l" height="416pt">

@@ -8,10 +8,10 @@
       <color name="ink"         value="#1a1a1a" />
     </colors>
   </tokens>
-  <document size="a4" margin="48pt">
+  <document size="a4">
     <meta title="Engineering Handbook — running header and page numbers" />
     <section>
-      <layout>
+      <layout margin="48pt">
 
       <!-- running header: rendered identically on every page -->
       <column gap="xs">

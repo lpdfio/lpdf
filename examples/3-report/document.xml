@@ -43,7 +43,7 @@
     </colors>
   </tokens>
 
-  <document size="letter" margin="54pt">
+  <document size="letter">
     <meta title="Data Centers Worldwide" subject="Cloud regions and AI campuses" author="Brightwork Studio" />
     <section background="surface">
 
@@ -60,7 +60,7 @@
         <rect anchor="top-left" w="612pt" h="8pt" fill="primary" />
       </layer>
 
-      <layout>
+      <layout margin="54pt">
 
         <!-- the header: pages 2 to the last. It is first in the layout, so it is the header -->
         <region pin="top" page="2-last">

@@ -11,12 +11,12 @@
       <color name="surface"  value="#ffffff"/>
     </colors>
   </tokens>
-  <document size="a4" margin="0pt">
+  <document size="a4">
     <meta title="lpdf Showcase — Region Chrome (header and footer)"
           subject="Layout region pin=top and pin=bottom"/>
 
-  <section margin="0pt">
-    <layout>
+  <section>
+    <layout margin="0pt">
       <!-- Pinned header: appears on every page -->
       <region pin="top" page="each">
         <column background="primary" padding="12pt 40pt" gap="xs">

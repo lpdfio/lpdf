@@ -11,10 +11,10 @@
     </colors>
   </tokens>
   <!-- 4in × 6in shipping label = 288pt × 432pt -->
-  <document size="288pt 432pt" margin="0pt">
+  <document size="288pt 432pt">
     <meta title="Shipping Label — ORD-20260412-0087" />
     <section background="surface">
-      <layout>
+      <layout margin="0pt">
       <column gap="0pt" height="full">
 
         <!-- carrier header -->

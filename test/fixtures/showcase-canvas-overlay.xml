@@ -11,13 +11,13 @@
       <color name="surface"  value="#ffffff"/>
     </colors>
   </tokens>
-  <document size="a4" margin="40pt">
+  <document size="a4">
     <meta title="lpdf Showcase — Canvas Overlay (DRAFT watermark)"
           subject="Layout + canvas overlay"/>
 
     <!-- layout + layer: the layer is drawn over the layout content -->
   <section>
-    <layout>
+    <layout margin="40pt">
       <column gap="xl">
         <column gap="xs">
           <text font-size="xxl" font="Helvetica-Bold" color="primary">Invoice #2024-001</text>

@@ -10,7 +10,7 @@
     </colors>
   </tokens>
 
-  <document size="letter" margin="64pt">
+  <document size="letter">
     <meta title="Offer of admission" author="Linden Vale University" />
     <section>
 
@@ -33,7 +33,7 @@
         <text x="64pt" y="110pt" w="56pt" font="bold" font-size="8pt" color="surface" align="center">LV</text>
       </layer>
 
-      <layout>
+      <layout margin="64pt">
         <column gap="l">
 
           <!-- letterhead: the logo is at the left on the same row, and each line is aligned to the right edge -->

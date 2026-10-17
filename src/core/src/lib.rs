@@ -541,10 +541,10 @@ mod tests {
 
     fn minimal(body: &str) -> String {
         if body.is_empty() {
-            r#"<lpdf version="1"><document size="a4" margin="28pt"><section><layout/></section></document></lpdf>"#.to_string()
+            r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt"/></section></document></lpdf>"#.to_string()
         } else {
             format!(
-                r#"<lpdf version="1"><document size="a4" margin="28pt"><section><layout>{body}</layout></section></document></lpdf>"#
+                r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
             )
         }
     }
@@ -631,9 +631,9 @@ mod tests {
     #[test]
     fn full_page_example_renders_without_error() {
         let xml = r##"<lpdf version="1">
-            <document size="a4" margin="28pt">
+            <document size="a4">
                 <section background="surface">
-                    <layout>
+                    <layout margin="28pt">
                         <column gap="m">
                             <frame background="primary" padding="m" radius="s">
                                 <row gap="m" align="center" justify="between">

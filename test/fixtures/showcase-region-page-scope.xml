@@ -11,12 +11,12 @@
       <color name="surface" value="#ffffff"/>
     </colors>
   </tokens>
-  <document size="a4" margin="0pt">
+  <document size="a4">
     <meta title="lpdf Showcase — Region PageScope (all variants)"
           subject="Layout region page= each, first, last, odd, even, numeric range"/>
 
-    <section margin="0pt">
-      <layout>
+    <section>
+      <layout margin="0pt">
         <!-- page="each" — header on all pages -->
         <region pin="top" page="each">
           <column background="primary" padding="8pt 40pt">

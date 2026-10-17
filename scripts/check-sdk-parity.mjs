@@ -27,6 +27,7 @@ const attributes = (element, where = 'global') =>
 const EXPECTED = {
     DocumentAttr: [...attributes('document'), 'assets', 'tokens', 'meta'],
     SectionAttr: attributes('section'),
+    LayoutAttr: attributes('layout'),
     DocumentMeta: attributes('meta'),
     DocumentAssets: ['fonts', 'images'],
     DocumentTokens: ['colors', 'space', 'grid', 'border', 'radius', 'width', 'text-size'],

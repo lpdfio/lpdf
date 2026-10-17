@@ -414,8 +414,8 @@ fn classes_used(code: &str) -> Vec<String> {
 /// The PHP namespace of an SDK class.
 fn php_namespace(class: &str) -> &'static str {
     match class {
-        "DocumentAttr" | "DocumentMeta" | "DocumentAssets" | "DocumentTokens" | "SectionAttr" | "FontAttr"
-        | "ImageAttr" => "Lpdf\\Kit",
+        "DocumentAttr" | "DocumentMeta" | "DocumentAssets" | "DocumentTokens" | "SectionAttr" | "LayoutAttr"
+        | "FontAttr" | "ImageAttr" => "Lpdf\\Kit",
         "LayerAttr" | "RectAttr" | "CircleAttr" | "EllipseAttr" | "LineAttr" | "PathAttr" | "CanvasTextAttr"
         | "CanvasImgAttr" => "Lpdf\\Canvas",
         _ => "Lpdf\\Layout",
@@ -1582,9 +1582,9 @@ mod tests {
     fn test_minimal_document() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
-  <document size="a4" margin="48pt">
+  <document size="a4">
     <section>
-      <layout>
+      <layout margin="48pt">
         <text font-size="12pt">Hello</text>
       </layout>
     </section>
@@ -1792,6 +1792,26 @@ mod tests {
     }
 
     #[test]
+    fn test_the_margin_is_an_attribute_of_the_layout() {
+        let xml = r#"<lpdf version="1"><document size="a4"><section>
+            <layout margin="48pt"><text>Body</text></layout>
+        </section></document></lpdf>"#;
+        for (target, layout, import) in [
+            ("js", "L.layout({ margin: '48pt' }, [", None),
+            ("python", "L.layout(LayoutAttr(margin='48pt'), [", Some("from lpdf import L, NoAttr, DocumentAttr, LayoutAttr\n")),
+            ("php", "L::layout(new LayoutAttr(margin: '48pt'), [", Some("use Lpdf\\Kit\\LayoutAttr;\n")),
+            ("dotnet", "L.Layout(new() { Margin = \"48pt\" }, [", None),
+        ] {
+            let opts = CodegenOptions { target: target.into(), indent: 4 };
+            let out  = codegen(xml, &opts).unwrap();
+            assert!(out.contains(layout), "{target}: {out}");
+            if let Some(import) = import {
+                assert!(out.contains(import), "{target}: {out}");
+            }
+        }
+    }
+
+    #[test]
     fn test_layer_text_and_image_have_their_own_attribute_classes() {
         let xml = r##"<lpdf version="1"><document><section><layer>
             <text x="10pt" y="20pt">Hi</text>
@@ -1824,9 +1844,9 @@ mod tests {
     fn test_dotnet_minimal_document() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
-  <document size="a4" margin="48pt">
+  <document size="a4">
     <section>
-      <layout>
+      <layout margin="48pt">
         <text font-size="12pt">Hello</text>
       </layout>
     </section>
@@ -1947,9 +1967,9 @@ mod tests {
     fn test_php_minimal_document() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
-  <document size="a4" margin="48pt">
+  <document size="a4">
     <section>
-      <layout>
+      <layout margin="48pt">
         <text font-size="12pt">Hello</text>
       </layout>
     </section>
@@ -2061,9 +2081,9 @@ mod tests {
     fn test_python_minimal_document() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
-  <document size="a4" margin="48pt">
+  <document size="a4">
     <section>
-      <layout>
+      <layout margin="48pt">
         <text font-size="12pt">Hello</text>
       </layout>
     </section>

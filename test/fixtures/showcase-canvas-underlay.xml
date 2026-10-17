@@ -12,12 +12,12 @@
       <color name="surface"  value="#ffffff"/>
     </colors>
   </tokens>
-  <document size="a4" margin="0pt">
+  <document size="a4">
     <meta title="lpdf Showcase — Canvas Underlay (letterhead)"
           subject="Canvas underlay + layout"/>
 
     <!-- layer + layout: the layer is painted first (underlay/background) -->
-    <section margin="60pt 50pt 50pt 50pt">
+    <section>
       <!-- Letterhead background: decorative header band -->
       <layer page="each">
         <!-- Blue header band -->
@@ -38,7 +38,7 @@
       </layer>
 
       <!-- Layout content flows over the underlay -->
-      <layout>
+      <layout margin="60pt 50pt 50pt 50pt">
         <!-- Spacer for the header band height -->
         <column height="60pt"/>
 

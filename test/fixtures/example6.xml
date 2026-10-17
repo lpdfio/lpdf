@@ -11,12 +11,12 @@
     </colors>
   </tokens>
   <!-- Standard business card: 3.5in × 2in = 252pt × 144pt -->
-  <document size="252pt 144pt" margin="0pt">
+  <document size="252pt 144pt">
     <meta title="Business Card — Jane Doe" />
 
       <!-- Front -->
     <section background="brand">
-      <layout>
+      <layout margin="0pt">
       <column padding="l" gap="m" height="full" justify="between">
 
         <!-- name + title -->
@@ -34,7 +34,7 @@
 
       <!-- Back -->
     <section background="surface">
-      <layout>
+      <layout margin="0pt">
       <column padding="l" gap="m" height="full" justify="between">
 
         <!-- company repeated small -->
