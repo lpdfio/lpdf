@@ -276,6 +276,12 @@ pub struct Node {
     pub widows: usize,
     /// The fewest lines of a split text that may stand alone on the page it starts on.
     pub orphans: usize,
+    /// The distance between lines of text, as a factor of the font size.
+    pub line_height: f32,
+    /// The most lines of a text that are drawn; `None` draws them all. Only `text-at` sets it.
+    pub max_lines: Option<usize>,
+    /// A text cut short by its width or `max_lines` ends in an ellipsis. Only `text-at` sets it.
+    pub ellipsis: bool,
     // link
     pub url: Option<String>,
     // img (NodeKind::Img only)
@@ -314,6 +320,8 @@ pub struct Node {
 /// The lines of a split text kept together on each side of a page break when `widows` and `orphans` are not set.
 pub const DEFAULT_WIDOWS: usize = 2;
 pub const DEFAULT_ORPHANS: usize = 2;
+/// The distance between lines of text, as a factor of the font size, when a text sets none.
+pub const DEFAULT_LINE_HEIGHT: f32 = 1.2;
 
 /// Pagination hint set via `paginate="…"` on any node.
 #[derive(Debug, Clone, PartialEq)]
@@ -449,6 +457,9 @@ struct ParsedNode {
     text_align: TextAlign,
     widows: usize,
     orphans: usize,
+    line_height: f32,
+    max_lines: Option<usize>,
+    ellipsis: bool,
     url: Option<String>,
     image_name: Option<String>,
     img_height_constraint: Option<f32>,
@@ -507,6 +518,9 @@ impl ParsedNode {
             text_align: TextAlign::Left,
             widows: DEFAULT_WIDOWS,
             orphans: DEFAULT_ORPHANS,
+            line_height: DEFAULT_LINE_HEIGHT,
+            max_lines: None,
+            ellipsis: false,
             url: None,
             image_name: None,
             img_height_constraint: None,
@@ -569,6 +583,7 @@ impl Node {
             color: None, thickness: 1.0, text_runs: Vec::new(),
             font: "Helvetica".to_string(), font_size: 11.0, text_color: None,
             text_align: TextAlign::Left, widows: DEFAULT_WIDOWS, orphans: DEFAULT_ORPHANS,
+            line_height: DEFAULT_LINE_HEIGHT, max_lines: None, ellipsis: false,
             url: None, image_name: None,
             img_height_constraint: None, barcode_type: None, barcode_data: None,
             barcode_ec: BarcodeEcLevel::M, barcode_hrt: false, barcode_color: None,
@@ -653,6 +668,9 @@ fn resolve_node(
         text_align:            n.text_align,
         widows:                n.widows,
         orphans:               n.orphans,
+        line_height:           n.line_height,
+        max_lines:             n.max_lines,
+        ellipsis:              n.ellipsis,
         url:                   n.url,
         image_name:            n.image_name,
         img_height_constraint: n.img_height_constraint,
@@ -1209,9 +1227,11 @@ fn parse_section_elem(
                 children.push(SectionChild::Layout { margin, children: lc });
             }
             "layer" => {
-                children.push(SectionChild::Layer(
-                    canvas::parse_layer_elem(&child, tokens, asset_images, size.0, size.1)?
-                ));
+                let ctx = canvas::LayerContext {
+                    tokens, asset_images, asset_fonts,
+                    root_font: &root_font, root_size, page_w: size.0, page_h: size.1,
+                };
+                children.push(SectionChild::Layer(canvas::parse_layer_elem(&child, &ctx)?));
             }
             "canvas" => return Err(format!("<canvas>{}: {CANVAS_REMOVED}", node_loc(&child))),
             "bookmark" => {
@@ -1331,48 +1351,7 @@ fn parse_node(
                 _         => TextAlign::Left,
             };
             node.bold = elem.attribute("bold").map(|v| v == "true").unwrap_or(false);
-            // Mixed content: text nodes → plain runs; <span> elements → styled runs.
-            let mut prev_ended_space = false;
-            for child in elem.children() {
-                if child.is_text() {
-                    let raw = child.text().unwrap_or("");
-                    let leading = raw.starts_with(char::is_whitespace) || prev_ended_space;
-                    let words: Vec<&str> = raw.split_whitespace().collect();
-                    if !words.is_empty() {
-                        node.text_runs.push(TextRun {
-                            text: words.join(" "),
-                            leading_space: leading,
-                            font: None, color: None, href: None,
-                            underline: false, strike: false, bold: false,
-                        });
-                    }
-                    prev_ended_space = raw.ends_with(char::is_whitespace);
-                } else if child.is_element() && child.tag_name().name() == "span" {
-                    let raw_span: String = child
-                        .children()
-                        .filter(|n| n.is_text())
-                        .filter_map(|n| n.text())
-                        .collect();
-                    let span_text = raw_span.split_whitespace().collect::<Vec<_>>().join(" ");
-                    if !span_text.is_empty() {
-                        node.text_runs.push(TextRun {
-                            text: span_text,
-                            leading_space: prev_ended_space,
-                            font:  child.attribute("font").map(|s| s.to_string()),
-                            color: if let Some(v) = child.attribute("color") {
-                                Some(tokens.resolve_color(v)?)
-                            } else {
-                                None
-                            },
-                            href:      child.attribute("href").map(|s| s.to_string()),
-                            underline: child.attribute("underline").map(|v| v == "true").unwrap_or(false),
-                            strike:    child.attribute("strike").map(|v| v == "true").unwrap_or(false),
-                            bold:      child.attribute("bold").map(|v| v == "true").unwrap_or(false),
-                        });
-                    }
-                    prev_ended_space = raw_span.ends_with(char::is_whitespace);
-                }
-            }
+            read_text_runs(&mut node, elem, tokens)?;
         }
         NodeKind::Link => {
             node.url = Some(
@@ -1443,6 +1422,238 @@ fn parse_node(
     }
 
     Ok(node)
+}
+
+/// The runs of a `<text>` or `<text-at>`: its plain words, and a styled run for each `<span>`.
+fn read_text_runs(node: &mut ParsedNode, elem: &roxmltree::Node, tokens: &Tokens) -> Result<(), String> {
+    // Mixed content: text nodes → plain runs; <span> elements → styled runs.
+    let mut prev_ended_space = false;
+    for child in elem.children() {
+        if child.is_text() {
+            let raw = child.text().unwrap_or("");
+            let leading = raw.starts_with(char::is_whitespace) || prev_ended_space;
+            let words: Vec<&str> = raw.split_whitespace().collect();
+            if !words.is_empty() {
+                node.text_runs.push(TextRun {
+                    text: words.join(" "),
+                    leading_space: leading,
+                    font: None, color: None, href: None,
+                    underline: false, strike: false, bold: false,
+                });
+            }
+            prev_ended_space = raw.ends_with(char::is_whitespace);
+        } else if child.is_element() && child.tag_name().name() == "span" {
+            let raw_span: String = child
+                .children()
+                .filter(|n| n.is_text())
+                .filter_map(|n| n.text())
+                .collect();
+            let span_text = raw_span.split_whitespace().collect::<Vec<_>>().join(" ");
+            if !span_text.is_empty() {
+                node.text_runs.push(TextRun {
+                    text: span_text,
+                    leading_space: prev_ended_space,
+                    font:  child.attribute("font").map(|s| s.to_string()),
+                    color: if let Some(v) = child.attribute("color") {
+                        Some(tokens.resolve_color(v)?)
+                    } else {
+                        None
+                    },
+                    href:      child.attribute("href").map(|s| s.to_string()),
+                    underline: child.attribute("underline").map(|v| v == "true").unwrap_or(false),
+                    strike:    child.attribute("strike").map(|v| v == "true").unwrap_or(false),
+                    bold:      child.attribute("bold").map(|v| v == "true").unwrap_or(false),
+                });
+            }
+            prev_ended_space = raw_span.ends_with(char::is_whitespace);
+        }
+    }
+    Ok(())
+}
+
+/// The runs of a text node of a kit tree: its strings, and a styled run for each `span` child.
+fn read_tree_text_runs(node: &mut ParsedNode, json: &serde_json::Value, tokens: &Tokens) -> Result<(), String> {
+    if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
+        for (i, child) in arr.iter().enumerate() {
+            let leading = i > 0;
+            if let Some(s) = child.as_str() {
+                let words: Vec<&str> = s.split_whitespace().collect();
+                if !words.is_empty() {
+                    node.text_runs.push(TextRun {
+                        text: words.join(" "),
+                        leading_space: leading,
+                        font: None, color: None, href: None,
+                        underline: false, strike: false, bold: false,
+                    });
+                }
+            } else if child.get("type").and_then(|v| v.as_str()) == Some("span") {
+                let span_text: String = child
+                    .get("nodes").and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                           .filter_map(|v| v.as_str())
+                           .collect::<Vec<_>>()
+                           .join(" ")
+                    })
+                    .unwrap_or_default()
+                    .split_whitespace()
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                if !span_text.is_empty() {
+                    let color = match jattr(child, "color") {
+                        Some(v) => Some(tokens.resolve_color(v)?),
+                        None    => None,
+                    };
+                    node.text_runs.push(TextRun {
+                        text: span_text,
+                        leading_space: leading,
+                        font:      jattr(child, "font").map(str::to_string),
+                        color,
+                        href:      jattr(child, "href").map(str::to_string),
+                        underline: jattr(child, "underline").map(|v| v == "true").unwrap_or(false),
+                        strike:    jattr(child, "strike")   .map(|v| v == "true").unwrap_or(false),
+                        bold:      jattr(child, "bold")     .map(|v| v == "true").unwrap_or(false),
+                    });
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+// ── Text, images and barcodes at fixed places ───────────────────────────────
+
+/// The node kind a layer's `text-at`, `img-at` or `barcode-at` becomes: the one its flow version has.
+pub(crate) fn at_node_kind(tag: &str) -> Option<NodeKind> {
+    match tag {
+        "text-at"    => Some(NodeKind::Text),
+        "img-at"     => Some(NodeKind::Img),
+        "barcode-at" => Some(NodeKind::Barcode),
+        _            => None,
+    }
+}
+
+/// What to write in a layer in place of a text, an image or a barcode of the layout.
+pub(crate) fn at_element_for(tag: &str) -> Option<&'static str> {
+    match tag {
+        "text"    => Some("text-at"),
+        "img"     => Some("img-at"),
+        "barcode" => Some("barcode-at"),
+        _         => None,
+    }
+}
+
+/// The `width` of a `text-at` or `img-at`: a length, since there is no line for it to take its width from.
+fn at_width(a: &impl Attrs) -> Result<Option<f32>, String> {
+    a.get("width")
+        .map(|v| parse_pt(v).ok_or_else(|| format!("invalid width '{v}': expected a pt value like 80pt")))
+        .transpose()
+}
+
+/// Read the attributes of a `text-at`, `img-at` or `barcode-at` that are not about where it goes: the ones its
+/// flow version has too, and the few of its own. XML and kit trees are read the same way. A layer element has
+/// none of the flow's box attributes, so a `padding` or a `background` on it is not read.
+fn at_node_attrs(
+    kind:         NodeKind,
+    a:            &impl Attrs,
+    tokens:       &Tokens,
+    asset_images: &HashMap<String, String>,
+    hint:         &str,
+) -> Result<ParsedNode, String> {
+    if a.get("data-source").is_some() {
+        return Err("'data-source' is not allowed here: every copy would sit in the same place, so a list belongs in the layout".into());
+    }
+    let mut node = ParsedNode::default_for(kind.clone());
+    let (value, only_if, unless) = (a.get("data-value"), a.get("data-if"), a.get("data-if-not"));
+    if value.is_some() || only_if.is_some() || unless.is_some() {
+        node.data_attrs = Some(Box::new(DataAttrs {
+            data_value:  value.map(str::to_owned),
+            data_source: None,
+            data_if:     only_if.map(str::to_owned),
+            data_if_not: unless.map(str::to_owned),
+        }));
+    }
+    match kind {
+        NodeKind::Text => {
+            if let Some(v) = a.get("font")      { node.font      = Some(v.to_string()); }
+            if let Some(v) = a.get("font-size") { node.font_size = Some(tokens.resolve_text_size(v)?); }
+            node.width_constraint = at_width(a)?;
+            node.text_color = Some(match a.get("color") {
+                Some(v) => tokens.resolve_color(v)?,
+                None    => tokens.resolve_color("text").unwrap_or_else(|_| "#1a1a1a".into()),
+            });
+            node.text_align = match a.get("align").unwrap_or("left") {
+                "center"  => TextAlign::Center,
+                "right"   => TextAlign::Right,
+                "justify" => TextAlign::Justify,
+                _         => TextAlign::Left,
+            };
+            node.bold = a.get("bold").map(|v| v == "true").unwrap_or(false);
+            if let Some(v) = a.get("line-height") {
+                node.line_height = v.parse::<f32>().ok().filter(|f| *f > 0.0)
+                    .ok_or_else(|| format!("invalid line-height '{v}': expected a factor above 0, like 1.5"))?;
+            }
+            let max_lines = match a.get("max-lines") {
+                Some(v) => v.parse::<usize>().ok().filter(|n| *n >= 1)
+                    .ok_or_else(|| format!("invalid max-lines '{v}': expected a whole number from 1"))?,
+                None => 1,
+            };
+            if max_lines > 1 && node.width_constraint.is_none() {
+                return Err(format!("'max-lines' of {max_lines} needs a 'width' to wrap the text at"));
+            }
+            node.max_lines = Some(max_lines);
+            node.ellipsis = a.get("ellipsis").map(|v| v == "true").unwrap_or(false);
+        }
+        NodeKind::Img => {
+            node.width_constraint = at_width(a)?;
+            apply_img_attrs(&mut node, a, asset_images, hint).map_err(|e| e.replace("<img>", "<img-at>"))?;
+            if node.width_constraint.is_none() && node.img_height_constraint.is_none() {
+                return Err("needs a 'width' or a 'height': on a fixed page its size must not depend on the image file's resolution".into());
+            }
+        }
+        NodeKind::Barcode => {
+            apply_barcode_attrs(&mut node, a, tokens).map_err(|e| e.replace("<barcode", "<barcode-at"))?;
+            if node.width_constraint.is_none() {
+                return Err("needs a 'width': a barcode in a layer has no line to take its width from".into());
+            }
+        }
+        _ => unreachable!("only text, image and barcode have an -at element"),
+    }
+    Ok(node)
+}
+
+/// Read a `<text-at>`, `<img-at>` or `<barcode-at>` as the node of its flow version. `root_font` and
+/// `root_size` are the defaults the document gives its text.
+pub(crate) fn parse_at_node(
+    elem:         &roxmltree::Node,
+    tokens:       &Tokens,
+    asset_images: &HashMap<String, String>,
+    asset_fonts:  &HashMap<String, FontDef>,
+    root_font:    &str,
+    root_size:    f32,
+) -> Result<Node, String> {
+    let kind = at_node_kind(elem.tag_name().name()).expect("a text-at, img-at or barcode-at");
+    let mut node = at_node_attrs(kind.clone(), elem, tokens, asset_images, "<assets>")?;
+    if kind == NodeKind::Text {
+        read_text_runs(&mut node, elem, tokens)?;
+    }
+    Ok(resolve_parsed_node(node, root_font, root_size, asset_fonts))
+}
+
+/// Read a `text-at`, `img-at` or `barcode-at` of a kit tree as the node of its flow version.
+pub(crate) fn parse_tree_at_node(
+    json:         &serde_json::Value,
+    tokens:       &Tokens,
+    asset_images: &HashMap<String, String>,
+    asset_fonts:  &HashMap<String, FontDef>,
+) -> Result<Node, String> {
+    let type_str = json.get("type").and_then(|v| v.as_str()).unwrap_or("");
+    let kind = at_node_kind(type_str).expect("a text-at, img-at or barcode-at");
+    let mut node = at_node_attrs(kind.clone(), &JsonAttrs(json), tokens, asset_images, "assets.images")?;
+    if kind == NodeKind::Text {
+        read_tree_text_runs(&mut node, json, tokens)?;
+    }
+    Ok(resolve_parsed_node(node, "Helvetica", 11.0, asset_fonts))
 }
 
 // ── Bookmarks and the table of contents ──────────────────────────────────────
@@ -2161,9 +2372,11 @@ fn parse_tree_section(
                     bookmark = Some(tree_bookmark(child)?);
                 }
                 Some("layer") => {
-                    children.push(SectionChild::Layer(
-                        canvas::parse_tree_layer(child, tokens, asset_images, size.0, size.1)?
-                    ));
+                    let ctx = canvas::LayerContext {
+                        tokens, asset_images, asset_fonts,
+                        root_font, root_size, page_w: size.0, page_h: size.1,
+                    };
+                    children.push(SectionChild::Layer(canvas::parse_tree_layer(child, &ctx)?));
                 }
                 Some("canvas") => return Err(format!("node type 'canvas': {CANVAS_REMOVED}")),
                 other => return Err(format!(
@@ -2282,51 +2495,7 @@ fn parse_tree_node(
             };
             node.bold = jattr(json, "bold").map(|v| v == "true").unwrap_or(false);
 
-            if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
-                for (i, child) in arr.iter().enumerate() {
-                    let leading = i > 0;
-                    if let Some(s) = child.as_str() {
-                        let words: Vec<&str> = s.split_whitespace().collect();
-                        if !words.is_empty() {
-                            node.text_runs.push(TextRun {
-                                text: words.join(" "),
-                                leading_space: leading,
-                                font: None, color: None, href: None,
-                                underline: false, strike: false, bold: false,
-                            });
-                        }
-                    } else if child.get("type").and_then(|v| v.as_str()) == Some("span") {
-                        let span_text: String = child
-                            .get("nodes").and_then(|v| v.as_array())
-                            .map(|arr| {
-                                arr.iter()
-                                   .filter_map(|v| v.as_str())
-                                   .collect::<Vec<_>>()
-                                   .join(" ")
-                            })
-                            .unwrap_or_default()
-                            .split_whitespace()
-                            .collect::<Vec<_>>()
-                            .join(" ");
-                        if !span_text.is_empty() {
-                            let color = match jattr(child, "color") {
-                                Some(v) => Some(tokens.resolve_color(v)?),
-                                None    => None,
-                            };
-                            node.text_runs.push(TextRun {
-                                text: span_text,
-                                leading_space: leading,
-                                font:      jattr(child, "font").map(str::to_string),
-                                color,
-                                href:      jattr(child, "href").map(str::to_string),
-                                underline: jattr(child, "underline").map(|v| v == "true").unwrap_or(false),
-                                strike:    jattr(child, "strike")   .map(|v| v == "true").unwrap_or(false),
-                                bold:      jattr(child, "bold")     .map(|v| v == "true").unwrap_or(false),
-                            });
-                        }
-                    }
-                }
-            }
+            read_tree_text_runs(&mut node, json, tokens)?;
             return Ok(node); // text nodes have no layout children
         }
         NodeKind::Link => {
@@ -2920,7 +3089,7 @@ mod tests {
             <document size="a4">
                 <section>
                     <layer>
-                        <rect x="10pt" y="20pt" width="100pt" height="50pt" fill="#ff0000" radius="4pt" opacity="0.5"/>
+                        <rect x="10pt" y="20pt" width="100pt" height="50pt" fill="#ff0000" radius="4pt"/>
                     </layer>
                 </section>
             </document>
@@ -3014,7 +3183,7 @@ mod tests {
             (r#"<circle cx="10pt" cy="10pt" r="5pt"/>"#, "cx", "'x' and 'y'"),
             (r#"<circle cy="10pt" r="5pt"/>"#, "cy", "'x' and 'y'"),
             (r#"<ellipse cx="10pt" rx="5pt" ry="3pt"/>"#, "cx", "'x' and 'y'"),
-            (r#"<text w="100pt">Hi</text>"#, "w", "'width'"),
+            (r#"<text-at w="100pt">Hi</text-at>"#, "w", "'width'"),
         ] {
             let tag = &body[1..body[1..].find([' ', '>']).unwrap() + 1];
             let xml = format!(r##"<lpdf version="1"><document size="a4"><section><layer>{body}</layer></section></document></lpdf>"##);
@@ -3024,27 +3193,137 @@ mod tests {
         }
     }
 
+    /// The `PlacedNode` that is the first child of the first layer of the first section.
+    fn first_placed(doc: &Document) -> &canvas::PlacedNode {
+        match &as_layer(&doc.sections[0].children[0]).children[0] {
+            canvas::CanvasPrimitive::Placed(placed) => placed,
+            _ => panic!("expected a text-at, img-at or barcode-at"),
+        }
+    }
+
+    fn layer_document(head: &str, layer: &str) -> String {
+        format!(r##"<lpdf version="1">{head}<document size="a4"><section><layer>{layer}</layer></section></document></lpdf>"##)
+    }
+
     #[test]
-    fn layer_text_with_spans() {
-        use crate::canvas::CanvasPrimitive;
-        let xml = r#"<lpdf version="1">
-            <document size="a4">
-                <section>
-                    <layer>
-                        <text anchor="center" font-size="12pt">Hello <span font="Helvetica-Bold">world</span></text>
-                    </layer>
-                </section>
-            </document>
-        </lpdf>"#;
+    fn layer_text_at_is_the_text_of_the_layout_with_a_position() {
+        let xml = layer_document("", r#"<text-at anchor="center" font-size="12pt">Hello <span font="Helvetica-Bold">world</span></text-at>"#);
+        let doc = parse(&xml).unwrap();
+        let placed = first_placed(&doc);
+        assert_eq!(placed.node.kind, NodeKind::Text);
+        // A4 center = (297.64, 420.945)
+        assert!((placed.x - 297.64).abs() < 0.5 && (placed.y - 420.94).abs() < 0.5);
+        assert_eq!(placed.anchor, canvas::Anchor::Center);
+        assert_eq!(placed.node.font_size, 12.0);
+        assert_eq!(placed.node.text_runs.len(), 2);
+        assert_eq!(placed.node.text_runs[1].font.as_deref(), Some("Helvetica-Bold"));
+    }
+
+    #[test]
+    fn layer_text_takes_the_defaults_of_the_text_of_the_layout() {
+        let layout_xml = r##"<lpdf version="1">
+            <assets><font name="body" core="Times-Roman"/></assets>
+            <tokens><colors><color name="text" value="#223344"/></colors></tokens>
+            <document size="a4" font="body"><section>
+                <layer><text-at x="0pt" y="0pt">Layer</text-at></layer>
+                <layout><text>Layout</text></layout>
+            </section></document></lpdf>"##;
+        let mut doc = parse(layout_xml).unwrap();
+        let placed = first_placed(&doc).node.clone();
+        let layout = doc.section_layouts().remove(0).children.remove(0);
+        for node in [&placed, &layout] {
+            assert_eq!(node.font, "Times-Roman");
+            assert_eq!(node.font_size, 11.0);
+            assert_eq!(node.text_color.as_deref(), Some("#223344"));
+        }
+        // Without a document font or a text colour of its own, a layer's text is Helvetica, 11pt and #1a1a1a.
+        let doc = parse(&layer_document("", r#"<text-at x="0pt" y="0pt">Hi</text-at>"#)).unwrap();
+        let node = &first_placed(&doc).node;
+        assert_eq!((node.font.as_str(), node.font_size, node.text_color.as_deref()), ("Helvetica", 11.0, Some("#1a1a1a")));
+    }
+
+    #[test]
+    fn text_at_reads_its_line_limits() {
+        let xml = layer_document("", r#"<text-at x="0pt" y="0pt" width="90pt" max-lines="3" ellipsis="true" line-height="1.5">Hi</text-at>"#);
+        let doc = parse(&xml).unwrap();
+        let node = &first_placed(&doc).node;
+        assert_eq!((node.width_constraint, node.max_lines, node.ellipsis, node.line_height), (Some(90.0), Some(3), true, 1.5));
+        // One line, cut off at nothing, unless told otherwise.
+        let doc = parse(&layer_document("", r#"<text-at x="0pt" y="0pt">Hi</text-at>"#)).unwrap();
+        let node = &first_placed(&doc).node;
+        assert_eq!((node.width_constraint, node.max_lines, node.ellipsis, node.line_height), (None, Some(1), false, 1.2));
+    }
+
+    #[test]
+    fn img_at_and_barcode_at_are_the_image_and_barcode_of_the_layout() {
+        let head = r#"<assets><image name="logo"/></assets>"#;
+        let doc = parse(&layer_document(head, r#"<img-at name="logo" x="10pt" y="20pt" width="60pt"/>"#)).unwrap();
+        let placed = first_placed(&doc);
+        assert_eq!(placed.node.kind, NodeKind::Img);
+        assert_eq!((placed.node.width_constraint, placed.node.img_height_constraint), (Some(60.0), None));
+
+        let doc = parse(&layer_document("", r#"<barcode-at type="qr" data="x" x="10pt" y="20pt" height="50pt"/>"#)).unwrap();
+        let node = &first_placed(&doc).node;
+        assert_eq!(node.kind, NodeKind::Barcode);
+        assert_eq!((node.width_constraint, node.img_height_constraint), (Some(50.0), Some(50.0)));
+    }
+
+    #[test]
+    fn a_text_img_or_barcode_in_a_layer_says_to_use_the_at_element() {
+        let head = r#"<assets><image name="logo"/></assets>"#;
+        for (body, hint) in [
+            (r#"<text x="0pt" y="0pt">Hi</text>"#, "<text-at>"),
+            (r#"<img name="logo" x="0pt" y="0pt" width="9pt" height="9pt"/>"#, "<img-at>"),
+            (r#"<barcode type="qr" data="x" x="0pt" y="0pt" width="9pt"/>"#, "<barcode-at>"),
+        ] {
+            let err = parse(&layer_document(head, body)).unwrap_err();
+            assert!(err.contains("at line") && err.contains(hint), "{err}");
+        }
+        let tree = |node: &str| format!(r#"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
+            {{"type":"layer","attrs":{{}},"nodes":[{node}]}}]}}]}}"#);
+        let err = parse_tree(&tree(r#"{"type":"text","attrs":{"x":"0pt","y":"0pt"},"nodes":["Hi"]}"#)).unwrap_err();
+        assert!(err.contains("'text-at'"), "{err}");
+    }
+
+    #[test]
+    fn errors_for_text_at_img_at_and_barcode_at() {
+        let head = r#"<assets><image name="logo"/></assets>"#;
+        for (body, expected) in [
+            (r#"<text-at x="0pt" y="0pt" max-lines="2">Hi</text-at>"#, "'max-lines' of 2 needs a 'width'"),
+            (r#"<text-at x="0pt" y="0pt" max-lines="0">Hi</text-at>"#, "invalid max-lines"),
+            (r#"<text-at x="0pt" y="0pt" line-height="0">Hi</text-at>"#, "invalid line-height"),
+            (r#"<text-at x="0pt" y="0pt" width="fill">Hi</text-at>"#, "invalid width"),
+            (r#"<text-at x="0pt" y="0pt" data-source="items">Hi</text-at>"#, "a list belongs in the layout"),
+            (r#"<img-at name="logo" x="0pt" y="0pt"/>"#, "needs a 'width' or a 'height'"),
+            (r#"<barcode-at type="code128" data="x" x="0pt" y="0pt"/>"#, "needs a 'width'"),
+            (r#"<barcode-at type="qr" data="x" x="0pt" y="0pt"/>"#, "needs a 'height', or a 'width'"),
+            (r#"<rect x="0pt" y="0pt" width="9pt" height="9pt" opacity="0.5"/>"#, "put the element in a <layer> with opacity"),
+            (r#"<text-at x="0pt" y="0pt" opacity="0.5">Hi</text-at>"#, "put the element in a <layer> with opacity"),
+        ] {
+            let err = parse(&layer_document(head, body)).unwrap_err();
+            assert!(err.contains(expected), "{body}: {err}");
+        }
+    }
+
+    #[test]
+    fn a_layer_reads_its_clip_and_its_conditions() {
+        let xml = r#"<lpdf version="1"><document size="a4"><section>
+            <layer clip="10pt 20pt 100pt 50pt" data-if="draft" data-if-not="final"><rect width="9pt" height="9pt"/></layer>
+        </section></document></lpdf>"#;
         let doc = parse(xml).unwrap();
-        if let CanvasPrimitive::Text(ref t) = as_layer(&doc.sections[0].children[0]).children[0] {
-            // A4 center = (297.64, 420.945)
-            assert!((t.x - 297.64).abs() < 0.5);
-            assert!((t.y - 420.94).abs() < 0.5);
-            assert!((t.font_size.unwrap() - 12.0).abs() < 0.01);
-            assert_eq!(t.runs.len(), 1);
-            assert_eq!(t.runs[0].font.as_deref(), Some("Helvetica-Bold"));
-        } else { panic!("expected text"); }
+        let layer = as_layer(&doc.sections[0].children[0]);
+        assert_eq!(layer.clip, Some([10.0, 20.0, 100.0, 50.0]));
+        assert_eq!((layer.data_if.as_deref(), layer.data_if_not.as_deref()), (Some("draft"), Some("final")));
+
+        for (attrs, expected) in [
+            (r#"clip="10pt 20pt""#, "expected x y w h"),
+            (r#"data-value="title""#, "do not apply to a layer"),
+            (r#"data-source="items""#, "do not apply to a layer"),
+        ] {
+            let xml = format!(r#"<lpdf version="1"><document size="a4"><section><layer {attrs}/></section></document></lpdf>"#);
+            let err = parse(&xml).unwrap_err();
+            assert!(err.contains(expected), "{attrs}: {err}");
+        }
     }
 
     // ── Error quality tests ───────────────────────────────────────────────────

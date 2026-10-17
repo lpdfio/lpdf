@@ -73,19 +73,19 @@
     <!-- A layer after the layout: DRAFT watermark rendered on top of layout content -->
     <layer page="each" opacity="0.08">
       <!-- Diagonal DRAFT text centred on the page -->
-      <text anchor="center" font-size="120pt" font="Helvetica-Bold" color="primary"
+      <text-at anchor="center" font-size="120pt" font="Helvetica-Bold" color="primary"
             align="center">
         DRAFT
-      </text>
+      </text-at>
     </layer>
     <!-- Border stamp in the top-right corner -->
     <layer page="each">
       <rect anchor="top-right" x="-30pt" y="30pt" width="80pt" height="30pt"
             fill="#e74c3c" radius="4pt"/>
-      <text anchor="top-right" x="-30pt" y="30pt" font-size="10pt"
+      <text-at anchor="top-right" x="-30pt" y="30pt" font-size="10pt"
             font="Helvetica-Bold" color="surface" align="center" width="80pt">
         DRAFT
-      </text>
+      </text-at>
     </layer>
   </section>
   </document>

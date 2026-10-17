@@ -21,13 +21,12 @@ pub enum RenderNode {
     Image(RenderImage),
     Barcode(RenderBarcode),
     Field(RenderField),
-    // Canvas primitives — constructed by canvas.rs.
-    CanvasText(RenderCanvasText),
+    // What a layer draws — constructed by canvas.rs. Its text, images and barcodes are the
+    // layout's own nodes (`Box`, `Text`, `Image`, `Barcode`), put in `CanvasLayer`.
     CanvasRect(RenderCanvasRect),
     CanvasLine(RenderCanvasLine),
     CanvasEllipse(RenderCanvasEllipse),
     CanvasPath(RenderCanvasPath),
-    CanvasImage(RenderCanvasImage),
     CanvasLayer(RenderCanvasLayer),
     Anchor(RenderAnchor),
 }
@@ -184,34 +183,6 @@ pub struct RenderLink {
 
 // ── Canvas primitives ─────────────────────────────────────────────────────────
 
-/// A text block placed at an absolute canvas position.
-/// Coordinates are top-left origin, y-down (flipped at PDF render time).
-pub struct RenderCanvasText {
-    pub x: f32,
-    pub y: f32,
-    pub font: String,
-    pub size: f32,
-    pub color: String,
-    /// "left" | "center" | "right" | "justify"
-    pub align: String,
-    pub line_height: f32,
-    /// Explicit wrap width (None = content width − x).
-    pub width: Option<f32>,
-    /// Plain text content; lines split on `\n`.
-    pub content: String,
-    /// Mixed-style runs (if non-empty, overrides `content`).
-    pub runs: Vec<RenderCanvasRun>,
-    /// How `x` should be interpreted: 0 = left edge, 1 = centre, 2 = right edge.
-    pub anchor_col: u8,
-    /// Fill opacity (1.0 = fully opaque).
-    pub opacity: f32,
-}
-
-pub struct RenderCanvasRun {
-    pub text: String,
-    pub font: Option<String>,
-}
-
 pub struct RenderCanvasRect {
     pub x: f32,
     pub y: f32,
@@ -260,14 +231,6 @@ pub struct RenderCanvasPath {
     pub fill_rule_evenodd: bool,
     pub line_cap: u8,
     pub line_join: u8,
-}
-
-pub struct RenderCanvasImage {
-    pub x: f32,
-    pub y: f32,
-    pub w: f32,
-    pub h: f32,
-    pub src: String,
 }
 
 pub struct RenderCanvasClip {
@@ -428,15 +391,6 @@ fn node_to_json(node: &RenderNode) -> Value {
                 "options":    f.options,
             })
         }
-        RenderNode::CanvasText(t) => json!({
-            "type":  "canvas-text",
-            "x":     r2(t.x),
-            "y":     r2(t.y),
-            "font":  t.font,
-            "size":  r2(t.size),
-            "color": t.color,
-            "align": t.align,
-        }),
         RenderNode::CanvasRect(r) => json!({
             "type":   "canvas-rect",
             "x":      r2(r.x),
@@ -469,17 +423,10 @@ fn node_to_json(node: &RenderNode) -> Value {
             "fill":   p.fill,
             "stroke": p.stroke,
         }),
-        RenderNode::CanvasImage(i) => json!({
-            "type": "canvas-image",
-            "x":    r2(i.x),
-            "y":    r2(i.y),
-            "w":    r2(i.w),
-            "h":    r2(i.h),
-            "src":  i.src,
-        }),
         RenderNode::CanvasLayer(l) => json!({
             "type":     "canvas-layer",
             "opacity":  l.opacity,
+            "clip":     l.clip.as_ref().map(|c| [r2(c.x), r2(c.y), r2(c.w), r2(c.h)]),
             "nodes": nodes_to_json(&l.children),
         }),
         // Filtered out by `is_invisible`: the JSON pages are what is drawn.

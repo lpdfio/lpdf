@@ -771,66 +771,66 @@
         <circle x="223.5pt" y="519.1pt" r="2.4pt" fill="ai" />
       </layer>
       <layer>
-        <text x="950.5pt" y="389.1pt" font-size="8pt" color="ai" font="bold">Johor, Malaysia</text>
-        <text x="789.9pt" y="304.0pt" font-size="8pt" color="ai" font="bold">Abu Dhabi</text>
-        <text x="913.1pt" y="229.9pt" font-size="8pt" color="ai" font="bold">Ulanqab, China</text>
-        <text x="659.6pt" y="146.8pt" font-size="8pt" color="ai" font="bold">Narvik</text>
-        <text x="260.6pt" y="202.8pt" font-size="7pt" color="text-muted">United States, enlarged below left</text>
-        <text x="46.0pt" y="418.8pt" font-size="9pt" color="text-muted" font="bold">United States</text>
-        <text x="195.6pt" y="470.3pt" font-size="7pt" color="ai" font="bold">1</text>
-        <text x="187.9pt" y="510.8pt" font-size="7pt" color="ai" font="bold">3</text>
-        <text x="142.3pt" y="525.8pt" font-size="7pt" color="ai" font="bold">4</text>
-        <text x="230.7pt" y="497.2pt" font-size="7pt" color="ai" font="bold">5</text>
-        <text x="180.8pt" y="524.9pt" font-size="7pt" color="ai" font="bold">6</text>
-        <text x="149.2pt" y="528.2pt" font-size="7pt" color="ai" font="bold">7</text>
-        <text x="226.6pt" y="460.2pt" font-size="7pt" color="ai" font="bold">8</text>
-        <text x="209.3pt" y="453.9pt" font-size="7pt" color="ai" font="bold">9</text>
-        <text x="181.4pt" y="539.0pt" font-size="7pt" color="ai" font="bold">10</text>
-        <text x="262.2pt" y="497.6pt" font-size="7pt" color="ai" font="bold">14</text>
+        <text-at x="950.5pt" y="389.1pt" font-size="8pt" color="ai" font="bold">Johor, Malaysia</text-at>
+        <text-at x="789.9pt" y="304.0pt" font-size="8pt" color="ai" font="bold">Abu Dhabi</text-at>
+        <text-at x="913.1pt" y="229.9pt" font-size="8pt" color="ai" font="bold">Ulanqab, China</text-at>
+        <text-at x="659.6pt" y="146.8pt" font-size="8pt" color="ai" font="bold">Narvik</text-at>
+        <text-at x="260.6pt" y="202.8pt" font-size="7pt" color="text-muted">United States, enlarged below left</text-at>
+        <text-at x="46.0pt" y="418.8pt" font-size="9pt" color="text-muted" font="bold">United States</text-at>
+        <text-at x="195.6pt" y="470.3pt" font-size="7pt" color="ai" font="bold">1</text-at>
+        <text-at x="187.9pt" y="510.8pt" font-size="7pt" color="ai" font="bold">3</text-at>
+        <text-at x="142.3pt" y="525.8pt" font-size="7pt" color="ai" font="bold">4</text-at>
+        <text-at x="230.7pt" y="497.2pt" font-size="7pt" color="ai" font="bold">5</text-at>
+        <text-at x="180.8pt" y="524.9pt" font-size="7pt" color="ai" font="bold">6</text-at>
+        <text-at x="149.2pt" y="528.2pt" font-size="7pt" color="ai" font="bold">7</text-at>
+        <text-at x="226.6pt" y="460.2pt" font-size="7pt" color="ai" font="bold">8</text-at>
+        <text-at x="209.3pt" y="453.9pt" font-size="7pt" color="ai" font="bold">9</text-at>
+        <text-at x="181.4pt" y="539.0pt" font-size="7pt" color="ai" font="bold">10</text-at>
+        <text-at x="262.2pt" y="497.6pt" font-size="7pt" color="ai" font="bold">14</text-at>
       </layer>
       <layer>
-        <text x="36.0pt" y="28.0pt" font-size="24pt" color="primary" font="bold">Where the data centers are</text>
-        <text x="36.0pt" y="62.0pt" font-size="11pt" color="text-muted">132 cloud regions in 76 metro areas, and 81 AI campuses.</text>
+        <text-at x="36.0pt" y="28.0pt" font-size="24pt" color="primary" font="bold">Where the data centers are</text-at>
+        <text-at x="36.0pt" y="62.0pt" font-size="11pt" color="text-muted">132 cloud regions in 76 metro areas, and 81 AI campuses.</text-at>
         <circle x="760.8pt" y="24.8pt" r="3.2pt" fill="primary" />
-        <text x="774.0pt" y="23.0pt" font-size="8pt" color="text-muted">Cloud region (AWS, Azure or Google). Darker where regions share a metro area.</text>
+        <text-at x="774.0pt" y="23.0pt" font-size="8pt" color="text-muted">Cloud region (AWS, Azure or Google). Darker where regions share a metro area.</text-at>
         <circle x="760pt" y="38pt" r="4.0pt" fill="ai" />
-        <text x="774.0pt" y="37.0pt" font-size="8pt" color="text-muted">AI campus running. Area follows IT power today.</text>
+        <text-at x="774.0pt" y="37.0pt" font-size="8pt" color="text-muted">AI campus running. Area follows IT power today.</text-at>
         <circle x="758.8pt" y="50.8pt" r="5.2pt" stroke="ai" stroke-width="0.7pt" />
-        <text x="774.0pt" y="51.0pt" font-size="8pt" color="text-muted">Ring: planned IT power. Dashed: under construction.</text>
+        <text-at x="774.0pt" y="51.0pt" font-size="8pt" color="text-muted">Ring: planned IT power. Dashed: under construction.</text-at>
       </layer>
       <layer>
         <line x1="36pt" y1="618pt" x2="1188pt" y2="618pt" stroke="rule" stroke-width="0.75pt" />
-        <text x="36.0pt" y="628.0pt" font-size="10pt" color="primary" font="bold">Cloud regions</text>
-        <text x="36.0pt" y="646.0pt" font-size="9pt" color="#1a1a1a">AWS: 34 regions, 108 zones</text>
-        <text x="36.0pt" y="660.0pt" font-size="9pt" color="#1a1a1a">Azure: 57 regions, 121 zones</text>
-        <text x="36.0pt" y="674.0pt" font-size="9pt" color="#1a1a1a">Google: 41 regions, 124 zones</text>
-        <text x="36.0pt" y="688.0pt" font-size="9pt" color="text-muted">132 regions in 76 metro areas.</text>
-        <text x="330.0pt" y="628.0pt" font-size="10pt" color="ai" font="bold">AI campuses</text>
-        <text x="330.0pt" y="646.0pt" font-size="9pt" color="#1a1a1a">72 running: 13.7 GW of IT power today.</text>
-        <text x="330.0pt" y="660.0pt" font-size="9pt" color="#1a1a1a">9 under construction. About 32 GW planned by 2029.</text>
-        <text x="330.0pt" y="674.0pt" font-size="9pt" color="#1a1a1a">86% of running power is in the United States.</text>
-        <text x="330.0pt" y="688.0pt" font-size="9pt" color="text-muted">Johor, Malaysia is next, with 895 MW.</text>
-        <text x="640.0pt" y="628.0pt" font-size="10pt" color="ai" font="bold">United States inset: IT power today / planned, MW</text>
-        <text x="640.0pt" y="646.0pt" font-size="8pt" color="#1a1a1a">1  Mount Pleasant, WI: 369 / 2,263</text>
-        <text x="640.0pt" y="659.0pt" font-size="8pt" color="#1a1a1a">2  New Carlisle, IN: 910 / 1,925</text>
-        <text x="640.0pt" y="672.0pt" font-size="8pt" color="#1a1a1a">3  Memphis, TN: 1,286 / 1,871</text>
-        <text x="640.0pt" y="685.0pt" font-size="8pt" color="#1a1a1a">4  Doña Ana County, NM: 0 / 1,750</text>
-        <text x="640.0pt" y="698.0pt" font-size="8pt" color="#1a1a1a">5  New Albany, OH: 1,017 / 1,693</text>
-        <text x="640.0pt" y="711.0pt" font-size="8pt" color="#1a1a1a">6  Holly Ridge, LA: 0 / 1,632</text>
-        <text x="640.0pt" y="724.0pt" font-size="8pt" color="#1a1a1a">7  Shackelford County, TX: 0 / 1,400</text>
-        <text x="830.0pt" y="646.0pt" font-size="8pt" color="#1a1a1a">8  Saline Township, MI: 0 / 988</text>
-        <text x="830.0pt" y="659.0pt" font-size="8pt" color="#1a1a1a">9  Port Washington, WI: 0 / 902</text>
-        <text x="830.0pt" y="672.0pt" font-size="8pt" color="#1a1a1a">10  Milam County, TX: 0 / 857</text>
-        <text x="830.0pt" y="685.0pt" font-size="8pt" color="#1a1a1a">11  Abilene, TX: 421 / 843</text>
-        <text x="830.0pt" y="698.0pt" font-size="8pt" color="#1a1a1a">12  Ridgeland, MS: 228 / 840</text>
-        <text x="830.0pt" y="711.0pt" font-size="8pt" color="#1a1a1a">13  Canton, MS: 284 / 683</text>
-        <text x="830.0pt" y="724.0pt" font-size="8pt" color="#1a1a1a">14  Sandston, VA: 562 / 658</text>
-        <text x="1040.0pt" y="628.0pt" font-size="10pt" color="text-muted" font="bold">About this map</text>
-        <text x="1040.0pt" y="646.0pt" font-size="8pt" color="text-muted">Markers sit at metro level for cloud</text>
-        <text x="1040.0pt" y="658.0pt" font-size="8pt" color="text-muted">regions and town level for AI campuses.</text>
-        <text x="1040.0pt" y="670.0pt" font-size="8pt" color="text-muted">Cloud regions: AWS, Azure and Google</text>
-        <text x="1040.0pt" y="682.0pt" font-size="8pt" color="text-muted">documentation. AI campuses: Epoch AI,</text>
-        <text x="1040.0pt" y="694.0pt" font-size="8pt" color="text-muted">CC BY 4.0. October 2026.</text>
+        <text-at x="36.0pt" y="628.0pt" font-size="10pt" color="primary" font="bold">Cloud regions</text-at>
+        <text-at x="36.0pt" y="646.0pt" font-size="9pt" color="#1a1a1a">AWS: 34 regions, 108 zones</text-at>
+        <text-at x="36.0pt" y="660.0pt" font-size="9pt" color="#1a1a1a">Azure: 57 regions, 121 zones</text-at>
+        <text-at x="36.0pt" y="674.0pt" font-size="9pt" color="#1a1a1a">Google: 41 regions, 124 zones</text-at>
+        <text-at x="36.0pt" y="688.0pt" font-size="9pt" color="text-muted">132 regions in 76 metro areas.</text-at>
+        <text-at x="330.0pt" y="628.0pt" font-size="10pt" color="ai" font="bold">AI campuses</text-at>
+        <text-at x="330.0pt" y="646.0pt" font-size="9pt" color="#1a1a1a">72 running: 13.7 GW of IT power today.</text-at>
+        <text-at x="330.0pt" y="660.0pt" font-size="9pt" color="#1a1a1a">9 under construction. About 32 GW planned by 2029.</text-at>
+        <text-at x="330.0pt" y="674.0pt" font-size="9pt" color="#1a1a1a">86% of running power is in the United States.</text-at>
+        <text-at x="330.0pt" y="688.0pt" font-size="9pt" color="text-muted">Johor, Malaysia is next, with 895 MW.</text-at>
+        <text-at x="640.0pt" y="628.0pt" font-size="10pt" color="ai" font="bold">United States inset: IT power today / planned, MW</text-at>
+        <text-at x="640.0pt" y="646.0pt" font-size="8pt" color="#1a1a1a">1  Mount Pleasant, WI: 369 / 2,263</text-at>
+        <text-at x="640.0pt" y="659.0pt" font-size="8pt" color="#1a1a1a">2  New Carlisle, IN: 910 / 1,925</text-at>
+        <text-at x="640.0pt" y="672.0pt" font-size="8pt" color="#1a1a1a">3  Memphis, TN: 1,286 / 1,871</text-at>
+        <text-at x="640.0pt" y="685.0pt" font-size="8pt" color="#1a1a1a">4  Doña Ana County, NM: 0 / 1,750</text-at>
+        <text-at x="640.0pt" y="698.0pt" font-size="8pt" color="#1a1a1a">5  New Albany, OH: 1,017 / 1,693</text-at>
+        <text-at x="640.0pt" y="711.0pt" font-size="8pt" color="#1a1a1a">6  Holly Ridge, LA: 0 / 1,632</text-at>
+        <text-at x="640.0pt" y="724.0pt" font-size="8pt" color="#1a1a1a">7  Shackelford County, TX: 0 / 1,400</text-at>
+        <text-at x="830.0pt" y="646.0pt" font-size="8pt" color="#1a1a1a">8  Saline Township, MI: 0 / 988</text-at>
+        <text-at x="830.0pt" y="659.0pt" font-size="8pt" color="#1a1a1a">9  Port Washington, WI: 0 / 902</text-at>
+        <text-at x="830.0pt" y="672.0pt" font-size="8pt" color="#1a1a1a">10  Milam County, TX: 0 / 857</text-at>
+        <text-at x="830.0pt" y="685.0pt" font-size="8pt" color="#1a1a1a">11  Abilene, TX: 421 / 843</text-at>
+        <text-at x="830.0pt" y="698.0pt" font-size="8pt" color="#1a1a1a">12  Ridgeland, MS: 228 / 840</text-at>
+        <text-at x="830.0pt" y="711.0pt" font-size="8pt" color="#1a1a1a">13  Canton, MS: 284 / 683</text-at>
+        <text-at x="830.0pt" y="724.0pt" font-size="8pt" color="#1a1a1a">14  Sandston, VA: 562 / 658</text-at>
+        <text-at x="1040.0pt" y="628.0pt" font-size="10pt" color="text-muted" font="bold">About this map</text-at>
+        <text-at x="1040.0pt" y="646.0pt" font-size="8pt" color="text-muted">Markers sit at metro level for cloud</text-at>
+        <text-at x="1040.0pt" y="658.0pt" font-size="8pt" color="text-muted">regions and town level for AI campuses.</text-at>
+        <text-at x="1040.0pt" y="670.0pt" font-size="8pt" color="text-muted">Cloud regions: AWS, Azure and Google</text-at>
+        <text-at x="1040.0pt" y="682.0pt" font-size="8pt" color="text-muted">documentation. AI campuses: Epoch AI,</text-at>
+        <text-at x="1040.0pt" y="694.0pt" font-size="8pt" color="text-muted">CC BY 4.0. October 2026.</text-at>
       </layer>
     </section>
   </document>

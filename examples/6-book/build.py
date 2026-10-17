@@ -166,7 +166,7 @@ for i, ch in enumerate(chapters):
     if last != 'last' and first > last:
         continue
     headers.append('''      <layer page="%s-%s">
-        <text x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">%s  ·  %s</text>
+        <text-at x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">%s  ·  %s</text-at>
         <line x1="34pt" y1="38pt" x2="272pt" y2="38pt" stroke="rule" stroke-width="0.5pt" />
       </layer>''' % (first, last, roman_title(ch['number']), esc(ch['title'].upper())))
 

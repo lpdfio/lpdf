@@ -30,26 +30,26 @@
       <layer page="first">
         <rect anchor="top-left" width="595.28pt" height="8pt" fill="primary"/>
         <rect anchor="bottom-left" width="595.28pt" height="4pt" fill="primary"/>
-        <text anchor="top-center" y="20pt" font-size="20pt" font="Helvetica-Bold"
+        <text-at anchor="top-center" y="20pt" font-size="20pt" font="Helvetica-Bold"
               color="primary" align="center">
           Canvas Layer Showcase
-        </text>
+        </text-at>
       </layer>
 
       <!-- Layer 3: reduced opacity, all pages -->
       <layer opacity="0.3">
-        <text anchor="center" font-size="60pt" font="Helvetica-Bold"
+        <text-at anchor="center" font-size="60pt" font="Helvetica-Bold"
               color="primary" align="center">
           SAMPLE
-        </text>
+        </text-at>
       </layer>
 
       <!-- Layer 4: last page only — end mark -->
       <layer page="last">
-        <text anchor="bottom-center" y="-20pt" font-size="9pt"
+        <text-at anchor="bottom-center" y="-20pt" font-size="9pt"
               color="muted" align="center">
           — End of Document —
-        </text>
+        </text-at>
       </layer>
 
       <!-- Layer 5: odd pages only — left margin marker -->
@@ -58,22 +58,22 @@
       </layer>
 
       <!-- Layer 6: even pages only — right margin marker -->
-      <layer page="even">
-        <rect anchor="center-right" width="4pt" height="60pt" fill="primary" opacity="0.4"/>
+      <layer page="even" opacity="0.4">
+        <rect anchor="center-right" width="4pt" height="60pt" fill="primary"/>
       </layer>
 
       <!-- Layer 7: numeric range — pages 2-3 only -->
       <layer page="2-3">
-        <text anchor="top-right" x="-40pt" y="40pt" font-size="9pt"
+        <text-at anchor="top-right" x="-40pt" y="40pt" font-size="9pt"
               color="muted" align="right">
           pages 2–3
-        </text>
+        </text-at>
       </layer>
 
       <!-- Layer 8: transform demo (rotation via transform attribute) -->
-      <layer transform="rotate(45 297.64 421)">
+      <layer transform="rotate(45 297.64 421)" opacity="0.6">
         <rect x="247.64pt" y="396pt" width="100pt" height="50pt"
-              fill="accent" stroke="primary" stroke-width="1pt" opacity="0.6"/>
+              fill="accent" stroke="primary" stroke-width="1pt"/>
       </layer>
 
       <!-- Layer 9: line and path primitives -->

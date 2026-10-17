@@ -32,17 +32,24 @@
         <!-- Circle: absolute centre -->
         <circle x="330pt" y="70pt" r="50pt" fill="accent" stroke="primary" stroke-width="1.5pt"/>
 
-        <!-- Circle: anchor-based centre -->
-        <circle anchor="center" r="40pt" fill="#ffffff" stroke="primary"
-                stroke-width="2pt" opacity="0.7"/>
+      </layer>
 
+      <!-- Circle: anchor-based centre, faded by a layer of its own -->
+      <layer opacity="0.7">
+        <circle anchor="center" r="40pt" fill="#ffffff" stroke="primary" stroke-width="2pt"/>
+      </layer>
+
+      <layer>
         <!-- Ellipse: absolute -->
         <ellipse x="50pt" y="250pt" rx="100pt" ry="50pt" fill="accent"/>
+      </layer>
 
-        <!-- Ellipse: anchor top-center -->
-        <ellipse anchor="top-center" y="170pt" rx="80pt" ry="30pt"
-                 fill="primary" opacity="0.3"/>
+      <!-- Ellipse: anchor top-center, faded by a layer of its own -->
+      <layer opacity="0.3">
+        <ellipse anchor="top-center" y="170pt" rx="80pt" ry="30pt" fill="primary"/>
+      </layer>
 
+      <layer>
         <!-- Rounded rect: border only -->
         <rect x="40pt" y="400pt" width="515.28pt" height="1pt" fill="rule"/>
 

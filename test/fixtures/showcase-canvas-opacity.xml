@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf"/>
+      <color name="accent"   value="#e74c3c"/>
+      <color name="sun"      value="#f5b82e"/>
+      <color name="hill"     value="#2e8b57"/>
+      <color name="sky"      value="#9ccbf2"/>
+      <color name="muted"    value="#737373"/>
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Layer Opacity" subject="Opacity on layers"/>
+
+    <!-- Opacity belongs to a layer: it fades everything in it. To fade a single element, put it in a layer of
+         its own. -->
+    <section>
+      <layer>
+        <text-at x="40pt" y="40pt" font-size="xxl" font="Helvetica-Bold" color="primary">Layer opacity</text-at>
+        <text-at x="40pt" y="76pt" color="muted">Opacity is set on a layer, and fades what is in it.</text-at>
+      </layer>
+
+      <!-- A faded element: a circle in a layer of its own, next to the same circle at full strength -->
+      <layer>
+        <text-at x="40pt" y="130pt" font-size="l" font="Helvetica-Bold">A faded element</text-at>
+        <circle x="40pt" y="160pt" r="45pt" fill="primary"/>
+      </layer>
+      <layer opacity="0.35">
+        <circle x="150pt" y="160pt" r="45pt" fill="primary"/>
+      </layer>
+
+      <!-- A faded group: everything in one layer takes the layer's opacity -->
+      <layer>
+        <text-at x="340pt" y="130pt" font-size="l" font="Helvetica-Bold">A faded group</text-at>
+        <rect x="340pt" y="160pt" width="215pt" height="90pt" fill="#dde3ed" radius="6pt"/>
+      </layer>
+      <layer opacity="0.45">
+        <circle x="355pt" y="175pt" r="30pt" fill="accent"/>
+        <rect x="430pt" y="180pt" width="110pt" height="20pt" fill="primary"/>
+        <rect x="430pt" y="212pt" width="70pt" height="20pt" fill="primary"/>
+        <text-at x="438pt" y="184pt" font-size="s" color="#ffffff">one layer, one opacity</text-at>
+      </layer>
+
+      <!-- A translucent panel over a picture. The picture is made of shapes here; any image under a layer
+           behaves the same. The caption is in a layer of its own, above the panel, at full strength. -->
+      <layer>
+        <text-at x="40pt" y="330pt" font-size="l" font="Helvetica-Bold">A translucent panel over a picture</text-at>
+        <rect x="40pt" y="360pt" width="515pt" height="300pt" fill="sky"/>
+        <circle x="440pt" y="385pt" r="35pt" fill="sun"/>
+        <path d="M 40 660 L 40 560 C 120 480 220 500 300 540 C 380 580 470 520 555 560 L 555 660 Z" fill="hill"/>
+        <rect x="90pt" y="560pt" width="60pt" height="60pt" fill="accent"/>
+        <path d="M 80 560 L 120 520 L 160 560 Z" fill="primary"/>
+      </layer>
+      <layer opacity="0.7">
+        <rect x="70pt" y="440pt" width="320pt" height="150pt" fill="#ffffff" radius="8pt"/>
+      </layer>
+      <layer>
+        <text-at x="90pt" y="460pt" font-size="xl" font="Helvetica-Bold" color="primary">Seen through glass</text-at>
+        <text-at x="90pt" y="494pt" width="280pt" max-lines="3" color="muted">The panel is 70% opaque, so the picture shows through it, and this caption sits above the panel at full strength.</text-at>
+      </layer>
+    </section>
+  </document>
+</lpdf>

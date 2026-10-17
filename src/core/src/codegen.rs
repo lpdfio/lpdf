@@ -81,19 +81,19 @@ pub fn codegen_fragment(xml: &str, options: &CodegenOptions) -> Result<String, S
     let lines: Vec<String> = match options.target.as_str() {
         "js" => {
             let emitter = JsEmitter { indent: options.indent };
-            elements.iter().map(|n| emitter.emit_node(n, 0, false)).collect()
+            elements.iter().map(|n| emitter.emit_node(n, 0)).collect()
         }
         "dotnet" => {
             let emitter = DotnetEmitter { indent: options.indent };
-            elements.iter().map(|n| emitter.emit_node(n, 0, false)).collect()
+            elements.iter().map(|n| emitter.emit_node(n, 0)).collect()
         }
         "php" => {
             let emitter = PhpEmitter { indent: options.indent };
-            elements.iter().map(|n| emitter.emit_node(n, 0, false)).collect()
+            elements.iter().map(|n| emitter.emit_node(n, 0)).collect()
         }
         "python" => {
             let emitter = PythonEmitter { indent: options.indent };
-            elements.iter().map(|n| emitter.emit_node(n, 0, false)).collect()
+            elements.iter().map(|n| emitter.emit_node(n, 0)).collect()
         }
         other => return Err(format!("Unknown target: '{other}'. Supported: js, dotnet, php, python")),
     };
@@ -138,19 +138,13 @@ fn to_pascal_case(s: &str) -> String {
         .collect()
 }
 
-/// Return the canonical JS method name for an XML element tag, given context.
-fn js_method(tag: &str, in_canvas: bool) -> &'static str {
-    if in_canvas {
-        return match tag {
-            "text" => "textAt",
-            "img"  => "imgAt",
-            other  => js_layout_method(other),
-        };
-    }
-    js_layout_method(tag)
+/// Whether an element holds text and `span` children: the layout's `text` and the layer's `text-at`.
+fn is_text_tag(tag: &str) -> bool {
+    matches!(tag, "text" | "text-at")
 }
 
-fn js_layout_method(tag: &str) -> &'static str {
+/// Return the canonical JS method name for an XML element tag.
+fn js_method(tag: &str) -> &'static str {
     match tag {
         "document" => "document",
         "section"  => "section",
@@ -179,23 +173,15 @@ fn js_layout_method(tag: &str) -> &'static str {
         "ellipse"  => "ellipse",
         "line"     => "line",
         "path"     => "path",
+        "text-at"    => "textAt",
+        "img-at"     => "imgAt",
+        "barcode-at" => "barcodeAt",
         _          => "element",
     }
 }
 
-/// Return the canonical C# method name for an XML element tag, given context.
-fn dotnet_method(tag: &str, in_canvas: bool) -> &'static str {
-    if in_canvas {
-        return match tag {
-            "text" => "TextAt",
-            "img"  => "ImgAt",
-            other  => dotnet_layout_method(other),
-        };
-    }
-    dotnet_layout_method(tag)
-}
-
-fn dotnet_layout_method(tag: &str) -> &'static str {
+/// Return the canonical C# method name for an XML element tag.
+fn dotnet_method(tag: &str) -> &'static str {
     match tag {
         "document" => "Document",
         "section"  => "Section",
@@ -224,6 +210,9 @@ fn dotnet_layout_method(tag: &str) -> &'static str {
         "ellipse"  => "Ellipse",
         "line"     => "Line",
         "path"     => "Path",
+        "text-at"    => "TextAt",
+        "img-at"     => "ImgAt",
+        "barcode-at" => "BarcodeAt",
         _          => "Element",
     }
 }
@@ -416,8 +405,8 @@ fn php_namespace(class: &str) -> &'static str {
     match class {
         "DocumentAttr" | "DocumentMeta" | "DocumentAssets" | "DocumentTokens" | "SectionAttr" | "LayoutAttr"
         | "FontAttr" | "ImageAttr" => "Lpdf\\Kit",
-        "LayerAttr" | "RectAttr" | "CircleAttr" | "EllipseAttr" | "LineAttr" | "PathAttr" | "CanvasTextAttr"
-        | "CanvasImgAttr" => "Lpdf\\Canvas",
+        "LayerAttr" | "RectAttr" | "CircleAttr" | "EllipseAttr" | "LineAttr" | "PathAttr" | "TextAtAttr"
+        | "ImgAtAttr" | "BarcodeAtAttr" => "Lpdf\\Canvas",
         _ => "Lpdf\\Layout",
     }
 }
@@ -494,7 +483,7 @@ fn php_attr_value(val: &str) -> String {
 /// Emit a PHP named-arg constructor call for the attributes of a node.
 ///
 /// Returns `"NoAttr"` when there are no attributes.
-fn php_attrs(node: &Node, tag: &str, in_canvas: bool, extra_attrs: Option<&[(&str, String)]>) -> String {
+fn php_attrs(node: &Node, tag: &str, extra_attrs: Option<&[(&str, String)]>) -> String {
     let mut parts: Vec<String> = node
         .attributes()
         .filter(|a| !matches!(a.name(), "data-value" | "data-source" | "data-if" | "data-if-not"))
@@ -510,25 +499,21 @@ fn php_attrs(node: &Node, tag: &str, in_canvas: bool, extra_attrs: Option<&[(&st
     if parts.is_empty() {
         "NoAttr".into()
     } else {
-        let class = attr_class(tag, in_canvas);
+        let class = attr_class(tag);
         format!("new {class}({})", parts.join(", "))
     }
 }
 
-/// The attribute class of an element: `{Element}Attr`, except that text and images on the canvas, which
-/// have other attributes than their layout namesakes, are `CanvasTextAttr` and `CanvasImgAttr`.
-fn attr_class(tag: &str, in_canvas: bool) -> String {
-    match (tag, in_canvas) {
-        ("text", true) => "CanvasTextAttr".to_string(),
-        ("img", true)  => "CanvasImgAttr".to_string(),
-        _              => format!("{}Attr", to_pascal_case(tag)),
-    }
+/// The attribute class of an element: `{Element}Attr`, as the schema's element names give them (`TextAtAttr`
+/// for `text-at`).
+fn attr_class(tag: &str) -> String {
+    format!("{}Attr", to_pascal_case(tag))
 }
 
 /// Emit a Python keyword-arg constructor for the attributes of a node.
 ///
 /// Returns `"NoAttr"` when there are no attributes.
-fn python_attrs(node: &Node, tag: &str, in_canvas: bool, extra_attrs: Option<&[(&str, String)]>) -> String {
+fn python_attrs(node: &Node, tag: &str, extra_attrs: Option<&[(&str, String)]>) -> String {
     let mut parts: Vec<String> = node
         .attributes()
         .filter(|a| !matches!(a.name(), "data-value" | "data-source" | "data-if" | "data-if-not"))
@@ -544,7 +529,7 @@ fn python_attrs(node: &Node, tag: &str, in_canvas: bool, extra_attrs: Option<&[(
     if parts.is_empty() {
         "NoAttr".into()
     } else {
-        let class = attr_class(tag, in_canvas);
+        let class = attr_class(tag);
         format!("{class}({})", parts.join(", "))
     }
 }
@@ -639,7 +624,7 @@ impl JsEmitter {
         }
     }
 
-    fn emit_node(&self, node: &Node, level: usize, in_canvas: bool) -> String {
+    fn emit_node(&self, node: &Node, level: usize) -> String {
         let tag = node.tag_name().name();
 
         // Special cases
@@ -649,9 +634,7 @@ impl JsEmitter {
             "meta"     => return String::new(), // folded into document
             _ => {}
         }
-
-        let in_canvas = in_canvas || tag == "layer";
-        let method    = js_method(tag, in_canvas);
+        let method    = js_method(tag);
         let ind0      = self.ind(level);
         let ind1      = self.ind(level + 1);
 
@@ -666,12 +649,12 @@ impl JsEmitter {
         let text_content_override: Option<String> = data_value.map(|p| format!("{{{p}}}"));
 
         // Determine children
-        let children = self.collect_children(node, tag, level, in_canvas, text_content_override.as_deref());
+        let children = self.collect_children(node, tag, level, text_content_override.as_deref());
 
         let call = if children.is_empty() {
             // Leaf — no children arg
             format!("{binding_comments}{ind0}L.{method}({attrs})")
-        } else if tag == "text" {
+        } else if is_text_tag(tag) {
             format!("{binding_comments}{}", self.emit_text_call(&ind0, &ind1, method, &attrs, &children))
         } else if tag == "span" {
             // span always inline: L.span({...}, ['content'])
@@ -731,7 +714,7 @@ impl JsEmitter {
         children.extend(
             node.children()
                 .filter(|n| n.is_element() && n.tag_name().name() != "meta")
-                .map(|n| self.emit_node(&n, level + 1, false))
+                .map(|n| self.emit_node(&n, level + 1))
                 .filter(|s| !s.is_empty()),
         );
 
@@ -744,12 +727,11 @@ impl JsEmitter {
         node: &Node,
         tag: &str,
         level: usize,
-        in_canvas: bool,
         text_content_override: Option<&str>,
     ) -> Vec<String> {
         let mut children: Vec<String> = Vec::new();
 
-        if tag == "text" || tag == "span" {
+        if is_text_tag(tag) || tag == "span" {
             // Mixed text + <span> children
             let override_text = text_content_override;
 
@@ -767,7 +749,7 @@ impl JsEmitter {
                         }
                         NodeType::Element if child.tag_name().name() == "span" => {
                             // Emit span at level 0 — parent handles indentation
-                            children.push(self.emit_node(&child, 0, in_canvas));
+                            children.push(self.emit_node(&child, 0));
                         }
                         _ => {}
                     }
@@ -775,7 +757,7 @@ impl JsEmitter {
             }
         } else {
             for child in node.children().filter(|n| n.is_element()) {
-                let s = self.emit_node(&child, level + 1, in_canvas);
+                let s = self.emit_node(&child, level + 1);
                 if !s.is_empty() {
                     children.push(s);
                 }
@@ -888,7 +870,7 @@ impl DotnetEmitter {
         }
     }
 
-    fn emit_node(&self, node: &Node, level: usize, in_canvas: bool) -> String {
+    fn emit_node(&self, node: &Node, level: usize) -> String {
         let tag = node.tag_name().name();
 
         match tag {
@@ -897,9 +879,7 @@ impl DotnetEmitter {
             "meta"     => return String::new(),
             _ => {}
         }
-
-        let in_canvas = in_canvas || tag == "layer";
-        let method    = dotnet_method(tag, in_canvas);
+        let method    = dotnet_method(tag);
         let ind0      = self.ind(level);
         let ind1      = self.ind(level + 1);
 
@@ -908,11 +888,11 @@ impl DotnetEmitter {
         let attrs = dotnet_attrs(node, None);
         let text_content_override: Option<String> = data_value.map(|p| format!("{{{p}}}"));
 
-        let children = self.collect_children(node, tag, level, in_canvas, text_content_override.as_deref());
+        let children = self.collect_children(node, tag, level, text_content_override.as_deref());
 
         if children.is_empty() {
             format!("{binding_comments}{ind0}L.{method}({attrs})")
-        } else if tag == "text" {
+        } else if is_text_tag(tag) {
             format!("{binding_comments}{}", self.emit_text_call(&ind0, &ind1, method, &attrs, &children))
         } else if tag == "span" {
             format!("{binding_comments}{ind0}L.{method}({attrs}, [{}])", children.join(", "))
@@ -965,7 +945,7 @@ impl DotnetEmitter {
         children.extend(
             node.children()
                 .filter(|n| n.is_element() && n.tag_name().name() != "meta")
-                .map(|n| self.emit_node(&n, level + 1, false))
+                .map(|n| self.emit_node(&n, level + 1))
                 .filter(|s| !s.is_empty()),
         );
 
@@ -977,12 +957,11 @@ impl DotnetEmitter {
         node: &Node,
         tag: &str,
         level: usize,
-        in_canvas: bool,
         text_content_override: Option<&str>,
     ) -> Vec<String> {
         let mut children: Vec<String> = Vec::new();
 
-        if tag == "text" || tag == "span" {
+        if is_text_tag(tag) || tag == "span" {
             if let Some(placeholder) = text_content_override {
                 children.push(format!("\"{placeholder}\""));
             } else {
@@ -995,7 +974,7 @@ impl DotnetEmitter {
                             }
                         }
                         NodeType::Element if child.tag_name().name() == "span" => {
-                            children.push(self.emit_node(&child, 0, in_canvas));
+                            children.push(self.emit_node(&child, 0));
                         }
                         _ => {}
                     }
@@ -1003,7 +982,7 @@ impl DotnetEmitter {
             }
         } else {
             for child in node.children().filter(|n| n.is_element()) {
-                let s = self.emit_node(&child, level + 1, in_canvas);
+                let s = self.emit_node(&child, level + 1);
                 if !s.is_empty() {
                     children.push(s);
                 }
@@ -1113,7 +1092,7 @@ impl PhpEmitter {
         }
     }
 
-    fn emit_node(&self, node: &Node, level: usize, in_canvas: bool) -> String {
+    fn emit_node(&self, node: &Node, level: usize) -> String {
         let tag = node.tag_name().name();
 
         match tag {
@@ -1122,23 +1101,21 @@ impl PhpEmitter {
             "meta"     => return String::new(),
             _ => {}
         }
-
-        let in_canvas = in_canvas || tag == "layer";
         // PHP uses same method names as JS (camelCase)
-        let method    = js_method(tag, in_canvas);
+        let method    = js_method(tag);
         let ind0      = self.ind(level);
         let ind1      = self.ind(level + 1);
 
         let binding_comments = data_binding_comments(node, &ind0);
         let data_value = node.attribute("data-value");
-        let attrs = php_attrs(node, tag, in_canvas, None);
+        let attrs = php_attrs(node, tag, None);
         let text_content_override: Option<String> = data_value.map(|p| format!("{{{p}}}"));
 
-        let children = self.collect_children(node, tag, level, in_canvas, text_content_override.as_deref());
+        let children = self.collect_children(node, tag, level, text_content_override.as_deref());
 
         if children.is_empty() {
             format!("{binding_comments}{ind0}L::{method}({attrs})")
-        } else if tag == "text" {
+        } else if is_text_tag(tag) {
             format!("{binding_comments}{}", self.emit_text_call(&ind0, &ind1, method, &attrs, &children))
         } else if tag == "span" {
             format!("{binding_comments}{ind0}L::{method}({attrs}, [{}])", children.join(", "))
@@ -1191,7 +1168,7 @@ impl PhpEmitter {
         children.extend(
             node.children()
                 .filter(|n| n.is_element() && n.tag_name().name() != "meta")
-                .map(|n| self.emit_node(&n, level + 1, false))
+                .map(|n| self.emit_node(&n, level + 1))
                 .filter(|s| !s.is_empty()),
         );
 
@@ -1203,12 +1180,11 @@ impl PhpEmitter {
         node: &Node,
         tag: &str,
         level: usize,
-        in_canvas: bool,
         text_content_override: Option<&str>,
     ) -> Vec<String> {
         let mut children: Vec<String> = Vec::new();
 
-        if tag == "text" || tag == "span" {
+        if is_text_tag(tag) || tag == "span" {
             if let Some(placeholder) = text_content_override {
                 children.push(format!("'{placeholder}'"));
             } else {
@@ -1221,7 +1197,7 @@ impl PhpEmitter {
                             }
                         }
                         NodeType::Element if child.tag_name().name() == "span" => {
-                            children.push(self.emit_node(&child, 0, in_canvas));
+                            children.push(self.emit_node(&child, 0));
                         }
                         _ => {}
                     }
@@ -1229,7 +1205,7 @@ impl PhpEmitter {
             }
         } else {
             for child in node.children().filter(|n| n.is_element()) {
-                let s = self.emit_node(&child, level + 1, in_canvas);
+                let s = self.emit_node(&child, level + 1);
                 if !s.is_empty() {
                     children.push(s);
                 }
@@ -1332,7 +1308,7 @@ impl PythonEmitter {
         }
     }
 
-    fn emit_node(&self, node: &Node, level: usize, in_canvas: bool) -> String {
+    fn emit_node(&self, node: &Node, level: usize) -> String {
         let tag = node.tag_name().name();
 
         match tag {
@@ -1341,23 +1317,21 @@ impl PythonEmitter {
             "meta"     => return String::new(),
             _ => {}
         }
-
-        let in_canvas = in_canvas || tag == "layer";
         // Python uses same method names as JS (snake_case only for multi-word: textAt → text_at)
-        let method    = python_method(tag, in_canvas);
+        let method    = python_method(tag);
         let ind0      = self.ind(level);
         let ind1      = self.ind(level + 1);
 
         let binding_comments = data_binding_comments_hash(node, &ind0);
         let data_value = node.attribute("data-value");
-        let attrs = python_attrs(node, tag, in_canvas, None);
+        let attrs = python_attrs(node, tag, None);
         let text_content_override: Option<String> = data_value.map(|p| format!("{{{p}}}"));
 
-        let children = self.collect_children(node, tag, level, in_canvas, text_content_override.as_deref());
+        let children = self.collect_children(node, tag, level, text_content_override.as_deref());
 
         if children.is_empty() {
             format!("{binding_comments}{ind0}L.{method}({attrs})")
-        } else if tag == "text" {
+        } else if is_text_tag(tag) {
             format!("{binding_comments}{}", self.emit_text_call(&ind0, &ind1, method, &attrs, &children))
         } else if tag == "span" {
             format!("{binding_comments}{ind0}L.{method}({attrs}, [{}])", children.join(", "))
@@ -1410,7 +1384,7 @@ impl PythonEmitter {
         children.extend(
             node.children()
                 .filter(|n| n.is_element() && n.tag_name().name() != "meta")
-                .map(|n| self.emit_node(&n, level + 1, false))
+                .map(|n| self.emit_node(&n, level + 1))
                 .filter(|s| !s.is_empty()),
         );
 
@@ -1422,12 +1396,11 @@ impl PythonEmitter {
         node: &Node,
         tag: &str,
         level: usize,
-        in_canvas: bool,
         text_content_override: Option<&str>,
     ) -> Vec<String> {
         let mut children: Vec<String> = Vec::new();
 
-        if tag == "text" || tag == "span" {
+        if is_text_tag(tag) || tag == "span" {
             if let Some(placeholder) = text_content_override {
                 children.push(format!("'{placeholder}'"));
             } else {
@@ -1440,7 +1413,7 @@ impl PythonEmitter {
                             }
                         }
                         NodeType::Element if child.tag_name().name() == "span" => {
-                            children.push(self.emit_node(&child, 0, in_canvas));
+                            children.push(self.emit_node(&child, 0));
                         }
                         _ => {}
                     }
@@ -1448,7 +1421,7 @@ impl PythonEmitter {
             }
         } else {
             for child in node.children().filter(|n| n.is_element()) {
-                let s = self.emit_node(&child, level + 1, in_canvas);
+                let s = self.emit_node(&child, level + 1);
                 if !s.is_empty() {
                     children.push(s);
                 }
@@ -1501,19 +1474,8 @@ impl PythonEmitter {
     }
 }
 
-/// Return the Python method name for an XML element tag, given context.
-fn python_method(tag: &str, in_canvas: bool) -> &'static str {
-    if in_canvas {
-        return match tag {
-            "text" => "text_at",
-            "img"  => "img_at",
-            other  => python_layout_method(other),
-        };
-    }
-    python_layout_method(tag)
-}
-
-fn python_layout_method(tag: &str) -> &'static str {
+/// Return the Python method name for an XML element tag.
+fn python_method(tag: &str) -> &'static str {
     match tag {
         "document" => "document",
         "section"  => "section",
@@ -1542,6 +1504,9 @@ fn python_layout_method(tag: &str) -> &'static str {
         "ellipse"  => "ellipse",
         "line"     => "line",
         "path"     => "path",
+        "text-at"    => "text_at",
+        "img-at"     => "img_at",
+        "barcode-at" => "barcode_at",
         _          => "element",
     }
 }
@@ -1812,17 +1777,34 @@ mod tests {
     }
 
     #[test]
-    fn test_layer_text_and_image_have_their_own_attribute_classes() {
+    fn test_layer_text_image_and_barcode_have_their_own_elements_and_attribute_classes() {
         let xml = r##"<lpdf version="1"><document><section><layer>
-            <text x="10pt" y="20pt">Hi</text>
-            <img name="logo" x="0pt" y="0pt" width="10pt" height="10pt"/>
+            <text-at x="10pt" y="20pt">Hi</text-at>
+            <img-at name="logo" x="0pt" y="0pt" width="10pt" height="10pt"/>
+            <barcode-at type="qr" data="x" x="0pt" y="0pt" width="40pt"/>
         </layer></section></document></lpdf>"##;
-        for target in ["php", "python"] {
+        for (target, builders, classes) in [
+            ("js",     ["L.textAt(", "L.imgAt(", "L.barcodeAt("],   [None, None, None]),
+            ("python", ["L.text_at(", "L.img_at(", "L.barcode_at("], [Some("TextAtAttr("), Some("ImgAtAttr("), Some("BarcodeAtAttr(")]),
+            ("php",    ["L::textAt(", "L::imgAt(", "L::barcodeAt("], [Some("TextAtAttr("), Some("ImgAtAttr("), Some("BarcodeAtAttr(")]),
+            ("dotnet", ["L.TextAt(", "L.ImgAt(", "L.BarcodeAt("],   [None, None, None]),
+        ] {
             let opts = CodegenOptions { target: target.into(), indent: 4 };
             let out  = codegen(xml, &opts).unwrap();
-            assert!(out.contains("CanvasTextAttr("), "{target}: {out}");
-            assert!(out.contains("CanvasImgAttr("), "{target}: {out}");
+            for builder in builders {
+                assert!(out.contains(builder), "{target}: no {builder} in {out}");
+            }
+            for class in classes.into_iter().flatten() {
+                assert!(out.contains(class), "{target}: no {class} in {out}");
+            }
+            assert!(out.contains("['Hi']") || out.contains("[\"Hi\"]"), "{target}: the text is lost in {out}");
+            assert!(!out.contains("CanvasText") && !out.contains("CanvasImg"), "{target}: {out}");
         }
+        // PHP imports the classes from the namespace of the layer's elements.
+        let opts = CodegenOptions { target: "php".into(), indent: 4 };
+        let out  = codegen(xml, &opts).unwrap();
+        assert!(out.contains("use Lpdf\\Canvas\\TextAtAttr;"), "{out}");
+        assert!(out.contains("use Lpdf\\Canvas\\BarcodeAtAttr;"), "{out}");
     }
 
     #[test]

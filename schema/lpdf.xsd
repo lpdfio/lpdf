@@ -289,6 +289,17 @@
     <xs:attribute name="data-if-not" type="xs:string"/>
   </xs:attributeGroup>
 
+  <!-- Data binding for a layer and the elements in it: a value, or whether they are drawn. They read single
+       values, so there is no data-source: a list belongs in the layout. -->
+  <xs:attributeGroup name="DataConditionAttrs">
+    <xs:attribute name="data-if"     type="xs:string"/>
+    <xs:attribute name="data-if-not" type="xs:string"/>
+  </xs:attributeGroup>
+  <xs:attributeGroup name="DataValueAttrs">
+    <xs:attribute name="data-value"  type="xs:string"/>
+    <xs:attributeGroup ref="DataConditionAttrs"/>
+  </xs:attributeGroup>
+
   <!-- Box attrs shared by all layout elements -->
   <xs:attributeGroup name="BoxAttrs">
     <xs:attribute name="font"       type="xs:string"/>
@@ -352,24 +363,17 @@
   </xs:attributeGroup>
 
   <!-- ============================================================
-       Canvas primitives — named group of flat drawing elements.
-       <layer> is not in this group; nesting is not permitted.
+       Layers — what a layer draws. Every element has one set of attributes, wherever it is.
+       Shapes exist in layers only. text-at, img-at and barcode-at are the text, image and barcode of
+       the layout (TextCore, ImgCore, BarcodeCore) put at a fixed place instead of in the flow.
   ============================================================ -->
 
-  <!-- Shared fill/stroke attributes for canvas primitives -->
+  <!-- Shared fill/stroke attributes for the shapes -->
   <xs:attributeGroup name="CanvasFillStrokeAttrs">
     <xs:attribute name="fill"         type="Color"/>
     <xs:attribute name="stroke"       type="Color"/>
     <xs:attribute name="stroke-width" type="PtValue"/>
     <xs:attribute name="stroke-dash"  type="xs:string"/>
-    <xs:attribute name="opacity">
-      <xs:simpleType>
-        <xs:restriction base="xs:decimal">
-          <xs:minInclusive value="0"/>
-          <xs:maxInclusive value="1"/>
-        </xs:restriction>
-      </xs:simpleType>
-    </xs:attribute>
   </xs:attributeGroup>
 
   <!-- Positioning rule (enforced by parser, not XSD 1.0):
@@ -378,152 +382,223 @@
        signed offsets from that point of the page, where the box's matching point goes. -->
   <xs:group name="CanvasPrimitives">
     <xs:choice>
-
-      <!-- rect -->
-      <xs:element name="rect">
-        <xs:complexType>
-          <xs:attribute name="x"      type="SignedPtValue"/>
-          <xs:attribute name="y"      type="SignedPtValue"/>
-          <xs:attribute name="width"  type="PtValue" use="required"/>
-          <xs:attribute name="height" type="PtValue" use="required"/>
-          <xs:attribute name="anchor" type="Anchor"/>
-          <xs:attribute name="radius" type="PtValue"/>
-          <xs:attributeGroup ref="CanvasFillStrokeAttrs"/>
-        </xs:complexType>
-      </xs:element>
-
-      <!-- circle -->
-      <xs:element name="circle">
-        <xs:complexType>
-          <xs:attribute name="x"      type="SignedPtValue">
-            <xs:annotation>
-              <xs:documentation>Where the circle's box goes, the square of side 2r around it: its left edge, or with anchor, an offset from that point of the page, where the box's matching point goes. The centre is r further in.</xs:documentation>
-            </xs:annotation>
-          </xs:attribute>
-          <xs:attribute name="y"      type="SignedPtValue">
-            <xs:annotation>
-              <xs:documentation>Where the circle's box goes, the square of side 2r around it: its top edge, or with anchor, an offset from that point of the page, where the box's matching point goes. The centre is r further in.</xs:documentation>
-            </xs:annotation>
-          </xs:attribute>
-          <xs:attribute name="r"      type="PtValue" use="required"/>
-          <xs:attribute name="anchor" type="Anchor"/>
-          <xs:attributeGroup ref="CanvasFillStrokeAttrs"/>
-        </xs:complexType>
-      </xs:element>
-
-      <!-- ellipse -->
-      <xs:element name="ellipse">
-        <xs:complexType>
-          <xs:attribute name="x"      type="SignedPtValue">
-            <xs:annotation>
-              <xs:documentation>Where the ellipse's box goes, 2rx wide and 2ry high around it: its left edge, or with anchor, an offset from that point of the page, where the box's matching point goes. The centre is rx further in.</xs:documentation>
-            </xs:annotation>
-          </xs:attribute>
-          <xs:attribute name="y"      type="SignedPtValue">
-            <xs:annotation>
-              <xs:documentation>Where the ellipse's box goes, 2rx wide and 2ry high around it: its top edge, or with anchor, an offset from that point of the page, where the box's matching point goes. The centre is ry further in.</xs:documentation>
-            </xs:annotation>
-          </xs:attribute>
-          <xs:attribute name="rx"     type="PtValue" use="required"/>
-          <xs:attribute name="ry"     type="PtValue" use="required"/>
-          <xs:attribute name="anchor" type="Anchor"/>
-          <xs:attributeGroup ref="CanvasFillStrokeAttrs"/>
-        </xs:complexType>
-      </xs:element>
-
-      <!-- line (no anchor — x1/y1/x2/y2 always required) -->
-      <xs:element name="line">
-        <xs:complexType>
-          <xs:attribute name="x1"          type="SignedPtValue" use="required"/>
-          <xs:attribute name="y1"          type="SignedPtValue" use="required"/>
-          <xs:attribute name="x2"          type="SignedPtValue" use="required"/>
-          <xs:attribute name="y2"          type="SignedPtValue" use="required"/>
-          <xs:attribute name="stroke"       type="Color"/>
-          <xs:attribute name="stroke-width" type="PtValue"/>
-          <xs:attribute name="stroke-dash"  type="xs:string"/>
-          <xs:attribute name="line-cap"     type="LineCap"/>
-        </xs:complexType>
-      </xs:element>
-
-      <!-- path (no anchor — SVG-compatible d attribute) -->
-      <xs:element name="path">
-        <xs:complexType>
-          <xs:attribute name="d"            type="xs:string" use="required"/>
-          <xs:attribute name="fill"         type="Color"/>
-          <xs:attribute name="stroke"       type="Color"/>
-          <xs:attribute name="fill-rule"    type="FillRule"/>
-          <xs:attribute name="stroke-width" type="PtValue"/>
-          <xs:attribute name="stroke-dash"  type="xs:string"/>
-          <xs:attribute name="line-cap"     type="LineCap"/>
-          <xs:attribute name="opacity">
-            <xs:simpleType>
-              <xs:restriction base="xs:decimal">
-                <xs:minInclusive value="0"/>
-                <xs:maxInclusive value="1"/>
-              </xs:restriction>
-            </xs:simpleType>
-          </xs:attribute>
-        </xs:complexType>
-      </xs:element>
-
-      <!-- text — absolutely positioned; <span> children for mixed runs -->
-      <xs:element name="text">
-        <xs:annotation>
-          <xs:documentation>Text at an exact position on the page: either x and y, or an anchor with optional offsets.</xs:documentation>
-        </xs:annotation>
-        <xs:complexType mixed="true">
-          <xs:choice minOccurs="0" maxOccurs="unbounded">
-            <xs:element ref="span"/>
-          </xs:choice>
-          <xs:attribute name="x"           type="SignedPtValue"/>
-          <xs:attribute name="y"           type="SignedPtValue"/>
-          <xs:attribute name="anchor"      type="Anchor"/>
-          <xs:attribute name="font"        type="xs:string"/>
-          <xs:attribute name="font-size"   type="TokenScaleOrPt"/>
-          <xs:attribute name="color"       type="Color"/>
-          <xs:attribute name="align"       type="TextAlignH"/>
-          <xs:attribute name="width"       type="PtValue"/>
-          <xs:attribute name="line-height">
-            <xs:simpleType>
-              <xs:restriction base="xs:decimal">
-                <xs:minInclusive value="0"/>
-              </xs:restriction>
-            </xs:simpleType>
-          </xs:attribute>
-          <xs:attribute name="opacity">
-            <xs:simpleType>
-              <xs:restriction base="xs:decimal">
-                <xs:minInclusive value="0"/>
-                <xs:maxInclusive value="1"/>
-              </xs:restriction>
-            </xs:simpleType>
-          </xs:attribute>
-          <xs:attributeGroup ref="DataBindingAttrs"/>
-        </xs:complexType>
-      </xs:element>
-
-      <!-- img — absolutely positioned; width and height required (no auto-sizing) -->
-      <xs:element name="img">
-        <xs:complexType>
-          <xs:attribute name="name"   type="xs:string" use="required"/>
-          <xs:attribute name="x"      type="SignedPtValue"/>
-          <xs:attribute name="y"      type="SignedPtValue"/>
-          <xs:attribute name="width"  type="PtValue" use="required"/>
-          <xs:attribute name="height" type="PtValue" use="required"/>
-          <xs:attribute name="anchor" type="Anchor"/>
-          <xs:attributeGroup ref="DataBindingAttrs"/>
-        </xs:complexType>
-      </xs:element>
-
+      <xs:element ref="rect"/>
+      <xs:element ref="circle"/>
+      <xs:element ref="ellipse"/>
+      <xs:element ref="line"/>
+      <xs:element ref="path"/>
+      <xs:element ref="text-at"/>
+      <xs:element ref="img-at"/>
+      <xs:element ref="barcode-at"/>
     </xs:choice>
   </xs:group>
+
+  <!-- Where the box of a text-at, img-at or barcode-at goes -->
+  <xs:attributeGroup name="AtPositionAttrs">
+    <xs:attribute name="x"      type="SignedPtValue"/>
+    <xs:attribute name="y"      type="SignedPtValue"/>
+    <xs:attribute name="anchor" type="Anchor"/>
+  </xs:attributeGroup>
+
+  <!-- What a text means in the layout and in a layer -->
+  <xs:attributeGroup name="TextCore">
+    <xs:attribute name="font-size" type="TokenScaleOrPt"/>
+    <xs:attribute name="font"      type="xs:string"/>
+    <xs:attribute name="bold" type="xs:boolean">
+      <xs:annotation>
+        <xs:documentation>Use the bold face of the font. It applies to the 14 built-in fonts: Helvetica becomes Helvetica-Bold, Times-Roman becomes Times-Bold, Courier becomes Courier-Bold, and the oblique and italic faces their bold forms. A custom font has no bold face to pick, so name one in font.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="color"     type="Color"/>
+    <xs:attribute name="align"     type="TextAlignH"/>
+  </xs:attributeGroup>
+
+  <!-- What an image means in the layout and in a layer -->
+  <xs:attributeGroup name="ImgCore">
+    <xs:attribute name="name" type="xs:string" use="required"/>
+  </xs:attributeGroup>
+
+  <!-- What a barcode means in the layout and in a layer -->
+  <xs:attributeGroup name="BarcodeCore">
+    <xs:attribute name="type" use="required">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="qr"/>
+          <xs:enumeration value="code128"/>
+          <xs:enumeration value="ean13"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="data" type="xs:string" use="required"/>
+    <xs:attribute name="height" type="PtValue">
+      <xs:annotation>
+        <xs:documentation>Height of the whole barcode, with the digits of hrt inside it: they take the bottom 12pt and the bars the rest. A QR code is square: it takes width or height, and the smaller when both are set. Without a height, code128 has bars 40pt high, and 12pt more with hrt, and ean13 is 60pt high.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="ec">
+      <xs:simpleType>
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="L"/>
+          <xs:enumeration value="M"/>
+          <xs:enumeration value="Q"/>
+          <xs:enumeration value="H"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:attribute>
+    <xs:attribute name="hrt"        type="xs:boolean"/>
+    <xs:attribute name="color"      type="Color"/>
+    <xs:attribute name="background" type="Color"/>
+  </xs:attributeGroup>
+
+  <xs:element name="rect">
+    <xs:complexType>
+      <xs:attribute name="x"      type="SignedPtValue"/>
+      <xs:attribute name="y"      type="SignedPtValue"/>
+      <xs:attribute name="width"  type="PtValue" use="required"/>
+      <xs:attribute name="height" type="PtValue" use="required"/>
+      <xs:attribute name="anchor" type="Anchor"/>
+      <xs:attribute name="radius" type="PtValue"/>
+      <xs:attributeGroup ref="CanvasFillStrokeAttrs"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="circle">
+    <xs:complexType>
+      <xs:attribute name="x"      type="SignedPtValue">
+        <xs:annotation>
+          <xs:documentation>Where the circle's box goes, the square of side 2r around it: its left edge, or with anchor, an offset from that point of the page, where the box's matching point goes. The centre is r further in.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="y"      type="SignedPtValue">
+        <xs:annotation>
+          <xs:documentation>Where the circle's box goes, the square of side 2r around it: its top edge, or with anchor, an offset from that point of the page, where the box's matching point goes. The centre is r further in.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="r"      type="PtValue" use="required"/>
+      <xs:attribute name="anchor" type="Anchor"/>
+      <xs:attributeGroup ref="CanvasFillStrokeAttrs"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="ellipse">
+    <xs:complexType>
+      <xs:attribute name="x"      type="SignedPtValue">
+        <xs:annotation>
+          <xs:documentation>Where the ellipse's box goes, 2rx wide and 2ry high around it: its left edge, or with anchor, an offset from that point of the page, where the box's matching point goes. The centre is rx further in.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="y"      type="SignedPtValue">
+        <xs:annotation>
+          <xs:documentation>Where the ellipse's box goes, 2rx wide and 2ry high around it: its top edge, or with anchor, an offset from that point of the page, where the box's matching point goes. The centre is ry further in.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="rx"     type="PtValue" use="required"/>
+      <xs:attribute name="ry"     type="PtValue" use="required"/>
+      <xs:attribute name="anchor" type="Anchor"/>
+      <xs:attributeGroup ref="CanvasFillStrokeAttrs"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="line">
+    <xs:complexType>
+      <xs:attribute name="x1"          type="SignedPtValue" use="required"/>
+      <xs:attribute name="y1"          type="SignedPtValue" use="required"/>
+      <xs:attribute name="x2"          type="SignedPtValue" use="required"/>
+      <xs:attribute name="y2"          type="SignedPtValue" use="required"/>
+      <xs:attribute name="stroke"       type="Color"/>
+      <xs:attribute name="stroke-width" type="PtValue"/>
+      <xs:attribute name="stroke-dash"  type="xs:string"/>
+      <xs:attribute name="line-cap"     type="LineCap"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="path">
+    <xs:complexType>
+      <xs:attribute name="d"            type="xs:string" use="required"/>
+      <xs:attribute name="fill"         type="Color"/>
+      <xs:attribute name="stroke"       type="Color"/>
+      <xs:attribute name="fill-rule"    type="FillRule"/>
+      <xs:attribute name="stroke-width" type="PtValue"/>
+      <xs:attribute name="stroke-dash"  type="xs:string"/>
+      <xs:attribute name="line-cap"     type="LineCap"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="text-at">
+    <xs:annotation>
+      <xs:documentation>Text at a fixed place on the page. It is the text of the layout, with the same defaults: the document's font or Helvetica, 11pt and the text colour. It is one line unless told otherwise; give width to cut it off at a width or to wrap it with max-lines. x and y place its box: the top-left corner, or with anchor, an offset from that point of the page, where the box's matching point goes. {page} and {pages} in it count within the section, and a text that comes from data belongs in the layout, since a longer text loses its end here without a warning.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType mixed="true">
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element ref="span"/>
+      </xs:choice>
+      <xs:attributeGroup ref="AtPositionAttrs"/>
+      <xs:attributeGroup ref="TextCore"/>
+      <xs:attribute name="width" type="PtValue">
+        <xs:annotation>
+          <xs:documentation>Width of the box. Without it the text is one line of the width its characters need, and align has no effect; a long text runs on past the edge of the page, which cuts it off, but stays in the PDF. With it, a line past the width is cut off at it, or ends in an ellipsis with ellipsis, and max-lines above 1 wraps the text within it.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="max-lines">
+        <xs:annotation>
+          <xs:documentation>The most lines drawn, 1 by default. Above 1 it needs a width to wrap at, and wraps the text within it; only whole lines are drawn, and the rest of the text is dropped.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:positiveInteger">
+            <xs:minInclusive value="1"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+      <xs:attribute name="ellipsis" type="xs:boolean">
+        <xs:annotation>
+          <xs:documentation>End the last line drawn in an ellipsis when the text does not fit its width and max-lines. Off by default: the line is cut off at the width.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="line-height">
+        <xs:annotation>
+          <xs:documentation>The distance between lines, as a factor of the font size. Default 1.2.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:decimal">
+            <xs:minExclusive value="0"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+      <xs:attributeGroup ref="DataValueAttrs"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="img-at">
+    <xs:annotation>
+      <xs:documentation>An image at a fixed place on the page. It needs width or height, and the other follows the image's proportions. x and y place its box: the top-left corner, or with anchor, an offset from that point of the page, where the box's matching point goes.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attributeGroup ref="ImgCore"/>
+      <xs:attributeGroup ref="AtPositionAttrs"/>
+      <xs:attribute name="width"  type="PtValue"/>
+      <xs:attribute name="height" type="PtValue"/>
+      <xs:attributeGroup ref="DataConditionAttrs"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="barcode-at">
+    <xs:annotation>
+      <xs:documentation>A barcode at a fixed place on the page. A QR code takes width or height. A code128 or ean13 needs a width. x and y place its box: the top-left corner, or with anchor, an offset from that point of the page, where the box's matching point goes.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attributeGroup ref="BarcodeCore"/>
+      <xs:attributeGroup ref="AtPositionAttrs"/>
+      <xs:attribute name="width" type="PtValue"/>
+      <xs:attributeGroup ref="DataValueAttrs"/>
+    </xs:complexType>
+  </xs:element>
 
   <!-- layer: absolute-coordinate content, a direct child of <section>.
        Coordinates are top-left origin, y-down, relative to the full page.
        Graphics state scope (page, opacity, transform, clip). Cannot nest. -->
   <xs:element name="layer">
     <xs:annotation>
-      <xs:documentation>Draws shapes at exact positions on the page, independent of the flowing layout: watermarks, stamps, page furniture. Coordinates start at the top left corner of the whole page, not inside the layout's margin, and y grows downward. A layer before the section's layout paints under it, and one after paints over it. It sets what applies to all of its shapes: which pages they appear on, opacity, transform and clip. Layers cannot be nested.</xs:documentation>
+      <xs:documentation>Draws shapes, text, images and barcodes at exact positions on the page, independent of the flowing layout: watermarks, stamps, page furniture. Coordinates start at the top left corner of the whole page, not inside the layout's margin, and y grows downward. A layer before the section's layout paints under it, and one after paints over it. It sets what applies to all of its content: which pages it appears on, opacity, transform and clip. Layers cannot be nested.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
@@ -531,6 +606,9 @@
       </xs:sequence>
       <xs:attribute name="page"      type="PageScope"/>
       <xs:attribute name="opacity">
+        <xs:annotation>
+          <xs:documentation>How opaque everything in the layer is, from 0 to 1. To fade one element, put it in a layer of its own.</xs:documentation>
+        </xs:annotation>
         <xs:simpleType>
           <xs:restriction base="xs:decimal">
             <xs:minInclusive value="0"/>
@@ -539,7 +617,12 @@
         </xs:simpleType>
       </xs:attribute>
       <xs:attribute name="transform" type="xs:string"/>
-      <xs:attribute name="clip"      type="xs:string"/>
+      <xs:attribute name="clip" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>A rectangle that cuts off what the layer draws outside it: x y w h, in points from the top left corner of the page.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attributeGroup ref="DataConditionAttrs"/>
     </xs:complexType>
   </xs:element>
 
@@ -936,7 +1019,7 @@
   <xs:element name="img">
     <xs:complexType>
       <!-- <img> uses a pt-only height constraint, not HeightMode (fill/full) -->
-      <xs:attribute name="name"       type="xs:string"     use="required"/>
+      <xs:attributeGroup ref="ImgCore"/>
       <xs:attribute name="height"     type="PtValue"/>
       <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="font"       type="xs:string"/>
@@ -954,35 +1037,8 @@
 
   <xs:element name="barcode">
     <xs:complexType>
-      <xs:attribute name="type" use="required">
-        <xs:simpleType>
-          <xs:restriction base="xs:string">
-            <xs:enumeration value="qr"/>
-            <xs:enumeration value="code128"/>
-            <xs:enumeration value="ean13"/>
-          </xs:restriction>
-        </xs:simpleType>
-      </xs:attribute>
-      <xs:attribute name="data"       type="xs:string"       use="required"/>
+      <xs:attributeGroup ref="BarcodeCore"/>
       <xs:attributeGroup ref="WidthAttr"/>
-      <xs:attribute name="height"     type="PtValue">
-        <xs:annotation>
-          <xs:documentation>Height of the whole barcode, with the digits of hrt inside it: they take the bottom 12pt and the bars the rest. A QR code is square: it takes width or height, and the smaller when both are set. Without a height, code128 has bars 40pt high, and 12pt more with hrt, and ean13 is 60pt high.</xs:documentation>
-        </xs:annotation>
-      </xs:attribute>
-      <xs:attribute name="ec">
-        <xs:simpleType>
-          <xs:restriction base="xs:string">
-            <xs:enumeration value="L"/>
-            <xs:enumeration value="M"/>
-            <xs:enumeration value="Q"/>
-            <xs:enumeration value="H"/>
-          </xs:restriction>
-        </xs:simpleType>
-      </xs:attribute>
-      <xs:attribute name="hrt"        type="xs:boolean"/>
-      <xs:attribute name="color"      type="Color"/>
-      <xs:attribute name="background" type="Color"/>
       <xs:attribute name="paginate"   type="Paginate"/>
       <xs:attribute name="debug"      type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
@@ -997,15 +1053,7 @@
       <xs:choice minOccurs="0" maxOccurs="unbounded">
         <xs:element ref="span"/>
       </xs:choice>
-      <xs:attribute name="font-size" type="TokenScaleOrPt"/>
-      <xs:attribute name="font"      type="xs:string"/>
-      <xs:attribute name="bold" type="xs:boolean">
-        <xs:annotation>
-          <xs:documentation>Use the bold face of the font. It applies to the 14 built-in fonts: Helvetica becomes Helvetica-Bold, Times-Roman becomes Times-Bold, Courier becomes Courier-Bold, and the oblique and italic faces their bold forms. A custom font has no bold face to pick, so name one in font.</xs:documentation>
-        </xs:annotation>
-      </xs:attribute>
-      <xs:attribute name="color"     type="Color"/>
-      <xs:attribute name="align"     type="TextAlignH"/>
+      <xs:attributeGroup ref="TextCore"/>
       <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="widows">
         <xs:annotation>

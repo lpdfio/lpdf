@@ -36,35 +36,6 @@ use roxmltree::{Document, Node};
 /// Attributes the schema declares and the engine does not use yet: `element@attribute`, and why. The test
 /// requires them to have no effect; when one is implemented, the test fails and the entry is removed.
 const IGNORED: &[(&str, &str)] = &[
-    ("canvas:rect@opacity", "a shape reads no opacity of its own; the layer's opacity applies"),
-    ("canvas:circle@opacity", "a shape reads no opacity of its own; the layer's opacity applies"),
-    ("canvas:ellipse@opacity", "a shape reads no opacity of its own; the layer's opacity applies"),
-    ("canvas:path@opacity", "a shape reads no opacity of its own; the layer's opacity applies"),
-    (
-        "canvas:text@line-height",
-        "it spaces the lines of a text, and the content is collapsed to one line before it is drawn, so there is never a second line",
-    ),
-    (
-        "canvas:span@bold",
-        "the runs of a canvas text are drawn as one string in the text's own font: a span's attributes are read and not used",
-    ),
-    (
-        "canvas:span@color",
-        "the runs of a canvas text are drawn as one string in the text's own font: a span's attributes are read and not used",
-    ),
-    (
-        "canvas:span@href",
-        "the runs of a canvas text are drawn as one string in the text's own font: a span's attributes are read and not used",
-    ),
-    (
-        "canvas:span@underline",
-        "the runs of a canvas text are drawn as one string in the text's own font: a span's attributes are read and not used",
-    ),
-    (
-        "canvas:span@strike",
-        "the runs of a canvas text are drawn as one string in the text's own font: a span's attributes are read and not used",
-    ),
-    ("layer@clip", "never read"),
     (
         "region@pin",
         "read and not used: a region is a header when it comes first in the layout and a footer when it comes last, whatever its pin says",
@@ -92,8 +63,7 @@ const IGNORED_VALUES: &[(&str, &str)] = &[(
 
 /// Attributes that change the PDF file and not what a page shows: `element@attribute`, and why. The test cannot
 /// tell the two apart; these were found by reading the engine. Each has to keep changing the PDF.
-const INVISIBLE: &[(&str, &str)] =
-    &[("canvas:span@font", "the run's font is embedded, and the run is drawn in the text's own font")];
+const INVISIBLE: &[(&str, &str)] = &[];
 
 /// Attributes this test cannot exercise: `element@attribute`, and why.
 const UNTESTED: &[(&str, &str)] = &[
@@ -134,13 +104,15 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
     let by_id: &[(&str, &[&str])] = &[
         ("table@cols", &["2fr 1fr", "100pt 1fr"]),
         ("img@name", &["other"]),
-        ("canvas:img@name", &["other"]),
+        ("img-at@name", &["other"]),
         ("font@name", &["renamed"]),
         ("image@name", &["renamed"]),
         ("color@name", &["renamed"]),
         ("font@ref", &["custom"]),
         ("image@ref", &["other"]),
         ("barcode@data", &["Another payload"]),
+        ("barcode-at@data", &["Another payload"]),
+        ("layer@clip", &["20pt 20pt 80pt 80pt"]),
         ("bookmark@id", &["chosen"]),
     ];
     if let Some((_, values)) = by_id.iter().find(|(key, _)| *key == id) {
@@ -186,11 +158,11 @@ fn pattern_samples(type_name: &str) -> Vec<String> {
 
 /// Elements the schema declares once and the engine reads in more than one place: the name to try the second
 /// place under, and the element it is.
-const CONTEXTS: &[(&str, &str)] = &[("canvas:span", "span")];
+const CONTEXTS: &[(&str, &str)] = &[];
 
 /// One attribute of one element, with the values to try for it.
 struct Attribute {
-    /// The element: its name, `canvas:` in front of a drawing primitive, `tokens:` in front of a token row.
+    /// The element: its name, `tokens:` in front of a token row.
     element: String,
     name: String,
     required: bool,
@@ -318,7 +290,6 @@ fn schema_attributes(doc: &Document) -> Vec<Attribute> {
         let (own, nested) = match (outer.tag_name().name(), outer.attribute("name")) {
             ("element", Some("tokens")) => ("", "tokens:"),
             ("element", Some(_)) => ("", ""),
-            ("group", Some("CanvasPrimitives")) => ("canvas:", "canvas:"),
             _ => continue,
         };
         for declaration in outer.descendants().filter(|n| is(*n, "element") && n.attribute("name").is_some()) {
@@ -553,22 +524,23 @@ fn subjects() -> Vec<Subject> {
                 ),
             )
         }),
-        Subject::new("canvas:rect", |a, _| draw("", &format!("<rect {a}/>")))
+        Subject::new("rect", |a, _| draw("", &format!("<rect {a}/>")))
             .base(&[("x", "50pt"), ("y", "50pt"), ("width", "100pt"), ("height", "60pt"), ("fill", "#00aa00")]),
-        Subject::new("canvas:circle", |a, _| draw("", &format!("<circle {a}/>")))
+        Subject::new("circle", |a, _| draw("", &format!("<circle {a}/>")))
             .base(&[("x", "110pt"), ("y", "110pt"), ("r", "40pt"), ("fill", "#00aa00")]),
-        Subject::new("canvas:ellipse", |a, _| draw("", &format!("<ellipse {a}/>")))
+        Subject::new("ellipse", |a, _| draw("", &format!("<ellipse {a}/>")))
             .base(&[("x", "90pt"), ("y", "120pt"), ("rx", "60pt"), ("ry", "30pt"), ("fill", "#00aa00")]),
-        Subject::new("canvas:line", |a, _| draw("", &format!("<line {a}/>")))
+        Subject::new("line", |a, _| draw("", &format!("<line {a}/>")))
             .base(&[("x1", "50pt"), ("y1", "50pt"), ("x2", "200pt"), ("y2", "120pt"), ("stroke", "#000000")]),
-        Subject::new("canvas:path", |a, _| draw("", &format!("<path {a}/>")))
+        Subject::new("path", |a, _| draw("", &format!("<path {a}/>")))
             .base(&[("d", "M 50 50 L 200 50 L 125 150 Z"), ("fill", "#00aa00")]),
-        Subject::new("canvas:text", |a, c| draw("", &format!("<text {a}>{c}</text>")))
+        Subject::new("text-at", |a, c| draw("", &format!("<text-at {a}>{c}</text-at>")))
             .base(&[("x", "50pt"), ("y", "100pt")])
-            .content("Canvas text"),
-        Subject::new("canvas:span", |a, _| draw("", &format!(r#"<text x="50pt" y="100pt">Before <span {a}>middle</span> after</text>"#))),
-        Subject::new("canvas:img", |a, _| draw("", &format!("<img {a}/>")))
+            .content("Text in a layer"),
+        Subject::new("img-at", |a, _| draw("", &format!("<img-at {a}/>")))
             .base(&[("name", "logo"), ("x", "50pt"), ("y", "50pt"), ("width", "80pt"), ("height", "80pt")]),
+        Subject::new("barcode-at", |a, _| draw("", &format!("<barcode-at {a}/>")))
+            .base(&[("type", "qr"), ("data", "1234567890128"), ("x", "50pt"), ("y", "50pt"), ("width", "100pt")]),
     ]
 }
 
@@ -675,20 +647,34 @@ fn tweaks() -> HashMap<String, Tweak> {
     add("field@action-url", Tweak::default().set("type", "button"));
     add("field@label", Tweak::default().set("type", "button"));
 
-    // Canvas shapes: what is drawn only with a fill or a stroke.
-    for element in ["canvas:rect", "canvas:circle", "canvas:ellipse"] {
+    // Layer shapes: what is drawn only with a fill or a stroke.
+    for element in ["rect", "circle", "ellipse"] {
         add(&format!("{element}@stroke-width"), Tweak::default().set("stroke", "#000000"));
         add(&format!("{element}@stroke-dash"), Tweak::default().set("stroke", "#000000"));
     }
-    add("canvas:path@stroke-width", Tweak::default().set("stroke", "#000000"));
-    add("canvas:path@stroke-dash", Tweak::default().set("stroke", "#000000"));
-    add("canvas:path@line-cap", Tweak::default().set("stroke", "#000000"));
-    // The width of a canvas text is what its align works in.
-    add("canvas:text@width", Tweak::default().set("align", "center"));
+    add("path@stroke-width", Tweak::default().set("stroke", "#000000"));
+    add("path@stroke-dash", Tweak::default().set("stroke", "#000000"));
+    add("path@line-cap", Tweak::default().set("stroke", "#000000"));
     add(
-        "canvas:path@fill-rule",
+        "path@fill-rule",
         Tweak::default().set("d", "M 50 50 L 250 50 L 250 250 L 50 250 Z M 100 100 L 200 100 L 200 200 L 100 200 Z"),
     );
+
+    // A text-at is one line at its natural width until it is given a width. The width is what align works in,
+    // and what a long line is cut off at; max-lines wraps within it, and ellipsis and line-height show on the
+    // lines that wrapping makes or cuts.
+    const WRAPS: &str = "Text that needs more than one line to say what it says";
+    add("text-at@width", Tweak::default().set("align", "center").content("A short text"));
+    add("text-at@align", Tweak::default().set("width", "150pt").set("max-lines", "2").content(WRAPS));
+    add("text-at@max-lines", Tweak::default().set("width", "60pt").content(WRAPS));
+    add("text-at@ellipsis", Tweak::default().set("width", "40pt").content(WRAPS));
+    add("text-at@line-height", Tweak::default().set("width", "60pt").set("max-lines", "3").content(WRAPS));
+
+    // A barcode in a layer: the options of one type show on that type, and a QR code takes the smaller of its
+    // width and height, so the other is left large for the one tried to show.
+    add("barcode-at@hrt", Tweak::default().set("type", "code128"));
+    add("barcode-at@width", Tweak::default().set("height", "300pt"));
+    add("barcode-at@height", Tweak::default().set("width", "300pt"));
     t
 }
 

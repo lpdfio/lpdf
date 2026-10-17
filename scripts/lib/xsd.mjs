@@ -82,7 +82,6 @@ export function loadSchema(path) {
     }
 
     const globals = schema.children.filter((c) => local(c.name) === 'element' && c.attrs.name);
-    const canvasGroup = schema.children.find((c) => local(c.name) === 'group' && c.attrs.name === 'CanvasPrimitives');
 
     const simpleTypes = new Map(
         schema.children.filter((c) => local(c.name) === 'simpleType' && c.attrs.name).map((s) => [s.attrs.name, s]),
@@ -107,7 +106,6 @@ export function loadSchema(path) {
         element(name, where = 'global') {
             let found;
             if (where === 'global') found = globals.find((e) => e.attrs.name === name);
-            else if (where === 'primitives') found = descendants(canvasGroup, 'element').find((e) => e.attrs.name === name);
             else {
                 const outer = globals.find((e) => e.attrs.name === where);
                 found = outer && descendants(outer, 'element').find((e) => e.attrs.name === name && e.children.length);
