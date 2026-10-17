@@ -12,7 +12,8 @@
 //! cargo run --manifest-path src/core/Cargo.toml --bin gen_fixtures -- \
 //!     --size m --depth 3 --out test/fixtures/bench_m.xml
 //!
-//! # generate all standard static bench fixtures (bench_xs through bench_max)
+//! # generate all standard static bench fixtures (bench_xs through bench_max), and the layer
+//! # and media fixtures (bench_layers_*, bench_media_*)
 //! cargo run --manifest-path src/core/Cargo.toml --bin gen_fixtures -- --all
 //!
 //! # generate data-binding fixtures (bench_data_s + bench_data_m, XML + JSON)
@@ -43,6 +44,21 @@
 //! |  3    | + grid (3-col), row, row justified between        |
 //! |  4    | + table, nested grid                              |
 //! |  5    | + deep nested containers, spans, multi-col tables |
+//!
+//! ## Page fixtures: layers, images, QR codes, linear barcodes
+//!
+//! `--all` also writes `bench_{kind}_{s,m,l}.xml` for four kinds, at the sizes of the static tiers s, m and l.
+//! Depth does not apply to them. Each section is one page, and each kind holds one thing, since a page that
+//! holds a QR code spends nearly all of its time encoding it:
+//!
+//! | Kind   | A page holds |
+//! |--------|--------------|
+//! | layers | a layer under the flow (shapes, a text-at), a layer over it (a wrapped text-at that ends in an ellipsis, one that wraps, `{page}` and `{pages}`), and a layer faded to 35% |
+//! | images | pictures in the flow (one size given, two sizes given, in a grid), and three img-at in a layer |
+//! | qr     | three QR codes in the flow (width, height, both), and two barcode-at in a layer |
+//! | linear | Code 128 and EAN-13 in the flow (width, height, both, with and without digits), and two barcode-at in a layer |
+//!
+//! The image fixtures name one picture, `photo`, and a bench loads it.
 
 use std::fmt::Write as FmtWrite;
 use std::fs;
@@ -71,6 +87,10 @@ const TIERS: &[SizeTier] = &[
 /// The data-binding fixtures: a label and a target size in bytes.
 const DATA_TIERS: &[(&str, usize)] = &[("s", 10_000), ("m", 50_000)];
 
+/// The page fixtures (layers, images, QR codes, linear barcodes): a label and a target size in bytes, the sizes
+/// of the static tiers s, m and l.
+const PAGE_TIERS: &[(&str, usize)] = &[("s", 10_000), ("m", 50_000), ("l", 100_000)];
+
 fn tier_by_label(label: &str) -> Option<SizeTier> {
     TIERS.iter().copied().find(|t| t.label == label)
 }
@@ -94,6 +114,14 @@ fn main() {
             let xml = generate(tier, depth);
             write_file(&path, xml.as_bytes());
             eprintln!("wrote {} ({} B) → {}", tier.label, xml.len(), path.display());
+        }
+        for (kind, _, _) in PAGE_KINDS {
+            for (label, target) in PAGE_TIERS {
+                let xml = generate_pages(kind, label, *target);
+                let path = fixtures_dir.join(format!("bench_{kind}_{label}.xml"));
+                write_file(&path, xml.as_bytes());
+                eprintln!("wrote bench_{kind}_{label}.xml ({} B) → {}", xml.len(), path.display());
+            }
         }
     }
 
@@ -153,7 +181,7 @@ fn usage_exit(msg: &str) -> ! {
     eprintln!();
     eprintln!("Usage:");
     eprintln!("  gen_fixtures --size <xs|s|m|l|xl|xxl|max> [--depth <1-5>] [--out <path>]");
-    eprintln!("  gen_fixtures --all  [--depth <1-5>] [--out <fixtures-dir>]  (static fixtures)");
+    eprintln!("  gen_fixtures --all  [--depth <1-5>] [--out <fixtures-dir>]  (static, layer and media fixtures)");
     eprintln!("  gen_fixtures --data [--out <fixtures-dir>]                  (data-binding fixtures)");
     eprintln!("  gen_fixtures --all --data                                   (all fixtures)");
     std::process::exit(1);
@@ -200,7 +228,7 @@ fn parse_args(args: &[String]) -> Opts {
                 eprintln!("  --size  <xs|s|m|l|xl|xxl|max>   target size tier (static XML)");
                 eprintln!("  --depth <1-5>                    structural depth (default: per-tier)");
                 eprintln!("  --out   <path>                   output file or dir (default: stdout / test/fixtures)");
-                eprintln!("  --all                            generate all static bench fixtures");
+                eprintln!("  --all                            generate all static bench fixtures, and the layer and media ones");
                 eprintln!("  --data                           generate data-binding fixtures (XML + JSON)");
                 std::process::exit(0);
             }
@@ -533,6 +561,187 @@ fn generate(tier: &SizeTier, depth: u8) -> String {
     ctx.buf
 }
 
+// ── Layer, image and barcode fixture generators ──────────────────────────────
+
+/// The page fixtures, named `bench_{kind}_{label}.xml`: what a page holds, and the `<assets>` block the
+/// document declares, or empty. Each kind is one thing, since a document that holds a QR code spends nearly
+/// all of its time encoding it, and would show nothing of the rest.
+const PAGE_KINDS: &[(&str, &str, fn(&mut String, usize))] = &[
+    ("layers", "",           layers_section),
+    ("images", IMAGE_ASSETS, images_section),
+    ("qr",     "",           qr_section),
+    ("linear", "",           linear_section),
+];
+
+/// One page fixture of `kind` (a name in `PAGE_KINDS`) at about `target_bytes`: as many pages as it takes.
+pub fn generate_pages(kind: &str, label: &str, target_bytes: usize) -> String {
+    let (_, assets, section) = PAGE_KINDS
+        .iter()
+        .find(|(name, _, _)| *name == kind)
+        .unwrap_or_else(|| panic!("unknown page fixture '{kind}'"));
+
+    let header = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated by gen_fixtures: {kind} label={label} target={target_bytes}B -->
+<lpdf version="1">
+{assets}  <document size="a4">
+    <meta title="Benchmark Fixture {kind} {}" />
+"#,
+        label.to_uppercase()
+    );
+    let footer = "  </document>\n</lpdf>\n";
+
+    let content_target = target_bytes.saturating_sub(header.len() + footer.len());
+    let mut body = String::new();
+    let mut n = 0;
+    while body.len() < content_target {
+        n += 1;
+        section(&mut body, n);
+    }
+    format!("{header}{body}{footer}")
+}
+
+/// A page of layers: shapes and a text under the flow, over it a wrapped text that ends in an ellipsis and a
+/// page number, and a group of shapes and text faded to 35%.
+fn layers_section(buf: &mut String, n: usize) {
+    write!(
+        buf,
+        r##"    <section>
+      <layer>
+        <rect x="0pt" y="0pt" width="595pt" height="72pt" fill="#1e3a8a" />
+        <circle x="506pt" y="14pt" r="22pt" fill="#3b82f6" />
+        <line x1="40pt" y1="770pt" x2="555pt" y2="770pt" stroke="#cbd5e1" stroke-width="0.5pt" />
+        <path d="M 40 800 L 100 800 L 70 826 Z" fill="#e0e7ff" stroke="#4f46e5" stroke-width="1pt" />
+        <text-at x="40pt" y="22pt" font-size="xl" font="Helvetica-Bold" color="#ffffff">Layers {n}</text-at>
+      </layer>
+      <layout margin="96pt 40pt 72pt">
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">Page {n}</text>
+          <text font-size="m">Paragraph {n}. The flow of the page is laid out as it always is, between the layer that paints under it and the layers that paint over it. Each layer is drawn after the flow has found its pages.</text>
+          <text font-size="m">Paragraph {n}. A layer holds shapes, text, images and barcodes at exact places on the page, and a layer with an opacity is drawn as one group and faded as a whole.</text>
+        </column>
+      </layout>
+      <layer>
+        <text-at x="40pt" y="640pt" width="260pt" max-lines="3" ellipsis="true" font-size="s" color="#475569">Note {n}. A text in a layer wraps at its width and keeps at most the lines it is given, and the last line ends in dots when the text does not fit. This one is longer than three lines on purpose, so that the engine has to cut it short and end it in dots, as it does with the long names and descriptions that a printed form has to fit in a box of a fixed size.</text-at>
+        <text-at x="320pt" y="640pt" width="235pt" max-lines="4" font-size="s" color="#475569">Note {n}, wrapped and not cut. Four lines are enough for this text, which has no dots at its end.</text-at>
+        <text-at anchor="bottom-right" x="-40pt" y="-30pt" font-size="xs" align="right" color="#64748b">Page {{page}} of {{pages}}</text-at>
+      </layer>
+      <layer opacity="0.35">
+        <rect x="60pt" y="300pt" width="300pt" height="160pt" fill="#f59e0b" radius="8pt" />
+        <circle x="280pt" y="340pt" r="70pt" fill="#ef4444" />
+        <text-at x="80pt" y="360pt" font-size="xxl" font="Helvetica-Bold" color="#111827">Draft {n}</text-at>
+      </layer>
+    </section>
+"##
+    )
+    .unwrap();
+}
+
+/// What the image fixtures declare for their picture: the name the document uses, and a file for it.
+const IMAGE_ASSETS: &str = r#"  <assets>
+    <image name="photo" src="photo.jpg" />
+  </assets>
+"#;
+
+/// A page of pictures: in the flow with one size given and with two, and in a layer.
+fn images_section(buf: &mut String, n: usize) {
+    write!(
+        buf,
+        r##"    <section>
+      <layout margin="40pt">
+        <column gap="m">
+          <text font-size="xl" font="Helvetica-Bold">Images {n}</text>
+          <text font-size="m">Pictures in the flow keep their proportions. One size sets the other, and two sizes are a maximum that the picture fits in.</text>
+          <row gap="m" align="start">
+            <img name="photo" width="140pt" />
+            <img name="photo" width="140pt" height="140pt" />
+            <img name="photo" height="120pt" />
+          </row>
+          <grid cols="4" gap="s">
+            <img name="photo" width="90pt" />
+            <img name="photo" width="90pt" height="60pt" />
+            <img name="photo" height="80pt" />
+            <img name="photo" width="100pt" height="100pt" />
+            <img name="photo" width="60pt" />
+            <img name="photo" width="120pt" height="50pt" />
+            <img name="photo" height="60pt" />
+            <img name="photo" width="70pt" height="90pt" />
+          </grid>
+        </column>
+      </layout>
+      <layer>
+        <img-at name="photo" x="300pt" y="680pt" width="90pt" />
+        <img-at name="photo" anchor="bottom-right" x="-40pt" y="-40pt" width="150pt" height="60pt" />
+        <img-at name="photo" anchor="bottom-left" x="40pt" y="-40pt" height="80pt" />
+      </layer>
+    </section>
+"##
+    )
+    .unwrap();
+}
+
+/// A page of QR codes: in the flow with a width, a height and both, and two in a layer.
+fn qr_section(buf: &mut String, n: usize) {
+    write!(
+        buf,
+        r##"    <section>
+      <layout margin="40pt">
+        <column gap="m">
+          <text font-size="xl" font="Helvetica-Bold">QR codes {n}</text>
+          <row gap="l" align="start">
+            <barcode type="qr" data="https://example.com/qr/{n}" width="96pt" />
+            <barcode type="qr" data="https://example.com/qr/{n}/height" height="72pt" />
+            <barcode type="qr" data="LP-{n:05}" width="120pt" height="80pt" ec="H" />
+          </row>
+        </column>
+      </layout>
+      <layer>
+        <barcode-at type="qr" data="https://example.com/qr/{n}/page" anchor="bottom-left" x="40pt" y="-40pt" height="60pt" />
+        <barcode-at type="qr" data="https://example.com/qr/{n}/corner" anchor="bottom-right" x="-40pt" y="-40pt" width="60pt" ec="Q" />
+      </layer>
+    </section>
+"##
+    )
+    .unwrap();
+}
+
+/// A page of linear barcodes, Code 128 and EAN-13: in the flow with a width, a height and both, with the digits
+/// under them or not, and two in a layer.
+fn linear_section(buf: &mut String, n: usize) {
+    write!(
+        buf,
+        r##"    <section>
+      <layout margin="40pt">
+        <column gap="m">
+          <text font-size="xl" font="Helvetica-Bold">Linear barcodes {n}</text>
+          <row gap="l" align="start">
+            <barcode type="code128" data="LP-{n:05}" width="200pt" />
+            <barcode type="code128" data="LP-{n:05}-B" height="52pt" hrt="true" />
+            <barcode type="code128" data="LP-{n:05}-C" width="160pt" height="40pt" />
+          </row>
+          <row gap="l" align="start">
+            <barcode type="ean13" data="590123412345" width="140pt" />
+            <barcode type="ean13" data="590123412345" height="70pt" hrt="true" />
+            <barcode type="ean13" data="590123412345" width="160pt" height="60pt" />
+          </row>
+          <row gap="l" align="start">
+            <barcode type="code128" data="LP-{n:05}-D" width="120pt" />
+            <barcode type="ean13" data="400638133393" width="100pt" />
+            <barcode type="code128" data="LP-{n:05}-E" height="30pt" />
+            <barcode type="ean13" data="400638133393" height="50pt" />
+          </row>
+        </column>
+      </layout>
+      <layer>
+        <barcode-at type="code128" data="LP-{n:05}" x="40pt" y="700pt" width="200pt" height="40pt" />
+        <barcode-at type="ean13" data="590123412345" anchor="bottom-right" x="-40pt" y="-40pt" height="60pt" />
+      </layer>
+    </section>
+"##
+    )
+    .unwrap();
+}
+
 // ── Data-binding fixture generator ───────────────────────────────────────────
 
 /// Generate a pair of (XML template, JSON data) for the data-binding bench.
@@ -722,6 +931,52 @@ mod tests {
     fn the_static_fixtures_are_what_the_generator_writes() {
         for tier in TIERS {
             assert_committed(&format!("bench_{}.xml", tier.label), &generate(tier, tier.default_depth));
+        }
+    }
+
+    #[test]
+    fn the_page_fixtures_are_what_the_generator_writes() {
+        for (kind, _, _) in PAGE_KINDS {
+            for (label, target) in PAGE_TIERS {
+                assert_committed(&format!("bench_{kind}_{label}.xml"), &generate_pages(kind, label, *target));
+            }
+        }
+    }
+
+    fn contains(pdf: &[u8], needle: &[u8]) -> bool {
+        pdf.windows(needle.len()).any(|window| window == needle)
+    }
+
+    // A fixture the engine reads differently than it was written would still render a page, and its bench would
+    // time something else than layers, pictures and barcodes. So the engine is asked what it lays out: every
+    // section is one page, and holds the layers, images or barcodes of its kind, all of them.
+    #[test]
+    fn the_page_fixtures_hold_what_they_are_for() {
+        let photo_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/6-book/assets/images/chapter-05-caterpillar.jpg");
+        let photo = fs::read(&photo_path).unwrap_or_else(|e| panic!("{}: {e}", photo_path.display()));
+
+        // The bigger tiers are more of the same pages, and take long to lay out in a debug build.
+        let (label, target) = PAGE_TIERS[0];
+
+        // (kind, what the layout calls it, how many a page holds)
+        for (kind, node, per_page) in [("layers", "canvas-layer", 3), ("images", "image", 14), ("qr", "barcode", 5), ("linear", "barcode", 12)] {
+            let xml = generate_pages(kind, label, target);
+            let pages = xml.matches("<section>").count();
+
+            let mut engine = lpdf::LpdfEngine::new("");
+            engine.load_image("photo", &photo);
+            let layout = engine.render(&xml);
+            let found = layout.matches(&format!(r#""type":"{node}""#)).count();
+            assert_eq!(found, pages * per_page, "{kind} {label}: {pages} pages should hold {per_page} {node} each");
+            let laid_out: serde_json::Value = serde_json::from_str(&layout).unwrap();
+            assert_eq!(laid_out["pages"].as_array().map(Vec::len), Some(pages), "{kind} {label}: every section should be one page");
+
+            let pdf = lpdf::bench_render_doc_with_images(lpdf::bench_parse(&xml).unwrap(), &[("photo", &photo)]).unwrap();
+            match kind {
+                "layers" => assert!(contains(&pdf, b"/Group"), "layers {label}: the faded layer is not drawn as a group"),
+                "images" => assert!(contains(&pdf, b"/Subtype /Image"), "images {label}: the picture is not in the PDF"),
+                _ => {}
+            }
         }
     }
 
