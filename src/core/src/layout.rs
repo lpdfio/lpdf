@@ -1775,7 +1775,9 @@ fn layout_barcode(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32
             let w = node.width_constraint.unwrap_or(avail_w).min(avail_w);
             let hrt_text = if node.barcode_hrt { Some(data.clone()) } else { None };
             let hrt_h    = if node.barcode_hrt { 12.0_f32 } else { 0.0 };
-            let h = node.img_height_constraint.unwrap_or(40.0) + hrt_h;
+            // `height` is the whole barcode, its digits inside it: they take the bottom 12pt.
+            // Without one, the bars are 40pt high.
+            let h = node.img_height_constraint.unwrap_or(40.0 + hrt_h);
 
             match encode_code128(&data) {
                 Ok(bars) => {
@@ -3595,11 +3597,11 @@ mod tests {
         let lines: String = (1..=120).map(|n| format!("<text>Line {n}</text>")).collect();
         let pages = render_pages(&format!(
             r##"<lpdf version="1"><document size="a4"><section>
-                <layer opacity="0.1"><rect w="10pt" h="10pt" fill="#000000"/></layer>
-                <layer opacity="0.2"><rect w="10pt" h="10pt" fill="#000000"/></layer>
+                <layer opacity="0.1"><rect width="10pt" height="10pt" fill="#000000"/></layer>
+                <layer opacity="0.2"><rect width="10pt" height="10pt" fill="#000000"/></layer>
                 <layout margin="28pt">{lines}</layout>
-                <layer opacity="0.3"><rect w="10pt" h="10pt" fill="#000000"/></layer>
-                <layer opacity="0.4" page="last"><rect w="10pt" h="10pt" fill="#000000"/></layer>
+                <layer opacity="0.3"><rect width="10pt" height="10pt" fill="#000000"/></layer>
+                <layer opacity="0.4" page="last"><rect width="10pt" height="10pt" fill="#000000"/></layer>
             </section></document></lpdf>"##
         ));
         assert!(pages.len() > 1, "the layout should run to several pages");
@@ -3691,5 +3693,57 @@ mod tests {
         );
         let anchors = crate::render::placed_anchors(&pages);
         assert_eq!((anchors[0].page, anchors[0].anchor.y), (1, 0.0));
+    }
+
+    /// The width and height of the first barcode in a layout, as the render tree reports them.
+    fn barcode_size(body: &str) -> (f64, f64) {
+        fn find(nodes: &serde_json::Value) -> Option<(f64, f64)> {
+            nodes.as_array()?.iter().find_map(|node| {
+                if node["type"] == "barcode" {
+                    Some((node["width"].as_f64()?, node["height"].as_f64()?))
+                } else {
+                    find(&node["nodes"])
+                }
+            })
+        }
+        let tree = engine_render(&minimal(body));
+        find(&tree["pages"][0]["nodes"]).expect("a barcode in the tree")
+    }
+
+    #[test]
+    fn a_qr_code_is_as_wide_and_as_high_as_its_width_or_its_height() {
+        let qr = |size: &str| format!(r#"<barcode type="qr" data="x" {size}/>"#);
+        assert_eq!(barcode_size(&qr(r#"width="60pt""#)), (60.0, 60.0));
+        assert_eq!(barcode_size(&qr(r#"height="50pt""#)), (50.0, 50.0));
+    }
+
+    #[test]
+    fn a_qr_code_given_both_takes_the_smaller_so_it_stays_square() {
+        assert_eq!(barcode_size(r#"<barcode type="qr" data="x" width="90pt" height="50pt"/>"#), (50.0, 50.0));
+        assert_eq!(barcode_size(r#"<barcode type="qr" data="x" width="40pt" height="70pt"/>"#), (40.0, 40.0));
+    }
+
+    #[test]
+    fn a_qr_code_in_a_filled_slot_takes_its_size_from_its_height() {
+        let row = r#"<row><barcode type="qr" data="x" width="fill" height="80pt"/><frame width="fill" height="10pt"/></row>"#;
+        assert_eq!(barcode_size(row), (80.0, 80.0));
+    }
+
+    #[test]
+    fn the_digits_of_a_code_128_sit_inside_its_height() {
+        let code = |attrs: &str| format!(r#"<barcode type="code128" data="ABC-123" width="120pt" {attrs}/>"#);
+        assert_eq!(barcode_size(&code(r#"height="40pt""#)), (120.0, 40.0));
+        assert_eq!(barcode_size(&code(r#"height="40pt" hrt="true""#)), (120.0, 40.0));
+        // Without a height the bars are 40pt high, and the digits come on top of that.
+        assert_eq!(barcode_size(&code("")), (120.0, 40.0));
+        assert_eq!(barcode_size(&code(r#"hrt="true""#)), (120.0, 52.0));
+    }
+
+    #[test]
+    fn the_digits_of_an_ean_13_sit_inside_its_height() {
+        let code = |attrs: &str| format!(r#"<barcode type="ean13" data="590123412345" width="120pt" {attrs}/>"#);
+        assert_eq!(barcode_size(&code(r#"height="60pt""#)), (120.0, 60.0));
+        assert_eq!(barcode_size(&code(r#"height="60pt" hrt="true""#)), (120.0, 60.0));
+        assert_eq!(barcode_size(&code(r#"hrt="true""#)), (120.0, 60.0));
     }
 }

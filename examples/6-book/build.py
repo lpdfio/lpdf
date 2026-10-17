@@ -140,10 +140,10 @@ def polar(radius, degrees):
     return CX + radius * math.sin(a), CY - radius * math.cos(a)
 
 
-watch = ['<circle cx="%dpt" cy="%dpt" r="58pt" stroke="gold" stroke-width="2.5pt" />' % (CX, CY),
-         '<circle cx="%dpt" cy="%dpt" r="51pt" stroke="gold" stroke-width="0.6pt" />' % (CX, CY),
-         '<rect x="147pt" y="%dpt" w="12pt" h="9pt" radius="2pt" fill="gold" />' % (CY - 67),
-         '<circle cx="%dpt" cy="%dpt" r="6pt" stroke="gold" stroke-width="1.6pt" />' % (CX, CY - 76)]
+watch = ['<circle x="%dpt" y="%dpt" r="58pt" stroke="gold" stroke-width="2.5pt" />' % (CX - 58, CY - 58),
+         '<circle x="%dpt" y="%dpt" r="51pt" stroke="gold" stroke-width="0.6pt" />' % (CX - 51, CY - 51),
+         '<rect x="147pt" y="%dpt" width="12pt" height="9pt" radius="2pt" fill="gold" />' % (CY - 67),
+         '<circle x="%dpt" y="%dpt" r="6pt" stroke="gold" stroke-width="1.6pt" />' % (CX - 6, CY - 82)]
 for hour in range(12):
     inner = 41 if hour % 3 == 0 else 44
     x1, y1 = polar(inner, hour * 30)
@@ -154,7 +154,7 @@ hx, hy = polar(27, 305)   # ten past ten: the hour hand
 mx, my = polar(38, 60)    # and the minute hand
 watch.append('<line x1="%dpt" y1="%dpt" x2="%.1fpt" y2="%.1fpt" stroke="gold" stroke-width="2.2pt" line-cap="round" />' % (CX, CY, hx, hy))
 watch.append('<line x1="%dpt" y1="%dpt" x2="%.1fpt" y2="%.1fpt" stroke="gold" stroke-width="1.4pt" line-cap="round" />' % (CX, CY, mx, my))
-watch.append('<circle cx="%dpt" cy="%dpt" r="3pt" fill="gold" />' % (CX, CY))
+watch.append('<circle x="%dpt" y="%dpt" r="3pt" fill="gold" />' % (CX - 3, CY - 3))
 
 # ---- headers: a layer for each chapter, on the pages of that chapter after its first -----------------------------
 # Drawn in layers, not as regions: Lpdf reserves room for every region whose page range it cannot count,
@@ -166,7 +166,7 @@ for i, ch in enumerate(chapters):
     if last != 'last' and first > last:
         continue
     headers.append('''      <layer page="%s-%s">
-        <text x="34pt" y="26pt" w="238pt" font-size="7pt" color="muted" align="center">%s  ·  %s</text>
+        <text x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">%s  ·  %s</text>
         <line x1="34pt" y1="38pt" x2="272pt" y2="38pt" stroke="rule" stroke-width="0.5pt" />
       </layer>''' % (first, last, roman_title(ch['number']), esc(ch['title'].upper())))
 
@@ -249,8 +249,8 @@ xml = '''<lpdf version="1">
 
       <!-- the cover, on the first page only -->
       <layer page="first">
-        <rect x="0pt" y="0pt" w="306pt" h="495pt" fill="cover" />
-        <rect x="14pt" y="14pt" w="278pt" h="467pt" stroke="gold" stroke-width="0.75pt" />
+        <rect x="0pt" y="0pt" width="306pt" height="495pt" fill="cover" />
+        <rect x="14pt" y="14pt" width="278pt" height="467pt" stroke="gold" stroke-width="0.75pt" />
         %s
       </layer>
 

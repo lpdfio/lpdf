@@ -30,7 +30,7 @@
         <line x1="109pt" y1="92pt" x2="96pt" y2="94pt" stroke="primary" stroke-width="0.9pt" />
         <line x1="109pt" y1="96pt" x2="96pt" y2="98pt" stroke="primary" stroke-width="0.9pt" />
         <line x1="109pt" y1="100pt" x2="96pt" y2="102pt" stroke="primary" stroke-width="0.9pt" />
-        <text x="64pt" y="110pt" w="56pt" font="bold" font-size="8pt" color="surface" align="center">LV</text>
+        <text x="64pt" y="110pt" width="56pt" font="bold" font-size="8pt" color="surface" align="center">LV</text>
       </layer>
 
       <layout margin="64pt">

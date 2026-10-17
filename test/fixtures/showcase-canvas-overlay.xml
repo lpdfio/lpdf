@@ -80,10 +80,10 @@
     </layer>
     <!-- Border stamp in the top-right corner -->
     <layer page="each">
-      <rect anchor="top-right" x="-30pt" y="30pt" w="80pt" h="30pt"
+      <rect anchor="top-right" x="-30pt" y="30pt" width="80pt" height="30pt"
             fill="#e74c3c" radius="4pt"/>
       <text anchor="top-right" x="-30pt" y="30pt" font-size="10pt"
-            font="Helvetica-Bold" color="surface" align="center" w="80pt">
+            font="Helvetica-Bold" color="surface" align="center" width="80pt">
         DRAFT
       </text>
     </layer>

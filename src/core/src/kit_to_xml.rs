@@ -810,11 +810,11 @@ mod tests {
     #[test]
     fn layer_primitives_are_written_under_their_schema_names() {
         let json = doc_with_layer_child(
-            r##"{"type":"rect","attrs":{"x":"50pt","y":"50pt","w":"100pt","h":"60pt","fill":"#ff0000","radius":"8pt"}}"##,
+            r##"{"type":"rect","attrs":{"x":"50pt","y":"50pt","width":"100pt","height":"60pt","fill":"#ff0000","radius":"8pt"}}"##,
         );
         let xml = kit_to_xml(&json).unwrap();
         assert!(xml.contains("<rect "), "{xml}");
-        for attr in [r#"x="50pt""#, r#"y="50pt""#, r#"w="100pt""#, r#"h="60pt""#, r##"fill="#ff0000""##, r#"radius="8pt""#] {
+        for attr in [r#"x="50pt""#, r#"y="50pt""#, r#"width="100pt""#, r#"height="60pt""#, r##"fill="#ff0000""##, r#"radius="8pt""#] {
             assert!(xml.contains(attr), "{attr} missing from {xml}");
         }
         assert!(!xml.contains("canvas-rect"), "{xml}");
@@ -834,38 +834,65 @@ mod tests {
     }
 
     #[test]
-    fn circle_and_ellipse_are_positioned_by_cx_and_cy() {
+    fn circle_and_ellipse_are_positioned_by_their_box() {
         for (shape, size) in [("circle", r#""r":"40pt""#), ("ellipse", r#""rx":"40pt","ry":"20pt""#)] {
-            let at = |cx: &str| {
-                doc_with_layer_child(&format!(
-                    r##"{{"type":"{shape}","attrs":{{"cx":"{cx}","cy":"200pt",{size},"fill":"#ff0000"}}}}"##
-                ))
-            };
-            let (tree_left, xml_left) = rendered_both_ways(&at("100pt"));
-            let (tree_right, xml_right) = rendered_both_ways(&at("300pt"));
-            assert_eq!(tree_left, xml_left, "{shape}: the tree and the XML render differently");
-            assert_eq!(tree_right, xml_right, "{shape}: the tree and the XML render differently");
-            assert_ne!(tree_left, tree_right, "{shape} does not move with cx");
+            for (name, other) in [("x", "y"), ("y", "x")] {
+                let at = |value: &str| {
+                    doc_with_layer_child(&format!(
+                        r##"{{"type":"{shape}","attrs":{{"{name}":"{value}","{other}":"200pt",{size},"fill":"#ff0000"}}}}"##
+                    ))
+                };
+                let (tree_near, xml_near) = rendered_both_ways(&at("100pt"));
+                let (tree_far, xml_far) = rendered_both_ways(&at("300pt"));
+                assert_eq!(tree_near, xml_near, "{shape}: the tree and the XML render differently");
+                assert_eq!(tree_far, xml_far, "{shape}: the tree and the XML render differently");
+                assert_ne!(tree_near, tree_far, "{shape} does not move with {name}");
+            }
         }
     }
 
     #[test]
-    fn circle_x_and_y_are_not_its_position() {
-        let at = |x: &str| {
-            doc_with_layer_child(&format!(
-                r##"{{"type":"circle","attrs":{{"x":"{x}","y":"200pt","r":"40pt","fill":"#ff0000"}}}}"##
-            ))
-        };
-        let (left, _) = rendered_both_ways(&at("100pt"));
-        let (right, _) = rendered_both_ways(&at("300pt"));
-        assert_eq!(left, right, "x moved a circle, but a circle's position is cx and cy");
+    fn an_anchored_circle_and_ellipse_are_placed_the_same_from_the_tree_and_from_the_xml() {
+        for (shape, size) in [("circle", r#""r":"30pt""#), ("ellipse", r#""rx":"30pt","ry":"12pt""#)] {
+            for anchor in ["top-right", "center", "bottom-center", "bottom-left"] {
+                let kit = doc_with_layer_child(&format!(
+                    r##"{{"type":"{shape}","attrs":{{"anchor":"{anchor}","x":"-18pt","y":"18pt",{size},"fill":"#ff0000"}}}}"##
+                ));
+                let from_tree = crate::parse::parse_tree(&kit).unwrap();
+                let from_xml = crate::parse::parse(&kit_to_xml(&kit).unwrap()).unwrap();
+                assert_eq!(
+                    format!("{:?}", from_tree.sections),
+                    format!("{:?}", from_xml.sections),
+                    "{shape} {anchor}: the tree and the XML place it differently"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_attributes_a_layer_element_lost_fail_in_the_tree_and_in_the_xml_naming_the_new_ones() {
+        for (node, attr, replacement) in [
+            (r#""type":"rect","attrs":{"w":"10pt","height":"10pt"}"#, "w", "'width'"),
+            (r#""type":"rect","attrs":{"width":"10pt","h":"10pt"}"#, "h", "'height'"),
+            (r#""type":"circle","attrs":{"cx":"10pt","r":"5pt"}"#, "cx", "'x' and 'y'"),
+            (r#""type":"circle","attrs":{"cy":"10pt","r":"5pt"}"#, "cy", "'x' and 'y'"),
+            (r#""type":"ellipse","attrs":{"cx":"10pt","rx":"5pt","ry":"3pt"}"#, "cx", "'x' and 'y'"),
+            (r#""type":"text","attrs":{"w":"100pt"},"nodes":["Hi"]"#, "w", "'width'"),
+        ] {
+            let json = doc_with_layer_child(&format!("{{{node}}}"));
+            let from_tree = crate::parse::parse_tree(&json).err().expect("the tree is rejected");
+            let from_xml = crate::parse::parse(&kit_to_xml(&json).unwrap()).err().expect("the XML is rejected");
+            for err in [from_tree, from_xml] {
+                assert!(err.contains(&format!("'{attr}'")) && err.contains(replacement), "{attr}: {err}");
+            }
+        }
     }
 
     #[test]
     fn an_anchored_rect_is_placed_the_same_from_the_tree_and_from_the_xml() {
         for anchor in ["top-right", "center", "bottom-center", "bottom-left"] {
             let kit = doc_with_layer_child(&format!(
-                r##"{{"type":"rect","attrs":{{"anchor":"{anchor}","x":"-18pt","y":"18pt","w":"80pt","h":"24pt","fill":"#ff0000"}}}}"##
+                r##"{{"type":"rect","attrs":{{"anchor":"{anchor}","x":"-18pt","y":"18pt","width":"80pt","height":"24pt","fill":"#ff0000"}}}}"##
             ));
             let (from_tree, from_xml) = rendered_both_ways(&kit);
             assert_eq!(from_tree, from_xml, "{anchor}: the tree and the XML place the rect differently");
@@ -878,7 +905,7 @@ mod tests {
             let kit = format!(
                 r#"{{"version":1,"type":"document","attrs":{{"assets":{{"images":[{{"name":"logo"}}]}}}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
                     {{"type":"layer","attrs":{{}},"nodes":[
-                        {{"type":"img","attrs":{{"name":"logo","anchor":"{anchor}","x":"-18pt","y":"18pt","w":"80pt","h":"24pt"}}}}]}}]}}]}}"#
+                        {{"type":"img","attrs":{{"name":"logo","anchor":"{anchor}","x":"-18pt","y":"18pt","width":"80pt","height":"24pt"}}}}]}}]}}]}}"#
             );
             let from_tree = crate::parse::parse_tree(&kit).unwrap();
             let from_xml = crate::parse::parse(&kit_to_xml(&kit).unwrap()).unwrap();
@@ -893,9 +920,9 @@ mod tests {
     #[test]
     fn layers_are_written_before_and_after_the_layout_in_their_order() {
         let json = r##"{"version":1,"type":"document","attrs":{},"nodes":[{"type":"section","attrs":{},"nodes":[
-            {"type":"layer","attrs":{"page":"first"},"nodes":[{"type":"rect","attrs":{"w":"100pt","h":"60pt","fill":"#ff0000"}}]},
+            {"type":"layer","attrs":{"page":"first"},"nodes":[{"type":"rect","attrs":{"width":"100pt","height":"60pt","fill":"#ff0000"}}]},
             {"type":"layout","nodes":[{"type":"text","attrs":{},"nodes":["Body"]}]},
-            {"type":"layer","attrs":{"page":"last"},"nodes":[{"type":"rect","attrs":{"w":"50pt","h":"30pt","fill":"#0000ff"}}]}]}]}"##;
+            {"type":"layer","attrs":{"page":"last"},"nodes":[{"type":"rect","attrs":{"width":"50pt","height":"30pt","fill":"#0000ff"}}]}]}]}"##;
         let xml = kit_to_xml(json).unwrap();
         let under = xml.find(r#"<layer page="first">"#).expect("the first layer is written");
         let layout = xml.find("<layout>").expect("the layout is written");
@@ -919,7 +946,7 @@ mod tests {
     #[test]
     fn layer_image_is_read_by_name() {
         let json = doc_with_layer_child(
-            r#"{"type":"img","attrs":{"name":"logo","x":"10pt","y":"10pt","w":"50pt","h":"50pt"}}"#,
+            r#"{"type":"img","attrs":{"name":"logo","x":"10pt","y":"10pt","width":"50pt","height":"50pt"}}"#,
         );
         let err = crate::parse::parse_tree(&json).err().expect("an undeclared asset is rejected");
         assert!(err.contains("logo"), "{err}");

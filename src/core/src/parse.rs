@@ -1613,7 +1613,7 @@ pub(crate) fn elems<'a>(
 }
 
 /// Format the source position of an XML element as " at line N, col M".
-fn node_loc(elem: &roxmltree::Node) -> String {
+pub(crate) fn node_loc(elem: &roxmltree::Node) -> String {
     let pos = elem.document().text_pos_at(elem.range().start);
     format!(" at line {}, col {}", pos.row, pos.col)
 }
@@ -1820,6 +1820,9 @@ fn apply_barcode_attrs(
     a:    &impl Attrs,
     tokens: &Tokens,
 ) -> Result<(), String> {
+    if a.get("size").is_some() {
+        return Err("'size' removed; use 'width' or 'height', which a QR code takes either of".to_string());
+    }
     let type_str = a.get("type")
         .ok_or_else(|| "<barcode> missing required attribute 'type'".to_string())?;
     node.barcode_type = Some(match type_str {
@@ -1861,31 +1864,30 @@ fn apply_barcode_attrs(
         None
     };
 
-    // Dimensions:
-    // QR uses `size` for both width and height (square).
-    // Code128 / EAN-13 use `width` and `height` independently.
+    // Dimensions: `width` and `height`, for every type.  A QR code is square, so it takes
+    // either one, and the smaller when it has both.  `width="fill"` sizes the slot of a QR code
+    // in a row, not the code itself, so then only `height` sets its size.
+    let width = a.get("width").filter(|w| *w != "fill")
+        .map(|w| tokens.resolve_width(w).map_err(|_| format!("<barcode> invalid width '{w}'")))
+        .transpose()?;
+    let height = a.get("height")
+        .map(|h| tokens.resolve_width(h).map_err(|_| format!("<barcode> invalid height '{h}'")))
+        .transpose()?;
     match node.barcode_type.as_ref().unwrap() {
         BarcodeType::Qr => {
-            let size = a.get("size")
-                .ok_or_else(|| "<barcode type=\"qr\"> missing required attribute 'size'".to_string())?;
-            let pt = tokens.resolve_width(size)
-                .map_err(|_| format!("<barcode> invalid size '{size}'"))?;
+            let pt = match (width, height) {
+                (Some(w), Some(h)) => w.min(h),
+                (Some(side), None) | (None, Some(side)) => side,
+                (None, None) => return Err(
+                    "<barcode type=\"qr\"> needs a 'height', or a 'width' that is a length".to_string(),
+                ),
+            };
             node.width_constraint      = Some(pt);
             node.img_height_constraint = Some(pt);
         }
         BarcodeType::Code128 | BarcodeType::Ean13 => {
-            if let Some(w) = a.get("width").filter(|w| *w != "fill") {
-                node.width_constraint = Some(
-                    tokens.resolve_width(w)
-                          .map_err(|_| format!("<barcode> invalid width '{w}'"))?,
-                );
-            }
-            if let Some(h) = a.get("height") {
-                node.img_height_constraint = Some(
-                    tokens.resolve_width(h)
-                          .map_err(|_| format!("<barcode> invalid height '{h}'"))?,
-                );
-            }
+            if width.is_some() { node.width_constraint = width; }
+            node.img_height_constraint = height;
         }
     }
 
@@ -2694,7 +2696,7 @@ mod tests {
         let xml = r##"<lpdf version="1">
             <document size="a4">
                 <section>
-                    <layer><rect w="100pt" h="50pt" fill="#ff0000"/></layer>
+                    <layer><rect width="100pt" height="50pt" fill="#ff0000"/></layer>
                 </section>
             </document>
         </lpdf>"##;
@@ -2710,7 +2712,7 @@ mod tests {
             <document size="a4">
                 <section>
                     <layout margin="0pt"><text>Body</text></layout>
-                    <layer page="each"><rect w="100pt" h="5pt" fill="#000000"/></layer>
+                    <layer page="each"><rect width="100pt" height="5pt" fill="#000000"/></layer>
                 </section>
             </document>
         </lpdf>"##;
@@ -2723,11 +2725,11 @@ mod tests {
         let xml = r##"<lpdf version="1">
             <document size="a4">
                 <section>
-                    <layer page="first"><rect w="10pt" h="10pt" fill="#000"/></layer>
-                    <layer page="last"><rect w="10pt" h="10pt" fill="#000"/></layer>
+                    <layer page="first"><rect width="10pt" height="10pt" fill="#000"/></layer>
+                    <layer page="last"><rect width="10pt" height="10pt" fill="#000"/></layer>
                     <layout margin="0pt"><text>Body</text></layout>
-                    <layer page="odd"><rect w="10pt" h="10pt" fill="#000"/></layer>
-                    <layer page="even"><rect w="10pt" h="10pt" fill="#000"/></layer>
+                    <layer page="odd"><rect width="10pt" height="10pt" fill="#000"/></layer>
+                    <layer page="even"><rect width="10pt" height="10pt" fill="#000"/></layer>
                 </section>
             </document>
         </lpdf>"##;
@@ -2758,7 +2760,7 @@ mod tests {
     fn tree_layers_parse_as_the_xml_does() {
         let json = r##"{"version":1,"type":"document","attrs":{},"nodes":[
             {"type":"section","attrs":{},"nodes":[
-                {"type":"layer","attrs":{"page":"first"},"nodes":[{"type":"rect","attrs":{"w":"10pt","h":"10pt"}}]},
+                {"type":"layer","attrs":{"page":"first"},"nodes":[{"type":"rect","attrs":{"width":"10pt","height":"10pt"}}]},
                 {"type":"layout","nodes":[{"type":"text","attrs":{},"nodes":["Body"]}]},
                 {"type":"layer","attrs":{"page":"last"},"nodes":[]}]}]}"##;
         let mut doc = parse_tree(json).unwrap();
@@ -2808,7 +2810,7 @@ mod tests {
 
     #[test]
     fn a_section_of_layers_alone_has_no_margin() {
-        let mut doc = parse(&document(r##"<section><layer><rect w="10pt" h="10pt" fill="#000"/></layer></section>"##)).unwrap();
+        let mut doc = parse(&document(r##"<section><layer><rect width="10pt" height="10pt" fill="#000"/></layer></section>"##)).unwrap();
         assert_eq!(doc.section_layouts()[0].margin, [0.0; 4]);
     }
 
@@ -2839,7 +2841,7 @@ mod tests {
     fn parse_multi_section() {
         let xml = r##"<lpdf version="1">
             <document size="a4">
-                <section title="Cover"><layer><rect w="100pt" h="100pt" fill="#000"/></layer></section>
+                <section title="Cover"><layer><rect width="100pt" height="100pt" fill="#000"/></layer></section>
                 <section title="Body"><layout margin="0pt"><text>Hello</text></layout></section>
             </document>
         </lpdf>"##;
@@ -2897,8 +2899,8 @@ mod tests {
         let xml = r##"<lpdf version="1">
             <document size="a4">
                 <section>
-                    <layer page="odd"><rect w="10pt" h="10pt" fill="#000"/></layer>
-                    <layer page="2-4"><rect w="10pt" h="10pt" fill="#000"/></layer>
+                    <layer page="odd"><rect width="10pt" height="10pt" fill="#000"/></layer>
+                    <layer page="2-4"><rect width="10pt" height="10pt" fill="#000"/></layer>
                 </section>
             </document>
         </lpdf>"##;
@@ -2918,7 +2920,7 @@ mod tests {
             <document size="a4">
                 <section>
                     <layer>
-                        <rect x="10pt" y="20pt" w="100pt" h="50pt" fill="#ff0000" radius="4pt" opacity="0.5"/>
+                        <rect x="10pt" y="20pt" width="100pt" height="50pt" fill="#ff0000" radius="4pt" opacity="0.5"/>
                     </layer>
                 </section>
             </document>
@@ -2940,7 +2942,7 @@ mod tests {
             <document size="a4">
                 <section>
                     <layer>
-                        <rect anchor="center" x="10pt" y="-5pt" w="50pt" h="20pt" fill="#000"/>
+                        <rect anchor="center" x="10pt" y="-5pt" width="50pt" height="20pt" fill="#000"/>
                     </layer>
                 </section>
             </document>
@@ -2952,6 +2954,74 @@ mod tests {
             assert!((r.x - 282.64).abs() < 0.5);
             assert!((r.y - 405.94).abs() < 0.5);
         } else { panic!("expected rect"); }
+    }
+
+    #[test]
+    fn a_circle_is_placed_by_its_box() {
+        use crate::canvas::CanvasPrimitive;
+        let xml = r##"<lpdf version="1"><document size="a4"><section><layer>
+            <circle x="10pt" y="20pt" r="5pt" fill="#000"/>
+            <circle r="5pt" fill="#000"/>
+        </layer></section></document></lpdf>"##;
+        let doc = parse(xml).unwrap();
+        let children = &as_layer(&doc.sections[0].children[0]).children;
+        let centres: Vec<(f32, f32)> = children.iter().map(|c| match c {
+            CanvasPrimitive::Circle(c) => (c.cx, c.cy),
+            _ => panic!("expected a circle"),
+        }).collect();
+        // The box is 10pt square with its top-left corner at x, y; the centre is r further in.
+        assert_eq!(centres, vec![(15.0, 25.0), (5.0, 5.0)]);
+    }
+
+    #[test]
+    fn an_ellipse_is_placed_by_its_box() {
+        use crate::canvas::CanvasPrimitive;
+        let xml = r##"<lpdf version="1"><document size="a4"><section><layer>
+            <ellipse x="10pt" y="20pt" rx="8pt" ry="3pt" fill="#000"/>
+        </layer></section></document></lpdf>"##;
+        let doc = parse(xml).unwrap();
+        if let CanvasPrimitive::Ellipse(ref e) = as_layer(&doc.sections[0].children[0]).children[0] {
+            assert_eq!((e.cx, e.cy, e.rx, e.ry), (18.0, 23.0, 8.0, 3.0));
+        } else { panic!("expected an ellipse"); }
+    }
+
+    #[test]
+    fn an_anchored_circle_has_its_box_anchored_not_its_centre() {
+        use crate::canvas::CanvasPrimitive;
+        // A4 is 595.28 x 841.89pt. Each box is 20pt square, its anchor point offset by (-5, 7) from the page's.
+        let cases = [
+            ("top-left",     (-5.0 + 10.0,            7.0 + 10.0)),
+            ("top-right",    (595.28 - 5.0 - 10.0,    7.0 + 10.0)),
+            ("bottom-right", (595.28 - 5.0 - 10.0,    841.89 + 7.0 - 10.0)),
+            ("center",       (595.28 / 2.0 - 5.0,     841.89 / 2.0 + 7.0)),
+        ];
+        for (anchor, (cx, cy)) in cases {
+            let xml = format!(r##"<lpdf version="1"><document size="a4"><section><layer>
+                <circle anchor="{anchor}" x="-5pt" y="7pt" r="10pt" fill="#000"/>
+            </layer></section></document></lpdf>"##);
+            let doc = parse(&xml).unwrap();
+            if let CanvasPrimitive::Circle(ref c) = as_layer(&doc.sections[0].children[0]).children[0] {
+                assert!((c.cx - cx).abs() < 0.01 && (c.cy - cy).abs() < 0.01, "{anchor}: ({}, {})", c.cx, c.cy);
+            } else { panic!("expected a circle"); }
+        }
+    }
+
+    #[test]
+    fn a_layer_element_with_an_attribute_it_lost_says_what_replaces_it() {
+        for (body, attr, replacement) in [
+            (r#"<rect w="10pt" height="10pt"/>"#, "w", "'width'"),
+            (r#"<rect width="10pt" h="10pt"/>"#, "h", "'height'"),
+            (r#"<circle cx="10pt" cy="10pt" r="5pt"/>"#, "cx", "'x' and 'y'"),
+            (r#"<circle cy="10pt" r="5pt"/>"#, "cy", "'x' and 'y'"),
+            (r#"<ellipse cx="10pt" rx="5pt" ry="3pt"/>"#, "cx", "'x' and 'y'"),
+            (r#"<text w="100pt">Hi</text>"#, "w", "'width'"),
+        ] {
+            let tag = &body[1..body[1..].find([' ', '>']).unwrap() + 1];
+            let xml = format!(r##"<lpdf version="1"><document size="a4"><section><layer>{body}</layer></section></document></lpdf>"##);
+            let err = parse(&xml).unwrap_err();
+            assert!(err.contains(&format!("<{tag}>")) && err.contains("at line"), "{err}");
+            assert!(err.contains(&format!("'{attr}'")) && err.contains(replacement), "{err}");
+        }
     }
 
     #[test]
@@ -3079,7 +3149,7 @@ mod tests {
 
     #[test]
     fn err_barcode_invalid_ec() {
-        let err = parse(&minimal(r#"<barcode type="qr" data="x" size="100pt" ec="Z" />"#)).unwrap_err();
+        let err = parse(&minimal(r#"<barcode type="qr" data="x" width="100pt" ec="Z" />"#)).unwrap_err();
         assert!(err.contains("<barcode>"), "{err}");
         assert!(err.contains("at line"),  "{err}");
         assert!(err.contains("Z"),         "{err}");
@@ -3127,11 +3197,26 @@ mod tests {
     }
 
     #[test]
-    fn err_missing_attr_barcode_size() {
-        let err = parse(&minimal(r#"<barcode type="qr" data="x" />"#)).unwrap_err();
+    fn err_qr_barcode_without_width_or_height() {
+        for body in [r#"<barcode type="qr" data="x" />"#, r#"<barcode type="qr" data="x" width="fill" />"#] {
+            let err = parse(&minimal(body)).unwrap_err();
+            assert!(err.contains("<barcode>"), "{err}");
+            assert!(err.contains("at line"),  "{err}");
+            assert!(err.contains("'height'") && err.contains("'width'"), "{err}");
+        }
+    }
+
+    #[test]
+    fn err_barcode_size_names_width_and_height() {
+        let err = parse(&minimal(r#"<barcode type="qr" data="x" size="100pt" />"#)).unwrap_err();
         assert!(err.contains("<barcode>"), "{err}");
         assert!(err.contains("at line"),  "{err}");
-        assert!(err.contains("size"),      "{err}");
+        assert!(err.contains("'size'") && err.contains("'width'") && err.contains("'height'"), "{err}");
+
+        let tree = r#"{"version":1,"type":"document","attrs":{},"nodes":[{"type":"section","attrs":{},"nodes":[
+            {"type":"layout","nodes":[{"type":"barcode","attrs":{"type":"qr","data":"x","size":"100pt"}}]}]}]}"#;
+        let err = parse_tree(tree).unwrap_err();
+        assert!(err.contains("'size'") && err.contains("'width'") && err.contains("'height'"), "{err}");
     }
 
     #[test]

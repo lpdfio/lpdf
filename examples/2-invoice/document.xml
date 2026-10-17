@@ -40,12 +40,12 @@
       <!-- behind the layout, so it is written first. Coordinates are in points from the top left
            of the page, not of the margin, and each shape is one line -->
       <layer page="each">
-        <rect anchor="top-left" w="612pt" h="12pt" fill="primary" />
-        <rect anchor="bottom-left" w="612pt" h="6pt" fill="primary" />
+        <rect anchor="top-left" width="612pt" height="12pt" fill="primary" />
+        <rect anchor="bottom-left" width="612pt" height="6pt" fill="primary" />
       </layer>
       <layer page="first">
-        <rect x="48pt" y="40pt" w="30pt" h="30pt" radius="8pt" fill="primary" />
-        <circle cx="63pt" cy="55pt" r="7pt" fill="surface" />
+        <rect x="48pt" y="40pt" width="30pt" height="30pt" radius="8pt" fill="primary" />
+        <circle x="56pt" y="48pt" r="7pt" fill="surface" />
       </layer>
 
       <layout margin="48pt">
@@ -149,7 +149,7 @@
                 <text font-size="s" color="text-muted" data-value="payment">ACH to Casco Federal Credit Union, routing 011000015, account 4400198273, reference INV-1042</text>
                 <text font-size="s" color="text-muted">Or scan the code to pay by card.</text>
               </column>
-              <barcode type="qr" data="https://pay.brightwork.example" size="64pt" color="primary-dark" background="surface" />
+              <barcode type="qr" data="https://pay.brightwork.example" width="64pt" color="primary-dark" background="surface" />
             </row>
 
             <frame data-if="invoice.paid" background="accent" padding="s" radius="s">

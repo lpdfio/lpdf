@@ -1770,9 +1770,9 @@ mod tests {
     #[test]
     fn test_layers_are_section_children_before_and_after_the_layout() {
         let xml = r##"<lpdf version="1"><document><section>
-            <layer page="first"><rect w="10pt" h="10pt"/></layer>
+            <layer page="first"><rect width="10pt" height="10pt"/></layer>
             <layout><text>Body</text></layout>
-            <layer page="last"><rect w="10pt" h="10pt"/></layer>
+            <layer page="last"><rect width="10pt" height="10pt"/></layer>
         </section></document></lpdf>"##;
         for (target, layer, layout, section, canvas) in [
             ("js", "L.layer(", "L.layout(", "L.section(", "L.canvas("),
@@ -1815,7 +1815,7 @@ mod tests {
     fn test_layer_text_and_image_have_their_own_attribute_classes() {
         let xml = r##"<lpdf version="1"><document><section><layer>
             <text x="10pt" y="20pt">Hi</text>
-            <img name="logo" x="0pt" y="0pt" w="10pt" h="10pt"/>
+            <img name="logo" x="0pt" y="0pt" width="10pt" height="10pt"/>
         </layer></section></document></lpdf>"##;
         for target in ["php", "python"] {
             let opts = CodegenOptions { target: target.into(), indent: 4 };

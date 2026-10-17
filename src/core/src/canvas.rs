@@ -11,7 +11,7 @@ use crate::tokens::Tokens;
 use crate::parse::{
     PageScope,
     parse_measurement, parse_signed_measurement, parse_page_scope,
-    elems, validate_img_asset, jattr,
+    elems, validate_img_asset, jattr, node_loc,
 };
 use crate::page_scope::page_scope_indices;
 use crate::render::{
@@ -42,7 +42,7 @@ pub struct CanvasRect {
     pub radius:       Option<f32>,
 }
 
-/// Circle: `cx`/`cy` is the centre point.
+/// Circle: `cx`/`cy` is the centre point, worked out from the box `x` and `y` place.
 #[derive(Debug, Clone)]
 pub struct CanvasCircle {
     pub cx:           f32,
@@ -54,7 +54,7 @@ pub struct CanvasCircle {
     pub stroke_dash:  Option<String>,
 }
 
-/// Ellipse: `cx`/`cy` is the centre point.
+/// Ellipse: `cx`/`cy` is the centre point, worked out from the box `x` and `y` place.
 #[derive(Debug, Clone)]
 pub struct CanvasEllipse {
     pub cx:           f32,
@@ -206,23 +206,11 @@ fn apply_anchor_offset(anchor: &Anchor, x: f32, y: f32, w: f32, h: f32) -> (f32,
 }
 
 /// Parse canvas position from element attributes, resolving anchors immediately.
-/// Returns `(x, y)` in canvas top-down coordinates.
+/// Returns `(x, y)` in canvas top-down coordinates.  With an anchor, `x` and `y` are
+/// offsets from that point of the page.
 fn parse_canvas_position(elem: &roxmltree::Node, page_w: f32, page_h: f32) -> Result<(f32, f32), String> {
-    parse_canvas_position_as(elem, page_w, page_h, "x", "y")
-}
-
-/// The position of an element whose attributes are named `x_attr` and `y_attr`: `x` and `y` for a rect,
-/// text or image, `cx` and `cy` for the centre of a circle or an ellipse. With an anchor they are
-/// offsets from it.
-fn parse_canvas_position_as(
-    elem:   &roxmltree::Node,
-    page_w: f32,
-    page_h: f32,
-    x_attr: &str,
-    y_attr: &str,
-) -> Result<(f32, f32), String> {
-    let dx = elem.attribute(x_attr).map(parse_signed_measurement).transpose()?.unwrap_or(0.0);
-    let dy = elem.attribute(y_attr).map(parse_signed_measurement).transpose()?.unwrap_or(0.0);
+    let dx = elem.attribute("x").map(parse_signed_measurement).transpose()?.unwrap_or(0.0);
+    let dy = elem.attribute("y").map(parse_signed_measurement).transpose()?.unwrap_or(0.0);
     match elem.attribute("anchor") {
         Some(a) => {
             let (bx, by) = resolve_anchor(&parse_anchor(a)?, page_w, page_h);
@@ -230,6 +218,47 @@ fn parse_canvas_position_as(
         }
         None => Ok((dx, dy)),
     }
+}
+
+/// The top-left corner of a box of the given size, placed by `x` and `y`: with an anchor, the box's
+/// own anchor point lands on the position.
+fn parse_canvas_box_position(
+    elem:   &roxmltree::Node,
+    page_w: f32,
+    page_h: f32,
+    w:      f32,
+    h:      f32,
+) -> Result<(f32, f32), String> {
+    let (x, y) = parse_canvas_position(elem, page_w, page_h)?;
+    match elem.attribute("anchor") {
+        Some(a) => Ok(apply_anchor_offset(&parse_anchor(a)?, x, y, w, h)),
+        None => Ok((x, y)),
+    }
+}
+
+/// What to write instead of an attribute a layer element no longer has.
+fn removed_attr_hint(tag: &str, attr: &str) -> Option<&'static str> {
+    match (tag, attr) {
+        ("rect" | "text" | "img", "w") => Some("renamed to 'width'"),
+        ("rect" | "img", "h") => Some("renamed to 'height'"),
+        ("circle", "cx" | "cy") => Some(
+            "removed; 'x' and 'y' place the circle's box, 2r square, so write x = cx - r and y = cy - r",
+        ),
+        ("ellipse", "cx" | "cy") => Some(
+            "removed; 'x' and 'y' place the ellipse's box, 2rx wide and 2ry high, so write x = cx - rx and y = cy - ry",
+        ),
+        _ => None,
+    }
+}
+
+/// Fail on an attribute the element used to take, with what to write instead.
+fn reject_removed_attrs(tag: &str, has: impl Fn(&str) -> bool) -> Result<(), String> {
+    for attr in ["w", "h", "cx", "cy"] {
+        if let (true, Some(hint)) = (has(attr), removed_attr_hint(tag, attr)) {
+            return Err(format!("'{attr}' {hint}"));
+        }
+    }
+    Ok(())
 }
 
 /// Parse a transform string such as `"translate(10pt 20pt)"`, `"scale(2)"`,
@@ -290,14 +319,9 @@ fn opt_canvas_color(
 }
 
 fn parse_canvas_rect(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_h: f32) -> Result<CanvasPrimitive, String> {
-    let w            = parse_measurement(elem.attribute("w").unwrap_or("0pt"))?;
-    let h            = parse_measurement(elem.attribute("h").unwrap_or("0pt"))?;
-    let (rx, ry)     = parse_canvas_position(elem, page_w, page_h)?;
-    let (x, y)       = if let Some(a) = elem.attribute("anchor") {
-        apply_anchor_offset(&parse_anchor(a)?, rx, ry, w, h)
-    } else {
-        (rx, ry)
-    };
+    let w            = parse_measurement(elem.attribute("width").unwrap_or("0pt"))?;
+    let h            = parse_measurement(elem.attribute("height").unwrap_or("0pt"))?;
+    let (x, y)       = parse_canvas_box_position(elem, page_w, page_h, w, h)?;
     let fill         = opt_canvas_color(elem, "fill", tokens)?;
     let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
     let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
@@ -307,8 +331,9 @@ fn parse_canvas_rect(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_
 }
 
 fn parse_canvas_circle(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_h: f32) -> Result<CanvasPrimitive, String> {
-    let (cx, cy)     = parse_canvas_position_as(elem, page_w, page_h, "cx", "cy")?;
     let r            = parse_measurement(elem.attribute("r").unwrap_or("0pt"))?;
+    let (x, y)       = parse_canvas_box_position(elem, page_w, page_h, 2.0 * r, 2.0 * r)?;
+    let (cx, cy)     = (x + r, y + r);
     let fill         = opt_canvas_color(elem, "fill", tokens)?;
     let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
     let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
@@ -317,9 +342,10 @@ fn parse_canvas_circle(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, pag
 }
 
 fn parse_canvas_ellipse(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_h: f32) -> Result<CanvasPrimitive, String> {
-    let (cx, cy)     = parse_canvas_position_as(elem, page_w, page_h, "cx", "cy")?;
     let rx           = parse_measurement(elem.attribute("rx").unwrap_or("0pt"))?;
     let ry           = parse_measurement(elem.attribute("ry").unwrap_or("0pt"))?;
+    let (x, y)       = parse_canvas_box_position(elem, page_w, page_h, 2.0 * rx, 2.0 * ry)?;
+    let (cx, cy)     = (x + rx, y + ry);
     let fill         = opt_canvas_color(elem, "fill", tokens)?;
     let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
     let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
@@ -363,7 +389,7 @@ fn parse_canvas_text_elem(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, 
     let font_size   = elem.attribute("font-size").map(parse_measurement).transpose()?;
     let color       = opt_canvas_color(elem, "color", tokens)?;
     let align       = elem.attribute("align").map(str::to_string);
-    let w           = elem.attribute("w").map(parse_measurement).transpose()?;
+    let w           = elem.attribute("width").map(parse_measurement).transpose()?;
     let line_height = elem.attribute("line-height").map(parse_measurement).transpose()?;
     let opacity     = elem.attribute("opacity")
         .map(|v| v.parse::<f32>().map_err(|_| format!("invalid text opacity '{v}'")))
@@ -408,14 +434,9 @@ fn parse_canvas_img_elem(
         .ok_or("<img> (canvas) missing required attribute 'name'")?;
     validate_img_asset(name_raw, asset_images, "<assets>")?;
     let name      = asset_images[name_raw].clone();
-    let w         = parse_measurement(elem.attribute("w").unwrap_or("0pt"))?;
-    let h         = parse_measurement(elem.attribute("h").unwrap_or("0pt"))?;
-    let (rx, ry)  = parse_canvas_position(elem, page_w, page_h)?;
-    let (x, y)    = if let Some(a) = elem.attribute("anchor") {
-        apply_anchor_offset(&parse_anchor(a)?, rx, ry, w, h)
-    } else {
-        (rx, ry)
-    };
+    let w         = parse_measurement(elem.attribute("width").unwrap_or("0pt"))?;
+    let h         = parse_measurement(elem.attribute("height").unwrap_or("0pt"))?;
+    let (x, y)    = parse_canvas_box_position(elem, page_w, page_h, w, h)?;
     Ok(CanvasPrimitive::Img(CanvasImg { name, x, y, w, h }))
 }
 
@@ -426,7 +447,10 @@ fn parse_canvas_primitive_elem(
     page_w:       f32,
     page_h:       f32,
 ) -> Result<CanvasPrimitive, String> {
-    match elem.tag_name().name() {
+    let tag = elem.tag_name().name();
+    reject_removed_attrs(tag, |a| elem.attribute(a).is_some())
+        .map_err(|e| format!("<{tag}>{}: {e}", node_loc(elem)))?;
+    match tag {
         "rect"    => parse_canvas_rect(elem, tokens, page_w, page_h),
         "circle"  => parse_canvas_circle(elem, tokens, page_w, page_h),
         "ellipse" => parse_canvas_ellipse(elem, tokens, page_w, page_h),
@@ -508,11 +532,12 @@ fn parse_tree_canvas_primitive(
     let get_f32_signed = |k: &str| -> Result<Option<f32>, String> {
         get_attr(k).map(parse_signed_measurement).transpose()
     };
-    // The position of a primitive: `x` and `y`, or `cx` and `cy` for a circle or an ellipse. With an
-    // anchor they are offsets from it.
-    let get_pos_as = |x_attr: &str, y_attr: &str| -> Result<(f32, f32), String> {
-        let dx = get_f32_signed(x_attr)?.unwrap_or(0.0);
-        let dy = get_f32_signed(y_attr)?.unwrap_or(0.0);
+    reject_removed_attrs(type_str, |a| get_attr(a).is_some())
+        .map_err(|e| format!("canvas primitive '{type_str}': {e}"))?;
+    // The position of a primitive: `x` and `y`. With an anchor they are offsets from it.
+    let get_pos = || -> Result<(f32, f32), String> {
+        let dx = get_f32_signed("x")?.unwrap_or(0.0);
+        let dy = get_f32_signed("y")?.unwrap_or(0.0);
         match get_attr("anchor") {
             Some(a) => {
                 let (bx, by) = resolve_anchor(&parse_anchor(a)?, page_w, page_h);
@@ -521,7 +546,6 @@ fn parse_tree_canvas_primitive(
             None => Ok((dx, dy)),
         }
     };
-    let get_pos = || get_pos_as("x", "y");
     // The top-left corner of a box of the given size: with an anchor, the box is placed so that its own
     // anchor point lands on the position, as in XML.
     let get_box_pos = |w: f32, h: f32| -> Result<(f32, f32), String> {
@@ -534,8 +558,8 @@ fn parse_tree_canvas_primitive(
 
     match type_str {
         "rect" => {
-            let w = get_f32("w")?.unwrap_or(0.0);
-            let h = get_f32("h")?.unwrap_or(0.0);
+            let w = get_f32("width")?.unwrap_or(0.0);
+            let h = get_f32("height")?.unwrap_or(0.0);
             let (x, y) = get_box_pos(w, h)?;
             Ok(CanvasPrimitive::Rect(CanvasRect {
                 x, y, w, h,
@@ -547,10 +571,10 @@ fn parse_tree_canvas_primitive(
             }))
         }
         "circle" => {
-            let (cx, cy) = get_pos_as("cx", "cy")?;
+            let r = get_f32("r")?.unwrap_or(0.0);
+            let (x, y) = get_box_pos(2.0 * r, 2.0 * r)?;
             Ok(CanvasPrimitive::Circle(CanvasCircle {
-                cx, cy,
-                r:            get_f32("r")?.unwrap_or(0.0),
+                cx: x + r, cy: y + r, r,
                 fill:         get_color("fill")?,
                 stroke:       get_color("stroke")?,
                 stroke_width: get_f32("stroke-width")?,
@@ -558,11 +582,11 @@ fn parse_tree_canvas_primitive(
             }))
         }
         "ellipse" => {
-            let (cx, cy) = get_pos_as("cx", "cy")?;
+            let rx = get_f32("rx")?.unwrap_or(0.0);
+            let ry = get_f32("ry")?.unwrap_or(0.0);
+            let (x, y) = get_box_pos(2.0 * rx, 2.0 * ry)?;
             Ok(CanvasPrimitive::Ellipse(CanvasEllipse {
-                cx, cy,
-                rx:           get_f32("rx")?.unwrap_or(0.0),
-                ry:           get_f32("ry")?.unwrap_or(0.0),
+                cx: x + rx, cy: y + ry, rx, ry,
                 fill:         get_color("fill")?,
                 stroke:       get_color("stroke")?,
                 stroke_width: get_f32("stroke-width")?,
@@ -624,14 +648,14 @@ fn parse_tree_canvas_primitive(
                 font_size:   get_f32("font-size")?,
                 color:       get_color("color")?,
                 align:       get_attr("align").map(str::to_string),
-                w:           get_f32("w")?,
+                w:           get_f32("width")?,
                 line_height: get_f32("line-height")?,
                 content, runs, anchor_col, opacity,
             }))
         }
         "img" => {
-            let w = get_f32("w")?.unwrap_or(0.0);
-            let h = get_f32("h")?.unwrap_or(0.0);
+            let w = get_f32("width")?.unwrap_or(0.0);
+            let h = get_f32("height")?.unwrap_or(0.0);
             let (x, y) = get_box_pos(w, h)?;
             let name_raw = get_attr("name")
                 .ok_or("<img> (canvas) missing required attribute 'name'")?;

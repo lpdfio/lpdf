@@ -29,36 +29,36 @@
 
           <column gap="xs">
             <text font-size="m" color="muted">Default error-correction (M) — size 80pt</text>
-            <barcode type="qr" data="https://lpdf.dev" size="80pt" />
+            <barcode type="qr" data="https://lpdf.dev" width="80pt" />
           </column>
 
           <column gap="xs">
             <text font-size="m" color="muted">Error-correction H — size 100pt, custom colour</text>
-            <barcode type="qr" data="https://lpdf.dev" ec="H" size="100pt" color="#1763cf" />
+            <barcode type="qr" data="https://lpdf.dev" ec="H" width="100pt" color="#1763cf" />
           </column>
 
           <column gap="xs">
             <text font-size="m" color="muted">With background — ec=L, size 80pt</text>
-            <barcode type="qr" data="Hello, lpdf!" ec="L" size="80pt"
+            <barcode type="qr" data="Hello, lpdf!" ec="L" width="80pt"
                      color="#1a1a1a" background="#fff9e6" />
           </column>
 
           <row gap="m">
             <column gap="xs">
               <text font-size="s" color="muted">ec=L</text>
-              <barcode type="qr" data="lpdf" ec="L" size="60pt" />
+              <barcode type="qr" data="lpdf" ec="L" width="60pt" />
             </column>
             <column gap="xs">
               <text font-size="s" color="muted">ec=M</text>
-              <barcode type="qr" data="lpdf" ec="M" size="60pt" />
+              <barcode type="qr" data="lpdf" ec="M" width="60pt" />
             </column>
             <column gap="xs">
               <text font-size="s" color="muted">ec=Q</text>
-              <barcode type="qr" data="lpdf" ec="Q" size="60pt" />
+              <barcode type="qr" data="lpdf" ec="Q" width="60pt" />
             </column>
             <column width="fill" gap="xs">
               <text font-size="s" color="muted">ec=H</text>
-              <barcode type="qr" data="lpdf" ec="H" size="60pt" />
+              <barcode type="qr" data="lpdf" ec="H" width="60pt" />
             </column>
           </row>
         </column>
@@ -74,7 +74,7 @@
 
           <column gap="xs">
             <text font-size="m" color="muted">With HRT (human-readable text)</text>
-            <barcode type="code128" data="ABC-12345" width="200pt" height="40pt" hrt="true" />
+            <barcode type="code128" data="ABC-12345" width="200pt" height="52pt" hrt="true" />
           </column>
 
           <column gap="xs">
@@ -85,7 +85,7 @@
 
           <column gap="xs">
             <text font-size="m" color="muted">With background and HRT</text>
-            <barcode type="code128" data="CODE128" width="200pt" height="40pt"
+            <barcode type="code128" data="CODE128" width="200pt" height="52pt"
                      hrt="true" color="#003366" background="#e8f0fc" />
           </column>
         </column>
@@ -147,7 +147,7 @@
                 <text font-size="m" color="muted">Scan to view details online</text>
               </column>
               <barcode width="fill" type="qr" data="https://lpdf.dev/products/LP-2024-001"
-                       ec="M" size="80pt" />
+                       ec="M" height="80pt" />
             </row>
           </frame>
         </column>
@@ -164,7 +164,7 @@
               <text font-size="m">123 Main Street, Anytown, CA 90210</text>
               <divider color="#dde3ed" />
               <barcode type="code128" data="1Z999AA10123456784"
-                       height="50pt" hrt="true" />
+                       height="62pt" hrt="true" />
             </column>
           </frame>
         </column>

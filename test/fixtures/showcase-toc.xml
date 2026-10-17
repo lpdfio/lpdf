@@ -18,7 +18,7 @@
     <section>
       <bookmark label="Cover"/>
       <layer>
-        <rect x="0pt" y="0pt" w="595pt" h="842pt" fill="primary"/>
+        <rect x="0pt" y="0pt" width="595pt" height="842pt" fill="primary"/>
         <text x="56pt" y="380pt" font-size="32pt" font="Helvetica-Bold" color="#ffffff">Annual Report</text>
         <text x="56pt" y="420pt" font-size="14pt" color="accent">Bookmarks, internal links and a table of contents</text>
       </layer>
