@@ -3108,7 +3108,12 @@ mod tests {
         let xml = r#"<lpdf version="1"><assets><image name="photo" src="photo.png"/></assets><document><section>
             <layer opacity="0.5"><img-at name="photo" x="40pt" y="40pt" width="100pt" height="100pt"/></layer>
             </section></document></lpdf>"#;
-        let pdf = crate::bench_render_xml_with_image(xml, "photo", &RED_PIXEL).expect("renders");
+        // Built from the modules both crates share: the core library's `bench_render_xml_with_image` is not in the WASI crate.
+        let mut doc = crate::parse::parse(xml).expect("parses");
+        let pages = crate::layout::layout_document(&doc.section_layouts());
+        let mut images = ImageRegistry::new();
+        images.load("photo", RED_PIXEL.to_vec());
+        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, None, false).expect("renders");
         let (page, groups) = page_and_groups(&pdf);
         assert_eq!(groups.len(), 1);
         let (dict, group) = &groups[0];
