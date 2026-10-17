@@ -1240,4 +1240,17 @@ mod tests {
         let (with_space, _) = rendered_both_ways(&doc_with_runs(&format!(r#"["Hello ",{BOLD_WORLD}]"#)));
         assert_ne!(without_space, with_space);
     }
+
+    #[test]
+    fn a_layer_at_opacity_zero_draws_nothing_from_the_tree_and_from_the_xml() {
+        let document = |layers: &str| format!(
+            r#"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[{layers}]}}]}}"#
+        );
+        let shown = r##"{"type":"layer","attrs":{},"nodes":[{"type":"rect","attrs":{"x":"10pt","y":"10pt","width":"50pt","height":"50pt","fill":"#00ff00"}}]}"##;
+        let hidden = r##"{"type":"layer","attrs":{"opacity":"0"},"nodes":[{"type":"rect","attrs":{"x":"40pt","y":"40pt","width":"50pt","height":"50pt","fill":"#ff0000"}}]}"##;
+        let (from_tree, from_xml) = rendered_both_ways(&document(&format!("{shown},{hidden}")));
+        let without = render_tree(&document(shown));
+        assert!(from_tree == without, "the tree shows the hidden layer");
+        assert!(from_xml == without, "the XML shows the hidden layer");
+    }
 }

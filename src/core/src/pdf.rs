@@ -1319,7 +1319,11 @@ fn draw_node(
 
         // ── Canvas Layer ──────────────────────────────────────────────────────
         RenderNode::CanvasLayer(layer) => {
-            if (layer.opacity - 1.0).abs() > 0.001 {
+            let percent = opacity_percent(layer.opacity);
+            if percent == 0 {
+                // Nothing of the layer shows. It can't be faded to nothing: no ExtGState is written for 0%, and a
+                // viewer ignores a `gs` that names a missing one, which draws the layer at full strength.
+            } else if percent < 100 {
                 // A faded layer is drawn into a transparency group of its own. The group is composited first
                 // and faded as one, so shapes that overlap inside the layer do not show through each other. The
                 // group is a form XObject, written with the page (`groups`); the page only draws it, under the
@@ -1330,7 +1334,7 @@ fn draw_node(
                 groups.push(group.finish());
 
                 content.save_state();
-                content.set_parameters(Name(opacity_gs_name(layer.opacity).as_bytes()));
+                content.set_parameters(Name(opacity_gs_name(percent).as_bytes()));
                 content.x_object(Name(name.as_bytes()));
                 content.restore_state();
             } else {
@@ -1386,10 +1390,16 @@ fn group_resource_name(index: usize) -> String {
 
 // ── Form appearance helpers ───────────────────────────────────────────────────
 
-/// Build an ExtGState resource name for a given opacity value.
-/// E.g. opacity 0.5 → "GS50", 0.3 → "GS30".
-fn opacity_gs_name(opacity: f32) -> String {
-    format!("GS{:02}", (opacity * 100.0).round() as u32)
+/// A layer's opacity in whole percent, which is the precision the document keeps it to. 0 is invisible and 100 is
+/// full strength, and only 1 to 99 are faded by an ExtGState.
+fn opacity_percent(opacity: f32) -> u32 {
+    (opacity * 100.0).round() as u32
+}
+
+/// Build an ExtGState resource name for an opacity in whole percent.
+/// E.g. 50 → "GS50", 30 → "GS30".
+fn opacity_gs_name(percent: u32) -> String {
+    format!("GS{percent:02}")
 }
 
 /// Convert a canvas line-cap code (0=butt, 1=round, 2=square) to pdf_writer's enum.
@@ -1416,10 +1426,8 @@ fn collect_used_opacities(nodes: &[RenderNode], out: &mut HashSet<u32>) {
     for node in nodes {
         match node {
             RenderNode::CanvasLayer(l) => {
-                if (l.opacity - 1.0).abs() > 0.001 {
-                    let pct = (l.opacity * 100.0).round() as u32;
-                    if pct > 0 && pct < 100 { out.insert(pct); }
-                }
+                let pct = opacity_percent(l.opacity);
+                if pct > 0 && pct < 100 { out.insert(pct); }
                 collect_used_opacities(&l.children, out);
             }
             RenderNode::Box(b)  => collect_used_opacities(&b.children, out),
@@ -2305,8 +2313,7 @@ fn assemble_pdf(
         if !opacity_gs_ids.is_empty() {
             let mut gs_res = resources.ext_g_states();
             for (pct, gs_id) in &opacity_gs_ids {
-                let gs_name = format!("GS{pct:02}");
-                gs_res.pair(Name(gs_name.as_bytes()), *gs_id);
+                gs_res.pair(Name(opacity_gs_name(*pct).as_bytes()), *gs_id);
             }
         }
     };
@@ -3126,6 +3133,35 @@ mod tests {
     fn a_layer_at_full_opacity_is_drawn_on_the_page() {
         let pdf = render_layers(&format!(r#"<layer>{OVERLAPPING}</layer>"#));
         let (page, groups) = page_and_groups(&pdf);
+        assert!(groups.is_empty());
+        assert_eq!(rectangles(&page), 2);
+    }
+
+    #[test]
+    fn a_layer_whose_opacity_rounds_to_zero_draws_nothing() {
+        let shown = r##"<layer><rect x="10pt" y="10pt" width="50pt" height="50pt" fill="#00ff00"/></layer>"##;
+        let without = render_layers(shown);
+        for opacity in ["0", "0.004"] {
+            let hidden = format!(r#"<layer opacity="{opacity}">{OVERLAPPING}</layer>"#);
+            assert!(render_layers(&format!("{shown}{hidden}")) == without, "opacity {opacity} shows something");
+        }
+    }
+
+    #[test]
+    fn every_opacity_a_page_sets_is_defined_in_its_resources() {
+        for opacity in ["0", "0.004", "0.5", "0.996", "1"] {
+            let pdf = render_layers(&format!(r#"<layer opacity="{opacity}">{OVERLAPPING}</layer>"#));
+            let (page, _) = page_and_groups(&pdf);
+            let resources = object_with(&String::from_utf8_lossy(&pdf), "/Type /Page\n").1;
+            for state in page.lines().filter_map(|line| line.strip_suffix(" gs")) {
+                assert!(resources.contains(&format!("{state} ")), "opacity {opacity}: the page sets {state}, which its resources do not define: {resources}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_layer_at_almost_full_opacity_is_drawn_on_the_page() {
+        let (page, groups) = page_and_groups(&render_layers(&format!(r#"<layer opacity="0.996">{OVERLAPPING}</layer>"#)));
         assert!(groups.is_empty());
         assert_eq!(rectangles(&page), 2);
     }
