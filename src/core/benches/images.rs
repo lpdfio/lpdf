@@ -6,20 +6,23 @@ fn fixtures_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test/fixtures")
 }
 
-fn image_xml(name: &str) -> String {
+/// The name the document gives its image: asset names are lowercase letters, digits and `-`.
+const IMAGE: &str = "photo";
+
+fn image_xml(file: &str) -> String {
     format!(
         r#"<lpdf version="1">
-  <document size="a4" margin="0pt">
-    <assets>
-      <image name="{name}" src="{name}" />
-    </assets>
-    <pages>
-      <page>
+  <assets>
+    <image name="{IMAGE}" src="{file}" />
+  </assets>
+  <document size="a4">
+    <section>
+      <layout margin="0pt">
         <frame width="595pt" height="842pt">
-          <img name="{name}" width="595pt" height="842pt" />
+          <img name="{IMAGE}" width="595pt" height="842pt" />
         </frame>
-      </page>
-    </pages>
+      </layout>
+    </section>
   </document>
 </lpdf>"#
     )
@@ -49,21 +52,21 @@ fn bench_image_formats(c: &mut Criterion) {
     if let Some(ref bytes) = jpeg_bytes {
         let xml = image_xml("bench_photo.jpg");
         group.bench_function("jpeg", |b| {
-            b.iter(|| bench_render_xml_with_image(&xml, "bench_photo.jpg", bytes).unwrap())
+            b.iter(|| bench_render_xml_with_image(&xml, IMAGE, bytes).unwrap())
         });
     }
 
     if let Some(ref bytes) = png_rgb_bytes {
         let xml = image_xml("bench_photo_rgb.png");
         group.bench_function("png_rgb", |b| {
-            b.iter(|| bench_render_xml_with_image(&xml, "bench_photo_rgb.png", bytes).unwrap())
+            b.iter(|| bench_render_xml_with_image(&xml, IMAGE, bytes).unwrap())
         });
     }
 
     if let Some(ref bytes) = png_rgba_bytes {
         let xml = image_xml("bench_photo_rgba.png");
         group.bench_function("png_rgba", |b| {
-            b.iter(|| bench_render_xml_with_image(&xml, "bench_photo_rgba.png", bytes).unwrap())
+            b.iter(|| bench_render_xml_with_image(&xml, IMAGE, bytes).unwrap())
         });
     }
 

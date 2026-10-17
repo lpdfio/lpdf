@@ -9,21 +9,21 @@ fn fixtures_dir() -> PathBuf {
 fn font_xml(font_ref: &str) -> String {
     format!(
         r#"<lpdf version="1">
-  <document size="a4" margin="40pt">
-    <assets>
-      <font name="BenchFont" src="{font_ref}" />
-    </assets>
-    <pages>
-      <page>
+  <assets>
+    <font name="bench-font" src="{font_ref}" />
+  </assets>
+  <document size="a4">
+    <section>
+      <layout margin="40pt">
         <column gap="m">
-          <text font="BenchFont" font-size="m">The quick brown fox jumps over the lazy dog.</text>
-          <text font="BenchFont" font-size="m">Pack my box with five dozen liquor jugs.</text>
-          <text font="BenchFont" font-size="m">How vexingly quick daft zebras jump!</text>
-          <text font="BenchFont" font-size="m">The five boxing wizards jump quickly.</text>
-          <text font="BenchFont" font-size="m">Sphinx of black quartz, judge my vow.</text>
+          <text font="bench-font" font-size="m">The quick brown fox jumps over the lazy dog.</text>
+          <text font="bench-font" font-size="m">Pack my box with five dozen liquor jugs.</text>
+          <text font="bench-font" font-size="m">How vexingly quick daft zebras jump!</text>
+          <text font="bench-font" font-size="m">The five boxing wizards jump quickly.</text>
+          <text font="bench-font" font-size="m">Sphinx of black quartz, judge my vow.</text>
         </column>
-      </page>
-    </pages>
+      </layout>
+    </section>
   </document>
 </lpdf>"#
     )
@@ -31,9 +31,9 @@ fn font_xml(font_ref: &str) -> String {
 
 fn builtin_xml() -> String {
     r#"<lpdf version="1">
-  <document size="a4" margin="40pt">
-    <pages>
-      <page>
+  <document size="a4">
+    <section>
+      <layout margin="40pt">
         <column gap="m">
           <text font="Helvetica" font-size="m">The quick brown fox jumps over the lazy dog.</text>
           <text font="Helvetica" font-size="m">Pack my box with five dozen liquor jugs.</text>
@@ -41,8 +41,8 @@ fn builtin_xml() -> String {
           <text font="Helvetica" font-size="m">The five boxing wizards jump quickly.</text>
           <text font="Helvetica" font-size="m">Sphinx of black quartz, judge my vow.</text>
         </column>
-      </page>
-    </pages>
+      </layout>
+    </section>
   </document>
 </lpdf>"#.to_string()
 }
@@ -68,7 +68,7 @@ fn bench_subsetting(c: &mut Criterion) {
     });
 
     group.bench_function("one_font", |b| {
-        b.iter(|| bench_render_xml_with_font(&xml_one_font, "BenchFont", &font_bytes).unwrap())
+        b.iter(|| bench_render_xml_with_font(&xml_one_font, "bench-font", &font_bytes).unwrap())
     });
 
     group.finish();
