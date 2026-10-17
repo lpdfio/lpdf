@@ -570,6 +570,13 @@ fn resolve_font_alias(name: &str, fonts: &HashMap<String, FontDef>) -> String {
     }
 }
 
+/// The font the text of a section is set in unless it names another: the document's `font`, or Helvetica.
+fn section_root_font(doc_font: Option<&str>, fonts: &HashMap<String, FontDef>) -> String {
+    doc_font
+        .map(|f| resolve_font_alias(f, fonts))
+        .unwrap_or_else(|| "Helvetica".to_string())
+}
+
 /// `Node::layout_default()` — used by region_to_compat_node.
 impl Node {
     pub fn layout_default() -> Node {
@@ -1195,9 +1202,7 @@ fn parse_section_elem(
     let title = elem.attribute("title").map(str::to_string);
     let toc = parse_section_toc(elem, tokens).map_err(|e| format!("<section>{}: {e}", node_loc(elem)))?;
 
-    let root_font = doc_font
-        .map(|f| resolve_font_alias(f, asset_fonts))
-        .unwrap_or_else(|| "Helvetica".to_string());
+    let root_font = section_root_font(doc_font, asset_fonts);
     let root_size = 11.0_f32;
 
     let mut children: Vec<SectionChild> = Vec::new();
@@ -1646,6 +1651,8 @@ pub(crate) fn parse_tree_at_node(
     tokens:       &Tokens,
     asset_images: &HashMap<String, String>,
     asset_fonts:  &HashMap<String, FontDef>,
+    root_font:    &str,
+    root_size:    f32,
 ) -> Result<Node, String> {
     let type_str = json.get("type").and_then(|v| v.as_str()).unwrap_or("");
     let kind = at_node_kind(type_str).expect("a text-at, img-at or barcode-at");
@@ -1653,7 +1660,7 @@ pub(crate) fn parse_tree_at_node(
     if kind == NodeKind::Text {
         read_tree_text_runs(&mut node, json, tokens)?;
     }
-    Ok(resolve_parsed_node(node, "Helvetica", 11.0, asset_fonts))
+    Ok(resolve_parsed_node(node, root_font, root_size, asset_fonts))
 }
 
 // ── Bookmarks and the table of contents ──────────────────────────────────────
@@ -2239,6 +2246,7 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     };
     let doc_debug = attrs.get("debug").and_then(|v| v.as_str())
         .map(|v| v == "true").unwrap_or(false);
+    let doc_font = attrs.get("font").and_then(|v| v.as_str());
 
     // ── Sections ──────────────────────────────────────────────────────────────
     let nodes_arr = root.get("nodes")
@@ -2249,7 +2257,7 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     for sec_json in nodes_arr {
         sections.push(parse_tree_section(
             sec_json, doc_size, doc_background.clone(),
-            doc_debug, &tokens, &asset_fonts, &asset_images,
+            doc_debug, doc_font, &tokens, &asset_fonts, &asset_images,
         )?);
     }
     if sections.is_empty() {
@@ -2314,11 +2322,13 @@ pub fn parse_tree_tokens_pub(
 }
 
 
+#[allow(clippy::too_many_arguments)]
 fn parse_tree_section(
     json:           &serde_json::Value,
     doc_size:       (f32, f32),
     doc_background: Option<String>,
     doc_debug:      bool,
+    doc_font:       Option<&str>,
     tokens:         &Tokens,
     asset_fonts:    &HashMap<String, FontDef>,
     asset_images:   &HashMap<String, String>,
@@ -2333,7 +2343,7 @@ fn parse_tree_section(
     let title = jattr(json, "title").map(str::to_string);
     let toc = parse_section_toc(&a, tokens).map_err(|e| format!("section: {e}"))?;
 
-    let root_font = "Helvetica";
+    let root_font = section_root_font(doc_font, asset_fonts);
     let root_size = 11.0_f32;
 
     let mut children: Vec<SectionChild> = Vec::new();
@@ -2352,13 +2362,13 @@ fn parse_tree_section(
                     if let Some(nodes) = child.get("nodes").and_then(|v| v.as_array()) {
                         for n in nodes {
                             if n.get("type").and_then(|v| v.as_str()) == Some("region") {
-                                lc.push(LayoutChild::Region(parse_tree_region(n, tokens, asset_images, asset_fonts)?));
+                                lc.push(LayoutChild::Region(parse_tree_region(n, tokens, asset_images, asset_fonts, &root_font, root_size)?));
                             } else if is_tree_bookmark(n) {
                                 pending.push(tree_bookmark(n)?);
                             } else {
                                 let mut node = parse_tree_node(n, tokens, asset_images)?;
                                 pending.attach(&mut node);
-                                lc.push(LayoutChild::Content(resolve_parsed_node(node, root_font, root_size, asset_fonts)));
+                                lc.push(LayoutChild::Content(resolve_parsed_node(node, &root_font, root_size, asset_fonts)));
                             }
                         }
                     }
@@ -2374,7 +2384,7 @@ fn parse_tree_section(
                 Some("layer") => {
                     let ctx = canvas::LayerContext {
                         tokens, asset_images, asset_fonts,
-                        root_font, root_size, page_w: size.0, page_h: size.1,
+                        root_font: &root_font, root_size, page_w: size.0, page_h: size.1,
                     };
                     children.push(SectionChild::Layer(canvas::parse_tree_layer(child, &ctx)?));
                 }
@@ -2416,6 +2426,8 @@ fn parse_tree_region(
     tokens:       &Tokens,
     asset_images: &HashMap<String, String>,
     asset_fonts:  &HashMap<String, FontDef>,
+    root_font:    &str,
+    root_size:    f32,
 ) -> Result<LayoutRegion, String> {
     let pin_str = jattr(json, "pin")
         .ok_or("region missing 'pin' attribute")?;
@@ -2440,7 +2452,7 @@ fn parse_tree_region(
             }
             let mut node = parse_tree_node(n, tokens, asset_images)?;
             pending.attach(&mut node);
-            children.push(resolve_parsed_node(node, "Helvetica", 11.0, asset_fonts));
+            children.push(resolve_parsed_node(node, root_font, root_size, asset_fonts));
         }
         pending.finish("region")?;
     }

@@ -770,6 +770,56 @@ mod tests {
         assert_eq!(bold, named);
     }
 
+    /// A document with the given attrs and text in every place a font is inherited: a layer, a header
+    /// region, the layout, and a text that names a font of its own.
+    fn doc_with_text_everywhere(doc_attrs: &str) -> String {
+        format!(
+            r#"{{"version":1,"type":"document","attrs":{{{doc_attrs}}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
+                {{"type":"layer","attrs":{{}},"nodes":[{{"type":"text-at","attrs":{{"x":"40pt","y":"40pt"}},"nodes":["In a layer"]}}]}},
+                {{"type":"layout","nodes":[
+                    {{"type":"region","attrs":{{"pin":"top"}},"nodes":[{{"type":"text","attrs":{{}},"nodes":["In a region"]}}]}},
+                    {{"type":"text","attrs":{{}},"nodes":["In the layout"]}},
+                    {{"type":"text","attrs":{{"font":"Helvetica-Bold"}},"nodes":["With a font of its own"]}}]}}]}}]}}"#
+        )
+    }
+
+    #[test]
+    fn the_documents_font_sets_its_text_the_same_from_the_tree_and_from_the_xml() {
+        let plain = render_tree(&doc_with_text_everywhere(""));
+        for attrs in [
+            r#""font":"Times-Roman""#,
+            r#""font":"heading","assets":{"fonts":[{"name":"heading","core":"Times-Bold"}]}"#,
+        ] {
+            let kit = doc_with_text_everywhere(attrs);
+            let (from_tree, from_xml) = rendered_both_ways(&kit);
+            assert_eq!(from_tree, from_xml, "{attrs}: the tree and the XML set the text in different fonts");
+            assert_ne!(from_tree, plain, "{attrs}: the document's font does not reach the text");
+        }
+    }
+
+    #[test]
+    fn the_documents_font_is_the_font_of_a_tree_text_in_the_layout_a_region_and_a_layer() {
+        let doc = crate::parse::parse_tree(&doc_with_text_everywhere(r#""font":"Times-Roman""#)).unwrap();
+        let section = &doc.sections[0];
+        let mut fonts = Vec::new();
+        for child in &section.children {
+            match child {
+                crate::parse::SectionChild::Layer(layer) => for primitive in &layer.children {
+                    if let crate::canvas::CanvasPrimitive::Placed(placed) = primitive {
+                        fonts.push(placed.node.font.clone());
+                    }
+                },
+                crate::parse::SectionChild::Layout { children, .. } => for child in children {
+                    match child {
+                        crate::parse::LayoutChild::Region(region) => fonts.extend(region.children.iter().map(|n| n.font.clone())),
+                        crate::parse::LayoutChild::Content(node) => fonts.push(node.font.clone()),
+                    }
+                },
+            }
+        }
+        assert_eq!(fonts, ["Times-Roman", "Times-Roman", "Times-Roman", "Helvetica-Bold"]);
+    }
+
     #[test]
     fn bold_span_is_written_and_renders() {
         let json = doc_with_layout_child(

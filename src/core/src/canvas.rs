@@ -556,7 +556,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
             line_cap:     get_attr("line-cap").map(str::to_string),
         })),
         "text-at" | "img-at" | "barcode-at" => {
-            let node = parse_tree_at_node(json, tokens, ctx.asset_images, ctx.asset_fonts)
+            let node = parse_tree_at_node(json, tokens, ctx.asset_images, ctx.asset_fonts, ctx.root_font, ctx.root_size)
                 .map_err(|e| format!("canvas primitive '{type_str}': {e}"))?;
             let anchor = get_attr("anchor").map(parse_anchor).transpose()?.unwrap_or(Anchor::TopLeft);
             let (x, y) = get_pos()?;
