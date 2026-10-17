@@ -28,8 +28,8 @@
 
       <!-- Layer 2: first page only — title decoration -->
       <layer page="first">
-        <rect anchor="top-left" w="595.28pt" h="8pt" fill="primary"/>
-        <rect anchor="bottom-left" w="595.28pt" h="4pt" fill="primary"/>
+        <rect anchor="top-left" width="595.28pt" height="8pt" fill="primary"/>
+        <rect anchor="bottom-left" width="595.28pt" height="4pt" fill="primary"/>
         <text anchor="top-center" y="20pt" font-size="20pt" font="Helvetica-Bold"
               color="primary" align="center">
           Canvas Layer Showcase
@@ -54,12 +54,12 @@
 
       <!-- Layer 5: odd pages only — left margin marker -->
       <layer page="odd">
-        <rect anchor="center-left" w="4pt" h="60pt" fill="accent"/>
+        <rect anchor="center-left" width="4pt" height="60pt" fill="accent"/>
       </layer>
 
       <!-- Layer 6: even pages only — right margin marker -->
       <layer page="even">
-        <rect anchor="center-right" w="4pt" h="60pt" fill="primary" opacity="0.4"/>
+        <rect anchor="center-right" width="4pt" height="60pt" fill="primary" opacity="0.4"/>
       </layer>
 
       <!-- Layer 7: numeric range — pages 2-3 only -->
@@ -72,7 +72,7 @@
 
       <!-- Layer 8: transform demo (rotation via transform attribute) -->
       <layer transform="rotate(45 297.64 421)">
-        <rect x="247.64pt" y="396pt" w="100pt" h="50pt"
+        <rect x="247.64pt" y="396pt" width="100pt" height="50pt"
               fill="accent" stroke="primary" stroke-width="1pt" opacity="0.6"/>
       </layer>
 

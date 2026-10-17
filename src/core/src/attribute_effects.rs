@@ -520,7 +520,7 @@ fn subjects() -> Vec<Subject> {
         Subject::new("span", |a, _| flow(&format!("<text>Before <span {a}>middle</span> after</text>"))),
         Subject::new("img", |a, _| flow_with_images(&format!("<img {a}/><text>After</text>"))).base(&[("name", "logo")]),
         Subject::new("barcode", |a, _| flow(&format!("<barcode {a}/><text>After</text>")))
-            .base(&[("type", "qr"), ("data", "1234567890128"), ("size", "100pt")]),
+            .base(&[("type", "qr"), ("data", "1234567890128"), ("width", "100pt")]),
         Subject::new("text", |a, c| flow(&format!("<text {a}>{c}</text><text>After</text>"))).content(LONG),
         Subject::new("field", |a, _| flow(&format!("<field {a}/><text>After</text>"))).base(&[("type", "text"), ("name", "f1")]),
         // Tables.
@@ -548,17 +548,17 @@ fn subjects() -> Vec<Subject> {
             lpdf(
                 "",
                 &format!(
-                    r##"<document><section><layer {a}><rect x="50pt" y="50pt" w="100pt" h="60pt" fill="#ff0000"/></layer><layout>{}</layout></section></document>"##,
+                    r##"<document><section><layer {a}><rect x="50pt" y="50pt" width="100pt" height="60pt" fill="#ff0000"/></layer><layout>{}</layout></section></document>"##,
                     pages()
                 ),
             )
         }),
         Subject::new("canvas:rect", |a, _| draw("", &format!("<rect {a}/>")))
-            .base(&[("x", "50pt"), ("y", "50pt"), ("w", "100pt"), ("h", "60pt"), ("fill", "#00aa00")]),
+            .base(&[("x", "50pt"), ("y", "50pt"), ("width", "100pt"), ("height", "60pt"), ("fill", "#00aa00")]),
         Subject::new("canvas:circle", |a, _| draw("", &format!("<circle {a}/>")))
-            .base(&[("cx", "150pt"), ("cy", "150pt"), ("r", "40pt"), ("fill", "#00aa00")]),
+            .base(&[("x", "110pt"), ("y", "110pt"), ("r", "40pt"), ("fill", "#00aa00")]),
         Subject::new("canvas:ellipse", |a, _| draw("", &format!("<ellipse {a}/>")))
-            .base(&[("cx", "150pt"), ("cy", "150pt"), ("rx", "60pt"), ("ry", "30pt"), ("fill", "#00aa00")]),
+            .base(&[("x", "90pt"), ("y", "120pt"), ("rx", "60pt"), ("ry", "30pt"), ("fill", "#00aa00")]),
         Subject::new("canvas:line", |a, _| draw("", &format!("<line {a}/>")))
             .base(&[("x1", "50pt"), ("y1", "50pt"), ("x2", "200pt"), ("y2", "120pt"), ("stroke", "#000000")]),
         Subject::new("canvas:path", |a, _| draw("", &format!("<path {a}/>")))
@@ -568,7 +568,7 @@ fn subjects() -> Vec<Subject> {
             .content("Canvas text"),
         Subject::new("canvas:span", |a, _| draw("", &format!(r#"<text x="50pt" y="100pt">Before <span {a}>middle</span> after</text>"#))),
         Subject::new("canvas:img", |a, _| draw("", &format!("<img {a}/>")))
-            .base(&[("name", "logo"), ("x", "50pt"), ("y", "50pt"), ("w", "80pt"), ("h", "80pt")]),
+            .base(&[("name", "logo"), ("x", "50pt"), ("y", "50pt"), ("width", "80pt"), ("height", "80pt")]),
     ]
 }
 
@@ -684,7 +684,7 @@ fn tweaks() -> HashMap<String, Tweak> {
     add("canvas:path@stroke-dash", Tweak::default().set("stroke", "#000000"));
     add("canvas:path@line-cap", Tweak::default().set("stroke", "#000000"));
     // The width of a canvas text is what its align works in.
-    add("canvas:text@w", Tweak::default().set("align", "center"));
+    add("canvas:text@width", Tweak::default().set("align", "center"));
     add(
         "canvas:path@fill-rule",
         Tweak::default().set("d", "M 50 50 L 250 50 L 250 250 L 50 250 Z M 100 100 L 200 100 L 200 200 L 100 200 Z"),

@@ -374,7 +374,8 @@
 
   <!-- Positioning rule (enforced by parser, not XSD 1.0):
        anchor OR (x AND y) must be present.
-       When anchor is present, x/y are signed offsets from that reference point. -->
+       x and y place the element's box: its top-left corner, or, when anchor is present,
+       signed offsets from that point of the page, where the box's matching point goes. -->
   <xs:group name="CanvasPrimitives">
     <xs:choice>
 
@@ -383,8 +384,8 @@
         <xs:complexType>
           <xs:attribute name="x"      type="SignedPtValue"/>
           <xs:attribute name="y"      type="SignedPtValue"/>
-          <xs:attribute name="w"      type="PtValue" use="required"/>
-          <xs:attribute name="h"      type="PtValue" use="required"/>
+          <xs:attribute name="width"  type="PtValue" use="required"/>
+          <xs:attribute name="height" type="PtValue" use="required"/>
           <xs:attribute name="anchor" type="Anchor"/>
           <xs:attribute name="radius" type="PtValue"/>
           <xs:attributeGroup ref="CanvasFillStrokeAttrs"/>
@@ -394,8 +395,16 @@
       <!-- circle -->
       <xs:element name="circle">
         <xs:complexType>
-          <xs:attribute name="cx"     type="SignedPtValue"/>
-          <xs:attribute name="cy"     type="SignedPtValue"/>
+          <xs:attribute name="x"      type="SignedPtValue">
+            <xs:annotation>
+              <xs:documentation>Where the circle's box goes, the square of side 2r around it: its left edge, or with anchor, an offset from that point of the page, where the box's matching point goes. The centre is r further in.</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+          <xs:attribute name="y"      type="SignedPtValue">
+            <xs:annotation>
+              <xs:documentation>Where the circle's box goes, the square of side 2r around it: its top edge, or with anchor, an offset from that point of the page, where the box's matching point goes. The centre is r further in.</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
           <xs:attribute name="r"      type="PtValue" use="required"/>
           <xs:attribute name="anchor" type="Anchor"/>
           <xs:attributeGroup ref="CanvasFillStrokeAttrs"/>
@@ -405,8 +414,16 @@
       <!-- ellipse -->
       <xs:element name="ellipse">
         <xs:complexType>
-          <xs:attribute name="cx"     type="SignedPtValue"/>
-          <xs:attribute name="cy"     type="SignedPtValue"/>
+          <xs:attribute name="x"      type="SignedPtValue">
+            <xs:annotation>
+              <xs:documentation>Where the ellipse's box goes, 2rx wide and 2ry high around it: its left edge, or with anchor, an offset from that point of the page, where the box's matching point goes. The centre is rx further in.</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+          <xs:attribute name="y"      type="SignedPtValue">
+            <xs:annotation>
+              <xs:documentation>Where the ellipse's box goes, 2rx wide and 2ry high around it: its top edge, or with anchor, an offset from that point of the page, where the box's matching point goes. The centre is ry further in.</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
           <xs:attribute name="rx"     type="PtValue" use="required"/>
           <xs:attribute name="ry"     type="PtValue" use="required"/>
           <xs:attribute name="anchor" type="Anchor"/>
@@ -465,7 +482,7 @@
           <xs:attribute name="font-size"   type="TokenScaleOrPt"/>
           <xs:attribute name="color"       type="Color"/>
           <xs:attribute name="align"       type="TextAlignH"/>
-          <xs:attribute name="w"           type="PtValue"/>
+          <xs:attribute name="width"       type="PtValue"/>
           <xs:attribute name="line-height">
             <xs:simpleType>
               <xs:restriction base="xs:decimal">
@@ -485,14 +502,14 @@
         </xs:complexType>
       </xs:element>
 
-      <!-- img — absolutely positioned; w and h required (no auto-sizing) -->
+      <!-- img — absolutely positioned; width and height required (no auto-sizing) -->
       <xs:element name="img">
         <xs:complexType>
           <xs:attribute name="name"   type="xs:string" use="required"/>
           <xs:attribute name="x"      type="SignedPtValue"/>
           <xs:attribute name="y"      type="SignedPtValue"/>
-          <xs:attribute name="w"      type="PtValue" use="required"/>
-          <xs:attribute name="h"      type="PtValue" use="required"/>
+          <xs:attribute name="width"  type="PtValue" use="required"/>
+          <xs:attribute name="height" type="PtValue" use="required"/>
           <xs:attribute name="anchor" type="Anchor"/>
           <xs:attributeGroup ref="DataBindingAttrs"/>
         </xs:complexType>
@@ -947,9 +964,12 @@
         </xs:simpleType>
       </xs:attribute>
       <xs:attribute name="data"       type="xs:string"       use="required"/>
-      <xs:attribute name="size"       type="TokenScaleOrPt"/>
       <xs:attributeGroup ref="WidthAttr"/>
-      <xs:attribute name="height"     type="PtValue"/>
+      <xs:attribute name="height"     type="PtValue">
+        <xs:annotation>
+          <xs:documentation>Height of the whole barcode, with the digits of hrt inside it: they take the bottom 12pt and the bars the rest. A QR code is square: it takes width or height, and the smaller when both are set. Without a height, code128 has bars 40pt high, and 12pt more with hrt, and ean13 is 60pt high.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attribute name="ec">
         <xs:simpleType>
           <xs:restriction base="xs:string">

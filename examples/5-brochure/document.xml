@@ -55,31 +55,31 @@
     <section background="sand">
 
       <layer>
-        <rect x="0pt" y="0pt" w="500pt" h="595pt" fill="primary" />
-        <rect x="500pt" y="0pt" w="4pt" h="595pt" fill="brass" />
+        <rect x="0pt" y="0pt" width="500pt" height="595pt" fill="primary" />
+        <rect x="500pt" y="0pt" width="4pt" height="595pt" fill="brass" />
         <!-- the mark: three bars, beside the name -->
-        <rect x="48pt" y="62pt" w="6pt" h="10pt" fill="brass" />
-        <rect x="57pt" y="56pt" w="6pt" h="16pt" fill="brass" />
-        <rect x="66pt" y="48pt" w="6pt" h="24pt" fill="brass" />
+        <rect x="48pt" y="62pt" width="6pt" height="10pt" fill="brass" />
+        <rect x="57pt" y="56pt" width="6pt" height="16pt" fill="brass" />
+        <rect x="66pt" y="48pt" width="6pt" height="24pt" fill="brass" />
       </layer>
       <layer opacity="0.14">
-        <circle cx="500pt" cy="575pt" r="210pt" fill="brass" />
-        <circle cx="60pt" cy="40pt" r="120pt" fill="brass" />
+        <circle x="290pt" y="365pt" r="210pt" fill="brass" />
+        <circle x="-60pt" y="-80pt" r="120pt" fill="brass" />
       </layer>
       <!-- eight bars rising from a baseline at y=520, a growing company -->
       <layer opacity="0.6">
-        <rect x="48pt" y="504pt" w="30pt" h="16pt" fill="brass" />
-        <rect x="90pt" y="496pt" w="30pt" h="24pt" fill="brass" />
-        <rect x="132pt" y="486pt" w="30pt" h="34pt" fill="brass" />
-        <rect x="174pt" y="474pt" w="30pt" h="46pt" fill="brass" />
-        <rect x="216pt" y="460pt" w="30pt" h="60pt" fill="brass" />
-        <rect x="258pt" y="444pt" w="30pt" h="76pt" fill="brass" />
-        <rect x="300pt" y="428pt" w="30pt" h="92pt" fill="brass" />
-        <rect x="342pt" y="412pt" w="30pt" h="108pt" fill="brass" />
+        <rect x="48pt" y="504pt" width="30pt" height="16pt" fill="brass" />
+        <rect x="90pt" y="496pt" width="30pt" height="24pt" fill="brass" />
+        <rect x="132pt" y="486pt" width="30pt" height="34pt" fill="brass" />
+        <rect x="174pt" y="474pt" width="30pt" height="46pt" fill="brass" />
+        <rect x="216pt" y="460pt" width="30pt" height="60pt" fill="brass" />
+        <rect x="258pt" y="444pt" width="30pt" height="76pt" fill="brass" />
+        <rect x="300pt" y="428pt" width="30pt" height="92pt" fill="brass" />
+        <rect x="342pt" y="412pt" width="30pt" height="108pt" fill="brass" />
       </layer>
       <layer>
         <path d="M 63 488 C 140 482, 250 448, 357 396" stroke="brass-light" stroke-width="2pt" />
-        <circle cx="357pt" cy="396pt" r="5pt" fill="brass-light" />
+        <circle x="352pt" y="391pt" r="5pt" fill="brass-light" />
       </layer>
 
       <layout margin="0pt">
@@ -153,12 +153,12 @@
     <section background="sand">
 
       <layer>
-        <rect anchor="bottom-left" w="842pt" h="133pt" fill="primary" />
-        <rect x="0pt" y="462pt" w="842pt" h="3pt" fill="brass" />
+        <rect anchor="bottom-left" width="842pt" height="133pt" fill="primary" />
+        <rect x="0pt" y="462pt" width="842pt" height="3pt" fill="brass" />
       </layer>
       <layer opacity="0.12">
-        <circle cx="790pt" cy="10pt" r="110pt" fill="brass" />
-        <circle cx="700pt" cy="96pt" r="46pt" fill="brass" />
+        <circle x="680pt" y="-100pt" r="110pt" fill="brass" />
+        <circle x="654pt" y="50pt" r="46pt" fill="brass" />
       </layer>
 
       <layout margin="36pt">
@@ -331,7 +331,7 @@
                 <text font-size="s" color="sand">(555) 010-0188   partners@coldwaterrow.example</text>
               </column>
               <row align="center" gap="m">
-                <barcode type="qr" data="https://www.coldwaterrow.example/contact" size="54pt" color="primary" background="surface" />
+                <barcode type="qr" data="https://www.coldwaterrow.example/contact" width="54pt" color="primary" background="surface" />
                 <text width="fill" font-size="s" color="on-primary">Scan to book an introduction call.</text>
               </row>
             </grid>

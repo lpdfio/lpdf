@@ -70,7 +70,7 @@
         </text>
 
         <!-- Text with w= for wrapping -->
-        <text x="40pt" y="390pt" font-size="11pt" w="300pt" align="left" color="muted">
+        <text x="40pt" y="390pt" font-size="11pt" width="300pt" align="left" color="muted">
           This text has a width constraint of 300pt and will wrap onto the next line
           when it exceeds that width.
         </text>
