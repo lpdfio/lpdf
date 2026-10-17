@@ -1201,4 +1201,43 @@ mod tests {
         assert!(String::from_utf8_lossy(&from_tree).contains("/Outlines"));
         assert_eq!(from_tree, from_xml);
     }
+
+    /// A document with the same strings and spans as the text of the layout and as a layer's `text-at`.
+    fn doc_with_runs(runs: &str) -> String {
+        format!(
+            r#"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
+                {{"type":"layer","attrs":{{}},"nodes":[{{"type":"text-at","attrs":{{"x":"40pt","y":"40pt"}},"nodes":{runs}}}]}},
+                {{"type":"layout","nodes":[{{"type":"text","attrs":{{}},"nodes":{runs}}}]}}]}}]}}"#
+        )
+    }
+
+    const BOLD_WORLD: &str = r#"{"type":"span","attrs":{"font":"Helvetica-Bold"},"nodes":["world"]}"#;
+
+    #[test]
+    fn strings_and_spans_are_read_the_same_from_the_tree_and_from_the_xml() {
+        let split_span = r#"{"type":"span","attrs":{"font":"Helvetica-Bold"},"nodes":["wor","ld"]}"#;
+        let price = r#"{"type":"span","attrs":{"font":"Helvetica-Bold"},"nodes":["468.88"]}"#;
+        for runs in [
+            format!(r#"["Hello",{BOLD_WORLD}]"#),
+            format!(r#"["Hello ",{BOLD_WORLD}]"#),
+            format!(r#"["Hello"," ",{BOLD_WORLD}]"#),
+            format!(r#"[" Hello",{BOLD_WORLD}]"#),
+            format!(r#"[{BOLD_WORLD},"again"]"#),
+            format!(r#"[{BOLD_WORLD}," again"]"#),
+            format!(r#"["Hello ",{BOLD_WORLD},"!"]"#),
+            format!(r#"["Total: $",{price}," due"]"#),
+            r#"["Hel","lo"]"#.to_string(),
+            format!(r#"["Hello ",{split_span}]"#),
+        ] {
+            let (from_tree, from_xml) = rendered_both_ways(&doc_with_runs(&runs));
+            assert_eq!(from_tree, from_xml, "{runs}: the tree and its XML space the text differently");
+        }
+    }
+
+    #[test]
+    fn a_span_follows_a_string_with_a_space_only_where_the_string_ends_in_one() {
+        let (without_space, _) = rendered_both_ways(&doc_with_runs(&format!(r#"["Hello",{BOLD_WORLD}]"#)));
+        let (with_space, _) = rendered_both_ways(&doc_with_runs(&format!(r#"["Hello ",{BOLD_WORLD}]"#)));
+        assert_ne!(without_space, with_space);
+    }
 }
