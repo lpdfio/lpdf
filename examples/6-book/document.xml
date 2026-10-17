@@ -102,51 +102,51 @@
 
       <!-- the running heads, one layer for each chapter -->
       <layer page="4-10">
-        <text x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER I  ·  DOWN THE RABBIT-HOLE</text>
+        <text-at x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER I  ·  DOWN THE RABBIT-HOLE</text-at>
         <line x1="34pt" y1="38pt" x2="272pt" y2="38pt" stroke="rule" stroke-width="0.5pt" />
       </layer>
       <layer page="12-18">
-        <text x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER II  ·  THE POOL OF TEARS</text>
+        <text-at x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER II  ·  THE POOL OF TEARS</text-at>
         <line x1="34pt" y1="38pt" x2="272pt" y2="38pt" stroke="rule" stroke-width="0.5pt" />
       </layer>
       <layer page="20-26">
-        <text x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER III  ·  A CAUCUS-RACE AND A LONG TALE</text>
+        <text-at x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER III  ·  A CAUCUS-RACE AND A LONG TALE</text-at>
         <line x1="34pt" y1="38pt" x2="272pt" y2="38pt" stroke="rule" stroke-width="0.5pt" />
       </layer>
       <layer page="28-36">
-        <text x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER IV  ·  THE RABBIT SENDS IN A LITTLE BILL</text>
+        <text-at x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER IV  ·  THE RABBIT SENDS IN A LITTLE BILL</text-at>
         <line x1="34pt" y1="38pt" x2="272pt" y2="38pt" stroke="rule" stroke-width="0.5pt" />
       </layer>
       <layer page="38-46">
-        <text x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER V  ·  ADVICE FROM A CATERPILLAR</text>
+        <text-at x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER V  ·  ADVICE FROM A CATERPILLAR</text-at>
         <line x1="34pt" y1="38pt" x2="272pt" y2="38pt" stroke="rule" stroke-width="0.5pt" />
       </layer>
       <layer page="48-57">
-        <text x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER VI  ·  PIG AND PEPPER</text>
+        <text-at x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER VI  ·  PIG AND PEPPER</text-at>
         <line x1="34pt" y1="38pt" x2="272pt" y2="38pt" stroke="rule" stroke-width="0.5pt" />
       </layer>
       <layer page="59-68">
-        <text x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER VII  ·  A MAD TEA-PARTY</text>
+        <text-at x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER VII  ·  A MAD TEA-PARTY</text-at>
         <line x1="34pt" y1="38pt" x2="272pt" y2="38pt" stroke="rule" stroke-width="0.5pt" />
       </layer>
       <layer page="70-78">
-        <text x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER VIII  ·  THE QUEEN’S CROQUET-GROUND</text>
+        <text-at x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER VIII  ·  THE QUEEN’S CROQUET-GROUND</text-at>
         <line x1="34pt" y1="38pt" x2="272pt" y2="38pt" stroke="rule" stroke-width="0.5pt" />
       </layer>
       <layer page="80-89">
-        <text x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER IX  ·  THE MOCK TURTLE’S STORY</text>
+        <text-at x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER IX  ·  THE MOCK TURTLE’S STORY</text-at>
         <line x1="34pt" y1="38pt" x2="272pt" y2="38pt" stroke="rule" stroke-width="0.5pt" />
       </layer>
       <layer page="91-98">
-        <text x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER X  ·  THE LOBSTER QUADRILLE</text>
+        <text-at x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER X  ·  THE LOBSTER QUADRILLE</text-at>
         <line x1="34pt" y1="38pt" x2="272pt" y2="38pt" stroke="rule" stroke-width="0.5pt" />
       </layer>
       <layer page="100-107">
-        <text x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER XI  ·  WHO STOLE THE TARTS?</text>
+        <text-at x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER XI  ·  WHO STOLE THE TARTS?</text-at>
         <line x1="34pt" y1="38pt" x2="272pt" y2="38pt" stroke="rule" stroke-width="0.5pt" />
       </layer>
       <layer page="109-last">
-        <text x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER XII  ·  ALICE’S EVIDENCE</text>
+        <text-at x="34pt" y="26pt" width="238pt" font-size="7pt" color="muted" align="center">CHAPTER XII  ·  ALICE’S EVIDENCE</text-at>
         <line x1="34pt" y1="38pt" x2="272pt" y2="38pt" stroke="rule" stroke-width="0.5pt" />
       </layer>
 

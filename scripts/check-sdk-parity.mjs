@@ -35,15 +35,13 @@ const EXPECTED = {
     ImageAttr: attributes('image'),
     RegionAttr: attributes('region', 'layout'),
     LayerAttr: attributes('layer'),
-    CanvasTextAttr: attributes('text', 'primitives'),
-    CanvasImgAttr: attributes('img', 'primitives'),
 };
 for (const element of ['column', 'row', 'grid', 'frame', 'link', 'divider', 'span', 'img',
     'barcode', 'text', 'td', 'thead', 'tr', 'table', 'field', 'bookmark']) {
     EXPECTED[`${element[0].toUpperCase()}${element.slice(1)}Attr`] = attributes(element);
 }
-for (const element of ['rect', 'circle', 'ellipse', 'line', 'path']) {
-    EXPECTED[`${element[0].toUpperCase()}${element.slice(1)}Attr`] = attributes(element, 'primitives');
+for (const element of ['rect', 'circle', 'ellipse', 'line', 'path', 'text-at', 'img-at', 'barcode-at']) {
+    EXPECTED[`${element.split('-').map((word) => word[0].toUpperCase() + word.slice(1)).join('')}Attr`] = attributes(element);
 }
 
 // ── What each SDK has ─────────────────────────────────────────────────────────

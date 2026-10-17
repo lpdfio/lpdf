@@ -32,9 +32,9 @@
 
       <!-- Page number (first page only: no number) -->
       <layer page="2-last">
-        <text anchor="bottom-center" y="-10pt" font-size="9pt" color="surface" align="center">
+        <text-at anchor="bottom-center" y="-10pt" font-size="9pt" color="surface" align="center">
           Page 2
-        </text>
+        </text-at>
       </layer>
 
       <!-- Layout content flows over the underlay -->

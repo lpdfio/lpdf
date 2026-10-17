@@ -129,6 +129,8 @@ fn showcase_canvas_rect()     { run_snapshot("showcase-canvas-rect"); }
 #[test]
 fn showcase_canvas_text()     { run_snapshot("showcase-canvas-text"); }
 #[test]
+fn showcase_canvas_opacity()  { run_snapshot("showcase-canvas-opacity"); }
+#[test]
 fn showcase_region_chrome()  { run_snapshot("showcase-region-chrome"); }
 #[test]
 fn showcase_region_page_scope() { run_snapshot("showcase-region-page-scope"); }

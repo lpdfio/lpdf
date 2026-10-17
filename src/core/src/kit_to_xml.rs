@@ -167,7 +167,9 @@ fn render_span(node: &Value) -> String {
     }
 }
 
+/// A `text`, or a layer's `text-at`, with its strings and `span` children.
 fn render_text_node(node: &Value, depth: usize) -> String {
+    let tag    = node.get("type").and_then(|v| v.as_str()).unwrap_or("text");
     let pad    = "  ".repeat(depth);
     let empty  = serde_json::Map::new();
     let attrs  = node.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
@@ -175,7 +177,7 @@ fn render_text_node(node: &Value, depth: usize) -> String {
 
     let children = match node.get("nodes").and_then(|v| v.as_array()) {
         Some(c) if !c.is_empty() => c,
-        _ => return format!("{pad}<text{}/>", attrs_s),
+        _ => return format!("{pad}<{tag}{}/>", attrs_s),
     };
 
     let inner: String = children
@@ -191,7 +193,7 @@ fn render_text_node(node: &Value, depth: usize) -> String {
         })
         .collect();
 
-    format!("{pad}<text{}>{}</text>", attrs_s, inner)
+    format!("{pad}<{tag}{}>{}</{tag}>", attrs_s, inner)
 }
 
 fn render_node(node: &Value, depth: usize) -> String {
@@ -230,8 +232,9 @@ fn render_layer_primitive(node: &Value, depth: usize) -> String {
     let attrs     = node.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
 
     match node_type {
-        // Layer text has the same content as layout text: strings, and span children for styled runs.
-        "text" => render_text_node(node, depth),
+        // A `text-at` has the same content as layout text: strings, and span children for styled runs. A `text`
+        // is written as it is, so that reading the XML says it is a `text-at` in a layer.
+        "text" | "text-at" => render_text_node(node, depth),
         tag => format!("{pad}<{tag}{}/>", attrs_str(attrs, &[])),
     }
 }
@@ -825,10 +828,10 @@ mod tests {
     #[test]
     fn layer_text_is_written_with_its_content_and_span_children() {
         let json = doc_with_layer_child(
-            r##"{"type":"text","attrs":{"x":"50pt","y":"50pt"},"nodes":["Hello",{"type":"span","attrs":{"color":"#ff0000"},"nodes":["world"]}]}"##,
+            r##"{"type":"text-at","attrs":{"x":"50pt","y":"50pt"},"nodes":["Hello ",{"type":"span","attrs":{"color":"#ff0000"},"nodes":["world"]}]}"##,
         );
         let xml = kit_to_xml(&json).unwrap();
-        assert!(xml.contains(r##"<span color="#ff0000">world</span>"##), "{xml}");
+        assert!(xml.contains(r##"<text-at x="50pt" y="50pt">Hello <span color="#ff0000">world</span></text-at>"##), "{xml}");
         let (from_tree, from_xml) = rendered_both_ways(&json);
         assert_eq!(from_tree, from_xml);
     }
@@ -877,7 +880,7 @@ mod tests {
             (r#""type":"circle","attrs":{"cx":"10pt","r":"5pt"}"#, "cx", "'x' and 'y'"),
             (r#""type":"circle","attrs":{"cy":"10pt","r":"5pt"}"#, "cy", "'x' and 'y'"),
             (r#""type":"ellipse","attrs":{"cx":"10pt","rx":"5pt","ry":"3pt"}"#, "cx", "'x' and 'y'"),
-            (r#""type":"text","attrs":{"w":"100pt"},"nodes":["Hi"]"#, "w", "'width'"),
+            (r#""type":"text-at","attrs":{"w":"100pt"},"nodes":["Hi"]"#, "w", "'width'"),
         ] {
             let json = doc_with_layer_child(&format!("{{{node}}}"));
             let from_tree = crate::parse::parse_tree(&json).err().expect("the tree is rejected");
@@ -905,7 +908,7 @@ mod tests {
             let kit = format!(
                 r#"{{"version":1,"type":"document","attrs":{{"assets":{{"images":[{{"name":"logo"}}]}}}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
                     {{"type":"layer","attrs":{{}},"nodes":[
-                        {{"type":"img","attrs":{{"name":"logo","anchor":"{anchor}","x":"-18pt","y":"18pt","width":"80pt","height":"24pt"}}}}]}}]}}]}}"#
+                        {{"type":"img-at","attrs":{{"name":"logo","anchor":"{anchor}","x":"-18pt","y":"18pt","width":"80pt","height":"24pt"}}}}]}}]}}]}}"#
             );
             let from_tree = crate::parse::parse_tree(&kit).unwrap();
             let from_xml = crate::parse::parse(&kit_to_xml(&kit).unwrap()).unwrap();
@@ -944,9 +947,37 @@ mod tests {
     }
 
     #[test]
+    fn text_at_and_barcode_at_render_the_same_from_the_tree_and_from_the_xml() {
+        for anchor in ["top-left", "center", "bottom-right"] {
+            let kit = format!(
+                r##"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
+                    {{"type":"layer","attrs":{{}},"nodes":[
+                        {{"type":"text-at","attrs":{{"anchor":"{anchor}","x":"-12pt","y":"12pt","width":"90pt","max-lines":"2","ellipsis":"true","align":"center"}},
+                          "nodes":["A text that does not fit on one line ",{{"type":"span","attrs":{{"font":"Helvetica-Bold"}},"nodes":["in its box"]}}]}},
+                        {{"type":"barcode-at","attrs":{{"type":"qr","data":"x","anchor":"{anchor}","x":"-12pt","y":"12pt","width":"50pt"}}}}]}}]}}]}}"##
+            );
+            let (from_tree, from_xml) = rendered_both_ways(&kit);
+            assert_eq!(from_tree, from_xml, "{anchor}: the tree and the XML render differently");
+        }
+    }
+
+    #[test]
+    fn text_at_img_at_and_barcode_at_are_written_under_their_element_names() {
+        let json = doc_with_layer_child(
+            r##"{"type":"text-at","attrs":{"x":"1pt","y":"2pt"},"nodes":["Hi"]}"##,
+        );
+        let xml = kit_to_xml(&json).unwrap();
+        assert!(xml.contains("<text-at x=\"1pt\" y=\"2pt\">Hi</text-at>") || xml.contains("<text-at y=\"2pt\" x=\"1pt\">Hi</text-at>"), "{xml}");
+        let json = doc_with_layer_child(r#"{"type":"barcode-at","attrs":{"type":"qr","data":"x","x":"1pt","y":"2pt","width":"9pt"}}"#);
+        assert!(kit_to_xml(&json).unwrap().contains("<barcode-at "));
+        let json = doc_with_layer_child(r#"{"type":"img-at","attrs":{"name":"logo","x":"1pt","y":"2pt","width":"9pt"}}"#);
+        assert!(kit_to_xml(&json).unwrap().contains("<img-at "));
+    }
+
+    #[test]
     fn layer_image_is_read_by_name() {
         let json = doc_with_layer_child(
-            r#"{"type":"img","attrs":{"name":"logo","x":"10pt","y":"10pt","width":"50pt","height":"50pt"}}"#,
+            r#"{"type":"img-at","attrs":{"name":"logo","x":"10pt","y":"10pt","width":"50pt","height":"50pt"}}"#,
         );
         let err = crate::parse::parse_tree(&json).err().expect("an undeclared asset is rejected");
         assert!(err.contains("logo"), "{err}");

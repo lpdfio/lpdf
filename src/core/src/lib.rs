@@ -172,7 +172,7 @@ impl LpdfEngine {
         let meta = pdf::build_image_meta(&self.images);
         let mut lp = doc.section_layouts();
         for page in &mut lp {
-            layout::prefill_image_sizes(&mut page.children, &meta);
+            layout::prefill_section_image_sizes(page, &meta);
         }
 
         layout::set_font_widths(self.font_widths.clone());
@@ -234,7 +234,7 @@ impl LpdfEngine {
         let meta = pdf::build_image_meta(&self.images);
         let mut lp = doc.section_layouts();
         for page in &mut lp {
-            layout::prefill_image_sizes(&mut page.children, &meta);
+            layout::prefill_section_image_sizes(page, &meta);
         }
 
         // Merge font widths: engine-level + doc-level (doc-level takes precedence).

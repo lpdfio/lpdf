@@ -1,6 +1,6 @@
 use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Direction, FieldKind, HeightMode, Justify, Node, NodeKind, SectionLayout, Paginate, TextAlign, TextRun};
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
-use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderField, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind};
+use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderCanvasClip, RenderCanvasLayer, RenderField, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind};
 use crate::tokens::FontWidths;
 use crate::canvas;
 use crate::toc;
@@ -33,6 +33,18 @@ pub type ImageMeta = HashMap<String, (u32, u32)>;
 pub fn prefill_image_sizes(nodes: &mut Vec<Node>, meta: &ImageMeta) {
     for node in nodes.iter_mut() {
         prefill_node(node, meta);
+    }
+}
+
+/// `prefill_image_sizes` for a whole section: its layout, and the `img-at` of its layers.
+pub fn prefill_section_image_sizes(section: &mut SectionLayout, meta: &ImageMeta) {
+    prefill_image_sizes(&mut section.children, meta);
+    for layer in section.underlays.iter_mut().chain(section.overlays.iter_mut()) {
+        for child in &mut layer.children {
+            if let canvas::CanvasPrimitive::Placed(placed) = child {
+                prefill_node(&mut placed.node, meta);
+            }
+        }
     }
 }
 
@@ -2389,19 +2401,68 @@ fn measure_natural_w(node: &Node) -> f32 {
     }
 }
 
-fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
-    struct Atom {
-        text:      String,
-        font:      String,
-        color:     String,
-        href:      Option<String>,
-        underline: bool,
-        strike:    bool,
-    }
-    enum Tok { Space, Word(Atom) }
+/// A word or a styled run of a text, with the style it is drawn in.
+struct Atom {
+    text:      String,
+    font:      String,
+    color:     String,
+    href:      Option<String>,
+    underline: bool,
+    strike:    bool,
+}
 
+enum Tok { Space, Word(Atom) }
+
+/// A line of a text: its atoms, each with the gap before it.
+type TextLine = Vec<(Atom, f32)>;
+
+/// How a text is cut to fit. A text in the flow wraps at its width and keeps every line. A `text-at` has a
+/// different width to wrap at than to align in (it stays on one line unless `max-lines` says otherwise), keeps
+/// at most `max_lines` lines, and can end the last in dots.
+struct TextFit {
+    /// A word that would end past this starts a new line.
+    wrap_w:    f32,
+    max_lines: Option<usize>,
+    ellipsis:  bool,
+}
+
+/// The ending of a line cut short by its width or by `max-lines`.
+const ELLIPSIS: &str = "...";
+
+fn text_line_width(line: &TextLine, font_size: f32) -> f32 {
+    line.iter().map(|(atom, gap)| gap + text_width(&atom.font, &atom.text, font_size)).sum()
+}
+
+/// Shorten `line` until it and the dots after it fit in `limit`, and end it in them. The last characters go
+/// first, and a run with none left goes too.
+fn end_in_ellipsis(line: &mut TextLine, limit: f32, font_size: f32) {
+    while let Some((last, _)) = line.last() {
+        let dots = text_width(&last.font, ELLIPSIS, font_size);
+        if text_line_width(line, font_size) + dots <= limit + 0.01 {
+            if let Some((last, _)) = line.last_mut() {
+                last.text.push_str(ELLIPSIS);
+            }
+            return;
+        }
+        let emptied = match line.last_mut() {
+            Some((last, _)) => { last.text.pop(); last.text.is_empty() }
+            None => false,
+        };
+        if emptied { line.pop(); }
+    }
+}
+
+fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
+    let fit = TextFit { wrap_w: avail_w, max_lines: node.max_lines, ellipsis: node.ellipsis };
+    let (rendered, height, _) = layout_text_fit(node, x, y, avail_w, &fit);
+    (rendered, height)
+}
+
+/// Lay out a text in a box `avail_w` wide, which is what its lines align in. Returns the box, its height, and
+/// whether a line it keeps is wider than the box, which the caller cuts off.
+fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> (RenderNode, f32, bool) {
     let font_size    = node.font_size;
-    let line_height  = font_size * 1.2;
+    let line_height  = font_size * node.line_height;
     let parent_font  = node.font.as_str();
     let parent_color = node.text_color.clone().unwrap_or_else(|| "#1a1a1a".into());
     let space_w      = text_width(parent_font, " ", font_size);
@@ -2438,12 +2499,12 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
         return (RenderNode::Box(RenderBox {
             x, y, width: 0.0, height: 0.0, fill: None,
             border_width: 0.0, border_color: None, radius: 0.0, debug_self: false, children: vec![],
-        }), 0.0);
+        }), 0.0, false);
     }
 
     // ── Word-wrap: build lines of (Atom, gap_before_pt) ──────────────────────
-    let mut lines: Vec<Vec<(Atom, f32)>> = Vec::new();
-    let mut cur_line: Vec<(Atom, f32)>   = Vec::new();
+    let mut lines: Vec<TextLine> = Vec::new();
+    let mut cur_line: TextLine   = Vec::new();
     let mut cur_line_w    = 0.0_f32;
     let mut pending_space = false;
 
@@ -2453,7 +2514,7 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
             Tok::Word(atom) => {
                 let aw  = text_width(&atom.font, &atom.text, font_size);
                 let gap = if cur_line.is_empty() || !pending_space { 0.0 } else { space_w };
-                if cur_line.is_empty() || cur_line_w + gap + aw <= avail_w + 0.01 {
+                if cur_line.is_empty() || cur_line_w + gap + aw <= fit.wrap_w + 0.01 {
                     cur_line_w += gap + aw;
                     cur_line.push((atom, gap));
                 } else {
@@ -2466,6 +2527,20 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
         }
     }
     if !cur_line.is_empty() { lines.push(cur_line); }
+
+    // Only whole lines are kept. A line that is still too wide, because it is cut short or is a word longer
+    // than the box, ends in dots when the text asks for them.
+    let cut = fit.max_lines.is_some_and(|max| lines.len() > max);
+    if let Some(max) = fit.max_lines { lines.truncate(max); }
+    if fit.ellipsis {
+        if let Some(last) = lines.last_mut() {
+            if cut || text_line_width(last, font_size) > avail_w + 0.01 {
+                end_in_ellipsis(last, avail_w, font_size);
+            }
+        }
+    }
+    let overflow = fit.max_lines.is_some()
+        && lines.iter().any(|line| text_line_width(line, font_size) > avail_w + 0.01);
 
     let total_h = lines.len() as f32 * line_height;
     let mut all_nodes: Vec<RenderNode> = Vec::new();
@@ -2601,7 +2676,56 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
             children: all_nodes,
         }),
         total_h,
+        overflow,
     )
+}
+
+// ── Elements at fixed places ──────────────────────────────────────────────────
+
+/// The width and height of a laid-out text, image or barcode.
+fn render_size(node: &RenderNode) -> (f32, f32) {
+    match node {
+        RenderNode::Box(b)     => (b.width, b.height),
+        RenderNode::Image(i)   => (i.width, i.height),
+        RenderNode::Barcode(b) => (b.width, b.height),
+        _                      => (0.0, 0.0),
+    }
+}
+
+/// Lay out a layer's `text-at`, `img-at` or `barcode-at`: the node of the layout, through the layout's own
+/// measuring, wrapping and drawing, and then put where the layer says. `page` is the number of the page it
+/// is drawn on, and `pages` how many the section has, for `{page}` and `{pages}`.
+///
+/// The box is laid out at the origin and moved once its size is known, since an anchor other than the top
+/// left corner needs it. A `text-at` with a line wider than its box is clipped to the box.
+pub(crate) fn layout_placed(placed: &canvas::PlacedNode, page: usize, pages: usize) -> RenderNode {
+    let node = substitute_page_tokens(&placed.node, page, pages);
+    let (rendered, overflow) = match node.kind {
+        NodeKind::Text => {
+            let width = node.width_constraint.unwrap_or_else(|| text_natural_w(&node));
+            let max_lines = node.max_lines.unwrap_or(1);
+            // On one line a text never wraps, whatever its width: it is cut off at it.
+            let wrap_w = if max_lines > 1 { width } else { f32::INFINITY };
+            let fit = TextFit { wrap_w, max_lines: Some(max_lines), ellipsis: node.ellipsis };
+            let (rendered, _, overflow) = layout_text_fit(&node, 0.0, 0.0, width, &fit);
+            (rendered, overflow)
+        }
+        NodeKind::Img     => (layout_img(&node, 0.0, 0.0, f32::MAX).0, false),
+        NodeKind::Barcode => (layout_barcode(&node, 0.0, 0.0, f32::MAX).0, false),
+        _                 => unreachable!("a layer holds text, images and barcodes"),
+    };
+    let (w, h) = render_size(&rendered);
+    let (left, top) = canvas::apply_anchor_offset(&placed.anchor, placed.x, placed.y, w, h);
+    let moved = shift_x(shift_y(rendered, top), left);
+    if !overflow {
+        return moved;
+    }
+    RenderNode::CanvasLayer(RenderCanvasLayer {
+        transform: None,
+        clip:      Some(RenderCanvasClip { x: left, y: top, w, h, border_radius: 0.0 }),
+        opacity:   1.0,
+        children:  vec![moved],
+    })
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -3745,5 +3869,191 @@ mod tests {
         assert_eq!(barcode_size(&code(r#"height="60pt""#)), (120.0, 60.0));
         assert_eq!(barcode_size(&code(r#"height="60pt" hrt="true""#)), (120.0, 60.0));
         assert_eq!(barcode_size(&code(r#"hrt="true""#)), (120.0, 60.0));
+    }
+
+    // ── Elements at fixed places ──────────────────────────────────────────────
+
+    /// The render tree of a document with the given layers and a layout of `lines` lines of text.
+    fn layer_tree(layers: &str, lines: usize) -> serde_json::Value {
+        let body: String = (1..=lines).map(|n| format!("<text>Line {n}</text>")).collect();
+        engine_render(&format!(
+            r#"<lpdf version="1"><document size="a4"><section>{layers}<layout margin="28pt">{body}</layout></section></document></lpdf>"#
+        ))
+    }
+
+    /// The layers a page draws, from the bottom up.
+    fn page_layers(tree: &serde_json::Value, page: usize) -> Vec<&serde_json::Value> {
+        tree["pages"][page]["nodes"].as_array().unwrap().iter().filter(|n| n["type"] == "canvas-layer").collect()
+    }
+
+    /// Every text a node draws, as (content, font, size, colour).
+    fn texts(node: &serde_json::Value) -> Vec<(String, String, f64, String)> {
+        let mut out = Vec::new();
+        fn walk(node: &serde_json::Value, out: &mut Vec<(String, String, f64, String)>) {
+            if node["type"] == "text" {
+                out.push((
+                    node["content"].as_str().unwrap().to_string(),
+                    node["font"].as_str().unwrap().to_string(),
+                    node["size"].as_f64().unwrap(),
+                    node["color"].as_str().unwrap().to_string(),
+                ));
+            }
+            for child in node["nodes"].as_array().into_iter().flatten() {
+                walk(child, out);
+            }
+        }
+        walk(node, &mut out);
+        out
+    }
+
+    #[test]
+    fn a_text_at_is_drawn_like_the_same_text_in_the_layout() {
+        let markup = r##"Plain <span font="Helvetica-Bold" color="#ff0000">bold red</span> and <span underline="true">underlined</span> text"##;
+        let tree = layer_tree(&format!(r#"<layer><text-at x="40pt" y="40pt">{markup}</text-at></layer>"#), 0);
+        let layer = page_layers(&tree, 0)[0];
+        let flow = engine_render(&minimal(&format!("<text>{markup}</text>")));
+        assert_eq!(texts(layer), texts(&flow["pages"][0]["nodes"][0]));
+        assert_eq!(texts(layer).len(), 5, "every word and run is drawn: {:?}", texts(layer));
+    }
+
+    #[test]
+    fn a_text_at_without_a_width_is_one_line_as_wide_as_its_text() {
+        let long = "word ".repeat(40);
+        let tree = layer_tree(&format!(r#"<layer><text-at x="40pt" y="40pt">{long}</text-at></layer>"#), 0);
+        let layer = page_layers(&tree, 0)[0];
+        let b = &layer["nodes"][0];
+        assert!((b["height"].as_f64().unwrap() - 13.2).abs() < 0.01, "a line is 1.2 × the 11pt of text");
+        let right = b["x"].as_f64().unwrap() + b["width"].as_f64().unwrap();
+        assert!(right > 595.28, "it runs on past the page edge: {right}");
+        assert!(layer["nodes"][0]["type"] == "box", "and is not clipped: {layer}");
+        assert_eq!(layer["clip"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn a_text_at_anchor_attaches_its_box_to_the_page_vertically_too() {
+        let tree = layer_tree(
+            r#"<layer>
+                <text-at anchor="bottom-right" x="-10pt" y="-10pt" font-size="10pt">Corner</text-at>
+                <text-at anchor="center" font-size="10pt" line-height="2">Middle</text-at>
+            </layer>"#,
+            0,
+        );
+        let layer = page_layers(&tree, 0)[0];
+        let corner = &layer["nodes"][0];
+        assert!((corner["x"].as_f64().unwrap() + corner["width"].as_f64().unwrap() - (595.28 - 10.0)).abs() < 0.02);
+        assert!((corner["y"].as_f64().unwrap() + corner["height"].as_f64().unwrap() - (841.89 - 10.0)).abs() < 0.02);
+        let middle = &layer["nodes"][1];
+        assert_eq!(middle["height"].as_f64().unwrap(), 20.0, "a line is 2 × the font size high");
+        assert!((middle["y"].as_f64().unwrap() + 10.0 - 841.89 / 2.0).abs() < 0.02, "its middle is the page's");
+        assert!((middle["x"].as_f64().unwrap() + middle["width"].as_f64().unwrap() / 2.0 - 595.28 / 2.0).abs() < 0.02);
+    }
+
+    #[test]
+    fn a_text_at_with_a_width_aligns_in_it() {
+        let tree = layer_tree(
+            r#"<layer><text-at x="100pt" y="40pt" width="200pt" align="right" font-size="10pt">Right</text-at></layer>"#,
+            0,
+        );
+        let b = &page_layers(&tree, 0)[0]["nodes"][0];
+        assert_eq!((b["x"].as_f64().unwrap(), b["width"].as_f64().unwrap()), (100.0, 200.0));
+        let run = &b["nodes"][0];
+        assert_eq!(run["text_align"], "right");
+        assert_eq!(run["x"].as_f64().unwrap() + 0.0, 300.0, "a right-aligned run is anchored at the right edge of the box");
+    }
+
+    #[test]
+    fn max_lines_wraps_a_text_at_within_its_width_and_drops_the_lines_after_them() {
+        let words = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda";
+        let lines = |max: &str| {
+            let tree = layer_tree(
+                &format!(r#"<layer><text-at x="40pt" y="40pt" width="90pt" {max} font-size="10pt">{words}</text-at></layer>"#),
+                0,
+            );
+            let mut b = page_layers(&tree, 0)[0]["nodes"][0].clone();
+            // A line past the width is cut off at it, by a layer of its own around the box.
+            if b["type"] == "canvas-layer" { b = b["nodes"][0].clone(); }
+            let mut ys: Vec<String> = b["nodes"].as_array().unwrap().iter().map(|t| t["y"].to_string()).collect();
+            ys.dedup();
+            (ys.len(), b["height"].as_f64().unwrap())
+        };
+        assert_eq!(lines(r#"max-lines="2""#), (2, 24.0));
+        assert_eq!(lines(r#"max-lines="3""#), (3, 36.0));
+        // One line, by default: it does not wrap.
+        assert_eq!(lines(""), (1, 12.0));
+    }
+
+    #[test]
+    fn a_text_at_line_past_its_width_is_clipped_to_its_box_unless_it_ends_in_dots() {
+        let layer_of = |ellipsis: &str| {
+            let tree = layer_tree(
+                &format!(r#"<layer><text-at x="40pt" y="40pt" width="60pt" {ellipsis} font-size="10pt">A line that is far too long</text-at></layer>"#),
+                0,
+            );
+            page_layers(&tree, 0)[0].clone()
+        };
+        let clipped = layer_of("");
+        let inner = &clipped["nodes"][0];
+        assert_eq!(inner["type"], "canvas-layer");
+        assert_eq!(inner["clip"], serde_json::json!([40.0, 40.0, 60.0, 12.0]));
+        assert!(texts(inner).iter().map(|t| t.0.as_str()).collect::<Vec<_>>().join(" ").contains("too long"));
+
+        let dotted = layer_of(r#"ellipsis="true""#);
+        assert_eq!(dotted["nodes"][0]["type"], "box", "nothing is left to cut off");
+        let shown: String = texts(&dotted).iter().map(|t| t.0.clone()).collect::<Vec<_>>().join(" ");
+        assert!(shown.ends_with("..."), "{shown}");
+        assert!(!shown.contains("too long"), "{shown}");
+        let width = text_width("Helvetica", &shown, 10.0);
+        assert!(width <= 60.01, "the line and its dots fit the width: {width}");
+    }
+
+    #[test]
+    fn ellipsis_ends_the_last_line_when_max_lines_drops_text() {
+        let tree = layer_tree(
+            r#"<layer><text-at x="40pt" y="40pt" width="90pt" max-lines="2" ellipsis="true" font-size="10pt">alpha beta gamma delta epsilon zeta eta theta iota</text-at></layer>"#,
+            0,
+        );
+        let b = &page_layers(&tree, 0)[0]["nodes"][0];
+        let runs = b["nodes"].as_array().unwrap();
+        let last_y = runs.last().unwrap()["y"].clone();
+        let last_line: String = runs.iter().filter(|r| r["y"] == last_y).map(|r| r["content"].as_str().unwrap()).collect::<Vec<_>>().join(" ");
+        assert!(last_line.ends_with("..."), "{last_line}");
+        assert!(text_width("Helvetica", &last_line, 10.0) <= 90.01);
+    }
+
+    #[test]
+    fn page_and_pages_in_a_text_at_count_within_the_section() {
+        let tree = layer_tree(
+            r#"<layer page="each"><text-at x="40pt" y="800pt">Page {page} of {pages}</text-at></layer>"#,
+            120,
+        );
+        let pages = tree["pages"].as_array().unwrap().len();
+        assert!(pages >= 3, "{pages} pages");
+        for page in 0..pages {
+            let layer = page_layers(&tree, page)[0];
+            let said: String = texts(layer).iter().map(|t| t.0.clone()).collect::<Vec<_>>().join(" ");
+            assert_eq!(said, format!("Page {} of {}", page + 1, pages));
+        }
+    }
+
+    #[test]
+    fn a_barcode_at_is_placed_by_its_anchor() {
+        let tree = layer_tree(
+            r#"<layer><barcode-at type="qr" data="x" anchor="top-right" x="-20pt" y="20pt" width="60pt"/></layer>"#,
+            0,
+        );
+        let code = &page_layers(&tree, 0)[0]["nodes"][0];
+        assert_eq!(code["type"], "barcode");
+        assert_eq!((code["width"].as_f64().unwrap(), code["height"].as_f64().unwrap()), (60.0, 60.0));
+        assert!((code["x"].as_f64().unwrap() - (595.28 - 20.0 - 60.0)).abs() < 0.02);
+        assert_eq!(code["y"].as_f64().unwrap(), 20.0);
+    }
+
+    #[test]
+    fn a_layer_with_a_clip_tells_the_page_to_cut_off_what_it_draws() {
+        let tree = layer_tree(
+            r##"<layer clip="10pt 20pt 100pt 50pt"><rect x="0pt" y="0pt" width="300pt" height="300pt" fill="#ff0000"/></layer>"##,
+            0,
+        );
+        assert_eq!(page_layers(&tree, 0)[0]["clip"], serde_json::json!([10.0, 20.0, 100.0, 50.0]));
     }
 }

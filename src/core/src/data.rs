@@ -1,6 +1,7 @@
 use serde_json::Value;
 
-use crate::parse::{Document, Node, TextRun, TOC_DATA_KEY};
+use crate::canvas::{CanvasLayer, CanvasPrimitive};
+use crate::parse::{Document, Node, NodeKind, TextRun, TOC_DATA_KEY};
 
 // ── Path resolution ───────────────────────────────────────────────────────────
 
@@ -111,6 +112,11 @@ pub fn apply(doc: &mut Document, json_data: &str) -> Result<(), String> {
             toc.data = Some(root.clone());
             continue;
         }
+        // A layer is drawn or not by its data-if and data-if-not, and what is in it is bound like the layout.
+        section.children.retain_mut(|sc| match sc {
+            crate::parse::SectionChild::Layer(layer) => bind_layer(layer, &root),
+            _ => true,
+        });
         for sc in &mut section.children {
             if let crate::parse::SectionChild::Layout { children: layout_children, .. } = sc {
                 // Expand the flat content list (data-source loops can expand nodes).
@@ -137,6 +143,36 @@ pub fn apply(doc: &mut Document, json_data: &str) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// Bind a layer. Returns `false` when its `data-if` or `data-if-not` say it is not drawn.
+///
+/// A layer reads single values: an array is read by index (`signers[0].name`), and there is no `data-source`
+/// on what is in it.
+fn bind_layer(layer: &mut CanvasLayer, root: &Value) -> bool {
+    if let Some(path) = &layer.data_if {
+        if !is_truthy(resolve_path(path, &[], root)) { return false; }
+    }
+    if let Some(path) = &layer.data_if_not {
+        if is_truthy(resolve_path(path, &[], root)) { return false; }
+    }
+    let mut bound = Vec::with_capacity(layer.children.len());
+    for child in std::mem::take(&mut layer.children) {
+        match child {
+            CanvasPrimitive::Placed(mut placed) => {
+                let mut out = Vec::new();
+                apply_single_node(placed.node.clone(), &[], root, None, &mut out);
+                // A node filtered out by its data-if is not drawn; there is no data-source to repeat it.
+                if let Some(node) = out.pop() {
+                    placed.node = node;
+                    bound.push(CanvasPrimitive::Placed(placed));
+                }
+            }
+            shape => bound.push(shape),
+        }
+    }
+    layer.children = bound;
+    true
 }
 
 /// Bind the content of a table of contents section. `root` is the caller's data with `$toc` added. Each item
@@ -209,24 +245,28 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, toc_indent_step
         return;
     }
 
-    // 4. data-value: substitute the text content.
+    // 4. data-value: substitute the text content, or the data a barcode encodes.
     let mut node = node;
     if let Some(ref path) = dv {
         let text = value_to_string(resolve_path(path, stack, root));
-        node.text_runs = if text.is_empty() {
-            vec![]
+        if node.kind == NodeKind::Barcode {
+            node.barcode_data = Some(text);
         } else {
-            vec![TextRun {
-                text,
-                leading_space: false,
-                font:      None,
-                color:     None,
-                href:      None,
-                underline: false,
-                strike:    false,
-                bold:      false,
-            }]
-        };
+            node.text_runs = if text.is_empty() {
+                vec![]
+            } else {
+                vec![TextRun {
+                    text,
+                    leading_space: false,
+                    font:      None,
+                    color:     None,
+                    href:      None,
+                    underline: false,
+                    strike:    false,
+                    bold:      false,
+                }]
+            };
+        }
         if let Some(d) = &mut node.data_attrs {
             d.data_value = None;
         }
@@ -267,7 +307,7 @@ fn point_links_at(node: &mut Node, anchor: &str) {
 mod tests {
     use super::*;
     use crate::parse::{
-        Align, BarcodeEcLevel, DataAttrs, DEFAULT_ORPHANS, DEFAULT_WIDOWS, Direction, HeightMode, Justify, Meta, NodeKind,
+        Align, BarcodeEcLevel, DataAttrs, DEFAULT_LINE_HEIGHT, DEFAULT_ORPHANS, DEFAULT_WIDOWS, Direction, HeightMode, Justify, Meta, NodeKind,
         Paginate, TextAlign,
     };
     use std::collections::HashMap;
@@ -302,6 +342,9 @@ mod tests {
             text_align: TextAlign::Left,
             widows: DEFAULT_WIDOWS,
             orphans: DEFAULT_ORPHANS,
+            line_height: DEFAULT_LINE_HEIGHT,
+            max_lines: None,
+            ellipsis: false,
             url: None,
             image_name: None,
             img_height_constraint: None,
@@ -585,5 +628,77 @@ mod tests {
         let n = text_node("fallback");
         let mut doc = make_doc(vec![n]);
         assert!(apply(&mut doc, "not json").is_err());
+    }
+
+    // ── Layers ────────────────────────────────────────────────────────────────
+
+    /// The layers of the first section of `xml`, with `data` bound to them.
+    fn bound_layers(layers: &str, data: &str) -> Vec<CanvasLayer> {
+        let xml = format!(r#"<lpdf version="1"><document><section>{layers}</section></document></lpdf>"#);
+        let mut doc = crate::parse::parse(&xml).unwrap();
+        apply(&mut doc, data).unwrap();
+        doc.sections.remove(0).children.into_iter().filter_map(|child| match child {
+            crate::parse::SectionChild::Layer(layer) => Some(layer),
+            _ => None,
+        }).collect()
+    }
+
+    /// What a layer's `text-at` and `barcode-at` say: their text and their data.
+    fn said(layer: &CanvasLayer) -> Vec<String> {
+        layer.children.iter().filter_map(|child| match child {
+            CanvasPrimitive::Placed(placed) if placed.node.kind == NodeKind::Barcode => placed.node.barcode_data.clone(),
+            CanvasPrimitive::Placed(placed) => Some(placed.node.text_runs.iter().map(|r| r.text.as_str()).collect::<Vec<_>>().join(" ")),
+            _ => None,
+        }).collect()
+    }
+
+    #[test]
+    fn data_value_fills_a_text_at_and_a_barcode_at_and_reads_arrays_by_index() {
+        let layers = bound_layers(
+            r#"<layer>
+                <text-at x="0pt" y="0pt" data-value="signers[1].name">Name</text-at>
+                <text-at x="0pt" y="20pt" data-value="missing">Fallback</text-at>
+                <barcode-at type="qr" data="placeholder" x="0pt" y="40pt" width="40pt" data-value="id"/>
+            </layer>"#,
+            r#"{"signers":[{"name":"Jane Smith"},{"name":"John Roe"}],"id":"A-77"}"#,
+        );
+        // A path that is missing gives an empty text, as in the layout.
+        assert_eq!(said(&layers[0]), vec!["John Roe", "", "A-77"]);
+    }
+
+    #[test]
+    fn data_if_and_data_if_not_keep_or_drop_a_text_at() {
+        let layers = bound_layers(
+            r#"<layer>
+                <text-at x="0pt" y="0pt" data-if="paid">PAID</text-at>
+                <text-at x="0pt" y="20pt" data-if-not="paid">UNPAID</text-at>
+                <text-at x="0pt" y="40pt" data-if="notes">NOTES</text-at>
+            </layer>"#,
+            r#"{"paid":true,"notes":""}"#,
+        );
+        assert_eq!(said(&layers[0]), vec!["PAID"]);
+    }
+
+    #[test]
+    fn a_layer_is_drawn_only_when_its_data_if_and_data_if_not_say_so() {
+        let xml = r#"<layer data-if="draft"><text-at x="0pt" y="0pt">DRAFT</text-at></layer>
+            <layer data-if-not="draft"><text-at x="0pt" y="0pt">FINAL</text-at></layer>
+            <layer><text-at x="0pt" y="0pt">ALWAYS</text-at></layer>"#;
+        let names = |data: &str| -> Vec<String> {
+            bound_layers(xml, data).iter().flat_map(said).collect()
+        };
+        assert_eq!(names(r#"{"draft":true}"#), vec!["DRAFT", "ALWAYS"]);
+        assert_eq!(names(r#"{"draft":false}"#), vec!["FINAL", "ALWAYS"]);
+        // A missing value is falsy.
+        assert_eq!(names("{}"), vec!["FINAL", "ALWAYS"]);
+    }
+
+    #[test]
+    fn data_value_sets_the_data_of_a_barcode_in_the_layout() {
+        let xml = r#"<lpdf version="1"><document><section><layout>
+            <barcode type="qr" data="placeholder" width="40pt" data-value="id"/></layout></section></document></lpdf>"#;
+        let mut doc = crate::parse::parse(xml).unwrap();
+        apply(&mut doc, r#"{"id":"A-77"}"#).unwrap();
+        assert_eq!(layout_children(&doc)[0].barcode_data.as_deref(), Some("A-77"));
     }
 }

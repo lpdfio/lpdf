@@ -40,9 +40,8 @@ const CLASSES = [
         'text', 'td', 'thead', 'tr', 'table', 'field', 'bookmark'].map((el) => ({ cls: `${pascal(el)}Attr`, el, where: 'global', area: 'layout' })),
     { cls: 'RegionAttr', el: 'region', where: 'layout', area: 'layout' },
     { cls: 'LayerAttr', el: 'layer', where: 'global', area: 'canvas' },
-    ...['rect', 'circle', 'ellipse', 'line', 'path'].map((el) => ({ cls: `${pascal(el)}Attr`, el, where: 'primitives', area: 'canvas' })),
-    { cls: 'CanvasTextAttr', el: 'text', where: 'primitives', area: 'canvas' },
-    { cls: 'CanvasImgAttr', el: 'img', where: 'primitives', area: 'canvas' },
+    ...['rect', 'circle', 'ellipse', 'line', 'path', 'text-at', 'img-at', 'barcode-at']
+        .map((el) => ({ cls: `${pascal(el)}Attr`, el, where: 'global', area: 'canvas' })),
     { cls: 'LayoutAttr', el: 'layout', where: 'global', area: 'kit' },
     { cls: 'FontAttr', el: 'font', where: 'global', area: 'kit' },
     { cls: 'ImageAttr', el: 'image', where: 'global', area: 'kit' },
@@ -79,7 +78,7 @@ function xmlDoc(text) {
 
 function summary(spec, element) {
     if (element.doc) return element.doc;
-    return `Attributes of the \`${spec.el}\` element${spec.area === 'canvas' && spec.where === 'primitives' ? ' in a layer' : ''}.`;
+    return `Attributes of the \`${spec.el}\` element${spec.area === 'canvas' && spec.el !== 'layer' ? ' in a layer' : ''}.`;
 }
 
 /** Required attributes first, in schema order, then the optional ones in schema order. */
