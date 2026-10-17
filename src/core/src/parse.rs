@@ -1429,24 +1429,28 @@ fn parse_node(
     Ok(node)
 }
 
+/// The plain run for a stretch of text between spans. A space leads it where the stretch starts with whitespace
+/// or the text before it ended with some, and `prev_ended_space` is left for the run after it.
+fn push_plain_run(node: &mut ParsedNode, raw: &str, prev_ended_space: &mut bool) {
+    let words: Vec<&str> = raw.split_whitespace().collect();
+    if !words.is_empty() {
+        node.text_runs.push(TextRun {
+            text: words.join(" "),
+            leading_space: raw.starts_with(char::is_whitespace) || *prev_ended_space,
+            font: None, color: None, href: None,
+            underline: false, strike: false, bold: false,
+        });
+    }
+    *prev_ended_space = raw.ends_with(char::is_whitespace);
+}
+
 /// The runs of a `<text>` or `<text-at>`: its plain words, and a styled run for each `<span>`.
 fn read_text_runs(node: &mut ParsedNode, elem: &roxmltree::Node, tokens: &Tokens) -> Result<(), String> {
     // Mixed content: text nodes → plain runs; <span> elements → styled runs.
     let mut prev_ended_space = false;
     for child in elem.children() {
         if child.is_text() {
-            let raw = child.text().unwrap_or("");
-            let leading = raw.starts_with(char::is_whitespace) || prev_ended_space;
-            let words: Vec<&str> = raw.split_whitespace().collect();
-            if !words.is_empty() {
-                node.text_runs.push(TextRun {
-                    text: words.join(" "),
-                    leading_space: leading,
-                    font: None, color: None, href: None,
-                    underline: false, strike: false, bold: false,
-                });
-            }
-            prev_ended_space = raw.ends_with(char::is_whitespace);
+            push_plain_run(node, child.text().unwrap_or(""), &mut prev_ended_space);
         } else if child.is_element() && child.tag_name().name() == "span" {
             let raw_span: String = child
                 .children()
@@ -1476,52 +1480,50 @@ fn read_text_runs(node: &mut ParsedNode, elem: &roxmltree::Node, tokens: &Tokens
     Ok(())
 }
 
-/// The runs of a text node of a kit tree: its strings, and a styled run for each `span` child.
+/// The runs of a text node of a kit tree: its strings, and a styled run for each `span` child. The strings are
+/// read as the text of the XML is, so a space falls between two runs only where the text has whitespace there:
+/// `["$", span("5")]` is `$5`, and `["Total: ", span("5")]` is `Total: 5`. Strings with no span between them
+/// are one text, as they are once written as XML.
 fn read_tree_text_runs(node: &mut ParsedNode, json: &serde_json::Value, tokens: &Tokens) -> Result<(), String> {
-    if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
-        for (i, child) in arr.iter().enumerate() {
-            let leading = i > 0;
-            if let Some(s) = child.as_str() {
-                let words: Vec<&str> = s.split_whitespace().collect();
-                if !words.is_empty() {
-                    node.text_runs.push(TextRun {
-                        text: words.join(" "),
-                        leading_space: leading,
-                        font: None, color: None, href: None,
-                        underline: false, strike: false, bold: false,
-                    });
-                }
-            } else if child.get("type").and_then(|v| v.as_str()) == Some("span") {
-                let span_text: String = child
-                    .get("nodes").and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                           .filter_map(|v| v.as_str())
-                           .collect::<Vec<_>>()
-                           .join(" ")
-                    })
-                    .unwrap_or_default()
-                    .split_whitespace()
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                if !span_text.is_empty() {
-                    let color = match jattr(child, "color") {
-                        Some(v) => Some(tokens.resolve_color(v)?),
-                        None    => None,
-                    };
-                    node.text_runs.push(TextRun {
-                        text: span_text,
-                        leading_space: leading,
-                        font:      jattr(child, "font").map(str::to_string),
-                        color,
-                        href:      jattr(child, "href").map(str::to_string),
-                        underline: jattr(child, "underline").map(|v| v == "true").unwrap_or(false),
-                        strike:    jattr(child, "strike")   .map(|v| v == "true").unwrap_or(false),
-                        bold:      jattr(child, "bold")     .map(|v| v == "true").unwrap_or(false),
-                    });
-                }
+    let Some(children) = json.get("nodes").and_then(|v| v.as_array()) else {
+        return Ok(());
+    };
+    let mut prev_ended_space = false;
+    let mut text = String::new();
+    for child in children {
+        if let Some(s) = child.as_str() {
+            text.push_str(s);
+        } else if child.get("type").and_then(|v| v.as_str()) == Some("span") {
+            if !text.is_empty() {
+                push_plain_run(node, &text, &mut prev_ended_space);
+                text.clear();
             }
+            let raw_span: String = child
+                .get("nodes").and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+                .unwrap_or_default();
+            let span_text = raw_span.split_whitespace().collect::<Vec<_>>().join(" ");
+            if !span_text.is_empty() {
+                let color = match jattr(child, "color") {
+                    Some(v) => Some(tokens.resolve_color(v)?),
+                    None    => None,
+                };
+                node.text_runs.push(TextRun {
+                    text: span_text,
+                    leading_space: prev_ended_space,
+                    font:      jattr(child, "font").map(str::to_string),
+                    color,
+                    href:      jattr(child, "href").map(str::to_string),
+                    underline: jattr(child, "underline").map(|v| v == "true").unwrap_or(false),
+                    strike:    jattr(child, "strike")   .map(|v| v == "true").unwrap_or(false),
+                    bold:      jattr(child, "bold")     .map(|v| v == "true").unwrap_or(false),
+                });
+            }
+            prev_ended_space = raw_span.ends_with(char::is_whitespace);
         }
+    }
+    if !text.is_empty() {
+        push_plain_run(node, &text, &mut prev_ended_space);
     }
     Ok(())
 }
