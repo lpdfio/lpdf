@@ -1613,8 +1613,8 @@ fn at_node_attrs(
         }
         NodeKind::Barcode => {
             apply_barcode_attrs(&mut node, a, tokens).map_err(|e| e.replace("<barcode", "<barcode-at"))?;
-            if node.width_constraint.is_none() {
-                return Err("needs a 'width': a barcode in a layer has no line to take its width from".into());
+            if node.width_constraint.is_none() && node.img_height_constraint.is_none() {
+                return Err("needs a 'width' or a 'height': a barcode in a layer has no line to take its size from".into());
             }
         }
         _ => unreachable!("only text, image and barcode have an -at element"),
@@ -3295,7 +3295,7 @@ mod tests {
             (r#"<text-at x="0pt" y="0pt" width="fill">Hi</text-at>"#, "invalid width"),
             (r#"<text-at x="0pt" y="0pt" data-source="items">Hi</text-at>"#, "a list belongs in the layout"),
             (r#"<img-at name="logo" x="0pt" y="0pt"/>"#, "needs a 'width' or a 'height'"),
-            (r#"<barcode-at type="code128" data="x" x="0pt" y="0pt"/>"#, "needs a 'width'"),
+            (r#"<barcode-at type="code128" data="x" x="0pt" y="0pt"/>"#, "needs a 'width' or a 'height'"),
             (r#"<barcode-at type="qr" data="x" x="0pt" y="0pt"/>"#, "needs a 'height', or a 'width'"),
             (r#"<rect x="0pt" y="0pt" width="9pt" height="9pt" opacity="0.5"/>"#, "put the element in a <layer> with opacity"),
             (r#"<text-at x="0pt" y="0pt" opacity="0.5">Hi</text-at>"#, "put the element in a <layer> with opacity"),

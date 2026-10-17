@@ -48,18 +48,30 @@ pub fn prefill_section_image_sizes(section: &mut SectionLayout, meta: &ImageMeta
     }
 }
 
+/// The size of a content with the proportions `natural`, inside the `width` and `height` it is given.
+///
+/// One size given: the other follows the proportions. Both: they are a maximum, and the content takes the
+/// largest size that fits in them with its own proportions, so it is never stretched. Neither: the natural size.
+fn fit_within(natural: (f32, f32), width: Option<f32>, height: Option<f32>) -> (f32, f32) {
+    let (nat_w, nat_h) = natural;
+    let aspect = if nat_h > 0.0 && nat_w > 0.0 { nat_w / nat_h } else { 1.0 };
+    match (width, height) {
+        (Some(w), Some(h)) if h > 0.0 && w / h > aspect => (h * aspect, h),
+        (Some(w), Some(_))                              => (w, w / aspect),
+        (Some(w), None)                                 => (w, w / aspect),
+        (None, Some(h))                                 => (h * aspect, h),
+        (None, None)                                    => natural,
+    }
+}
+
 fn prefill_node(node: &mut Node, meta: &ImageMeta) {
     if node.kind == NodeKind::Img {
         let name = node.image_name.as_deref().unwrap_or("");
-        let (nat_w, nat_h) = meta.get(name)
-            .map(|&(w, h)| (w as f32, h as f32))
-            .unwrap_or((100.0, 100.0));
-        let aspect = if nat_h > 0.0 { nat_w / nat_h } else { 1.0 };
-        let (w, h) = match (node.width_constraint, node.img_height_constraint) {
-            (Some(w), Some(h)) => (w, h),
-            (Some(w), None)    => (w, if aspect > 0.0 { w / aspect } else { w }),
-            (None, Some(h))    => (if aspect > 0.0 { h * aspect } else { h }, h),
-            (None, None)       => (nat_w, nat_h),
+        let known = meta.get(name).map(|&(w, h)| (w as f32, h as f32));
+        let (w, h) = match (node.width_constraint, node.img_height_constraint, known) {
+            // An image that is not loaded has no proportions to keep, so a box stays as it was given.
+            (Some(w), Some(h), None) => (w, h),
+            _ => fit_within(known.unwrap_or((100.0, 100.0)), node.width_constraint, node.img_height_constraint),
         };
         node.width_constraint      = Some(w);
         node.img_height_constraint = Some(h);
@@ -1133,8 +1145,7 @@ fn measure_height(node: &Node, avail_w: f32, avail_h: f32) -> f32 {
         HeightMode::Fixed(h) => *h,
         HeightMode::Full | HeightMode::Fill => avail_h,
         HeightMode::Auto => {
-            let cw = node
-                .width_constraint
+            let cw = own_width(node)
                 .map(|w| w.min(avail_w))
                 .unwrap_or(avail_w);
             let (_, h) = layout_node(node, 0.0, 0.0, cw, Some(avail_h));
@@ -1154,7 +1165,7 @@ fn layout_node(
     avail_h: Option<f32>,
 ) -> (RenderNode, f32) {
     // Resolve actual width from constraint or available
-    let (node_w, node_x) = match node.width_constraint {
+    let (node_w, node_x) = match own_width(node) {
         Some(w) => (w.min(avail_w), x),
         None => (avail_w, x),
     };
@@ -1454,7 +1465,7 @@ fn row_child_w(child: &Node, avail_w: f32) -> Option<f32> {
     if child.width_fill {
         return None;
     }
-    Some(child.width_constraint.unwrap_or_else(|| measure_natural_w(child)).min(avail_w))
+    Some(own_width(child).unwrap_or_else(|| measure_natural_w(child)).min(avail_w))
 }
 
 fn layout_row(
@@ -1784,15 +1795,11 @@ fn layout_barcode(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32
         }
 
         BarcodeType::Code128 => {
-            let w = node.width_constraint.unwrap_or(avail_w).min(avail_w);
             let hrt_text = if node.barcode_hrt { Some(data.clone()) } else { None };
-            let hrt_h    = if node.barcode_hrt { 12.0_f32 } else { 0.0 };
-            // `height` is the whole barcode, its digits inside it: they take the bottom 12pt.
-            // Without one, the bars are 40pt high.
-            let h = node.img_height_constraint.unwrap_or(40.0 + hrt_h);
 
             match encode_code128(&data) {
                 Ok(bars) => {
+                    let (w, h) = fit_linear_barcode(node, &bars, avail_w);
                     let bc = RenderBarcode {
                         x, y, width: w, height: h,
                         kind: RenderedBarcodeKind::Code128 { bars, hrt: hrt_text },
@@ -1800,16 +1807,14 @@ fn layout_barcode(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32
                     };
                     (RenderNode::Barcode(bc), h)
                 }
-                Err(msg) => fallback_barcode(x, y, w, &msg),
+                Err(msg) => fallback_barcode(x, y, node.width_constraint.unwrap_or(avail_w).min(avail_w), &msg),
             }
         }
 
         BarcodeType::Ean13 => {
-            let w = node.width_constraint.unwrap_or(avail_w).min(avail_w);
-            let h = node.img_height_constraint.unwrap_or(60.0);
-
             match encode_ean13(&data) {
                 Ok(bars) => {
+                    let (w, h) = fit_linear_barcode(node, &bars, avail_w);
                     let bc = RenderBarcode {
                         x, y, width: w, height: h,
                         kind: RenderedBarcodeKind::Ean13 { bars, digits: data, hrt: node.barcode_hrt },
@@ -1817,10 +1822,64 @@ fn layout_barcode(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32
                     };
                     (RenderNode::Barcode(bc), h)
                 }
-                Err(msg) => fallback_barcode(x, y, w, &msg),
+                Err(msg) => fallback_barcode(x, y, node.width_constraint.unwrap_or(avail_w).min(avail_w), &msg),
             }
         }
     }
+}
+
+/// A Code 128 bar at its default width, in points. A Code 128 with no size of its own is as wide as its
+/// bars, and the bars of one with a height only follow that height.
+const CODE128_MODULE: f32 = 1.0;
+/// The height of the bars of a Code 128 at its default size.
+const CODE128_BAR_H: f32 = 40.0;
+/// The size of an EAN-13 at the standard magnification of 1: bars 0.33mm wide and 22.85mm high.
+const EAN13_MODULE: f32 = 0.33 * 72.0 / 25.4;
+const EAN13_BAR_H: f32 = 22.85 * 72.0 / 25.4;
+/// The digits of `hrt` are inside the barcode's height and take this much of it.
+const HRT_H: f32 = 12.0;
+
+/// The size of a Code 128 or an EAN-13 inside the `width` and `height` it is given, or its natural size at
+/// the default bar width. Both given: they are a maximum, and the barcode keeps its proportions.
+/// `bars` is the encoded barcode, its run lengths adding up to the number of modules across.
+fn linear_barcode_size(
+    node: &Node,
+    bars: &[u8],
+    width: Option<f32>,
+    height: Option<f32>,
+) -> (f32, f32) {
+    let (module, bar_h) = match node.barcode_type {
+        Some(BarcodeType::Ean13) => (EAN13_MODULE, EAN13_BAR_H),
+        _                        => (CODE128_MODULE, CODE128_BAR_H),
+    };
+    let modules: u32 = bars.iter().map(|&run| run as u32).sum();
+    let hrt_h = if node.barcode_hrt { HRT_H } else { 0.0 };
+    fit_within((modules as f32 * module, bar_h + hrt_h), width, height)
+}
+
+/// The box a Code 128 or an EAN-13 takes in a slot `avail_w` wide: inside its `width` and `height`, which
+/// `width="fill"` makes the slot, and not wider than the slot.
+fn fit_linear_barcode(node: &Node, bars: &[u8], avail_w: f32) -> (f32, f32) {
+    let width = if node.width_fill { Some(avail_w) } else { node.width_constraint };
+    let (w, h) = linear_barcode_size(node, bars, width, node.img_height_constraint);
+    if w > avail_w && w > 0.0 { (avail_w, h * avail_w / w) } else { (w, h) }
+}
+
+/// The width a node takes in the flow when it sets one itself: its `width`, and for a Code 128 or an EAN-13 the
+/// width of the box it fits inside its sizes, which can be narrower than the `width`.
+fn own_width(node: &Node) -> Option<f32> {
+    barcode_flow_width(node).or(node.width_constraint)
+}
+
+/// The width a Code 128 or an EAN-13 takes in the flow when it isn't `width="fill"`: the box it keeps inside
+/// its sizes, so that the parent's `align` places that box. `None` for any other node, or data that can't be encoded.
+fn barcode_flow_width(node: &Node) -> Option<f32> {
+    let bars = match (&node.barcode_type, &node.barcode_data) {
+        (Some(BarcodeType::Code128), Some(data)) => encode_code128(data).ok()?,
+        (Some(BarcodeType::Ean13),   Some(data)) => encode_ean13(data).ok()?,
+        _                                        => return None,
+    };
+    Some(linear_barcode_size(node, &bars, node.width_constraint, node.img_height_constraint).0)
 }
 
 /// Return an empty box placeholder for an invalid/unencodable barcode.
@@ -2371,7 +2430,7 @@ fn measure_natural_w(node: &Node) -> f32 {
         }
         NodeKind::Divider => node.thickness,
         NodeKind::Img => node.width_constraint.unwrap_or(100.0),
-        NodeKind::Barcode => node.width_constraint.unwrap_or(80.0),
+        NodeKind::Barcode => own_width(node).unwrap_or(80.0),
         NodeKind::Field => node.width_constraint.unwrap_or(100.0),
         _ => {
             let [_pt, pr, _pb, pl] = node.padding;
@@ -2735,7 +2794,7 @@ fn resolve_child_w(child: &Node, avail_w: f32, align: &Align) -> f32 {
     if child.width_fill {
         return avail_w;
     }
-    if let Some(w) = child.width_constraint {
+    if let Some(w) = own_width(child) {
         return w.min(avail_w);
     }
     match align {
@@ -3853,22 +3912,74 @@ mod tests {
         assert_eq!(barcode_size(row), (80.0, 80.0));
     }
 
-    #[test]
-    fn the_digits_of_a_code_128_sit_inside_its_height() {
-        let code = |attrs: &str| format!(r#"<barcode type="code128" data="ABC-123" width="120pt" {attrs}/>"#);
-        assert_eq!(barcode_size(&code(r#"height="40pt""#)), (120.0, 40.0));
-        assert_eq!(barcode_size(&code(r#"height="40pt" hrt="true""#)), (120.0, 40.0));
-        // Without a height the bars are 40pt high, and the digits come on top of that.
-        assert_eq!(barcode_size(&code("")), (120.0, 40.0));
-        assert_eq!(barcode_size(&code(r#"hrt="true""#)), (120.0, 52.0));
+    fn near(a: (f64, f64), b: (f64, f64)) {
+        assert!((a.0 - b.0).abs() < 0.01 && (a.1 - b.1).abs() < 0.01, "{a:?} is not {b:?}");
     }
 
     #[test]
-    fn the_digits_of_an_ean_13_sit_inside_its_height() {
-        let code = |attrs: &str| format!(r#"<barcode type="ean13" data="590123412345" width="120pt" {attrs}/>"#);
-        assert_eq!(barcode_size(&code(r#"height="60pt""#)), (120.0, 60.0));
-        assert_eq!(barcode_size(&code(r#"height="60pt" hrt="true""#)), (120.0, 60.0));
-        assert_eq!(barcode_size(&code(r#"hrt="true""#)), (120.0, 60.0));
+    fn a_code_128_with_no_size_is_as_wide_as_its_bars() {
+        // "ABC-123": a start symbol, 7 characters, the check symbol and the stop: 11 × 9 + 13 modules of 1pt.
+        assert_eq!(barcode_size(r#"<barcode type="code128" data="ABC-123"/>"#), (112.0, 40.0));
+        assert_eq!(barcode_size(r#"<barcode type="code128" data="ABC-123" hrt="true"/>"#), (112.0, 52.0));
+    }
+
+    #[test]
+    fn a_code_128_given_one_size_keeps_its_proportions() {
+        let code = |attrs: &str| format!(r#"<barcode type="code128" data="ABC-123" {attrs}/>"#);
+        assert_eq!(barcode_size(&code(r#"width="224pt""#)), (224.0, 80.0));
+        assert_eq!(barcode_size(&code(r#"height="20pt""#)), (56.0, 20.0));
+    }
+
+    #[test]
+    fn a_code_128_given_both_sizes_fits_inside_them() {
+        let code = |attrs: &str| format!(r#"<barcode type="code128" data="ABC-123" {attrs}/>"#);
+        // Wider than its proportions allow: the height sets the size.
+        assert_eq!(barcode_size(&code(r#"width="200pt" height="40pt""#)), (112.0, 40.0));
+        assert_eq!(barcode_size(&code(r#"width="200pt" height="20pt""#)), (56.0, 20.0));
+        // Taller than its proportions allow: the width sets it.
+        assert_eq!(barcode_size(&code(r#"width="56pt" height="100pt""#)), (56.0, 20.0));
+    }
+
+    #[test]
+    fn the_digits_of_a_code_128_sit_inside_its_height() {
+        let code = |attrs: &str| format!(r#"<barcode type="code128" data="ABC-123" {attrs}/>"#);
+        assert_eq!(barcode_size(&code(r#"height="52pt" hrt="true""#)), (112.0, 52.0));
+        // The digits come on top of the 40pt bars of a barcode with no size.
+        assert_eq!(barcode_size(&code(r#"hrt="true""#)), (112.0, 52.0));
+        // The box keeps the proportions it has with the digits in it.
+        assert_eq!(barcode_size(&code(r#"width="224pt" hrt="true""#)), (224.0, 104.0));
+    }
+
+    #[test]
+    fn an_ean_13_with_no_size_is_the_standard_symbol() {
+        // 95 modules of 0.33mm, and bars 22.85mm high: about 88.9 × 64.8pt.
+        near(barcode_size(r#"<barcode type="ean13" data="590123412345"/>"#), (88.87, 64.77));
+        near(barcode_size(r#"<barcode type="ean13" data="590123412345" hrt="true"/>"#), (88.87, 76.77));
+    }
+
+    #[test]
+    fn an_ean_13_given_one_size_keeps_its_proportions() {
+        let code = |attrs: &str| format!(r#"<barcode type="ean13" data="590123412345" {attrs}/>"#);
+        near(barcode_size(&code(r#"width="177.72pt""#)), (177.72, 129.54));
+        near(barcode_size(&code(r#"height="32.385pt""#)), (44.43, 32.385));
+    }
+
+    #[test]
+    fn an_ean_13_given_both_sizes_fits_inside_them() {
+        let code = |attrs: &str| format!(r#"<barcode type="ean13" data="590123412345" {attrs}/>"#);
+        // 120 × 60 is wider than the symbol: the height sets the size.
+        near(barcode_size(&code(r#"width="120pt" height="60pt""#)), (82.32, 60.0));
+        // 60 × 120 is taller: the width sets it.
+        near(barcode_size(&code(r#"width="60pt" height="120pt""#)), (60.0, 43.73));
+        // The digits are inside the box, and the box keeps the proportions with them.
+        near(barcode_size(&code(r#"width="100pt" height="45pt" hrt="true""#)), (52.09, 45.0));
+    }
+
+    #[test]
+    fn a_barcode_in_a_filled_slot_fits_inside_the_slot_and_its_height() {
+        // The slot is wider than the 56pt a 20pt high Code 128 needs, so the height sets the size.
+        let row = r#"<row><barcode type="code128" data="ABC-123" width="fill" height="20pt"/><frame width="fill" height="10pt"/></row>"#;
+        assert_eq!(barcode_size(row), (56.0, 20.0));
     }
 
     // ── Elements at fixed places ──────────────────────────────────────────────
@@ -4033,6 +4144,134 @@ mod tests {
             let said: String = texts(layer).iter().map(|t| t.0.clone()).collect::<Vec<_>>().join(" ");
             assert_eq!(said, format!("Page {} of {}", page + 1, pages));
         }
+    }
+
+    // ── Fitting images and barcodes ───────────────────────────────────────────
+
+    /// The render tree of `body` in a layout, and of `layers` over it, with the image `logo` loaded at `px`
+    /// pixels, or not loaded when `px` is `None`.
+    fn tree_with_logo(layers: &str, body: &str, px: Option<(u32, u32)>) -> serde_json::Value {
+        let xml = format!(
+            r#"<lpdf version="1"><assets><image name="logo"/></assets><document size="a4"><section>{layers}<layout margin="28pt">{body}</layout></section></document></lpdf>"#
+        );
+        let mut doc = parse(&xml).unwrap();
+        let mut lp = doc.section_layouts();
+        let meta: ImageMeta = px.into_iter().map(|px| ("logo".to_string(), px)).collect();
+        for section in &mut lp {
+            prefill_section_image_sizes(section, &meta);
+        }
+        let pages: Vec<_> = lp.iter().flat_map(layout_page).collect();
+        let json = crate::render::pages_to_json(&pages, serde_json::Value::Null, serde_json::Value::Null);
+        serde_json::from_str(&json).unwrap()
+    }
+
+    /// The x, y, width and height of the first image in a page, in the layout or in a layer.
+    fn first_image(tree: &serde_json::Value) -> (f64, f64, f64, f64) {
+        fn find(nodes: &serde_json::Value) -> Option<(f64, f64, f64, f64)> {
+            nodes.as_array()?.iter().find_map(|node| {
+                if node["type"] == "image" {
+                    Some((node["x"].as_f64()?, node["y"].as_f64()?, node["width"].as_f64()?, node["height"].as_f64()?))
+                } else {
+                    find(&node["nodes"])
+                }
+            })
+        }
+        find(&tree["pages"][0]["nodes"]).expect("an image in the tree")
+    }
+
+    fn logo_size(img: &str, px: (u32, u32)) -> (f64, f64) {
+        let (_, _, w, h) = first_image(&tree_with_logo("", img, Some(px)));
+        (w, h)
+    }
+
+    #[test]
+    fn an_image_given_one_size_follows_the_proportions_of_the_image() {
+        assert_eq!(logo_size(r#"<img name="logo" width="80pt"/>"#, (200, 100)), (80.0, 40.0));
+        assert_eq!(logo_size(r#"<img name="logo" height="30pt"/>"#, (200, 100)), (60.0, 30.0));
+    }
+
+    #[test]
+    fn an_image_given_both_sizes_fits_inside_them() {
+        // A wide image in a square: the width sets the size.
+        assert_eq!(logo_size(r#"<img name="logo" width="100pt" height="100pt"/>"#, (200, 100)), (100.0, 50.0));
+        // A tall one: the height sets it.
+        assert_eq!(logo_size(r#"<img name="logo" width="100pt" height="100pt"/>"#, (100, 200)), (50.0, 100.0));
+        // One with the proportions of the box fills it, and a small one grows to it.
+        assert_eq!(logo_size(r#"<img name="logo" width="100pt" height="50pt"/>"#, (200, 100)), (100.0, 50.0));
+        assert_eq!(logo_size(r#"<img name="logo" width="100pt" height="100pt"/>"#, (20, 10)), (100.0, 50.0));
+    }
+
+    #[test]
+    fn an_image_that_is_not_loaded_keeps_the_box_it_is_given() {
+        let tree = tree_with_logo("", r#"<img name="logo" width="84pt" height="164pt"/>"#, None);
+        let (_, _, w, h) = first_image(&tree);
+        assert_eq!((w, h), (84.0, 164.0));
+    }
+
+    #[test]
+    fn the_align_of_the_parent_places_the_fitted_image() {
+        // A tall image in a square box is 50pt wide, and the column centres that, not the 100pt it was given.
+        let img = r#"<column align="center"><img name="logo" width="100pt" height="100pt"/></column>"#;
+        let (x, _, w, _) = first_image(&tree_with_logo("", img, Some((100, 200))));
+        assert_eq!(w, 50.0);
+        assert!((x - (28.0 + (595.28 - 56.0 - 50.0) / 2.0)).abs() < 0.02, "x is {x}");
+    }
+
+    #[test]
+    fn the_align_of_the_parent_places_the_fitted_barcode() {
+        let code = r#"<column align="center"><barcode type="ean13" data="590123412345" width="100pt" height="45pt" hrt="true"/></column>"#;
+        let tree = engine_render(&minimal(code));
+        let barcode = &tree["pages"][0]["nodes"][0]["nodes"][0];
+        let (x, w) = (barcode["x"].as_f64().unwrap(), barcode["width"].as_f64().unwrap());
+        assert!((w - 52.09).abs() < 0.01, "w is {w}");
+        assert!((x - (28.0 + (595.28 - 56.0 - w) / 2.0)).abs() < 0.02, "x is {x}");
+    }
+
+    #[test]
+    fn a_row_gives_a_fitted_barcode_the_width_it_fits_to() {
+        // The EAN-13 of 100 × 45pt is 52.09pt wide, and the text after it starts 10pt past that, not past 100pt.
+        let row = r#"<row gap="10pt"><barcode type="ean13" data="590123412345" width="100pt" height="45pt" hrt="true"/><text width="80pt">After</text></row>"#;
+        let tree = engine_render(&minimal(row));
+        let items = &tree["pages"][0]["nodes"][0]["nodes"];
+        let (code, text) = (&items[0], &items[1]);
+        assert!((code["width"].as_f64().unwrap() - 52.09).abs() < 0.01);
+        assert!((text["x"].as_f64().unwrap() - (28.0 + 52.09 + 10.0)).abs() < 0.02, "the text is at {}", text["x"]);
+    }
+
+    #[test]
+    fn an_img_at_in_a_corner_touches_it_whatever_its_proportions() {
+        let layer = |name: &str| format!(
+            r#"<layer><img-at name="{name}" anchor="top-right" width="100pt" height="100pt"/></layer>"#
+        );
+        for px in [(200, 100), (100, 200), (100, 100)] {
+            let (x, y, w, h) = first_image(&tree_with_logo(&layer("logo"), "", Some(px)));
+            assert!((x + w - 595.28).abs() < 0.02 && y == 0.0, "{px:?} is at {x},{y} {w}×{h}");
+            assert!(w <= 100.0 && h <= 100.0 && (w == 100.0 || h == 100.0), "{px:?} is {w}×{h}");
+            assert!((w / h - px.0 as f64 / px.1 as f64).abs() < 0.001, "{px:?} is {w}×{h}");
+        }
+    }
+
+    #[test]
+    fn a_barcode_at_in_a_corner_touches_it_whatever_its_proportions() {
+        for (width, height) in [("100pt", "45pt"), ("60pt", "120pt")] {
+            let tree = layer_tree(
+                &format!(r#"<layer><barcode-at type="ean13" data="590123412345" anchor="bottom-right" width="{width}" height="{height}"/></layer>"#),
+                0,
+            );
+            let code = &page_layers(&tree, 0)[0]["nodes"][0];
+            let (x, y) = (code["x"].as_f64().unwrap(), code["y"].as_f64().unwrap());
+            let (w, h) = (code["width"].as_f64().unwrap(), code["height"].as_f64().unwrap());
+            assert!((x + w - 595.28).abs() < 0.02 && (y + h - 841.89).abs() < 0.02, "{width} × {height}: {x},{y} {w}×{h}");
+            // 95 modules of 0.33mm across, and bars 22.85mm high.
+            assert!((w / h - 95.0 * 0.33 / 22.85).abs() < 0.001, "{width} × {height}: {w}×{h}");
+        }
+    }
+
+    #[test]
+    fn a_barcode_at_takes_a_width_or_a_height_and_a_code_128_follows_the_other() {
+        let tree = layer_tree(r#"<layer><barcode-at type="code128" data="ABC-123" height="20pt"/></layer>"#, 0);
+        let code = &page_layers(&tree, 0)[0]["nodes"][0];
+        assert_eq!((code["width"].as_f64().unwrap(), code["height"].as_f64().unwrap()), (56.0, 20.0));
     }
 
     #[test]

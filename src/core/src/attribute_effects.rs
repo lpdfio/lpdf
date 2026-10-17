@@ -635,10 +635,11 @@ fn tweaks() -> HashMap<String, Tweak> {
     // A font is a core font or a registry key, not both.
     add("font@ref", Tweak::default().without("core"));
 
-    // Barcodes: the options of one type show on that type.
+    // Barcodes: the options of one type show on that type. A width and a height are a maximum together, so a
+    // height shows on a barcode that has no width to fit inside.
     add("barcode@hrt", Tweak::default().set("type", "code128"));
     add("barcode@width", Tweak::default().set("type", "code128"));
-    add("barcode@height", Tweak::default().set("type", "code128"));
+    add("barcode@height", Tweak::default().set("type", "code128").remove("width"));
 
     // Form fields: an option of one type shows on that type.
     add("field@options", Tweak::default().set("type", "dropdown"));

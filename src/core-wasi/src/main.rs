@@ -202,7 +202,7 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     let meta = pdf::build_image_meta(&image_registry);
     let mut lp = doc.section_layouts();
     for page in &mut lp {
-        layout::prefill_image_sizes(&mut page.children, &meta);
+        layout::prefill_section_image_sizes(page, &meta);
     }
 
     // Auto-extract glyph advance-width metrics from the loaded font bytes.
@@ -273,3 +273,46 @@ fn render_doc(doc: parse::Document, license_key: &str, now_unix: i64) -> String 
     shared::render_doc_shared(doc, font_widths, license_key, now_unix)
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A PNG of 1 × 2 pixels: an image twice as high as it is wide.
+    const TALL_PNG: &str =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAIAAAAW4yFwAAAADklEQVR4nGMwSJjAAMQACEgCQStAOpQAAAAASUVORK5CYII=";
+
+    /// The image matrices (`cm` lines) in the content streams of a PDF.
+    fn image_matrices(pdf: &[u8]) -> Vec<String> {
+        let mut found = Vec::new();
+        let mut rest = pdf;
+        while let Some(start) = rest.windows(7).position(|w| w == b"stream\n") {
+            rest = &rest[start + 7..];
+            let end = rest.windows(10).position(|w| w == b"\nendstream").unwrap_or(rest.len());
+            if let Ok(content) = miniz_oxide::inflate::decompress_to_vec_zlib(&rest[..end]) {
+                let text = String::from_utf8_lossy(&content);
+                found.extend(text.lines().filter(|l| l.ends_with(" cm")).map(str::to_string));
+            }
+            rest = &rest[end..];
+        }
+        found
+    }
+
+    #[test]
+    fn an_img_at_in_a_layer_is_sized_by_the_proportions_of_its_image() {
+        let xml = r#"<lpdf version="1"><assets><image name="logo"/></assets><document size="a4"><section>
+            <layer><img-at name="logo" x="10pt" y="10pt" width="50pt"/></layer>
+            <layer><img-at name="logo" anchor="top-right" width="100pt" height="100pt"/></layer>
+        </section></document></lpdf>"#;
+        let req = serde_json::json!({ "images": { "logo": TALL_PNG } });
+        let out = render_pdf_doc(parse::parse(xml).unwrap(), "", 0, &req);
+        let out: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let pdf = base64::engine::general_purpose::STANDARD.decode(out["pdf"].as_str().expect(&out.to_string())).unwrap();
+
+        let matrices = image_matrices(&pdf);
+        // One size given: the other follows the image, so 50pt wide is 100pt high. Both given: the image fits
+        // in the square, so 100pt high is 50pt wide, and the box touches the corner of the page.
+        assert!(matrices.iter().any(|m| m.starts_with("50 0 0 100 10 ")), "{matrices:?}");
+        assert!(matrices.iter().any(|m| m.starts_with("50 0 0 100 545.28")), "{matrices:?}");
+    }
+}
