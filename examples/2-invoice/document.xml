@@ -15,7 +15,7 @@
       layer    drawn at fixed places on the page, here behind the layout: a colored band on every
                page and a logo made of two shapes on the first. Change "paid" to true in the JSON
                and look at the bottom
-      barcode  a QR code, here a link to pay online. Its size is set in points
+      barcode  a QR code, here a link to pay online. Its width is set in points, and it is as high
       region   text pinned to the bottom of every page, outside the flow: the invoice number and
                "Page 1 of 2". {page} and {pages} become the page number and the page count
   -->
