@@ -68,6 +68,9 @@ const TIERS: &[SizeTier] = &[
     SizeTier { label: "max", target_bytes: 1_000_000, default_depth: 4 },
 ];
 
+/// The data-binding fixtures: a label and a target size in bytes.
+const DATA_TIERS: &[(&str, usize)] = &[("s", 10_000), ("m", 50_000)];
+
 fn tier_by_label(label: &str) -> Option<SizeTier> {
     TIERS.iter().copied().find(|t| t.label == label)
 }
@@ -96,7 +99,7 @@ fn main() {
 
     if opts.data {
         // Data-binding fixtures: s (~10 KB) and m (~50 KB)
-        for (label, target) in &[("s", 10_000usize), ("m", 50_000usize)] {
+        for (label, target) in DATA_TIERS {
             let (xml, json) = generate_data(label, *target);
             let xml_path  = fixtures_dir.join(format!("bench_data_{label}.xml"));
             let json_path = fixtures_dir.join(format!("bench_data_{label}.json"));
@@ -696,4 +699,38 @@ fn build_data_json(label: &str, n_sections: usize) -> String {
     );
 
     buf
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn committed(name: &str) -> String {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test/fixtures").join(name);
+        fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+    }
+
+    // The files are compared with `==` and not `assert_eq!`, which would print a megabyte of XML.
+    fn assert_committed(name: &str, generated: &str) {
+        assert!(
+            committed(name) == generated,
+            "test/fixtures/{name} is not what gen_fixtures writes: run `make gen-fixtures`, or change the generator to match"
+        );
+    }
+
+    #[test]
+    fn the_static_fixtures_are_what_the_generator_writes() {
+        for tier in TIERS {
+            assert_committed(&format!("bench_{}.xml", tier.label), &generate(tier, tier.default_depth));
+        }
+    }
+
+    #[test]
+    fn the_data_fixtures_are_what_the_generator_writes() {
+        for (label, target) in DATA_TIERS {
+            let (xml, json) = generate_data(label, *target);
+            assert_committed(&format!("bench_data_{label}.xml"), &xml);
+            assert_committed(&format!("bench_data_{label}.json"), &json);
+        }
+    }
 }
