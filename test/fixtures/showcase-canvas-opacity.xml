@@ -15,8 +15,8 @@
   <document size="a4">
     <meta title="lpdf Showcase — Layer Opacity" subject="Opacity on layers"/>
 
-    <!-- Opacity belongs to a layer: it fades everything in it. To fade a single element, put it in a layer of
-         its own. -->
+    <!-- Opacity belongs to a layer: it fades everything in it, as a group. To fade a single element, put it in
+         a layer of its own. -->
     <section>
       <layer>
         <text-at x="40pt" y="40pt" font-size="xxl" font="Helvetica-Bold" color="primary">Layer opacity</text-at>
@@ -60,6 +60,24 @@
       <layer>
         <text-at x="90pt" y="460pt" font-size="xl" font="Helvetica-Bold" color="primary">Seen through glass</text-at>
         <text-at x="90pt" y="494pt" width="280pt" max-lines="3" color="muted">The panel is 70% opaque, so the picture shows through it, and this caption sits above the panel at full strength.</text-at>
+      </layer>
+
+      <!-- One layer or two: the layer is faded as a group, so two shapes that overlap inside it do not show
+           through each other. The same two shapes in a layer each do. -->
+      <layer>
+        <text-at x="40pt" y="686pt" font-size="l" font="Helvetica-Bold">One layer, or two</text-at>
+        <text-at x="40pt" y="710pt" font-size="s" color="muted">Both circles in one layer: the top one hides the other</text-at>
+        <text-at x="330pt" y="710pt" font-size="s" color="muted">One circle in each layer: they show through</text-at>
+      </layer>
+      <layer opacity="0.5">
+        <circle x="40pt" y="728pt" r="38pt" fill="primary"/>
+        <circle x="86pt" y="728pt" r="38pt" fill="accent"/>
+      </layer>
+      <layer opacity="0.5">
+        <circle x="330pt" y="728pt" r="38pt" fill="primary"/>
+      </layer>
+      <layer opacity="0.5">
+        <circle x="376pt" y="728pt" r="38pt" fill="accent"/>
       </layer>
     </section>
   </document>

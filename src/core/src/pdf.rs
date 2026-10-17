@@ -32,13 +32,14 @@
 use std::collections::{HashMap, HashSet};
 
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
+use pdf_writer::writers::Resources;
 use pdf_writer::types::{ActionType, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, HighlightEffect, LineCapStyle, LineJoinStyle, PageMode, Predictor, TextRenderingMode};
 use ttf_parser::Face;
 use miniz_oxide::deflate::compress_to_vec_zlib;
 use miniz_oxide::inflate::decompress_to_vec_zlib;
 use subsetter::GlyphRemapper;
 
-use crate::render::{placed_anchors, PlacedAnchor, RenderField, RenderNode, RenderPage, RenderedBarcodeKind};
+use crate::render::{placed_anchors, PlacedAnchor, RenderCanvasLayer, RenderField, RenderNode, RenderPage, RenderedBarcodeKind};
 use crate::parse::{FieldKind, Meta};
 use crate::tokens::FontDef;
 
@@ -944,19 +945,21 @@ fn draw_barcode_hrt(
 fn draw_nodes(
     content:       &mut Content,
     annots:        &mut Vec<AnnotData>,
+    groups:        &mut Vec<Vec<u8>>,
     nodes:         &[RenderNode],
     fonts:         &HashMap<String, PreparedFont>,
     image_res_map: &HashMap<String, String>,
     page_h:        f32,
 ) {
     for node in nodes {
-        draw_node(content, annots, node, fonts, image_res_map, page_h);
+        draw_node(content, annots, groups, node, fonts, image_res_map, page_h);
     }
 }
 
 fn draw_node(
     content:       &mut Content,
     annots:        &mut Vec<AnnotData>,
+    groups:        &mut Vec<Vec<u8>>,
     node:          &RenderNode,
     fonts:         &HashMap<String, PreparedFont>,
     image_res_map: &HashMap<String, String>,
@@ -1002,7 +1005,7 @@ fn draw_node(
                 content.restore_state();
             }
 
-            draw_nodes(content, annots, &b.children, fonts, image_res_map, page_h);
+            draw_nodes(content, annots, groups, &b.children, fonts, image_res_map, page_h);
         }
 
         // ── Line ─────────────────────────────────────────────────────────────
@@ -1074,7 +1077,7 @@ fn draw_node(
         // ── Link ─────────────────────────────────────────────────────────────
         RenderNode::Link(lk) => {
             // Draw child nodes first (they appear inside the link area).
-            draw_nodes(content, annots, &lk.children, fonts, image_res_map, page_h);
+            draw_nodes(content, annots, groups, &lk.children, fonts, image_res_map, page_h);
 
             // Collect the annotation rect in bottom-up PDF coordinates.
             // The annotation PDF object will be written during assembly.
@@ -1316,47 +1319,69 @@ fn draw_node(
 
         // ── Canvas Layer ──────────────────────────────────────────────────────
         RenderNode::CanvasLayer(layer) => {
-            content.save_state();
-
-            // Apply optional CTM transform.
-            // The matrix [a b c d e f] is written for canvas space (y down, origin at the top
-            // left), but the shapes inside the layer are already in PDF space (y up, origin at
-            // the bottom left). A point is (X, Y) there and (X, H - Y) on the canvas, so
-            // conjugating the canvas matrix with that flip gives the matrix the page needs:
-            //   X' = a X - c Y + (c H + e)
-            //   Y' = -b X + d Y + (H - d H - f)
-            if let Some(ctm) = layer.transform {
-                let [a, b, c, d, e, f] = ctm;
-                content.transform([a, -b, -c, d, c * page_h + e, page_h - d * page_h - f]);
-            }
-
-            // Apply optional clip rect.
-            if let Some(clip) = &layer.clip {
-                let clip_pdf_y = page_h - clip.y - clip.h;
-                if clip.border_radius > 0.0 {
-                    rounded_rect(content, clip.x, clip_pdf_y, clip.w, clip.h, clip.border_radius);
-                } else {
-                    content.rect(clip.x, clip_pdf_y, clip.w, clip.h);
-                }
-                content.clip_nonzero();
-                content.end_path();
-            }
-
-            // Apply opacity via graphics state parameter (if not fully opaque).
-            // We emit a raw `gs` operator for the opacity ExtGState.
-            // The ExtGState objects are pre-written during assembly; here we
-            // reference them by a computed name.
             if (layer.opacity - 1.0).abs() > 0.001 {
-                let gs_name = opacity_gs_name(layer.opacity);
-                let gs_bytes: Vec<u8> = gs_name.bytes().collect();
-                content.set_parameters(Name(&gs_bytes));
+                // A faded layer is drawn into a transparency group of its own. The group is composited first
+                // and faded as one, so shapes that overlap inside the layer do not show through each other. The
+                // group is a form XObject, written with the page (`groups`); the page only draws it, under the
+                // opacity's ExtGState, which is pre-written during assembly and referenced here by name.
+                let mut group = Content::new();
+                draw_layer(&mut group, annots, groups, layer, fonts, image_res_map, page_h);
+                let name = group_resource_name(groups.len());
+                groups.push(group.finish());
+
+                content.save_state();
+                content.set_parameters(Name(opacity_gs_name(layer.opacity).as_bytes()));
+                content.x_object(Name(name.as_bytes()));
+                content.restore_state();
+            } else {
+                content.save_state();
+                draw_layer(content, annots, groups, layer, fonts, image_res_map, page_h);
+                content.restore_state();
             }
-
-            draw_nodes(content, annots, &layer.children, fonts, image_res_map, page_h);
-
-            content.restore_state();
         }
     }
+}
+
+/// The inside of a canvas layer: its transform, its clip and its children. Its opacity is not applied here.
+fn draw_layer(
+    content:       &mut Content,
+    annots:        &mut Vec<AnnotData>,
+    groups:        &mut Vec<Vec<u8>>,
+    layer:         &RenderCanvasLayer,
+    fonts:         &HashMap<String, PreparedFont>,
+    image_res_map: &HashMap<String, String>,
+    page_h:        f32,
+) {
+    // Apply optional CTM transform.
+    // The matrix [a b c d e f] is written for canvas space (y down, origin at the top
+    // left), but the shapes inside the layer are already in PDF space (y up, origin at
+    // the bottom left). A point is (X, Y) there and (X, H - Y) on the canvas, so
+    // conjugating the canvas matrix with that flip gives the matrix the page needs:
+    //   X' = a X - c Y + (c H + e)
+    //   Y' = -b X + d Y + (H - d H - f)
+    if let Some(ctm) = layer.transform {
+        let [a, b, c, d, e, f] = ctm;
+        content.transform([a, -b, -c, d, c * page_h + e, page_h - d * page_h - f]);
+    }
+
+    // Apply optional clip rect.
+    if let Some(clip) = &layer.clip {
+        let clip_pdf_y = page_h - clip.y - clip.h;
+        if clip.border_radius > 0.0 {
+            rounded_rect(content, clip.x, clip_pdf_y, clip.w, clip.h, clip.border_radius);
+        } else {
+            content.rect(clip.x, clip_pdf_y, clip.w, clip.h);
+        }
+        content.clip_nonzero();
+        content.end_path();
+    }
+
+    draw_nodes(content, annots, groups, &layer.children, fonts, image_res_map, page_h);
+}
+
+/// The name a page's resources give its `index`th transparency group.
+fn group_resource_name(index: usize) -> String {
+    format!("G{index}")
 }
 
 // ── Form appearance helpers ───────────────────────────────────────────────────
@@ -1719,6 +1744,8 @@ struct AllocatedIds {
     radio_parent_alloc: Vec<(String, Ref)>,        // (group_name, parent_dict_id)
     /// ExtGState objects for canvas layer opacity: (opacity_pct 1..99) → Ref.
     opacity_gs_ids:    Vec<(u32, Ref)>,
+    /// The form XObjects of the transparency groups, per page, in the order of the page's groups.
+    group_ids:         Vec<Vec<Ref>>,
     /// `None` when the document has no bookmarks.
     outline:           Option<OutlineIds>,
 }
@@ -1822,19 +1849,29 @@ fn prepare_images(
 
 // ── Step 2: Content stream building ──────────────────────────────────────────
 
+/// A page drawn: its content stream, its link annotations, and the content streams of the transparency groups
+/// its content draws. A group is a form XObject written with the page, and the page content invokes it by the
+/// name `group_resource_name` gives its position here.
+struct RenderedPage {
+    content: Vec<u8>,
+    annots:  Vec<AnnotData>,
+    groups:  Vec<Vec<u8>>,
+}
+
 /// Render every page to a content-stream byte buffer and collect link
-/// annotations.  Returns one `(content_bytes, annotations)` tuple per page.
+/// annotations and transparency groups.  Returns one `RenderedPage` per page.
 fn build_content_streams(
     pages:         &[RenderPage],
     fonts:         &HashMap<String, PreparedFont>,
     image_res_map: &HashMap<String, String>,
     attribution:   bool,
-) -> Vec<(Vec<u8>, Vec<AnnotData>)> {
-    let mut rendered_pages: Vec<(Vec<u8>, Vec<AnnotData>)> = Vec::new();
+) -> Vec<RenderedPage> {
+    let mut rendered_pages: Vec<RenderedPage> = Vec::new();
 
     for page in pages {
         let mut content = Content::new();
         let mut annots: Vec<AnnotData> = Vec::new();
+        let mut groups: Vec<Vec<u8>> = Vec::new();
 
         // Draw optional page background before any nodes.
         if let Some(bg) = &page.background {
@@ -1845,14 +1882,14 @@ fn build_content_streams(
         }
 
         // Draw all render-tree nodes.
-        draw_nodes(&mut content, &mut annots, &page.nodes, fonts, image_res_map, page.height);
+        draw_nodes(&mut content, &mut annots, &mut groups, &page.nodes, fonts, image_res_map, page.height);
 
         // Drawn last so it sits above the page's own content.
         if attribution {
             draw_attribution(&mut content, &mut annots, fonts, page.width, page.height);
         }
 
-        rendered_pages.push((content.finish(), annots));
+        rendered_pages.push(RenderedPage { content: content.finish(), annots, groups });
     }
 
     rendered_pages
@@ -2019,7 +2056,7 @@ fn collect_fields_in_nodes(nodes: &[RenderNode], page_idx: usize, out: &mut Vec<
 
 fn allocate_ids(
     pages:              &[RenderPage],
-    rendered_pages:     &[(Vec<u8>, Vec<AnnotData>)],
+    rendered_pages:     &[RenderedPage],
     fonts:              &HashMap<String, PreparedFont>,
     sorted_font_names:  &[String],
     sorted_image_names: &[String],
@@ -2040,7 +2077,7 @@ fn allocate_ids(
     // One annotation object per link annotation, grouped by page.
     let annot_ids: Vec<Vec<Ref>> = rendered_pages
         .iter()
-        .map(|(_, annots)| (0..annots.len()).map(|_| alloc.next()).collect())
+        .map(|page| (0..page.annots.len()).map(|_| alloc.next()).collect())
         .collect();
 
     // Font object IDs:
@@ -2115,6 +2152,12 @@ fn allocate_ids(
     let opacity_gs_ids: Vec<(u32, Ref)> =
         sorted_opacities.iter().map(|&pct| (pct, alloc.next())).collect();
 
+    // One form XObject per transparency group, grouped by page.
+    let group_ids: Vec<Vec<Ref>> = rendered_pages
+        .iter()
+        .map(|page| (0..page.groups.len()).map(|_| alloc.next()).collect())
+        .collect();
+
     let anchor_count = placed_anchors(pages).len();
     let outline = (anchor_count > 0).then(|| OutlineIds {
         dests_id:   alloc.next(),
@@ -2135,6 +2178,7 @@ fn allocate_ids(
         field_alloc,
         radio_parent_alloc,
         opacity_gs_ids,
+        group_ids,
         outline,
     }
 }
@@ -2150,7 +2194,7 @@ fn assemble_pdf(
     sorted_image_names: &[String],
     image_registry:     &ImageRegistry,
     image_res_map:      &HashMap<String, String>,
-    rendered_pages:     Vec<(Vec<u8>, Vec<AnnotData>)>,
+    rendered_pages:     Vec<RenderedPage>,
     ids:                AllocatedIds,
     fields:             &[(usize, RenderField)],
     anchors:            &[PlacedAnchor],
@@ -2161,7 +2205,7 @@ fn assemble_pdf(
         catalog_id, info_id, pages_id,
         page_ids, content_ids, annot_ids,
         font_id_map, image_id_map, image_smask_ids,
-        field_alloc, radio_parent_alloc, opacity_gs_ids,
+        field_alloc, radio_parent_alloc, opacity_gs_ids, group_ids,
         outline,
     } = ids;
 
@@ -2232,6 +2276,41 @@ fn assemble_pdf(
         tree.kids(page_ids.iter().copied()).count(n as i32);
     }
 
+    // -- Resources -------------------------------------------------------------
+    // What a page, or a transparency group, draws with: all fonts and images used anywhere in this document
+    // (over-inclusion is harmless and avoids a second per-page scan), the ExtGStates for layer opacity, and the
+    // `groups` it draws.
+    let write_resources = |resources: &mut Resources<'_>, groups: &[Ref]| {
+        {
+            let mut font_res = resources.fonts();
+            for name in sorted_font_names {
+                let font = &fonts[name];
+                let fid  = font_id_map[name].font_dict_id;
+                font_res.pair(Name(font.resource_name.as_bytes()), fid);
+            }
+        }
+        // Add image and group XObjects to the resource dictionary.
+        if !sorted_image_names.is_empty() || !groups.is_empty() {
+            let mut xobj_res = resources.x_objects();
+            for name in sorted_image_names {
+                let res_name = &image_res_map[name];
+                let img_id   = image_id_map[name];
+                xobj_res.pair(Name(res_name.as_bytes()), img_id);
+            }
+            for (index, group_id) in groups.iter().enumerate() {
+                xobj_res.pair(Name(group_resource_name(index).as_bytes()), *group_id);
+            }
+        }
+        // Add ExtGState entries for canvas layer opacity.
+        if !opacity_gs_ids.is_empty() {
+            let mut gs_res = resources.ext_g_states();
+            for (pct, gs_id) in &opacity_gs_ids {
+                let gs_name = format!("GS{pct:02}");
+                gs_res.pair(Name(gs_name.as_bytes()), *gs_id);
+            }
+        }
+    };
+
     // -- Per-page dicts --------------------------------------------------------
     // We write the page dictionary before its content stream so that content
     // stream IDs can be referenced in the page's /Contents entry.
@@ -2243,37 +2322,7 @@ fn assemble_pdf(
         pw.parent(pages_id)
           .media_box(Rect::new(0.0, 0.0, page.width, page.height));
 
-        // List all fonts used anywhere in this document in every page's
-        // resource dict.  (Over-inclusion is harmless and avoids a second
-        // per-page scan.)
-        {
-            let mut resources = pw.resources();
-            {
-                let mut font_res = resources.fonts();
-                for name in sorted_font_names {
-                    let font = &fonts[name];
-                    let fid  = font_id_map[name].font_dict_id;
-                    font_res.pair(Name(font.resource_name.as_bytes()), fid);
-                }
-            }
-            // Add image XObjects to the resource dictionary.
-            if !sorted_image_names.is_empty() {
-                let mut xobj_res = resources.x_objects();
-                for name in sorted_image_names {
-                    let res_name = &image_res_map[name];
-                    let img_id   = image_id_map[name];
-                    xobj_res.pair(Name(res_name.as_bytes()), img_id);
-                }
-            }
-            // Add ExtGState entries for canvas layer opacity.
-            if !opacity_gs_ids.is_empty() {
-                let mut gs_res = resources.ext_g_states();
-                for (pct, gs_id) in &opacity_gs_ids {
-                    let gs_name = format!("GS{pct:02}");
-                    gs_res.pair(Name(gs_name.as_bytes()), *gs_id);
-                }
-            }
-        }
+        write_resources(&mut pw.resources(), &group_ids[i]);
 
         // Add the content stream reference.
         pw.contents(content_id);
@@ -2293,10 +2342,25 @@ fn assemble_pdf(
     }
 
     // -- Content streams -------------------------------------------------------
-    for (i, (content_bytes, _)) in rendered_pages.iter().enumerate() {
-        let compressed = compress_to_vec_zlib(content_bytes, 6);
+    for (i, page) in rendered_pages.iter().enumerate() {
+        let compressed = compress_to_vec_zlib(&page.content, 6);
         pdf.stream(content_ids[i], &compressed)
            .filter(Filter::FlateDecode);
+    }
+
+    // -- Transparency groups ---------------------------------------------------
+    // A faded layer is a form XObject of its own, so that the page composites the layer first and fades it as
+    // one. It is isolated, so nothing under it on the page reaches into it, and it covers the page. Layers cannot
+    // nest, so a group draws no group of its own.
+    for (i, page) in rendered_pages.iter().enumerate() {
+        for (j, group) in page.groups.iter().enumerate() {
+            let compressed = compress_to_vec_zlib(group, 6);
+            let mut form = pdf.form_xobject(group_ids[i][j], &compressed);
+            form.filter(Filter::FlateDecode);
+            form.bbox(Rect::new(0.0, 0.0, pages[i].width, pages[i].height));
+            form.group().transparency().isolated(true).color_space().device_rgb();
+            write_resources(&mut form.resources(), &[]);
+        }
     }
 
     // -- Opacity ExtGState objects ---------------------------------------------
@@ -2320,8 +2384,8 @@ fn assemble_pdf(
     // Each link annotation is a separate indirect object.  Invisible border
     // (0-width) so only the action fires; no visual box is drawn.  An href of
     // "#id" goes to the named destination of the bookmark with that id.
-    for (i, (_, page_annots)) in rendered_pages.iter().enumerate() {
-        for (j, ann) in page_annots.iter().enumerate() {
+    for (i, page) in rendered_pages.iter().enumerate() {
+        for (j, ann) in page.annots.iter().enumerate() {
             let aid       = annot_ids[i][j];
             let mut aw    = pdf.annotation(aid);
             aw.subtype(AnnotationType::Link)
@@ -2779,10 +2843,10 @@ pub fn render_pdf(
 }
 
 /// Remove the links to an id no bookmark has, such as an `href="#"` outside a table of contents.
-fn drop_dangling_links(rendered_pages: &mut [(Vec<u8>, Vec<AnnotData>)], anchors: &[PlacedAnchor]) {
+fn drop_dangling_links(rendered_pages: &mut [RenderedPage], anchors: &[PlacedAnchor]) {
     let ids: HashSet<&str> = anchors.iter().map(|placed| placed.anchor.id.as_str()).collect();
-    for (_, annots) in rendered_pages.iter_mut() {
-        annots.retain(|ann| ann.url.strip_prefix('#').is_none_or(|id| ids.contains(id)));
+    for page in rendered_pages.iter_mut() {
+        page.annots.retain(|ann| ann.url.strip_prefix('#').is_none_or(|id| ids.contains(id)));
     }
 }
 
@@ -2952,5 +3016,120 @@ mod tests {
     fn document_without_bookmarks_has_no_outline() {
         let pdf = render("<text>Plain</text>");
         assert!(!pdf.contains("/Outlines") && !pdf.contains("/Dests") && !pdf.contains("/PageMode"));
+    }
+
+    // ── Layer opacity ─────────────────────────────────────────────────────────
+
+    /// Two shapes that overlap: a red square, and a blue one over its corner.
+    const OVERLAPPING: &str = r##"<rect x="40pt" y="40pt" width="100pt" height="100pt" fill="#ff0000"/>
+        <rect x="90pt" y="90pt" width="100pt" height="100pt" fill="#0000ff"/>"##;
+
+    /// The PDF of a section that holds only the given layers.
+    fn render_layers(layers: &str) -> Vec<u8> {
+        let xml = format!(r#"<lpdf version="1"><document><section>{layers}</section></document></lpdf>"#);
+        crate::LpdfEngine::render_xml_to_pdf_bytes(&xml).expect("renders")
+    }
+
+    /// Each stream of a PDF with its object number, the text of its object up to the stream, and its bytes once inflated.
+    fn streams(pdf: &[u8]) -> Vec<(u32, String, String)> {
+        const START: &[u8] = b">>\nstream\n";
+        const END: &[u8] = b"\nendstream";
+        let find = |from: usize, needle: &[u8]| pdf[from..].windows(needle.len()).position(|w| w == needle).map(|i| from + i);
+        let mut found = Vec::new();
+        let mut from = 0;
+        while let Some(at) = find(from, START) {
+            let start = at + START.len();
+            let end = find(start, END).expect("a stream end");
+            let obj = pdf[..at].windows(6).rposition(|w| w == b" 0 obj").expect("inside an object");
+            let line = pdf[..obj].iter().rposition(|&b| b == b'\n').map_or(0, |i| i + 1);
+            let number = String::from_utf8_lossy(&pdf[line..obj]).trim().parse().expect("an object number");
+            let dict = String::from_utf8_lossy(&pdf[obj..start]).into_owned();
+            if let Ok(inflated) = decompress_to_vec_zlib(&pdf[start..end]) {
+                found.push((number, dict, String::from_utf8_lossy(&inflated).into_owned()));
+            }
+            from = end;
+        }
+        found
+    }
+
+    /// The page's content stream, and the dictionary and content of each transparency group.
+    fn page_and_groups(pdf: &[u8]) -> (String, Vec<(String, String)>) {
+        let text = String::from_utf8_lossy(pdf);
+        let (_, page) = object_with(&text, "/Type /Page\n");
+        let contents: u32 = page.split("/Contents ").nth(1).and_then(|rest| rest.split_whitespace().next())
+            .and_then(|number| number.parse().ok()).expect("a /Contents entry");
+        let streams = streams(pdf);
+        let content = streams.iter().find(|(number, ..)| *number == contents).expect("the content stream").2.clone();
+        let groups = streams.into_iter()
+            .filter(|(_, dict, _)| dict.contains("/S /Transparency"))
+            .map(|(_, dict, group)| (dict, group))
+            .collect();
+        (content, groups)
+    }
+
+    fn rectangles(content: &str) -> usize {
+        content.lines().filter(|line| line.ends_with(" re")).count()
+    }
+
+    #[test]
+    fn a_faded_layer_is_drawn_as_one_transparency_group() {
+        let pdf = render_layers(&format!(r#"<layer opacity="0.5">{OVERLAPPING}</layer>"#));
+        let (page, groups) = page_and_groups(&pdf);
+        assert_eq!(groups.len(), 1);
+        let (dict, group) = &groups[0];
+        assert!(dict.contains("/Subtype /Form") && dict.contains("/I true"), "{dict}");
+        assert_eq!(rectangles(group), 2, "both shapes are drawn into the group");
+        assert!(page.contains("/GS50 gs") && page.contains("/G0 Do"), "the page fades the group: {page}");
+        assert_eq!(rectangles(&page), 0, "the shapes are not drawn on the page");
+    }
+
+    #[test]
+    fn two_faded_layers_are_two_groups() {
+        let pdf = render_layers(
+            r##"<layer opacity="0.5"><rect x="40pt" y="40pt" width="100pt" height="100pt" fill="#ff0000"/></layer>
+                <layer opacity="0.3"><rect x="90pt" y="90pt" width="100pt" height="100pt" fill="#0000ff"/></layer>"##,
+        );
+        let (page, groups) = page_and_groups(&pdf);
+        assert_eq!(groups.len(), 2);
+        assert!(page.contains("/GS50 gs") && page.contains("/G0 Do"), "{page}");
+        assert!(page.contains("/GS30 gs") && page.contains("/G1 Do"), "{page}");
+    }
+
+    /// A PNG of one red pixel.
+    const RED_PIXEL: [u8; 69] = [
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01,
+        0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0xc9, 0xfe, 0x92, 0xef, 0x00, 0x00, 0x00,
+        0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ];
+
+    #[test]
+    fn a_faded_layer_draws_an_image_from_the_resources_of_its_group() {
+        let xml = r#"<lpdf version="1"><assets><image name="photo" src="photo.png"/></assets><document><section>
+            <layer opacity="0.5"><img-at name="photo" x="40pt" y="40pt" width="100pt" height="100pt"/></layer>
+            </section></document></lpdf>"#;
+        let pdf = crate::bench_render_xml_with_image(xml, "photo", &RED_PIXEL).expect("renders");
+        let (page, groups) = page_and_groups(&pdf);
+        assert_eq!(groups.len(), 1);
+        let (dict, group) = &groups[0];
+        assert!(group.contains("/I0 Do"), "the image is drawn in the group: {group}");
+        assert!(dict.contains("/XObject") && dict.contains("/I0 "), "the group lists the image: {dict}");
+        assert!(!page.contains("/I0 Do"), "{page}");
+    }
+
+    #[test]
+    fn a_layer_at_full_opacity_is_drawn_on_the_page() {
+        let pdf = render_layers(&format!(r#"<layer>{OVERLAPPING}</layer>"#));
+        let (page, groups) = page_and_groups(&pdf);
+        assert!(groups.is_empty());
+        assert_eq!(rectangles(&page), 2);
+    }
+
+    #[test]
+    fn a_faded_layer_keeps_its_transform_and_clip_inside_the_group() {
+        let pdf = render_layers(&format!(r#"<layer opacity="0.5" transform="translate(10 20)">{OVERLAPPING}</layer>"#));
+        let (page, groups) = page_and_groups(&pdf);
+        assert!(groups[0].1.contains(" cm"), "the transform is applied to the group's content: {}", groups[0].1);
+        assert!(!page.contains(" cm"), "{page}");
     }
 }
