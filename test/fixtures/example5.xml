@@ -70,7 +70,10 @@
         <frame width="90pt" background="stub-bg" padding="s" height="full">
           <column gap="s" align="center" justify="center" height="full">
             <text font-size="xs" font="Helvetica-Bold" color="brand">NS26</text>
-            <frame width="56pt" height="56pt" background="surface" radius="xs" />
+            <!-- the engine draws no quiet zone, so the white frame gives the code one on the dark stub -->
+            <frame width="56pt" height="56pt" background="surface" radius="xs" padding="7pt">
+              <barcode type="qr" data="GA-00842" width="42pt" color="text" />
+            </frame>
             <text font-size="xs" color="surface">GA-00842</text>
           </column>
         </frame>

@@ -56,10 +56,10 @@
 
         <divider color="rule" thickness="s" />
 
-        <!-- barcode placeholder + tracking -->
+        <!-- barcode + tracking -->
         <frame padding="m" height="fill">
           <column gap="s" align="center">
-            <frame width="220pt" height="60pt" background="rule" radius="xs" />
+            <barcode type="code128" data="9400111899223456789012" width="220pt" height="60pt" color="text" />
             <text font-size="s" font="Courier-Bold">9400 1118 9922 3456 7890 12</text>
           </column>
         </frame>
