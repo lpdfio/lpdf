@@ -41,7 +41,7 @@ use miniz_oxide::inflate::decompress_to_vec_zlib;
 use subsetter::GlyphRemapper;
 
 use crate::render::{placed_anchors, PlacedAnchor, RenderBox, RenderCanvasLayer, RenderField, RenderNode, RenderPage, RenderedBarcodeKind};
-use crate::parse::{FieldKind, Meta};
+use crate::parse::{FieldKind, Meta, Shadow};
 use crate::tokens::FontDef;
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -1175,6 +1175,10 @@ fn draw_node(
         RenderNode::CanvasRect(r) => {
             let has_fill   = r.fill.is_some();
             let has_stroke = r.stroke.is_some() && r.stroke_width > 0.0;
+            if let Some(shadow) = &r.shadow {
+                let outline = Outline::Rect { x: r.x, y: page_h - r.y - r.h, w: r.w, h: r.h, radius: r.border_radius };
+                draw_shadow(content, groups, shadow, &outline, has_fill);
+            }
             if has_fill || has_stroke {
                 content.save_state();
                 if has_fill {
@@ -1226,6 +1230,10 @@ fn draw_node(
         RenderNode::CanvasEllipse(e) => {
             let has_fill   = e.fill.is_some();
             let has_stroke = e.stroke.is_some() && e.stroke_width > 0.0;
+            if let Some(shadow) = &e.shadow {
+                let outline = Outline::Ellipse { cx: e.cx, cy: page_h - e.cy, rx: e.rx, ry: e.ry };
+                draw_shadow(content, groups, shadow, &outline, has_fill);
+            }
             if has_fill || has_stroke {
                 content.save_state();
                 if has_fill {
@@ -1320,6 +1328,11 @@ fn draw_box(
     // Flip the box y from top-down to bottom-up.
     let pdf_y = page_h - b.y - b.height;
 
+    if let Some(shadow) = &b.shadow {
+        let outline = Outline::Rect { x: b.x, y: pdf_y, w: b.width, h: b.height, radius: b.radius };
+        draw_shadow(content, groups, shadow, &outline, has_fill);
+    }
+
     if has_fill || has_border {
         content.save_state();
 
@@ -1384,6 +1397,71 @@ fn draw_faded(
     content.set_parameters(Name(opacity_gs_name(percent).as_bytes()));
     content.x_object(Name(name.as_bytes()));
     content.restore_state();
+}
+
+/// The outline of a box or a canvas shape in PDF coordinates, which a shadow is a copy of.
+enum Outline {
+    /// `x`, `y` is the lower-left corner.
+    Rect { x: f32, y: f32, w: f32, h: f32, radius: f32 },
+    /// `cx`, `cy` is the centre.
+    Ellipse { cx: f32, cy: f32, rx: f32, ry: f32 },
+}
+
+impl Outline {
+    /// Append the outline to the current path, moved by `dx` and `dy`.
+    fn path(&self, content: &mut Content, dx: f32, dy: f32) {
+        match *self {
+            Outline::Rect { x, y, w, h, radius } => rounded_rect(content, x + dx, y + dy, w, h, radius),
+            Outline::Ellipse { cx, cy, rx, ry }  => ellipse_path(content, cx + dx, cy + dy, rx, ry),
+        }
+    }
+
+    /// The smallest rectangle around the outline: its lower-left corner, width and height.
+    fn bounds(&self) -> (f32, f32, f32, f32) {
+        match *self {
+            Outline::Rect { x, y, w, h, .. } => (x, y, w, h),
+            Outline::Ellipse { cx, cy, rx, ry } => (cx - rx, cy - ry, 2.0 * rx, 2.0 * ry),
+        }
+    }
+}
+
+/// A drop shadow: the outline moved by the shadow's offset and filled with its color, drawn before the shape so the
+/// shape covers the part of it that lies behind. `covers` is whether the shape has a fill to do that. Without
+/// one the shape is see-through, and the shadow is drawn only outside it, as CSS does.
+///
+/// A shadow with an opacity below 1 is drawn as a transparency group of its own (`draw_faded`), so it fades alone.
+/// Inside a faded box it is part of that box's group, and fades with it.
+fn draw_shadow(
+    content: &mut Content,
+    groups:  &mut Vec<PageGroup>,
+    shadow:  &Shadow,
+    outline: &Outline,
+    covers:  bool,
+) {
+    // The offset is down on the page and the outline is bottom-up.
+    let (dx, dy) = (shadow.dx, -shadow.dy);
+    let draw = |content: &mut Content, _: &mut Vec<PageGroup>| {
+        content.save_state();
+        if !covers {
+            // Keep the shadow out of the shape: clip to a rectangle around both with the shape cut out.
+            let (x, y, w, h) = outline.bounds();
+            let (left, bottom) = (x.min(x + dx) - 1.0, y.min(y + dy) - 1.0);
+            let (right, top)   = ((x + w).max(x + w + dx) + 1.0, (y + h).max(y + h + dy) + 1.0);
+            content.rect(left, bottom, right - left, top - bottom);
+            outline.path(content, 0.0, 0.0);
+            content.clip_even_odd();
+            content.end_path();
+        }
+        let (r, g, b) = parse_hex(&shadow.color);
+        content.set_fill_rgb(r, g, b);
+        outline.path(content, dx, dy);
+        content.fill_nonzero();
+        content.restore_state();
+    };
+    match opacity_percent(shadow.opacity) {
+        100.. => draw(content, groups),
+        percent => draw_faded(content, groups, percent, draw),
+    }
 }
 
 /// The inside of a canvas layer: its transform, its clip and its children. Its opacity is not applied here.
@@ -1461,24 +1539,35 @@ fn u8_to_line_join(v: u8) -> LineJoinStyle {
 }
 
 /// Recursively collect all unique opacity values (as integer percentages 1..99)
-/// from canvas layers and boxes. Opacity 1.0 (fully opaque) is excluded.
+/// from canvas layers, boxes and shadows. Opacity 1.0 (fully opaque) is excluded.
 fn collect_used_opacities(nodes: &[RenderNode], out: &mut HashSet<u32>) {
     for node in nodes {
         match node {
             RenderNode::CanvasLayer(l) => {
-                let pct = opacity_percent(l.opacity);
-                if pct > 0 && pct < 100 { out.insert(pct); }
+                note_opacity(l.opacity, out);
                 collect_used_opacities(&l.children, out);
             }
             RenderNode::Box(b) => {
-                let pct = opacity_percent(b.opacity);
-                if pct > 0 && pct < 100 { out.insert(pct); }
+                note_opacity(b.opacity, out);
+                if let Some(s) = &b.shadow { note_opacity(s.opacity, out); }
                 collect_used_opacities(&b.children, out);
+            }
+            RenderNode::CanvasRect(r) => {
+                if let Some(s) = &r.shadow { note_opacity(s.opacity, out); }
+            }
+            RenderNode::CanvasEllipse(e) => {
+                if let Some(s) = &e.shadow { note_opacity(s.opacity, out); }
             }
             RenderNode::Link(l) => collect_used_opacities(&l.children, out),
             _                   => {}
         }
     }
+}
+
+/// Add an opacity that is drawn through an ExtGState: only a percentage from 1 to 99 is.
+fn note_opacity(opacity: f32, out: &mut HashSet<u32>) {
+    let pct = opacity_percent(opacity);
+    if pct > 0 && pct < 100 { out.insert(pct); }
 }
 
 /// Append an ellipse path (4 cubic-Bézier arcs) in PDF bottom-up coords.
@@ -3344,5 +3433,220 @@ mod tests {
         assert_eq!(groups.len(), 1);
         assert!(groups[0].1.contains("/I0 Do"), "the image is drawn in the group: {}", groups[0].1);
         assert!(!page.contains("/I0 Do"), "{page}");
+    }
+
+    // ── Drop shadow ───────────────────────────────────────────────────────────
+
+    /// The `x y w h` of each rectangle a content stream draws, in order.
+    fn rectangle_boxes(content: &str) -> Vec<[f32; 4]> {
+        content
+            .lines()
+            .filter_map(|line| line.strip_suffix(" re"))
+            .map(|line| {
+                let n: Vec<f32> = line.split(' ').map(|v| v.parse().expect("a number")).collect();
+                [n[0], n[1], n[2], n[3]]
+            })
+            .collect()
+    }
+
+    fn curves(content: &str) -> usize {
+        content.lines().filter(|line| line.ends_with(" c")).count()
+    }
+
+    fn position(content: &str, line: &str) -> usize {
+        content.lines().position(|l| l == line).unwrap_or_else(|| panic!("no '{line}' in {content}"))
+    }
+
+    const BOX_SHADOW: &str = r##"<column background="#ff0000" shadow="3pt 4pt #0000ff"><text>A</text></column>"##;
+
+    #[test]
+    fn a_shadow_is_drawn_under_its_box_moved_right_and_down() {
+        let (page, groups) = page_and_groups(&render_layout(BOX_SHADOW));
+        assert!(groups.is_empty());
+        let boxes = rectangle_boxes(&page);
+        assert_eq!(boxes.len(), 2, "the shadow and the fill: {page}");
+        let (shadow, fill) = (boxes[0], boxes[1]);
+        assert!(position(&page, "0 0 1 rg") < position(&page, "1 0 0 rg"), "the shadow comes first: {page}");
+        assert_eq!((shadow[0] - fill[0], fill[1] - shadow[1]), (3.0, 4.0), "right 3 and down 4: {page}");
+        assert_eq!((shadow[2], shadow[3]), (fill[2], fill[3]), "the same size");
+    }
+
+    #[test]
+    fn a_negative_offset_moves_the_shadow_left_and_up() {
+        let (page, _) = page_and_groups(&render_layout(
+            r##"<column background="#ff0000" shadow="-3pt -4pt #0000ff"><text>A</text></column>"##,
+        ));
+        let boxes = rectangle_boxes(&page);
+        assert_eq!((boxes[1][0] - boxes[0][0], boxes[0][1] - boxes[1][1]), (3.0, 4.0), "{page}");
+    }
+
+    #[test]
+    fn a_shadow_takes_the_radius_of_its_box() {
+        let (page, _) = page_and_groups(&render_layout(
+            r##"<column background="#ff0000" radius="8pt" shadow="3pt 4pt #0000ff"><text>A</text></column>"##,
+        ));
+        assert_eq!((rectangles(&page), curves(&page)), (0, 8), "a rounded fill and a rounded shadow: {page}");
+    }
+
+    #[test]
+    fn a_shadow_takes_a_color_token() {
+        let xml = r##"<lpdf version="1"><tokens><colors><color name="ink" value="#00ff00"/></colors></tokens><document><section><layout>
+            <column background="#ff0000" shadow="3pt 4pt ink"><text>A</text></column></layout></section></document></lpdf>"##;
+        let bytes = crate::LpdfEngine::render_xml_to_pdf_bytes(xml).expect("renders");
+        let (page, _) = page_and_groups(&bytes);
+        assert!(position(&page, "0 1 0 rg") < position(&page, "1 0 0 rg"), "{page}");
+    }
+
+    #[test]
+    fn a_box_with_no_background_shows_its_shadow_only_outside_it() {
+        let (page, _) = page_and_groups(&render_layout(r##"<column shadow="3pt 4pt #0000ff"><text>A</text></column>"##));
+        assert!(page.contains("W*\nn"), "the shadow is clipped to the outside of the box: {page}");
+        let (page, _) = page_and_groups(&render_layout(BOX_SHADOW));
+        assert!(!page.contains("W*"), "a fill hides the part behind it, so nothing is clipped: {page}");
+    }
+
+    #[test]
+    fn a_shadow_below_full_opacity_is_a_transparency_group_of_its_own() {
+        let (page, groups) = page_and_groups(&render_layout(
+            r##"<column background="#ff0000" shadow="3pt 4pt #0000ff 0.5"><text>A</text></column>"##,
+        ));
+        assert_eq!(groups.len(), 1);
+        let (dict, group) = &groups[0];
+        assert!(dict.contains("/Subtype /Form") && dict.contains("/I true"), "{dict}");
+        assert_eq!(rectangles(group), 1, "only the shadow is in the group: {group}");
+        assert!(page.contains("/GS50 gs") && page.contains("/G0 Do"), "the page fades the group: {page}");
+        assert_eq!(rectangles(&page), 1, "the fill is on the page, not faded: {page}");
+        assert!(position(&page, "/G0 Do") < position(&page, "1 0 0 rg"), "the shadow is under the fill: {page}");
+    }
+
+    #[test]
+    fn a_shadow_at_full_opacity_is_drawn_on_the_page() {
+        for shadow in ["3pt 4pt #0000ff", "3pt 4pt #0000ff 1", "3pt 4pt #0000ff 1.0", "3pt 4pt #0000ff 0.999"] {
+            let (page, groups) = page_and_groups(&render_layout(&format!(
+                r##"<column background="#ff0000" shadow="{shadow}"><text>A</text></column>"##
+            )));
+            assert!(groups.is_empty() && rectangles(&page) == 2, "{shadow}: {page}");
+        }
+    }
+
+    #[test]
+    fn a_shadow_at_opacity_zero_draws_nothing() {
+        let (page, groups) = page_and_groups(&render_layout(
+            r##"<column background="#ff0000" shadow="3pt 4pt #0000ff 0"><text>A</text></column>"##,
+        ));
+        assert!(groups.is_empty());
+        assert_eq!(rectangles(&page), 1, "only the fill: {page}");
+    }
+
+    #[test]
+    fn a_shadow_in_a_faded_box_fades_with_the_box() {
+        let (page, groups) = page_and_groups(&render_layout(
+            r##"<column opacity="0.5" background="#ff0000" shadow="3pt 4pt #0000ff"><text>A</text></column>"##,
+        ));
+        assert_eq!(groups.len(), 1);
+        assert_eq!(rectangles(&groups[0].1), 2, "the shadow and the fill are in the box's group: {}", groups[0].1);
+        assert_eq!(rectangles(&page), 0, "{page}");
+    }
+
+    #[test]
+    fn a_faded_shadow_in_a_faded_box_is_a_group_in_its_group() {
+        let (page, groups) = page_and_groups(&render_layout(
+            r##"<column opacity="0.5" background="#ff0000" shadow="3pt 4pt #0000ff 0.4"><text>A</text></column>"##,
+        ));
+        assert_eq!(groups.len(), 2);
+        let (outer_dict, outer) = &groups[1];
+        assert!(outer.contains("/GS40 gs") && outer.contains("/G0 Do"), "the box's group fades the shadow's: {outer}");
+        assert_eq!(rectangles(outer), 1, "the fill is in the box's group: {outer}");
+        assert!(outer_dict.contains("/G0 "), "{outer_dict}");
+        assert!(page.contains("/GS50 gs") && page.contains("/G1 Do") && !page.contains("/G0 Do"), "{page}");
+    }
+
+    #[test]
+    fn every_opacity_a_shadow_sets_is_defined_in_the_resources_of_what_sets_it() {
+        let pdf = render_layout(
+            r##"<column opacity="0.5" shadow="3pt 4pt #0000ff 0.4"><text>A</text></column><column shadow="3pt 4pt #0000ff 0.7"><text>B</text></column>"##,
+        );
+        let (page, groups) = page_and_groups(&pdf);
+        let text = String::from_utf8_lossy(&pdf);
+        let page_resources = object_with(&text, "/Type /Page\n").1;
+        for state in page.lines().filter_map(|line| line.strip_suffix(" gs")) {
+            assert!(page_resources.contains(&format!("{state} ")), "the page sets {state}: {page_resources}");
+        }
+        for (dict, content) in &groups {
+            for state in content.lines().filter_map(|line| line.strip_suffix(" gs")) {
+                assert!(dict.contains(&format!("{state} ")), "a group sets {state}, which its resources do not define: {dict}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_box_that_splits_across_pages_has_its_shadow_on_each() {
+        let lines: String = (1..=120).map(|n| format!("<text>Line {n}</text>")).collect();
+        let pdf = render_layout(&format!(r##"<column background="#ff0000" shadow="3pt 4pt #0000ff">{lines}</column>"##));
+        let pages = String::from_utf8_lossy(&pdf).matches("/Type /Page\n").count();
+        let shadows = streams(&pdf).iter().map(|s| s.2.matches("0 0 1 rg").count()).sum::<usize>();
+        assert!(pages > 1);
+        assert_eq!(shadows, pages, "a shadow for each page");
+    }
+
+    #[test]
+    fn a_layer_rect_has_a_shadow_moved_right_and_down() {
+        let pdf = render_layers(
+            r##"<layer><rect x="50pt" y="50pt" width="100pt" height="60pt" fill="#ff0000" shadow="5pt 6pt #0000ff"/></layer>"##,
+        );
+        let (page, _) = page_and_groups(&pdf);
+        let boxes = rectangle_boxes(&page);
+        assert!(position(&page, "0 0 1 rg") < position(&page, "1 0 0 rg"), "{page}");
+        assert_eq!((boxes[1][0] - boxes[0][0], boxes[1][1] - boxes[0][1]), (-5.0, 6.0), "{page}");
+        assert!(!page.contains("W*"), "{page}");
+    }
+
+    #[test]
+    fn a_layer_rect_shadow_takes_the_radius_of_its_rect() {
+        let pdf = render_layers(
+            r##"<layer><rect x="50pt" y="50pt" width="100pt" height="60pt" radius="8pt" fill="#ff0000" shadow="5pt 6pt #0000ff"/></layer>"##,
+        );
+        let (page, _) = page_and_groups(&pdf);
+        assert_eq!((rectangles(&page), curves(&page)), (0, 8), "{page}");
+    }
+
+    #[test]
+    fn a_layer_circle_and_ellipse_have_shadows_of_their_own_shape() {
+        for shape in [
+            r##"<circle x="110pt" y="110pt" r="40pt" fill="#ff0000" shadow="5pt 6pt #0000ff"/>"##,
+            r##"<ellipse x="90pt" y="120pt" rx="60pt" ry="30pt" fill="#ff0000" shadow="5pt 6pt #0000ff"/>"##,
+        ] {
+            let (page, _) = page_and_groups(&render_layers(&format!("<layer>{shape}</layer>")));
+            assert_eq!((rectangles(&page), curves(&page)), (0, 8), "{shape}: {page}");
+            assert!(position(&page, "0 0 1 rg") < position(&page, "1 0 0 rg"), "{shape}: {page}");
+        }
+    }
+
+    #[test]
+    fn a_layer_shape_with_no_fill_shows_its_shadow_only_outside_it() {
+        let (page, _) = page_and_groups(&render_layers(
+            r##"<layer><rect x="50pt" y="50pt" width="100pt" height="60pt" stroke="#ff0000" shadow="5pt 6pt #0000ff"/></layer>"##,
+        ));
+        assert!(page.contains("W*\nn"), "{page}");
+    }
+
+    #[test]
+    fn a_layer_shape_shadow_below_full_opacity_is_a_group_of_its_own() {
+        let (page, groups) = page_and_groups(&render_layers(
+            r##"<layer><rect x="50pt" y="50pt" width="100pt" height="60pt" fill="#ff0000" shadow="5pt 6pt #0000ff 0.25"/></layer>"##,
+        ));
+        assert_eq!(groups.len(), 1);
+        assert_eq!(rectangles(&groups[0].1), 1, "{}", groups[0].1);
+        assert!(page.contains("/GS25 gs") && page.contains("/G0 Do") && rectangles(&page) == 1, "{page}");
+    }
+
+    #[test]
+    fn a_layer_shape_shadow_fades_with_its_layer() {
+        let (page, groups) = page_and_groups(&render_layers(
+            r##"<layer opacity="0.5"><rect x="50pt" y="50pt" width="100pt" height="60pt" fill="#ff0000" shadow="5pt 6pt #0000ff"/></layer>"##,
+        ));
+        assert_eq!(groups.len(), 1);
+        assert_eq!(rectangles(&groups[0].1), 2, "{}", groups[0].1);
+        assert_eq!(rectangles(&page), 0, "{page}");
     }
 }

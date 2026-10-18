@@ -9,8 +9,8 @@
 use std::collections::HashMap;
 use crate::tokens::{FontDef, Tokens};
 use crate::parse::{
-    Node, PageScope, TextDefaults,
-    parse_measurement, parse_signed_measurement, parse_page_scope,
+    Node, PageScope, Shadow, TextDefaults,
+    parse_measurement, parse_shadow, parse_signed_measurement, parse_page_scope,
     elems, jattr, node_loc, at_element_for, parse_at_node, parse_tree_at_node,
 };
 use crate::page_scope::page_scope_indices;
@@ -40,6 +40,7 @@ pub struct CanvasRect {
     pub stroke_width: Option<f32>,
     pub stroke_dash:  Option<String>,
     pub radius:       Option<f32>,
+    pub shadow:       Option<Shadow>,
 }
 
 /// Circle: `cx`/`cy` is the centre point, worked out from the box `x` and `y` place.
@@ -52,6 +53,7 @@ pub struct CanvasCircle {
     pub stroke:       Option<String>,
     pub stroke_width: Option<f32>,
     pub stroke_dash:  Option<String>,
+    pub shadow:       Option<Shadow>,
 }
 
 /// Ellipse: `cx`/`cy` is the centre point, worked out from the box `x` and `y` place.
@@ -65,6 +67,7 @@ pub struct CanvasEllipse {
     pub stroke:       Option<String>,
     pub stroke_width: Option<f32>,
     pub stroke_dash:  Option<String>,
+    pub shadow:       Option<Shadow>,
 }
 
 /// Line: no anchor — absolute coordinates always required.
@@ -295,6 +298,10 @@ fn opt_canvas_color(
     elem.attribute(attr).map(|v| tokens.resolve_color(v)).transpose()
 }
 
+fn opt_canvas_shadow(elem: &roxmltree::Node, tokens: &Tokens) -> Result<Option<Shadow>, String> {
+    elem.attribute("shadow").map(|v| parse_shadow(v, tokens)).transpose()
+}
+
 fn parse_canvas_rect(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_h: f32) -> Result<CanvasPrimitive, String> {
     let w            = parse_measurement(elem.attribute("width").unwrap_or("0pt"))?;
     let h            = parse_measurement(elem.attribute("height").unwrap_or("0pt"))?;
@@ -304,7 +311,8 @@ fn parse_canvas_rect(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_
     let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
     let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
     let radius       = elem.attribute("radius").map(parse_measurement).transpose()?;
-    Ok(CanvasPrimitive::Rect(CanvasRect { x, y, w, h, fill, stroke, stroke_width, stroke_dash, radius }))
+    let shadow       = opt_canvas_shadow(elem, tokens)?;
+    Ok(CanvasPrimitive::Rect(CanvasRect { x, y, w, h, fill, stroke, stroke_width, stroke_dash, radius, shadow }))
 }
 
 fn parse_canvas_circle(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_h: f32) -> Result<CanvasPrimitive, String> {
@@ -315,7 +323,8 @@ fn parse_canvas_circle(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, pag
     let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
     let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
     let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
-    Ok(CanvasPrimitive::Circle(CanvasCircle { cx, cy, r, fill, stroke, stroke_width, stroke_dash }))
+    let shadow       = opt_canvas_shadow(elem, tokens)?;
+    Ok(CanvasPrimitive::Circle(CanvasCircle { cx, cy, r, fill, stroke, stroke_width, stroke_dash, shadow }))
 }
 
 fn parse_canvas_ellipse(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_h: f32) -> Result<CanvasPrimitive, String> {
@@ -327,7 +336,8 @@ fn parse_canvas_ellipse(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, pa
     let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
     let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
     let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
-    Ok(CanvasPrimitive::Ellipse(CanvasEllipse { cx, cy, rx, ry, fill, stroke, stroke_width, stroke_dash }))
+    let shadow       = opt_canvas_shadow(elem, tokens)?;
+    Ok(CanvasPrimitive::Ellipse(CanvasEllipse { cx, cy, rx, ry, fill, stroke, stroke_width, stroke_dash, shadow }))
 }
 
 fn parse_canvas_line(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
@@ -480,6 +490,9 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
     let get_color = |k: &str| -> Result<Option<String>, String> {
         get_attr(k).map(|v| tokens.resolve_color(v)).transpose()
     };
+    let get_shadow = || -> Result<Option<Shadow>, String> {
+        get_attr("shadow").map(|v| parse_shadow(v, tokens)).transpose()
+    };
     let get_f32 = |k: &str| -> Result<Option<f32>, String> {
         get_attr(k).map(parse_measurement).transpose()
     };
@@ -522,6 +535,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
                 stroke_width: get_f32("stroke-width")?,
                 stroke_dash:  get_attr("stroke-dash").map(str::to_string),
                 radius:       get_f32("radius")?,
+                shadow:       get_shadow()?,
             }))
         }
         "circle" => {
@@ -533,6 +547,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
                 stroke:       get_color("stroke")?,
                 stroke_width: get_f32("stroke-width")?,
                 stroke_dash:  get_attr("stroke-dash").map(str::to_string),
+                shadow:       get_shadow()?,
             }))
         }
         "ellipse" => {
@@ -545,6 +560,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
                 stroke:       get_color("stroke")?,
                 stroke_width: get_f32("stroke-width")?,
                 stroke_dash:  get_attr("stroke-dash").map(str::to_string),
+                shadow:       get_shadow()?,
             }))
         }
         "line" => Ok(CanvasPrimitive::Line(CanvasLine {
@@ -606,6 +622,7 @@ fn primitive_to_render_node(prim: &CanvasPrimitive, page: usize, pages: usize) -
             stroke_width:  r.stroke_width.unwrap_or(1.0),
             stroke_dash:   r.stroke_dash.as_deref().and_then(stroke_dash_to_vec),
             border_radius: r.radius.unwrap_or(0.0),
+            shadow:        r.shadow.clone(),
         }),
         CanvasPrimitive::Circle(c) => RenderNode::CanvasEllipse(RenderCanvasEllipse {
             cx:           c.cx,
@@ -616,6 +633,7 @@ fn primitive_to_render_node(prim: &CanvasPrimitive, page: usize, pages: usize) -
             stroke:       c.stroke.clone(),
             stroke_width: c.stroke_width.unwrap_or(1.0),
             stroke_dash:  c.stroke_dash.as_deref().and_then(stroke_dash_to_vec),
+            shadow:       c.shadow.clone(),
         }),
         CanvasPrimitive::Ellipse(e) => RenderNode::CanvasEllipse(RenderCanvasEllipse {
             cx:           e.cx,
@@ -626,6 +644,7 @@ fn primitive_to_render_node(prim: &CanvasPrimitive, page: usize, pages: usize) -
             stroke:       e.stroke.clone(),
             stroke_width: e.stroke_width.unwrap_or(1.0),
             stroke_dash:  e.stroke_dash.as_deref().and_then(stroke_dash_to_vec),
+            shadow:       e.shadow.clone(),
         }),
         CanvasPrimitive::Line(l) => RenderNode::CanvasLine(RenderCanvasLine {
             x1:           l.x1,

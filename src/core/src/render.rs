@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use serde_json::{json, Value};
-use crate::parse::FieldKind;
+use crate::parse::{FieldKind, Shadow};
 
 // ── Render tree types ─────────────────────────────────────────────────────────
 
@@ -140,6 +140,8 @@ pub struct RenderBox {
     pub radius: f32,
     /// 0.0–1.0 opacity of the box and its children, drawn as one (1.0 = fully opaque).
     pub opacity: f32,
+    /// A copy of the box's outline, offset and filled, drawn under the box. Faded with the box.
+    pub shadow: Option<Shadow>,
     pub debug_self: bool,
     pub children: Vec<RenderNode>,
 }
@@ -195,6 +197,7 @@ pub struct RenderCanvasRect {
     pub stroke_width: f32,
     pub stroke_dash: Option<Vec<f32>>,
     pub border_radius: f32,
+    pub shadow: Option<Shadow>,
 }
 
 pub struct RenderCanvasLine {
@@ -220,6 +223,7 @@ pub struct RenderCanvasEllipse {
     pub stroke: Option<String>,
     pub stroke_width: f32,
     pub stroke_dash: Option<Vec<f32>>,
+    pub shadow: Option<Shadow>,
 }
 
 /// A canvas path using SVG-like command string (M, L, C, Z).
@@ -295,6 +299,10 @@ fn is_invisible(node: &RenderNode) -> bool {
     }
 }
 
+fn shadow_to_json(s: &Shadow) -> Value {
+    json!({ "x": r2(s.dx), "y": r2(s.dy), "color": s.color, "opacity": r2(s.opacity) })
+}
+
 fn node_to_json(node: &RenderNode) -> Value {
     match node {
         RenderNode::Box(b) => {
@@ -312,6 +320,9 @@ fn node_to_json(node: &RenderNode) -> Value {
             });
             if b.opacity < 1.0 {
                 v["opacity"] = json!(r2(b.opacity));
+            }
+            if let Some(s) = &b.shadow {
+                v["shadow"] = shadow_to_json(s);
             }
             v
         }
@@ -399,15 +410,21 @@ fn node_to_json(node: &RenderNode) -> Value {
                 "options":    f.options,
             })
         }
-        RenderNode::CanvasRect(r) => json!({
-            "type":   "canvas-rect",
-            "x":      r2(r.x),
-            "y":      r2(r.y),
-            "w":      r2(r.w),
-            "h":      r2(r.h),
-            "fill":   r.fill,
-            "stroke": r.stroke,
-        }),
+        RenderNode::CanvasRect(r) => {
+            let mut v = json!({
+                "type":   "canvas-rect",
+                "x":      r2(r.x),
+                "y":      r2(r.y),
+                "w":      r2(r.w),
+                "h":      r2(r.h),
+                "fill":   r.fill,
+                "stroke": r.stroke,
+            });
+            if let Some(s) = &r.shadow {
+                v["shadow"] = shadow_to_json(s);
+            }
+            v
+        }
         RenderNode::CanvasLine(l) => json!({
             "type":   "canvas-line",
             "x1":     r2(l.x1),
@@ -416,15 +433,21 @@ fn node_to_json(node: &RenderNode) -> Value {
             "y2":     r2(l.y2),
             "stroke": l.stroke,
         }),
-        RenderNode::CanvasEllipse(e) => json!({
-            "type":   "canvas-ellipse",
-            "cx":     r2(e.cx),
-            "cy":     r2(e.cy),
-            "rx":     r2(e.rx),
-            "ry":     r2(e.ry),
-            "fill":   e.fill,
-            "stroke": e.stroke,
-        }),
+        RenderNode::CanvasEllipse(e) => {
+            let mut v = json!({
+                "type":   "canvas-ellipse",
+                "cx":     r2(e.cx),
+                "cy":     r2(e.cy),
+                "rx":     r2(e.rx),
+                "ry":     r2(e.ry),
+                "fill":   e.fill,
+                "stroke": e.stroke,
+            });
+            if let Some(s) = &e.shadow {
+                v["shadow"] = shadow_to_json(s);
+            }
+            v
+        }
         RenderNode::CanvasPath(p) => json!({
             "type":   "canvas-path",
             "d":      p.d,

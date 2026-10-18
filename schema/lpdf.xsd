@@ -121,6 +121,13 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <!-- x offset, y offset, color and optionally an opacity, e.g. "2pt 3pt #000000" or "2pt 3pt text 0.2" -->
+  <xs:simpleType name="ShadowValue">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="-?\d+(\.\d+)?(pt|mm|in) -?\d+(\.\d+)?(pt|mm|in) (#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|[a-z][a-z0-9-]*)( (0(\.\d+)?|1(\.0+)?|\.\d+))?"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <!-- e.g. "s #ccc", "m primary", or "1.5pt #ccc" -->
   <xs:simpleType name="BorderValue">
     <xs:restriction base="xs:string">
@@ -358,6 +365,11 @@
         <xs:documentation>How opaque the box and everything in it is, from 0 to 1. The box is faded as one, so children that overlap do not show through each other, and a box inside a faded box is faded further: 0.5 inside 0.5 is drawn at 0.25. A form field in the box is not faded. Default 1.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
+    <xs:attribute name="shadow"     type="ShadowValue">
+      <xs:annotation>
+        <xs:documentation>A hard-edged shadow: a copy of the box, moved right and down by the first two lengths (negative is left and up) and filled with the color, drawn under the box with the same radius. An opacity from 0 to 1 after the color fades the shadow alone: "2pt 3pt #000000 0.2". There is no blur. The shadow takes no room in the layout, so it can run into the margin or a neighbor, and the siblings after the box are drawn over it. A box with no background shows the shadow only outside it. The box's own opacity fades the box and its shadow together.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
     <xs:attribute name="paginate"   type="Paginate">
       <xs:annotation>
         <xs:documentation>Where the box falls in the page flow. no: never split the box, and move it whole to the next page when it does not fit. break-before: start it on a new page. break-after: start the next sibling on a new page. keep-next: keep it on one page with the sibling that follows, moving both to the next page if that sibling would not fit. break-before, break-after and keep-next take effect on the children of layout; on a box inside another box they are not applied. no applies at any depth.</xs:documentation>
@@ -403,6 +415,11 @@
         <xs:documentation>How opaque the box and everything in it is, from 0 to 1. The box is faded as one, so children that overlap do not show through each other, and a box inside a faded box is faded further: 0.5 inside 0.5 is drawn at 0.25. A form field in the box is not faded. Default 1.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
+    <xs:attribute name="shadow"     type="ShadowValue">
+      <xs:annotation>
+        <xs:documentation>A hard-edged shadow: a copy of the box, moved right and down by the first two lengths (negative is left and up) and filled with the color, drawn under the box with the same radius. An opacity from 0 to 1 after the color fades the shadow alone: "2pt 3pt #000000 0.2". There is no blur. The shadow takes no room in the layout, so it can run into the margin or a neighbor, and the siblings after the box are drawn over it. A box with no background shows the shadow only outside it. The box's own opacity fades the box and its shadow together.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
     <xs:attribute name="paginate"   type="Paginate">
       <xs:annotation>
         <xs:documentation>Where the box falls in the page flow. no: never split the box, and move it whole to the next page when it does not fit. break-before: start it on a new page. break-after: start the next sibling on a new page. keep-next: keep it on one page with the sibling that follows, moving both to the next page if that sibling would not fit. break-before, break-after and keep-next take effect on the children of layout; on a box inside another box they are not applied. no applies at any depth.</xs:documentation>
@@ -424,6 +441,15 @@
     <xs:attribute name="stroke"       type="Color"/>
     <xs:attribute name="stroke-width" type="PtValue"/>
     <xs:attribute name="stroke-dash"  type="xs:string"/>
+  </xs:attributeGroup>
+
+  <!-- A shadow on a layer shape: the same attribute as on a box -->
+  <xs:attributeGroup name="CanvasShadowAttrs">
+    <xs:attribute name="shadow" type="ShadowValue">
+      <xs:annotation>
+        <xs:documentation>A hard-edged shadow: a copy of the shape, moved right and down by the first two lengths (negative is left and up) and filled with the color, drawn under the shape. An opacity from 0 to 1 after the color fades the shadow alone: "2pt 3pt #000000 0.2". There is no blur. A shape with no fill shows the shadow only outside it.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
   </xs:attributeGroup>
 
   <!-- Positioning rule (enforced by parser, not XSD 1.0):
@@ -529,6 +555,7 @@
       <xs:attribute name="anchor" type="Anchor"/>
       <xs:attribute name="radius" type="PtValue"/>
       <xs:attributeGroup ref="CanvasFillStrokeAttrs"/>
+      <xs:attributeGroup ref="CanvasShadowAttrs"/>
     </xs:complexType>
   </xs:element>
 
@@ -547,6 +574,7 @@
       <xs:attribute name="r"      type="PtValue" use="required"/>
       <xs:attribute name="anchor" type="Anchor"/>
       <xs:attributeGroup ref="CanvasFillStrokeAttrs"/>
+      <xs:attributeGroup ref="CanvasShadowAttrs"/>
     </xs:complexType>
   </xs:element>
 
@@ -566,6 +594,7 @@
       <xs:attribute name="ry"     type="PtValue" use="required"/>
       <xs:attribute name="anchor" type="Anchor"/>
       <xs:attributeGroup ref="CanvasFillStrokeAttrs"/>
+      <xs:attributeGroup ref="CanvasShadowAttrs"/>
     </xs:complexType>
   </xs:element>
 

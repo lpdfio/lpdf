@@ -842,7 +842,7 @@ fn layout_table(
             nodes.push(RenderNode::Box(RenderBox {
                 x, y: row_y, width: avail_w, height: row_h,
                 fill: Some(bg),
-                border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0,
+                border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None,
                 debug_self: false, children: vec![],
             }));
         }
@@ -1216,7 +1216,7 @@ fn with_anchors(rendered: RenderNode, bookmarks: &[Bookmark], x: f32, y: f32, wi
         }
         leaf => RenderNode::Box(RenderBox {
             x, y, width, height,
-            fill: None, border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, debug_self: false,
+            fill: None, border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None, debug_self: false,
             children: anchors.chain(std::iter::once(leaf)).collect(),
         }),
     }
@@ -1270,6 +1270,7 @@ fn layout_container(
             border_color,
             radius: node.radius,
             opacity: node.opacity,
+            shadow: node.shadow.clone(),
             debug_self: node.debug,
             children,
         }),
@@ -1900,6 +1901,7 @@ fn fallback_barcode(x: f32, y: f32, w: f32, _reason: &str) -> (RenderNode, f32) 
         border_color: Some("#ff0000".to_string()),
         radius: 0.0,
         opacity: 1.0,
+        shadow: None,
         debug_self: false,
         children: vec![],
     };
@@ -2568,7 +2570,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     if toks.is_empty() {
         return (RenderNode::Box(RenderBox {
             x, y, width: 0.0, height: 0.0, fill: None,
-            border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, debug_self: false, children: vec![],
+            border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None, debug_self: false, children: vec![],
         }), 0.0, false);
     }
 
@@ -2741,7 +2743,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     (
         RenderNode::Box(RenderBox {
             x, y, width: avail_w, height: total_h,
-            fill: None, border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0,
+            fill: None, border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None,
             debug_self: node.debug,
             children: all_nodes,
         }),
@@ -3590,6 +3592,36 @@ mod tests {
         assert_eq!(nodes[0]["opacity"], 0.5);
         assert_eq!(nodes[0]["nodes"][0]["opacity"], 0.25);
         assert!(nodes[1].get("opacity").is_none(), "an opaque box says nothing: {}", nodes[1]);
+    }
+
+    #[test]
+    fn a_box_with_a_shadow_carries_it_in_the_render_tree() {
+        let tree = engine_render(&minimal(
+            r##"<column shadow="2pt 3pt #112233 0.5" background="#cccccc"><text>In</text></column><column><text>Out</text></column>"##,
+        ));
+        let nodes = tree["pages"][0]["nodes"].as_array().unwrap();
+        assert_eq!(nodes[0]["shadow"], serde_json::json!({ "x": 2.0, "y": 3.0, "color": "#112233", "opacity": 0.5 }));
+        assert!(nodes[1].get("shadow").is_none(), "a box without a shadow says nothing: {}", nodes[1]);
+    }
+
+    #[test]
+    fn a_table_cell_with_a_shadow_carries_it() {
+        let tree = engine_render(&minimal(
+            r##"<table cols="1fr 1fr"><tr><td shadow="2pt 3pt #112233"><text>A</text></td><td><text>B</text></td></tr></table>"##,
+        ));
+        let table = tree["pages"][0]["nodes"][0].to_string();
+        assert_eq!(table.matches("\"shadow\"").count(), 1, "{table}");
+    }
+
+    #[test]
+    fn a_box_with_a_shadow_that_splits_across_pages_carries_it_on_each_part() {
+        let lines: String = (1..=120).map(|n| format!("<text>Line {n}</text>")).collect();
+        let tree = engine_render(&minimal(&format!(r##"<column shadow="2pt 3pt #112233">{lines}</column>"##)));
+        let pages = tree["pages"].as_array().unwrap();
+        assert!(pages.len() > 1);
+        for page in pages {
+            assert_eq!(page["nodes"][0]["shadow"]["x"], 2.0, "{}", page["nodes"][0]);
+        }
     }
 
     #[test]
