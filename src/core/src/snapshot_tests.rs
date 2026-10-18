@@ -113,6 +113,8 @@ fn showcase_row_between() { run_snapshot("showcase-row-between"); }
 #[test]
 fn showcase_table() { run_snapshot("showcase-table"); }
 #[test]
+fn showcase_text_max_lines() { run_snapshot("showcase-text-max-lines"); }
+#[test]
 fn showcase_barcode() { run_snapshot("showcase-barcode"); }
 #[test]
 fn showcase_barcode_fit() { run_snapshot("showcase-barcode-fit"); }
