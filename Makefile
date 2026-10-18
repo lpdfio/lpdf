@@ -421,9 +421,10 @@ rc-vsix:
 	@node scripts/rc-vsix.mjs "$(RC)"
 
 # ── Portal UI bundle ───────────────────────────────────────────────────────────
-# build:pages writes lpdf-pages.js / lpdf-docs.js straight into the pages asset
-# tree with __PORTAL_URL__ / __PAGES_URL__ sentinels, ignoring .env.local.  The
-# pages deploy workflow owns the sed replacement for each environment.
+# build:pages writes lpdf-pages*.js (one bundle for each kind of page) and lpdf-docs.js
+# straight into the pages asset tree with __PORTAL_URL__ / __PAGES_URL__ sentinels,
+# ignoring .env.local.  The pages deploy workflow owns the sed replacement for each
+# environment.
 build-portal-ui:
 	cd "$(PORTAL_UI_DIR)" && npm run build:pages
 
@@ -525,8 +526,8 @@ dev-pages: sync-examples build-demo-viewer
 	@echo "-------------------------------"
 	@echo ">>> Copying pages assets (local dev)..."
 	@echo ""
-	cp "$(PORTAL_UI_DIR)/dist/lpdf-pages.js" "$(PAGES_DIR)/www/assets/js/lpdf-pages.js" && \
-	echo ">>> $(PAGES_DIR)/www/assets/js/lpdf-pages.js updated." && \
+	cp "$(PORTAL_UI_DIR)"/dist/lpdf-pages*.js "$(PAGES_DIR)/www/assets/js/" && \
+	echo ">>> $(PAGES_DIR)/www/assets/js/lpdf-pages*.js updated." && \
 	cp "$(PORTAL_UI_DIR)/dist/lpdf-docs.js" "$(PAGES_DIR)/www/assets/js/lpdf-docs.js" && \
 	echo ">>> $(PAGES_DIR)/www/assets/js/lpdf-docs.js updated." && \
 	cp dist/web/lpdf.js "$(PAGES_DIR)/ui/demo/lpdf-web.js" && \
