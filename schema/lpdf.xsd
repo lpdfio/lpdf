@@ -42,6 +42,14 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <!-- a fraction from 0 (invisible) to 1 (opaque), e.g. "0.5" -->
+  <xs:simpleType name="OpacityValue">
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <!-- token name or a factor, e.g. "m" or "1.5" -->
   <xs:simpleType name="TokenScaleOrFactor">
     <xs:union memberTypes="TokenScale FactorValue"/>
@@ -326,6 +334,11 @@
   <xs:attributeGroup name="BoxAttrs">
     <xs:attribute name="font"       type="xs:string"/>
     <xs:attribute name="font-size"  type="TokenScaleOrPt"/>
+    <xs:attribute name="color"      type="Color">
+      <xs:annotation>
+        <xs:documentation>The color of the text inside the box. A text that sets no color of its own takes the nearest box's, and the text token when no box sets one. A divider or a barcode in the box keeps its own color.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
     <xs:attribute name="gap"        type="TokenScaleOrPt"/>
     <xs:attribute name="padding"    type="SpacingOrToken">
       <xs:annotation>
@@ -340,6 +353,11 @@
     <xs:attribute name="background" type="Color"/>
     <xs:attribute name="border"     type="BorderValue"/>
     <xs:attribute name="radius"     type="TokenScaleOrPt"/>
+    <xs:attribute name="opacity"    type="OpacityValue">
+      <xs:annotation>
+        <xs:documentation>How opaque the box and everything in it is, from 0 to 1. The box is faded as one, so children that overlap do not show through each other, and a box inside a faded box is faded further: 0.5 inside 0.5 is drawn at 0.25. A form field in the box is not faded. Default 1.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
     <xs:attribute name="paginate"   type="Paginate">
       <xs:annotation>
         <xs:documentation>Where the box falls in the page flow. no: never split the box, and move it whole to the next page when it does not fit. break-before: start it on a new page. break-after: start the next sibling on a new page. keep-next: keep it on one page with the sibling that follows, moving both to the next page if that sibling would not fit. break-before, break-after and keep-next take effect on the children of layout; on a box inside another box they are not applied. no applies at any depth.</xs:documentation>
@@ -362,6 +380,11 @@
   <xs:attributeGroup name="FrameBoxAttrs">
     <xs:attribute name="font"       type="xs:string"/>
     <xs:attribute name="font-size"  type="TokenScaleOrPt"/>
+    <xs:attribute name="color"      type="Color">
+      <xs:annotation>
+        <xs:documentation>The color of the text inside the box. A text that sets no color of its own takes the nearest box's, and the text token when no box sets one. A divider or a barcode in the box keeps its own color.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
     <xs:attribute name="padding"    type="SpacingOrToken">
       <xs:annotation>
         <xs:documentation>Space between the edge of the box and its content, written like CSS: one value for all sides, two for top-bottom and left-right, three for top, left-right and bottom, four for top, right, bottom and left.</xs:documentation>
@@ -375,6 +398,11 @@
     <xs:attribute name="background" type="Color"/>
     <xs:attribute name="border"     type="BorderValue"/>
     <xs:attribute name="radius"     type="TokenScaleOrPt"/>
+    <xs:attribute name="opacity"    type="OpacityValue">
+      <xs:annotation>
+        <xs:documentation>How opaque the box and everything in it is, from 0 to 1. The box is faded as one, so children that overlap do not show through each other, and a box inside a faded box is faded further: 0.5 inside 0.5 is drawn at 0.25. A form field in the box is not faded. Default 1.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
     <xs:attribute name="paginate"   type="Paginate">
       <xs:annotation>
         <xs:documentation>Where the box falls in the page flow. no: never split the box, and move it whole to the next page when it does not fit. break-before: start it on a new page. break-after: start the next sibling on a new page. keep-next: keep it on one page with the sibling that follows, moving both to the next page if that sibling would not fit. break-before, break-after and keep-next take effect on the children of layout; on a box inside another box they are not applied. no applies at any depth.</xs:documentation>
@@ -615,28 +643,37 @@
        Graphics state scope (page, opacity, transform, clip). Cannot nest. -->
   <xs:element name="layer">
     <xs:annotation>
-      <xs:documentation>Draws shapes, text, images and barcodes at exact positions on the page, independent of the flowing layout: watermarks, stamps, page furniture. Coordinates start at the top left corner of the whole page, not inside the layout's margin, and y grows downward. A layer before the section's layout paints under it, and one after paints over it. It sets what applies to all of its content: which pages it appears on, opacity, transform and clip. Layers cannot be nested.</xs:documentation>
+      <xs:documentation>Draws shapes, text, images and barcodes at exact positions on the page, independent of the flowing layout: watermarks, stamps, page furniture. Coordinates start at the top left corner of the whole page, not inside the layout's margin, and y grows downward. A layer before the section's layout paints under it, and one after paints over it. It sets what applies to all of its content: which pages it appears on, opacity, transform and clip, and the font, size and color of its text. Layers cannot be nested.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:group ref="CanvasPrimitives" minOccurs="0" maxOccurs="unbounded"/>
       </xs:sequence>
       <xs:attribute name="page"      type="PageScope"/>
-      <xs:attribute name="opacity">
+      <xs:attribute name="opacity"   type="OpacityValue">
         <xs:annotation>
           <xs:documentation>How opaque everything in the layer is, from 0 to 1. To fade one element, put it in a layer of its own.</xs:documentation>
         </xs:annotation>
-        <xs:simpleType>
-          <xs:restriction base="xs:decimal">
-            <xs:minInclusive value="0"/>
-            <xs:maxInclusive value="1"/>
-          </xs:restriction>
-        </xs:simpleType>
       </xs:attribute>
       <xs:attribute name="transform" type="xs:string"/>
       <xs:attribute name="clip" type="xs:string">
         <xs:annotation>
           <xs:documentation>A rectangle that cuts off what the layer draws outside it: x y w h, in points from the top left corner of the page.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="font" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>The font of the text-at in the layer that sets none of its own. Defaults to the font of the document.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="font-size" type="TokenScaleOrPt">
+        <xs:annotation>
+          <xs:documentation>The size of the text-at in the layer that sets none of its own. Defaults to 11pt.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="color" type="Color">
+        <xs:annotation>
+          <xs:documentation>The color of the text-at in the layer that sets none of its own. Defaults to the text token.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attributeGroup ref="DataConditionAttrs"/>

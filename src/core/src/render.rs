@@ -138,6 +138,8 @@ pub struct RenderBox {
     pub border_width: f32,
     pub border_color: Option<String>,
     pub radius: f32,
+    /// 0.0–1.0 opacity of the box and its children, drawn as one (1.0 = fully opaque).
+    pub opacity: f32,
     pub debug_self: bool,
     pub children: Vec<RenderNode>,
 }
@@ -295,18 +297,24 @@ fn is_invisible(node: &RenderNode) -> bool {
 
 fn node_to_json(node: &RenderNode) -> Value {
     match node {
-        RenderNode::Box(b) => json!({
-            "type":         "box",
-            "x":            r2(b.x),
-            "y":            r2(b.y),
-            "width":        r2(b.width),
-            "height":       r2(b.height),
-            "fill":         b.fill,
-            "border_width": r2(b.border_width),
-            "border_color": b.border_color,
-            "radius":       r2(b.radius),
-            "nodes":        nodes_to_json(&b.children),
-        }),
+        RenderNode::Box(b) => {
+            let mut v = json!({
+                "type":         "box",
+                "x":            r2(b.x),
+                "y":            r2(b.y),
+                "width":        r2(b.width),
+                "height":       r2(b.height),
+                "fill":         b.fill,
+                "border_width": r2(b.border_width),
+                "border_color": b.border_color,
+                "radius":       r2(b.radius),
+                "nodes":        nodes_to_json(&b.children),
+            });
+            if b.opacity < 1.0 {
+                v["opacity"] = json!(r2(b.opacity));
+            }
+            v
+        }
         RenderNode::Line(l) => {
             let mut v = json!({
                 "type":      "line",

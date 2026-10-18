@@ -30,6 +30,7 @@
 //    returned as `Vec<u8>`.
 
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
 use pdf_writer::writers::Resources;
@@ -39,7 +40,7 @@ use miniz_oxide::deflate::compress_to_vec_zlib;
 use miniz_oxide::inflate::decompress_to_vec_zlib;
 use subsetter::GlyphRemapper;
 
-use crate::render::{placed_anchors, PlacedAnchor, RenderCanvasLayer, RenderField, RenderNode, RenderPage, RenderedBarcodeKind};
+use crate::render::{placed_anchors, PlacedAnchor, RenderBox, RenderCanvasLayer, RenderField, RenderNode, RenderPage, RenderedBarcodeKind};
 use crate::parse::{FieldKind, Meta};
 use crate::tokens::FontDef;
 
@@ -945,7 +946,7 @@ fn draw_barcode_hrt(
 fn draw_nodes(
     content:       &mut Content,
     annots:        &mut Vec<AnnotData>,
-    groups:        &mut Vec<Vec<u8>>,
+    groups:        &mut Vec<PageGroup>,
     nodes:         &[RenderNode],
     fonts:         &HashMap<String, PreparedFont>,
     image_res_map: &HashMap<String, String>,
@@ -959,7 +960,7 @@ fn draw_nodes(
 fn draw_node(
     content:       &mut Content,
     annots:        &mut Vec<AnnotData>,
-    groups:        &mut Vec<Vec<u8>>,
+    groups:        &mut Vec<PageGroup>,
     node:          &RenderNode,
     fonts:         &HashMap<String, PreparedFont>,
     image_res_map: &HashMap<String, String>,
@@ -968,44 +969,14 @@ fn draw_node(
     match node {
         // ── Box ──────────────────────────────────────────────────────────────
         RenderNode::Box(b) => {
-            let has_fill   = b.fill.is_some();
-            let has_border = b.border_width > 0.0 && b.border_color.is_some();
-
-            // Flip the box y from top-down to bottom-up.
-            let pdf_y = page_h - b.y - b.height;
-
-            if has_fill || has_border {
-                content.save_state();
-
-                if has_fill {
-                    let (r, g, bl) = parse_hex(b.fill.as_deref().unwrap_or("#000000"));
-                    content.set_fill_rgb(r, g, bl);
-                }
-                if has_border {
-                    let (r, g, bl) = parse_hex(
-                        b.border_color.as_deref().unwrap_or("#000000"),
-                    );
-                    content.set_stroke_rgb(r, g, bl);
-                    content.set_line_width(b.border_width);
-                }
-
-                if b.radius > 0.0 {
-                    rounded_rect(content, b.x, pdf_y, b.width, b.height, b.radius);
-                } else {
-                    content.rect(b.x, pdf_y, b.width, b.height);
-                }
-
-                match (has_fill, has_border) {
-                    (true,  true)  => { content.fill_nonzero_and_stroke(); }
-                    (true,  false) => { content.fill_nonzero(); }
-                    (false, true)  => { content.stroke(); }
-                    (false, false) => { content.end_path(); }
-                }
-
-                content.restore_state();
+            let percent = opacity_percent(b.opacity);
+            if percent >= 100 {
+                draw_box(content, annots, groups, b, fonts, image_res_map, page_h);
+            } else {
+                draw_faded(content, groups, percent, |content, groups| {
+                    draw_box(content, annots, groups, b, fonts, image_res_map, page_h);
+                });
             }
-
-            draw_nodes(content, annots, groups, &b.children, fonts, image_res_map, page_h);
         }
 
         // ── Line ─────────────────────────────────────────────────────────────
@@ -1320,37 +1291,106 @@ fn draw_node(
         // ── Canvas Layer ──────────────────────────────────────────────────────
         RenderNode::CanvasLayer(layer) => {
             let percent = opacity_percent(layer.opacity);
-            if percent == 0 {
-                // Nothing of the layer shows. It can't be faded to nothing: no ExtGState is written for 0%, and a
-                // viewer ignores a `gs` that names a missing one, which draws the layer at full strength.
-            } else if percent < 100 {
-                // A faded layer is drawn into a transparency group of its own. The group is composited first
-                // and faded as one, so shapes that overlap inside the layer do not show through each other. The
-                // group is a form XObject, written with the page (`groups`); the page only draws it, under the
-                // opacity's ExtGState, which is pre-written during assembly and referenced here by name.
-                let mut group = Content::new();
-                draw_layer(&mut group, annots, groups, layer, fonts, image_res_map, page_h);
-                let name = group_resource_name(groups.len());
-                groups.push(group.finish());
-
-                content.save_state();
-                content.set_parameters(Name(opacity_gs_name(percent).as_bytes()));
-                content.x_object(Name(name.as_bytes()));
-                content.restore_state();
-            } else {
+            if percent >= 100 {
                 content.save_state();
                 draw_layer(content, annots, groups, layer, fonts, image_res_map, page_h);
                 content.restore_state();
+            } else {
+                draw_faded(content, groups, percent, |content, groups| {
+                    draw_layer(content, annots, groups, layer, fonts, image_res_map, page_h);
+                });
             }
         }
     }
+}
+
+/// A box: its fill and border, then its children.
+fn draw_box(
+    content:       &mut Content,
+    annots:        &mut Vec<AnnotData>,
+    groups:        &mut Vec<PageGroup>,
+    b:             &RenderBox,
+    fonts:         &HashMap<String, PreparedFont>,
+    image_res_map: &HashMap<String, String>,
+    page_h:        f32,
+) {
+    let has_fill   = b.fill.is_some();
+    let has_border = b.border_width > 0.0 && b.border_color.is_some();
+
+    // Flip the box y from top-down to bottom-up.
+    let pdf_y = page_h - b.y - b.height;
+
+    if has_fill || has_border {
+        content.save_state();
+
+        if has_fill {
+            let (r, g, bl) = parse_hex(b.fill.as_deref().unwrap_or("#000000"));
+            content.set_fill_rgb(r, g, bl);
+        }
+        if has_border {
+            let (r, g, bl) = parse_hex(
+                b.border_color.as_deref().unwrap_or("#000000"),
+            );
+            content.set_stroke_rgb(r, g, bl);
+            content.set_line_width(b.border_width);
+        }
+
+        if b.radius > 0.0 {
+            rounded_rect(content, b.x, pdf_y, b.width, b.height, b.radius);
+        } else {
+            content.rect(b.x, pdf_y, b.width, b.height);
+        }
+
+        match (has_fill, has_border) {
+            (true,  true)  => { content.fill_nonzero_and_stroke(); }
+            (true,  false) => { content.fill_nonzero(); }
+            (false, true)  => { content.stroke(); }
+            (false, false) => { content.end_path(); }
+        }
+
+        content.restore_state();
+    }
+
+    draw_nodes(content, annots, groups, &b.children, fonts, image_res_map, page_h);
+}
+
+/// What `draw` writes, faded to `percent` of its strength, which is below 100.
+///
+/// It is drawn into a transparency group of its own. The group is composited first and faded as one, so shapes
+/// that overlap inside it do not show through each other. The group is a form XObject, written with the page
+/// (`groups`); the page only draws it, under the opacity's ExtGState, which is pre-written during assembly and
+/// referenced here by name. What `draw` fades can hold faded things in turn: their groups come first in
+/// `groups`, and this group's resources name them (`PageGroup::nested`).
+///
+/// At 0% nothing shows. It can't be faded to nothing: no ExtGState is written for 0%, and a viewer ignores a
+/// `gs` that names a missing one, which would draw the group at full strength.
+fn draw_faded(
+    content: &mut Content,
+    groups:  &mut Vec<PageGroup>,
+    percent: u32,
+    draw:    impl FnOnce(&mut Content, &mut Vec<PageGroup>),
+) {
+    if percent == 0 {
+        return;
+    }
+    let first_nested = groups.len();
+    let mut group = Content::new();
+    draw(&mut group, groups);
+    let nested = first_nested..groups.len();
+    let name = group_resource_name(groups.len());
+    groups.push(PageGroup { content: group.finish(), nested });
+
+    content.save_state();
+    content.set_parameters(Name(opacity_gs_name(percent).as_bytes()));
+    content.x_object(Name(name.as_bytes()));
+    content.restore_state();
 }
 
 /// The inside of a canvas layer: its transform, its clip and its children. Its opacity is not applied here.
 fn draw_layer(
     content:       &mut Content,
     annots:        &mut Vec<AnnotData>,
-    groups:        &mut Vec<Vec<u8>>,
+    groups:        &mut Vec<PageGroup>,
     layer:         &RenderCanvasLayer,
     fonts:         &HashMap<String, PreparedFont>,
     image_res_map: &HashMap<String, String>,
@@ -1421,7 +1461,7 @@ fn u8_to_line_join(v: u8) -> LineJoinStyle {
 }
 
 /// Recursively collect all unique opacity values (as integer percentages 1..99)
-/// from canvas layer nodes. Opacity 1.0 (fully opaque) is excluded.
+/// from canvas layers and boxes. Opacity 1.0 (fully opaque) is excluded.
 fn collect_used_opacities(nodes: &[RenderNode], out: &mut HashSet<u32>) {
     for node in nodes {
         match node {
@@ -1430,7 +1470,11 @@ fn collect_used_opacities(nodes: &[RenderNode], out: &mut HashSet<u32>) {
                 if pct > 0 && pct < 100 { out.insert(pct); }
                 collect_used_opacities(&l.children, out);
             }
-            RenderNode::Box(b)  => collect_used_opacities(&b.children, out),
+            RenderNode::Box(b) => {
+                let pct = opacity_percent(b.opacity);
+                if pct > 0 && pct < 100 { out.insert(pct); }
+                collect_used_opacities(&b.children, out);
+            }
             RenderNode::Link(l) => collect_used_opacities(&l.children, out),
             _                   => {}
         }
@@ -1857,13 +1901,20 @@ fn prepare_images(
 
 // ── Step 2: Content stream building ──────────────────────────────────────────
 
-/// A page drawn: its content stream, its link annotations, and the content streams of the transparency groups
-/// its content draws. A group is a form XObject written with the page, and the page content invokes it by the
-/// name `group_resource_name` gives its position here.
+/// A page drawn: its content stream, its link annotations, and the transparency groups its content draws. A group
+/// is a form XObject written with the page, and the content invokes it by the name `group_resource_name` gives
+/// its position here.
 struct RenderedPage {
     content: Vec<u8>,
     annots:  Vec<AnnotData>,
-    groups:  Vec<Vec<u8>>,
+    groups:  Vec<PageGroup>,
+}
+
+/// A transparency group of a page: its content stream, and which of the page's groups it draws. A group is
+/// pushed after the groups it draws, so those are the ones just before it, and its resources name them.
+struct PageGroup {
+    content: Vec<u8>,
+    nested:  Range<usize>,
 }
 
 /// Render every page to a content-stream byte buffer and collect link
@@ -1879,7 +1930,7 @@ fn build_content_streams(
     for page in pages {
         let mut content = Content::new();
         let mut annots: Vec<AnnotData> = Vec::new();
-        let mut groups: Vec<Vec<u8>> = Vec::new();
+        let mut groups: Vec<PageGroup> = Vec::new();
 
         // Draw optional page background before any nodes.
         if let Some(bg) = &page.background {
@@ -2286,9 +2337,9 @@ fn assemble_pdf(
 
     // -- Resources -------------------------------------------------------------
     // What a page, or a transparency group, draws with: all fonts and images used anywhere in this document
-    // (over-inclusion is harmless and avoids a second per-page scan), the ExtGStates for layer opacity, and the
-    // `groups` it draws.
-    let write_resources = |resources: &mut Resources<'_>, groups: &[Ref]| {
+    // (over-inclusion is harmless and avoids a second per-page scan), the ExtGStates for opacity, and the
+    // groups it draws: the `drawn` positions in `groups`, the form XObjects of the page.
+    let write_resources = |resources: &mut Resources<'_>, groups: &[Ref], drawn: Range<usize>| {
         {
             let mut font_res = resources.fonts();
             for name in sorted_font_names {
@@ -2298,18 +2349,18 @@ fn assemble_pdf(
             }
         }
         // Add image and group XObjects to the resource dictionary.
-        if !sorted_image_names.is_empty() || !groups.is_empty() {
+        if !sorted_image_names.is_empty() || !drawn.is_empty() {
             let mut xobj_res = resources.x_objects();
             for name in sorted_image_names {
                 let res_name = &image_res_map[name];
                 let img_id   = image_id_map[name];
                 xobj_res.pair(Name(res_name.as_bytes()), img_id);
             }
-            for (index, group_id) in groups.iter().enumerate() {
-                xobj_res.pair(Name(group_resource_name(index).as_bytes()), *group_id);
+            for index in drawn {
+                xobj_res.pair(Name(group_resource_name(index).as_bytes()), groups[index]);
             }
         }
-        // Add ExtGState entries for canvas layer opacity.
+        // Add ExtGState entries for opacity.
         if !opacity_gs_ids.is_empty() {
             let mut gs_res = resources.ext_g_states();
             for (pct, gs_id) in &opacity_gs_ids {
@@ -2329,7 +2380,7 @@ fn assemble_pdf(
         pw.parent(pages_id)
           .media_box(Rect::new(0.0, 0.0, page.width, page.height));
 
-        write_resources(&mut pw.resources(), &group_ids[i]);
+        write_resources(&mut pw.resources(), &group_ids[i], 0..group_ids[i].len());
 
         // Add the content stream reference.
         pw.contents(content_id);
@@ -2356,17 +2407,17 @@ fn assemble_pdf(
     }
 
     // -- Transparency groups ---------------------------------------------------
-    // A faded layer is a form XObject of its own, so that the page composites the layer first and fades it as
-    // one. It is isolated, so nothing under it on the page reaches into it, and it covers the page. Layers cannot
-    // nest, so a group draws no group of its own.
+    // A faded layer or box is a form XObject of its own, so that the page composites it first and fades it as
+    // one. It is isolated, so nothing under it on the page reaches into it, and it covers the page. A faded box
+    // can hold faded boxes, so a group's resources name the groups drawn inside it.
     for (i, page) in rendered_pages.iter().enumerate() {
         for (j, group) in page.groups.iter().enumerate() {
-            let compressed = compress_to_vec_zlib(group, 6);
+            let compressed = compress_to_vec_zlib(&group.content, 6);
             let mut form = pdf.form_xobject(group_ids[i][j], &compressed);
             form.filter(Filter::FlateDecode);
             form.bbox(Rect::new(0.0, 0.0, pages[i].width, pages[i].height));
             form.group().transparency().isolated(true).color_space().device_rgb();
-            write_resources(&mut form.resources(), &[]);
+            write_resources(&mut form.resources(), &group_ids[i], group.nested.clone());
         }
     }
 
@@ -3172,5 +3223,126 @@ mod tests {
         let (page, groups) = page_and_groups(&pdf);
         assert!(groups[0].1.contains(" cm"), "the transform is applied to the group's content: {}", groups[0].1);
         assert!(!page.contains(" cm"), "{page}");
+    }
+
+    // ── Box opacity ───────────────────────────────────────────────────────────
+
+    /// The PDF of a section whose layout holds `body`.
+    fn render_layout(body: &str) -> Vec<u8> {
+        let xml = format!(r#"<lpdf version="1"><document><section><layout>{body}</layout></section></document></lpdf>"#);
+        crate::LpdfEngine::render_xml_to_pdf_bytes(&xml).expect("renders")
+    }
+
+    fn texts(content: &str) -> usize {
+        content.lines().filter(|line| *line == "BT").count()
+    }
+
+    #[test]
+    fn a_faded_box_is_drawn_as_one_transparency_group() {
+        let pdf = render_layout(r##"<column opacity="0.5" background="#ff0000"><text>One</text><text>Two</text></column>"##);
+        let (page, groups) = page_and_groups(&pdf);
+        assert_eq!(groups.len(), 1);
+        let (dict, group) = &groups[0];
+        assert!(dict.contains("/Subtype /Form") && dict.contains("/I true"), "{dict}");
+        assert_eq!((rectangles(group), texts(group)), (1, 2), "the fill and both texts are drawn into the group: {group}");
+        assert!(page.contains("/GS50 gs") && page.contains("/G0 Do"), "the page fades the group: {page}");
+        assert!(rectangles(&page) == 0 && !page.contains("(One)") && !page.contains("(Two)"), "nothing of the box is drawn on the page: {page}");
+    }
+
+    #[test]
+    fn a_box_at_full_opacity_is_drawn_on_the_page() {
+        for opacity in [r#"opacity="1""#, ""] {
+            let pdf = render_layout(&format!(r##"<column {opacity} background="#ff0000"><text>One</text></column>"##));
+            let (page, groups) = page_and_groups(&pdf);
+            assert!(groups.is_empty());
+            assert!(rectangles(&page) == 1 && page.contains("(One)"), "{page}");
+        }
+    }
+
+    #[test]
+    fn a_box_at_zero_opacity_draws_nothing() {
+        let pdf = render_layout(r##"<column opacity="0" background="#ff0000"><text>Hidden</text></column>"##);
+        let (page, groups) = page_and_groups(&pdf);
+        assert!(groups.is_empty());
+        assert!(rectangles(&page) == 0 && !page.contains("(Hidden)"), "{page}");
+    }
+
+    #[test]
+    fn a_faded_box_in_a_faded_box_is_a_group_in_its_group() {
+        let pdf = render_layout(
+            r##"<column opacity="0.5" background="#ff0000"><column opacity="0.3" background="#0000ff"><text>In</text></column></column>"##,
+        );
+        let (page, groups) = page_and_groups(&pdf);
+        assert_eq!(groups.len(), 2);
+        let (inner_dict, inner) = &groups[0];
+        let (outer_dict, outer) = &groups[1];
+        assert_eq!((rectangles(inner), texts(inner)), (1, 1), "the inner box is drawn into the inner group: {inner}");
+        assert_eq!((rectangles(outer), texts(outer)), (1, 0), "the outer group has its own fill: {outer}");
+        assert!(outer.contains("/GS30 gs") && outer.contains("/G0 Do"), "the outer group fades the inner one: {outer}");
+        assert!(page.contains("/GS50 gs") && page.contains("/G1 Do") && !page.contains("/G0 Do"), "the page draws the outer group only: {page}");
+        assert!(outer_dict.contains("/G0 "), "the outer group names the group it draws: {outer_dict}");
+        assert!(!inner_dict.contains("/G0 ") && !inner_dict.contains("/G1 "), "the inner group draws no group: {inner_dict}");
+    }
+
+    #[test]
+    fn two_boxes_side_by_side_do_not_name_each_others_group() {
+        let pdf = render_layout(r#"<column opacity="0.5"><text>A</text></column><column opacity="0.5"><text>B</text></column>"#);
+        let (page, groups) = page_and_groups(&pdf);
+        assert_eq!(groups.len(), 2);
+        assert!(page.contains("/G0 Do") && page.contains("/G1 Do"), "{page}");
+        for (dict, _) in &groups {
+            assert!(!dict.contains("/G0 ") && !dict.contains("/G1 "), "a group names none: {dict}");
+        }
+    }
+
+    #[test]
+    fn every_opacity_a_box_sets_is_defined_in_the_resources_of_what_sets_it() {
+        let pdf = render_layout(
+            r#"<column opacity="0.5"><column opacity="0.3"><text>In</text></column></column><column opacity="0.7"><text>Beside</text></column>"#,
+        );
+        let (page, groups) = page_and_groups(&pdf);
+        let text = String::from_utf8_lossy(&pdf);
+        let page_resources = object_with(&text, "/Type /Page\n").1;
+        for state in page.lines().filter_map(|line| line.strip_suffix(" gs")) {
+            assert!(page_resources.contains(&format!("{state} ")), "the page sets {state}: {page_resources}");
+        }
+        for (dict, content) in &groups {
+            for state in content.lines().filter_map(|line| line.strip_suffix(" gs")) {
+                assert!(dict.contains(&format!("{state} ")), "a group sets {state}, which its resources do not define: {dict}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_faded_box_that_splits_across_pages_is_a_group_on_each() {
+        let lines: String = (1..=120).map(|n| format!("<text>Line {n}</text>")).collect();
+        let pdf = render_layout(&format!(r#"<column opacity="0.5">{lines}</column>"#));
+        let pages = String::from_utf8_lossy(&pdf).matches("/Type /Page\n").count();
+        let groups: Vec<String> = streams(&pdf).into_iter().filter(|(_, dict, _)| dict.contains("/S /Transparency")).map(|s| s.2).collect();
+        assert!(pages > 1);
+        assert_eq!(groups.len(), pages, "a group for each page");
+        assert!(groups.iter().all(|group| texts(group) > 0));
+    }
+
+    #[test]
+    fn a_link_in_a_faded_box_stays_a_link() {
+        let pdf = render_layout(r#"<column opacity="0.5"><link href="https://a.example"><text>Go</text></link></column>"#);
+        assert!(String::from_utf8_lossy(&pdf).contains("/Subtype /Link"));
+    }
+
+    #[test]
+    fn a_faded_box_draws_an_image_from_the_resources_of_its_group() {
+        let xml = r#"<lpdf version="1"><assets><image name="photo" src="photo.png"/></assets><document><section><layout>
+            <column opacity="0.5"><img name="photo" width="100pt" height="100pt"/></column>
+            </layout></section></document></lpdf>"#;
+        let mut doc = crate::parse::parse(xml).expect("parses");
+        let pages = crate::layout::layout_document(&doc.section_layouts());
+        let mut images = ImageRegistry::new();
+        images.load("photo", RED_PIXEL.to_vec());
+        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, None, false).expect("renders");
+        let (page, groups) = page_and_groups(&pdf);
+        assert_eq!(groups.len(), 1);
+        assert!(groups[0].1.contains("/I0 Do"), "the image is drawn in the group: {}", groups[0].1);
+        assert!(!page.contains("/I0 Do"), "{page}");
     }
 }

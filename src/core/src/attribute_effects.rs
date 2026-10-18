@@ -524,7 +524,7 @@ fn subjects() -> Vec<Subject> {
             lpdf(
                 "",
                 &format!(
-                    r##"<document><section><layer {a}><rect x="50pt" y="50pt" width="100pt" height="60pt" fill="#ff0000"/></layer><layout>{}</layout></section></document>"##,
+                    r##"<document><section><layer {a}><rect x="50pt" y="50pt" width="100pt" height="60pt" fill="#ff0000"/><text-at x="50pt" y="130pt">Text in a layer</text-at></layer><layout>{}</layout></section></document>"##,
                     pages()
                 ),
             )

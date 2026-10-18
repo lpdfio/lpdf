@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 use crate::tokens::{FontDef, Tokens};
 use crate::parse::{
-    Node, PageScope,
+    Node, PageScope, TextDefaults,
     parse_measurement, parse_signed_measurement, parse_page_scope,
     elems, jattr, node_loc, at_element_for, parse_at_node, parse_tree_at_node,
 };
@@ -359,15 +359,14 @@ pub(crate) struct LayerContext<'a> {
     pub tokens:       &'a Tokens,
     pub asset_images: &'a HashMap<String, String>,
     pub asset_fonts:  &'a HashMap<String, FontDef>,
-    pub root_font:    &'a str,
-    pub root_size:    f32,
+    pub text:         &'a TextDefaults,
     pub page_w:       f32,
     pub page_h:       f32,
 }
 
 /// A `text-at`, `img-at` or `barcode-at`: the node of its flow version, and where it goes.
 fn parse_placed_elem(elem: &roxmltree::Node, ctx: &LayerContext) -> Result<CanvasPrimitive, String> {
-    let node = parse_at_node(elem, ctx.tokens, ctx.asset_images, ctx.asset_fonts, ctx.root_font, ctx.root_size)?;
+    let node = parse_at_node(elem, ctx.tokens, ctx.asset_images, ctx.asset_fonts, ctx.text)?;
     let anchor = elem.attribute("anchor").map(parse_anchor).transpose()?.unwrap_or(Anchor::TopLeft);
     let (x, y) = parse_canvas_position(elem, ctx.page_w, ctx.page_h)?;
     Ok(CanvasPrimitive::Placed(PlacedNode { node, x, y, anchor }))
@@ -422,9 +421,15 @@ pub(crate) fn parse_layer_elem(elem: &roxmltree::Node, ctx: &LayerContext) -> Re
     let transform = elem.attribute("transform").and_then(parse_transform);
     let clip = elem.attribute("clip").map(parse_clip).transpose().map_err(located)?;
 
+    // Its text-at take what the layer sets for text over what the section gives it.
+    let text = ctx.text
+        .overridden_by(ctx.tokens, elem.attribute("font"), elem.attribute("font-size"), elem.attribute("color"))
+        .map_err(located)?;
+    let ctx = LayerContext { text: &text, ..*ctx };
+
     let mut children = Vec::new();
     for child in elems(elem) {
-        children.push(parse_canvas_primitive_elem(&child, ctx)?);
+        children.push(parse_canvas_primitive_elem(&child, &ctx)?);
     }
     Ok(CanvasLayer {
         children, page, opacity, transform, clip,
@@ -447,10 +452,16 @@ pub(crate) fn parse_tree_layer(json: &serde_json::Value, ctx: &LayerContext) -> 
     let transform = jattr(json, "transform").and_then(parse_transform);
     let clip = jattr(json, "clip").map(parse_clip).transpose().map_err(|e| format!("layer: {e}"))?;
 
+    // Its text-at take what the layer sets for text over what the section gives it.
+    let text = ctx.text
+        .overridden_by(ctx.tokens, jattr(json, "font"), jattr(json, "font-size"), jattr(json, "color"))
+        .map_err(|e| format!("layer: {e}"))?;
+    let ctx = LayerContext { text: &text, ..*ctx };
+
     let mut children = Vec::new();
     if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
         for n in arr {
-            children.push(parse_tree_canvas_primitive(n, ctx)?);
+            children.push(parse_tree_canvas_primitive(n, &ctx)?);
         }
     }
     Ok(CanvasLayer {
@@ -556,7 +567,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
             line_cap:     get_attr("line-cap").map(str::to_string),
         })),
         "text-at" | "img-at" | "barcode-at" => {
-            let node = parse_tree_at_node(json, tokens, ctx.asset_images, ctx.asset_fonts, ctx.root_font, ctx.root_size)
+            let node = parse_tree_at_node(json, tokens, ctx.asset_images, ctx.asset_fonts, ctx.text)
                 .map_err(|e| format!("canvas primitive '{type_str}': {e}"))?;
             let anchor = get_attr("anchor").map(parse_anchor).transpose()?.unwrap_or(Anchor::TopLeft);
             let (x, y) = get_pos()?;

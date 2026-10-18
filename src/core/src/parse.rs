@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use crate::tokens::{parse_factor, parse_pt, FontDef, FontWidths, Tokens};
+use crate::tokens::{parse_factor, parse_opacity, parse_pt, FontDef, FontWidths, Tokens};
 use crate::canvas;
 
 // ── Resolved document model (layout / render operate on these) ────────────────
@@ -251,6 +251,8 @@ pub struct Node {
     pub background: Option<String>,
     pub border: Option<(f32, String)>,
     pub radius: f32,
+    /// How opaque the box and everything in it is, from 0 to 1.
+    pub opacity: f32,
     pub height_mode: HeightMode,
     pub width_constraint: Option<f32>,
     pub width_fill: bool,
@@ -270,6 +272,7 @@ pub struct Node {
     pub text_runs: Vec<TextRun>,
     pub font: String,
     pub font_size: f32,
+    /// The color of a text, its own or the one it took from the box around it. `None` on every other node.
     pub text_color: Option<String>,
     pub text_align: TextAlign,
     /// The fewest lines of a split text that may stand alone on the next page.
@@ -436,6 +439,7 @@ struct ParsedNode {
     background: Option<String>,
     border: Option<(f32, String)>,
     radius: f32,
+    opacity: f32,
     height_mode: HeightMode,
     width_constraint: Option<f32>,
     width_fill: bool,
@@ -453,7 +457,7 @@ struct ParsedNode {
     bold: bool,                 // `<text bold>`, folded into `font` by `resolve_node`
     font:      Option<String>,  // None = inherit
     font_size: Option<f32>,     // None = inherit
-    text_color: Option<String>,
+    text_color: Option<String>, // None = inherit; a box sets it for the text inside
     text_align: TextAlign,
     widows: usize,
     orphans: usize,
@@ -497,6 +501,7 @@ impl ParsedNode {
             background: None,
             border: None,
             radius: 0.0,
+            opacity: 1.0,
             height_mode: HeightMode::Auto,
             width_constraint: None,
             width_fill: false,
@@ -577,12 +582,50 @@ fn section_root_font(doc_font: Option<&str>, fonts: &HashMap<String, FontDef>) -
         .unwrap_or_else(|| "Helvetica".to_string())
 }
 
+/// The size of text when nothing sets one.
+const DEFAULT_FONT_SIZE: f32 = 11.0;
+/// The color of text when nothing sets one and the tokens have no `text` color.
+const DEFAULT_TEXT_COLOR: &str = "#1a1a1a";
+
+/// What a text is set in unless it, a box around it or the layer it is in says otherwise.
+pub(crate) struct TextDefaults {
+    pub font:  String,
+    pub size:  f32,
+    pub color: String,
+}
+
+impl TextDefaults {
+    /// The defaults of a section: the document's font, 11pt and the `text` color.
+    fn of_section(doc_font: Option<&str>, tokens: &Tokens, fonts: &HashMap<String, FontDef>) -> Self {
+        TextDefaults {
+            font:  section_root_font(doc_font, fonts),
+            size:  DEFAULT_FONT_SIZE,
+            color: tokens.resolve_color("text").unwrap_or_else(|_| DEFAULT_TEXT_COLOR.into()),
+        }
+    }
+
+    /// These defaults with the font, size and color a layer sets over them.
+    pub(crate) fn overridden_by(
+        &self,
+        tokens: &Tokens,
+        font:   Option<&str>,
+        size:   Option<&str>,
+        color:  Option<&str>,
+    ) -> Result<Self, String> {
+        Ok(TextDefaults {
+            font:  font.map_or_else(|| self.font.clone(), str::to_string),
+            size:  size.map(|v| tokens.resolve_text_size(v)).transpose()?.unwrap_or(self.size),
+            color: color.map(|v| tokens.resolve_color(v)).transpose()?.unwrap_or_else(|| self.color.clone()),
+        })
+    }
+}
+
 /// `Node::layout_default()` — used by region_to_compat_node.
 impl Node {
     pub fn layout_default() -> Node {
         Node {
             kind: NodeKind::Column,
-            gap: 0.0, padding: [0.0; 4], background: None, border: None, radius: 0.0,
+            gap: 0.0, padding: [0.0; 4], background: None, border: None, radius: 0.0, opacity: 1.0,
             height_mode: HeightMode::Auto, width_constraint: None, width_fill: false,
             page_scope: None, paginate: Paginate::None, debug: false,
             align: Align::Stretch, justify: Justify::Start,
@@ -619,16 +662,20 @@ fn bold_variant(font: &str) -> String {
 }
 
 fn resolve_node(
-    n:            ParsedNode,
-    current_font: &str,
-    current_size: f32,
-    fonts:        &HashMap<String, FontDef>,
+    n:             ParsedNode,
+    current_font:  &str,
+    current_size:  f32,
+    current_color: &str,
+    fonts:         &HashMap<String, FontDef>,
 ) -> Node {
     let font_raw   = n.font.as_deref().unwrap_or(current_font);
     let inherited  = resolve_font_alias(font_raw, fonts);
     let font       = if n.bold { bold_variant(&inherited) } else { inherited.clone() };
     let font_size  = n.font_size.unwrap_or(current_size);
     let node_bold  = n.bold;
+    let is_text    = n.kind == NodeKind::Text;
+    let own_color  = n.text_color;
+    let color      = own_color.as_deref().unwrap_or(current_color);
 
     // Resolve span-level font aliases and fold bold into the font. A span with no font of its own keeps
     // inheriting the text's font, which is already bold when the text is.
@@ -645,8 +692,9 @@ fn resolve_node(
 
     let children = n.children
         .into_iter()
-        .map(|c| resolve_node(c, &font, font_size, fonts))
+        .map(|c| resolve_node(c, &font, font_size, color, fonts))
         .collect();
+    let text_color = is_text.then(|| color.to_string());
 
     Node {
         kind:                  n.kind,
@@ -655,6 +703,7 @@ fn resolve_node(
         background:            n.background,
         border:                n.border,
         radius:                n.radius,
+        opacity:               n.opacity,
         height_mode:           n.height_mode,
         width_constraint:      n.width_constraint,
         width_fill:            n.width_fill,
@@ -671,7 +720,7 @@ fn resolve_node(
         text_runs,
         font,
         font_size,
-        text_color:            n.text_color,
+        text_color,
         text_align:            n.text_align,
         widows:                n.widows,
         orphans:               n.orphans,
@@ -1143,11 +1192,10 @@ pub fn parse_signed_measurement(s: &str) -> Result<f32, String> {
 /// `ParsedNode` → `Node` when the context font is already known to be the default.
 fn resolve_parsed_node(
     n:     ParsedNode,
-    font:  &str,
-    size:  f32,
+    text:  &TextDefaults,
     fonts: &HashMap<String, FontDef>,
 ) -> Node {
-    resolve_node(n, font, size, fonts)
+    resolve_node(n, &text.font, text.size, &text.color, fonts)
 }
 
 fn parse_region_elem(
@@ -1155,8 +1203,7 @@ fn parse_region_elem(
     tokens:       &Tokens,
     asset_images: &HashMap<String, String>,
     asset_fonts:  &HashMap<String, FontDef>,
-    root_font:    &str,
-    root_size:    f32,
+    text:         &TextDefaults,
 ) -> Result<LayoutRegion, String> {
     let pin_str = req_attr(elem, "pin")?;
     let pin = match pin_str.as_str() {
@@ -1179,7 +1226,7 @@ fn parse_region_elem(
         }
         let mut node = parse_node(&child, tokens, asset_images)?;
         pending.attach(&mut node);
-        children.push(resolve_parsed_node(node, root_font, root_size, asset_fonts));
+        children.push(resolve_parsed_node(node, text, asset_fonts));
     }
     pending.finish("region").map_err(|e| format!("<region>{}: {e}", node_loc(elem)))?;
     Ok(LayoutRegion { pin, page, w, children, debug })
@@ -1213,8 +1260,7 @@ fn parse_section_elem(
     let title = elem.attribute("title").map(str::to_string);
     let toc = parse_section_toc(elem, tokens).map_err(|e| format!("<section>{}: {e}", node_loc(elem)))?;
 
-    let root_font = section_root_font(doc_font, asset_fonts);
-    let root_size = 11.0_f32;
+    let text = TextDefaults::of_section(doc_font, tokens, asset_fonts);
 
     let mut children: Vec<SectionChild> = Vec::new();
     let mut bookmark: Option<Bookmark> = None;
@@ -1230,12 +1276,12 @@ fn parse_section_elem(
                 let mut pending = PendingBookmarks::default();
                 for layout_child in elems(&child) {
                     match layout_child.tag_name().name() {
-                        "region" => lc.push(LayoutChild::Region(parse_region_elem(&layout_child, tokens, asset_images, asset_fonts, &root_font, root_size)?)),
+                        "region" => lc.push(LayoutChild::Region(parse_region_elem(&layout_child, tokens, asset_images, asset_fonts, &text)?)),
                         "bookmark" => pending.push(xml_bookmark(&layout_child)?),
                         _ => {
                             let mut node = parse_node(&layout_child, tokens, asset_images)?;
                             pending.attach(&mut node);
-                            lc.push(LayoutChild::Content(resolve_parsed_node(node, &root_font, root_size, asset_fonts)));
+                            lc.push(LayoutChild::Content(resolve_parsed_node(node, &text, asset_fonts)));
                         }
                     }
                 }
@@ -1245,7 +1291,7 @@ fn parse_section_elem(
             "layer" => {
                 let ctx = canvas::LayerContext {
                     tokens, asset_images, asset_fonts,
-                    root_font: &root_font, root_size, page_w: size.0, page_h: size.1,
+                    text: &text, page_w: size.0, page_h: size.1,
                 };
                 children.push(SectionChild::Layer(canvas::parse_layer_elem(&child, &ctx)?));
             }
@@ -1355,11 +1401,6 @@ fn parse_node(
 
     match kind {
         NodeKind::Text => {
-            node.text_color = Some(if let Some(v) = elem.attribute("color") {
-                tokens.resolve_color(v)?
-            } else {
-                tokens.resolve_color("text").unwrap_or_else(|_| "#1a1a1a".into())
-            });
             node.text_align = match elem.attribute("align").unwrap_or("left") {
                 "center"  => TextAlign::Center,
                 "right"   => TextAlign::Right,
@@ -1596,10 +1637,7 @@ fn at_node_attrs(
             if let Some(v) = a.get("font")      { node.font      = Some(v.to_string()); }
             if let Some(v) = a.get("font-size") { node.font_size = Some(tokens.resolve_text_size(v)?); }
             node.width_constraint = at_width(a)?;
-            node.text_color = Some(match a.get("color") {
-                Some(v) => tokens.resolve_color(v)?,
-                None    => tokens.resolve_color("text").unwrap_or_else(|_| "#1a1a1a".into()),
-            });
+            node.text_color = a.get("color").map(|v| tokens.resolve_color(v)).transpose()?;
             node.text_align = match a.get("align").unwrap_or("left") {
                 "center"  => TextAlign::Center,
                 "right"   => TextAlign::Right,
@@ -1633,22 +1671,21 @@ fn at_node_attrs(
     Ok(node)
 }
 
-/// Read a `<text-at>`, `<img-at>` or `<barcode-at>` as the node of its flow version. `root_font` and
-/// `root_size` are the defaults the document gives its text.
+/// Read a `<text-at>`, `<img-at>` or `<barcode-at>` as the node of its flow version. `text` is what the
+/// document and the layer give its text unless it says otherwise.
 pub(crate) fn parse_at_node(
     elem:         &roxmltree::Node,
     tokens:       &Tokens,
     asset_images: &HashMap<String, String>,
     asset_fonts:  &HashMap<String, FontDef>,
-    root_font:    &str,
-    root_size:    f32,
+    text:         &TextDefaults,
 ) -> Result<Node, String> {
     let kind = at_node_kind(elem.tag_name().name()).expect("a text-at, img-at or barcode-at");
     let mut node = at_node_attrs(kind.clone(), elem, tokens, asset_images, "<assets>")?;
     if kind == NodeKind::Text {
         read_text_runs(&mut node, elem, tokens)?;
     }
-    Ok(resolve_parsed_node(node, root_font, root_size, asset_fonts))
+    Ok(resolve_parsed_node(node, text, asset_fonts))
 }
 
 /// Read a `text-at`, `img-at` or `barcode-at` of a kit tree as the node of its flow version.
@@ -1657,8 +1694,7 @@ pub(crate) fn parse_tree_at_node(
     tokens:       &Tokens,
     asset_images: &HashMap<String, String>,
     asset_fonts:  &HashMap<String, FontDef>,
-    root_font:    &str,
-    root_size:    f32,
+    text:         &TextDefaults,
 ) -> Result<Node, String> {
     let type_str = json.get("type").and_then(|v| v.as_str()).unwrap_or("");
     let kind = at_node_kind(type_str).expect("a text-at, img-at or barcode-at");
@@ -1666,7 +1702,7 @@ pub(crate) fn parse_tree_at_node(
     if kind == NodeKind::Text {
         read_tree_text_runs(&mut node, json, tokens)?;
     }
-    Ok(resolve_parsed_node(node, root_font, root_size, asset_fonts))
+    Ok(resolve_parsed_node(node, text, asset_fonts))
 }
 
 // ── Bookmarks and the table of contents ──────────────────────────────────────
@@ -1916,6 +1952,18 @@ fn apply_box_attrs(
     if let Some(v) = a.get("background") { node.background = Some(tokens.resolve_color(v)?); }
     if let Some(v) = a.get("border")     { node.border    = Some(tokens.resolve_border(v)?); }
     if let Some(v) = a.get("radius")     { node.radius    = tokens.resolve_radius(v)?; }
+    // A box passes its color to the text inside it and fades itself with everything in it. A divider and a
+    // barcode have a color of their own, which is not the text's.
+    let is_box = matches!(
+        node.kind,
+        NodeKind::Column | NodeKind::Row | NodeKind::Grid | NodeKind::Frame | NodeKind::TableCell
+    );
+    if is_box || node.kind == NodeKind::Text {
+        if let Some(v) = a.get("color") { node.text_color = Some(tokens.resolve_color(v)?); }
+    }
+    if is_box {
+        if let Some(v) = a.get("opacity") { node.opacity = parse_opacity(v)?; }
+    }
     if !matches!(node.kind, NodeKind::Img | NodeKind::Barcode | NodeKind::Field) {
         if let Some(v) = a.get("height") { node.height_mode = parse_height_mode(v)?; }
     }
@@ -2359,8 +2407,7 @@ fn parse_tree_section(
     let title = jattr(json, "title").map(str::to_string);
     let toc = parse_section_toc(&a, tokens).map_err(|e| format!("section: {e}"))?;
 
-    let root_font = section_root_font(doc_font, asset_fonts);
-    let root_size = 11.0_f32;
+    let text = TextDefaults::of_section(doc_font, tokens, asset_fonts);
 
     let mut children: Vec<SectionChild> = Vec::new();
     let mut bookmark: Option<Bookmark> = None;
@@ -2378,13 +2425,13 @@ fn parse_tree_section(
                     if let Some(nodes) = child.get("nodes").and_then(|v| v.as_array()) {
                         for n in nodes {
                             if n.get("type").and_then(|v| v.as_str()) == Some("region") {
-                                lc.push(LayoutChild::Region(parse_tree_region(n, tokens, asset_images, asset_fonts, &root_font, root_size)?));
+                                lc.push(LayoutChild::Region(parse_tree_region(n, tokens, asset_images, asset_fonts, &text)?));
                             } else if is_tree_bookmark(n) {
                                 pending.push(tree_bookmark(n)?);
                             } else {
                                 let mut node = parse_tree_node(n, tokens, asset_images)?;
                                 pending.attach(&mut node);
-                                lc.push(LayoutChild::Content(resolve_parsed_node(node, &root_font, root_size, asset_fonts)));
+                                lc.push(LayoutChild::Content(resolve_parsed_node(node, &text, asset_fonts)));
                             }
                         }
                     }
@@ -2400,7 +2447,7 @@ fn parse_tree_section(
                 Some("layer") => {
                     let ctx = canvas::LayerContext {
                         tokens, asset_images, asset_fonts,
-                        root_font: &root_font, root_size, page_w: size.0, page_h: size.1,
+                        text: &text, page_w: size.0, page_h: size.1,
                     };
                     children.push(SectionChild::Layer(canvas::parse_tree_layer(child, &ctx)?));
                 }
@@ -2442,8 +2489,7 @@ fn parse_tree_region(
     tokens:       &Tokens,
     asset_images: &HashMap<String, String>,
     asset_fonts:  &HashMap<String, FontDef>,
-    root_font:    &str,
-    root_size:    f32,
+    text:         &TextDefaults,
 ) -> Result<LayoutRegion, String> {
     let pin_str = jattr(json, "pin")
         .ok_or("region missing 'pin' attribute")?;
@@ -2468,7 +2514,7 @@ fn parse_tree_region(
             }
             let mut node = parse_tree_node(n, tokens, asset_images)?;
             pending.attach(&mut node);
-            children.push(resolve_parsed_node(node, root_font, root_size, asset_fonts));
+            children.push(resolve_parsed_node(node, text, asset_fonts));
         }
         pending.finish("region")?;
     }
@@ -2511,10 +2557,6 @@ fn parse_tree_node(
 
     match kind {
         NodeKind::Text => {
-            node.text_color = Some(match jattr(json, "color") {
-                Some(v) => tokens.resolve_color(v)?,
-                None    => tokens.resolve_color("text").unwrap_or_else(|_| "#1a1a1a".into()),
-            });
             node.text_align = match jattr(json, "align").unwrap_or("left") {
                 "center"  => TextAlign::Center,
                 "right"   => TextAlign::Right,
@@ -3327,6 +3369,170 @@ mod tests {
         let doc = parse(&layer_document("", r#"<text-at x="0pt" y="0pt">Hi</text-at>"#)).unwrap();
         let node = &first_placed(&doc).node;
         assert_eq!((node.font.as_str(), node.font_size, node.text_color.as_deref()), ("Helvetica", 11.0, Some("#1a1a1a")));
+    }
+
+    // ── Color and opacity of a box, font and color of a layer ────────────────
+
+    /// The colors of the texts under `nodes`, in document order, at any depth.
+    fn text_colors(nodes: &[Node]) -> Vec<String> {
+        nodes.iter().flat_map(|n| {
+            let own = (n.kind == NodeKind::Text).then(|| n.text_color.clone().expect("a text has a color"));
+            own.into_iter().chain(text_colors(&n.children))
+        }).collect()
+    }
+
+    const NESTED_COLORS: &str = r##"
+        <column color="#111111">
+            <text>a</text>
+            <row color="#222222"><text>b</text><text color="#333333">c</text></row>
+            <grid cols="2"><text>d</text></grid>
+            <frame color="primary"><text>e</text></frame>
+        </column>
+        <table cols="1fr"><tr><td color="#444444"><text>f</text></td></tr></table>
+        <text>g</text>"##;
+
+    const NESTED_COLORS_EXPECTED: [&str; 7] =
+        ["#111111", "#222222", "#333333", "#111111", "#1763cf", "#444444", "#1a1a1a"];
+
+    #[test]
+    fn a_text_takes_the_color_of_the_nearest_box() {
+        let mut doc = parse(&minimal(NESTED_COLORS)).unwrap();
+        assert_eq!(text_colors(&doc.section_layouts()[0].children), NESTED_COLORS_EXPECTED);
+    }
+
+    #[test]
+    fn a_text_in_a_kit_tree_takes_the_color_of_the_nearest_box() {
+        let text = |attrs: &str, word: &str| format!(r#"{{"type":"text","attrs":{{{attrs}}},"nodes":["{word}"]}}"#);
+        let boxed = |tag: &str, attrs: &str, inner: &[String]| {
+            format!(r#"{{"type":"{tag}","attrs":{{{attrs}}},"nodes":[{}]}}"#, inner.join(","))
+        };
+        let nodes = [
+            boxed("column", r##""color":"#111111""##, &[
+                text("", "a"),
+                boxed("row", r##""color":"#222222""##, &[text("", "b"), text(r##""color":"#333333""##, "c")]),
+                boxed("grid", r#""cols":"2""#, &[text("", "d")]),
+                boxed("frame", r#""color":"primary""#, &[text("", "e")]),
+            ]),
+            boxed("table", r#""cols":"1fr""#, &[boxed("tr", "", &[boxed("td", r##""color":"#444444""##, &[text("", "f")])])]),
+            text("", "g"),
+        ];
+        let json = format!(r#"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
+            {{"type":"layout","attrs":{{}},"nodes":[{}]}}]}}]}}"#, nodes.join(","));
+        let mut doc = parse_tree(&json).unwrap();
+        assert_eq!(text_colors(&doc.section_layouts()[0].children), NESTED_COLORS_EXPECTED);
+    }
+
+    #[test]
+    fn the_color_of_a_box_reaches_a_text_through_a_table_and_a_link() {
+        let mut doc = parse(&minimal(
+            r##"<column color="#555555"><link href="https://a.example"><text>a</text></link>
+                <table cols="1fr"><thead><td><text>b</text></td></thead><tr><td><text>c</text></td></tr></table></column>"##,
+        )).unwrap();
+        assert_eq!(text_colors(&doc.section_layouts()[0].children), ["#555555"; 3]);
+    }
+
+    #[test]
+    fn a_text_outside_every_box_takes_the_text_color_of_the_tokens() {
+        let xml = r##"<lpdf version="1"><tokens><colors><color name="text" value="#223344"/></colors></tokens>
+            <document size="a4"><section><layout><text>a</text><column><text>b</text></column></layout></section></document></lpdf>"##;
+        let mut doc = parse(xml).unwrap();
+        assert_eq!(text_colors(&doc.section_layouts()[0].children), ["#223344", "#223344"]);
+    }
+
+    #[test]
+    fn the_color_of_a_box_is_not_the_color_of_a_divider_or_a_barcode() {
+        let mut doc = parse(&minimal(r##"<column color="#111111"><divider/><barcode type="qr" data="x" width="50pt"/></column>"##)).unwrap();
+        let column = &doc.section_layouts()[0].children[0];
+        assert_eq!(column.children[0].color.as_deref(), Some("#000000"));
+        assert_eq!(column.children[1].barcode_color, None);
+        assert_eq!(column.children.iter().filter_map(|n| n.text_color.as_deref()).count(), 0, "only a text carries a color");
+    }
+
+    #[test]
+    fn a_color_that_is_not_one_says_so() {
+        for body in [r#"<column color="nope"><text>a</text></column>"#, r##"<column color="#12"><text>a</text></column>"##] {
+            let err = parse(&minimal(body)).unwrap_err();
+            assert!(err.contains("<column>") && err.contains("color"), "{err}");
+        }
+    }
+
+    #[test]
+    fn a_box_reads_its_opacity() {
+        let mut doc = parse(&minimal(
+            r#"<column opacity="0.5"><row opacity="0"/><grid opacity="1"/><frame/><table cols="1fr"><tr><td opacity=".25"/></tr></table></column>"#,
+        )).unwrap();
+        let column = &doc.section_layouts()[0].children[0];
+        let opacities: Vec<f32> = column.children.iter().map(|n| n.opacity).collect();
+        assert_eq!((column.opacity, opacities[..3].to_vec()), (0.5, vec![0.0, 1.0, 1.0]));
+        assert_eq!(column.children[3].children[0].children[0].opacity, 0.25);
+    }
+
+    #[test]
+    fn a_box_in_a_kit_tree_reads_its_opacity() {
+        let json = r#"{"version":1,"type":"document","attrs":{},"nodes":[{"type":"section","attrs":{},"nodes":[
+            {"type":"layout","attrs":{},"nodes":[{"type":"column","attrs":{"opacity":"0.5"},"nodes":[]}]}]}]}"#;
+        let mut doc = parse_tree(json).unwrap();
+        assert_eq!(doc.section_layouts()[0].children[0].opacity, 0.5);
+    }
+
+    #[test]
+    fn an_opacity_that_is_not_a_number_from_0_to_1_says_so() {
+        for opacity in ["1.5", "-0.1", "half", "", "NaN"] {
+            let err = parse(&minimal(&format!(r#"<column opacity="{opacity}"/>"#))).unwrap_err();
+            assert!(err.contains("<column>") && err.contains(&format!("invalid opacity '{opacity}'")), "{err}");
+        }
+    }
+
+    /// The nodes of the `text-at` that are the children of the layer at `index` in the first section.
+    fn layer_texts(doc: &Document, index: usize) -> Vec<&Node> {
+        as_layer(&doc.sections[0].children[index]).children.iter().map(|c| match c {
+            canvas::CanvasPrimitive::Placed(placed) => &placed.node,
+            _ => panic!("expected a text-at"),
+        }).collect()
+    }
+
+    #[test]
+    fn a_layer_gives_its_text_at_a_font_a_size_and_a_color() {
+        let xml = r##"<lpdf version="1">
+            <assets><font name="body" core="Times-Roman"/><font name="mono" core="Courier"/></assets>
+            <tokens><colors><color name="text" value="#223344"/></colors></tokens>
+            <document size="a4" font="body"><section>
+                <layer font="mono" font-size="s" color="danger">
+                    <text-at x="0pt" y="0pt">own</text-at>
+                    <text-at x="0pt" y="9pt" font="body" font-size="20pt" color="#445566">theirs</text-at>
+                </layer>
+                <layer font-size="l"><text-at x="0pt" y="0pt">size only</text-at></layer>
+                <layer><text-at x="0pt" y="0pt">none</text-at></layer>
+            </section></document></lpdf>"##;
+        let doc = parse(xml).unwrap();
+        let summary = |n: &Node| (n.font.clone(), n.font_size, n.text_color.clone().unwrap());
+        let danger = "#d92626".to_string();
+        assert_eq!(summary(layer_texts(&doc, 0)[0]), ("Courier".into(), 9.0, danger));
+        assert_eq!(summary(layer_texts(&doc, 0)[1]), ("Times-Roman".into(), 20.0, "#445566".into()));
+        assert_eq!(summary(layer_texts(&doc, 1)[0]), ("Times-Roman".into(), 14.0, "#223344".into()));
+        assert_eq!(summary(layer_texts(&doc, 2)[0]), ("Times-Roman".into(), 11.0, "#223344".into()));
+    }
+
+    #[test]
+    fn a_layer_in_a_kit_tree_gives_its_text_at_a_font_a_size_and_a_color() {
+        let json = r##"{"version":1,"type":"document","attrs":{},"nodes":[{"type":"section","attrs":{},"nodes":[
+            {"type":"layer","attrs":{"font":"Courier","font-size":"s","color":"danger"},"nodes":[
+                {"type":"text-at","attrs":{"x":"0pt","y":"0pt"},"nodes":["own"]},
+                {"type":"text-at","attrs":{"x":"0pt","y":"9pt","color":"#445566"},"nodes":["theirs"]}]}]}]}"##;
+        let doc = parse_tree(json).unwrap();
+        let texts = layer_texts(&doc, 0);
+        assert_eq!((texts[0].font.as_str(), texts[0].font_size, texts[0].text_color.as_deref()), ("Courier", 9.0, Some("#d92626")));
+        assert_eq!((texts[1].font.as_str(), texts[1].font_size, texts[1].text_color.as_deref()), ("Courier", 9.0, Some("#445566")));
+    }
+
+    #[test]
+    fn a_layer_with_a_size_or_color_that_is_not_one_says_so() {
+        for (attrs, expected) in [(r#"font-size="huge""#, "text size"), (r#"color="nope""#, "color token")] {
+            let err = parse(&format!(
+                r#"<lpdf version="1"><document size="a4"><section><layer {attrs}><text-at x="0pt" y="0pt">a</text-at></layer></section></document></lpdf>"#
+            )).unwrap_err();
+            assert!(err.contains("<layer>") && err.contains("at line") && err.contains(expected), "{err}");
+        }
     }
 
     #[test]

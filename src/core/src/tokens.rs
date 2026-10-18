@@ -53,6 +53,15 @@ pub fn parse_factor(val: &str) -> Option<f32> {
     val.trim().parse::<f32>().ok().filter(|f| f.is_finite() && *f > 0.0)
 }
 
+/// Parse an opacity, the way the schema's OpacityValue does: a number from 0 (invisible) to 1 (opaque).
+pub fn parse_opacity(val: &str) -> Result<f32, String> {
+    val.trim()
+        .parse::<f32>()
+        .ok()
+        .filter(|f| (0.0..=1.0).contains(f))
+        .ok_or_else(|| format!("invalid opacity '{val}': expected a number from 0 to 1"))
+}
+
 pub fn normalize_hex(s: &str) -> Result<String, String> {
     let h = match s.strip_prefix('#') {
         Some(h) => h,
@@ -259,6 +268,17 @@ mod tests {
         for bad in ["0", "-1", "1.5pt", "tall", "", "inf", "NaN", "1,5"] {
             let err = t.resolve_line_height(bad).unwrap_err();
             assert!(err.starts_with(&format!("invalid line-height '{bad}'")), "{bad}: {err}");
+        }
+    }
+
+    #[test]
+    fn parse_opacity_takes_a_number_from_0_to_1() {
+        for (val, want) in [("0", 0.0), ("1", 1.0), ("0.5", 0.5), (".25", 0.25), (" 0.5 ", 0.5)] {
+            assert_eq!(parse_opacity(val).unwrap(), want, "{val}");
+        }
+        for bad in ["1.01", "-0.1", "half", "", "NaN", "inf", "50%"] {
+            let err = parse_opacity(bad).unwrap_err();
+            assert!(err.starts_with(&format!("invalid opacity '{bad}'")), "{bad}: {err}");
         }
     }
 
