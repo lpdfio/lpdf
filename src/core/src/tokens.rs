@@ -8,6 +8,8 @@ pub struct Tokens {
     pub width: [f32; 6],
     pub grid_col: [f32; 6],
     pub text_size: [f32; 6],
+    /// Factors of the font size, not pt.
+    pub line_height: [f32; 6],
     pub colors: HashMap<String, String>,
 }
 
@@ -44,6 +46,11 @@ pub fn parse_pt(val: &str) -> Option<f32> {
     let s = val.trim();
     if s == "0" { return Some(0.0); }
     s.strip_suffix("pt")?.trim().parse().ok()
+}
+
+/// Parse a factor above 0, like "1.5", the way the schema's FactorValue does: a bare number, no unit.
+pub fn parse_factor(val: &str) -> Option<f32> {
+    val.trim().parse::<f32>().ok().filter(|f| f.is_finite() && *f > 0.0)
 }
 
 pub fn normalize_hex(s: &str) -> Result<String, String> {
@@ -115,6 +122,16 @@ impl Tokens {
         }
         val.parse::<f32>()
             .map_err(|_| format!("invalid text size: '{val}'"))
+    }
+
+    /// Line height: a token of the line-height row, or a factor of the font size above 0.
+    pub fn resolve_line_height(&self, val: &str) -> Result<f32, String> {
+        if let Some(i) = scale_idx(val) {
+            return Ok(self.line_height[i]);
+        }
+        parse_factor(val).ok_or_else(|| {
+            format!("invalid line-height '{val}': expected a factor above 0, like 1.5, or a token from xs to xxl")
+        })
     }
 
     pub fn resolve_color(&self, val: &str) -> Result<String, String> {
@@ -194,6 +211,7 @@ impl Default for Tokens {
             width: [120.0, 200.0, 280.0, 360.0, 440.0, 515.0],
             grid_col: [60.0, 100.0, 140.0, 180.0, 220.0, 280.0],
             text_size: [7.0, 9.0, 11.0, 14.0, 20.0, 28.0],
+            line_height: [1.0, 1.1, 1.2, 1.4, 1.6, 2.0],
             colors,
         }
     }
@@ -216,6 +234,37 @@ mod tests {
         let t = Tokens::default();
         assert_eq!(t.resolve_space("12pt").unwrap(), 12.0);
         assert_eq!(t.resolve_space("0.5pt").unwrap(), 0.5);
+    }
+
+    #[test]
+    fn resolve_line_height_token_and_factor() {
+        let t = Tokens::default();
+        assert_eq!(t.resolve_line_height("xs").unwrap(), 1.0);
+        assert_eq!(t.resolve_line_height("m").unwrap(), 1.2);
+        assert_eq!(t.resolve_line_height("xxl").unwrap(), 2.0);
+        assert_eq!(t.resolve_line_height("1.5").unwrap(), 1.5);
+        assert_eq!(t.resolve_line_height("2").unwrap(), 2.0);
+    }
+
+    #[test]
+    fn resolve_line_height_follows_a_redefined_row() {
+        let t = Tokens { line_height: [1.0, 1.25, 1.5, 1.75, 2.0, 2.5], ..Tokens::default() };
+        assert_eq!(t.resolve_line_height("m").unwrap(), 1.5);
+        assert_eq!(t.resolve_line_height("1.5").unwrap(), 1.5, "a number is not looked up");
+    }
+
+    #[test]
+    fn resolve_line_height_rejects_what_is_not_a_factor_above_zero() {
+        let t = Tokens::default();
+        for bad in ["0", "-1", "1.5pt", "tall", "", "inf", "NaN", "1,5"] {
+            let err = t.resolve_line_height(bad).unwrap_err();
+            assert!(err.starts_with(&format!("invalid line-height '{bad}'")), "{bad}: {err}");
+        }
+    }
+
+    #[test]
+    fn the_default_line_height_row_has_the_default_factor_at_m() {
+        assert_eq!(Tokens::default().line_height[scale_idx("m").unwrap()], crate::parse::DEFAULT_LINE_HEIGHT);
     }
 
     #[test]

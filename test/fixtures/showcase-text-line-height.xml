@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf" />
+      <color name="muted"    value="#737373" />
+      <color name="rule"     value="#dde3ed" />
+      <color name="bg"       value="#f5f7fa" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Line Height" subject="line-height on a text of the layout, as a factor or a token" />
+
+    <!-- The distance between lines is a factor of the font size: 1.2 unless a text says otherwise. A text
+         gives a number, or a name from the line-height row of the tokens (xs 1.0, s 1.1, m 1.2, l 1.4,
+         xl 1.6, xxl 2.0). text-at takes the same. -->
+    <section>
+      <layer>
+        <text-at x="40pt" y="400pt" width="240pt" max-lines="3" line-height="l" font-size="s" color="muted">A text in a layer takes a token too: this one is set at l, 1.4 times its font size, and kept to three lines.</text-at>
+        <text-at x="315pt" y="400pt" width="240pt" max-lines="3" line-height="2" font-size="s" color="muted">And a number: this one is set at 2, twice its font size, and kept to three lines, so it takes more room.</text-at>
+      </layer>
+      <layout margin="40pt">
+        <column gap="xl">
+
+          <column gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Line height</text>
+            <text font-size="m" color="muted">The distance between lines, as a factor of the font size.</text>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">A factor</text>
+            <row gap="xl" align="start">
+              <column gap="xs" width="150pt">
+                <text font-size="s" color="muted">line-height="1"</text>
+                <text font-size="s" line-height="1">Lines set solid, with no room between them, are the tightest a text can be: good for a heading that wraps, hard to read as a paragraph.</text>
+              </column>
+              <column gap="xs" width="150pt">
+                <text font-size="s" color="muted">Without line-height: 1.2</text>
+                <text font-size="s">The default is 1.2 times the font size, which is what every text had before line-height could be set, so a document that sets none looks as it always did.</text>
+              </column>
+              <column gap="xs" width="150pt">
+                <text font-size="s" color="muted">line-height="1.8"</text>
+                <text font-size="s" line-height="1.8">Open lines give a paragraph room to breathe, which helps when it is long, or set small, or read on paper by someone who writes in the margin.</text>
+              </column>
+            </row>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">A token</text>
+            <row gap="xl" align="start">
+              <column gap="xs" width="150pt">
+                <text font-size="s" color="muted">line-height="xs", 1.0</text>
+                <text font-size="s" line-height="xs">A name from the row stands for a factor, so a document can change what tight and loose mean in one place.</text>
+              </column>
+              <column gap="xs" width="150pt">
+                <text font-size="s" color="muted">line-height="l", 1.4</text>
+                <text font-size="s" line-height="l">A name from the row stands for a factor, so a document can change what tight and loose mean in one place.</text>
+              </column>
+              <column gap="xs" width="150pt">
+                <text font-size="s" color="muted">line-height="xxl", 2.0</text>
+                <text font-size="s" line-height="xxl">A name from the row stands for a factor, so a document can change what tight and loose mean in one place.</text>
+              </column>
+            </row>
+          </column>
+
+        </column>
+      </layout>
+    </section>
+
+    <!-- A text that splits across pages splits by its own line height: each line here is 22pt, and the first
+         page has room for three of them. -->
+    <section>
+      <layout margin="40pt">
+        <column gap="m">
+          <column height="680pt" background="bg" padding="m" gap="xs">
+            <text font-size="l" font="Helvetica-Bold">A text across a page break</text>
+            <text font-size="s" color="muted">This box fills the page so that the text after it starts with room for three lines. The text has line-height="2", so its lines are 22pt apart, and it splits between lines at that distance: three on this page and the rest on the next.</text>
+          </column>
+          <text line-height="2">The text starts here, near the bottom of the page, and it is set with open lines. When a page cannot hold all of it, the lines that fit stay and the rest go on, and what fits depends on how far apart the lines are, not on the size of the font alone. Three lines of this text stay on this page. The others continue at the top of the next, where the space between them is the same as here, so the paragraph reads as one text that happens to cross a page break.</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

@@ -474,6 +474,11 @@ fn subjects() -> Vec<Subject> {
         .base(&[("xs", "40pt"), ("s", "80pt"), ("m", "120pt"), ("l", "160pt"), ("xl", "200pt"), ("xxl", "240pt")]),
         Subject::new("tokens:text-size", |a, _| token_row("text-size", a, |s| format!(r#"<text font-size="{s}">Alpha</text>"#)))
             .base(&[("xs", "8pt"), ("s", "10pt"), ("m", "12pt"), ("l", "16pt"), ("xl", "20pt"), ("xxl", "28pt")]),
+        // A line height shows in what comes after the line, so each text has another after it.
+        Subject::new("tokens:line-height", |a, _| {
+            token_row("line-height", a, |s| format!(r#"<text line-height="{s}">Alpha</text><text>After</text>"#))
+        })
+            .base(&[("xs", "1.0"), ("s", "1.1"), ("m", "1.2"), ("l", "1.4"), ("xl", "1.6"), ("xxl", "2.0")]),
         Subject::new("tokens:grid", |a, _| token_row("grid", a, |s| format!(r#"<grid col-width="{s}">{FOUR}</grid>"#)))
             .base(&[("xs", "40pt"), ("s", "80pt"), ("m", "120pt"), ("l", "160pt"), ("xl", "200pt"), ("xxl", "240pt")]),
         // Layout containers.

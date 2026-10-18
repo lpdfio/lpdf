@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use crate::tokens::{parse_pt, FontDef, FontWidths, Tokens};
+use crate::tokens::{parse_factor, parse_pt, FontDef, FontWidths, Tokens};
 use crate::canvas;
 
 // ── Resolved document model (layout / render operate on these) ────────────────
@@ -964,6 +964,7 @@ fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), 
             "radius" => tokens.radius   = parse_scale_row(&child)?,
             "width"  => tokens.width    = parse_scale_row(&child)?,
             "text-size" => tokens.text_size = parse_scale_row(&child)?,
+            "line-height" => tokens.line_height = parse_factor_row(&child)?,
             "grid"   => tokens.grid_col = parse_scale_row(&child)?,
             "colors" => {
                 for color_elem in elems(&child) {
@@ -984,12 +985,22 @@ fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), 
 
 /// Parse xs/s/m/l/xl/xxl pt attributes from a token scale element.
 fn parse_scale_row(elem: &roxmltree::Node) -> Result<[f32; 6], String> {
+    parse_row(elem, parse_pt, "pt value")
+}
+
+/// Parse xs/s/m/l/xl/xxl factors from a token row of factors, such as `line-height`.
+fn parse_factor_row(elem: &roxmltree::Node) -> Result<[f32; 6], String> {
+    parse_row(elem, parse_factor, "factor, a number above 0")
+}
+
+/// The six slots of a token row, each read with `parse`. `expected` says what a slot holds, for the error.
+fn parse_row(elem: &roxmltree::Node, parse: fn(&str) -> Option<f32>, expected: &str) -> Result<[f32; 6], String> {
     let tag = elem.tag_name().name();
     let get = |attr: &str| -> Result<f32, String> {
         let v = elem
             .attribute(attr)
             .ok_or_else(|| format!("<{tag}> missing '{attr}' attribute"))?;
-        parse_pt(v).ok_or_else(|| format!("<{tag}> '{attr}': invalid pt value '{v}'"))
+        parse(v).ok_or_else(|| format!("<{tag}> '{attr}': invalid {expected} '{v}'"))
     };
     Ok([get("xs")?, get("s")?, get("m")?, get("l")?, get("xl")?, get("xxl")?])
 }
@@ -1596,10 +1607,7 @@ fn at_node_attrs(
                 _         => TextAlign::Left,
             };
             node.bold = a.get("bold").map(|v| v == "true").unwrap_or(false);
-            if let Some(v) = a.get("line-height") {
-                node.line_height = v.parse::<f32>().ok().filter(|f| *f > 0.0)
-                    .ok_or_else(|| format!("invalid line-height '{v}': expected a factor above 0, like 1.5"))?;
-            }
+            if let Some(v) = a.get("line-height") { node.line_height = tokens.resolve_line_height(v)?; }
             let max_lines = a.get("max-lines").map(parse_max_lines).transpose()?.unwrap_or(1);
             if max_lines > 1 && node.width_constraint.is_none() {
                 return Err(format!("'max-lines' of {max_lines} needs a 'width' to wrap the text at"));
@@ -1991,6 +1999,7 @@ fn apply_layout_kind_attrs(
         NodeKind::Text => {
             if let Some(v) = a.get("widows")  { node.widows  = parse_line_limit("widows", v)?; }
             if let Some(v) = a.get("orphans") { node.orphans = parse_line_limit("orphans", v)?; }
+            if let Some(v) = a.get("line-height") { node.line_height = tokens.resolve_line_height(v)?; }
             node.max_lines = a.get("max-lines").map(parse_max_lines).transpose()?;
             node.ellipsis  = a.get("ellipsis").map(|v| v == "true").unwrap_or(false);
         }
@@ -2297,11 +2306,11 @@ pub fn parse_tree_tokens_pub(
 ) -> Result<(), String> {
     use crate::tokens::scale_idx;
 
-    let apply_scale = |json_key: &str, scale: &mut [f32; 6]| -> Result<(), String> {
+    let apply_row = |json_key: &str, scale: &mut [f32; 6], parse: fn(&str) -> Option<f32>| -> Result<(), String> {
         if let Some(map) = obj.get(json_key).and_then(|v| v.as_object()) {
             for (k, v) in map {
                 if let (Some(idx), Some(s)) = (scale_idx(k), v.as_str()) {
-                    scale[idx] = parse_pt(s)
+                    scale[idx] = parse(s)
                         .ok_or_else(|| format!("invalid {json_key} token '{k}': '{s}'"))?;
                 }
             }
@@ -2309,12 +2318,13 @@ pub fn parse_tree_tokens_pub(
         Ok(())
     };
 
-    apply_scale("space",  &mut tokens.space)?;
-    apply_scale("border", &mut tokens.border)?;
-    apply_scale("radius", &mut tokens.radius)?;
-    apply_scale("width",  &mut tokens.width)?;
-    apply_scale("grid",   &mut tokens.grid_col)?;
-    apply_scale("text-size", &mut tokens.text_size)?;
+    apply_row("space",  &mut tokens.space, parse_pt)?;
+    apply_row("border", &mut tokens.border, parse_pt)?;
+    apply_row("radius", &mut tokens.radius, parse_pt)?;
+    apply_row("width",  &mut tokens.width, parse_pt)?;
+    apply_row("grid",   &mut tokens.grid_col, parse_pt)?;
+    apply_row("text-size", &mut tokens.text_size, parse_pt)?;
+    apply_row("line-height", &mut tokens.line_height, parse_factor)?;
 
     if let Some(colors) = obj.get("colors").and_then(|v| v.as_object()) {
         for (k, v) in colors {
@@ -2671,6 +2681,49 @@ mod tests {
         for value in ["0", "-1", "two", "1.5"] {
             let err = parse(&minimal(&format!(r#"<text max-lines="{value}">Hi</text>"#))).unwrap_err();
             assert!(err.contains(&format!("invalid max-lines '{value}'")) && err.contains("at line"), "{err}");
+        }
+    }
+
+    #[test]
+    fn text_reads_line_height_as_a_factor_or_a_token() {
+        let line_height = |attrs: &str| {
+            let mut doc = parse(&minimal(&format!("<text {attrs}>Hello world</text>"))).unwrap();
+            doc.section_layouts().remove(0).children.remove(0).line_height
+        };
+        assert_eq!(line_height(""), 1.2);
+        assert_eq!(line_height(r#"line-height="1.5""#), 1.5);
+        assert_eq!(line_height(r#"line-height="2""#), 2.0);
+        assert_eq!(line_height(r#"line-height="xs""#), 1.0);
+        assert_eq!(line_height(r#"line-height="m""#), 1.2);
+        assert_eq!(line_height(r#"line-height="xxl""#), 2.0);
+        for value in ["0", "-1", "tall", "1.5pt", ""] {
+            let err = parse(&minimal(&format!(r#"<text line-height="{value}">Hi</text>"#))).unwrap_err();
+            assert!(err.contains(&format!("invalid line-height '{value}'")) && err.contains("at line"), "{err}");
+        }
+    }
+
+    #[test]
+    fn a_text_and_a_text_at_read_a_line_height_token_from_the_documents_row() {
+        let head = r#"<tokens><line-height xs="1" s="1.25" m="1.5" l="1.75" xl="2" xxl="2.5"/></tokens>"#;
+        let xml = format!(
+            r#"<lpdf version="1">{head}<document><section>
+                <layer><text-at x="0pt" y="0pt" line-height="l">Hi</text-at></layer>
+                <layout><text line-height="l">Hi</text></layout></section></document></lpdf>"#
+        );
+        let mut doc = parse(&xml).unwrap();
+        assert_eq!(first_placed(&doc).node.line_height, 1.75);
+        assert_eq!(doc.section_layouts().remove(0).children.remove(0).line_height, 1.75);
+    }
+
+    #[test]
+    fn a_line_height_row_needs_all_six_slots_each_a_factor_above_zero() {
+        let tokens = |row: &str| parse(&format!(r#"<lpdf version="1"><tokens>{row}</tokens><document><section><layout/></section></document></lpdf>"#));
+        assert!(tokens(r#"<line-height xs="1" s="1.1" m="1.2" l="1.4" xl="1.6" xxl="2"/>"#).is_ok());
+        let err = tokens(r#"<line-height xs="1" s="1.1" m="1.2" l="1.4" xl="1.6"/>"#).unwrap_err();
+        assert!(err.contains("<line-height> missing 'xxl' attribute"), "{err}");
+        for bad in ["0", "-1", "1.5pt", "tall"] {
+            let err = tokens(&format!(r#"<line-height xs="{bad}" s="1.1" m="1.2" l="1.4" xl="1.6" xxl="2"/>"#)).unwrap_err();
+            assert!(err.contains("<line-height> 'xs': invalid factor") && err.contains(&format!("'{bad}'")), "{err}");
         }
     }
 
@@ -3326,6 +3379,7 @@ mod tests {
             (r#"<text-at x="0pt" y="0pt" max-lines="2">Hi</text-at>"#, "'max-lines' of 2 needs a 'width'"),
             (r#"<text-at x="0pt" y="0pt" max-lines="0">Hi</text-at>"#, "invalid max-lines"),
             (r#"<text-at x="0pt" y="0pt" line-height="0">Hi</text-at>"#, "invalid line-height"),
+            (r#"<text-at x="0pt" y="0pt" line-height="tall">Hi</text-at>"#, "invalid line-height 'tall'"),
             (r#"<text-at x="0pt" y="0pt" width="fill">Hi</text-at>"#, "invalid width"),
             (r#"<text-at x="0pt" y="0pt" data-source="items">Hi</text-at>"#, "a list belongs in the layout"),
             (r#"<img-at name="logo" x="0pt" y="0pt"/>"#, "needs a 'width' or a 'height'"),

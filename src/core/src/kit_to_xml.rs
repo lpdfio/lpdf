@@ -48,7 +48,7 @@ fn attrs_str(obj: &serde_json::Map<String, Value>, skip: &[&str]) -> String {
 
 // ── Tokens block ──────────────────────────────────────────────────────────────
 
-const TOKEN_SCALES: &[&str] = &["space", "grid", "border", "radius", "width", "text-size"];
+const TOKEN_SCALES: &[&str] = &["space", "grid", "border", "radius", "width", "text-size", "line-height"];
 
 fn render_tokens(tokens: &serde_json::Map<String, Value>, depth: usize) -> String {
     let pad   = "  ".repeat(depth);
@@ -753,6 +753,37 @@ mod tests {
         let (from_tree, from_xml) = rendered_both_ways(&kit);
         assert_eq!(from_tree, from_xml);
         assert_ne!(from_tree, render_tree(&text(r#"{"width":"60pt"}"#)), "the tree's cap is not read");
+    }
+
+    /// A document whose line-height row has 3 at `xxl`, holding one text that wraps at 60pt.
+    fn doc_with_line_height_row_and_text(text_attrs: &str) -> String {
+        format!(
+            r#"{{"version":1,"type":"document","attrs":{{"tokens":{{"line-height":{{"xs":"1","s":"1.1","m":"1.2","l":"1.4","xl":"1.6","xxl":"3"}}}}}},
+                "nodes":[{{"type":"section","attrs":{{}},"nodes":[{{"type":"layout","nodes":[
+                {{"type":"text","attrs":{text_attrs},"nodes":["A text long enough to wrap to a few lines at this width"]}}]}}]}}]}}"#
+        )
+    }
+
+    #[test]
+    fn a_line_height_from_the_builder_renders_the_same_from_the_tree_and_from_the_xml() {
+        let plain = render_tree(&doc_with_line_height_row_and_text(r#"{"width":"60pt"}"#));
+        for line_height in ["2", "l", "xxl"] {
+            let kit = doc_with_line_height_row_and_text(&format!(r#"{{"width":"60pt","line-height":"{line_height}"}}"#));
+            let (from_tree, from_xml) = rendered_both_ways(&kit);
+            assert_eq!(from_tree, from_xml, "line-height {line_height}");
+            assert_ne!(from_tree, plain, "the tree's line-height {line_height} is not read");
+        }
+        // A token is looked up in the row the tree gives, not in the default one.
+        let from_row = render_tree(&doc_with_line_height_row_and_text(r#"{"width":"60pt","line-height":"xxl"}"#));
+        let factor = render_tree(&doc_with_line_height_row_and_text(r#"{"width":"60pt","line-height":"3"}"#));
+        assert_eq!(from_row, factor, "xxl is 3 in this row, and 2 in the default one");
+    }
+
+    #[test]
+    fn a_line_height_row_with_a_value_that_is_not_a_factor_is_rejected_in_a_tree() {
+        let kit = doc_with_line_height_row_and_text(r#"{}"#).replace(r#""xxl":"3""#, r#""xxl":"0""#);
+        let err = crate::parse::parse_tree(&kit).err().expect("0 is not a factor above 0");
+        assert!(err.contains("invalid line-height token 'xxl': '0'"), "{err}");
     }
 
     #[test]
