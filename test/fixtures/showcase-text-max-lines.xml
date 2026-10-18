@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf" />
+      <color name="muted"    value="#737373" />
+      <color name="rule"     value="#dde3ed" />
+      <color name="bg"       value="#f5f7fa" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Capping Text" subject="max-lines and ellipsis on a text of the layout" />
+
+    <!-- A text of the layout wraps to as many lines as it needs. max-lines caps it, and ellipsis ends the last
+         line kept in dots. The same rows are shown without a cap and with one. -->
+    <section>
+      <layout margin="40pt">
+        <column gap="xl">
+
+          <column gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Capping text</text>
+            <text font-size="m" color="muted">max-lines keeps a text to a number of lines, and ellipsis marks what it dropped.</text>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Without a cap</text>
+            <text font-size="s" color="muted">One long name or address makes its whole row tall.</text>
+            <table cols="5fr 5fr 1fr" border="0.5pt rule" stripe="bg">
+              <thead background="rule">
+                <td padding="5pt 8pt"><text font-size="s" bold="true">Product</text></td>
+                <td padding="5pt 8pt"><text font-size="s" bold="true">Ship to</text></td>
+                <td padding="5pt 8pt" align="end"><text font-size="s" bold="true">Qty</text></td>
+              </thead>
+              <tr>
+                <td padding="5pt 8pt"><text font-size="s">Desk lamp</text></td>
+                <td padding="5pt 8pt"><text font-size="s">12 Elm Street, Springfield</text></td>
+                <td padding="5pt 8pt" align="end"><text font-size="s">2</text></td>
+              </tr>
+              <tr>
+                <td padding="5pt 8pt"><text font-size="s">Adjustable standing desk frame with dual motors, four memory presets, a cable tray and a 160 × 80 cm top in oak finish</text></td>
+                <td padding="5pt 8pt"><text font-size="s">Attn. Receiving, dock B (use the side gate after 4pm), Harbor &amp; Pine Co., 88 Market Square, Building 4, Floor 2, Burlington, VT 05401</text></td>
+                <td padding="5pt 8pt" align="end"><text font-size="s">1</text></td>
+              </tr>
+              <tr>
+                <td padding="5pt 8pt"><text font-size="s">Monitor arm</text></td>
+                <td padding="5pt 8pt"><text font-size="s">4 Quay Road, Portland</text></td>
+                <td padding="5pt 8pt" align="end"><text font-size="s">3</text></td>
+              </tr>
+            </table>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">With a cap and an ellipsis</text>
+            <text font-size="s" color="muted">The product keeps one line and the address two, each ending in dots where text was dropped.</text>
+            <table cols="5fr 5fr 1fr" border="0.5pt rule" stripe="bg">
+              <thead background="rule">
+                <td padding="5pt 8pt"><text font-size="s" bold="true">Product</text></td>
+                <td padding="5pt 8pt"><text font-size="s" bold="true">Ship to</text></td>
+                <td padding="5pt 8pt" align="end"><text font-size="s" bold="true">Qty</text></td>
+              </thead>
+              <tr>
+                <td padding="5pt 8pt"><text font-size="s" max-lines="1" ellipsis="true">Desk lamp</text></td>
+                <td padding="5pt 8pt"><text font-size="s" max-lines="2" ellipsis="true">12 Elm Street, Springfield</text></td>
+                <td padding="5pt 8pt" align="end"><text font-size="s">2</text></td>
+              </tr>
+              <tr>
+                <td padding="5pt 8pt"><text font-size="s" max-lines="1" ellipsis="true">Adjustable standing desk frame with dual motors, four memory presets, a cable tray and a 160 × 80 cm top in oak finish</text></td>
+                <td padding="5pt 8pt"><text font-size="s" max-lines="2" ellipsis="true">Attn. Receiving, dock B (use the side gate after 4pm), Harbor &amp; Pine Co., 88 Market Square, Building 4, Floor 2, Burlington, VT 05401</text></td>
+                <td padding="5pt 8pt" align="end"><text font-size="s">1</text></td>
+              </tr>
+              <tr>
+                <td padding="5pt 8pt"><text font-size="s" max-lines="1" ellipsis="true">Monitor arm</text></td>
+                <td padding="5pt 8pt"><text font-size="s" max-lines="2" ellipsis="true">4 Quay Road, Portland</text></td>
+                <td padding="5pt 8pt" align="end"><text font-size="s">3</text></td>
+              </tr>
+            </table>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">A cap without an ellipsis</text>
+            <text font-size="s" color="muted">max-lines="2" alone: the text stops at the end of its second line.</text>
+            <column width="212pt" background="bg" padding="6pt">
+              <text font-size="s" max-lines="2">A description that runs on: it says what the product is, what it is made of, how it ships and how long the warranty lasts, which takes more than two lines at this width.</text>
+            </column>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">An ellipsis without a cap</text>
+            <text font-size="s" color="muted">ellipsis="true" alone changes nothing: the text wraps whole, and a word wider than its box is drawn whole.</text>
+            <column width="112pt" background="bg" padding="6pt">
+              <text font-size="s" ellipsis="true">Shipping is free on orders over fifty dollars. Electroencephalographically</text>
+            </column>
+          </column>
+
+        </column>
+      </layout>
+    </section>
+
+    <!-- A capped text that meets a page break splits within its cap: six lines of it are kept, three on this
+         page and three on the next, and the last of them ends in dots. -->
+    <section>
+      <layout margin="40pt">
+        <column gap="m">
+          <column height="708pt" background="bg" padding="m" gap="xs">
+            <text font-size="l" font="Helvetica-Bold">A capped text across a page break</text>
+            <text font-size="s" color="muted">This box fills the page so that the text after it starts with room for three lines. The text has max-lines="6" and ellipsis="true", and is long enough for many more lines.</text>
+          </column>
+          <text max-lines="6" ellipsis="true">The capped text starts here, near the bottom of the page. It is a long paragraph, the kind a terms and conditions block or a notes field holds, and it would fill much of the next page if nothing capped it. With max-lines it keeps its first six lines and drops the rest. The page break falls inside those six lines, so three of them stay on this page and three go to the next, and the last line kept ends in dots. Nothing past that line is drawn, on the next page or on any page after it, however much text there is. The words from here on only make the text long. A payment is due thirty days after the date of the invoice. Goods remain the property of the seller until they are paid for in full. Returns are accepted within fourteen days of delivery, in the original packaging and with the receipt. A restocking fee may apply to items that were opened. Claims for damage in transit must be made within forty-eight hours of delivery, with photographs of the package and of the item. The seller is not liable for delays caused by the carrier, by customs or by events outside its control. These terms are governed by the law of the place where the seller is registered.</text>
+          <text font-size="s" color="muted">This line follows the capped text on the next page.</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

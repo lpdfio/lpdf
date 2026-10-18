@@ -661,6 +661,11 @@ fn tweaks() -> HashMap<String, Tweak> {
         Tweak::default().set("d", "M 50 50 L 250 50 L 250 250 L 50 250 Z M 100 100 L 200 100 L 200 200 L 100 200 Z"),
     );
 
+    // A text of the flow is cut only by max-lines, so its ellipsis shows on a text that max-lines cuts. A narrow
+    // width gives the text more lines than either value of max-lines tried.
+    add("text@max-lines", Tweak::default().set("width", "60pt"));
+    add("text@ellipsis", Tweak::default().set("width", "60pt").set("max-lines", "2"));
+
     // A text-at is one line at its natural width until it is given a width. The width is what align works in,
     // and what a long line is cut off at; max-lines wraps within it, and ellipsis and line-height show on the
     // lines that wrapping makes or cuts.

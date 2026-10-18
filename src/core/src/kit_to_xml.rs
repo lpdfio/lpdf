@@ -743,6 +743,19 @@ mod tests {
     }
 
     #[test]
+    fn a_capped_text_from_the_builder_renders_the_same_from_the_tree_and_from_the_xml() {
+        let text = |attrs: &str| {
+            doc_with_layout_child(&format!(
+                r#"{{"type":"text","attrs":{attrs},"nodes":["A text long enough to wrap to a few lines at this width"]}}"#
+            ))
+        };
+        let kit = text(r#"{"width":"60pt","max-lines":"2","ellipsis":"true"}"#);
+        let (from_tree, from_xml) = rendered_both_ways(&kit);
+        assert_eq!(from_tree, from_xml);
+        assert_ne!(from_tree, render_tree(&text(r#"{"width":"60pt"}"#)), "the tree's cap is not read");
+    }
+
+    #[test]
     fn right_aligned_text_differs_from_left_aligned() {
         let right = render_xml(&kit_to_xml(&doc_with_text_attrs(r#"{"align":"right"}"#)).unwrap());
         let plain = render_xml(&kit_to_xml(&doc_with_text_attrs("{}")).unwrap());

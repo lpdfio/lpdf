@@ -278,9 +278,9 @@ pub struct Node {
     pub orphans: usize,
     /// The distance between lines of text, as a factor of the font size.
     pub line_height: f32,
-    /// The most lines of a text that are drawn; `None` draws them all. Only `text-at` sets it.
+    /// The most lines of a text that are drawn; `None` draws them all.
     pub max_lines: Option<usize>,
-    /// A text cut short by its width or `max_lines` ends in an ellipsis. Only `text-at` sets it.
+    /// A text cut short by `max_lines`, or a `text-at` cut short by its width, ends in an ellipsis.
     pub ellipsis: bool,
     // link
     pub url: Option<String>,
@@ -1600,11 +1600,7 @@ fn at_node_attrs(
                 node.line_height = v.parse::<f32>().ok().filter(|f| *f > 0.0)
                     .ok_or_else(|| format!("invalid line-height '{v}': expected a factor above 0, like 1.5"))?;
             }
-            let max_lines = match a.get("max-lines") {
-                Some(v) => v.parse::<usize>().ok().filter(|n| *n >= 1)
-                    .ok_or_else(|| format!("invalid max-lines '{v}': expected a whole number from 1"))?,
-                None => 1,
-            };
+            let max_lines = a.get("max-lines").map(parse_max_lines).transpose()?.unwrap_or(1);
             if max_lines > 1 && node.width_constraint.is_none() {
                 return Err(format!("'max-lines' of {max_lines} needs a 'width' to wrap the text at"));
             }
@@ -1995,10 +1991,18 @@ fn apply_layout_kind_attrs(
         NodeKind::Text => {
             if let Some(v) = a.get("widows")  { node.widows  = parse_line_limit("widows", v)?; }
             if let Some(v) = a.get("orphans") { node.orphans = parse_line_limit("orphans", v)?; }
+            node.max_lines = a.get("max-lines").map(parse_max_lines).transpose()?;
+            node.ellipsis  = a.get("ellipsis").map(|v| v == "true").unwrap_or(false);
         }
         NodeKind::Link | NodeKind::Img | NodeKind::Barcode | NodeKind::Field => {}
     }
     Ok(())
+}
+
+/// Read a `max-lines` value: a whole number of lines from 1.
+fn parse_max_lines(v: &str) -> Result<usize, String> {
+    v.parse::<usize>().ok().filter(|n| *n >= 1)
+        .ok_or_else(|| format!("invalid max-lines '{v}': expected a whole number from 1"))
 }
 
 /// Read a `widows` or `orphans` value: a whole number of lines from 1 to 10.
@@ -2652,6 +2656,22 @@ mod tests {
         assert_eq!(t.font_size, 11.0);
         assert_eq!(t.text_runs.len(), 1);
         assert_eq!(t.text_runs[0].text, "Hello world");
+    }
+
+    #[test]
+    fn text_reads_its_line_limits_and_has_no_cap_by_default() {
+        let text = |attrs: &str| {
+            let mut doc = parse(&minimal(&format!("<text {attrs}>Hello world</text>"))).unwrap();
+            let t = doc.section_layouts().remove(0).children.remove(0);
+            (t.max_lines, t.ellipsis)
+        };
+        // A text of the flow wraps at the width it has, so a cap above 1 needs no width of its own.
+        assert_eq!(text(r#"max-lines="3" ellipsis="true""#), (Some(3), true));
+        assert_eq!(text(""), (None, false));
+        for value in ["0", "-1", "two", "1.5"] {
+            let err = parse(&minimal(&format!(r#"<text max-lines="{value}">Hi</text>"#))).unwrap_err();
+            assert!(err.contains(&format!("invalid max-lines '{value}'")) && err.contains("at line"), "{err}");
+        }
     }
 
     #[test]
