@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf" />
+      <color name="muted"    value="#737373" />
+      <color name="rule"     value="#dde3ed" />
+      <color name="bg"       value="#f5f7fa" />
+      <color name="ink"      value="#1f2a44" />
+      <color name="accent"   value="#e0762b" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Inherited Style" subject="color and opacity on a box, font, size and color on a layer" />
+
+    <!-- A box passes its color to the text inside it, and its opacity fades the box and everything in it as
+         one. A layer passes its font, size and color to its text-at. Whatever a text sets itself wins. -->
+    <section>
+      <layer font-size="s" color="muted">
+        <text-at x="40pt" y="790pt">This line and the next take the size and color of their layer.</text-at>
+        <text-at x="40pt" y="804pt" font="Helvetica-Bold" color="primary">Set on the text itself, the font and the color win.</text-at>
+      </layer>
+      <layout margin="40pt">
+        <column gap="xl">
+
+          <column gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Inherited style</text>
+            <text font-size="m" color="muted">Say it once on the box, not on every text in it.</text>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Color</text>
+            <row gap="m" align="start">
+              <column color="muted" gap="xs" padding="m" background="bg" radius="s" width="160pt">
+                <text font-size="s" font="Helvetica-Bold">color="muted" on the column</text>
+                <text font-size="s">Every text in it takes the color, however deep it sits.</text>
+                <column padding="xs"><text font-size="s">Even one in a column inside it.</text></column>
+                <text font-size="s" color="primary">One sets its own.</text>
+              </column>
+              <column color="ink" gap="xs" padding="m" background="bg" radius="s" width="160pt">
+                <text font-size="s" font="Helvetica-Bold">The nearest box wins</text>
+                <text font-size="s">This one takes ink from the column.</text>
+                <row color="accent" gap="s">
+                  <text font-size="s">These two</text>
+                  <text font-size="s">take accent.</text>
+                </row>
+                <divider />
+                <text font-size="s">A divider keeps its own color.</text>
+              </column>
+              <column gap="xs" padding="m" background="bg" radius="s" width="160pt">
+                <text font-size="s" font="Helvetica-Bold">Cells, frames, grids</text>
+                <table cols="1fr 1fr">
+                  <tr>
+                    <td color="primary"><text font-size="s">A cell</text></td>
+                    <td color="accent"><text font-size="s">and another</text></td>
+                  </tr>
+                </table>
+                <frame color="muted"><text font-size="s">A frame</text></frame>
+                <grid cols="2" color="ink">
+                  <text font-size="s">A</text><text font-size="s">grid</text>
+                </grid>
+              </column>
+            </row>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Opacity</text>
+            <text font-size="s" color="muted">The box, its border and everything in it fade as one, over what is behind.</text>
+            <column background="ink" padding="m" radius="s">
+              <row gap="m" align="start">
+                <column opacity="1" background="#ffffff" color="ink" padding="m" radius="s" border="s accent" width="110pt">
+                  <text font-size="s" font="Helvetica-Bold">opacity 1</text>
+                  <text font-size="s">Drawn as it is.</text>
+                </column>
+                <column opacity="0.75" background="#ffffff" color="ink" padding="m" radius="s" border="s accent" width="110pt">
+                  <text font-size="s" font="Helvetica-Bold">opacity 0.75</text>
+                  <text font-size="s">Box, border, text.</text>
+                </column>
+                <column opacity="0.5" background="#ffffff" color="ink" padding="m" radius="s" border="s accent" width="110pt">
+                  <text font-size="s" font="Helvetica-Bold">opacity 0.5</text>
+                  <text font-size="s">Faded together.</text>
+                </column>
+                <column opacity="0.25" background="#ffffff" color="ink" padding="m" radius="s" border="s accent" width="110pt">
+                  <text font-size="s" font="Helvetica-Bold">opacity 0.25</text>
+                  <text font-size="s">Almost gone.</text>
+                </column>
+              </row>
+            </column>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Boxes in boxes</text>
+            <text font-size="s" color="muted">A faded box inside a faded box fades further: 0.5 in 0.5 is 0.25.</text>
+            <column background="ink" padding="m" radius="s">
+              <row gap="m" align="start">
+                <column opacity="0.5" background="#ffffff" padding="m" radius="s" width="240pt" gap="s">
+                  <text font-size="s" font="Helvetica-Bold" color="ink">0.5</text>
+                  <column opacity="0.5" background="accent" padding="m" radius="s">
+                    <text font-size="s" color="#ffffff">0.5 inside 0.5, drawn at 0.25</text>
+                  </column>
+                </column>
+                <column opacity="0.25" background="#ffffff" padding="m" radius="s" width="240pt" gap="s">
+                  <text font-size="s" font="Helvetica-Bold" color="ink">0.25, for comparison</text>
+                  <column background="accent" padding="m" radius="s">
+                    <text font-size="s" color="#ffffff">Not faded on its own</text>
+                  </column>
+                </column>
+              </row>
+            </column>
+          </column>
+
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>
