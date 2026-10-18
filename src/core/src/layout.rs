@@ -963,35 +963,42 @@ fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Sp
 /// `orphans` on this one. When this page cannot do both, the text moves on to the next page, where it fits
 /// whole or has more room. Only a text taller than a page, on a page too short to keep both rules, splits
 /// where the lines fit, because moving it on would change nothing and it would run past the end of the page.
+///
+/// A text with `max-lines` has only the lines of its cap to split. The part on this page is drawn whole, and
+/// the rest keeps what is left of the cap, so it still drops the text past it and ends in its ellipsis.
 fn split_text(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
     let line_h  = node.font_size * 1.2;
     let lines   = wrap_text_split(node, avail_w);
-    let n_lines = lines.len();
+    let n_lines = node.max_lines.map_or(lines.len(), |max| lines.len().min(max));
     if n_lines <= 1 || line_h <= 0.0 {
         return SplitOutcome::Atomic;
     }
-    let max_lines = ((target_h / line_h).floor().max(0.0)) as usize;
-    if max_lines >= n_lines {
+    let room = ((target_h / line_h).floor().max(0.0)) as usize;
+    if room >= n_lines {
         return SplitOutcome::Atomic;
     }
-    if max_lines == 0 {
+    if room == 0 {
         return SplitOutcome::NothingFits(vec![node.clone()]);
     }
     // Most lines this page may take and still leave `widows` for the next.
     let widow_limit = n_lines.saturating_sub(node.widows);
     let orphans     = node.orphans.max(1);
-    let mut split_at = max_lines.min(widow_limit);
+    let mut split_at = room.min(widow_limit);
     if split_at < orphans {
         let page_lines = ((full_page_h / line_h).floor().max(0.0)) as usize;
         if n_lines <= page_lines || page_lines.min(widow_limit) >= orphans {
             return SplitOutcome::NothingFits(vec![node.clone()]);
         }
-        split_at = max_lines;
+        split_at = room;
     }
     let first_atoms: Vec<SplitAtom> = lines[..split_at].iter().flatten().cloned().collect();
     let rest_atoms:  Vec<SplitAtom> = lines[split_at..].iter().flatten().cloned().collect();
-    let first = Node { text_runs: atoms_to_runs(&first_atoms), ..node.clone() };
-    let rest  = Node { text_runs: atoms_to_runs(&rest_atoms),  ..node.clone() };
+    let first = Node { text_runs: atoms_to_runs(&first_atoms), max_lines: None, ellipsis: false, ..node.clone() };
+    let rest  = Node {
+        text_runs: atoms_to_runs(&rest_atoms),
+        max_lines: node.max_lines.map(|max| max - split_at),
+        ..node.clone()
+    };
     SplitOutcome::First(first, vec![rest])
 }
 
@@ -2511,8 +2518,10 @@ fn end_in_ellipsis(line: &mut TextLine, limit: f32, font_size: f32) {
     }
 }
 
+/// Lay out a text of the flow. Without `max-lines` it is never cut, so `ellipsis` has nothing to end: not even
+/// a word wider than the box, which the shared code would end in dots.
 fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
-    let fit = TextFit { wrap_w: avail_w, max_lines: node.max_lines, ellipsis: node.ellipsis };
+    let fit = TextFit { wrap_w: avail_w, max_lines: node.max_lines, ellipsis: node.ellipsis && node.max_lines.is_some() };
     let (rendered, height, _) = layout_text_fit(node, x, y, avail_w, &fit);
     (rendered, height)
 }
@@ -3416,12 +3425,17 @@ mod tests {
 
     /// The lines of a text on each page. The text has `lines` lines, each a word too wide to share its line, and a
     /// frame before it leaves room for `room` of them on the first page (a page holds 785.89pt of 13.2pt lines).
-    fn lines_per_page(attrs: &str, lines: usize, room: usize) -> Vec<usize> {
+    fn page_lines(attrs: &str, lines: usize, room: usize) -> Vec<Vec<String>> {
         let words: Vec<String> = (1..=lines).map(|n| format!("L{n:02}{}", "W".repeat(36))).collect();
         let frame = 785.89 - 13.2 * room as f32 - 6.6;
         let body = format!(r#"<frame height="{frame:.2}pt" /><text {attrs}>{}</text>"#, words.join(" "));
         let tree = engine_render(&minimal(&body));
-        tree["pages"].as_array().unwrap().iter().map(|p| find_text_content(p).len()).collect()
+        tree["pages"].as_array().unwrap().iter().map(find_text_content).collect()
+    }
+
+    /// How many lines of the text of `page_lines` each page has.
+    fn lines_per_page(attrs: &str, lines: usize, room: usize) -> Vec<usize> {
+        page_lines(attrs, lines, room).iter().map(Vec::len).collect()
     }
 
     #[test]
@@ -3470,6 +3484,87 @@ mod tests {
         let lines: Vec<usize> =
             tree["pages"].as_array().unwrap().iter().map(|p| find_text_content(p).len()).collect();
         assert_eq!(lines, vec![2, 1]);
+    }
+
+    // ── max-lines and ellipsis in the flow ────────────────────────────────────
+
+    const CAPPED_WORDS: &str = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda";
+
+    /// The text box of `<text {attrs}>` at 90pt and 10pt, followed by a text "After": the box, the content of
+    /// each of its lines, and where "After" starts.
+    fn flow_text(attrs: &str, content: &str) -> (serde_json::Value, Vec<String>, f64) {
+        let tree = engine_render(&minimal(&format!(
+            r#"<text width="90pt" font-size="10pt" {attrs}>{content}</text><text>After</text>"#
+        )));
+        let nodes = tree["pages"][0]["nodes"].as_array().unwrap();
+        let b = nodes[0].clone();
+        let mut lines: Vec<(f64, String)> = Vec::new();
+        for run in b["nodes"].as_array().unwrap() {
+            let (y, text) = (run["y"].as_f64().unwrap(), run["content"].as_str().unwrap().to_string());
+            match lines.last_mut() {
+                Some((last_y, line)) if *last_y == y => { line.push(' '); line.push_str(&text); }
+                _ => lines.push((y, text)),
+            }
+        }
+        let after = nodes[1]["y"].as_f64().unwrap();
+        (b, lines.into_iter().map(|(_, line)| line).collect(), after)
+    }
+
+    #[test]
+    fn max_lines_stops_a_flow_text_after_its_lines_and_counts_only_those() {
+        let end = |b: &serde_json::Value| b["y"].as_f64().unwrap() + b["height"].as_f64().unwrap();
+        let (whole, lines, after_whole) = flow_text("", CAPPED_WORDS);
+        assert!(lines.len() > 3, "the text wraps to more lines than the cap: {lines:?}");
+        assert_eq!(whole["height"].as_f64().unwrap(), 12.0 * lines.len() as f64);
+
+        let (capped, lines, after) = flow_text(r#"max-lines="2""#, CAPPED_WORDS);
+        assert_eq!(lines.len(), 2, "{lines:?}");
+        assert_eq!(capped["height"].as_f64().unwrap(), 24.0, "only the lines drawn take room");
+        assert_eq!(after - end(&capped), after_whole - end(&whole), "the next text follows the lines drawn");
+        assert!(!lines.join(" ").contains("lambda"), "the text past the cap is dropped: {lines:?}");
+        assert!(!lines.join(" ").ends_with("..."), "without ellipsis it stops at the end of a line: {lines:?}");
+    }
+
+    #[test]
+    fn max_lines_above_what_a_flow_text_needs_changes_nothing() {
+        assert_eq!(flow_text(r#"max-lines="20""#, CAPPED_WORDS).0, flow_text("", CAPPED_WORDS).0);
+    }
+
+    #[test]
+    fn ellipsis_ends_a_capped_flow_text_in_dots_within_its_width() {
+        let (_, lines, _) = flow_text(r#"max-lines="2" ellipsis="true""#, CAPPED_WORDS);
+        assert_eq!(lines.len(), 2, "{lines:?}");
+        let last = lines.last().unwrap();
+        assert!(last.ends_with("..."), "{last}");
+        assert!(text_width("Helvetica", last, 10.0) <= 90.01, "the line and its dots fit the width: {last}");
+    }
+
+    #[test]
+    fn ellipsis_without_max_lines_changes_nothing_in_the_flow() {
+        // The last word is wider than the box, which the text of a layer would end in dots.
+        let content = format!("{CAPPED_WORDS} Incomprehensibilities");
+        let (plain, lines, _) = flow_text("", &content);
+        assert_eq!(flow_text(r#"ellipsis="true""#, &content).0, plain);
+        assert_eq!(lines.last().unwrap(), "Incomprehensibilities", "the long word is drawn whole: {lines:?}");
+    }
+
+    #[test]
+    fn a_capped_flow_text_that_fits_its_page_is_not_split() {
+        assert_eq!(lines_per_page(r#"max-lines="3""#, 8, 3), vec![3]);
+    }
+
+    #[test]
+    fn a_capped_flow_text_splits_across_pages_within_its_cap() {
+        // 5 of the 8 lines are kept and the first page has room for 3: 2 go on, not the 5 an uncapped text would take.
+        assert_eq!(lines_per_page("", 8, 3), vec![3, 5]);
+        assert_eq!(lines_per_page(r#"max-lines="5""#, 8, 3), vec![3, 2]);
+        // Widows count within the cap: 5 kept lines with room for 4 give the next page 2.
+        assert_eq!(lines_per_page(r#"max-lines="5""#, 8, 4), vec![3, 2]);
+
+        let pages = page_lines(r#"max-lines="5" ellipsis="true""#, 8, 3);
+        let last = pages[1].last().unwrap();
+        assert!(last.starts_with("L05") && last.ends_with("..."), "the last line kept ends in dots: {pages:?}");
+        assert!(pages.iter().flatten().all(|line| !line.ends_with("...") || line == last), "{pages:?}");
     }
 
     /// Helper: collect every "content" string of text nodes in a page tree.
