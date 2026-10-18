@@ -35,6 +35,18 @@
     <xs:union memberTypes="TokenScale PtValue"/>
   </xs:simpleType>
 
+  <!-- a factor above 0, e.g. "1.5" -->
+  <xs:simpleType name="FactorValue">
+    <xs:restriction base="xs:decimal">
+      <xs:minExclusive value="0"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- token name or a factor, e.g. "m" or "1.5" -->
+  <xs:simpleType name="TokenScaleOrFactor">
+    <xs:union memberTypes="TokenScale FactorValue"/>
+  </xs:simpleType>
+
   <!-- e.g. "10pt" | "10pt 12pt" | "10pt 12pt 8pt" | "10pt 12pt 8pt 6pt". A bare 0 needs no unit. -->
   <xs:simpleType name="SpacingValue">
     <xs:restriction base="xs:string">
@@ -272,6 +284,16 @@
     <xs:attribute name="xxl" type="PtValue" use="required"/>
   </xs:complexType>
 
+  <!-- All six scale slots with factors — the line-height row -->
+  <xs:complexType name="TokenFactorRow">
+    <xs:attribute name="xs"  type="FactorValue" use="required"/>
+    <xs:attribute name="s"   type="FactorValue" use="required"/>
+    <xs:attribute name="m"   type="FactorValue" use="required"/>
+    <xs:attribute name="l"   type="FactorValue" use="required"/>
+    <xs:attribute name="xl"  type="FactorValue" use="required"/>
+    <xs:attribute name="xxl" type="FactorValue" use="required"/>
+  </xs:complexType>
+
 
   <!-- ============================================================
        Shared attribute groups
@@ -411,6 +433,11 @@
     </xs:attribute>
     <xs:attribute name="color"     type="Color"/>
     <xs:attribute name="align"     type="TextAlignH"/>
+    <xs:attribute name="line-height" type="TokenScaleOrFactor">
+      <xs:annotation>
+        <xs:documentation>The distance between lines, as a factor of the font size: a number above 0, such as 1.5, or a name from the line-height row of the tokens. Default 1.2, which is the token m.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
     <xs:attribute name="max-lines">
       <xs:annotation>
         <xs:documentation>The most lines drawn. Only whole lines are drawn, and the rest of the text is dropped. A text in the layout has no cap by default and wraps at the width it has; the lines it drops take no room, and a text that splits across pages keeps the cap across them. A text-at is one line by default, and above 1 needs a width to wrap within.</xs:documentation>
@@ -553,16 +580,6 @@
         <xs:annotation>
           <xs:documentation>Width of the box. Without it the text is one line of the width its characters need, and align has no effect; a long text runs on past the edge of the page, which cuts it off, but stays in the PDF. With it, a line past the width is cut off at it, or ends in an ellipsis with ellipsis, and max-lines above 1 wraps the text within it.</xs:documentation>
         </xs:annotation>
-      </xs:attribute>
-      <xs:attribute name="line-height">
-        <xs:annotation>
-          <xs:documentation>The distance between lines, as a factor of the font size. Default 1.2.</xs:documentation>
-        </xs:annotation>
-        <xs:simpleType>
-          <xs:restriction base="xs:decimal">
-            <xs:minExclusive value="0"/>
-          </xs:restriction>
-        </xs:simpleType>
       </xs:attribute>
       <xs:attributeGroup ref="DataValueAttrs"/>
     </xs:complexType>
@@ -721,6 +738,7 @@
         <xs:element name="radius" type="TokenScaleRow" minOccurs="0"/>
         <xs:element name="width"  type="TokenScaleRow" minOccurs="0"/>
         <xs:element name="text-size" type="TokenScaleRow" minOccurs="0"/>
+        <xs:element name="line-height" type="TokenFactorRow" minOccurs="0"/>
         <!-- "grid" and "space" share the same shape -->
         <xs:element name="grid"   type="TokenScaleRow" minOccurs="0"/>
         <xs:element name="colors" minOccurs="0">

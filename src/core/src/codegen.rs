@@ -2128,6 +2128,29 @@ mod tests {
     }
 
     #[test]
+    fn a_line_height_row_and_a_line_height_token_are_written_in_every_target() {
+        let xml = r##"<?xml version="1.0"?>
+<lpdf version="1">
+  <tokens>
+    <line-height xs="1" m="1.2"/>
+  </tokens>
+  <document>
+    <section><layout><text line-height="l">x</text></layout></section>
+  </document>
+</lpdf>"##;
+        for (target, row, attr) in [
+            ("js",     "lineHeight: { xs: '1', m: '1.2' }",                       "lineHeight: 'l'"),
+            ("dotnet", "LineHeight: new() { [\"xs\"] = \"1\", [\"m\"] = \"1.2\" }", "LineHeight = \"l\""),
+            ("php",    "lineHeight: ['xs' => '1', 'm' => '1.2']",                  "lineHeight: 'l'"),
+            ("python", "line_height={'xs': '1', 'm': '1.2'}",                      "line_height='l'"),
+        ] {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            assert!(out.contains(row), "{target}: the row is not written as {row}\n{out}");
+            assert!(out.contains(attr), "{target}: the attribute is not written as {attr}\n{out}");
+        }
+    }
+
+    #[test]
     fn test_dotnet_pascal_case() {
         assert_eq!(to_pascal_case("font-size"),    "FontSize");
         assert_eq!(to_pascal_case("stroke-width"), "StrokeWidth");

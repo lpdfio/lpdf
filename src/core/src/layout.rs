@@ -967,7 +967,7 @@ fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Sp
 /// A text with `max-lines` has only the lines of its cap to split. The part on this page is drawn whole, and
 /// the rest keeps what is left of the cap, so it still drops the text past it and ends in its ellipsis.
 fn split_text(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
-    let line_h  = node.font_size * 1.2;
+    let line_h  = node.font_size * node.line_height;
     let lines   = wrap_text_split(node, avail_w);
     let n_lines = node.max_lines.map_or(lines.len(), |max| lines.len().min(max));
     if n_lines <= 1 || line_h <= 0.0 {
@@ -3426,8 +3426,13 @@ mod tests {
     /// The lines of a text on each page. The text has `lines` lines, each a word too wide to share its line, and a
     /// frame before it leaves room for `room` of them on the first page (a page holds 785.89pt of 13.2pt lines).
     fn page_lines(attrs: &str, lines: usize, room: usize) -> Vec<Vec<String>> {
+        page_lines_of(attrs, lines, room, 13.2)
+    }
+
+    /// `page_lines` for a text whose lines are `line_h` high, which `attrs` has to say.
+    fn page_lines_of(attrs: &str, lines: usize, room: usize, line_h: f32) -> Vec<Vec<String>> {
         let words: Vec<String> = (1..=lines).map(|n| format!("L{n:02}{}", "W".repeat(36))).collect();
-        let frame = 785.89 - 13.2 * room as f32 - 6.6;
+        let frame = 785.89 - line_h * room as f32 - line_h / 2.0;
         let body = format!(r#"<frame height="{frame:.2}pt" /><text {attrs}>{}</text>"#, words.join(" "));
         let tree = engine_render(&minimal(&body));
         tree["pages"].as_array().unwrap().iter().map(find_text_content).collect()
@@ -3484,6 +3489,68 @@ mod tests {
         let lines: Vec<usize> =
             tree["pages"].as_array().unwrap().iter().map(|p| find_text_content(p).len()).collect();
         assert_eq!(lines, vec![2, 1]);
+    }
+
+    // ── line-height in the flow ───────────────────────────────────────────────
+
+    #[test]
+    fn line_height_sets_the_distance_between_the_lines_of_a_flow_text_and_its_height() {
+        let height = |attrs: &str| {
+            let (b, lines, _) = flow_text(attrs, CAPPED_WORDS);
+            (lines.len(), b["height"].as_f64().unwrap())
+        };
+        let (lines, plain) = height("");
+        assert!(lines > 2, "the text wraps");
+        assert_eq!(plain, 12.0 * lines as f64, "1.2 × the 10pt font size, as before");
+        assert_eq!(height(r#"line-height="2""#), (lines, 20.0 * lines as f64));
+        assert_eq!(height(r#"line-height="1""#), (lines, 10.0 * lines as f64));
+        assert_eq!(height(r#"line-height="m""#), (lines, plain), "m is the default factor");
+        assert_eq!(height(r#"line-height="l""#), (lines, 14.0 * lines as f64), "l is 1.4");
+    }
+
+    #[test]
+    fn line_height_places_each_line_of_a_flow_text_one_line_height_below_the_last() {
+        let tree = engine_render(&minimal(&format!(r#"<text width="90pt" font-size="10pt" line-height="2">{CAPPED_WORDS}</text>"#)));
+        let runs = tree["pages"][0]["nodes"][0]["nodes"].as_array().unwrap().clone();
+        let mut ys: Vec<f64> = runs.iter().map(|r| r["y"].as_f64().unwrap()).collect();
+        ys.dedup();
+        assert!(ys.len() > 2, "{ys:?}");
+        for pair in ys.windows(2) {
+            assert_eq!(pair[1] - pair[0], 20.0, "{ys:?}");
+        }
+    }
+
+    #[test]
+    fn a_line_height_token_follows_the_documents_row() {
+        let xml = |attr: &str| {
+            format!(
+                r#"<lpdf version="1"><tokens><line-height xs="1" s="1.5" m="2" l="2.5" xl="3" xxl="4"/></tokens><document size="a4"><section><layout margin="28pt">
+                    <text width="90pt" font-size="10pt" {attr}>alpha beta gamma delta epsilon</text></layout></section></document></lpdf>"#
+            )
+        };
+        let height = |attr: &str| engine_render(&xml(attr))["pages"][0]["nodes"][0]["height"].as_f64().unwrap();
+        let lines = height(r#"line-height="1""#) / 10.0;
+        assert_eq!(height(r#"line-height="xl""#), 30.0 * lines, "xl is 3 in this row");
+        assert_eq!(height(r#"line-height="3""#), 30.0 * lines, "a number is the factor itself");
+        assert_eq!(height(""), 12.0 * lines, "a text without line-height does not follow m");
+    }
+
+    #[test]
+    fn a_text_splits_across_pages_by_its_own_line_height() {
+        // The 11pt text is 22pt a line at line-height 2, and the frame leaves room for `room` such lines.
+        let per_page = |attrs: &str, lines: usize, room: usize| -> Vec<usize> {
+            page_lines_of(attrs, lines, room, 22.0).iter().map(Vec::len).collect()
+        };
+        assert_eq!(per_page(r#"line-height="2""#, 8, 4), vec![4, 4]);
+        assert_eq!(per_page(r#"line-height="2""#, 8, 6), vec![6, 2], "widows keep two for the next page");
+        // The same frame holds more lines that are closer together: 99pt is 4 lines of 22pt or 9 of 11pt.
+        assert_eq!(per_page(r#"line-height="1""#, 12, 4), vec![9, 3]);
+    }
+
+    #[test]
+    fn a_capped_text_splits_by_its_own_line_height() {
+        let pages = page_lines_of(r#"line-height="2" max-lines="6""#, 8, 4, 22.0);
+        assert_eq!(pages.iter().map(Vec::len).collect::<Vec<_>>(), vec![4, 2], "{pages:?}");
     }
 
     // ── max-lines and ellipsis in the flow ────────────────────────────────────
