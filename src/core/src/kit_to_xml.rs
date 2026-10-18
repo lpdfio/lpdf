@@ -755,6 +755,41 @@ mod tests {
         assert_ne!(from_tree, render_tree(&text(r#"{"width":"60pt"}"#)), "the tree's cap is not read");
     }
 
+    #[test]
+    fn a_box_color_and_opacity_from_the_builder_render_the_same_from_the_tree_and_from_the_xml() {
+        let column = |attrs: &str| {
+            doc_with_layout_child(&format!(
+                r##"{{"type":"column","attrs":{attrs},"nodes":[
+                    {{"type":"text","attrs":{{}},"nodes":["Inherits"]}},
+                    {{"type":"row","attrs":{{"opacity":"0.25"}},"nodes":[{{"type":"text","attrs":{{"color":"#00aa00"}},"nodes":["Own"]}}]}}]}}"##
+            ))
+        };
+        let plain = render_tree(&column(r##"{"background":"#cccccc"}"##));
+        for attrs in [r##"{"background":"#cccccc","color":"danger"}"##, r##"{"background":"#cccccc","opacity":"0.5"}"##] {
+            let (from_tree, from_xml) = rendered_both_ways(&column(attrs));
+            assert_eq!(from_tree, from_xml, "{attrs}");
+            assert_ne!(from_tree, plain, "the tree's {attrs} is not read");
+        }
+    }
+
+    #[test]
+    fn a_layer_font_size_and_color_from_the_builder_render_the_same_from_the_tree_and_from_the_xml() {
+        let layer = |attrs: &str| {
+            format!(
+                r##"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
+                    {{"type":"layer","attrs":{attrs},"nodes":[
+                        {{"type":"text-at","attrs":{{"x":"20pt","y":"20pt"}},"nodes":["Inherits"]}},
+                        {{"type":"text-at","attrs":{{"x":"20pt","y":"60pt","font-size":"20pt"}},"nodes":["Own size"]}}]}}]}}]}}"##
+            )
+        };
+        let plain = render_tree(&layer("{}"));
+        for attrs in [r#"{"font":"Courier"}"#, r#"{"font-size":"xl"}"#, r#"{"color":"danger"}"#] {
+            let (from_tree, from_xml) = rendered_both_ways(&layer(attrs));
+            assert_eq!(from_tree, from_xml, "{attrs}");
+            assert_ne!(from_tree, plain, "the tree's {attrs} is not read");
+        }
+    }
+
     /// A document whose line-height row has 3 at `xxl`, holding one text that wraps at 60pt.
     fn doc_with_line_height_row_and_text(text_attrs: &str) -> String {
         format!(

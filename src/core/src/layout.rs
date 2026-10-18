@@ -842,7 +842,7 @@ fn layout_table(
             nodes.push(RenderNode::Box(RenderBox {
                 x, y: row_y, width: avail_w, height: row_h,
                 fill: Some(bg),
-                border_width: 0.0, border_color: None, radius: 0.0,
+                border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0,
                 debug_self: false, children: vec![],
             }));
         }
@@ -1216,7 +1216,7 @@ fn with_anchors(rendered: RenderNode, bookmarks: &[Bookmark], x: f32, y: f32, wi
         }
         leaf => RenderNode::Box(RenderBox {
             x, y, width, height,
-            fill: None, border_width: 0.0, border_color: None, radius: 0.0, debug_self: false,
+            fill: None, border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, debug_self: false,
             children: anchors.chain(std::iter::once(leaf)).collect(),
         }),
     }
@@ -1269,6 +1269,7 @@ fn layout_container(
             border_width,
             border_color,
             radius: node.radius,
+            opacity: node.opacity,
             debug_self: node.debug,
             children,
         }),
@@ -1898,6 +1899,7 @@ fn fallback_barcode(x: f32, y: f32, w: f32, _reason: &str) -> (RenderNode, f32) 
         border_width: 0.5,
         border_color: Some("#ff0000".to_string()),
         radius: 0.0,
+        opacity: 1.0,
         debug_self: false,
         children: vec![],
     };
@@ -2566,7 +2568,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     if toks.is_empty() {
         return (RenderNode::Box(RenderBox {
             x, y, width: 0.0, height: 0.0, fill: None,
-            border_width: 0.0, border_color: None, radius: 0.0, debug_self: false, children: vec![],
+            border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, debug_self: false, children: vec![],
         }), 0.0, false);
     }
 
@@ -2739,7 +2741,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     (
         RenderNode::Box(RenderBox {
             x, y, width: avail_w, height: total_h,
-            fill: None, border_width: 0.0, border_color: None, radius: 0.0,
+            fill: None, border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0,
             debug_self: node.debug,
             children: all_nodes,
         }),
@@ -3575,6 +3577,40 @@ mod tests {
         }
         let after = nodes[1]["y"].as_f64().unwrap();
         (b, lines.into_iter().map(|(_, line)| line).collect(), after)
+    }
+
+    // ── Opacity of a box ──────────────────────────────────────────────────────
+
+    #[test]
+    fn a_faded_box_carries_its_opacity_in_the_render_tree() {
+        let tree = engine_render(&minimal(
+            r##"<column opacity="0.5" background="#cccccc"><row opacity="0.25"><text>In</text></row></column><column><text>Out</text></column>"##,
+        ));
+        let nodes = tree["pages"][0]["nodes"].as_array().unwrap();
+        assert_eq!(nodes[0]["opacity"], 0.5);
+        assert_eq!(nodes[0]["nodes"][0]["opacity"], 0.25);
+        assert!(nodes[1].get("opacity").is_none(), "an opaque box says nothing: {}", nodes[1]);
+    }
+
+    #[test]
+    fn a_faded_box_that_splits_across_pages_fades_each_part() {
+        let lines: String = (1..=120).map(|n| format!("<text>Line {n}</text>")).collect();
+        let tree = engine_render(&minimal(&format!(r#"<column opacity="0.5">{lines}</column>"#)));
+        let pages = tree["pages"].as_array().unwrap();
+        assert!(pages.len() > 1, "the column fills more than a page");
+        for page in pages {
+            assert_eq!(page["nodes"][0]["opacity"], 0.5, "{}", page["nodes"][0]);
+        }
+    }
+
+    #[test]
+    fn a_faded_table_cell_carries_its_opacity() {
+        let tree = engine_render(&minimal(
+            r#"<table cols="1fr 1fr"><tr><td opacity="0.5"><text>A</text></td><td><text>B</text></td></tr></table>"#,
+        ));
+        let table = &tree["pages"][0]["nodes"][0];
+        let cells: Vec<&serde_json::Value> = table["nodes"].as_array().unwrap().iter().filter(|n| n["type"] == "box").collect();
+        assert_eq!(cells.iter().filter(|c| c["opacity"] == 0.5).count(), 1, "{table}");
     }
 
     #[test]
