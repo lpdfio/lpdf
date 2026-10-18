@@ -235,6 +235,70 @@ fn collapse_whitespace(raw: &str) -> String {
     raw.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// A piece of the content of a `text`, `text-at` or `span`, as the generators write it.
+enum TextPiece<'a, 'i> {
+    /// A string, with the space that separates it from its neighbour at its edge.
+    Str(String),
+    /// A `span` element.
+    Span(Node<'a, 'i>),
+}
+
+/// The content of a `text`, `text-at` or `span`, split as the engine reads it (`read_text_runs` in `parse.rs`).
+///
+/// The words of each stretch of text are one string, and a space falls between two runs where the XML has
+/// whitespace there: at the end of a string before a span, at the start of one after a span, or as a string of
+/// its own between two spans. The SDKs read the strings and spans of a built text the same way, so the code
+/// renders the PDF of the XML. Whitespace at either end of the content is dropped, and so is a span's own.
+fn text_pieces<'a, 'i>(node: &Node<'a, 'i>) -> Vec<TextPiece<'a, 'i>> {
+    enum Run<'a, 'i> {
+        Plain(String),
+        Span(Node<'a, 'i>),
+    }
+
+    // Each run, with whether whitespace comes before it.
+    let mut runs: Vec<(Run<'a, 'i>, bool)> = Vec::new();
+    let mut prev_ended_space = false;
+    for child in node.children() {
+        match child.node_type() {
+            NodeType::Text => {
+                let raw = child.text().unwrap_or("");
+                let words = collapse_whitespace(raw);
+                if !words.is_empty() {
+                    let space = raw.starts_with(char::is_whitespace) || prev_ended_space;
+                    runs.push((Run::Plain(words), space));
+                }
+                prev_ended_space = raw.ends_with(char::is_whitespace);
+            }
+            NodeType::Element if child.tag_name().name() == "span" => {
+                let raw: String = child.children().filter(|n| n.is_text()).filter_map(|n| n.text()).collect();
+                if !collapse_whitespace(&raw).is_empty() {
+                    runs.push((Run::Span(child), prev_ended_space));
+                }
+                prev_ended_space = raw.ends_with(char::is_whitespace);
+            }
+            _ => {}
+        }
+    }
+
+    let mut pieces: Vec<TextPiece<'a, 'i>> = Vec::new();
+    for (i, (run, space)) in runs.into_iter().enumerate() {
+        let space = space && i > 0;
+        match run {
+            Run::Plain(text) => pieces.push(TextPiece::Str(if space { format!(" {text}") } else { text })),
+            Run::Span(span) => {
+                if space {
+                    match pieces.last_mut() {
+                        Some(TextPiece::Str(text)) => text.push(' '),
+                        _ => pieces.push(TextPiece::Str(" ".into())),
+                    }
+                }
+                pieces.push(TextPiece::Span(span));
+            }
+        }
+    }
+    pieces
+}
+
 // ── The assets and tokens of a document ───────────────────────────────────────
 
 /// The language a generator writes.
@@ -739,19 +803,11 @@ impl JsEmitter {
                 // data-value replaces all content
                 children.push(format!("'{placeholder}'"));
             } else {
-                for child in node.children() {
-                    match child.node_type() {
-                        NodeType::Text => {
-                            let text = collapse_whitespace(child.text().unwrap_or(""));
-                            if !text.is_empty() {
-                                children.push(single_quoted(&text));
-                            }
-                        }
-                        NodeType::Element if child.tag_name().name() == "span" => {
-                            // Emit span at level 0 — parent handles indentation
-                            children.push(self.emit_node(&child, 0));
-                        }
-                        _ => {}
+                for piece in text_pieces(node) {
+                    match piece {
+                        TextPiece::Str(text) => children.push(single_quoted(&text)),
+                        // Emit span at level 0 — parent handles indentation
+                        TextPiece::Span(span) => children.push(self.emit_node(&span, 0)),
                     }
                 }
             }
@@ -965,18 +1021,11 @@ impl DotnetEmitter {
             if let Some(placeholder) = text_content_override {
                 children.push(format!("\"{placeholder}\""));
             } else {
-                for child in node.children() {
-                    match child.node_type() {
-                        NodeType::Text => {
-                            let text = collapse_whitespace(child.text().unwrap_or(""));
-                            if !text.is_empty() {
-                                children.push(double_quoted(&text));
-                            }
-                        }
-                        NodeType::Element if child.tag_name().name() == "span" => {
-                            children.push(self.emit_node(&child, 0));
-                        }
-                        _ => {}
+                for piece in text_pieces(node) {
+                    match piece {
+                        TextPiece::Str(text) => children.push(double_quoted(&text)),
+                        // Emit span at level 0 — parent handles indentation
+                        TextPiece::Span(span) => children.push(self.emit_node(&span, 0)),
                     }
                 }
             }
@@ -1188,18 +1237,11 @@ impl PhpEmitter {
             if let Some(placeholder) = text_content_override {
                 children.push(format!("'{placeholder}'"));
             } else {
-                for child in node.children() {
-                    match child.node_type() {
-                        NodeType::Text => {
-                            let text = collapse_whitespace(child.text().unwrap_or(""));
-                            if !text.is_empty() {
-                                children.push(single_quoted(&text));
-                            }
-                        }
-                        NodeType::Element if child.tag_name().name() == "span" => {
-                            children.push(self.emit_node(&child, 0));
-                        }
-                        _ => {}
+                for piece in text_pieces(node) {
+                    match piece {
+                        TextPiece::Str(text) => children.push(single_quoted(&text)),
+                        // Emit span at level 0 — parent handles indentation
+                        TextPiece::Span(span) => children.push(self.emit_node(&span, 0)),
                     }
                 }
             }
@@ -1404,18 +1446,11 @@ impl PythonEmitter {
             if let Some(placeholder) = text_content_override {
                 children.push(format!("'{placeholder}'"));
             } else {
-                for child in node.children() {
-                    match child.node_type() {
-                        NodeType::Text => {
-                            let text = collapse_whitespace(child.text().unwrap_or(""));
-                            if !text.is_empty() {
-                                children.push(single_quoted(&text));
-                            }
-                        }
-                        NodeType::Element if child.tag_name().name() == "span" => {
-                            children.push(self.emit_node(&child, 0));
-                        }
-                        _ => {}
+                for piece in text_pieces(node) {
+                    match piece {
+                        TextPiece::Str(text) => children.push(single_quoted(&text)),
+                        // Emit span at level 0 — parent handles indentation
+                        TextPiece::Span(span) => children.push(self.emit_node(&span, 0)),
                     }
                 }
             }
@@ -1716,7 +1751,165 @@ mod tests {
         assert!(out.contains("L.span({ color: '#f00' }, ['world'])"));
         // Multiple children → multi-line text (children on separate indented lines)
         assert!(out.contains("L.text({ fontSize: '13pt' }, ["));
-        assert!(out.contains("'Hello'"));
+        assert!(out.contains("'Hello ',"));
+    }
+
+    /// The code a text of this XML content makes in a target.
+    fn text_code(target: &str, tag: &str, content: &str) -> String {
+        let xml = format!(
+            "<lpdf version=\"1\"><document><section>{}</section></document></lpdf>",
+            if tag == "text-at" {
+                format!("<layer><text-at x=\"0pt\" y=\"0pt\">{content}</text-at></layer>")
+            } else {
+                format!("<layout><text>{content}</text></layout>")
+            }
+        );
+        codegen(&xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap()
+    }
+
+    #[test]
+    fn test_space_before_a_span_stays_on_its_string() {
+        let out = text_code("js", "text", r#"See the <span bold="true">docs</span>"#);
+        assert!(out.contains("'See the ',\n"), "{out}");
+        assert!(out.contains("L.span({ bold: 'true' }, ['docs'])"), "{out}");
+    }
+
+    #[test]
+    fn test_space_after_a_span_stays_on_its_string() {
+        let out = text_code("js", "text", r#"<span bold="true">5</span> units"#);
+        assert!(out.contains("' units',"), "{out}");
+    }
+
+    #[test]
+    fn test_space_on_both_sides_of_a_span() {
+        let out = text_code("js", "text", r#"Read <span bold="true">this</span> twice"#);
+        assert!(out.contains("'Read ',"), "{out}");
+        assert!(out.contains("' twice',"), "{out}");
+    }
+
+    #[test]
+    fn test_no_space_beside_a_span_where_the_xml_has_none() {
+        let out = text_code("js", "text", r#"Tight<span bold="true">er</span>run"#);
+        assert!(out.contains("'Tight',"), "{out}");
+        assert!(out.contains("'run',"), "{out}");
+    }
+
+    #[test]
+    fn test_space_between_two_spans_is_a_string_of_its_own() {
+        let out = text_code("js", "text", r#"<span bold="true">a</span> <span underline="true">b</span>"#);
+        assert!(out.contains("' ',"), "{out}");
+        let out = text_code("js", "text", r#"<span bold="true">a</span><span underline="true">b</span>"#);
+        assert!(!out.contains("' '"), "{out}");
+    }
+
+    #[test]
+    fn test_a_spans_own_edges_do_not_make_spaces() {
+        // The engine ignores whitespace at the start of a span, and keeps one at its end for what follows.
+        let out = text_code("js", "text", r#"Total:<span bold="true"> 5</span>"#);
+        assert!(out.contains("'Total:',"), "{out}");
+        assert!(out.contains("['5']"), "{out}");
+        let out = text_code("js", "text", r#"<span bold="true">a </span>b"#);
+        assert!(out.contains("['a']"), "{out}");
+        assert!(out.contains("' b',"), "{out}");
+    }
+
+    #[test]
+    fn test_text_edges_and_line_breaks_make_no_spaces() {
+        let out = text_code("js", "text", "\n      Read the\n      <span bold=\"true\">docs</span>\n      first.\n    ");
+        assert!(out.contains("'Read the ',"), "{out}");
+        assert!(out.contains("' first.',"), "{out}");
+        let out = text_code("js", "text", r#"  <span bold="true">docs</span>  "#);
+        assert!(!out.contains("' '"), "{out}");
+    }
+
+    #[test]
+    fn test_text_at_keeps_the_space_beside_a_span() {
+        let out = text_code("js", "text-at", r#"Invoice <span bold="true">#1042</span>"#);
+        assert!(out.contains("'Invoice ',"), "{out}");
+    }
+
+    #[test]
+    fn test_every_target_keeps_the_space_beside_a_span() {
+        let content = r#"See the <span bold="true">docs</span> now"#;
+        let out = text_code("dotnet", "text", content);
+        assert!(out.contains("\"See the \","), "{out}");
+        assert!(out.contains("\" now\","), "{out}");
+        for target in ["php", "python"] {
+            let out = text_code(target, "text", content);
+            assert!(out.contains("'See the ',"), "{target}: {out}");
+            assert!(out.contains("' now'"), "{target}: {out}");
+        }
+    }
+
+    /// The PDF the engine makes of a parsed document.
+    fn pdf_of(mut doc: crate::parse::Document) -> Vec<u8> {
+        let layouts = doc.section_layouts();
+        let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts);
+        let fonts = crate::pdf::FontRegistry::new();
+        let images = crate::pdf::ImageRegistry::new();
+        crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, None, false).unwrap()
+    }
+
+    /// The text's XML, and the tree the SDKs would build from the strings and spans the generator writes for it.
+    fn xml_and_tree_pdfs(content: &str) -> (Vec<u8>, Vec<u8>) {
+        let xml = format!(
+            "<lpdf version=\"1\"><document><section><layout><text>{content}</text></layout></section></document></lpdf>"
+        );
+        let parsed = Document::parse(&xml).unwrap();
+        let text = parsed.descendants().find(|n| n.has_tag_name("text")).unwrap();
+
+        let nodes: Vec<serde_json::Value> = text_pieces(&text)
+            .into_iter()
+            .map(|piece| match piece {
+                TextPiece::Str(s) => serde_json::Value::String(s),
+                TextPiece::Span(span) => {
+                    let attrs: serde_json::Map<String, serde_json::Value> = span
+                        .attributes()
+                        .map(|a| (a.name().to_string(), serde_json::Value::String(a.value().to_string())))
+                        .collect();
+                    let inner: String = span.children().filter_map(|n| n.text()).collect();
+                    serde_json::json!({ "type": "span", "attrs": attrs, "nodes": [collapse_whitespace(&inner)] })
+                }
+            })
+            .collect();
+        let tree = serde_json::json!({
+            "version": 1, "type": "document", "attrs": {},
+            "nodes": [{ "type": "section", "attrs": {}, "nodes": [{
+                "type": "layout", "nodes": [{ "type": "text", "attrs": {}, "nodes": nodes }]
+            }]}]
+        });
+        (
+            pdf_of(crate::parse::parse(&xml).unwrap()),
+            pdf_of(crate::parse::parse_tree(&tree.to_string()).unwrap()),
+        )
+    }
+
+    #[test]
+    fn test_the_strings_and_spans_written_render_the_pdf_of_the_xml() {
+        for content in [
+            r#"Total: <span bold="true">5</span>"#,
+            r#"<span bold="true">5</span> units"#,
+            r#"Read <span bold="true">this</span> twice"#,
+            r#"Tight<span bold="true">er</span>run"#,
+            r#"<span bold="true">a</span> <span underline="true">b</span>"#,
+            r#"<span bold="true">a</span><span underline="true">b</span>"#,
+            r#"<span bold="true">a </span><span underline="true">b</span>"#,
+            r#"<span bold="true">a </span>b"#,
+            r#"Total:<span bold="true"> 5</span>"#,
+            "\n      Read the\n      <span bold=\"true\">docs</span>\n      first.\n    ",
+            r#"  <span bold="true">docs</span> and <span underline="true">more</span>  "#,
+        ] {
+            let (from_xml, from_tree) = xml_and_tree_pdfs(content);
+            assert!(from_xml == from_tree, "the tree of {content:?} renders another PDF than its XML");
+        }
+    }
+
+    #[test]
+    fn test_the_pdf_shows_the_space_the_xml_has_beside_a_span() {
+        // The check above proves nothing unless the space changes the PDF.
+        let (spaced, _) = xml_and_tree_pdfs(r#"Total: <span bold="true">5</span>"#);
+        let (tight, _) = xml_and_tree_pdfs(r#"Total:<span bold="true">5</span>"#);
+        assert!(spaced != tight);
     }
 
     #[test]
