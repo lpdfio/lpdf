@@ -225,7 +225,7 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     let created_on = req["created_on"].as_str();
 
     // An unlicensed status draws the attribution line on every page.
-    match pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, created_on, status.is_licensed()) {
+    match pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, &doc.gradients, created_on, status.is_licensed()) {
         Ok(bytes) => {
             let bytes = if let Some(enc) = req.get("encrypt") {
                 let user_pw  = enc["user_password"] .as_str().unwrap_or("");
@@ -264,7 +264,7 @@ impl LpdfEngine {
         let pages: Vec<render::RenderPage> =
             layout::layout_document(&lp);
         // Unlicensed, as in the core stub, so both crates hash the same attributed bytes.
-        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, None, false)
+        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, &doc.gradients, None, false)
     }
 }
 

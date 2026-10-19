@@ -87,8 +87,49 @@ fn render_tokens(tokens: &serde_json::Map<String, Value>, depth: usize) -> Strin
         }
     }
 
+    if let Some(gradients) = tokens.get("gradients").and_then(|v| v.as_object())
+        && !gradients.is_empty()
+    {
+        lines.push(format!("{inner}<gradients>"));
+        for (name, gradient) in gradients {
+            lines.extend(render_gradient(name, gradient, depth + 2));
+        }
+        lines.push(format!("{inner}</gradients>"));
+    }
+
     lines.push(format!("{pad}</tokens>"));
     lines.join("\n")
+}
+
+/// One `<gradient>` of the tokens, from its entry in the Kit tree: `{ type, from, to, angle, stops }`. A number
+/// is written as it is, so the angle may be one.
+fn render_gradient(name: &str, gradient: &Value, depth: usize) -> Vec<String> {
+    let pad = "  ".repeat(depth);
+    let Some(gradient) = gradient.as_object() else {
+        return Vec::new();
+    };
+    let mut tag = format!("{pad}<gradient name=\"{}\"", escape_attr(name));
+    for key in ["type", "from", "to", "angle"] {
+        let text = match gradient.get(key) {
+            Some(Value::String(s)) => Some(s.clone()),
+            Some(Value::Number(n)) => Some(n.to_string()),
+            _                      => None,
+        };
+        if let Some(text) = text {
+            tag.push_str(&format!(" {key}=\"{}\"", escape_attr(&text)));
+        }
+    }
+    let stops: Vec<&Value> = gradient.get("stops").and_then(|v| v.as_array()).into_iter().flatten().collect();
+    if stops.is_empty() {
+        return vec![format!("{tag}/>")];
+    }
+    let stop_pad = "  ".repeat(depth + 1);
+    let mut lines = vec![format!("{tag}>")];
+    for stop in stops {
+        lines.push(format!("{stop_pad}<stop{}/>", attrs_str(stop.as_object().unwrap_or(&serde_json::Map::new()), &[])));
+    }
+    lines.push(format!("{pad}</gradient>"));
+    lines
 }
 
 // ── Assets block ──────────────────────────────────────────────────────────────
@@ -376,7 +417,12 @@ pub fn kit_to_xml(json: &str) -> Result<String, String> {
             .and_then(|v| v.as_object())
             .map_or(false, |m| !m.is_empty());
 
-        if has_scales || has_colors {
+        let has_gradients = tokens
+            .get("gradients")
+            .and_then(|v| v.as_object())
+            .is_some_and(|m| !m.is_empty());
+
+        if has_scales || has_colors || has_gradients {
             lines.push(render_tokens(tokens, 1));
         }
     }
@@ -461,6 +507,36 @@ mod tests {
     }
 
     // ── Tokens ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn gradients_emitted_in_tokens_block() {
+        let json = r##"{
+            "version": 1,
+            "type": "document",
+            "attrs": {
+                "tokens": {
+                    "gradients": {
+                        "fade": { "type": "linear", "from": "#f00", "to": "primary", "angle": 90 },
+                        "sunset": { "type": "radial", "stops": [
+                            { "offset": "0%", "color": "#f00" }, { "offset": "100%", "color": "#00f" }] }
+                    }
+                }
+            },
+            "nodes": [{"type":"section","attrs":{},"nodes":[]}]
+        }"##;
+        let xml = kit_to_xml(json).unwrap();
+        assert!(xml.contains("<tokens>") && xml.contains("<gradients>"), "{xml}");
+        let fade = xml.lines().find(|line| line.contains(r#"name="fade""#)).expect("the gradient fade");
+        for attribute in [r##"type="linear""##, r##"from="#f00""##, r##"to="primary""##, r##"angle="90""##] {
+            assert!(fade.contains(attribute), "{attribute}: {fade}");
+        }
+        assert!(fade.trim_end().ends_with("/>"), "a gradient without stops is one tag: {fade}");
+        assert!(xml.contains(r#"<gradient name="sunset" type="radial">"#), "{xml}");
+        let stops: Vec<&str> = xml.lines().filter(|line| line.contains("<stop ")).collect();
+        assert_eq!(stops.len(), 2, "{xml}");
+        assert!(stops[0].contains(r##"offset="0%""##) && stops[0].contains(r##"color="#f00""##), "{}", stops[0]);
+        assert!(xml.contains("</gradient>") && xml.contains("</gradients>"), "{xml}");
+    }
 
     #[test]
     fn scale_tokens_emitted_in_tokens_block() {
@@ -623,7 +699,7 @@ mod tests {
         crate::pdf::render_pdf(
             &pages, &doc.fonts,
             &crate::pdf::FontRegistry::new(), &crate::pdf::ImageRegistry::new(),
-            &doc.meta, None, false,
+            &doc.meta, &doc.gradients, None, false,
         )
         .unwrap()
     }
@@ -769,6 +845,28 @@ mod tests {
             let (from_tree, from_xml) = rendered_both_ways(&column(attrs));
             assert_eq!(from_tree, from_xml, "{attrs}");
             assert_ne!(from_tree, plain, "the tree's {attrs} is not read");
+        }
+    }
+
+    #[test]
+    fn gradients_from_the_builder_render_the_same_from_the_tree_and_from_the_xml() {
+        let document = |fill: &str| {
+            format!(
+                r##"{{"version":1,"type":"document","attrs":{{"tokens":{{"colors":{{"brand":"#112233"}},"gradients":{{
+                    "fade":{{"type":"linear","from":"brand","to":"#ffffff","angle":90}},
+                    "spot":{{"type":"radial","stops":[{{"offset":"0%","color":"#ff0000"}},{{"offset":"100%","color":"brand"}}]}}}}}}}},
+                    "nodes":[{{"type":"section","attrs":{{}},"nodes":[
+                        {{"type":"layout","nodes":[{{"type":"column","attrs":{{"background":"{fill}"}},"nodes":[
+                            {{"type":"text","attrs":{{}},"nodes":["Filled"]}}]}}]}},
+                        {{"type":"layer","attrs":{{}},"nodes":[
+                            {{"type":"rect","attrs":{{"x":"40pt","y":"400pt","width":"60pt","height":"40pt","fill":"{fill}"}}}}]}}]}}]}}"##
+            )
+        };
+        let flat = render_tree(&document("#336699"));
+        for fill in ["gradient:fade", "gradient:spot"] {
+            let (from_tree, from_xml) = rendered_both_ways(&document(fill));
+            assert_eq!(from_tree, from_xml, "{fill}");
+            assert_ne!(from_tree, flat, "the tree's {fill} is not read");
         }
     }
 

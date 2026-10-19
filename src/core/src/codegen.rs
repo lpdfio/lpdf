@@ -357,6 +357,42 @@ impl Target {
         }
     }
 
+    /// A value nested in a map: text, a list, or a map of values. A list is a list of maps, as `stops` is; in C# it
+    /// is a `List<Dictionary<string, object>>`, so a gradient fits the `Dictionary<string, object>` it sits in.
+    fn value(self, value: &Value) -> String {
+        match value {
+            Value::Text(text) => self.literal(text),
+            Value::List(items) => {
+                let items = items.iter().map(|item| self.value(item)).collect::<Vec<_>>().join(", ");
+                match self {
+                    Target::Dotnet => format!("new List<Dictionary<string, object>> {{ {items} }}"),
+                    _              => format!("[{items}]"),
+                }
+            }
+            Value::Map(entries) => {
+                let items: Vec<String> = entries
+                    .iter()
+                    .map(|(key, value)| {
+                        let value = self.value(value);
+                        match self {
+                            Target::Js     => format!("{}: {value}", js_key(key)),
+                            Target::Python => format!("{}: {value}", single_quoted(key)),
+                            Target::Php    => format!("{} => {value}", single_quoted(key)),
+                            Target::Dotnet => format!("[{}] = {value}", double_quoted(key)),
+                        }
+                    })
+                    .collect();
+                let items = items.join(", ");
+                match self {
+                    Target::Js     => format!("{{ {items} }}"),
+                    Target::Python => format!("{{{items}}}"),
+                    Target::Php    => format!("[{items}]"),
+                    Target::Dotnet => format!("new() {{ {items} }}"),
+                }
+            }
+        }
+    }
+
     /// An object of `class` with the given members, each an XML attribute name and the value written for
     /// it. A JS object has no class. In C# a record such as `DocumentTokens` takes its members as arguments
     /// (`constructor`), where an attribute class takes them in an initializer.
@@ -377,6 +413,44 @@ impl Target {
             (Target::Dotnet, false)   => format!("new {class} {{ {written} }}"),
         }
     }
+}
+
+/// A value of a nested map, before it is written in an SDK's language.
+enum Value {
+    Text(String),
+    List(Vec<Value>),
+    Map(Vec<(String, Value)>),
+}
+
+/// The attributes of an element as a map of text, leaving out the ones named in `skip`.
+fn attribute_map(element: &Node, skip: &[&str]) -> Vec<(String, Value)> {
+    element
+        .attributes()
+        .filter(|a| !skip.contains(&a.name()))
+        .map(|a| (a.name().to_string(), Value::Text(a.value().to_string())))
+        .collect()
+}
+
+/// The `<gradients>` of the tokens as the map the SDKs take: each gradient's name to its attributes, and its
+/// `stops` as a list.
+fn gradients_value(gradients: &Node) -> Value {
+    let entries = gradients
+        .children()
+        .filter(|n| n.is_element() && n.tag_name().name() == "gradient")
+        .map(|gradient| {
+            let mut members = attribute_map(&gradient, &["name"]);
+            let stops: Vec<Value> = gradient
+                .children()
+                .filter(|n| n.is_element() && n.tag_name().name() == "stop")
+                .map(|stop| Value::Map(attribute_map(&stop, &[])))
+                .collect();
+            if !stops.is_empty() {
+                members.push(("stops".to_string(), Value::List(stops)));
+            }
+            (gradient.attribute("name").unwrap_or("").to_string(), Value::Map(members))
+        })
+        .collect();
+    Value::Map(entries)
 }
 
 /// A key of a JS object literal: bare when it is an identifier, such as `primary`, quoted when it is not,
@@ -425,6 +499,12 @@ fn tokens_expression(target: Target, tokens: &Node) -> Option<String> {
     let mut members: Vec<(String, String)> = Vec::new();
     for child in tokens.children().filter(|n| n.is_element()) {
         let tag = child.tag_name().name();
+        if tag == "gradients" {
+            if child.children().any(|n| n.is_element()) {
+                members.push((tag.to_string(), target.value(&gradients_value(&child))));
+            }
+            continue;
+        }
         let entries: Vec<(String, String)> = if tag == "colors" {
             child
                 .children()
@@ -1672,6 +1752,40 @@ mod tests {
         assert!(!out.contains("loadFont") && !out.contains("loadImage"), "{out}");
     }
 
+    #[test]
+    fn test_gradients_are_a_map_of_tokens_in_every_language() {
+        let xml = r##"<?xml version="1.0"?>
+<lpdf version="1">
+  <tokens>
+    <colors><color name="brand" value="#336699"/></colors>
+    <gradients>
+      <gradient name="fade" type="linear" from="brand" to="#ffffff" angle="90"/>
+      <gradient name="sunset" type="radial">
+        <stop offset="0%" color="#f97316"/>
+        <stop offset="100%" color="#8b5cf6"/>
+      </gradient>
+    </gradients>
+  </tokens>
+  <document>
+    <section><layout><column background="gradient:fade"><text>x</text></column></layout></section>
+  </document>
+</lpdf>"##;
+        let code = |target: &str| codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+
+        assert!(code("js").contains(
+            "gradients: { fade: { type: 'linear', from: 'brand', to: '#ffffff', angle: '90' }, sunset: { type: 'radial', stops: [{ offset: '0%', color: '#f97316' }, { offset: '100%', color: '#8b5cf6' }] } }"
+        ), "{}", code("js"));
+        assert!(code("python").contains(
+            "gradients={'fade': {'type': 'linear', 'from': 'brand', 'to': '#ffffff', 'angle': '90'}, 'sunset': {'type': 'radial', 'stops': [{'offset': '0%', 'color': '#f97316'}, {'offset': '100%', 'color': '#8b5cf6'}]}}"
+        ), "{}", code("python"));
+        assert!(code("php").contains(
+            "gradients: ['fade' => ['type' => 'linear', 'from' => 'brand', 'to' => '#ffffff', 'angle' => '90'], 'sunset' => ['type' => 'radial', 'stops' => [['offset' => '0%', 'color' => '#f97316'], ['offset' => '100%', 'color' => '#8b5cf6']]]]"
+        ), "{}", code("php"));
+        assert!(code("dotnet").contains(
+            "Gradients: new() { [\"fade\"] = new() { [\"type\"] = \"linear\", [\"from\"] = \"brand\", [\"to\"] = \"#ffffff\", [\"angle\"] = \"90\" }, [\"sunset\"] = new() { [\"type\"] = \"radial\", [\"stops\"] = new List<Dictionary<string, object>> { new() { [\"offset\"] = \"0%\", [\"color\"] = \"#f97316\" }, new() { [\"offset\"] = \"100%\", [\"color\"] = \"#8b5cf6\" } } } }"
+        ), "{}", code("dotnet"));
+    }
+
     const FULL_DOCUMENT: &str = r##"<lpdf version="1">
   <assets><image name="logo" src="logo.png"/></assets>
   <tokens><colors><color name="brand" value="#336699"/></colors></tokens>
@@ -1847,7 +1961,7 @@ mod tests {
         let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts);
         let fonts = crate::pdf::FontRegistry::new();
         let images = crate::pdf::ImageRegistry::new();
-        crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, None, false).unwrap()
+        crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, None, false).unwrap()
     }
 
     /// The text's XML, and the tree the SDKs would build from the strings and spans the generator writes for it.

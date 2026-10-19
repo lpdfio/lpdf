@@ -400,6 +400,7 @@ mod tests {
             page_width: 595.28,
             page_height: 841.89,
             background: None,
+            gradients: HashMap::new(),
             debug: false,
             sections: vec![Section {
                 children: vec![SectionChild::Layout { margin: [0.0; 4], children: layout_children }],
