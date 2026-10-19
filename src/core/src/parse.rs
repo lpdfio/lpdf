@@ -271,6 +271,26 @@ pub struct CaptureRef {
     pub fallback: String,
 }
 
+/// What a text records or shows for a running header: `capture` or `capture-ref`. Few texts have one, so a node
+/// holds it boxed (see `Node`).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Capture {
+    /// The name the text records its words under, as the pages are filled, for a `capture-ref` text to show.
+    pub key: Option<String>,
+    /// What the text says, set by the layout before it paginates; a text that splits across pages keeps it whole.
+    pub words: Option<String>,
+    /// A text that shows what was captured, not words of its own.
+    pub sink: Option<CaptureRef>,
+    /// The lines a `capture-ref` text always takes, whatever it shows, so a header's height is known before the
+    /// pages are filled. 0 for every other text.
+    pub reserve_lines: usize,
+}
+
+/// One element of the layout. Every node has every field, whatever its kind, and parse and data binding copy
+/// nodes whole, so a field costs its size in every node of a document, set or not: a larger node is a slower
+/// parse. A new field that is a number, a flag or a small enum goes inline. A string, a list or a struct that few
+/// nodes set goes into a boxed group, `Option<Box<…>>`, one for each set of fields used together, as `shadow`,
+/// `capture` and `data_attrs` do. `a_node_stays_small` in the tests holds the size.
 #[derive(Debug, Clone)]
 pub struct Node {
     pub kind: NodeKind,
@@ -282,7 +302,8 @@ pub struct Node {
     pub radius: f32,
     /// How opaque the box and everything in it is, from 0 to 1.
     pub opacity: f32,
-    pub shadow: Option<Shadow>,
+    /// A drop shadow under the box, boxed: few boxes have one.
+    pub shadow: Option<Box<Shadow>>,
     pub height_mode: HeightMode,
     pub width_constraint: Option<f32>,
     pub width_fill: bool,
@@ -315,15 +336,8 @@ pub struct Node {
     pub max_lines: Option<usize>,
     /// A text cut short by `max_lines`, or a `text-at` cut short by its width, ends in an ellipsis.
     pub ellipsis: bool,
-    /// The name a text records its words under, as the pages are filled, for a `capture-ref` text to show.
-    pub capture: Option<String>,
-    /// What the text says, set by the layout before it paginates; a text that splits across pages keeps it whole.
-    pub captured: Option<String>,
-    /// A text that shows what was captured, not words of its own.
-    pub capture_ref: Option<CaptureRef>,
-    /// The lines a `capture-ref` text always takes, whatever it shows, so a header's height is known before the
-    /// pages are filled. 0 for every other text.
-    pub reserve_lines: usize,
+    /// What the text records or shows for a running header, boxed: few texts have one.
+    pub capture: Option<Box<Capture>>,
     // link
     pub url: Option<String>,
     // img (NodeKind::Img only)
@@ -482,7 +496,7 @@ struct ParsedNode {
     border: Option<(f32, String)>,
     radius: f32,
     opacity: f32,
-    shadow: Option<Shadow>,
+    shadow: Option<Box<Shadow>>,
     height_mode: HeightMode,
     width_constraint: Option<f32>,
     width_fill: bool,
@@ -507,8 +521,7 @@ struct ParsedNode {
     line_height: f32,
     max_lines: Option<usize>,
     ellipsis: bool,
-    capture: Option<String>,
-    capture_ref: Option<CaptureRef>,
+    capture: Option<Box<Capture>>,
     url: Option<String>,
     image_name: Option<String>,
     img_height_constraint: Option<f32>,
@@ -573,7 +586,6 @@ impl ParsedNode {
             max_lines: None,
             ellipsis: false,
             capture: None,
-            capture_ref: None,
             url: None,
             image_name: None,
             img_height_constraint: None,
@@ -682,7 +694,7 @@ impl Node {
             font: "Helvetica".to_string(), font_size: 11.0, text_color: None,
             text_align: TextAlign::Left, widows: DEFAULT_WIDOWS, orphans: DEFAULT_ORPHANS,
             line_height: DEFAULT_LINE_HEIGHT, max_lines: None, ellipsis: false,
-            capture: None, captured: None, capture_ref: None, reserve_lines: 0,
+            capture: None,
             url: None, image_name: None,
             img_height_constraint: None, img_aspect: None, barcode_type: None, barcode_data: None,
             barcode_ec: BarcodeEcLevel::M, barcode_hrt: false, barcode_color: None,
@@ -692,6 +704,16 @@ impl Node {
             field_checked: false, field_max_len: None, field_group: None,
             field_action_url: None, data_attrs: None, bookmarks: Vec::new(), children: Vec::new(),
         }
+    }
+
+    /// The `capture-ref` of a text that shows what was captured.
+    pub fn capture_ref(&self) -> Option<&CaptureRef> {
+        self.capture.as_ref()?.sink.as_ref()
+    }
+
+    /// The lines a `capture-ref` text always takes; 0 for every other node.
+    pub fn reserve_lines(&self) -> usize {
+        self.capture.as_ref().map_or(0, |c| c.reserve_lines)
     }
 }
 
@@ -778,9 +800,6 @@ fn resolve_node(
         max_lines:             n.max_lines,
         ellipsis:              n.ellipsis,
         capture:               n.capture,
-        captured:              None,
-        capture_ref:           n.capture_ref,
-        reserve_lines:         0,
         url:                   n.url,
         image_name:            n.image_name,
         img_height_constraint: n.img_height_constraint,
@@ -2101,7 +2120,7 @@ fn apply_box_attrs(
     }
     if is_box {
         if let Some(v) = a.get("opacity") { node.opacity = parse_opacity(v)?; }
-        if let Some(v) = a.get("shadow")  { node.shadow  = Some(parse_shadow(v, tokens)?); }
+        if let Some(v) = a.get("shadow")  { node.shadow  = Some(Box::new(parse_shadow(v, tokens)?)); }
     }
     if !matches!(node.kind, NodeKind::Img | NodeKind::Barcode | NodeKind::Field) {
         if let Some(v) = a.get("height") { node.height_mode = parse_height_mode(v)?; }
@@ -2202,7 +2221,7 @@ fn apply_capture_attrs(node: &mut ParsedNode, a: &impl Attrs) -> Result<(), Stri
         let key = v.trim();
         if key.is_empty() { Err(format!("'{attr}' needs a name")) } else { Ok(key.to_string()) }
     };
-    node.capture = a.get("capture").map(|v| name("capture", v)).transpose()?;
+    let capture = a.get("capture").map(|v| name("capture", v)).transpose()?;
     let key = a.get("capture-ref").map(|v| name("capture-ref", v)).transpose()?;
     let mode = match a.get("capture-mode") {
         None         => None,
@@ -2213,19 +2232,19 @@ fn apply_capture_attrs(node: &mut ParsedNode, a: &impl Attrs) -> Result<(), Stri
     let fallback = a.get("capture-fallback");
     match key {
         Some(key) => {
-            if node.capture.is_some() {
+            if capture.is_some() {
                 return Err("a text cannot have both 'capture' and 'capture-ref': one records its words, the other shows what was recorded".to_string());
             }
-            node.capture_ref = Some(CaptureRef {
-                key,
-                mode:     mode.unwrap_or_default(),
-                fallback: fallback.unwrap_or("").to_string(),
-            });
+            let sink = CaptureRef { key, mode: mode.unwrap_or_default(), fallback: fallback.unwrap_or("").to_string() };
+            node.capture = Some(Box::new(Capture { sink: Some(sink), ..Capture::default() }));
         }
         None if mode.is_some() || fallback.is_some() => {
             return Err("'capture-mode' and 'capture-fallback' belong to a text with 'capture-ref'".to_string());
         }
         None => {}
+    }
+    if capture.is_some() {
+        node.capture = Some(Box::new(Capture { key: capture, ..Capture::default() }));
     }
     Ok(())
 }
@@ -2869,6 +2888,14 @@ mod tests {
     }
 
     #[test]
+    fn a_node_stays_small() {
+        // Parse and data binding copy nodes whole, so a larger node is a slower parse: see the comment on `Node`.
+        // Raise a limit only with a benchmark of parse that shows the room is worth it.
+        assert!(std::mem::size_of::<Node>() <= 704, "Node is {} bytes", std::mem::size_of::<Node>());
+        assert!(std::mem::size_of::<ParsedNode>() <= 704, "ParsedNode is {} bytes", std::mem::size_of::<ParsedNode>());
+    }
+
+    #[test]
     fn parse_empty_page() {
         let mut doc = parse(&minimal("")).unwrap();
         let pages = doc.section_layouts();
@@ -2993,20 +3020,20 @@ mod tests {
             doc.section_layouts().remove(0).children.remove(0)
         };
         let source = text(r#"capture=" chapter ""#);
-        assert_eq!((source.capture.as_deref(), source.capture_ref.is_some()), (Some("chapter"), false));
+        assert_eq!((source.capture.as_ref().and_then(|c| c.key.as_deref()), source.capture_ref()), (Some("chapter"), None));
         let sink = text(r#"capture-ref="chapter""#);
-        assert_eq!(sink.capture, None);
+        assert_eq!(sink.capture.as_ref().and_then(|c| c.key.as_deref()), None);
         assert_eq!(
-            sink.capture_ref,
+            sink.capture_ref().cloned(),
             Some(CaptureRef { key: "chapter".into(), mode: CaptureMode::Last, fallback: String::new() })
         );
         let sink = text(r#"capture-ref="entry" capture-mode="first" capture-fallback="A""#);
         assert_eq!(
-            sink.capture_ref,
+            sink.capture_ref().cloned(),
             Some(CaptureRef { key: "entry".into(), mode: CaptureMode::First, fallback: "A".into() })
         );
         let plain = text("");
-        assert_eq!((plain.capture, plain.capture_ref), (None, None));
+        assert!(plain.capture.is_none());
     }
 
     #[test]
@@ -3814,12 +3841,12 @@ mod tests {
             r##"<column shadow="2pt 3pt #112233"><row shadow="-2pt -3pt #fff 0.2"/><grid shadow="0pt 0pt #000 0"/><frame shadow="1pt 1pt #000 1"/><table cols="1fr"><tr><td shadow=".5pt 1.5pt #abc .25"/></tr></table><column/></column>"##,
         )).unwrap();
         let column = &doc.section_layouts()[0].children[0];
-        let shadows: Vec<Option<Shadow>> = column.children.iter().map(|n| n.shadow.clone()).collect();
-        assert_eq!(column.shadow, shadow(2.0, 3.0, "#112233", 1.0));
+        let shadows: Vec<Option<Shadow>> = column.children.iter().map(|n| n.shadow.as_deref().cloned()).collect();
+        assert_eq!(column.shadow.as_deref().cloned(), shadow(2.0, 3.0, "#112233", 1.0));
         assert_eq!(shadows[0], shadow(-2.0, -3.0, "#ffffff", 0.2));
         assert_eq!(shadows[1], shadow(0.0, 0.0, "#000000", 0.0));
         assert_eq!(shadows[2], shadow(1.0, 1.0, "#000000", 1.0));
-        assert_eq!(column.children[3].children[0].children[0].shadow, shadow(0.5, 1.5, "#aabbcc", 0.25));
+        assert_eq!(column.children[3].children[0].children[0].shadow.as_deref().cloned(), shadow(0.5, 1.5, "#aabbcc", 0.25));
         assert_eq!(shadows[4], None, "a box without a shadow has none");
     }
 
@@ -3837,7 +3864,7 @@ mod tests {
         let json = r#"{"version":1,"type":"document","attrs":{},"nodes":[{"type":"section","attrs":{},"nodes":[
             {"type":"layout","attrs":{},"nodes":[{"type":"column","attrs":{"shadow":"2pt 3pt #112233 0.5"},"nodes":[]}]}]}]}"#;
         let mut doc = parse_tree(json).unwrap();
-        assert_eq!(doc.section_layouts()[0].children[0].shadow, shadow(2.0, 3.0, "#112233", 0.5));
+        assert_eq!(doc.section_layouts()[0].children[0].shadow.as_deref().cloned(), shadow(2.0, 3.0, "#112233", 0.5));
     }
 
     #[test]
