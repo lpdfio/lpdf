@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.28.0 — 2026-10-19
+### Text
+- `max-lines` and `ellipsis` work on a `<text>` in the layout, as they do on `<text-at>`. `max-lines="2"` draws at most two lines of the wrapped text, whole lines only; the lines it drops take no room, and a text that splits across pages keeps the cap across them. With `ellipsis="true"` the last line drawn ends in dots. Without `max-lines` a text wraps as before
+- `line-height` works on a `<text>` in the layout: a number, as a factor of the font size, or a name from the new `line-height` row of the tokens. The default is 1.2, which is what flow text always used, so a text without it looks the same. A text splits across pages by its own line height. `<text-at>` takes the token names too
+- `color` on a `<column>`, `<row>`, `<grid>`, `<frame>` or `<td>` is the color of the text inside it. A text takes the first `color` it finds walking up its boxes, and the `text` color when none sets one. A text or a span with a color of its own keeps it
+- `<layer>` takes `font`, `font-size` and `color`: the defaults of the `<text-at>` in it, which keeps what it sets itself
+
+### Boxes and fills
+- `opacity` on a `<column>`, `<row>`, `<grid>`, `<frame>` or `<td>` fades the box and everything in it as one, so children that overlap don't show through each other. Boxes nest: a box at 0.5 inside one at 0.5 draws at 25%. At 0 it draws nothing. A box that splits across pages is faded on each page
+- `shadow="2pt 3pt #000000 0.15"` draws a drop shadow under a box, or under a layer's `<rect>`, `<circle>` or `<ellipse>`: the offset across and down, a color, and an optional opacity from 0 to 1. It is a hard shadow, with no blur, in the shape of the element, rounded corners included. A box with no background is see-through, so its shadow shows only outside it. The shadow takes no room in the layout
+- Gradients. A `<gradients>` block in the tokens defines linear and radial gradients by name: two colors with `from` and `to`, or any number of `<stop offset="…" color="…"/>`, and an `angle` for a linear one (0° runs top to bottom, 90° left to right). A gradient is a fill: `background="gradient:name"` on a box, a table, a `<thead>`, a `<tr>`, a section or the document, and `fill="gradient:name"` on a layer's `<rect>`, `<circle>`, `<ellipse>` and `<path>`. It spans the element it fills, and a box that splits across pages has it on each page. A gradient as a text `color`, a `stroke` or a border is an error that says so
+
+### Images
+- **An `<img>` with `padding`, `background`, `border` or `radius` is drawn as a box around its picture.** They were accepted and ignored until now, so an image that set one looks different. `width` and `height` size the picture, and the box is larger by the padding. The border is drawn on the edge of the box and takes no room. `radius` rounds the box and clips the picture to rounded corners, which follow the inside of the box. With no box, `radius` alone clips the picture. With none of the four, an image is drawn as before
+- `width="fill"` on an `<img>` makes it as wide as the room it has, in a column, a row (shared with other `fill` children) or a table cell, and its height follows its proportions. A `height` limits it. It stayed at its natural size until now
+
+### Page headers and regions
+- Running headers. A `<text capture="chapter">` in the flow remembers its text, and a `<text capture-ref="chapter"/>` in a `<region>` shows the value for the page it is on: the new value on the page where the heading appears, the latest earlier value on a page with none, and `capture-fallback` before any. `capture-mode="first"` or `"last"` (the default) picks between several on one page, so a dictionary's header can read "Abacus – Adrift". A header always keeps room for its lines, one or `max-lines`. A table header that repeats on each page it continues on captures once, on the page it starts
+- A `<region>` is drawn at the edge its `pin` names, wherever it is written. **A `<region pin="bottom">` written before the flow was drawn at the top**; it is drawn at the bottom now, so a document that wrote its footer first gets its footer where it asked. Regions on one edge stack in the order written
+
+### Code generation
+- The code generated from an XML document, in the VS Code command and in the code tabs of lpdf.io, keeps the space beside a span: `['See the ', L.span(…), ' for details.']`. It trimmed the strings, so the code read "See thedocumentationfor details." and no longer rendered the PDF of its XML
+
+### SDKs
+- The attribute classes of all four SDKs carry the new attributes: `max-lines`, `ellipsis` and `line-height` on text, `color`, `opacity` and `shadow` on boxes, `font`, `font-size` and `color` on layers, `capture`, `capture-ref`, `capture-mode` and `capture-fallback` on text. `background` and `fill` take `gradient:name`
+- The tokens take `gradients`, a map from a gradient's name to its `type`, `from`, `to` and `angle`, with its `stops` as a list of `{ offset, color }`, and a `line-height` row
+
+### VS Code extension
+- Hover, autocomplete and validation follow the schema, so they cover the new attributes and token rows
+- The preview no longer asks where to save a PDF when another file is selected after a document with form fields, such as one with `<field>` elements
+
 ## v0.27.0 — 2026-10-18
 ### Layers
 - **Breaking:** `<canvas>` is removed, and layers go directly in the section. Layers before the section's `<layout>` paint under it, and layers after it paint over it, so one section can draw both under and over its flow. A document that uses `<canvas>`, or `"type": "canvas"` in a JSON tree, fails with an error that says its layers go directly in the section
