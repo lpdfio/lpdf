@@ -417,6 +417,14 @@ fn record_captures(node: &mut Node) {
     for child in node.children.iter_mut() { record_captures(child); }
 }
 
+/// Make the texts below `node` capture nothing: a copy of a node for a later page, whose words were recorded with
+/// the node on the page it started on.
+fn forget_captures(node: &mut Node) {
+    node.capture = None;
+    node.captured = None;
+    for child in node.children.iter_mut() { forget_captures(child); }
+}
+
 /// Add what the texts below `node` captured to `out`.
 fn collect_captures(node: &Node, out: &mut PageCaptures) {
     if let (Some(key), Some(words)) = (&node.capture, &node.captured) {
@@ -1078,10 +1086,13 @@ fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Sp
 
     let first = Node { children: node.children[..split_idx].to_vec(), ..node.clone() };
 
-    // Carry thead onto the continuation page.
+    // Carry thead onto the continuation page. Its texts were captured with the first copy, on the page the table
+    // started on, so the copy captures nothing.
     let mut rest_children = node.children[split_idx..].to_vec();
     if has_thead {
-        rest_children.insert(0, node.children[0].clone());
+        let mut header = node.children[0].clone();
+        forget_captures(&mut header);
+        rest_children.insert(0, header);
     }
     let rest = Node { children: rest_children, ..node.clone() };
     SplitOutcome::First(first, vec![rest])
@@ -4789,6 +4800,26 @@ mod tests {
         let headers = headers_of(&minimal(&body));
         assert!(headers.len() >= 2, "the text should run onto a second page");
         assert_eq!((headers[0].as_str(), headers.last().unwrap().as_str()), ("Early", "Late"));
+    }
+
+    #[test]
+    fn a_table_header_repeated_on_a_later_page_does_not_capture_again() {
+        // The header captures once, on the page the table starts, and the third row captures after it. Every page
+        // shows "Row", the latest capture: a repeated copy of the header must not put "Head" back on a later page.
+        let rows: String = (1..=150)
+            .map(|n| if n == 3 { r#"<tr><td><text capture="k">Row</text></td></tr>"#.to_string() } else { "<tr><td><text>cell</text></td></tr>".to_string() })
+            .collect();
+        let body = format!(
+            r#"<region pin="top"><text capture-ref="k"/></region><table cols="1fr"><thead><td><text capture="k">Head</text></td></thead>{rows}</table>"#
+        );
+        let tree = engine_render(&minimal(&body));
+        let pages = tree["pages"].as_array().unwrap();
+        assert!(pages.len() >= 3, "the table should run over three pages");
+        for (i, page) in pages.iter().enumerate() {
+            assert_eq!(header_of(page), "Row", "page {}", i + 1);
+            // The header is still drawn on every page.
+            assert!(texts_from_the_top(page).iter().any(|t| t.1 == "Head"), "page {} has no table header", i + 1);
+        }
     }
 
     #[test]
