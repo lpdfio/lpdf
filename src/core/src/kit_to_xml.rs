@@ -961,6 +961,20 @@ mod tests {
     }
 
     #[test]
+    fn a_header_that_shows_a_capture_from_the_builder_renders_the_same_from_the_tree_and_from_the_xml() {
+        let doc = |source_attrs: &str| {
+            doc_with_layout_child(&format!(
+                r#"{{"type":"region","attrs":{{"pin":"top"}},"nodes":[{{"type":"text","attrs":{{"capture-ref":"k","capture-mode":"first","capture-fallback":"none"}},"nodes":[]}}]}},
+                   {{"type":"text","attrs":{source_attrs},"nodes":["Alpha"]}}"#
+            ))
+        };
+        let kit = doc(r#"{"capture":"k"}"#);
+        let (from_tree, from_xml) = rendered_both_ways(&kit);
+        assert_eq!(from_tree, from_xml);
+        assert_ne!(from_tree, render_tree(&doc("{}")), "the tree's capture is not read");
+    }
+
+    #[test]
     fn right_aligned_text_differs_from_left_aligned() {
         let right = render_xml(&kit_to_xml(&doc_with_text_attrs(r#"{"align":"right"}"#)).unwrap());
         let plain = render_xml(&kit_to_xml(&doc_with_text_attrs("{}")).unwrap());

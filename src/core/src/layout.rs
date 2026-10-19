@@ -1,4 +1,4 @@
-use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Direction, FieldKind, HeightMode, Justify, Node, NodeKind, SectionLayout, Paginate, TextAlign, TextRun};
+use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, CaptureMode, Direction, FieldKind, HeightMode, Justify, Node, NodeKind, SectionLayout, Paginate, TextAlign, TextRun};
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
 use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderCanvasClip, RenderCanvasLayer, RenderField, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind};
 use crate::tokens::FontWidths;
@@ -162,14 +162,21 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
     while trail_start > lead && page.children[trail_start - 1].page_scope.is_some() {
         trail_start -= 1;
     }
-    let top_chrome: &[Node] = &page.children[..lead];
-    let flow: Vec<Node> = page.children[lead..trail_start]
+    // A text with `capture-ref` takes its lines whatever it shows, so the chrome is measured before it is filled.
+    let top_chrome: Vec<Node> = page.children[..lead].iter().cloned().map(reserve_sink_lines).collect();
+    let mut flow: Vec<Node> = page.children[lead..trail_start]
         .iter()
         // Defensive: a repeat child stuck in the middle is treated as flow
         // (acts like an atomic node that appears once, not chrome).
         .cloned()
         .collect();
-    let bot_chrome: &[Node] = &page.children[trail_start..];
+    let bot_chrome: Vec<Node> = page.children[trail_start..].iter().cloned().map(reserve_sink_lines).collect();
+    // Texts that capture say their words whole before the flow is split; one in the flow that shows a capture
+    // shows its fallback.
+    for node in flow.iter_mut() {
+        record_captures(node);
+        fill_sinks(node, &PageCaptures::new(), &HashMap::new());
+    }
 
     // Fast path: no chrome — standard pagination.
     if top_chrome.is_empty() && bot_chrome.is_empty() {
@@ -195,10 +202,10 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
     // ── Measure chrome heights ────────────────────────────────────────────────
     // "always" = sum of chrome that appears on pages 2+ (exclude First-only nodes)
     // "first"  = sum of all chrome (used on page 1)
-    let top_always_h = measure_chrome_height(top_chrome, avail_w, false);
-    let top_first_h  = measure_chrome_height(top_chrome, avail_w, true);
-    let bot_always_h = measure_chrome_height(bot_chrome, avail_w, false);
-    let bot_first_h  = measure_chrome_height(bot_chrome, avail_w, true);
+    let top_always_h = measure_chrome_height(&top_chrome, avail_w, false);
+    let top_first_h  = measure_chrome_height(&top_chrome, avail_w, true);
+    let bot_always_h = measure_chrome_height(&bot_chrome, avail_w, false);
+    let bot_first_h  = measure_chrome_height(&bot_chrome, avail_w, true);
 
     let budget_first = (avail_h - top_first_h - bot_first_h).max(0.0);
     let budget_rest  = (avail_h - top_always_h - bot_always_h).max(0.0);
@@ -209,18 +216,28 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
 
     // ── Build each output page ───────────────────────────────────────────────
     let mut pages_out: Vec<RenderPage> = Vec::with_capacity(total_pages);
+    // The latest value captured under each name on the pages before this one.
+    let mut latest: HashMap<String, String> = HashMap::new();
     for (idx, chunk) in chunks.into_iter().enumerate() {
         let is_first = idx == 0;
         let page_num = idx + 1;
 
-        let top_here: Vec<Node> = top_chrome.iter()
-            .filter(|n| page_scope_indices(&n.page_scope, total_pages).contains(&idx))
-            .map(|n| substitute_page_tokens(n, page_num, total_pages))
-            .collect();
-        let bot_here: Vec<Node> = bot_chrome.iter()
-            .filter(|n| page_scope_indices(&n.page_scope, total_pages).contains(&idx))
-            .map(|n| substitute_page_tokens(n, page_num, total_pages))
-            .collect();
+        let captured = page_captures(&chunk);
+        let page_chrome = |chrome: &[Node]| -> Vec<Node> {
+            chrome.iter()
+                .filter(|n| page_scope_indices(&n.page_scope, total_pages).contains(&idx))
+                .map(|n| {
+                    let mut node = substitute_page_tokens(n, page_num, total_pages);
+                    fill_sinks(&mut node, &captured, &latest);
+                    node
+                })
+                .collect()
+        };
+        let top_here = page_chrome(&top_chrome);
+        let bot_here = page_chrome(&bot_chrome);
+        for (key, values) in &captured {
+            if let Some(last) = values.last() { latest.insert(key.clone(), last.clone()); }
+        }
 
         // Top chrome laid out from y = mt down.
         let (top_nodes, top_h) = layout_column(
@@ -259,14 +276,18 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
 
     // Guarantee at least one page, even if flow is empty but chrome exists.
     if pages_out.is_empty() {
-        let top_here: Vec<Node> = top_chrome.iter()
-            .filter(|n| page_scope_indices(&n.page_scope, 1).contains(&0))
-            .map(|n| substitute_page_tokens(n, 1, 1))
-            .collect();
-        let bot_here: Vec<Node> = bot_chrome.iter()
-            .filter(|n| page_scope_indices(&n.page_scope, 1).contains(&0))
-            .map(|n| substitute_page_tokens(n, 1, 1))
-            .collect();
+        let page_chrome = |chrome: &[Node]| -> Vec<Node> {
+            chrome.iter()
+                .filter(|n| page_scope_indices(&n.page_scope, 1).contains(&0))
+                .map(|n| {
+                    let mut node = substitute_page_tokens(n, 1, 1);
+                    fill_sinks(&mut node, &PageCaptures::new(), &HashMap::new());
+                    node
+                })
+                .collect()
+        };
+        let top_here = page_chrome(&top_chrome);
+        let bot_here = page_chrome(&bot_chrome);
         let (top_nodes, _) = layout_column(&top_here, avail_x, avail_y, avail_w, None, 0.0, &Align::Stretch, &Justify::Start);
         let bot_h = measure_column_height(&bot_here, avail_w);
         let bot_y = avail_y + avail_h - bot_h;
@@ -333,6 +354,76 @@ fn substitute_in_text(s: &mut String, page: usize, total: usize) {
     *s = s
         .replace("{page}", &page.to_string())
         .replace("{pages}", &total.to_string());
+}
+
+// ── Running headers ───────────────────────────────────────────────────────────
+
+/// What the texts of a page captured, by name, in reading order.
+type PageCaptures = HashMap<String, Vec<String>>;
+
+/// The words of a text, as it draws them: the runs of its spans joined, with the white space collapsed.
+fn text_words(node: &Node) -> String {
+    let mut out = String::new();
+    for (i, run) in node.text_runs.iter().enumerate() {
+        if i > 0 && run.leading_space { out.push(' '); }
+        out.push_str(&run.text);
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Let every text with a `capture` below `node` say its words, whole. A text that splits across pages keeps
+/// them with its first part.
+fn record_captures(node: &mut Node) {
+    if node.kind == NodeKind::Text && node.capture.is_some() {
+        node.captured = Some(text_words(node));
+    }
+    for child in node.children.iter_mut() { record_captures(child); }
+}
+
+/// Add what the texts below `node` captured to `out`.
+fn collect_captures(node: &Node, out: &mut PageCaptures) {
+    if let (Some(key), Some(words)) = (&node.capture, &node.captured) {
+        out.entry(key.clone()).or_default().push(words.clone());
+    }
+    for child in &node.children { collect_captures(child, out); }
+}
+
+/// What the nodes that fell on one page captured.
+fn page_captures(nodes: &[Node]) -> PageCaptures {
+    let mut out = PageCaptures::new();
+    for node in nodes { collect_captures(node, &mut out); }
+    out
+}
+
+/// Give every text with `capture-ref` below `node` what it shows on a page that captured `here`, after the pages
+/// that left `before` as the latest value of each name: the pick of its mode among what the page captured,
+/// else the latest value, else its fallback.
+fn fill_sinks(node: &mut Node, here: &PageCaptures, before: &HashMap<String, String>) {
+    if let (NodeKind::Text, Some(sink)) = (&node.kind, &node.capture_ref) {
+        let picked = here.get(&sink.key).and_then(|values| match sink.mode {
+            CaptureMode::First => values.first(),
+            CaptureMode::Last  => values.last(),
+        });
+        let words = picked.or_else(|| before.get(&sink.key)).unwrap_or(&sink.fallback).clone();
+        node.text_runs = vec![TextRun {
+            text: words, leading_space: false, font: None, color: None, href: None,
+            underline: false, strike: false, bold: false,
+        }];
+    }
+    for child in node.children.iter_mut() { fill_sinks(child, here, before); }
+}
+
+/// A text with `capture-ref` is one line unless `max-lines` says more, and takes that many lines whatever it
+/// shows: a header or a footer is measured before the pages are filled, and its height must not depend on them.
+fn reserve_sink_lines(mut node: Node) -> Node {
+    fn walk(node: &mut Node) {
+        if node.kind == NodeKind::Text && node.capture_ref.is_some() {
+            node.reserve_lines = *node.max_lines.get_or_insert(1);
+        }
+        for child in node.children.iter_mut() { walk(child); }
+    }
+    walk(&mut node);
+    node
 }
 
 // ── Source-level pagination ───────────────────────────────────────────────────
@@ -994,9 +1085,11 @@ fn split_text(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Spl
     let first_atoms: Vec<SplitAtom> = lines[..split_at].iter().flatten().cloned().collect();
     let rest_atoms:  Vec<SplitAtom> = lines[split_at..].iter().flatten().cloned().collect();
     let first = Node { text_runs: atoms_to_runs(&first_atoms), max_lines: None, ellipsis: false, ..node.clone() };
+    // The text is captured on the page where it starts, whole: `captured` stays with the first part.
     let rest  = Node {
         text_runs: atoms_to_runs(&rest_atoms),
         max_lines: node.max_lines.map(|max| max - split_at),
+        capture: None,
         ..node.clone()
     };
     SplitOutcome::First(first, vec![rest])
@@ -2568,10 +2661,11 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     }
 
     if toks.is_empty() {
+        let reserved = node.reserve_lines as f32 * line_height;
         return (RenderNode::Box(RenderBox {
-            x, y, width: 0.0, height: 0.0, fill: None,
+            x, y, width: 0.0, height: reserved, fill: None,
             border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None, debug_self: false, children: vec![],
-        }), 0.0, false);
+        }), reserved, false);
     }
 
     // ── Word-wrap: build lines of (Atom, gap_before_pt) ──────────────────────
@@ -2614,7 +2708,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     let overflow = fit.max_lines.is_some()
         && lines.iter().any(|line| text_line_width(line, font_size) > avail_w + 0.01);
 
-    let total_h = lines.len() as f32 * line_height;
+    let total_h = lines.len().max(node.reserve_lines) as f32 * line_height;
     let mut all_nodes: Vec<RenderNode> = Vec::new();
 
     let align_str = match node.text_align {
@@ -4524,5 +4618,143 @@ mod tests {
             0,
         );
         assert_eq!(page_layers(&tree, 0)[0]["clip"], serde_json::json!([10.0, 20.0, 100.0, 50.0]));
+    }
+
+    // ── Running headers ───────────────────────────────────────────────────────
+
+    /// Every text of a page tree with the `y` it is drawn at, from the top of the page down.
+    fn texts_from_the_top(page: &serde_json::Value) -> Vec<(f64, String)> {
+        let mut texts: Vec<(f64, String)> = Vec::new();
+        fn walk(v: &serde_json::Value, out: &mut Vec<(f64, String)>) {
+            if v["type"] == "text" {
+                if let (Some(s), Some(y)) = (v["content"].as_str(), v["y"].as_f64()) { out.push((y, s.to_string())); }
+            }
+            if let Some(arr) = v["nodes"].as_array() {
+                for c in arr { walk(c, out); }
+            }
+        }
+        walk(page, &mut texts);
+        texts.sort_by(|a, b| a.0.total_cmp(&b.0));
+        texts
+    }
+
+    /// The words of the text nearest the top of a page: a header, when the page has one.
+    fn header_of(page: &serde_json::Value) -> String {
+        texts_from_the_top(page).first().map(|t| t.1.clone()).unwrap_or_default()
+    }
+
+    fn headers_of(xml: &str) -> Vec<String> {
+        let tree = engine_render(xml);
+        tree["pages"].as_array().unwrap().iter().map(header_of).collect()
+    }
+
+    /// A header with a sink for `k`, then a column on a page of its own for each of `pages`: a text that captures
+    /// under `k` when it starts with `+`.
+    fn captured_pages(sink: &str, pages: &[&str]) -> Vec<String> {
+        let flow: String = pages.iter().enumerate().map(|(i, p)| {
+            let (capture, words) = match p.strip_prefix('+') {
+                Some(words) => (r#" capture="k""#, words),
+                None        => ("", *p),
+            };
+            let brk = if i == 0 { "" } else { r#" paginate="break-before""# };
+            format!("<column{brk}><text{capture}>{words}</text></column>")
+        }).collect();
+        headers_of(&minimal(&format!(r#"<region pin="top"><text capture-ref="k" {sink}/></region>{flow}"#)))
+    }
+
+    #[test]
+    fn a_sink_shows_the_page_it_is_on_then_the_latest_value_then_its_fallback() {
+        let headers = captured_pages(r#"capture-fallback="none""#, &["Intro", "+Alpha", "Body", "Body", "+Beta", "Body"]);
+        assert_eq!(headers, ["none", "Alpha", "Alpha", "Alpha", "Beta", "Beta"]);
+    }
+
+    #[test]
+    fn a_sink_without_a_fallback_shows_nothing_before_the_first_capture() {
+        // The first page has no header text, so the text nearest its top is the body.
+        assert_eq!(captured_pages("", &["Intro", "+Alpha"]), ["Intro", "Alpha"]);
+    }
+
+    #[test]
+    fn capture_mode_picks_the_first_or_the_last_text_the_page_captured() {
+        // Two texts capture on the first page, one on the second, and none on the third.
+        let flow = concat!(
+            r#"<text capture="k">One</text><text capture="k">Two</text>"#,
+            r#"<column paginate="break-before"><text capture="k">Three</text></column>"#,
+            r#"<column paginate="break-before"><text>None</text></column>"#,
+        );
+        for (mode, want) in [(r#"capture-mode="first""#, ["One", "Three", "Three"]), (r#"capture-mode="last""#, ["Two", "Three", "Three"]), ("", ["Two", "Three", "Three"])] {
+            let body = format!(r#"<region pin="top"><text capture-ref="k" {mode}/></region>{flow}"#);
+            assert_eq!(headers_of(&minimal(&body)), want, "{mode:?}");
+        }
+    }
+
+    #[test]
+    fn a_capture_reads_the_words_of_a_text_with_spans() {
+        let body = r#"<region pin="top"><text capture-ref="k"/></region><text capture="k">Chapter <span font="Helvetica-Bold">Two</span>, the   Road</text>"#;
+        assert_eq!(headers_of(&minimal(body)), ["Chapter Two, the Road"]);
+    }
+
+    #[test]
+    fn capture_is_kept_apart_in_each_section() {
+        let section = |body: &str| {
+            format!(r#"<section><layout margin="28pt"><region pin="top"><text capture-ref="k" capture-fallback="none"/></region>{body}</layout></section>"#)
+        };
+        let xml = format!(
+            r#"<lpdf version="1"><document size="a4">{}{}</document></lpdf>"#,
+            section(r#"<text capture="k">Alpha</text>"#),
+            section("<text>Plain</text>"),
+        );
+        assert_eq!(headers_of(&xml), ["Alpha", "none"]);
+    }
+
+    #[test]
+    fn a_text_that_splits_across_pages_is_captured_once_where_it_starts() {
+        // The long text runs from the first page onto the second, where one more text captures. The part on the
+        // second page must not capture again: the first text captured on that page is "Late".
+        let long = "word ".repeat(1500);
+        let body = format!(
+            r#"<region pin="top"><text capture-ref="k" capture-mode="first"/></region><text capture="k">Early</text><text capture="k">{long}</text><text capture="k">Late</text>"#
+        );
+        let headers = headers_of(&minimal(&body));
+        assert!(headers.len() >= 2, "the text should run onto a second page");
+        assert_eq!((headers[0].as_str(), headers.last().unwrap().as_str()), ("Early", "Late"));
+    }
+
+    #[test]
+    fn a_sink_takes_its_line_whatever_it_shows_so_the_flow_stays_on_its_page() {
+        // The same flow under a header that shows a heading and one that shows nothing, because nothing is captured
+        // under its name: the flow starts at the same place and runs to the same number of pages.
+        let flow_start = |sink_key: &str| {
+            let lines: String = (1..=120).map(|n| format!("<text>Line {n}</text>")).collect();
+            let body = format!(
+                r#"<region pin="top"><text capture-ref="{sink_key}" font-size="20pt"/></region><text capture="k">A heading</text>{lines}"#
+            );
+            let tree = engine_render(&minimal(&body));
+            let pages = tree["pages"].as_array().unwrap();
+            let y = texts_from_the_top(&pages[0]).into_iter().find(|t| t.1 == "Line 1").unwrap().0;
+            (y, pages.len())
+        };
+        assert_eq!(flow_start("k"), flow_start("nothing-captured-under-this-name"));
+    }
+
+    #[test]
+    fn a_sink_is_one_line_and_cuts_a_longer_value_in_dots() {
+        let long = "A heading that is far too long to fit on the line that the header of this page has to hold it in";
+        let body = format!(
+            r#"<region pin="top"><text capture-ref="k" width="150pt" ellipsis="true"/></region><text capture="k">{long}</text>"#
+        );
+        let tree = engine_render(&minimal(&body));
+        let page = &tree["pages"][0];
+        let header = header_of(page);
+        assert!(header.ends_with("...") && header.len() < long.len(), "{header}");
+        let dotted = texts_from_the_top(page).into_iter().filter(|t| t.1.ends_with("...")).count();
+        assert_eq!(dotted, 1, "one line, cut in dots");
+    }
+
+    #[test]
+    fn a_sink_in_the_flow_shows_its_fallback() {
+        let body = r#"<text capture="k">Alpha</text><text capture-ref="k" capture-fallback="from the flow"/>"#;
+        let tree = engine_render(&minimal(body));
+        assert!(find_text_content(&tree["pages"][0]).contains(&"from the flow".to_string()));
     }
 }
