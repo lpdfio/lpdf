@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+      <color name="rule"    value="#dde3ed" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Running Header" subject="A header and a footer that show the chapter on their page" />
+
+    <!-- capture="chapter" on a text in the flow records its words under that name as the pages are filled. A text with
+         capture-ref="chapter" in a header or a footer shows what was recorded: capture-mode picks the first or the last text
+         captured on its page. A page where nothing is captured shows the latest value of an earlier page, and
+         capture-fallback shows before any. The header of each section is its own, so a section starts with no value.
+         Expected, page by page (header | footer):
+           Section 1
+             1  Front matter                   | Front matter                  nothing captured yet: the fallback
+             2  Chapter 1: The Lamp Room       | Chapter 1: The Lamp Room      the capture counts on the page it starts
+             3  Chapter 1: The Lamp Room       | Chapter 1: The Lamp Room      nothing captured: the latest value
+             4  Chapter 3: The Storm           | Chapter 2: The Record         two captured: the last, and the first
+             5  Chapter 3: The Storm           | Chapter 3: The Storm          nothing captured: the latest value
+             6  Chapter 4: A Very Long Chapt...| Chapter 4: A Very Long Chapter Title That Does Not Fit On One Line Of The Header And Is Cut Where It Runs Out Of Room
+                                                                      the header is cut in dots at one line; the footer's smaller type holds the title whole
+           Section 2
+             1  Appendix                       | Appendix                      the fallback again: capture starts over
+             2  Appendix A: Weather Notes      | Appendix A: Weather Notes     captured part way down the page
+    -->
+    <section>
+      <layout margin="40pt">
+        <!-- The header shows the chapter that is current on the page: the last one captured on it (capture-mode defaults to last),
+             else the latest of an earlier page, else the fallback. The footer asks for the first one captured on the page. A sink
+             holds one line, so a long title is cut in dots and the header never grows. -->
+        <region pin="top">
+          <column padding="0pt 0pt 6pt 0pt">
+            <row gap="m">
+              <text width="fill" font-size="s" font="Helvetica-Bold" color="primary" max-lines="1" ellipsis="true" capture-ref="chapter" capture-fallback="Front matter"/>
+              <text width="60pt" font-size="s" color="muted" align="right">Page {page}</text>
+            </row>
+          </column>
+          <divider color="rule" thickness="xs"/>
+        </region>
+
+        <!-- Page 1 captures nothing: it shows the fallback. -->
+        <column gap="m" padding="0pt 0pt 18pt 0pt">
+          <text font-size="xl" font="Helvetica-Bold">The Lamplighter's Almanac</text>
+          <text font-size="m">The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea.</text>
+          <text font-size="m">Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering.</text>
+        </column>
+        <!-- Starts page 2: the capture counts on its own page. Runs onto page 3, which captures nothing. -->
+        <column gap="m" paginate="break-before" padding="0pt 0pt 18pt 0pt">
+          <text capture="chapter" font-size="xl" font="Helvetica-Bold">Chapter 1: The Lamp Room</text>
+          <text font-size="m">A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+          <text font-size="m">Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand.</text>
+          <text font-size="m">When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did.</text>
+          <text font-size="m">Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong.</text>
+          <text font-size="m">The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying.</text>
+          <text font-size="m">Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself.</text>
+          <text font-size="m">The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea.</text>
+          <text font-size="m">Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering.</text>
+          <text font-size="m">A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+          <text font-size="m">Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand.</text>
+          <text font-size="m">When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did.</text>
+          <text font-size="m">Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong.</text>
+        </column>
+        <!-- Two chapters on one page: the header shows the last, the footer the first. -->
+        <column gap="m" paginate="break-before" padding="0pt 0pt 18pt 0pt">
+          <text capture="chapter" font-size="xl" font="Helvetica-Bold">Chapter 2: The Record</text>
+          <text font-size="m">Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering.</text>
+          <text font-size="m">A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+          <text font-size="m">Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand.</text>
+        </column>
+        <column gap="m" padding="0pt 0pt 18pt 0pt">
+          <text capture="chapter" font-size="xl" font="Helvetica-Bold">Chapter 3: The Storm</text>
+          <text font-size="m">Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong.</text>
+          <text font-size="m">The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying.</text>
+          <text font-size="m">Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself.</text>
+          <text font-size="m">The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea.</text>
+          <text font-size="m">Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering.</text>
+          <text font-size="m">A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+          <text font-size="m">Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand.</text>
+          <text font-size="m">When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did.</text>
+          <text font-size="m">Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong.</text>
+          <text font-size="m">The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying.</text>
+          <text font-size="m">Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself.</text>
+          <text font-size="m">The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea.</text>
+        </column>
+        <!-- A title longer than the line the header has is cut in dots. -->
+        <column gap="m" paginate="break-before" padding="0pt 0pt 18pt 0pt">
+          <text capture="chapter" font-size="xl" font="Helvetica-Bold">Chapter 4: A Very Long Chapter Title That Does Not Fit On One Line Of The Header And Is Cut Where It Runs Out Of Room</text>
+          <text font-size="m">Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand.</text>
+          <text font-size="m">When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did.</text>
+          <text font-size="m">Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong.</text>
+          <text font-size="m">The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying.</text>
+        </column>
+        <region pin="bottom">
+          <divider color="rule" thickness="xs"/>
+          <column padding="6pt 0pt 0pt 0pt">
+            <row gap="s">
+              <text font-size="xs" color="muted">Opens with</text>
+              <text width="fill" font-size="xs" color="muted" max-lines="1" ellipsis="true" capture-ref="chapter" capture-mode="first" capture-fallback="Front matter"/>
+            </row>
+          </column>
+        </region>
+      </layout>
+    </section>
+
+    <!-- A second section: its own header, and nothing captured yet, so the fallback shows although the first section captured
+         chapters. Page numbers start again. -->
+    <section>
+      <layout margin="40pt">
+        <!-- The header shows the chapter that is current on the page: the last one captured on it (capture-mode defaults to last),
+             else the latest of an earlier page, else the fallback. The footer asks for the first one captured on the page. A sink
+             holds one line, so a long title is cut in dots and the header never grows. -->
+        <region pin="top">
+          <column padding="0pt 0pt 6pt 0pt">
+            <row gap="m">
+              <text width="fill" font-size="s" font="Helvetica-Bold" color="primary" max-lines="1" ellipsis="true" capture-ref="chapter" capture-fallback="Appendix"/>
+              <text width="60pt" font-size="s" color="muted" align="right">Page {page}</text>
+            </row>
+          </column>
+          <divider color="rule" thickness="xs"/>
+        </region>
+
+        <!-- Nothing is captured on page 1 of this section. -->
+        <column gap="m" padding="0pt 0pt 18pt 0pt">
+          <text font-size="xl" font="Helvetica-Bold">Before the appendix</text>
+          <text font-size="m">The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying.</text>
+          <text font-size="m">Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself.</text>
+          <text font-size="m">The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea.</text>
+          <text font-size="m">Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering.</text>
+          <text font-size="m">A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+          <text font-size="m">Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand.</text>
+          <text font-size="m">When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did.</text>
+          <text font-size="m">Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong.</text>
+          <text font-size="m">The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying.</text>
+          <text font-size="m">Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself.</text>
+          <text font-size="m">The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea.</text>
+        </column>
+        <!-- Captured part way down page 2 of this section: it counts for the whole page, text above it included. -->
+        <column gap="m" padding="0pt 0pt 18pt 0pt">
+          <text capture="chapter" font-size="xl" font="Helvetica-Bold">Appendix A: Weather Notes</text>
+          <text font-size="m">Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering.</text>
+          <text font-size="m">A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+          <text font-size="m">Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand.</text>
+        </column>
+        <region pin="bottom">
+          <divider color="rule" thickness="xs"/>
+          <column padding="6pt 0pt 0pt 0pt">
+            <row gap="s">
+              <text font-size="xs" color="muted">Opens with</text>
+              <text width="fill" font-size="xs" color="muted" max-lines="1" ellipsis="true" capture-ref="chapter" capture-mode="first" capture-fallback="Appendix"/>
+            </row>
+          </column>
+        </region>
+      </layout>
+    </section>
+  </document>
+</lpdf>

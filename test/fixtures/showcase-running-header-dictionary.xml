@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+      <color name="rule"    value="#dde3ed" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Running Header, Dictionary" subject="A header that shows the first and the last entry on its page" />
+
+    <!-- Every entry only says capture="entry". The header asks for the first and the last of them on its page, so one text feeds
+         both and the header reads like the guide words of a dictionary.
+         Expected header on each page (first – last):
+           Page 1   Abacus – Adrift
+           Page 2   Advent – Atlas
+           Page 3   Attic – Azimuth
+    -->
+    <section>
+      <layout margin="40pt">
+        <region pin="top">
+          <column padding="0pt 0pt 6pt 0pt">
+            <row gap="s">
+              <text width="fill" font-size="s" font="Helvetica-Bold" color="primary" align="right" max-lines="1" ellipsis="true" capture-ref="entry" capture-mode="first"/>
+              <text font-size="s" color="muted">–</text>
+              <text width="fill" font-size="s" font="Helvetica-Bold" color="primary" max-lines="1" ellipsis="true" capture-ref="entry" capture-mode="last"/>
+            </row>
+          </column>
+          <divider color="rule" thickness="xs"/>
+        </region>
+
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Abacus</text>
+          <text font-size="s" color="muted">A frame of rods and sliding beads used for counting before written numbers were common.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Abbey</text>
+          <text font-size="s" color="muted">A building where monks or nuns live, work and pray, often with a church at its center.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Abide</text>
+          <text font-size="s" color="muted">To put up with something, or to stay in a place for a long time.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Ablaze</text>
+          <text font-size="s" color="muted">On fire, or lit so brightly that it seems to burn.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Abode</text>
+          <text font-size="s" color="muted">The place where a person lives; a home.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Abrupt</text>
+          <text font-size="s" color="muted">Sudden and unexpected, often in a way that feels rough or curt.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Absorb</text>
+          <text font-size="s" color="muted">To take in a liquid, a sound or an idea so that it becomes part of oneself.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Abstract</text>
+          <text font-size="s" color="muted">Existing as an idea rather than as a thing that can be touched.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Abundant</text>
+          <text font-size="s" color="muted">Present in large amounts; more than enough.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Academy</text>
+          <text font-size="s" color="muted">A school for special training, or a society of scholars and artists.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Accent</text>
+          <text font-size="s" color="muted">A way of speaking that shows where a person comes from, or a mark placed over a letter.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Accord</text>
+          <text font-size="s" color="muted">Agreement between people; also to give or grant something.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Acorn</text>
+          <text font-size="s" color="muted">The nut of the oak tree, which sits in a small cup.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Acquire</text>
+          <text font-size="s" color="muted">To come to own or know something, by effort or by chance.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Acrobat</text>
+          <text font-size="s" color="muted">A performer who does difficult feats of balance and agility.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Adapt</text>
+          <text font-size="s" color="muted">To change so as to suit a new use or a new place.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Adhere</text>
+          <text font-size="s" color="muted">To stick firmly to a surface, or to keep to a rule or a belief.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Admire</text>
+          <text font-size="s" color="muted">To regard a person or a thing with respect and pleasure.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Adrift</text>
+          <text font-size="s" color="muted">Floating without anchor or steering; without a purpose.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Advent</text>
+          <text font-size="s" color="muted">The arrival of an important person, thing or event.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Aerial</text>
+          <text font-size="s" color="muted">Of the air, or high above the ground; also a wire for receiving radio signals.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Affair</text>
+          <text font-size="s" color="muted">A matter of concern or business; also a brief and private relationship.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Agile</text>
+          <text font-size="s" color="muted">Able to move quickly and lightly, in body or in mind.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Alcove</text>
+          <text font-size="s" color="muted">A small space set back into the wall of a room.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Alder</text>
+          <text font-size="s" color="muted">A tree of damp ground with rounded leaves and small cones.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Amber</text>
+          <text font-size="s" color="muted">Fossil resin, golden and clear, often worn as a jewel; also its yellow-brown color.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Anchor</text>
+          <text font-size="s" color="muted">A heavy object lowered on a chain to hold a ship in place.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Angle</text>
+          <text font-size="s" color="muted">The space between two lines that meet, measured in degrees; also a point of view.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Annual</text>
+          <text font-size="s" color="muted">Happening once every year.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Anvil</text>
+          <text font-size="s" color="muted">A heavy block of iron on which a smith shapes hot metal.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Apex</text>
+          <text font-size="s" color="muted">The highest point of something; the tip.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Apron</text>
+          <text font-size="s" color="muted">A garment worn over the front of the body to keep clothes clean.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Arbor</text>
+          <text font-size="s" color="muted">A shady place in a garden, formed by climbing plants on a frame.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Arch</text>
+          <text font-size="s" color="muted">A curved structure that spans an opening and carries the weight above it.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Arrow</text>
+          <text font-size="s" color="muted">A thin shaft with a point, shot from a bow; also a sign that shows a direction.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Ash</text>
+          <text font-size="s" color="muted">The gray powder left after something has burned; also a tree with pale wood.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Aspen</text>
+          <text font-size="s" color="muted">A kind of poplar whose leaves tremble in the slightest wind.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Atlas</text>
+          <text font-size="s" color="muted">A book of maps.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Attic</text>
+          <text font-size="s" color="muted">A space or room just under the roof of a house.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Aurora</text>
+          <text font-size="s" color="muted">Bands of light seen in the sky near the poles; also the dawn.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Autumn</text>
+          <text font-size="s" color="muted">The season between summer and winter, when leaves fall.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Avenue</text>
+          <text font-size="s" color="muted">A broad road, often lined with trees; also a way of approaching a problem.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Awning</text>
+          <text font-size="s" color="muted">A cover of canvas over a door or window to keep off sun and rain.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Axle</text>
+          <text font-size="s" color="muted">The rod on which a wheel turns, or that turns with it.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Azalea</text>
+          <text font-size="s" color="muted">A shrub with bright flowers that open in spring.</text>
+        </column>
+        <column gap="xs" paginate="no" padding="0pt 0pt 12pt 0pt">
+          <text capture="entry" font-size="m" font="Helvetica-Bold">Azimuth</text>
+          <text font-size="s" color="muted">The angle of a direction measured clockwise from north, used in navigation.</text>
+        </column>
+        <region pin="bottom">
+          <divider color="rule" thickness="xs"/>
+          <column padding="6pt 0pt 0pt 0pt">
+            <text font-size="xs" color="muted" align="center">Page {page} of {pages}</text>
+          </column>
+        </region>
+      </layout>
+    </section>
+  </document>
+</lpdf>

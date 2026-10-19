@@ -121,6 +121,9 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
         ("barcode-at@data", &["Another payload"]),
         ("layer@clip", &["20pt 20pt 80pt 80pt"]),
         ("bookmark@id", &["chosen"]),
+        ("text@capture", &["k"]),
+        ("text@capture-ref", &["k"]),
+        ("text@capture-fallback", &["Soon"]),
     ];
     if let Some((_, values)) = by_id.iter().find(|(key, _)| *key == id) {
         return Some(values);
@@ -372,11 +375,17 @@ struct Subject {
     base: &'static [(&'static str, &'static str)],
     content: &'static str,
     build: fn(&str, &str) -> String,
+    /// The attributes this subject is for, when the element has another subject for the rest. Empty: all of them.
+    only: &'static [&'static str],
 }
 
 impl Subject {
     fn new(element: &'static str, build: fn(&str, &str) -> String) -> Subject {
-        Subject { element, base: &[], content: "", build }
+        Subject { element, base: &[], content: "", build, only: &[] }
+    }
+    fn only(mut self, only: &'static [&'static str]) -> Subject {
+        self.only = only;
+        self
     }
     fn base(mut self, base: &'static [(&'static str, &'static str)]) -> Subject {
         self.base = base;
@@ -523,7 +532,22 @@ fn subjects() -> Vec<Subject> {
         Subject::new("img", |a, _| flow_with_images(&format!("<img {a}/><text>After</text>"))).base(&[("name", "logo")]),
         Subject::new("barcode", |a, _| flow(&format!("<barcode {a}/><text>After</text>")))
             .base(&[("type", "qr"), ("data", "1234567890128"), ("width", "100pt")]),
-        Subject::new("text", |a, c| flow(&format!("<text {a}>{c}</text><text>After</text>"))).content(LONG),
+        Subject::new("text", |a, c| flow(&format!("<text {a}>{c}</text><text>After</text>")))
+            .content(LONG),
+        // What a text records shows in a header that shows it, and a text with capture-ref is that header. Two texts
+        // capture under k, so the first and the last of them differ.
+        Subject::new("text", |a, c| {
+            const SOURCES: &str = r#"<text capture="k">One</text><text capture="k">Two</text>"#;
+            if a.contains("capture-ref=") {
+                flow(&format!("<region pin=\"top\"><text {a}>{c}</text></region>{SOURCES}<text>After</text>"))
+            } else {
+                flow(&format!(
+                    "<region pin=\"top\"><text capture-ref=\"k\" capture-fallback=\"none\"/></region>{SOURCES}<text {a}>{c}</text>"
+                ))
+            }
+        })
+        .only(&["capture", "capture-ref", "capture-mode", "capture-fallback"])
+        .content("Heading"),
         Subject::new("field", |a, _| flow(&format!("<field {a}/><text>After</text>"))).base(&[("type", "text"), ("name", "f1")]),
         // Tables.
         Subject::new("table", |a, _| flow(&format!("<table {a}>{TABLE_ROWS}</table><text>After</text>"))).base(&[("cols", "1fr 1fr")]),
@@ -698,6 +722,10 @@ fn tweaks() -> HashMap<String, Tweak> {
     add("text@max-lines", Tweak::default().set("width", "60pt"));
     add("text@ellipsis", Tweak::default().set("width", "60pt").set("max-lines", "2"));
 
+    // A text shows a capture only with capture-ref, and its fallback only where nothing was captured under the name.
+    add("text@capture-mode", Tweak::default().set("capture-ref", "k"));
+    add("text@capture-fallback", Tweak::default().set("capture-ref", "nothing-captured-under-this-name"));
+
     // A text-at is one line at its natural width until it is given a width. The width is what align works in,
     // and what a long line is cut off at; max-lines wraps within it, and ellipsis and line-height show on the
     // lines that wrapping makes or cuts.
@@ -799,6 +827,12 @@ fn judge(attribute: &Attribute, subject: &Subject, tweak: &Tweak) -> Verdict {
     Verdict::Effect { same: if attribute.one_of { same } else { Vec::new() }, allowed }
 }
 
+/// The subject that exercises an attribute: one made for it, else the one of its element.
+fn subject_for<'a>(subjects: &'a [Subject], attribute: &Attribute) -> Option<&'a Subject> {
+    let of_element = || subjects.iter().filter(|s| s.element == attribute.element);
+    of_element().find(|s| s.only.contains(&attribute.name.as_str())).or_else(|| of_element().find(|s| s.only.is_empty()))
+}
+
 fn reason<'a>(list: &'a [(&'a str, &'a str)], id: &str) -> Option<&'a str> {
     list.iter().find(|(key, _)| *key == id).map(|(_, why)| *why)
 }
@@ -846,7 +880,7 @@ fn every_attribute_of_the_schema_does_something() {
             skipped += 1;
             continue;
         }
-        let Some(subject) = subjects.iter().find(|s| s.element == attribute.element) else {
+        let Some(subject) = subject_for(&subjects, attribute) else {
             problems.push(format!("{id}: no subject for the element {}: add one to `subjects`", attribute.element));
             continue;
         };
@@ -889,7 +923,7 @@ fn every_attribute_of_the_schema_does_something() {
         };
         // An attribute or an element that is not there has been reported above.
         let Some(attribute) = attributes.iter().find(|a| a.id() == id) else { continue };
-        let Some(subject) = subjects.iter().find(|s| s.element == attribute.element) else { continue };
+        let Some(subject) = subject_for(&subjects, attribute) else { continue };
         let default = Tweak::default();
         let tweak = tweaks.get(id).unwrap_or(&default);
         if let Verdict::Effect { same, .. } = judge(attribute, subject, tweak)

@@ -254,6 +254,23 @@ pub struct DataAttrs {
     pub data_if_not: Option<String>,
 }
 
+/// Which of the texts captured under a name on a page a `capture-ref` text shows.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum CaptureMode {
+    First,
+    #[default]
+    Last,
+}
+
+/// A text that shows what was captured under `key`, as of the page it is drawn on: the `mode`'s pick of what the
+/// page captured, else the latest value of an earlier page, else `fallback`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CaptureRef {
+    pub key:      String,
+    pub mode:     CaptureMode,
+    pub fallback: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct Node {
     pub kind: NodeKind,
@@ -298,6 +315,15 @@ pub struct Node {
     pub max_lines: Option<usize>,
     /// A text cut short by `max_lines`, or a `text-at` cut short by its width, ends in an ellipsis.
     pub ellipsis: bool,
+    /// The name a text records its words under, as the pages are filled, for a `capture-ref` text to show.
+    pub capture: Option<String>,
+    /// What the text says, set by the layout before it paginates; a text that splits across pages keeps it whole.
+    pub captured: Option<String>,
+    /// A text that shows what was captured, not words of its own.
+    pub capture_ref: Option<CaptureRef>,
+    /// The lines a `capture-ref` text always takes, whatever it shows, so a header's height is known before the
+    /// pages are filled. 0 for every other text.
+    pub reserve_lines: usize,
     // link
     pub url: Option<String>,
     // img (NodeKind::Img only)
@@ -478,6 +504,8 @@ struct ParsedNode {
     line_height: f32,
     max_lines: Option<usize>,
     ellipsis: bool,
+    capture: Option<String>,
+    capture_ref: Option<CaptureRef>,
     url: Option<String>,
     image_name: Option<String>,
     img_height_constraint: Option<f32>,
@@ -541,6 +569,8 @@ impl ParsedNode {
             line_height: DEFAULT_LINE_HEIGHT,
             max_lines: None,
             ellipsis: false,
+            capture: None,
+            capture_ref: None,
             url: None,
             image_name: None,
             img_height_constraint: None,
@@ -649,6 +679,7 @@ impl Node {
             font: "Helvetica".to_string(), font_size: 11.0, text_color: None,
             text_align: TextAlign::Left, widows: DEFAULT_WIDOWS, orphans: DEFAULT_ORPHANS,
             line_height: DEFAULT_LINE_HEIGHT, max_lines: None, ellipsis: false,
+            capture: None, captured: None, capture_ref: None, reserve_lines: 0,
             url: None, image_name: None,
             img_height_constraint: None, barcode_type: None, barcode_data: None,
             barcode_ec: BarcodeEcLevel::M, barcode_hrt: false, barcode_color: None,
@@ -743,6 +774,10 @@ fn resolve_node(
         line_height:           n.line_height,
         max_lines:             n.max_lines,
         ellipsis:              n.ellipsis,
+        capture:               n.capture,
+        captured:              None,
+        capture_ref:           n.capture_ref,
+        reserve_lines:         0,
         url:                   n.url,
         image_name:            n.image_name,
         img_height_constraint: n.img_height_constraint,
@@ -2150,8 +2185,43 @@ fn apply_layout_kind_attrs(
             if let Some(v) = a.get("line-height") { node.line_height = tokens.resolve_line_height(v)?; }
             node.max_lines = a.get("max-lines").map(parse_max_lines).transpose()?;
             node.ellipsis  = a.get("ellipsis").map(|v| v == "true").unwrap_or(false);
+            apply_capture_attrs(node, a)?;
         }
         NodeKind::Link | NodeKind::Img | NodeKind::Barcode | NodeKind::Field => {}
+    }
+    Ok(())
+}
+
+/// Read `capture`, `capture-ref`, `capture-mode` and `capture-fallback` of a text of the layout.
+fn apply_capture_attrs(node: &mut ParsedNode, a: &impl Attrs) -> Result<(), String> {
+    let name = |attr: &str, v: &str| -> Result<String, String> {
+        let key = v.trim();
+        if key.is_empty() { Err(format!("'{attr}' needs a name")) } else { Ok(key.to_string()) }
+    };
+    node.capture = a.get("capture").map(|v| name("capture", v)).transpose()?;
+    let key = a.get("capture-ref").map(|v| name("capture-ref", v)).transpose()?;
+    let mode = match a.get("capture-mode") {
+        None         => None,
+        Some("first") => Some(CaptureMode::First),
+        Some("last")  => Some(CaptureMode::Last),
+        Some(other)   => return Err(format!("invalid capture-mode '{other}': expected first or last")),
+    };
+    let fallback = a.get("capture-fallback");
+    match key {
+        Some(key) => {
+            if node.capture.is_some() {
+                return Err("a text cannot have both 'capture' and 'capture-ref': one records its words, the other shows what was recorded".to_string());
+            }
+            node.capture_ref = Some(CaptureRef {
+                key,
+                mode:     mode.unwrap_or_default(),
+                fallback: fallback.unwrap_or("").to_string(),
+            });
+        }
+        None if mode.is_some() || fallback.is_some() => {
+            return Err("'capture-mode' and 'capture-fallback' belong to a text with 'capture-ref'".to_string());
+        }
+        None => {}
     }
     Ok(())
 }
@@ -2909,6 +2979,44 @@ mod tests {
         for bad in ["0", "-1", "1.5pt", "tall"] {
             let err = tokens(&format!(r#"<line-height xs="{bad}" s="1.1" m="1.2" l="1.4" xl="1.6" xxl="2"/>"#)).unwrap_err();
             assert!(err.contains("<line-height> 'xs': invalid factor") && err.contains(&format!("'{bad}'")), "{err}");
+        }
+    }
+
+    #[test]
+    fn text_reads_its_capture_attributes() {
+        let text = |attrs: &str| {
+            let mut doc = parse(&minimal(&format!("<text {attrs}>Hello</text>"))).unwrap();
+            doc.section_layouts().remove(0).children.remove(0)
+        };
+        let source = text(r#"capture=" chapter ""#);
+        assert_eq!((source.capture.as_deref(), source.capture_ref.is_some()), (Some("chapter"), false));
+        let sink = text(r#"capture-ref="chapter""#);
+        assert_eq!(sink.capture, None);
+        assert_eq!(
+            sink.capture_ref,
+            Some(CaptureRef { key: "chapter".into(), mode: CaptureMode::Last, fallback: String::new() })
+        );
+        let sink = text(r#"capture-ref="entry" capture-mode="first" capture-fallback="A""#);
+        assert_eq!(
+            sink.capture_ref,
+            Some(CaptureRef { key: "entry".into(), mode: CaptureMode::First, fallback: "A".into() })
+        );
+        let plain = text("");
+        assert_eq!((plain.capture, plain.capture_ref), (None, None));
+    }
+
+    #[test]
+    fn a_text_cannot_capture_and_show_a_capture() {
+        for (attrs, want) in [
+            (r#"capture="a" capture-ref="a""#, "cannot have both"),
+            (r#"capture-mode="first""#, "belong to a text with 'capture-ref'"),
+            (r#"capture-fallback="x""#, "belong to a text with 'capture-ref'"),
+            (r#"capture-ref="a" capture-mode="middle""#, "invalid capture-mode 'middle'"),
+            (r#"capture="  ""#, "'capture' needs a name"),
+            (r#"capture-ref="""#, "'capture-ref' needs a name"),
+        ] {
+            let err = parse(&minimal(&format!("<text {attrs}>Hi</text>"))).unwrap_err();
+            assert!(err.contains(want) && err.contains("at line"), "{attrs}: {err}");
         }
     }
 

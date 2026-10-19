@@ -123,6 +123,10 @@ fn showcase_shadow() { run_snapshot("showcase-shadow"); }
 #[test]
 fn showcase_gradient() { run_snapshot("showcase-gradient"); }
 #[test]
+fn showcase_running_header() { run_snapshot("showcase-running-header"); }
+#[test]
+fn showcase_running_header_dictionary() { run_snapshot("showcase-running-header-dictionary"); }
+#[test]
 fn showcase_barcode() { run_snapshot("showcase-barcode"); }
 #[test]
 fn showcase_barcode_fit() { run_snapshot("showcase-barcode-fit"); }
