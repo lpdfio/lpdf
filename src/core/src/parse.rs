@@ -48,12 +48,23 @@ impl Document {
                     SectionChild::Layout { margin: layout_margin, children: layout_children } => {
                         seen_layout = true;
                         margin = layout_margin;
+                        // The layout takes the children in front of the flow as the header and the ones behind it
+                        // as the footer, so `pin` is applied here, wherever the region is written.
+                        let (mut top, mut bottom, mut middle) = (Vec::new(), Vec::new(), Vec::new());
                         for lc in layout_children {
                             match lc {
-                                LayoutChild::Content(node) => children.push(node),
-                                LayoutChild::Region(reg)   => children.push(region_to_compat_node(reg)),
+                                LayoutChild::Content(node) => middle.push(node),
+                                LayoutChild::Region(reg) => match reg.pin {
+                                    RegionPin::Top    => top.push(region_to_compat_node(reg)),
+                                    RegionPin::Bottom => bottom.push(region_to_compat_node(reg)),
+                                    // Not implemented: stays where it is written.
+                                    RegionPin::Left | RegionPin::Right => middle.push(region_to_compat_node(reg)),
+                                },
                             }
                         }
+                        children.append(&mut top);
+                        children.append(&mut middle);
+                        children.append(&mut bottom);
                     }
                     SectionChild::Layer(layer) => {
                         if seen_layout {
@@ -112,8 +123,7 @@ pub enum RegionPin { Top, Bottom, Left, Right }
 /// Only valid as a direct child of `<layout>`, not inside containers.
 #[derive(Debug, Clone)]
 pub struct LayoutRegion {
-    /// Not yet used by `region_to_compat_node`; reserved for left/right pins.
-    #[allow(dead_code)]
+    /// Top and bottom decide where `section_layouts` puts the region; left and right are not implemented.
     pub pin:      RegionPin,
     pub page:     Option<PageScope>,
     /// `w` is required for `Left`/`Right`; ignored for `Top`/`Bottom`.
@@ -3322,6 +3332,72 @@ mod tests {
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0].children.len(), 1);
         assert_eq!(pages[0].children[0].kind, NodeKind::Text);
+    }
+
+    /// The first words of what a layout child holds: its own text, or the text of the region it stands for.
+    fn label(node: &Node) -> String {
+        let text = if node.kind == NodeKind::Text { node } else { &node.children[0] };
+        text.text_runs[0].text.clone()
+    }
+
+    #[test]
+    fn regions_go_by_pin_wherever_they_are_written() {
+        let xml = r#"<lpdf version="1">
+            <document size="a4">
+                <section>
+                    <layout>
+                        <region pin="bottom"><text>Foot</text></region>
+                        <text>Body</text>
+                        <region pin="top" page="first"><text>Head</text></region>
+                        <region pin="bottom" page="last"><text>Foot 2</text></region>
+                        <region pin="top"><text>Head 2</text></region>
+                    </layout>
+                </section>
+            </document>
+        </lpdf>"#;
+        let mut doc = parse(xml).unwrap();
+        let layout = doc.section_layouts();
+        let order: Vec<String> = layout[0].children.iter().map(label).collect();
+        assert_eq!(order, ["Head", "Head 2", "Body", "Foot", "Foot 2"]);
+    }
+
+    #[test]
+    fn regions_written_at_the_edges_keep_their_order() {
+        let xml = r#"<lpdf version="1">
+            <document size="a4">
+                <section>
+                    <layout>
+                        <region pin="top"><text>Head</text></region>
+                        <text>Body</text>
+                        <region pin="bottom"><text>Foot</text></region>
+                    </layout>
+                </section>
+            </document>
+        </lpdf>"#;
+        let mut doc = parse(xml).unwrap();
+        let layout = doc.section_layouts();
+        let order: Vec<String> = layout[0].children.iter().map(label).collect();
+        assert_eq!(order, ["Head", "Body", "Foot"]);
+    }
+
+    #[test]
+    fn a_left_region_stays_where_it_is_written() {
+        let xml = r#"<lpdf version="1">
+            <document size="a4">
+                <section>
+                    <layout>
+                        <text>A</text>
+                        <region pin="left" w="40pt"><text>Side</text></region>
+                        <text>B</text>
+                        <region pin="top"><text>Head</text></region>
+                    </layout>
+                </section>
+            </document>
+        </lpdf>"#;
+        let mut doc = parse(xml).unwrap();
+        let layout = doc.section_layouts();
+        let order: Vec<String> = layout[0].children.iter().map(label).collect();
+        assert_eq!(order, ["Head", "A", "Side", "B"]);
     }
 
     // §5.2.8 layer page scope
