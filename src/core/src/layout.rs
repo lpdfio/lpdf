@@ -3325,6 +3325,40 @@ mod tests {
         }
     }
 
+    /// Helper: the `y` of every text node of a page, by its content.
+    fn text_ys(page: &serde_json::Value) -> HashMap<String, f64> {
+        let mut out = HashMap::new();
+        fn walk(v: &serde_json::Value, out: &mut HashMap<String, f64>) {
+            if v["type"] == "text" {
+                if let (Some(s), Some(y)) = (v["content"].as_str(), v["y"].as_f64()) { out.insert(s.to_string(), y); }
+            }
+            if let Some(arr) = v["nodes"].as_array() {
+                for c in arr { walk(c, out); }
+            }
+        }
+        walk(page, &mut out);
+        out
+    }
+
+    #[test]
+    fn a_region_is_drawn_at_the_edge_its_pin_names_wherever_it_is_written() {
+        // Written in the wrong order on purpose: the footer first, the header last.
+        let body = r#"<region pin="bottom"><text>FOOT</text></region><text>BODY</text><region pin="top"><text>HEAD</text></region>"#;
+        let tree = engine_render(&minimal(body));
+        let ys = text_ys(&tree["pages"][0]);
+        let (head, body, foot) = (ys["HEAD"], ys["BODY"], ys["FOOT"]);
+        assert!(head < body && body < foot, "head {head}, body {body}, foot {foot}");
+        assert!(foot > 700.0, "the footer is drawn at the bottom of the page, not at {foot}");
+    }
+
+    #[test]
+    fn a_region_written_in_the_right_order_is_drawn_as_before() {
+        let body = r#"<region pin="top"><text>HEAD</text></region><text>BODY</text><region pin="bottom"><text>FOOT</text></region>"#;
+        let tree = engine_render(&minimal(body));
+        let ys = text_ys(&tree["pages"][0]);
+        assert!(ys["HEAD"] < ys["BODY"] && ys["BODY"] < ys["FOOT"] && ys["FOOT"] > 700.0, "{ys:?}");
+    }
+
     #[test]
     fn repeat_first_renders_only_on_first_page() {
         let filler = r#"<frame height="120pt" />"#;

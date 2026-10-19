@@ -36,10 +36,6 @@ use roxmltree::{Document, Node};
 /// Attributes the schema declares and the engine does not use yet: `element@attribute`, and why. The test
 /// requires them to have no effect; when one is implemented, the test fails and the entry is removed.
 const IGNORED: &[(&str, &str)] = &[
-    (
-        "region@pin",
-        "read and not used: a region is a header when it comes first in the layout and a footer when it comes last, whatever its pin says",
-    ),
     ("region@w", "read and not used: it is for the left and right pins, which are not implemented"),
     ("section@title", "read and not used: the outline takes its entries from bookmarks"),
     ("divider@debug", "the debug outline is drawn for boxes, and a divider is not one"),
@@ -56,10 +52,20 @@ const IGNORED: &[(&str, &str)] = &[
 
 /// Values of an enumeration the engine does not use yet: `element@attribute=value`, and why. Each has to stay
 /// without effect, like the entries of IGNORED.
-const IGNORED_VALUES: &[(&str, &str)] = &[(
-    "row@align=stretch",
-    "a row does not stretch its children to the height of the line, so stretch places them as start does",
-)];
+const IGNORED_VALUES: &[(&str, &str)] = &[
+    (
+        "row@align=stretch",
+        "a row does not stretch its children to the height of the line, so stretch places them as start does",
+    ),
+    (
+        "region@pin=left",
+        "the left and right pins are not implemented: the region stays where it is written, as a top one does when it comes first",
+    ),
+    (
+        "region@pin=right",
+        "the left and right pins are not implemented: the region stays where it is written, as a top one does when it comes first",
+    ),
+];
 
 /// Attributes that change the PDF file and not what a page shows: `element@attribute`, and why. The test cannot
 /// tell the two apart; these were found by reading the engine. Each has to keep changing the PDF.

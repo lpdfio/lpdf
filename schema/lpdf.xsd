@@ -932,8 +932,8 @@
         <!-- Pinned region: reserves a slot at the specified edge of the content area.
              pin="top|bottom" implemented in this phase.
              pin="left|right" schema-valid but deferred (requires w attribute).
-             Only valid as a direct child of <layout>, not inside containers.
-             At most one region per pin per physical page (parser-enforced). -->
+             Only valid as a direct child of <layout>, not inside containers. Several regions on one
+             edge stack in the order they are written. -->
         <xs:element name="region">
           <xs:annotation>
             <xs:documentation>Pins content to the top or bottom edge of pages, outside the normal flow, for headers and footers. It reserves that space on every page it appears on. Only allowed directly inside layout, and one per pin on a page.</xs:documentation>
@@ -952,7 +952,7 @@
                 <xs:documentation>Which pages show the region: each, first, last, odd, even, or a range such as 2-last. Defaults to each.</xs:documentation>
               </xs:annotation>
             </xs:attribute>
-            <!-- w required for pin="left|right"; ignored for pin="top|bottom" (parser-enforced) -->
+            <!-- w is for pin="left|right", which are not implemented; it is read and not used -->
             <xs:attribute name="w"     type="PtValue"/>
             <xs:attribute name="debug" type="xs:boolean"/>
           </xs:complexType>
