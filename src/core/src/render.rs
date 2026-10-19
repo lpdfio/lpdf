@@ -106,6 +106,8 @@ pub struct RenderImage {
     pub width: f32,
     pub height: f32,
     pub name: String,
+    /// The corner radius the picture is clipped to; 0 draws it as a rectangle.
+    pub radius: f32,
 }
 
 #[derive(Clone)]
@@ -362,14 +364,18 @@ fn node_to_json(node: &RenderNode) -> Value {
             "height":   r2(l.height),
             "nodes": nodes_to_json(&l.children),
         }),
-        RenderNode::Image(i) => json!({
-            "type":   "image",
-            "x":      r2(i.x),
-            "y":      r2(i.y),
-            "width":  r2(i.width),
-            "height": r2(i.height),
-            "name":   i.name,
-        }),
+        RenderNode::Image(i) => {
+            let mut v = json!({
+                "type":   "image",
+                "x":      r2(i.x),
+                "y":      r2(i.y),
+                "width":  r2(i.width),
+                "height": r2(i.height),
+                "name":   i.name,
+            });
+            if i.radius > 0.0 { v["radius"] = json!(r2(i.radius)); }
+            v
+        }
         RenderNode::Barcode(bc) => {
             let kind_str = match &bc.kind {
                 RenderedBarcodeKind::Qr { .. }      => "qr",

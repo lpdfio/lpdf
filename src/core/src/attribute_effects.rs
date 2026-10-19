@@ -43,10 +43,6 @@ const IGNORED: &[(&str, &str)] = &[
     ("img@font", "an image is laid out as the picture alone: the attribute is read and not used"),
     ("img@font-size", "an image is laid out as the picture alone: the attribute is read and not used"),
     ("img@gap", "an image is laid out as the picture alone: the attribute is read and not used"),
-    ("img@padding", "an image is laid out as the picture alone: the attribute is read and not used"),
-    ("img@background", "an image is laid out as the picture alone: the attribute is read and not used"),
-    ("img@border", "an image is laid out as the picture alone: the attribute is read and not used"),
-    ("img@radius", "an image is laid out as the picture alone: the attribute is read and not used"),
     ("img@debug", "an image is laid out as the picture alone: the attribute is read and not used"),
 ];
 
@@ -353,13 +349,18 @@ const BLUE_PIXEL: &[u8] = &[
 fn render(xml: &str) -> Result<Vec<u8>, String> {
     catch_unwind(AssertUnwindSafe(|| {
         let mut doc = crate::parse::parse(xml)?;
-        let layouts = doc.section_layouts();
-        let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts);
-        let mut fonts = crate::pdf::FontRegistry::new();
-        fonts.register("custom", crate::pdf::ATTRIBUTION_FONT.to_vec());
         let mut images = crate::pdf::ImageRegistry::new();
         images.load("logo", RED_PIXEL.to_vec());
         images.load("other", BLUE_PIXEL.to_vec());
+        // As the engine does before it lays out: the sizes of the images, and what is drawn around one.
+        let meta = crate::pdf::build_image_meta(&images);
+        let mut layouts = doc.section_layouts();
+        for section in &mut layouts {
+            crate::layout::prefill_section_image_sizes(section, &meta);
+        }
+        let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts);
+        let mut fonts = crate::pdf::FontRegistry::new();
+        fonts.register("custom", crate::pdf::ATTRIBUTION_FONT.to_vec());
         crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, None, false)
     }))
     .unwrap_or_else(|_| Err("the engine panicked".to_string()))

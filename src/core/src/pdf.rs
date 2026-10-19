@@ -1077,6 +1077,12 @@ fn draw_node(
                 // image to the desired width/height, positioned at (x, pdf_y).
                 let pdf_y = page_h - img.y - img.height;
                 content.save_state();
+                // Rounded corners: only what is inside the rounded rectangle is painted.
+                if img.radius > 0.0 {
+                    rounded_rect(content, img.x, pdf_y, img.width, img.height, img.radius);
+                    content.clip_nonzero();
+                    content.end_path();
+                }
                 content.transform([img.width, 0.0, 0.0, img.height, img.x, pdf_y]);
                 let rname: Vec<u8> = res_name.bytes().collect();
                 content.x_object(Name(&rname));
@@ -3579,6 +3585,44 @@ mod tests {
         0x54, 0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0xc9, 0xfe, 0x92, 0xef, 0x00, 0x00, 0x00,
         0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
     ];
+
+    // ── An image clipped to rounded corners ───────────────────────────────────
+
+    /// A page with one `img` of the given attributes, from `RED_PIXEL`, laid out as the engine does.
+    fn render_image_page(attrs: &str) -> Vec<u8> {
+        let xml = format!(
+            r#"<lpdf version="1"><assets><image name="photo" src="photo.png"/></assets><document><section><layout margin="20pt"><img name="photo" {attrs}/></layout></section></document></lpdf>"#
+        );
+        let mut doc = crate::parse::parse(&xml).expect("parses");
+        let mut images = ImageRegistry::new();
+        images.load("photo", RED_PIXEL.to_vec());
+        let meta = build_image_meta(&images);
+        let mut layouts = doc.section_layouts();
+        for section in &mut layouts {
+            crate::layout::prefill_section_image_sizes(section, &meta);
+        }
+        let pages = crate::layout::layout_document(&layouts);
+        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false).expect("renders")
+    }
+
+    #[test]
+    fn an_image_with_a_radius_is_painted_inside_a_clip_and_one_without_is_not() {
+        let (rounded, _) = page_and_groups(&render_image_page(r#"width="60pt" height="60pt" radius="12pt""#));
+        let (square, _) = page_and_groups(&render_image_page(r#"width="60pt" height="60pt""#));
+        let clip = rounded.find("W\nn").or_else(|| rounded.find("W n")).expect("a clip before the image");
+        let draw = rounded.find("/I0 Do").expect("the image is drawn");
+        assert!(clip < draw, "the clip comes before the picture: {rounded}");
+        assert!(rounded.contains(" c\n") || rounded.contains(" c "), "the clip has curved corners: {rounded}");
+        assert!(!square.contains("W\nn") && !square.contains("W n"), "a plain image has no clip: {square}");
+    }
+
+    #[test]
+    fn a_box_around_an_image_fills_and_strokes_before_the_picture_is_drawn() {
+        let (page, _) = page_and_groups(&render_image_page(r##"width="60pt" height="60pt" padding="8pt" background="#eeeeee" border="1pt #112233" radius="10pt""##));
+        let fill = page.find("0.93333334 0.93333334 0.93333334 rg").unwrap_or_else(|| panic!("the background is filled: {page}"));
+        let draw = page.find("/I0 Do").expect("the image is drawn");
+        assert!(fill < draw, "the box is painted before the picture: {page}");
+    }
 
     #[test]
     fn a_faded_layer_draws_an_image_from_the_resources_of_its_group() {

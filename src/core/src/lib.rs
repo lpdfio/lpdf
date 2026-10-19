@@ -340,6 +340,24 @@ impl LpdfEngine {
         pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, &doc.gradients, None, false)
     }
 
+    /// Render XML to PDF bytes with `images` loaded, the way an SDK does: the sizes of the images are known before
+    /// the layout. Used by tests.
+    #[cfg(test)]
+    pub(crate) fn render_xml_with_images_to_pdf_bytes(xml: &str, images: &[(&str, &[u8])]) -> Result<Vec<u8>, String> {
+        let mut doc = parse::parse(xml)?;
+        let mut registry = pdf::ImageRegistry::new();
+        for (name, bytes) in images {
+            registry.load(name, bytes.to_vec());
+        }
+        let meta = pdf::build_image_meta(&registry);
+        let mut lp = doc.section_layouts();
+        for page in &mut lp {
+            layout::prefill_section_image_sizes(page, &meta);
+        }
+        let pages: Vec<render::RenderPage> = layout::layout_document(&lp);
+        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &registry, &doc.meta, &doc.gradients, None, false)
+    }
+
     fn render_doc(&self, mut doc: parse::Document) -> String {
         // Merge widths: engine-level (from set_font_metrics) + doc-level (from
         // tree JSON). Doc-level takes precedence — the adapter that built the
