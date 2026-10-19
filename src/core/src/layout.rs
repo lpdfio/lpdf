@@ -64,6 +64,40 @@ fn fit_within(natural: (f32, f32), width: Option<f32>, height: Option<f32>) -> (
     }
 }
 
+/// Whether an image sets a `padding`, a `background` or a `border`, and so is a box around its picture.
+fn sets_box(img: &Node) -> bool {
+    img.padding != [0.0; 4] || img.background.is_some() || img.border.is_some()
+}
+
+/// An image that sets a `padding`, a `background` or a `border` is a box around its picture. `width` and `height`
+/// size the picture, as they do for an image without them, and the box grows by the padding. Its border is drawn
+/// on its edge and takes no room, as on every box. The picture is clipped to the box's `radius` less the smallest
+/// padding, which is how far the picture is from the edge.
+fn box_around_picture(img: Node) -> Node {
+    let [pt, pr, pb, pl] = img.padding;
+    let least_padding = pt.min(pr).min(pb).min(pl);
+    let picture_w = img.width_constraint.unwrap_or(0.0);
+    let picture = Node {
+        padding: [0.0; 4],
+        background: None,
+        border: None,
+        radius: (img.radius - least_padding).max(0.0),
+        width_fill: false,
+        paginate: Paginate::None,
+        debug: false,
+        bookmarks: Vec::new(),
+        ..img.clone()
+    };
+    Node {
+        kind: NodeKind::Column,
+        children: vec![picture],
+        width_constraint: Some(picture_w + pl + pr),
+        image_name: None,
+        img_height_constraint: None,
+        ..img
+    }
+}
+
 fn prefill_node(node: &mut Node, meta: &ImageMeta) {
     if node.kind == NodeKind::Img {
         let name = node.image_name.as_deref().unwrap_or("");
@@ -75,6 +109,9 @@ fn prefill_node(node: &mut Node, meta: &ImageMeta) {
         };
         node.width_constraint      = Some(w);
         node.img_height_constraint = Some(h);
+        if sets_box(node) {
+            *node = box_around_picture(std::mem::replace(node, Node::layout_default()));
+        }
     } else {
         for child in &mut node.children {
             prefill_node(child, meta);
@@ -1825,7 +1862,7 @@ fn layout_img(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
     // If the width was clamped, scale height proportionally to preserve aspect ratio.
     let h = if pre_w > 0.0 { pre_h * (w / pre_w) } else { pre_h };
     let name = node.image_name.clone().unwrap_or_default();
-    (RenderNode::Image(RenderImage { x, y, width: w, height: h, name }), h)
+    (RenderNode::Image(RenderImage { x, y, width: w, height: h, name, radius: node.radius }), h)
 }
 
 // ── Form field ────────────────────────────────────────────────────────────────
@@ -4790,5 +4827,104 @@ mod tests {
         let body = r#"<text capture="k">Alpha</text><text capture-ref="k" capture-fallback="from the flow"/>"#;
         let tree = engine_render(&minimal(body));
         assert!(find_text_content(&tree["pages"][0]).contains(&"from the flow".to_string()));
+    }
+
+    // ── An image with box attributes ──────────────────────────────────────────
+
+    /// The first node of a page tree, at any depth, that `pick` returns a value for.
+    fn find_in<T>(tree: &serde_json::Value, pick: &dyn Fn(&serde_json::Value) -> Option<T>) -> Option<T> {
+        fn walk<T>(nodes: &serde_json::Value, pick: &dyn Fn(&serde_json::Value) -> Option<T>) -> Option<T> {
+            nodes.as_array()?.iter().find_map(|node| pick(node).or_else(|| walk(&node["nodes"], pick)))
+        }
+        walk(&tree["pages"][0]["nodes"], pick)
+    }
+
+    /// The first box of the page that holds an image, and that image.
+    fn box_with_image(tree: &serde_json::Value) -> Option<(serde_json::Value, serde_json::Value)> {
+        find_in(tree, &|node| {
+            if node["type"] != "box" { return None; }
+            let image = node["nodes"].as_array()?.iter().find(|n| n["type"] == "image")?;
+            Some((node.clone(), image.clone()))
+        })
+    }
+
+    #[test]
+    fn an_image_with_padding_a_background_and_a_border_is_a_box_around_its_picture() {
+        let img = r##"<img name="logo" width="80pt" padding="10pt" background="#eeeeee" border="2pt #112233" radius="12pt"/>"##;
+        let tree = tree_with_logo("", img, Some((200, 100)));
+        let (frame, picture) = box_with_image(&tree).expect("a box around the picture");
+        // The picture is 80 by 40, and the box grows by the padding on each side. The border takes no room.
+        assert_eq!((picture["width"].as_f64(), picture["height"].as_f64()), (Some(80.0), Some(40.0)));
+        assert_eq!((frame["width"].as_f64(), frame["height"].as_f64()), (Some(100.0), Some(60.0)));
+        assert_eq!(frame["fill"], "#eeeeee");
+        assert_eq!((frame["border_width"].as_f64(), frame["border_color"].as_str()), (Some(2.0), Some("#112233")));
+        assert_eq!(frame["radius"].as_f64(), Some(12.0));
+        // The picture sits the padding in from the edge, and its corners are the box's less that.
+        let inset = picture["x"].as_f64().unwrap() - frame["x"].as_f64().unwrap();
+        assert_eq!(inset, 10.0);
+        assert_eq!(picture["radius"].as_f64(), Some(2.0));
+    }
+
+    #[test]
+    fn the_picture_is_rounded_to_the_radius_less_the_smallest_padding_and_never_below_nothing() {
+        let radius = |padding: &str| {
+            let img = format!(r##"<img name="logo" width="80pt" padding="{padding}" border="2pt #112233" radius="20pt"/>"##);
+            let (_, picture) = box_with_image(&tree_with_logo("", &img, Some((200, 100)))).expect("a box around the picture");
+            picture["radius"].as_f64()
+        };
+        assert_eq!(radius("4pt"), Some(16.0));
+        assert_eq!(radius("4pt 10pt"), Some(16.0), "the smallest side counts");
+        assert_eq!(radius("30pt"), None, "a padding past the radius leaves the picture square");
+    }
+
+    #[test]
+    fn a_radius_alone_clips_the_picture_and_adds_no_box() {
+        let tree = tree_with_logo("", r#"<img name="logo" width="48pt" height="48pt" radius="12pt"/>"#, Some((100, 100)));
+        assert!(box_with_image(&tree).is_none(), "a box was added");
+        let picture = find_in(&tree, &|n| (n["type"] == "image").then(|| n.clone())).expect("an image");
+        assert_eq!((picture["width"].as_f64(), picture["radius"].as_f64()), (Some(48.0), Some(12.0)));
+    }
+
+    #[test]
+    fn an_image_without_box_attributes_is_drawn_as_before() {
+        let tree = tree_with_logo("", r#"<img name="logo" width="80pt"/>"#, Some((200, 100)));
+        assert!(box_with_image(&tree).is_none());
+        let picture = find_in(&tree, &|n| (n["type"] == "image").then(|| n.clone())).expect("an image");
+        assert!(picture.get("radius").is_none());
+        assert_eq!(first_image(&tree), (28.0, 28.0, 80.0, 40.0));
+    }
+
+    #[test]
+    fn a_box_around_a_picture_takes_its_width_in_a_row() {
+        let body = r##"<row gap="10pt"><img name="logo" width="80pt" padding="10pt" background="#eeeeee"/><text>Next</text></row>"##;
+        let tree = tree_with_logo("", body, Some((200, 100)));
+        let (frame, _) = box_with_image(&tree).expect("a box around the picture");
+        let next = find_in(&tree, &|n| (n["type"] == "text" && n["content"] == "Next").then(|| n["x"].as_f64()).flatten())
+            .expect("the text after the image");
+        // The box is 100 wide, so the text starts a gap after it.
+        assert_eq!(frame["width"].as_f64(), Some(100.0));
+        assert_eq!(next, frame["x"].as_f64().unwrap() + 100.0 + 10.0);
+    }
+
+    #[test]
+    fn a_box_around_a_picture_stays_a_box_in_a_table_cell() {
+        let body = r##"<table cols="1fr 1fr"><tr><td><img name="logo" width="40pt" padding="5pt" background="#eeeeee"/></td><td><text>Cell</text></td></tr></table>"##;
+        let tree = tree_with_logo("", body, Some((200, 100)));
+        let (frame, picture) = box_with_image(&tree).expect("a box around the picture in the cell");
+        assert_eq!((frame["width"].as_f64(), frame["height"].as_f64()), (Some(50.0), Some(30.0)));
+        assert_eq!(picture["width"].as_f64(), Some(40.0));
+    }
+
+    #[test]
+    fn a_box_around_a_picture_is_not_split_across_a_page_break() {
+        let filler = r#"<frame height="760pt"/>"#;
+        let img = r##"<img name="logo" width="80pt" padding="10pt" background="#eeeeee"/>"##;
+        let tree = tree_with_logo("", &format!("{filler}{img}"), Some((200, 100)));
+        let on_page = |page: usize| {
+            let has = |kind: &str| tree["pages"][page].to_string().contains(&format!(r#""type":"{kind}""#));
+            (has("image"), tree["pages"][page]["nodes"].to_string().contains(r##""fill":"#eeeeee""##))
+        };
+        assert_eq!(on_page(0), (false, false), "nothing of the box stays on the first page");
+        assert_eq!(on_page(1), (true, true), "the box and its picture are together on the second");
     }
 }
