@@ -146,6 +146,8 @@ fn showcase_running_header_dictionary() { run_snapshot("showcase-running-header-
 #[test]
 fn showcase_image_box() { run_snapshot_with_image("showcase-image-box"); }
 #[test]
+fn showcase_image_fill() { run_snapshot_with_image("showcase-image-fill"); }
+#[test]
 fn showcase_barcode() { run_snapshot("showcase-barcode"); }
 #[test]
 fn showcase_barcode_fit() { run_snapshot("showcase-barcode-fit"); }

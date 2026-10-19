@@ -329,6 +329,9 @@ pub struct Node {
     // img (NodeKind::Img only)
     pub image_name: Option<String>,
     pub img_height_constraint: Option<f32>,
+    /// The width over the height of a picture whose width is `fill`, set where the sizes of the images are filled
+    /// in. The width comes from the slot the picture is laid out in, and the height follows from this.
+    pub img_aspect: Option<f32>,
     // barcode (NodeKind::Barcode only)
     pub barcode_type: Option<BarcodeType>,
     pub barcode_data: Option<String>,
@@ -681,7 +684,7 @@ impl Node {
             line_height: DEFAULT_LINE_HEIGHT, max_lines: None, ellipsis: false,
             capture: None, captured: None, capture_ref: None, reserve_lines: 0,
             url: None, image_name: None,
-            img_height_constraint: None, barcode_type: None, barcode_data: None,
+            img_height_constraint: None, img_aspect: None, barcode_type: None, barcode_data: None,
             barcode_ec: BarcodeEcLevel::M, barcode_hrt: false, barcode_color: None,
             barcode_bg: None, table_cols: String::new(), stripe: None,
             field_kind: None, field_name: None, field_value: None, field_label: None,
@@ -781,6 +784,7 @@ fn resolve_node(
         url:                   n.url,
         image_name:            n.image_name,
         img_height_constraint: n.img_height_constraint,
+        img_aspect:            None,
         barcode_type:          n.barcode_type,
         barcode_data:          n.barcode_data,
         barcode_ec:            n.barcode_ec,

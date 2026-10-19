@@ -76,13 +76,13 @@ fn sets_box(img: &Node) -> bool {
 fn box_around_picture(img: Node) -> Node {
     let [pt, pr, pb, pl] = img.padding;
     let least_padding = pt.min(pr).min(pb).min(pl);
-    let picture_w = img.width_constraint.unwrap_or(0.0);
+    // A picture that fills takes what the padding leaves of the box, and the box takes its slot.
+    let width_constraint = img.width_constraint.map(|picture_w| picture_w + pl + pr);
     let picture = Node {
         padding: [0.0; 4],
         background: None,
         border: None,
         radius: (img.radius - least_padding).max(0.0),
-        width_fill: false,
         paginate: Paginate::None,
         debug: false,
         bookmarks: Vec::new(),
@@ -91,15 +91,25 @@ fn box_around_picture(img: Node) -> Node {
     Node {
         kind: NodeKind::Column,
         children: vec![picture],
-        width_constraint: Some(picture_w + pl + pr),
+        width_constraint,
         image_name: None,
         img_height_constraint: None,
+        img_aspect: None,
         ..img
     }
 }
 
 fn prefill_node(node: &mut Node, meta: &ImageMeta) {
-    if node.kind == NodeKind::Img {
+    if node.kind == NodeKind::Img && node.width_fill {
+        // The slot gives a picture with `width="fill"` its width, which is not known yet: keep the proportions
+        // and the `height` it may not pass, for `layout_img`.
+        let name = node.image_name.as_deref().unwrap_or("");
+        let (nat_w, nat_h) = meta.get(name).map_or((100.0, 100.0), |&(w, h)| (w as f32, h as f32));
+        node.img_aspect = Some(if nat_w > 0.0 && nat_h > 0.0 { nat_w / nat_h } else { 1.0 });
+        if sets_box(node) {
+            *node = box_around_picture(std::mem::replace(node, Node::layout_default()));
+        }
+    } else if node.kind == NodeKind::Img {
         let name = node.image_name.as_deref().unwrap_or("");
         let known = meta.get(name).map(|&(w, h)| (w as f32, h as f32));
         let (w, h) = match (node.width_constraint, node.img_height_constraint, known) {
@@ -1865,13 +1875,19 @@ fn layout_link(
 // ── Image ─────────────────────────────────────────────────────────────────────
 
 fn layout_img(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
-    // width_constraint and img_height_constraint are pre-filled by prefill_image_sizes.
-    // If somehow missing, fall back to a square box at available width.
-    let pre_w = node.width_constraint.unwrap_or(avail_w);
-    let pre_h = node.img_height_constraint.unwrap_or(pre_w);
-    let w = pre_w.min(avail_w);
-    // If the width was clamped, scale height proportionally to preserve aspect ratio.
-    let h = if pre_w > 0.0 { pre_h * (w / pre_w) } else { pre_h };
+    let (w, h) = match node.img_aspect {
+        // `width="fill"`: the slot is the width, and a `height` is a limit, as for any picture given both.
+        Some(aspect) if node.width_fill && avail_w < f32::MAX => fit_within((aspect, 1.0), Some(avail_w), node.img_height_constraint),
+        _ => {
+            // width_constraint and img_height_constraint are pre-filled by prefill_image_sizes.
+            // If somehow missing, fall back to a square box at available width.
+            let pre_w = node.width_constraint.unwrap_or(avail_w);
+            let pre_h = node.img_height_constraint.unwrap_or(pre_w);
+            let w = pre_w.min(avail_w);
+            // If the width was clamped, scale height proportionally to preserve aspect ratio.
+            (w, if pre_w > 0.0 { pre_h * (w / pre_w) } else { pre_h })
+        }
+    };
     let name = node.image_name.clone().unwrap_or_default();
     (RenderNode::Image(RenderImage { x, y, width: w, height: h, name, radius: node.radius }), h)
 }
@@ -4944,6 +4960,75 @@ mod tests {
         let (frame, picture) = box_with_image(&tree).expect("a box around the picture in the cell");
         assert_eq!((frame["width"].as_f64(), frame["height"].as_f64()), (Some(50.0), Some(30.0)));
         assert_eq!(picture["width"].as_f64(), Some(40.0));
+    }
+
+    // ── An image with width fill ──────────────────────────────────────────────
+
+    /// The width of the layout's column: an A4 page less a 28pt margin on each side.
+    const COLUMN_W: f64 = 595.28 - 56.0;
+
+    fn fill_size(body: &str, px: (u32, u32)) -> (f64, f64) {
+        let (_, _, w, h) = first_image(&tree_with_logo("", body, Some(px)));
+        (w, h)
+    }
+
+    fn close(got: (f64, f64), want: (f64, f64)) {
+        assert!((got.0 - want.0).abs() < 0.02 && (got.1 - want.1).abs() < 0.02, "got {got:?}, want {want:?}");
+    }
+
+    #[test]
+    fn an_image_with_width_fill_takes_the_width_of_its_column_and_the_height_follows() {
+        close(fill_size(r#"<img name="logo" width="fill"/>"#, (200, 100)), (COLUMN_W, COLUMN_W / 2.0));
+        // A picture smaller than the column grows to it, as one given a width does.
+        close(fill_size(r#"<img name="logo" width="fill"/>"#, (20, 10)), (COLUMN_W, COLUMN_W / 2.0));
+        // Inside a narrower box, it takes that box.
+        close(fill_size(r#"<column width="100pt"><img name="logo" width="fill"/></column>"#, (200, 100)), (100.0, 50.0));
+    }
+
+    #[test]
+    fn an_image_with_width_fill_and_a_height_fits_inside_both() {
+        // The height is the limit: the picture is as tall as given, and not as wide as the column.
+        close(fill_size(r#"<img name="logo" width="fill" height="60pt"/>"#, (200, 100)), (120.0, 60.0));
+        // The width is the limit: the column is 100pt wide, and the height allows more.
+        close(fill_size(r#"<column width="100pt"><img name="logo" width="fill" height="200pt"/></column>"#, (200, 100)), (100.0, 50.0));
+    }
+
+    #[test]
+    fn an_image_with_width_fill_in_a_row_takes_the_room_the_line_leaves() {
+        let body = r#"<row gap="10pt"><img name="logo" width="fill"/><text width="100pt">Next</text></row>"#;
+        let left = COLUMN_W - 100.0 - 10.0;
+        close(fill_size(body, (200, 100)), (left, left / 2.0));
+        // Two fill images share the line.
+        let two = r#"<row gap="10pt"><img name="logo" width="fill"/><img name="logo" width="fill"/></row>"#;
+        let half = (COLUMN_W - 10.0) / 2.0;
+        close(fill_size(two, (200, 100)), (half, half / 2.0));
+    }
+
+    #[test]
+    fn an_image_with_width_fill_in_a_table_cell_takes_the_cell() {
+        let body = r#"<table cols="1fr 1fr"><tr><td><img name="logo" width="fill"/></td><td><text>Cell</text></td></tr></table>"#;
+        let tree = tree_with_logo("", body, Some((200, 100)));
+        let (x, _, w, h) = first_image(&tree);
+        let next_cell = find_in(&tree, &|n| (n["type"] == "text" && n["content"] == "Cell").then(|| n["x"].as_f64()).flatten()).unwrap();
+        // Two equal cells: the picture is half the column, and the next cell starts where it ends.
+        close((w, h), (COLUMN_W / 2.0, COLUMN_W / 4.0));
+        assert!((x + w - next_cell).abs() < 0.02, "the picture ends at {}, the next cell starts at {next_cell}", x + w);
+    }
+
+    #[test]
+    fn a_box_around_an_image_with_width_fill_takes_the_column_and_the_picture_what_the_padding_leaves() {
+        let img = r##"<img name="logo" width="fill" padding="10pt" background="#eeeeee" border="1pt #112233"/>"##;
+        let tree = tree_with_logo("", img, Some((200, 100)));
+        let (frame, picture) = box_with_image(&tree).expect("a box around the picture");
+        let inner = COLUMN_W - 20.0;
+        close((frame["width"].as_f64().unwrap(), frame["height"].as_f64().unwrap()), (COLUMN_W, inner / 2.0 + 20.0));
+        close((picture["width"].as_f64().unwrap(), picture["height"].as_f64().unwrap()), (inner, inner / 2.0));
+    }
+
+    #[test]
+    fn an_image_without_width_fill_is_sized_as_before() {
+        close(fill_size(r#"<img name="logo"/>"#, (200, 100)), (200.0, 100.0));
+        close(fill_size(r#"<img name="logo" width="80pt"/>"#, (200, 100)), (80.0, 40.0));
     }
 
     #[test]

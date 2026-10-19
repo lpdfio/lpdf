@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <assets>
+    <image name="photo"  src="image-sample.png" />
+    <image name="avatar" src="image-square.png" />
+  </assets>
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+      <color name="rule"    value="#c4ccd9" />
+      <color name="bg"      value="#f5f7fa" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Image Fill" subject="An image with width fill takes the width of its slot" />
+
+    <!-- width="fill" makes the picture as wide as the slot it is laid out in, and the height follows its proportions:
+         the column, the room a row's line leaves, or a table cell. With a height too, both are a limit. With padding,
+         a background or a border, the box takes the slot and the picture fills what the padding leaves. Each slot is
+         outlined in grey, so the picture can be seen to fill it. -->
+    <section>
+      <layout margin="40pt">
+        <column gap="l">
+
+          <column gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Image fill</text>
+            <text font-size="m" color="muted">A picture as wide as the room it is given.</text>
+          </column>
+
+          <row gap="l" align="start">
+            <column width="240pt" gap="xs">
+              <text font-size="s" color="muted">In a column</text>
+              <column border="xs rule">
+                <img name="photo" width="fill"/>
+              </column>
+            </column>
+            <column width="240pt" gap="xs">
+              <text font-size="s" color="muted">With height="50pt", a limit</text>
+              <column border="xs rule">
+                <img name="photo" width="fill" height="50pt"/>
+              </column>
+            </column>
+          </row>
+
+          <row gap="l" align="start">
+            <column width="240pt" gap="xs">
+              <text font-size="s" color="muted">In a row, beside a text of 90pt</text>
+              <row gap="m" align="center" border="xs rule">
+                <img name="avatar" width="fill"/>
+                <text width="90pt" font-size="s">The picture takes what is left.</text>
+              </row>
+            </column>
+            <column width="240pt" gap="xs">
+              <text font-size="s" color="muted">Two in a row share the line</text>
+              <row gap="m" border="xs rule">
+                <img name="photo" width="fill" radius="m"/>
+                <img name="photo" width="fill" radius="m"/>
+              </row>
+            </column>
+          </row>
+
+          <row gap="l" align="start">
+            <column width="240pt" gap="xs">
+              <text font-size="s" color="muted">With padding, a background and a border</text>
+              <img name="photo" width="fill" padding="m" background="bg" border="xs primary" radius="l"/>
+            </column>
+            <column width="240pt" gap="xs">
+              <text font-size="s" color="muted">In a table cell</text>
+              <table cols="1fr 1fr" gap="m" border="xs rule">
+                <tr>
+                  <td><img name="photo" width="fill"/></td>
+                  <td><text font-size="s">As wide as its cell.</text></td>
+                </tr>
+              </table>
+            </column>
+          </row>
+
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

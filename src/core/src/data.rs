@@ -354,6 +354,7 @@ mod tests {
             url: None,
             image_name: None,
             img_height_constraint: None,
+            img_aspect: None,
             barcode_type: None,
             barcode_data: None,
             barcode_ec: BarcodeEcLevel::M,
