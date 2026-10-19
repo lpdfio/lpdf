@@ -298,6 +298,11 @@ fn opt_canvas_color(
     elem.attribute(attr).map(|v| tokens.resolve_color(v)).transpose()
 }
 
+/// The `fill` of a shape: a color, or `gradient:name`.
+fn opt_canvas_fill(elem: &roxmltree::Node, tokens: &Tokens) -> Result<Option<String>, String> {
+    elem.attribute("fill").map(|v| tokens.resolve_fill(v)).transpose()
+}
+
 fn opt_canvas_shadow(elem: &roxmltree::Node, tokens: &Tokens) -> Result<Option<Shadow>, String> {
     elem.attribute("shadow").map(|v| parse_shadow(v, tokens)).transpose()
 }
@@ -306,7 +311,7 @@ fn parse_canvas_rect(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_
     let w            = parse_measurement(elem.attribute("width").unwrap_or("0pt"))?;
     let h            = parse_measurement(elem.attribute("height").unwrap_or("0pt"))?;
     let (x, y)       = parse_canvas_box_position(elem, page_w, page_h, w, h)?;
-    let fill         = opt_canvas_color(elem, "fill", tokens)?;
+    let fill         = opt_canvas_fill(elem, tokens)?;
     let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
     let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
     let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
@@ -319,7 +324,7 @@ fn parse_canvas_circle(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, pag
     let r            = parse_measurement(elem.attribute("r").unwrap_or("0pt"))?;
     let (x, y)       = parse_canvas_box_position(elem, page_w, page_h, 2.0 * r, 2.0 * r)?;
     let (cx, cy)     = (x + r, y + r);
-    let fill         = opt_canvas_color(elem, "fill", tokens)?;
+    let fill         = opt_canvas_fill(elem, tokens)?;
     let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
     let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
     let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
@@ -332,7 +337,7 @@ fn parse_canvas_ellipse(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, pa
     let ry           = parse_measurement(elem.attribute("ry").unwrap_or("0pt"))?;
     let (x, y)       = parse_canvas_box_position(elem, page_w, page_h, 2.0 * rx, 2.0 * ry)?;
     let (cx, cy)     = (x + rx, y + ry);
-    let fill         = opt_canvas_color(elem, "fill", tokens)?;
+    let fill         = opt_canvas_fill(elem, tokens)?;
     let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
     let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
     let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
@@ -354,7 +359,7 @@ fn parse_canvas_line(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPr
 
 fn parse_canvas_path(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
     let d            = elem.attribute("d").unwrap_or("").to_string();
-    let fill         = opt_canvas_color(elem, "fill", tokens)?;
+    let fill         = opt_canvas_fill(elem, tokens)?;
     let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
     let fill_rule    = elem.attribute("fill-rule").map(str::to_string);
     let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
@@ -490,6 +495,9 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
     let get_color = |k: &str| -> Result<Option<String>, String> {
         get_attr(k).map(|v| tokens.resolve_color(v)).transpose()
     };
+    let get_fill = || -> Result<Option<String>, String> {
+        get_attr("fill").map(|v| tokens.resolve_fill(v)).transpose()
+    };
     let get_shadow = || -> Result<Option<Shadow>, String> {
         get_attr("shadow").map(|v| parse_shadow(v, tokens)).transpose()
     };
@@ -530,7 +538,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
             let (x, y) = get_box_pos(w, h)?;
             Ok(CanvasPrimitive::Rect(CanvasRect {
                 x, y, w, h,
-                fill:         get_color("fill")?,
+                fill:         get_fill()?,
                 stroke:       get_color("stroke")?,
                 stroke_width: get_f32("stroke-width")?,
                 stroke_dash:  get_attr("stroke-dash").map(str::to_string),
@@ -543,7 +551,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
             let (x, y) = get_box_pos(2.0 * r, 2.0 * r)?;
             Ok(CanvasPrimitive::Circle(CanvasCircle {
                 cx: x + r, cy: y + r, r,
-                fill:         get_color("fill")?,
+                fill:         get_fill()?,
                 stroke:       get_color("stroke")?,
                 stroke_width: get_f32("stroke-width")?,
                 stroke_dash:  get_attr("stroke-dash").map(str::to_string),
@@ -556,7 +564,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
             let (x, y) = get_box_pos(2.0 * rx, 2.0 * ry)?;
             Ok(CanvasPrimitive::Ellipse(CanvasEllipse {
                 cx: x + rx, cy: y + ry, rx, ry,
-                fill:         get_color("fill")?,
+                fill:         get_fill()?,
                 stroke:       get_color("stroke")?,
                 stroke_width: get_f32("stroke-width")?,
                 stroke_dash:  get_attr("stroke-dash").map(str::to_string),
@@ -575,7 +583,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
         })),
         "path" => Ok(CanvasPrimitive::Path(CanvasPath {
             d:            get_attr("d").unwrap_or("").to_string(),
-            fill:         get_color("fill")?,
+            fill:         get_fill()?,
             stroke:       get_color("stroke")?,
             fill_rule:    get_attr("fill-rule").map(str::to_string),
             stroke_width: get_f32("stroke-width")?,

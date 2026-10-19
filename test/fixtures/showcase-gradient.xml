@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf" />
+      <color name="muted"    value="#737373" />
+      <color name="rule"     value="#dde3ed" />
+      <color name="ink"      value="#1f2a44" />
+      <color name="accent"   value="#e0762b" />
+    </colors>
+    <gradients>
+      <!-- Two colors: from and to. The angle is where the blend runs: 0 top to bottom, 90 left to right. -->
+      <gradient name="down"     type="linear" from="primary" to="#0f3e8a" />
+      <gradient name="right"    type="linear" from="primary" to="accent" angle="90" />
+      <gradient name="diagonal" type="linear" from="primary" to="accent" angle="45" />
+      <gradient name="up"       type="linear" from="primary" to="accent" angle="180" />
+      <!-- More colors: stops, each at a percentage of the way along. -->
+      <gradient name="sunset" type="linear" angle="90">
+        <stop offset="0%"   color="#f97316" />
+        <stop offset="55%"  color="#ec4899" />
+        <stop offset="100%" color="#8b5cf6" />
+      </gradient>
+      <!-- Radial: from the center out to the farthest corner. -->
+      <gradient name="spotlight" type="radial" from="#ffffff" to="primary" />
+      <gradient name="night"     type="linear" from="#0f172a" to="#1e3a8a" />
+    </gradients>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Gradient" subject="gradients on boxes, table rows, layer shapes and a page" />
+
+    <!-- A gradient is defined once under a name in the tokens, and used where a background or a fill goes,
+         as gradient:name. It spans the box it fills. -->
+    <section>
+      <layout margin="40pt">
+        <column gap="xl">
+
+          <column gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Gradient</text>
+            <text font-size="m" color="muted">A blend of colors across a box, from a name in the tokens.</text>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Direction</text>
+            <row gap="m" align="start">
+              <column width="110pt" height="90pt" padding="m" background="gradient:down" radius="s">
+                <text font-size="s" font="Helvetica-Bold" color="#ffffff">angle 0</text>
+                <text font-size="s" color="#ffffff">Top to bottom.</text>
+              </column>
+              <column width="110pt" height="90pt" padding="m" background="gradient:right" radius="s">
+                <text font-size="s" font="Helvetica-Bold" color="#ffffff">angle 90</text>
+                <text font-size="s" color="#ffffff">Left to right.</text>
+              </column>
+              <column width="110pt" height="90pt" padding="m" background="gradient:diagonal" radius="s">
+                <text font-size="s" font="Helvetica-Bold" color="#ffffff">angle 45</text>
+                <text font-size="s" color="#ffffff">Corner to corner.</text>
+              </column>
+              <column width="110pt" height="90pt" padding="m" background="gradient:up" radius="s">
+                <text font-size="s" font="Helvetica-Bold" color="#ffffff">angle 180</text>
+                <text font-size="s" color="#ffffff">Bottom to top.</text>
+              </column>
+            </row>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Stops and radial</text>
+            <column width="fill" height="60pt" padding="m" background="gradient:sunset" radius="m">
+              <text font-size="m" font="Helvetica-Bold" color="#ffffff">Three colors, at 0%, 55% and 100%</text>
+            </column>
+            <row gap="m" align="start">
+              <column width="240pt" height="90pt" padding="m" background="gradient:spotlight" radius="s">
+                <text font-size="s" font="Helvetica-Bold" color="ink">radial</text>
+                <text font-size="s" color="ink">Out to the farthest corner.</text>
+              </column>
+              <column width="240pt" height="90pt" padding="m" background="gradient:spotlight" radius="s" border="s rule" shadow="4pt 4pt ink 0.3">
+                <text font-size="s" font="Helvetica-Bold" color="ink">border and shadow</text>
+                <text font-size="s" color="ink">Both are drawn around the blend.</text>
+              </column>
+            </row>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Table rows</text>
+            <table cols="2fr 1fr 1fr">
+              <thead background="gradient:right">
+                <td padding="s"><text font-size="s" font="Helvetica-Bold" color="#ffffff">Item</text></td>
+                <td padding="s"><text font-size="s" font="Helvetica-Bold" color="#ffffff">Qty</text></td>
+                <td padding="s"><text font-size="s" font="Helvetica-Bold" color="#ffffff">Price</text></td>
+              </thead>
+              <tr>
+                <td padding="s"><text font-size="s">Setup</text></td>
+                <td padding="s"><text font-size="s">1</text></td>
+                <td padding="s"><text font-size="s">200.00</text></td>
+              </tr>
+              <tr background="gradient:spotlight">
+                <td padding="s"><text font-size="s">Support</text></td>
+                <td padding="s"><text font-size="s">12</text></td>
+                <td padding="s"><text font-size="s">1,200.00</text></td>
+              </tr>
+            </table>
+          </column>
+
+        </column>
+      </layout>
+
+      <!-- The fill of a layer shape. A circle, an ellipse or a path is filled inside its own outline. -->
+      <layer>
+        <text-at x="40pt" y="590pt" font="Helvetica-Bold" font-size="l">On a layer</text-at>
+        <rect x="40pt" y="620pt" width="130pt" height="70pt" radius="6pt" fill="gradient:right"/>
+        <circle x="212pt" y="620pt" r="35pt" fill="gradient:spotlight" stroke="rule"/>
+        <ellipse x="312pt" y="630pt" rx="55pt" ry="25pt" fill="gradient:sunset"/>
+        <path d="M 470 690 L 520 620 L 570 690 Z" fill="gradient:diagonal"/>
+        <path d="M 40 720 L 170 720 L 170 790 L 40 790 Z M 70 735 L 140 735 L 140 775 L 70 775 Z" fill="gradient:down" fill-rule="evenodd"/>
+        <text-at x="190pt" y="760pt" font-size="s" color="muted">A rect with a radius, a circle, an ellipse, a triangle and a frame with a hole (even-odd).</text-at>
+      </layer>
+    </section>
+
+    <!-- A section's background can be a gradient too: it spans the page. -->
+    <section background="gradient:night">
+      <layout margin="40pt">
+        <column gap="m">
+          <text font-size="xxl" font="Helvetica-Bold" color="#ffffff">A page of its own</text>
+          <text font-size="m" color="#c7d2fe">background="gradient:night" on the section.</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

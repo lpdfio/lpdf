@@ -34,7 +34,7 @@ use std::ops::Range;
 
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
 use pdf_writer::writers::Resources;
-use pdf_writer::types::{ActionType, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, HighlightEffect, LineCapStyle, LineJoinStyle, PageMode, Predictor, TextRenderingMode};
+use pdf_writer::types::{ActionType, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, FunctionShadingType, HighlightEffect, LineCapStyle, LineJoinStyle, PageMode, Predictor, TextRenderingMode};
 use ttf_parser::Face;
 use miniz_oxide::deflate::compress_to_vec_zlib;
 use miniz_oxide::inflate::decompress_to_vec_zlib;
@@ -42,7 +42,7 @@ use subsetter::GlyphRemapper;
 
 use crate::render::{placed_anchors, PlacedAnchor, RenderBox, RenderCanvasLayer, RenderField, RenderNode, RenderPage, RenderedBarcodeKind};
 use crate::parse::{FieldKind, Meta, Shadow};
-use crate::tokens::FontDef;
+use crate::tokens::{FontDef, Gradient, GradientKind, GRADIENT_PREFIX};
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -943,17 +943,24 @@ fn draw_barcode_hrt(
 ///
 /// `page_h` is required for the top-down → bottom-up coordinate flip:
 ///   `pdf_y = page_h − layout_y − node_height`
+/// What drawing looks up by name: the fonts, the resource name of each image, and the gradients of the tokens.
+#[derive(Clone, Copy)]
+struct DrawResources<'a> {
+    fonts:         &'a HashMap<String, PreparedFont>,
+    image_res_map: &'a HashMap<String, String>,
+    gradients:     &'a HashMap<String, Gradient>,
+}
+
 fn draw_nodes(
     content:       &mut Content,
     annots:        &mut Vec<AnnotData>,
     groups:        &mut Vec<PageGroup>,
     nodes:         &[RenderNode],
-    fonts:         &HashMap<String, PreparedFont>,
-    image_res_map: &HashMap<String, String>,
+    res:           &DrawResources,
     page_h:        f32,
 ) {
     for node in nodes {
-        draw_node(content, annots, groups, node, fonts, image_res_map, page_h);
+        draw_node(content, annots, groups, node, res, page_h);
     }
 }
 
@@ -962,19 +969,19 @@ fn draw_node(
     annots:        &mut Vec<AnnotData>,
     groups:        &mut Vec<PageGroup>,
     node:          &RenderNode,
-    fonts:         &HashMap<String, PreparedFont>,
-    image_res_map: &HashMap<String, String>,
+    res:           &DrawResources,
     page_h:        f32,
 ) {
+    let DrawResources { fonts, image_res_map, gradients } = *res;
     match node {
         // ── Box ──────────────────────────────────────────────────────────────
         RenderNode::Box(b) => {
             let percent = opacity_percent(b.opacity);
             if percent >= 100 {
-                draw_box(content, annots, groups, b, fonts, image_res_map, page_h);
+                draw_box(content, annots, groups, b, res, page_h);
             } else {
                 draw_faded(content, groups, percent, |content, groups| {
-                    draw_box(content, annots, groups, b, fonts, image_res_map, page_h);
+                    draw_box(content, annots, groups, b, res, page_h);
                 });
             }
         }
@@ -1048,7 +1055,7 @@ fn draw_node(
         // ── Link ─────────────────────────────────────────────────────────────
         RenderNode::Link(lk) => {
             // Draw child nodes first (they appear inside the link area).
-            draw_nodes(content, annots, groups, &lk.children, fonts, image_res_map, page_h);
+            draw_nodes(content, annots, groups, &lk.children, res, page_h);
 
             // Collect the annotation rect in bottom-up PDF coordinates.
             // The annotation PDF object will be written during assembly.
@@ -1179,9 +1186,20 @@ fn draw_node(
                 let outline = Outline::Rect { x: r.x, y: page_h - r.y - r.h, w: r.w, h: r.h, radius: r.border_radius };
                 draw_shadow(content, groups, shadow, &outline, has_fill);
             }
-            if has_fill || has_stroke {
+            let pdf_y = page_h - r.y - r.h;
+            if let Some((name, gradient)) = r.fill.as_deref().and_then(|fill| gradient_of(fill, gradients)) {
+                fill_with_gradient(content, name, gradient, (r.x, pdf_y, r.w, r.h), false, |content| {
+                    if r.border_radius > 0.0 {
+                        rounded_rect(content, r.x, pdf_y, r.w, r.h, r.border_radius);
+                    } else {
+                        content.rect(r.x, pdf_y, r.w, r.h);
+                    }
+                });
+            }
+            let solid_fill = has_fill && !r.fill.as_deref().is_some_and(is_gradient_fill);
+            if solid_fill || has_stroke {
                 content.save_state();
-                if has_fill {
+                if solid_fill {
                     let (rf, gf, bf) = parse_hex(r.fill.as_deref().unwrap_or("#000000"));
                     content.set_fill_rgb(rf, gf, bf);
                 }
@@ -1193,13 +1211,12 @@ fn draw_node(
                         content.set_dash_pattern(dash.iter().copied(), 0.0);
                     }
                 }
-                let pdf_y = page_h - r.y - r.h;
                 if r.border_radius > 0.0 {
                     rounded_rect(content, r.x, pdf_y, r.w, r.h, r.border_radius);
                 } else {
                     content.rect(r.x, pdf_y, r.w, r.h);
                 }
-                match (has_fill, has_stroke) {
+                match (solid_fill, has_stroke) {
                     (true,  true)  => { content.fill_nonzero_and_stroke(); }
                     (true,  false) => { content.fill_nonzero(); }
                     (false, true)  => { content.stroke(); }
@@ -1234,9 +1251,16 @@ fn draw_node(
                 let outline = Outline::Ellipse { cx: e.cx, cy: page_h - e.cy, rx: e.rx, ry: e.ry };
                 draw_shadow(content, groups, shadow, &outline, has_fill);
             }
-            if has_fill || has_stroke {
+            if let Some((name, gradient)) = e.fill.as_deref().and_then(|fill| gradient_of(fill, gradients)) {
+                let bounds = (e.cx - e.rx, page_h - e.cy - e.ry, 2.0 * e.rx, 2.0 * e.ry);
+                fill_with_gradient(content, name, gradient, bounds, false, |content| {
+                    ellipse_path(content, e.cx, page_h - e.cy, e.rx, e.ry);
+                });
+            }
+            let solid_fill = has_fill && !e.fill.as_deref().is_some_and(is_gradient_fill);
+            if solid_fill || has_stroke {
                 content.save_state();
-                if has_fill {
+                if solid_fill {
                     let (rf, gf, bf) = parse_hex(e.fill.as_deref().unwrap_or("#000000"));
                     content.set_fill_rgb(rf, gf, bf);
                 }
@@ -1253,7 +1277,7 @@ fn draw_node(
                 let cx = e.cx;
                 let cy = page_h - e.cy;
                 ellipse_path(content, cx, cy, e.rx, e.ry);
-                match (has_fill, has_stroke) {
+                match (solid_fill, has_stroke) {
                     (true,  true)  => { content.fill_nonzero_and_stroke(); }
                     (true,  false) => { content.fill_nonzero(); }
                     (false, true)  => { content.stroke(); }
@@ -1267,9 +1291,19 @@ fn draw_node(
         RenderNode::CanvasPath(p) => {
             let has_fill   = p.fill.is_some();
             let has_stroke = p.stroke.is_some() && p.stroke_width > 0.0;
-            if has_fill || has_stroke {
+            if let Some((name, gradient)) = p.fill.as_deref().and_then(|fill| gradient_of(fill, gradients)) {
+                let mut bounds = PathBounds::default();
+                emit_svg_path(&mut bounds, &p.d, page_h);
+                if let Some(bounds) = bounds.rect() {
+                    fill_with_gradient(content, name, gradient, bounds, p.fill_rule_evenodd, |content| {
+                        emit_svg_path(content, &p.d, page_h);
+                    });
+                }
+            }
+            let solid_fill = has_fill && !p.fill.as_deref().is_some_and(is_gradient_fill);
+            if solid_fill || has_stroke {
                 content.save_state();
-                if has_fill {
+                if solid_fill {
                     let (rf, gf, bf) = parse_hex(p.fill.as_deref().unwrap_or("#000000"));
                     content.set_fill_rgb(rf, gf, bf);
                 }
@@ -1284,7 +1318,7 @@ fn draw_node(
                     }
                 }
                 emit_svg_path(content, &p.d, page_h);
-                match (has_fill, has_stroke, p.fill_rule_evenodd) {
+                match (solid_fill, has_stroke, p.fill_rule_evenodd) {
                     (true,  true,  false) => { content.fill_nonzero_and_stroke(); }
                     (true,  true,  true)  => { content.fill_even_odd_and_stroke(); }
                     (true,  false, false) => { content.fill_nonzero(); }
@@ -1301,11 +1335,11 @@ fn draw_node(
             let percent = opacity_percent(layer.opacity);
             if percent >= 100 {
                 content.save_state();
-                draw_layer(content, annots, groups, layer, fonts, image_res_map, page_h);
+                draw_layer(content, annots, groups, layer, res, page_h);
                 content.restore_state();
             } else {
                 draw_faded(content, groups, percent, |content, groups| {
-                    draw_layer(content, annots, groups, layer, fonts, image_res_map, page_h);
+                    draw_layer(content, annots, groups, layer, res, page_h);
                 });
             }
         }
@@ -1318,12 +1352,14 @@ fn draw_box(
     annots:        &mut Vec<AnnotData>,
     groups:        &mut Vec<PageGroup>,
     b:             &RenderBox,
-    fonts:         &HashMap<String, PreparedFont>,
-    image_res_map: &HashMap<String, String>,
+    res:           &DrawResources,
     page_h:        f32,
 ) {
+    let gradients = res.gradients;
     let has_fill   = b.fill.is_some();
     let has_border = b.border_width > 0.0 && b.border_color.is_some();
+    // A gradient is painted ahead of the border; only a color is left to the fill operator below.
+    let solid_fill = has_fill && !b.fill.as_deref().is_some_and(is_gradient_fill);
 
     // Flip the box y from top-down to bottom-up.
     let pdf_y = page_h - b.y - b.height;
@@ -1333,10 +1369,20 @@ fn draw_box(
         draw_shadow(content, groups, shadow, &outline, has_fill);
     }
 
-    if has_fill || has_border {
+    if let Some((name, gradient)) = b.fill.as_deref().and_then(|fill| gradient_of(fill, gradients)) {
+        fill_with_gradient(content, name, gradient, (b.x, pdf_y, b.width, b.height), false, |content| {
+            if b.radius > 0.0 {
+                rounded_rect(content, b.x, pdf_y, b.width, b.height, b.radius);
+            } else {
+                content.rect(b.x, pdf_y, b.width, b.height);
+            }
+        });
+    }
+
+    if solid_fill || has_border {
         content.save_state();
 
-        if has_fill {
+        if solid_fill {
             let (r, g, bl) = parse_hex(b.fill.as_deref().unwrap_or("#000000"));
             content.set_fill_rgb(r, g, bl);
         }
@@ -1354,7 +1400,7 @@ fn draw_box(
             content.rect(b.x, pdf_y, b.width, b.height);
         }
 
-        match (has_fill, has_border) {
+        match (solid_fill, has_border) {
             (true,  true)  => { content.fill_nonzero_and_stroke(); }
             (true,  false) => { content.fill_nonzero(); }
             (false, true)  => { content.stroke(); }
@@ -1364,7 +1410,7 @@ fn draw_box(
         content.restore_state();
     }
 
-    draw_nodes(content, annots, groups, &b.children, fonts, image_res_map, page_h);
+    draw_nodes(content, annots, groups, &b.children, res, page_h);
 }
 
 /// What `draw` writes, faded to `percent` of its strength, which is below 100.
@@ -1470,8 +1516,7 @@ fn draw_layer(
     annots:        &mut Vec<AnnotData>,
     groups:        &mut Vec<PageGroup>,
     layer:         &RenderCanvasLayer,
-    fonts:         &HashMap<String, PreparedFont>,
-    image_res_map: &HashMap<String, String>,
+    res:           &DrawResources,
     page_h:        f32,
 ) {
     // Apply optional CTM transform.
@@ -1498,7 +1543,7 @@ fn draw_layer(
         content.end_path();
     }
 
-    draw_nodes(content, annots, groups, &layer.children, fonts, image_res_map, page_h);
+    draw_nodes(content, annots, groups, &layer.children, res, page_h);
 }
 
 /// The name a page's resources give its `index`th transparency group.
@@ -1570,6 +1615,98 @@ fn note_opacity(opacity: f32, out: &mut HashSet<u32>) {
     if pct > 0 && pct < 100 { out.insert(pct); }
 }
 
+/// The gradients the pages fill with, by name. A page's background counts, as does any box or shape drawn
+/// anywhere in the page, in a group or a layer.
+fn used_gradients<'a>(pages: &[RenderPage], gradients: &'a HashMap<String, Gradient>) -> Vec<(&'a str, &'a Gradient)> {
+    let mut names: HashSet<String> = HashSet::new();
+    for page in pages {
+        note_gradient(page.background.as_deref(), gradients, &mut names);
+        collect_used_gradients(&page.nodes, gradients, &mut names);
+    }
+    let mut used: Vec<(&str, &Gradient)> = names
+        .iter()
+        .filter_map(|name| gradients.get_key_value(name.as_str()))
+        .map(|(name, gradient)| (name.as_str(), gradient))
+        .collect();
+    // Sorted, so the objects of a document are numbered the same way every time.
+    used.sort_by_key(|(name, _)| *name);
+    used
+}
+
+fn collect_used_gradients(nodes: &[RenderNode], gradients: &HashMap<String, Gradient>, out: &mut HashSet<String>) {
+    for node in nodes {
+        match node {
+            RenderNode::Box(b) => {
+                note_gradient(b.fill.as_deref(), gradients, out);
+                collect_used_gradients(&b.children, gradients, out);
+            }
+            RenderNode::CanvasRect(r)    => note_gradient(r.fill.as_deref(), gradients, out),
+            RenderNode::CanvasEllipse(e) => note_gradient(e.fill.as_deref(), gradients, out),
+            RenderNode::CanvasPath(p)    => note_gradient(p.fill.as_deref(), gradients, out),
+            RenderNode::CanvasLayer(l)   => collect_used_gradients(&l.children, gradients, out),
+            RenderNode::Link(l)          => collect_used_gradients(&l.children, gradients, out),
+            _                            => {}
+        }
+    }
+}
+
+/// Add the gradient a fill names, if it names one the tokens have.
+fn note_gradient(fill: Option<&str>, gradients: &HashMap<String, Gradient>, out: &mut HashSet<String>) {
+    if let Some((name, _)) = fill.and_then(|fill| gradient_of(fill, gradients)) {
+        out.insert(name.to_string());
+    }
+}
+
+/// How many function objects a gradient takes: one for two colors, else one per pair of colors and the function
+/// that stitches them.
+fn gradient_function_count(gradient: &Gradient) -> usize {
+    if gradient.stops.len() <= 2 { 1 } else { gradient.stops.len() }
+}
+
+/// Write a gradient's functions and its shading. The shading is on the unit axis (0, 0) to (1, 0), or the unit
+/// circle, and extends past its ends, so whatever the matrix before `sh` puts over the clip is painted.
+fn write_gradient(pdf: &mut Pdf, gradient: &Gradient, ids: &GradientIds) {
+    let rgb = |hex: &str| {
+        let (r, g, b) = parse_hex(hex);
+        [r, g, b]
+    };
+    let stops = &gradient.stops;
+    let pieces = stops.len() - 1;
+    if pieces == 1 {
+        pdf.exponential_function(ids.function_ids[0])
+            .domain([0.0, 1.0])
+            .c0(rgb(&stops[0].color))
+            .c1(rgb(&stops[1].color))
+            .n(1.0);
+    } else {
+        for (piece, pair) in stops.windows(2).enumerate() {
+            pdf.exponential_function(ids.function_ids[piece])
+                .domain([0.0, 1.0])
+                .c0(rgb(&pair[0].color))
+                .c1(rgb(&pair[1].color))
+                .n(1.0);
+        }
+        pdf.stitching_function(ids.function_ids[pieces])
+            .domain([0.0, 1.0])
+            .functions(ids.function_ids[..pieces].iter().copied())
+            .bounds(stops[1..pieces].iter().map(|stop| stop.offset))
+            .encode((0..pieces).flat_map(|_| [0.0, 1.0]));
+    }
+
+    let function_id = ids.function_ids[ids.function_ids.len() - 1];
+    let mut shading = pdf.function_shading(ids.shading_id);
+    shading.color_space().device_rgb();
+    match gradient.kind {
+        GradientKind::Linear => {
+            shading.shading_type(FunctionShadingType::Axial).coords([0.0, 0.0, 1.0, 0.0]);
+        }
+        GradientKind::Radial => {
+            shading.shading_type(FunctionShadingType::Radial).coords([0.0, 0.0, 0.0, 0.0, 0.0, 1.0]);
+        }
+    }
+    shading.function(function_id).extend([true, true]);
+}
+
 /// Append an ellipse path (4 cubic-Bézier arcs) in PDF bottom-up coords.
 /// `cx`, `cy` are already in PDF (bottom-up) coordinates.
 fn ellipse_path(content: &mut Content, cx: f32, cy: f32, rx: f32, ry: f32) {
@@ -1584,10 +1721,154 @@ fn ellipse_path(content: &mut Content, cx: f32, cy: f32, rx: f32, ry: f32) {
     content.close_path();
 }
 
+// ── Gradients ─────────────────────────────────────────────────────────────────
+
+/// Whether a fill names a gradient of the tokens, as `gradient:name`, and not a color.
+fn is_gradient_fill(fill: &str) -> bool {
+    fill.starts_with(GRADIENT_PREFIX)
+}
+
+/// The gradient a fill names: its name and its definition. `None` for a color, and for a name the tokens lack.
+fn gradient_of<'a>(fill: &'a str, gradients: &'a HashMap<String, Gradient>) -> Option<(&'a str, &'a Gradient)> {
+    let name = fill.strip_prefix(GRADIENT_PREFIX)?;
+    gradients.get(name).map(|gradient| (name, gradient))
+}
+
+/// The name a page's resources give the shading of a gradient. The shading is drawn on a unit axis or circle and
+/// put onto each shape by a matrix, so a gradient has one shading however many shapes it fills.
+fn shading_resource_name(gradient: &str) -> String {
+    format!("Sh-{gradient}")
+}
+
+/// A value this close to 0 is the rounding of a sine or cosine, and is written as 0.
+fn snap_to_zero(value: f32) -> f32 {
+    if value.abs() < 1e-6 { 0.0 } else { value }
+}
+
+/// The matrix that puts a gradient's unit shading onto the box `(x, y, w, h)`, in PDF coordinates.
+///
+/// A linear gradient's shading runs from (0, 0) to (1, 0), and a radial gradient's from the center of the unit
+/// circle out to its edge.
+fn gradient_matrix(gradient: &Gradient, x: f32, y: f32, w: f32, h: f32) -> [f32; 6] {
+    let (center_x, center_y) = (x + w / 2.0, y + h / 2.0);
+    match gradient.kind {
+        GradientKind::Linear => {
+            let (sin, cos) = gradient.angle.to_radians().sin_cos();
+            let (sin, cos) = (snap_to_zero(sin), snap_to_zero(cos));
+            // Angles run from the top of the box, and PDF's y points up.
+            let (dx, dy) = (sin, -cos);
+            // The line is as long as the box is along it, so the first and last colors reach the corners.
+            let length = (w * sin).abs() + (h * cos).abs();
+            [
+                dx * length, dy * length, -dy * length, dx * length,
+                center_x - dx * length / 2.0, center_y - dy * length / 2.0,
+            ]
+        }
+        GradientKind::Radial => {
+            // Out to the farthest corner.
+            let radius = w.hypot(h) / 2.0;
+            [radius, 0.0, 0.0, radius, center_x, center_y]
+        }
+    }
+}
+
+/// Fill a shape with a gradient: clip to the path `outline` appends, then paint the shading over the clip, so the
+/// shape keeps its own corners. `bounds` is the box around the shape that the gradient spans, `(x, y, w, h)` in
+/// PDF coordinates. A box with no width or height has nothing to paint.
+fn fill_with_gradient(
+    content:  &mut Content,
+    name:     &str,
+    gradient: &Gradient,
+    bounds:   (f32, f32, f32, f32),
+    even_odd: bool,
+    outline:  impl FnOnce(&mut Content),
+) {
+    let (x, y, w, h) = bounds;
+    if w <= 0.0 || h <= 0.0 {
+        return;
+    }
+    content.save_state();
+    outline(content);
+    if even_odd {
+        content.clip_even_odd();
+    } else {
+        content.clip_nonzero();
+    }
+    content.end_path();
+    content.transform(gradient_matrix(gradient, x, y, w, h));
+    content.shading(Name(shading_resource_name(name).as_bytes()));
+    content.restore_state();
+}
+
+/// Where `emit_svg_path` sends the segments of a path: a content stream, or a measure of the path.
+trait PathSink {
+    fn move_to(&mut self, x: f32, y: f32);
+    fn line_to(&mut self, x: f32, y: f32);
+    fn cubic_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32);
+    fn close_path(&mut self);
+}
+
+impl PathSink for Content {
+    fn move_to(&mut self, x: f32, y: f32) {
+        Content::move_to(self, x, y);
+    }
+
+    fn line_to(&mut self, x: f32, y: f32) {
+        Content::line_to(self, x, y);
+    }
+
+    fn cubic_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
+        Content::cubic_to(self, x1, y1, x2, y2, x3, y3);
+    }
+
+    fn close_path(&mut self) {
+        Content::close_path(self);
+    }
+}
+
+/// The box around the points of a path, its control points included.
+#[derive(Default)]
+struct PathBounds {
+    /// `(x_min, y_min, x_max, y_max)`, once the path has a point.
+    corners: Option<(f32, f32, f32, f32)>,
+}
+
+impl PathBounds {
+    fn include(&mut self, x: f32, y: f32) {
+        self.corners = Some(match self.corners {
+            None                          => (x, y, x, y),
+            Some((x_min, y_min, x_max, y_max)) => (x_min.min(x), y_min.min(y), x_max.max(x), y_max.max(y)),
+        });
+    }
+
+    /// The box as `(x, y, width, height)`; `None` for a path with no points.
+    fn rect(&self) -> Option<(f32, f32, f32, f32)> {
+        self.corners.map(|(x_min, y_min, x_max, y_max)| (x_min, y_min, x_max - x_min, y_max - y_min))
+    }
+}
+
+impl PathSink for PathBounds {
+    fn move_to(&mut self, x: f32, y: f32) {
+        self.include(x, y);
+    }
+
+    fn line_to(&mut self, x: f32, y: f32) {
+        self.include(x, y);
+    }
+
+    fn cubic_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) {
+        self.include(x1, y1);
+        self.include(x2, y2);
+        self.include(x3, y3);
+    }
+
+    fn close_path(&mut self) {}
+}
+
 /// Parse an SVG-like path string and emit PDF path operators.
 /// Supports: M/m, L/l, H/h, V/v, C/c, Q/q, Z/z.
 /// Y-coordinates are flipped (canvas top-down → PDF bottom-up).
-fn emit_svg_path(content: &mut Content, d: &str, page_h: f32) {
+fn emit_svg_path(content: &mut impl PathSink, d: &str, page_h: f32) {
     let flip = |y: f32| page_h - y;
 
     // Tokenise: split on whitespace and commas, preserve command letters.
@@ -1889,6 +2170,17 @@ struct AllocatedIds {
     group_ids:         Vec<Vec<Ref>>,
     /// `None` when the document has no bookmarks.
     outline:           Option<OutlineIds>,
+    /// The counter, where allocation stopped: what the writer adds later takes the ids after these, so a
+    /// document without it keeps the ids it had.
+    alloc:             Alloc,
+}
+
+/// The objects of a gradient: the function that blends its colors, and the shading that applies it.
+struct GradientIds {
+    /// A two-color gradient is one function. More colors are a function between each pair, and a last one that
+    /// stitches them, which the shading uses.
+    function_ids: Vec<Ref>,
+    shading_id:   Ref,
 }
 
 /// The objects of the outline and the named destinations, allocated last so that a document without bookmarks
@@ -2012,9 +2304,11 @@ fn build_content_streams(
     pages:         &[RenderPage],
     fonts:         &HashMap<String, PreparedFont>,
     image_res_map: &HashMap<String, String>,
+    gradients:     &HashMap<String, Gradient>,
     attribution:   bool,
 ) -> Vec<RenderedPage> {
     let mut rendered_pages: Vec<RenderedPage> = Vec::new();
+    let res = DrawResources { fonts, image_res_map, gradients };
 
     for page in pages {
         let mut content = Content::new();
@@ -2023,14 +2317,23 @@ fn build_content_streams(
 
         // Draw optional page background before any nodes.
         if let Some(bg) = &page.background {
-            let (r, g, b) = parse_hex(bg);
-            content.set_fill_rgb(r, g, b);
-            content.rect(0.0, 0.0, page.width, page.height);
-            content.fill_nonzero();
+            if is_gradient_fill(bg) {
+                if let Some((name, gradient)) = gradient_of(bg, gradients) {
+                    let bounds = (0.0, 0.0, page.width, page.height);
+                    fill_with_gradient(&mut content, name, gradient, bounds, false, |content| {
+                        content.rect(0.0, 0.0, page.width, page.height);
+                    });
+                }
+            } else {
+                let (r, g, b) = parse_hex(bg);
+                content.set_fill_rgb(r, g, b);
+                content.rect(0.0, 0.0, page.width, page.height);
+                content.fill_nonzero();
+            }
         }
 
         // Draw all render-tree nodes.
-        draw_nodes(&mut content, &mut annots, &mut groups, &page.nodes, fonts, image_res_map, page.height);
+        draw_nodes(&mut content, &mut annots, &mut groups, &page.nodes, &res, page.height);
 
         // Drawn last so it sits above the page's own content.
         if attribution {
@@ -2328,6 +2631,7 @@ fn allocate_ids(
         opacity_gs_ids,
         group_ids,
         outline,
+        alloc,
     }
 }
 
@@ -2346,6 +2650,7 @@ fn assemble_pdf(
     ids:                AllocatedIds,
     fields:             &[(usize, RenderField)],
     anchors:            &[PlacedAnchor],
+    used_gradients:     &[(&str, &Gradient)],
     meta:               &Meta,
     created_on:         Option<&str>,
 ) -> Result<Vec<u8>, String> {
@@ -2354,8 +2659,17 @@ fn assemble_pdf(
         page_ids, content_ids, annot_ids,
         font_id_map, image_id_map, image_smask_ids,
         field_alloc, radio_parent_alloc, opacity_gs_ids, group_ids,
-        outline,
+        outline, mut alloc,
     } = ids;
+
+    // The gradients' objects come last, so a document with no gradient keeps the ids it had before gradients existed.
+    let gradient_ids: Vec<GradientIds> = used_gradients
+        .iter()
+        .map(|(_, gradient)| GradientIds {
+            function_ids: (0..gradient_function_count(gradient)).map(|_| alloc.next()).collect(),
+            shading_id:   alloc.next(),
+        })
+        .collect();
 
     let n = pages.len();
     let mut pdf = Pdf::new();
@@ -2456,6 +2770,13 @@ fn assemble_pdf(
                 gs_res.pair(Name(opacity_gs_name(*pct).as_bytes()), *gs_id);
             }
         }
+        // The shadings of the gradients, which any page or group may paint.
+        if !used_gradients.is_empty() {
+            let mut shading_res = resources.shadings();
+            for ((name, _), gradient) in used_gradients.iter().zip(&gradient_ids) {
+                shading_res.pair(Name(shading_resource_name(name).as_bytes()), gradient.shading_id);
+            }
+        }
     };
 
     // -- Per-page dicts --------------------------------------------------------
@@ -2516,6 +2837,11 @@ fn assemble_pdf(
         let mut gs = pdf.ext_graphics(*gs_id);
         gs.non_stroking_alpha(opacity);
         gs.stroking_alpha(opacity);
+    }
+
+    // -- Gradient functions and shadings ---------------------------------------
+    for ((_, gradient), ids) in used_gradients.iter().zip(&gradient_ids) {
+        write_gradient(&mut pdf, gradient, ids);
     }
 
     // -- Image XObject streams -------------------------------------------------
@@ -2955,16 +3281,19 @@ fn assemble_pdf(
 /// - `font_defs`  – Font name → definition from the document's `<fonts>` section.
 /// - `registry`   – Raw font bytes for custom fonts (populated via `load_font`).
 /// - `meta`       – Document metadata (title, author, subject, etc.).
+/// - `gradients`  – The gradients of the document's tokens, which a fill names as `gradient:name`.
 /// - `created_on` – Optional ISO 8601 date string written to `/CreationDate`.
 /// - `licensed`   – `true` when a valid commercial license token was supplied.
 ///                  When `false`, draws the attribution line ("Made with", the lpdf
 ///                  mark, "Lpdf") in every page's top-right corner.
+#[allow(clippy::too_many_arguments)]
 pub fn render_pdf(
     pages:          &[RenderPage],
     font_defs:      &HashMap<String, FontDef>,
     registry:       &FontRegistry,
     image_registry: &ImageRegistry,
     meta:           &Meta,
+    gradients:      &HashMap<String, Gradient>,
     created_on:     Option<&str>,
     licensed:       bool,
 ) -> Result<Vec<u8>, String> {
@@ -2976,8 +3305,9 @@ pub fn render_pdf(
     let (sorted_image_names, image_res_map) =
         prepare_images(pages, image_registry);
     let anchors = placed_anchors(pages);
+    let used_gradients = used_gradients(pages, gradients);
     let mut rendered_pages =
-        build_content_streams(pages, &fonts, &image_res_map, attribution);
+        build_content_streams(pages, &fonts, &image_res_map, gradients, attribution);
     drop_dangling_links(&mut rendered_pages, &anchors);
     let fields = collect_render_fields(pages);
     let ids =
@@ -2985,7 +3315,7 @@ pub fn render_pdf(
     assemble_pdf(
         pages, &fonts, &sorted_font_names, &sorted_image_names,
         image_registry, &image_res_map, rendered_pages, ids, &fields, &anchors,
-        meta, created_on,
+        &used_gradients, meta, created_on,
     )
 }
 
@@ -3260,7 +3590,7 @@ mod tests {
         let pages = crate::layout::layout_document(&doc.section_layouts());
         let mut images = ImageRegistry::new();
         images.load("photo", RED_PIXEL.to_vec());
-        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, None, false).expect("renders");
+        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false).expect("renders");
         let (page, groups) = page_and_groups(&pdf);
         assert_eq!(groups.len(), 1);
         let (dict, group) = &groups[0];
@@ -3428,7 +3758,7 @@ mod tests {
         let pages = crate::layout::layout_document(&doc.section_layouts());
         let mut images = ImageRegistry::new();
         images.load("photo", RED_PIXEL.to_vec());
-        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, None, false).expect("renders");
+        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false).expect("renders");
         let (page, groups) = page_and_groups(&pdf);
         assert_eq!(groups.len(), 1);
         assert!(groups[0].1.contains("/I0 Do"), "the image is drawn in the group: {}", groups[0].1);
@@ -3648,5 +3978,339 @@ mod tests {
         assert_eq!(groups.len(), 1);
         assert_eq!(rectangles(&groups[0].1), 2, "{}", groups[0].1);
         assert_eq!(rectangles(&page), 0, "{page}");
+    }
+
+    // ── Gradients ─────────────────────────────────────────────────────────────
+
+    const FADE: &str = r##"<gradient name="fade" type="linear" from="#ff0000" to="#0000ff"/>"##;
+    const RIGHT: &str = r##"<gradient name="right" type="linear" from="#ff0000" to="#0000ff" angle="90"/>"##;
+
+    /// The PDF of a document whose tokens hold `gradients`, around the given sections.
+    fn render_with_gradients(gradients: &str, sections: &str) -> Vec<u8> {
+        let xml = format!(
+            r#"<lpdf version="1"><tokens><gradients>{gradients}</gradients></tokens><document>{sections}</document></lpdf>"#
+        );
+        crate::LpdfEngine::render_xml_to_pdf_bytes(&xml).expect("renders")
+    }
+
+    /// The same, with `body` as the layout of one section.
+    fn render_gradient_layout(gradients: &str, body: &str) -> Vec<u8> {
+        render_with_gradients(gradients, &format!("<section><layout>{body}</layout></section>"))
+    }
+
+    /// The same, with `shapes` in the layer of one section.
+    fn render_gradient_layer(gradients: &str, shapes: &str) -> Vec<u8> {
+        render_with_gradients(gradients, &format!("<section><layer>{shapes}</layer></section>"))
+    }
+
+    /// The matrix of each `cm` of a content stream, in order.
+    fn matrices(content: &str) -> Vec<[f32; 6]> {
+        content
+            .lines()
+            .filter_map(|line| line.strip_suffix(" cm"))
+            .map(|line| {
+                let n: Vec<f32> = line.split(' ').map(|v| v.parse().expect("a number")).collect();
+                [n[0], n[1], n[2], n[3], n[4], n[5]]
+            })
+            .collect()
+    }
+
+    fn assert_matrix(actual: [f32; 6], expected: [f32; 6]) {
+        assert!(actual.iter().zip(&expected).all(|(a, e)| (a - e).abs() < 0.01), "{actual:?} is not {expected:?}");
+    }
+
+    fn linear(angle: f32) -> Gradient {
+        Gradient { kind: GradientKind::Linear, angle, stops: Vec::new() }
+    }
+
+    #[test]
+    fn a_linear_gradient_runs_down_a_box_at_zero_degrees() {
+        // The box is 100 wide and 50 high at (10, 20): the line starts at its top edge and ends at its bottom edge.
+        assert_matrix(gradient_matrix(&linear(0.0), 10.0, 20.0, 100.0, 50.0), [0.0, -50.0, 50.0, 0.0, 60.0, 70.0]);
+    }
+
+    #[test]
+    fn a_linear_gradient_runs_across_a_box_at_ninety_degrees() {
+        assert_matrix(gradient_matrix(&linear(90.0), 10.0, 20.0, 100.0, 50.0), [100.0, 0.0, 0.0, 100.0, 10.0, 45.0]);
+    }
+
+    #[test]
+    fn a_linear_gradient_runs_up_a_box_at_a_hundred_and_eighty_degrees() {
+        assert_matrix(gradient_matrix(&linear(180.0), 10.0, 20.0, 100.0, 50.0), [0.0, 50.0, -50.0, 0.0, 60.0, 20.0]);
+    }
+
+    #[test]
+    fn a_diagonal_gradient_reaches_its_colors_at_the_corners() {
+        // At 45 degrees the line runs from the top left to the bottom right, and is as long as the box is along it:
+        // the first color is at the top left corner, (10, 70), and the last at the bottom right, (110, 20).
+        let matrix = gradient_matrix(&linear(45.0), 10.0, 20.0, 100.0, 50.0);
+        let along = |x: f32, y: f32| ((x - matrix[4]) * matrix[0] + (y - matrix[5]) * matrix[1]) / (matrix[0].powi(2) + matrix[1].powi(2));
+        assert!(along(10.0, 70.0).abs() < 0.001, "the top left corner is at the start: {}", along(10.0, 70.0));
+        assert!((along(110.0, 20.0) - 1.0).abs() < 0.001, "the bottom right corner is at the end: {}", along(110.0, 20.0));
+    }
+
+    #[test]
+    fn a_radial_gradient_is_a_circle_out_to_the_farthest_corner() {
+        let radial = Gradient { kind: GradientKind::Radial, angle: 0.0, stops: Vec::new() };
+        let radius = 100.0_f32.hypot(50.0) / 2.0;
+        assert_matrix(gradient_matrix(&radial, 10.0, 20.0, 100.0, 50.0), [radius, 0.0, 0.0, radius, 60.0, 45.0]);
+    }
+
+    #[test]
+    fn a_box_with_a_gradient_background_is_clipped_to_its_box_and_painted_with_the_shading() {
+        let pdf = render_gradient_layout(FADE, r##"<column background="gradient:fade" width="100pt" height="50pt"/>"##);
+        let (page, groups) = page_and_groups(&pdf);
+        assert!(groups.is_empty());
+        let lines: Vec<&str> = page.lines().collect();
+        let clip = lines.iter().position(|line| *line == "W").unwrap_or_else(|| panic!("no clip in {page}"));
+        assert!(lines[clip - 1].ends_with(" re"), "the clip is the box: {page}");
+        assert_eq!(&lines[clip + 1..clip + 3], ["n", lines[clip + 2]], "{page}");
+        assert!(lines[clip + 2].ends_with(" cm"), "{page}");
+        assert_eq!(&lines[clip + 3..clip + 5], ["/Sh-fade sh", "Q"], "{page}");
+        assert!(!page.contains("1 0 0 rg") && !page.contains("0 0 1 rg"), "no flat fill: {page}");
+    }
+
+    #[test]
+    fn the_shading_is_in_the_resources_of_the_page() {
+        let pdf = render_gradient_layout(FADE, r##"<column background="gradient:fade" height="50pt"/>"##);
+        let text = String::from_utf8_lossy(&pdf);
+        let (_, page) = object_with(&text, "/Type /Page\n");
+        assert!(page.contains("/Shading") && page.contains("/Sh-fade "), "{page}");
+        let (shading, dict) = object_with(&text, "/ShadingType 2");
+        assert!(page.contains(&format!("/Sh-fade {shading} 0 R")), "{page}");
+        assert!(dict.contains("/ColorSpace /DeviceRGB") && dict.contains("/Coords [0 0 1 0]") && dict.contains("/Extend [true true]"), "{dict}");
+        let (function, function_dict) = object_with(&text, "/FunctionType 2");
+        assert!(dict.contains(&format!("/Function {function} 0 R")), "{dict}");
+        assert!(function_dict.contains("/C0 [1 0 0]") && function_dict.contains("/C1 [0 0 1]"), "{function_dict}");
+    }
+
+    #[test]
+    fn a_document_without_a_gradient_has_no_shading() {
+        let pdf = render_layout(r##"<column background="#ff0000" height="50pt"/>"##);
+        let text = String::from_utf8_lossy(&pdf);
+        assert!(!text.contains("/Shading") && !text.contains("/FunctionType"));
+    }
+
+    #[test]
+    fn a_gradient_that_nothing_uses_is_not_written() {
+        let pdf = render_gradient_layout(FADE, r##"<column background="#ff0000" height="50pt"/>"##);
+        let text = String::from_utf8_lossy(&pdf);
+        assert!(!text.contains("/Shading") && !text.contains("/FunctionType"));
+    }
+
+    #[test]
+    fn a_gradient_used_twice_is_one_shading_painted_twice() {
+        let pdf = render_gradient_layout(
+            FADE,
+            r##"<column background="gradient:fade" height="50pt"/><column background="gradient:fade" height="30pt"/>"##,
+        );
+        let text = String::from_utf8_lossy(&pdf);
+        assert_eq!(text.matches("/ShadingType").count(), 1);
+        let (page, _) = page_and_groups(&pdf);
+        assert_eq!(page.matches("/Sh-fade sh").count(), 2, "{page}");
+        let (first, second) = (matrices(&page)[0], matrices(&page)[1]);
+        assert_ne!(first, second, "each box has a matrix of its own");
+    }
+
+    #[test]
+    fn two_gradients_are_two_shadings_in_the_resources() {
+        let pdf = render_gradient_layout(
+            &format!("{FADE}{RIGHT}"),
+            r##"<column background="gradient:fade" height="50pt"/><column background="gradient:right" height="30pt"/>"##,
+        );
+        let text = String::from_utf8_lossy(&pdf);
+        let (_, page) = object_with(&text, "/Type /Page\n");
+        assert!(page.contains("/Sh-fade ") && page.contains("/Sh-right "), "{page}");
+        assert_eq!(text.matches("/ShadingType").count(), 2);
+    }
+
+    #[test]
+    fn a_gradient_of_several_colors_is_stitched_from_a_function_for_each_pair() {
+        let sunset = r##"<gradient name="sunset" type="linear"><stop offset="0%" color="#f00"/><stop offset="50%" color="#0f0"/><stop offset="100%" color="#00f"/></gradient>"##;
+        let pdf = render_gradient_layout(sunset, r##"<column background="gradient:sunset" height="50pt"/>"##);
+        let text = String::from_utf8_lossy(&pdf);
+        assert_eq!(text.matches("/FunctionType 2").count(), 2);
+        let (stitching, dict) = object_with(&text, "/FunctionType 3");
+        assert!(dict.contains("/Bounds [0.5]") && dict.contains("/Encode [0 1 0 1]") && dict.contains("/Domain [0 1]"), "{dict}");
+        let (_, shading) = object_with(&text, "/ShadingType 2");
+        assert!(shading.contains(&format!("/Function {stitching} 0 R")), "the shading uses the stitching function: {shading}");
+    }
+
+    #[test]
+    fn a_radial_gradient_is_a_radial_shading() {
+        let spotlight = r##"<gradient name="spot" type="radial" from="#ffffff" to="#0000ff"/>"##;
+        let pdf = render_gradient_layout(spotlight, r##"<column background="gradient:spot" height="50pt"/>"##);
+        let text = String::from_utf8_lossy(&pdf);
+        let (_, shading) = object_with(&text, "/ShadingType 3");
+        assert!(shading.contains("/Coords [0 0 0 0 0 1]") && shading.contains("/Extend [true true]"), "{shading}");
+    }
+
+    #[test]
+    fn the_matrix_of_a_box_gradient_follows_its_box() {
+        let pdf = render_gradient_layout(RIGHT, r##"<column background="gradient:right" width="100pt" height="50pt"/>"##);
+        let (page, _) = page_and_groups(&pdf);
+        let [x, y, w, h] = rectangle_boxes(&page)[0];
+        assert_matrix(matrices(&page)[0], [w, 0.0, 0.0, w, x, y + h / 2.0]);
+    }
+
+    #[test]
+    fn a_box_with_a_radius_clips_the_gradient_to_its_rounded_corners() {
+        let pdf = render_gradient_layout(FADE, r##"<column background="gradient:fade" radius="8pt" height="50pt"/>"##);
+        let (page, _) = page_and_groups(&pdf);
+        assert_eq!((rectangles(&page), curves(&page)), (0, 4), "{page}");
+        assert!(position(&page, "W") < position(&page, "/Sh-fade sh"), "{page}");
+    }
+
+    #[test]
+    fn a_border_is_stroked_over_the_gradient() {
+        let pdf = render_gradient_layout(FADE, r##"<column background="gradient:fade" border="2pt #00ff00" height="50pt"/>"##);
+        let (page, _) = page_and_groups(&pdf);
+        assert!(position(&page, "/Sh-fade sh") < position(&page, "S"), "{page}");
+        assert!(page.contains("0 1 0 RG"), "{page}");
+        assert!(!page.contains("1 0 0 rg") && !page.contains("0 0 1 rg"), "no flat fill: {page}");
+    }
+
+    #[test]
+    fn a_box_with_a_gradient_covers_its_shadow_like_one_with_a_color() {
+        let pdf = render_gradient_layout(FADE, r##"<column background="gradient:fade" shadow="3pt 4pt #00ff00" height="50pt"/>"##);
+        let (page, _) = page_and_groups(&pdf);
+        assert!(position(&page, "0 1 0 rg") < position(&page, "/Sh-fade sh"), "the shadow comes first: {page}");
+        assert!(!page.contains("W*"), "the gradient fills the box, so the shadow is not cut out of it: {page}");
+    }
+
+    #[test]
+    fn a_faded_box_draws_its_gradient_in_its_group_and_the_group_has_the_shading_in_its_resources() {
+        let pdf = render_gradient_layout(FADE, r##"<column opacity="0.5" background="gradient:fade" height="50pt"/>"##);
+        let (page, groups) = page_and_groups(&pdf);
+        assert_eq!(groups.len(), 1);
+        let (dict, group) = &groups[0];
+        assert!(group.contains("/Sh-fade sh") && !page.contains("/Sh-fade sh"), "{group}");
+        assert!(dict.contains("/Shading") && dict.contains("/Sh-fade "), "{dict}");
+    }
+
+    #[test]
+    fn a_box_split_over_pages_has_a_gradient_on_each_page() {
+        let lines: String = (1..=120).map(|n| format!("<text>Line {n}</text>")).collect();
+        let pdf = render_gradient_layout(FADE, &format!(r##"<column background="gradient:fade">{lines}</column>"##));
+        let text = String::from_utf8_lossy(&pdf);
+        let pages = text.matches("/Type /Page\n").count();
+        let painted = streams(&pdf).into_iter().filter(|(_, _, content)| content.contains("/Sh-fade sh")).count();
+        assert!(pages >= 2, "the column does not fit on a page");
+        assert_eq!(painted, pages, "a gradient on every page");
+        assert_eq!(text.matches("/ShadingType").count(), 1);
+    }
+
+    #[test]
+    fn a_page_background_gradient_spans_the_page() {
+        let pdf = render_with_gradients(
+            RIGHT,
+            r##"<section background="gradient:right"><layout><text>Page</text></layout></section>"##,
+        );
+        let (page, _) = page_and_groups(&pdf);
+        let (width, height) = (595.28_f32, 841.89_f32);
+        assert!(position(&page, "/Sh-right sh") < position(&page, "BT"), "{page}");
+        assert_matrix(matrices(&page)[0], [width, 0.0, 0.0, width, 0.0, height / 2.0]);
+    }
+
+    #[test]
+    fn a_document_background_gradient_spans_each_page() {
+        let xml = r##"<lpdf version="1"><tokens><gradients><gradient name="night" type="linear" from="#000000" to="#0000ff"/></gradients></tokens>
+            <document background="gradient:night"><section><layout><text>One</text></layout></section></document></lpdf>"##;
+        let pdf = crate::LpdfEngine::render_xml_to_pdf_bytes(xml).expect("renders");
+        let (page, _) = page_and_groups(&pdf);
+        assert!(page.contains("/Sh-night sh"), "{page}");
+    }
+
+    #[test]
+    fn a_layer_rect_circle_and_ellipse_are_filled_with_a_gradient() {
+        for (shape, curves_drawn, rectangles_drawn) in [
+            (r##"<rect x="50pt" y="50pt" width="100pt" height="60pt" fill="gradient:fade"/>"##, 0, 1),
+            (r##"<rect x="50pt" y="50pt" width="100pt" height="60pt" radius="8pt" fill="gradient:fade"/>"##, 4, 0),
+            (r##"<circle x="110pt" y="110pt" r="40pt" fill="gradient:fade"/>"##, 4, 0),
+            (r##"<ellipse x="90pt" y="120pt" rx="60pt" ry="30pt" fill="gradient:fade"/>"##, 4, 0),
+        ] {
+            let (page, _) = page_and_groups(&render_gradient_layer(FADE, shape));
+            assert_eq!((curves(&page), rectangles(&page)), (curves_drawn, rectangles_drawn), "{shape}: {page}");
+            assert!(position(&page, "W") < position(&page, "/Sh-fade sh"), "{shape}: {page}");
+            assert!(!page.contains("1 0 0 rg") && !page.contains("0 0 1 rg"), "no flat fill, {shape}: {page}");
+        }
+    }
+
+    #[test]
+    fn a_layer_shape_gradient_spans_its_own_box() {
+        let (page, _) = page_and_groups(&render_gradient_layer(
+            RIGHT,
+            r##"<rect x="50pt" y="50pt" width="100pt" height="60pt" fill="gradient:right"/>"##,
+        ));
+        let [x, y, w, h] = rectangle_boxes(&page)[0];
+        assert_matrix(matrices(&page)[0], [w, 0.0, 0.0, w, x, y + h / 2.0]);
+    }
+
+    #[test]
+    fn a_layer_circle_gradient_spans_the_box_around_the_circle() {
+        let radial = r##"<gradient name="spot" type="radial" from="#ffffff" to="#0000ff"/>"##;
+        let (page, _) = page_and_groups(&render_gradient_layer(
+            radial,
+            r##"<circle x="110pt" y="110pt" r="40pt" fill="gradient:spot"/>"##,
+        ));
+        // 80 by 80 around the circle's center, so out to the corner is 40 times the square root of 2.
+        let radius = 80.0_f32.hypot(80.0) / 2.0;
+        assert_matrix(matrices(&page)[0], [radius, 0.0, 0.0, radius, 150.0, 841.89 - 150.0]);
+    }
+
+    #[test]
+    fn a_layer_path_is_filled_with_a_gradient_over_the_box_around_it() {
+        let (page, _) = page_and_groups(&render_gradient_layer(
+            RIGHT,
+            r##"<path d="M 50 50 L 150 50 L 100 100 Z" fill="gradient:right"/>"##,
+        ));
+        assert!(position(&page, "W") < position(&page, "/Sh-right sh"), "{page}");
+        // The path spans 100 by 50 from (50, 50): the gradient line runs across it.
+        assert_matrix(matrices(&page)[0], [100.0, 0.0, 0.0, 100.0, 50.0, 841.89 - 75.0]);
+    }
+
+    #[test]
+    fn a_layer_path_with_the_even_odd_rule_is_clipped_with_it() {
+        let hollow = r##"<path d="M 50 50 L 250 50 L 250 250 L 50 250 Z M 100 100 L 200 100 L 200 200 L 100 200 Z" fill="gradient:fade" fill-rule="evenodd"/>"##;
+        let (page, _) = page_and_groups(&render_gradient_layer(FADE, hollow));
+        assert!(position(&page, "W*") < position(&page, "/Sh-fade sh"), "{page}");
+        let solid = hollow.replace(r#" fill-rule="evenodd""#, "");
+        let (page, _) = page_and_groups(&render_gradient_layer(FADE, &solid));
+        assert!(!page.contains("W*") && page.contains("W\n"), "{page}");
+    }
+
+    #[test]
+    fn a_layer_shape_keeps_its_stroke_over_a_gradient_fill() {
+        let (page, _) = page_and_groups(&render_gradient_layer(
+            FADE,
+            r##"<rect x="50pt" y="50pt" width="100pt" height="60pt" fill="gradient:fade" stroke="#00ff00" stroke-width="2pt"/>"##,
+        ));
+        assert!(position(&page, "/Sh-fade sh") < position(&page, "S"), "{page}");
+        assert!(page.contains("0 1 0 RG"), "{page}");
+    }
+
+    #[test]
+    fn a_gradient_in_a_faded_layer_is_painted_in_the_layer_group() {
+        let pdf = render_with_gradients(
+            FADE,
+            r##"<section><layer opacity="0.5"><rect x="50pt" y="50pt" width="100pt" height="60pt" fill="gradient:fade"/></layer></section>"##,
+        );
+        let (page, groups) = page_and_groups(&pdf);
+        assert_eq!(groups.len(), 1);
+        assert!(groups[0].1.contains("/Sh-fade sh") && !page.contains("/Sh-fade sh"), "{}", groups[0].1);
+        assert!(groups[0].0.contains("/Sh-fade "), "{}", groups[0].0);
+    }
+
+    #[test]
+    fn a_box_with_nothing_to_span_has_no_gradient_painted() {
+        let mut content = Content::new();
+        let gradient = linear(0.0);
+        fill_with_gradient(&mut content, "fade", &gradient, (10.0, 10.0, 0.0, 50.0), false, |content| {
+            content.rect(10.0, 10.0, 0.0, 50.0);
+        });
+        fill_with_gradient(&mut content, "fade", &gradient, (10.0, 10.0, 50.0, 0.0), false, |content| {
+            content.rect(10.0, 10.0, 50.0, 0.0);
+        });
+        assert!(content.finish().is_empty());
     }
 }

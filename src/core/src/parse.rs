@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use crate::tokens::{parse_factor, parse_opacity, parse_pt, FontDef, FontWidths, Tokens};
+use crate::tokens::{parse_factor, parse_opacity, parse_pt, FontDef, FontWidths, Gradient, GradientSpec, Tokens};
 use crate::canvas;
 
 // ── Resolved document model (layout / render operate on these) ────────────────
@@ -15,6 +15,8 @@ pub struct Document {
     pub page_width:  f32,
     pub page_height: f32,
     pub background:  Option<String>,
+    /// The gradients of the tokens, which a background or a fill names as `gradient:name`.
+    pub gradients:   HashMap<String, Gradient>,
     pub debug:       bool,
     /// Sections — always ≥ 1.  Single-section shorthand is normalised here.
     pub sections:    Vec<Section>,
@@ -818,7 +820,7 @@ pub fn parse(xml: &str) -> Result<Document, String> {
                     return Err(format!("<document>{}: {MARGIN_MOVED}", node_loc(&child)));
                 }
                 if let Some(v) = child.attribute("background") {
-                    doc_background = Some(tokens.resolve_color(v)?);
+                    doc_background = Some(tokens.resolve_fill(v)?);
                 }
                 if let Some(v) = child.attribute("debug") {
                     doc_debug = v == "true";
@@ -869,6 +871,7 @@ pub fn parse(xml: &str) -> Result<Document, String> {
                     page_width:  doc_size.0,
                     page_height: doc_size.1,
                     background:  doc_background,
+                    gradients:   tokens.gradients.clone(),
                     debug:       doc_debug,
                     sections:    sections_xml,
                 });
@@ -1010,6 +1013,8 @@ fn parse_assets_elem(
 // ── Tokens ────────────────────────────────────────────────────────────────────
 
 fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), String> {
+    // A gradient names colors of the `colors` row, which may come after it, so gradients are read last.
+    let mut gradients_elem = None;
     for child in elems(elem) {
         match child.tag_name().name() {
             "space"  => tokens.space    = parse_scale_row(&child)?,
@@ -1029,8 +1034,50 @@ fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), 
                     }
                 }
             }
+            "gradients" => gradients_elem = Some(child),
             other => return Err(format!("<{}>{}: unknown element in <tokens>", other, node_loc(&child))),
         }
+    }
+    if let Some(gradients) = gradients_elem {
+        parse_gradients_elem(&gradients, tokens)?;
+    }
+    Ok(())
+}
+
+/// Read the `<gradient>` elements of `<gradients>`, each with its `<stop>` children.
+fn parse_gradients_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), String> {
+    for gradient in elems(elem) {
+        if gradient.tag_name().name() != "gradient" {
+            return Err(format!(
+                "<{}>{}: unknown element in <gradients>",
+                gradient.tag_name().name(),
+                node_loc(&gradient)
+            ));
+        }
+        let name = req_attr(&gradient, "name")?;
+        let mut stops: Vec<(&str, &str)> = Vec::new();
+        for stop in elems(&gradient) {
+            if stop.tag_name().name() != "stop" {
+                return Err(format!(
+                    "<{}>{}: unknown element in <gradient>",
+                    stop.tag_name().name(),
+                    node_loc(&stop)
+                ));
+            }
+            let offset = stop.attribute("offset").ok_or_else(|| format!("<stop>{}: missing offset", node_loc(&stop)))?;
+            let color  = stop.attribute("color").ok_or_else(|| format!("<stop>{}: missing color", node_loc(&stop)))?;
+            stops.push((offset, color));
+        }
+        let kind = req_attr(&gradient, "type")?;
+        let spec = GradientSpec {
+            kind:  &kind,
+            angle: gradient.attribute("angle"),
+            from:  gradient.attribute("from"),
+            to:    gradient.attribute("to"),
+            stops,
+        };
+        let resolved = tokens.resolve_gradient(&name, &spec)?;
+        tokens.gradients.insert(name, resolved);
     }
     Ok(())
 }
@@ -1077,7 +1124,7 @@ fn apply_page_overrides(
         *size = (size.1, size.0);
     }
     if let Some(v) = a.get("background") {
-        *background = Some(tokens.resolve_color(v)?);
+        *background = Some(tokens.resolve_fill(v)?);
     }
     Ok(a.get("debug").map(|v| v == "true").unwrap_or(doc_debug))
 }
@@ -1991,7 +2038,7 @@ fn apply_box_attrs(
     if let Some(v) = a.get("font-size")  { node.font_size = Some(tokens.resolve_text_size(v)?); }
     if let Some(v) = a.get("gap")        { node.gap       = tokens.resolve_space(v)?; }
     if let Some(v) = a.get("padding")    { node.padding   = tokens.resolve_spacing(v)?; }
-    if let Some(v) = a.get("background") { node.background = Some(tokens.resolve_color(v)?); }
+    if let Some(v) = a.get("background") { node.background = Some(tokens.resolve_fill(v)?); }
     if let Some(v) = a.get("border")     { node.border    = Some(tokens.resolve_border(v)?); }
     if let Some(v) = a.get("radius")     { node.radius    = tokens.resolve_radius(v)?; }
     // A box passes its color to the text inside it and fades itself with everything in it. A divider and a
@@ -2346,7 +2393,7 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
         doc_size = (doc_size.1, doc_size.0);
     }
     let doc_background = if let Some(s) = doc_bg_s {
-        Some(tokens.resolve_color(s)?)
+        Some(tokens.resolve_fill(s)?)
     } else {
         None
     };
@@ -2386,6 +2433,7 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
         page_width:  doc_size.0,
         page_height: doc_size.1,
         background:  doc_background,
+        gradients:   tokens.gradients.clone(),
         debug:       doc_debug,
         sections,
     })
@@ -2425,7 +2473,49 @@ pub fn parse_tree_tokens_pub(
         }
     }
 
+    // Gradients name colors of the row above, so they are read after it.
+    if let Some(gradients) = obj.get("gradients").and_then(|v| v.as_object()) {
+        for (name, def) in gradients {
+            let resolved = parse_tree_gradient(name, def, tokens)?;
+            tokens.gradients.insert(name.clone(), resolved);
+        }
+    }
+
     Ok(())
+}
+
+/// Read one gradient of a Kit tree's tokens: `{ type, from, to, angle, stops: [{ offset, color }] }`. The angle
+/// may be a number or a string.
+fn parse_tree_gradient(name: &str, def: &serde_json::Value, tokens: &Tokens) -> Result<Gradient, String> {
+    let text = |key: &str| {
+        def.get(key).and_then(|v| match v {
+            serde_json::Value::String(s) => Some(s.clone()),
+            serde_json::Value::Number(n) => Some(n.to_string()),
+            _                            => None,
+        })
+    };
+    let kind = text("type").ok_or_else(|| format!("gradient '{name}': missing type"))?;
+    let (angle, from, to) = (text("angle"), text("from"), text("to"));
+
+    let mut stops: Vec<(String, String)> = Vec::new();
+    for stop in def.get("stops").and_then(|v| v.as_array()).into_iter().flatten() {
+        let field = |key: &str| {
+            stop.get(key)
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+                .ok_or_else(|| format!("gradient '{name}': a stop needs an {key}"))
+        };
+        stops.push((field("offset")?, field("color")?));
+    }
+
+    let spec = GradientSpec {
+        kind:  &kind,
+        angle: angle.as_deref(),
+        from:  from.as_deref(),
+        to:    to.as_deref(),
+        stops: stops.iter().map(|(offset, color)| (offset.as_str(), color.as_str())).collect(),
+    };
+    tokens.resolve_gradient(name, &spec)
 }
 
 
@@ -4179,5 +4269,157 @@ mod tests {
         assert_eq!(layouts[0].bookmark.as_ref().map(|b| b.id.as_str()), Some("contents"));
         assert_eq!(layouts[1].children[0].bookmarks[0].id, "methods");
         assert_eq!(layouts[1].children[0].bookmarks[0].level, 2);
+    }
+
+    // ── Gradients ─────────────────────────────────────────────────────────────
+
+    const FADE: &str = r##"<gradient name="fade" type="linear" from="brand" to="#fff" angle="90"/>"##;
+
+    /// A document whose tokens define a color `brand` and the given gradients, around `body` in a layout.
+    fn with_gradients(gradients: &str, body: &str) -> String {
+        format!(
+            r##"<lpdf version="1"><tokens><colors><color name="brand" value="#112233"/></colors><gradients>{gradients}</gradients></tokens>
+            <document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"##
+        )
+    }
+
+    fn stop_at(offset: f32, color: &str) -> crate::tokens::GradientStop {
+        crate::tokens::GradientStop { offset, color: color.to_string() }
+    }
+
+    #[test]
+    fn a_document_reads_the_gradients_of_its_tokens() {
+        let doc = parse(&with_gradients(
+            &format!(
+                r##"{FADE}<gradient name="sunset" type="radial"><stop offset="0%" color="#f00"/><stop offset="40%" color="brand"/></gradient>"##
+            ),
+            "",
+        ))
+        .unwrap();
+        let fade = &doc.gradients["fade"];
+        assert_eq!((fade.kind, fade.angle), (crate::tokens::GradientKind::Linear, 90.0));
+        assert_eq!(fade.stops, vec![stop_at(0.0, "#112233"), stop_at(1.0, "#ffffff")]);
+        let sunset = &doc.gradients["sunset"];
+        assert_eq!(sunset.kind, crate::tokens::GradientKind::Radial);
+        assert_eq!(sunset.stops, vec![stop_at(0.0, "#ff0000"), stop_at(0.4, "#112233"), stop_at(1.0, "#112233")]);
+    }
+
+    #[test]
+    fn a_gradient_may_come_before_the_colors_it_names() {
+        let xml = format!(
+            r##"<lpdf version="1"><tokens><gradients>{FADE}</gradients><colors><color name="brand" value="#445566"/></colors></tokens>
+            <document><section><layout/></section></document></lpdf>"##
+        );
+        assert_eq!(parse(&xml).unwrap().gradients["fade"].stops[0].color, "#445566");
+    }
+
+    #[test]
+    fn a_document_without_gradients_has_none() {
+        assert!(parse(&minimal("")).unwrap().gradients.is_empty());
+    }
+
+    #[test]
+    fn a_box_and_a_table_row_read_a_gradient_as_their_background() {
+        let mut doc = parse(&with_gradients(
+            FADE,
+            r##"<column background="gradient:fade"><table cols="1fr"><thead background="gradient:fade"><td/></thead><tr background="#abc"><td background="gradient:fade"/></tr></table></column>"##,
+        ))
+        .unwrap();
+        let column = &doc.section_layouts()[0].children[0];
+        let table = &column.children[0];
+        assert_eq!(column.background.as_deref(), Some("gradient:fade"));
+        assert_eq!(table.children[0].background.as_deref(), Some("gradient:fade"), "the head");
+        assert_eq!(table.children[1].background.as_deref(), Some("#aabbcc"), "a row with a color keeps it");
+        assert_eq!(table.children[1].children[0].background.as_deref(), Some("gradient:fade"), "the cell");
+    }
+
+    #[test]
+    fn a_section_and_a_document_read_a_gradient_as_their_background() {
+        let xml = format!(
+            r##"<lpdf version="1"><tokens><colors><color name="brand" value="#112233"/></colors><gradients>{FADE}</gradients></tokens>
+            <document background="gradient:fade"><section><layout/></section><section background="#fff"><layout/></section></document></lpdf>"##
+        );
+        let mut doc = parse(&xml).unwrap();
+        let layouts = doc.section_layouts();
+        assert_eq!(layouts[0].background.as_deref(), Some("gradient:fade"));
+        assert_eq!(layouts[1].background.as_deref(), Some("#ffffff"));
+    }
+
+    #[test]
+    fn a_kit_tree_defines_gradients_with_a_number_or_a_string_for_the_angle() {
+        let json = r##"{"version":1,"type":"document","attrs":{"tokens":{"colors":{"brand":"#112233"},"gradients":{
+            "fade":{"type":"linear","from":"brand","to":"#fff","angle":90},
+            "same":{"type":"linear","from":"brand","to":"#fff","angle":"90"},
+            "multi":{"type":"radial","stops":[{"offset":"0%","color":"#f00"},{"offset":"100%","color":"brand"}]}}}},
+            "nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[
+                {"type":"column","attrs":{"background":"gradient:fade"},"nodes":[]}]}]}]}"##;
+        let mut doc = parse_tree(json).unwrap();
+        assert_eq!(doc.gradients["fade"], doc.gradients["same"]);
+        assert_eq!(doc.gradients["fade"].angle, 90.0);
+        assert_eq!(doc.gradients["multi"].stops, vec![stop_at(0.0, "#ff0000"), stop_at(1.0, "#112233")]);
+        assert_eq!(doc.section_layouts()[0].children[0].background.as_deref(), Some("gradient:fade"));
+    }
+
+    #[test]
+    fn a_kit_tree_gradient_that_is_not_one_says_so() {
+        let tree = |gradient: &str| {
+            format!(
+                r##"{{"version":1,"type":"document","attrs":{{"tokens":{{"gradients":{{"fade":{gradient}}}}}}},"nodes":[]}}"##
+            )
+        };
+        for (gradient, says) in [
+            (r##"{"from":"#f00","to":"#00f"}"##, "gradient 'fade': missing type"),
+            (r##"{"type":"linear","from":"#f00"}"##, "give from and to, or at least two stops"),
+            (r##"{"type":"linear","stops":[{"offset":"0%"}]}"##, "a stop needs an color"),
+            (r##"{"type":"linear","stops":[{"color":"#f00"}]}"##, "a stop needs an offset"),
+        ] {
+            let err = parse_tree(&tree(gradient)).unwrap_err();
+            assert!(err.contains(says), "{gradient}: {err}");
+        }
+    }
+
+    #[test]
+    fn a_gradient_that_is_not_one_says_so() {
+        for (gradient, says) in [
+            (r##"<gradient name="fade" type="linear" from="#f00"/>"##, "gradient 'fade': give from and to"),
+            (r##"<gradient name="fade" type="conic" from="#f00" to="#00f"/>"##, "invalid type 'conic'"),
+            (r##"<gradient name="fade" type="linear" from="#f00" to="#00f" angle="up"/>"##, "invalid angle 'up'"),
+            (r##"<gradient type="linear" from="#f00" to="#00f"/>"##, "missing required attribute 'name'"),
+            (r##"<gradient name="fade" from="#f00" to="#00f"/>"##, "missing required attribute 'type'"),
+            (r##"<gradient name="fade" type="linear"><stop color="#f00"/></gradient>"##, "<stop>"),
+            (r##"<gradient name="fade" type="linear"><step/></gradient>"##, "<step>"),
+            (r##"<shade/>"##, "<shade>"),
+        ] {
+            let err = parse(&with_gradients(gradient, "")).unwrap_err();
+            assert!(err.contains(says), "{gradient}: {err}");
+        }
+    }
+
+    #[test]
+    fn a_background_that_names_no_gradient_says_so() {
+        for body in [
+            r#"<column background="gradient:missing"/>"#,
+            r#"<table cols="1fr"><tr background="gradient:missing"><td/></tr></table>"#,
+        ] {
+            let err = parse(&with_gradients(FADE, body)).unwrap_err();
+            assert!(err.contains("unknown gradient token: 'missing'"), "{body}: {err}");
+        }
+    }
+
+    #[test]
+    fn a_gradient_is_refused_where_only_a_color_goes() {
+        for body in [
+            r#"<column color="gradient:fade"><text>a</text></column>"#,
+            r#"<text color="gradient:fade">a</text>"#,
+            r#"<text>a <span color="gradient:fade">b</span></text>"#,
+            r#"<column border="s gradient:fade"/>"#,
+            r#"<column shadow="1pt 1pt gradient:fade"/>"#,
+            r#"<divider color="gradient:fade"/>"#,
+            r#"<table cols="1fr" stripe="gradient:fade"><tr><td/></tr></table>"#,
+            r#"<barcode type="qr" data="x" background="gradient:fade"/>"#,
+        ] {
+            let err = parse(&with_gradients(FADE, body)).unwrap_err();
+            assert!(err.contains("is a gradient, which can fill a background or a shape"), "{body}: {err}");
+        }
     }
 }

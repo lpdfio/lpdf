@@ -121,6 +121,27 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <!-- a color, or a gradient of the tokens e.g. "gradient:brand-fade" -->
+  <xs:simpleType name="Fill">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|gradient:[a-z][a-z0-9-]*|[a-z][a-z0-9-]*"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- where a gradient stop sits, from 0% to 100% e.g. "60%" -->
+  <xs:simpleType name="GradientOffset">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="(100(\.0+)?|[0-9]{1,2}(\.[0-9]+)?)%"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="GradientType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="linear"/>
+      <xs:enumeration value="radial"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <!-- x offset, y offset, color and optionally an opacity, e.g. "2pt 3pt #000000" or "2pt 3pt text 0.2" -->
   <xs:simpleType name="ShadowValue">
     <xs:restriction base="xs:string">
@@ -357,7 +378,7 @@
         <xs:documentation>Height of the box. Leave it out to size to the content. A length fixes it; fill takes what is left after its siblings (shared equally if several use fill); full takes all the height available. Any of these stops the box splitting across pages.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
-    <xs:attribute name="background" type="Color"/>
+    <xs:attribute name="background" type="Fill"/>
     <xs:attribute name="border"     type="BorderValue"/>
     <xs:attribute name="radius"     type="TokenScaleOrPt"/>
     <xs:attribute name="opacity"    type="OpacityValue">
@@ -407,7 +428,7 @@
         <xs:documentation>Height of the box. Leave it out to size to the content. A length fixes it; fill takes what is left after its siblings (shared equally if several use fill); full takes all the height available. Any of these stops the box splitting across pages.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
-    <xs:attribute name="background" type="Color"/>
+    <xs:attribute name="background" type="Fill"/>
     <xs:attribute name="border"     type="BorderValue"/>
     <xs:attribute name="radius"     type="TokenScaleOrPt"/>
     <xs:attribute name="opacity"    type="OpacityValue">
@@ -437,7 +458,7 @@
 
   <!-- Shared fill/stroke attributes for the shapes -->
   <xs:attributeGroup name="CanvasFillStrokeAttrs">
-    <xs:attribute name="fill"         type="Color"/>
+    <xs:attribute name="fill"         type="Fill"/>
     <xs:attribute name="stroke"       type="Color"/>
     <xs:attribute name="stroke-width" type="PtValue"/>
     <xs:attribute name="stroke-dash"  type="xs:string"/>
@@ -614,7 +635,7 @@
   <xs:element name="path">
     <xs:complexType>
       <xs:attribute name="d"            type="xs:string" use="required"/>
-      <xs:attribute name="fill"         type="Color"/>
+      <xs:attribute name="fill"         type="Fill"/>
       <xs:attribute name="stroke"       type="Color"/>
       <xs:attribute name="fill-rule"    type="FillRule"/>
       <xs:attribute name="stroke-width" type="PtValue"/>
@@ -796,6 +817,57 @@
     </xs:complexType>
   </xs:element>
 
+  <xs:element name="stop">
+    <xs:complexType>
+      <xs:attribute name="offset" type="GradientOffset" use="required">
+        <xs:annotation>
+          <xs:documentation>Where the color is reached along the gradient, from 0% (the start) to 100% (the end). Stops go in increasing order.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="color" type="Color" use="required">
+        <xs:annotation>
+          <xs:documentation>The color at the stop: hex or a color token.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="gradient">
+    <xs:annotation>
+      <xs:documentation>A named blend of colors. A background or a fill uses it as gradient:name, and the blend spans the box it fills. Give from and to for two colors, or stop children for more.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="stop" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attribute name="name" type="xs:string" use="required">
+        <xs:annotation>
+          <xs:documentation>The name a background or a fill gives after gradient:. Lowercase letters, digits and hyphens, starting with a letter.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="type" type="GradientType" use="required">
+        <xs:annotation>
+          <xs:documentation>linear runs along a line across the box. radial runs from the center out to the farthest corner.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="from" type="Color">
+        <xs:annotation>
+          <xs:documentation>The first color: hex or a color token. Used with to, when there are no stop children. For a radial gradient it is the center.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="to" type="Color">
+        <xs:annotation>
+          <xs:documentation>The last color: hex or a color token. Used with from, when there are no stop children. For a radial gradient it is the edge.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="angle" type="xs:decimal">
+        <xs:annotation>
+          <xs:documentation>The direction of a linear gradient, in degrees: 0 runs from the top to the bottom, 90 from the left to the right, 180 from the bottom to the top. Default 0. A radial gradient has no direction.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+
   <xs:element name="tokens">
     <xs:complexType>
       <xs:all>
@@ -811,6 +883,13 @@
           <xs:complexType>
             <xs:sequence>
               <xs:element ref="color" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="gradients" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element ref="gradient" minOccurs="0" maxOccurs="unbounded"/>
             </xs:sequence>
           </xs:complexType>
         </xs:element>
@@ -902,7 +981,7 @@
       <xs:attribute name="font"        type="xs:string"/>
       <xs:attribute name="size"        type="PageSize"/>
       <xs:attribute name="orientation" type="Orientation"/>
-      <xs:attribute name="background"  type="Color"/>
+      <xs:attribute name="background"  type="Fill"/>
       <xs:attribute name="debug"       type="xs:boolean"/>
     </xs:complexType>
   </xs:element>
@@ -928,7 +1007,7 @@
       </xs:sequence>
       <xs:attribute name="size"        type="PageSize"/>
       <xs:attribute name="orientation" type="Orientation"/>
-      <xs:attribute name="background"  type="Color"/>
+      <xs:attribute name="background"  type="Fill"/>
       <xs:attribute name="title"       type="xs:string"/>
       <xs:attribute name="debug"       type="xs:boolean"/>
       <xs:attribute name="type"        type="SectionType">
@@ -1203,7 +1282,7 @@
       <xs:sequence>
         <xs:element ref="td" minOccurs="1" maxOccurs="unbounded"/>
       </xs:sequence>
-      <xs:attribute name="background" type="Color"/>
+      <xs:attribute name="background" type="Fill"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
   </xs:element>
@@ -1214,7 +1293,7 @@
       <xs:sequence>
         <xs:element ref="td" minOccurs="1" maxOccurs="unbounded"/>
       </xs:sequence>
-      <xs:attribute name="background" type="Color"/>
+      <xs:attribute name="background" type="Fill"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
   </xs:element>
@@ -1240,7 +1319,7 @@
       <xs:attribute name="stripe"     type="Color"/>
       <xs:attribute name="gap"        type="TokenScaleOrPt"/>
       <xs:attribute name="padding"    type="SpacingOrToken"/>
-      <xs:attribute name="background" type="Color"/>
+      <xs:attribute name="background" type="Fill"/>
       <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="height"     type="HeightValue"/>
       <xs:attribute name="paginate"   type="Paginate"/>

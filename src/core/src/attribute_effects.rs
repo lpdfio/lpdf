@@ -108,6 +108,7 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
         ("font@name", &["renamed"]),
         ("image@name", &["renamed"]),
         ("color@name", &["renamed"]),
+        ("gradient@name", &["renamed"]),
         ("font@ref", &["custom"]),
         ("image@ref", &["other"]),
         ("barcode@data", &["Another payload"]),
@@ -146,7 +147,8 @@ fn pattern_samples(type_name: &str) -> Vec<String> {
         "PtValue" | "SignedPtValue" => &["37pt", "143pt"],
         "SpacingValue" => &["17pt", "61pt"],
         "PageSizeCustom" => &["300pt 400pt"],
-        "ColorHex" | "Color" => &["#ff0000"],
+        "ColorHex" | "Color" | "Fill" => &["#ff0000"],
+        "GradientOffset" => &["50%"],
         "BorderValue" => &["2pt #ff0000"],
         "ShadowValue" => &["4pt 5pt #333333", "4pt 5pt #333333 0.5"],
         "PageScope" => &["2"],
@@ -349,7 +351,7 @@ fn render(xml: &str) -> Result<Vec<u8>, String> {
         let mut images = crate::pdf::ImageRegistry::new();
         images.load("logo", RED_PIXEL.to_vec());
         images.load("other", BLUE_PIXEL.to_vec());
-        crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, None, false)
+        crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, None, false)
     }))
     .unwrap_or_else(|_| Err("the engine panicked".to_string()))
 }
@@ -398,6 +400,14 @@ fn lpdf(head: &str, body: &str) -> String {
 
 fn flow(inner: &str) -> String {
     lpdf("", &format!("<document><section><layout>{inner}</layout></section></document>"))
+}
+
+/// A document whose tokens hold `gradients`, and whose column fills with the one named `fade`.
+fn gradient_document(gradients: &str) -> String {
+    lpdf(
+        &format!("<tokens><gradients>{gradients}</gradients></tokens>"),
+        r#"<document><section><layout><column background="gradient:fade" height="100pt"><text>Alpha</text></column></layout></section></document>"#,
+    )
 }
 
 fn flow_with_images(inner: &str) -> String {
@@ -460,6 +470,15 @@ fn subjects() -> Vec<Subject> {
             )
         })
         .base(&[("name", "brand"), ("value", "#336699")]),
+        // A gradient shows on the box that fills with it, and a stop on the gradient it is in.
+        Subject::new("gradient", |a, _| gradient_document(&format!("<gradient {a}/>")))
+            .base(&[("name", "fade"), ("type", "linear"), ("from", "#336699"), ("to", "#cc3300")]),
+        Subject::new("stop", |a, _| {
+            gradient_document(&format!(
+                r##"<gradient name="fade" type="linear"><stop offset="0%" color="#ff0000"/><stop {a}/></gradient>"##
+            ))
+        })
+        .base(&[("offset", "100%"), ("color", "#0000ff")]),
         // The token scale: each row is used by the attribute it scales.
         Subject::new("tokens:space", |a, _| token_row("space", a, |s| format!(r#"<column gap="{s}">{TWO}</column>"#)))
             .base(&[("xs", "2pt"), ("s", "4pt"), ("m", "8pt"), ("l", "16pt"), ("xl", "24pt"), ("xxl", "32pt")]),
@@ -638,6 +657,7 @@ fn tweaks() -> HashMap<String, Tweak> {
     add("font@name", Tweak::default().error_counts());
     add("image@name", Tweak::default().error_counts());
     add("color@name", Tweak::default().error_counts());
+    add("gradient@name", Tweak::default().error_counts());
     // A font is a core font or a registry key, not both.
     add("font@ref", Tweak::default().without("core"));
 

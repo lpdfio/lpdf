@@ -188,6 +188,7 @@ impl LpdfEngine {
             &self.fonts,
             &self.images,
             &doc.meta,
+            &doc.gradients,
             self.created_on.as_deref(),
             status.is_licensed(),
         )
@@ -253,6 +254,7 @@ impl LpdfEngine {
             &self.fonts,
             &self.images,
             &doc.meta,
+            &doc.gradients,
             self.created_on.as_deref(),
             status.is_licensed(),
         )
@@ -319,6 +321,7 @@ impl LpdfEngine {
             &pdf::FontRegistry::new(),
             &pdf::ImageRegistry::new(),
             &doc.meta,
+            &doc.gradients,
             None,
             status.is_licensed(),
         )
@@ -334,7 +337,7 @@ impl LpdfEngine {
         // Render as unlicensed (with the attribution line) to match what the adapters
         // produce when no valid license key is supplied — keeps snapshot hashes
         // consistent between the Rust tests and the adapter test suites.
-        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, None, false)
+        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, &doc.gradients, None, false)
     }
 
     fn render_doc(&self, mut doc: parse::Document) -> String {
@@ -458,7 +461,7 @@ pub fn bench_render_doc(mut doc: BenchDoc) -> Result<Vec<u8>, String> {
     pdf::render_pdf(
         &pages, &doc.0.fonts,
         &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
-        &doc.0.meta, None, false,
+        &doc.0.meta, &doc.0.gradients, None, false,
     )
 }
 
@@ -481,7 +484,7 @@ pub fn bench_render_doc_with_images(mut doc: BenchDoc, images: &[(&str, &[u8])])
     pdf::render_pdf(
         &pages, &doc.0.fonts,
         &pdf::FontRegistry::new(), &registry,
-        &doc.0.meta, None, false,
+        &doc.0.meta, &doc.0.gradients, None, false,
     )
 }
 
@@ -502,7 +505,7 @@ pub fn bench_render_xml(xml: &str) -> Result<Vec<u8>, String> {
     pdf::render_pdf(
         &pages, &doc.fonts,
         &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
-        &doc.meta, None, false,
+        &doc.meta, &doc.gradients, None, false,
     )
 }
 
@@ -522,7 +525,7 @@ pub fn bench_render_xml_with_font(
     pdf::render_pdf(
         &pages, &doc.fonts,
         &fonts, &pdf::ImageRegistry::new(),
-        &doc.meta, None, false,
+        &doc.meta, &doc.gradients, None, false,
     )
 }
 
@@ -542,7 +545,7 @@ pub fn bench_render_xml_with_image(
     pdf::render_pdf(
         &pages, &doc.fonts,
         &pdf::FontRegistry::new(), &images,
-        &doc.meta, None, false,
+        &doc.meta, &doc.gradients, None, false,
     )
 }
 
@@ -617,7 +620,7 @@ mod tests {
             layout::layout_document(&lp);
         let pdf = pdf::render_pdf(
             &pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
-            &doc.meta, None, true,
+            &doc.meta, &doc.gradients, None, true,
         ).unwrap();
         assert!(!pdf_contains(&pdf, pdf::ATTRIBUTION_FONT_KEY.as_bytes()));
         assert!(!pdf_contains(&pdf, b"https://lpdf.io"));

@@ -11,6 +11,57 @@ pub struct Tokens {
     /// Factors of the font size, not pt.
     pub line_height: [f32; 6],
     pub colors: HashMap<String, String>,
+    pub gradients: HashMap<String, Gradient>,
+}
+
+/// What a fill starts with when it names a gradient of the tokens: `gradient:brand-fade`.
+pub const GRADIENT_PREFIX: &str = "gradient:";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GradientKind {
+    Linear,
+    Radial,
+}
+
+/// One color of a gradient, at a position from 0 (where it starts) to 1 (where it ends).
+#[derive(Debug, Clone, PartialEq)]
+pub struct GradientStop {
+    pub offset: f32,
+    /// A normalised hex color.
+    pub color: String,
+}
+
+/// A gradient of the tokens, resolved: every color is hex and the stops are in order.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Gradient {
+    pub kind: GradientKind,
+    /// In degrees: 0 runs top to bottom and 90 left to right. A radial gradient has no direction.
+    pub angle: f32,
+    /// At least two, by increasing offset, the first at 0 and the last at 1.
+    pub stops: Vec<GradientStop>,
+}
+
+/// A gradient as the document writes it, before its type, angle and colors are checked.
+pub struct GradientSpec<'a> {
+    pub kind: &'a str,
+    pub angle: Option<&'a str>,
+    pub from: Option<&'a str>,
+    pub to: Option<&'a str>,
+    /// `(offset, color)` pairs. When there are any, `from` and `to` are not used.
+    pub stops: Vec<(&'a str, &'a str)>,
+}
+
+/// The name of a gradient, the way the schema's `Fill` type spells it after `gradient:`.
+fn is_gradient_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars.next().is_some_and(|c| c.is_ascii_lowercase())
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// Parse a stop offset like "60%" into a position from 0 to 1.
+fn parse_stop_offset(val: &str) -> Option<f32> {
+    let percent: f32 = val.trim().strip_suffix('%')?.trim().parse().ok()?;
+    (0.0..=100.0).contains(&percent).then_some(percent / 100.0)
 }
 
 /// A font definition resolved from `<assets><fonts>`.
@@ -147,10 +198,88 @@ impl Tokens {
         if val.starts_with('#') {
             return normalize_hex(val);
         }
+        if val.starts_with(GRADIENT_PREFIX) {
+            return Err(format!(
+                "'{val}' is a gradient, which can fill a background or a shape but not color a text, a stroke or a border"
+            ));
+        }
         self.colors
             .get(val)
             .cloned()
             .ok_or_else(|| format!("unknown color token: '{val}'"))
+    }
+
+    /// A background or the fill of a shape: a color, or `gradient:name` for a gradient of the tokens, which is
+    /// returned as written once it is known to exist.
+    pub fn resolve_fill(&self, val: &str) -> Result<String, String> {
+        match val.strip_prefix(GRADIENT_PREFIX) {
+            Some(name) if self.gradients.contains_key(name) => Ok(val.to_string()),
+            Some(name) => Err(format!("unknown gradient token: '{name}'")),
+            None => self.resolve_color(val),
+        }
+    }
+
+    /// Check a gradient the document defines and look up its colors.
+    ///
+    /// The colors come from the `colors` row, so call this once the row is complete.
+    pub fn resolve_gradient(&self, name: &str, spec: &GradientSpec) -> Result<Gradient, String> {
+        let fail = |reason: String| format!("gradient '{name}': {reason}");
+        if !is_gradient_name(name) {
+            return Err(fail("the name must be lowercase letters, digits and hyphens, starting with a letter".into()));
+        }
+        let kind = match spec.kind {
+            "linear" => GradientKind::Linear,
+            "radial" => GradientKind::Radial,
+            other    => return Err(fail(format!("invalid type '{other}': expected linear or radial"))),
+        };
+        let angle = match spec.angle {
+            None => 0.0,
+            Some(val) => val
+                .trim()
+                .parse::<f32>()
+                .ok()
+                .filter(|angle| angle.is_finite())
+                .ok_or_else(|| fail(format!("invalid angle '{val}': expected degrees, like 90")))?,
+        };
+
+        let written: Vec<(&str, &str)> = if spec.stops.is_empty() {
+            match (spec.from, spec.to) {
+                (Some(from), Some(to)) => vec![("0%", from), ("100%", to)],
+                _ => return Err(fail("give from and to, or at least two stops".into())),
+            }
+        } else {
+            spec.stops.clone()
+        };
+        if written.len() < 2 {
+            return Err(fail("a gradient needs at least two stops".into()));
+        }
+
+        let mut stops: Vec<GradientStop> = Vec::with_capacity(written.len() + 2);
+        for (offset, color) in written {
+            let offset = parse_stop_offset(offset)
+                .ok_or_else(|| fail(format!("invalid stop offset '{offset}': expected a percentage from 0% to 100%")))?;
+            let color = self.resolve_color(color).map_err(fail)?;
+            if let Some(previous) = stops.last()
+                && offset <= previous.offset
+            {
+                return Err(fail(format!(
+                    "the stop offsets must increase, but {}% comes after {}%",
+                    offset * 100.0,
+                    previous.offset * 100.0
+                )));
+            }
+            stops.push(GradientStop { offset, color });
+        }
+
+        // A gradient keeps its first color up to the first stop and its last color after the last, so the
+        // writer can take the stops as covering 0 to 1.
+        if let Some(first) = stops.first().filter(|stop| stop.offset > 0.0) {
+            stops.insert(0, GradientStop { offset: 0.0, color: first.color.clone() });
+        }
+        if let Some(last) = stops.last().filter(|stop| stop.offset < 1.0) {
+            stops.push(GradientStop { offset: 1.0, color: last.color.clone() });
+        }
+        Ok(Gradient { kind, angle, stops })
     }
 
     /// Parse "thickness color" border shorthand
@@ -222,6 +351,7 @@ impl Default for Tokens {
             text_size: [7.0, 9.0, 11.0, 14.0, 20.0, 28.0],
             line_height: [1.0, 1.1, 1.2, 1.4, 1.6, 2.0],
             colors,
+            gradients: HashMap::new(),
         }
     }
 }
@@ -306,6 +436,122 @@ mod tests {
         let t = Tokens::default();
         assert_eq!(t.resolve_color("primary").unwrap(), "#1763cf");
         assert_eq!(t.resolve_color("surface-alt").unwrap(), "#f5f5f5");
+    }
+
+    // ── Gradients ─────────────────────────────────────────────────────────────
+
+    fn spec<'a>(kind: &'a str, from: Option<&'a str>, to: Option<&'a str>) -> GradientSpec<'a> {
+        GradientSpec { kind, angle: None, from, to, stops: Vec::new() }
+    }
+
+    fn stop_of(offset: f32, color: &str) -> GradientStop {
+        GradientStop { offset, color: color.to_string() }
+    }
+
+    #[test]
+    fn a_gradient_of_from_and_to_has_a_stop_at_each_end() {
+        let gradient = Tokens::default().resolve_gradient("fade", &spec("linear", Some("#f00"), Some("#00f"))).unwrap();
+        assert_eq!(gradient.kind, GradientKind::Linear);
+        assert_eq!(gradient.angle, 0.0, "the default angle runs top to bottom");
+        assert_eq!(gradient.stops, vec![stop_of(0.0, "#ff0000"), stop_of(1.0, "#0000ff")]);
+    }
+
+    #[test]
+    fn a_gradient_takes_color_tokens_as_well_as_hex() {
+        let gradient = Tokens::default().resolve_gradient("fade", &spec("radial", Some("primary"), Some("#ffffff"))).unwrap();
+        assert_eq!(gradient.kind, GradientKind::Radial);
+        assert_eq!(gradient.stops, vec![stop_of(0.0, "#1763cf"), stop_of(1.0, "#ffffff")]);
+    }
+
+    #[test]
+    fn a_gradient_follows_a_color_token_the_document_redefines() {
+        let mut tokens = Tokens::default();
+        tokens.colors.insert("primary".into(), "#112233".into());
+        let gradient = tokens.resolve_gradient("fade", &spec("linear", Some("primary"), Some("#fff"))).unwrap();
+        assert_eq!(gradient.stops[0].color, "#112233");
+    }
+
+    #[test]
+    fn stops_are_read_with_their_offsets_and_win_over_from_and_to() {
+        let gradient = GradientSpec {
+            kind: "linear",
+            angle: Some("135"),
+            from: Some("#000"),
+            to: Some("#fff"),
+            stops: vec![("0%", "#f97316"), ("60.5%", "#ec4899"), ("100%", "#8b5cf6")],
+        };
+        let gradient = Tokens::default().resolve_gradient("sunset", &gradient).unwrap();
+        assert_eq!(gradient.angle, 135.0);
+        assert_eq!(gradient.stops, vec![stop_of(0.0, "#f97316"), stop_of(0.605, "#ec4899"), stop_of(1.0, "#8b5cf6")]);
+    }
+
+    #[test]
+    fn the_first_and_last_color_run_out_to_the_ends() {
+        let gradient = GradientSpec { stops: vec![("20%", "#f00"), ("70%", "#00f")], ..spec("linear", None, None) };
+        let gradient = Tokens::default().resolve_gradient("fade", &gradient).unwrap();
+        assert_eq!(
+            gradient.stops,
+            vec![stop_of(0.0, "#ff0000"), stop_of(0.2, "#ff0000"), stop_of(0.7, "#0000ff"), stop_of(1.0, "#0000ff")]
+        );
+    }
+
+    #[test]
+    fn a_gradient_that_is_not_one_says_so() {
+        let mut stops = spec("linear", None, None);
+        stops.stops = vec![("0%", "#f00")];
+        let mut backwards = spec("linear", None, None);
+        backwards.stops = vec![("50%", "#f00"), ("50%", "#00f")];
+        let mut outside = spec("linear", None, None);
+        outside.stops = vec![("0%", "#f00"), ("120%", "#00f")];
+        let mut no_percent = spec("linear", None, None);
+        no_percent.stops = vec![("0%", "#f00"), ("0.5", "#00f")];
+        let mut by_gradient = spec("linear", None, None);
+        by_gradient.stops = vec![("0%", "#f00"), ("100%", "gradient:other")];
+        let mut angled = spec("linear", Some("#f00"), Some("#00f"));
+        angled.angle = Some("steep");
+
+        let cases = [
+            ("fade", spec("conic", Some("#f00"), Some("#00f")), "invalid type 'conic': expected linear or radial"),
+            ("fade", spec("linear", Some("#f00"), None), "give from and to, or at least two stops"),
+            ("fade", spec("linear", None, None), "give from and to, or at least two stops"),
+            ("fade", stops, "a gradient needs at least two stops"),
+            ("fade", backwards, "the stop offsets must increase, but 50% comes after 50%"),
+            ("fade", outside, "invalid stop offset '120%': expected a percentage from 0% to 100%"),
+            ("fade", no_percent, "invalid stop offset '0.5': expected a percentage from 0% to 100%"),
+            ("fade", spec("linear", Some("#f00"), Some("nope")), "unknown color token: 'nope'"),
+            ("fade", by_gradient, "is a gradient, which can fill a background or a shape"),
+            ("fade", angled, "invalid angle 'steep': expected degrees, like 90"),
+            ("Fade", spec("linear", Some("#f00"), Some("#00f")), "the name must be lowercase letters"),
+            ("2fade", spec("linear", Some("#f00"), Some("#00f")), "the name must be lowercase letters"),
+        ];
+        for (name, gradient, expected) in cases {
+            let err = Tokens::default().resolve_gradient(name, &gradient).unwrap_err();
+            assert!(err.starts_with(&format!("gradient '{name}': ")) && err.contains(expected), "{expected}: {err}");
+        }
+    }
+
+    #[test]
+    fn a_fill_is_a_color_or_a_gradient_of_the_tokens() {
+        let mut tokens = Tokens::default();
+        tokens.gradients.insert(
+            "fade".into(),
+            Gradient { kind: GradientKind::Linear, angle: 0.0, stops: vec![stop_of(0.0, "#ff0000"), stop_of(1.0, "#0000ff")] },
+        );
+        assert_eq!(tokens.resolve_fill("#FFF").unwrap(), "#ffffff");
+        assert_eq!(tokens.resolve_fill("primary").unwrap(), "#1763cf");
+        assert_eq!(tokens.resolve_fill("gradient:fade").unwrap(), "gradient:fade");
+        assert_eq!(tokens.resolve_fill("gradient:missing").unwrap_err(), "unknown gradient token: 'missing'");
+    }
+
+    #[test]
+    fn a_gradient_is_not_a_color() {
+        let mut tokens = Tokens::default();
+        tokens.gradients.insert(
+            "fade".into(),
+            Gradient { kind: GradientKind::Linear, angle: 0.0, stops: vec![stop_of(0.0, "#ff0000"), stop_of(1.0, "#0000ff")] },
+        );
+        let err = tokens.resolve_color("gradient:fade").unwrap_err();
+        assert!(err.contains("'gradient:fade' is a gradient") && err.contains("not color a text, a stroke or a border"), "{err}");
     }
 
     #[test]
