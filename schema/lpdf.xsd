@@ -943,7 +943,7 @@
              edge stack in the order they are written. -->
         <xs:element name="region">
           <xs:annotation>
-            <xs:documentation>Pins content to the top or bottom edge of pages, outside the normal flow, for headers and footers. It reserves that space on every page it appears on. Only allowed directly inside layout, and one per pin on a page.</xs:documentation>
+            <xs:documentation>Pins content to the top or bottom edge of pages, outside the normal flow, for headers and footers. It reserves that space on every page it appears on. Only allowed directly inside layout. Where it is written among the flow does not matter: pin chooses the edge, and regions on one edge stack in the order written.</xs:documentation>
           </xs:annotation>
           <xs:complexType>
             <xs:sequence>
