@@ -1,4 +1,4 @@
-use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, CaptureMode, Direction, FieldKind, HeightMode, Justify, Node, NodeKind, SectionLayout, Paginate, TextAlign, TextRun};
+use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Capture, CaptureMode, Direction, FieldKind, HeightMode, Justify, Node, NodeKind, SectionLayout, Paginate, TextAlign, TextRun};
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
 use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderCanvasClip, RenderCanvasLayer, RenderField, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind};
 use crate::tokens::FontWidths;
@@ -421,8 +421,9 @@ fn text_words(node: &Node) -> String {
 /// Let every text with a `capture` below `node` say its words, whole. A text that splits across pages keeps
 /// them with its first part.
 fn record_captures(node: &mut Node) {
-    if node.kind == NodeKind::Text && node.capture.is_some() {
-        node.captured = Some(text_words(node));
+    if node.kind == NodeKind::Text && node.capture.as_ref().is_some_and(|c| c.key.is_some()) {
+        let words = text_words(node);
+        if let Some(c) = node.capture.as_mut() { c.words = Some(words); }
     }
     for child in node.children.iter_mut() { record_captures(child); }
 }
@@ -430,14 +431,13 @@ fn record_captures(node: &mut Node) {
 /// Make the texts below `node` capture nothing: a copy of a node for a later page, whose words were recorded with
 /// the node on the page it started on.
 fn forget_captures(node: &mut Node) {
-    node.capture = None;
-    node.captured = None;
+    if let Some(c) = node.capture.as_mut() { c.key = None; c.words = None; }
     for child in node.children.iter_mut() { forget_captures(child); }
 }
 
 /// Add what the texts below `node` captured to `out`.
 fn collect_captures(node: &Node, out: &mut PageCaptures) {
-    if let (Some(key), Some(words)) = (&node.capture, &node.captured) {
+    if let Some(Capture { key: Some(key), words: Some(words), .. }) = node.capture.as_deref() {
         out.entry(key.clone()).or_default().push(words.clone());
     }
     for child in &node.children { collect_captures(child, out); }
@@ -454,7 +454,7 @@ fn page_captures(nodes: &[Node]) -> PageCaptures {
 /// that left `before` as the latest value of each name: the pick of its mode among what the page captured,
 /// else the latest value, else its fallback.
 fn fill_sinks(node: &mut Node, here: &PageCaptures, before: &HashMap<String, String>) {
-    if let (NodeKind::Text, Some(sink)) = (&node.kind, &node.capture_ref) {
+    if let (NodeKind::Text, Some(sink)) = (&node.kind, node.capture_ref()) {
         let picked = here.get(&sink.key).and_then(|values| match sink.mode {
             CaptureMode::First => values.first(),
             CaptureMode::Last  => values.last(),
@@ -472,8 +472,9 @@ fn fill_sinks(node: &mut Node, here: &PageCaptures, before: &HashMap<String, Str
 /// shows: a header or a footer is measured before the pages are filled, and its height must not depend on them.
 fn reserve_sink_lines(mut node: Node) -> Node {
     fn walk(node: &mut Node) {
-        if node.kind == NodeKind::Text && node.capture_ref.is_some() {
-            node.reserve_lines = *node.max_lines.get_or_insert(1);
+        if node.kind == NodeKind::Text && node.capture_ref().is_some() {
+            let lines = *node.max_lines.get_or_insert(1);
+            if let Some(c) = node.capture.as_mut() { c.reserve_lines = lines; }
         }
         for child in node.children.iter_mut() { walk(child); }
     }
@@ -1147,7 +1148,7 @@ fn split_text(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Spl
     let rest  = Node {
         text_runs: atoms_to_runs(&rest_atoms),
         max_lines: node.max_lines.map(|max| max - split_at),
-        capture: None,
+        capture: node.capture.as_ref().map(|c| Box::new(Capture { key: None, ..(**c).clone() })),
         ..node.clone()
     };
     SplitOutcome::First(first, vec![rest])
@@ -1421,7 +1422,7 @@ fn layout_container(
             border_color,
             radius: node.radius,
             opacity: node.opacity,
-            shadow: node.shadow.clone(),
+            shadow: node.shadow.as_deref().cloned(),
             debug_self: node.debug,
             children,
         }),
@@ -2725,7 +2726,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     }
 
     if toks.is_empty() {
-        let reserved = node.reserve_lines as f32 * line_height;
+        let reserved = node.reserve_lines() as f32 * line_height;
         return (RenderNode::Box(RenderBox {
             x, y, width: 0.0, height: reserved, fill: None,
             border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None, debug_self: false, children: vec![],
@@ -2772,7 +2773,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     let overflow = fit.max_lines.is_some()
         && lines.iter().any(|line| text_line_width(line, font_size) > avail_w + 0.01);
 
-    let total_h = lines.len().max(node.reserve_lines) as f32 * line_height;
+    let total_h = lines.len().max(node.reserve_lines()) as f32 * line_height;
     let mut all_nodes: Vec<RenderNode> = Vec::new();
 
     let align_str = match node.text_align {
