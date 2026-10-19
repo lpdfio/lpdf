@@ -52,9 +52,26 @@ fn run_snapshot(name: &str) {
 
     let pdf_bytes = crate::LpdfEngine::render_xml_to_pdf_bytes(&xml)
         .unwrap_or_else(|e| panic!("render failed for {name}: {e}"));
+    check_snapshot(name, &pdf_bytes);
+}
 
+/// A fixture with pictures: the images `photo` and `avatar` are read from `image-sample.png` and
+/// `image-square.png` in the fixtures directory and loaded as an SDK would, so the pictures are in the PDF.
+fn run_snapshot_with_image(name: &str) {
+    let xml_path = fixtures_dir().join(format!("{name}.xml"));
+    let xml = std::fs::read_to_string(&xml_path)
+        .unwrap_or_else(|_| panic!("fixture not found: {}", xml_path.display()));
+    let photo  = std::fs::read(fixtures_dir().join("image-sample.png")).expect("image-sample.png");
+    let avatar = std::fs::read(fixtures_dir().join("image-square.png")).expect("image-square.png");
+
+    let pdf_bytes = crate::LpdfEngine::render_xml_with_images_to_pdf_bytes(&xml, &[("photo", &photo), ("avatar", &avatar)])
+        .unwrap_or_else(|e| panic!("render failed for {name}: {e}"));
+    check_snapshot(name, &pdf_bytes);
+}
+
+fn check_snapshot(name: &str, pdf_bytes: &[u8]) {
     if std::env::var("UPDATE_SNAPSHOTS").is_ok() {
-        write_snapshot(name, &pdf_bytes);
+        write_snapshot(name, pdf_bytes);
     } else {
         let snap_path = snapshots_dir().join(format!("{name}.pdf.sha256"));
         let stored = std::fs::read_to_string(&snap_path).unwrap_or_else(|_| {
@@ -63,7 +80,7 @@ fn run_snapshot(name: &str) {
                 snap_path.display()
             )
         });
-        let hash = sha256_hex(&pdf_bytes);
+        let hash = sha256_hex(pdf_bytes);
         assert_eq!(
             stored.trim(), hash,
             "PDF output changed for {name}. Run with UPDATE_SNAPSHOTS=1 to accept the new output."
@@ -126,6 +143,8 @@ fn showcase_gradient() { run_snapshot("showcase-gradient"); }
 fn showcase_running_header() { run_snapshot("showcase-running-header"); }
 #[test]
 fn showcase_running_header_dictionary() { run_snapshot("showcase-running-header-dictionary"); }
+#[test]
+fn showcase_image_box() { run_snapshot_with_image("showcase-image-box"); }
 #[test]
 fn showcase_barcode() { run_snapshot("showcase-barcode"); }
 #[test]

@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+      <color name="rule"    value="#dde3ed" />
+      <color name="bg"      value="#f5f7fa" />
+    </colors>
+  </tokens>
+  <assets>
+    <image name="photo"  src="image-sample.png" />
+    <image name="avatar" src="image-square.png" />
+  </assets>
+  <document size="a4">
+    <meta title="lpdf Showcase — Image Box" subject="padding, background, border and radius on an image" />
+
+    <!-- width and height size the picture. A padding, a background or a border makes the image a box around it: the
+         padding adds room, the background fills the box, and the border is drawn on the box's edge, as on every
+         box. A radius rounds the box and clips the picture to the same corners, less the padding. -->
+    <section>
+      <layout margin="40pt">
+        <column gap="xl">
+
+          <column gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Image box</text>
+            <text font-size="m" color="muted">Room, a background, a border and rounded corners around a picture.</text>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Radius</text>
+            <row gap="l" align="start">
+              <column gap="xs">
+                <img name="photo" width="110pt"/>
+                <text font-size="s" color="muted">No attributes</text>
+              </column>
+              <column gap="xs">
+                <img name="photo" width="110pt" radius="m"/>
+                <text font-size="s" color="muted">radius="m"</text>
+              </column>
+              <column gap="xs">
+                <img name="photo" width="110pt" radius="xxl"/>
+                <text font-size="s" color="muted">radius="xxl"</text>
+              </column>
+              <column gap="xs">
+                <img name="avatar" width="80pt" height="80pt" radius="40pt"/>
+                <text font-size="s" color="muted">A circle: radius 40pt on 80pt</text>
+              </column>
+            </row>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Padding, background and border</text>
+            <row gap="l" align="start">
+              <column gap="xs">
+                <img name="photo" width="110pt" padding="s" background="bg"/>
+                <text font-size="s" color="muted">padding and background</text>
+              </column>
+              <column gap="xs">
+                <img name="photo" width="110pt" padding="s" border="1pt primary"/>
+                <text font-size="s" color="muted">padding and border</text>
+              </column>
+              <column gap="xs">
+                <img name="photo" width="110pt" padding="m" background="bg" border="1pt rule" radius="l"/>
+                <text font-size="s" color="muted">all four, radius="l"</text>
+              </column>
+            </row>
+            <text font-size="s" color="muted">The box is larger than the picture by the padding. The border takes no room: it is drawn on the edge of the box.</text>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">In a row and a table</text>
+            <row gap="m" align="center">
+              <img name="avatar" width="64pt" height="64pt" radius="35pt" border="2pt primary" padding="3pt" background="#ffffff"/>
+              <column gap="xs">
+                <text font-size="m" font="Helvetica-Bold">Avatar and name</text>
+                <text font-size="s" color="muted">A round picture in a ring: radius 35pt on a 64pt picture and 3pt of padding.</text>
+              </column>
+            </row>
+            <table cols="1fr 3fr" border="0.5pt rule">
+              <tr>
+                <td padding="s"><img name="photo" width="48pt" radius="8pt" padding="2pt" background="bg" border="0.5pt rule"/></td>
+                <td padding="s"><text font-size="s">An image in a table cell keeps its box.</text></td>
+              </tr>
+              <tr>
+                <td padding="s"><img name="avatar" width="48pt" radius="24pt"/></td>
+                <td padding="s"><text font-size="s">And a rounded one without a box.</text></td>
+              </tr>
+            </table>
+          </column>
+
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>
