@@ -637,9 +637,11 @@ fn layers_section(buf: &mut String, n: usize) {
     .unwrap();
 }
 
-/// What the image fixtures declare for their picture: the name the document uses, and a file for it.
+/// What the image fixtures declare for their picture: the name the document uses, and a file for it. The benches
+/// load that photo themselves and never read `src`, but a preview does, so it names the photo they use, from
+/// `test/fixtures`.
 const IMAGE_ASSETS: &str = r#"  <assets>
-    <image name="photo" src="photo.jpg" />
+    <image name="photo" src="../../examples/6-book/assets/images/chapter-05-caterpillar.jpg" />
   </assets>
 "#;
 
