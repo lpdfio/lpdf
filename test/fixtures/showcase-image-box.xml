@@ -2,6 +2,10 @@
 <lpdf version="1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <assets>
+    <image name="photo"  src="image-sample.png" />
+    <image name="avatar" src="image-square.png" />
+  </assets>
   <tokens>
     <colors>
       <color name="primary" value="#1763cf" />
@@ -10,10 +14,6 @@
       <color name="bg"      value="#f5f7fa" />
     </colors>
   </tokens>
-  <assets>
-    <image name="photo"  src="image-sample.png" />
-    <image name="avatar" src="image-square.png" />
-  </assets>
   <document size="a4">
     <meta title="lpdf Showcase — Image Box" subject="padding, background, border and radius on an image" />
 
