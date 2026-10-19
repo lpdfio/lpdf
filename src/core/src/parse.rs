@@ -253,6 +253,7 @@ pub struct Node {
     pub radius: f32,
     /// How opaque the box and everything in it is, from 0 to 1.
     pub opacity: f32,
+    pub shadow: Option<Shadow>,
     pub height_mode: HeightMode,
     pub width_constraint: Option<f32>,
     pub width_fill: bool,
@@ -440,6 +441,7 @@ struct ParsedNode {
     border: Option<(f32, String)>,
     radius: f32,
     opacity: f32,
+    shadow: Option<Shadow>,
     height_mode: HeightMode,
     width_constraint: Option<f32>,
     width_fill: bool,
@@ -502,6 +504,7 @@ impl ParsedNode {
             border: None,
             radius: 0.0,
             opacity: 1.0,
+            shadow: None,
             height_mode: HeightMode::Auto,
             width_constraint: None,
             width_fill: false,
@@ -625,7 +628,7 @@ impl Node {
     pub fn layout_default() -> Node {
         Node {
             kind: NodeKind::Column,
-            gap: 0.0, padding: [0.0; 4], background: None, border: None, radius: 0.0, opacity: 1.0,
+            gap: 0.0, padding: [0.0; 4], background: None, border: None, radius: 0.0, opacity: 1.0, shadow: None,
             height_mode: HeightMode::Auto, width_constraint: None, width_fill: false,
             page_scope: None, paginate: Paginate::None, debug: false,
             align: Align::Stretch, justify: Justify::Start,
@@ -704,6 +707,7 @@ fn resolve_node(
         border:                n.border,
         radius:                n.radius,
         opacity:               n.opacity,
+        shadow:                n.shadow,
         height_mode:           n.height_mode,
         width_constraint:      n.width_constraint,
         width_fill:            n.width_fill,
@@ -1184,6 +1188,44 @@ pub fn parse_signed_measurement(s: &str) -> Result<f32, String> {
     let inner = if neg { &s[1..] } else { s };
     let val = parse_measurement(inner)?;
     Ok(if neg { -val } else { val })
+}
+
+/// A drop shadow: a copy of a shape, moved by `dx` and `dy` and filled with `color`, drawn under the shape.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Shadow {
+    /// How far right of the shape the copy is, in pt. Negative is left.
+    pub dx: f32,
+    /// How far below the shape the copy is, in pt. Negative is above.
+    pub dy: f32,
+    pub color: String,
+    /// How opaque the shadow alone is, from 0 to 1.
+    pub opacity: f32,
+}
+
+/// Parse a `shadow`: "x y color", and after the color an opacity that fades the shadow alone, as in
+/// "2pt 3pt #000000 0.2".
+pub fn parse_shadow(val: &str, tokens: &Tokens) -> Result<Shadow, String> {
+    let parts: Vec<&str> = val.split_whitespace().collect();
+    if !(3..=4).contains(&parts.len()) {
+        return Err(format!(
+            "invalid shadow '{val}': expected 'x y color' and optionally an opacity, like '2pt 3pt #000000 0.2'"
+        ));
+    }
+    let offset = |part: &str, axis: &str| {
+        parse_signed_measurement(part)
+            .ok()
+            .filter(|v| v.is_finite())
+            .ok_or_else(|| format!("invalid shadow '{val}': {axis} '{part}' is not a length, like 2pt or -3pt"))
+    };
+    let dx = offset(parts[0], "x")?;
+    let dy = offset(parts[1], "y")?;
+    let color = tokens.resolve_color(parts[2]).map_err(|e| format!("invalid shadow '{val}': {e}"))?;
+    let opacity = match parts.get(3) {
+        Some(part) => parse_opacity(part)
+            .map_err(|_| format!("invalid shadow '{val}': opacity '{part}' is not a number from 0 to 1"))?,
+        None => 1.0,
+    };
+    Ok(Shadow { dx, dy, color, opacity })
 }
 
 /// Thin wrapper: resolve a ParsedNode in isolation (used during XML parse of sections
@@ -1963,6 +2005,7 @@ fn apply_box_attrs(
     }
     if is_box {
         if let Some(v) = a.get("opacity") { node.opacity = parse_opacity(v)?; }
+        if let Some(v) = a.get("shadow")  { node.shadow  = Some(parse_shadow(v, tokens)?); }
     }
     if !matches!(node.kind, NodeKind::Img | NodeKind::Barcode | NodeKind::Field) {
         if let Some(v) = a.get("height") { node.height_mode = parse_height_mode(v)?; }
@@ -3481,6 +3524,119 @@ mod tests {
             let err = parse(&minimal(&format!(r#"<column opacity="{opacity}"/>"#))).unwrap_err();
             assert!(err.contains("<column>") && err.contains(&format!("invalid opacity '{opacity}'")), "{err}");
         }
+    }
+
+    fn shadow(dx: f32, dy: f32, color: &str, opacity: f32) -> Option<Shadow> {
+        Some(Shadow { dx, dy, color: color.to_string(), opacity })
+    }
+
+    #[test]
+    fn a_box_reads_its_shadow() {
+        let mut doc = parse(&minimal(
+            r##"<column shadow="2pt 3pt #112233"><row shadow="-2pt -3pt #fff 0.2"/><grid shadow="0pt 0pt #000 0"/><frame shadow="1pt 1pt #000 1"/><table cols="1fr"><tr><td shadow=".5pt 1.5pt #abc .25"/></tr></table><column/></column>"##,
+        )).unwrap();
+        let column = &doc.section_layouts()[0].children[0];
+        let shadows: Vec<Option<Shadow>> = column.children.iter().map(|n| n.shadow.clone()).collect();
+        assert_eq!(column.shadow, shadow(2.0, 3.0, "#112233", 1.0));
+        assert_eq!(shadows[0], shadow(-2.0, -3.0, "#ffffff", 0.2));
+        assert_eq!(shadows[1], shadow(0.0, 0.0, "#000000", 0.0));
+        assert_eq!(shadows[2], shadow(1.0, 1.0, "#000000", 1.0));
+        assert_eq!(column.children[3].children[0].children[0].shadow, shadow(0.5, 1.5, "#aabbcc", 0.25));
+        assert_eq!(shadows[4], None, "a box without a shadow has none");
+    }
+
+    #[test]
+    fn a_shadow_takes_a_length_in_any_unit_and_a_color_token() {
+        let xml = r##"<lpdf version="1"><tokens><colors><color name="ink" value="#123456"/></colors></tokens>
+            <document><section><layout><column shadow="1in 25.4mm ink"/></layout></section></document></lpdf>"##;
+        let mut doc = parse(xml).unwrap();
+        let shadow = doc.section_layouts()[0].children[0].shadow.clone().unwrap();
+        assert_eq!((shadow.dx, shadow.dy, shadow.color.as_str()), (72.0, 72.0, "#123456"));
+    }
+
+    #[test]
+    fn a_box_in_a_kit_tree_reads_its_shadow() {
+        let json = r#"{"version":1,"type":"document","attrs":{},"nodes":[{"type":"section","attrs":{},"nodes":[
+            {"type":"layout","attrs":{},"nodes":[{"type":"column","attrs":{"shadow":"2pt 3pt #112233 0.5"},"nodes":[]}]}]}]}"#;
+        let mut doc = parse_tree(json).unwrap();
+        assert_eq!(doc.section_layouts()[0].children[0].shadow, shadow(2.0, 3.0, "#112233", 0.5));
+    }
+
+    #[test]
+    fn a_shadow_that_is_not_x_y_color_and_an_opacity_says_so() {
+        for (value, says) in [
+            ("", "expected 'x y color'"),
+            ("2pt", "expected 'x y color'"),
+            ("2pt 3pt", "expected 'x y color'"),
+            ("2pt 3pt #000 0.5 4pt", "expected 'x y color'"),
+            ("two 3pt #000", "x 'two' is not a length"),
+            ("2pt 3px #000", "y '3px' is not a length"),
+            ("2pt NaNpt #000", "y 'NaNpt' is not a length"),
+            ("2pt 3pt #12", "invalid hex color"),
+            ("2pt 3pt nope", "unknown color token: 'nope'"),
+            ("2pt 3pt #000 1.5", "opacity '1.5' is not a number from 0 to 1"),
+            ("2pt 3pt #000 half", "opacity 'half' is not a number from 0 to 1"),
+            ("2pt 3pt #000 -0.1", "opacity '-0.1' is not a number from 0 to 1"),
+        ] {
+            let err = parse(&minimal(&format!(r#"<column shadow="{value}"/>"#))).unwrap_err();
+            assert!(err.contains("<column>") && err.contains(&format!("invalid shadow '{value}'")) && err.contains(says), "{value}: {err}");
+        }
+    }
+
+    #[test]
+    fn layer_shapes_read_their_shadow() {
+        use crate::canvas::CanvasPrimitive;
+        let xml = r##"<lpdf version="1"><document size="a4"><section><layer>
+            <rect x="10pt" y="20pt" width="100pt" height="50pt" shadow="2pt 3pt #112233"/>
+            <circle x="10pt" y="20pt" r="5pt" shadow="-2pt 3pt #fff 0.5"/>
+            <ellipse x="10pt" y="20pt" rx="8pt" ry="3pt" shadow="2pt -3pt #000 0"/>
+            <rect x="10pt" y="20pt" width="100pt" height="50pt"/>
+        </layer></section></document></lpdf>"##;
+        let doc = parse(xml).unwrap();
+        let children = &as_layer(&doc.sections[0].children[0]).children;
+        let shadows: Vec<Option<Shadow>> = children.iter().map(|c| match c {
+            CanvasPrimitive::Rect(r) => r.shadow.clone(),
+            CanvasPrimitive::Circle(c) => c.shadow.clone(),
+            CanvasPrimitive::Ellipse(e) => e.shadow.clone(),
+            _ => panic!("expected a shape"),
+        }).collect();
+        assert_eq!(shadows, vec![
+            shadow(2.0, 3.0, "#112233", 1.0),
+            shadow(-2.0, 3.0, "#ffffff", 0.5),
+            shadow(2.0, -3.0, "#000000", 0.0),
+            None,
+        ]);
+    }
+
+    #[test]
+    fn layer_shapes_in_a_kit_tree_read_their_shadow() {
+        use crate::canvas::CanvasPrimitive;
+        let json = r#"{"version":1,"type":"document","attrs":{},"nodes":[{"type":"section","attrs":{},"nodes":[
+            {"type":"layer","attrs":{},"nodes":[
+                {"type":"rect","attrs":{"x":"10pt","y":"20pt","width":"100pt","height":"50pt","shadow":"2pt 3pt #112233"}},
+                {"type":"circle","attrs":{"x":"10pt","y":"20pt","r":"5pt","shadow":"-2pt 3pt #fff 0.5"}},
+                {"type":"ellipse","attrs":{"x":"10pt","y":"20pt","rx":"8pt","ry":"3pt","shadow":"2pt -3pt #000 0"}}]}]}]}"#;
+        let doc = parse_tree(json).unwrap();
+        let shadows: Vec<Option<Shadow>> = as_layer(&doc.sections[0].children[0]).children.iter().map(|c| match c {
+            CanvasPrimitive::Rect(r) => r.shadow.clone(),
+            CanvasPrimitive::Circle(c) => c.shadow.clone(),
+            CanvasPrimitive::Ellipse(e) => e.shadow.clone(),
+            _ => panic!("expected a shape"),
+        }).collect();
+        assert_eq!(shadows, vec![
+            shadow(2.0, 3.0, "#112233", 1.0),
+            shadow(-2.0, 3.0, "#ffffff", 0.5),
+            shadow(2.0, -3.0, "#000000", 0.0),
+        ]);
+    }
+
+    #[test]
+    fn a_layer_shape_shadow_that_is_not_valid_says_so() {
+        let xml = r##"<lpdf version="1"><document size="a4"><section><layer>
+            <rect x="10pt" y="20pt" width="100pt" height="50pt" shadow="2pt 3pt"/>
+        </layer></section></document></lpdf>"##;
+        let err = parse(xml).unwrap_err();
+        assert!(err.contains("<rect>") && err.contains("invalid shadow '2pt 3pt'"), "{err}");
     }
 
     /// The nodes of the `text-at` that are the children of the layer at `index` in the first section.

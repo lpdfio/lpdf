@@ -323,6 +323,7 @@ mod tests {
             border: None,
             radius: 0.0,
             opacity: 1.0,
+            shadow: None,
             height_mode: HeightMode::Auto,
             width_constraint: None,
             width_fill: false,

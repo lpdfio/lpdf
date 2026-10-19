@@ -773,6 +773,47 @@ mod tests {
     }
 
     #[test]
+    fn a_box_shadow_from_the_builder_renders_the_same_from_the_tree_and_from_the_xml() {
+        let column = |attrs: &str| {
+            doc_with_layout_child(&format!(
+                r##"{{"type":"column","attrs":{attrs},"nodes":[{{"type":"text","attrs":{{}},"nodes":["Shadowed"]}}]}}"##
+            ))
+        };
+        let plain = render_tree(&column(r##"{"background":"#cccccc"}"##));
+        for attrs in [
+            r##"{"background":"#cccccc","shadow":"3pt 4pt #0000ff"}"##,
+            r##"{"background":"#cccccc","shadow":"3pt 4pt #0000ff 0.4"}"##,
+        ] {
+            let (from_tree, from_xml) = rendered_both_ways(&column(attrs));
+            assert_eq!(from_tree, from_xml, "{attrs}");
+            assert_ne!(from_tree, plain, "the tree's {attrs} is not read");
+        }
+    }
+
+    #[test]
+    fn a_layer_shape_shadow_from_the_builder_renders_the_same_from_the_tree_and_from_the_xml() {
+        let layer = |shape: &str| {
+            format!(
+                r##"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
+                    {{"type":"layer","attrs":{{}},"nodes":[{shape}]}}]}}]}}"##
+            )
+        };
+        for (kind, attrs) in [
+            ("rect", r##""x":"40pt","y":"40pt","width":"60pt","height":"40pt","fill":"#00ff00""##),
+            ("circle", r##""x":"40pt","y":"40pt","r":"30pt","fill":"#00ff00""##),
+            ("ellipse", r##""x":"40pt","y":"40pt","rx":"40pt","ry":"20pt","fill":"#00ff00""##),
+        ] {
+            let shape = |shadow: &str| format!(r#"{{"type":"{kind}","attrs":{{{attrs}{shadow}}}}}"#);
+            let plain = render_tree(&layer(&shape("")));
+            for shadow in [r#","shadow":"3pt 4pt #0000ff""#, r#","shadow":"3pt 4pt #0000ff 0.4""#] {
+                let (from_tree, from_xml) = rendered_both_ways(&layer(&shape(shadow)));
+                assert_eq!(from_tree, from_xml, "{kind}{shadow}");
+                assert_ne!(from_tree, plain, "the tree's {kind} shadow {shadow} is not read");
+            }
+        }
+    }
+
+    #[test]
     fn a_layer_font_size_and_color_from_the_builder_render_the_same_from_the_tree_and_from_the_xml() {
         let layer = |attrs: &str| {
             format!(

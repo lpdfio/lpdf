@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary"  value="#1763cf" />
+      <color name="muted"    value="#737373" />
+      <color name="rule"     value="#dde3ed" />
+      <color name="bg"       value="#f5f7fa" />
+      <color name="ink"      value="#1f2a44" />
+      <color name="accent"   value="#e0762b" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Shadow" subject="shadow on a box and on a layer shape" />
+
+    <!-- A shadow is a hard-edged copy of the shape: moved right and down by the first two lengths, filled with
+         the color, drawn under the shape. A fourth value, an opacity, fades the shadow alone. -->
+    <section>
+      <layout margin="40pt">
+        <column gap="xl">
+
+          <column gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Shadow</text>
+            <text font-size="m" color="muted">A copy of the shape, moved and filled, under the shape. No blur.</text>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Offset and color</text>
+            <row gap="xl" align="start">
+              <column width="140pt" padding="m" background="#ffffff" border="s rule" shadow="3pt 3pt ink">
+                <text font-size="s" font="Helvetica-Bold">3pt 3pt ink</text>
+                <text font-size="s" color="muted">Right and down.</text>
+              </column>
+              <column width="140pt" padding="m" background="#ffffff" border="s rule" shadow="6pt 6pt accent">
+                <text font-size="s" font="Helvetica-Bold">6pt 6pt accent</text>
+                <text font-size="s" color="muted">A longer offset.</text>
+              </column>
+              <column width="140pt" padding="m" background="#ffffff" border="s rule" shadow="-4pt -4pt primary">
+                <text font-size="s" font="Helvetica-Bold">-4pt -4pt primary</text>
+                <text font-size="s" color="muted">Left and up.</text>
+              </column>
+            </row>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Opacity of the shadow</text>
+            <text font-size="s" color="muted">A fourth value fades the shadow alone, over whatever is behind it.</text>
+            <column background="bg" padding="l" radius="s">
+              <row gap="xl" align="start">
+                <column width="140pt" padding="m" background="#ffffff" radius="s" shadow="4pt 5pt #000000">
+                  <text font-size="s" font="Helvetica-Bold">no opacity</text>
+                  <text font-size="s" color="muted">Opaque.</text>
+                </column>
+                <column width="140pt" padding="m" background="#ffffff" radius="s" shadow="4pt 5pt #000000 0.35">
+                  <text font-size="s" font="Helvetica-Bold">0.35</text>
+                  <text font-size="s" color="muted">The panel shows through.</text>
+                </column>
+                <column width="140pt" padding="m" background="#ffffff" radius="s" shadow="4pt 5pt #000000 0.12">
+                  <text font-size="s" font="Helvetica-Bold">0.12</text>
+                  <text font-size="s" color="muted">A light depth cue.</text>
+                </column>
+              </row>
+            </column>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Radius, and a box with no background</text>
+            <row gap="xl" align="start">
+              <column width="140pt" padding="m" background="#ffffff" border="s rule" radius="m" shadow="4pt 4pt ink 0.3">
+                <text font-size="s" font="Helvetica-Bold">radius m</text>
+                <text font-size="s" color="muted">The shadow has the same corners.</text>
+              </column>
+              <column width="140pt" padding="m" border="s ink" shadow="4pt 4pt accent">
+                <text font-size="s" font="Helvetica-Bold">no background</text>
+                <text font-size="s" color="muted">Shown only outside the box.</text>
+              </column>
+              <column width="140pt" padding="m" background="#ffffff" border="s rule" opacity="0.5" shadow="4pt 4pt ink">
+                <text font-size="s" font="Helvetica-Bold">opacity 0.5</text>
+                <text font-size="s" color="muted">The box and its shadow fade together.</text>
+              </column>
+            </row>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Frame, grid and cell</text>
+            <row gap="xl" align="start">
+              <frame width="140pt" padding="m" background="#ffffff" border="s rule" shadow="3pt 3pt ink 0.3">
+                <text font-size="s">A frame</text>
+              </frame>
+              <grid cols="2" width="140pt" padding="m" background="#ffffff" border="s rule" shadow="3pt 3pt ink 0.3">
+                <text font-size="s">A</text><text font-size="s">grid</text>
+              </grid>
+              <table cols="1fr 1fr" width="140pt">
+                <tr>
+                  <td padding="m" background="#ffffff" border="s rule" shadow="3pt 3pt ink 0.3"><text font-size="s">A cell</text></td>
+                  <td padding="m"><text font-size="s">and another</text></td>
+                </tr>
+              </table>
+            </row>
+          </column>
+
+        </column>
+      </layout>
+
+      <!-- The same on the shapes of a layer. -->
+      <layer>
+        <text-at x="40pt" y="520pt" font="Helvetica-Bold" font-size="l">On a layer</text-at>
+        <rect x="40pt" y="552pt" width="130pt" height="70pt" radius="6pt" fill="#ffffff" stroke="rule" shadow="4pt 4pt ink 0.3"/>
+        <circle x="212pt" y="552pt" r="35pt" fill="#ffffff" stroke="rule" shadow="4pt 4pt ink 0.3"/>
+        <ellipse x="312pt" y="562pt" rx="55pt" ry="25pt" fill="accent" shadow="5pt 5pt primary"/>
+        <rect x="450pt" y="552pt" width="90pt" height="70pt" stroke="ink" shadow="5pt 5pt accent"/>
+        <text-at x="40pt" y="650pt" font-size="s" color="muted">A rect with a radius, a circle, an ellipse and a rect with no fill, which shows its shadow only outside.</text-at>
+      </layer>
+    </section>
+  </document>
+</lpdf>

@@ -148,6 +148,7 @@ fn pattern_samples(type_name: &str) -> Vec<String> {
         "PageSizeCustom" => &["300pt 400pt"],
         "ColorHex" | "Color" => &["#ff0000"],
         "BorderValue" => &["2pt #ff0000"],
+        "ShadowValue" => &["4pt 5pt #333333", "4pt 5pt #333333 0.5"],
         "PageScope" => &["2"],
         other => panic!("no sample value for the pattern type {other}: add one to pattern_samples"),
     };
