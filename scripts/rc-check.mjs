@@ -2,13 +2,15 @@
 // Shows where a core release candidate stands (Lpdf-devcycle.md §4.2): core's
 // release.yml run for the RC tag, then the rc.yml run it dispatched in each
 // of the five SDK and extension repos, and whether the RC is ready to release.
+// Each of those repos releases its main as it stands, so a repo whose main has
+// a commit its rc.yml run did not test is not ready: the release would stop there.
 //
 //   make rc-check                   the newest RC tag on GitHub
 //   make rc-check RC=v0.19.0-rc.2   a specific one
 //
 // Read-only: it pushes nothing and changes nothing. The repos are public, so
 // no token is needed, but GitHub allows 60 unauthenticated API calls an hour.
-// A check uses about 6 while runs are going and up to ~20 once they finish.
+// A check uses about 6 while runs are going and up to ~25 once they finish.
 // Set GH_TOKEN or GITHUB_TOKEN to raise the limit to 5,000.
 
 import { execFileSync } from 'node:child_process'
@@ -23,6 +25,10 @@ const TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || ''
 // A dispatched run appears within seconds. After this long with no run, the
 // repo most likely has no rc.yml on main, or the dispatch failed.
 const MISSING_AFTER_MS = 3 * 60 * 1000
+// Commits the release workflows push to main themselves, after a release. They are no change to test.
+const BOT_COMMIT_RE = /^(changelog|release): /
+
+const short = s => s.slice(0, 7)
 
 function fail(message) {
     console.error(`rc-check: ${message}`)
@@ -113,6 +119,23 @@ async function findRcRun(repo) {
     return { run: runs.workflow_runs.find(r => (r.display_title || '').startsWith(`RC ${tag}:`)) ?? null }
 }
 
+// The commits on a repo's main that its rc.yml run did not test. Each repo's release workflow
+// builds main as it is then, and stops when it holds a commit the RC's run did not build, so a
+// release is only ready while this list is empty. A main that no longer contains the run's commit
+// has no such list: it is reported as a single line.
+async function findUntestedMain(repo, run) {
+    const compare = await api(`/repos/${OWNER}/${repo}/compare/${run.head_sha}...${BRANCH}`)
+    if (compare === null) return [`main does not contain ${short(run.head_sha)}, the commit the run tested`]
+    const commits = compare.commits
+        .map(c => ({ sha: c.sha, subject: c.commit.message.split('\n')[0] }))
+        .filter(c => !BOT_COMMIT_RE.test(c.subject))
+        .map(c => `${short(c.sha)} ${c.subject}`)
+    if (compare.status === 'diverged' || compare.status === 'behind') {
+        return [`main does not contain ${short(run.head_sha)}, the commit the run tested`, ...commits]
+    }
+    return commits
+}
+
 // What a finished run has to say: our own ::error:: and ::notice:: lines, and
 // the step that failed. GitHub's own annotations (the generic "Process
 // completed with exit code 1.", runner and Node deprecation notices) are noise.
@@ -166,6 +189,14 @@ async function collect() {
             row.run = found.run
             row.state = stateOf(found.run)
             row.messages = await findMessages(repo, found.run)
+            // A released version's main has moved on by design: its release commit, and later work.
+            if (row.state === 'ok' && !tagCommits.has(final)) {
+                const untested = await findUntestedMain(repo, found.run)
+                if (untested.length) {
+                    row.state = 'MAIN MOVED'
+                    row.messages.push(`${BRANCH} is past ${short(found.run.head_sha)}, the commit this run tested:`, ...untested.map(c => `  ${c}`))
+                }
+            }
         } else if (coreRow.state === 'ok' && Date.now() - coreDoneAt > MISSING_AFTER_MS) {
             row.state = 'MISSING'
             row.messages.push('core finished a while ago but no run started here')
@@ -181,7 +212,6 @@ async function collect() {
 
 // Returns the exit code: 1 when something failed or is missing, else 0.
 function show(rows) {
-    const short = s => s.slice(0, 7)
     console.log('')
     console.log('-------------------------------')
     console.log(`>>> Release candidate ${tag}  (commit ${short(sha)}, for ${final})`)
@@ -194,13 +224,19 @@ function show(rows) {
     }
     console.log('')
 
-    const bad = rows.filter(r => ['FAILED', 'cancelled', 'MISSING'].includes(r.state))
+    const bad = rows.filter(r => ['FAILED', 'cancelled', 'MISSING', 'MAIN MOVED'].includes(r.state))
     const busy = rows.filter(r => ['running', 'queued', 'waiting', 'not started'].includes(r.state))
 
     if (bad.length) {
         console.log(`Not releasable: ${bad.map(r => `${r.repo} ${r.state.toLowerCase()}`).join(', ')}.`)
-        console.log('A code problem: fix it on main, then make rc-next for the next RC.')
-        console.log('A flaky run: open it and use "Re-run failed jobs", then check again.')
+        if (bad.some(r => r.state !== 'MAIN MOVED')) {
+            console.log('A code problem: fix it on main, then make rc-next for the next RC.')
+            console.log('A flaky run: open it and use "Re-run failed jobs", then check again.')
+        }
+        if (bad.some(r => r.state === 'MAIN MOVED')) {
+            console.log('A main that moved on: the release builds it as it is and stops on a commit no RC run built.')
+            console.log('Make rc-next for another RC, which tests it, then check again.')
+        }
         return 1
     }
     if (busy.length) {
