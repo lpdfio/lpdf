@@ -30,7 +30,7 @@ const EXPECTED = {
     LayoutAttr: attributes('layout'),
     DocumentMeta: attributes('meta'),
     DocumentAssets: ['fonts', 'images'],
-    DocumentTokens: ['colors', 'gradients', 'aliases', 'space', 'grid', 'border', 'radius', 'width', 'text-size', 'line-height'],
+    DocumentTokens: ['colors', 'gradients', 'aliases', 'space', 'grid', 'border', 'radius', 'width', 'height', 'text-size', 'line-height'],
     FontAttr: attributes('font'),
     ImageAttr: attributes('image'),
     RegionAttr: attributes('region', 'layout'),

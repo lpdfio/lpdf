@@ -6,6 +6,7 @@ pub struct Tokens {
     pub border: [f32; 6],
     pub radius: [f32; 6],
     pub width: [f32; 6],
+    pub height: [f32; 6],
     pub grid_col: [f32; 6],
     pub text_size: [f32; 6],
     /// Factors of the font size, not pt.
@@ -18,7 +19,7 @@ pub struct Tokens {
 }
 
 /// Names an alias cannot take, because an attribute that takes a scale value has them as a keyword of its own:
-/// `width="fill"`, and `height="full"` or `"fill"`, which a height token row would join.
+/// `width="fill"`, and `height="full"` or `"fill"`, which the height row shares the attribute with.
 const RESERVED_ALIASES: [&str; 2] = ["fill", "full"];
 
 /// What a fill starts with when it names a gradient of the tokens: `gradient:brand-fade`.
@@ -170,7 +171,7 @@ impl Tokens {
     }
 
     /// What names a slot, for the error that says a value is none of them: the six, and the document's aliases.
-    fn slot_names(&self) -> String {
+    pub(crate) fn slot_names(&self) -> String {
         if self.aliases.is_empty() {
             return "a slot from xs to xxl".to_string();
         }
@@ -205,6 +206,11 @@ impl Tokens {
     /// Width token OR explicit pt value
     pub fn resolve_width(&self, val: &str) -> Result<f32, String> {
         self.resolve_scale(val, &self.width, "width")
+    }
+
+    /// Height token OR explicit pt value. `full` and `fill` are not read here: the boxes that have them read them first.
+    pub fn resolve_height(&self, val: &str) -> Result<f32, String> {
+        self.resolve_scale(val, &self.height, "height")
     }
 
     /// Grid column min-width: scale token or pt value
@@ -387,6 +393,7 @@ impl Default for Tokens {
             border: [0.5, 1.0, 1.5, 2.0, 3.0, 4.0],
             radius: [2.0, 4.0, 6.0, 10.0, 16.0, 24.0],
             width: [120.0, 200.0, 280.0, 360.0, 440.0, 515.0],
+            height: [16.0, 24.0, 32.0, 48.0, 64.0, 96.0],
             grid_col: [60.0, 100.0, 140.0, 180.0, 220.0, 280.0],
             text_size: [7.0, 9.0, 11.0, 14.0, 20.0, 28.0],
             line_height: [1.0, 1.1, 1.2, 1.4, 1.6, 2.0],
@@ -442,6 +449,31 @@ mod tests {
         }
     }
 
+    #[test]
+    fn resolve_height_token_and_pt() {
+        let t = Tokens::default();
+        assert_eq!(t.resolve_height("xs").unwrap(), 16.0);
+        assert_eq!(t.resolve_height("m").unwrap(), 32.0);
+        assert_eq!(t.resolve_height("xxl").unwrap(), 96.0);
+        assert_eq!(t.resolve_height("28pt").unwrap(), 28.0);
+    }
+
+    #[test]
+    fn resolve_height_follows_a_redefined_row_and_is_not_the_width_row() {
+        let t = Tokens { height: [10.0, 20.0, 30.0, 40.0, 50.0, 60.0], ..Tokens::default() };
+        assert_eq!(t.resolve_height("l").unwrap(), 40.0);
+        assert_eq!(t.resolve_width("l").unwrap(), 360.0, "the width row is a row of its own");
+    }
+
+    #[test]
+    fn resolve_height_rejects_what_is_neither_a_slot_nor_a_length() {
+        let t = Tokens::default();
+        assert_eq!(
+            t.resolve_height("medum").unwrap_err(),
+            "invalid height value: 'medum': expected a slot from xs to xxl or a pt value"
+        );
+    }
+
     // ── Aliases ───────────────────────────────────────────────────────────────
 
     fn with_aliases(aliases: &[(&str, &str)]) -> Tokens {
@@ -459,6 +491,7 @@ mod tests {
         assert_eq!(t.resolve_border_thickness("body").unwrap(), 1.5);
         assert_eq!(t.resolve_radius("body").unwrap(), 6.0);
         assert_eq!(t.resolve_width("caption").unwrap(), 120.0);
+        assert_eq!(t.resolve_height("body").unwrap(), 32.0);
         assert_eq!(t.resolve_grid_col("body").unwrap(), 140.0);
         assert_eq!(t.resolve_text_size("caption").unwrap(), 7.0);
         assert_eq!(t.resolve_line_height("body").unwrap(), 1.2);

@@ -48,7 +48,7 @@ fn attrs_str(obj: &serde_json::Map<String, Value>, skip: &[&str]) -> String {
 
 // ── Tokens block ──────────────────────────────────────────────────────────────
 
-const TOKEN_SCALES: &[&str] = &["space", "grid", "border", "radius", "width", "text-size", "line-height"];
+const TOKEN_SCALES: &[&str] = &["space", "grid", "border", "radius", "width", "height", "text-size", "line-height"];
 
 fn render_tokens(tokens: &serde_json::Map<String, Value>, depth: usize) -> String {
     let pad   = "  ".repeat(depth);
@@ -588,6 +588,7 @@ mod tests {
             "attrs": {
                 "tokens": {
                     "space": { "m": "8pt", "l": "16pt" },
+                    "height": { "m": "30pt" },
                     "text-size":  { "body": "12pt" }
                 }
             },
@@ -596,6 +597,7 @@ mod tests {
         let xml = kit_to_xml(json).unwrap();
         assert!(xml.contains("<tokens>"));
         assert!(xml.contains("<space ") && xml.contains(r#"m="8pt""#));
+        assert!(xml.contains("<height ") && xml.contains(r#"m="30pt""#));
         assert!(xml.contains("<text-size ") && xml.contains(r#"body="12pt""#));
     }
 
