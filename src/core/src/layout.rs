@@ -3262,6 +3262,22 @@ mod tests {
     }
 
     #[test]
+    fn a_box_is_as_high_as_the_height_slot_it_names() {
+        let render = |tokens: &str, body: &str| {
+            engine_render(&format!(
+                r#"<lpdf version="1"><tokens>{tokens}</tokens><document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
+            ))
+        };
+        let tree = render("", r#"<frame height="s" /><frame height="xxl" /><frame height="40pt" />"#);
+        let heights: Vec<f64> = tree["pages"][0]["nodes"].as_array().unwrap().iter().map(|n| n["height"].as_f64().unwrap()).collect();
+        assert_eq!(heights, [24.0, 96.0, 40.0], "s and xxl of the default row, and a length");
+
+        let row = r#"<height xs="10pt" s="70pt" m="30pt" l="40pt" xl="50pt" xxl="60pt"/>"#;
+        let tree = render(row, r#"<frame height="s" />"#);
+        assert_eq!(tree["pages"][0]["nodes"][0]["height"], 70.0, "the document's own row");
+    }
+
+    #[test]
     fn column_positions_children_sequentially() {
         // Two frames with fixed heights and a gap
         let tree = engine_render(&minimal(

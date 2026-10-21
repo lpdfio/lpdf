@@ -2297,6 +2297,29 @@ mod tests {
     }
 
     #[test]
+    fn a_height_row_and_a_height_that_uses_a_slot_are_written_in_every_target() {
+        let xml = r##"<?xml version="1.0"?>
+<lpdf version="1">
+  <tokens>
+    <height xs="10pt" s="20pt" m="30pt" l="40pt" xl="50pt" xxl="60pt"/>
+  </tokens>
+  <document>
+    <section><layout><column height="m"/></layout></section>
+  </document>
+</lpdf>"##;
+        for (target, row, attr) in [
+            ("js",     "height: { xs: '10pt', s: '20pt', m: '30pt'", "height: 'm'"),
+            ("dotnet", "Height: new() { [\"xs\"] = \"10pt\"",       "Height = \"m\""),
+            ("php",    "height: ['xs' => '10pt'",                    "height: 'm'"),
+            ("python", "height={'xs': '10pt'",                       "height='m'"),
+        ] {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            assert!(out.contains(row), "{target}: the row is not written as {row}\n{out}");
+            assert!(out.contains(attr), "{target}: the attribute is not written as {attr}\n{out}");
+        }
+    }
+
+    #[test]
     fn test_dotnet_pascal_case() {
         assert_eq!(to_pascal_case("font-size"),    "FontSize");
         assert_eq!(to_pascal_case("stroke-width"), "StrokeWidth");

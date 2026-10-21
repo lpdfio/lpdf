@@ -1089,6 +1089,7 @@ fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), 
             "border" => tokens.border   = parse_scale_row(&child)?,
             "radius" => tokens.radius   = parse_scale_row(&child)?,
             "width"  => tokens.width    = parse_scale_row(&child)?,
+            "height" => tokens.height   = parse_scale_row(&child)?,
             "text-size" => tokens.text_size = parse_scale_row(&child)?,
             "line-height" => tokens.line_height = parse_factor_row(&child)?,
             "grid"   => tokens.grid_col = parse_scale_row(&child)?,
@@ -1593,7 +1594,7 @@ fn parse_node(
             );
         }
         NodeKind::Img => {
-            apply_img_attrs(&mut node, elem, asset_images, "<assets>")
+            apply_img_attrs(&mut node, elem, Some(tokens), asset_images, "<assets>")
                 .map_err(|e| format!("<{}>{}: {e}", tag, node_loc(elem)))?;
         }
         NodeKind::Barcode => {
@@ -1830,7 +1831,7 @@ fn at_node_attrs(
         }
         NodeKind::Img => {
             node.width_constraint = at_width(a)?;
-            apply_img_attrs(&mut node, a, asset_images, hint).map_err(|e| e.replace("<img>", "<img-at>"))?;
+            apply_img_attrs(&mut node, a, None, asset_images, hint).map_err(|e| e.replace("<img>", "<img-at>"))?;
             if node.width_constraint.is_none() && node.img_height_constraint.is_none() {
                 return Err("needs a 'width' or a 'height': on a fixed page its size must not depend on the image file's resolution".into());
             }
@@ -2091,13 +2092,16 @@ impl<'a> Attrs for JsonAttrs<'a> {
     fn get(&self, key: &str) -> Option<&str> { jattr(self.0, key) }
 }
 
-fn parse_height_mode(v: &str) -> Result<HeightMode, String> {
+fn parse_height_mode(v: &str, tokens: &Tokens) -> Result<HeightMode, String> {
     match v {
         "full" => Ok(HeightMode::Full),
         "fill" => Ok(HeightMode::Fill),
-        other  => parse_pt(other)
+        other  => tokens.resolve_height(other)
             .map(HeightMode::Fixed)
-            .ok_or_else(|| format!("invalid height value: '{other}' — expected full, fill, or a pt value like 28pt")),
+            .map_err(|_| format!(
+                "invalid height value: '{other}' — expected full, fill, {} or a pt value like 28pt",
+                tokens.slot_names()
+            )),
     }
 }
 
@@ -2141,7 +2145,7 @@ fn apply_box_attrs(
         if let Some(v) = a.get("shadow")  { node.shadow  = Some(Box::new(parse_shadow(v, tokens)?)); }
     }
     if !matches!(node.kind, NodeKind::Img | NodeKind::Barcode | NodeKind::Field) {
-        if let Some(v) = a.get("height") { node.height_mode = parse_height_mode(v)?; }
+        if let Some(v) = a.get("height") { node.height_mode = parse_height_mode(v, tokens)?; }
     }
     match a.get("width") {
         Some("fill") => node.width_fill = true,
@@ -2283,9 +2287,12 @@ fn parse_line_limit(attr: &str, v: &str) -> Result<usize, String> {
 
 /// Apply `name` and `height` attributes for an `<img>` / `"img"` node.
 /// Works with both XML elements and JSON attr objects via the `Attrs` trait.
+/// `tokens` is what a `height` may name: the flow's image takes the height row, and `None` is an `img-at` in a
+/// layer, whose height is a length.
 fn apply_img_attrs(
     node:         &mut ParsedNode,
     a:            &impl Attrs,
+    tokens:       Option<&Tokens>,
     asset_images: &HashMap<String, String>,
     hint:         &str,
 ) -> Result<(), String> {
@@ -2298,9 +2305,10 @@ fn apply_img_attrs(
     node.image_name = Some(registry_key);
     // `height` on <img> sets the display height constraint (not HeightMode).
     if let Some(v) = a.get("height") {
-        node.img_height_constraint = Some(
-            parse_pt(v).ok_or_else(|| format!("img height: invalid pt value '{v}'"))?
-        );
+        node.img_height_constraint = Some(match tokens {
+            Some(tokens) => tokens.resolve_height(v).map_err(|e| format!("img height: {e}"))?,
+            None         => parse_pt(v).ok_or_else(|| format!("img height: invalid pt value '{v}'"))?,
+        });
     }
     Ok(())
 }
@@ -2363,7 +2371,7 @@ fn apply_barcode_attrs(
         .map(|w| tokens.resolve_width(w).map_err(|_| format!("<barcode> invalid width '{w}'")))
         .transpose()?;
     let height = a.get("height")
-        .map(|h| tokens.resolve_width(h).map_err(|_| format!("<barcode> invalid height '{h}'")))
+        .map(|h| tokens.resolve_height(h).map_err(|_| format!("<barcode> invalid height '{h}'")))
         .transpose()?;
     match node.barcode_type.as_ref().unwrap() {
         BarcodeType::Qr => {
@@ -2445,7 +2453,7 @@ fn apply_field_attrs(
     // height stored as img_height_constraint (atomic leaf, like <img>)
     if let Some(v) = a.get("height") {
         node.img_height_constraint = Some(
-            tokens.resolve_width(v)
+            tokens.resolve_height(v)
                   .map_err(|_| format!("<field> invalid height '{v}'"))?
         );
     }
@@ -2582,7 +2590,8 @@ pub fn parse_tree_tokens_pub(
     apply_row("border", &mut tokens.border, parse_pt)?;
     apply_row("radius", &mut tokens.radius, parse_pt)?;
     apply_row("width",  &mut tokens.width, parse_pt)?;
-    apply_row("grid",   &mut tokens.grid_col, parse_pt)?;
+    apply_row("height", &mut tokens.height, parse_pt)?;
+    apply_row("grid",  &mut tokens.grid_col, parse_pt)?;
     apply_row("text-size", &mut tokens.text_size, parse_pt)?;
     apply_row("line-height", &mut tokens.line_height, parse_factor)?;
 
@@ -2839,7 +2848,7 @@ fn parse_tree_node(
             );
         }
         NodeKind::Img => {
-            apply_img_attrs(&mut node, &a, asset_images, "assets.images")?;
+            apply_img_attrs(&mut node, &a, Some(tokens), asset_images, "assets.images")?;
         }
         NodeKind::Barcode => {
             apply_barcode_attrs(&mut node, &a, tokens)?;
@@ -3153,6 +3162,115 @@ mod tests {
             let err = parse_tree(&ALIASED_TREE.replace("ALIASES", aliases)).unwrap_err();
             assert!(err.contains(says), "{aliases}: {err}");
         }
+    }
+
+    // ── Height tokens ─────────────────────────────────────────────────────────
+
+    /// A document with the image `logo` and the given `tokens`, around `body` in a layout.
+    fn with_height_tokens(tokens: &str, body: &str) -> String {
+        format!(
+            r#"<lpdf version="1"><assets><image name="logo"/></assets><tokens>{tokens}</tokens>
+            <document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
+        )
+    }
+
+    #[test]
+    fn a_box_height_is_a_slot_an_alias_a_length_fill_or_full() {
+        let mut doc = parse(&with_aliases(
+            r#"<column height="xs"/><frame height="m"/><row height="xxl"/><grid height="body"/>
+            <column height="40pt"/><column height="fill"/><column height="full"/>
+            <table cols="1fr" height="s"><tr><td height="l"/></tr></table>"#,
+        ))
+        .unwrap();
+        let children = doc.section_layouts().remove(0).children;
+        let modes: Vec<HeightMode> = children[..7].iter().map(|c| c.height_mode.clone()).collect();
+        assert_eq!(
+            modes,
+            [
+                HeightMode::Fixed(16.0),
+                HeightMode::Fixed(32.0),
+                HeightMode::Fixed(96.0),
+                HeightMode::Fixed(32.0),
+                HeightMode::Fixed(40.0),
+                HeightMode::Fill,
+                HeightMode::Full,
+            ]
+        );
+        assert_eq!(children[7].height_mode, HeightMode::Fixed(24.0), "table s");
+        assert_eq!(children[7].children[0].children[0].height_mode, HeightMode::Fixed(48.0), "td l");
+    }
+
+    #[test]
+    fn a_height_follows_the_height_row_the_document_redefines() {
+        let row = r#"<height xs="10pt" s="20pt" m="30pt" l="40pt" xl="50pt" xxl="60pt"/>"#;
+        let mut doc = parse(&with_height_tokens(row, r#"<column height="m"/><column gap="m"/><column width="m"/>"#)).unwrap();
+        let children = doc.section_layouts().remove(0).children;
+        assert_eq!(children[0].height_mode, HeightMode::Fixed(30.0));
+        assert_eq!(children[1].gap, 8.0, "the space row is not the height row");
+        assert_eq!(children[2].width_constraint, Some(280.0), "nor is the width row");
+    }
+
+    #[test]
+    fn a_height_row_needs_all_six_slots_each_a_length() {
+        let tokens = |row: &str| parse(&with_height_tokens(row, ""));
+        assert!(tokens(r#"<height xs="16pt" s="24pt" m="32pt" l="48pt" xl="64pt" xxl="96pt"/>"#).is_ok());
+        let err = tokens(r#"<height xs="16pt" s="24pt" m="32pt" l="48pt" xl="64pt"/>"#).unwrap_err();
+        assert!(err.contains("<height> missing 'xxl' attribute"), "{err}");
+        let err = tokens(r#"<height xs="tall" s="24pt" m="32pt" l="48pt" xl="64pt" xxl="96pt"/>"#).unwrap_err();
+        assert!(err.contains("<height> 'xs': invalid pt value 'tall'"), "{err}");
+    }
+
+    #[test]
+    fn a_height_that_is_none_of_these_says_what_is_expected() {
+        let err = parse(&minimal(r#"<column height="tall"/>"#)).unwrap_err();
+        assert!(
+            err.contains("invalid height value: 'tall' — expected full, fill, a slot from xs to xxl or a pt value like 28pt")
+                && err.contains("at line"),
+            "{err}"
+        );
+        let err = parse(&with_aliases(r#"<frame height="medum"/>"#)).unwrap_err();
+        assert!(err.contains("expected full, fill, a slot from xs to xxl, an alias (body, caption, heading) or a pt value"), "{err}");
+    }
+
+    #[test]
+    fn an_image_a_barcode_and_a_field_take_a_height_from_the_row() {
+        let mut doc = parse(&with_height_tokens(
+            "",
+            r#"<img name="logo" height="m"/>
+            <barcode type="code128" data="x" height="s"/>
+            <barcode type="qr" data="x" height="l"/>
+            <field type="text" name="f" height="xs"/>"#,
+        ))
+        .unwrap();
+        let heights: Vec<Option<f32>> = doc.section_layouts().remove(0).children.iter().map(|c| c.img_height_constraint).collect();
+        assert_eq!(heights, [Some(32.0), Some(24.0), Some(48.0), Some(16.0)]);
+    }
+
+    #[test]
+    fn a_height_a_layer_image_takes_is_a_length() {
+        let layer = |height: &str| {
+            parse(&format!(
+                r#"<lpdf version="1"><assets><image name="logo"/></assets><document size="a4"><section>
+                <layer><img-at name="logo" x="0pt" y="0pt" height="{height}"/></layer><layout/></section></document></lpdf>"#
+            ))
+        };
+        assert!(layer("40pt").is_ok());
+        let err = layer("m").unwrap_err();
+        assert!(err.contains("img height: invalid pt value 'm'"), "{err}");
+    }
+
+    #[test]
+    fn a_kit_tree_defines_the_height_row_and_uses_it() {
+        let tree = r#"{"version":1,"type":"document","attrs":{"tokens":{"height":{"m":"50pt"}}},
+            "nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[
+                {"type":"column","attrs":{"height":"m"},"nodes":[]},
+                {"type":"column","attrs":{"height":"xs"},"nodes":[]}]}]}]}"#;
+        let children = parse_tree(tree).unwrap().section_layouts().remove(0).children;
+        assert_eq!(children[0].height_mode, HeightMode::Fixed(50.0));
+        assert_eq!(children[1].height_mode, HeightMode::Fixed(16.0), "a slot the tree leaves out keeps its default");
+
+        let err = parse_tree(&tree.replace(r#""m":"50pt""#, r#""m":"tall""#)).unwrap_err();
+        assert!(err.contains("invalid height token 'm': 'tall'"), "{err}");
     }
 
     #[test]

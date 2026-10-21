@@ -216,9 +216,9 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- "full", "fill", or an explicit pt value e.g. "48pt" -->
+  <!-- "full", "fill", a slot or an alias of one, or an explicit pt value e.g. "48pt" -->
   <xs:simpleType name="HeightValue">
-    <xs:union memberTypes="HeightMode PtValue"/>
+    <xs:union memberTypes="HeightMode TokenScale PtValue TokenName"/>
   </xs:simpleType>
 
   <xs:simpleType name="HeightMode">
@@ -390,7 +390,7 @@
     </xs:attribute>
     <xs:attribute name="height"     type="HeightValue">
       <xs:annotation>
-        <xs:documentation>Height of the box. Leave it out to size to the content. A length fixes it; fill takes what is left after its siblings (shared equally if several use fill); full takes all the height available. Any of these stops the box splitting across pages.</xs:documentation>
+        <xs:documentation>Height of the box. Leave it out to size to the content. A length, or a name from the height row of the tokens, fixes it; fill takes what is left after its siblings (shared equally if several use fill); full takes all the height available. Any of these stops the box splitting across pages.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="background" type="Fill"/>
@@ -440,7 +440,7 @@
     </xs:attribute>
     <xs:attribute name="height"     type="HeightValue">
       <xs:annotation>
-        <xs:documentation>Height of the box. Leave it out to size to the content. A length fixes it; fill takes what is left after its siblings (shared equally if several use fill); full takes all the height available. Any of these stops the box splitting across pages.</xs:documentation>
+        <xs:documentation>Height of the box. Leave it out to size to the content. A length, or a name from the height row of the tokens, fixes it; fill takes what is left after its siblings (shared equally if several use fill); full takes all the height available. Any of these stops the box splitting across pages.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="background" type="Fill"/>
@@ -550,7 +550,8 @@
     <xs:attribute name="name" type="xs:string" use="required"/>
   </xs:attributeGroup>
 
-  <!-- What a barcode means in the layout and in a layer -->
+  <!-- What a barcode means in the layout and in a layer. Its height comes after these two, and BarcodeStyle after
+       the height: the layout's height takes a slot of the tokens and a layer's is a length. -->
   <xs:attributeGroup name="BarcodeCore">
     <xs:attribute name="type" use="required">
       <xs:simpleType>
@@ -562,11 +563,10 @@
       </xs:simpleType>
     </xs:attribute>
     <xs:attribute name="data" type="xs:string" use="required"/>
-    <xs:attribute name="height" type="PtValue">
-      <xs:annotation>
-        <xs:documentation>Height of the whole barcode, with the digits of hrt inside it: they take the bottom 12pt and the bars the rest. A barcode is never stretched. With only a height, the width follows the barcode's proportions. With both width and height, they are a maximum: the barcode takes the largest size that fits in them, and its box becomes that size. A QR code is square, so it takes the smaller of the two. Without a size, a code128 is as wide as its bars at 1pt per module and its bars are 40pt high, and an ean13 is the standard symbol, 0.33mm per module and bars 22.85mm high. The digits of hrt add 12pt to either.</xs:documentation>
-      </xs:annotation>
-    </xs:attribute>
+  </xs:attributeGroup>
+
+  <!-- How a barcode looks, in the layout and in a layer -->
+  <xs:attributeGroup name="BarcodeStyle">
     <xs:attribute name="ec">
       <xs:simpleType>
         <xs:restriction base="xs:string">
@@ -697,6 +697,12 @@
     </xs:annotation>
     <xs:complexType>
       <xs:attributeGroup ref="BarcodeCore"/>
+      <xs:attribute name="height" type="PtValue">
+        <xs:annotation>
+          <xs:documentation>Height of the whole barcode, with the digits of hrt inside it: they take the bottom 12pt and the bars the rest. A barcode is never stretched. With only a height, the width follows the barcode's proportions. With both width and height, they are a maximum: the barcode takes the largest size that fits in them, and its box becomes that size. A QR code is square, so it takes the smaller of the two. Without a size, a code128 is as wide as its bars at 1pt per module and its bars are 40pt high, and an ean13 is the standard symbol, 0.33mm per module and bars 22.85mm high. The digits of hrt add 12pt to either.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attributeGroup ref="BarcodeStyle"/>
       <xs:attributeGroup ref="AtPositionAttrs"/>
       <xs:attribute name="width" type="PtValue"/>
       <xs:attributeGroup ref="DataValueAttrs"/>
@@ -908,6 +914,7 @@
         <xs:element name="border" type="TokenScaleRow" minOccurs="0"/>
         <xs:element name="radius" type="TokenScaleRow" minOccurs="0"/>
         <xs:element name="width"  type="TokenScaleRow" minOccurs="0"/>
+        <xs:element name="height" type="TokenScaleRow" minOccurs="0"/>
         <xs:element name="text-size" type="TokenScaleRow" minOccurs="0"/>
         <xs:element name="line-height" type="TokenFactorRow" minOccurs="0"/>
         <!-- "grid" and "space" share the same shape -->
@@ -1224,9 +1231,9 @@
       <xs:documentation>An image. It is never stretched. With only a width or a height, the other follows the image's proportions. With both, they are a maximum: the image takes the largest size that fits in them, and its box becomes that size, which the parent's align places. To put images of different shapes in slots of one size, wrap each in a frame of that size. With neither, the image has its natural size.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
-      <!-- <img> uses a pt-only height constraint, not HeightMode (fill/full) -->
+      <!-- <img> takes a slot or a length for its height, not HeightMode (fill/full) -->
       <xs:attributeGroup ref="ImgCore"/>
-      <xs:attribute name="height"     type="PtValue"/>
+      <xs:attribute name="height"     type="TokenScaleOrPt"/>
       <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="font"       type="xs:string"/>
       <xs:attribute name="font-size"  type="TokenScaleOrPt"/>
@@ -1247,6 +1254,12 @@
     </xs:annotation>
     <xs:complexType>
       <xs:attributeGroup ref="BarcodeCore"/>
+      <xs:attribute name="height" type="TokenScaleOrPt">
+        <xs:annotation>
+          <xs:documentation>Height of the whole barcode, a length or a name from the height row of the tokens, with the digits of hrt inside it: they take the bottom 12pt and the bars the rest. A barcode is never stretched. With only a height, the width follows the barcode's proportions. With both width and height, they are a maximum: the barcode takes the largest size that fits in them, and its box becomes that size. A QR code is square, so it takes the smaller of the two. Without a size, a code128 is as wide as its bars at 1pt per module and its bars are 40pt high, and an ean13 is the standard symbol, 0.33mm per module and bars 22.85mm high. The digits of hrt add 12pt to either.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attributeGroup ref="BarcodeStyle"/>
       <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="paginate"   type="Paginate"/>
       <xs:attribute name="debug"      type="xs:boolean"/>
@@ -1416,7 +1429,7 @@
       <xs:attribute name="max-len"    type="xs:positiveInteger"/>
       <xs:attribute name="action-url" type="xs:anyURI"/>
       <xs:attributeGroup ref="WidthAttr"/>
-      <xs:attribute name="height"     type="PtValue"/>
+      <xs:attribute name="height"     type="TokenScaleOrPt"/>
       <xs:attribute name="background" type="Color"/>
       <xs:attribute name="border"     type="BorderValue"/>
       <xs:attribute name="debug"      type="xs:boolean"/>

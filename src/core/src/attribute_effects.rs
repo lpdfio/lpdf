@@ -520,6 +520,10 @@ fn subjects() -> Vec<Subject> {
             token_row("width", a, |s| format!(r##"<column background="#cccccc" width="{s}">{TWO}</column>"##))
         })
         .base(&[("xs", "40pt"), ("s", "80pt"), ("m", "120pt"), ("l", "160pt"), ("xl", "200pt"), ("xxl", "240pt")]),
+        Subject::new("tokens:height", |a, _| {
+            token_row("height", a, |s| format!(r##"<column background="#cccccc" height="{s}">{TWO}</column>"##))
+        })
+        .base(&[("xs", "20pt"), ("s", "40pt"), ("m", "60pt"), ("l", "80pt"), ("xl", "100pt"), ("xxl", "120pt")]),
         Subject::new("tokens:text-size", |a, _| token_row("text-size", a, |s| format!(r#"<text font-size="{s}">Alpha</text>"#)))
             .base(&[("xs", "8pt"), ("s", "10pt"), ("m", "12pt"), ("l", "16pt"), ("xl", "20pt"), ("xxl", "28pt")]),
         // A line height shows in what comes after the line, so each text has another after it.
