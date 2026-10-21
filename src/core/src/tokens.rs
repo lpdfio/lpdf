@@ -10,9 +10,16 @@ pub struct Tokens {
     pub text_size: [f32; 6],
     /// Factors of the font size, not pt.
     pub line_height: [f32; 6],
+    /// Names for the slots of the scale, each with the index of its slot: `caption` for `xs` is `("caption", 0)`.
+    /// An alias is shared by every row, so it names the same slot wherever a scale value is accepted.
+    pub aliases: HashMap<String, usize>,
     pub colors: HashMap<String, String>,
     pub gradients: HashMap<String, Gradient>,
 }
+
+/// Names an alias cannot take, because an attribute that takes a scale value has them as a keyword of its own:
+/// `width="fill"`, and `height="full"` or `"fill"`, which a height token row would join.
+const RESERVED_ALIASES: [&str; 2] = ["fill", "full"];
 
 /// What a fill starts with when it names a gradient of the tokens: `gradient:brand-fade`.
 pub const GRADIENT_PREFIX: &str = "gradient:";
@@ -51,8 +58,9 @@ pub struct GradientSpec<'a> {
     pub stops: Vec<(&'a str, &'a str)>,
 }
 
-/// The name of a gradient, the way the schema's `Fill` type spells it after `gradient:`.
-fn is_gradient_name(name: &str) -> bool {
+/// The name of a gradient or an alias, the way the schema's `TokenName` type spells it: the `Fill` type spells a
+/// gradient's after `gradient:`.
+fn is_token_name(name: &str) -> bool {
     let mut chars = name.chars();
     chars.next().is_some_and(|c| c.is_ascii_lowercase())
         && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
@@ -133,64 +141,96 @@ pub fn normalize_hex(s: &str) -> Result<String, String> {
     }
 }
 
-fn resolve_scale(val: &str, scale: &[f32; 6], name: &str) -> Result<f32, String> {
-    if let Some(i) = scale_idx(val) {
-        return Ok(scale[i]);
-    }
-    if let Some(v) = parse_pt(val) {
-        return Ok(v);
-    }
-    Err(format!("invalid {name} value: '{val}'"))
-}
-
 impl Tokens {
-    pub fn resolve_space(&self, val: &str) -> Result<f32, String> {
-        resolve_scale(val, &self.space, "space")
+    /// The slot a scale value names: one of the six (`xs`), or an alias of the document (`caption`).
+    fn slot(&self, val: &str) -> Option<usize> {
+        scale_idx(val).or_else(|| self.aliases.get(val).copied())
     }
 
-    pub fn resolve_border_thickness(&self, val: &str) -> Result<f32, String> {
-        resolve_scale(val, &self.border, "border")
+    /// Name a slot of the scale, as the document's `<alias name value/>` does. The value must be one of the six
+    /// slots: an alias names a slot, not another alias, so it never has to be followed.
+    pub fn add_alias(&mut self, name: &str, value: &str) -> Result<(), String> {
+        let fail = |reason: String| format!("alias '{name}': {reason}");
+        if !is_token_name(name) {
+            return Err(fail("the name must be lowercase letters, digits and hyphens, starting with a letter".into()));
+        }
+        if scale_idx(name).is_some() {
+            return Err(fail("xs, s, m, l, xl and xxl are the slots themselves, and cannot name another".into()));
+        }
+        if RESERVED_ALIASES.contains(&name) {
+            return Err(fail(format!("'{name}' is a keyword of the attributes that take a scale value")));
+        }
+        let slot = scale_idx(value)
+            .ok_or_else(|| fail(format!("invalid value '{value}': expected a slot from xs to xxl")))?;
+        if self.aliases.contains_key(name) {
+            return Err(fail("it is defined twice".into()));
+        }
+        self.aliases.insert(name.to_string(), slot);
+        Ok(())
     }
 
-    pub fn resolve_radius(&self, val: &str) -> Result<f32, String> {
-        resolve_scale(val, &self.radius, "radius")
+    /// What names a slot, for the error that says a value is none of them: the six, and the document's aliases.
+    fn slot_names(&self) -> String {
+        if self.aliases.is_empty() {
+            return "a slot from xs to xxl".to_string();
+        }
+        let mut aliases: Vec<&str> = self.aliases.keys().map(String::as_str).collect();
+        aliases.sort_unstable();
+        format!("a slot from xs to xxl, an alias ({})", aliases.join(", "))
     }
 
-    /// Width token OR explicit pt value
-    pub fn resolve_width(&self, val: &str) -> Result<f32, String> {
-        if let Some(i) = scale_idx(val) {
-            return Ok(self.width[i]);
+    /// A slot of the scale, an alias of one, or a pt value: the `name` row's value for it.
+    fn resolve_scale(&self, val: &str, scale: &[f32; 6], name: &str) -> Result<f32, String> {
+        if let Some(i) = self.slot(val) {
+            return Ok(scale[i]);
         }
         if let Some(v) = parse_pt(val) {
             return Ok(v);
         }
-        Err(format!("invalid width value: '{val}'"))
+        Err(format!("invalid {name} value: '{val}': expected {} or a pt value", self.slot_names()))
+    }
+
+    pub fn resolve_space(&self, val: &str) -> Result<f32, String> {
+        self.resolve_scale(val, &self.space, "space")
+    }
+
+    pub fn resolve_border_thickness(&self, val: &str) -> Result<f32, String> {
+        self.resolve_scale(val, &self.border, "border")
+    }
+
+    pub fn resolve_radius(&self, val: &str) -> Result<f32, String> {
+        self.resolve_scale(val, &self.radius, "radius")
+    }
+
+    /// Width token OR explicit pt value
+    pub fn resolve_width(&self, val: &str) -> Result<f32, String> {
+        self.resolve_scale(val, &self.width, "width")
     }
 
     /// Grid column min-width: scale token or pt value
     pub fn resolve_grid_col(&self, val: &str) -> Result<f32, String> {
-        resolve_scale(val, &self.grid_col, "grid")
+        self.resolve_scale(val, &self.grid_col, "grid")
     }
 
     /// Text size: scale token, pt value, or plain number
     pub fn resolve_text_size(&self, val: &str) -> Result<f32, String> {
-        if let Some(i) = scale_idx(val) {
+        if let Some(i) = self.slot(val) {
             return Ok(self.text_size[i]);
         }
         if let Some(v) = parse_pt(val) {
             return Ok(v);
         }
         val.parse::<f32>()
-            .map_err(|_| format!("invalid text size: '{val}'"))
+            .map_err(|_| format!("invalid text size: '{val}': expected {} or a pt value", self.slot_names()))
     }
 
     /// Line height: a token of the line-height row, or a factor of the font size above 0.
     pub fn resolve_line_height(&self, val: &str) -> Result<f32, String> {
-        if let Some(i) = scale_idx(val) {
+        if let Some(i) = self.slot(val) {
             return Ok(self.line_height[i]);
         }
         parse_factor(val).ok_or_else(|| {
-            format!("invalid line-height '{val}': expected a factor above 0, like 1.5, or a token from xs to xxl")
+            format!("invalid line-height '{val}': expected {} or a factor above 0, like 1.5", self.slot_names())
         })
     }
 
@@ -224,7 +264,7 @@ impl Tokens {
     /// The colors come from the `colors` row, so call this once the row is complete.
     pub fn resolve_gradient(&self, name: &str, spec: &GradientSpec) -> Result<Gradient, String> {
         let fail = |reason: String| format!("gradient '{name}': {reason}");
-        if !is_gradient_name(name) {
+        if !is_token_name(name) {
             return Err(fail("the name must be lowercase letters, digits and hyphens, starting with a letter".into()));
         }
         let kind = match spec.kind {
@@ -350,6 +390,7 @@ impl Default for Tokens {
             grid_col: [60.0, 100.0, 140.0, 180.0, 220.0, 280.0],
             text_size: [7.0, 9.0, 11.0, 14.0, 20.0, 28.0],
             line_height: [1.0, 1.1, 1.2, 1.4, 1.6, 2.0],
+            aliases: HashMap::new(),
             colors,
             gradients: HashMap::new(),
         }
@@ -399,6 +440,114 @@ mod tests {
             let err = t.resolve_line_height(bad).unwrap_err();
             assert!(err.starts_with(&format!("invalid line-height '{bad}'")), "{bad}: {err}");
         }
+    }
+
+    // ── Aliases ───────────────────────────────────────────────────────────────
+
+    fn with_aliases(aliases: &[(&str, &str)]) -> Tokens {
+        let mut tokens = Tokens::default();
+        for (name, value) in aliases {
+            tokens.add_alias(name, value).unwrap();
+        }
+        tokens
+    }
+
+    #[test]
+    fn an_alias_resolves_to_its_slot_in_every_scale() {
+        let t = with_aliases(&[("caption", "xs"), ("body", "m")]);
+        assert_eq!(t.resolve_space("caption").unwrap(), 2.0);
+        assert_eq!(t.resolve_border_thickness("body").unwrap(), 1.5);
+        assert_eq!(t.resolve_radius("body").unwrap(), 6.0);
+        assert_eq!(t.resolve_width("caption").unwrap(), 120.0);
+        assert_eq!(t.resolve_grid_col("body").unwrap(), 140.0);
+        assert_eq!(t.resolve_text_size("caption").unwrap(), 7.0);
+        assert_eq!(t.resolve_line_height("body").unwrap(), 1.2);
+    }
+
+    #[test]
+    fn an_alias_is_shared_by_every_row() {
+        let t = with_aliases(&[("caption", "xs")]);
+        assert_eq!(t.resolve_text_size("caption").unwrap(), t.text_size[0]);
+        assert_eq!(t.resolve_space("caption").unwrap(), t.space[0], "a gap takes the name of a text size");
+    }
+
+    #[test]
+    fn an_alias_follows_a_redefined_row() {
+        let t = Tokens { text_size: [8.0, 10.0, 12.0, 16.0, 22.0, 32.0], ..with_aliases(&[("body", "m")]) };
+        assert_eq!(t.resolve_text_size("body").unwrap(), 12.0);
+    }
+
+    #[test]
+    fn an_alias_is_found_in_a_spacing_and_a_border_shorthand() {
+        let t = with_aliases(&[("tight", "xs"), ("roomy", "l")]);
+        assert_eq!(t.resolve_spacing("tight roomy").unwrap(), [2.0, 14.0, 2.0, 14.0]);
+        assert_eq!(t.resolve_border("roomy #ccc").unwrap(), (2.0, "#cccccc".to_string()));
+    }
+
+    #[test]
+    fn a_name_that_is_neither_a_slot_nor_an_alias_says_what_is_expected() {
+        let t = Tokens::default();
+        let err = t.resolve_text_size("medum").unwrap_err();
+        assert_eq!(err, "invalid text size: 'medum': expected a slot from xs to xxl or a pt value");
+        let err = t.resolve_space("medum").unwrap_err();
+        assert_eq!(err, "invalid space value: 'medum': expected a slot from xs to xxl or a pt value");
+
+        let t = with_aliases(&[("caption", "xs"), ("body", "m")]);
+        let err = t.resolve_space("medum").unwrap_err();
+        assert_eq!(
+            err,
+            "invalid space value: 'medum': expected a slot from xs to xxl, an alias (body, caption) or a pt value"
+        );
+        let err = t.resolve_line_height("medum").unwrap_err();
+        assert!(err.starts_with("invalid line-height 'medum': expected a slot from xs to xxl, an alias (body, caption)"), "{err}");
+    }
+
+    #[test]
+    fn pt_values_and_factors_still_resolve_beside_aliases() {
+        let t = with_aliases(&[("body", "m")]);
+        assert_eq!(t.resolve_space("12pt").unwrap(), 12.0);
+        assert_eq!(t.resolve_line_height("1.5").unwrap(), 1.5);
+    }
+
+    #[test]
+    fn an_alias_takes_a_name_like_a_gradient_does() {
+        let mut t = Tokens::default();
+        for bad in ["", "Caption", "1st", "-caption", "cap tion", "cap_tion", "12pt"] {
+            let err = t.add_alias(bad, "xs").unwrap_err();
+            assert!(err.contains("lowercase letters, digits and hyphens"), "{bad}: {err}");
+        }
+        assert!(t.add_alias("sub-title-2", "l").is_ok());
+    }
+
+    #[test]
+    fn an_alias_cannot_take_the_name_of_a_slot_or_a_keyword() {
+        let mut t = Tokens::default();
+        for slot in SCALE_NAMES {
+            let err = t.add_alias(slot, "m").unwrap_err();
+            assert!(err.contains("are the slots themselves"), "{slot}: {err}");
+        }
+        for keyword in ["fill", "full"] {
+            let err = t.add_alias(keyword, "m").unwrap_err();
+            assert!(err.contains("is a keyword"), "{keyword}: {err}");
+        }
+        assert!(t.aliases.is_empty());
+    }
+
+    #[test]
+    fn an_alias_names_one_of_the_six_slots() {
+        let mut t = Tokens::default();
+        for bad in ["huge", "12pt", "caption", "", "M"] {
+            let err = t.add_alias("body", bad).unwrap_err();
+            assert_eq!(err, format!("alias 'body': invalid value '{bad}': expected a slot from xs to xxl"));
+        }
+        assert!(t.aliases.is_empty(), "an alias that failed is not kept");
+    }
+
+    #[test]
+    fn an_alias_defined_twice_is_an_error() {
+        let mut t = with_aliases(&[("body", "m")]);
+        assert_eq!(t.add_alias("body", "l").unwrap_err(), "alias 'body': it is defined twice");
+        assert_eq!(t.resolve_space("body").unwrap(), 8.0, "the first definition stands");
     }
 
     #[test]

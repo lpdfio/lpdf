@@ -16,6 +16,14 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <!-- a name the document gives a token: lowercase letters, digits and -, starting with a letter. An alias
+       is used where a slot is: font-size="caption", gap="caption". -->
+  <xs:simpleType name="TokenName">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[a-z][a-z0-9-]*"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <!-- e.g. "10pt", "25.4mm", or "1in" (non-negative) -->
   <xs:simpleType name="PtValue">
     <xs:restriction base="xs:string">
@@ -30,9 +38,9 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- token name or explicit pt value, e.g. "m" or "14pt" -->
+  <!-- slot, alias of a slot, or explicit pt value, e.g. "m", "caption" or "14pt" -->
   <xs:simpleType name="TokenScaleOrPt">
-    <xs:union memberTypes="TokenScale PtValue"/>
+    <xs:union memberTypes="TokenScale PtValue TokenName"/>
   </xs:simpleType>
 
   <!-- a factor above 0, e.g. "1.5" -->
@@ -50,9 +58,9 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- token name or a factor, e.g. "m" or "1.5" -->
+  <!-- slot, alias of a slot, or a factor, e.g. "m", "body" or "1.5" -->
   <xs:simpleType name="TokenScaleOrFactor">
-    <xs:union memberTypes="TokenScale FactorValue"/>
+    <xs:union memberTypes="TokenScale FactorValue TokenName"/>
   </xs:simpleType>
 
   <!-- e.g. "10pt" | "10pt 12pt" | "10pt 12pt 8pt" | "10pt 12pt 8pt 6pt". A bare 0 needs no unit. -->
@@ -62,9 +70,9 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- spacing: explicit multi-pt shorthand OR a single token name -->
+  <!-- spacing: explicit multi-pt shorthand OR a single slot or alias -->
   <xs:simpleType name="SpacingOrToken">
-    <xs:union memberTypes="SpacingValue TokenScale"/>
+    <xs:union memberTypes="SpacingValue TokenScale TokenName"/>
   </xs:simpleType>
 
   <xs:simpleType name="PageSizeNamed">
@@ -149,10 +157,10 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- e.g. "s #ccc", "m primary", or "1.5pt #ccc" -->
+  <!-- e.g. "s #ccc", "m primary", "hairline primary" (an alias of a slot), or "1.5pt #ccc" -->
   <xs:simpleType name="BorderValue">
     <xs:restriction base="xs:string">
-      <xs:pattern value="(\d+(\.\d+)?pt|xs|s|m|l|xl|xxl) .+"/>
+      <xs:pattern value="(\d+(\.\d+)?pt|[a-z][a-z0-9-]*) .+"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -220,9 +228,9 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- "fill", a token, or an explicit pt value e.g. "120pt" -->
+  <!-- "fill", a slot or an alias of one, or an explicit pt value e.g. "120pt" -->
   <xs:simpleType name="WidthValue">
-    <xs:union memberTypes="WidthMode TokenScale PtValue"/>
+    <xs:union memberTypes="WidthMode TokenScale PtValue TokenName"/>
   </xs:simpleType>
 
   <xs:simpleType name="WidthMode">
@@ -824,6 +832,24 @@
     </xs:complexType>
   </xs:element>
 
+  <xs:element name="alias">
+    <xs:annotation>
+      <xs:documentation>A name for a slot of the scale. An attribute that takes a slot (xs to xxl) takes the name instead, and gets that slot of its own row: with caption for xs, font-size="caption" is the text size xs, and gap="caption" the space xs. A name that is neither a slot nor an alias is an error.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="name" type="TokenName" use="required">
+        <xs:annotation>
+          <xs:documentation>Lowercase letters, digits and -, starting with a letter. Not xs, s, m, l, xl, xxl, fill or full, which mean something already.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="value" type="TokenScale" use="required">
+        <xs:annotation>
+          <xs:documentation>The slot the name stands for: xs, s, m, l, xl or xxl. Not another alias.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+
   <xs:element name="stop">
     <xs:complexType>
       <xs:attribute name="offset" type="GradientOffset" use="required">
@@ -886,6 +912,13 @@
         <xs:element name="line-height" type="TokenFactorRow" minOccurs="0"/>
         <!-- "grid" and "space" share the same shape -->
         <xs:element name="grid"   type="TokenScaleRow" minOccurs="0"/>
+        <xs:element name="aliases" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element ref="alias" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
         <xs:element name="colors" minOccurs="0">
           <xs:complexType>
             <xs:sequence>

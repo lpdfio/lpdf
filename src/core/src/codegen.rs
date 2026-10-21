@@ -493,8 +493,8 @@ fn assets_have_src(assets: &Node) -> bool {
         .any(|n| n.is_element() && n.has_attribute("src"))
 }
 
-/// The `tokens` of a document as the object the SDK takes: the colours and the scales of the `<tokens>`
-/// element. `None` when it has none.
+/// The `tokens` of a document as the object the SDK takes: the colours, the aliases and the scales of the
+/// `<tokens>` element. `None` when it has none.
 fn tokens_expression(target: Target, tokens: &Node) -> Option<String> {
     let mut members: Vec<(String, String)> = Vec::new();
     for child in tokens.children().filter(|n| n.is_element()) {
@@ -505,10 +505,16 @@ fn tokens_expression(target: Target, tokens: &Node) -> Option<String> {
             }
             continue;
         }
-        let entries: Vec<(String, String)> = if tag == "colors" {
+        // The colours and the aliases are lists of `name` and `value`; the SDK takes each as a map.
+        let named = match tag {
+            "colors"  => Some("color"),
+            "aliases" => Some("alias"),
+            _         => None,
+        };
+        let entries: Vec<(String, String)> = if let Some(entry) = named {
             child
                 .children()
-                .filter(|n| n.is_element() && n.tag_name().name() == "color")
+                .filter(|n| n.is_element() && n.tag_name().name() == entry)
                 .map(|c| {
                     (
                         c.attribute("name").unwrap_or("").to_string(),
@@ -2260,6 +2266,32 @@ mod tests {
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(row), "{target}: the row is not written as {row}\n{out}");
+            assert!(out.contains(attr), "{target}: the attribute is not written as {attr}\n{out}");
+        }
+    }
+
+    #[test]
+    fn aliases_and_a_text_size_that_uses_one_are_written_in_every_target() {
+        let xml = r##"<?xml version="1.0"?>
+<lpdf version="1">
+  <tokens>
+    <aliases>
+      <alias name="caption" value="xs"/>
+      <alias name="sub-title" value="l"/>
+    </aliases>
+  </tokens>
+  <document>
+    <section><layout><text font-size="caption">x</text></layout></section>
+  </document>
+</lpdf>"##;
+        for (target, aliases, attr) in [
+            ("js",     "aliases: { caption: 'xs', 'sub-title': 'l' }",                          "fontSize: 'caption'"),
+            ("dotnet", "Aliases: new() { [\"caption\"] = \"xs\", [\"sub-title\"] = \"l\" }",    "FontSize = \"caption\""),
+            ("php",    "aliases: ['caption' => 'xs', 'sub-title' => 'l']",                      "fontSize: 'caption'"),
+            ("python", "aliases={'caption': 'xs', 'sub-title': 'l'}",                           "font_size='caption'"),
+        ] {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            assert!(out.contains(aliases), "{target}: the aliases are not written as {aliases}\n{out}");
             assert!(out.contains(attr), "{target}: the attribute is not written as {attr}\n{out}");
         }
     }
