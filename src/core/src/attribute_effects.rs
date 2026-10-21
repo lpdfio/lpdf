@@ -111,6 +111,7 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
         ("image@name", &["renamed"]),
         ("color@name", &["renamed"]),
         ("gradient@name", &["renamed"]),
+        ("alias@name", &["renamed"]),
         ("font@ref", &["custom"]),
         ("image@ref", &["other"]),
         ("barcode@data", &["Another payload"]),
@@ -154,6 +155,9 @@ fn pattern_samples(type_name: &str) -> Vec<String> {
         "PageSizeCustom" => &["300pt 400pt"],
         "ColorHex" | "Color" | "Fill" => &["#ff0000"],
         "GradientOffset" => &["50%"],
+        // A name the document defines in its aliases: any sample would be one nothing defines. The `alias` subject
+        // tries a renamed alias, and a slot takes the place of the name in every attribute that accepts either.
+        "TokenName" => &[],
         "BorderValue" => &["2pt #ff0000"],
         "ShadowValue" => &["4pt 5pt #333333", "4pt 5pt #333333 0.5"],
         "PageScope" => &["2"],
@@ -486,6 +490,14 @@ fn subjects() -> Vec<Subject> {
             )
         })
         .base(&[("name", "brand"), ("value", "#336699")]),
+        // An alias shows on the text size that uses it, and the slot it names decides which size.
+        Subject::new("alias", |a, _| {
+            lpdf(
+                &format!("<tokens><aliases><alias {a}/></aliases></tokens>"),
+                r#"<document><section><layout><text font-size="caption">Alpha</text></layout></section></document>"#,
+            )
+        })
+        .base(&[("name", "caption"), ("value", "xs")]),
         // A gradient shows on the box that fills with it, and a stop on the gradient it is in.
         Subject::new("gradient", |a, _| gradient_document(&format!("<gradient {a}/>")))
             .base(&[("name", "fade"), ("type", "linear"), ("from", "#336699"), ("to", "#cc3300")]),
@@ -689,6 +701,7 @@ fn tweaks() -> HashMap<String, Tweak> {
     add("image@name", Tweak::default().error_counts());
     add("color@name", Tweak::default().error_counts());
     add("gradient@name", Tweak::default().error_counts());
+    add("alias@name", Tweak::default().error_counts());
     // A font is a core font or a registry key, not both.
     add("font@ref", Tweak::default().without("core"));
 

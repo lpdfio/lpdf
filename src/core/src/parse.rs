@@ -1092,6 +1092,7 @@ fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), 
             "text-size" => tokens.text_size = parse_scale_row(&child)?,
             "line-height" => tokens.line_height = parse_factor_row(&child)?,
             "grid"   => tokens.grid_col = parse_scale_row(&child)?,
+            "aliases" => parse_aliases_elem(&child, tokens)?,
             "colors" => {
                 for color_elem in elems(&child) {
                     if color_elem.tag_name().name() == "color" {
@@ -1108,6 +1109,23 @@ fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), 
     }
     if let Some(gradients) = gradients_elem {
         parse_gradients_elem(&gradients, tokens)?;
+    }
+    Ok(())
+}
+
+/// Read the `<alias>` elements of `<aliases>`, each naming a slot of the scale.
+fn parse_aliases_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), String> {
+    for alias in elems(elem) {
+        if alias.tag_name().name() != "alias" {
+            return Err(format!(
+                "<{}>{}: unknown element in <aliases>",
+                alias.tag_name().name(),
+                node_loc(&alias)
+            ));
+        }
+        let name  = req_attr(&alias, "name")?;
+        let value = req_attr(&alias, "value")?;
+        tokens.add_alias(&name, &value).map_err(|e| format!("{e}{}", node_loc(&alias)))?;
     }
     Ok(())
 }
@@ -2568,6 +2586,15 @@ pub fn parse_tree_tokens_pub(
     apply_row("text-size", &mut tokens.text_size, parse_pt)?;
     apply_row("line-height", &mut tokens.line_height, parse_factor)?;
 
+    if let Some(aliases) = obj.get("aliases").and_then(|v| v.as_object()) {
+        for (name, value) in aliases {
+            let slot = value
+                .as_str()
+                .ok_or_else(|| format!("alias '{name}': expected a slot from xs to xxl as text"))?;
+            tokens.add_alias(name, slot)?;
+        }
+    }
+
     if let Some(colors) = obj.get("colors").and_then(|v| v.as_object()) {
         for (k, v) in colors {
             if let Some(s) = v.as_str() {
@@ -3010,6 +3037,121 @@ mod tests {
         for bad in ["0", "-1", "1.5pt", "tall"] {
             let err = tokens(&format!(r#"<line-height xs="{bad}" s="1.1" m="1.2" l="1.4" xl="1.6" xxl="2"/>"#)).unwrap_err();
             assert!(err.contains("<line-height> 'xs': invalid factor") && err.contains(&format!("'{bad}'")), "{err}");
+        }
+    }
+
+    // ── Aliases ───────────────────────────────────────────────────────────────
+
+    const ALIASES: &str = r#"<tokens><aliases>
+        <alias name="caption" value="xs"/><alias name="body" value="m"/><alias name="heading" value="xl"/>
+    </aliases></tokens>"#;
+
+    /// A document whose tokens define the aliases `caption` (xs), `body` (m) and `heading` (xl), around `body` in a layout.
+    fn with_aliases(body: &str) -> String {
+        format!(
+            r#"<lpdf version="1">{ALIASES}<document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
+        )
+    }
+
+    #[test]
+    fn a_scale_attribute_takes_an_alias_for_a_slot() {
+        let mut doc = parse(&with_aliases(
+            r##"<column gap="caption" padding="body" radius="heading" border="caption #000" width="caption">
+                <text font-size="heading" line-height="caption">Hi</text>
+                <divider thickness="body"/>
+            </column>
+            <grid col-width="body"/>"##,
+        ))
+        .unwrap();
+        let layout = doc.section_layouts().remove(0);
+        let column = &layout.children[0];
+        assert_eq!(column.gap, 2.0, "space xs");
+        assert_eq!(column.padding, [8.0; 4], "space m");
+        assert_eq!(column.radius, 16.0, "radius xl");
+        assert_eq!(column.border, Some((0.5, "#000000".to_string())), "border xs");
+        assert_eq!(column.width_constraint, Some(120.0), "width xs");
+        assert_eq!(column.children[0].font_size, 20.0, "text-size xl");
+        assert_eq!(column.children[0].line_height, 1.0, "line-height xs");
+        assert_eq!(column.children[1].thickness, 1.5, "border m");
+        assert_eq!(layout.children[1].col_width, Some(140.0), "grid m");
+    }
+
+    #[test]
+    fn an_alias_is_a_slot_of_the_row_the_document_redefines() {
+        let xml = format!(
+            r#"<lpdf version="1"><tokens><text-size xs="8pt" s="10pt" m="12pt" l="16pt" xl="22pt" xxl="32pt"/>
+            <aliases><alias name="body" value="m"/></aliases></tokens>
+            <document><section><layout><text font-size="body">Hi</text></layout></section></document></lpdf>"#
+        );
+        let mut doc = parse(&xml).unwrap();
+        assert_eq!(doc.section_layouts().remove(0).children[0].font_size, 12.0);
+    }
+
+    #[test]
+    fn an_alias_is_shared_by_every_row() {
+        let mut doc = parse(&with_aliases(r#"<column gap="caption"><text font-size="caption">Hi</text></column>"#)).unwrap();
+        let column = doc.section_layouts().remove(0).children.remove(0);
+        assert_eq!((column.gap, column.children[0].font_size), (2.0, 7.0), "space xs, then text-size xs");
+    }
+
+    #[test]
+    fn a_name_that_is_not_an_alias_is_an_error_that_lists_the_aliases() {
+        let err = parse(&with_aliases(r#"<text font-size="medum">Hi</text>"#)).unwrap_err();
+        assert!(
+            err.contains("invalid text size: 'medum': expected a slot from xs to xxl, an alias (body, caption, heading) or a pt value")
+                && err.contains("at line"),
+            "{err}"
+        );
+        let err = parse(&with_aliases(r#"<column gap="medum"/>"#)).unwrap_err();
+        assert!(err.contains("invalid space value: 'medum': expected a slot from xs to xxl, an alias (body, caption, heading)"), "{err}");
+    }
+
+    #[test]
+    fn a_document_without_aliases_does_not_know_the_name() {
+        let err = parse(&minimal(r#"<text font-size="caption">Hi</text>"#)).unwrap_err();
+        assert!(err.contains("invalid text size: 'caption': expected a slot from xs to xxl or a pt value"), "{err}");
+    }
+
+    #[test]
+    fn an_alias_that_is_not_one_says_so() {
+        for (alias, says) in [
+            (r#"<alias name="body" value="huge"/>"#, "alias 'body': invalid value 'huge': expected a slot from xs to xxl"),
+            (r#"<alias name="body" value="caption"/><alias name="caption" value="xs"/>"#, "alias 'body': invalid value 'caption'"),
+            (r#"<alias name="xs" value="m"/>"#, "alias 'xs': xs, s, m, l, xl and xxl are the slots themselves"),
+            (r#"<alias name="Body" value="m"/>"#, "alias 'Body': the name must be lowercase letters"),
+            (r#"<alias name="fill" value="m"/>"#, "alias 'fill': 'fill' is a keyword"),
+            (r#"<alias name="body" value="m"/><alias name="body" value="l"/>"#, "alias 'body': it is defined twice"),
+            (r#"<alias value="m"/>"#, "missing required attribute 'name'"),
+            (r#"<alias name="body"/>"#, "missing required attribute 'value'"),
+            (r#"<nickname name="body" value="m"/>"#, "<nickname>"),
+        ] {
+            let xml = format!(
+                r#"<lpdf version="1"><tokens><aliases>{alias}</aliases></tokens><document><section><layout/></section></document></lpdf>"#
+            );
+            let err = parse(&xml).unwrap_err();
+            assert!(err.contains(says) && err.contains("at line"), "{alias}: {err}");
+        }
+    }
+
+    const ALIASED_TREE: &str = r#"{"version":1,"type":"document","attrs":{"tokens":{"aliases":ALIASES}},
+        "nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[
+            {"type":"text","attrs":{"font-size":"caption"},"nodes":["Hi"]}]}]}]}"#;
+
+    #[test]
+    fn a_kit_tree_defines_aliases() {
+        let mut doc = parse_tree(&ALIASED_TREE.replace("ALIASES", r#"{"caption":"xs","body":"m"}"#)).unwrap();
+        assert_eq!(doc.section_layouts().remove(0).children[0].font_size, 7.0);
+    }
+
+    #[test]
+    fn a_kit_tree_alias_that_is_not_one_says_so() {
+        for (aliases, says) in [
+            (r#"{"caption":"huge"}"#, "alias 'caption': invalid value 'huge'"),
+            (r#"{"caption":7}"#, "alias 'caption': expected a slot from xs to xxl as text"),
+            (r#"{"Caption":"xs"}"#, "alias 'Caption': the name must be lowercase letters"),
+        ] {
+            let err = parse_tree(&ALIASED_TREE.replace("ALIASES", aliases)).unwrap_err();
+            assert!(err.contains(says), "{aliases}: {err}");
         }
     }
 

@@ -70,6 +70,23 @@ fn render_tokens(tokens: &serde_json::Map<String, Value>, depth: usize) -> Strin
         }
     }
 
+    if let Some(aliases) = tokens.get("aliases").and_then(|v| v.as_object())
+        && !aliases.is_empty()
+    {
+        let alias_pad = "  ".repeat(depth + 2);
+        lines.push(format!("{inner}<aliases>"));
+        for (name, val) in aliases {
+            if let Some(v) = val.as_str() {
+                lines.push(format!(
+                    "{alias_pad}<alias name=\"{}\" value=\"{}\"/>",
+                    escape_attr(name),
+                    escape_attr(v)
+                ));
+            }
+        }
+        lines.push(format!("{inner}</aliases>"));
+    }
+
     if let Some(colors) = tokens.get("colors").and_then(|v| v.as_object()) {
         if !colors.is_empty() {
             let color_pad = "  ".repeat(depth + 2);
@@ -422,7 +439,12 @@ pub fn kit_to_xml(json: &str) -> Result<String, String> {
             .and_then(|v| v.as_object())
             .is_some_and(|m| !m.is_empty());
 
-        if has_scales || has_colors || has_gradients {
+        let has_aliases = tokens
+            .get("aliases")
+            .and_then(|v| v.as_object())
+            .is_some_and(|m| !m.is_empty());
+
+        if has_scales || has_colors || has_gradients || has_aliases {
             lines.push(render_tokens(tokens, 1));
         }
     }
@@ -536,6 +558,26 @@ mod tests {
         assert_eq!(stops.len(), 2, "{xml}");
         assert!(stops[0].contains(r##"offset="0%""##) && stops[0].contains(r##"color="#f00""##), "{}", stops[0]);
         assert!(xml.contains("</gradient>") && xml.contains("</gradients>"), "{xml}");
+    }
+
+    #[test]
+    fn aliases_emitted_in_tokens_block() {
+        let json = r#"{
+            "version": 1,
+            "type": "document",
+            "attrs": { "tokens": { "aliases": { "caption": "xs", "body": "m" } } },
+            "nodes": [{"type":"section","attrs":{},"nodes":[]}]
+        }"#;
+        let xml = kit_to_xml(json).unwrap();
+        assert!(xml.contains("<tokens>") && xml.contains("<aliases>") && xml.contains("</aliases>"), "{xml}");
+        assert!(xml.contains(r#"<alias name="caption" value="xs"/>"#), "{xml}");
+        assert!(xml.contains(r#"<alias name="body" value="m"/>"#), "{xml}");
+    }
+
+    #[test]
+    fn no_aliases_leaves_no_tokens_block() {
+        let json = r#"{"version":1,"type":"document","attrs":{"tokens":{"aliases":{}}},"nodes":[{"type":"section","attrs":{},"nodes":[]}]}"#;
+        assert!(!kit_to_xml(json).unwrap().contains("<tokens>"));
     }
 
     #[test]
@@ -868,6 +910,25 @@ mod tests {
             assert_eq!(from_tree, from_xml, "{fill}");
             assert_ne!(from_tree, flat, "the tree's {fill} is not read");
         }
+    }
+
+    #[test]
+    fn aliases_from_the_builder_render_the_same_from_the_tree_and_from_the_xml() {
+        let document = |size: &str| {
+            format!(
+                r##"{{"version":1,"type":"document","attrs":{{"tokens":{{"aliases":{{"caption":"xs","heading":"xl"}}}}}},
+                    "nodes":[{{"type":"section","attrs":{{}},"nodes":[{{"type":"layout","nodes":[
+                        {{"type":"text","attrs":{{"font-size":"{size}"}},"nodes":["Sized"]}}]}}]}}]}}"##
+            )
+        };
+        let literal = render_tree(&document("xs"));
+        for size in ["caption", "heading"] {
+            let (from_tree, from_xml) = rendered_both_ways(&document(size));
+            assert_eq!(from_tree, from_xml, "{size}");
+        }
+        let (caption, _) = rendered_both_ways(&document("caption"));
+        assert_eq!(caption, literal, "the alias caption is the slot xs");
+        assert_ne!(render_tree(&document("heading")), literal, "the tree's alias heading is read");
     }
 
     #[test]
