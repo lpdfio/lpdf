@@ -4,8 +4,8 @@
 //! push the anchor to the next page. The flow is paginated one page at a time to settle that. A page is filled
 //! without room for notes, and the notes of what landed on it are measured; it is filled again with that much
 //! room kept back. The second fill is the first one cut short, so it holds no more notes than the first, and they
-//! fit the room. A third fill tries for a tighter fit, with the room the second fill's notes need, and is kept
-//! when the notes still fit. A line whose note does not fit moves to the next page, with its anchor.
+//! fit the room. Up to two more fills look for a tighter fit, with the room for fewer notes (see `settle_page`).
+//! A line whose note does not fit moves to the next page, with its anchor.
 
 use super::*;
 use crate::parse::FootnoteCounter;
@@ -139,30 +139,43 @@ fn fill<'a>(pending: &Pending<'a>, avail_w: f32, budget: f32, next_budget: f32, 
 }
 
 /// Fill the next page so that its notes fit under it, and take its nodes off `pending`.
+///
+/// The first fill has no room kept back and holds `n` notes. A fill with the room for the first `j` of them
+/// holds `k(j)` notes, and `k` falls as `j` grows, since more room kept back leaves less of the flow for the page.
+/// The room fits when `k(j) <= j`, and `j = n` always does. The tightest page is the least `j` that fits, which this
+/// looks for in two steps after the fill with `j = n`, for four fills at most: the `j` that fill held, and if its
+/// notes did not fit, the number it held, which does.
 fn settle_page(pending: &mut Pending, avail_w: f32, budget: f32, next_budget: f32, counter: FootnoteCounter) -> FlowPage {
     let first = fill(pending, avail_w, budget, next_budget, counter, 0.0);
     if first.area <= 0.0 {
         *pending = first.rest;
         return FlowPage { nodes: first.nodes, notes: first.notes, reserve: 0.0 };
     }
-    // Keep back what the notes of the first fill need. What lands on the page now is a start of the first fill.
-    let second = fill(pending, avail_w, budget, next_budget, counter, first.area);
-    let chosen = if second.area > first.area + 0.01 {
-        // Not a start of the first fill after all: keep back what this one needs, and take the result as it is.
-        let reserve = second.area;
-        let third = fill(pending, avail_w, budget, next_budget, counter, reserve);
-        (third, reserve)
-    } else if second.area < first.area - 0.01 {
-        // Fewer notes than room: try the room they need, and keep the fill when its notes still fit.
-        let tight = fill(pending, avail_w, budget, next_budget, counter, second.area);
-        if tight.area <= second.area + 0.01 {
-            (tight, second.area)
-        } else {
-            (second, first.area)
-        }
-    } else {
-        (second, first.area)
+    let n = first.notes.len();
+    // Fill with the room the first `j` notes of the first fill need.
+    let with_room = |j: usize| {
+        let reserve = area_height(&first.notes[..j], avail_w, budget);
+        (fill(pending, avail_w, budget, next_budget, counter, reserve), reserve)
     };
+    let fits = |(fill, reserve): &(Fill, f32)| fill.area <= *reserve + 0.01;
+
+    let mut chosen = with_room(n);
+    if !fits(&chosen) {
+        // Not a start of the first fill after all: keep back what this one needs, and take the result as it is.
+        let reserve = chosen.0.area;
+        chosen = (fill(pending, avail_w, budget, next_budget, counter, reserve), reserve);
+    } else if chosen.0.notes.len() < n {
+        let held = chosen.0.notes.len();
+        let tight = with_room(held);
+        if fits(&tight) {
+            chosen = tight;
+        } else if tight.0.notes.len() < n {
+            let more = with_room(tight.0.notes.len());
+            if fits(&more) {
+                chosen = more;
+            }
+        }
+    }
     let (fill, reserve) = chosen;
     *pending = fill.rest;
     FlowPage { nodes: fill.nodes, notes: fill.notes, reserve }

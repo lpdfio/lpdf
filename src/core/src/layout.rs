@@ -5534,6 +5534,47 @@ mod tests {
     }
 
     #[test]
+    fn a_page_keeps_back_only_the_room_its_notes_need() {
+        // The text of the fixture that ends page 1 early: with the room for all six notes of the first fill a third
+        // line does not fit, and with the room for the five that stand on the page it does. Only the search for
+        // the tightest room finds it. The default widow rule moves the last two lines together, and fits neither.
+        let xml = include_str!("../../../test/fixtures/showcase-footnote.xml");
+        let first_lines = |xml: &str, page: usize| -> Vec<String> {
+            texts_on(&engine_render(xml), page).into_iter().filter(|t| t.3 > 10.0).map(|t| t.0).collect()
+        };
+        let labels = |xml: &str| -> Vec<String> {
+            texts_on(&engine_render(xml), 0).into_iter().filter(|t| t.3 < 6.0 && t.2 > 600.0 && t.1 == 40.0).map(|t| t.0).collect()
+        };
+        assert!(first_lines(xml, 1)[0].starts_with("worth remembering. The last column"));
+        assert_eq!(labels(xml), ["1", "2", "3", "4"]);
+
+        let tight = xml.replace("<text>Keepers who", "<text widows=\"1\">Keepers who");
+        assert!(first_lines(&tight, 0).iter().any(|l| l.starts_with("worth remembering. The last column")), "the line fits");
+        assert_eq!(labels(&tight), ["1", "2", "3", "4", "5"]);
+    }
+
+    #[test]
+    fn the_notes_never_overlap_the_text_over_a_range_of_page_fills() {
+        let words = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau";
+        let text = format!(
+            r#"<text width="220pt">{words}<fn>First note, a little longer than one line of the note area so that it wraps onto a second line.</fn> {words}<fn>Second.</fn> {words}<fn>Third note.</fn> {words}</text>"#
+        );
+        for height in (400..=770).step_by(7) {
+            let tree = engine_render(&minimal(&format!(r#"<frame height="{height}pt"/>{text}<frame height="{height}pt"/>{text}"#)));
+            for page in 0..tree["pages"].as_array().unwrap().len() {
+                let rules = nodes_of(&tree["pages"][page], "line");
+                let Some(rule) = rules.first() else { continue };
+                let rule_y = rule["y1"].as_f64().unwrap();
+                for (content, _, y, size) in texts_on(&tree, page) {
+                    if size > 10.0 {
+                        assert!(y + size * 1.2 <= rule_y + 0.01, "height {height}, page {}: {content:?} ends at {} past the rule at {rule_y}", page + 1, y + size * 1.2);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn a_document_without_footnotes_has_no_rule_and_no_notes() {
         let tree = engine_render(&minimal(r#"<text>Plain text.</text>"#));
         assert!(nodes_of(&tree, "line").is_empty());
