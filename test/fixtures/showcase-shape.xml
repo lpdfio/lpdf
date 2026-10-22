@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+      <color name="rule"    value="#dde3ed" />
+      <color name="bg"      value="#f5f7fa" />
+      <color name="ink"     value="#1f2a44" />
+      <color name="accent"  value="#e0762b" />
+      <color name="ok"      value="#2f9e44" />
+      <color name="warn"    value="#f2b01e" />
+      <color name="bad"     value="#d6336c" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Shape" subject="rect, circle and ellipse shapes in the layout" />
+
+    <!-- A shape takes its box in the flow as an image does, and draws a rect, a circle or an ellipse in it. A rect
+         and an ellipse have a width and a height, and a circle an r, whose box is the square of side 2r. The
+         parent's align places the box. -->
+    <section>
+      <layout margin="40pt">
+        <column gap="xl">
+
+          <column gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Shape</text>
+            <text font-size="m" color="muted">A rect, a circle or an ellipse that takes space in the flow.</text>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Status dots</text>
+            <text font-size="s" color="muted">A circle beside a text; the row centers them.</text>
+            <column gap="s">
+              <row gap="s" align="center">
+                <shape type="circle" r="5pt" fill="ok"/>
+                <text font-size="m">Active</text>
+              </row>
+              <row gap="s" align="center">
+                <shape type="circle" r="5pt" fill="warn"/>
+                <text font-size="m">Pending review</text>
+              </row>
+              <row gap="s" align="center">
+                <shape type="circle" r="5pt" fill="bad"/>
+                <text font-size="m">Failed</text>
+              </row>
+              <row gap="s" align="center">
+                <shape type="circle" r="5pt" stroke="muted" stroke-width="1pt"/>
+                <text font-size="m" color="muted">Not started</text>
+              </row>
+            </column>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Color swatches in a table</text>
+            <table cols="1fr 1fr">
+              <thead>
+                <td padding="s" background="bg"><text font-size="s" font="Helvetica-Bold">Token</text></td>
+                <td padding="s" background="bg"><text font-size="s" font="Helvetica-Bold">Value</text></td>
+              </thead>
+              <tr>
+                <td padding="s">
+                  <row gap="s" align="center">
+                    <shape type="rect" width="14pt" height="14pt" radius="2pt" fill="primary"/>
+                    <text font-size="s">primary</text>
+                  </row>
+                </td>
+                <td padding="s"><text font-size="s" color="muted">#1763cf</text></td>
+              </tr>
+              <tr>
+                <td padding="s">
+                  <row gap="s" align="center">
+                    <shape type="rect" width="14pt" height="14pt" radius="2pt" fill="accent"/>
+                    <text font-size="s">accent</text>
+                  </row>
+                </td>
+                <td padding="s"><text font-size="s" color="muted">#e0762b</text></td>
+              </tr>
+              <tr>
+                <td padding="s">
+                  <row gap="s" align="center">
+                    <shape type="rect" width="14pt" height="14pt" radius="2pt" fill="rule" stroke="muted" stroke-width="0.5pt"/>
+                    <text font-size="s">rule</text>
+                  </row>
+                </td>
+                <td padding="s"><text font-size="s" color="muted">#dde3ed</text></td>
+              </tr>
+            </table>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Progress bars</text>
+            <text font-size="s" color="muted">Two rects side by side, the done part and the rest; and a bar of rounded steps.</text>
+            <column gap="s">
+              <row gap="m" align="center">
+                <row width="180pt">
+                  <shape type="rect" width="120pt" height="8pt" fill="primary"/>
+                  <shape type="rect" width="60pt" height="8pt" fill="rule"/>
+                </row>
+                <text font-size="s" color="muted">67%</text>
+              </row>
+              <row gap="m" align="center">
+                <row width="180pt">
+                  <shape type="rect" width="36pt" height="8pt" fill="accent"/>
+                  <shape type="rect" width="144pt" height="8pt" fill="rule"/>
+                </row>
+                <text font-size="s" color="muted">20%</text>
+              </row>
+              <row gap="m" align="center">
+                <row gap="3pt">
+                  <shape type="rect" width="40pt" height="8pt" radius="4pt" fill="ok"/>
+                  <shape type="rect" width="40pt" height="8pt" radius="4pt" fill="ok"/>
+                  <shape type="rect" width="40pt" height="8pt" radius="4pt" fill="ok"/>
+                  <shape type="rect" width="40pt" height="8pt" radius="4pt" fill="rule"/>
+                </row>
+                <text font-size="s" color="muted">Step 3 of 4</text>
+              </row>
+            </column>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Ellipses and strokes</text>
+            <row gap="xl" align="center">
+              <shape type="ellipse" width="60pt" height="30pt" fill="bg" stroke="primary" stroke-width="1.5pt"/>
+              <shape type="ellipse" width="60pt" height="30pt" fill="accent"/>
+              <shape type="circle" r="18pt" stroke="ink" stroke-width="1pt" stroke-dash="4 3"/>
+              <shape type="rect" width="60pt" height="30pt" radius="6pt" fill="bg" stroke="ink" stroke-width="1pt"/>
+              <shape type="rect" width="60pt" height="30pt" fill="primary" stroke="accent" stroke-width="3pt"/>
+            </row>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Sizes from the tokens</text>
+            <text font-size="s" color="muted">height="xs" to "xxl" are the height row; the shapes sit on one baseline with align="end".</text>
+            <row gap="s" align="end">
+              <shape type="rect" width="32pt" height="xs" fill="primary"/>
+              <shape type="rect" width="32pt" height="s" fill="primary"/>
+              <shape type="rect" width="32pt" height="m" fill="primary"/>
+              <shape type="rect" width="32pt" height="l" fill="primary"/>
+              <shape type="rect" width="32pt" height="xl" fill="primary"/>
+              <shape type="rect" width="32pt" height="xxl" fill="primary"/>
+            </row>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold">Opacity</text>
+            <column background="bg" padding="m" radius="s">
+              <row gap="m" align="center">
+                <shape type="circle" r="16pt" fill="primary"/>
+                <shape type="circle" r="16pt" fill="primary" opacity="0.6"/>
+                <shape type="circle" r="16pt" fill="primary" opacity="0.3"/>
+                <shape type="rect" width="80pt" height="24pt" radius="4pt" fill="accent" stroke="ink" stroke-width="2pt" opacity="0.5"/>
+              </row>
+            </column>
+          </column>
+
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

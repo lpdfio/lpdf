@@ -37,7 +37,7 @@ const EXPECTED = {
     LayerAttr: attributes('layer'),
 };
 for (const element of ['column', 'row', 'grid', 'frame', 'link', 'divider', 'span', 'img',
-    'barcode', 'text', 'td', 'thead', 'tr', 'table', 'field', 'bookmark']) {
+    'shape', 'barcode', 'text', 'td', 'thead', 'tr', 'table', 'field', 'bookmark']) {
     EXPECTED[`${element[0].toUpperCase()}${element.slice(1)}Attr`] = attributes(element);
 }
 for (const element of ['rect', 'circle', 'ellipse', 'line', 'path', 'text-at', 'img-at', 'barcode-at']) {

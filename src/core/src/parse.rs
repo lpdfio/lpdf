@@ -286,6 +286,26 @@ pub struct Capture {
     pub reserve_lines: usize,
 }
 
+/// What a `<shape>` draws.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ShapeKind {
+    Rect,
+    Circle,
+    Ellipse,
+}
+
+/// What a `<shape>` draws in its box, which the node's `width_constraint` and `img_height_constraint` size (a
+/// circle's is the square of side 2r) and its `radius` and `opacity` shape. Few nodes are shapes, so a node holds
+/// it boxed (see `Node`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Shape {
+    pub kind:         ShapeKind,
+    pub fill:         Option<String>,
+    pub stroke:       Option<String>,
+    pub stroke_width: Option<f32>,
+    pub stroke_dash:  Option<String>,
+}
+
 /// One element of the layout. Every node has every field, whatever its kind, and parse and data binding copy
 /// nodes whole, so a field costs its size in every node of a document, set or not: a larger node is a slower
 /// parse. A new field that is a number, a flag or a small enum goes inline. A string, a list or a struct that few
@@ -327,9 +347,9 @@ pub struct Node {
     pub text_color: Option<String>,
     pub text_align: TextAlign,
     /// The fewest lines of a split text that may stand alone on the next page.
-    pub widows: usize,
+    pub widows: u8,
     /// The fewest lines of a split text that may stand alone on the page it starts on.
-    pub orphans: usize,
+    pub orphans: u8,
     /// The distance between lines of text, as a factor of the font size.
     pub line_height: f32,
     /// The most lines of a text that are drawn; `None` draws them all.
@@ -346,6 +366,8 @@ pub struct Node {
     /// The width over the height of a picture whose width is `fill`, set where the sizes of the images are filled
     /// in. The width comes from the slot the picture is laid out in, and the height follows from this.
     pub img_aspect: Option<f32>,
+    // shape (NodeKind::Shape only), boxed: few nodes are shapes
+    pub shape: Option<Box<Shape>>,
     // barcode (NodeKind::Barcode only)
     pub barcode_type: Option<BarcodeType>,
     pub barcode_data: Option<String>,
@@ -377,8 +399,8 @@ pub struct Node {
 }
 
 /// The lines of a split text kept together on each side of a page break when `widows` and `orphans` are not set.
-pub const DEFAULT_WIDOWS: usize = 2;
-pub const DEFAULT_ORPHANS: usize = 2;
+pub const DEFAULT_WIDOWS: u8 = 2;
+pub const DEFAULT_ORPHANS: u8 = 2;
 /// The distance between lines of text, as a factor of the font size, when a text sets none.
 pub const DEFAULT_LINE_HEIGHT: f32 = 1.2;
 
@@ -411,6 +433,7 @@ pub enum NodeKind {
     Text,
     Link,
     Img,
+    Shape,
     Barcode,
     Field,
 }
@@ -516,8 +539,8 @@ struct ParsedNode {
     font_size: Option<f32>,     // None = inherit
     text_color: Option<String>, // None = inherit; a box sets it for the text inside
     text_align: TextAlign,
-    widows: usize,
-    orphans: usize,
+    widows: u8,
+    orphans: u8,
     line_height: f32,
     max_lines: Option<usize>,
     ellipsis: bool,
@@ -525,6 +548,7 @@ struct ParsedNode {
     url: Option<String>,
     image_name: Option<String>,
     img_height_constraint: Option<f32>,
+    shape: Option<Box<Shape>>,
     barcode_type: Option<BarcodeType>,
     barcode_data: Option<String>,
     barcode_ec: BarcodeEcLevel,
@@ -589,6 +613,7 @@ impl ParsedNode {
             url: None,
             image_name: None,
             img_height_constraint: None,
+            shape: None,
             barcode_type: None,
             barcode_data: None,
             barcode_ec: BarcodeEcLevel::M,
@@ -696,7 +721,7 @@ impl Node {
             line_height: DEFAULT_LINE_HEIGHT, max_lines: None, ellipsis: false,
             capture: None,
             url: None, image_name: None,
-            img_height_constraint: None, img_aspect: None, barcode_type: None, barcode_data: None,
+            img_height_constraint: None, img_aspect: None, shape: None, barcode_type: None, barcode_data: None,
             barcode_ec: BarcodeEcLevel::M, barcode_hrt: false, barcode_color: None,
             barcode_bg: None, table_cols: String::new(), stripe: None,
             field_kind: None, field_name: None, field_value: None, field_label: None,
@@ -804,6 +829,7 @@ fn resolve_node(
         image_name:            n.image_name,
         img_height_constraint: n.img_height_constraint,
         img_aspect:            None,
+        shape:                 n.shape,
         barcode_type:          n.barcode_type,
         barcode_data:          n.barcode_data,
         barcode_ec:            n.barcode_ec,
@@ -1541,6 +1567,7 @@ fn parse_node(
         "text"    => NodeKind::Text,
         "link"    => NodeKind::Link,
         "img"     => NodeKind::Img,
+        "shape"   => NodeKind::Shape,
         "barcode" => NodeKind::Barcode,
         "field"   => NodeKind::Field,
         "table"   => NodeKind::Table,
@@ -1597,6 +1624,10 @@ fn parse_node(
             apply_img_attrs(&mut node, elem, Some(tokens), asset_images, "<assets>")
                 .map_err(|e| format!("<{}>{}: {e}", tag, node_loc(elem)))?;
         }
+        NodeKind::Shape => {
+            apply_shape_attrs(&mut node, elem, tokens)
+                .map_err(|e| format!("<{}>{}: {e}", tag, node_loc(elem)))?;
+        }
         NodeKind::Barcode => {
             apply_barcode_attrs(&mut node, elem, tokens)
                 .map_err(|e| format!("<{}>{}: {e}", tag, node_loc(elem)))?;
@@ -1609,7 +1640,7 @@ fn parse_node(
     }
 
     // ── Children (not for leaf nodes) ────────────────────────────────────────
-    if !matches!(kind, NodeKind::Divider | NodeKind::Text | NodeKind::Img | NodeKind::Barcode | NodeKind::Field) {
+    if !matches!(kind, NodeKind::Divider | NodeKind::Text | NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field) {
         let mut pending = PendingBookmarks::default();
         for child in elems(elem) {
             if child.tag_name().name() == "bookmark" {
@@ -2140,11 +2171,13 @@ fn apply_box_attrs(
     if is_box || node.kind == NodeKind::Text {
         if let Some(v) = a.get("color") { node.text_color = Some(tokens.resolve_color(v)?); }
     }
-    if is_box {
+    if is_box || node.kind == NodeKind::Shape {
         if let Some(v) = a.get("opacity") { node.opacity = parse_opacity(v)?; }
+    }
+    if is_box {
         if let Some(v) = a.get("shadow")  { node.shadow  = Some(Box::new(parse_shadow(v, tokens)?)); }
     }
-    if !matches!(node.kind, NodeKind::Img | NodeKind::Barcode | NodeKind::Field) {
+    if !matches!(node.kind, NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field) {
         if let Some(v) = a.get("height") { node.height_mode = parse_height_mode(v, tokens)?; }
     }
     match a.get("width") {
@@ -2232,8 +2265,60 @@ fn apply_layout_kind_attrs(
             node.ellipsis  = a.get("ellipsis").map(|v| v == "true").unwrap_or(false);
             apply_capture_attrs(node, a)?;
         }
-        NodeKind::Link | NodeKind::Img | NodeKind::Barcode | NodeKind::Field => {}
+        NodeKind::Link | NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field => {}
     }
+    Ok(())
+}
+
+/// Apply the attributes of a `<shape>` / `"shape"` node, which `apply_box_attrs` has already read the `width`,
+/// `height`, `radius` and `opacity` of. A rect and an ellipse take a `width` and a `height`, and a circle takes
+/// `r`, whose box is the square of side 2r: the node holds the size of every shape as a width and a height, as an
+/// image does.
+fn apply_shape_attrs(node: &mut ParsedNode, a: &impl Attrs, tokens: &Tokens) -> Result<(), String> {
+    let type_str = a.get("type").ok_or("missing required attribute 'type'")?;
+    let kind = match type_str {
+        "rect"    => ShapeKind::Rect,
+        "circle"  => ShapeKind::Circle,
+        "ellipse" => ShapeKind::Ellipse,
+        other     => return Err(format!("unknown type '{other}'; use 'rect', 'circle', or 'ellipse'")),
+    };
+    if node.width_fill {
+        return Err("'width' is a length or a name of the width row, not fill".to_string());
+    }
+    match kind {
+        ShapeKind::Circle => {
+            if a.get("width").is_some() || a.get("height").is_some() {
+                return Err("a circle takes 'r', not 'width' or 'height': its box is the square of side 2r".to_string());
+            }
+            if a.get("radius").is_some() {
+                return Err("'radius' rounds the corners of a rect; a circle is round already".to_string());
+            }
+            let r = a.get("r").ok_or("a circle needs 'r'")?;
+            let side = 2.0 * parse_measurement(r).map_err(|e| format!("invalid r '{r}': {e}"))?;
+            node.width_constraint      = Some(side);
+            node.img_height_constraint = Some(side);
+        }
+        ShapeKind::Rect | ShapeKind::Ellipse => {
+            if a.get("r").is_some() {
+                return Err(format!("'r' is the radius of a circle; a {type_str} takes 'width' and 'height'"));
+            }
+            if kind == ShapeKind::Ellipse && a.get("radius").is_some() {
+                return Err("'radius' rounds the corners of a rect; an ellipse is round already".to_string());
+            }
+            if node.width_constraint.is_none() || a.get("height").is_none() {
+                return Err(format!("a {type_str} needs both 'width' and 'height'"));
+            }
+            let height = a.get("height").expect("checked above");
+            node.img_height_constraint = Some(tokens.resolve_height(height).map_err(|e| format!("shape height: {e}"))?);
+        }
+    }
+    node.shape = Some(Box::new(Shape {
+        kind,
+        fill:         a.get("fill").map(|v| tokens.resolve_fill(v)).transpose()?,
+        stroke:       a.get("stroke").map(|v| tokens.resolve_color(v)).transpose()?,
+        stroke_width: a.get("stroke-width").map(parse_measurement).transpose()?,
+        stroke_dash:  a.get("stroke-dash").map(str::to_string),
+    }));
     Ok(())
 }
 
@@ -2278,8 +2363,8 @@ fn parse_max_lines(v: &str) -> Result<usize, String> {
 }
 
 /// Read a `widows` or `orphans` value: a whole number of lines from 1 to 10.
-fn parse_line_limit(attr: &str, v: &str) -> Result<usize, String> {
-    match v.parse::<usize>() {
+fn parse_line_limit(attr: &str, v: &str) -> Result<u8, String> {
+    match v.parse::<u8>() {
         Ok(lines) if (1..=10).contains(&lines) => Ok(lines),
         _ => Err(format!("invalid {attr} value: '{v}' — expected a whole number from 1 to 10")),
     }
@@ -2810,6 +2895,7 @@ fn parse_tree_node(
         "text"    => NodeKind::Text,
         "link"    => NodeKind::Link,
         "img"     => NodeKind::Img,
+        "shape"   => NodeKind::Shape,
         "barcode" => NodeKind::Barcode,
         "field"   => NodeKind::Field,
         "table"   => NodeKind::Table,
@@ -2850,6 +2936,9 @@ fn parse_tree_node(
         NodeKind::Img => {
             apply_img_attrs(&mut node, &a, Some(tokens), asset_images, "assets.images")?;
         }
+        NodeKind::Shape => {
+            apply_shape_attrs(&mut node, &a, tokens).map_err(|e| format!("shape: {e}"))?;
+        }
         NodeKind::Barcode => {
             apply_barcode_attrs(&mut node, &a, tokens)?;
         }
@@ -2860,7 +2949,7 @@ fn parse_tree_node(
     }
 
     // ── Layout children ───────────────────────────────────────────────────────
-    if !matches!(kind, NodeKind::Divider | NodeKind::Img | NodeKind::Barcode | NodeKind::Field) {
+    if !matches!(kind, NodeKind::Divider | NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field) {
         if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
             let mut pending = PendingBookmarks::default();
             for child in arr {
@@ -3363,6 +3452,83 @@ mod tests {
         let result = parse(&minimal(r#"<img name="ghost" />"#));
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("unknown asset image"));
+    }
+
+    #[test]
+    fn a_shape_is_a_box_of_the_size_its_type_names() {
+        let xml = minimal(
+            r##"<shape type="rect" width="40pt" height="20pt" radius="4pt" fill="#112233" stroke="#445566" stroke-width="2pt" stroke-dash="3 2" opacity="0.5"/>
+            <shape type="circle" r="10pt"/>
+            <shape type="ellipse" width="30pt" height="12pt"/>"##,
+        );
+        let mut doc = parse(&xml).unwrap();
+        let nodes = &doc.section_layouts()[0].children;
+        assert!(nodes.iter().all(|n| n.kind == NodeKind::Shape));
+
+        let rect = &nodes[0];
+        assert_eq!((rect.width_constraint, rect.img_height_constraint), (Some(40.0), Some(20.0)));
+        assert_eq!((rect.radius, rect.opacity), (4.0, 0.5));
+        let shape = rect.shape.as_deref().unwrap();
+        assert_eq!(shape.kind, ShapeKind::Rect);
+        assert_eq!((shape.fill.as_deref(), shape.stroke.as_deref()), (Some("#112233"), Some("#445566")));
+        assert_eq!((shape.stroke_width, shape.stroke_dash.as_deref()), (Some(2.0), Some("3 2")));
+
+        let circle = &nodes[1];
+        assert_eq!(circle.shape.as_deref().unwrap().kind, ShapeKind::Circle);
+        assert_eq!((circle.width_constraint, circle.img_height_constraint), (Some(20.0), Some(20.0)), "the square of side 2r");
+
+        let ellipse = &nodes[2];
+        assert_eq!(ellipse.shape.as_deref().unwrap().kind, ShapeKind::Ellipse);
+        assert_eq!((ellipse.width_constraint, ellipse.img_height_constraint), (Some(30.0), Some(12.0)));
+    }
+
+    #[test]
+    fn a_shape_takes_its_size_and_radius_from_the_tokens() {
+        let xml = r#"<lpdf version="1"><document size="a4"><section><layout>
+            <shape type="rect" width="m" height="m" radius="s"/>
+        </layout></section></document></lpdf>"#;
+        let mut doc = parse(xml).unwrap();
+        let shape = &doc.section_layouts()[0].children[0];
+        let tokens = Tokens::default();
+        assert_eq!(shape.width_constraint, Some(tokens.resolve_width("m").unwrap()));
+        assert_eq!(shape.img_height_constraint, Some(tokens.resolve_height("m").unwrap()));
+        assert_eq!(shape.radius, tokens.resolve_radius("s").unwrap());
+    }
+
+    #[test]
+    fn a_shape_that_lacks_what_its_type_needs_says_what() {
+        for (shape, says) in [
+            (r#"<shape width="10pt" height="10pt"/>"#, "missing required attribute 'type'"),
+            (r#"<shape type="star"/>"#, "unknown type 'star'"),
+            (r#"<shape type="circle"/>"#, "a circle needs 'r'"),
+            (r#"<shape type="circle" r="big"/>"#, "invalid r 'big'"),
+            (r#"<shape type="circle" r="5pt" width="10pt"/>"#, "a circle takes 'r', not 'width' or 'height'"),
+            (r#"<shape type="circle" r="5pt" radius="2pt"/>"#, "a circle is round already"),
+            (r#"<shape type="rect" height="10pt"/>"#, "a rect needs both 'width' and 'height'"),
+            (r#"<shape type="rect" width="10pt"/>"#, "a rect needs both 'width' and 'height'"),
+            (r#"<shape type="ellipse" r="2pt"/>"#, "'r' is the radius of a circle"),
+            (r#"<shape type="ellipse" width="10pt" height="5pt" radius="2pt"/>"#, "an ellipse is round already"),
+            (r#"<shape type="rect" width="fill" height="10pt"/>"#, "not fill"),
+        ] {
+            let err = parse(&minimal(shape)).unwrap_err();
+            assert!(err.starts_with("<shape> at line") && err.contains(says), "{shape}: {err}");
+        }
+    }
+
+    #[test]
+    fn a_shape_in_a_kit_tree_is_read_as_in_xml() {
+        let tree = |shape: &str| format!(
+            r#"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
+                {{"type":"layout","attrs":{{}},"nodes":[{shape}]}}]}}]}}"#
+        );
+        let mut doc = parse_tree(&tree(r##"{"type":"shape","attrs":{"type":"circle","r":"10pt","fill":"#ff0000","opacity":"0.5"}}"##)).unwrap();
+        let shape = &doc.section_layouts()[0].children[0];
+        assert_eq!(shape.kind, NodeKind::Shape);
+        assert_eq!((shape.width_constraint, shape.img_height_constraint, shape.opacity), (Some(20.0), Some(20.0), 0.5));
+        assert_eq!(shape.shape.as_deref().unwrap().fill.as_deref(), Some("#ff0000"));
+
+        let err = parse_tree(&tree(r#"{"type":"shape","attrs":{"type":"circle"}}"#)).unwrap_err();
+        assert!(err.contains("shape: a circle needs 'r'"), "{err}");
     }
 
     #[test]

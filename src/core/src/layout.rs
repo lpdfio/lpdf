@@ -1131,8 +1131,8 @@ fn split_text(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Spl
         return SplitOutcome::NothingFits(vec![node.clone()]);
     }
     // Most lines this page may take and still leave `widows` for the next.
-    let widow_limit = n_lines.saturating_sub(node.widows);
-    let orphans     = node.orphans.max(1);
+    let widow_limit = n_lines.saturating_sub(usize::from(node.widows));
+    let orphans     = usize::from(node.orphans).max(1);
     let mut split_at = room.min(widow_limit);
     if split_at < orphans {
         let page_lines = ((full_page_h / line_h).floor().max(0.0)) as usize;
@@ -1334,6 +1334,7 @@ fn layout_node(
         NodeKind::Text => layout_text(node, node_x, y, node_w),
         NodeKind::Link => layout_link(node, node_x, y, node_w, avail_h),
         NodeKind::Img => layout_img(node, node_x, y, node_w),
+        NodeKind::Shape => layout_shape(node, node_x, y, node_w),
         NodeKind::Barcode => layout_barcode(node, node_x, y, node_w),
         NodeKind::Field => layout_field(node, node_x, y, node_w),
         _ => layout_container(node, node_x, y, node_w, avail_h),
@@ -1891,6 +1892,27 @@ fn layout_img(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
     };
     let name = node.image_name.clone().unwrap_or_default();
     (RenderNode::Image(RenderImage { x, y, width: w, height: h, name, radius: node.radius }), h)
+}
+
+// ── Shape ─────────────────────────────────────────────────────────────────────
+
+/// A `<shape>`: a box of the size it was given, as an image has, with the rect, circle or ellipse of a layer drawn
+/// in it. Narrower room than its width narrows the shape and keeps its proportions, as it does an image. The
+/// drawing sits in a box of its own, so that the box can fade it and the parent's alignment can move it.
+fn layout_shape(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
+    let pre_w = node.width_constraint.unwrap_or(0.0);
+    let pre_h = node.img_height_constraint.unwrap_or(0.0);
+    let w = pre_w.min(avail_w);
+    let h = if pre_w > 0.0 { pre_h * (w / pre_w) } else { pre_h };
+    let drawing = node.shape.as_deref().map(|shape| canvas::draw_flow_shape(shape, node.radius, x, y, w, h));
+    let shape_box = RenderBox {
+        x, y, width: w, height: h,
+        fill: None, border_width: 0.0, border_color: None, radius: 0.0,
+        opacity: node.opacity, shadow: None,
+        debug_self: node.debug,
+        children: drawing.into_iter().collect(),
+    };
+    (RenderNode::Box(shape_box), h)
 }
 
 // ── Form field ────────────────────────────────────────────────────────────────
@@ -2599,6 +2621,7 @@ fn measure_natural_w(node: &Node) -> f32 {
         }
         NodeKind::Divider => node.thickness,
         NodeKind::Img => node.width_constraint.unwrap_or(100.0),
+        NodeKind::Shape => node.width_constraint.unwrap_or(0.0),
         NodeKind::Barcode => own_width(node).unwrap_or(80.0),
         NodeKind::Field => node.width_constraint.unwrap_or(100.0),
         _ => {
@@ -3082,7 +3105,16 @@ fn shift_y(node: RenderNode, dy: f32) -> RenderNode {
             a.y += dy;
             RenderNode::Anchor(a)
         }
-        // Canvas nodes use absolute canvas coordinates; y-shifting is a no-op.
+        // What a `<shape>` draws moves with its box.
+        RenderNode::CanvasRect(mut r) => {
+            r.y += dy;
+            RenderNode::CanvasRect(r)
+        }
+        RenderNode::CanvasEllipse(mut e) => {
+            e.cy += dy;
+            RenderNode::CanvasEllipse(e)
+        }
+        // The other canvas nodes use absolute canvas coordinates; y-shifting is a no-op.
         other => other,
     }
 }
@@ -3123,7 +3155,16 @@ fn shift_x(node: RenderNode, dx: f32) -> RenderNode {
             f.x += dx;
             RenderNode::Field(f)
         }
-        // Canvas nodes use absolute canvas coordinates; x-shifting is a no-op.
+        // What a `<shape>` draws moves with its box.
+        RenderNode::CanvasRect(mut r) => {
+            r.x += dx;
+            RenderNode::CanvasRect(r)
+        }
+        RenderNode::CanvasEllipse(mut e) => {
+            e.cx += dx;
+            RenderNode::CanvasEllipse(e)
+        }
+        // The other canvas nodes use absolute canvas coordinates; x-shifting is a no-op.
         other => other,
     }
 }
@@ -5059,5 +5100,129 @@ mod tests {
         };
         assert_eq!(on_page(0), (false, false), "nothing of the box stays on the first page");
         assert_eq!(on_page(1), (true, true), "the box and its picture are together on the second");
+    }
+
+    // ── Shapes ───────────────────────────────────────────────────────────────
+
+    /// Every node of `kind` in the tree, in document order.
+    fn nodes_of(tree: &serde_json::Value, kind: &str) -> Vec<serde_json::Value> {
+        fn walk(value: &serde_json::Value, kind: &str, found: &mut Vec<serde_json::Value>) {
+            match value {
+                serde_json::Value::Object(map) => {
+                    if map.get("type").and_then(|t| t.as_str()) == Some(kind) {
+                        found.push(value.clone());
+                    }
+                    map.values().for_each(|v| walk(v, kind, found));
+                }
+                serde_json::Value::Array(items) => items.iter().for_each(|v| walk(v, kind, found)),
+                _ => {}
+            }
+        }
+        let mut found = Vec::new();
+        walk(tree, kind, &mut found);
+        found
+    }
+
+    fn numbers(node: &serde_json::Value, keys: &[&str]) -> Vec<f64> {
+        keys.iter().map(|k| node[*k].as_f64().unwrap_or_else(|| panic!("{k} in {node}"))).collect()
+    }
+
+    fn all_near(actual: Vec<f64>, expected: &[f64]) {
+        assert!(
+            actual.len() == expected.len() && actual.iter().zip(expected).all(|(a, e)| (a - e).abs() < 0.01),
+            "{actual:?} is not {expected:?}"
+        );
+    }
+
+    /// The `y` of the first text, which follows what the document puts before it.
+    fn text_y(tree: &serde_json::Value) -> f64 {
+        nodes_of(tree, "text")[0]["y"].as_f64().unwrap()
+    }
+
+    #[test]
+    fn a_rect_shape_takes_its_box_in_the_flow() {
+        let tree = engine_render(&minimal(r##"<shape type="rect" width="60pt" height="20pt" fill="#ff0000"/><text>After</text>"##));
+        let rect = &nodes_of(&tree, "canvas-rect")[0];
+        all_near(numbers(rect, &["x", "y", "w", "h"]), &[28.0, 28.0, 60.0, 20.0]);
+
+        let frame = engine_render(&minimal(r#"<frame width="60pt" height="20pt"/><text>After</text>"#));
+        assert_eq!(text_y(&tree), text_y(&frame), "the text after it starts where the 20pt box ends");
+    }
+
+    #[test]
+    fn a_shape_with_no_fill_and_no_stroke_keeps_its_box() {
+        let tree = engine_render(&minimal(r#"<shape type="rect" width="60pt" height="20pt"/><text>After</text>"#));
+        let frame = engine_render(&minimal(r#"<frame width="60pt" height="20pt"/><text>After</text>"#));
+        assert_eq!(text_y(&tree), text_y(&frame));
+    }
+
+    #[test]
+    fn a_circle_shape_is_drawn_in_the_square_of_side_2r() {
+        let tree = engine_render(&minimal(r##"<shape type="circle" r="10pt" fill="#00ff00"/><text>After</text>"##));
+        let circle = &nodes_of(&tree, "canvas-ellipse")[0];
+        all_near(numbers(circle, &["cx", "cy", "rx", "ry"]), &[38.0, 38.0, 10.0, 10.0]);
+
+        let frame = engine_render(&minimal(r#"<frame width="20pt" height="20pt"/><text>After</text>"#));
+        assert_eq!(text_y(&tree), text_y(&frame));
+    }
+
+    #[test]
+    fn an_ellipse_shape_is_drawn_in_its_box() {
+        let tree = engine_render(&minimal(r##"<shape type="ellipse" width="40pt" height="20pt" fill="#00ff00"/>"##));
+        all_near(numbers(&nodes_of(&tree, "canvas-ellipse")[0], &["cx", "cy", "rx", "ry"]), &[48.0, 38.0, 20.0, 10.0]);
+    }
+
+    #[test]
+    fn the_parent_places_a_shape_by_its_align_and_the_drawing_moves_with_the_box() {
+        let page_w = 595.28 - 56.0;
+        let in_column = engine_render(&minimal(
+            r##"<column align="center"><shape type="rect" width="100pt" height="20pt" fill="#ff0000"/></column>"##,
+        ));
+        all_near(numbers(&nodes_of(&in_column, "canvas-rect")[0], &["x", "y"]), &[28.0 + (page_w - 100.0) / 2.0, 28.0]);
+
+        let in_row = engine_render(&minimal(
+            r##"<row align="center"><frame width="10pt" height="60pt"/><shape type="circle" r="10pt" fill="#00ff00"/></row>"##,
+        ));
+        all_near(numbers(&nodes_of(&in_row, "canvas-ellipse")[0], &["cx", "cy"]), &[38.0 + 10.0, 28.0 + 20.0 + 10.0]);
+
+        let at_end = engine_render(&minimal(
+            r##"<row justify="end"><shape type="rect" width="50pt" height="10pt" fill="#ff0000"/></row>"##,
+        ));
+        all_near(numbers(&nodes_of(&at_end, "canvas-rect")[0], &["x"]), &[28.0 + page_w - 50.0]);
+    }
+
+    #[test]
+    fn a_shape_wider_than_its_room_is_narrowed_with_its_proportions() {
+        let tree = engine_render(&minimal(
+            r##"<column width="50pt"><shape type="rect" width="100pt" height="20pt" fill="#ff0000"/><text>After</text></column>"##,
+        ));
+        all_near(numbers(&nodes_of(&tree, "canvas-rect")[0], &["w", "h"]), &[50.0, 10.0]);
+    }
+
+    #[test]
+    fn a_shape_reads_its_size_from_the_width_and_height_rows_of_the_tokens() {
+        let tree = engine_render(&minimal(r##"<shape type="rect" width="xs" height="m" fill="#ff0000"/>"##));
+        all_near(numbers(&nodes_of(&tree, "canvas-rect")[0], &["w", "h"]), &[120.0, 32.0]);
+    }
+
+    #[test]
+    fn a_shape_with_opacity_is_faded_as_one_and_one_without_is_not() {
+        let faded = engine_render(&minimal(r##"<shape type="rect" width="60pt" height="20pt" fill="#ff0000" opacity="0.5"/>"##));
+        let boxed = nodes_of(&faded, "box");
+        let shape_box = boxed.iter().find(|b| b["opacity"] == 0.5).expect("a box with the opacity");
+        assert_eq!(nodes_of(shape_box, "canvas-rect").len(), 1);
+
+        let opaque = engine_render(&minimal(r##"<shape type="rect" width="60pt" height="20pt" fill="#ff0000"/>"##));
+        assert!(nodes_of(&opaque, "box").iter().all(|b| b.get("opacity").is_none()));
+    }
+
+    #[test]
+    fn a_shape_in_a_table_cell_is_drawn_inside_the_cell() {
+        let tree = engine_render(&minimal(
+            r##"<table cols="1fr 1fr"><tr><td><row gap="s" align="center"><shape type="circle" r="5pt" fill="#00aa00"/><text>Active</text></row></td><td><text>x</text></td></tr></table>"##,
+        ));
+        let dot = &nodes_of(&tree, "canvas-ellipse")[0];
+        let cx = dot["cx"].as_f64().unwrap();
+        assert!(cx > 28.0 && cx < 28.0 + 539.28 / 2.0, "cx={cx}");
     }
 }

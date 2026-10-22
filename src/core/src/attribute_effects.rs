@@ -547,6 +547,12 @@ fn subjects() -> Vec<Subject> {
         Subject::new("divider", |a, _| flow(&format!("<text>Before</text><divider {a}/><text>After</text>"))),
         Subject::new("span", |a, _| flow(&format!("<text>Before <span {a}>middle</span> after</text>"))),
         Subject::new("img", |a, _| flow_with_images(&format!("<img {a}/><text>After</text>"))).base(&[("name", "logo")]),
+        Subject::new("shape", |a, _| flow(&format!("<shape {a}/><text>After</text>")))
+            .base(&[("type", "rect"), ("width", "100pt"), ("height", "40pt"), ("fill", "#00aa00")]),
+        // A circle needs r, so r is tried on a circle that has one.
+        Subject::new("shape", |a, _| flow(&format!("<shape {a}/><text>After</text>")))
+            .base(&[("type", "circle"), ("r", "40pt"), ("fill", "#00aa00")])
+            .only(&["r"]),
         Subject::new("barcode", |a, _| flow(&format!("<barcode {a}/><text>After</text>")))
             .base(&[("type", "qr"), ("data", "1234567890128"), ("width", "100pt")]),
         Subject::new("text", |a, c| flow(&format!("<text {a}>{c}</text><text>After</text>")))
@@ -734,6 +740,10 @@ fn tweaks() -> HashMap<String, Tweak> {
         "path@fill-rule",
         Tweak::default().set("d", "M 50 50 L 250 50 L 250 250 L 50 250 Z M 100 100 L 200 100 L 200 200 L 100 200 Z"),
     );
+
+    // Shapes of the flow: a stroke shows with a stroke color.
+    add("shape@stroke-width", Tweak::default().set("stroke", "#000000"));
+    add("shape@stroke-dash", Tweak::default().set("stroke", "#000000"));
 
     // A text of the flow is cut only by max-lines, so its ellipsis shows on a text that max-lines cuts. A narrow
     // width gives the text more lines than either value of max-lines tried.

@@ -159,6 +159,7 @@ fn js_method(tag: &str) -> &'static str {
         "bookmark" => "bookmark",
         "text"     => "text",
         "img"      => "img",
+        "shape"    => "shape",
         "divider"  => "divider",
         "table"    => "table",
         "thead"    => "thead",
@@ -196,6 +197,7 @@ fn dotnet_method(tag: &str) -> &'static str {
         "bookmark" => "Bookmark",
         "text"     => "Text",
         "img"      => "Img",
+        "shape"    => "Shape",
         "divider"  => "Divider",
         "table"    => "Table",
         "thead"    => "Thead",
@@ -1611,6 +1613,7 @@ fn python_method(tag: &str) -> &'static str {
         "bookmark" => "bookmark",
         "text"     => "text",
         "img"      => "img",
+        "shape"    => "shape",
         "divider"  => "divider",
         "table"    => "table",
         "thead"    => "thead",
@@ -2118,6 +2121,34 @@ mod tests {
         let out  = codegen(xml, &opts).unwrap();
         assert!(out.contains("use Lpdf\\Canvas\\TextAtAttr;"), "{out}");
         assert!(out.contains("use Lpdf\\Canvas\\BarcodeAtAttr;"), "{out}");
+    }
+
+    #[test]
+    fn test_a_shape_of_the_layout_is_a_shape_with_a_shape_attribute_class() {
+        let xml = r##"<lpdf version="1"><document><section><layout>
+            <row><shape type="circle" r="5pt" fill="primary"/><text>Active</text></row>
+        </layout></section></document></lpdf>"##;
+        for (target, builder, class) in [
+            ("js",     "L.shape(",  None),
+            ("python", "L.shape(",  Some("ShapeAttr(type='circle', r='5pt', fill='primary')")),
+            ("php",    "L::shape(", Some("new ShapeAttr(type: 'circle', r: '5pt', fill: 'primary')")),
+            ("dotnet", "L.Shape(",  Some("new() { Type = \"circle\", R = \"5pt\", Fill = \"primary\" }")),
+        ] {
+            let opts = CodegenOptions { target: target.into(), indent: 4 };
+            let out  = codegen(xml, &opts).unwrap();
+            assert!(out.contains(builder), "{target}: no {builder} in {out}");
+            if let Some(class) = class {
+                assert!(out.contains(class), "{target}: no {class} in {out}");
+            }
+            assert!(!out.contains("element("), "{target}: {out}");
+        }
+        let opts = CodegenOptions { target: "js".into(), indent: 4 };
+        let out  = codegen(xml, &opts).unwrap();
+        assert!(out.contains("L.shape({ type: 'circle', r: '5pt', fill: 'primary' })"), "{out}");
+        // PHP imports the class from the namespace of the layout's elements.
+        let opts = CodegenOptions { target: "php".into(), indent: 4 };
+        let out  = codegen(xml, &opts).unwrap();
+        assert!(out.contains("use Lpdf\\Layout\\ShapeAttr;"), "{out}");
     }
 
     #[test]
