@@ -377,6 +377,8 @@ pub struct Node {
     pub width_fill: bool,
     pub page_scope: Option<PageScope>,
     pub paginate: Paginate,
+    /// Whether a table row stays with the row after it across a page break.
+    pub keep: RowKeep,
     pub debug: bool,
     // layout-specific
     pub align: Align,
@@ -465,6 +467,16 @@ pub enum Paginate {
     BreakAfter,
     /// If the next sibling would land on a different page, bump this node to that page too.
     KeepNext,
+}
+
+/// Page-break hint set via `keep="…"` on a table row.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RowKeep {
+    /// The row may end a page (default).
+    None,
+    /// The row stays on the same page as the row after it, so a chain of these rows and the row that ends it break
+    /// only together.
+    WithNext,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -573,6 +585,7 @@ struct ParsedNode {
     width_fill: bool,
     page_scope: Option<PageScope>,
     paginate: Paginate,
+    keep: RowKeep,
     debug: bool,
     align: Align,
     justify: Justify,
@@ -638,6 +651,7 @@ impl ParsedNode {
             width_fill: false,
             page_scope: None,
             paginate: Paginate::None,
+            keep: RowKeep::None,
             debug: false,
             align: Align::Stretch,
             justify: Justify::Start,
@@ -760,7 +774,7 @@ impl Node {
             kind: NodeKind::Column,
             gap: 0.0, padding: [0.0; 4], background: None, border: None, radius: 0.0, opacity: 1.0, shadow: None,
             height_mode: HeightMode::Auto, width_constraint: None, width_fill: false,
-            page_scope: None, paginate: Paginate::None, debug: false,
+            page_scope: None, paginate: Paginate::None, keep: RowKeep::None, debug: false,
             align: Align::Stretch, justify: Justify::Start,
             cols: 1, col_width: None, direction: Direction::Horizontal,
             color: None, thickness: 1.0, text_runs: Vec::new(),
@@ -865,6 +879,7 @@ fn resolve_node(
         width_fill:            n.width_fill,
         page_scope:            n.page_scope,
         paginate:              n.paginate,
+        keep:                  n.keep,
         debug:                 n.debug,
         align:                 n.align,
         justify:               n.justify,
@@ -2288,6 +2303,13 @@ fn parse_height_mode(v: &str, tokens: &Tokens) -> Result<HeightMode, String> {
     }
 }
 
+fn parse_row_keep(v: &str) -> Result<RowKeep, String> {
+    match v {
+        "with-next" => Ok(RowKeep::WithNext),
+        other       => Err(format!("invalid keep value: '{other}' (expected 'with-next')")),
+    }
+}
+
 fn parse_paginate_attr(v: &str) -> Result<Paginate, String> {
     match v {
         "no"           => Ok(Paginate::No),
@@ -2398,7 +2420,10 @@ fn apply_layout_kind_attrs(
                 node.stripe = Some(tokens.resolve_color(v)?);
             }
         }
-        NodeKind::TableHead | NodeKind::TableRow => {}
+        NodeKind::TableHead => {}
+        NodeKind::TableRow => {
+            if let Some(v) = a.get("keep") { node.keep = parse_row_keep(v)?; }
+        }
         NodeKind::TableCell => {
             node.align   = parse_align(a.get("align").unwrap_or("stretch"))?;
             let valign_str = a.get("valign").unwrap_or("top");
@@ -4837,6 +4862,29 @@ mod tests {
             assert!(err.contains("at line"), "{err}");
             assert!(err.contains(&format!("invalid {attr} value: '{value}'")), "{err}");
             assert!(err.contains("1 to 10"), "{err}"); // allowed values present
+        }
+    }
+
+    #[test]
+    fn a_table_row_takes_keep_with_next() {
+        let mut doc = parse(&minimal(
+            r#"<table cols="1fr"><tr keep="with-next"><td><text>A</text></td></tr><tr><td><text>B</text></td></tr></table>"#,
+        )).unwrap();
+        let layouts = doc.section_layouts();
+        let rows = &layouts[0].children[0].children;
+        assert_eq!((rows[0].keep, rows[1].keep), (RowKeep::WithNext, RowKeep::None));
+    }
+
+    #[test]
+    fn err_invalid_row_keep() {
+        for value in ["together", "with-body", "yes", ""] {
+            let err = parse(&minimal(&format!(
+                r#"<table cols="1fr"><tr keep="{value}"><td><text>A</text></td></tr></table>"#
+            ))).unwrap_err();
+            assert!(err.contains("<tr>"), "{err}");
+            assert!(err.contains("at line"), "{err}");
+            assert!(err.contains(&format!("invalid keep value: '{value}'")), "{err}");
+            assert!(err.contains("with-next"), "{err}"); // allowed value present
         }
     }
 

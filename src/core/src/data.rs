@@ -309,7 +309,7 @@ mod tests {
     use super::*;
     use crate::parse::{
         Align, BarcodeEcLevel, DataAttrs, DEFAULT_LINE_HEIGHT, DEFAULT_ORPHANS, DEFAULT_WIDOWS, Direction, HeightMode, Justify, Meta, NodeKind,
-        Paginate, TextAlign,
+        Paginate, RowKeep, TextAlign,
     };
     use std::collections::HashMap;
 
@@ -330,6 +330,7 @@ mod tests {
             width_fill: false,
             page_scope: None,
             paginate: Paginate::None,
+            keep: RowKeep::None,
             debug: false,
             align: Align::Stretch,
             justify: Justify::Start,
