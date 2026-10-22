@@ -5727,6 +5727,22 @@ mod tests {
     }
 
     #[test]
+    fn the_table_keep_showcase_moves_a_group_heading_to_the_page_of_its_first_item() {
+        // Without the keep, the page would end on the heading "Launch and support".
+        let xml = include_str!("../../../test/fixtures/showcase-table-keep.xml");
+        let tree = engine_render(xml);
+        let pages: Vec<Vec<String>> = tree["pages"].as_array().unwrap().iter()
+            .map(|page| texts_from_the_top(page).into_iter().map(|t| t.1).collect())
+            .collect();
+        assert_eq!(pages.len(), 2, "the showcase should run over two pages");
+        let heading = "Launch and support".to_string();
+        assert!(!pages[0].contains(&heading), "the heading ends the first page alone");
+        let heading_at = pages[1].iter().position(|w| *w == heading).expect("the heading moves to page 2");
+        let header_at = pages[1].iter().position(|w| w == "Description").expect("the header repeats on page 2");
+        assert!(header_at < heading_at, "{:?}", &pages[1][..8]);
+    }
+
+    #[test]
     fn a_kept_run_goes_to_the_next_page_under_the_header() {
         let pages = table_after(740, &[("R1", ""), ("R2", KEEP), ("R3", "")]);
         let second = &pages[1];

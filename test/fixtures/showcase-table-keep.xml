@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+  <document size="a4">
+    <section>
+      <layout margin="40pt">
+      <!--
+        Rows that keep together. keep="with-next" keeps a row on the same page as the row after it, so a group
+        heading never ends a page above its first item, and the subtotal and the tax never stand apart from the
+        total. When a page break would fall inside a run of such rows, the run and the row that ends it move to the
+        next page together, under the header that the table repeats there.
+      -->
+      <text font-size="l" bold="true">Website project</text>
+      <text font-size="s">Statement of work and fees. The group headings and the totals keep with the row after them.</text>
+      <frame height="12pt"/>
+      <table cols="4fr 1fr 2fr" border="0.5pt #cccccc">
+
+        <thead background="#e8ecf0">
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Description</text></td>
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Qty</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s" bold="true">Amount</text></td>
+        </thead>
+
+        <!-- Discovery -->
+        <tr keep="with-next" background="#f5f5f5">
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Discovery</text></td>
+          <td padding="8pt 8pt"><text font-size="s"> </text></td>
+          <td padding="8pt 8pt"><text font-size="s"> </text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Stakeholder interviews</text></td>
+          <td padding="8pt 8pt"><text font-size="s">6</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$1,800.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Requirements workshop</text></td>
+          <td padding="8pt 8pt"><text font-size="s">2</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$1,400.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Technical audit</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$2,200.00</text></td>
+        </tr>
+        <!-- Design -->
+        <tr keep="with-next" background="#f5f5f5">
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Design</text></td>
+          <td padding="8pt 8pt"><text font-size="s"> </text></td>
+          <td padding="8pt 8pt"><text font-size="s"> </text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Information architecture</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$1,600.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Wireframes</text></td>
+          <td padding="8pt 8pt"><text font-size="s">12</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$2,400.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Visual design, desktop</text></td>
+          <td padding="8pt 8pt"><text font-size="s">8</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$3,200.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Visual design, mobile</text></td>
+          <td padding="8pt 8pt"><text font-size="s">8</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$2,800.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Design system</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$3,500.00</text></td>
+        </tr>
+        <!-- Development -->
+        <tr keep="with-next" background="#f5f5f5">
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Development</text></td>
+          <td padding="8pt 8pt"><text font-size="s"> </text></td>
+          <td padding="8pt 8pt"><text font-size="s"> </text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Account and sign-in</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$4,200.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Catalog and search</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$6,800.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Checkout and payments</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$7,400.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Order history</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$2,900.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Admin area</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$5,600.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Email notifications</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$1,900.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Import of existing data</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$3,300.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Accessibility fixes</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$2,100.00</text></td>
+        </tr>
+        <!-- Quality -->
+        <tr keep="with-next" background="#f5f5f5">
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Quality</text></td>
+          <td padding="8pt 8pt"><text font-size="s"> </text></td>
+          <td padding="8pt 8pt"><text font-size="s"> </text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Test plan</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$1,200.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Automated tests</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$4,100.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Browser and device testing</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$2,600.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Load testing</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$1,700.00</text></td>
+        </tr>
+        <!-- Launch and support -->
+        <tr keep="with-next" background="#f5f5f5">
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Launch and support</text></td>
+          <td padding="8pt 8pt"><text font-size="s"> </text></td>
+          <td padding="8pt 8pt"><text font-size="s"> </text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Hosting set-up</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$1,500.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Training sessions</text></td>
+          <td padding="8pt 8pt"><text font-size="s">3</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$2,250.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Launch week support</text></td>
+          <td padding="8pt 8pt"><text font-size="s">5</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$3,750.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Documentation</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$1,300.00</text></td>
+        </tr>
+        <!-- Totals: the rows above the last one keep with the row after them, so the total never stands alone -->
+        <tr keep="with-next">
+          <td padding="8pt 8pt"><text font-size="s">Subtotal</text></td>
+          <td padding="8pt 8pt"><text font-size="s"> </text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$71,500.00</text></td>
+        </tr>
+        <tr keep="with-next">
+          <td padding="8pt 8pt"><text font-size="s">Tax (8%)</text></td>
+          <td padding="8pt 8pt"><text font-size="s"> </text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$5,720.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Total due</text></td>
+          <td padding="8pt 8pt"><text font-size="s"> </text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s" bold="true">$77,220.00</text></td>
+        </tr>
+
+      </table>
+
+      </layout>
+    </section>
+  </document>
+</lpdf>
