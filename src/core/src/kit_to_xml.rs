@@ -848,6 +848,24 @@ mod tests {
     }
 
     #[test]
+    fn a_tree_table_cell_takes_colspan_and_a_row_that_spans_too_much_is_rejected() {
+        let table = |first: &str, second: &str| doc_with_layout_child(&format!(
+            r#"{{"type":"table","attrs":{{"cols":"1fr 1fr"}},"nodes":[{{"type":"tr","attrs":{{}},"nodes":[
+                {{"type":"td","attrs":{{"colspan":"{first}"}},"nodes":[{{"type":"text","attrs":{{}},"nodes":["A"]}}]}},
+                {{"type":"td","attrs":{{"colspan":"{second}"}},"nodes":[{{"type":"text","attrs":{{}},"nodes":["B"]}}]}}]}}]}}"#
+        ));
+        let mut doc = crate::parse::parse_tree(&table("1", "1")).expect("two cells fit two columns");
+        let layouts = doc.section_layouts();
+        assert_eq!(layouts[0].children[0].children[0].children[0].col_span, 1);
+
+        let err = crate::parse::parse_tree(&table("2", "1")).err().expect("three columns do not fit two");
+        assert!(err.contains("span 3 columns, but the table has 2"), "{err}");
+
+        let err = crate::parse::parse_tree(&table("0", "1")).err().expect("colspan starts at 1");
+        assert!(err.contains("invalid colspan value: '0'"), "{err}");
+    }
+
+    #[test]
     fn a_tree_table_row_takes_keep_with_next_and_rejects_another_value() {
         let table = |keep: &str| doc_with_layout_child(&format!(
             r#"{{"type":"table","attrs":{{"cols":"1fr"}},"nodes":[{{"type":"tr","attrs":{{"keep":"{keep}"}},"nodes":[{{"type":"td","attrs":{{}},"nodes":[{{"type":"text","attrs":{{}},"nodes":["A"]}}]}}]}}]}}"#

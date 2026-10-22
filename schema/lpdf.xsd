@@ -1421,6 +1421,16 @@
         <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
       </xs:sequence>
       <xs:attributeGroup ref="BoxAttrs"/>
+      <xs:attribute name="colspan">
+        <xs:annotation>
+          <xs:documentation>How many of the table's columns the cell spans. It is as wide as those columns and the gaps between them, and the cells after it in the row start at the column after its last. A row whose cells span more columns than the table's cols names is an error; a row with fewer leaves its last columns empty. It changes widths only: row heights and page breaks work as before. Default 1.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:positiveInteger">
+            <xs:minInclusive value="1"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
       <xs:attribute name="align"  type="Align"/>
       <xs:attribute name="valign">
         <xs:simpleType>

@@ -428,6 +428,9 @@ pub struct Node {
     // table (NodeKind::Table only)
     pub table_cols: String,
     pub stripe: Option<String>,
+    // table cell (NodeKind::TableCell only)
+    /// How many of the table's columns the cell spans, from 1.
+    pub col_span: u16,
     // form field (NodeKind::Field only)
     pub field_kind:       Option<FieldKind>,
     pub field_name:       Option<String>,
@@ -618,6 +621,7 @@ struct ParsedNode {
     barcode_bg: Option<String>,
     table_cols: String,
     stripe: Option<String>,
+    col_span: u16,
     field_kind:       Option<FieldKind>,
     field_name:       Option<String>,
     field_value:      Option<String>,
@@ -684,6 +688,7 @@ impl ParsedNode {
             barcode_bg: None,
             table_cols: String::new(),
             stripe: None,
+            col_span: 1,
             field_kind:       None,
             field_name:       None,
             field_value:      None,
@@ -785,7 +790,7 @@ impl Node {
             url: None, image_name: None,
             img_height_constraint: None, img_aspect: None, shape: None, barcode_type: None, barcode_data: None,
             barcode_ec: BarcodeEcLevel::M, barcode_hrt: false, barcode_color: None,
-            barcode_bg: None, table_cols: String::new(), stripe: None,
+            barcode_bg: None, table_cols: String::new(), stripe: None, col_span: 1,
             field_kind: None, field_name: None, field_value: None, field_label: None,
             field_options: Vec::new(), field_required: false, field_readonly: false,
             field_checked: false, field_max_len: None, field_group: None,
@@ -912,6 +917,7 @@ fn resolve_node(
         barcode_bg:            n.barcode_bg,
         table_cols:            n.table_cols,
         stripe:                n.stripe,
+        col_span:              n.col_span,
         field_kind:            n.field_kind,
         field_name:            n.field_name,
         field_value:           n.field_value,
@@ -1750,6 +1756,8 @@ fn parse_node(
                             node_loc(elem), child.tag_name().name()
                         ));
                     }
+                    check_row_columns(&child_node, &node.table_cols)
+                        .map_err(|e| format!("<{}>{}: {e}", child.tag_name().name(), node_loc(&child)))?;
                 }
                 NodeKind::TableHead | NodeKind::TableRow => {
                     if child_node.kind != NodeKind::TableCell {
@@ -2310,6 +2318,23 @@ fn parse_row_keep(v: &str) -> Result<RowKeep, String> {
     }
 }
 
+/// Read a `colspan` value: a whole number of columns from 1.
+fn parse_col_span(v: &str) -> Result<u16, String> {
+    v.parse::<u16>().ok().filter(|n| *n >= 1)
+        .ok_or_else(|| format!("invalid colspan value: '{v}' — expected a whole number from 1"))
+}
+
+/// Fails when the cells of a `<thead>` or `<tr>` span more columns than the table has. A row with fewer is fine:
+/// the columns after its last cell stay empty.
+fn check_row_columns(row: &ParsedNode, table_cols: &str) -> Result<(), String> {
+    let spanned: usize = row.children.iter().map(|cell| usize::from(cell.col_span)).sum();
+    let columns = crate::layout::table_col_count(table_cols);
+    if spanned > columns {
+        return Err(format!("its cells span {spanned} columns, but the table has {columns} (cols=\"{table_cols}\")"));
+    }
+    Ok(())
+}
+
 fn parse_paginate_attr(v: &str) -> Result<Paginate, String> {
     match v {
         "no"           => Ok(Paginate::No),
@@ -2425,6 +2450,7 @@ fn apply_layout_kind_attrs(
             if let Some(v) = a.get("keep") { node.keep = parse_row_keep(v)?; }
         }
         NodeKind::TableCell => {
+            if let Some(v) = a.get("colspan") { node.col_span = parse_col_span(v)?; }
             node.align   = parse_align(a.get("align").unwrap_or("stretch"))?;
             let valign_str = a.get("valign").unwrap_or("top");
             node.justify = parse_justify(match valign_str {
@@ -3160,6 +3186,8 @@ fn parse_tree_node(
                                 child.get("type").and_then(|v| v.as_str()).unwrap_or("?")
                             ));
                         }
+                        check_row_columns(&child_node, &node.table_cols)
+                            .map_err(|e| format!("{}: {e}", child.get("type").and_then(|v| v.as_str()).unwrap_or("?")))?;
                     }
                     NodeKind::TableHead | NodeKind::TableRow => {
                         if child_node.kind != NodeKind::TableCell {
@@ -4873,6 +4901,59 @@ mod tests {
         let layouts = doc.section_layouts();
         let rows = &layouts[0].children[0].children;
         assert_eq!((rows[0].keep, rows[1].keep), (RowKeep::WithNext, RowKeep::None));
+    }
+
+    #[test]
+    fn a_table_cell_takes_colspan_and_spans_one_column_without_it() {
+        let mut doc = parse(&minimal(
+            r#"<table cols="1fr 1fr 1fr"><tr><td colspan="2"><text>A</text></td><td><text>B</text></td></tr></table>"#,
+        )).unwrap();
+        let layouts = doc.section_layouts();
+        let cells = &layouts[0].children[0].children[0].children;
+        assert_eq!((cells[0].col_span, cells[1].col_span), (2, 1));
+    }
+
+    #[test]
+    fn err_invalid_colspan() {
+        for value in ["0", "-1", "two", "1.5", "", "70000"] {
+            let err = parse(&minimal(&format!(
+                r#"<table cols="1fr"><tr><td colspan="{value}"><text>A</text></td></tr></table>"#
+            ))).unwrap_err();
+            assert!(err.contains("<td>"), "{err}");
+            assert!(err.contains("at line"), "{err}");
+            assert!(err.contains(&format!("invalid colspan value: '{value}'")), "{err}");
+        }
+    }
+
+    #[test]
+    fn err_a_row_spans_more_columns_than_the_table_has() {
+        let table = |row: &str| minimal(&format!(r#"<table cols="1fr 1fr">{row}</table>"#));
+        for (row, spanned) in [
+            (r#"<tr><td colspan="2"><text>A</text></td><td><text>B</text></td></tr>"#, 3),
+            (r#"<tr><td><text>A</text></td><td colspan="2"><text>B</text></td></tr>"#, 3),
+            (r#"<tr><td colspan="3"><text>A</text></td></tr>"#, 3),
+            // Cells without a colspan count too: a third cell has no column to go in.
+            (r#"<tr><td><text>A</text></td><td><text>B</text></td><td><text>C</text></td></tr>"#, 3),
+        ] {
+            let err = parse(&table(row)).unwrap_err();
+            assert!(err.contains("<tr>"), "{err}");
+            assert!(err.contains("at line"), "{err}");
+            assert!(err.contains(&format!("span {spanned} columns, but the table has 2")), "{err}");
+        }
+        let err = parse(&table(r#"<thead><td colspan="3"><text>A</text></td></thead>"#)).unwrap_err();
+        assert!(err.contains("<thead>"), "{err}");
+        assert!(err.contains("span 3 columns, but the table has 2"), "{err}");
+    }
+
+    #[test]
+    fn a_row_that_spans_as_many_columns_as_the_table_has_or_fewer_is_accepted() {
+        for row in [
+            r#"<tr><td colspan="2"><text>A</text></td></tr>"#,
+            r#"<tr><td><text>A</text></td><td><text>B</text></td></tr>"#,
+            r#"<tr><td><text>A</text></td></tr>"#,
+        ] {
+            assert!(parse(&minimal(&format!(r#"<table cols="1fr 1fr">{row}</table>"#))).is_ok(), "{row}");
+        }
     }
 
     #[test]

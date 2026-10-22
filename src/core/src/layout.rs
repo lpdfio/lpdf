@@ -10,6 +10,7 @@ use crate::canvas;
 use crate::toc;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ops::Range;
 
 // ── Per-call custom font width tables ────────────────────────────────────────
 // Set by LpdfEngine before calling layout_page so that text_width can use
@@ -974,12 +975,38 @@ fn resolve_col_widths(spec: &str, avail_w: f32) -> Vec<f32> {
     }).collect()
 }
 
+/// How many columns a table's `cols` spec makes.
+pub(crate) fn table_col_count(spec: &str) -> usize {
+    resolve_col_widths(spec, 0.0).len()
+}
+
+/// The columns each cell of a row covers, in order: a cell starts at the column after the one before it ends. A
+/// cell that would run past the last column is cut there, and a cell that starts past it is left out. A row that
+/// the parser accepted has neither.
+fn cell_columns(row: &Node, n_cols: usize) -> Vec<Range<usize>> {
+    let mut next = 0;
+    let mut covered = Vec::with_capacity(row.children.len());
+    for cell in &row.children {
+        if next >= n_cols {
+            break;
+        }
+        let end = (next + usize::from(cell.col_span)).min(n_cols);
+        covered.push(next..end);
+        next = end;
+    }
+    covered
+}
+
+/// The width of a cell over `columns`: the columns and the gaps between them.
+fn span_width(col_widths: &[f32], columns: &Range<usize>, gap: f32) -> f32 {
+    col_widths[columns.clone()].iter().sum::<f32>() + gap * (columns.len() - 1) as f32
+}
+
 /// Measure the tallest cell height in a row at the given column widths.
-fn measure_row_height(row: &Node, col_widths: &[f32], _avail_h: f32) -> f32 {
-    row.children.iter().enumerate()
-        .filter(|(j, _)| *j < col_widths.len())
-        .map(|(j, cell)| {
-            let (_, h) = layout_node(cell, 0.0, 0.0, col_widths[j], None);
+fn measure_row_height(row: &Node, col_widths: &[f32], gap: f32, _avail_h: f32) -> f32 {
+    row.children.iter().zip(cell_columns(row, col_widths.len()))
+        .map(|(cell, columns)| {
+            let (_, h) = layout_node(cell, 0.0, 0.0, span_width(col_widths, &columns, gap), None);
             h
         })
         .fold(0.0_f32, f32::max)
@@ -1015,7 +1042,7 @@ fn layout_table(
         row_ys.push(row_y);
 
         // Pass 1: measure the row's height (max over all cells).
-        let row_h = measure_row_height(row, &col_widths, f32::MAX);
+        let row_h = measure_row_height(row, &col_widths, gap, f32::MAX);
         row_heights.push(row_h);
 
         // Determine row background (stripe overrides only when no explicit bg).
@@ -1042,12 +1069,12 @@ fn layout_table(
 
         // Pass 2: lay out each cell at its column position, stretched to row_h.
         let mut cell_x = x;
-        for (j, cell) in row.children.iter().enumerate().take(n_cols) {
-            let col_w   = col_widths[j];
+        for (cell, columns) in row.children.iter().zip(cell_columns(row, n_cols)) {
+            let cell_w    = span_width(&col_widths, &columns, gap);
             let stretched = Node { height_mode: crate::parse::HeightMode::Full, ..cell.clone() };
-            let (rn, _) = layout_node(&stretched, cell_x, row_y, col_w, Some(row_h));
+            let (rn, _) = layout_node(&stretched, cell_x, row_y, cell_w, Some(row_h));
             nodes.push(rn);
-            cell_x += col_w + gap;
+            cell_x += cell_w + gap;
         }
 
         row_y += row_h + gap;
@@ -1087,18 +1114,21 @@ fn layout_table(
             ry += gap;
         }
 
-        // Vertical column separators: one per adjacent column pair, per row.
-        for (&ry_start, &rh) in row_ys.iter().zip(row_heights.iter()) {
+        // Vertical column separators: one per adjacent column pair, per row, except inside a cell that spans both.
+        for ((&ry_start, &rh), row) in row_ys.iter().zip(row_heights.iter()).zip(rows) {
+            let covered = cell_columns(row, n_cols);
             let mut vx = x;
             for j in 0..n_cols {
                 vx += col_widths[j];
                 if j < n_cols - 1 {
-                    let sep_x = vx + gap / 2.0;
-                    nodes.push(RenderNode::Line(RenderLine {
-                        x1: sep_x, y1: ry_start,
-                        x2: sep_x, y2: ry_start + rh,
-                        color: bclr.clone(), thickness: *bw, dash: None,
-                    }));
+                    if !covered.iter().any(|columns| columns.start <= j && j + 1 < columns.end) {
+                        let sep_x = vx + gap / 2.0;
+                        nodes.push(RenderNode::Line(RenderLine {
+                            x1: sep_x, y1: ry_start,
+                            x2: sep_x, y2: ry_start + rh,
+                            color: bclr.clone(), thickness: *bw, dash: None,
+                        }));
+                    }
                     vx += gap;
                 }
             }
@@ -1129,7 +1159,7 @@ fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Sp
     let mut heights: Vec<f32> = Vec::new();
 
     for (i, row) in node.children.iter().enumerate() {
-        let rh = measure_row_height(row, &col_widths, inner_full);
+        let rh = measure_row_height(row, &col_widths, gap, inner_full);
         heights.push(rh);
         let g  = if i == 0 { 0.0 } else { gap };
         if chunk_h + g + rh > inner_target + 0.5 {
@@ -1192,7 +1222,7 @@ fn keep_rows_with_next(
 
     let mut run_h = 0.0_f32;
     for (offset, row) in rows[start..=end].iter().enumerate() {
-        let rh = heights.get(start + offset).copied().unwrap_or_else(|| measure_row_height(row, col_widths, room));
+        let rh = heights.get(start + offset).copied().unwrap_or_else(|| measure_row_height(row, col_widths, gap, room));
         run_h += if offset == 0 { rh } else { gap + rh };
         if run_h > room + 0.5 {
             return break_idx;
@@ -5748,5 +5778,122 @@ mod tests {
         let second = &pages[1];
         assert_eq!(second.first().map(String::as_str), Some("HEAD"), "{pages:?}");
         assert_eq!(second[1..], words(&["R2", "R3"])[..]);
+    }
+
+    // ── Table cells that span columns ─────────────────────────────────────────
+
+    /// A table of four columns of 100pt with 10pt between them, from the page margin at 28pt, and one row whose cells
+    /// span `spans` columns each and are filled, so that each draws a box.
+    fn span_table(attrs: &str, spans: &[u16]) -> String {
+        let cells: String = spans.iter()
+            .map(|span| format!(r##"<td colspan="{span}" background="#cccccc"><text>cell</text></td>"##))
+            .collect();
+        format!(r#"<table cols="100pt 100pt 100pt 100pt" gap="10pt" {attrs}><tr>{cells}</tr></table>"#)
+    }
+
+    /// The boxes of the cells of the table that `body` starts the page with.
+    fn cells_of(tree: &serde_json::Value) -> Vec<&serde_json::Value> {
+        tree["pages"][0]["nodes"][0]["nodes"].as_array().unwrap().iter().filter(|n| n["type"] == "box").collect()
+    }
+
+    /// The `(x, width)` of the cells of the table that `body` starts the page with, left to right.
+    fn cell_boxes(body: &str) -> Vec<(f64, f64)> {
+        let tree = engine_render(&minimal(body));
+        let mut boxes: Vec<(f64, f64)> = cells_of(&tree).iter()
+            .map(|b| (b["x"].as_f64().unwrap(), b["width"].as_f64().unwrap()))
+            .collect();
+        boxes.sort_by(|a, b| a.0.total_cmp(&b.0));
+        boxes
+    }
+
+    fn assert_boxes(actual: Vec<(f64, f64)>, expected: &[(f64, f64)]) {
+        assert_eq!(actual.len(), expected.len(), "{actual:?}");
+        for ((x, w), (ex, ew)) in actual.iter().zip(expected) {
+            assert!((x - ex).abs() < 0.01 && (w - ew).abs() < 0.01, "{actual:?} against {expected:?}");
+        }
+    }
+
+    #[test]
+    fn a_cell_without_colspan_takes_one_column() {
+        assert_boxes(cell_boxes(&span_table("", &[1, 1, 1, 1])), &[(28.0, 100.0), (138.0, 100.0), (248.0, 100.0), (358.0, 100.0)]);
+    }
+
+    #[test]
+    fn a_cell_that_spans_columns_at_the_start_of_a_row_is_as_wide_as_them_and_their_gaps() {
+        assert_boxes(cell_boxes(&span_table("", &[2, 1, 1])), &[(28.0, 210.0), (248.0, 100.0), (358.0, 100.0)]);
+    }
+
+    #[test]
+    fn a_cell_that_spans_columns_in_the_middle_of_a_row_pushes_the_cells_after_it() {
+        assert_boxes(cell_boxes(&span_table("", &[1, 2, 1])), &[(28.0, 100.0), (138.0, 210.0), (358.0, 100.0)]);
+    }
+
+    #[test]
+    fn a_cell_that_spans_columns_at_the_end_of_a_row_reaches_the_last_column() {
+        assert_boxes(cell_boxes(&span_table("", &[1, 1, 2])), &[(28.0, 100.0), (138.0, 100.0), (248.0, 210.0)]);
+    }
+
+    #[test]
+    fn a_cell_that_spans_every_column_is_as_wide_as_the_table() {
+        assert_boxes(cell_boxes(&span_table("", &[4])), &[(28.0, 430.0)]);
+    }
+
+    #[test]
+    fn a_row_with_fewer_columns_than_the_table_leaves_the_last_ones_empty() {
+        assert_boxes(cell_boxes(&span_table("", &[1, 2])), &[(28.0, 100.0), (138.0, 210.0)]);
+    }
+
+    #[test]
+    fn a_spanning_cell_lays_its_text_out_at_the_width_it_spans() {
+        let lines = |spans: &[u16]| {
+            let cells: String = spans.iter()
+                .map(|span| format!(r#"<td colspan="{span}"><text>alpha beta gamma delta epsilon zeta</text></td>"#))
+                .collect();
+            let tree = engine_render(&minimal(&format!(
+                r#"<table cols="100pt 100pt 100pt" gap="10pt"><tr>{cells}</tr></table>"#
+            )));
+            texts_on(&tree, 0).len()
+        };
+        assert!(lines(&[1]) > 1, "the words need more than one line in a column of 100pt");
+        assert_eq!(lines(&[3]), 1, "and one line in the 320pt of three columns");
+    }
+
+    #[test]
+    fn a_spanning_cell_does_not_change_the_height_of_a_row_of_plain_cells() {
+        let height = |spans: &[u16]| {
+            let tree = engine_render(&minimal(&span_table("", spans)));
+            cells_of(&tree)[0]["height"].as_f64().unwrap()
+        };
+        assert_eq!(height(&[1, 1, 1, 1]), height(&[2, 1, 1]));
+    }
+
+    #[test]
+    fn a_grid_border_has_no_column_rule_inside_a_spanning_cell() {
+        let rules = |spans: &[u16]| -> Vec<f64> {
+            let tree = engine_render(&minimal(&span_table(r##"border="1pt #000000""##, spans)));
+            let mut xs: Vec<f64> = nodes_of(&tree["pages"][0], "line").iter()
+                .filter(|l| l["x1"] == l["x2"])
+                .map(|l| (l["x1"].as_f64().unwrap() * 100.0).round() / 100.0)
+                .collect();
+            xs.sort_by(f64::total_cmp);
+            xs
+        };
+        // The edges of the table, which is as wide as the page allows, and a rule in the middle of each gap between
+        // two cells.
+        let plain = rules(&[1, 1, 1, 1]);
+        assert_eq!(plain, vec![28.5, 133.0, 243.0, 353.0, 566.78], "{plain:?}");
+        let spanned = rules(&[2, 1, 1]);
+        assert_eq!(spanned, vec![28.5, 243.0, 353.0, 566.78], "the rule at 133 is inside the first cell: {spanned:?}");
+    }
+
+    #[test]
+    fn a_spanning_cell_does_not_change_where_a_table_breaks() {
+        // The span changes widths only: the rows break at the same places as in a table without one.
+        let pages = |span: u16| -> Vec<Vec<String>> {
+            let rows: String = (1..=120).map(|n| format!(r#"<tr><td colspan="{span}"><text>Row {n}</text></td></tr>"#)).collect();
+            words_by_page(&format!(r#"<table cols="1fr 1fr">{rows}</table>"#))
+        };
+        assert!(pages(2).len() > 1, "the table fills more than a page");
+        assert_eq!(pages(1), pages(2));
     }
 }
