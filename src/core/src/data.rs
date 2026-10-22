@@ -364,6 +364,7 @@ mod tests {
             table_cols: String::new(),
             stripe: None,
             col_span: 1,
+            row_span: 1,
             field_kind: None,
             field_name: None,
             field_value: None,

@@ -616,6 +616,15 @@ fn subjects() -> Vec<Subject> {
             ))
         })
         .only(&["colspan"]),
+        // Eight rows follow the first, so any span tried fits. The first cell reaching into the next row sends that
+        // row's only cell to the second column.
+        Subject::new("td", |a, _| {
+            let rows: String = (2..=8).map(|n| format!("<tr><td><text>row {n}</text></td></tr>")).collect();
+            flow(&format!(
+                r#"<table cols="1fr 1fr"><tr><td {a}><text>one</text></td><td><text>two</text></td></tr>{rows}</table>"#
+            ))
+        })
+        .only(&["rowspan"]),
         // Regions and layers.
         Subject::new("region", |a, _| {
             lpdf("", &format!("<document><section><layout><region {a}><text>Header</text></region>{}</layout></section></document>", pages()))
