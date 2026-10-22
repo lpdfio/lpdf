@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 use crate::tokens::{FontDef, Tokens};
 use crate::parse::{
-    Node, PageScope, Shadow, TextDefaults,
+    Node, PageScope, Shadow, Shape, ShapeKind, TextDefaults,
     parse_measurement, parse_shadow, parse_signed_measurement, parse_page_scope,
     elems, jattr, node_loc, at_element_for, parse_at_node, parse_tree_at_node,
 };
@@ -677,6 +677,25 @@ fn primitive_to_render_node(prim: &CanvasPrimitive, page: usize, pages: usize) -
         }),
         CanvasPrimitive::Placed(placed) => crate::layout::layout_placed(placed, page, pages),
     }
+}
+
+/// What a `<shape>` of the layout draws in its box `x`, `y`, `w`, `h`, which the flow gave it: the rect, circle
+/// or ellipse of a layer, fitted to the box. A rect has the corners `radius` rounds; a circle's box is square.
+pub(crate) fn draw_flow_shape(shape: &Shape, radius: f32, x: f32, y: f32, w: f32, h: f32) -> RenderNode {
+    let Shape { fill, stroke, stroke_width, stroke_dash, .. } = shape.clone();
+    let (cx, cy) = (x + w / 2.0, y + h / 2.0);
+    let primitive = match shape.kind {
+        ShapeKind::Rect => CanvasPrimitive::Rect(CanvasRect {
+            x, y, w, h, fill, stroke, stroke_width, stroke_dash, radius: Some(radius), shadow: None,
+        }),
+        ShapeKind::Circle => CanvasPrimitive::Circle(CanvasCircle {
+            cx, cy, r: w / 2.0, fill, stroke, stroke_width, stroke_dash, shadow: None,
+        }),
+        ShapeKind::Ellipse => CanvasPrimitive::Ellipse(CanvasEllipse {
+            cx, cy, rx: w / 2.0, ry: h / 2.0, fill, stroke, stroke_width, stroke_dash, shadow: None,
+        }),
+    };
+    primitive_to_render_node(&primitive, 1, 1)
 }
 
 fn layer_to_render_node(layer: &CanvasLayer, page: usize, pages: usize) -> RenderNode {

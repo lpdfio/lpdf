@@ -263,7 +263,7 @@ fn render_node(node: &Value, depth: usize) -> String {
 
     match node_type {
         "text"    => return render_text_node(node, depth),
-        "divider" | "img" | "barcode" => return format!("{pad}<{node_type}{}/>", attrs_s),
+        "divider" | "img" | "shape" | "barcode" => return format!("{pad}<{node_type}{}/>", attrs_s),
         _ => {}
     }
 
@@ -971,6 +971,26 @@ mod tests {
                 assert_eq!(from_tree, from_xml, "{kind}{shadow}");
                 assert_ne!(from_tree, plain, "the tree's {kind} shadow {shadow} is not read");
             }
+        }
+    }
+
+    #[test]
+    fn a_shape_of_the_layout_from_the_builder_renders_the_same_from_the_tree_and_from_the_xml() {
+        let layout = |shapes: &str| {
+            format!(
+                r##"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
+                    {{"type":"layout","attrs":{{}},"nodes":[{{"type":"row","attrs":{{"align":"center","gap":"s"}},"nodes":[{shapes}]}}]}}]}}]}}"##
+            )
+        };
+        let none = render_tree(&layout(""));
+        for shape in [
+            r##"{"type":"shape","attrs":{"type":"rect","width":"60pt","height":"12pt","radius":"6pt","fill":"#00ff00","stroke":"#000000","stroke-width":"2pt"}}"##,
+            r##"{"type":"shape","attrs":{"type":"circle","r":"8pt","fill":"#0000ff","opacity":"0.5"}}"##,
+            r##"{"type":"shape","attrs":{"type":"ellipse","width":"40pt","height":"20pt","stroke":"#ff0000","stroke-dash":"3 2"}}"##,
+        ] {
+            let (from_tree, from_xml) = rendered_both_ways(&layout(shape));
+            assert_eq!(from_tree, from_xml, "{shape}");
+            assert_ne!(from_tree, none, "the tree's {shape} is not drawn");
         }
     }
 
