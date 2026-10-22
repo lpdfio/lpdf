@@ -848,6 +848,19 @@ mod tests {
     }
 
     #[test]
+    fn a_tree_table_row_takes_keep_with_next_and_rejects_another_value() {
+        let table = |keep: &str| doc_with_layout_child(&format!(
+            r#"{{"type":"table","attrs":{{"cols":"1fr"}},"nodes":[{{"type":"tr","attrs":{{"keep":"{keep}"}},"nodes":[{{"type":"td","attrs":{{}},"nodes":[{{"type":"text","attrs":{{}},"nodes":["A"]}}]}}]}}]}}"#
+        ));
+        let mut doc = crate::parse::parse_tree(&table("with-next")).expect("with-next is accepted");
+        let layouts = doc.section_layouts();
+        assert_eq!(layouts[0].children[0].children[0].keep, crate::parse::RowKeep::WithNext);
+
+        let err = crate::parse::parse_tree(&table("together")).err().expect("together is not a keep value");
+        assert!(err.contains("invalid keep value: 'together'"), "{err}");
+    }
+
+    #[test]
     fn a_tree_font_that_is_a_url_is_rejected() {
         let json = doc_with_assets_and_text(r#"{"fonts":[{"name":"heading","ref":"https://example.com/f.ttf"}]}"#);
         let err = crate::parse::parse_tree(&json).err().expect("a URL is not a registry key");

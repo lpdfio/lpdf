@@ -596,9 +596,11 @@ fn subjects() -> Vec<Subject> {
         Subject::new("thead", |a, _| {
             flow(&format!(r#"<table cols="1fr 1fr"><thead {a}><td>{ONE}</td><td>{ONE}</td></thead><tr><td>{ONE}</td><td>{ONE}</td></tr></table>"#))
         }),
+        // The table starts 30pt above the foot of the page, so rows A and B fit and C does not. A `keep` on B shows
+        // as B moving on to the next page, with C.
         Subject::new("tr", |a, _| {
             flow(&format!(
-                r#"<table cols="1fr 1fr"><tr {a}><td>{ONE}</td><td>{ONE}</td></tr><tr><td>{ONE}</td><td>{ONE}</td></tr></table>"#
+                r#"<frame height="739pt"/><table cols="1fr 1fr"><tr><td>{ONE}</td><td>{ONE}</td></tr><tr {a}><td>{ONE}</td><td>{ONE}</td></tr><tr><td>{ONE}</td><td>{ONE}</td></tr></table>"#
             ))
         }),
         Subject::new("td", |a, c| {

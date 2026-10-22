@@ -1,4 +1,4 @@
-use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Capture, CaptureMode, Direction, FieldKind, Footnote, HeightMode, Justify, Node, NodeKind, SectionLayout, Paginate, TextAlign, TextRun};
+use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Capture, CaptureMode, Direction, FieldKind, Footnote, HeightMode, Justify, Node, NodeKind, RowKeep, SectionLayout, Paginate, TextAlign, TextRun};
 
 // The path is spelled out because the WASI build includes this file from another crate.
 #[path = "layout/footnotes.rs"]
@@ -1108,6 +1108,9 @@ fn layout_table(
     (nodes, total_h)
 }
 
+/// Splits a table between rows: a row that does not fit goes to the next page whole, and so does the whole table
+/// when only its header would stay behind. A run of rows with `keep="with-next"` moves on together with the row
+/// that ends it when the break would fall inside it.
 fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
     let [pt, pr, pb, pl] = node.padding;
     let inner_w      = (avail_w     - pl - pr).max(0.0);
@@ -1122,9 +1125,12 @@ fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Sp
     let n_rows = node.children.len();
     let mut split_idx = 0usize;
     let mut chunk_h   = 0.0_f32;
+    // The height of each row measured so far: those that fit, and the one that did not.
+    let mut heights: Vec<f32> = Vec::new();
 
     for (i, row) in node.children.iter().enumerate() {
         let rh = measure_row_height(row, &col_widths, inner_full);
+        heights.push(rh);
         let g  = if i == 0 { 0.0 } else { gap };
         if chunk_h + g + rh > inner_target + 0.5 {
             break;
@@ -1134,6 +1140,10 @@ fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Sp
     }
 
     if split_idx == n_rows { return SplitOutcome::Atomic; }
+
+    // A later page shows the header again above the rows, so a run has the page less the header to fit in.
+    let header_h = if has_thead { heights[0] + gap } else { 0.0 };
+    split_idx = keep_rows_with_next(&node.children, &heights, split_idx, &col_widths, gap, inner_full - header_h);
 
     // Nothing useful fits: need at least thead (if present) + one data row.
     let min_useful = if has_thead { 2 } else { 1 };
@@ -1153,6 +1163,42 @@ fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Sp
     }
     let rest = Node { children: rest_children, ..node.clone() };
     SplitOutcome::First(first, vec![rest])
+}
+
+/// Moves a page break at `break_idx` out of a run of rows with `keep="with-next"`, back to the row the run starts
+/// at, so the run and the row that ends it go on to the next page together. A break between rows that do not keep
+/// stays. `heights` holds the rows measured so far, and `room` is the height a page has for rows.
+///
+/// A run taller than `room` cannot stay on one page wherever it starts. The break stays where it was then, and the
+/// run splits between its rows as if it had no keep, because moving it on would change nothing.
+fn keep_rows_with_next(
+    rows:       &[Node],
+    heights:    &[f32],
+    break_idx:  usize,
+    col_widths: &[f32],
+    gap:        f32,
+    room:       f32,
+) -> usize {
+    let start = rows[..break_idx].iter()
+        .rposition(|row| row.keep != RowKeep::WithNext)
+        .map_or(0, |i| i + 1);
+    if start == break_idx {
+        return break_idx;
+    }
+    // The run ends at the first row that does not keep with the next, or at the last row of the table.
+    let end = rows[break_idx..].iter()
+        .position(|row| row.keep != RowKeep::WithNext)
+        .map_or(rows.len() - 1, |i| break_idx + i);
+
+    let mut run_h = 0.0_f32;
+    for (offset, row) in rows[start..=end].iter().enumerate() {
+        let rh = heights.get(start + offset).copied().unwrap_or_else(|| measure_row_height(row, col_widths, room));
+        run_h += if offset == 0 { rh } else { gap + rh };
+        if run_h > room + 0.5 {
+            return break_idx;
+        }
+    }
+    start
 }
 
 /// Splits a text between lines, leaving at least `widows` lines for the next page and keeping at least
@@ -5579,5 +5625,112 @@ mod tests {
         let tree = engine_render(&minimal(r#"<text>Plain text.</text>"#));
         assert!(nodes_of(&tree, "line").is_empty());
         assert_eq!(texts_on(&tree, 0).len(), 1);
+    }
+
+    // ── Table rows that keep together ─────────────────────────────────────────
+
+    /// The words on each page of a flow, from the top of the page down.
+    fn words_by_page(body: &str) -> Vec<Vec<String>> {
+        let tree = engine_render(&minimal(body));
+        tree["pages"].as_array().unwrap().iter()
+            .map(|page| texts_from_the_top(page).into_iter().map(|t| t.1).collect())
+            .collect()
+    }
+
+    /// A table of one column, a header `HEAD` and a row for each of `rows` (the words of its cell, or its content when
+    /// that starts with `<`, and the attributes of its `tr`), after a frame of `spacer` pt. A page of `minimal` has
+    /// 785.89pt of room and a row of one line is 13.2pt, so the spacer decides how many rows the first page has left.
+    fn table_after(spacer: u32, rows: &[(&str, &str)]) -> Vec<Vec<String>> {
+        let rows: String = rows.iter()
+            .map(|(cell, attrs)| {
+                let content = if cell.starts_with('<') { cell.to_string() } else { format!("<text>{cell}</text>") };
+                format!(r#"<tr {attrs}><td>{content}</td></tr>"#)
+            })
+            .collect();
+        words_by_page(&format!(
+            r#"<frame height="{spacer}pt"/><table cols="1fr"><thead><td><text>HEAD</text></td></thead>{rows}</table>"#
+        ))
+    }
+
+    const KEEP: &str = r#"keep="with-next""#;
+
+    fn words(of: &[&str]) -> Vec<String> {
+        of.iter().map(|w| w.to_string()).collect()
+    }
+
+    #[test]
+    fn a_table_header_is_not_left_alone_at_the_bottom_of_a_page() {
+        // 20.89pt are left: the header fits and the first row does not, so the table starts on the next page.
+        let pages = table_after(765, &[("R1", ""), ("R2", "")]);
+        assert_eq!(pages, vec![words(&[]), words(&["HEAD", "R1", "R2"])]);
+    }
+
+    #[test]
+    fn a_table_row_that_does_not_fit_moves_to_the_next_page_whole() {
+        // 35.89pt are left: the header and one row fit, and the three lines of the second do not.
+        let pages = table_after(750, &[("R1", ""), ("<text>R2</text><text>b</text><text>c</text>", "")]);
+        assert_eq!(pages, vec![words(&["HEAD", "R1"]), words(&["HEAD", "R2", "b", "c"])]);
+    }
+
+    #[test]
+    fn a_row_that_keeps_with_the_next_moves_on_with_it() {
+        // 45.89pt are left: the header and two rows fit, and the break falls between R2 and R3.
+        let pages = table_after(740, &[("R1", ""), ("R2", KEEP), ("R3", ""), ("R4", "")]);
+        assert_eq!(pages, vec![words(&["HEAD", "R1"]), words(&["HEAD", "R2", "R3", "R4"])]);
+    }
+
+    #[test]
+    fn a_run_of_rows_that_keep_with_the_next_moves_on_as_one_group() {
+        // The same break falls between R2 and R3 of a run of R2, R3 and R4, which ends at R4.
+        let pages = table_after(740, &[("R1", ""), ("R2", KEEP), ("R3", KEEP), ("R4", ""), ("R5", "")]);
+        assert_eq!(pages, vec![words(&["HEAD", "R1"]), words(&["HEAD", "R2", "R3", "R4", "R5"])]);
+    }
+
+    #[test]
+    fn a_break_that_falls_between_rows_that_do_not_keep_stays() {
+        // R3 keeps with R4, and the break falls before R3 and after R2: nothing is inside the run.
+        let pages = table_after(740, &[("R1", ""), ("R2", ""), ("R3", KEEP), ("R4", "")]);
+        assert_eq!(pages, vec![words(&["HEAD", "R1", "R2"]), words(&["HEAD", "R3", "R4"])]);
+    }
+
+    #[test]
+    fn a_run_that_fits_before_the_break_stays_on_the_page() {
+        // R1 keeps with R2, and both fit with room to spare: the break comes after R2.
+        let pages = table_after(740, &[("R1", KEEP), ("R2", ""), ("R3", ""), ("R4", "")]);
+        assert_eq!(pages, vec![words(&["HEAD", "R1", "R2"]), words(&["HEAD", "R3", "R4"])]);
+    }
+
+    #[test]
+    fn a_kept_run_that_would_leave_only_the_header_moves_the_whole_table() {
+        // R1 keeps with R2 and the break falls between them, so no row is left to stay with the header.
+        let pages = table_after(750, &[("R1", KEEP), ("R2", ""), ("R3", "")]);
+        assert_eq!(pages, vec![words(&[]), words(&["HEAD", "R1", "R2", "R3"])]);
+    }
+
+    #[test]
+    fn keep_on_the_last_row_of_a_table_has_no_effect() {
+        let kept  = table_after(740, &[("R1", ""), ("R2", ""), ("R3", KEEP)]);
+        let plain = table_after(740, &[("R1", ""), ("R2", ""), ("R3", "")]);
+        assert_eq!(kept, plain);
+    }
+
+    #[test]
+    fn a_run_taller_than_a_page_breaks_where_its_rows_fit() {
+        // Two rows of 400pt that keep together cannot stand on one page with the header. The run splits between
+        // them, as it would without the keep.
+        let tall = |name: &str| format!(r#"<text>{name}</text><frame height="400pt"/>"#);
+        let (a, b, c) = (tall("A"), tall("B"), tall("C"));
+        let kept  = table_after(100, &[(&a, KEEP), (&b, ""), (&c, "")]);
+        let plain = table_after(100, &[(&a, ""), (&b, ""), (&c, "")]);
+        assert_eq!(kept, plain);
+        assert_eq!(kept, vec![words(&["HEAD", "A"]), words(&["HEAD", "B"]), words(&["HEAD", "C"])]);
+    }
+
+    #[test]
+    fn a_kept_run_goes_to_the_next_page_under_the_header() {
+        let pages = table_after(740, &[("R1", ""), ("R2", KEEP), ("R3", "")]);
+        let second = &pages[1];
+        assert_eq!(second.first().map(String::as_str), Some("HEAD"), "{pages:?}");
+        assert_eq!(second[1..], words(&["R2", "R3"])[..]);
     }
 }

@@ -218,6 +218,12 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <xs:simpleType name="RowKeep">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="with-next"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="TextAlignH">
     <xs:restriction base="xs:string">
       <xs:enumeration value="left"/>
@@ -1445,6 +1451,11 @@
       <xs:sequence>
         <xs:element ref="td" minOccurs="1" maxOccurs="unbounded"/>
       </xs:sequence>
+      <xs:attribute name="keep" type="RowKeep">
+        <xs:annotation>
+          <xs:documentation>with-next keeps the row on the same page as the row after it. A run of rows that each say with-next, and the row that ends it, move to the next page together when a page break would fall inside them. A run taller than a page breaks where its rows fit, as if it had no keep. Rows are never split, and a header is never left alone at the bottom of a page, with or without this.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attribute name="background" type="Fill"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
