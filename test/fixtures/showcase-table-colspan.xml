@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+  <document size="a4">
+    <section>
+      <layout margin="40pt">
+      <!--
+        Cells that span columns. colspan="n" makes a cell as wide as n columns and the gaps between them, and the
+        cells after it start at the column after its last. A section heading spans every column, the subtotal, the
+        tax and the total put their label across the first three and leave the amount in the last, and a cell can
+        span columns in the middle or at the end of a row as well. The grid border has no rule inside a spanning
+        cell. A row whose cells span more columns than the table has is an error.
+      -->
+      <text font-size="l" bold="true">Website project</text>
+      <text font-size="s">Statement of work and fees. Section headings, labels and notes span the columns they need.</text>
+      <frame height="12pt"/>
+      <table cols="5fr 1fr 2fr 2fr" border="0.5pt #cccccc">
+
+        <thead background="#e8ecf0">
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Description</text></td>
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Qty</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s" bold="true">Unit price</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s" bold="true">Amount</text></td>
+        </thead>
+
+        <!-- Design: a heading across all four columns -->
+        <tr background="#f5f5f5">
+          <td colspan="4" padding="8pt 8pt"><text font-size="s" bold="true">Design</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Information architecture</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$1,600.00</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$1,600.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Wireframes</text></td>
+          <td padding="8pt 8pt"><text font-size="s">12</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$200.00</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$2,400.00</text></td>
+        </tr>
+        <!-- A span in the middle: Qty and Unit price share one cell -->
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Brand review with the founders</text></td>
+          <td colspan="2" padding="8pt 8pt" align="center"><text font-size="s">Included in the design fee</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$0.00</text></td>
+        </tr>
+
+        <!-- Build -->
+        <tr background="#f5f5f5">
+          <td colspan="4" padding="8pt 8pt"><text font-size="s" bold="true">Build</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Front-end templates</text></td>
+          <td padding="8pt 8pt"><text font-size="s">8</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$450.00</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$3,600.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Content management setup</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$2,200.00</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$2,200.00</text></td>
+        </tr>
+        <!-- A span at the end: Unit price and Amount share one cell -->
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">Hosting, first year</text></td>
+          <td padding="8pt 8pt"><text font-size="s">1</text></td>
+          <td colspan="2" padding="8pt 8pt" align="end"><text font-size="s">Waived</text></td>
+        </tr>
+
+        <!-- The totals: a label across the first three columns, the amount in the last -->
+        <tr>
+          <td colspan="3" padding="8pt 8pt" align="end"><text font-size="s">Subtotal</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$9,800.00</text></td>
+        </tr>
+        <tr>
+          <td colspan="3" padding="8pt 8pt" align="end"><text font-size="s">Sales tax (8%)</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$784.00</text></td>
+        </tr>
+        <tr background="#e8ecf0">
+          <td colspan="3" padding="8pt 8pt" align="end"><text font-size="s" bold="true">Total due</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s" bold="true">$10,584.00</text></td>
+        </tr>
+      </table>
+      </layout>
+    </section>
+  </document>
+</lpdf>

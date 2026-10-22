@@ -363,6 +363,7 @@ mod tests {
             barcode_bg: None,
             table_cols: String::new(),
             stripe: None,
+            col_span: 1,
             field_kind: None,
             field_name: None,
             field_value: None,

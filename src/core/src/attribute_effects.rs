@@ -609,6 +609,13 @@ fn subjects() -> Vec<Subject> {
             ))
         })
         .content(TWO),
+        // The table has eight columns, so any span tried fits. A wider first cell pushes the second one on.
+        Subject::new("td", |a, _| {
+            flow(&format!(
+                r#"<table cols="1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr"><tr><td {a}><text>one</text></td><td><text>two</text></td></tr></table>"#
+            ))
+        })
+        .only(&["colspan"]),
         // Regions and layers.
         Subject::new("region", |a, _| {
             lpdf("", &format!("<document><section><layout><region {a}><text>Header</text></region>{}</layout></section></document>", pages()))
