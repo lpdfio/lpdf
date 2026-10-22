@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Footnote Counter" subject="Where the numbers of the footnotes start over" />
+
+    <!-- footnote-counter says where the numbers of the footnotes start over: on every page ("page"), in every section
+         ("section", the default) or never ("document"). It is set on the document, for all its sections, or on a section,
+         which overrides the document. A section that counts across the document goes on from the notes of the earlier
+         sections that do, and a section that counts its own, or by page, takes none of them.
+         Expected numbers, page by page:
+           Section 1, counter "page"
+             1  1, 2
+             2  1, 2        the numbers start over on the new page
+           Section 2, counter "document"
+             3  1, 2
+           Section 3, counter "document"
+             4  3, 4        it goes on from section 2
+           Section 4, counter "section" (the default)
+             5  1, 2        it counts its own, whatever the sections before it did
+    -->
+    <section footnote-counter="page">
+      <layout margin="40pt">
+        <column gap="m">
+          <text font-size="xl" font="Helvetica-Bold" color="primary">Counter: page</text>
+          <text font-size="m" color="muted">The numbers start over on every page.</text>
+          <text>The first page of the section has two notes<fn>The first note of the first page.</fn>, and they are numbered from 1<fn>The second note of the first page.</fn>.</text>
+        </column>
+        <column paginate="break-before">
+          <text>The second page of the section has two notes too<fn>The first note of the second page.</fn>, and the numbers start over<fn>The second note of the second page: its number is 2, though the section has four notes.</fn>.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section footnote-counter="document">
+      <layout margin="40pt">
+        <column gap="m">
+          <text font-size="xl" font="Helvetica-Bold" color="primary">Counter: document</text>
+          <text font-size="m" color="muted">The numbers go on across the sections that count so.</text>
+          <text>This section is the first to count across the document<fn>The first note of the document counter.</fn>, so its notes are numbered from 1<fn>The second note of the document counter.</fn>.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section footnote-counter="document">
+      <layout margin="40pt">
+        <column gap="m">
+          <text font-size="xl" font="Helvetica-Bold" color="primary">Counter: document, again</text>
+          <text font-size="m" color="muted">It goes on from the section before.</text>
+          <text>This section goes on from the two notes before it<fn>The third note of the document counter.</fn>, so its notes are numbered 3<fn>The fourth note of the document counter.</fn> and 4.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <layout margin="40pt">
+        <column gap="m">
+          <text font-size="xl" font="Helvetica-Bold" color="primary">Counter: section</text>
+          <text font-size="m" color="muted">The numbers start over in the section, which is what a section does without a counter.</text>
+          <text>This section counts its own notes<fn>The first note of the section.</fn>, from 1<fn>The second note of the section.</fn>, whatever the sections before it did.</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>
