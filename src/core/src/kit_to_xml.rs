@@ -866,6 +866,37 @@ mod tests {
     }
 
     #[test]
+    fn a_tree_table_cell_takes_rowspan_and_a_table_whose_spans_do_not_line_up_is_rejected() {
+        let td = |attrs: &str, text: &str| format!(
+            r#"{{"type":"td","attrs":{{{attrs}}},"nodes":[{{"type":"text","attrs":{{}},"nodes":["{text}"]}}]}}"#
+        );
+        let tr = |cells: &[String]| format!(r#"{{"type":"tr","attrs":{{}},"nodes":[{}]}}"#, cells.join(","));
+        let table = |rows: &[String]| doc_with_layout_child(&format!(
+            r#"{{"type":"table","attrs":{{"cols":"1fr 1fr"}},"nodes":[{}]}}"#, rows.join(",")
+        ));
+
+        let mut doc = crate::parse::parse_tree(&table(&[
+            tr(&[td(r#""rowspan":"2""#, "A"), td("", "B")]),
+            tr(&[td("", "C")]),
+        ])).expect("the second row has the one free column to itself");
+        let layouts = doc.section_layouts();
+        assert_eq!(layouts[0].children[0].children[0].children[0].row_span, 2);
+
+        let err = crate::parse::parse_tree(&table(&[tr(&[td("", "A"), td("", "B")]), tr(&[td(r#""rowspan":"2""#, "C")])]))
+            .err().expect("the span runs past the last row");
+        assert!(err.contains("a rowspan that runs 1 row past the last row of the table"), "{err}");
+
+        let err = crate::parse::parse_tree(&table(&[
+            tr(&[td(r#""rowspan":"2""#, "A"), td("", "B")]),
+            tr(&[td("", "C"), td("", "D")]),
+        ])).err().expect("the second row has a cell too many");
+        assert!(err.contains("span 2 columns, but only 1 of the table's 2 are free"), "{err}");
+
+        let err = crate::parse::parse_tree(&table(&[tr(&[td(r#""rowspan":"0""#, "A")])])).err().expect("rowspan starts at 1");
+        assert!(err.contains("invalid rowspan value: '0'"), "{err}");
+    }
+
+    #[test]
     fn a_tree_table_row_takes_keep_with_next_and_rejects_another_value() {
         let table = |keep: &str| doc_with_layout_child(&format!(
             r#"{{"type":"table","attrs":{{"cols":"1fr"}},"nodes":[{{"type":"tr","attrs":{{"keep":"{keep}"}},"nodes":[{{"type":"td","attrs":{{}},"nodes":[{{"type":"text","attrs":{{}},"nodes":["A"]}}]}}]}}]}}"#

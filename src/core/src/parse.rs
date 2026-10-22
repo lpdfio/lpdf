@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use crate::tokens::{parse_factor, parse_opacity, parse_pt, FontDef, FontWidths, Gradient, GradientSpec, Tokens};
 use crate::canvas;
+use crate::layout::{Held, Placed};
 
 // ── Resolved document model (layout / render operate on these) ────────────────
 
@@ -429,8 +430,9 @@ pub struct Node {
     pub table_cols: String,
     pub stripe: Option<String>,
     // table cell (NodeKind::TableCell only)
-    /// How many of the table's columns the cell spans, from 1.
+    /// How many of the table's columns the cell spans, and how many of its rows, from 1.
     pub col_span: u16,
+    pub row_span: u16,
     // form field (NodeKind::Field only)
     pub field_kind:       Option<FieldKind>,
     pub field_name:       Option<String>,
@@ -622,6 +624,7 @@ struct ParsedNode {
     table_cols: String,
     stripe: Option<String>,
     col_span: u16,
+    row_span: u16,
     field_kind:       Option<FieldKind>,
     field_name:       Option<String>,
     field_value:      Option<String>,
@@ -689,6 +692,7 @@ impl ParsedNode {
             table_cols: String::new(),
             stripe: None,
             col_span: 1,
+            row_span: 1,
             field_kind:       None,
             field_name:       None,
             field_value:      None,
@@ -790,7 +794,7 @@ impl Node {
             url: None, image_name: None,
             img_height_constraint: None, img_aspect: None, shape: None, barcode_type: None, barcode_data: None,
             barcode_ec: BarcodeEcLevel::M, barcode_hrt: false, barcode_color: None,
-            barcode_bg: None, table_cols: String::new(), stripe: None, col_span: 1,
+            barcode_bg: None, table_cols: String::new(), stripe: None, col_span: 1, row_span: 1,
             field_kind: None, field_name: None, field_value: None, field_label: None,
             field_options: Vec::new(), field_required: false, field_readonly: false,
             field_checked: false, field_max_len: None, field_group: None,
@@ -918,6 +922,7 @@ fn resolve_node(
         table_cols:            n.table_cols,
         stripe:                n.stripe,
         col_span:              n.col_span,
+        row_span:              n.row_span,
         field_kind:            n.field_kind,
         field_name:            n.field_name,
         field_value:           n.field_value,
@@ -1735,6 +1740,7 @@ fn parse_node(
     // ── Children (not for leaf nodes) ────────────────────────────────────────
     if !matches!(kind, NodeKind::Divider | NodeKind::Text | NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field) {
         let mut pending = PendingBookmarks::default();
+        let mut table_rows = (kind == NodeKind::Table).then(|| TableRows::new(&node.table_cols));
         for child in elems(elem) {
             if child.tag_name().name() == "bookmark" {
                 if matches!(kind, NodeKind::Table | NodeKind::TableHead | NodeKind::TableRow) {
@@ -1756,8 +1762,10 @@ fn parse_node(
                             node_loc(elem), child.tag_name().name()
                         ));
                     }
-                    check_row_columns(&child_node, &node.table_cols)
-                        .map_err(|e| format!("<{}>{}: {e}", child.tag_name().name(), node_loc(&child)))?;
+                    if let Some(rows) = table_rows.as_mut() {
+                        rows.check(&child_node)
+                            .map_err(|e| format!("<{}>{}: {e}", child.tag_name().name(), node_loc(&child)))?;
+                    }
                 }
                 NodeKind::TableHead | NodeKind::TableRow => {
                     if child_node.kind != NodeKind::TableCell {
@@ -1770,6 +1778,9 @@ fn parse_node(
                 _ => {}
             }
             node.children.push(child_node);
+        }
+        if let Some(rows) = &table_rows {
+            rows.finish().map_err(|e| format!("<table>{}: {e}", node_loc(elem)))?;
         }
         pending.finish(tag).map_err(|e| format!("<{tag}>{}: {e}", node_loc(elem)))?;
         if kind == NodeKind::Frame && node.children.len() > 1 {
@@ -2324,15 +2335,56 @@ fn parse_col_span(v: &str) -> Result<u16, String> {
         .ok_or_else(|| format!("invalid colspan value: '{v}' — expected a whole number from 1"))
 }
 
-/// Fails when the cells of a `<thead>` or `<tr>` span more columns than the table has. A row with fewer is fine:
-/// the columns after its last cell stay empty.
-fn check_row_columns(row: &ParsedNode, table_cols: &str) -> Result<(), String> {
-    let spanned: usize = row.children.iter().map(|cell| usize::from(cell.col_span)).sum();
-    let columns = crate::layout::table_col_count(table_cols);
-    if spanned > columns {
-        return Err(format!("its cells span {spanned} columns, but the table has {columns} (cols=\"{table_cols}\")"));
+/// Read a `rowspan` value: a whole number of rows from 1.
+fn parse_row_span(v: &str) -> Result<u16, String> {
+    v.parse::<u16>().ok().filter(|n| *n >= 1)
+        .ok_or_else(|| format!("invalid rowspan value: '{v}' — expected a whole number from 1"))
+}
+
+/// Checks the rows of a `<table>` as they are parsed: that the cells of each row fit the columns that the cells
+/// above it that span rows leave free, and that no cell spans past the last row. `check` takes each `<thead>` or
+/// `<tr>` in order, and `finish` the end of the table.
+struct TableRows {
+    held:     Held,
+    cols:     String,
+    next_row: usize,
+    cells:    Vec<(u16, u16)>,
+    placed:   Vec<Placed>,
+}
+
+impl TableRows {
+    fn new(table_cols: &str) -> TableRows {
+        TableRows {
+            held: Held::new(crate::layout::table_col_count(table_cols)),
+            cols: table_cols.to_string(),
+            next_row: 0,
+            cells: Vec::new(),
+            placed: Vec::new(),
+        }
     }
-    Ok(())
+
+    fn check(&mut self, row: &ParsedNode) -> Result<(), String> {
+        if row.kind == NodeKind::TableHead && row.children.iter().any(|cell| cell.row_span > 1) {
+            return Err("a cell of the header cannot have a rowspan: the header is a single row".to_string());
+        }
+        self.cells.clear();
+        self.cells.extend(row.children.iter().map(|cell| (cell.col_span, cell.row_span)));
+        self.placed.clear();
+        let problem = self.held.place_row(self.next_row, &self.cells, &mut self.placed);
+        self.next_row += 1;
+        problem.map_or(Ok(()), |problem| Err(format!("{problem} (cols=\"{}\")", self.cols)))
+    }
+
+    fn finish(&self) -> Result<(), String> {
+        match self.held.unfinished() {
+            Some((column, rows)) => Err(format!(
+                "the cell in column {} has a rowspan that runs {rows} {} past the last row of the table",
+                column + 1,
+                if rows == 1 { "row" } else { "rows" }
+            )),
+            None => Ok(()),
+        }
+    }
 }
 
 fn parse_paginate_attr(v: &str) -> Result<Paginate, String> {
@@ -2451,6 +2503,7 @@ fn apply_layout_kind_attrs(
         }
         NodeKind::TableCell => {
             if let Some(v) = a.get("colspan") { node.col_span = parse_col_span(v)?; }
+            if let Some(v) = a.get("rowspan") { node.row_span = parse_row_span(v)?; }
             node.align   = parse_align(a.get("align").unwrap_or("stretch"))?;
             let valign_str = a.get("valign").unwrap_or("top");
             node.justify = parse_justify(match valign_str {
@@ -3168,6 +3221,7 @@ fn parse_tree_node(
     if !matches!(kind, NodeKind::Divider | NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field) {
         if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
             let mut pending = PendingBookmarks::default();
+            let mut table_rows = (kind == NodeKind::Table).then(|| TableRows::new(&node.table_cols));
             for child in arr {
                 if is_tree_bookmark(child) {
                     if matches!(kind, NodeKind::Table | NodeKind::TableHead | NodeKind::TableRow) {
@@ -3186,8 +3240,10 @@ fn parse_tree_node(
                                 child.get("type").and_then(|v| v.as_str()).unwrap_or("?")
                             ));
                         }
-                        check_row_columns(&child_node, &node.table_cols)
-                            .map_err(|e| format!("{}: {e}", child.get("type").and_then(|v| v.as_str()).unwrap_or("?")))?;
+                        if let Some(rows) = table_rows.as_mut() {
+                            rows.check(&child_node)
+                                .map_err(|e| format!("{}: {e}", child.get("type").and_then(|v| v.as_str()).unwrap_or("?")))?;
+                        }
                     }
                     NodeKind::TableHead | NodeKind::TableRow => {
                         if child_node.kind != NodeKind::TableCell {
@@ -3200,6 +3256,9 @@ fn parse_tree_node(
                     _ => {}
                 }
                 node.children.push(child_node);
+            }
+            if let Some(rows) = &table_rows {
+                rows.finish().map_err(|e| format!("table: {e}"))?;
             }
             pending.finish(type_str)?;
         }
@@ -4943,6 +5002,87 @@ mod tests {
         let err = parse(&table(r#"<thead><td colspan="3"><text>A</text></td></thead>"#)).unwrap_err();
         assert!(err.contains("<thead>"), "{err}");
         assert!(err.contains("span 3 columns, but the table has 2"), "{err}");
+    }
+
+    #[test]
+    fn a_table_cell_takes_rowspan_and_spans_one_row_without_it() {
+        let mut doc = parse(&minimal(
+            r#"<table cols="1fr 1fr"><tr><td rowspan="2"><text>A</text></td><td><text>B</text></td></tr><tr><td><text>C</text></td></tr></table>"#,
+        )).unwrap();
+        let layouts = doc.section_layouts();
+        let rows = &layouts[0].children[0].children;
+        assert_eq!((rows[0].children[0].row_span, rows[0].children[1].row_span, rows[1].children[0].row_span), (2, 1, 1));
+    }
+
+    #[test]
+    fn err_invalid_rowspan() {
+        for value in ["0", "-1", "two", "1.5", "", "70000"] {
+            let err = parse(&minimal(&format!(
+                r#"<table cols="1fr"><tr><td rowspan="{value}"><text>A</text></td></tr></table>"#
+            ))).unwrap_err();
+            assert!(err.contains("<td>"), "{err}");
+            assert!(err.contains("at line"), "{err}");
+            assert!(err.contains(&format!("invalid rowspan value: '{value}'")), "{err}");
+        }
+    }
+
+    #[test]
+    fn err_a_row_has_a_cell_too_many_under_a_rowspan() {
+        // The span holds the first column of the second row, so it has two columns for its three cells.
+        let err = parse(&minimal(
+            r#"<table cols="1fr 1fr 1fr"><tr><td rowspan="2"><text>A</text></td><td><text>B</text></td><td><text>C</text></td></tr>
+                <tr><td><text>D</text></td><td><text>E</text></td><td><text>F</text></td></tr></table>"#,
+        )).unwrap_err();
+        assert!(err.contains("<tr>"), "{err}");
+        assert!(err.contains("at line 2"), "the second row: {err}");
+        assert!(err.contains("span 3 columns, but only 2 of the table's 3 are free"), "{err}");
+    }
+
+    #[test]
+    fn err_a_colspan_does_not_fit_between_the_columns_that_a_rowspan_holds() {
+        let err = parse(&minimal(
+            r#"<table cols="1fr 1fr 1fr"><tr><td><text>A</text></td><td rowspan="2"><text>B</text></td><td><text>C</text></td></tr>
+                <tr><td colspan="2"><text>D</text></td></tr></table>"#,
+        )).unwrap_err();
+        assert!(err.contains("<tr>"), "{err}");
+        assert!(err.contains(r#"colspan="2" does not fit before column 2"#), "{err}");
+    }
+
+    #[test]
+    fn err_a_rowspan_runs_past_the_last_row() {
+        for (rows, past) in [
+            (r#"<tr><td rowspan="2"><text>A</text></td><td><text>B</text></td></tr>"#, "1 row"),
+            (r#"<tr><td><text>A</text></td></tr><tr><td><text>B</text></td><td rowspan="4"><text>C</text></td></tr>"#, "3 rows"),
+        ] {
+            let err = parse(&minimal(&format!(r#"<table cols="1fr 1fr">{rows}</table>"#))).unwrap_err();
+            assert!(err.contains("<table>"), "{err}");
+            assert!(err.contains("at line"), "{err}");
+            assert!(err.contains(&format!("a rowspan that runs {past} past the last row of the table")), "{err}");
+        }
+    }
+
+    #[test]
+    fn err_a_header_cell_has_a_rowspan() {
+        let err = parse(&minimal(
+            r#"<table cols="1fr 1fr"><thead><td rowspan="2"><text>A</text></td><td><text>B</text></td></thead>
+                <tr><td><text>C</text></td></tr></table>"#,
+        )).unwrap_err();
+        assert!(err.contains("<thead>"), "{err}");
+        assert!(err.contains("the header is a single row"), "{err}");
+    }
+
+    #[test]
+    fn a_table_whose_rowspans_line_up_with_its_columns_is_accepted() {
+        for rows in [
+            // The span ends with the last row.
+            r#"<tr><td rowspan="2"><text>A</text></td><td><text>B</text></td></tr><tr><td><text>C</text></td></tr>"#,
+            // The rows under a span may have fewer cells than the free columns.
+            r#"<tr><td rowspan="3"><text>A</text></td><td><text>B</text></td></tr><tr></tr><tr><td><text>C</text></td></tr>"#,
+            // Spans side by side, and one that starts under another's end.
+            r#"<tr><td rowspan="2"><text>A</text></td><td rowspan="3"><text>B</text></td></tr><tr></tr><tr><td><text>C</text></td></tr>"#,
+        ] {
+            assert!(parse(&minimal(&format!(r#"<table cols="1fr 1fr">{rows}</table>"#))).is_ok(), "{rows}");
+        }
     }
 
     #[test]
