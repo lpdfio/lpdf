@@ -5896,4 +5896,15 @@ mod tests {
         assert!(pages(2).len() > 1, "the table fills more than a page");
         assert_eq!(pages(1), pages(2));
     }
+
+    #[test]
+    fn the_table_colspan_showcase_puts_a_subtotal_label_across_the_columns_before_the_amount() {
+        let xml = include_str!("../../../test/fixtures/showcase-table-colspan.xml");
+        let tree = engine_render(xml);
+        assert_eq!(tree["pages"].as_array().unwrap().len(), 1, "the showcase fits on one page");
+        let x_of = |word: &str| texts_on(&tree, 0).into_iter().find(|t| t.0 == word).unwrap_or_else(|| panic!("no {word}")).1;
+        // Right-aligned in one column, the label would end before the Qty column; across three, it ends where the
+        // third does, so it starts to the right of the Qty header.
+        assert!(x_of("Subtotal") > x_of("Qty"), "Subtotal at {}, Qty at {}", x_of("Subtotal"), x_of("Qty"));
+    }
 }
