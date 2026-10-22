@@ -140,6 +140,8 @@ fn showcase_shadow() { run_snapshot("showcase-shadow"); }
 #[test]
 fn showcase_gradient() { run_snapshot("showcase-gradient"); }
 #[test]
+fn showcase_shape() { run_snapshot("showcase-shape"); }
+#[test]
 fn showcase_running_header() { run_snapshot("showcase-running-header"); }
 #[test]
 fn showcase_running_header_dictionary() { run_snapshot("showcase-running-header-dictionary"); }
