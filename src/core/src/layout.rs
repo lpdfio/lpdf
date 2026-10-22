@@ -6258,6 +6258,26 @@ mod tests {
     }
 
     #[test]
+    fn the_table_rowspan_showcase_moves_the_quarter_that_does_not_fit_to_the_second_page_whole() {
+        // Page 1 has room left after Q1 2025, but not for the four rows of Q2 2025, whose label and notes span them.
+        let xml = include_str!("../../../test/fixtures/showcase-table-rowspan.xml");
+        let tree = engine_render(xml);
+        let pages: Vec<Vec<String>> = tree["pages"].as_array().unwrap().iter()
+            .map(|page| texts_from_the_top(page).into_iter().map(|t| t.1).collect())
+            .collect();
+        assert_eq!(pages.len(), 2, "the showcase should run over two pages");
+        let q2 = ["Q2 2025", "$58,400.00", "$61,950.00", "$64,300.00", "$184,650.00"];
+        for word in q2 {
+            assert!(!pages[0].iter().any(|w| w == word), "{word} is on the first page");
+            assert!(pages[1].iter().any(|w| w == word), "{word} is not on the second page");
+        }
+        assert!(pages[0].iter().any(|w| w == "$158,600.00"), "Q1 2025 stays on the first page");
+        let header_at = pages[1].iter().position(|w| w == "Quarter").expect("the header repeats on page 2");
+        let label_at = pages[1].iter().position(|w| w == "Q2 2025").unwrap();
+        assert!(header_at < label_at, "{:?}", &pages[1][..8]);
+    }
+
+    #[test]
     fn a_table_whose_rows_data_binding_changed_still_lays_out_without_the_cells_that_have_no_column() {
         // The template is fine: the row with the span has a row after it. With three items there are three of the
         // first row, whose cells then run into the span above: the cell that has no free column is left out.

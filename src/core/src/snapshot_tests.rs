@@ -138,6 +138,8 @@ fn showcase_table_keep() { run_snapshot("showcase-table-keep"); }
 #[test]
 fn showcase_table_colspan() { run_snapshot("showcase-table-colspan"); }
 #[test]
+fn showcase_table_rowspan() { run_snapshot("showcase-table-rowspan"); }
+#[test]
 fn showcase_text_max_lines() { run_snapshot("showcase-text-max-lines"); }
 #[test]
 fn showcase_text_line_height() { run_snapshot("showcase-text-line-height"); }

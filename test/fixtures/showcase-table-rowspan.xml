@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+  <document size="a4">
+    <section>
+      <layout margin="40pt">
+      <!--
+        Cells that span rows. rowspan="n" makes a cell as tall as n rows and the gaps between them, and the rows
+        under it leave its column out: their cells start at the first free columns. Each quarter label spans the
+        quarter's four rows, and each note spans two. A note taller than the rows it spans makes the last of them
+        grow. The rows a cell spans stay on one page, so a quarter that does not fit moves to the next page whole,
+        under the header that the table repeats there, and a year banner, which keeps with the next row, goes with
+        the first quarter under it. The grid border has no rule across a spanning cell.
+      -->
+      <text font-size="l" bold="true">Revenue by quarter</text>
+      <text font-size="s">Monthly revenue, with the quarter and its notes in cells that span the rows they describe.</text>
+      <frame height="12pt"/>
+      <table cols="2fr 2fr 2fr 5fr" border="0.5pt #cccccc">
+
+        <thead background="#e8ecf0">
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Quarter</text></td>
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Month</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s" bold="true">Revenue</text></td>
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Notes</text></td>
+        </thead>
+
+        <!-- 2024 -->
+        <tr keep="with-next" background="#e8ecf0">
+          <td colspan="4" padding="8pt 8pt"><text font-size="s" bold="true">2024</text></td>
+        </tr>
+        <!-- Q1 2024: the label spans the three months and the total -->
+        <tr>
+          <td rowspan="4" padding="8pt 8pt"><text font-size="s" bold="true">Q1 2024</text></td>
+          <td padding="8pt 8pt"><text font-size="s">January</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$41,200.00</text></td>
+          <td rowspan="2" padding="8pt 8pt"><text font-size="s">Slow start after the holidays.</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">February</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$38,900.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">March</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$44,100.00</text></td>
+          <td rowspan="2" padding="8pt 8pt"><text font-size="s">Spring catalogue sent in the last week.</text></td>
+        </tr>
+        <tr background="#f5f5f5">
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Quarter total</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s" bold="true">$124,200.00</text></td>
+        </tr>
+        <!-- Q2 2024: the label spans the three months and the total -->
+        <tr>
+          <td rowspan="4" padding="8pt 8pt"><text font-size="s" bold="true">Q2 2024</text></td>
+          <td padding="8pt 8pt"><text font-size="s">April</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$46,800.00</text></td>
+          <td rowspan="2" padding="8pt 8pt"><text font-size="s">New regional store opened in May, with a launch campaign that ran for three weeks and brought in the first wholesale customers.</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">May</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$49,250.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">June</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$51,400.00</text></td>
+          <td rowspan="2" padding="8pt 8pt"><text font-size="s">Best month so far.</text></td>
+        </tr>
+        <tr background="#f5f5f5">
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Quarter total</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s" bold="true">$147,450.00</text></td>
+        </tr>
+        <!-- Q3 2024: the label spans the three months and the total -->
+        <tr>
+          <td rowspan="4" padding="8pt 8pt"><text font-size="s" bold="true">Q3 2024</text></td>
+          <td padding="8pt 8pt"><text font-size="s">July</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$47,900.00</text></td>
+          <td rowspan="2" padding="8pt 8pt"><text font-size="s">Summer lull in July and August.</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">August</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$45,300.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">September</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$52,600.00</text></td>
+          <td rowspan="2" padding="8pt 8pt"><text font-size="s">Back-to-school orders from September.</text></td>
+        </tr>
+        <tr background="#f5f5f5">
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Quarter total</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s" bold="true">$145,800.00</text></td>
+        </tr>
+        <!-- Q4 2024: the label spans the three months and the total -->
+        <tr>
+          <td rowspan="4" padding="8pt 8pt"><text font-size="s" bold="true">Q4 2024</text></td>
+          <td padding="8pt 8pt"><text font-size="s">October</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$55,800.00</text></td>
+          <td rowspan="2" padding="8pt 8pt"><text font-size="s">Holiday promotion started early and stayed on through the end of the year. Free delivery over $50 on every order placed online, a gift guide in the weekly newsletter on each of the four Sundays before the holiday, a second shift in the warehouse from the middle of November, and a temporary pick-up point at the new store for orders placed after the last delivery date.</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">November</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$71,300.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">December</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$83,900.00</text></td>
+          <td rowspan="2" padding="8pt 8pt"><text font-size="s">Record month: gift cards sold out.</text></td>
+        </tr>
+        <tr background="#f5f5f5">
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Quarter total</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s" bold="true">$211,000.00</text></td>
+        </tr>
+        <!-- 2025 -->
+        <tr keep="with-next" background="#e8ecf0">
+          <td colspan="4" padding="8pt 8pt"><text font-size="s" bold="true">2025</text></td>
+        </tr>
+        <!-- Q1 2025: the label spans the three months and the total -->
+        <tr>
+          <td rowspan="4" padding="8pt 8pt"><text font-size="s" bold="true">Q1 2025</text></td>
+          <td padding="8pt 8pt"><text font-size="s">January</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$52,100.00</text></td>
+          <td rowspan="2" padding="8pt 8pt"><text font-size="s">Returns from the holiday season.</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">February</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$49,800.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">March</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$56,700.00</text></td>
+          <td rowspan="2" padding="8pt 8pt"><text font-size="s">Price rise on the wholesale range.</text></td>
+        </tr>
+        <tr background="#f5f5f5">
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Quarter total</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s" bold="true">$158,600.00</text></td>
+        </tr>
+        <!-- Q2 2025: the label spans the three months and the total -->
+        <tr>
+          <td rowspan="4" padding="8pt 8pt"><text font-size="s" bold="true">Q2 2025</text></td>
+          <td padding="8pt 8pt"><text font-size="s">April</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$58,400.00</text></td>
+          <td rowspan="2" padding="8pt 8pt"><text font-size="s">Second store opened in the north, which took a share of the first one's walk-in sales but doubled the reach of the delivery area.</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">May</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$61,950.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">June</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$64,300.00</text></td>
+          <td rowspan="2" padding="8pt 8pt"><text font-size="s">Wholesale customers up by a third.</text></td>
+        </tr>
+        <tr background="#f5f5f5">
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Quarter total</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s" bold="true">$184,650.00</text></td>
+        </tr>
+        <!-- Q3 2025: the label spans the three months and the total -->
+        <tr>
+          <td rowspan="4" padding="8pt 8pt"><text font-size="s" bold="true">Q3 2025</text></td>
+          <td padding="8pt 8pt"><text font-size="s">July</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$60,200.00</text></td>
+          <td rowspan="2" padding="8pt 8pt"><text font-size="s">Heat wave kept shoppers away in August.</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">August</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$57,800.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">September</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$66,100.00</text></td>
+          <td rowspan="2" padding="8pt 8pt"><text font-size="s">New autumn range in the last week.</text></td>
+        </tr>
+        <tr background="#f5f5f5">
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Quarter total</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s" bold="true">$184,100.00</text></td>
+        </tr>
+        <!-- Q4 2025: the label spans the three months and the total -->
+        <tr>
+          <td rowspan="4" padding="8pt 8pt"><text font-size="s" bold="true">Q4 2025</text></td>
+          <td padding="8pt 8pt"><text font-size="s">October</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$69,500.00</text></td>
+          <td rowspan="2" padding="8pt 8pt"><text font-size="s">Holiday promotion repeated, with the gift card offer moved to the start of November and a longer returns window for presents.</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">November</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$88,400.00</text></td>
+        </tr>
+        <tr>
+          <td padding="8pt 8pt"><text font-size="s">December</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s">$97,600.00</text></td>
+          <td rowspan="2" padding="8pt 8pt"><text font-size="s">Warehouse at its limit in December.</text></td>
+        </tr>
+        <tr background="#f5f5f5">
+          <td padding="8pt 8pt"><text font-size="s" bold="true">Quarter total</text></td>
+          <td padding="8pt 8pt" align="end"><text font-size="s" bold="true">$255,500.00</text></td>
+        </tr>
+      </table>
+      </layout>
+    </section>
+  </document>
+</lpdf>
