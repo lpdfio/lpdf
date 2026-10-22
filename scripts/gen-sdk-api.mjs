@@ -161,6 +161,8 @@ const CONSTANTS = [
       doc: 'The values of the `orientation` attribute of a document or a section.' },
     { name: 'SectionType', area: 'kit', file: 'section_type', values: () => schema.simpleTypeValues('SectionType'),
       doc: 'The values of the `type` attribute of a section.' },
+    { name: 'FootnoteCounter', area: 'kit', file: 'footnote_counter', values: () => schema.simpleTypeValues('FootnoteCounter'),
+      doc: 'The values of the `footnote-counter` attribute of a document or a section.' },
     { name: 'BuiltinFont', area: 'kit', file: 'builtin_font', values: () => schema.simpleTypeValues('BuiltinFont'),
       doc: 'The values of the `core` attribute of a font: the built-in PDF fonts, which need no file.' },
     { name: 'PageScope', area: 'shared', file: 'page_scope', values: () => schema.simpleTypeValues('PageScope'),

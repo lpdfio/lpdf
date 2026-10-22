@@ -122,6 +122,10 @@ fn showcase_row_fill() { run_snapshot("showcase-row-fill"); }
 #[test]
 fn showcase_frame() { run_snapshot("showcase-frame"); }
 #[test]
+fn showcase_footnote() { run_snapshot("showcase-footnote"); }
+#[test]
+fn showcase_footnote_counter() { run_snapshot("showcase-footnote-counter"); }
+#[test]
 fn showcase_grid() { run_snapshot("showcase-grid"); }
 #[test]
 fn showcase_row() { run_snapshot("showcase-row"); }

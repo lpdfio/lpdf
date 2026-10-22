@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Footnote" subject="Notes at the bottom of the page where their number is" />
+
+    <!-- An <fn> in a text puts a small raised number in the line and the note it holds at the bottom of the page the
+         number lands on, under a short rule. The engine numbers the notes, and by default the numbers start over in
+         each section (footnote-counter on the document or a section says where else). The notes take room from the
+         text of their page: a line whose note would not fit moves to the next page, with its note, and the page it
+         leaves ends early. A note can hold spans.
+         Expected, page by page:
+           Section 1
+             1  notes 1 to 4, in the order of their numbers. The page ends after the second line of "Keepers who
+                stayed on the coast…" and leaves a gap above the rule: the last two lines of that text, one of them
+                holding the number 5, would not fit above their note
+             2  those two lines first, with the number 5, then the heading and the text with the number 6; notes 5 and 6
+           Section 2
+             1  one text with one note, numbered 1: the numbers start over in a section
+    -->
+    <section>
+      <layout margin="40pt">
+        <column gap="m">
+          <text font-size="xxl" font="Helvetica-Bold" color="primary">Footnote</text>
+          <text font-size="m" color="muted">A note at the bottom of the page where its number is.</text>
+
+          <text font-size="l" font="Helvetica-Bold">One note</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor<fn>The record is kept in the museum at the old customs house, in forty volumes.</fn>, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that.</text>
+
+          <text font-size="l" font="Helvetica-Bold">Several notes on a page</text>
+          <text>The oldest keeper claimed that she could tell the season from the smell of the oil alone<fn>Whale oil in winter, colza in spring, and later the paraffin the lighthouse board sent.</fn>, and she was seldom wrong. Nobody could say when the first entry was made<fn>The first leaf is lost; the earliest entry that can be read is from the autumn of 1811.</fn>, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin<fn>Some are written crosswise over the ruling, and a few <span font="Helvetica-Oblique">on the back of the page</span>.</fn> and onto the back of the page.</text>
+
+          <text>Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did.</text>
+          <text>Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand.</text>
+          <text>Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that.</text>
+          <text>Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did.</text>
+          <text>Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page, written in a hurried hand.</text>
+          <text>Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that.</text>
+          <text>Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did.</text>
+          <text>Keepers who stayed on the coast for many winters learned to read the record the way a sailor reads a chart. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. The last column held what the keepers could not leave out: a ship lost on the bar<fn>The brig Alder, in the November gale of 1834; the keeper rang the brass bell until morning.</fn>, a child born in the lamp room, or the winter the harbor froze from the pier to the point.</text>
+
+          <text font-size="l" font="Helvetica-Bold">On the next page</text>
+          <text>A note keeps to the page of its number. When the notes of a page would crowd out the line they belong to, the line moves to the next page, with its note<fn>This note is on the second page, with the number that stands in the line above it.</fn>, and the page before it ends a little early.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <layout margin="40pt">
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">A section of its own</text>
+          <text>The numbers of the notes start over in a section, so the note of this text is the first again<fn>Numbered 1, though the section before it has six notes.</fn>, and it stands at the bottom of this page.</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

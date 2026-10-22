@@ -1,4 +1,8 @@
-use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Capture, CaptureMode, Direction, FieldKind, HeightMode, Justify, Node, NodeKind, SectionLayout, Paginate, TextAlign, TextRun};
+use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Capture, CaptureMode, Direction, FieldKind, Footnote, HeightMode, Justify, Node, NodeKind, SectionLayout, Paginate, TextAlign, TextRun};
+
+// The path is spelled out because the WASI build includes this file from another crate.
+#[path = "layout/footnotes.rs"]
+mod footnotes;
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
 use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderCanvasClip, RenderCanvasLayer, RenderField, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind};
 use crate::tokens::FontWidths;
@@ -186,6 +190,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
             HeightMode::Full | HeightMode::Fill
         )
         && page.children[0].page_scope.is_none()
+        && !footnotes::has_footnotes(&page.children)
     {
         let (nodes, _) = layout_column(
             &page.children, avail_x, avail_y, avail_w, Some(avail_h),
@@ -225,16 +230,23 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
         fill_sinks(node, &PageCaptures::new(), &HashMap::new());
     }
 
+    // The notes of the footnotes take room at the bottom of their page, and are numbered once the counter is known.
+    let has_notes = footnotes::has_footnotes(&flow);
+    if has_notes {
+        footnotes::number_flow(&mut flow, page.footnote_counter, page.footnote_start);
+    }
+
     // Fast path: no chrome — standard pagination.
     if top_chrome.is_empty() && bot_chrome.is_empty() {
-        let chunks = split_into_pages(&flow, avail_w, avail_h, avail_h, 0.0);
+        let chunks = footnotes::split_flow(&flow, avail_w, avail_h, avail_h, page.footnote_counter, has_notes);
         return chunks
             .into_iter()
             .map(|chunk| {
-                let (nodes, _) = layout_column(
-                    &chunk, avail_x, avail_y, avail_w, Some(avail_h),
+                let (mut nodes, _) = layout_column(
+                    &chunk.nodes, avail_x, avail_y, avail_w, Some(avail_h - chunk.reserve),
                     0.0, &Align::Stretch, &Justify::Start,
                 );
+                nodes.extend(footnotes::draw_area(&chunk.notes, avail_x, avail_y + avail_h, avail_w, avail_h));
                 RenderPage {
                     width: page.width,
                     height: page.height,
@@ -258,7 +270,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
     let budget_rest  = (avail_h - top_always_h - bot_always_h).max(0.0);
 
     // ── Paginate flow with per-page budgets ──────────────────────────────────
-    let chunks = split_into_pages(&flow, avail_w, budget_first, budget_rest, 0.0);
+    let chunks = footnotes::split_flow(&flow, avail_w, budget_first, budget_rest, page.footnote_counter, has_notes);
     let total_pages = chunks.len();
 
     // ── Build each output page ───────────────────────────────────────────────
@@ -269,7 +281,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
         let is_first = idx == 0;
         let page_num = idx + 1;
 
-        let captured = page_captures(&chunk);
+        let captured = page_captures(&chunk.nodes);
         let page_chrome = |chrome: &[Node]| -> Vec<Node> {
             chrome.iter()
                 .filter(|n| page_scope_indices(&n.page_scope, total_pages).contains(&idx))
@@ -304,12 +316,13 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
         let flow_y = avail_y + top_h;
         let flow_budget = if is_first { budget_first } else { budget_rest };
         let (flow_nodes, _) = layout_column(
-            &chunk, avail_x, flow_y, avail_w, Some(flow_budget),
+            &chunk.nodes, avail_x, flow_y, avail_w, Some(flow_budget - chunk.reserve),
             0.0, &Align::Stretch, &Justify::Start,
         );
 
         let mut all_nodes = top_nodes;
         all_nodes.extend(flow_nodes);
+        all_nodes.extend(footnotes::draw_area(&chunk.notes, avail_x, bot_y, avail_w, flow_budget));
         all_nodes.extend(bot_nodes);
 
         pages_out.push(RenderPage {
@@ -411,7 +424,7 @@ type PageCaptures = HashMap<String, Vec<String>>;
 /// The words of a text, as it draws them: the runs of its spans joined, with the white space collapsed.
 fn text_words(node: &Node) -> String {
     let mut out = String::new();
-    for (i, run) in node.text_runs.iter().enumerate() {
+    for (i, run) in node.text_runs.iter().enumerate().filter(|(_, run)| run.footnote.is_none()) {
         if i > 0 && run.leading_space { out.push(' '); }
         out.push_str(&run.text);
     }
@@ -462,7 +475,7 @@ fn fill_sinks(node: &mut Node, here: &PageCaptures, before: &HashMap<String, Str
         let words = picked.or_else(|| before.get(&sink.key)).unwrap_or(&sink.fallback).clone();
         node.text_runs = vec![TextRun {
             text: words, leading_space: false, font: None, color: None, href: None,
-            underline: false, strike: false, bold: false,
+            underline: false, strike: false, bold: false, footnote: None,
         }];
     }
     for child in node.children.iter_mut() { fill_sinks(child, here, before); }
@@ -483,6 +496,40 @@ fn reserve_sink_lines(mut node: Node) -> Node {
 }
 
 // ── Source-level pagination ───────────────────────────────────────────────────
+
+/// The nodes still to be placed: the rest of the flow not yet touched, behind the pieces of nodes that were split
+/// or sent on to the next page. Cloning one is cheap, so a page can be filled to try it and the try thrown away.
+#[derive(Clone)]
+struct Pending<'a> {
+    flow:  &'a [Node],
+    next:  usize,
+    front: std::collections::VecDeque<Node>,
+}
+
+impl<'a> Pending<'a> {
+    fn new(flow: &'a [Node]) -> Self {
+        Pending { flow, next: 0, front: std::collections::VecDeque::new() }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.front.is_empty() && self.next >= self.flow.len()
+    }
+
+    fn pop(&mut self) -> Option<Node> {
+        if let Some(node) = self.front.pop_front() { return Some(node); }
+        let node = self.flow.get(self.next).cloned();
+        if node.is_some() { self.next += 1; }
+        node
+    }
+
+    fn push_front(&mut self, node: Node) {
+        self.front.push_front(node);
+    }
+
+    fn peek(&self) -> Option<&Node> {
+        self.front.front().or_else(|| self.flow.get(self.next))
+    }
+}
 
 /// Packs `nodes` (stacked vertically with `gap` between adjacent items) into
 /// page-sized chunks. The first chunk gets `budget_first` of vertical space,
@@ -505,68 +552,74 @@ fn split_into_pages(
         return vec![vec![]];
     }
 
-    let mut pages: Vec<Vec<Node>> = vec![vec![]];
+    let mut pending = Pending::new(nodes);
+    let mut pages: Vec<Vec<Node>> = Vec::new();
+    while !pending.is_empty() {
+        let budget = if pages.is_empty() { budget_first } else { budget_rest };
+        pages.push(fill_page(&mut pending, avail_w, budget, budget_rest, gap));
+    }
+    pages
+}
+
+/// Takes the nodes of one page off `pending`: as many as fit in `budget`, a node that does not fit being split
+/// or sent on whole. `next_budget` is what the page after it has, which keep-next looks at.
+fn fill_page(
+    pending: &mut Pending,
+    avail_w: f32,
+    budget: f32,
+    next_budget: f32,
+    gap: f32,
+) -> Vec<Node> {
+    let mut page: Vec<Node> = Vec::new();
     let mut used_h: f32 = 0.0;
-    let mut queue: std::collections::VecDeque<Node> = nodes.iter().cloned().collect();
 
-    let page_budget = |idx: usize| -> f32 {
-        if idx == 0 { budget_first } else { budget_rest }
-    };
-
-    while let Some(node) = queue.pop_front() {
-        // break-before: flush to a new page before placing this node.
-        // Requeue without the flag to avoid an infinite loop on a fresh page.
-        if node.paginate == Paginate::BreakBefore && !pages.last().expect("pages is non-empty").is_empty() {
-            pages.push(vec![]);
-            used_h = 0.0;
-            queue.push_front(Node { paginate: Paginate::None, ..node });
-            continue;
+    while let Some(node) = pending.pop() {
+        // break-before: end the page before this node. Requeue without the flag to avoid an infinite loop on
+        // a fresh page.
+        if node.paginate == Paginate::BreakBefore && !page.is_empty() {
+            pending.push_front(Node { paginate: Paginate::None, ..node });
+            break;
         }
 
-        let cur_idx = pages.len() - 1;
-        let budget = page_budget(cur_idx);
-        let gap_before = if pages.last().expect("pages is non-empty").is_empty() { 0.0 } else { gap };
+        let gap_before = if page.is_empty() { 0.0 } else { gap };
         let h = measure_height(&node, avail_w, budget);
         let remaining = budget - used_h - gap_before;
 
-        let mut needs_break_after = false;
+        let needs_break_after;
 
         if h <= remaining + 0.5 {
             // keep-next: if the immediately following sibling would not fit on this
             // page after placing this node, and both fit together on the next page,
             // bump this node to the next page so they stay together.
             let do_keep_next = node.paginate == Paginate::KeepNext
-                && !pages.last().expect("pages is non-empty").is_empty()
-                && queue.front().map_or(false, |next| {
+                && !page.is_empty()
+                && pending.peek().map_or(false, |next| {
                     let next_h = measure_height(next, avail_w, budget);
                     let remaining_for_next = remaining - h - gap;
-                    let next_budget = page_budget(pages.len());
                     next_h > remaining_for_next + 0.5
                         && h + gap + next_h <= next_budget + 0.5
                 });
 
             if do_keep_next {
-                pages.push(vec![]);
-                used_h = 0.0;
-                queue.push_front(node);
-            } else {
-                needs_break_after = node.paginate == Paginate::BreakAfter;
-                // Detect silently-ignored keep-next (only when debug=true): the
-                // next sibling doesn't fit after this node AND both together
-                // exceed a full page, so the constraint cannot be honoured.
-                let warn_keep_next = node.debug
-                    && node.paginate == Paginate::KeepNext
-                    && queue.front().map_or(false, |next| {
-                        let next_h = measure_height(next, avail_w, page_budget(pages.len()));
-                        let remaining_for_next = remaining - h - gap;
-                        next_h > remaining_for_next + 0.5
-                            && h + gap + next_h > page_budget(pages.len()) + 0.5
-                    });
-                pages.last_mut().expect("pages is non-empty").push(node);
-                used_h += gap_before + h;
-                if warn_keep_next {
-                    queue.push_front(make_keep_next_warning());
-                }
+                pending.push_front(node);
+                break;
+            }
+            needs_break_after = node.paginate == Paginate::BreakAfter;
+            // Detect silently-ignored keep-next (only when debug=true): the
+            // next sibling doesn't fit after this node AND both together
+            // exceed a full page, so the constraint cannot be honoured.
+            let warn_keep_next = node.debug
+                && node.paginate == Paginate::KeepNext
+                && pending.peek().map_or(false, |next| {
+                    let next_h = measure_height(next, avail_w, next_budget);
+                    let remaining_for_next = remaining - h - gap;
+                    next_h > remaining_for_next + 0.5
+                        && h + gap + next_h > next_budget + 0.5
+                });
+            page.push(node);
+            used_h += gap_before + h;
+            if warn_keep_next {
+                pending.push_front(make_keep_next_warning());
             }
         } else {
             let target = remaining.max(0.0);
@@ -579,57 +632,49 @@ fn split_into_pages(
                             last.paginate = Paginate::BreakAfter;
                         }
                     }
-                    pages.last_mut().expect("pages is non-empty").push(first);
-                    pages.push(vec![]);
-                    used_h = 0.0;
+                    page.push(first);
                     for item in rest.into_iter().rev() {
-                        queue.push_front(item);
+                        pending.push_front(item);
                     }
+                    break;
                 }
                 SplitOutcome::NothingFits(rest) => {
-                    if pages.last().expect("pages is non-empty").is_empty() {
+                    if page.is_empty() {
                         // Already on a fresh page and still can't split — force-place
                         // the first piece to prevent an infinite loop.
                         let first = rest.into_iter().next().unwrap_or(node);
                         needs_break_after = first.paginate == Paginate::BreakAfter;
                         let fh = measure_height(&first, avail_w, budget);
-                        pages.last_mut().expect("pages is non-empty").push(first);
+                        page.push(first);
                         used_h = fh.min(budget);
                     } else {
-                        pages.push(vec![]);
-                        used_h = 0.0;
                         // paginate flags are preserved on rest items via clone
                         for item in rest.into_iter().rev() {
-                            queue.push_front(item);
+                            pending.push_front(item);
                         }
+                        break;
                     }
                 }
                 SplitOutcome::Atomic => {
-                    if pages.last().expect("pages is non-empty").is_empty() {
+                    if page.is_empty() {
                         needs_break_after = node.paginate == Paginate::BreakAfter;
-                        pages.last_mut().expect("pages is non-empty").push(node);
+                        page.push(node);
                         used_h = budget;
                     } else {
-                        pages.push(vec![]);
-                        used_h = 0.0;
-                        queue.push_front(node);
+                        pending.push_front(node);
+                        break;
                     }
                 }
             }
         }
 
-        // break-after: flush to a new page after this node (or its last fragment) is placed.
-        if needs_break_after && !pages.last().expect("pages is non-empty").is_empty() {
-            pages.push(vec![]);
-            used_h = 0.0;
+        // break-after: end the page after this node (or its last fragment) is placed.
+        if needs_break_after && !page.is_empty() {
+            break;
         }
     }
 
-    while pages.len() > 1 && pages.last().map_or(true, |p| p.is_empty()) {
-        pages.pop();
-    }
-
-    pages
+    page
 }
 
 /// Construct a small red diagnostic text node injected into the layout stream
@@ -648,6 +693,7 @@ fn make_keep_next_warning() -> Node {
             underline: false,
             strike: false,
             bold: false,
+            footnote: None,
         }],
         font: "Helvetica".to_string(),
         font_size: 7.0,
@@ -1170,6 +1216,23 @@ struct SplitAtom {
     /// True if this atom came from a `<span>`; spans stay as single atoms
     /// (not word-sliced) to keep formatting intact.
     is_span:        bool,
+    /// The note, on the atom that stands for the anchor of a footnote. Its `text` is the number it shows.
+    footnote:       Option<Box<Footnote>>,
+}
+
+/// A footnote's number is set at this share of the text's size, and its baseline raised by this share of it.
+const SUP_SCALE: f32 = 0.62;
+const SUP_RISE:  f32 = 0.33;
+
+/// The size of a raised number in a line of `font_size`, and how far below the line's top its box starts.
+fn sup_geometry(font_size: f32) -> (f32, f32) {
+    let size = font_size * SUP_SCALE;
+    (size, font_size - font_size * SUP_RISE - size)
+}
+
+/// The width of a word of a line, set in `font_size`, or at the size of a raised number when `sup`.
+fn word_width(font: &str, text: &str, font_size: f32, sup: bool) -> f32 {
+    text_width(font, text, if sup { font_size * SUP_SCALE } else { font_size })
 }
 
 /// Tokenize text_runs + wrap into lines. Mirrors the shape of `layout_text`'s
@@ -1187,7 +1250,20 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
 
         let run_leading = ri > 0 && run.leading_space;
 
-        if is_span {
+        if let Some(note) = &run.footnote {
+            atoms.push(SplitAtom {
+                text: note.number.to_string(),
+                font_override: None,
+                color_override: None,
+                href: None,
+                underline: false,
+                strike: false,
+                leading_space: pending_leading || run_leading,
+                is_span: true,
+                footnote: Some(note.clone()),
+            });
+            pending_leading = false;
+        } else if is_span {
             if !run.text.is_empty() {
                 atoms.push(SplitAtom {
                     text: run.text.clone(),
@@ -1198,6 +1274,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
                     strike: run.strike,
                     leading_space: pending_leading || run_leading,
                     is_span: true,
+                    footnote: None,
                 });
                 pending_leading = false;
             }
@@ -1212,6 +1289,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
                     strike: false,
                     leading_space: if j == 0 { pending_leading || run_leading } else { true },
                     is_span: false,
+                    footnote: None,
                 });
                 pending_leading = false;
             }
@@ -1227,14 +1305,21 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
 
     for atom in atoms {
         let font_for_atom = atom.font_override.as_deref().unwrap_or(parent_font);
-        let aw = text_width(font_for_atom, &atom.text, font_size);
+        let aw = word_width(font_for_atom, &atom.text, font_size, atom.footnote.is_some());
         let gap = if cur_line.is_empty() || !atom.leading_space { 0.0 } else { space_w };
         if cur_line.is_empty() || cur_w + gap + aw <= avail_w + 0.01 {
             cur_w += gap + aw;
             cur_line.push(atom);
         } else {
+            // The number of a footnote stays with the word before it, which goes down to the next line too.
+            let carried = if atom.footnote.is_some() && !atom.leading_space && cur_line.len() > 1 { cur_line.pop() } else { None };
             lines.push(std::mem::take(&mut cur_line));
             cur_w = aw;
+            if let Some(prev) = carried {
+                let font_for_prev = prev.font_override.as_deref().unwrap_or(parent_font);
+                cur_w += word_width(font_for_prev, &prev.text, font_size, prev.footnote.is_some());
+                cur_line.push(prev);
+            }
             // Do NOT strip leading_space here. The gap calculation above already
             // handles "no space before the first atom on an empty line" via the
             // `cur_line.is_empty()` guard.  Stripping leading_space would cause
@@ -1258,7 +1343,15 @@ fn atoms_to_runs(atoms: &[SplitAtom]) -> Vec<TextRun> {
     for atom in atoms {
         let leading = if !first_emitted { false } else { atom.leading_space };
 
-        if atom.is_span {
+        if let Some(note) = &atom.footnote {
+            runs.push(TextRun {
+                text: String::new(),
+                leading_space: leading,
+                font: None, color: None, href: None,
+                underline: false, strike: false, bold: false,
+                footnote: Some(note.clone()),
+            });
+        } else if atom.is_span {
             runs.push(TextRun {
                 text: atom.text.clone(),
                 leading_space: leading,
@@ -1268,12 +1361,13 @@ fn atoms_to_runs(atoms: &[SplitAtom]) -> Vec<TextRun> {
                 underline: atom.underline,
                 strike: atom.strike,
                 bold: false,
+                footnote: None,
             });
         } else {
             // Try to append to the last plain run.
             let can_append = runs.last().map_or(false, |r| {
                 r.font.is_none() && r.color.is_none() && r.href.is_none()
-                    && !r.underline && !r.strike
+                    && !r.underline && !r.strike && r.footnote.is_none()
             });
             if can_append {
                 let r = runs.last_mut().unwrap();
@@ -1289,6 +1383,7 @@ fn atoms_to_runs(atoms: &[SplitAtom]) -> Vec<TextRun> {
                     underline: false,
                     strike: false,
                     bold: false,
+                    footnote: None,
                 });
             }
         }
@@ -2611,6 +2706,11 @@ fn measure_natural_w(node: &Node) -> f32 {
             let mut first = true;
             for run in &node.text_runs {
                 let font = run.font.as_deref().unwrap_or(&node.font);
+                if let Some(note) = &run.footnote {
+                    total += word_width(font, &note.number.to_string(), size, true);
+                    first = false;
+                    continue;
+                }
                 for (j, word) in run.text.split_whitespace().enumerate() {
                     if !first || j > 0 { total += space; }
                     total += text_width(font, word, size);
@@ -2660,6 +2760,8 @@ struct Atom {
     href:      Option<String>,
     underline: bool,
     strike:    bool,
+    /// The number of a footnote, drawn small and raised.
+    sup:       bool,
 }
 
 enum Tok { Space, Word(Atom) }
@@ -2681,7 +2783,7 @@ struct TextFit {
 const ELLIPSIS: &str = "...";
 
 fn text_line_width(line: &TextLine, font_size: f32) -> f32 {
-    line.iter().map(|(atom, gap)| gap + text_width(&atom.font, &atom.text, font_size)).sum()
+    line.iter().map(|(atom, gap)| gap + word_width(&atom.font, &atom.text, font_size, atom.sup)).sum()
 }
 
 /// Shorten `line` until it and the dots after it fit in `limit`, and end it in them. The last characters go
@@ -2730,11 +2832,16 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
 
         if ri > 0 && run.leading_space { toks.push(Tok::Space); }
 
-        if is_span {
+        if let Some(note) = &run.footnote {
+            toks.push(Tok::Word(Atom {
+                text: note.number.to_string(), font: font.to_string(), color,
+                href: None, underline: false, strike: false, sup: true,
+            }));
+        } else if is_span {
             if !run.text.is_empty() {
                 toks.push(Tok::Word(Atom {
                     text: run.text.clone(), font: font.to_string(), color,
-                    href: run.href.clone(), underline: run.underline, strike: run.strike,
+                    href: run.href.clone(), underline: run.underline, strike: run.strike, sup: false,
                 }));
             }
         } else {
@@ -2742,7 +2849,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 if j > 0 { toks.push(Tok::Space); }
                 toks.push(Tok::Word(Atom {
                     text: word.to_string(), font: font.to_string(), color: color.clone(),
-                    href: None, underline: false, strike: false,
+                    href: None, underline: false, strike: false, sup: false,
                 }));
             }
         }
@@ -2766,15 +2873,21 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
         match tok {
             Tok::Space => { pending_space = true; }
             Tok::Word(atom) => {
-                let aw  = text_width(&atom.font, &atom.text, font_size);
+                let aw  = word_width(&atom.font, &atom.text, font_size, atom.sup);
                 let gap = if cur_line.is_empty() || !pending_space { 0.0 } else { space_w };
                 if cur_line.is_empty() || cur_line_w + gap + aw <= fit.wrap_w + 0.01 {
                     cur_line_w += gap + aw;
                     cur_line.push((atom, gap));
                 } else {
+                    // The number of a footnote stays with the word before it, which goes down to the next line too.
+                    let carried = if atom.sup && !pending_space && cur_line.len() > 1 { cur_line.pop() } else { None };
                     lines.push(std::mem::take(&mut cur_line));
-                    cur_line.push((atom, 0.0));
                     cur_line_w = aw;
+                    if let Some((prev, _)) = carried {
+                        cur_line_w += word_width(&prev.font, &prev.text, font_size, prev.sup);
+                        cur_line.push((prev, 0.0));
+                    }
+                    cur_line.push((atom, 0.0));
                 }
                 pending_space = false;
             }
@@ -2840,9 +2953,9 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
 
         for (atom, gap) in line {
             cur_x += gap;
-            let aw = text_width(&atom.font, &atom.text, font_size);
+            let aw = word_width(&atom.font, &atom.text, font_size, atom.sup);
 
-            let plain = atom.href.is_none() && !atom.underline && !atom.strike;
+            let plain = atom.href.is_none() && !atom.underline && !atom.strike && !atom.sup;
 
             if plain {
                 // If font or color changed, flush the current group first.
@@ -2874,10 +2987,16 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                     }));
                 }
 
+                let (atom_size, atom_y) = if atom.sup {
+                    let (size, dy) = sup_geometry(font_size);
+                    (size, line_y + dy)
+                } else {
+                    (font_size, line_y)
+                };
                 let mut seg = vec![RenderNode::Text(RenderText {
-                    x: cur_x, y: line_y,
+                    x: cur_x, y: atom_y,
                     content: atom.text.clone(), font: atom.font.clone(),
-                    size: font_size, color: atom.color.clone(),
+                    size: atom_size, color: atom.color.clone(),
                     // Decorated atoms (spans) always use their computed cur_x as a
                     // left-edge anchor; alignment has already been applied at the line level.
                     text_align: "left".to_string(), line_width: 0.0,
@@ -3030,7 +3149,10 @@ fn text_natural_w(node: &Node) -> f32 {
 
         if ri > 0 && run.leading_space { pending_space = true; }
 
-        if is_span {
+        if let Some(note) = &run.footnote {
+            if pending_space { total += space_w; pending_space = false; }
+            total += word_width(font, &note.number.to_string(), font_size, true);
+        } else if is_span {
             if !run.text.is_empty() {
                 if pending_space { total += space_w; pending_space = false; }
                 total += text_width(font, &run.text, font_size);
@@ -5224,5 +5346,238 @@ mod tests {
         let dot = &nodes_of(&tree, "canvas-ellipse")[0];
         let cx = dot["cx"].as_f64().unwrap();
         assert!(cx > 28.0 && cx < 28.0 + 539.28 / 2.0, "cx={cx}");
+    }
+
+    // ── Footnotes ─────────────────────────────────────────────────────────────
+
+    /// Every text of a page in draw order: its content, x, y and size.
+    fn texts_on(tree: &serde_json::Value, page: usize) -> Vec<(String, f64, f64, f64)> {
+        fn walk(v: &serde_json::Value, out: &mut Vec<(String, f64, f64, f64)>) {
+            if v["type"] == "text" {
+                out.push((
+                    v["content"].as_str().unwrap_or("").to_string(),
+                    v["x"].as_f64().unwrap_or(0.0), v["y"].as_f64().unwrap_or(0.0), v["size"].as_f64().unwrap_or(0.0),
+                ));
+            }
+            if let Some(arr) = v["nodes"].as_array() { for c in arr { walk(c, out); } }
+        }
+        let mut out = Vec::new();
+        walk(&tree["pages"][page], &mut out);
+        out
+    }
+
+    /// A document of sections, each `(attributes, layout children)`, with a margin of 28pt.
+    fn sections_doc(document_attrs: &str, sections: &[(&str, &str)]) -> String {
+        let sections: String = sections.iter()
+            .map(|(attrs, body)| format!(r#"<section {attrs}><layout margin="28pt">{body}</layout></section>"#))
+            .collect();
+        format!(r#"<lpdf version="1"><document size="a4" {document_attrs}>{sections}</document></lpdf>"#)
+    }
+
+    /// The numbers of the notes of a page, which are the small texts at its foot (size below the body's).
+    fn note_labels(tree: &serde_json::Value, page: usize) -> Vec<String> {
+        texts_on(tree, page).into_iter()
+            .filter(|(_, x, y, size)| *x == 28.0 && *y > 600.0 && *size < 6.0)
+            .map(|(c, ..)| c)
+            .collect()
+    }
+
+    /// The numbers of the anchors in the text of a page: the raised texts above the notes.
+    fn anchor_numbers(tree: &serde_json::Value, page: usize) -> Vec<String> {
+        texts_on(tree, page).into_iter()
+            .filter(|(_, _, y, size)| (*size - 6.82).abs() < 0.01 && *y < 600.0)
+            .map(|(c, ..)| c)
+            .collect()
+    }
+
+    #[test]
+    fn a_footnote_shows_a_raised_number_in_its_line_and_the_note_at_the_foot_of_the_page() {
+        let tree = engine_render(&minimal(r#"<text>The standard model<fn>First proposed in the 1960s.</fn> describes three forces.</text>"#));
+        let texts = texts_on(&tree, 0);
+        let word = texts.iter().find(|t| t.0 == "The standard model").unwrap();
+        let anchor = texts.iter().find(|t| t.0 == "1" && t.3 < 8.0 && t.2 < 100.0).expect("the anchor");
+        let after = texts.iter().find(|t| t.0 == "describes three forces.").unwrap();
+        assert!((anchor.3 - 11.0 * SUP_SCALE as f64).abs() < 0.01, "the anchor is small: {}", anchor.3);
+        // The anchor sits right after the word, a little below the line's top so that its baseline is above the line's.
+        assert!((anchor.1 - (word.1 + text_width("Helvetica", "The standard model", 11.0) as f64)).abs() < 0.01);
+        assert!(anchor.2 > word.2 && anchor.2 + anchor.3 < word.2 + word.3, "{anchor:?} against {word:?}");
+        assert!(after.1 > anchor.1, "the text goes on after the anchor");
+        // The note stands at the foot of the page, under the body, with its number hanging at the left.
+        let note = texts.iter().find(|t| t.0 == "First proposed in the 1960s.").expect("the note");
+        let label = texts.iter().find(|t| t.0 == "1" && t.2 > 700.0).expect("the note's number");
+        assert!(note.2 > 700.0 && note.2 + note.3 < 841.89 - 28.0 + 1.0, "{note:?}");
+        assert_eq!(label.1, 28.0);
+        assert!(note.1 > label.1, "the words stand to the right of the number");
+        assert_eq!(nodes_of(&tree, "line").len(), 1, "one rule above the notes");
+    }
+
+    #[test]
+    fn several_notes_on_a_page_stack_in_order_under_one_rule() {
+        let tree = engine_render(&minimal(
+            r#"<text>One<fn>Note A.</fn> two<fn>Note B.</fn> three<fn>Note C.</fn>.</text>"#,
+        ));
+        let texts = texts_on(&tree, 0);
+        let ys: Vec<f64> = ["Note A.", "Note B.", "Note C."].iter()
+            .map(|n| texts.iter().find(|t| t.0 == *n).unwrap_or_else(|| panic!("{n} missing")).2)
+            .collect();
+        assert!(ys[0] < ys[1] && ys[1] < ys[2], "{ys:?}");
+        assert_eq!(note_labels(&tree, 0), ["1", "2", "3"]);
+        assert_eq!(anchor_numbers(&tree, 0), ["1", "2", "3"]);
+        let rules = nodes_of(&tree, "line");
+        assert_eq!(rules.len(), 1);
+        assert!(rules[0]["y1"].as_f64().unwrap() < ys[0], "the rule is above the first note");
+    }
+
+    #[test]
+    fn the_notes_stand_above_a_region_at_the_bottom() {
+        let tree = engine_render(&minimal(
+            r#"<region pin="bottom"><text>FOOT</text></region><text>Body<fn>The note.</fn> text.</text>"#,
+        ));
+        let ys = text_ys(&tree["pages"][0]);
+        assert!(ys["The note."] < ys["FOOT"], "the note {} is above the footer {}", ys["The note."], ys["FOOT"]);
+        assert!(ys["The note."] > 700.0);
+    }
+
+    #[test]
+    fn a_line_whose_note_does_not_fit_moves_to_the_next_page_with_its_note() {
+        // 760pt of frame leave room for one more line, but not for the line and its note.
+        let with = engine_render(&minimal(r#"<frame height="760pt"/><text>Last line<fn>The note.</fn> here.</text>"#));
+        assert_eq!(with["pages"].as_array().unwrap().len(), 2);
+        assert!(texts_on(&with, 0).is_empty(), "nothing on the first page: {:?}", texts_on(&with, 0));
+        let second = texts_on(&with, 1);
+        assert!(second.iter().any(|t| t.0 == "Last line") && second.iter().any(|t| t.0 == "The note."), "{second:?}");
+
+        let without = engine_render(&minimal(r#"<frame height="760pt"/><text>Last line here.</text>"#));
+        assert_eq!(without["pages"].as_array().unwrap().len(), 1, "without the note the line fits");
+    }
+
+    #[test]
+    fn the_note_of_an_anchor_in_the_second_part_of_a_split_text_is_on_the_second_page() {
+        let words = "word ".repeat(2400);
+        let tree = engine_render(&minimal(&format!(r#"<text>{words}end<fn>Late note.</fn>.</text>"#)));
+        let pages = tree["pages"].as_array().unwrap().len();
+        assert!(pages >= 2);
+        for page in 0..pages - 1 {
+            assert!(!texts_on(&tree, page).iter().any(|t| t.0 == "Late note."), "page {} has the note", page + 1);
+        }
+        let last = texts_on(&tree, pages - 1);
+        assert!(last.iter().any(|t| t.0 == "Late note."), "{last:?}");
+        assert_eq!(anchor_numbers(&tree, pages - 1), ["1"]);
+    }
+
+    #[test]
+    fn the_number_of_a_footnote_stays_with_the_word_before_it() {
+        // The line has room for "alpha beta gamma", and not for the number after it.
+        let width = text_width("Helvetica", "alpha beta gamma", 11.0) + 1.0;
+        let tree = engine_render(&minimal(&format!(
+            r#"<text width="{width}pt">alpha beta gamma<fn>The note.</fn> delta</text>"#
+        )));
+        let body: Vec<String> = texts_on(&tree, 0).into_iter().filter(|t| t.2 < 100.0 && t.3 > 10.0).map(|t| t.0).collect();
+        assert_eq!(body[0], "alpha beta", "{body:?}");
+        assert_eq!(body[1], "gamma", "{body:?}");
+    }
+
+    #[test]
+    fn the_counter_set_to_page_numbers_each_page_from_one() {
+        let tree = engine_render(&sections_doc("footnote-counter=\"page\"", &[(
+            "",
+            r#"<column><text>A<fn>a1</fn> b<fn>a2</fn></text></column><column paginate="break-before"><text>C<fn>b1</fn> d<fn>b2</fn> e<fn>b3</fn></text></column>"#,
+        )]));
+        assert_eq!(anchor_numbers(&tree, 0), ["1", "2"]);
+        assert_eq!(note_labels(&tree, 0), ["1", "2"]);
+        assert_eq!(anchor_numbers(&tree, 1), ["1", "2", "3"]);
+        assert_eq!(note_labels(&tree, 1), ["1", "2", "3"]);
+    }
+
+    #[test]
+    fn the_counter_set_to_section_numbers_across_pages_and_starts_over_in_the_next_section() {
+        let page_break = r#"<column paginate="break-before"><text>C<fn>b1</fn></text></column>"#;
+        let tree = engine_render(&sections_doc("", &[
+            ("", &format!("<column><text>A<fn>a1</fn> b<fn>a2</fn></text></column>{page_break}")),
+            ("footnote-counter=\"section\"", "<text>D<fn>c1</fn></text>"),
+        ]));
+        assert_eq!(note_labels(&tree, 0), ["1", "2"]);
+        assert_eq!(note_labels(&tree, 1), ["3"], "the numbers go on over the page");
+        assert_eq!(note_labels(&tree, 2), ["1"], "and start over in the next section");
+    }
+
+    #[test]
+    fn the_counter_set_to_document_goes_on_across_the_sections_that_count_so() {
+        let tree = engine_render(&sections_doc("footnote-counter=\"document\"", &[
+            ("", "<text>A<fn>a1</fn> b<fn>a2</fn></text>"),
+            ("", "<text>C<fn>b1</fn></text>"),
+            ("footnote-counter=\"section\"", "<text>D<fn>c1</fn></text>"),
+            ("", "<text>E<fn>d1</fn></text>"),
+        ]));
+        assert_eq!(note_labels(&tree, 0), ["1", "2"]);
+        assert_eq!(note_labels(&tree, 1), ["3"]);
+        assert_eq!(note_labels(&tree, 2), ["1"], "a section with a counter of its own starts over");
+        assert_eq!(note_labels(&tree, 3), ["4"], "the next one goes on from the sections that count across the document");
+        assert_eq!(anchor_numbers(&tree, 3), ["4"]);
+    }
+
+    #[test]
+    fn a_footnote_in_a_single_full_height_child_still_shows_its_note() {
+        let tree = engine_render(&minimal(r#"<column height="full"><text>Body<fn>The note.</fn> text.</text></column>"#));
+        assert!(texts_on(&tree, 0).iter().any(|t| t.0 == "The note."));
+    }
+
+    #[test]
+    fn a_note_taller_than_the_page_is_cut_at_the_page() {
+        let words = "word ".repeat(3000);
+        let tree = engine_render(&minimal(&format!(r#"<text>Body<fn>{words}</fn> text.</text>"#)));
+        let page_h = 841.89;
+        for (c, _, y, size) in texts_on(&tree, 0) {
+            assert!(y + size <= page_h, "{c} is drawn at {y}, past the page");
+        }
+        assert!(texts_on(&tree, 0).iter().any(|t| t.0 == "Body"), "the body is still drawn");
+    }
+
+    #[test]
+    fn a_page_keeps_back_only_the_room_its_notes_need() {
+        // The text of the fixture that ends page 1 early: with the room for all six notes of the first fill a third
+        // line does not fit, and with the room for the five that stand on the page it does. Only the search for
+        // the tightest room finds it. The default widow rule moves the last two lines together, and fits neither.
+        let xml = include_str!("../../../test/fixtures/showcase-footnote.xml");
+        let first_lines = |xml: &str, page: usize| -> Vec<String> {
+            texts_on(&engine_render(xml), page).into_iter().filter(|t| t.3 > 10.0).map(|t| t.0).collect()
+        };
+        let labels = |xml: &str| -> Vec<String> {
+            texts_on(&engine_render(xml), 0).into_iter().filter(|t| t.3 < 6.0 && t.2 > 600.0 && t.1 == 40.0).map(|t| t.0).collect()
+        };
+        assert!(first_lines(xml, 1)[0].starts_with("worth remembering. The last column"));
+        assert_eq!(labels(xml), ["1", "2", "3", "4"]);
+
+        let tight = xml.replace("<text>Keepers who", "<text widows=\"1\">Keepers who");
+        assert!(first_lines(&tight, 0).iter().any(|l| l.starts_with("worth remembering. The last column")), "the line fits");
+        assert_eq!(labels(&tight), ["1", "2", "3", "4", "5"]);
+    }
+
+    #[test]
+    fn the_notes_never_overlap_the_text_over_a_range_of_page_fills() {
+        let words = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau";
+        let text = format!(
+            r#"<text width="220pt">{words}<fn>First note, a little longer than one line of the note area so that it wraps onto a second line.</fn> {words}<fn>Second.</fn> {words}<fn>Third note.</fn> {words}</text>"#
+        );
+        for height in (400..=770).step_by(7) {
+            let tree = engine_render(&minimal(&format!(r#"<frame height="{height}pt"/>{text}<frame height="{height}pt"/>{text}"#)));
+            for page in 0..tree["pages"].as_array().unwrap().len() {
+                let rules = nodes_of(&tree["pages"][page], "line");
+                let Some(rule) = rules.first() else { continue };
+                let rule_y = rule["y1"].as_f64().unwrap();
+                for (content, _, y, size) in texts_on(&tree, page) {
+                    if size > 10.0 {
+                        assert!(y + size * 1.2 <= rule_y + 0.01, "height {height}, page {}: {content:?} ends at {} past the rule at {rule_y}", page + 1, y + size * 1.2);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_document_without_footnotes_has_no_rule_and_no_notes() {
+        let tree = engine_render(&minimal(r#"<text>Plain text.</text>"#));
+        assert!(nodes_of(&tree, "line").is_empty());
+        assert_eq!(texts_on(&tree, 0).len(), 1);
     }
 }
