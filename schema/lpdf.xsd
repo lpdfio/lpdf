@@ -109,6 +109,17 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <xs:simpleType name="FootnoteCounter">
+    <xs:annotation>
+      <xs:documentation>Where the numbers of the footnotes start over: on every page, in every section, or never.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="page"/>
+      <xs:enumeration value="section"/>
+      <xs:enumeration value="document"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="BookmarkLevel">
     <xs:restriction base="xs:positiveInteger">
       <xs:maxInclusive value="6"/>
@@ -1031,6 +1042,11 @@
       <xs:attribute name="orientation" type="Orientation"/>
       <xs:attribute name="background"  type="Fill"/>
       <xs:attribute name="debug"       type="xs:boolean"/>
+      <xs:attribute name="footnote-counter" type="FootnoteCounter">
+        <xs:annotation>
+          <xs:documentation>Where the numbers of the footnotes start over: on every page, in every section (the default), or never, so that they run on through the document. A section's own footnote-counter overrides it.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
     </xs:complexType>
   </xs:element>
 
@@ -1061,6 +1077,11 @@
       <xs:attribute name="type"        type="SectionType">
         <xs:annotation>
           <xs:documentation>toc makes the section the document's table of contents. It is laid out after the other sections, with the data $toc: one entry per bookmark outside it, with index, level, label, page, anchor and indent. Repeat an element over it with data-source="$toc". One section per document may be a table of contents.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="footnote-counter" type="FootnoteCounter">
+        <xs:annotation>
+          <xs:documentation>Where the numbers of the footnotes in this section start over: on every page, in this section (the default), or never, so that they run on from the earlier sections that number across the document. Overrides the document's.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="toc-indent-step" type="TokenScaleOrPt">
@@ -1227,6 +1248,17 @@
     </xs:complexType>
   </xs:element>
 
+  <xs:element name="fn">
+    <xs:annotation>
+      <xs:documentation>A footnote. Its place in the text shows a small raised number, and its words go at the bottom of the page where that number lands, under a short rule, in the order of the numbers. The engine numbers the notes: footnote-counter on the document or the section says where the numbers start over. A page with notes has less room for the text, so the line with the number moves to the next page when its note does not fit. The note holds words and spans. Only a text of the layout may hold one: a text-at, a table and a region cannot.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType mixed="true">
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element ref="span"/>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+
   <xs:element name="img">
     <xs:annotation>
       <xs:documentation>An image. It is never stretched. With only a width or a height, the other follows the image's proportions. With both, they are a maximum: the image takes the largest size that fits in them, and its box becomes that size, which the parent's align places. To put images of different shapes in slots of one size, wrap each in a frame of that size. With neither, the image has its natural size.</xs:documentation>
@@ -1315,11 +1347,12 @@
 
   <xs:element name="text">
     <xs:annotation>
-      <xs:documentation>A block of wrapping text. Use span children to style parts of it. Splits across pages between lines.</xs:documentation>
+      <xs:documentation>A block of wrapping text. Use span children to style parts of it, and fn children for footnotes. Splits across pages between lines.</xs:documentation>
     </xs:annotation>
     <xs:complexType mixed="true">
       <xs:choice minOccurs="0" maxOccurs="unbounded">
         <xs:element ref="span"/>
+        <xs:element ref="fn"/>
       </xs:choice>
       <xs:attributeGroup ref="TextCore"/>
       <xs:attributeGroup ref="WidthAttr"/>

@@ -444,6 +444,15 @@ fn pages() -> String {
     (1..=200).map(|n| format!("<text>Line {n}</text>")).collect()
 }
 
+const NOTE: &str = "<text>Last<fn>The last note.</fn></text>";
+
+/// Enough text for four pages, with a footnote on the first line of three of them, for the numbers of the notes.
+fn noted_pages() -> String {
+    (1..=200)
+        .map(|n| if n % 60 == 0 { format!("<text>Line {n}<fn>Note {n}.</fn></text>") } else { format!("<text>Line {n}</text>") })
+        .collect()
+}
+
 fn each_slot(one: impl Fn(&str) -> String) -> String {
     SLOTS.iter().map(|slot| one(slot)).collect()
 }
@@ -470,6 +479,16 @@ fn subjects() -> Vec<Subject> {
             lpdf("", &format!("<document><section {a}><layout>{c}</layout></section><section><layout>{BOOKMARKED}</layout></section></document>"))
         })
         .content(ONE),
+        // The numbers of the footnotes: notes on three pages, then a section with a note.
+        Subject::new("document", |a, _| {
+            lpdf("", &format!("<document {a}><section><layout>{}</layout></section><section><layout>{NOTE}</layout></section></document>", noted_pages()))
+        })
+        .only(&["footnote-counter"]),
+        // The section before it counts across the document, for a section that does to go on from it.
+        Subject::new("section", |a, _| {
+            lpdf("", &format!("<document><section footnote-counter=\"document\"><layout>{NOTE}</layout></section><section {a}><layout>{}</layout></section></document>", noted_pages()))
+        })
+        .only(&["footnote-counter"]),
         Subject::new("layout", |a, c| lpdf("", &format!("<document><section><layout {a}>{c}</layout></section></document>"))).content(ONE),
         Subject::new("meta", |a, _| lpdf("", &format!("<document><meta {a}/><section><layout>{ONE}</layout></section></document>"))),
         Subject::new("font", |a, _| {

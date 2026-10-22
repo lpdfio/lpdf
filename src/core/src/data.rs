@@ -264,6 +264,7 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, toc_indent_step
                     underline: false,
                     strike:    false,
                     bold:      false,
+                    footnote: None,
                 }]
             };
         }
@@ -389,6 +390,7 @@ mod tests {
             underline: false,
             strike: false,
             bold: false,
+            footnote: None,
         }];
         n
     }
@@ -405,6 +407,7 @@ mod tests {
             background: None,
             gradients: HashMap::new(),
             debug: false,
+            footnote_counter: None,
             sections: vec![Section {
                 children: vec![SectionChild::Layout { margin: [0.0; 4], children: layout_children }],
                 options: SectionOptions { size: Some((595.28, 841.89)), ..SectionOptions::default() },

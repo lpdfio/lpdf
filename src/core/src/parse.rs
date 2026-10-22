@@ -18,6 +18,8 @@ pub struct Document {
     /// The gradients of the tokens, which a background or a fill names as `gradient:name`.
     pub gradients:   HashMap<String, Gradient>,
     pub debug:       bool,
+    /// Where footnote numbers start over, for the sections that don't say (`footnote-counter`).
+    pub footnote_counter: Option<FootnoteCounter>,
     /// Sections — always ≥ 1.  Single-section shorthand is normalised here.
     pub sections:    Vec<Section>,
 }
@@ -28,6 +30,7 @@ impl Document {
     /// collected into `underlays` (before the layout) or `overlays` (after) per document order.
     pub fn section_layouts(&mut self) -> Vec<SectionLayout> {
         let mut result = Vec::new();
+        let mut document_notes = 0u32;
         for section in std::mem::take(&mut self.sections) {
             let width  = section.options.size.map(|(w, _)| w).unwrap_or(self.page_width);
             let height = section.options.size.map(|(_, h)| h).unwrap_or(self.page_height);
@@ -75,10 +78,18 @@ impl Document {
                     }
                 }
             }
+            // The numbers of a section that counts across the document go on from the notes the earlier ones that
+            // do hold, so they are counted here, once the data is in.
+            let footnote_counter = section.options.footnote_counter.or(self.footnote_counter).unwrap_or_default();
+            let footnote_start = document_notes;
+            if footnote_counter == FootnoteCounter::Document {
+                document_notes += children.iter().map(count_footnotes).sum::<u32>();
+            }
             result.push(SectionLayout {
                 width, height, margin, background: bg, debug, children, underlays, overlays,
                 bookmark: section.bookmark,
                 toc: section.options.toc,
+                footnote_counter, footnote_start,
             });
         }
         result
@@ -164,6 +175,7 @@ pub struct SectionOptions {
     pub title:      Option<String>,
     /// Set on the one `<section type="toc">` of a document.
     pub toc:        Option<TocOptions>,
+    pub footnote_counter: Option<FootnoteCounter>,
 }
 
 /// What a table of contents section needs once the other sections are laid out.
@@ -227,6 +239,10 @@ pub struct SectionLayout {
     pub overlays: Vec<canvas::CanvasLayer>,
     pub bookmark: Option<Bookmark>,
     pub toc: Option<TocOptions>,
+    pub footnote_counter: FootnoteCounter,
+    /// How many notes the sections before this one that count across the document hold: its own numbering
+    /// goes on from there when it counts across the document too.
+    pub footnote_start: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -241,6 +257,38 @@ pub struct TextRun {
     /// Set on a `<span bold>` while parsing. `resolve_node` folds it into `font` and the field is `false`
     /// from then on.
     pub bold:         bool,
+    /// Set on the run an `<fn>` stands for: the anchor, a raised number, with the note it points at. The run has
+    /// no text of its own.
+    pub footnote:     Option<Box<Footnote>>,
+}
+
+/// The note of an `<fn>`, which the page where its anchor lands shows at the bottom.
+#[derive(Debug, Clone)]
+pub struct Footnote {
+    /// The words of the note: plain runs and spans.
+    pub runs:   Vec<TextRun>,
+    /// The number the anchor and the note show. Layout sets it, from the counter and the page.
+    pub number: u32,
+}
+
+/// Where the numbers of the footnotes start over (`footnote-counter`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FootnoteCounter {
+    Page,
+    #[default]
+    Section,
+    Document,
+}
+
+impl FootnoteCounter {
+    fn parse(v: &str) -> Result<Self, String> {
+        match v {
+            "page"     => Ok(Self::Page),
+            "section"  => Ok(Self::Section),
+            "document" => Ok(Self::Document),
+            other      => Err(format!("invalid footnote-counter '{other}': expected page, section or document")),
+        }
+    }
 }
 
 /// Data-binding attributes.  Boxed on `Node` so that the common case (no
@@ -757,6 +805,26 @@ fn bold_variant(font: &str) -> String {
     .to_string()
 }
 
+/// Resolve the font of a run: a span's font alias, and `bold` folded into the font. A span with no font of its
+/// own keeps inheriting the text's font, which is already bold when the text is. The words of a footnote are
+/// resolved the same way.
+fn resolve_run(run: TextRun, inherited: &str, node_bold: bool, fonts: &HashMap<String, FontDef>) -> TextRun {
+    let own = run.font.as_deref().map(|alias| resolve_font_alias(alias, fonts));
+    let font = match (own, run.bold) {
+        (Some(f), true)  => Some(bold_variant(&f)),
+        (Some(f), false) => Some(if node_bold { bold_variant(&f) } else { f }),
+        (None, true)     => Some(bold_variant(inherited)),
+        (None, false)    => None,
+    };
+    let footnote = run.footnote.map(|mut note| {
+        note.runs = std::mem::take(&mut note.runs).into_iter()
+            .map(|r| resolve_run(r, inherited, node_bold, fonts))
+            .collect();
+        note
+    });
+    TextRun { font, bold: false, footnote, ..run }
+}
+
 fn resolve_node(
     n:             ParsedNode,
     current_font:  &str,
@@ -775,16 +843,7 @@ fn resolve_node(
 
     // Resolve span-level font aliases and fold bold into the font. A span with no font of its own keeps
     // inheriting the text's font, which is already bold when the text is.
-    let text_runs = n.text_runs.into_iter().map(|run| {
-        let own = run.font.as_deref().map(|alias| resolve_font_alias(alias, fonts));
-        let font = match (own, run.bold) {
-            (Some(f), true)  => Some(bold_variant(&f)),
-            (Some(f), false) => Some(if node_bold { bold_variant(&f) } else { f }),
-            (None, true)     => Some(bold_variant(&inherited)),
-            (None, false)    => None,
-        };
-        TextRun { font, bold: false, ..run }
-    }).collect();
+    let text_runs = n.text_runs.into_iter().map(|run| resolve_run(run, &inherited, node_bold, fonts)).collect();
 
     let children = n.children
         .into_iter()
@@ -919,6 +978,10 @@ pub fn parse(xml: &str) -> Result<Document, String> {
                 if let Some(v) = child.attribute("debug") {
                     doc_debug = v == "true";
                 }
+                let doc_footnote_counter = child.attribute("footnote-counter")
+                    .map(FootnoteCounter::parse)
+                    .transpose()
+                    .map_err(|e| format!("<document>{}: {e}", node_loc(&child)))?;
 
                 let mut sections_xml: Vec<Section> = Vec::new();
                 for doc_child in elems(&child) {
@@ -967,6 +1030,7 @@ pub fn parse(xml: &str) -> Result<Document, String> {
                     background:  doc_background,
                     gradients:   tokens.gradients.clone(),
                     debug:       doc_debug,
+                    footnote_counter: doc_footnote_counter,
                     sections:    sections_xml,
                 });
             }
@@ -1431,6 +1495,9 @@ fn parse_region_elem(
         children.push(resolve_parsed_node(node, text, asset_fonts));
     }
     pending.finish("region").map_err(|e| format!("<region>{}: {e}", node_loc(elem)))?;
+    if children.iter().any(|c| count_footnotes(c) > 0) {
+        return Err(format!("<region>{}: {}", node_loc(elem), footnote_not_here("a region")));
+    }
     Ok(LayoutRegion { pin, page, w, children, debug })
 }
 
@@ -1461,6 +1528,10 @@ fn parse_section_elem(
     let debug = apply_page_overrides(&mut size, &mut background, elem, tokens, doc_debug)?;
     let title = elem.attribute("title").map(str::to_string);
     let toc = parse_section_toc(elem, tokens).map_err(|e| format!("<section>{}: {e}", node_loc(elem)))?;
+    let footnote_counter = elem.attribute("footnote-counter")
+        .map(FootnoteCounter::parse)
+        .transpose()
+        .map_err(|e| format!("<section>{}: {e}", node_loc(elem)))?;
 
     let text = TextDefaults::of_section(doc_font, tokens, asset_fonts);
 
@@ -1529,6 +1600,7 @@ fn parse_section_elem(
             debug:      Some(debug),
             title,
             toc,
+            footnote_counter,
         },
         bookmark,
     })
@@ -1683,6 +1755,9 @@ fn parse_node(
                 node_loc(elem), node.children.len()
             ));
         }
+        if kind == NodeKind::Table && node.children.iter().any(parsed_has_footnote) {
+            return Err(format!("<table>{}: {}", node_loc(elem), footnote_not_here("a table")));
+        }
     }
 
     Ok(node)
@@ -1690,26 +1765,48 @@ fn parse_node(
 
 /// The plain run for a stretch of text between spans. A space leads it where the stretch starts with whitespace
 /// or the text before it ended with some, and `prev_ended_space` is left for the run after it.
-fn push_plain_run(node: &mut ParsedNode, raw: &str, prev_ended_space: &mut bool) {
+fn push_plain_run(runs: &mut Vec<TextRun>, raw: &str, prev_ended_space: &mut bool) {
     let words: Vec<&str> = raw.split_whitespace().collect();
     if !words.is_empty() {
-        node.text_runs.push(TextRun {
+        runs.push(TextRun {
             text: words.join(" "),
             leading_space: raw.starts_with(char::is_whitespace) || *prev_ended_space,
             font: None, color: None, href: None,
-            underline: false, strike: false, bold: false,
+            underline: false, strike: false, bold: false, footnote: None,
         });
     }
     *prev_ended_space = raw.ends_with(char::is_whitespace);
 }
 
-/// The runs of a `<text>` or `<text-at>`: its plain words, and a styled run for each `<span>`.
+/// The anchor of a footnote: a run without words of its own that carries the note. It is numbered when the page
+/// it lands on is known.
+fn footnote_run(words: Vec<TextRun>, leading_space: bool) -> TextRun {
+    TextRun {
+        text: String::new(), leading_space,
+        font: None, color: None, href: None,
+        underline: false, strike: false, bold: false,
+        footnote: Some(Box::new(Footnote { runs: words, number: 1 })),
+    }
+}
+
+/// What a footnote with no words, or inside another, is told.
+const EMPTY_FOOTNOTE: &str = "a footnote needs words";
+const NESTED_FOOTNOTE: &str = "a footnote cannot hold another footnote";
+
+/// The runs of a `<text>` or `<text-at>`: its plain words, a styled run for each `<span>`, and an anchor for each
+/// `<fn>`.
 fn read_text_runs(node: &mut ParsedNode, elem: &roxmltree::Node, tokens: &Tokens) -> Result<(), String> {
+    read_runs(&mut node.text_runs, elem, tokens, true)
+}
+
+/// Read the mixed content of `elem` into `runs`. `notes` says whether an `<fn>` may stand in it: the words of a
+/// footnote may not hold one.
+fn read_runs(runs: &mut Vec<TextRun>, elem: &roxmltree::Node, tokens: &Tokens, notes: bool) -> Result<(), String> {
     // Mixed content: text nodes → plain runs; <span> elements → styled runs.
     let mut prev_ended_space = false;
     for child in elem.children() {
         if child.is_text() {
-            push_plain_run(node, child.text().unwrap_or(""), &mut prev_ended_space);
+            push_plain_run(runs, child.text().unwrap_or(""), &mut prev_ended_space);
         } else if child.is_element() && child.tag_name().name() == "span" {
             let raw_span: String = child
                 .children()
@@ -1718,7 +1815,7 @@ fn read_text_runs(node: &mut ParsedNode, elem: &roxmltree::Node, tokens: &Tokens
                 .collect();
             let span_text = raw_span.split_whitespace().collect::<Vec<_>>().join(" ");
             if !span_text.is_empty() {
-                node.text_runs.push(TextRun {
+                runs.push(TextRun {
                     text: span_text,
                     leading_space: prev_ended_space,
                     font:  child.attribute("font").map(|s| s.to_string()),
@@ -1731,19 +1828,35 @@ fn read_text_runs(node: &mut ParsedNode, elem: &roxmltree::Node, tokens: &Tokens
                     underline: child.attribute("underline").map(|v| v == "true").unwrap_or(false),
                     strike:    child.attribute("strike").map(|v| v == "true").unwrap_or(false),
                     bold:      child.attribute("bold").map(|v| v == "true").unwrap_or(false),
+                    footnote:  None,
                 });
             }
             prev_ended_space = raw_span.ends_with(char::is_whitespace);
+        } else if child.is_element() && child.tag_name().name() == "fn" {
+            if !notes {
+                return Err(format!("<fn>{}: {NESTED_FOOTNOTE}", node_loc(&child)));
+            }
+            let mut words = Vec::new();
+            read_runs(&mut words, &child, tokens, false)?;
+            if words.is_empty() {
+                return Err(format!("<fn>{}: {EMPTY_FOOTNOTE}", node_loc(&child)));
+            }
+            runs.push(footnote_run(words, prev_ended_space));
+            prev_ended_space = false;
         }
     }
     Ok(())
 }
 
-/// The runs of a text node of a kit tree: its strings, and a styled run for each `span` child. The strings are
-/// read as the text of the XML is, so a space falls between two runs only where the text has whitespace there:
-/// `["$", span("5")]` is `$5`, and `["Total: ", span("5")]` is `Total: 5`. Strings with no span between them
-/// are one text, as they are once written as XML.
+/// The runs of a text node of a kit tree: its strings, a styled run for each `span` child, and an anchor for each
+/// `fn`. The strings are read as the text of the XML is, so a space falls between two runs only where the text has
+/// whitespace there: `["$", span("5")]` is `$5`, and `["Total: ", span("5")]` is `Total: 5`. Strings with no span
+/// between them are one text, as they are once written as XML.
 fn read_tree_text_runs(node: &mut ParsedNode, json: &serde_json::Value, tokens: &Tokens) -> Result<(), String> {
+    read_tree_runs(&mut node.text_runs, json, tokens, true)
+}
+
+fn read_tree_runs(runs: &mut Vec<TextRun>, json: &serde_json::Value, tokens: &Tokens, notes: bool) -> Result<(), String> {
     let Some(children) = json.get("nodes").and_then(|v| v.as_array()) else {
         return Ok(());
     };
@@ -1752,39 +1865,72 @@ fn read_tree_text_runs(node: &mut ParsedNode, json: &serde_json::Value, tokens: 
     for child in children {
         if let Some(s) = child.as_str() {
             text.push_str(s);
-        } else if child.get("type").and_then(|v| v.as_str()) == Some("span") {
-            if !text.is_empty() {
-                push_plain_run(node, &text, &mut prev_ended_space);
-                text.clear();
-            }
-            let raw_span: String = child
-                .get("nodes").and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
-                .unwrap_or_default();
-            let span_text = raw_span.split_whitespace().collect::<Vec<_>>().join(" ");
-            if !span_text.is_empty() {
-                let color = match jattr(child, "color") {
-                    Some(v) => Some(tokens.resolve_color(v)?),
-                    None    => None,
-                };
-                node.text_runs.push(TextRun {
-                    text: span_text,
-                    leading_space: prev_ended_space,
-                    font:      jattr(child, "font").map(str::to_string),
-                    color,
-                    href:      jattr(child, "href").map(str::to_string),
-                    underline: jattr(child, "underline").map(|v| v == "true").unwrap_or(false),
-                    strike:    jattr(child, "strike")   .map(|v| v == "true").unwrap_or(false),
-                    bold:      jattr(child, "bold")     .map(|v| v == "true").unwrap_or(false),
-                });
-            }
-            prev_ended_space = raw_span.ends_with(char::is_whitespace);
+            continue;
         }
+        let kind = child.get("type").and_then(|v| v.as_str());
+        if !matches!(kind, Some("span" | "fn")) {
+            continue;
+        }
+        if !text.is_empty() {
+            push_plain_run(runs, &text, &mut prev_ended_space);
+            text.clear();
+        }
+        if kind == Some("fn") {
+            if !notes {
+                return Err(format!("fn: {NESTED_FOOTNOTE}"));
+            }
+            let mut words = Vec::new();
+            read_tree_runs(&mut words, child, tokens, false)?;
+            if words.is_empty() {
+                return Err(format!("fn: {EMPTY_FOOTNOTE}"));
+            }
+            runs.push(footnote_run(words, prev_ended_space));
+            prev_ended_space = false;
+            continue;
+        }
+        let raw_span: String = child
+            .get("nodes").and_then(|v| v.as_array())
+            .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+            .unwrap_or_default();
+        let span_text = raw_span.split_whitespace().collect::<Vec<_>>().join(" ");
+        if !span_text.is_empty() {
+            let color = match jattr(child, "color") {
+                Some(v) => Some(tokens.resolve_color(v)?),
+                None    => None,
+            };
+            runs.push(TextRun {
+                text: span_text,
+                leading_space: prev_ended_space,
+                font:      jattr(child, "font").map(str::to_string),
+                color,
+                href:      jattr(child, "href").map(str::to_string),
+                underline: jattr(child, "underline").map(|v| v == "true").unwrap_or(false),
+                strike:    jattr(child, "strike")   .map(|v| v == "true").unwrap_or(false),
+                bold:      jattr(child, "bold")     .map(|v| v == "true").unwrap_or(false),
+                footnote:  None,
+            });
+        }
+        prev_ended_space = raw_span.ends_with(char::is_whitespace);
     }
     if !text.is_empty() {
-        push_plain_run(node, &text, &mut prev_ended_space);
+        push_plain_run(runs, &text, &mut prev_ended_space);
     }
     Ok(())
+}
+
+/// The footnotes in a node and below it: how many numbers a section takes.
+pub(crate) fn count_footnotes(node: &Node) -> u32 {
+    let own = node.text_runs.iter().filter(|r| r.footnote.is_some()).count() as u32;
+    own + node.children.iter().map(count_footnotes).sum::<u32>()
+}
+
+fn parsed_has_footnote(node: &ParsedNode) -> bool {
+    node.text_runs.iter().any(|r| r.footnote.is_some()) || node.children.iter().any(parsed_has_footnote)
+}
+
+/// What a footnote in a place that has no page of its own to show it on is told.
+fn footnote_not_here(place: &str) -> String {
+    format!("<fn> is not supported in {place}: put footnotes in the texts of the layout, outside tables and regions")
 }
 
 // ── Text, images and barcodes at fixed places ───────────────────────────────
@@ -1891,6 +2037,9 @@ pub(crate) fn parse_at_node(
     let mut node = at_node_attrs(kind.clone(), elem, tokens, asset_images, "<assets>")?;
     if kind == NodeKind::Text {
         read_text_runs(&mut node, elem, tokens)?;
+        if parsed_has_footnote(&node) {
+            return Err(format!("<text-at>{}: {}", node_loc(elem), footnote_not_here("a <text-at>")));
+        }
     }
     Ok(resolve_parsed_node(node, text, asset_fonts))
 }
@@ -1908,6 +2057,9 @@ pub(crate) fn parse_tree_at_node(
     let mut node = at_node_attrs(kind.clone(), &JsonAttrs(json), tokens, asset_images, "assets.images")?;
     if kind == NodeKind::Text {
         read_tree_text_runs(&mut node, json, tokens)?;
+        if parsed_has_footnote(&node) {
+            return Err(format!("text-at: {}", footnote_not_here("a text-at")));
+        }
     }
     Ok(resolve_parsed_node(node, text, asset_fonts))
 }
@@ -2614,6 +2766,10 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     let doc_debug = attrs.get("debug").and_then(|v| v.as_str())
         .map(|v| v == "true").unwrap_or(false);
     let doc_font = attrs.get("font").and_then(|v| v.as_str());
+    let doc_footnote_counter = attrs.get("footnote-counter").and_then(|v| v.as_str())
+        .map(FootnoteCounter::parse)
+        .transpose()
+        .map_err(|e| format!("document: {e}"))?;
 
     // ── Sections ──────────────────────────────────────────────────────────────
     let nodes_arr = root.get("nodes")
@@ -2649,6 +2805,7 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
         background:  doc_background,
         gradients:   tokens.gradients.clone(),
         debug:       doc_debug,
+        footnote_counter: doc_footnote_counter,
         sections,
     })
 }
@@ -2763,6 +2920,10 @@ fn parse_tree_section(
     let debug = apply_page_overrides(&mut size, &mut background, &a, tokens, doc_debug)?;
     let title = jattr(json, "title").map(str::to_string);
     let toc = parse_section_toc(&a, tokens).map_err(|e| format!("section: {e}"))?;
+    let footnote_counter = a.get("footnote-counter")
+        .map(FootnoteCounter::parse)
+        .transpose()
+        .map_err(|e| format!("section: {e}"))?;
 
     let text = TextDefaults::of_section(doc_font, tokens, asset_fonts);
 
@@ -2828,6 +2989,7 @@ fn parse_tree_section(
             debug:      Some(debug),
             title,
             toc,
+            footnote_counter,
         },
         bookmark,
     })
@@ -2874,6 +3036,9 @@ fn parse_tree_region(
             children.push(resolve_parsed_node(node, text, asset_fonts));
         }
         pending.finish("region")?;
+    }
+    if children.iter().any(|c| count_footnotes(c) > 0) {
+        return Err(format!("region: {}", footnote_not_here("a region")));
     }
     Ok(LayoutRegion { pin, page, w, children, debug })
 }
@@ -2990,6 +3155,9 @@ fn parse_tree_node(
                 "frame accepts at most one child; got {}",
                 node.children.len()
             ));
+        }
+        if kind == NodeKind::Table && node.children.iter().any(parsed_has_footnote) {
+            return Err(format!("table: {}", footnote_not_here("a table")));
         }
     }
 
@@ -3529,6 +3697,108 @@ mod tests {
 
         let err = parse_tree(&tree(r#"{"type":"shape","attrs":{"type":"circle"}}"#)).unwrap_err();
         assert!(err.contains("shape: a circle needs 'r'"), "{err}");
+    }
+
+    #[test]
+    fn an_fn_in_a_text_is_an_anchor_run_that_holds_its_note() {
+        let mut doc = parse(&minimal(
+            r#"<text>The model<fn>First <span bold="true">proposed</span> in 1960.</fn> describes <fn>Another.</fn>forces.</text>"#,
+        )).unwrap();
+        let runs = &doc.section_layouts()[0].children[0].text_runs;
+        let texts: Vec<_> = runs.iter().map(|r| (r.text.as_str(), r.footnote.is_some(), r.leading_space)).collect();
+        assert_eq!(texts, [("The model", false, false), ("", true, false), ("describes", false, true), ("", true, true), ("forces.", false, false)]);
+        let note = runs[1].footnote.as_deref().unwrap();
+        let words: Vec<_> = note.runs.iter().map(|r| (r.text.as_str(), r.font.as_deref())).collect();
+        assert_eq!(words, [("First", None), ("proposed", Some("Helvetica-Bold")), ("in 1960.", None)], "bold in a note is resolved");
+        assert_eq!(note.number, 1);
+    }
+
+    #[test]
+    fn an_fn_with_no_words_or_inside_another_is_an_error() {
+        for (body, says) in [
+            (r#"<text>A<fn/></text>"#, "a footnote needs words"),
+            (r#"<text>A<fn>   </fn></text>"#, "a footnote needs words"),
+            (r#"<text>A<fn>B<fn>C</fn></fn></text>"#, "cannot hold another footnote"),
+        ] {
+            let err = parse(&minimal(body)).unwrap_err();
+            assert!(err.starts_with("<fn>") && err.contains(says), "{body}: {err}");
+        }
+    }
+
+    #[test]
+    fn an_fn_is_an_error_in_a_table_a_region_and_a_text_at() {
+        let table = r#"<table cols="1fr"><tr><td><text>A<fn>B</fn></text></td></tr></table>"#;
+        let err = parse(&minimal(table)).unwrap_err();
+        assert!(err.starts_with("<table>") && err.contains("<fn> is not supported in a table"), "{err}");
+
+        let region = r#"<region pin="bottom"><text>A<fn>B</fn></text></region>"#;
+        let err = parse(&minimal(region)).unwrap_err();
+        assert!(err.starts_with("<region>") && err.contains("<fn> is not supported in a region"), "{err}");
+
+        let layer = r#"<lpdf version="1"><document size="a4"><section><layer><text-at x="10pt" y="10pt">A<fn>B</fn></text-at></layer><layout/></section></document></lpdf>"#;
+        let err = parse(layer).unwrap_err();
+        assert!(err.contains("<fn> is not supported in a <text-at>"), "{err}");
+    }
+
+    #[test]
+    fn an_fn_in_a_kit_tree_is_read_as_in_xml() {
+        let tree = |text: &str| format!(
+            r#"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
+                {{"type":"layout","attrs":{{}},"nodes":[{text}]}}]}}]}}"#
+        );
+        let mut doc = parse_tree(&tree(
+            r#"{"type":"text","attrs":{},"nodes":["The model",{"type":"fn","attrs":{},"nodes":["First ",{"type":"span","attrs":{"bold":"true"},"nodes":["proposed"]}]}," describes."]}"#,
+        )).unwrap();
+        let runs = &doc.section_layouts()[0].children[0].text_runs;
+        let texts: Vec<_> = runs.iter().map(|r| (r.text.as_str(), r.footnote.is_some())).collect();
+        assert_eq!(texts, [("The model", false), ("", true), ("describes.", false)]);
+        assert!(runs[2].leading_space);
+        let words: Vec<_> = runs[1].footnote.as_deref().unwrap().runs.iter().map(|r| r.text.as_str()).collect();
+        assert_eq!(words, ["First", "proposed"]);
+
+        for (text, says) in [
+            (r#"{"type":"text","attrs":{},"nodes":["A",{"type":"fn","attrs":{},"nodes":[]}]}"#, "a footnote needs words"),
+            (r#"{"type":"text","attrs":{},"nodes":["A",{"type":"fn","attrs":{},"nodes":["B",{"type":"fn","attrs":{},"nodes":["C"]}]}]}"#, "cannot hold another footnote"),
+            (r#"{"type":"table","attrs":{"cols":"1fr"},"nodes":[{"type":"tr","attrs":{},"nodes":[{"type":"td","attrs":{},"nodes":[{"type":"text","attrs":{},"nodes":["A",{"type":"fn","attrs":{},"nodes":["B"]}]}]}]}]}"#, "not supported in a table"),
+        ] {
+            let err = parse_tree(&tree(text)).unwrap_err();
+            assert!(err.contains(says), "{text}: {err}");
+        }
+    }
+
+    #[test]
+    fn footnote_counter_is_read_on_the_document_and_the_section_and_a_section_overrides() {
+        let xml = r#"<lpdf version="1"><document size="a4" footnote-counter="document">
+            <section><layout/></section>
+            <section footnote-counter="page"><layout/></section>
+            <section footnote-counter="section"><layout/></section>
+        </document></lpdf>"#;
+        let counters: Vec<_> = parse(xml).unwrap().section_layouts().iter().map(|s| s.footnote_counter).collect();
+        assert_eq!(counters, [FootnoteCounter::Document, FootnoteCounter::Page, FootnoteCounter::Section]);
+
+        let default: Vec<_> = parse(&minimal("")).unwrap().section_layouts().iter().map(|s| s.footnote_counter).collect();
+        assert_eq!(default, [FootnoteCounter::Section], "a section counts its own notes unless told otherwise");
+
+        let err = parse(&xml.replace(r#"footnote-counter="page""#, r#"footnote-counter="book""#)).unwrap_err();
+        assert!(err.starts_with("<section>") && err.contains("invalid footnote-counter 'book'"), "{err}");
+        let err = parse(&xml.replace(r#"footnote-counter="document""#, r#"footnote-counter="book""#)).unwrap_err();
+        assert!(err.starts_with("<document>") && err.contains("invalid footnote-counter 'book'"), "{err}");
+    }
+
+    #[test]
+    fn footnote_counter_is_read_in_a_kit_tree() {
+        let tree = r#"{"version":1,"type":"document","attrs":{"footnote-counter":"document"},"nodes":[
+            {"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[
+                {"type":"text","attrs":{},"nodes":["A",{"type":"fn","attrs":{},"nodes":["B"]}]}]}]},
+            {"type":"section","attrs":{"footnote-counter":"page"},"nodes":[{"type":"layout","attrs":{},"nodes":[]}]},
+            {"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[
+                {"type":"text","attrs":{},"nodes":["C",{"type":"fn","attrs":{},"nodes":["D"]}]}]}]}]}"#;
+        let layouts = parse_tree(tree).unwrap().section_layouts();
+        let seen: Vec<_> = layouts.iter().map(|s| (s.footnote_counter, s.footnote_start)).collect();
+        assert_eq!(seen, [(FootnoteCounter::Document, 0), (FootnoteCounter::Page, 1), (FootnoteCounter::Document, 1)]);
+
+        let err = parse_tree(&tree.replace(r#""footnote-counter":"page""#, r#""footnote-counter":"book""#)).unwrap_err();
+        assert!(err.contains("section: invalid footnote-counter 'book'"), "{err}");
     }
 
     #[test]

@@ -143,6 +143,11 @@ fn is_text_tag(tag: &str) -> bool {
     matches!(tag, "text" | "text-at")
 }
 
+/// The elements that stand inside the words of a text: a `span`, and a `fn`, whose own words are inline too.
+fn is_inline_tag(tag: &str) -> bool {
+    matches!(tag, "span" | "fn")
+}
+
 /// Return the canonical JS method name for an XML element tag.
 fn js_method(tag: &str) -> &'static str {
     match tag {
@@ -169,6 +174,7 @@ fn js_method(tag: &str) -> &'static str {
         "field"    => "field",
         "region"   => "region",
         "span"     => "span",
+        "fn"       => "fn",
         "rect"     => "rect",
         "circle"   => "circle",
         "ellipse"  => "ellipse",
@@ -207,6 +213,7 @@ fn dotnet_method(tag: &str) -> &'static str {
         "field"    => "Field",
         "region"   => "Region",
         "span"     => "Span",
+        "fn"       => "Fn",
         "rect"     => "Rect",
         "circle"   => "Circle",
         "ellipse"  => "Ellipse",
@@ -237,15 +244,15 @@ fn collapse_whitespace(raw: &str) -> String {
     raw.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// A piece of the content of a `text`, `text-at` or `span`, as the generators write it.
+/// A piece of the content of a `text`, `text-at`, `span` or `fn`, as the generators write it.
 enum TextPiece<'a, 'i> {
     /// A string, with the space that separates it from its neighbour at its edge.
     Str(String),
-    /// A `span` element.
+    /// A `span` element, or an `fn`.
     Span(Node<'a, 'i>),
 }
 
-/// The content of a `text`, `text-at` or `span`, split as the engine reads it (`read_text_runs` in `parse.rs`).
+/// The content of a `text`, `text-at`, `span` or `fn`, split as the engine reads it (`read_text_runs` in `parse.rs`).
 ///
 /// The words of each stretch of text are one string, and a space falls between two runs where the XML has
 /// whitespace there: at the end of a string before a span, at the start of one after a span, or as a string of
@@ -277,6 +284,13 @@ fn text_pieces<'a, 'i>(node: &Node<'a, 'i>) -> Vec<TextPiece<'a, 'i>> {
                     runs.push((Run::Span(child), prev_ended_space));
                 }
                 prev_ended_space = raw.ends_with(char::is_whitespace);
+            }
+            // A footnote has words of its own, in text and spans, and no whitespace of its own reaches the text.
+            NodeType::Element if child.tag_name().name() == "fn" => {
+                if child.descendants().any(|n| n.is_text() && !collapse_whitespace(n.text().unwrap_or("")).is_empty()) {
+                    runs.push((Run::Span(child), prev_ended_space));
+                }
+                prev_ended_space = false;
             }
             _ => {}
         }
@@ -808,7 +822,7 @@ impl JsEmitter {
             format!("{binding_comments}{ind0}L.{method}({attrs})")
         } else if is_text_tag(tag) {
             format!("{binding_comments}{}", self.emit_text_call(&ind0, &ind1, method, &attrs, &children))
-        } else if tag == "span" {
+        } else if is_inline_tag(tag) {
             // span always inline: L.span({...}, ['content'])
             format!("{binding_comments}{ind0}L.{method}({attrs}, [{}])", children.join(", "))
         } else {
@@ -883,7 +897,7 @@ impl JsEmitter {
     ) -> Vec<String> {
         let mut children: Vec<String> = Vec::new();
 
-        if is_text_tag(tag) || tag == "span" {
+        if is_text_tag(tag) || is_inline_tag(tag) {
             // Mixed text + <span> children
             let override_text = text_content_override;
 
@@ -1038,7 +1052,7 @@ impl DotnetEmitter {
             format!("{binding_comments}{ind0}L.{method}({attrs})")
         } else if is_text_tag(tag) {
             format!("{binding_comments}{}", self.emit_text_call(&ind0, &ind1, method, &attrs, &children))
-        } else if tag == "span" {
+        } else if is_inline_tag(tag) {
             format!("{binding_comments}{ind0}L.{method}({attrs}, [{}])", children.join(", "))
         } else {
             format!("{binding_comments}{}", self.emit_block_call(&ind0, method, &attrs, &children))
@@ -1105,7 +1119,7 @@ impl DotnetEmitter {
     ) -> Vec<String> {
         let mut children: Vec<String> = Vec::new();
 
-        if is_text_tag(tag) || tag == "span" {
+        if is_text_tag(tag) || is_inline_tag(tag) {
             if let Some(placeholder) = text_content_override {
                 children.push(format!("\"{placeholder}\""));
             } else {
@@ -1254,7 +1268,7 @@ impl PhpEmitter {
             format!("{binding_comments}{ind0}L::{method}({attrs})")
         } else if is_text_tag(tag) {
             format!("{binding_comments}{}", self.emit_text_call(&ind0, &ind1, method, &attrs, &children))
-        } else if tag == "span" {
+        } else if is_inline_tag(tag) {
             format!("{binding_comments}{ind0}L::{method}({attrs}, [{}])", children.join(", "))
         } else {
             format!("{binding_comments}{}", self.emit_block_call(&ind0, method, &attrs, &children))
@@ -1321,7 +1335,7 @@ impl PhpEmitter {
     ) -> Vec<String> {
         let mut children: Vec<String> = Vec::new();
 
-        if is_text_tag(tag) || tag == "span" {
+        if is_text_tag(tag) || is_inline_tag(tag) {
             if let Some(placeholder) = text_content_override {
                 children.push(format!("'{placeholder}'"));
             } else {
@@ -1463,7 +1477,7 @@ impl PythonEmitter {
             format!("{binding_comments}{ind0}L.{method}({attrs})")
         } else if is_text_tag(tag) {
             format!("{binding_comments}{}", self.emit_text_call(&ind0, &ind1, method, &attrs, &children))
-        } else if tag == "span" {
+        } else if is_inline_tag(tag) {
             format!("{binding_comments}{ind0}L.{method}({attrs}, [{}])", children.join(", "))
         } else {
             format!("{binding_comments}{}", self.emit_block_call(&ind0, method, &attrs, &children))
@@ -1530,7 +1544,7 @@ impl PythonEmitter {
     ) -> Vec<String> {
         let mut children: Vec<String> = Vec::new();
 
-        if is_text_tag(tag) || tag == "span" {
+        if is_text_tag(tag) || is_inline_tag(tag) {
             if let Some(placeholder) = text_content_override {
                 children.push(format!("'{placeholder}'"));
             } else {
@@ -1623,6 +1637,7 @@ fn python_method(tag: &str) -> &'static str {
         "field"    => "field",
         "region"   => "region",
         "span"     => "span",
+        "fn"       => "fn",
         "rect"     => "rect",
         "circle"   => "circle",
         "ellipse"  => "ellipse",
@@ -1891,6 +1906,19 @@ mod tests {
     }
 
     #[test]
+    fn test_a_footnote_is_written_as_an_inline_call_holding_its_words() {
+        let content = r#"Total<fn>The <span bold="true">note</span>.</fn> here"#;
+        let js = text_code("js", "text", content);
+        assert!(js.contains("L.fn(NoAttr, ['The ', L.span({ bold: 'true' }, ['note']), '.'])"), "{js}");
+        let dotnet = text_code("dotnet", "text", content);
+        assert!(dotnet.contains("L.Fn(") && dotnet.contains("\"The \""), "{dotnet}");
+        let php = text_code("php", "text", content);
+        assert!(php.contains("L::fn(") && php.contains("'The '"), "{php}");
+        let python = text_code("python", "text", content);
+        assert!(python.contains("L.fn(") && python.contains("'The '"), "{python}");
+    }
+
+    #[test]
     fn test_space_before_a_span_stays_on_its_string() {
         let out = text_code("js", "text", r#"See the <span bold="true">docs</span>"#);
         assert!(out.contains("'See the ',\n"), "{out}");
@@ -1981,20 +2009,22 @@ mod tests {
         let parsed = Document::parse(&xml).unwrap();
         let text = parsed.descendants().find(|n| n.has_tag_name("text")).unwrap();
 
-        let nodes: Vec<serde_json::Value> = text_pieces(&text)
-            .into_iter()
-            .map(|piece| match piece {
-                TextPiece::Str(s) => serde_json::Value::String(s),
-                TextPiece::Span(span) => {
-                    let attrs: serde_json::Map<String, serde_json::Value> = span
-                        .attributes()
-                        .map(|a| (a.name().to_string(), serde_json::Value::String(a.value().to_string())))
-                        .collect();
-                    let inner: String = span.children().filter_map(|n| n.text()).collect();
-                    serde_json::json!({ "type": "span", "attrs": attrs, "nodes": [collapse_whitespace(&inner)] })
-                }
-            })
-            .collect();
+        fn inline_nodes(parent: &Node) -> Vec<serde_json::Value> {
+            text_pieces(parent)
+                .into_iter()
+                .map(|piece| match piece {
+                    TextPiece::Str(s) => serde_json::Value::String(s),
+                    TextPiece::Span(inline) => {
+                        let attrs: serde_json::Map<String, serde_json::Value> = inline
+                            .attributes()
+                            .map(|a| (a.name().to_string(), serde_json::Value::String(a.value().to_string())))
+                            .collect();
+                        serde_json::json!({ "type": inline.tag_name().name(), "attrs": attrs, "nodes": inline_nodes(&inline) })
+                    }
+                })
+                .collect()
+        }
+        let nodes = inline_nodes(&text);
         let tree = serde_json::json!({
             "version": 1, "type": "document", "attrs": {},
             "nodes": [{ "type": "section", "attrs": {}, "nodes": [{
@@ -2019,6 +2049,9 @@ mod tests {
             r#"<span bold="true">a </span><span underline="true">b</span>"#,
             r#"<span bold="true">a </span>b"#,
             r#"Total:<span bold="true"> 5</span>"#,
+            r#"Total<fn>The note.</fn> is five."#,
+            r#"Total <fn>The <span bold="true">note</span> here.</fn>and more"#,
+            r#"A<fn>One.</fn><fn>Two.</fn> b"#,
             "\n      Read the\n      <span bold=\"true\">docs</span>\n      first.\n    ",
             r#"  <span bold="true">docs</span> and <span underline="true">more</span>  "#,
         ] {

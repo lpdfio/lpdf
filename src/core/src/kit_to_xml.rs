@@ -202,8 +202,10 @@ fn render_meta(meta: &serde_json::Map<String, Value>, depth: usize) -> String {
 
 // ── Node rendering ────────────────────────────────────────────────────────────
 
-fn render_span(node: &Value) -> String {
+/// A `span`, whose content is strings, or an `fn`, whose content is strings and spans.
+fn render_inline(node: &Value) -> String {
     let empty = serde_json::Map::new();
+    let tag    = node.get("type").and_then(|v| v.as_str()).unwrap_or("span");
     let attrs  = node.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
     let attrs_s = attrs_str(attrs, &[]);
 
@@ -212,20 +214,23 @@ fn render_span(node: &Value) -> String {
         .and_then(|v| v.as_array())
         .map(|arr| {
             arr.iter()
-               .filter_map(|v| v.as_str())
-               .map(escape_text)
+               .map(|c| match c.as_str() {
+                   Some(s) => escape_text(s),
+                   None if tag == "fn" && c.get("type").and_then(|v| v.as_str()) == Some("span") => render_inline(c),
+                   None => String::new(),
+               })
                .collect()
         })
         .unwrap_or_default();
 
     if content.is_empty() {
-        format!("<span{}/>", attrs_s)
+        format!("<{tag}{}/>", attrs_s)
     } else {
-        format!("<span{}>{}</span>", attrs_s, content)
+        format!("<{tag}{}>{}</{tag}>", attrs_s, content)
     }
 }
 
-/// A `text`, or a layer's `text-at`, with its strings and `span` children.
+/// A `text`, or a layer's `text-at`, with its strings and `span` and `fn` children.
 fn render_text_node(node: &Value, depth: usize) -> String {
     let tag    = node.get("type").and_then(|v| v.as_str()).unwrap_or("text");
     let pad    = "  ".repeat(depth);
@@ -243,8 +248,8 @@ fn render_text_node(node: &Value, depth: usize) -> String {
         .map(|c| {
             if let Some(s) = c.as_str() {
                 escape_text(s)
-            } else if c.get("type").and_then(|v| v.as_str()) == Some("span") {
-                render_span(c)
+            } else if matches!(c.get("type").and_then(|v| v.as_str()), Some("span" | "fn")) {
+                render_inline(c)
             } else {
                 String::new()
             }
@@ -1141,6 +1146,16 @@ mod tests {
             r#"{"type":"text","attrs":{},"nodes":["a ",{"type":"span","attrs":{"bold":"true"},"nodes":["b"]}]}"#,
         );
         assert!(kit_to_xml(&json).unwrap().contains(r#"<span bold="true">b</span>"#));
+        let (from_tree, from_xml) = rendered_both_ways(&json);
+        assert_eq!(from_tree, from_xml);
+    }
+
+    #[test]
+    fn footnote_is_written_with_its_words_and_spans_and_renders() {
+        let json = doc_with_layout_child(
+            r#"{"type":"text","attrs":{},"nodes":["a",{"type":"fn","attrs":{},"nodes":["The ",{"type":"span","attrs":{"bold":"true"},"nodes":["note"]},"."]}," b"]}"#,
+        );
+        assert!(kit_to_xml(&json).unwrap().contains(r#"a<fn>The <span bold="true">note</span>.</fn> b"#), "{}", kit_to_xml(&json).unwrap());
         let (from_tree, from_xml) = rendered_both_ways(&json);
         assert_eq!(from_tree, from_xml);
     }
