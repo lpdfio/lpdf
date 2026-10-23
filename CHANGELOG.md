@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.29.0 — 2026-10-23
+### Tables
+- `colspan="n"` on a `<td>` makes the cell as wide as its `n` columns and the gaps between them, so a subtotal label or a full-width heading can sit in a table without nesting one. The cells after it in the row start at the column after its last. A row whose cells span more columns than the table has is an error; a row with fewer leaves its last columns empty. It changes widths only: row heights and page breaks work as before
+- `rowspan="n"` on a `<td>` makes the cell as tall as its `n` rows and the gaps between them, for a row-group label or a note that runs down the side. The rows under it leave its columns out, so their cells start at the first free columns. If the cell's content is taller than the rows are together, the last of them grows by the difference. The rows a cell spans stay on one page: the group moves to the next page whole when it does not fit, and one taller than a page is clipped at the page's end. A row with more cells than free columns, and a span that runs past the last row, are errors. A `<thead>` is one row and takes no `rowspan`
+- `keep="with-next"` on a `<tr>` keeps the row on the same page as the row after it, so a line item is not left behind its total. A run of rows that each say `with-next`, and the row that ends it, move to the next page together when a page break would fall inside them. A run taller than a page breaks where its rows fit, as if it had no `keep`. Rows are never split, and a header is never left alone at the bottom of a page, with or without it
+
+### Text
+- Footnotes. A `<fn>` inside a `<text>` in the layout shows a small raised number at its place and puts its words at the bottom of the page where that number lands, under a short rule, in the order of the numbers. The engine numbers the notes, and the number stays with the word before it at the end of a line. A page with notes has less room for the text, so the line with the number moves to the next page, with its note, when the note does not fit. A note taller than a whole page is cut at the page. A note holds words and `<span>`s
+- `footnote-counter` on the document or a `<section>` says where the numbers start over: `page` for every page, `section` for every section (the default), or `document` so that they run on through the document. A section's own value overrides the document's
+- A `<fn>` is only for a `<text>` in the layout. In a `<text-at>`, a table or a `<region>` it is an error that says so
+
+### Layout
+- `<shape type="rect">`, `"circle"` or `"ellipse"` in the layout, for a status dot, a color swatch or a progress bar. It takes room in the flow as an `<img>` does, has no children, and is drawn centered in its box, which the parent's `align` places. A `rect` and an `ellipse` need a `width` and a `height`, a `circle` an `r`. `radius` rounds the corners of a `rect`. `fill`, `stroke` and `opacity` work as on a layer's shapes. A shape with no fill and no stroke draws nothing but keeps its box. A stroke is centered on the edge of the box, so half of it lies outside. To put a shape at a place on the page, use a `<rect>`, `<circle>` or `<ellipse>` in a `<layer>`
+
+### Tokens
+- A `height` row in the tokens, `xs` to `xxl`, so that `height="m"` works. Boxes, tables, `<img>`, `<shape>` and barcodes take a name from it, as well as a length. It is a row of its own, because the `width` row is a page-wide scale that gives no heights for a card or a row
+- Aliases. `<aliases><alias name="caption" value="xs"/></aliases>` in the tokens gives a slot of the scale a name of your own. An attribute that takes a slot takes the name instead, from its own row: `font-size="caption"` is the text size `xs` and `gap="caption"` is the space `xs`. A name is lowercase letters, digits and `-`, starting with a letter, and not `xs` to `xxl`, `fill` or `full`; its value is a slot, not another alias. A border takes one too: `border="hairline primary"`
+- **A name that is neither a slot nor an alias is an error from the engine, not from the schema.** The scale attributes accept any name now, so a typo such as `medum` is no longer flagged by validation against the schema; the engine reports it as an unknown name
+
+### SDKs
+- The four SDKs carry the new attributes and elements: `colspan` and `rowspan` on a cell, `keep` on a row, `footnote-counter` on a document and a section (with the values `page`, `section` and `document` as constants), a footnote builder and a shape builder (`L.fn()` and `L.shape()` in JavaScript)
+- The tokens take `aliases`, a map from a name to a slot, and a `height` row
+
+### VS Code extension
+- Hover, autocomplete and validation follow the schema, so they cover the new elements, attributes and token rows
+
 ## v0.28.0 — 2026-10-19
 ### Text
 - `max-lines` and `ellipsis` work on a `<text>` in the layout, as they do on `<text-at>`. `max-lines="2"` draws at most two lines of the wrapped text, whole lines only; the lines it drops take no room, and a text that splits across pages keeps the cap across them. With `ellipsis="true"` the last line drawn ends in dots. Without `max-lines` a text wraps as before
