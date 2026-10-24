@@ -592,6 +592,9 @@ mod snapshot_tests;
 mod attribute_effects;
 
 #[cfg(test)]
+mod embedded_font_layout_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
