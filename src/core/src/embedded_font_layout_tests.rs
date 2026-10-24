@@ -154,3 +154,20 @@ fn a_justified_line_with_spans_has_no_overlap_and_even_gaps_in_both_kinds_of_fon
         }
     }
 }
+
+#[test]
+fn justified_lines_with_accents_curly_quotes_and_cyrillic_end_at_the_right_edge() {
+    // The layout JSON rounds `word_gap` to hundredths, so the sum over a line is checked to 0.15 pt.
+    let latin = "Ça été très naïve — “déjà vu” à Zürich, señor Åström, 5 € pour la crème brûlée de la maison ".repeat(3);
+    let cyrillic = "Привет, «мир» — это длинный абзац текста, который переносится на несколько строк и выравнивается по ширине ".repeat(3);
+    for body in [latin, cyrillic] {
+        let nodes = justified_text_nodes(&body, true, 500.0);
+        let lines = lines_of(&spans_of(&nodes, face_width));
+        assert!(lines.len() > 2, "the paragraph wraps");
+        let left = lines[0][0].0;
+        for line in &lines[..lines.len() - 1] {
+            let end = line.last().map(|(x, w, _)| x + w).expect("a line has text");
+            assert!((end - (left + 500.0)).abs() < 0.15, "a line ends at {end}, not at the right edge {}", left + 500.0);
+        }
+    }
+}
