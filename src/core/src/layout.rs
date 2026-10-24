@@ -6290,4 +6290,28 @@ mod tests {
         let pages: Vec<_> = layouts.iter().flat_map(layout_page).collect();
         assert!(!pages.is_empty());
     }
+
+    #[test]
+    fn bound_attributes_reach_the_rendered_page_for_each_row() {
+        let xml = r##"<lpdf version="1"><tokens><colors><color name="late" value="#cc0000"/></colors></tokens>
+            <document size="a4"><section><layout margin="28pt"><column data-source="items">
+                <shape type="rect" width="60pt" height="10pt" fill="#999999" data-fill="color"/>
+                <text color="#000000" data-color="tone" data-value="label">Label</text>
+            </column></layout></section></document></lpdf>"##;
+        let mut doc = parse(xml).unwrap();
+        crate::data::apply(
+            &mut doc,
+            r##"{"items":[{"color":"#00ff00","tone":"late","label":"One"},{"label":"Two"}]}"##,
+        )
+        .unwrap();
+        let lp = doc.section_layouts();
+        let pages: Vec<_> = lp.iter().flat_map(layout_page).collect();
+        let tree: serde_json::Value =
+            serde_json::from_str(&crate::render::pages_to_json(&pages, serde_json::Value::Null, serde_json::Value::Null)).unwrap();
+
+        let fills: Vec<_> = nodes_of(&tree, "canvas-rect").iter().map(|rect| rect["fill"].as_str().map(str::to_owned)).collect();
+        assert_eq!(fills, vec![Some("#00ff00".to_owned()), Some("#999999".to_owned())]);
+        let colors: Vec<_> = nodes_of(&tree, "text").iter().map(|text| text["color"].as_str().map(str::to_owned)).collect();
+        assert_eq!(colors, vec![Some("#cc0000".to_owned()), Some("#000000".to_owned())]);
+    }
 }

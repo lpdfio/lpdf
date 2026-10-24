@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use serde_json::Value;
 
 use crate::canvas::{CanvasLayer, CanvasPrimitive};
-use crate::parse::{Document, Node, NodeKind, TextRun, TOC_DATA_KEY};
+use crate::parse::{BoundAttr, Document, Node, NodeKind, TextRun, TOC_DATA_KEY};
+use crate::tokens::Tokens;
 
 // ── Path resolution ───────────────────────────────────────────────────────────
 
@@ -91,32 +94,163 @@ fn value_to_string(value: Option<&Value>) -> String {
     }
 }
 
+// ── Bound attributes ──────────────────────────────────────────────────────────
+
+/// What a bound attribute is checked against once its value is known: the document's colors and gradients, and
+/// the images declared in `<assets>`. Binding calls the parser's own checks through these and has none of its own.
+struct Resolvers {
+    tokens: Tokens,
+    images: HashMap<String, String>,
+}
+
+impl Resolvers {
+    fn of(doc: &Document) -> Self {
+        Self {
+            tokens: Tokens { colors: doc.colors.clone(), gradients: doc.gradients.clone(), ..Tokens::default() },
+            images: doc.images.clone(),
+        }
+    }
+}
+
+/// Everything a walk over the tree reads besides the scope stack.
+struct Bind<'a> {
+    root: &'a Value,
+    /// Set while binding a table of contents section; see `apply_toc`.
+    toc_indent_step: Option<f32>,
+    /// `None` in a table of contents section, which refuses bound attributes (`refuse_bound_attrs`).
+    resolvers: Option<&'a Resolvers>,
+}
+
+/// A bound attribute that can't be used, naming the attribute and the data path it reads.
+fn bound_error(attr: BoundAttr, path: &str, problem: &str) -> String {
+    format!("{}=\"{path}\": {problem}", attr.data_attribute())
+}
+
+fn json_type(value: &Value) -> &'static str {
+    match value {
+        Value::Null      => "null",
+        Value::Bool(_)   => "a boolean",
+        Value::Number(_) => "a number",
+        Value::String(_) => "a string",
+        Value::Array(_)  => "an array",
+        Value::Object(_) => "an object",
+    }
+}
+
+/// Set the attributes that read the data. A path that finds nothing, or an empty string, leaves the attribute
+/// the document wrote; a value that is not a string, or that the attribute would not have accepted written in
+/// the document, is an error.
+fn bind_attributes(
+    node: &mut Node,
+    bound: &[(BoundAttr, String)],
+    stack: &[&Value],
+    root: &Value,
+    resolvers: &Resolvers,
+) -> Result<(), String> {
+    for (attr, path) in bound {
+        let value = match resolve_path(path, stack, root) {
+            None | Some(Value::Null) => continue,
+            Some(Value::String(text)) if text.is_empty() => continue,
+            Some(Value::String(text)) => text,
+            Some(other) => return Err(bound_error(*attr, path, &format!("expected a string, found {}", json_type(other)))),
+        };
+        set_bound(node, *attr, value, resolvers).map_err(|problem| bound_error(*attr, path, &problem))?;
+    }
+    Ok(())
+}
+
+/// Set the field that the attribute of this name sets on a node when it is read from the document.
+fn set_bound(node: &mut Node, attr: BoundAttr, value: &str, resolvers: &Resolvers) -> Result<(), String> {
+    match attr {
+        BoundAttr::Href => node.url = Some(value.to_owned()),
+        BoundAttr::Name => {
+            let registry_key = resolvers
+                .images
+                .get(value)
+                .ok_or_else(|| format!("'{value}' is not an image declared in <assets>"))?;
+            node.image_name = Some(registry_key.clone());
+        }
+        BoundAttr::Color => {
+            let color = resolvers.tokens.resolve_color(value)?;
+            match node.kind {
+                NodeKind::Divider => node.color = Some(color),
+                NodeKind::Barcode => node.barcode_color = Some(color),
+                _                 => node.text_color = Some(color),
+            }
+        }
+        BoundAttr::Background => match node.kind {
+            NodeKind::Barcode => node.barcode_bg = Some(resolvers.tokens.resolve_color(value)?),
+            _                 => node.background = Some(resolvers.tokens.resolve_fill(value)?),
+        },
+        BoundAttr::Fill => {
+            let fill = resolvers.tokens.resolve_fill(value)?;
+            if let Some(shape) = node.shape.as_mut() {
+                shape.fill = Some(fill);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// A table of contents section is bound after layout, without the document's tokens, so it can't check a bound
+/// attribute: refuse one when the data is applied.
+fn refuse_bound_attrs(nodes: &[Node]) -> Result<(), String> {
+    for node in nodes {
+        if let Some((attr, _)) = node.data_attrs.as_ref().and_then(|d| d.bound.first()) {
+            return Err(format!("'{}' is not supported in a table of contents section", attr.data_attribute()));
+        }
+        refuse_bound_attrs(&node.children)?;
+    }
+    Ok(())
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /// Apply data binding to every page in `doc` using `json_data` as the data
 /// source.
 ///
 /// The pass is a pure tree transformation: it expands `data-source` loops,
-/// filters `data-if` / `data-if-not` conditionals, and substitutes
-/// `data-value` text content.  Layout and PDF emit receive a plain `Document`
-/// with no `data-*` attributes remaining, except in a table of contents
-/// section: it keeps the data and is bound by `apply_toc` once `$toc` exists.
+/// filters `data-if` / `data-if-not` conditionals, substitutes `data-value`
+/// text content, and sets the attributes that read the data (`data-href`,
+/// `data-name`, `data-color`, `data-background`, `data-fill`).  Layout and PDF
+/// emit receive a plain `Document` with no `data-*` attributes remaining,
+/// except in a table of contents section: it keeps the data and is bound by
+/// `apply_toc` once `$toc` exists.
 ///
-/// Returns an error if `json_data` is not valid JSON.
+/// Returns an error if `json_data` is not valid JSON, or if a bound attribute
+/// reads a value it can't use.
 pub fn apply(doc: &mut Document, json_data: &str) -> Result<(), String> {
     let root: Value = serde_json::from_str(json_data)
         .map_err(|e| format!("data JSON parse error: {e}"))?;
+    let resolvers = Resolvers::of(doc);
+    let bind = Bind { root: &root, toc_indent_step: None, resolvers: Some(&resolvers) };
 
     for section in &mut doc.sections {
         if let Some(toc) = &mut section.options.toc {
+            for sc in &section.children {
+                if let crate::parse::SectionChild::Layout { children, .. } = sc {
+                    for lc in children {
+                        match lc {
+                            crate::parse::LayoutChild::Content(node) => refuse_bound_attrs(std::slice::from_ref(node))?,
+                            crate::parse::LayoutChild::Region(region) => refuse_bound_attrs(&region.children)?,
+                        }
+                    }
+                }
+            }
             toc.data = Some(root.clone());
             continue;
         }
         // A layer is drawn or not by its data-if and data-if-not, and what is in it is bound like the layout.
-        section.children.retain_mut(|sc| match sc {
-            crate::parse::SectionChild::Layer(layer) => bind_layer(layer, &root),
-            _ => true,
-        });
+        let mut children = Vec::with_capacity(section.children.len());
+        for mut sc in std::mem::take(&mut section.children) {
+            if let crate::parse::SectionChild::Layer(layer) = &mut sc {
+                if !bind_layer(layer, &bind)? {
+                    continue;
+                }
+            }
+            children.push(sc);
+        }
+        section.children = children;
         for sc in &mut section.children {
             if let crate::parse::SectionChild::Layout { children: layout_children, .. } = sc {
                 // Expand the flat content list (data-source loops can expand nodes).
@@ -127,12 +261,12 @@ pub fn apply(doc: &mut Document, json_data: &str) -> Result<(), String> {
                     match lc {
                         crate::parse::LayoutChild::Content(node) => {
                             out.clear();
-                            apply_single_node(node, &[], &root, None, &mut out);
+                            apply_single_node(node, &[], &bind, &mut out)?;
                             new_children.extend(out.drain(..).map(crate::parse::LayoutChild::Content));
                         }
                         crate::parse::LayoutChild::Region(mut region) => {
                             let children = std::mem::take(&mut region.children);
-                            region.children = apply_nodes(children, &[], &root, None);
+                            region.children = apply_nodes(children, &[], &bind)?;
                             new_children.push(crate::parse::LayoutChild::Region(region));
                         }
                     }
@@ -149,19 +283,20 @@ pub fn apply(doc: &mut Document, json_data: &str) -> Result<(), String> {
 ///
 /// A layer reads single values: an array is read by index (`signers[0].name`), and there is no `data-source`
 /// on what is in it.
-fn bind_layer(layer: &mut CanvasLayer, root: &Value) -> bool {
+fn bind_layer(layer: &mut CanvasLayer, bind: &Bind) -> Result<bool, String> {
+    let root = bind.root;
     if let Some(path) = &layer.data_if {
-        if !is_truthy(resolve_path(path, &[], root)) { return false; }
+        if !is_truthy(resolve_path(path, &[], root)) { return Ok(false); }
     }
     if let Some(path) = &layer.data_if_not {
-        if is_truthy(resolve_path(path, &[], root)) { return false; }
+        if is_truthy(resolve_path(path, &[], root)) { return Ok(false); }
     }
     let mut bound = Vec::with_capacity(layer.children.len());
     for child in std::mem::take(&mut layer.children) {
         match child {
             CanvasPrimitive::Placed(mut placed) => {
                 let mut out = Vec::new();
-                apply_single_node(placed.node.clone(), &[], root, None, &mut out);
+                apply_single_node(placed.node.clone(), &[], bind, &mut out)?;
                 // A node filtered out by its data-if is not drawn; there is no data-source to repeat it.
                 if let Some(node) = out.pop() {
                     placed.node = node;
@@ -172,32 +307,34 @@ fn bind_layer(layer: &mut CanvasLayer, root: &Value) -> bool {
         }
     }
     layer.children = bound;
-    true
+    Ok(true)
 }
 
 /// Bind the content of a table of contents section. `root` is the caller's data with `$toc` added. Each item
 /// that `data-source="$toc"` expands gets `(level - 1) × indent_step` more left padding, and its `href="#"`
 /// links point at its entry's bookmark.
 pub(crate) fn apply_toc(nodes: Vec<Node>, root: &Value, indent_step: f32) -> Vec<Node> {
-    apply_nodes(nodes, &[], root, Some(indent_step))
+    let bind = Bind { root, toc_indent_step: Some(indent_step), resolvers: None };
+    // Only a bound attribute can fail, and `apply` refused those in this section when the data came in.
+    apply_nodes(nodes, &[], &bind).unwrap_or_default()
 }
 
 // ── Tree walking ──────────────────────────────────────────────────────────────
 
-/// `toc_indent_step` is set while binding a table of contents section; see `apply_toc`.
-fn apply_nodes(nodes: Vec<Node>, stack: &[&Value], root: &Value, toc_indent_step: Option<f32>) -> Vec<Node> {
+fn apply_nodes(nodes: Vec<Node>, stack: &[&Value], bind: &Bind) -> Result<Vec<Node>, String> {
     let mut out = Vec::with_capacity(nodes.len());
     for node in nodes {
-        apply_single_node(node, stack, root, toc_indent_step, &mut out);
+        apply_single_node(node, stack, bind, &mut out)?;
     }
-    out
+    Ok(out)
 }
 
 /// Process one node, appending results to `out`.  May produce:
 /// - 0 outputs: the node is filtered out by `data-if` / `data-if-not`
 /// - 1 output:  the normal case (data resolved and children recursed)
 /// - N outputs: the node has `data-source` and is expanded once per array item
-fn apply_single_node(node: Node, stack: &[&Value], root: &Value, toc_indent_step: Option<f32>, out: &mut Vec<Node>) {
+fn apply_single_node(node: Node, stack: &[&Value], bind: &Bind, out: &mut Vec<Node>) -> Result<(), String> {
+    let root = bind.root;
     let di  = node.data_attrs.as_ref().and_then(|d| d.data_if.as_deref()).map(str::to_owned);
     let din = node.data_attrs.as_ref().and_then(|d| d.data_if_not.as_deref()).map(str::to_owned);
     let ds  = node.data_attrs.as_ref().and_then(|d| d.data_source.as_deref()).map(str::to_owned);
@@ -206,21 +343,21 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, toc_indent_step
     // 1. data-if: skip when the path evaluates to a falsy value.
     if let Some(ref path) = di {
         if !is_truthy(resolve_path(path, stack, root)) {
-            return;
+            return Ok(());
         }
     }
 
     // 2. data-if-not: skip when the path evaluates to a truthy value.
     if let Some(ref path) = din {
         if is_truthy(resolve_path(path, stack, root)) {
-            return;
+            return Ok(());
         }
     }
 
     // 3. data-source: expand into one copy per array element.
     if let Some(ref path) = ds {
         if let Some(Value::Array(items)) = resolve_path(path, stack, root) {
-            let toc_entries = toc_indent_step.filter(|_| path == TOC_DATA_KEY);
+            let toc_entries = bind.toc_indent_step.filter(|_| path == TOC_DATA_KEY);
             for item in items {
                 let mut new_stack = stack.to_vec();
                 new_stack.push(item);
@@ -233,7 +370,7 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, toc_indent_step
                     d.data_if_not = None;
                 }
                 let first = out.len();
-                apply_single_node(template, &new_stack, root, toc_indent_step, out);
+                apply_single_node(template, &new_stack, bind, out)?;
                 if let Some(indent_step) = toc_entries {
                     for entry_node in &mut out[first..] {
                         finish_toc_entry(entry_node, item, indent_step);
@@ -242,7 +379,7 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, toc_indent_step
             }
         }
         // Non-array value or missing path → node produces no output.
-        return;
+        return Ok(());
     }
 
     // 4. data-value: substitute the text content, or the data a barcode encodes.
@@ -273,9 +410,16 @@ fn apply_single_node(node: Node, stack: &[&Value], root: &Value, toc_indent_step
         }
     }
 
-    // 5. Recurse into children with the current scope.
-    node.children = apply_nodes(std::mem::take(&mut node.children), stack, root, toc_indent_step);
+    // 5. data-href, data-name, data-color, data-background, data-fill: set the attribute from the data.
+    if let Some(resolvers) = bind.resolvers {
+        let bound = node.data_attrs.as_mut().map(|d| std::mem::take(&mut d.bound)).unwrap_or_default();
+        bind_attributes(&mut node, &bound, stack, root, resolvers)?;
+    }
+
+    // 6. Recurse into children with the current scope.
+    node.children = apply_nodes(std::mem::take(&mut node.children), stack, bind)?;
     out.push(node);
+    Ok(())
 }
 
 /// Indent an item expanded from `$toc` by its entry's level, and point the item's `href="#"` links at the
@@ -409,6 +553,7 @@ mod tests {
             page_height: 841.89,
             background: None,
             gradients: HashMap::new(),
+            colors: HashMap::new(),
             debug: false,
             footnote_counter: None,
             sections: vec![Section {
@@ -712,5 +857,169 @@ mod tests {
         let mut doc = crate::parse::parse(xml).unwrap();
         apply(&mut doc, r#"{"id":"A-77"}"#).unwrap();
         assert_eq!(layout_children(&doc)[0].barcode_data.as_deref(), Some("A-77"));
+    }
+
+    // ── Bound attributes ──────────────────────────────────────────────────────
+
+    const BOUND_HEAD: &str = r##"<assets><image name="logo"/><image name="photo" ref="photo-key"/></assets>
+        <tokens><colors><color name="brand" value="#112233"/></colors></tokens>"##;
+
+    fn bound_xml(layout: &str) -> String {
+        format!(r#"<lpdf version="1">{BOUND_HEAD}<document><section><layout>{layout}</layout></section></document></lpdf>"#)
+    }
+
+    /// The layout of `layout` with `data` bound.
+    fn bound_layout(layout: &str, data: &str) -> Result<Vec<Node>, String> {
+        let mut doc = crate::parse::parse(&bound_xml(layout))?;
+        apply(&mut doc, data)?;
+        Ok(layout_children(&doc))
+    }
+
+    #[test]
+    fn data_href_sets_the_target_of_a_link_for_each_row() {
+        let nodes = bound_layout(
+            r#"<column data-source="items"><link href="https://fallback.example" data-href="url"><text>Go</text></link></column>"#,
+            r#"{"items":[{"url":"https://a.example"},{"url":"https://b.example"},{}]}"#,
+        )
+        .unwrap();
+        let urls: Vec<_> = nodes.iter().map(|row| row.children[0].url.as_deref()).collect();
+        // A row with no url keeps the href the document wrote.
+        assert_eq!(urls, vec![Some("https://a.example"), Some("https://b.example"), Some("https://fallback.example")]);
+    }
+
+    #[test]
+    fn data_name_picks_a_declared_image_and_keeps_its_registry_key() {
+        let nodes = bound_layout(
+            r#"<column data-source="items"><img name="logo" data-name="image" width="40pt"/></column>"#,
+            r#"{"items":[{"image":"photo"},{"image":"logo"},{}]}"#,
+        )
+        .unwrap();
+        let keys: Vec<_> = nodes.iter().map(|row| row.children[0].image_name.as_deref()).collect();
+        assert_eq!(keys, vec![Some("photo-key"), Some("logo"), Some("logo")]);
+    }
+
+    #[test]
+    fn data_name_names_the_data_path_of_an_image_that_is_not_declared() {
+        let error = bound_layout(
+            r#"<img name="logo" data-name="item.image" width="40pt"/>"#,
+            r#"{"item":{"image":"nope"}}"#,
+        )
+        .unwrap_err();
+        assert_eq!(error, r#"data-name="item.image": 'nope' is not an image declared in <assets>"#);
+    }
+
+    #[test]
+    fn data_name_picks_the_image_of_an_img_at() {
+        let xml = bound_xml(r#"<layer><img-at x="0pt" y="0pt" width="40pt" name="logo" data-name="image"/></layer>"#)
+            .replace("<layout>", "").replace("</layout>", "");
+        let mut doc = crate::parse::parse(&xml).unwrap();
+        apply(&mut doc, r#"{"image":"photo"}"#).unwrap();
+        let layer = doc.sections.remove(0).children.into_iter().find_map(|child| match child {
+            crate::parse::SectionChild::Layer(layer) => Some(layer),
+            _ => None,
+        });
+        let key = layer.unwrap().children.into_iter().find_map(|child| match child {
+            CanvasPrimitive::Placed(placed) => placed.node.image_name,
+            _ => None,
+        });
+        assert_eq!(key.as_deref(), Some("photo-key"));
+    }
+
+    #[test]
+    fn data_color_sets_the_text_color_of_a_text_a_divider_and_a_barcode() {
+        let nodes = bound_layout(
+            r##"<text color="#000000" data-color="status">Late</text>
+               <divider data-color="status"/>
+               <barcode type="qr" data="x" width="40pt" data-color="status"/>"##,
+            r##"{"status":"brand"}"##,
+        )
+        .unwrap();
+        assert_eq!(nodes[0].text_color.as_deref(), Some("#112233"));
+        assert_eq!(nodes[1].color.as_deref(), Some("#112233"));
+        assert_eq!(nodes[2].barcode_color.as_deref(), Some("#112233"));
+    }
+
+    #[test]
+    fn data_color_takes_a_hex_value_from_the_data() {
+        let nodes = bound_layout(r#"<column data-color="c"/>"#, r##"{"c":"#ABCDEF"}"##).unwrap();
+        assert_eq!(nodes[0].text_color.as_deref(), Some("#abcdef"));
+    }
+
+    #[test]
+    fn data_background_sets_the_fill_of_a_box_and_the_background_of_a_barcode() {
+        let nodes = bound_layout(
+            r#"<column data-background="fill"/>
+               <barcode type="qr" data="x" width="40pt" data-background="fill"/>"#,
+            r##"{"fill":"brand"}"##,
+        )
+        .unwrap();
+        assert_eq!(nodes[0].background.as_deref(), Some("#112233"));
+        assert_eq!(nodes[1].barcode_bg.as_deref(), Some("#112233"));
+    }
+
+    #[test]
+    fn data_fill_sets_the_fill_of_a_shape_and_keeps_the_written_one_for_a_missing_path() {
+        let nodes = bound_layout(
+            r##"<column data-source="items"><shape type="rect" width="20pt" height="6pt" fill="#999999" data-fill="color"/></column>"##,
+            r##"{"items":[{"color":"#FF0000"},{}]}"##,
+        )
+        .unwrap();
+        let fills: Vec<_> = nodes.iter().map(|row| row.children[0].shape.as_ref().and_then(|s| s.fill.clone())).collect();
+        assert_eq!(fills, vec![Some("#ff0000".to_owned()), Some("#999999".to_owned())]);
+    }
+
+    #[test]
+    fn a_bound_attribute_reads_a_loop_scope_the_parent_and_the_root() {
+        let nodes = bound_layout(
+            r#"<column data-source="groups">
+                 <column data-source="items">
+                   <text data-color="color">in item</text>
+                   <text data-color="../tint">in group</text>
+                   <text data-color="/all">in root</text>
+                 </column>
+               </column>"#,
+            r##"{"all":"#000001","groups":[{"tint":"#000002","items":[{"color":"#000003"}]}]}"##,
+        )
+        .unwrap();
+        let texts = &nodes[0].children[0].children;
+        let colors: Vec<_> = texts.iter().map(|t| t.text_color.as_deref()).collect();
+        assert_eq!(colors, vec![Some("#000003"), Some("#000002"), Some("#000001")]);
+    }
+
+    #[test]
+    fn a_bound_color_that_is_not_a_color_names_the_attribute_and_the_data_path() {
+        let error = bound_layout(r#"<text data-color="item.status">Late</text>"#, r#"{"item":{"status":"chartreuse"}}"#).unwrap_err();
+        assert_eq!(error, r#"data-color="item.status": unknown color token: 'chartreuse'"#);
+    }
+
+    #[test]
+    fn a_bound_value_that_is_not_a_string_is_an_error() {
+        let error = bound_layout(r#"<text data-color="n">Late</text>"#, r#"{"n":7}"#).unwrap_err();
+        assert_eq!(error, r#"data-color="n": expected a string, found a number"#);
+    }
+
+    #[test]
+    fn a_gradient_can_fill_a_background_but_not_color_a_text() {
+        let xml = r##"<lpdf version="1"><tokens><colors><color name="a" value="#000000"/><color name="b" value="#ffffff"/></colors>
+            <gradients><gradient name="fade" type="linear" from="a" to="b"/></gradients></tokens>
+            <document><section><layout><column data-background="g"/><text data-color="g">x</text></layout></section></document></lpdf>"##;
+        let mut doc = crate::parse::parse(xml).unwrap();
+        let error = apply(&mut doc, r#"{"g":"gradient:fade"}"#).unwrap_err();
+        assert!(error.starts_with(r#"data-color="g": "#), "{error}");
+    }
+
+    #[test]
+    fn a_data_attribute_on_an_element_without_that_attribute_is_refused_when_the_document_is_read() {
+        let error = crate::parse::parse(&bound_xml(r#"<divider data-background="c"/>"#)).unwrap_err();
+        assert!(error.contains("'data-background' does not apply to this element"), "{error}");
+    }
+
+    #[test]
+    fn a_table_of_contents_section_refuses_a_bound_attribute() {
+        let xml = r#"<lpdf version="1"><document><section type="toc"><layout>
+            <column data-source="$toc"><text data-color="c" data-value="label">x</text></column></layout></section></document></lpdf>"#;
+        let mut doc = crate::parse::parse(xml).unwrap();
+        let error = apply(&mut doc, "{}").unwrap_err();
+        assert_eq!(error, "'data-color' is not supported in a table of contents section");
     }
 }

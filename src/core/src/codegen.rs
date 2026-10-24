@@ -592,7 +592,7 @@ fn js_attr_value(val: &str) -> String {
 fn js_attrs(node: &Node, extra_attrs: Option<&[(&str, String)]>) -> String {
     let mut parts: Vec<String> = node
         .attributes()
-        .filter(|a| !matches!(a.name(), "data-value" | "data-source" | "data-if" | "data-if-not"))
+        .filter(|a| !is_data_binding(a.name()))
         .map(|a| format!("{}: {}", to_camel_case(a.name()), js_attr_value(a.value())))
         .collect();
 
@@ -609,36 +609,33 @@ fn js_attrs(node: &Node, extra_attrs: Option<&[(&str, String)]>) -> String {
     }
 }
 
+/// Whether an attribute reads the data (`data-value`, `data-source`, `data-if`, `data-if-not`, `data-href`,
+/// `data-color`…). The builders have no such attributes, so codegen leaves them out of the code it writes and
+/// notes them in a TODO comment.
+fn is_data_binding(name: &str) -> bool {
+    name.starts_with("data-")
+}
+
+/// The TODO comment for one data-binding attribute, after `marker` (`//` or `#`).
+fn data_binding_comment(marker: &str, indent_str: &str, attr: &roxmltree::Attribute) -> String {
+    let note = if attr.name() == "data-source" { " — loop" } else { "" };
+    format!("{indent_str}{marker} TODO (Lpdf) {}: {}{note}\n", attr.name(), attr.value())
+}
+
 /// Collect data-binding attributes for TODO comment generation (// style).
 fn data_binding_comments(node: &Node, indent_str: &str) -> String {
-    let mut lines = String::new();
-    for attr in node.attributes() {
-        let comment = match attr.name() {
-            "data-value"  => format!("{indent_str}// TODO (Lpdf) data-value: {}\n", attr.value()),
-            "data-source" => format!("{indent_str}// TODO (Lpdf) data-source: {} — loop\n", attr.value()),
-            "data-if"     => format!("{indent_str}// TODO (Lpdf) data-if: {}\n", attr.value()),
-            "data-if-not" => format!("{indent_str}// TODO (Lpdf) data-if-not: {}\n", attr.value()),
-            _ => continue,
-        };
-        lines.push_str(&comment);
-    }
-    lines
+    node.attributes()
+        .filter(|a| is_data_binding(a.name()))
+        .map(|a| data_binding_comment("//", indent_str, &a))
+        .collect()
 }
 
 /// Collect data-binding attributes for TODO comment generation (# style, Python).
 fn data_binding_comments_hash(node: &Node, indent_str: &str) -> String {
-    let mut lines = String::new();
-    for attr in node.attributes() {
-        let comment = match attr.name() {
-            "data-value"  => format!("{indent_str}# TODO (Lpdf) data-value: {}\n", attr.value()),
-            "data-source" => format!("{indent_str}# TODO (Lpdf) data-source: {} — loop\n", attr.value()),
-            "data-if"     => format!("{indent_str}# TODO (Lpdf) data-if: {}\n", attr.value()),
-            "data-if-not" => format!("{indent_str}# TODO (Lpdf) data-if-not: {}\n", attr.value()),
-            _ => continue,
-        };
-        lines.push_str(&comment);
-    }
-    lines
+    node.attributes()
+        .filter(|a| is_data_binding(a.name()))
+        .map(|a| data_binding_comment("#", indent_str, &a))
+        .collect()
 }
 
 /// An attribute value as a PHP string literal. Every attribute is a string in the SDKs, `true` included.
@@ -652,7 +649,7 @@ fn php_attr_value(val: &str) -> String {
 fn php_attrs(node: &Node, tag: &str, extra_attrs: Option<&[(&str, String)]>) -> String {
     let mut parts: Vec<String> = node
         .attributes()
-        .filter(|a| !matches!(a.name(), "data-value" | "data-source" | "data-if" | "data-if-not"))
+        .filter(|a| !is_data_binding(a.name()))
         .map(|a| format!("{}: {}", to_camel_case(a.name()), php_attr_value(a.value())))
         .collect();
 
@@ -682,7 +679,7 @@ fn attr_class(tag: &str) -> String {
 fn python_attrs(node: &Node, tag: &str, extra_attrs: Option<&[(&str, String)]>) -> String {
     let mut parts: Vec<String> = node
         .attributes()
-        .filter(|a| !matches!(a.name(), "data-value" | "data-source" | "data-if" | "data-if-not"))
+        .filter(|a| !is_data_binding(a.name()))
         .map(|a| format!("{}={}", to_snake_case(a.name()), python_attr_value(a.value())))
         .collect();
 
@@ -716,7 +713,7 @@ fn dotnet_attr_value(val: &str) -> String {
 fn dotnet_attrs(node: &Node, extra_attrs: Option<&[(&str, String)]>) -> String {
     let mut parts: Vec<String> = node
         .attributes()
-        .filter(|a| !matches!(a.name(), "data-value" | "data-source" | "data-if" | "data-if-not"))
+        .filter(|a| !is_data_binding(a.name()))
         .map(|a| format!("{} = {}", to_pascal_case(a.name()), dotnet_attr_value(a.value())))
         .collect();
 
@@ -1739,6 +1736,33 @@ mod tests {
         let out  = codegen(xml, &opts).unwrap();
         assert!(out.contains("const doc = L.document({ tokens: { textSize: { xs: '7pt', m: '11pt' }, colors: { primary: '#1763cf' } } }, ["), "{out}");
         assert!(!out.contains("const tokens"), "{out}");
+    }
+
+    #[test]
+    fn attributes_bound_to_data_become_todo_comments_in_every_target() {
+        let xml = r##"<?xml version="1.0"?>
+<lpdf version="1">
+  <assets><image name="logo"/></assets>
+  <document>
+    <section><layout>
+      <link href="https://x.example" data-href="url"><img name="logo" data-name="photo" width="40pt"/></link>
+      <shape type="rect" width="10pt" height="10pt" fill="#999999" data-fill="status.color"/>
+      <text color="#000000" data-color="tone">Late</text>
+    </layout></section>
+  </document>
+</lpdf>"##;
+        for (target, marker, bound, builder_name) in [
+            ("js", "//", "dataHref", "dataFill"),
+            ("dotnet", "//", "DataHref", "DataColor"),
+            ("php", "//", "dataColor", "dataName"),
+            ("python", "#", "data_href", "data_fill"),
+        ] {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            for line in ["data-href: url", "data-name: photo", "data-fill: status.color", "data-color: tone"] {
+                assert!(out.contains(&format!("{marker} TODO (Lpdf) {line}")), "{target}: {line}\n{out}");
+            }
+            assert!(!out.contains(bound) && !out.contains(builder_name), "{target} writes a bound attribute as code\n{out}");
+        }
     }
 
     #[test]
