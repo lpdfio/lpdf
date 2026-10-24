@@ -6,30 +6,36 @@
 
 use std::collections::HashMap;
 
-/// Extract per-glyph advance widths for printable ASCII (code points 32–126)
-/// from raw TrueType/OpenType font bytes, normalised to 1/1000 em units.
+/// Extract the advance width of every character the font maps from raw TrueType/OpenType
+/// font bytes, normalised to 1/1000 em units. A character the font does not map gets the
+/// advance of glyph 0 (.notdef), which is the glyph the encoder writes for it.
 /// Returns `None` if the font cannot be parsed (WOFF/WOFF2, corrupt data, etc.).
 pub(crate) fn extract_font_widths(bytes: &[u8]) -> Option<super::tokens::FontWidths> {
     let face = ttf_parser::Face::parse(bytes, 0).ok()?;
     let upm = face.units_per_em() as u32;
     if upm == 0 { return None; }
 
-    let mut ascii: Vec<u16> = Vec::with_capacity(95);
-    let mut sum: u32 = 0;
-    let mut count: u32 = 0;
+    let per_mille = |gid: ttf_parser::GlyphId| {
+        let advance = face.glyph_hor_advance(gid).unwrap_or(0) as u32;
+        ((advance * 1000 + upm / 2) / upm) as u16
+    };
 
-    for cp in 32u32..=126 {
-        let ch = char::from_u32(cp).unwrap_or(' ');
-        let adv = face.glyph_index(ch)
-            .and_then(|gid| face.glyph_hor_advance(gid))
-            .unwrap_or_else(|| face.glyph_hor_advance(ttf_parser::GlyphId(0)).unwrap_or(0));
-        let w = ((adv as u32 * 1000 + upm / 2) / upm) as u16;
-        ascii.push(w);
-        if w > 0 { sum += w as u32; count += 1; }
+    let mut advances: HashMap<char, u16> = HashMap::new();
+    if let Some(cmap) = face.tables().cmap {
+        for subtable in cmap.subtables.into_iter().filter(|s| s.is_unicode()) {
+            subtable.codepoints(|cp| {
+                let Some(c) = char::from_u32(cp) else { return };
+                // `Face::glyph_index` is the lookup the encoder uses, so the table lists
+                // exactly the characters it can encode.
+                if let Some(gid) = face.glyph_index(c) {
+                    advances.entry(c).or_insert_with(|| per_mille(gid));
+                }
+            });
+        }
     }
 
-    let default = if count > 0 { ((sum + count / 2) / count) as u16 } else { 500 };
-    Some(super::tokens::FontWidths { default, ascii })
+    let default = per_mille(ttf_parser::GlyphId(0));
+    Some(super::tokens::FontWidths { default, ascii: Vec::new(), advances: advances.into() })
 }
 
 /// Parse a JSON permissions object into an `encrypt::Permissions` value.
@@ -114,4 +120,51 @@ pub(crate) fn render_doc_shared(
         }
     }
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MONTSERRAT: &[u8] = include_bytes!("../../../examples/5-brochure/assets/fonts/Montserrat-Regular.ttf");
+
+    /// The advance of `c` in the face itself, in font units scaled to 1/1000 em.
+    fn real_advance(face: &ttf_parser::Face, c: char) -> f32 {
+        let gid = face.glyph_index(c).expect("the face maps the character");
+        face.glyph_hor_advance(gid).expect("the glyph has an advance") as f32 * 1000.0
+            / face.units_per_em() as f32
+    }
+
+    #[test]
+    fn lists_the_real_advance_of_characters_beyond_ascii() {
+        let face = ttf_parser::Face::parse(MONTSERRAT, 0).expect("fixture face parses");
+        let widths = extract_font_widths(MONTSERRAT).expect("fixture face has widths");
+        for c in "éÉñü€“”’–—Жд".chars() {
+            let listed = widths.advance(c) as f32;
+            assert!((listed - real_advance(&face, c)).abs() <= 0.5, "advance of {c:?} is {listed}");
+        }
+        assert_ne!(widths.advance('—'), widths.advance('i'), "an em dash is not as narrow as an i");
+    }
+
+    #[test]
+    fn keeps_the_ascii_advances_of_before() {
+        let face = ttf_parser::Face::parse(MONTSERRAT, 0).expect("fixture face parses");
+        let upm = face.units_per_em() as u32;
+        let widths = extract_font_widths(MONTSERRAT).expect("fixture face has widths");
+        for cp in 32u32..=126 {
+            let c = char::from_u32(cp).expect("ascii is a char");
+            let advance = face.glyph_hor_advance(face.glyph_index(c).expect("ascii is mapped")).expect("has advance") as u32;
+            assert_eq!(widths.advance(c) as u32, (advance * 1000 + upm / 2) / upm, "advance of {c:?}");
+        }
+    }
+
+    #[test]
+    fn counts_an_unmapped_character_as_glyph_zero() {
+        let face = ttf_parser::Face::parse(MONTSERRAT, 0).expect("fixture face parses");
+        let widths = extract_font_widths(MONTSERRAT).expect("fixture face has widths");
+        let notdef = face.glyph_hor_advance(ttf_parser::GlyphId(0)).expect("glyph 0 has an advance") as f32 * 1000.0
+            / face.units_per_em() as f32;
+        assert!(face.glyph_index('\u{4e2d}').is_none(), "the fixture face has no CJK");
+        assert!((widths.advance('\u{4e2d}') as f32 - notdef).abs() <= 0.5);
+    }
 }

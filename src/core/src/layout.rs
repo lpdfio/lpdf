@@ -2850,18 +2850,9 @@ pub(crate) fn text_width(font: &str, text: &str, size: f32) -> f32 {
     if font.contains("Courier") {
         return text.chars().count() as f32 * size * 0.6;
     }
-    // Check caller-supplied width table first (custom fonts via set_font_metrics).
-    let custom = FONT_WIDTHS.with(|fw| fw.borrow().get(font).cloned());
-    if let Some(w) = custom {
-        return text.chars().map(|c| {
-            let cp = c as u32;
-            let advance = if cp >= 32 && cp <= 126 && !w.ascii.is_empty() {
-                w.ascii[(cp - 32) as usize]
-            } else {
-                w.default
-            };
-            advance as f32 * size / 1000.0
-        }).sum();
+    // Check the width table of an embedded font first (read from its bytes, or set_font_metrics).
+    if let Some(width) = FONT_WIDTHS.with(|fw| fw.borrow().get(font).map(|w| w.text_width(text, size))) {
+        return width;
     }
     // For known builtins use per-character AFM widths.
     if builtin_char_advance(font, ' ').is_some() {
