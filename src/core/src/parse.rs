@@ -18,6 +18,8 @@ pub struct Document {
     pub background:  Option<String>,
     /// The gradients of the tokens, which a background or a fill names as `gradient:name`.
     pub gradients:   HashMap<String, Gradient>,
+    /// The color tokens, which a bound color (`data-color`) is checked against after binding.
+    pub colors:      HashMap<String, String>,
     pub debug:       bool,
     /// Where footnote numbers start over, for the sections that don't say (`footnote-counter`).
     pub footnote_counter: Option<FootnoteCounter>,
@@ -301,6 +303,78 @@ pub struct DataAttrs {
     pub data_source: Option<String>,
     pub data_if:     Option<String>,
     pub data_if_not: Option<String>,
+    /// The attributes that take their value from the data, with the path each reads (`data-href="url"`).
+    pub bound:       Vec<(BoundAttr, String)>,
+}
+
+/// An attribute that can take its value from the data. Each is written as `data-` and its name, and sets the
+/// field that the attribute of that name sets on the element.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoundAttr {
+    /// `data-href` on a `link`.
+    Href,
+    /// `data-name` on an `img` or `img-at`: one of the images declared in `<assets>`.
+    Name,
+    /// `data-color`: the text color of a text or box, the line of a divider, the bars of a barcode.
+    Color,
+    /// `data-background`: the fill behind a box, or behind a barcode.
+    Background,
+    /// `data-fill` on a `shape`.
+    Fill,
+}
+
+impl BoundAttr {
+    /// Every bindable attribute, in the order they are read and bound.
+    pub const ALL: [BoundAttr; 5] = [Self::Href, Self::Name, Self::Color, Self::Background, Self::Fill];
+
+    /// The attribute as written in a document.
+    pub fn data_attribute(self) -> &'static str {
+        match self {
+            Self::Href       => "data-href",
+            Self::Name       => "data-name",
+            Self::Color      => "data-color",
+            Self::Background => "data-background",
+            Self::Fill       => "data-fill",
+        }
+    }
+}
+
+impl BoundAttr {
+    /// Whether an element of this kind has the attribute to bind: `data-color` on a `shape` has no `color` to set.
+    pub fn applies_to(self, kind: &NodeKind) -> bool {
+        match self {
+            Self::Href       => *kind == NodeKind::Link,
+            Self::Name       => *kind == NodeKind::Img,
+            Self::Color      => matches!(
+                kind,
+                NodeKind::Text | NodeKind::Column | NodeKind::Row | NodeKind::Grid | NodeKind::Frame
+                    | NodeKind::TableCell | NodeKind::Divider | NodeKind::Barcode
+            ),
+            Self::Background => matches!(
+                kind,
+                NodeKind::Column | NodeKind::Row | NodeKind::Grid | NodeKind::Frame | NodeKind::TableCell
+                    | NodeKind::Barcode
+            ),
+            Self::Fill       => *kind == NodeKind::Shape,
+        }
+    }
+}
+
+/// Refuse a binding on an element that has no such attribute, when the document is read, not on the first row
+/// of data that would have used it.
+fn check_bound_attrs(kind: &NodeKind, bound: &[(BoundAttr, String)]) -> Result<(), String> {
+    match bound.iter().find(|(attr, _)| !attr.applies_to(kind)) {
+        Some((attr, _)) => Err(format!("'{}' does not apply to this element", attr.data_attribute())),
+        None            => Ok(()),
+    }
+}
+
+/// The `data-<attr>` bindings an element carries, in `BoundAttr::ALL` order.
+fn read_bound_attrs(a: &impl Attrs) -> Vec<(BoundAttr, String)> {
+    BoundAttr::ALL
+        .iter()
+        .filter_map(|&attr| a.get(attr.data_attribute()).map(|path| (attr, path.to_owned())))
+        .collect()
 }
 
 /// Which of the texts captured under a name on a page a `capture-ref` text shows.
@@ -1055,6 +1129,7 @@ pub fn parse(xml: &str) -> Result<Document, String> {
                     page_height: doc_size.1,
                     background:  doc_background,
                     gradients:   tokens.gradients.clone(),
+                    colors:      tokens.colors.clone(),
                     debug:       doc_debug,
                     footnote_counter: doc_footnote_counter,
                     sections:    sections_xml,
@@ -1686,16 +1761,19 @@ fn parse_node(
 
     // data-binding attributes (valid on any element; boxed to keep Node lean)
     {
-        let dv  = elem.attribute("data-value").map(str::to_owned);
-        let ds  = elem.attribute("data-source").map(str::to_owned);
-        let di  = elem.attribute("data-if").map(str::to_owned);
-        let din = elem.attribute("data-if-not").map(str::to_owned);
-        if dv.is_some() || ds.is_some() || di.is_some() || din.is_some() {
+        let dv    = elem.attribute("data-value").map(str::to_owned);
+        let ds    = elem.attribute("data-source").map(str::to_owned);
+        let di    = elem.attribute("data-if").map(str::to_owned);
+        let din   = elem.attribute("data-if-not").map(str::to_owned);
+        let bound = read_bound_attrs(elem);
+        check_bound_attrs(&kind, &bound).map_err(|e| format!("<{}>{}: {e}", tag, node_loc(elem)))?;
+        if dv.is_some() || ds.is_some() || di.is_some() || din.is_some() || !bound.is_empty() {
             node.data_attrs = Some(Box::new(DataAttrs {
                 data_value:  dv,
                 data_source: ds,
                 data_if:     di,
                 data_if_not: din,
+                bound,
             }));
         }
     }
@@ -2011,12 +2089,15 @@ fn at_node_attrs(
     }
     let mut node = ParsedNode::default_for(kind.clone());
     let (value, only_if, unless) = (a.get("data-value"), a.get("data-if"), a.get("data-if-not"));
-    if value.is_some() || only_if.is_some() || unless.is_some() {
+    let bound = read_bound_attrs(a);
+    check_bound_attrs(&kind, &bound)?;
+    if value.is_some() || only_if.is_some() || unless.is_some() || !bound.is_empty() {
         node.data_attrs = Some(Box::new(DataAttrs {
             data_value:  value.map(str::to_owned),
             data_source: None,
             data_if:     only_if.map(str::to_owned),
             data_if_not: unless.map(str::to_owned),
+            bound,
         }));
     }
     match kind {
@@ -2908,6 +2989,7 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
         page_height: doc_size.1,
         background:  doc_background,
         gradients:   tokens.gradients.clone(),
+        colors:      tokens.colors.clone(),
         debug:       doc_debug,
         footnote_counter: doc_footnote_counter,
         sections,

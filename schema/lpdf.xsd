@@ -390,6 +390,44 @@
     <xs:attributeGroup ref="DataConditionAttrs"/>
   </xs:attributeGroup>
 
+  <!-- Attributes that read their value from the data, as data-value does for text: the same dot-paths, loop scopes,
+       / and ../. The attribute of the same name without data- is what stays when the path finds nothing. -->
+  <xs:attributeGroup name="DataHrefAttr">
+    <xs:attribute name="data-href" type="xs:string">
+      <xs:annotation>
+        <xs:documentation>Dot-path to a string that sets href. When the path finds nothing, href stays, so it is the fallback.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:attributeGroup>
+  <xs:attributeGroup name="DataNameAttr">
+    <xs:attribute name="data-name" type="xs:string">
+      <xs:annotation>
+        <xs:documentation>Dot-path to a string that sets name: one of the images declared in assets, so the data chooses among the images the caller loaded and can't add one. When the path finds nothing, name stays, so it is the fallback. A name that is not declared is an error that names the path.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:attributeGroup>
+  <xs:attributeGroup name="DataColorAttr">
+    <xs:attribute name="data-color" type="xs:string">
+      <xs:annotation>
+        <xs:documentation>Dot-path to a string that sets color: a hex value or a name from the colors row of the tokens. When the path finds nothing, color stays. A value that is not a color is an error that names the path.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:attributeGroup>
+  <xs:attributeGroup name="DataBackgroundAttr">
+    <xs:attribute name="data-background" type="xs:string">
+      <xs:annotation>
+        <xs:documentation>Dot-path to a string that sets background: a color, or gradient:name where the element takes a gradient. When the path finds nothing, background stays. A value that is not a fill is an error that names the path.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:attributeGroup>
+  <xs:attributeGroup name="DataFillAttr">
+    <xs:attribute name="data-fill" type="xs:string">
+      <xs:annotation>
+        <xs:documentation>Dot-path to a string that sets fill: a color, or gradient:name. When the path finds nothing, fill stays. A value that is not a fill is an error that names the path.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:attributeGroup>
+
   <!-- Box attrs shared by all layout elements -->
   <xs:attributeGroup name="BoxAttrs">
     <xs:attribute name="font"       type="xs:string"/>
@@ -430,6 +468,8 @@
     </xs:attribute>
     <xs:attribute name="debug"      type="xs:boolean"/>
     <xs:attributeGroup ref="DataBindingAttrs"/>
+    <xs:attributeGroup ref="DataColorAttr"/>
+    <xs:attributeGroup ref="DataBackgroundAttr"/>
   </xs:attributeGroup>
 
   <!-- width, on every element a row can hold -->
@@ -480,6 +520,8 @@
     </xs:attribute>
     <xs:attribute name="debug"      type="xs:boolean"/>
     <xs:attributeGroup ref="DataBindingAttrs"/>
+    <xs:attributeGroup ref="DataColorAttr"/>
+    <xs:attributeGroup ref="DataBackgroundAttr"/>
   </xs:attributeGroup>
 
   <!-- ============================================================
@@ -539,6 +581,7 @@
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="color"     type="Color"/>
+    <xs:attributeGroup ref="DataColorAttr"/>
     <xs:attribute name="align"     type="TextAlignH"/>
     <xs:attribute name="line-height" type="TokenScaleOrFactor">
       <xs:annotation>
@@ -565,6 +608,7 @@
   <!-- What an image means in the layout and in a layer -->
   <xs:attributeGroup name="ImgCore">
     <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attributeGroup ref="DataNameAttr"/>
   </xs:attributeGroup>
 
   <!-- What a barcode means in the layout and in a layer. Its height comes after these two, and BarcodeStyle after
@@ -597,6 +641,8 @@
     <xs:attribute name="hrt"        type="xs:boolean"/>
     <xs:attribute name="color"      type="Color"/>
     <xs:attribute name="background" type="Color"/>
+    <xs:attributeGroup ref="DataColorAttr"/>
+    <xs:attributeGroup ref="DataBackgroundAttr"/>
   </xs:attributeGroup>
 
   <xs:element name="rect">
@@ -1195,6 +1241,7 @@
       <xs:attribute name="height" type="HeightValue"/>
       <xs:attribute name="debug"  type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
+      <xs:attributeGroup ref="DataHrefAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -1236,6 +1283,7 @@
       <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="debug"     type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
+      <xs:attributeGroup ref="DataColorAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -1348,6 +1396,7 @@
       </xs:attribute>
       <xs:attribute name="debug" type="xs:boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
+      <xs:attributeGroup ref="DataFillAttr"/>
     </xs:complexType>
   </xs:element>
 
