@@ -27,3 +27,10 @@ jobs:
         env:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
         run: cargo test --manifest-path src/core-wasi/Cargo.toml
+
+      - name: Check encrypted PDFs with qpdf
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
+        run: |
+          sudo apt-get install -y qpdf
+          make check-encryption

@@ -1,4 +1,5 @@
 pub mod codegen;
+mod aes256;
 mod canvas;
 mod data;
 mod encrypt;
@@ -11,6 +12,7 @@ mod page_scope;
 mod parse;
 mod pdf;
 mod render;
+mod rewrite;
 mod shared;
 mod toc;
 mod tokens;
@@ -33,7 +35,7 @@ pub struct LpdfEngine {
     /// Current Unix timestamp (seconds) used for license expiry checking.
     /// Set via `set_now()`.  Defaults to `0` (expiry check skipped).
     now_unix:    i64,
-    /// Optional RC4-128 encryption config; applied as a post-processing pass.
+    /// Optional encryption config (AES-256 or RC4-128); applied as a post-processing pass.
     encrypt:     Option<encrypt::EncryptConfig>,
 }
 
@@ -52,21 +54,37 @@ impl LpdfEngine {
         }
     }
 
-    /// Configure RC4-128 encryption applied to every subsequent `render_pdf` call.
+    /// Configure encryption applied to every subsequent `render_pdf` call.
     ///
     /// `permissions_json` is a JSON object with boolean fields matching the
     /// `Permissions` struct (`print`, `modify`, `copy`, `annotate`, `fill_forms`,
     /// `accessibility`, `assemble`, `print_hq`). Omitted fields default to `true`.
     ///
+    /// `algorithm` is `"aes-256"` or `"rc4-128"`. AES-256 needs `entropy`: at least 32
+    /// random bytes from the host's secure generator, from which the core cuts the file
+    /// key, salts and IVs. RC4-128 ignores it. Fails when the algorithm is unknown or
+    /// AES-256 gets too little entropy.
+    ///
     /// To apply permissions without an open password, pass an empty `user_password`
     /// and a non-empty `owner_password`.
-    pub fn set_encryption(&mut self, user_password: &str, owner_password: &str, permissions_json: &str) {
-        let perms = shared::parse_permissions_json(permissions_json);
-        self.encrypt = Some(encrypt::EncryptConfig {
+    pub fn set_encryption(
+        &mut self,
+        user_password: &str,
+        owner_password: &str,
+        permissions_json: &str,
+        algorithm: &str,
+        entropy: &[u8],
+    ) -> Result<(), JsValue> {
+        let config = encrypt::EncryptConfig {
             user_password:  user_password.to_string(),
             owner_password: owner_password.to_string(),
-            permissions:    perms,
-        });
+            permissions:    shared::parse_permissions_json(permissions_json),
+            algorithm:      encrypt::Algorithm::parse(algorithm).map_err(|e| JsValue::from_str(&e))?,
+            entropy:        entropy.to_vec(),
+        };
+        config.validate().map_err(|e| JsValue::from_str(&e))?;
+        self.encrypt = Some(config);
+        Ok(())
     }
 
     /// Remove any previously configured encryption.

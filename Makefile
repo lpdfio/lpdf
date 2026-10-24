@@ -16,7 +16,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python \
-        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api \
+        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api check-encryption \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
@@ -59,6 +59,18 @@ test-wasm:
 	@echo ">>> Running core tests..."
 	@echo ""
 	cargo test --manifest-path src/core/Cargo.toml
+
+# check-encryption has the core write encrypted PDFs and opens them with qpdf, which shares no code with the
+# engine: each password opens its file, a wrong one is refused, and decrypting gives the unencrypted render
+# (`scripts/check-encryption.mjs`). Needs qpdf on the PATH: `apt install qpdf` or `brew install qpdf`.
+check-encryption:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking encrypted PDFs with qpdf..."
+	@echo ""
+	rm -rf target/encryption-samples && mkdir -p target/encryption-samples
+	LPDF_ENCRYPT_OUT="$(CURDIR)/target/encryption-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_samples_for_the_external_check
+	node scripts/check-encryption.mjs target/encryption-samples
 
 test-wasi: test-wasm
 	@echo ""

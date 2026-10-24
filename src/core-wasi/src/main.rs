@@ -15,6 +15,14 @@
 /// ```json
 /// { "fonts": { "Inter": "<base64 TTF bytes>", … } }
 /// ```
+///
+/// Encryption is requested with an `encrypt` object. `algorithm` is `"aes-256"` (the
+/// default) or `"rc4-128"`; AES-256 also needs `entropy`, at least 32 random bytes from
+/// the host's secure generator, base64-encoded:
+/// ```json
+/// { "encrypt": { "user_password": "", "owner_password": "…", "permissions": { "copy": false },
+///                "algorithm": "aes-256", "entropy": "<base64 random bytes>" } }
+/// ```
 
 // Include the pure-Rust core modules by path — no wasm-bindgen involved.
 #[path = "../../core/src/tokens.rs"]
@@ -31,8 +39,12 @@ mod render;
 mod pdf;
 #[path = "../../core/src/license.rs"]
 mod license;
+#[path = "../../core/src/aes256.rs"]
+mod aes256;
 #[path = "../../core/src/encrypt.rs"]
 mod encrypt;
+#[path = "../../core/src/rewrite.rs"]
+mod rewrite;
 #[path = "../../core/src/shared.rs"]
 mod shared;
 #[path = "../../core/src/kit_to_xml.rs"]
@@ -228,13 +240,9 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     match pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, &doc.gradients, created_on, status.is_licensed()) {
         Ok(bytes) => {
             let bytes = if let Some(enc) = req.get("encrypt") {
-                let user_pw  = enc["user_password"] .as_str().unwrap_or("");
-                let owner_pw = enc["owner_password"].as_str().unwrap_or("");
-                let perms_json = enc["permissions"].to_string();
-                let cfg = encrypt::EncryptConfig {
-                    user_password:  user_pw.to_string(),
-                    owner_password: owner_pw.to_string(),
-                    permissions:    shared::parse_permissions_json(&perms_json),
+                let cfg = match encrypt_config(enc) {
+                    Ok(cfg) => cfg,
+                    Err(e)  => return serde_json::json!({ "error": e }).to_string(),
                 };
                 match encrypt::encrypt_pdf(&bytes, &cfg) {
                     Ok(b)  => b,
@@ -266,6 +274,29 @@ impl LpdfEngine {
         // Unlicensed, as in the core stub, so both crates hash the same attributed bytes.
         pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, &doc.gradients, None, false)
     }
+}
+
+/// Reads the request's `encrypt` object into a config the core can use.
+fn encrypt_config(enc: &serde_json::Value) -> Result<encrypt::EncryptConfig, String> {
+    let algorithm = match enc["algorithm"].as_str() {
+        Some(name) => encrypt::Algorithm::parse(name)?,
+        None       => encrypt::Algorithm::default(),
+    };
+    let entropy = match enc["entropy"].as_str() {
+        Some(text) => base64::engine::general_purpose::STANDARD
+            .decode(text)
+            .map_err(|e| format!("encrypt.entropy is not valid base64: {e}"))?,
+        None => Vec::new(),
+    };
+    let cfg = encrypt::EncryptConfig {
+        user_password:  enc["user_password"] .as_str().unwrap_or("").to_string(),
+        owner_password: enc["owner_password"].as_str().unwrap_or("").to_string(),
+        permissions:    shared::parse_permissions_json(&enc["permissions"].to_string()),
+        algorithm,
+        entropy,
+    };
+    cfg.validate()?;
+    Ok(cfg)
 }
 
 fn render_doc(doc: parse::Document, license_key: &str, now_unix: i64) -> String {
