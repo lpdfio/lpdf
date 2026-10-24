@@ -1,18 +1,26 @@
-//! RC4-128 PDF encryption (ISO 32000-1 §7.6, algorithm V=2 R=3).
+//! PDF encryption with permission controls (ISO 32000 §7.6): AES-256 (V=5 R=6) and
+//! RC4-128 (V=2 R=3).
 //!
 //! Applied as a post-processing pass on the raw bytes returned by pdf-writer.
-//! RC4 is length-preserving so all object offsets remain valid after encryption;
-//! the pass only appends a new /Encrypt object and rewrites the xref/trailer.
+//!
+//! AES-256 rewrites the file: AES-CBC adds an IV and padding to every string and
+//! stream, so `rewrite.rs` copies the objects into a new buffer with new offsets and
+//! lengths, and this pass writes a fresh xref around them. The random values come from
+//! the host's entropy (`aes256.rs`), so one entropy gives one file.
+//!
+//! RC4 is length-preserving so all object offsets remain valid after encryption; that
+//! pass encrypts in place, appends a new /Encrypt object and rewrites the xref/trailer.
+//! Its output is deterministic without entropy.
 //!
 //! # Compliance note
-//! This implementation uses RC4-128 (V=2 R=3), which is the weakest encryption
-//! scheme defined in the PDF specification and is considered legacy. It is
-//! intentionally chosen here for maximum reader compatibility (all PDF viewers
-//! support it). For environments with stricter security requirements (e.g. PCI-DSS,
-//! HIPAA, or ISO 27001 compliance), AES-256 encryption (V=5 R=6, PDF 1.7 Ext 3)
-//! should be used instead.
+//! RC4-128 (V=2 R=3) is the weakest encryption scheme defined in the PDF specification
+//! and is deprecated by PDF 2.0. It stays as an option for readers that need it. For
+//! environments with stricter security requirements (e.g. PCI-DSS, HIPAA, or ISO 27001
+//! compliance), use AES-256, the default.
 
 use md5::{Digest, Md5};
+
+use super::{aes256, rewrite};
 
 // ISO 32000-1 §7.6.3.3 — standard password padding string
 const PADDING: [u8; 32] = [
@@ -46,18 +54,54 @@ impl Default for Permissions {
     }
 }
 
+/// The cipher a file is encrypted with.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Algorithm {
+    /// AES-256-CBC (V=5 R=6). Needs entropy from the host.
+    #[default]
+    Aes256,
+    /// RC4-128 (V=2 R=3). Deprecated by PDF 2.0.
+    Rc4128,
+}
+
+impl Algorithm {
+    /// Reads the name an SDK sends: `aes-256` or `rc4-128`.
+    pub fn parse(name: &str) -> Result<Self, String> {
+        match name {
+            "aes-256" => Ok(Self::Aes256),
+            "rc4-128" => Ok(Self::Rc4128),
+            other => Err(format!("unknown encryption algorithm \"{other}\", expected \"aes-256\" or \"rc4-128\"")),
+        }
+    }
+}
+
 pub struct EncryptConfig {
     pub user_password:  String,
     pub owner_password: String,
     pub permissions:    Permissions,
+    pub algorithm:      Algorithm,
+    /// Random bytes from the host's secure generator: the AES-256 file key, salts, IVs
+    /// and file ID are all cut from them. Unused by RC4.
+    pub entropy:        Vec<u8>,
+}
+
+impl EncryptConfig {
+    /// Fails when the algorithm needs more than the config holds, so a bad request is
+    /// refused when it is set and not when the first page renders.
+    pub fn validate(&self) -> Result<(), String> {
+        match self.algorithm {
+            Algorithm::Aes256 => aes256::EntropyStream::new(&self.entropy).map(|_| ()),
+            Algorithm::Rc4128 => Ok(()),
+        }
+    }
 }
 
 // ── Internal types ─────────────────────────────────────────────────────────────
 
-struct ObjectEntry {
-    obj_num: u32,
-    gen_num: u32,
-    offset:  usize,
+pub(crate) struct ObjectEntry {
+    pub(crate) obj_num: u32,
+    pub(crate) gen_num: u32,
+    pub(crate) offset:  usize,
 }
 
 struct XrefInfo {
@@ -188,14 +232,14 @@ fn rfind_bytes(data: &[u8], needle: &[u8]) -> Option<usize> {
     None
 }
 
-fn skip_ws(data: &[u8]) -> &[u8] {
+pub(crate) fn skip_ws(data: &[u8]) -> &[u8] {
     let n = data.iter()
         .take_while(|&&b| b == b' ' || b == b'\t' || b == b'\r' || b == b'\n')
         .count();
     &data[n..]
 }
 
-fn read_u32(data: &[u8]) -> Option<(u32, &[u8])> {
+pub(crate) fn read_u32(data: &[u8]) -> Option<(u32, &[u8])> {
     let n = data.iter().take_while(|&&b| b.is_ascii_digit()).count();
     if n == 0 { return None; }
     let v: u32 = std::str::from_utf8(&data[..n]).ok()?.parse().ok()?;
@@ -212,7 +256,7 @@ fn parse_ref_in(data: &[u8], key: &[u8]) -> Option<(u32, u32)> {
     Some((obj, gen_num))
 }
 
-fn hex_nibble(b: u8) -> u8 {
+pub(crate) fn hex_nibble(b: u8) -> u8 {
     match b {
         b'0'..=b'9' => b - b'0',
         b'a'..=b'f' => b - b'a' + 10,
@@ -527,12 +571,49 @@ fn write_xref_and_trailer(
     out.extend_from_slice(format!("startxref\n{new_xref_offset}\n%%EOF\n").as_bytes());
 }
 
+fn append_aes256_encrypt_dict(out: &mut Vec<u8>, obj_num: u32, entries: &aes256::KeyEntries, p: i32) {
+    let s = format!(
+        "{obj_num} 0 obj\n<<\n/Filter /Standard\n/V 5\n/R 6\n/Length 256\n/P {p}\n\
+         /CF << /StdCF << /AuthEvent /DocOpen /CFM /AESV3 /Length 32 >> >>\n\
+         /StmF /StdCF\n/StrF /StdCF\n\
+         /O <{}>\n/U <{}>\n/OE <{}>\n/UE <{}>\n/Perms <{}>\n>>\nendobj\n",
+        to_hex(&entries.o), to_hex(&entries.u), to_hex(&entries.oe), to_hex(&entries.ue), to_hex(&entries.perms)
+    );
+    out.extend_from_slice(s.as_bytes());
+}
+
 // ── Public entry point ─────────────────────────────────────────────────────────
 
-/// Post-process a pdf-writer–generated PDF to add RC4-128 encryption (V=2 R=3).
+/// Post-process a pdf-writer–generated PDF to add encryption with the config's
+/// algorithm: AES-256 (V=5 R=6) or RC4-128 (V=2 R=3).
 ///
-/// Returns `Err` if the PDF structure is malformed (e.g. missing or corrupt xref).
+/// Returns `Err` if the config is not usable (AES-256 without enough entropy) or the
+/// PDF structure is malformed (e.g. missing or corrupt xref).
 pub fn encrypt_pdf(bytes: &[u8], config: &EncryptConfig) -> Result<Vec<u8>, String> {
+    match config.algorithm {
+        Algorithm::Aes256 => encrypt_pdf_aes256(bytes, config),
+        Algorithm::Rc4128 => encrypt_pdf_rc4(bytes, config),
+    }
+}
+
+fn encrypt_pdf_aes256(bytes: &[u8], config: &EncryptConfig) -> Result<Vec<u8>, String> {
+    let xref = parse_xref(bytes)?;
+    let p = compute_p(&config.permissions);
+    let aes256::Aes256Setup { entries, file_id, mut cipher } =
+        aes256::setup(&config.user_password, &config.owner_password, p, &config.entropy)?;
+
+    let rewrite::Rewritten { bytes: mut out, entries: moved } =
+        rewrite::rewrite_objects(bytes, &xref.entries, &mut |plain| cipher.seal(plain))?;
+
+    // The /Encrypt dictionary is stored in plaintext, so it is appended after the rewrite.
+    let encrypt_obj_num    = moved.iter().map(|e| e.obj_num).max().unwrap_or(0) + 1;
+    let encrypt_obj_offset = out.len();
+    append_aes256_encrypt_dict(&mut out, encrypt_obj_num, &entries, p);
+    write_xref_and_trailer(&mut out, &moved, encrypt_obj_num, encrypt_obj_offset, &xref, &file_id);
+    Ok(out)
+}
+
+fn encrypt_pdf_rc4(bytes: &[u8], config: &EncryptConfig) -> Result<Vec<u8>, String> {
     let xref = parse_xref(bytes)?;
 
     // File ID: MD5 of the unencrypted bytes — deterministic, no random salt needed
@@ -611,15 +692,22 @@ mod tests {
         r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt"><text size="m">Hello</text></layout></section></document></lpdf>"#
     }
 
-    fn encrypt_minimal(user_pw: &str, owner_pw: &str) -> Vec<u8> {
-        let plain = crate::LpdfEngine::render_xml_to_pdf_bytes(minimal_xml())
-            .expect("render failed");
-        let cfg = EncryptConfig {
+    fn config(algorithm: Algorithm, user_pw: &str, owner_pw: &str) -> EncryptConfig {
+        EncryptConfig {
             user_password:  user_pw.to_string(),
             owner_password: owner_pw.to_string(),
             permissions:    Permissions::default(),
-        };
-        encrypt_pdf(&plain, &cfg).expect("encrypt_pdf failed")
+            algorithm,
+            entropy:        (0u8..48).collect(),
+        }
+    }
+
+    fn render_minimal() -> Vec<u8> {
+        crate::LpdfEngine::render_xml_to_pdf_bytes(minimal_xml()).expect("render failed")
+    }
+
+    fn encrypt_minimal(user_pw: &str, owner_pw: &str) -> Vec<u8> {
+        encrypt_pdf(&render_minimal(), &config(Algorithm::Rc4128, user_pw, owner_pw)).expect("encrypt_pdf failed")
     }
 
     #[test]
@@ -646,7 +734,7 @@ mod tests {
     }
 
     #[test]
-    fn encryption_is_deterministic() {
+    fn rc4_encryption_is_deterministic() {
         let enc1 = encrypt_minimal("password", "owner");
         let enc2 = encrypt_minimal("password", "owner");
         assert_eq!(enc1, enc2);
@@ -654,22 +742,17 @@ mod tests {
 
     #[test]
     fn encryption_changes_content() {
-        let plain = crate::LpdfEngine::render_xml_to_pdf_bytes(minimal_xml())
-            .expect("render failed");
+        let plain = render_minimal();
         let enc = encrypt_minimal("password", "owner");
         assert_ne!(plain, enc);
     }
 
     #[test]
     fn permissions_only_no_user_password() {
-        let plain = crate::LpdfEngine::render_xml_to_pdf_bytes(minimal_xml())
-            .expect("render failed");
+        let plain = render_minimal();
         let cfg = EncryptConfig {
-            user_password:  "".to_string(),
-            owner_password: "s3cr3t".to_string(),
-            permissions: Permissions {
-                print: false, copy: false, modify: false, ..Default::default()
-            },
+            permissions: Permissions { print: false, copy: false, modify: false, ..Default::default() },
+            ..config(Algorithm::Rc4128, "", "s3cr3t")
         };
         let enc = encrypt_pdf(&plain, &cfg).expect("encrypt_pdf failed");
         assert_eq!(&enc[..5], b"%PDF-");
@@ -686,11 +769,8 @@ mod tests {
         let plain = crate::LpdfEngine::render_xml_to_pdf_bytes(&xml)
             .expect("render failed");
         let cfg = EncryptConfig {
-            user_password:  "password".to_string(),
-            owner_password: "password".to_string(),
-            permissions: Permissions {
-                copy: false, modify: false, ..Default::default()
-            },
+            permissions: Permissions { copy: false, modify: false, ..Default::default() },
+            ..config(Algorithm::Rc4128, "password", "password")
         };
         let enc = encrypt_pdf(&plain, &cfg).expect("encrypt_pdf failed");
         assert_eq!(&enc[..5], b"%PDF-");
@@ -698,5 +778,101 @@ mod tests {
         // Determinism: encrypting the same input twice gives the same output
         let enc2 = encrypt_pdf(&plain, &cfg).expect("encrypt_pdf failed");
         assert_eq!(enc, enc2);
+    }
+
+    // ── AES-256 ────────────────────────────────────────────────────────────────
+
+    fn encrypt_minimal_aes(user_pw: &str, owner_pw: &str) -> Vec<u8> {
+        encrypt_pdf(&render_minimal(), &config(Algorithm::Aes256, user_pw, owner_pw)).expect("encrypt_pdf failed")
+    }
+
+    #[test]
+    fn aes256_encrypts_with_the_v5_r6_dictionary() {
+        let enc = String::from_utf8_lossy(&encrypt_minimal_aes("", "owner")).into_owned();
+        for expected in ["/Filter /Standard", "/V 5", "/R 6", "/Length 256", "/CFM /AESV3", "/StmF /StdCF", "/StrF /StdCF"] {
+            assert!(enc.contains(expected), "missing {expected}");
+        }
+        for key in ["/O <", "/U <", "/OE <", "/UE <", "/Perms <"] {
+            assert!(enc.contains(key), "missing {key}");
+        }
+    }
+
+    #[test]
+    fn aes256_with_the_same_entropy_is_deterministic() {
+        assert_eq!(encrypt_minimal_aes("password", "owner"), encrypt_minimal_aes("password", "owner"));
+    }
+
+    #[test]
+    fn aes256_with_other_entropy_gives_another_file() {
+        let plain = render_minimal();
+        let other = EncryptConfig { entropy: (100u8..148).collect(), ..config(Algorithm::Aes256, "password", "owner") };
+        let first  = encrypt_pdf(&plain, &config(Algorithm::Aes256, "password", "owner")).unwrap();
+        let second = encrypt_pdf(&plain, &other).unwrap();
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn aes256_without_enough_entropy_is_refused() {
+        let cfg = EncryptConfig { entropy: vec![1; 16], ..config(Algorithm::Aes256, "", "owner") };
+        let error = encrypt_pdf(&render_minimal(), &cfg).unwrap_err();
+        assert!(error.contains("at least 32 bytes"), "{error}");
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn rc4_needs_no_entropy() {
+        let cfg = EncryptConfig { entropy: Vec::new(), ..config(Algorithm::Rc4128, "", "owner") };
+        assert!(cfg.validate().is_ok());
+        assert!(encrypt_pdf(&render_minimal(), &cfg).is_ok());
+    }
+
+    #[test]
+    fn aes256_xref_points_at_every_object() {
+        let enc = encrypt_minimal_aes("", "owner");
+        let xref = parse_xref(&enc).expect("the new xref parses");
+        assert!(!xref.entries.is_empty());
+        for entry in &xref.entries {
+            let header = format!("{} {} obj", entry.obj_num, entry.gen_num);
+            assert!(enc[entry.offset..].starts_with(header.as_bytes()), "object {} is not at {}", entry.obj_num, entry.offset);
+        }
+        assert!(enc.windows(8).any(|w| w == b"/Encrypt"));
+        assert!(enc.windows(3).any(|w| w == b"/ID"));
+    }
+
+    /// Writes the files `scripts/check-encryption.py` opens with qpdf, when
+    /// `LPDF_ENCRYPT_OUT` names a folder. Without it the test does nothing, so a plain
+    /// `cargo test` needs no other tool.
+    #[test]
+    fn writes_samples_for_the_external_check() {
+        let Some(dir) = std::env::var_os("LPDF_ENCRYPT_OUT") else { return };
+        let dir = std::path::Path::new(&dir);
+        let xml = std::fs::read_to_string(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../../test/fixtures/showcase-encryption.xml")
+        ).expect("fixture not found");
+        let plain = crate::LpdfEngine::render_xml_to_pdf_bytes(&xml).expect("render failed");
+        let no_copy = || Permissions { copy: false, modify: false, ..Default::default() };
+
+        let samples = [
+            ("plain.pdf",              None),
+            ("aes256-user.pdf",        Some(EncryptConfig { permissions: no_copy(), ..config(Algorithm::Aes256, "user", "owner") })),
+            ("aes256-open.pdf",        Some(EncryptConfig { permissions: no_copy(), ..config(Algorithm::Aes256, "", "owner") })),
+            ("aes256-same-password.pdf", Some(config(Algorithm::Aes256, "same", ""))),
+            ("rc4-user.pdf",           Some(EncryptConfig { permissions: no_copy(), ..config(Algorithm::Rc4128, "user", "owner") })),
+        ];
+        for (name, cfg) in samples {
+            let bytes = match cfg {
+                Some(cfg) => encrypt_pdf(&plain, &cfg).expect("encrypt_pdf failed"),
+                None      => plain.clone(),
+            };
+            std::fs::write(dir.join(name), bytes).expect("could not write a sample");
+        }
+    }
+
+    #[test]
+    fn algorithm_names_are_the_ones_the_sdks_send() {
+        assert_eq!(Algorithm::parse("aes-256"), Ok(Algorithm::Aes256));
+        assert_eq!(Algorithm::parse("rc4-128"), Ok(Algorithm::Rc4128));
+        assert!(Algorithm::parse("aes-128").unwrap_err().contains("aes-128"));
+        assert_eq!(Algorithm::default(), Algorithm::Aes256);
     }
 }

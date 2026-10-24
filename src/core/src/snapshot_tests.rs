@@ -69,6 +69,28 @@ fn run_snapshot_with_image(name: &str) {
     check_snapshot(name, &pdf_bytes);
 }
 
+/// `showcase-encryption` encrypted as the host would ask: user and owner passwords, no copying or
+/// modifying, and fixed entropy so that AES-256, which is random otherwise, gives the same file every run.
+/// The RC4 snapshot is the output of the engine before AES-256 existed; it must never change.
+fn run_snapshot_encrypted(name: &str, algorithm: crate::encrypt::Algorithm) {
+    let xml_path = fixtures_dir().join("showcase-encryption.xml");
+    let xml = std::fs::read_to_string(&xml_path)
+        .unwrap_or_else(|_| panic!("fixture not found: {}", xml_path.display()));
+    let plain = crate::LpdfEngine::render_xml_to_pdf_bytes(&xml)
+        .unwrap_or_else(|e| panic!("render failed for {name}: {e}"));
+
+    let config = crate::encrypt::EncryptConfig {
+        user_password:  "user".to_string(),
+        owner_password: "owner".to_string(),
+        permissions:    crate::encrypt::Permissions { copy: false, modify: false, ..Default::default() },
+        algorithm,
+        entropy:        (0u8..48).collect(),
+    };
+    let pdf_bytes = crate::encrypt::encrypt_pdf(&plain, &config)
+        .unwrap_or_else(|e| panic!("encryption failed for {name}: {e}"));
+    check_snapshot(name, &pdf_bytes);
+}
+
 fn check_snapshot(name: &str, pdf_bytes: &[u8]) {
     if std::env::var("UPDATE_SNAPSHOTS").is_ok() {
         write_snapshot(name, pdf_bytes);
@@ -167,6 +189,10 @@ fn showcase_barcode_fit() { run_snapshot("showcase-barcode-fit"); }
 fn showcase_forms() { run_snapshot("showcase-forms"); }
 #[test]
 fn showcase_encryption() { run_snapshot("showcase-encryption"); }
+#[test]
+fn showcase_encryption_rc4() { run_snapshot_encrypted("showcase-encryption-rc4", crate::encrypt::Algorithm::Rc4128); }
+#[test]
+fn showcase_encryption_aes256() { run_snapshot_encrypted("showcase-encryption-aes256", crate::encrypt::Algorithm::Aes256); }
 #[test]
 fn showcase_canvas_overlay()  { run_snapshot("showcase-canvas-overlay"); }
 #[test]
