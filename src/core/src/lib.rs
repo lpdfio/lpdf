@@ -145,7 +145,7 @@ impl LpdfEngine {
                         .and_then(|a| a.as_array())
                         .map(|arr| arr.iter().map(|n| n.as_u64().unwrap_or(500) as u16).collect())
                         .unwrap_or_default();
-                    self.font_widths.insert(name.clone(), tokens::FontWidths { default, ascii });
+                    self.font_widths.insert(name.clone(), tokens::FontWidths { default, ascii, ..tokens::FontWidths::default() });
                 }
             }
         }

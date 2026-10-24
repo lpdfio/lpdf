@@ -1213,7 +1213,7 @@ fn parse_tree_assets(
                 .and_then(|v| v.as_array())
                 .map(|arr| arr.iter().map(|n| n.as_u64().unwrap_or(500) as u16).collect())
                 .unwrap_or_default();
-            widths.insert(name.clone(), FontWidths { default, ascii });
+            widths.insert(name.clone(), FontWidths { default, ascii, ..FontWidths::default() });
         }
         fonts.insert(name, def);
     }

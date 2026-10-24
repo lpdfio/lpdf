@@ -184,7 +184,7 @@ fn build_font_widths(req: &serde_json::Value) -> std::collections::HashMap<Strin
                 .map(|arr| arr.iter().map(|v| v.as_u64().unwrap_or(0) as u16).collect())
                 .unwrap_or_default();
             if ascii.len() == 95 {
-                map.insert(name.clone(), tokens::FontWidths { default, ascii });
+                map.insert(name.clone(), tokens::FontWidths { default, ascii, ..tokens::FontWidths::default() });
             }
         }
     }

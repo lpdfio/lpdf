@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Tokens {
@@ -84,15 +85,41 @@ pub enum FontDef {
 }
 
 /// Per-glyph advance widths for a custom font, in 1/1000 em units.
-/// Supplied by the adapter before the WASM call so the layout engine can
-/// measure custom-font text accurately instead of using the 0.44 fallback.
-#[derive(Debug, Clone)]
+/// Read from the font's own bytes when it is loaded, or supplied by the adapter, so the
+/// layout engine and the renderer measure custom-font text with the same advances.
+#[derive(Debug, Clone, Default)]
 pub struct FontWidths {
-    /// Advance width for code points outside the ASCII printable range (32–126).
+    /// Advance width for a character the table does not list: the font's glyph 0
+    /// (.notdef), which is what the encoder writes for it.
     pub default: u16,
     /// Advances for code points 32 (space) through 126 (~), normalised to 1000 UPM.
-    /// Length must be exactly 95 elements; index = codepoint - 32.
+    /// Empty, or exactly 95 elements with index = codepoint - 32. Only tables supplied
+    /// as JSON use it; a table read from a font lists every character in `advances`.
     pub ascii: Vec<u16>,
+    /// Advance of every character the font maps, normalised to 1000 UPM. Shared, so a
+    /// table is cloned into each layout call without copying the map.
+    pub advances: Rc<HashMap<char, u16>>,
+}
+
+impl FontWidths {
+    /// Advance of `c` in 1/1000 em: its own, else the `ascii` entry, else `default`.
+    pub fn advance(&self, c: char) -> u16 {
+        if let Some(&advance) = self.advances.get(&c) {
+            return advance;
+        }
+        let cp = c as u32;
+        if (32..=126).contains(&cp) {
+            if let Some(&advance) = self.ascii.get((cp - 32) as usize) {
+                return advance;
+            }
+        }
+        self.default
+    }
+
+    /// Width of `text` at `size` pt.
+    pub fn text_width(&self, text: &str, size: f32) -> f32 {
+        text.chars().map(|c| self.advance(c) as f32 * size / 1000.0).sum()
+    }
 }
 
 pub const SCALE_NAMES: [&str; 6] = ["xs", "s", "m", "l", "xl", "xxl"];

@@ -573,7 +573,41 @@ enum PreparedFontKind {
         glyph_unicode: Vec<(u16, u32)>,
         /// (remapped_gid, width_per_mille) sorted by GID — for /W array.
         glyph_widths: Vec<(u16, f32)>,
+        /// Exact advances of the characters drawn, so measuring does not parse the face again.
+        /// `None` when the face could not be parsed.
+        advances: Option<FaceAdvances>,
     },
+}
+
+/// The advances of the characters a document draws in an embedded face, in font units.
+struct FaceAdvances {
+    units_per_em: f32,
+    /// Advance of glyph 0 (.notdef), which stands in for a character the face does not map,
+    /// as the encoder writes it.
+    notdef: u16,
+    advances: HashMap<char, u16>,
+}
+
+impl FaceAdvances {
+    fn new(face: &Face, used_chars: &HashSet<char>) -> Self {
+        let advance = |gid| face.glyph_hor_advance(gid).unwrap_or(0);
+        let advances = used_chars.iter()
+            .filter_map(|&c| face.glyph_index(c).map(|gid| (c, advance(gid))))
+            .collect();
+        FaceAdvances {
+            units_per_em: face.units_per_em() as f32,
+            notdef: advance(ttf_parser::GlyphId(0)),
+            advances,
+        }
+    }
+
+    fn text_width(&self, text: &str, size: f32) -> f32 {
+        let scale = size / self.units_per_em;
+        text.chars()
+            .map(|c| self.advances.get(&c).copied().unwrap_or(self.notdef))
+            .map(|advance| advance as f32 * scale)
+            .sum()
+    }
 }
 
 impl PreparedFont {
@@ -587,7 +621,9 @@ impl PreparedFont {
             PreparedFontKind::Builtin { base_name } => {
                 crate::layout::text_width(base_name, text, size)
             }
-            PreparedFontKind::Truetype { original_bytes, .. } => text_width_ttf(original_bytes, text, size),
+            PreparedFontKind::Truetype { advances: Some(advances), .. } => advances.text_width(text, size),
+            // The face could not be parsed: the same 0.5 × size per character as before.
+            PreparedFontKind::Truetype { advances: None, .. } => text.chars().count() as f32 * 0.5 * size,
         }
     }
 
@@ -686,22 +722,6 @@ fn win1252_byte(c: char) -> Option<u8> {
 }
 
 // ── Text width (TrueType) ─────────────────────────────────────────────────────
-
-/// Compute the advance width of `text` at `size` pt using real glyph metrics.
-/// Falls back to the 0.5× approximation if the font cannot be parsed.
-fn text_width_ttf(font_bytes: &[u8], text: &str, size: f32) -> f32 {
-    let face = match Face::parse(font_bytes, 0) {
-        Ok(f)  => f,
-        Err(_) => return text.chars().count() as f32 * 0.5 * size,
-    };
-    let upem  = face.units_per_em() as f32;
-    let scale = size / upem;
-    text.chars()
-        .filter_map(|c| face.glyph_index(c))
-        .filter_map(|gid| face.glyph_hor_advance(gid))
-        .map(|adv| adv as f32 * scale)
-        .sum()
-}
 
 // ── Rounded rectangle path ────────────────────────────────────────────────────
 
@@ -833,6 +853,7 @@ fn prepare_truetype_font(bytes: &[u8], used_chars: &HashSet<char>) -> PreparedFo
                 char_to_gid:     HashMap::new(),
                 glyph_unicode:   Vec::new(),
                 glyph_widths:    Vec::new(),
+                advances:        None,
             };
         }
     };
@@ -904,6 +925,7 @@ fn prepare_truetype_font(bytes: &[u8], used_chars: &HashSet<char>) -> PreparedFo
         char_to_gid,
         glyph_unicode,
         glyph_widths,
+        advances: Some(FaceAdvances::new(&face, used_chars)),
     }
 }
 
@@ -3405,6 +3427,48 @@ fn write_outline(pdf: &mut Pdf, ids: &OutlineIds, anchors: &[PlacedAnchor], page
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Fonts of the examples, as embedded fonts are in a document.
+    const FIXTURE_FONTS: [(&str, &[u8]); 5] = [
+        ("Radley", include_bytes!("../../../examples/5-brochure/assets/fonts/Radley-Regular.ttf")),
+        ("Montserrat", include_bytes!("../../../examples/5-brochure/assets/fonts/Montserrat-Regular.ttf")),
+        ("CrimsonText", include_bytes!("../../../examples/6-book/assets/fonts/CrimsonText-Regular.ttf")),
+        ("CrimsonTextItalic", include_bytes!("../../../examples/6-book/assets/fonts/CrimsonText-Italic.ttf")),
+        ("CrimsonTextSemiBold", include_bytes!("../../../examples/6-book/assets/fonts/CrimsonText-SemiBold.ttf")),
+    ];
+
+    #[test]
+    fn layout_and_renderer_measure_text_beyond_ascii_alike() {
+        let samples = [
+            "Crème brûlée, señor Åström: “quoted” – 5 € — ¿qué?",
+            "Привет, мир: «цена» — 5 ₽",
+            "plain ascii text, 0123456789",
+        ];
+        for (name, bytes) in FIXTURE_FONTS {
+            let face = Face::parse(bytes, 0).expect("fixture face parses");
+            let widths = crate::shared::extract_font_widths(bytes).expect("fixture face has widths");
+            crate::layout::set_font_widths(HashMap::from([(name.to_string(), widths)]));
+            for text in samples {
+                let used: HashSet<char> = text.chars().collect();
+                let font = PreparedFont {
+                    resource_name: "F0".to_string(),
+                    kind: prepare_truetype_font(bytes, &used),
+                };
+                let (size, upem) = (12.0_f32, face.units_per_em() as f32);
+                let laid_out = crate::layout::text_width(name, text, size);
+                let drawn = font.text_width(text, size);
+                // Glyph 0 stands in for a character the face does not map, as the encoder writes it.
+                let real: f32 = text.chars()
+                    .map(|c| face.glyph_index(c).unwrap_or(ttf_parser::GlyphId(0)))
+                    .map(|gid| face.glyph_hor_advance(gid).unwrap_or(0) as f32 * size / upem)
+                    .sum();
+                // Layout rounds each advance to 1/1000 em, at most 0.0005 em off.
+                let rounding = text.chars().count() as f32 * 0.0005 * size;
+                assert!((drawn - real).abs() < 0.001, "{name}: the renderer measures {text:?} as {drawn}, the face says {real}");
+                assert!((laid_out - drawn).abs() <= rounding, "{name}: layout {laid_out} against renderer {drawn} for {text:?}");
+            }
+        }
+    }
 
     #[test]
     fn bundled_attribution_face_has_every_glyph_of_the_name() {
