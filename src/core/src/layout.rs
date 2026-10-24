@@ -2957,6 +2957,25 @@ struct TextFit {
 /// The ending of a line cut short by its width or by `max-lines`.
 const ELLIPSIS: &str = "...";
 
+/// How far a gap of a justified line may be widened, in spaces. A line that would need more stays
+/// left-aligned: two long words are not spread across the width, since there is no hyphenation to help.
+const MAX_JUSTIFY_STRETCH: f32 = 2.0;
+
+/// The spaces inside a word or a styled run of a line. They are gaps of the line like the ones between atoms.
+fn atom_spaces(atom: &Atom) -> usize {
+    if atom.sup { 0 } else { atom.text.matches(' ').count() }
+}
+
+/// What a justified `line` adds to each of its gaps to end at `avail_w`: the spare width, shared evenly by the
+/// gaps between its words and inside its spans. 0.0 for a line with no gap, with no room to spare, or that
+/// would need more than `MAX_JUSTIFY_STRETCH` spaces of it.
+fn justify_gap(line: &TextLine, font_size: f32, avail_w: f32, space_w: f32) -> f32 {
+    let gaps: usize = line.iter().map(|(atom, gap)| usize::from(*gap > 0.0) + atom_spaces(atom)).sum();
+    if gaps == 0 { return 0.0; }
+    let per_gap = (avail_w - text_line_width(line, font_size)) / gaps as f32;
+    if per_gap <= 0.01 || per_gap > MAX_JUSTIFY_STRETCH * space_w { 0.0 } else { per_gap }
+}
+
 fn text_line_width(line: &TextLine, font_size: f32) -> f32 {
     line.iter().map(|(atom, gap)| gap + word_width(&atom.font, &atom.text, font_size, atom.sup)).sum()
 }
@@ -3115,7 +3134,12 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
 
         // For justify, the last line is left-aligned (not stretched).
         let is_last_line  = li + 1 == lines.len();
-        let eff_align_str = if align_str == "justify" && is_last_line { "left" } else { align_str };
+        // Every word of the line is placed here, so a span moves with its neighbours.
+        let word_gap = if align_str == "justify" && !is_last_line { justify_gap(line, font_size, avail_w, space_w) } else { 0.0 };
+        let eff_align_str = match (align_str, word_gap > 0.0) {
+            ("justify", false) => "left",
+            _                  => align_str,
+        };
 
         // Merge consecutive plain (no href/underline/strike) atoms that share the
         // same font and color into a single RenderText.  This lets pdf-lib render
@@ -3128,7 +3152,9 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
 
         for (atom, gap) in line {
             cur_x += gap;
-            let aw = word_width(&atom.font, &atom.text, font_size, atom.sup);
+            if *gap > 0.0 { cur_x += word_gap; }
+            let inner_gap = word_gap * atom_spaces(atom) as f32;
+            let aw = word_width(&atom.font, &atom.text, font_size, atom.sup) + inner_gap;
 
             let plain = atom.href.is_none() && !atom.underline && !atom.strike && !atom.sup;
 
@@ -3139,7 +3165,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                         x: grp_x, y: line_y,
                         content: std::mem::take(&mut grp_text),
                         font: grp_font.clone(), size: font_size, color: grp_clr.clone(),
-                        text_align: eff_align_str.to_string(), line_width: avail_w,
+                        text_align: eff_align_str.to_string(), line_width: avail_w, word_gap,
                     }));
                 }
                 if grp_text.is_empty() {
@@ -3158,7 +3184,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                         x: grp_x, y: line_y,
                         content: std::mem::take(&mut grp_text),
                         font: grp_font.clone(), size: font_size, color: grp_clr.clone(),
-                        text_align: eff_align_str.to_string(), line_width: avail_w,
+                        text_align: eff_align_str.to_string(), line_width: avail_w, word_gap,
                     }));
                 }
 
@@ -3174,7 +3200,9 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                     size: atom_size, color: atom.color.clone(),
                     // Decorated atoms (spans) always use their computed cur_x as a
                     // left-edge anchor; alignment has already been applied at the line level.
-                    text_align: "left".to_string(), line_width: 0.0,
+                    // The gaps inside one are widened like the rest of the line.
+                    text_align: if inner_gap > 0.0 { "justify" } else { "left" }.to_string(),
+                    line_width: 0.0, word_gap: if inner_gap > 0.0 { word_gap } else { 0.0 },
                 })];
 
                 if atom.underline {
@@ -3211,7 +3239,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 x: grp_x, y: line_y,
                 content: grp_text,
                 font: grp_font, size: font_size, color: grp_clr,
-                text_align: eff_align_str.to_string(), line_width: avail_w,
+                text_align: eff_align_str.to_string(), line_width: avail_w, word_gap,
             }));
         }
     }

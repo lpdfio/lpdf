@@ -166,6 +166,8 @@ fn showcase_text_max_lines() { run_snapshot("showcase-text-max-lines"); }
 #[test]
 fn showcase_text_line_height() { run_snapshot("showcase-text-line-height"); }
 #[test]
+fn showcase_text_justify() { run_snapshot("showcase-text-justify"); }
+#[test]
 fn showcase_inherited_style() { run_snapshot("showcase-inherited-style"); }
 #[test]
 fn showcase_shadow() { run_snapshot("showcase-shadow"); }
