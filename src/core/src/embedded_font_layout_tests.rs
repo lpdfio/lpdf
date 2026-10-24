@@ -67,3 +67,90 @@ fn a_paragraph_with_accents_wraps_where_the_face_widths_say() {
     assert!(lines.len() > 1, "the paragraph is long enough to wrap");
     assert_eq!(lines, expected);
 }
+
+/// Lay out `body` as a justified text in a box `box_width` wide, in the embedded font `brand` or in Helvetica
+/// when `embedded` is false, and return the text nodes of the page, line by line.
+fn justified_text_nodes(body: &str, embedded: bool, box_width: f32) -> Vec<serde_json::Value> {
+    let mut engine = crate::LpdfEngine::new("");
+    engine.load_font("brand", MONTSERRAT);
+    let (assets, font) = if embedded { (r#"<assets><font name="brand" src="brand.ttf"/></assets>"#, "brand") } else { ("", "Helvetica") };
+    let xml = format!(
+        r##"<lpdf version="1">{assets}<document font="{font}"><section><layout><column width="{box_width}pt"><text align="justify">{body}</text></column></layout></section></document></lpdf>"##
+    );
+    let json: serde_json::Value = serde_json::from_str(&engine.render(&xml)).expect("layout JSON");
+    let nodes = json["pages"][0]["nodes"][0]["nodes"][0]["nodes"].as_array().expect("a box of text nodes");
+    nodes.iter().flat_map(flatten_links).collect()
+}
+
+/// A link holds its text; the other nodes are what they are.
+fn flatten_links(node: &serde_json::Value) -> Vec<serde_json::Value> {
+    if node["type"] == "link" {
+        return node["nodes"].as_array().expect("link children").iter().filter(|n| n["type"] == "text").cloned().collect();
+    }
+    if node["type"] == "text" { vec![node.clone()] } else { Vec::new() }
+}
+
+/// The text nodes of a line, from the left, as (x, width) where the width counts the gap that layout added at each space.
+fn spans_of(nodes: &[serde_json::Value], width_of: impl Fn(&str, f32) -> f32) -> Vec<(f32, f32, f32)> {
+    nodes
+        .iter()
+        .map(|n| {
+            let content = n["content"].as_str().expect("content");
+            let size = n["size"].as_f64().expect("size") as f32;
+            let gap = n["word_gap"].as_f64().expect("word_gap") as f32;
+            let x = n["x"].as_f64().expect("x") as f32;
+            (x, width_of(content, size) + gap * content.matches(' ').count() as f32, n["y"].as_f64().expect("y") as f32)
+        })
+        .collect()
+}
+
+fn lines_of(spans: &[(f32, f32, f32)]) -> Vec<Vec<(f32, f32, f32)>> {
+    let mut lines: Vec<Vec<(f32, f32, f32)>> = Vec::new();
+    for span in spans {
+        match lines.last_mut() {
+            Some(line) if (line[0].2 - span.2).abs() < 0.01 => line.push(*span),
+            _ => lines.push(vec![*span]),
+        }
+    }
+    lines
+}
+
+const PARAGRAPH: &str = "The keepers wrote every evening in the record, in a hand that changed every few years, and the oldest entries were kept in a cupboard with spare wicks and one brass bell that nobody remembered buying.";
+
+#[test]
+fn every_line_of_a_justified_paragraph_in_an_embedded_font_but_the_last_ends_at_the_right_edge() {
+    let nodes = justified_text_nodes(PARAGRAPH, true, 300.0);
+    let lines = lines_of(&spans_of(&nodes, face_width));
+    assert!(lines.len() > 2, "the paragraph wraps");
+    let left = lines[0][0].0;
+    for line in &lines[..lines.len() - 1] {
+        let end = line.last().map(|(x, w, _)| x + w).expect("a line has text");
+        assert!((end - (left + 300.0)).abs() < 0.05, "a line ends at {end}, not at the right edge {}", left + 300.0);
+    }
+    let last = lines.last().and_then(|l| l.last()).expect("a last line");
+    assert!(last.0 + last.1 < left + 300.0 - 1.0, "the last line stays left-aligned");
+}
+
+#[test]
+fn a_justified_line_with_spans_has_no_overlap_and_even_gaps_in_both_kinds_of_font() {
+    let body = r##"The keepers wrote <span color="#ff0000">every evening</span> in the record, in <span href="https://lpdf.io">a hand</span> that changed every few years, and the oldest entries were kept in a cupboard with <span color="#0000ff">spare wicks</span> and one brass bell that nobody remembered buying."##;
+    for embedded in [true, false] {
+        let nodes = justified_text_nodes(body, embedded, 300.0);
+        let width_of = |text: &str, size: f32| if embedded { face_width(text, size) } else { crate::layout::text_width("Helvetica", text, size) };
+        let lines = lines_of(&spans_of(&nodes, width_of));
+        assert!(lines.len() > 2, "the paragraph wraps");
+        let left = lines[0][0].0;
+        for line in &lines[..lines.len() - 1] {
+            let mut gaps = Vec::new();
+            for pair in line.windows(2) {
+                gaps.push(pair[1].0 - (pair[0].0 + pair[0].1));
+            }
+            let end = line.last().map(|(x, w, _)| x + w).expect("a line has text");
+            assert!((end - (left + 300.0)).abs() < 0.1, "embedded {embedded}: a line ends at {end}, not {}", left + 300.0);
+            let widest = gaps.iter().cloned().fold(f32::MIN, f32::max);
+            let narrowest = gaps.iter().cloned().fold(f32::MAX, f32::min);
+            assert!(narrowest > 0.0, "embedded {embedded}: words overlap, gaps {gaps:?}");
+            assert!(widest - narrowest < 0.1, "embedded {embedded}: uneven gaps {gaps:?}");
+        }
+    }
+}

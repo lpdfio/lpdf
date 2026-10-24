@@ -247,7 +247,7 @@ fn build_area(notes: &[Note], x: f32, y: f32, width: f32, cap: f32) -> (Vec<Rend
             x, y: cursor + dy,
             content: n.number.to_string(), font: n.font.clone(), size: sup_size,
             color: n.color.clone().unwrap_or_else(|| "#1a1a1a".to_string()),
-            text_align: "left".to_string(), line_width: 0.0,
+            text_align: "left".to_string(), line_width: 0.0, word_gap: 0.0,
         }));
         out.push(body);
         cursor += h;

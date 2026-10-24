@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+      <color name="rule"    value="#dde3ed" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Justified Text" subject="align=justify: the words of a line are placed so that it ends at the right edge of its box" />
+
+    <!-- A justified line is spread over the width of its box by moving its words: the spare width is shared by
+         the gaps between the words and inside the spans. Each box below shows a case. Expected:
+           - plain: every line but the last ends at the right edge; the last line stays at the left
+           - spans: a bold, a coloured and a linked span, and one that holds several words, move with the words
+             around them, with no overlap and the same gap everywhere in the line
+           - footnote: the number stays on the word it follows, and the line is justified around it
+           - one word: a line of a single word is not stretched (the box is narrow, so each line holds one word)
+           - long words: a line that would need gaps wider than twice a space stays left-aligned, and the lines
+             around it are justified
+           - exact fit and short: a text that fits on one line is its last line and stays left-aligned
+    -->
+    <section>
+      <layout margin="40pt">
+        <column gap="l">
+          <column gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Justified text</text>
+            <text font-size="m" color="muted">Lines that end at the right edge of the box, whatever they hold.</text>
+          </column>
+
+          <column gap="xs">
+            <text font-size="s" color="muted">Plain</text>
+            <text font-size="m" align="justify">A harbor keeps its own time. The tide comes in when it is ready, the boats leave when the light allows, and the people on the quay learn to read the water the way others read a clock. Every line of this paragraph but the last ends exactly at the right edge of its box.</text>
+          </column>
+
+          <column gap="xs">
+            <text font-size="s" color="muted">Spans</text>
+            <text font-size="m" align="justify">The keepers wrote <span font="Helvetica-Bold">every evening</span> in the record, in <span color="primary">a hand that changed</span> every few years, and the <span href="https://lpdf.io" font="Helvetica-Bold" color="primary">oldest entries</span> were kept in a cupboard with <span font="Helvetica-Oblique">spare wicks, glass chimneys</span> and one brass bell. A <span underline="true">span</span> or a <span strike="true">strike</span> moves with its neighbours, and so does <span font="Helvetica-Bold">a bold</span> <span font="Helvetica-Oblique">one</span> that follows another.</text>
+          </column>
+
+          <column gap="xs">
+            <text font-size="s" color="muted">Footnote</text>
+            <text font-size="m" align="justify">The oldest keeper claimed that she could tell the season from the smell of the oil alone<fn>Whale oil in winter, colza in spring, and later the paraffin the lighthouse board sent.</fn>, and she was seldom wrong, though nobody ever asked her to prove it<fn>She was asked once, in 1874, and got every month right.</fn> in front of the board.</text>
+          </column>
+
+          <row gap="xl" align="start">
+            <column gap="xs" width="40pt">
+              <text font-size="s" color="muted">One word</text>
+              <text font-size="m" align="justify">Lamp light tide wick bell</text>
+            </column>
+            <column gap="xs" width="190pt">
+              <text font-size="s" color="muted">Long words</text>
+              <text font-size="m" align="justify">Extraordinarily unreasonable circumstances shortly necessitated misunderstandings, so a few small words follow here and fill a line which is justified as usual.</text>
+            </column>
+            <column gap="xs" width="190pt">
+              <text font-size="s" color="muted">Exact fit and short</text>
+              <text font-size="m" align="justify">One short line</text>
+              <text font-size="m" align="justify">Two</text>
+            </column>
+          </row>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

@@ -1045,19 +1045,6 @@ fn draw_node(
                 _        => t.x,
             };
 
-            // Compute word-spacing for justified lines.
-            let word_spacing = if t.text_align == "justify" && t.line_width > 0.0 {
-                let word_count = t.content.split_whitespace().count();
-                if word_count > 1 {
-                    let extra = t.line_width - text_w;
-                    (extra / (word_count - 1) as f32).max(0.0)
-                } else {
-                    0.0
-                }
-            } else {
-                0.0
-            };
-
             // Layout y = top of the text block; PDF baseline = top − font-size.
             let pdf_y   = page_h - t.y - t.size;
             let encoded = font.encode_text(&t.content);
@@ -1068,9 +1055,22 @@ fn draw_node(
             content.set_font(Name(&rname), t.size);
             // set_text_matrix positions the text origin precisely.
             content.set_text_matrix([1.0, 0.0, 0.0, 1.0, draw_x, pdf_y]);
-            if word_spacing > 0.0 { content.set_word_spacing(word_spacing); }
-            content.show(Str(&encoded));
-            if word_spacing > 0.0 { content.set_word_spacing(0.0); }
+            if t.word_gap > 0.0 {
+                // Layout placed the line's words; the gap it worked out goes in before each space. `Tw`
+                // would not do: it moves only the one-byte code 32, and an embedded font has two-byte codes.
+                // The adjustment is in thousandths of the font size, and a positive one moves back.
+                let adjustment = -t.word_gap * 1000.0 / t.size;
+                let mut pieces = t.content.split(' ');
+                let mut positioned = content.show_positioned();
+                let mut items = positioned.items();
+                items.show(Str(&font.encode_text(pieces.next().unwrap_or(""))));
+                for piece in pieces {
+                    items.adjust(adjustment);
+                    items.show(Str(&font.encode_text(&format!(" {piece}"))));
+                }
+            } else {
+                content.show(Str(&encoded));
+            }
             content.end_text();
         }
 

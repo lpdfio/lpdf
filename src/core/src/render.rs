@@ -172,9 +172,12 @@ pub struct RenderText {
     pub size: f32,
     pub color: String,
     pub text_align: String,
-    /// Available line width; used by the PDF renderer to compute word-spacing
-    /// for `text_align = "justify"`. Set to 0.0 for non-layout text nodes.
+    /// Available line width. Set to 0.0 for non-layout text nodes.
     pub line_width: f32,
+    /// What a justified line adds to each space of `content`, which layout worked out from the words
+    /// and spans of the whole line. The renderer draws it as a `TJ` adjustment at each space. 0.0 for
+    /// every other text.
+    pub word_gap: f32,
 }
 
 pub struct RenderLink {
@@ -354,6 +357,7 @@ fn node_to_json(node: &RenderNode) -> Value {
             "color":      t.color,
             "text_align": t.text_align,
             "line_width": r2(t.line_width),
+            "word_gap":   r2(t.word_gap),
         }),
         RenderNode::Link(l) => json!({
             "type":     "link",
