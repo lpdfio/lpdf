@@ -74,6 +74,7 @@ fn collect_anchors<'a>(
             }
             RenderNode::Box(b)  => collect_anchors(&b.children, page, seen, out),
             RenderNode::Link(l) => collect_anchors(&l.children, page, seen, out),
+            RenderNode::CanvasLayer(l) => collect_anchors(&l.children, page, seen, out),
             _ => {}
         }
     }

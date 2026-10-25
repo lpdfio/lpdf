@@ -55,16 +55,19 @@ fn run_snapshot(name: &str) {
     check_snapshot(name, &pdf_bytes);
 }
 
-/// A fixture with pictures: the images `photo` and `avatar` are read from `image-sample.png` and
-/// `image-square.png` in the fixtures directory and loaded as an SDK would, so the pictures are in the PDF.
+/// A fixture with pictures: the images `photo`, `avatar` and `tall` are read from `image-sample.png`,
+/// `image-square.png` and `image-tall.png` in the fixtures directory and loaded as an SDK would, so the pictures
+/// are in the PDF. `tall` is four times as high as it is wide.
 fn run_snapshot_with_image(name: &str) {
     let xml_path = fixtures_dir().join(format!("{name}.xml"));
     let xml = std::fs::read_to_string(&xml_path)
         .unwrap_or_else(|_| panic!("fixture not found: {}", xml_path.display()));
     let photo  = std::fs::read(fixtures_dir().join("image-sample.png")).expect("image-sample.png");
     let avatar = std::fs::read(fixtures_dir().join("image-square.png")).expect("image-square.png");
+    let tall   = std::fs::read(fixtures_dir().join("image-tall.png")).expect("image-tall.png");
 
-    let pdf_bytes = crate::LpdfEngine::render_xml_with_images_to_pdf_bytes(&xml, &[("photo", &photo), ("avatar", &avatar)])
+    let images: [(&str, &[u8]); 3] = [("photo", &photo), ("avatar", &avatar), ("tall", &tall)];
+    let pdf_bytes = crate::LpdfEngine::render_xml_with_images_to_pdf_bytes(&xml, &images)
         .unwrap_or_else(|e| panic!("render failed for {name}: {e}"));
     check_snapshot(name, &pdf_bytes);
 }
@@ -153,6 +156,14 @@ fn showcase_grid() { run_snapshot("showcase-grid"); }
 fn showcase_row() { run_snapshot("showcase-row"); }
 #[test]
 fn showcase_row_between() { run_snapshot("showcase-row-between"); }
+#[test]
+fn showcase_row_split() { run_snapshot("showcase-row-split"); }
+#[test]
+fn showcase_row_split_flags() { run_snapshot("showcase-row-split-flags"); }
+#[test]
+fn showcase_row_split_image() { run_snapshot_with_image("showcase-row-split-image"); }
+#[test]
+fn showcase_page_clip() { run_snapshot_with_image("showcase-page-clip"); }
 #[test]
 fn showcase_table() { run_snapshot("showcase-table"); }
 #[test]

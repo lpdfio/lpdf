@@ -2526,6 +2526,7 @@ fn collect_fields_in_nodes(nodes: &[RenderNode], page_idx: usize, out: &mut Vec<
             RenderNode::Field(f)  => out.push((page_idx, f.clone())),
             RenderNode::Box(b)    => collect_fields_in_nodes(&b.children, page_idx, out),
             RenderNode::Link(l)   => collect_fields_in_nodes(&l.children, page_idx, out),
+            RenderNode::CanvasLayer(l) => collect_fields_in_nodes(&l.children, page_idx, out),
             _                     => {}
         }
     }
