@@ -1,6 +1,6 @@
 #!/bin/sh
 # Counts the instructions, estimated cycles and allocations of one build of lpdf with benches/counts,
-# as bench.yml does for each build it compares (Lpdf-bench-counts.md in the internal repo).
+# as bench.yml does for each build it compares.
 #
 #   sh scripts/bench-counts.sh <checkout> <out folder> <name>
 #
