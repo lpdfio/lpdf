@@ -5,6 +5,9 @@ use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Capture, Captur
 mod footnotes;
 #[path = "layout/table_grid.rs"]
 mod table_grid;
+#[cfg(test)]
+#[path = "layout/row_split_tests.rs"]
+mod row_split_tests;
 pub(crate) use table_grid::{Held, Placed};
 use table_grid::TableGrid;
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
