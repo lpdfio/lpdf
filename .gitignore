@@ -12,3 +12,8 @@ node_modules
 bin/
 repos/
 tmp/
+
+# The counts harness builds in its own target, and takes the Cargo.lock of the checkout it measures
+# (scripts/bench-counts.sh).
+/benches/counts/target
+/benches/counts/Cargo.lock

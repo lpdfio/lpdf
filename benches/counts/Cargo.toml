@@ -1,0 +1,30 @@
+# The instruction, cycle and allocation counts of the core pipeline, under Valgrind with Gungraun.
+#
+# A workspace of its own, outside `src/core`, so that bench.yml can copy it into a checkout of an earlier
+# release and measure every build of a run with the same benchmarks. The workflow copies the checkout's
+# Cargo.lock in first, so that each build keeps the dependency versions it was released with.
+[package]
+name    = "lpdf-bench-counts"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[features]
+# The checkout's lib.rs has bench_layout_doc and bench_write_pdf, which measure layout and the PDF
+# write apart. bench.yml turns it on where they are, since earlier releases lack them.
+split-stages = []
+
+[dev-dependencies]
+lpdf     = { path = "../../src/core" }
+# The runner, gungraun-runner, must be the same version: bench.yml installs it from this line.
+gungraun = "=0.20.0"
+
+[[bench]]
+name    = "counts"
+harness = false
+
+# Symbols for callgrind_annotate and dh_view; they don't change the code measured.
+[profile.bench]
+debug = true
