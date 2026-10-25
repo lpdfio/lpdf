@@ -186,21 +186,24 @@ jobs:
           [ -x ~/.cargo/bin/gungraun-runner ] || cargo install gungraun-runner --version "$VERSION" --locked
           gungraun-runner --version
 
-      # Each build in a worktree of its own. A build that fails is noted in its report and the run
-      # goes on to the others; the last step fails the run then, unless it is a backfill.
+      # Every build in the same folder, one after the other: its path is compiled into the binary and
+      # read in the setup, and a path of another length moved the counts of one build by up to 1%. A
+      # build that fails is noted in its report and the run goes on to the others; the last step fails
+      # the run then, unless it is a backfill.
       - name: Count
         run: |
           set -u
           failed=""
           # Stdin is the list of builds, so nothing in the loop may read it.
           while read -r folder commit name; do
-            git worktree add --detach "$RUNNER_TEMP/builds/$folder" "$commit" < /dev/null
-            if ! sh scripts/bench-counts.sh "$RUNNER_TEMP/builds/$folder" "$RUNNER_TEMP/counts/$folder" "$name" < /dev/null; then
+            git worktree add --detach "$RUNNER_TEMP/build" "$commit" < /dev/null
+            if ! sh scripts/bench-counts.sh "$RUNNER_TEMP/build" "$RUNNER_TEMP/counts/$folder" "$name" < /dev/null; then
               echo "::error::$name ($commit) could not be built or measured: see the log above."
               mkdir -p "$RUNNER_TEMP/counts/$folder"
               echo "$name did not build or run with the benchmarks of this run" > "$RUNNER_TEMP/counts/$folder/failed"
               failed="$failed $name"
             fi
+            git worktree remove --force "$RUNNER_TEMP/build" < /dev/null
           done < "$RUNNER_TEMP/builds.txt"
           echo "failed=$failed" >> "$GITHUB_ENV"
 
