@@ -162,7 +162,9 @@ jobs:
             mkdir -p ~/valgrind-debs
             (cd ~/valgrind-debs && apt-get download valgrind libc6-dbg)
           fi
-          sudo apt-get install -y --no-install-recommends ~/valgrind-debs/*.deb
+          # dpkg, not apt-get: given the files, apt-get downloads the same version from the archive again,
+          # which took 8 minutes on the first run.
+          sudo dpkg -i ~/valgrind-debs/*.deb
           valgrind --version
 
       # The runner gungraun's benchmarks call, of the version benches/counts/Cargo.toml pins.
