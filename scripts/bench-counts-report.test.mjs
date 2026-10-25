@@ -6,26 +6,26 @@ import { test } from 'node:test';
 import { compare, history, markdown, missingStages, readCounts } from './bench-counts-report.mjs';
 
 /** A line of gungraun's JSON output, with only what the report reads. */
-function summaryLine(stage, fixture, { ir, cycles = ir * 1.5, blocks = 100, bytes = 10_000 }) {
+function summaryLine(stage, fixture, { ir, cycles = ir * 1.5, blocks = 100, bytes = 10_000, peak = 4_000 }) {
     const metrics = values => ({ metrics: Object.fromEntries(Object.entries(values).map(([k, v]) => [k, { values: { new: v } }])) });
     return JSON.stringify({
         function_name: stage,
         id: fixture,
         profiles: [
             { tool: 'Callgrind', data: { total: metrics({ Ir: ir, EstimatedCycles: cycles }) } },
-            { tool: 'DHAT', data: { total: metrics({ TotalBlocks: blocks, TotalBytes: bytes }) } },
+            { tool: 'DHAT', data: { total: metrics({ TotalBlocks: blocks, TotalBytes: bytes, AtTGmaxBytes: peak }) } },
         ],
     });
 }
 
 const build = (name, lines) => ({ name, commit: `${name}0000000`, counts: readCounts(lines.join('\n')) });
 
-test('reads the four measures of each fixture and stage', () => {
+test('reads the five measures of each fixture and stage', () => {
     const counts = readCounts([
-        summaryLine('parse', 'xs', { ir: 1000, cycles: 1500, blocks: 7, bytes: 512 }),
+        summaryLine('parse', 'xs', { ir: 1000, cycles: 1500, blocks: 7, bytes: 512, peak: 256 }),
         summaryLine('end_to_end', 'm', { ir: 9000 }),
     ].join('\n'));
-    assert.deepEqual(counts.xs.parse, { instructions: 1000, estimated_cycles: 1500, allocations: 7, bytes_allocated: 512 });
+    assert.deepEqual(counts.xs.parse, { instructions: 1000, estimated_cycles: 1500, allocations: 7, bytes_allocated: 512, peak_bytes: 256 });
     assert.equal(counts.m.end_to_end.instructions, 9000);
 });
 
@@ -46,12 +46,12 @@ test('marks a whole render that grew past its 3% but not a stage that grew less 
     assert.equal(row('parse', 'instructions').changes[0].percent.toFixed(2), '9.00');
 });
 
-test('marks allocations that grew past 10% in any stage, and never a drop', () => {
-    const release = build('v0.29.0', [summaryLine('parse', 's', { ir: 1000, blocks: 100, bytes: 1000 })]);
-    const branch = build('branch', [summaryLine('parse', 's', { ir: 500, blocks: 111, bytes: 500 })]);
+test('marks allocations or peak memory that grew past 10% in any stage, and never a drop', () => {
+    const release = build('v0.29.0', [summaryLine('parse', 's', { ir: 1000, blocks: 100, bytes: 1000, peak: 400 })]);
+    const branch = build('branch', [summaryLine('parse', 's', { ir: 500, blocks: 111, bytes: 500, peak: 450 })]);
     const rows = compare([release, branch]);
     const marked = rows.filter(r => r.changes[0].marked).map(r => r.measure);
-    assert.deepEqual(marked, ['allocations']);
+    assert.deepEqual(marked, ['allocations', 'peak_bytes']);
 });
 
 test('takes the marks it is given', () => {
