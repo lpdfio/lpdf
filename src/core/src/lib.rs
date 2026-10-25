@@ -501,6 +501,31 @@ pub fn bench_render_doc(mut doc: BenchDoc) -> Result<Vec<u8>, String> {
     )
 }
 
+/// Laid-out pages, with the document whose fonts, metadata and gradients the PDF write reads.
+pub struct BenchPages {
+    pages: Vec<render::RenderPage>,
+    doc:   parse::Document,
+}
+
+/// Layout on a pre-parsed doc, without the PDF write. With `bench_write_pdf`, it splits what
+/// `bench_render_doc` measures in two. Used by the instruction-count benchmarks of `benches/counts`.
+pub fn bench_layout_doc(mut doc: BenchDoc) -> BenchPages {
+    let lp = doc.0.section_layouts();
+    let pages: Vec<render::RenderPage> =
+        layout::layout_document(&lp);
+    BenchPages { pages, doc: doc.0 }
+}
+
+/// PDF write of laid-out pages. Used by the instruction-count benchmarks of `benches/counts`.
+pub fn bench_write_pdf(pages: BenchPages) -> Result<Vec<u8>, String> {
+    // Unlicensed, so benchmarks include the cost of the attribution line.
+    pdf::render_pdf(
+        &pages.pages, &pages.doc.fonts,
+        &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
+        &pages.doc.meta, &pages.doc.gradients, None, false,
+    )
+}
+
 /// Layout + PDF write on a pre-parsed doc, with its images loaded and sized as `render_pdf` sizes them: the
 /// images of the flow and the `img-at` of the layers are fitted to the pictures' proportions. Used by the
 /// `layers` and `media` benchmarks, whose documents hold images.
@@ -761,5 +786,13 @@ mod tests {
         let big = "x".repeat(1_048_577);
         let result: serde_json::Value = serde_json::from_str(&engine.render(&big)).unwrap();
         assert_eq!(result["error"], "input exceeds 1 MB limit");
+    }
+
+    #[test]
+    fn bench_layout_and_write_make_the_pdf_of_bench_render_doc() {
+        let xml = include_str!("../../../test/fixtures/bench_xs.xml");
+        let whole = bench_render_doc(bench_parse(xml).unwrap()).unwrap();
+        let split = bench_write_pdf(bench_layout_doc(bench_parse(xml).unwrap())).unwrap();
+        assert_eq!(whole, split);
     }
 }

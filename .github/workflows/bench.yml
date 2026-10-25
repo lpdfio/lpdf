@@ -1,0 +1,334 @@
+name: Bench counts
+run-name: "${{ inputs.tags && format('Bench counts: backfill {0}', inputs.tags) || format('Bench counts: {0} against the last release', github.ref_name) }}"
+
+# Counts instructions, estimated cycles and allocations of the core pipeline under Valgrind
+# (benches/counts) and reports how they changed since the last release. The counts don't depend on
+# how busy the machine is, and every build of a run is measured on one runner, so a change of 1%
+# between them is a change in the code. Report only: the run passes whatever the numbers show, and
+# it is no required check. `make benchmark` stays for real time; ci.yml only builds and tests.
+#
+# Starts:
+#   Run workflow     on the branch picked in "Use workflow from". A branch other than main is
+#                    measured against main too, to tell its own change from what is merged already.
+#                    The table goes on the branch's open PR as well.
+#   a tag push       vX.Y.0-rc.N from `make rc-next`, and vX.Y.Z when a release is published.
+#   rc-next.yml      after the "Cut release candidate" button pushes an RC tag: a tag pushed with
+#                    GITHUB_TOKEN starts no workflow, so rc-next.yml starts this one on it.
+#   Run workflow     with tags: the backfill of the history. Each tag is measured against the
+#                    release before it, and its counts are saved to lpdf-bench.
+#
+# A release, and each tag of a backfill, saves its counts to lpdf-bench as counts/vX.Y.Z.json, with
+# those of the release before it, measured in the same run (job "history").
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: "Backfill: release tags, separated by spaces (e.g. v0.24.0 v0.25.0). Each is measured against the release before it and saved to lpdf-bench. Empty: measure the branch"
+        required: false
+        default: ""
+
+env:
+  # A change is marked in the table when it grows more than this, in percent: instructions or
+  # estimated cycles of a whole render (end to end), or of one stage, and allocations or bytes
+  # allocated of any stage. Marks don't fail the run.
+  MARK_END_TO_END: 3
+  MARK_STAGE: 10
+  MARK_ALLOCATIONS: 10
+
+permissions:
+  contents: read
+
+jobs:
+  counts:
+    name: Count
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      pull-requests: write   # the table on the branch's PR
+    outputs:
+      history: ${{ steps.builds.outputs.history }}
+    steps:
+      # Every tag and main, to work out the builds and check each out beside this one.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Test the report
+        run: node --test scripts/bench-counts-report.test.mjs
+
+      # Writes $RUNNER_TEMP/builds.txt, a build a line: `<folder> <commit> <name>`, and reports.txt,
+      # a report a line: `<history|-> <folder> <folder> [<folder>]`, the last release first.
+      - name: Work out the builds
+        id: builds
+        env:
+          TAGS: ${{ inputs.tags }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -eu
+          RELEASE_RE='^v[0-9]+\.[0-9]+\.[0-9]+$'
+          BUILDS="$RUNNER_TEMP/builds.txt"
+          REPORTS="$RUNNER_TEMP/reports.txt"
+          : > "$BUILDS"
+          : > "$REPORTS"
+
+          # The newest release, of a lower version than <version> if one is given. By version, not by
+          # ancestry: the history was rewritten between v0.26.0 and v0.27.0, which share no commit.
+          release_before() {
+            git tag -l 'v*' | grep -E "$RELEASE_RE" \
+              | { if [ -n "${1:-}" ]; then
+                    while read -r t; do
+                      [ "$t" = "$1" ] && continue
+                      [ "$(printf '%s\n%s\n' "$t" "$1" | sort -V | head -n 1)" = "$t" ] && echo "$t"
+                    done
+                  else cat; fi; } \
+              | sort -V | tail -n 1
+          }
+
+          # A build once, in a folder named after it; prints the folder.
+          build() {
+            folder=$(printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_')
+            awk -v f="$folder" '$1 == f { found = 1 } END { exit !found }' "$BUILDS" \
+              || echo "$folder $(git rev-parse "$2^{commit}") $1" >> "$BUILDS"
+            echo "$folder"
+          }
+
+          if [ -n "$TAGS" ]; then
+            for tag in $TAGS; do
+              if ! echo "$tag" | grep -qE "$RELEASE_RE" || ! git rev-parse -q --verify "refs/tags/$tag" > /dev/null; then
+                echo "::error::'$tag' is not a release tag of this repo: give tags like v0.24.0."
+                exit 1
+              fi
+              before=$(release_before "$tag")
+              if [ -z "$before" ]; then
+                echo "::error::$tag has no release before it to be measured against."
+                exit 1
+              fi
+              echo "history $(build "$before" "$before") $(build "$tag" "$tag")" >> "$REPORTS"
+            done
+            echo "history=true" >> "$GITHUB_OUTPUT"
+          elif [ "$REF_TYPE" = tag ]; then
+            # An RC is measured against the release before its version; a release against the one before it.
+            version=${REF_NAME%%-rc.*}
+            before=$(release_before "$version")
+            if [ -z "$before" ]; then
+              echo "::error::$REF_NAME has no release before it to be measured against."
+              exit 1
+            fi
+            if echo "$REF_NAME" | grep -qE "$RELEASE_RE"; then
+              echo "history $(build "$before" "$before") $(build "$REF_NAME" "$GITHUB_SHA")" >> "$REPORTS"
+              echo "history=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "- $(build "$before" "$before") $(build "$REF_NAME" "$GITHUB_SHA")" >> "$REPORTS"
+            fi
+          else
+            before=$(release_before)
+            if [ -z "$before" ]; then
+              echo "::error::There is no release to measure $REF_NAME against."
+              exit 1
+            fi
+            if [ "$REF_NAME" = main ]; then
+              echo "- $(build "$before" "$before") $(build main "$GITHUB_SHA")" >> "$REPORTS"
+            else
+              echo "- $(build "$before" "$before") $(build main origin/main) $(build "$REF_NAME" "$GITHUB_SHA")" >> "$REPORTS"
+            fi
+          fi
+
+          echo "Builds:"; cat "$BUILDS"
+          echo "Reports:"; cat "$REPORTS"
+
+      - uses: dtolnay/rust-toolchain@1.99.0
+        # Rust is pinned here only, and bumped on purpose, such as at a release: every build of a run
+        # uses this compiler, and the history in lpdf-bench names it, so a step from a new compiler
+        # shows as one. CI and the release build stay on stable.
+
+      # Valgrind from Ubuntu's archive, its packages kept between runs. It needs the libc6-dbg of the
+      # runner's libc6, so a new libc6 in the runner image makes a new cache.
+      - name: Read the libc6 version
+        id: libc6
+        run: echo "version=$(dpkg-query -W -f='${Version}' libc6)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: ~/valgrind-debs
+          key: valgrind-debs-ubuntu-24.04-libc6-${{ steps.libc6.outputs.version }}
+      - name: Install Valgrind
+        run: |
+          if ! ls ~/valgrind-debs/*.deb > /dev/null 2>&1; then
+            sudo apt-get update
+            mkdir -p ~/valgrind-debs
+            (cd ~/valgrind-debs && apt-get download valgrind libc6-dbg)
+          fi
+          sudo apt-get install -y --no-install-recommends ~/valgrind-debs/*.deb
+          valgrind --version
+
+      # The runner gungraun's benchmarks call, of the version benches/counts/Cargo.toml pins.
+      - name: Read the gungraun version
+        id: gungraun
+        run: |
+          version=$(sed -n 's/^gungraun *= *"=\([0-9.]*\)".*/\1/p' benches/counts/Cargo.toml)
+          if [ -z "$version" ]; then
+            echo "::error::benches/counts/Cargo.toml must pin gungraun to one version, as gungraun = \"=X.Y.Z\"."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cargo/bin/gungraun-runner
+          key: gungraun-runner-${{ steps.gungraun.outputs.version }}-rust-1.99.0-ubuntu-24.04
+      - name: Install gungraun-runner
+        env:
+          VERSION: ${{ steps.gungraun.outputs.version }}
+        run: |
+          [ -x ~/.cargo/bin/gungraun-runner ] || cargo install gungraun-runner --version "$VERSION" --locked
+          gungraun-runner --version
+
+      # Every build in the same folder, one after the other: its path is compiled into the binary and
+      # read in the setup, and a path of another length moved the counts of one build by up to 1%. A
+      # build that fails is noted in its report and the run goes on to the others; the last step fails
+      # the run then, unless it is a backfill.
+      - name: Count
+        run: |
+          set -u
+          failed=""
+          # Stdin is the list of builds, so nothing in the loop may read it.
+          while read -r folder commit name; do
+            git worktree add --detach "$RUNNER_TEMP/build" "$commit" < /dev/null
+            if ! sh scripts/bench-counts.sh "$RUNNER_TEMP/build" "$RUNNER_TEMP/counts/$folder" "$name" < /dev/null; then
+              echo "::error::$name ($commit) could not be built or measured: see the log above."
+              mkdir -p "$RUNNER_TEMP/counts/$folder"
+              echo "$name did not build or run with the benchmarks of this run" > "$RUNNER_TEMP/counts/$folder/failed"
+              failed="$failed $name"
+            fi
+            git worktree remove --force "$RUNNER_TEMP/build" < /dev/null
+          done < "$RUNNER_TEMP/builds.txt"
+          echo "failed=$failed" >> "$GITHUB_ENV"
+
+      - name: Report
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -eu
+          rust=$(rustc -V)
+          about() { awk -v f="$1" -v col="$2" '$1 == f { print $col }' "$RUNNER_TEMP/builds.txt"; }
+          mkdir -p "$RUNNER_TEMP/history" "$RUNNER_TEMP/report"
+          n=0
+          while read -r history folders; do
+            n=$((n + 1))
+            last=${folders##* }
+            name=$(about "$last" 3)
+            unmeasured=""
+            for folder in $folders; do
+              if [ -f "$RUNNER_TEMP/counts/$folder/failed" ]; then unmeasured="$unmeasured $(cat "$RUNNER_TEMP/counts/$folder/failed")."; fi
+            done
+            if [ -n "$unmeasured" ]; then
+              printf '### Instruction and allocation counts of %s: not measured\n\n%s\n\n' "$name" "${unmeasured# }" >> "$GITHUB_STEP_SUMMARY"
+              # A backfill notes a release it could not measure, as the plan asks, and goes on.
+              if [ "$history" = history ]; then
+                node -e '
+                  const [file, version, commit, error, rust, run] = process.argv.slice(1);
+                  const record = { version, commit, rust, run, error, counts: null };
+                  require("node:fs").writeFileSync(file, JSON.stringify(record, null, 2) + "\n");
+                ' "$RUNNER_TEMP/history/$name.json" "$name" "$(about "$last" 2)" "${unmeasured# }" "$rust" "$RUN_URL"
+              fi
+              continue
+            fi
+            set -- --mark-end-to-end "$MARK_END_TO_END" --mark-stage "$MARK_STAGE" --mark-allocations "$MARK_ALLOCATIONS" \
+              --markdown "$RUNNER_TEMP/report/$n.md" --about "rust=$rust"
+            if [ "$history" = history ]; then
+              set -- "$@" --history "$RUNNER_TEMP/history/$name.json" \
+                --about "valgrind=$(valgrind --version)" \
+                --about "gungraun=$(gungraun-runner --version | awk '{ print $NF }')" \
+                --about "runner=${ImageOS:-} ${ImageVersion:-}" \
+                --about "run=$RUN_URL"
+            fi
+            for folder in $folders; do set -- "$@" "$RUNNER_TEMP/counts/$folder"; done
+            node scripts/bench-counts-report.mjs "$@"
+            cat "$RUNNER_TEMP/report/$n.md" >> "$GITHUB_STEP_SUMMARY"
+          done < "$RUNNER_TEMP/reports.txt"
+
+      - uses: actions/upload-artifact@v6
+        if: ${{ always() }}
+        with:
+          name: bench-counts
+          path: |
+            ${{ runner.temp }}/counts/
+            ${{ runner.temp }}/report/
+            ${{ runner.temp }}/history/
+          if-no-files-found: ignore
+
+      - name: Comment on the branch's PR
+        if: ${{ github.ref_type == 'branch' && github.ref_name != 'main' && !inputs.tags }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -eu
+          pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -z "$pr" ] || [ ! -f "$RUNNER_TEMP/report/1.md" ]; then
+            echo "No open PR for $BRANCH, or no table: the table is in the run's summary only."
+            exit 0
+          fi
+          marker='<!-- bench-counts -->'
+          { echo "$marker"; cat "$RUNNER_TEMP/report/1.md"; echo; echo "[The run]($RUN_URL) on \`$(git rev-parse --short HEAD)\`."; } > "$RUNNER_TEMP/comment.md"
+          # One comment a PR, updated by each run.
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$pr/comments" --paginate \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | tail -n 1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F "body=@$RUNNER_TEMP/comment.md" > /dev/null
+          else
+            gh pr comment "$pr" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"
+          fi
+
+      - name: Fail on a build that was not measured
+        if: ${{ env.failed != '' && !inputs.tags }}
+        run: |
+          echo "::error::Not measured:$failed"
+          exit 1
+
+  # A release, and each tag of a backfill, keeps its counts in lpdf-bench. The token is a secret of the
+  # `bench-history` environment, which only main and v* tags may use, so no other branch can push there.
+  history:
+    name: Save to lpdf-bench
+    needs: counts
+    if: ${{ needs.counts.outputs.history == 'true' }}
+    runs-on: ubuntu-24.04
+    environment: bench-history
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: bench-counts
+          path: bench-counts
+
+      - uses: actions/checkout@v5
+        with:
+          repository: lpdfio/lpdf-bench
+          token: ${{ secrets.LPDF_BENCH_TOKEN }}
+          path: lpdf-bench
+
+      - name: Push the counts
+        working-directory: lpdf-bench
+        run: |
+          set -eu
+          mkdir -p counts
+          cp ../bench-counts/history/*.json counts/
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add counts
+          if git diff --cached --quiet; then
+            echo "The counts are in lpdf-bench already."
+            exit 0
+          fi
+          versions=$(git diff --cached --name-only | sed -n 's|^counts/\(.*\)\.json$|\1|p' | sort -V | tr '\n' ' ')
+          git commit -m "Keep the counts of ${versions% }"
+          # Another run may have pushed in between: take its commit and try again.
+          for _ in 1 2 3; do
+            if git push origin HEAD; then exit 0; fi
+            git pull --rebase origin "$(git rev-parse --abbrev-ref HEAD)"
+          done
+          echo "::error::Could not push the counts to lpdf-bench."
+          exit 1
