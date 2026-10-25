@@ -108,19 +108,33 @@ fn end_to_end(xml: String) -> Vec<u8> {
     black_box(bench_render_xml(black_box(&xml)).expect("the fixture renders"))
 }
 
+/// glibc's malloc, which Callgrind counts, grows its heap in steps that depend on the address the heap
+/// starts at, and so on the size of the binary: a large block is carved from the heap or mapped on its
+/// own depending on whether the heap has room left, and frees then merge differently. Any change to the
+/// code moved small renders by up to 1% that way. One large heap from the start, never given back,
+/// leaves the allocator with the same work for the same calls. DHAT replaces malloc, so its counts
+/// don't depend on this.
+const GLIBC_TUNABLES: &str =
+    "glibc.malloc.top_pad=268435456:glibc.malloc.trim_threshold=4294967296";
+
+fn config() -> LibraryBenchmarkConfig {
+    let mut config = LibraryBenchmarkConfig::default();
+    config
+        .tool(Dhat::default())
+        .env("GLIBC_TUNABLES", GLIBC_TUNABLES);
+    config
+}
+
 library_benchmark_group!(name = stages, benchmarks = [parse, render_doc, end_to_end]);
 
 #[cfg(feature = "split-stages")]
 library_benchmark_group!(name = split_stages, benchmarks = [layout, write_pdf]);
 
 #[cfg(not(feature = "split-stages"))]
-main!(
-    config = LibraryBenchmarkConfig::default().tool(Dhat::default()),
-    library_benchmark_groups = stages
-);
+main!(config = config(), library_benchmark_groups = stages);
 
 #[cfg(feature = "split-stages")]
 main!(
-    config = LibraryBenchmarkConfig::default().tool(Dhat::default()),
+    config = config(),
     library_benchmark_groups = [stages, split_stages]
 );
