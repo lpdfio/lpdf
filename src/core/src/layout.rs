@@ -151,11 +151,23 @@ pub fn layout_page(page: &SectionLayout) -> Vec<RenderPage> {
             let cw = rp.width - ml - mr;
             let ch = rp.height - mt - mb;
             let mut overlay = debug_rect_lines(cx, cy, cw, ch, "#ff0033");
-            for node in rp.nodes.iter() {
-                if let RenderNode::Box(b) = node {
-                    if !b.debug_self {
+            for node in rp.nodes.iter_mut() {
+                match node {
+                    RenderNode::Box(b) if !b.debug_self => {
                         overlay.extend(debug_rect_lines(b.x, b.y, b.width, b.height, "#0066ff"));
                     }
+                    // A flow cut at the bottom of the page (`clip_overflow`): its outlines are cut with it.
+                    RenderNode::CanvasLayer(l) => {
+                        let lines: Vec<RenderNode> = l.children.iter()
+                            .filter_map(|c| match c {
+                                RenderNode::Box(b) if !b.debug_self => Some(debug_rect_lines(b.x, b.y, b.width, b.height, "#0066ff")),
+                                _ => None,
+                            })
+                            .flatten()
+                            .collect();
+                        l.children.extend(lines);
+                    }
+                    _ => {}
                 }
             }
             rp.nodes.extend(overlay);
@@ -247,10 +259,12 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
         return chunks
             .into_iter()
             .map(|chunk| {
-                let (mut nodes, _) = layout_column(
-                    &chunk.nodes, avail_x, avail_y, avail_w, Some(avail_h - chunk.reserve),
+                let room = avail_h - chunk.reserve;
+                let (nodes, used) = layout_column(
+                    &chunk.nodes, avail_x, avail_y, avail_w, Some(room),
                     0.0, &Align::Stretch, &Justify::Start,
                 );
+                let mut nodes = clip_overflow(nodes, used, avail_y + room, room, page.width);
                 nodes.extend(footnotes::draw_area(&chunk.notes, avail_x, avail_y + avail_h, avail_w, avail_h));
                 RenderPage {
                     width: page.width,
@@ -320,10 +334,12 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
         // Flow between chromes.
         let flow_y = avail_y + top_h;
         let flow_budget = if is_first { budget_first } else { budget_rest };
-        let (flow_nodes, _) = layout_column(
-            &chunk.nodes, avail_x, flow_y, avail_w, Some(flow_budget - chunk.reserve),
+        let room = flow_budget - chunk.reserve;
+        let (flow_nodes, used) = layout_column(
+            &chunk.nodes, avail_x, flow_y, avail_w, Some(room),
             0.0, &Align::Stretch, &Justify::Start,
         );
+        let flow_nodes = clip_overflow(flow_nodes, used, flow_y + room, room, page.width);
 
         let mut all_nodes = top_nodes;
         all_nodes.extend(flow_nodes);
@@ -367,6 +383,52 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
     }
 
     pages_out
+}
+
+/// The flow of a page, laid out `used` high in a `room` that ends at `bottom`. A flow that runs past it holds a node
+/// taller than a page, placed whole: the flow is clipped at `bottom`, so that it draws nothing over the footer, the
+/// margin or the notes, and what the clip can't hide is fitted to it (`fit_to_clip`). A flow that fits is returned
+/// as it is.
+fn clip_overflow(mut nodes: Vec<RenderNode>, used: f32, bottom: f32, room: f32, page_w: f32) -> Vec<RenderNode> {
+    if used <= room + 0.5 {
+        return nodes;
+    }
+    fit_to_clip(&mut nodes, bottom);
+    vec![RenderNode::CanvasLayer(RenderCanvasLayer {
+        transform: None,
+        clip:      Some(RenderCanvasClip { x: 0.0, y: 0.0, w: page_w, h: bottom, border_radius: 0.0 }),
+        opacity:   1.0,
+        children:  nodes,
+    })]
+}
+
+/// Fit to a clip at `bottom` what the clip in the content stream doesn't hide: a field that doesn't fit above it is
+/// dropped, a link is cut off at it, and a bookmark below it marks it instead.
+fn fit_to_clip(nodes: &mut Vec<RenderNode>, bottom: f32) {
+    nodes.retain(|node| !matches!(node, RenderNode::Field(f) if f.y + f.height > bottom + 0.5));
+    for node in nodes.iter_mut() {
+        match node {
+            RenderNode::Box(b)         => fit_to_clip(&mut b.children, bottom),
+            RenderNode::CanvasLayer(l) => fit_to_clip(&mut l.children, bottom),
+            // A link wholly below the clip keeps its content, which the clip hides, and loses its annotation.
+            RenderNode::Link(l) if l.y >= bottom => {
+                let mut children = std::mem::take(&mut l.children);
+                fit_to_clip(&mut children, bottom);
+                let (x, y, width, height) = (l.x, l.y, l.width, l.height);
+                *node = RenderNode::Box(RenderBox {
+                    x, y, width, height,
+                    fill: None, border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None,
+                    debug_self: false, children,
+                });
+            }
+            RenderNode::Link(l) => {
+                fit_to_clip(&mut l.children, bottom);
+                l.height = l.height.min(bottom - l.y);
+            }
+            RenderNode::Anchor(a) => a.y = a.y.min(bottom),
+            _ => {}
+        }
+    }
 }
 
 /// Total column height of a list of nodes at a given width (uses the standard
@@ -545,7 +607,8 @@ impl<'a> Pending<'a> {
 /// Atomic: Frame, Divider, Link, plus anything with Fixed/Full/Fill.
 ///
 /// When a node doesn't fit and can't be split, it moves wholesale to the next
-/// page. If a single atomic node is taller than a full page, it is force-placed.
+/// page. If a single atomic node is taller than a full page, it is force-placed,
+/// and the bottom of the page cuts it (`clip_overflow`).
 fn split_into_pages(
     nodes: &[Node],
     avail_w: f32,
@@ -637,9 +700,14 @@ fn fill_page(
                             last.paginate = Paginate::BreakAfter;
                         }
                     }
+                    // A part can still be taller than the page, as a table's spanned rows or a row's child can.
+                    let cut = node.debug && measure_height(&first, avail_w, budget) > target + 0.5;
                     page.push(first);
                     for item in rest.into_iter().rev() {
                         pending.push_front(item);
+                    }
+                    if cut {
+                        pending.push_front(make_clip_warning());
                     }
                     break;
                 }
@@ -650,6 +718,9 @@ fn fill_page(
                         let first = rest.into_iter().next().unwrap_or(node);
                         needs_break_after = first.paginate == Paginate::BreakAfter;
                         let fh = measure_height(&first, avail_w, budget);
+                        if first.debug && fh > budget + 0.5 {
+                            pending.push_front(make_clip_warning());
+                        }
                         page.push(first);
                         used_h = fh.min(budget);
                     } else {
@@ -663,6 +734,9 @@ fn fill_page(
                 SplitOutcome::Atomic => {
                     if page.is_empty() {
                         needs_break_after = node.paginate == Paginate::BreakAfter;
+                        if node.debug && h > budget + 0.5 {
+                            pending.push_front(make_clip_warning());
+                        }
                         page.push(node);
                         used_h = budget;
                     } else {
@@ -687,10 +761,21 @@ fn fill_page(
 /// honoured because both this node and its next sibling together exceed a full
 /// page height.
 fn make_keep_next_warning() -> Node {
+    debug_note("[lpdf] keep-next ignored: both nodes exceed page height")
+}
+
+/// The note injected into the layout stream after a `debug="true"` node that is taller than its page, which the
+/// bottom of the page cuts (`clip_overflow`). The page is full, so the note starts the next one.
+fn make_clip_warning() -> Node {
+    debug_note("[lpdf] cut at the bottom of the page: content taller than the page")
+}
+
+/// A small red diagnostic text, injected into the layout stream for a `debug="true"` node.
+fn debug_note(text: &str) -> Node {
     Node {
         kind: NodeKind::Text,
         text_runs: vec![TextRun {
-            text: "[lpdf] keep-next ignored: both nodes exceed page height".to_string(),
+            text: text.to_string(),
             leading_space: false,
             font: None,
             color: Some("#cc0000".to_string()),
@@ -724,33 +809,39 @@ enum SplitOutcome {
 /// Splittable node types (Auto height only):
 /// - **Column**: split child-by-child; recurses into first child if that's what overflows.
 /// - **Grid**: split row-by-row (rows are atomic; children inside a row are atomic).
-/// - **Row**: split between wrapped lines (items within a line are atomic).
+/// - **Row**: split between wrapped lines, or through the line the page edge falls in (`split_row`).
 /// - **Text**: split line-by-line, reconstructing runs on each half.
 ///
 /// Everything else (Frame, Divider, or any Fixed/Full/Fill
 /// height node) returns `Atomic`. Frame is atomic by design — it represents a
 /// card-like enclosure that should not be cut.
 fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
-    if node.paginate == Paginate::No {
-        return SplitOutcome::Atomic;
-    }
-    if node.height_mode != HeightMode::Auto {
-        return SplitOutcome::Atomic;
-    }
-    if node.kind != NodeKind::Text && node.children.is_empty() {
+    if !splittable(node) {
         return SplitOutcome::Atomic;
     }
 
     match node.kind {
         NodeKind::Column  => split_column(node, avail_w, target_h, full_page_h),
         NodeKind::Grid    => split_grid(node, avail_w, target_h, full_page_h),
-        NodeKind::Row     => split_row(node, avail_w, target_h),
+        NodeKind::Row     => split_row(node, avail_w, target_h, full_page_h),
         NodeKind::Text    => split_text(node, avail_w, target_h, full_page_h),
         NodeKind::Table   => split_table(node, avail_w, target_h, full_page_h),
         NodeKind::Link    => split_column(node, avail_w, target_h, full_page_h),
         // Frame, Divider — atomic by design.
         _                 => SplitOutcome::Atomic,
     }
+}
+
+/// Whether `split_node_at` can split `node` at all: a text, or a box of `auto` height with children, of a kind
+/// that splits, and without `paginate="no"`.
+fn splittable(node: &Node) -> bool {
+    node.paginate != Paginate::No
+        && node.height_mode == HeightMode::Auto
+        && (node.kind == NodeKind::Text || !node.children.is_empty())
+        && matches!(
+            node.kind,
+            NodeKind::Column | NodeKind::Grid | NodeKind::Row | NodeKind::Text | NodeKind::Table | NodeKind::Link
+        )
 }
 
 fn split_column(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
@@ -785,8 +876,18 @@ fn split_column(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> S
                 let first_node = Node { children: vec![child_first], ..node.clone() };
                 let mut rest_children = child_rest;
                 rest_children.extend_from_slice(&node.children[1..]);
+                if rest_children.is_empty() {
+                    return SplitOutcome::First(first_node, Vec::new());
+                }
                 let rest_node = Node { children: rest_children, ..node.clone() };
                 SplitOutcome::First(first_node, vec![rest_node])
+            }
+            // A first child taller than a page has nowhere better to go. On a full page it stays, cut at the
+            // bottom of the page (`clip_overflow`), and the children after it go on to the next.
+            SplitOutcome::NothingFits(_) | SplitOutcome::Atomic if n > 1 && inner_target + 0.5 >= inner_full => {
+                let first = Node { children: node.children[..1].to_vec(), ..node.clone() };
+                let rest  = Node { children: node.children[1..].to_vec(), ..node.clone() };
+                SplitOutcome::First(first, vec![rest])
             }
             SplitOutcome::NothingFits(_) | SplitOutcome::Atomic => {
                 SplitOutcome::NothingFits(vec![node.clone()])
@@ -803,6 +904,9 @@ fn split_column(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> S
                 let mut rest_children: Vec<Node> = child_rest;
                 rest_children.extend_from_slice(&node.children[split_idx + 1..]);
                 let first = Node { children: first_children, ..node.clone() };
+                if rest_children.is_empty() {
+                    return SplitOutcome::First(first, Vec::new());
+                }
                 let rest  = Node { children: rest_children, ..node.clone() };
                 SplitOutcome::First(first, vec![rest])
             }
@@ -851,7 +955,14 @@ fn split_grid(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Spl
     }
 
     if split_row == n_rows { return SplitOutcome::Atomic; }
-    if split_row == 0      { return SplitOutcome::NothingFits(vec![node.clone()]); }
+    if split_row == 0 {
+        // A first row taller than a page stays on a full page, cut at the bottom of the page, and the rows after
+        // it go on to the next.
+        if n_rows == 1 || inner_target + 0.5 < inner_full {
+            return SplitOutcome::NothingFits(vec![node.clone()]);
+        }
+        split_row = 1;
+    }
 
     let item_split = (split_row * cols).min(node.children.len());
     let first = Node { children: node.children[..item_split].to_vec(), ..node.clone() };
@@ -859,25 +970,28 @@ fn split_grid(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Spl
     SplitOutcome::First(first, vec![rest])
 }
 
-/// Bucket items into wrapped lines first; the row splits between lines.
-/// Items inside a line are treated as atomic (the user's rule: row children
-/// never split).
-fn split_row(node: &Node, avail_w: f32, target_h: f32) -> SplitOutcome {
-    let [pt, pr, pb, pl] = node.padding;
-    let inner_w      = (avail_w  - pl - pr).max(0.0);
-    let inner_target = (target_h - pt - pb).max(0.0);
-    let gap = node.gap;
+/// A line of a row's children: the children `start..end`, the width the line gives each, and the height of the
+/// tallest.
+struct RowLine {
+    start:  usize,
+    end:    usize,
+    widths: Vec<f32>,
+    height: f32,
+}
 
-    // Bucket by width, same logic as layout_row's pass 1: a fill child counts as no width.
+/// The lines `layout_row` breaks `node`'s children into, `inner_w` wide, each child measured with `avail_h`. A fill
+/// child counts as no width when the lines are formed, and gets the width its line leaves.
+fn row_lines(node: &Node, inner_w: f32, avail_h: f32) -> Vec<RowLine> {
+    let gap = node.gap;
     let widths: Vec<Option<f32>> = node.children.iter().map(|c| row_child_w(c, inner_w)).collect();
-    let mut lines: Vec<(usize, usize)> = Vec::new(); // (start, end_exclusive)
+    let mut bounds: Vec<(usize, usize)> = Vec::new(); // (start, end_exclusive)
     let mut row_start = 0usize;
     let mut cur_x     = 0.0_f32;
     for (i, w) in widths.iter().enumerate() {
         let cw  = w.unwrap_or(0.0);
         let adv = if i == row_start { cw } else { gap + cw };
         if i > row_start && cur_x + adv > inner_w + 0.01 {
-            lines.push((row_start, i));
+            bounds.push((row_start, i));
             row_start = i;
             cur_x = cw;
         } else {
@@ -885,11 +999,10 @@ fn split_row(node: &Node, avail_w: f32, target_h: f32) -> SplitOutcome {
         }
     }
     if row_start < node.children.len() {
-        lines.push((row_start, node.children.len()));
+        bounds.push((row_start, node.children.len()));
     }
 
-    // A line is as tall as its tallest child, a fill child measured at the width it gets.
-    let rows: Vec<(usize, usize, f32)> = lines
+    bounds
         .into_iter()
         .map(|(start, end)| {
             let line = &widths[start..end];
@@ -900,34 +1013,214 @@ fn split_row(node: &Node, avail_w: f32, target_h: f32) -> SplitOutcome {
             } else {
                 0.0
             };
-            let row_h = node.children[start..end]
+            let widths: Vec<f32> = line.iter().map(|w| w.unwrap_or(fill_w)).collect();
+            let height = node.children[start..end]
                 .iter()
-                .zip(line)
-                .map(|(child, w)| measure_height(child, w.unwrap_or(fill_w), inner_target))
+                .zip(&widths)
+                .map(|(child, &w)| measure_height(child, w, avail_h))
                 .fold(0.0_f32, f32::max);
-            (start, end, row_h)
+            RowLine { start, end, widths, height }
         })
-        .collect();
+        .collect()
+}
 
-    let n_rows = rows.len();
-    let mut split_row = 0usize;
-    let mut chunk_h   = 0.0_f32;
-    for (r, (_, _, rh)) in rows.iter().enumerate() {
+/// Splits a row between its lines, or through the line the page edge falls in. The lines above the edge stay on
+/// this page and the lines below it go on to the next. The line the edge falls in is cut where each of its
+/// children can stop (`line_cut`), and each child is split there (`cut_child`): what is left of them starts the
+/// row's next part. A line with no such cut goes on to the next page whole, and the row with it when it is the
+/// first.
+fn split_row(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
+    let [pt, pr, pb, pl] = node.padding;
+    let inner_w      = (avail_w     - pl - pr).max(0.0);
+    let inner_target = (target_h    - pt - pb).max(0.0);
+    let inner_full   = (full_page_h - pt - pb).max(0.0);
+    let gap = node.gap;
+
+    let lines = row_lines(node, inner_w, inner_target);
+    let mut fit     = 0usize;
+    let mut chunk_h = 0.0_f32;
+    for (r, line) in lines.iter().enumerate() {
         let g = if r == 0 { 0.0 } else { gap };
-        if chunk_h + g + rh > inner_target + 0.5 {
+        if chunk_h + g + line.height > inner_target + 0.5 {
             break;
         }
-        chunk_h += g + rh;
-        split_row = r + 1;
+        chunk_h += g + line.height;
+        fit = r + 1;
+    }
+    if fit == lines.len() { return SplitOutcome::Atomic; }
+
+    let line = &lines[fit];
+    let line_top = if fit == 0 { 0.0 } else { chunk_h + gap };
+    // Only the first line of a row with a full page is at the top of a page, where a child taller than a page
+    // can't do better.
+    let full_page = fit == 0 && inner_target + 0.5 >= inner_full;
+    let cut = line_cut(node, line, inner_target - line_top, full_page, inner_full);
+    if cut <= 0.0 {
+        if fit == 0 { return SplitOutcome::NothingFits(vec![node.clone()]); }
+        let first = Node { children: node.children[..line.start].to_vec(), ..node.clone() };
+        let rest  = Node { children: node.children[line.start..].to_vec(), ..node.clone() };
+        return SplitOutcome::First(first, vec![rest]);
     }
 
-    if split_row == n_rows { return SplitOutcome::Atomic; }
-    if split_row == 0      { return SplitOutcome::NothingFits(vec![node.clone()]); }
-
-    let item_split = rows[split_row].0;
-    let first = Node { children: node.children[..item_split].to_vec(), ..node.clone() };
-    let rest  = Node { children: node.children[item_split..].to_vec(), ..node.clone() };
+    let mut first_children = node.children[..line.start].to_vec();
+    let mut rests = Vec::with_capacity(line.end - line.start);
+    for (child, &width) in node.children[line.start..line.end].iter().zip(&line.widths) {
+        let (first, rest) = cut_child(child, width, cut, inner_full);
+        first_children.push(first);
+        rests.push((rest, child.width_fill, width));
+    }
+    let first = Node { children: first_children, ..node.clone() };
+    // What is left of the line starts the row's next part, with an empty box in the place of each child that
+    // ended. A line with nothing left, such as a child taller than the page beside others that ended, leaves none.
+    let mut rest_children: Vec<Node> = if rests.iter().any(|(rest, ..)| rest.is_some()) {
+        rests.into_iter().map(|(rest, fill, width)| rest.unwrap_or_else(|| place_of(fill, width))).collect()
+    } else {
+        Vec::new()
+    };
+    rest_children.extend_from_slice(&node.children[line.end..]);
+    if rest_children.is_empty() {
+        return SplitOutcome::First(first, Vec::new());
+    }
+    let rest = Node { children: rest_children, ..node.clone() };
     SplitOutcome::First(first, vec![rest])
+}
+
+/// The highest cut through `line`, at most `room` below its top, that suits every child of it. Each child is asked
+/// (`child_cut`), and the lowest answer is asked again until no child lowers it. An answer is the cut asked, or
+/// the top of something in the child, so it ends. `0` when only the top of the line suits them all.
+fn line_cut(node: &Node, line: &RowLine, room: f32, full_page: bool, full_page_h: f32) -> f32 {
+    let children = &node.children[line.start..line.end];
+    let mut cut = room;
+    while cut > 0.0 {
+        let lowest = children
+            .iter()
+            .zip(&line.widths)
+            .map(|(child, &width)| child_cut(child, width, cut, full_page, full_page_h))
+            .fold(cut, f32::min);
+        if lowest + 0.01 >= cut {
+            break;
+        }
+        cut = lowest;
+    }
+    cut.max(0.0)
+}
+
+/// The highest cut at or above `y`, from the top of `node` laid out `avail_w` wide, that suits it: one where it
+/// keeps something on this page and cuts nothing it can't, or one below all of it. `0` when only its top does.
+///
+/// - A text suits any cut where `split_text` keeps a line on this page. It ends at its last whole line above the
+///   cut, so texts of different sizes side by side don't push the cut up to each other's lines.
+/// - A node that can't be split suits a cut below it. When it is taller than a page and starts at the top of a
+///   full page (`full_page`), any cut suits it: no page would hold more of it, and the bottom of the page clips it
+///   (`clip_overflow`).
+/// - A column asks the child the cut falls in, and a row the line (`column_cut`, `row_cut`).
+/// - A grid or a table ends between its rows, at the bottom of the part it would keep.
+fn child_cut(node: &Node, avail_w: f32, y: f32, full_page: bool, full_page_h: f32) -> f32 {
+    let h = measure_height(node, avail_w, full_page_h);
+    if h <= y + 0.5 {
+        return y;
+    }
+    let taller_than_page = full_page && h > full_page_h + 0.5;
+    if !splittable(node) {
+        return if taller_than_page { y } else { 0.0 };
+    }
+    match node.kind {
+        NodeKind::Column | NodeKind::Link => column_cut(node, avail_w, y, full_page, full_page_h),
+        NodeKind::Row => row_cut(node, avail_w, y, full_page, full_page_h),
+        NodeKind::Text => match split_text(node, avail_w, y, full_page_h) {
+            SplitOutcome::First(..) => y,
+            _ if taller_than_page => y,
+            _ => 0.0,
+        },
+        _ => match split_node_at(node, avail_w, y, full_page_h) {
+            SplitOutcome::First(first, _) => measure_height(&first, avail_w, full_page_h).min(y),
+            _ if taller_than_page => y,
+            _ => 0.0,
+        },
+    }
+}
+
+/// `child_cut` for a column: the cut of the child it falls in, from that child's top. A child whose only cut is
+/// its top moves the cut up to it, or keeps the column for the next page when it is the first.
+fn column_cut(node: &Node, avail_w: f32, y: f32, full_page: bool, full_page_h: f32) -> f32 {
+    let [pt, pr, pb, pl] = node.padding;
+    let inner_w      = (avail_w     - pl - pr).max(0.0);
+    let inner_target = y - pt - pb;
+    let inner_full   = (full_page_h - pt - pb).max(0.0);
+    if inner_target <= 0.0 {
+        return 0.0;
+    }
+    let mut top = 0.0_f32;
+    for (i, child) in node.children.iter().enumerate() {
+        if i > 0 {
+            top += node.gap;
+            // The cut falls between two children.
+            if inner_target <= top { return y; }
+        }
+        let h = measure_height(child, inner_w, inner_full);
+        if top + h <= inner_target + 0.5 {
+            top += h;
+            continue;
+        }
+        let cut = child_cut(child, inner_w, inner_target - top, full_page && i == 0, inner_full);
+        return if cut > 0.0 { pt + top + cut + pb } else if i == 0 { 0.0 } else { pt + top + pb };
+    }
+    y
+}
+
+/// `child_cut` for a row in a row: the cut through the line it falls in (`line_cut`). A line whose only cut is its
+/// top moves the cut up to it, or keeps the row for the next page when it is the first.
+fn row_cut(node: &Node, avail_w: f32, y: f32, full_page: bool, full_page_h: f32) -> f32 {
+    let [pt, pr, pb, pl] = node.padding;
+    let inner_w      = (avail_w     - pl - pr).max(0.0);
+    let inner_target = y - pt - pb;
+    let inner_full   = (full_page_h - pt - pb).max(0.0);
+    if inner_target <= 0.0 {
+        return 0.0;
+    }
+    let mut top = 0.0_f32;
+    for (r, line) in row_lines(node, inner_w, inner_target).iter().enumerate() {
+        if r > 0 {
+            top += node.gap;
+            // The cut falls between two lines.
+            if inner_target <= top { return y; }
+        }
+        if top + line.height <= inner_target + 0.5 {
+            top += line.height;
+            continue;
+        }
+        let cut = line_cut(node, line, inner_target - top, full_page && r == 0, inner_full);
+        return if cut > 0.0 { pt + top + cut + pb } else if r == 0 { 0.0 } else { pt + top + pb };
+    }
+    y
+}
+
+/// `child` of a line cut at `cut`: its part on this page and what is left of it, if anything, both as wide as
+/// `width`, the width the line gave it, so that the line breaks and wraps as it did. A child that ends above the
+/// cut, or can't be split there, is placed whole.
+fn cut_child(child: &Node, width: f32, cut: f32, full_page_h: f32) -> (Node, Option<Node>) {
+    if measure_height(child, width, full_page_h) > cut + 0.5 {
+        if let SplitOutcome::First(first, rest) = split_node_at(child, width, cut, full_page_h) {
+            let rest = match <[Node; 1]>::try_from(rest) {
+                Ok([rest]) => Some(rest),
+                Err(parts) if parts.is_empty() => None,
+                Err(parts) => Some(Node { kind: NodeKind::Column, children: parts, width_fill: child.width_fill, ..Node::layout_default() }),
+            };
+            return (keep_width(first, width), rest.map(|rest| keep_width(rest, width)));
+        }
+    }
+    (child.clone(), None)
+}
+
+/// An empty box `width` wide, which keeps the place of a child that ended in the row's next part.
+fn place_of(fill: bool, width: f32) -> Node {
+    keep_width(Node { kind: NodeKind::Column, width_fill: fill, ..Node::layout_default() }, width)
+}
+
+/// `node` at `width`, the width its line gave it. A fill child still fills, which comes to the same width while
+/// the others keep theirs.
+fn keep_width(node: Node, width: f32) -> Node {
+    if node.width_fill { node } else { Node { width_constraint: Some(width), ..node } }
 }
 
 // ── Table ─────────────────────────────────────────────────────────────────────
@@ -3537,6 +3830,8 @@ fn apply_debug_overlay(nodes: &mut Vec<RenderNode>) {
                     l.children.extend(child_lines);
                 }
             }
+            // The flow of a page that is cut at its bottom (`clip_overflow`).
+            RenderNode::CanvasLayer(l) => apply_debug_overlay(&mut l.children),
             _ => {}
         }
     }
