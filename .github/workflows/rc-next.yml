@@ -8,9 +8,10 @@ run-name: "${{ inputs.dry_run && 'Dry run: cut' || 'Cut' }} release candidate${{
 #
 # A tag pushed with GITHUB_TOKEN starts no workflow, so the push alone would
 # start nothing. A workflow_dispatch is the exception, which is why the last
-# step starts release.yml itself. release.yml then runs on the tag as if the
-# tag had been pushed: the `rc` environment, whose App key only RC tags may
-# use, sees the same tag either way.
+# steps start release.yml and bench.yml themselves. release.yml then runs on
+# the tag as if the tag had been pushed: the `rc` environment, whose App key
+# only RC tags may use, sees the same tag either way. bench.yml counts the RC's
+# instructions and allocations against the last release, and reports only.
 #
 # Two runs at once can't make the same RC: GitHub refuses a tag that already
 # exists, and the run that loses changes nothing.
@@ -29,7 +30,7 @@ on:
 
 permissions:
   contents: write   # push the tag
-  actions: write    # start release.yml on it
+  actions: write    # start release.yml and bench.yml on it
 
 jobs:
   cut:
@@ -84,3 +85,15 @@ jobs:
             exit 1
           fi
           echo "Started release.yml on $TAG: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/workflows/release.yml" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Start bench.yml on the tag
+        if: ${{ steps.cut.outputs.tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.cut.outputs.tag }}
+        run: |
+          if ! gh workflow run bench.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG"; then
+            echo "::error::$TAG is pushed and release.yml started, but bench.yml didn't start. Start it by hand: Actions → Bench counts → Run workflow → Use workflow from: $TAG."
+            exit 1
+          fi
+          echo "Started bench.yml on $TAG: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/workflows/bench.yml" >> "$GITHUB_STEP_SUMMARY"
