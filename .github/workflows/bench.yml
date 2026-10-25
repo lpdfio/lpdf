@@ -18,7 +18,8 @@ run-name: "${{ inputs.tags && format('Bench counts: backfill {0}', inputs.tags) 
 #                    release before it, and its counts are saved to lpdf-bench.
 #
 # A release, and each tag of a backfill, saves its counts to lpdf-bench as counts/vX.Y.Z.json, with
-# those of the release before it, measured in the same run (job "history").
+# those of the release before it, measured in the same run (job "history"), and writes
+# counts/SUMMARY.md there: a row for each release, to see how the core moved over the releases.
 
 on:
   push:
@@ -32,8 +33,8 @@ on:
 
 env:
   # A change is marked in the table when it grows more than this, in percent: instructions or
-  # estimated cycles of a whole render (end to end), or of one stage, and allocations or bytes
-  # allocated of any stage. Marks don't fail the run.
+  # estimated cycles of a whole render (end to end), or of one stage, and allocations, bytes
+  # allocated or peak memory of any stage. Marks don't fail the run.
   MARK_END_TO_END: 3
   MARK_STAGE: 10
   MARK_ALLOCATIONS: 10
@@ -57,8 +58,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Test the report
-        run: node --test scripts/bench-counts-report.test.mjs
+      - name: Test the report and the summary
+        run: node --test scripts/bench-counts-report.test.mjs scripts/bench-counts-summary.test.mjs
 
       # Writes $RUNNER_TEMP/builds.txt, a build a line: `<folder> <commit> <name>`, and reports.txt,
       # a report a line: `<history|-> <folder> <folder> [<folder>]`, the last release first.
@@ -162,7 +163,9 @@ jobs:
             mkdir -p ~/valgrind-debs
             (cd ~/valgrind-debs && apt-get download valgrind libc6-dbg)
           fi
-          sudo apt-get install -y --no-install-recommends ~/valgrind-debs/*.deb
+          # dpkg, not apt-get: given the files, apt-get downloads the same version from the archive again,
+          # which took 8 minutes on the first run.
+          sudo dpkg -i ~/valgrind-debs/*.deb
           valgrind --version
 
       # The runner gungraun's benchmarks call, of the version benches/counts/Cargo.toml pins.
@@ -290,8 +293,9 @@ jobs:
           echo "::error::Not measured:$failed"
           exit 1
 
-  # A release, and each tag of a backfill, keeps its counts in lpdf-bench. The token is a secret of the
-  # `bench-history` environment, which only main and v* tags may use, so no other branch can push there.
+  # A release, and each tag of a backfill, keeps its counts in lpdf-bench, and the summary of every
+  # release there is written again. The token is a secret of the `bench-history` environment, which
+  # only main and v* tags may use, so no other branch can push there.
   history:
     name: Save to lpdf-bench
     needs: counts
@@ -310,12 +314,19 @@ jobs:
           token: ${{ secrets.LPDF_BENCH_TOKEN }}
           path: lpdf-bench
 
+      # The script that writes the summary, of the commit this run is on.
+      - uses: actions/checkout@v5
+        with:
+          path: lpdf
+          sparse-checkout: scripts
+
       - name: Push the counts
         working-directory: lpdf-bench
         run: |
           set -eu
           mkdir -p counts
           cp ../bench-counts/history/*.json counts/
+          node ../lpdf/scripts/bench-counts-summary.mjs counts --markdown counts/SUMMARY.md
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add counts
@@ -324,7 +335,7 @@ jobs:
             exit 0
           fi
           versions=$(git diff --cached --name-only | sed -n 's|^counts/\(.*\)\.json$|\1|p' | sort -V | tr '\n' ' ')
-          git commit -m "Keep the counts of ${versions% }"
+          if [ -n "$versions" ]; then git commit -m "Keep the counts of ${versions% }"; else git commit -m "Write the summary of the counts again"; fi
           # Another run may have pushed in between: take its commit and try again.
           for _ in 1 2 3; do
             if git push origin HEAD; then exit 0; fi

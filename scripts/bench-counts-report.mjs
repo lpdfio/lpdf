@@ -9,7 +9,7 @@
 // Usage: node scripts/bench-counts-report.mjs [options] <release> [<main>] <build>
 //   --mark-end-to-end <percent>   instructions or estimated cycles of a whole render (default 3)
 //   --mark-stage <percent>        instructions or estimated cycles of one stage (default 10)
-//   --mark-allocations <percent>  allocations, or bytes allocated, of any stage (default 10)
+//   --mark-allocations <percent>  allocations, bytes allocated or peak memory of any stage (default 10)
 //   --markdown <file>             write the table there instead of to stdout
 //   --history <file>              write the counts of the last build as JSON, with the build before it as
 //                                 `against`: what lpdf-bench keeps as counts/vX.Y.Z.json
@@ -37,6 +37,9 @@ export const MEASURES = [
     { id: 'estimated_cycles', name: 'estimated cycles', tool: 'Callgrind', metric: 'EstimatedCycles', kind: 'work' },
     { id: 'allocations', name: 'allocations', tool: 'DHAT', metric: 'TotalBlocks', kind: 'memory' },
     { id: 'bytes_allocated', name: 'bytes allocated', tool: 'DHAT', metric: 'TotalBytes', kind: 'memory' },
+    // The heap the benchmark holds when the process's heap is at its highest. Not DHAT's `MaximumBytes`,
+    // which adds up each allocation site's own maximum, reached at different times.
+    { id: 'peak_bytes', name: 'peak memory', tool: 'DHAT', metric: 'AtTGmaxBytes', kind: 'memory' },
 ];
 
 export const DEFAULT_MARKS = { endToEnd: 3, stage: 10, allocations: 10 };
@@ -159,7 +162,7 @@ export function markdown(builds, rows, marks = DEFAULT_MARKS, about = {}) {
         '',
         `Builds: ${built}${about.rust ? `, all with ${about.rust}` : ''}.`,
         `Marked (⚠): instructions or estimated cycles up more than ${marks.endToEnd}% end to end or ${marks.stage}% in one stage, ` +
-            `allocations or bytes allocated up more than ${marks.allocations}%. Report only: the run passes whatever it shows.`,
+            `allocations, bytes allocated or peak memory up more than ${marks.allocations}%. Report only: the run passes whatever it shows.`,
         '',
     ];
     for (const { build, stages } of missingStages(builds)) {
