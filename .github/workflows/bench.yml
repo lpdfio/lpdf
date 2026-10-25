@@ -76,13 +76,14 @@ jobs:
           : > "$BUILDS"
           : > "$REPORTS"
 
-          # The newest release merged into <commit>, of a lower version than <version> if one is given.
+          # The newest release, of a lower version than <version> if one is given. By version, not by
+          # ancestry: the history was rewritten between v0.26.0 and v0.27.0, which share no commit.
           release_before() {
-            git tag --merged "$1" -l 'v*' | grep -E "$RELEASE_RE" \
-              | { if [ -n "${2:-}" ]; then
+            git tag -l 'v*' | grep -E "$RELEASE_RE" \
+              | { if [ -n "${1:-}" ]; then
                     while read -r t; do
-                      [ "$t" = "$2" ] && continue
-                      [ "$(printf '%s\n%s\n' "$t" "$2" | sort -V | head -n 1)" = "$t" ] && echo "$t"
+                      [ "$t" = "$1" ] && continue
+                      [ "$(printf '%s\n%s\n' "$t" "$1" | sort -V | head -n 1)" = "$t" ] && echo "$t"
                     done
                   else cat; fi; } \
               | sort -V | tail -n 1
@@ -102,7 +103,7 @@ jobs:
                 echo "::error::'$tag' is not a release tag of this repo: give tags like v0.24.0."
                 exit 1
               fi
-              before=$(release_before "$tag" "$tag")
+              before=$(release_before "$tag")
               if [ -z "$before" ]; then
                 echo "::error::$tag has no release before it to be measured against."
                 exit 1
@@ -113,7 +114,7 @@ jobs:
           elif [ "$REF_TYPE" = tag ]; then
             # An RC is measured against the release before its version; a release against the one before it.
             version=${REF_NAME%%-rc.*}
-            before=$(release_before "$GITHUB_SHA" "$version")
+            before=$(release_before "$version")
             if [ -z "$before" ]; then
               echo "::error::$REF_NAME has no release before it to be measured against."
               exit 1
@@ -125,9 +126,9 @@ jobs:
               echo "- $(build "$before" "$before") $(build "$REF_NAME" "$GITHUB_SHA")" >> "$REPORTS"
             fi
           else
-            before=$(release_before "$GITHUB_SHA")
+            before=$(release_before)
             if [ -z "$before" ]; then
-              echo "::error::$REF_NAME has no release merged into it to be measured against."
+              echo "::error::There is no release to measure $REF_NAME against."
               exit 1
             fi
             if [ "$REF_NAME" = main ]; then
