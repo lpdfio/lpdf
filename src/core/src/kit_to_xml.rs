@@ -202,7 +202,7 @@ fn render_meta(meta: &serde_json::Map<String, Value>, depth: usize) -> String {
 
 // ── Node rendering ────────────────────────────────────────────────────────────
 
-/// A `span`, whose content is strings, or an `fn`, whose content is strings and spans.
+/// A `span` or a `code-span`, whose content is strings, or an `fn`, whose content is strings and spans.
 fn render_inline(node: &Value) -> String {
     let empty = serde_json::Map::new();
     let tag    = node.get("type").and_then(|v| v.as_str()).unwrap_or("span");
@@ -230,7 +230,8 @@ fn render_inline(node: &Value) -> String {
     }
 }
 
-/// A `text`, or a layer's `text-at`, with its strings and `span` and `fn` children.
+/// A `text`, or a layer's `text-at`, with its strings and `span`, `code-span` and `fn` children. A `code` has
+/// the same content, and its strings are written as they are: its white space is what it keeps.
 fn render_text_node(node: &Value, depth: usize) -> String {
     let tag    = node.get("type").and_then(|v| v.as_str()).unwrap_or("text");
     let pad    = "  ".repeat(depth);
@@ -248,7 +249,7 @@ fn render_text_node(node: &Value, depth: usize) -> String {
         .map(|c| {
             if let Some(s) = c.as_str() {
                 escape_text(s)
-            } else if matches!(c.get("type").and_then(|v| v.as_str()), Some("span" | "fn")) {
+            } else if matches!(c.get("type").and_then(|v| v.as_str()), Some("span" | "code-span" | "fn")) {
                 render_inline(c)
             } else {
                 String::new()
@@ -267,7 +268,7 @@ fn render_node(node: &Value, depth: usize) -> String {
     let attrs_s   = attrs_str(attrs, &[]);
 
     match node_type {
-        "text"    => return render_text_node(node, depth),
+        "text" | "code" => return render_text_node(node, depth),
         "divider" | "img" | "shape" | "barcode" => return format!("{pad}<{node_type}{}/>", attrs_s),
         _ => {}
     }
@@ -795,6 +796,21 @@ mod tests {
             r#"{{"version":1,"type":"document","attrs":{{"assets":{assets}}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
                 {{"type":"layout","nodes":[{{"type":"text","attrs":{{"font":"heading"}},"nodes":["Hello"]}}]}}]}}]}}"#
         )
+    }
+
+    #[test]
+    fn a_code_and_a_code_span_render_the_same_from_a_tree_and_from_its_xml() {
+        let kit = doc_with_layout_child(
+            r##"{"type":"column","attrs":{},"nodes":[
+                {"type":"code","attrs":{"tab-size":"2","font-size":"s"},"nodes":["\nif a < b && c {\n\treturn ",
+                    {"type":"span","attrs":{"color":"#c0392b"},"nodes":["x"]},";\n}\n"]},
+                {"type":"text","attrs":{},"nodes":["Run ",{"type":"code-span","attrs":{"background":"#ffff00"},"nodes":["cargo test"]}," now"]}]}"##,
+        );
+        let xml = kit_to_xml(&kit).unwrap();
+        assert!(xml.contains("<code font-size=\"s\" tab-size=\"2\">\nif a &lt; b &amp;&amp; c {\n\treturn <span color=\"#c0392b\">x</span>;\n}\n</code>"), "{xml}");
+        assert!(xml.contains("Run <code-span background=\"#ffff00\">cargo test</code-span> now"), "{xml}");
+        let (from_tree, from_xml) = rendered_both_ways(&kit);
+        assert_eq!(from_tree, from_xml);
     }
 
     #[test]

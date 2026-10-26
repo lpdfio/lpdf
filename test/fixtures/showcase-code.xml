@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+      <color name="keyword" value="#c0392b" />
+      <color name="string"  value="#1e8449" />
+      <color name="type"    value="#7d3c98" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Code" subject="Code that keeps its spaces and lines, in a box or in a line of text" />
+
+    <!-- A <code> keeps its text as it is written: every space, every line, and the blank lines between them. The box
+         fills the width and grows with its lines, in Courier on a light tint with padding m. An inline <code-span>
+         is the same look inside a line of text.
+         Expected, on the page, from the top:
+           1  the title and a sentence with two inline code-spans, wrapped over two lines
+           2  "A block" — a code box of eight lines: the indent of each line is kept, a blank line stands between
+              `let total` and `println`, and the closing brace is at the left edge
+           3  "Words in color" — the same shape with three colors: keywords red, strings green, types purple
+           4  "Long lines wrap" — a box 300pt wide: a comment wraps at a space, and an address with no space in it
+              breaks at the right edge and goes on in the next line; nothing is cut off
+           5  "Tabs" — two boxes of the same text with a tab in it: the first fills the tab to the next multiple of 4
+              columns, the second (tab-size="8") to the next multiple of 8
+           6  "A look of its own" — smaller type, a white box with a border and rounded corners, no tint
+           7  "In a sentence" — a paragraph that wraps with code-spans in it, one with its own color and tint
+         The whole page fits on one page: the showcase of a code that splits across pages is showcase-code-split.
+    -->
+    <section>
+      <layout margin="40pt">
+        <column gap="s">
+          <text font-size="xxl" font="Helvetica-Bold" color="primary">Code</text>
+          <text font-size="m" color="muted">Run <code-span>cargo test</code-span> before you push, and open the <code-span>README.md</code-span> in the repository for how to read what it prints.</text>
+
+          <text font-size="l" font="Helvetica-Bold">A block</text>
+          <code>
+fn main() {
+    let items = [3, 5, 8];
+    let total: i32 = items.iter().sum();
+
+    println!("total = {}", total);
+}
+          </code>
+
+          <text font-size="l" font="Helvetica-Bold">Words in color</text>
+          <code>
+<span color="keyword">fn</span> <span color="type">greeting</span>(name: <span color="type">&amp;str</span>) -> <span color="type">String</span> {
+    <span color="keyword">let</span> text = <span color="string">"hello, "</span>.to_string() + name;
+    <span color="keyword">return</span> text;
+}
+          </code>
+
+          <text font-size="l" font="Helvetica-Bold">Long lines wrap</text>
+          <code width="300pt">
+// A comment that is longer than the box wraps at a space, and the next line starts at the left edge.
+let url = "https://example.com/documents/2026/10/25/a-very-long-address-with-no-space-in-it-at-all/index.html";
+          </code>
+
+          <text font-size="l" font="Helvetica-Bold">Tabs</text>
+          <code>
+name	value
+a	1
+bcd	2
+          </code>
+          <code tab-size="8">
+name	value
+a	1
+bcd	2
+          </code>
+
+          <text font-size="l" font="Helvetica-Bold">A look of its own</text>
+          <code font-size="s" background="#ffffff" border="1pt #c8ccd2" radius="m" padding="l">
+SELECT name, total
+  FROM invoices
+ WHERE total &gt; 100
+ ORDER BY total DESC;
+          </code>
+
+          <text font-size="l" font="Helvetica-Bold">In a sentence</text>
+          <text>A code-span stays inside its line, like <code-span>let x = 1;</code-span> here, and a line that is long enough wraps around it. One has colors of its own, <code-span color="#ffffff" background="#1763cf">white on blue</code-span>, and the text goes on after it.</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

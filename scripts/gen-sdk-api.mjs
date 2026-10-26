@@ -36,8 +36,8 @@ const SDK = {
 
 // `where` is how the schema declares the element (see loadSchema); `area` is the folder it lives in.
 const CLASSES = [
-    ...['column', 'row', 'grid', 'frame', 'link', 'divider', 'span', 'img', 'shape', 'barcode',
-        'text', 'td', 'thead', 'tr', 'table', 'field', 'bookmark'].map((el) => ({ cls: `${pascal(el)}Attr`, el, where: 'global', area: 'layout' })),
+    ...['column', 'row', 'grid', 'frame', 'link', 'divider', 'span', 'code-span', 'img', 'shape', 'barcode',
+        'text', 'code', 'td', 'thead', 'tr', 'table', 'field', 'bookmark'].map((el) => ({ cls: `${pascal(el)}Attr`, el, where: 'global', area: 'layout' })),
     { cls: 'RegionAttr', el: 'region', where: 'layout', area: 'layout' },
     { cls: 'LayerAttr', el: 'layer', where: 'global', area: 'canvas' },
     ...['rect', 'circle', 'ellipse', 'line', 'path', 'text-at', 'img-at', 'barcode-at']

@@ -82,6 +82,7 @@ const UNTESTED: &[(&str, &str)] = &[
     ("row@paginate", PAGINATE),
     ("grid@paginate", PAGINATE),
     ("frame@paginate", PAGINATE),
+    ("code@paginate", PAGINATE),
     ("td@paginate", PAGINATE),
     ("text@paginate", PAGINATE),
     ("img@paginate", PAGINATE),
@@ -89,6 +90,8 @@ const UNTESTED: &[(&str, &str)] = &[
     ("table@paginate", PAGINATE),
     ("text@widows", WIDOWS_AND_ORPHANS),
     ("text@orphans", WIDOWS_AND_ORPHANS),
+    ("code@widows", WIDOWS_AND_ORPHANS),
+    ("code@orphans", WIDOWS_AND_ORPHANS),
 ];
 
 /// Why `paginate` is untested here, which is the same for every element that has it.
@@ -121,6 +124,9 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
         ("text@capture", &["k"]),
         ("text@capture-ref", &["k"]),
         ("text@capture-fallback", &["Soon"]),
+        // Courier is what a code and a code-span are set in unless they say otherwise.
+        ("code@font", &["Times-Roman"]),
+        ("code-span@font", &["Times-Roman"]),
     ];
     if let Some((_, values)) = by_id.iter().find(|(key, _)| *key == id) {
         return Some(values);
@@ -446,6 +452,9 @@ fn pages() -> String {
 
 const NOTE: &str = "<text>Last<fn>The last note.</fn></text>";
 
+/// Code with a tab, an indent and a line that wraps in a narrow box.
+const CODE: &str = "if ready {\n\treturn compute(first_argument, second_argument, third_argument, fourth_argument);\n}";
+
 /// Enough text for four pages, with a footnote on the first line of three of them, for the numbers of the notes.
 fn noted_pages() -> String {
     (1..=200)
@@ -557,6 +566,7 @@ fn subjects() -> Vec<Subject> {
         Subject::new("row", |a, c| boxed("row", a, c)).content(TWO),
         Subject::new("grid", |a, c| boxed("grid", a, c)).base(&[("cols", "2")]).content(FOUR),
         Subject::new("frame", |a, c| boxed("frame", a, c)).content(ONE),
+        Subject::new("code", |a, c| boxed("code", a, c)).content(CODE),
         Subject::new("link", |a, c| boxed("link", a, c)).base(&[("href", "https://a.example")]).content(TWO),
         // A bookmark shows in the outline. One before it gives a level something to nest under.
         Subject::new("bookmark", |a, c| flow(&format!(r#"<bookmark label="First"/><text>Zero</text><bookmark {a}/>{c}"#)))
@@ -565,6 +575,7 @@ fn subjects() -> Vec<Subject> {
         // Layout leaves.
         Subject::new("divider", |a, _| flow(&format!("<text>Before</text><divider {a}/><text>After</text>"))),
         Subject::new("span", |a, _| flow(&format!("<text>Before <span {a}>middle</span> after</text>"))),
+        Subject::new("code-span", |a, _| flow(&format!("<text>Before <code-span {a}>middle</code-span> after</text>"))),
         Subject::new("img", |a, _| flow_with_images(&format!("<img {a}/><text>After</text>"))).base(&[("name", "logo")]),
         Subject::new("shape", |a, _| flow(&format!("<shape {a}/><text>After</text>")))
             .base(&[("type", "rect"), ("width", "100pt"), ("height", "40pt"), ("fill", "#00aa00")]),
