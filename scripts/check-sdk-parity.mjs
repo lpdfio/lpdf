@@ -36,9 +36,9 @@ const EXPECTED = {
     RegionAttr: attributes('region', 'layout'),
     LayerAttr: attributes('layer'),
 };
-for (const element of ['column', 'row', 'grid', 'frame', 'link', 'divider', 'span', 'img',
-    'shape', 'barcode', 'text', 'td', 'thead', 'tr', 'table', 'field', 'bookmark']) {
-    EXPECTED[`${element[0].toUpperCase()}${element.slice(1)}Attr`] = attributes(element);
+for (const element of ['column', 'row', 'grid', 'frame', 'link', 'divider', 'span', 'code-span', 'img',
+    'shape', 'barcode', 'text', 'code', 'td', 'thead', 'tr', 'table', 'field', 'bookmark']) {
+    EXPECTED[`${element.split('-').map((word) => word[0].toUpperCase() + word.slice(1)).join('')}Attr`] = attributes(element);
 }
 for (const element of ['rect', 'circle', 'ellipse', 'line', 'path', 'text-at', 'img-at', 'barcode-at']) {
     EXPECTED[`${element.split('-').map((word) => word[0].toUpperCase() + word.slice(1)).join('')}Attr`] = attributes(element);
