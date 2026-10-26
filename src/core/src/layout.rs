@@ -258,14 +258,14 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
 
     // Fast path: no chrome — standard pagination.
     if top_chrome.is_empty() && bot_chrome.is_empty() {
-        let chunks = footnotes::split_flow(&flow, avail_w, avail_h, avail_h, page.footnote_counter, has_notes);
+        let chunks = footnotes::split_flow(&flow, avail_w, avail_h, avail_h, page.gap, page.footnote_counter, has_notes);
         return chunks
             .into_iter()
             .map(|chunk| {
                 let room = avail_h - chunk.reserve;
                 let (nodes, used) = layout_column(
                     &chunk.nodes, avail_x, avail_y, avail_w, Some(room),
-                    0.0, &Align::Stretch, &Justify::Start,
+                    page.gap, &Align::Stretch, &Justify::Start,
                 );
                 let mut nodes = clip_overflow(nodes, used, avail_y + room, room, page.width);
                 nodes.extend(footnotes::draw_area(&chunk.notes, avail_x, avail_y + avail_h, avail_w, avail_h));
@@ -292,7 +292,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
     let budget_rest  = (avail_h - top_always_h - bot_always_h).max(0.0);
 
     // ── Paginate flow with per-page budgets ──────────────────────────────────
-    let chunks = footnotes::split_flow(&flow, avail_w, budget_first, budget_rest, page.footnote_counter, has_notes);
+    let chunks = footnotes::split_flow(&flow, avail_w, budget_first, budget_rest, page.gap, page.footnote_counter, has_notes);
     let total_pages = chunks.len();
 
     // ── Build each output page ───────────────────────────────────────────────
@@ -340,7 +340,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
         let room = flow_budget - chunk.reserve;
         let (flow_nodes, used) = layout_column(
             &chunk.nodes, avail_x, flow_y, avail_w, Some(room),
-            0.0, &Align::Stretch, &Justify::Start,
+            page.gap, &Align::Stretch, &Justify::Start,
         );
         let flow_nodes = clip_overflow(flow_nodes, used, flow_y + room, room, page.width);
 

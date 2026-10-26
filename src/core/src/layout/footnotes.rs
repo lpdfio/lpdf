@@ -103,11 +103,12 @@ pub(super) fn split_flow(
     avail_w:      f32,
     budget_first: f32,
     budget_rest:  f32,
+    gap:          f32,
     counter:      FootnoteCounter,
     has_notes:    bool,
 ) -> Vec<FlowPage> {
     if !has_notes {
-        return split_into_pages(flow, avail_w, budget_first, budget_rest, 0.0)
+        return split_into_pages(flow, avail_w, budget_first, budget_rest, gap)
             .into_iter()
             .map(|nodes| FlowPage { nodes, notes: Vec::new(), reserve: 0.0 })
             .collect();
@@ -116,7 +117,7 @@ pub(super) fn split_flow(
     let mut pages: Vec<FlowPage> = Vec::new();
     while !pending.is_empty() {
         let budget = if pages.is_empty() { budget_first } else { budget_rest };
-        pages.push(settle_page(&mut pending, avail_w, budget, budget_rest, counter));
+        pages.push(settle_page(&mut pending, avail_w, budget, budget_rest, gap, counter));
     }
     pages
 }
@@ -130,9 +131,9 @@ struct Fill<'a> {
 }
 
 /// Fill the next page with `reserve` kept back for notes.
-fn fill<'a>(pending: &Pending<'a>, avail_w: f32, budget: f32, next_budget: f32, counter: FootnoteCounter, reserve: f32) -> Fill<'a> {
+fn fill<'a>(pending: &Pending<'a>, avail_w: f32, budget: f32, next_budget: f32, gap: f32, counter: FootnoteCounter, reserve: f32) -> Fill<'a> {
     let mut rest = pending.clone();
-    let mut nodes = fill_page(&mut rest, avail_w, (budget - reserve).max(0.0), next_budget, 0.0);
+    let mut nodes = fill_page(&mut rest, avail_w, (budget - reserve).max(0.0), next_budget, gap);
     let notes = take_notes(&mut nodes, counter);
     let area = area_height(&notes, avail_w, budget);
     Fill { rest, nodes, notes, area }
@@ -145,8 +146,8 @@ fn fill<'a>(pending: &Pending<'a>, avail_w: f32, budget: f32, next_budget: f32, 
 /// The room fits when `k(j) <= j`, and `j = n` always does. The tightest page is the least `j` that fits, which this
 /// looks for in two steps after the fill with `j = n`, for four fills at most: the `j` that fill held, and if its
 /// notes did not fit, the number it held, which does.
-fn settle_page(pending: &mut Pending, avail_w: f32, budget: f32, next_budget: f32, counter: FootnoteCounter) -> FlowPage {
-    let first = fill(pending, avail_w, budget, next_budget, counter, 0.0);
+fn settle_page(pending: &mut Pending, avail_w: f32, budget: f32, next_budget: f32, gap: f32, counter: FootnoteCounter) -> FlowPage {
+    let first = fill(pending, avail_w, budget, next_budget, gap, counter, 0.0);
     if first.area <= 0.0 {
         *pending = first.rest;
         return FlowPage { nodes: first.nodes, notes: first.notes, reserve: 0.0 };
@@ -155,7 +156,7 @@ fn settle_page(pending: &mut Pending, avail_w: f32, budget: f32, next_budget: f3
     // Fill with the room the first `j` notes of the first fill need.
     let with_room = |j: usize| {
         let reserve = area_height(&first.notes[..j], avail_w, budget);
-        (fill(pending, avail_w, budget, next_budget, counter, reserve), reserve)
+        (fill(pending, avail_w, budget, next_budget, gap, counter, reserve), reserve)
     };
     let fits = |(fill, reserve): &(Fill, f32)| fill.area <= *reserve + 0.01;
 
@@ -163,7 +164,7 @@ fn settle_page(pending: &mut Pending, avail_w: f32, budget: f32, next_budget: f3
     if !fits(&chosen) {
         // Not a start of the first fill after all: keep back what this one needs, and take the result as it is.
         let reserve = chosen.0.area;
-        chosen = (fill(pending, avail_w, budget, next_budget, counter, reserve), reserve);
+        chosen = (fill(pending, avail_w, budget, next_budget, gap, counter, reserve), reserve);
     } else if chosen.0.notes.len() < n {
         let held = chosen.0.notes.len();
         let tight = with_room(held);

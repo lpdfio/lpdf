@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use crate::tokens::{parse_factor, parse_opacity, parse_pt, FontDef, FontWidths, Gradient, GradientSpec, Tokens};
 use crate::canvas;
+use crate::markdown;
 use crate::layout::{Held, Placed};
 
 // ── Resolved document model (layout / render operate on these) ────────────────
@@ -32,6 +33,9 @@ impl Document {
     /// Each section's layout child is converted to one `SectionLayout`.  Its layers are
     /// collected into `underlays` (before the layout) or `overlays` (after) per document order.
     pub fn section_layouts(&mut self) -> Vec<SectionLayout> {
+        // A Markdown that came from data nobody supplied shows the text it stands in with. It was read with the
+        // document, so this does not fail.
+        let _ = markdown::expand_pending(&mut self.sections, None, markdown::Pass::Rest);
         let mut result = Vec::new();
         let mut document_notes = 0u32;
         for section in std::mem::take(&mut self.sections) {
@@ -48,12 +52,14 @@ impl Document {
             let mut overlays:  Vec<canvas::CanvasLayer> = Vec::new();
             // Only the flow keeps to a margin, so a section of layers alone has none.
             let mut margin = [0.0_f32; 4];
+            let mut gap = 0.0_f32;
             let mut seen_layout = false;
             for sc in section.children {
                 match sc {
-                    SectionChild::Layout { margin: layout_margin, children: layout_children } => {
+                    SectionChild::Layout { margin: layout_margin, gap: layout_gap, children: layout_children } => {
                         seen_layout = true;
                         margin = layout_margin;
+                        gap = layout_gap;
                         // The layout takes the children in front of the flow as the header and the ones behind it
                         // as the footer, so `pin` is applied here, wherever the region is written.
                         let (mut top, mut bottom, mut middle) = (Vec::new(), Vec::new(), Vec::new());
@@ -94,7 +100,7 @@ impl Document {
                 document_notes += children.iter().map(count_footnotes).sum::<u32>();
             }
             result.push(SectionLayout {
-                width, height, margin, background: bg, debug, children, underlays, overlays,
+                width, height, margin, gap, background: bg, debug, children, underlays, overlays,
                 bookmark: section.bookmark,
                 toc: section.options.toc,
                 footnote_counter, footnote_start,
@@ -161,8 +167,9 @@ pub enum LayoutChild {
 
 #[derive(Debug, Clone)]
 pub enum SectionChild {
-    /// The flow, and the margin it keeps from the page edges: top, right, bottom, left.
-    Layout { margin: [f32; 4], children: Vec<LayoutChild> },
+    /// The flow, the margin it keeps from the page edges (top, right, bottom, left) and the space between the
+    /// nodes that stand directly in it, which only a `<markdown>` sets.
+    Layout { margin: [f32; 4], gap: f32, children: Vec<LayoutChild> },
     Layer(canvas::CanvasLayer),
 }
 
@@ -240,6 +247,8 @@ pub struct SectionLayout {
     pub width: f32,
     pub height: f32,
     pub margin: [f32; 4], // the layout's: top, right, bottom, left
+    /// The space between the nodes that stand directly in the flow.
+    pub gap: f32,
     pub background: Option<String>,
     pub debug: bool,
     pub children: Vec<Node>,
@@ -487,6 +496,8 @@ pub struct ListSpec {
 pub enum Detail {
     Shape(Shape),
     List(ListSpec),
+    /// A `<markdown>` until `markdown::expand` turns it into the nodes of the layout.
+    Markdown(Box<crate::markdown::MarkdownSpec>),
 }
 
 /// One element of the layout. Every node has every field, whatever its kind, and parse and data binding copy
@@ -644,6 +655,9 @@ pub enum NodeKind {
     List,
     /// An `<li>`. It becomes a row of its marker and its content, with the list.
     ListItem,
+    /// A `<markdown>`. It becomes the nodes of its Markdown once the text is known (`markdown::expand`), so the
+    /// layout never sees it.
+    Markdown,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -719,7 +733,7 @@ pub enum TextAlign {
 /// resolved.  `font` and `font_size` may be `None` (meaning "inherit from
 /// parent").  Font resolution happens in `resolve_node` during section parsing.
 /// concrete `Node` values.
-struct ParsedNode {
+pub(crate) struct ParsedNode {
     kind: NodeKind,
     gap: f32,
     padding: [f32; 4],
@@ -865,7 +879,7 @@ impl ParsedNode {
 /// - `Ref("montserrat")`      → `"montserrat"` (the registry key)
 /// - Unknown name             → the name itself (may be a bare builtin like
 ///   `"Helvetica"` used directly without an assets declaration)
-fn resolve_font_alias(name: &str, fonts: &HashMap<String, FontDef>) -> String {
+pub(crate) fn resolve_font_alias(name: &str, fonts: &HashMap<String, FontDef>) -> String {
     match fonts.get(name) {
         Some(FontDef::Core(builtin)) => builtin.clone(),
         Some(FontDef::Ref(key))      => key.clone(),
@@ -889,6 +903,7 @@ const DEFAULT_FONT_SIZE: f32 = 11.0;
 const DEFAULT_TEXT_COLOR: &str = "#1a1a1a";
 
 /// What a text is set in unless it, a box around it or the layer it is in says otherwise.
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct TextDefaults {
     pub font:  String,
     pub size:  f32,
@@ -897,7 +912,7 @@ pub(crate) struct TextDefaults {
 
 impl TextDefaults {
     /// The defaults of a section: the document's font, 11pt and the `text` color.
-    fn of_section(doc_font: Option<&str>, tokens: &Tokens, fonts: &HashMap<String, FontDef>) -> Self {
+    pub(crate) fn of_section(doc_font: Option<&str>, tokens: &Tokens, fonts: &HashMap<String, FontDef>) -> Self {
         TextDefaults {
             font:  section_root_font(doc_font, fonts),
             size:  DEFAULT_FONT_SIZE,
@@ -975,7 +990,7 @@ impl Node {
 
 /// The bold face of a built-in font. A font with no bold face, a custom font or one that is already
 /// bold, comes back unchanged.
-fn bold_variant(font: &str) -> String {
+pub(crate) fn bold_variant(font: &str) -> String {
     match font {
         "Helvetica"         => "Helvetica-Bold",
         "Helvetica-Oblique" => "Helvetica-BoldOblique",
@@ -1105,6 +1120,18 @@ fn resolve_node(
 // ── Main parse entry point (XML) ─────────────────────────────────────────────
 
 pub fn parse(xml: &str) -> Result<Document, String> {
+    parse_with(xml, &Resources::default())
+}
+
+/// What whoever renders a document loads for it, besides the fonts and images: the files that a
+/// `<markdown-styles src>` names, by the `src` they were loaded for.
+#[derive(Debug, Clone, Default)]
+pub struct Resources {
+    pub markdown_styles: HashMap<String, String>,
+}
+
+/// Parse `xml` with the files its `src` attributes name loaded in `resources`.
+pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> {
     let doc = roxmltree::Document::parse(xml)
         .map_err(|e| format!("XML parse error: {e}"))?;
 
@@ -1119,9 +1146,10 @@ pub fn parse(xml: &str) -> Result<Document, String> {
     // ── Pass 0: collect <assets> ─────────────────────────────────────────────
     let mut asset_fonts:  HashMap<String, FontDef>   = HashMap::new();
     let mut asset_images: HashMap<String, String>     = HashMap::new();
+    let mut image_srcs:   HashMap<String, String>     = HashMap::new();
     for child in elems(&root) {
         if child.tag_name().name() == "assets" {
-            parse_assets_elem(&child, &mut asset_fonts, &mut asset_images)?;
+            parse_assets_elem(&child, &mut asset_fonts, &mut asset_images, &mut image_srcs)?;
         }
     }
 
@@ -1133,6 +1161,7 @@ pub fn parse(xml: &str) -> Result<Document, String> {
         }
     }
 
+    let markdown_assets = markdown::Assets { image_srcs, styles_files: resources.markdown_styles.clone() };
     let mut meta          = Meta::default();
     let mut doc_size      = (595.28_f32, 841.89_f32); // a4
     let mut doc_background: Option<String> = None;
@@ -1184,6 +1213,7 @@ pub fn parse(xml: &str) -> Result<Document, String> {
                                 &tokens,
                                 &asset_fonts,
                                 &asset_images,
+                                &markdown_assets,
                             )?);
                         }
                         other => return Err(format!(
@@ -1198,6 +1228,7 @@ pub fn parse(xml: &str) -> Result<Document, String> {
                         node_loc(&child)
                     ));
                 }
+                markdown::expand_pending(&mut sections_xml, None, markdown::Pass::Read)?;
                 check_sections(&mut sections_xml)?;
                 let mut resolved_fonts: HashMap<String, FontDef> = HashMap::new();
                 for (_alias, def) in &asset_fonts {
@@ -1285,10 +1316,11 @@ fn tree_asset_entries<'a>(
 /// Read the `assets` of a kit tree into the same maps the XML parser fills from `<assets>`. A font
 /// may also carry `widths`, glyph advance widths for layout, which XML has no attribute for.
 fn parse_tree_assets(
-    assets: &serde_json::Map<String, serde_json::Value>,
-    fonts:  &mut HashMap<String, FontDef>,
-    images: &mut HashMap<String, String>,
-    widths: &mut HashMap<String, FontWidths>,
+    assets:     &serde_json::Map<String, serde_json::Value>,
+    fonts:      &mut HashMap<String, FontDef>,
+    images:     &mut HashMap<String, String>,
+    image_srcs: &mut HashMap<String, String>,
+    widths:     &mut HashMap<String, FontWidths>,
 ) -> Result<(), String> {
     for font in tree_asset_entries(assets, "fonts")? {
         let name = tree_asset_name(font, "fonts")?;
@@ -1307,6 +1339,7 @@ fn parse_tree_assets(
     for image in tree_asset_entries(assets, "images")? {
         let name = tree_asset_name(image, "images")?;
         let key = image.get("ref").and_then(|v| v.as_str()).unwrap_or(&name).to_string();
+        if let Some(src) = image.get("src").and_then(|v| v.as_str()) { image_srcs.insert(src.to_string(), name.clone()); }
         images.insert(name, key);
     }
     Ok(())
@@ -1328,6 +1361,7 @@ fn parse_assets_elem(
     elem:         &roxmltree::Node,
     fonts:        &mut HashMap<String, FontDef>,
     images:       &mut HashMap<String, String>,
+    image_srcs:   &mut HashMap<String, String>,
 ) -> Result<(), String> {
     for child in elems(elem) {
         match child.tag_name().name() {
@@ -1347,7 +1381,9 @@ fn parse_assets_elem(
                 let name = req_attr(&child, "name")?;
                 validate_asset_name(&name)?;
                 let key = child.attribute("ref").unwrap_or(&name).to_string();
-                // src is an adapter-level hint only — ignored by the Rust parser.
+                // src is an adapter-level hint, which loads the file. The parser keeps it only to say which asset a
+                // Markdown image is, when the Markdown names the file.
+                if let Some(src) = child.attribute("src") { image_srcs.insert(src.to_string(), name.clone()); }
                 images.insert(name, key);
             }
             other => return Err(format!("<{}>{}: unknown element in <assets>", other, node_loc(&child))),
@@ -1495,7 +1531,7 @@ fn apply_page_overrides(
 }
 
 /// The margin a `<layout>` keeps from the page edges: its `margin`, or the default on every side.
-fn layout_margin(a: &impl Attrs, tokens: &Tokens) -> Result<[f32; 4], String> {
+pub(crate) fn layout_margin(a: &impl Attrs, tokens: &Tokens) -> Result<[f32; 4], String> {
     match a.get("margin") {
         Some(v) => tokens.resolve_spacing(v),
         None    => Ok([DEFAULT_LAYOUT_MARGIN; 4]),
@@ -1644,7 +1680,7 @@ pub fn parse_shadow(val: &str, tokens: &Tokens) -> Result<Shadow, String> {
 /// where we haven't yet done the full resolve_doc pass).  The caller should use
 /// `resolve_doc` for proper font inheritance; this is only used to convert
 /// `ParsedNode` → `Node` when the context font is already known to be the default.
-fn resolve_parsed_node(
+pub(crate) fn resolve_parsed_node(
     n:     ParsedNode,
     text:  &TextDefaults,
     fonts: &HashMap<String, FontDef>,
@@ -1696,6 +1732,12 @@ const CANVAS_REMOVED: &str =
 /// What to write instead of a second `<layout>` in a section.
 const SECOND_LAYOUT: &str = "a <section> has at most one <layout>; put all of its flowing content in the first one";
 
+/// What to write instead of a `<layout>` and a `<markdown>` in one section.
+const ONE_FLOW: &str = "a <section> has one <layout> or one <markdown>, not both; put the Markdown in a section of its own";
+
+/// Why a table of contents section can't hold a `<markdown>`.
+const NO_MARKDOWN_IN_TOC: &str = "a table of contents section is laid out from its <layout>; put the Markdown in a section of its own";
+
 #[allow(clippy::too_many_arguments)]
 fn parse_section_elem(
     elem:           &roxmltree::Node,
@@ -1706,6 +1748,7 @@ fn parse_section_elem(
     tokens:         &Tokens,
     asset_fonts:    &HashMap<String, FontDef>,
     asset_images:   &HashMap<String, String>,
+    markdown:       &markdown::Assets,
 ) -> Result<Section, String> {
     if elem.attribute("margin").is_some() {
         return Err(format!("<section>{}: {MARGIN_MOVED}", node_loc(elem)));
@@ -1725,11 +1768,26 @@ fn parse_section_elem(
 
     let mut children: Vec<SectionChild> = Vec::new();
     let mut bookmark: Option<Bookmark> = None;
+    let mut has_markdown = false;
     for child in elems(elem) {
         match child.tag_name().name() {
+            "markdown" => {
+                if children.iter().any(|c| matches!(c, SectionChild::Layout { .. })) {
+                    return Err(format!("<markdown>{}: {ONE_FLOW}", node_loc(&child)));
+                }
+                if toc.is_some() {
+                    return Err(format!("<markdown>{}: {NO_MARKDOWN_IN_TOC}", node_loc(&child)));
+                }
+                has_markdown = true;
+                let cx = markdown::SectionContext {
+                    tokens, fonts: asset_fonts, images: asset_images, image_srcs: &markdown.image_srcs,
+                    defaults: &text, styles_files: &markdown.styles_files,
+                };
+                children.push(markdown::parse_elem(&child, &cx)?);
+            }
             "layout" => {
                 if children.iter().any(|c| matches!(c, SectionChild::Layout { .. })) {
-                    return Err(format!("<layout>{}: {SECOND_LAYOUT}", node_loc(&child)));
+                    return Err(format!("<layout>{}: {}", node_loc(&child), if has_markdown { ONE_FLOW } else { SECOND_LAYOUT }));
                 }
                 let margin = layout_margin(&child, tokens).map_err(|e| format!("<layout>{}: {e}", node_loc(&child)))?;
                 // Inline layout: build a Layout from its children (may include <region>).
@@ -1747,7 +1805,7 @@ fn parse_section_elem(
                     }
                 }
                 pending.finish("layout").map_err(|e| format!("<layout>{}: {e}", node_loc(&child)))?;
-                children.push(SectionChild::Layout { margin, children: lc });
+                children.push(SectionChild::Layout { margin, gap: 0.0, children: lc });
             }
             "layer" => {
                 let ctx = canvas::LayerContext {
@@ -1767,7 +1825,7 @@ fn parse_section_elem(
                 bookmark = Some(xml_bookmark(&child)?);
             }
             other => return Err(format!(
-                "<{}>{}: unexpected child in <section> — expected <bookmark>, <layer> or <layout>",
+                "<{}>{}: unexpected child in <section> — expected <bookmark>, <layer>, <layout> or <markdown>",
                 other, node_loc(&child)
             )),
         }
@@ -1794,7 +1852,7 @@ fn parse_section_elem(
     })
 }
 
-fn xml_bookmark(elem: &roxmltree::Node) -> Result<Bookmark, String> {
+pub(crate) fn xml_bookmark(elem: &roxmltree::Node) -> Result<Bookmark, String> {
     parse_bookmark(elem).map_err(|e| format!("<bookmark>{}: {e}", node_loc(elem)))
 }
 
@@ -1812,7 +1870,7 @@ fn replaced_element_hint(tag: &str) -> Option<&'static str> {
     }
 }
 
-fn parse_node(
+pub(crate) fn parse_node(
     elem:         &roxmltree::Node,
     tokens:       &Tokens,
     asset_images: &HashMap<String, String>,
@@ -2531,20 +2589,20 @@ fn slug(label: &str) -> String {
 
 /// The bookmarks read in a list of children, waiting for the element they mark.
 #[derive(Default)]
-struct PendingBookmarks(Vec<Bookmark>);
+pub(crate) struct PendingBookmarks(Vec<Bookmark>);
 
 impl PendingBookmarks {
-    fn push(&mut self, bookmark: Bookmark) {
+    pub(crate) fn push(&mut self, bookmark: Bookmark) {
         self.0.push(bookmark);
     }
 
     /// Hand the waiting bookmarks to `node`, the element that follows them.
-    fn attach(&mut self, node: &mut ParsedNode) {
+    pub(crate) fn attach(&mut self, node: &mut ParsedNode) {
         node.bookmarks.append(&mut self.0);
     }
 
     /// Fails when bookmarks are left at the end of `container`, with no element after them to mark.
-    fn finish(self, container: &str) -> Result<(), String> {
+    pub(crate) fn finish(self, container: &str) -> Result<(), String> {
         match self.0.first() {
             None           => Ok(()),
             Some(bookmark) => Err(format!(
@@ -2580,7 +2638,7 @@ fn check_sections(sections: &mut [Section]) -> Result<(), String> {
 
 /// Settle bookmark ids in source order. Two explicit ids that are the same are an error. An id made from a
 /// label takes a `-2`, `-3`… suffix when an explicit id or an earlier bookmark has it.
-fn assign_bookmark_ids(sections: &mut [Section]) -> Result<(), String> {
+pub(crate) fn assign_bookmark_ids(sections: &mut [Section]) -> Result<(), String> {
     let mut bookmarks: Vec<&mut Bookmark> = Vec::new();
     for section in sections.iter_mut() {
         bookmarks.extend(section.bookmark.as_mut());
@@ -2694,7 +2752,7 @@ pub(crate) fn jattr<'a>(json: &'a serde_json::Value, key: &str) -> Option<&'a st
 
 /// Uniform attribute lookup over both XML element and JSON object nodes,
 /// so shared node-construction helpers can work with either input format.
-trait Attrs {
+pub(crate) trait Attrs {
     fn get(&self, key: &str) -> Option<&str>;
 }
 
@@ -2702,7 +2760,7 @@ impl<'a, 'b> Attrs for roxmltree::Node<'a, 'b> {
     fn get(&self, key: &str) -> Option<&str> { self.attribute(key) }
 }
 
-struct JsonAttrs<'a>(&'a serde_json::Value);
+pub(crate) struct JsonAttrs<'a>(pub &'a serde_json::Value);
 
 impl<'a> Attrs for JsonAttrs<'a> {
     fn get(&self, key: &str) -> Option<&str> { jattr(self.0, key) }
@@ -2922,7 +2980,7 @@ fn apply_layout_kind_attrs(
             apply_capture_attrs(node, a)?;
         }
         NodeKind::List => apply_list_attrs(node, a, tokens)?,
-        NodeKind::ListItem => {}
+        NodeKind::ListItem | NodeKind::Markdown => {}
         NodeKind::Link | NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field => {}
     }
     Ok(())
@@ -3261,6 +3319,11 @@ fn apply_field_attrs(
 
 /// Parse a JSON document tree (produced by `LpdfKit`) into a `Document`.
 pub fn parse_tree(json: &str) -> Result<Document, String> {
+    parse_tree_with(json, &Resources::default())
+}
+
+/// Parse a kit tree with the files its `src` attributes name loaded in `resources`.
+pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, String> {
     let root: serde_json::Value = serde_json::from_str(json)
         .map_err(|e| format!("JSON parse error: {e}"))?;
 
@@ -3280,9 +3343,11 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     let mut asset_fonts:       HashMap<String, FontDef>   = HashMap::new();
     let mut asset_images:      HashMap<String, String>     = HashMap::new();
     let mut asset_font_widths: HashMap<String, FontWidths> = HashMap::new();
+    let mut image_srcs:        HashMap<String, String>     = HashMap::new();
     if let Some(assets) = attrs.get("assets").and_then(|v| v.as_object()) {
-        parse_tree_assets(assets, &mut asset_fonts, &mut asset_images, &mut asset_font_widths)?;
+        parse_tree_assets(assets, &mut asset_fonts, &mut asset_images, &mut image_srcs, &mut asset_font_widths)?;
     }
+    let markdown_assets = markdown::Assets { image_srcs, styles_files: resources.markdown_styles.clone() };
 
     // ── Tokens ────────────────────────────────────────────────────────────────
     let mut tokens = Tokens::default();
@@ -3341,12 +3406,13 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
     for sec_json in nodes_arr {
         sections.push(parse_tree_section(
             sec_json, doc_size, doc_background.clone(),
-            doc_debug, doc_font, &tokens, &asset_fonts, &asset_images,
+            doc_debug, doc_font, &tokens, &asset_fonts, &asset_images, &markdown_assets,
         )?);
     }
     if sections.is_empty() {
         return Err("document must have at least one section".into());
     }
+    markdown::expand_pending(&mut sections, None, markdown::Pass::Read)?;
     check_sections(&mut sections)?;
     let mut resolved_fonts: HashMap<String, FontDef> = HashMap::new();
     for (_alias, def) in &asset_fonts {
@@ -3472,6 +3538,7 @@ fn parse_tree_section(
     tokens:         &Tokens,
     asset_fonts:    &HashMap<String, FontDef>,
     asset_images:   &HashMap<String, String>,
+    markdown:       &markdown::Assets,
 ) -> Result<Section, String> {
     if json.get("attrs").is_some_and(|attrs| attrs.get("margin").is_some()) {
         return Err(format!("section: {MARGIN_MOVED}"));
@@ -3491,13 +3558,28 @@ fn parse_tree_section(
 
     let mut children: Vec<SectionChild> = Vec::new();
     let mut bookmark: Option<Bookmark> = None;
+    let mut has_markdown = false;
     if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
         for child in arr {
             let kind = child.get("type").and_then(|v| v.as_str());
             match kind {
+                Some("markdown") => {
+                    if children.iter().any(|c| matches!(c, SectionChild::Layout { .. })) {
+                        return Err(format!("node type 'markdown': {ONE_FLOW}"));
+                    }
+                    if toc.is_some() {
+                        return Err(format!("node type 'markdown': {NO_MARKDOWN_IN_TOC}"));
+                    }
+                    has_markdown = true;
+                    let cx = markdown::SectionContext {
+                        tokens, fonts: asset_fonts, images: asset_images, image_srcs: &markdown.image_srcs,
+                        defaults: &text, styles_files: &markdown.styles_files,
+                    };
+                    children.push(markdown::parse_tree(child, &cx)?);
+                }
                 Some("layout") => {
                     if children.iter().any(|c| matches!(c, SectionChild::Layout { .. })) {
-                        return Err(format!("node type 'layout': {SECOND_LAYOUT}"));
+                        return Err(format!("node type 'layout': {}", if has_markdown { ONE_FLOW } else { SECOND_LAYOUT }));
                     }
                     let margin = layout_margin(&JsonAttrs(child), tokens).map_err(|e| format!("layout: {e}"))?;
                     let mut lc: Vec<LayoutChild> = Vec::new();
@@ -3516,7 +3598,7 @@ fn parse_tree_section(
                         }
                     }
                     pending.finish("layout")?;
-                    children.push(SectionChild::Layout { margin, children: lc });
+                    children.push(SectionChild::Layout { margin, gap: 0.0, children: lc });
                 }
                 Some("bookmark") => {
                     if bookmark.is_some() {
@@ -3533,7 +3615,7 @@ fn parse_tree_section(
                 }
                 Some("canvas") => return Err(format!("node type 'canvas': {CANVAS_REMOVED}")),
                 other => return Err(format!(
-                    "section child 'type' must be 'bookmark', 'layer' or 'layout', got {:?}", other
+                    "section child 'type' must be 'bookmark', 'layer', 'layout' or 'markdown', got {:?}", other
                 )),
             }
         }

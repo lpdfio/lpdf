@@ -35,6 +35,8 @@ mod data;
 mod layout;
 #[path = "../../core/src/lists.rs"]
 mod lists;
+#[path = "../../core/src/markdown.rs"]
+mod markdown;
 #[path = "../../core/src/render.rs"]
 mod render;
 #[path = "../../core/src/pdf.rs"]

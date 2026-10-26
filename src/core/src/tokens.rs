@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Tokens {
     pub space: [f32; 6],
     pub border: [f32; 6],
@@ -75,7 +75,7 @@ fn parse_stop_offset(val: &str) -> Option<f32> {
 }
 
 /// A font definition resolved from `<assets><fonts>`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FontDef {
     /// One of the 14 PDF core (built-in Type 1) fonts. No bytes needed.
     Core(String),

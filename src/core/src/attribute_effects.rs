@@ -78,6 +78,11 @@ const UNTESTED: &[(&str, &str)] = &[
         "image@src",
         "read by the SDKs, which load the file and hand it to the engine under the image's name or ref; the engine never sees it",
     ),
+    (
+        "markdown:markdown-styles@src",
+        "read by whoever renders the document, who loads the file and hands its text to the engine under the src; \
+         markdown::tests::a_styles_file_is_laid_under_the_inline_rules_and_over_the_defaults covers it",
+    ),
     ("column@paginate", PAGINATE),
     ("row@paginate", PAGINATE),
     ("grid@paginate", PAGINATE),
@@ -128,6 +133,7 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
         ("text@capture-fallback", &["Soon"]),
         // Courier is what a code and a code-span are set in unless they say otherwise.
         ("code@font", &["Times-Roman"]),
+        ("markdown:code@font", &["Times-Roman"]),
         ("code-span@font", &["Times-Roman"]),
         // The default suffix is a full stop and there is no prefix.
         ("list@prefix", &["("]),
@@ -246,6 +252,7 @@ fn values_of_type(doc: &Document, type_name: &str) -> (Vec<String>, bool) {
         "xs:boolean" => (strs(&["true", "false"]), true),
         "xs:string" | "xs:anyURI" => (Vec::new(), false),
         "xs:positiveInteger" => (strs(&["2", "7"]), false),
+        "xs:nonNegativeInteger" => (strs(&["2", "0"]), false),
         "xs:integer" => (strs(&["4", "0"]), false),
         "xs:decimal" => (strs(&["0.5"]), false),
         other => {
@@ -313,6 +320,8 @@ fn schema_attributes(doc: &Document) -> Vec<Attribute> {
     for outer in doc.root_element().children().filter(|n| n.is_element()) {
         let (own, nested) = match (outer.tag_name().name(), outer.attribute("name")) {
             ("element", Some("tokens")) => ("", "tokens:"),
+            // The rules of a markdown are named after Markdown and share names with elements of the layout.
+            ("element", Some("markdown")) => ("", "markdown:"),
             ("element", Some(_)) => ("", ""),
             _ => continue,
         };
@@ -486,6 +495,16 @@ fn boxed(tag: &str, attrs: &str, content: &str) -> String {
     flow(&format!("<{tag} {attrs}>{content}</{tag}><text>After</text>"))
 }
 
+/// The subject of a rule of a markdown: the rule element with the attribute tried, in a markdown that uses it.
+macro_rules! rule {
+    ($name:literal, $sample:literal) => {
+        Subject::new(concat!("markdown:", $name), |a, c| {
+            markdown_document(&format!(concat!("<", $name, " {}/>"), a), &markdown_sample(c))
+        })
+        .content($sample)
+    };
+}
+
 fn subjects() -> Vec<Subject> {
     vec![
         // The document and its parts.
@@ -506,6 +525,28 @@ fn subjects() -> Vec<Subject> {
         })
         .only(&["footnote-counter"]),
         Subject::new("layout", |a, c| lpdf("", &format!("<document><section><layout {a}>{c}</layout></section></document>"))).content(ONE),
+        // A markdown: its own attributes, over headings and paragraphs of several lines.
+        Subject::new("markdown", |a, c| {
+            lpdf("", &format!("<document><section><markdown {a}><markdown-content><![CDATA[{c}]]></markdown-content></markdown></section></document>"))
+        })
+        .content(MARKDOWN),
+        rule!("h1", "# {LONG}\n\nAfter"),
+        rule!("h2", "## {LONG}\n\nAfter"),
+        rule!("h3", "### {LONG}\n\nAfter"),
+        rule!("h4", "#### {LONG}\n\nAfter"),
+        rule!("h5", "##### {LONG}\n\nAfter"),
+        rule!("h6", "###### {LONG}\n\nAfter"),
+        rule!("p", "{LONG}\n\nAfter"),
+        rule!("code", "Text with `inline code` in it.\n\n```\n{CODE}\n```\n\nAfter"),
+        rule!("quote", "> {LONG}\n\nAfter"),
+        rule!("li", "- {LONG}\n- Two\n\n1. Three\n\nAfter"),
+        rule!("a", "See [the docs](https://a.example) for more."),
+        rule!("strong", "A **strong** word."),
+        rule!("em", "An *emphasized* word."),
+        rule!("del", "A ~~deleted~~ word."),
+        rule!("table", "| A | B |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n\nAfter"),
+        rule!("th", "| {LONG} | B |\n|---|---|\n| 1 | 2 |\n\nAfter"),
+        rule!("td", "| A | B |\n|---|---|\n| {LONG} | 2 |\n\nAfter"),
         Subject::new("meta", |a, _| lpdf("", &format!("<document><meta {a}/><section><layout>{ONE}</layout></section></document>"))),
         Subject::new("font", |a, _| {
             lpdf(&format!("<assets><font {a}/></assets>"), r#"<document><section><layout><text font="body">Alpha</text></layout></section></document>"#)
@@ -687,6 +728,26 @@ fn subjects() -> Vec<Subject> {
     ]
 }
 
+/// Headings of three levels and a paragraph that wraps, for the attributes of a markdown.
+const MARKDOWN: &str = "# Methods\n\nThe quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of \
+    text has to be long enough to wrap before a margin or a font can show.\n\n## Data\n\n### Sources\n\nAfter";
+
+/// A document with a markdown whose styles are `styles`, and the Markdown `markdown`.
+fn markdown_document(styles: &str, markdown: &str) -> String {
+    lpdf(
+        "",
+        &format!(
+            "<document><section><markdown><markdown-styles>{styles}</markdown-styles>\
+             <markdown-content><![CDATA[{markdown}]]></markdown-content></markdown></section></document>"
+        ),
+    )
+}
+
+/// The Markdown for a rule, with `{LONG}` and `{CODE}` filled in.
+fn markdown_sample(sample: &str) -> String {
+    sample.replace("{LONG}", LONG).replace("{CODE}", CODE)
+}
+
 const TABLE_ROWS: &str = "<thead><td><text>H1</text></td><td><text>H2</text></td></thead>\
     <tr><td><text>A1</text></td><td><text>A2</text></td></tr>\
     <tr><td><text>B1</text></td><td><text>B2</text></td></tr>\
@@ -763,6 +824,11 @@ fn tweaks() -> HashMap<String, Tweak> {
     add("td@align", Tweak::default().content("<text width=\"40pt\">Alpha</text>"));
     add("column@justify", Tweak::default().set("height", "300pt"));
     add("row@justify", Tweak::default().content(NARROW));
+
+    // The box around a rule's words shows a radius where it has a background.
+    for rule in ["h1", "h2", "h3", "h4", "h5", "h6", "p", "code", "quote"] {
+        add(&format!("markdown:{rule}@radius"), Tweak::default().set("background", "#cccccc"));
+    }
 
     // A grid has either cols or col-width.
     add("grid@col-width", Tweak::default().remove("cols"));

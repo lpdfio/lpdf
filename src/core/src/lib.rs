@@ -6,6 +6,7 @@ mod encrypt;
 mod kit_to_xml;
 mod layout;
 mod lists;
+pub mod markdown;
 // Public for native consumers — the CLI's `license` command reports a key's standing from the
 // typed result rather than parsing the JSON one back.
 pub mod license;

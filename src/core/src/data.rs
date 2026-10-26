@@ -94,6 +94,19 @@ fn value_to_string(value: Option<&Value>) -> String {
     }
 }
 
+/// The Markdown at `path` in the data, for a `<markdown-content data-value>`: a path the data lacks gives none,
+/// and a value that is not a string is an error that names the path.
+pub(crate) fn text_at(path: &str, root: &Value) -> Result<String, String> {
+    match resolve_path(path, &[], root) {
+        None | Some(Value::Null) => Ok(String::new()),
+        Some(Value::String(text)) => Ok(text.clone()),
+        Some(other) => Err(format!(
+            "<markdown-content data-value=\"{path}\">: the Markdown must be a string, but the data has {}",
+            json_type(other)
+        )),
+    }
+}
+
 // ── Bound attributes ──────────────────────────────────────────────────────────
 
 /// What a bound attribute is checked against once its value is known: the document's colors and gradients, and
@@ -276,6 +289,7 @@ pub fn apply(doc: &mut Document, json_data: &str) -> Result<(), String> {
         }
     }
 
+    crate::markdown::expand_pending(&mut doc.sections, Some(&root), crate::markdown::Pass::Data)?;
     Ok(())
 }
 
@@ -560,7 +574,7 @@ mod tests {
             debug: false,
             footnote_counter: None,
             sections: vec![Section {
-                children: vec![SectionChild::Layout { margin: [0.0; 4], children: layout_children }],
+                children: vec![SectionChild::Layout { margin: [0.0; 4], gap: 0.0, children: layout_children }],
                 options: SectionOptions { size: Some((595.28, 841.89)), ..SectionOptions::default() },
                 bookmark: None,
             }],

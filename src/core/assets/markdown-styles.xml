@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The look of a <markdown> that sets no styles of its own: what people expect of rendered Markdown, such as
+  GitHub's. Clear steps between the headings, comfortable line spacing, code on a light background and links in a
+  color. Every value is a token, so a token file alone rebrands it. Copy this file to start your own, and write
+  only the rules you change.
+-->
+<markdown-styles>
+    <h1 font-size="xxl" bold="true" line-height="m"/>
+    <h2 font-size="xl" bold="true" line-height="m"/>
+    <h3 font-size="l" bold="true" line-height="m"/>
+    <h4 font-size="m" bold="true"/>
+    <h5 font-size="m" bold="true" color="text-muted"/>
+    <h6 font-size="s" bold="true" color="text-muted"/>
+    <p line-height="l"/>
+    <code font="Courier" font-size="s" line-height="m" background="surface-alt" padding="m"/>
+    <quote color="text-muted" bar-color="text-muted" bar-width="3pt" padding="0pt 0pt 0pt m"/>
+    <li gap="xs"/>
+    <a color="primary" underline="true"/>
+    <strong bold="true"/>
+    <del strike="true"/>
+    <table stripe="surface-alt"/>
+    <th bold="true" padding="s"/>
+    <td padding="s"/>
+</markdown-styles>
