@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <document size="a4">
+    <meta title="lpdf Showcase — Markdown wrap" subject="Names wider than their box, dollar signs and the lines of a drawn box" />
+
+    <!-- Nothing of a markdown runs past its margin or its table cell, and what a built-in font has no glyph for
+         is drawn as an ASCII look-alike.
+         Expected, top to bottom:
+           1  A table whose Key column holds names wider than the column: each breaks at the last character that
+              fits and stays in its cell
+           2  A paragraph whose link, bold run and code span are longer than a line: each wraps at its spaces,
+              the tint and the line under them reaching across the gaps; a name longer than a line breaks
+           3  A table of prices, $1M-$10M among them: dollar signs are text, not math
+           4  A block of code with a drawn box and arrows: the lines and corners are - | and +, the arrows > and v
+    -->
+    <section>
+      <layer>
+        <text-at anchor="bottom-center" y="-24pt" font-size="xs" color="text-muted">Page {page} of {pages}</text-at>
+      </layer>
+      <markdown margin="54pt">
+        <markdown-content><![CDATA[
+          # Names that do not fit
+
+          | Where | Key | Value |
+          |---|---|---|
+          | Secrets Manager `codesense/prod/portal` | `PaySignal__Paddle__ApiKey` | live API key |
+          | GitHub repo secret | `PADDLE_CLIENT_TOKEN_PROD` | live client token |
+          | `api-stack.ts` | `Products__lpdf__Tiers__professional__PaddlePriceId` | live `pri_…` |
+          | `logo` | `<a><img class="logo-light" /><img class="logo-dark" /></a>` | a link around two images |
+
+          A [link whose text is long enough that it has to go on to a second line of the page](https://lpdf.io) and **a bold run that is also long enough to need more than one line on this page** and `code with spaces that is long enough to need a second line as well` and Products__lpdf__Tiers__professional__PaddlePriceId__AndSomeMoreCharactersThatMakeItWiderThanALine.
+
+          ## Prices
+
+          | Tier | Price | Revenue band |
+          |------|------:|--------------|
+          | Starter | $99/yr | Under $1M |
+          | Business | $299/yr | $1M—$10M |
+          | Scale | $999/yr | Over $10M |
+
+          ## A drawn box
+
+          ```
+          XML / Code (via Kit)
+                  │
+          ┌───────▼───────┐
+          │ parse.rs      │  XML/JSON → Document
+          └───────┬───────┘
+                  ▼
+          ┌───────────────┐      ┌───────────┐
+          │ render.rs     │─────►│ JSON tree │
+          └───────────────┘      └───────────┘
+          ```
+        ]]></markdown-content>
+      </markdown>
+    </section>
+  </document>
+</lpdf>

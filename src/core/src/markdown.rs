@@ -442,7 +442,6 @@ fn file_options() -> Options {
         | Options::ENABLE_FOOTNOTES
         | Options::ENABLE_STRIKETHROUGH
         | Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
-        | Options::ENABLE_MATH
 }
 
 /// The data a template gets for the `.md` file `markdown`: `{ "markdown": "…", "title": "…" }`, the text and then
@@ -566,11 +565,20 @@ pub(crate) fn expand(spec: &MarkdownSpec, markdown: &str) -> Result<Vec<Node>, S
             }
             let mut parsed = parse_node(&child, &spec.tokens, &spec.images).map_err(|e| at_line(block.line, &e))?;
             pending.attach(&mut parsed);
-            nodes.push(resolve_parsed_node(parsed, &spec.defaults, &spec.fonts));
+            let mut node = resolve_parsed_node(parsed, &spec.defaults, &spec.fonts);
+            break_words(&mut node);
+            nodes.push(node);
         }
         pending.finish("markdown").map_err(|e| at_line(block.line, &e))?;
     }
     Ok(nodes)
+}
+
+/// The texts of a markdown break a word, or a link, wider than their box: a cell of a table or a paragraph holds
+/// names and addresses of any length, and none may run past the margin.
+fn break_words(node: &mut Node) {
+    if node.kind == NodeKind::Text { node.break_words = true; }
+    for child in &mut node.children { break_words(child); }
 }
 
 /// An error of the parser, which names a place in the XML written here, said as a place in the Markdown.
@@ -735,9 +743,6 @@ impl<'a> Writer<'a> {
                 Event::Start(Tag::HtmlBlock) | Event::Html(_) | Event::InlineHtml(_) => {
                     return Err(self.fail(line, "raw HTML is not supported: write the Markdown it stands for, or leave it out"));
                 }
-                Event::InlineMath(_) | Event::DisplayMath(_) => {
-                    return Err(self.fail(line, "math is not supported: write it as text"));
-                }
                 Event::Rule => {
                     self.at += 1;
                     blocks.push(Block { xml: "<divider/>".into(), line });
@@ -857,9 +862,6 @@ impl<'a> Writer<'a> {
                 }
                 Event::Html(_) | Event::InlineHtml(_) => {
                     return Err(self.fail(line, "raw HTML is not supported: write the Markdown it stands for, or leave it out"));
-                }
-                Event::InlineMath(_) | Event::DisplayMath(_) => {
-                    return Err(self.fail(line, "math is not supported: write it as text"));
                 }
                 // A block that begins ends the words of a block with no tag of its own.
                 Event::Start(_) | Event::Rule | Event::TaskListMarker(_) if until.is_none() => return Ok(()),
@@ -1404,19 +1406,23 @@ mod tests {
     }
 
     #[test]
-    fn raw_html_and_math_are_errors_that_name_the_line() {
+    fn raw_html_is_an_error_that_names_the_line() {
         let err = error("fine\n\n<div>x</div>\n");
         assert!(err.contains("markdown line 3") && err.contains("raw HTML"), "{err}");
         let err = error("fine <b>x</b>\n");
         assert!(err.contains("markdown line 1") && err.contains("raw HTML"), "{err}");
-        let err = error("one\n\n$x^2$ is math\n");
-        assert!(err.contains("markdown line 3") && err.contains("math"), "{err}");
     }
 
     #[test]
-    fn a_price_is_not_math() {
-        let nodes = nodes("It costs $5 or $6 in all.\n");
-        assert_eq!(words(&nodes[0]), "It costs $5 or $6 in all.");
+    fn a_dollar_sign_is_text_whatever_stands_between_two_of_them() {
+        let nodes = nodes("It costs $5 or $6 in all, from $1M—$10M, or $x^2$.\n");
+        assert_eq!(words(&nodes[0]), "It costs $5 or $6 in all, from $1M—$10M, or $x^2$.");
+    }
+
+    #[test]
+    fn dollar_signs_in_the_cells_of_a_table_are_text() {
+        let nodes = nodes("| Tier | Price | Band |\n|---|---|---|\n| Business | $299/yr | $1M—$10M |\n| Scale | $999/yr | Over $10M |\n");
+        assert_eq!(nodes.len(), 1, "a table is one block");
     }
 
     #[test]

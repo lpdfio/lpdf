@@ -1726,6 +1726,68 @@ fn word_width(font: &str, text: &str, font_size: f32, sup: bool) -> f32 {
     text_width(font, text, if sup { font_size * SUP_SCALE } else { font_size })
 }
 
+/// The pieces of a word, or of a run of words, that is wider than a whole line: its words, and each word that is
+/// still wider cut after the last character that fits, so nothing runs past the box. Each piece comes with whether
+/// a space leads it.
+fn pieces_of_wide(font: &str, text: &str, font_size: f32, wrap_w: f32) -> Vec<(String, bool)> {
+    let fits = |s: &str| text_width(font, s, font_size) <= wrap_w + 0.01;
+    let mut pieces = Vec::new();
+    for (i, word) in text.split(' ').filter(|w| !w.is_empty()).enumerate() {
+        let mut rest = word;
+        let mut first = true;
+        while !fits(rest) {
+            // The longest start that fits, and at least one character, so the word always gets shorter.
+            let mut end = 0;
+            for (at, ch) in rest.char_indices() {
+                let next = at + ch.len_utf8();
+                if end > 0 && !fits(&rest[..next]) { break; }
+                end = next;
+            }
+            pieces.push((rest[..end].to_string(), i > 0 && first));
+            rest = &rest[end..];
+            first = false;
+        }
+        pieces.push((rest.to_string(), i > 0 && first));
+    }
+    pieces
+}
+
+/// Break the words and the styled runs of `toks` that are wider than a whole line into pieces that fit.
+fn break_wide_toks(toks: Vec<Tok>, font_size: f32, wrap_w: f32) -> Vec<Tok> {
+    let mut out = Vec::with_capacity(toks.len());
+    for tok in toks {
+        match tok {
+            Tok::Word(atom) if !atom.sup && word_width(&atom.font, &atom.text, font_size, false) > wrap_w + 0.01 => {
+                for (i, (text, space)) in pieces_of_wide(&atom.font, &atom.text, font_size, wrap_w).into_iter().enumerate() {
+                    if space { out.push(Tok::Space); }
+                    out.push(Tok::Word(Atom { text, joined: i > 0, ..atom.clone() }));
+                }
+            }
+            other => out.push(other),
+        }
+    }
+    out
+}
+
+/// `break_wide_toks` for the atoms of a text that is split across pages, which must find the same lines.
+fn break_wide_split_atoms(atoms: Vec<SplitAtom>, parent_font: &str, font_size: f32, wrap_w: f32) -> Vec<SplitAtom> {
+    let mut out = Vec::with_capacity(atoms.len());
+    for atom in atoms {
+        let font = atom.font_override.as_deref().unwrap_or(parent_font);
+        if atom.footnote.is_some() || text_width(font, &atom.text, font_size) <= wrap_w + 0.01 {
+            out.push(atom);
+            continue;
+        }
+        for (i, (text, space)) in pieces_of_wide(font, &atom.text, font_size, wrap_w).into_iter().enumerate() {
+            let mut piece = atom.clone();
+            piece.text = text;
+            if i > 0 { piece.leading_space = space; }
+            out.push(piece);
+        }
+    }
+    out
+}
+
 /// Tokenize text_runs + wrap into lines. Mirrors the shape of `layout_text`'s
 /// wrap step but preserves the overrides needed to rebuild `TextRun`s.
 fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
@@ -1791,6 +1853,9 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
     }
 
     if atoms.is_empty() { return vec![]; }
+
+    // The same pieces as the lines of the text itself are made of.
+    let atoms = if node.break_words { break_wide_split_atoms(atoms, parent_font, font_size, avail_w) } else { atoms };
 
     // Greedy wrap.
     let mut lines: Vec<Vec<SplitAtom>> = Vec::new();
@@ -3245,6 +3310,7 @@ fn measure_natural_w(node: &Node) -> f32 {
 }
 
 /// A word or a styled run of a text, with the style it is drawn in.
+#[derive(Clone)]
 struct Atom {
     text:      String,
     font:      String,
@@ -3256,6 +3322,9 @@ struct Atom {
     background: Option<String>,
     /// The number of a footnote, drawn small and raised.
     sup:       bool,
+    /// Whether it goes on from the atom before it, a piece of a word or a run too wide for a line, so a tint or a
+    /// line under it reaches back across the gap.
+    joined:    bool,
 }
 
 enum Tok { Space, Word(Atom) }
@@ -3351,14 +3420,14 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
         if let Some(note) = &run.footnote {
             toks.push(Tok::Word(Atom {
                 text: note.number.to_string(), font: font.to_string(), color,
-                href: None, underline: false, strike: false, background: None, sup: true,
+                href: None, underline: false, strike: false, background: None, sup: true, joined: false,
             }));
         } else if is_span {
             if !run.text.is_empty() {
                 toks.push(Tok::Word(Atom {
                     text: run.text.clone(), font: font.to_string(), color,
                     href: run.href.clone(), underline: run.underline, strike: run.strike,
-                    background: run.background.clone(), sup: false,
+                    background: run.background.clone(), sup: false, joined: false,
                 }));
             }
         } else {
@@ -3366,7 +3435,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 if j > 0 { toks.push(Tok::Space); }
                 toks.push(Tok::Word(Atom {
                     text: word.to_string(), font: font.to_string(), color: color.clone(),
-                    href: None, underline: false, strike: false, background: None, sup: false,
+                    href: None, underline: false, strike: false, background: None, sup: false, joined: false,
                 }));
             }
         }
@@ -3379,6 +3448,9 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
             border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None, debug_self: false, children: vec![],
         }), reserved, false);
     }
+
+    // A word, or a styled run, wider than the box would run past it: a text that asks for it breaks it to fit.
+    let toks = if node.break_words { break_wide_toks(toks, font_size, fit.wrap_w) } else { toks };
 
     // ── Word-wrap: build lines of (Atom, gap_before_pt) ──────────────────────
     let mut lines: Vec<TextLine> = Vec::new();
@@ -3517,9 +3589,11 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 } else {
                     (font_size, line_y)
                 };
+                // The tint and the lines of a run broken across a gap reach back over it.
+                let lead = if atom.joined && *gap > 0.0 { *gap + word_gap } else { 0.0 };
                 let mut seg = Vec::new();
                 if let Some(tint) = &atom.background {
-                    seg.push(tint_behind(tint, cur_x, line_y, aw, line_height));
+                    seg.push(tint_behind(tint, cur_x - lead, line_y, aw + lead, line_height));
                 }
                 seg.push(RenderNode::Text(RenderText {
                     x: cur_x, y: atom_y,
@@ -3534,7 +3608,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
 
                 if atom.underline {
                     seg.push(RenderNode::Line(RenderLine {
-                        x1: cur_x, y1: line_y + font_size,
+                        x1: cur_x - lead, y1: line_y + font_size,
                         x2: cur_x + aw, y2: line_y + font_size,
                         color: atom.color.clone(), thickness: 0.75,
                         dash: None,
@@ -3543,7 +3617,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 if atom.strike {
                     let sy = line_y + font_size * 0.5;
                     seg.push(RenderNode::Line(RenderLine {
-                        x1: cur_x, y1: sy, x2: cur_x + aw, y2: sy,
+                        x1: cur_x - lead, y1: sy, x2: cur_x + aw, y2: sy,
                         color: atom.color.clone(), thickness: 0.75,
                         dash: None,
                     }));
@@ -3551,8 +3625,8 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
 
                 match &atom.href {
                     Some(href) => all_nodes.push(RenderNode::Link(RenderLink {
-                        url: href.clone(), x: cur_x, y: line_y,
-                        width: aw, height: line_height, debug_self: false, children: seg,
+                        url: href.clone(), x: cur_x - lead, y: line_y,
+                        width: aw + lead, height: line_height, debug_self: false, children: seg,
                     })),
                     None => all_nodes.extend(seg),
                 }
@@ -4650,6 +4724,78 @@ mod tests {
         let mut out = Vec::new();
         walk(page, fill, &mut out);
         out
+    }
+
+    /// Every text of a page tree: `(x, font, size, content)`.
+    fn text_boxes(page: &serde_json::Value) -> Vec<(f64, String, f64, String)> {
+        fn walk(v: &serde_json::Value, out: &mut Vec<(f64, String, f64, String)>) {
+            if v["type"] == "text" {
+                out.push((
+                    v["x"].as_f64().unwrap(), v["font"].as_str().unwrap().to_string(),
+                    v["size"].as_f64().unwrap(), v["content"].as_str().unwrap().to_string(),
+                ));
+            }
+            if let Some(arr) = v["nodes"].as_array() {
+                for c in arr { walk(c, out); }
+            }
+        }
+        let mut out = Vec::new();
+        walk(page, &mut out);
+        out
+    }
+
+    /// The pages of a document with `markdown` in a section with 54pt of margin.
+    fn markdown_pages(markdown: &str) -> Vec<serde_json::Value> {
+        let xml = format!(
+            r#"<lpdf version="1"><document size="a4"><section><markdown margin="54pt"><markdown-content><![CDATA[{markdown}]]></markdown-content></markdown></section></document></lpdf>"#
+        );
+        engine_render(&xml)["pages"].as_array().unwrap().clone()
+    }
+
+    const WIDE_NAME: &str = "Products__lpdf__Tiers__professional__PaddlePriceId";
+
+    /// The right margin of `markdown_pages`.
+    const MARKDOWN_RIGHT_EDGE: f64 = 595.28 - 54.0;
+
+    #[test]
+    fn a_markdown_breaks_a_name_wider_than_its_table_cell_so_it_stays_in_the_cell() {
+        let pages = markdown_pages(&format!("| Key | Value |\n|---|---|\n| `{WIDE_NAME}` | ok |\n"));
+        let texts = text_boxes(&pages[0]);
+        let pieces: Vec<&(f64, String, f64, String)> = texts.iter().filter(|t| t.3.contains('_')).collect();
+        assert!(pieces.len() >= 2, "the name is on more than one line: {pieces:?}");
+        assert_eq!(pieces.iter().map(|t| t.3.as_str()).collect::<String>(), WIDE_NAME, "nothing is lost");
+        let value_x = texts.iter().find(|t| t.3 == "Value").unwrap().0;
+        for (x, font, size, content) in pieces {
+            let right = x + text_width(font, content, *size as f32) as f64;
+            assert!(right <= value_x, "{content} ends at {right}, in the next column, which starts at {value_x}");
+        }
+    }
+
+    #[test]
+    fn a_markdown_wraps_a_long_link_a_code_span_with_spaces_and_a_long_word_within_its_margin() {
+        let pages = markdown_pages(&format!(
+            "A [link whose text is long enough that it has to wrap onto a second line of the page](https://lpdf.io) and \
+             `code with spaces that is long enough to need a second line on this page of text, and more` and {WIDE_NAME}{WIDE_NAME}.\n"
+        ));
+        let texts = text_boxes(&pages[0]);
+        assert!(texts.iter().any(|t| t.3.contains("wrap")) && texts.iter().any(|t| t.3.contains("need")), "{texts:?}");
+        for (x, font, size, content) in &texts {
+            let right = x + text_width(font, content, *size as f32) as f64;
+            assert!(right <= MARKDOWN_RIGHT_EDGE + 0.1, "{content} ends at {right}, past the margin at {MARKDOWN_RIGHT_EDGE}");
+        }
+    }
+
+    #[test]
+    fn a_markdown_paragraph_with_wide_words_that_runs_onto_another_page_stays_within_its_margin() {
+        let paragraph = format!("{WIDE_NAME} and some words to fill the lines, `{WIDE_NAME}` too, ").repeat(60);
+        let pages = markdown_pages(&format!("{paragraph}\n"));
+        assert!(pages.len() > 1, "the paragraph runs onto a second page");
+        for page in &pages {
+            for (x, font, size, content) in text_boxes(page) {
+                let right = x + text_width(&font, &content, size as f32) as f64;
+                assert!(right <= MARKDOWN_RIGHT_EDGE + 0.1, "{content} ends at {right}, past the margin");
+            }
+        }
     }
 
     /// The contents of the texts of the first page of a layout holding `body`.
