@@ -11,7 +11,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Range;
 
-use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, MetadataBlockKind, Options, Parser, Tag, TagEnd};
+use pulldown_cmark::{Event, HeadingLevel, MetadataBlockKind, Options, Parser, Tag, TagEnd};
 use serde_json::Value;
 
 use crate::parse::{
@@ -703,7 +703,7 @@ impl<'a> Writer<'a> {
                     let inner = self.read_blocks(Some(TagEnd::BlockQuote(None)), &inner_around)?;
                     blocks.push(self.quote(inner, line)?);
                 }
-                Event::Start(Tag::CodeBlock(kind)) => {
+                Event::Start(Tag::CodeBlock(_)) => {
                     self.at += 1;
                     let mut text = String::new();
                     while let Some((event, _)) = self.events.get(self.at) {
@@ -714,7 +714,6 @@ impl<'a> Writer<'a> {
                             _ => {}
                         }
                     }
-                    let _ = kind == CodeBlockKind::Indented;
                     blocks.push(self.code_block(&text, line));
                 }
                 Event::Start(Tag::List(first)) => {
@@ -893,7 +892,7 @@ impl<'a> Writer<'a> {
     }
 
     /// `<text>` for the words of a block, wrapped in a box when the rule has a box around the words.
-    fn text_block(&mut self, name: &str, rule: &Rule, pieces: &[Piece], extra: &[(&str, &str)], bookmark: Option<String>) -> Result<String, String> {
+    fn text_block(&mut self, rule: &Rule, pieces: &[Piece], extra: &[(&str, &str)], bookmark: Option<String>) -> String {
         self.font = self.font_of(rule);
         let mut text_attrs = String::new();
         for key in TEXT_ATTRS {
@@ -905,7 +904,7 @@ impl<'a> Writer<'a> {
             for (key, value) in extra { push_attr(&mut text_attrs, key, value); }
         }
         inner.push_str(&format!("<text{text_attrs}>"));
-        for piece in pieces { self.write_piece(&mut inner, piece, name)?; }
+        for piece in pieces { self.write_piece(&mut inner, piece); }
         inner.push_str("</text>");
         let mut xml = bookmark.unwrap_or_default();
         if has_box {
@@ -918,7 +917,7 @@ impl<'a> Writer<'a> {
         } else {
             xml.push_str(&inner);
         }
-        Ok(xml)
+        xml
     }
 
     /// The attributes a run of words gets from the styles it is in.
@@ -943,7 +942,7 @@ impl<'a> Writer<'a> {
         attrs
     }
 
-    fn write_piece(&self, out: &mut String, piece: &Piece, block: &str) -> Result<(), String> {
+    fn write_piece(&self, out: &mut String, piece: &Piece) {
         match piece {
             Piece::Text { text, style } => {
                 let attrs = self.style_attrs(style);
@@ -969,13 +968,9 @@ impl<'a> Writer<'a> {
                     out.push_str(&format!("<code-span{}>{}</code-span>", attrs_xml(&attrs), escape_text(text)));
                 }
             }
-            Piece::Note(words) => {
-                let _ = block;
-                out.push_str(&format!("<fn>{}</fn>", escape_text(words)));
-            }
+            Piece::Note(words) => out.push_str(&format!("<fn>{}</fn>", escape_text(words))),
             Piece::Image { .. } => {}
         }
-        Ok(())
     }
 
     // ── Blocks ────────────────────────────────────────────────────────────────
@@ -989,7 +984,7 @@ impl<'a> Writer<'a> {
                 return Ok(());
             }
             let rule = this.text_rule("p", around);
-            let xml = this.text_block("p", &rule, words, &[], None)?;
+            let xml = this.text_block(&rule, words, &[], None);
             words.clear();
             blocks.push(Block { xml, line });
             Ok(())
@@ -1038,7 +1033,7 @@ impl<'a> Writer<'a> {
         let label = label.split_whitespace().collect::<Vec<_>>().join(" ");
         let bookmark = (number as u8 <= self.spec.bookmarks && !label.is_empty())
             .then(|| format!("<bookmark label=\"{}\" level=\"{number}\"/>", escape_attr(&label)));
-        let xml = self.text_block(&name, &rule, &pieces, &[("paginate", "keep-next")], bookmark)?;
+        let xml = self.text_block(&rule, &pieces, &[("paginate", "keep-next")], bookmark);
         Ok(Block { xml, line })
     }
 
@@ -1183,7 +1178,7 @@ impl<'a> Writer<'a> {
                     for key in ["padding", "background", "border"] {
                         if let Some(value) = cell.remove(key) { push_attr(&mut box_attrs, key, &value); }
                     }
-                    let text = self.text_block("p", &cell, &pieces, &[], None)?;
+                    let text = self.text_block(&cell, &pieces, &[], None);
                     cells.push_str(&format!("<td{box_attrs}>{text}</td>"));
                     column += 1;
                 }
