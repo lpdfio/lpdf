@@ -535,6 +535,7 @@ name = "lpdf-cli"
 version = "0.0.0"
 dependencies = [
  "lpdf",
+ "serde_json",
 ]
 
 [[package]]

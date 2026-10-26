@@ -327,8 +327,14 @@ impl LpdfEngine {
     /// that check. The core compiles to wasm, which has no clock of its own, so the time can
     /// only come from the host — the same reason `LpdfEngine::set_now` exists. This used to
     /// hard-code `0`, which meant an expired key rendered without the attribution line for ever.
-    pub fn render_xml_to_pdf(xml: &str, license_key: &str, now_unix: i64) -> Result<Vec<u8>, String> {
+    ///
+    /// `json_data` resolves the template's `data-*` attributes, as it does in `render_pdf`;
+    /// `None` renders the template with its inline content.
+    pub fn render_xml_to_pdf(xml: &str, json_data: Option<&str>, license_key: &str, now_unix: i64) -> Result<Vec<u8>, String> {
         let mut doc = parse::parse(xml)?;
+        if let Some(json) = json_data {
+            data::apply(&mut doc, json)?;
+        }
         let lp = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
             layout::layout_document(&lp);
@@ -670,9 +676,33 @@ mod tests {
 
     #[test]
     fn unlicensed_pdf_embeds_the_attribution_face_and_links_to_lpdf() {
-        let pdf = LpdfEngine::render_xml_to_pdf(&minimal(""), "", 0).unwrap();
+        let pdf = LpdfEngine::render_xml_to_pdf(&minimal(""), None, "", 0).unwrap();
         assert!(pdf_contains(&pdf, pdf::ATTRIBUTION_FONT_KEY.as_bytes()));
         assert!(pdf_contains(&pdf, b"https://lpdf.io"));
+    }
+
+    #[test]
+    fn renders_the_data_into_the_pdf_like_literal_text() {
+        let bound = minimal(r#"<text data-value="name">Fallback</text>"#);
+        let literal = minimal("<text>Ada</text>");
+        let with_data = LpdfEngine::render_xml_to_pdf(&bound, Some(r#"{"name":"Ada"}"#), "", 0).unwrap();
+        let without_data = LpdfEngine::render_xml_to_pdf(&literal, None, "", 0).unwrap();
+        assert_eq!(with_data, without_data);
+    }
+
+    #[test]
+    fn renders_the_inline_content_when_no_data_is_given() {
+        let bound = minimal(r#"<text data-value="name">Fallback</text>"#);
+        let literal = minimal("<text>Fallback</text>");
+        let without_data = LpdfEngine::render_xml_to_pdf(&bound, None, "", 0).unwrap();
+        let expected = LpdfEngine::render_xml_to_pdf(&literal, None, "", 0).unwrap();
+        assert_eq!(without_data, expected);
+    }
+
+    #[test]
+    fn rejects_data_that_is_not_json_and_says_where() {
+        let error = LpdfEngine::render_xml_to_pdf(&minimal(""), Some("{\n  \"name\": \n}"), "", 0).unwrap_err();
+        assert!(error.contains("line 3"), "{error}");
     }
 
     #[test]
