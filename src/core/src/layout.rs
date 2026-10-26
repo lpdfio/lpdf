@@ -3169,7 +3169,11 @@ pub(crate) fn text_width(font: &str, text: &str, size: f32) -> f32 {
     // For known builtins use per-character AFM widths.
     if builtin_char_advance(font, ' ').is_some() {
         return text.chars()
-            .map(|c| builtin_char_advance(font, c).unwrap_or(500) as f32 * size / 1000.0)
+            .map(|c| {
+                let drawn = builtin_char_advance(font, c)
+                    .or_else(|| crate::pdf::look_alike(c).and_then(|a| builtin_char_advance(font, a)));
+                drawn.unwrap_or(500) as f32 * size / 1000.0
+            })
             .sum();
     }
     // Unknown font (undefined alias, unsupported builtin, or custom font with no
