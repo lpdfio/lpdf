@@ -3,8 +3,8 @@
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
   <assets>
-    <image name="photo" />
-    <image name="avatar" src="img/avatar.png" />
+    <image name="photo"  src="image-sample.png" />
+    <image name="avatar" src="image-square.png" />
   </assets>
   <document size="a4">
     <meta title="lpdf Showcase — Markdown" subject="A markdown in a section, with the default styles" />
@@ -73,7 +73,7 @@
 
           ![The photo, found by its name](photo)
 
-          ![The avatar, found by its src](img/avatar.png)
+          ![The avatar, found by its src](image-square.png)
 
           A paragraph with a note.[^1]
 
