@@ -24,6 +24,7 @@ use crate::tokens::{FontDef, Tokens};
 const DEFAULT_STYLES: &str = include_str!("../assets/markdown-styles.xml");
 
 /// The default template that wraps a `.md` file for the command line and the extension.
+#[allow(dead_code)] // the WASI binary does not hand it out
 const DEFAULT_TEMPLATE: &str = include_str!("../assets/markdown-template.xml");
 
 /// The rules a `<markdown-styles>` may hold, each with the attributes it may set.
@@ -418,13 +419,129 @@ fn markdown_spec(node: &Node) -> Option<&MarkdownSpec> {
 }
 
 /// The template that wraps a `.md` file when no other is given.
+#[allow(dead_code)] // the WASI binary does not hand it out
 pub fn default_template() -> &'static str {
     DEFAULT_TEMPLATE
 }
 
 /// The rules that a `<markdown>` with no styles uses, as the file to start a style of one's own from.
+#[allow(dead_code)] // the WASI binary does not hand it out
 pub fn default_styles() -> &'static str {
     DEFAULT_STYLES
+}
+
+// ── A `.md` file as a document ────────────────────────────────────────────────
+//
+// What the command line and the extension do with a `.md` file, which is the same in both, so it is here: its text
+// and the fields of its front matter go to the template as data, its relative images are declared as assets of the
+// template, and the host loads them.
+
+/// The options the Markdown of a file is read with: those of `expand`, which finds the front matter.
+fn file_options() -> Options {
+    Options::ENABLE_TABLES
+        | Options::ENABLE_FOOTNOTES
+        | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
+        | Options::ENABLE_MATH
+}
+
+/// The data a template gets for the `.md` file `markdown`: `{ "markdown": "…", "title": "…" }`, the text and then
+/// each field of its front matter as a string. A field is a `key: value` line; one with no value on its line, a list
+/// and a nested field are left out.
+pub fn file_data(markdown: &str) -> String {
+    let mut data = serde_json::Map::new();
+    let mut in_front_matter = false;
+    for event in Parser::new_ext(markdown, file_options()) {
+        match event {
+            Event::Start(Tag::MetadataBlock(MetadataBlockKind::YamlStyle)) => in_front_matter = true,
+            Event::End(TagEnd::MetadataBlock(_)) => break,
+            Event::Text(text) if in_front_matter => {
+                for line in text.lines() {
+                    if let Some((key, value)) = front_matter_field(line) {
+                        data.insert(key.to_string(), Value::String(value));
+                    }
+                }
+            }
+            _ if !in_front_matter => break,
+            _ => {}
+        }
+    }
+    data.insert("markdown".to_string(), Value::String(markdown.to_string()));
+    Value::Object(data).to_string()
+}
+
+/// A `key: value` line of front matter, with a value that is quoted or plain. `None` for a line that is not one.
+fn front_matter_field(line: &str) -> Option<(&str, String)> {
+    if line.starts_with([' ', '\t', '#', '-']) { return None; }
+    let (key, value) = line.split_once(':')?;
+    let valid = key.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')
+        && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    let value = value.trim();
+    if !valid || value.is_empty() { return None; }
+    let unquoted = ['"', '\''].iter().find_map(|q| value.strip_prefix(*q).and_then(|v| v.strip_suffix(*q)));
+    Some((key, unquoted.unwrap_or(value).to_string()))
+}
+
+/// The images of the `.md` file `markdown`, as they are written: relative paths, in order and once each. An image
+/// at a URL is left out, which the engine reports where it is used.
+pub fn file_images(markdown: &str) -> Vec<String> {
+    let mut paths: Vec<String> = Vec::new();
+    for event in Parser::new_ext(markdown, file_options()) {
+        if let Event::Start(Tag::Image { dest_url, .. }) = event {
+            let lower = dest_url.to_ascii_lowercase();
+            let is_url = ["http://", "https://", "ftp://", "file://", "data:"].iter().any(|scheme| lower.starts_with(scheme));
+            if !is_url && !dest_url.is_empty() && !paths.iter().any(|path| path == dest_url.as_ref()) {
+                paths.push(dest_url.to_string());
+            }
+        }
+    }
+    paths
+}
+
+/// The asset name of the image at `src` of a `.md` file: the host loads the file under it.
+pub fn file_image_name(index: usize) -> String {
+    format!("markdown-image-{}", index + 1)
+}
+
+/// The template `template` with an `<image>` declared for each of `srcs`, named by `file_image_name`, so that an
+/// image of the Markdown, which names its file, is an asset. One the template declares itself is not declared
+/// twice.
+pub fn declare_images(template: &str, srcs: &[String]) -> Result<String, String> {
+    let doc = roxmltree::Document::parse(template).map_err(|e| format!("XML parse error: {e}"))?;
+    let root = doc.root_element();
+    let mut declared: Vec<&str> = Vec::new();
+    for assets in root.children().filter(|n| n.has_tag_name("assets")) {
+        declared.extend(assets.children().filter(|n| n.has_tag_name("image")).filter_map(|image| image.attribute("src")));
+    }
+    let mut images = String::new();
+    for (index, src) in srcs.iter().enumerate() {
+        if !declared.contains(&src.as_str()) {
+            images.push_str(&format!("<image name=\"{}\" src=\"{}\"/>", file_image_name(index), escape_attr(src)));
+        }
+    }
+    if images.is_empty() {
+        return Ok(template.to_string());
+    }
+    let assets = root.children().find(|n| n.has_tag_name("assets"));
+    let (at, written) = match assets {
+        Some(assets) => {
+            let range = assets.range();
+            let text = &template[range.clone()];
+            match text.strip_suffix("/>") {
+                // `<assets/>` becomes `<assets>` with the images and its end tag
+                Some(_) => {
+                    let start_tag = text.trim_end_matches("/>").trim_end();
+                    return Ok(format!("{}{start_tag}>{images}</assets>{}", &template[..range.start], &template[range.end..]));
+                }
+                None => (range.start + text.rfind("</").unwrap_or(text.len()), images),
+            }
+        }
+        None => {
+            let first = elems(&root).next().map_or(template.len(), |n| n.range().start);
+            (first, format!("<assets>{images}</assets>"))
+        }
+    };
+    Ok(format!("{}{written}{}", &template[..at], &template[at..]))
 }
 
 // ── Expansion ─────────────────────────────────────────────────────────────────
@@ -506,12 +623,7 @@ struct Writer<'a> {
 
 impl<'a> Writer<'a> {
     fn new(spec: &'a MarkdownSpec, markdown: &'a str) -> Self {
-        let options = Options::ENABLE_TABLES
-            | Options::ENABLE_FOOTNOTES
-            | Options::ENABLE_STRIKETHROUGH
-            | Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
-            | Options::ENABLE_MATH;
-        let events: Vec<(Event, Range<usize>)> = Parser::new_ext(markdown, options).into_offset_iter().collect();
+        let events: Vec<(Event, Range<usize>)> = Parser::new_ext(markdown, file_options()).into_offset_iter().collect();
         let mut lines = vec![0];
         lines.extend(markdown.match_indices('\n').map(|(i, _)| i + 1));
         Writer { spec, events, at: 0, lines, notes: HashMap::new(), font: spec.defaults.font.clone() }
@@ -1566,5 +1678,50 @@ mod tests {
         // the gap of a layout is none, as before
         let xml = r#"<lpdf version="1"><document><section><layout><text>a</text></layout></section></document></lpdf>"#;
         assert_eq!(parse(xml).unwrap().section_layouts()[0].gap, 0.0);
+    }
+    #[test]
+    fn a_file_gives_its_text_and_the_fields_of_its_front_matter_as_data() {
+        let file = "---\ntitle: \"Release notes\"\nauthor: Me\ntags:\n  - a\n  - b\n# a comment\nmarkdown: ignored\n---\n\n# Body\n";
+        let data: Value = serde_json::from_str(&file_data(file)).unwrap();
+        assert_eq!(data["title"], "Release notes");
+        assert_eq!(data["author"], "Me");
+        assert_eq!(data["markdown"], file);
+        assert!(data.get("tags").is_none());
+        let plain: Value = serde_json::from_str(&file_data("# Body")).unwrap();
+        assert_eq!(plain, serde_json::json!({ "markdown": "# Body" }));
+    }
+
+    #[test]
+    fn a_file_lists_its_relative_images_once_each_and_not_the_urls() {
+        let file = "![a](img/a.png) and ![b](./b.jpg) and ![a again](img/a.png) and ![u](https://x.org/u.png)\n";
+        assert_eq!(file_images(file), ["img/a.png", "./b.jpg"]);
+    }
+
+    #[test]
+    fn the_images_of_a_file_are_declared_in_the_assets_of_the_template() {
+        let srcs = vec!["img/a.png".to_string(), "b.jpg".to_string()];
+        let declared = declare_images(default_template(), &srcs).unwrap();
+        assert!(declared.contains(r#"<assets><image name="markdown-image-1" src="img/a.png"/><image name="markdown-image-2" src="b.jpg"/></assets>"#), "{declared}");
+        // an assets element of its own gets them too, empty or not
+        let own = r#"<lpdf version="1"><assets><image name="logo" src="logo.png"/></assets><document/></lpdf>"#;
+        let declared = declare_images(own, &srcs).unwrap();
+        assert!(declared.contains(r#"src="logo.png"/><image name="markdown-image-1" src="img/a.png"/><image name="markdown-image-2" src="b.jpg"/></assets>"#), "{declared}");
+        let empty = r#"<lpdf version="1"><assets/><document/></lpdf>"#;
+        assert!(declare_images(empty, &srcs).unwrap().contains(r#"<assets><image name="markdown-image-1""#));
+        // one the template declares is not declared twice
+        let again = r#"<lpdf version="1"><assets><image name="a" src="img/a.png"/></assets><document/></lpdf>"#;
+        let declared = declare_images(again, &srcs).unwrap();
+        assert!(declared.contains(r#"name="markdown-image-2""#) && !declared.contains(r#"src="img/a.png"/><image name="markdown-image-1""#), "{declared}");
+        assert_eq!(declare_images(again, &[]).unwrap(), again);
+    }
+
+    #[test]
+    fn a_file_with_its_images_declared_is_a_document_that_renders_them() {
+        let file = "# T\n\n![a chart](img/chart.png)\n";
+        let template = declare_images(default_template(), &file_images(file)).unwrap();
+        let mut doc = parse(&template).unwrap();
+        crate::data::apply(&mut doc, &file_data(file)).unwrap();
+        let kinds: Vec<NodeKind> = doc.section_layouts().remove(0).children.iter().map(|n| n.kind.clone()).collect();
+        assert_eq!(kinds, [NodeKind::Text, NodeKind::Img]);
     }
 }

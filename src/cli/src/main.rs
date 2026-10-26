@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process;
 use std::time::Instant;
 
@@ -104,6 +104,7 @@ fn cmd_convert(args: &[String]) {
     let mut input:   Option<PathBuf> = None;
     let mut output:  Option<PathBuf> = None;
     let mut data:    Option<PathBuf> = None;
+    let mut template: Option<PathBuf> = None;
     let mut license: String          = std::env::var("LPDF_LICENSE").unwrap_or_default();
 
     let mut i = 0;
@@ -113,6 +114,7 @@ fn cmd_convert(args: &[String]) {
                 print_convert_help();
                 return;
             }
+            "--template" => { i += 1; template = Some(PathBuf::from(require_arg(args, i, "--template"))); }
             "--input"   => { i += 1; input   = Some(PathBuf::from(require_arg(args, i, "--input"))); }
             "--output"  => { i += 1; output  = Some(PathBuf::from(require_arg(args, i, "--output"))); }
             "--data"    => { i += 1; data    = Some(PathBuf::from(require_arg(args, i, "--data"))); }
@@ -126,6 +128,10 @@ fn cmd_convert(args: &[String]) {
 
     // ── Folder batch mode ─────────────────────────────────────────────────────
     if input_path.is_dir() {
+        if template.is_some() {
+            eprintln!("--template takes one .md file and cannot be used when --input is a folder");
+            process::exit(1);
+        }
         if data.is_some() {
             eprintln!("--data takes one file and cannot be used when --input is a folder");
             process::exit(1);
@@ -139,11 +145,19 @@ fn cmd_convert(args: &[String]) {
     }
 
     // ── Single file mode ──────────────────────────────────────────────────────
-    let xml  = read_file(&input_path);
-    let json = data.as_ref().map(read_json_file);
+    let is_markdown = is_markdown_file(&input_path);
+    if template.is_some() && !is_markdown {
+        eprintln!("--template is the template of a .md file; '{}' is not one", input_path.display());
+        process::exit(1);
+    }
 
     let t0 = Instant::now();
-    let pdf_bytes = lpdf::LpdfEngine::render_xml_to_pdf(&xml, json.as_deref(), &license, now_unix()).unwrap_or_else(|e| {
+    let rendered = if is_markdown {
+        render_markdown_file(&input_path, template.as_ref(), data.as_ref(), &license)
+    } else {
+        render_xml_file(&input_path, data.as_ref(), &license)
+    };
+    let pdf_bytes = rendered.unwrap_or_else(|e| {
         eprintln!("Render error: {e}");
         process::exit(1);
     });
@@ -180,6 +194,92 @@ fn cmd_convert(args: &[String]) {
             });
         }
     }
+}
+
+/// Whether `path` is a Markdown file, by its extension.
+fn is_markdown_file(path: &Path) -> bool {
+    matches!(path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref(), Some("md" | "markdown"))
+}
+
+/// An engine for the license `license`, with the clock of this machine.
+fn engine_for(license: &str) -> lpdf::LpdfEngine {
+    let mut engine = lpdf::LpdfEngine::new(license);
+    engine.set_now(now_unix());
+    engine
+}
+
+/// Load into `engine` the files that `xml` names with a `src`, read relative to `base`: its images and the files of
+/// its Markdown styles. The images of a `.md` file are named `markdown-image-N` and loaded apart, so they are
+/// skipped here.
+fn load_sources(engine: &mut lpdf::LpdfEngine, xml: &str, base: &Path) -> Result<(), String> {
+    for file in lpdf::source_files(xml)? {
+        if file.key.starts_with("markdown-image-") { continue; }
+        let path = base.join(&file.src);
+        match file.kind {
+            lpdf::SourceKind::Image => {
+                let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read the image '{}': {e}", path.display()))?;
+                engine.load_image(&file.key, &bytes);
+            }
+            lpdf::SourceKind::MarkdownStyles => {
+                let text = std::fs::read_to_string(&path)
+                    .map_err(|e| format!("Failed to read the styles '{}': {e}", path.display()))?;
+                engine.load_markdown_styles(&file.key, &text);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The folder a path's relative `src` attributes are read from.
+fn folder_of(path: &Path) -> PathBuf {
+    path.parent().map(Path::to_path_buf).unwrap_or_default()
+}
+
+/// Render an XML document, with the images and styles files it names.
+fn render_xml_file(input: &Path, data: Option<&PathBuf>, license: &str) -> Result<Vec<u8>, String> {
+    let xml  = read_file(&input.to_path_buf());
+    let json = data.map(read_json_file);
+    let mut engine = engine_for(license);
+    load_sources(&mut engine, &xml, &folder_of(input))?;
+    engine.render_xml(&xml, json.as_deref())
+}
+
+/// Render a `.md` file in a template: the one given, or the default. The text and the front matter are the data of
+/// the template, `--data` adds to them, and the images of the Markdown are read relative to the `.md` file.
+fn render_markdown_file(input: &Path, template: Option<&PathBuf>, data: Option<&PathBuf>, license: &str) -> Result<Vec<u8>, String> {
+    let markdown = read_file(&input.to_path_buf());
+    let template_xml = match template {
+        Some(path) => read_file(path),
+        None       => lpdf::markdown::default_template().to_string(),
+    };
+    let images = lpdf::markdown::file_images(&markdown);
+    let xml = lpdf::markdown::declare_images(&template_xml, &images)?;
+
+    // The file's own data, over which what --data says is laid, but never the text of the file.
+    let mut fields: serde_json::Value = serde_json::from_str(&lpdf::markdown::file_data(&markdown))
+        .map_err(|e| format!("front matter: {e}"))?;
+    if let Some(path) = data {
+        let extra: serde_json::Value = serde_json::from_str(&read_json_file(path)).map_err(|e| e.to_string())?;
+        let serde_json::Value::Object(extra) = extra else {
+            return Err(format!("'{}' must hold a JSON object, to go with the fields of the .md file", path.display()));
+        };
+        if let Some(object) = fields.as_object_mut() {
+            for (key, value) in extra {
+                if key != "markdown" { object.insert(key, value); }
+            }
+        }
+    }
+
+    let mut engine = engine_for(license);
+    let template_dir = template.map(|path| folder_of(path)).unwrap_or_default();
+    load_sources(&mut engine, &xml, &template_dir)?;
+    let markdown_dir = folder_of(input);
+    for (index, src) in images.iter().enumerate() {
+        let path = markdown_dir.join(src);
+        let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read the image '{}': {e}", path.display()))?;
+        engine.load_image(&lpdf::markdown::file_image_name(index), &bytes);
+    }
+    engine.render_xml(&xml, Some(&fields.to_string()))
 }
 
 // ── Subcommand: license ───────────────────────────────────────────────────────
@@ -557,11 +657,19 @@ fn print_license_help() {
 }
 
 fn print_convert_help() {
-    eprintln!("Usage: lpdf convert --input <file.xml|dir> [options]");
+    eprintln!("Usage: lpdf convert --input <file.xml|file.md|dir> [options]");
     eprintln!();
     eprintln!("Options:");
-    eprintln!("  --input   <file.xml|dir>   LPDF XML source file, or folder for batch conversion");
-    eprintln!("  --output  <file.pdf|dir>   Write PDF to file instead of stdout; required for folder input");
-    eprintln!("  --data    <file.json>      JSON the document's data-* attributes read; not with folder input");
-    eprintln!("  --license <token>          License token (or set LPDF_LICENSE env var)");
+    eprintln!("  --input    <file.xml|file.md|dir>");
+    eprintln!("                             LPDF XML source file, a Markdown file, or a folder for batch conversion");
+    eprintln!("  --output   <file.pdf|dir>  Write PDF to file instead of stdout; required for folder input");
+    eprintln!("  --data     <file.json>     JSON the document's data-* attributes read; not with folder input.");
+    eprintln!("                             With a .md file, an object whose fields go with the file's front matter");
+    eprintln!("  --template <file.xml>      The document a .md file is rendered in, which holds a <markdown> that reads");
+    eprintln!("                             the text from the data \"markdown\" and the front matter from the other fields.");
+    eprintln!("                             Without it, a page of A4 with the page number");
+    eprintln!("  --license  <token>         License token (or set LPDF_LICENSE env var)");
+    eprintln!();
+    eprintln!("A <markdown-styles src> and an <image src> are read relative to the file that names them;");
+    eprintln!("the images of a .md file, relative to it.");
 }

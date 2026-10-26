@@ -1119,6 +1119,8 @@ fn resolve_node(
 
 // ── Main parse entry point (XML) ─────────────────────────────────────────────
 
+// The WASI binary reads every document with its resources, so this is for the engine and the tests.
+#[allow(dead_code)]
 pub fn parse(xml: &str) -> Result<Document, String> {
     parse_with(xml, &Resources::default())
 }
@@ -3318,6 +3320,8 @@ fn apply_field_attrs(
 }
 
 /// Parse a JSON document tree (produced by `LpdfKit`) into a `Document`.
+// The WASI binary reads every document with its resources, so this is for the engine and the tests.
+#[allow(dead_code)]
 pub fn parse_tree(json: &str) -> Result<Document, String> {
     parse_tree_with(json, &Resources::default())
 }

@@ -39,6 +39,8 @@ pub struct LpdfEngine {
     now_unix:    i64,
     /// Optional encryption config (AES-256 or RC4-128); applied as a post-processing pass.
     encrypt:     Option<encrypt::EncryptConfig>,
+    /// The text of the files that a `<markdown-styles src>` names, by `src`; populated via `load_markdown_styles`.
+    markdown_styles: HashMap<String, String>,
 }
 
 #[wasm_bindgen]
@@ -53,6 +55,7 @@ impl LpdfEngine {
             created_on:  None,
             now_unix:    0,
             encrypt:     None,
+            markdown_styles: HashMap::new(),
         }
     }
 
@@ -112,6 +115,13 @@ impl LpdfEngine {
         self.images.load(name, bytes.to_vec());
     }
 
+    /// Register the text of a file of Markdown rules, the root of which is a `<markdown-styles>`, for the
+    /// `src` that names it. The engine reads no files: call this once for every `<markdown-styles src="…">`
+    /// of the document before `render_pdf`, as `load_font` is called for a font.
+    pub fn load_markdown_styles(&mut self, src: &str, xml: &str) {
+        self.markdown_styles.insert(src.to_string(), xml.to_string());
+    }
+
     /// Set an optional ISO 8601 creation timestamp (e.g. `"2024-06-01T12:00:00"`).
     /// When provided, written as `/CreationDate` in the PDF info dictionary.
     /// Omitting this keeps builds reproducible (no embedded timestamp).
@@ -162,63 +172,7 @@ impl LpdfEngine {
     /// attributes in the template.  Pass `None` (or `null` / `undefined` from
     /// JavaScript) to render the template with its inline fallback content.
     pub fn render_pdf(&self, xml: &str, json_data: Option<String>) -> Result<Vec<u8>, JsValue> {
-        if xml.len() > 1_048_576 {
-            return Err(JsValue::from_str("input exceeds 1 MB limit"));
-        }
-
-        let mut doc = parse::parse(xml)
-            .map_err(|e| JsValue::from_str(&e))?;
-
-        if let Some(json) = json_data.as_deref() {
-            data::apply(&mut doc, json).map_err(|e| JsValue::from_str(&e))?;
-        }
-
-        // Confirm every image declared in <assets> has bytes in the registry.
-        for (_alias, name) in &doc.images {
-            if self.images.get(name).is_none() {
-                return Err(JsValue::from_str(&format!(
-                    "image '{name}' declared in <assets> but not loaded via loadImage()"
-                )));
-            }
-            if let Some(bytes) = self.images.get(name) {
-                if let Some(reason) = pdf::image_format_error(bytes) {
-                    return Err(JsValue::from_str(&format!(
-                        "image '{name}': {reason}"
-                    )));
-                }
-            }
-        }
-
-        let meta = pdf::build_image_meta(&self.images);
-        let mut lp = doc.section_layouts();
-        for page in &mut lp {
-            layout::prefill_section_image_sizes(page, &meta);
-        }
-
-        layout::set_font_widths(self.font_widths.clone());
-
-        let pages: Vec<render::RenderPage> =
-            layout::layout_document(&lp);
-
-        let status = license::check(&self.license_key, self.now_unix);
-        // An unlicensed status draws the attribution line on every page.
-        let bytes = pdf::render_pdf(
-            &pages,
-            &doc.fonts,
-            &self.fonts,
-            &self.images,
-            &doc.meta,
-            &doc.gradients,
-            self.created_on.as_deref(),
-            status.is_licensed(),
-        )
-        .map_err(|e| JsValue::from_str(&e))?;
-
-        let bytes = match &self.encrypt {
-            Some(cfg) => encrypt::encrypt_pdf(&bytes, cfg).map_err(|e| JsValue::from_str(&e))?,
-            None      => bytes,
-        };
-        Ok(bytes)
+        self.render_xml(xml, json_data.as_deref()).map_err(|e| JsValue::from_str(&e))
     }
 
     /// Render a JSON kit-tree document to PDF bytes.
@@ -233,7 +187,7 @@ impl LpdfEngine {
         }
 
         // ── Kit mode ──────────────────────────────────────────────────────────
-        let mut doc = parse::parse_tree(json)
+        let mut doc = parse::parse_tree_with(json, &self.resources())
             .map_err(|e| JsValue::from_str(&e))?;
 
         // Confirm every image declared in the tree has bytes in the registry.
@@ -292,7 +246,7 @@ impl LpdfEngine {
             return r#"{"error":"input exceeds 1 MB limit"}"#.to_string();
         }
 
-        let doc = match parse::parse(xml) {
+        let doc = match parse::parse_with(xml, &self.resources()) {
             Ok(d) => d,
             Err(e) => {
                 return serde_json::json!({ "error": e }).to_string();
@@ -307,7 +261,7 @@ impl LpdfEngine {
             return r#"{"error":"input exceeds 4 MB limit"}"#.to_string();
         }
 
-        let doc = match parse::parse_tree(json) {
+        let doc = match parse::parse_tree_with(json, &self.resources()) {
             Ok(d) => d,
             Err(e) => {
                 return serde_json::json!({ "error": e }).to_string();
@@ -320,6 +274,66 @@ impl LpdfEngine {
 
 // Private helpers — not exported to WASM.
 impl LpdfEngine {
+    /// Render `xml` to PDF bytes with the fonts, images and styles files loaded on this engine: `render_pdf`, with an
+    /// error that is not a JS value, which the command line and the tests can read.
+    pub fn render_xml(&self, xml: &str, json_data: Option<&str>) -> Result<Vec<u8>, String> {
+        if xml.len() > 1_048_576 {
+            return Err("input exceeds 1 MB limit".to_string());
+        }
+
+        let mut doc = parse::parse_with(xml, &self.resources())?;
+
+        if let Some(json) = json_data {
+            data::apply(&mut doc, json)?;
+        }
+
+        // Confirm every image declared in <assets> has bytes in the registry.
+        for (_alias, name) in &doc.images {
+            if self.images.get(name).is_none() {
+                return Err(format!("image '{name}' declared in <assets> but not loaded via loadImage()"));
+            }
+            if let Some(bytes) = self.images.get(name) {
+                if let Some(reason) = pdf::image_format_error(bytes) {
+                    return Err(format!("image '{name}': {reason}"));
+                }
+            }
+        }
+
+        let meta = pdf::build_image_meta(&self.images);
+        let mut lp = doc.section_layouts();
+        for page in &mut lp {
+            layout::prefill_section_image_sizes(page, &meta);
+        }
+
+        layout::set_font_widths(self.font_widths.clone());
+
+        let pages: Vec<render::RenderPage> =
+            layout::layout_document(&lp);
+
+        let status = license::check(&self.license_key, self.now_unix);
+        // An unlicensed status draws the attribution line on every page.
+        let bytes = pdf::render_pdf(
+            &pages,
+            &doc.fonts,
+            &self.fonts,
+            &self.images,
+            &doc.meta,
+            &doc.gradients,
+            self.created_on.as_deref(),
+            status.is_licensed(),
+        )?;
+
+        match &self.encrypt {
+            Some(cfg) => encrypt::encrypt_pdf(&bytes, cfg),
+            None      => Ok(bytes),
+        }
+    }
+
+    /// What the caller loaded for the `src` attributes of the document, for the parser.
+    fn resources(&self) -> parse::Resources {
+        parse::Resources { markdown_styles: self.markdown_styles.clone() }
+    }
+
     /// Render XML to PDF bytes — native API used by the CLI and tests.
     ///
     /// Draws the attribution line when `license_key` is empty or invalid.
@@ -416,6 +430,81 @@ impl LpdfEngine {
 #[wasm_bindgen]
 pub fn check_license(token: &str, now_unix: i64) -> String {
     license::report_json(token, now_unix)
+}
+
+/// What kind of file a `src` of a document names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceKind {
+    /// The `src` of an `<image>`, loaded under the image's `ref` or name with `load_image`.
+    Image,
+    /// The `src` of a `<markdown-styles>`, loaded under the `src` itself with `load_markdown_styles`.
+    MarkdownStyles,
+}
+
+/// A file that a document names with a `src` and whoever renders it loads, as the engine reads no files.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceFile {
+    pub kind: SourceKind,
+    /// What it is loaded under: the `ref` or name of an image, the `src` of a styles file.
+    pub key:  String,
+    pub src:  String,
+}
+
+/// The files that the XML document `xml` names with a `src`: its images and the files of its Markdown styles.
+/// A font is not among them: the command line draws in the built-in fonts.
+pub fn source_files(xml: &str) -> Result<Vec<SourceFile>, String> {
+    let doc = roxmltree::Document::parse(xml).map_err(|e| format!("XML parse error: {e}"))?;
+    let mut files = Vec::new();
+    for node in doc.descendants().filter(|n| n.is_element()) {
+        let Some(src) = node.attribute("src") else { continue };
+        match node.tag_name().name() {
+            "image" => {
+                let key = node.attribute("ref").or_else(|| node.attribute("name")).unwrap_or(src);
+                files.push(SourceFile { kind: SourceKind::Image, key: key.to_string(), src: src.to_string() });
+            }
+            "markdown-styles" => {
+                files.push(SourceFile { kind: SourceKind::MarkdownStyles, key: src.to_string(), src: src.to_string() });
+            }
+            _ => {}
+        }
+    }
+    Ok(files)
+}
+
+/// The template that wraps a `.md` file when it is rendered with no template of its own: A4, a margin and the
+/// page number. It reads the Markdown from the data `markdown`, the rest of which is the file's front matter.
+#[wasm_bindgen]
+pub fn markdown_template() -> String {
+    markdown::default_template().to_string()
+}
+
+/// The rules a `<markdown>` with no styles uses, as the file to start a style of one's own from.
+#[wasm_bindgen]
+pub fn markdown_default_styles() -> String {
+    markdown::default_styles().to_string()
+}
+
+/// The data a template gets for the `.md` file `markdown`, as JSON: the text as `markdown`, and the fields of its
+/// front matter, each a string.
+#[wasm_bindgen]
+pub fn markdown_file_data(markdown: &str) -> String {
+    markdown::file_data(markdown)
+}
+
+/// The relative paths of the images of the `.md` file `markdown`, as a JSON array. The caller declares them with
+/// `markdown_declare_images` and loads each file, relative to the `.md`, under the name `markdown-image-N` where N
+/// counts from 1 in the order of the array.
+#[wasm_bindgen]
+pub fn markdown_file_images(markdown: &str) -> String {
+    serde_json::json!(markdown::file_images(markdown)).to_string()
+}
+
+/// The template `template` with an `<image>` declared for each path of the JSON array `srcs`, named as
+/// `markdown_file_images` says.
+#[wasm_bindgen]
+pub fn markdown_declare_images(template: &str, srcs: &str) -> Result<String, JsValue> {
+    let srcs: Vec<String> = serde_json::from_str(srcs).map_err(|e| JsValue::from_str(&format!("images: {e}")))?;
+    markdown::declare_images(template, &srcs).map_err(|e| JsValue::from_str(&e))
 }
 
 /// Convert a JSON kit-tree (produced by `LpdfKit` in any adapter) to an lpdf

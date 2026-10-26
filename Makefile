@@ -12,7 +12,7 @@ export LPDF_PUBLIC_KEY
 PAGES_DIR     ?= repos/lpdf-pages
 PORTAL_UI_DIR ?= ../codesense/portal/ui
 
-.PHONY: build-wasm build-wasi build-cli test-wasm test-wasi \
+.PHONY: build-wasm build-wasi build-cli test-wasm test-wasi test-cli \
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python \
@@ -78,6 +78,13 @@ test-wasi: test-wasm
 	@echo ">>> Running WASI tests..."
 	@echo ""
 	cargo test --manifest-path src/core-wasi/Cargo.toml
+
+test-cli:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Running CLI tests..."
+	@echo ""
+	cargo test --manifest-path src/cli/Cargo.toml
 
 benchmark:
 	@echo ""
@@ -209,7 +216,7 @@ check-sdk-api:
 	node scripts/gen-sdk-api.mjs --check
 	node scripts/check-sdk-parity.mjs
 
-test-all: check-sdk-api test-wasm test-wasi test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python
+test-all: check-sdk-api test-wasm test-wasi test-cli test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python
 
 example-all: example-node example-dotnet example-php example-python
 

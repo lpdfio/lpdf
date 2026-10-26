@@ -550,6 +550,7 @@ dependencies = [
  "md-5",
  "miniz_oxide",
  "pdf-writer",
+ "pulldown-cmark",
  "qrcode",
  "roxmltree",
  "serde",
