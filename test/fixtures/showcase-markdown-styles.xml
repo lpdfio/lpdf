@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <assets>
+    <font name="body"        core="Times-Roman" />
+    <font name="body-italic" core="Times-Italic" />
+    <font name="body-bold"   core="Times-Bold" />
+    <font name="heading"     core="Helvetica-Bold" />
+  </assets>
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+      <color name="rule"    value="#d4d4d4" />
+      <color name="wash"    value="#eef3fb" />
+    </colors>
+  </tokens>
+  <document size="a4" font="body">
+    <meta title="lpdf Showcase — Markdown styles" subject="Rules that restyle a markdown, and its headings in a table of contents" />
+
+    <!-- A rule is named after the Markdown it styles and takes the attributes of the element it becomes. The rules
+         written here are laid over the default ones one attribute at a time, so what they do not set stays as it
+         was. A document in an embedded font names the faces of the bold and the italic: em and strong.
+         Expected, in order:
+           Page 1  A cover section, a layout of its own, around the Markdown
+           Page 2  The table of contents: Overview, Details and Notes at level 1 and 2 (bookmarks="2" keeps two
+                   levels, so the third heading is not listed), each with its page
+           Page 3  The Markdown in Times: headings in Helvetica Bold, h1 in blue with a rule's worth of space,
+                   justified paragraphs with the italic and bold faces named, a list with square bullets,
+                   a quote with a blue bar on a light wash, code on a blue-grey background, and a table with a wash
+                   on its header cells and a light stripe
+    -->
+    <section>
+      <layout margin="72pt">
+        <column gap="l" justify="center" height="full">
+          <text font="heading" font-size="xxl" color="primary">Markdown, restyled</text>
+          <text color="muted">A cover section, a table of contents and the Markdown, in one document.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section type="toc">
+      <layout margin="72pt">
+        <column gap="m">
+          <text font="heading" font-size="xl" color="primary">Contents</text>
+          <column gap="xs">
+            <column data-source="$toc">
+              <link href="#">
+                <row justify="between">
+                  <text data-value="label">Entry</text>
+                  <text data-value="page" color="muted">0</text>
+                </row>
+              </link>
+            </column>
+          </column>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <layer>
+        <rect x="0pt" y="0pt" width="595pt" height="10pt" fill="primary" />
+        <text-at anchor="bottom-center" y="-24pt" font-size="xs" color="muted">Page {page} of {pages}</text-at>
+      </layer>
+      <markdown margin="72pt 72pt 60pt 72pt" gap="m" bookmarks="2">
+        <markdown-styles>
+          <h1 font="heading" color="primary" font-size="xxl" />
+          <h2 font="heading" font-size="l" />
+          <h3 font="heading" font-size="m" color="muted" />
+          <p align="justify" line-height="1.5" />
+          <em font="body-italic" />
+          <strong font="body-bold" />
+          <li bullet="square" gap="s" indent="20pt" />
+          <quote color="primary" bar-color="primary" bar-width="4pt" background="wash" padding="s s s m" />
+          <code font="Courier" background="#eaf0f6" color="#1f3b57" />
+          <a color="primary" underline="false" />
+          <table stripe="wash" />
+          <th font="heading" background="wash" font-size="s" padding="s" />
+          <td font-size="s" padding="s" />
+        </markdown-styles>
+        <markdown-content><![CDATA[
+          # Overview
+
+          The *rules* of a markdown are **elements**, so the editor validates them, and a token file restyles them
+          all. This paragraph is justified, and is long enough to wrap onto a few lines so that the spacing between
+          its words shows, with the italic and the bold face of Times named in the rules of `em` and `strong`.
+
+          ## Details
+
+          - Square bullets from the `li` rule
+          - A gap of `s` between items
+            - A nested list, with the same indent
+          - [A link](https://lpdf.io) without an underline
+
+          > A quote on a wash, with a blue bar the height of the box and padding of its own.
+
+          ### Not listed
+
+          This heading is level 3, so with `bookmarks="2"` it is no bookmark and the contents do not list it.
+
+          ## Notes
+
+          ```
+          rule  = element
+          style = attributes
+          ```
+
+          | Rule   | Becomes  |
+          |:-------|:---------|
+          | `h1`   | a text   |
+          | `code` | a box    |
+          | `quote`| a table  |
+        ]]></markdown-content>
+      </markdown>
+    </section>
+  </document>
+</lpdf>

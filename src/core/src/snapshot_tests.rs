@@ -151,6 +151,12 @@ fn showcase_code() { run_snapshot("showcase-code"); }
 #[test]
 fn showcase_code_split() { run_snapshot("showcase-code-split"); }
 #[test]
+fn showcase_markdown() { run_snapshot_with_image("showcase-markdown"); }
+#[test]
+fn showcase_markdown_styles() { run_snapshot("showcase-markdown-styles"); }
+#[test]
+fn showcase_markdown_split() { run_snapshot("showcase-markdown-split"); }
+#[test]
 fn showcase_lists() { run_snapshot("showcase-lists"); }
 #[test]
 fn showcase_lists_split() { run_snapshot("showcase-lists-split"); }
