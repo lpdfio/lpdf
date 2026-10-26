@@ -40,6 +40,13 @@ for (const element of ['column', 'row', 'grid', 'list', 'li', 'frame', 'link', '
     'shape', 'barcode', 'text', 'code', 'td', 'thead', 'tr', 'table', 'field', 'bookmark']) {
     EXPECTED[`${element.split('-').map((word) => word[0].toUpperCase() + word.slice(1)).join('')}Attr`] = attributes(element);
 }
+// A markdown, its styles and their rules: classes named `Markdown` and the element's name, since a rule is named
+// after the Markdown it styles and shares names with elements of the layout.
+EXPECTED.MarkdownAttr = attributes('markdown');
+EXPECTED.MarkdownStylesAttr = attributes('markdown-styles', 'markdown');
+for (const rule of ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'code', 'quote', 'li', 'a', 'strong', 'em', 'del', 'table', 'th', 'td']) {
+    EXPECTED[`Markdown${rule[0].toUpperCase()}${rule.slice(1)}Attr`] = attributes(rule, 'markdown');
+}
 for (const element of ['rect', 'circle', 'ellipse', 'line', 'path', 'text-at', 'img-at', 'barcode-at']) {
     EXPECTED[`${element.split('-').map((word) => word[0].toUpperCase() + word.slice(1)).join('')}Attr`] = attributes(element);
 }

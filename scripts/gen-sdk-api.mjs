@@ -34,11 +34,19 @@ const SDK = {
     php: path.join(repositories.php, 'src'),
 };
 
+// The rules a `<markdown-styles>` holds, each an element of its own in the schema.
+const MARKDOWN_RULES = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'code', 'quote', 'li', 'a', 'strong', 'em', 'del', 'table', 'th', 'td'];
+
 // `where` is how the schema declares the element (see loadSchema); `area` is the folder it lives in.
 const CLASSES = [
     ...['column', 'row', 'grid', 'list', 'li', 'frame', 'link', 'divider', 'span', 'code-span', 'img', 'shape', 'barcode',
         'text', 'code', 'td', 'thead', 'tr', 'table', 'field', 'bookmark'].map((el) => ({ cls: `${pascal(el)}Attr`, el, where: 'global', area: 'layout' })),
     { cls: 'RegionAttr', el: 'region', where: 'layout', area: 'layout' },
+    // A markdown, its styles and the rules of its styles, which share names with elements of the layout: a class
+    // of each, named `Markdown` and the element's name, in an area of their own.
+    { cls: 'MarkdownAttr', el: 'markdown', where: 'global', area: 'markdown' },
+    { cls: 'MarkdownStylesAttr', el: 'markdown-styles', where: 'markdown', area: 'markdown' },
+    ...MARKDOWN_RULES.map((el) => ({ cls: `Markdown${pascal(el)}Attr`, el, where: 'markdown', area: 'markdown' })),
     { cls: 'LayerAttr', el: 'layer', where: 'global', area: 'canvas' },
     ...['rect', 'circle', 'ellipse', 'line', 'path', 'text-at', 'img-at', 'barcode-at']
         .map((el) => ({ cls: `${pascal(el)}Attr`, el, where: 'global', area: 'canvas' })),
@@ -52,6 +60,7 @@ const PLACES = {
     layout: { dotnet: 'Lpdf.Layout', php: 'Lpdf\\Layout', folder: 'Layout', python: 'layout' },
     canvas: { dotnet: 'Lpdf.Canvas', php: 'Lpdf\\Canvas', folder: 'Canvas', python: 'canvas' },
     kit: { dotnet: 'Lpdf.Kit', php: 'Lpdf\\Kit', folder: 'Kit', python: 'kit' },
+    markdown: { dotnet: 'Lpdf.Markdown', php: 'Lpdf\\Markdown', folder: 'Markdown', python: 'markdown' },
 };
 
 function words(name) { return name.split('-'); }
