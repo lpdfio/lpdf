@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+      <color name="keyword" value="#c0392b" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Code split" subject="A code that is longer than a page" />
+
+    <!-- A <code> longer than the page splits between lines, like a text. Each part is drawn in a box of its own,
+         with the padding at its top and bottom, so that the tint and the padding do not run off the page. The lines
+         keep their indent, a long line that wrapped stays together, and the lines of the next page continue where
+         the last page stopped. widows and orphans keep two lines of the code together at a break, as they do for a
+         text.
+         Expected, page by page:
+           1  the title, a sentence, and the first lines of the listing in a tinted box that ends at the bottom margin
+              with padding below its last line
+           2  the listing goes on in a box that starts at the top margin with padding above its first line, and
+              ends at the bottom margin the same way
+           3  the same
+           4  the last lines of the listing, a box that ends where they do, then the sentence after it
+    -->
+    <section>
+      <layout margin="40pt">
+        <column gap="m">
+        <text font-size="xxl" font="Helvetica-Bold" color="primary">A long listing</text>
+        <text font-size="m" color="muted">The listing below is longer than a page. It splits between two lines and goes on in a box on the next page.</text>
+        <code font-size="s">
+/// Part 1: reads the stock of one warehouse and reports what is below the line it was asked to keep, which is a long comment on purpose, so that it wraps inside the box and takes a second line.
+<span color="keyword">fn</span> stock_1(warehouse: &amp;Warehouse, floor: u32) -&gt; Vec&lt;Item&gt; {
+    <span color="keyword">let</span> mut low = Vec::new();
+    <span color="keyword">for</span> item <span color="keyword">in</span> warehouse.items() {
+        <span color="keyword">if</span> item.count &lt; floor {
+            low.push(item.clone());
+        }
+    }
+
+	// a tab here, as an editor with tabs would write the line
+	low.sort_by_key(|item| item.count);
+    low
+}
+
+/// Part 2: reads the stock of one warehouse and reports what is below the line it was asked to keep, which is a long comment on purpose, so that it wraps inside the box and takes a second line.
+<span color="keyword">fn</span> stock_2(warehouse: &amp;Warehouse, floor: u32) -&gt; Vec&lt;Item&gt; {
+    <span color="keyword">let</span> mut low = Vec::new();
+    <span color="keyword">for</span> item <span color="keyword">in</span> warehouse.items() {
+        <span color="keyword">if</span> item.count &lt; floor {
+            low.push(item.clone());
+        }
+    }
+
+	// a tab here, as an editor with tabs would write the line
+	low.sort_by_key(|item| item.count);
+    low
+}
+
+/// Part 3: reads the stock of one warehouse and reports what is below the line it was asked to keep, which is a long comment on purpose, so that it wraps inside the box and takes a second line.
+<span color="keyword">fn</span> stock_3(warehouse: &amp;Warehouse, floor: u32) -&gt; Vec&lt;Item&gt; {
+    <span color="keyword">let</span> mut low = Vec::new();
+    <span color="keyword">for</span> item <span color="keyword">in</span> warehouse.items() {
+        <span color="keyword">if</span> item.count &lt; floor {
+            low.push(item.clone());
+        }
+    }
+
+	// a tab here, as an editor with tabs would write the line
+	low.sort_by_key(|item| item.count);
+    low
+}
+
+/// Part 4: reads the stock of one warehouse and reports what is below the line it was asked to keep, which is a long comment on purpose, so that it wraps inside the box and takes a second line.
+<span color="keyword">fn</span> stock_4(warehouse: &amp;Warehouse, floor: u32) -&gt; Vec&lt;Item&gt; {
+    <span color="keyword">let</span> mut low = Vec::new();
+    <span color="keyword">for</span> item <span color="keyword">in</span> warehouse.items() {
+        <span color="keyword">if</span> item.count &lt; floor {
+            low.push(item.clone());
+        }
+    }
+
+	// a tab here, as an editor with tabs would write the line
+	low.sort_by_key(|item| item.count);
+    low
+}
+
+/// Part 5: reads the stock of one warehouse and reports what is below the line it was asked to keep, which is a long comment on purpose, so that it wraps inside the box and takes a second line.
+<span color="keyword">fn</span> stock_5(warehouse: &amp;Warehouse, floor: u32) -&gt; Vec&lt;Item&gt; {
+    <span color="keyword">let</span> mut low = Vec::new();
+    <span color="keyword">for</span> item <span color="keyword">in</span> warehouse.items() {
+        <span color="keyword">if</span> item.count &lt; floor {
+            low.push(item.clone());
+        }
+    }
+
+	// a tab here, as an editor with tabs would write the line
+	low.sort_by_key(|item| item.count);
+    low
+}
+
+/// Part 6: reads the stock of one warehouse and reports what is below the line it was asked to keep, which is a long comment on purpose, so that it wraps inside the box and takes a second line.
+<span color="keyword">fn</span> stock_6(warehouse: &amp;Warehouse, floor: u32) -&gt; Vec&lt;Item&gt; {
+    <span color="keyword">let</span> mut low = Vec::new();
+    <span color="keyword">for</span> item <span color="keyword">in</span> warehouse.items() {
+        <span color="keyword">if</span> item.count &lt; floor {
+            low.push(item.clone());
+        }
+    }
+
+	// a tab here, as an editor with tabs would write the line
+	low.sort_by_key(|item| item.count);
+    low
+}
+
+/// Part 7: reads the stock of one warehouse and reports what is below the line it was asked to keep, which is a long comment on purpose, so that it wraps inside the box and takes a second line.
+<span color="keyword">fn</span> stock_7(warehouse: &amp;Warehouse, floor: u32) -&gt; Vec&lt;Item&gt; {
+    <span color="keyword">let</span> mut low = Vec::new();
+    <span color="keyword">for</span> item <span color="keyword">in</span> warehouse.items() {
+        <span color="keyword">if</span> item.count &lt; floor {
+            low.push(item.clone());
+        }
+    }
+
+	// a tab here, as an editor with tabs would write the line
+	low.sort_by_key(|item| item.count);
+    low
+}
+
+/// Part 8: reads the stock of one warehouse and reports what is below the line it was asked to keep, which is a long comment on purpose, so that it wraps inside the box and takes a second line.
+<span color="keyword">fn</span> stock_8(warehouse: &amp;Warehouse, floor: u32) -&gt; Vec&lt;Item&gt; {
+    <span color="keyword">let</span> mut low = Vec::new();
+    <span color="keyword">for</span> item <span color="keyword">in</span> warehouse.items() {
+        <span color="keyword">if</span> item.count &lt; floor {
+            low.push(item.clone());
+        }
+    }
+
+	// a tab here, as an editor with tabs would write the line
+	low.sort_by_key(|item| item.count);
+    low
+}
+
+/// Part 9: reads the stock of one warehouse and reports what is below the line it was asked to keep, which is a long comment on purpose, so that it wraps inside the box and takes a second line.
+<span color="keyword">fn</span> stock_9(warehouse: &amp;Warehouse, floor: u32) -&gt; Vec&lt;Item&gt; {
+    <span color="keyword">let</span> mut low = Vec::new();
+    <span color="keyword">for</span> item <span color="keyword">in</span> warehouse.items() {
+        <span color="keyword">if</span> item.count &lt; floor {
+            low.push(item.clone());
+        }
+    }
+
+	// a tab here, as an editor with tabs would write the line
+	low.sort_by_key(|item| item.count);
+    low
+}
+
+/// Part 10: reads the stock of one warehouse and reports what is below the line it was asked to keep, which is a long comment on purpose, so that it wraps inside the box and takes a second line.
+<span color="keyword">fn</span> stock_10(warehouse: &amp;Warehouse, floor: u32) -&gt; Vec&lt;Item&gt; {
+    <span color="keyword">let</span> mut low = Vec::new();
+    <span color="keyword">for</span> item <span color="keyword">in</span> warehouse.items() {
+        <span color="keyword">if</span> item.count &lt; floor {
+            low.push(item.clone());
+        }
+    }
+
+	// a tab here, as an editor with tabs would write the line
+	low.sort_by_key(|item| item.count);
+    low
+}
+
+/// Part 11: reads the stock of one warehouse and reports what is below the line it was asked to keep, which is a long comment on purpose, so that it wraps inside the box and takes a second line.
+<span color="keyword">fn</span> stock_11(warehouse: &amp;Warehouse, floor: u32) -&gt; Vec&lt;Item&gt; {
+    <span color="keyword">let</span> mut low = Vec::new();
+    <span color="keyword">for</span> item <span color="keyword">in</span> warehouse.items() {
+        <span color="keyword">if</span> item.count &lt; floor {
+            low.push(item.clone());
+        }
+    }
+
+	// a tab here, as an editor with tabs would write the line
+	low.sort_by_key(|item| item.count);
+    low
+}
+
+/// Part 12: reads the stock of one warehouse and reports what is below the line it was asked to keep, which is a long comment on purpose, so that it wraps inside the box and takes a second line.
+<span color="keyword">fn</span> stock_12(warehouse: &amp;Warehouse, floor: u32) -&gt; Vec&lt;Item&gt; {
+    <span color="keyword">let</span> mut low = Vec::new();
+    <span color="keyword">for</span> item <span color="keyword">in</span> warehouse.items() {
+        <span color="keyword">if</span> item.count &lt; floor {
+            low.push(item.clone());
+        }
+    }
+
+	// a tab here, as an editor with tabs would write the line
+	low.sort_by_key(|item| item.count);
+    low
+}
+
+/// Part 13: reads the stock of one warehouse and reports what is below the line it was asked to keep, which is a long comment on purpose, so that it wraps inside the box and takes a second line.
+<span color="keyword">fn</span> stock_13(warehouse: &amp;Warehouse, floor: u32) -&gt; Vec&lt;Item&gt; {
+    <span color="keyword">let</span> mut low = Vec::new();
+    <span color="keyword">for</span> item <span color="keyword">in</span> warehouse.items() {
+        <span color="keyword">if</span> item.count &lt; floor {
+            low.push(item.clone());
+        }
+    }
+
+	// a tab here, as an editor with tabs would write the line
+	low.sort_by_key(|item| item.count);
+    low
+}
+
+        </code>
+        <text font-size="m" color="muted">The sentence after the listing starts under its last box.</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>
