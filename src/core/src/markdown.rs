@@ -333,7 +333,7 @@ const RULE_SAMPLES: [(&str, &str); 17] = [
 
 /// Remove the indent that all the lines of `text` share, so that indenting the XML does not make a code block of it.
 /// A line with only white space does not count, and is left empty.
-fn dedent(text: &str) -> String {
+pub(crate) fn dedent(text: &str) -> String {
     let indent = text
         .lines()
         .filter(|line| !line.trim().is_empty())
