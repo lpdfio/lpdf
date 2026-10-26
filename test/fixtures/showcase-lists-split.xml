@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Lists split" subject="A numbered list whose items run across the page breaks" />
+
+    <!-- A list item splits across pages like the paragraphs in it: through the line the page ends in. The marker stays
+         with the first part, and the lines after the break stand under the words, not under where the marker was. An
+         item that holds a list goes on with that list on the next page, and the numbers go on from where they were.
+         widows and orphans keep two lines of a paragraph together at the break, as they do for a text.
+         Expected, page by page:
+           1  the title, a paragraph, and clauses 1 to 8 with their lettered parts, then the first two lines of
+              clause 9 with its number 9., which ends the page at the bottom margin
+           2  the rest of clause 9, with nothing at its left where the number was and the lines under the words, then
+              its lettered parts (a) to (c); clauses 10 to 16, the second run of the same terms, numbered from 9 on in a
+              list of its own, with the lettered parts of clause 12
+    -->
+    <section>
+      <layout margin="40pt">
+        <column gap="m">
+          <text font-size="xxl" font="Helvetica-Bold" color="primary">Terms of supply</text>
+          <text font-size="m" color="muted">The clauses of a contract run longer than a page, and the page ends inside one of them.</text>
+          <text>These terms govern every order that the supplier accepts from the buyer, and they are read together with the order, the price list in force on the day of the order and the delivery note that goes with the goods. Where the order and these terms differ, the order stands for what it names and these terms for everything else. A clause that cannot be applied is left out, and the clauses around it stay as they are. The clauses are numbered one to sixteen, and a clause may have lettered parts under it, which belong to it and to no other, so that a reference to a clause is a reference to all of its parts.</text>
+          <list type="number" gap="m">
+            <li>
+              <text>The supplier delivers the goods to the address named in the order, on a weekday between nine and five, and the buyer signs for them at the door. A delivery that nobody is at the address to receive is left with the carrier, who tries again on the next weekday and then returns the goods to the supplier's warehouse.</text>
+              <list type="number" format="lower-alpha" prefix="(" suffix=")" gap="xs">
+                <li><text>Delivery is made to the first address in the order unless the buyer names another in writing at least two days before.</text></li>
+                <li><text>A change of address after the goods have left the warehouse is made at the buyer's cost, which the supplier tells the buyer of before the goods are sent on.</text></li>
+                <li><text>Nothing in this clause limits what the law gives the buyer, and a part of it that the law does not allow is left out and the rest stays.</text></li>
+              </list>
+            </li>
+            <li><text>Risk in the goods passes to the buyer when the buyer signs for them. Until then the supplier keeps the goods insured against loss and damage in transit, and the buyer need not pay for goods that the carrier lost or that arrived in a state that the buyer could not have caused.</text></li>
+            <li><text>The buyer pays the price within thirty days of the date of the invoice, by transfer to the account named on it. A payment that arrives late carries interest from the day it was due at the rate the law sets, and the supplier may stop further deliveries until the sum is paid.</text></li>
+            <li>
+              <text>The supplier warrants that the goods match their description and are fit for the purpose the buyer named when ordering, and promises to repair or replace what is not, at its own cost, if the buyer reports the fault in writing within twelve months of delivery.</text>
+              <list type="number" format="lower-alpha" prefix="(" suffix=")" gap="xs">
+                <li><text>The buyer reports damage to the goods on the day of delivery, in writing, with a photograph of the goods and of the packing they came in, so that the supplier can make its claim on the carrier within the time the carrier allows.</text></li>
+                <li><text>A report that comes later is looked at, and the supplier acts on it when the damage is of a kind that could not have been seen when the goods were signed for.</text></li>
+                <li><text>Nothing in this clause limits what the law gives the buyer, and a part of it that the law does not allow is left out and the rest stays.</text></li>
+              </list>
+            </li>
+            <li><text>Neither party is liable for a delay or a failure that comes from something outside its reasonable control, such as a storm, a strike, a closed road or an order of an authority, for as long as that lasts, if it tells the other party at once and does what it can to limit the harm.</text></li>
+            <li><text>Information that one party gives the other in confidence, about its prices, its customers or the way it works, stays between them during the contract and for five years after it. A party may share it with those who need it to carry out the contract and who are bound to keep it secret.</text></li>
+            <li><text>The supplier may change the price of goods not yet ordered by writing to the buyer thirty days before the change. A price in an order that the supplier has accepted does not change, whatever happens to the cost of the goods in the meantime.</text></li>
+            <li><text>Either party may end the contract by writing to the other when the other has broken it in a way that matters and has not put that right within thirty days of being asked to. Sums that were due before the end stay due, and so do the promises that are meant to outlast the contract.</text></li>
+          </list>
+          <list type="number" start="9" gap="m">
+            <li>
+              <text>The supplier delivers the goods to the address named in the order, on a weekday between nine and five, and the buyer signs for them at the door. A delivery that nobody is at the address to receive is left with the carrier, who tries again on the next weekday and then returns the goods to the supplier's warehouse.</text>
+              <list type="number" format="lower-alpha" prefix="(" suffix=")" gap="xs">
+                <li><text>Delivery is made to the first address in the order unless the buyer names another in writing at least two days before.</text></li>
+                <li><text>A change of address after the goods have left the warehouse is made at the buyer's cost, which the supplier tells the buyer of before the goods are sent on.</text></li>
+                <li><text>Nothing in this clause limits what the law gives the buyer, and a part of it that the law does not allow is left out and the rest stays.</text></li>
+              </list>
+            </li>
+            <li><text>Risk in the goods passes to the buyer when the buyer signs for them. Until then the supplier keeps the goods insured against loss and damage in transit, and the buyer need not pay for goods that the carrier lost or that arrived in a state that the buyer could not have caused.</text></li>
+            <li><text>The buyer pays the price within thirty days of the date of the invoice, by transfer to the account named on it. A payment that arrives late carries interest from the day it was due at the rate the law sets, and the supplier may stop further deliveries until the sum is paid.</text></li>
+            <li>
+              <text>The supplier warrants that the goods match their description and are fit for the purpose the buyer named when ordering, and promises to repair or replace what is not, at its own cost, if the buyer reports the fault in writing within twelve months of delivery.</text>
+              <list type="number" format="lower-alpha" prefix="(" suffix=")" gap="xs">
+                <li><text>The buyer reports damage to the goods on the day of delivery, in writing, with a photograph of the goods and of the packing they came in, so that the supplier can make its claim on the carrier within the time the carrier allows.</text></li>
+                <li><text>A report that comes later is looked at, and the supplier acts on it when the damage is of a kind that could not have been seen when the goods were signed for.</text></li>
+                <li><text>Nothing in this clause limits what the law gives the buyer, and a part of it that the law does not allow is left out and the rest stays.</text></li>
+              </list>
+            </li>
+            <li><text>Neither party is liable for a delay or a failure that comes from something outside its reasonable control, such as a storm, a strike, a closed road or an order of an authority, for as long as that lasts, if it tells the other party at once and does what it can to limit the harm.</text></li>
+            <li><text>Information that one party gives the other in confidence, about its prices, its customers or the way it works, stays between them during the contract and for five years after it. A party may share it with those who need it to carry out the contract and who are bound to keep it secret.</text></li>
+            <li><text>The supplier may change the price of goods not yet ordered by writing to the buyer thirty days before the change. A price in an order that the supplier has accepted does not change, whatever happens to the cost of the goods in the meantime.</text></li>
+            <li><text>Either party may end the contract by writing to the other when the other has broken it in a way that matters and has not put that right within thirty days of being asked to. Sums that were due before the end stay due, and so do the promises that are meant to outlast the contract.</text></li>
+          </list>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

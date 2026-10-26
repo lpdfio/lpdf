@@ -151,6 +151,10 @@ fn showcase_code() { run_snapshot("showcase-code"); }
 #[test]
 fn showcase_code_split() { run_snapshot("showcase-code-split"); }
 #[test]
+fn showcase_lists() { run_snapshot("showcase-lists"); }
+#[test]
+fn showcase_lists_split() { run_snapshot("showcase-lists-split"); }
+#[test]
 fn showcase_footnote() { run_snapshot("showcase-footnote"); }
 #[test]
 fn showcase_footnote_counter() { run_snapshot("showcase-footnote-counter"); }

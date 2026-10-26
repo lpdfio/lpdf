@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Lists" subject="Bulleted and numbered lists, nested to any depth" />
+
+    <!-- A <list> marks each <li> with a bullet drawn as a shape, or with a number the engine gives. A bullet list
+         without a bullet attribute uses a disc, a circle one level down and a square below that, then the three again.
+         A number list takes decimal, lower-alpha, upper-alpha, lower-roman or upper-roman in format, starts at start,
+         and writes prefix, the number and suffix (a full stop unless the list says otherwise). The words of an item
+         start indent from the left edge of the list, 24pt unless it says otherwise, at every level, and a list
+         inside an item starts there. A marker is set at the right of its column, so 9. and 10. end together, and in
+         the color and size of the first text of its item.
+         Expected, top to bottom (the page ends after clause 2, and the rest goes on at the top of page 2):
+           1  Bullets: a disc, a circle under the second item and a square under that. A bullet list in a number
+              list in a bullet list is a circle: the numbers between do not count as a level
+           2  A bullet attribute: a dash, a square and a circle, each in a list of its own
+           3  Numbers: 1. 2. 3.; a) b) c); (A) (B) in a small blue list; iii. iv. v. from start 3; VIII. IX. X., ending
+              together in an indent of 32pt that is wide enough for VIII.
+           4  A legal-style list: 1. with (a) and (b) under it, and (i) and (ii) under (b); the items after it go on
+              at 2. and 3.
+           5  An item with two paragraphs, a list inside it and a box of its own: background and padding go around the
+              marker and the words
+           6  A wide indent of 48pt, and a list with a gap of 12pt between its items
+    -->
+    <section>
+      <layout margin="40pt">
+        <column gap="m">
+          <text font-size="xxl" font="Helvetica-Bold" color="primary">Lists</text>
+          <text font-size="m" color="muted">Bullets and numbers that the engine writes, nested to any depth.</text>
+
+          <text font-size="l" font="Helvetica-Bold">Bullets by depth</text>
+          <list gap="xs">
+            <li><text>A disc at the top level.</text></li>
+            <li>
+              <text>A circle one level down.</text>
+              <list gap="xs">
+                <li><text>The first item of the circle list.</text></li>
+                <li>
+                  <text>A square one level further.</text>
+                  <list gap="xs">
+                    <li><text>The first item of the square list.</text></li>
+                    <li><text>The second item of the square list.</text></li>
+                  </list>
+                </li>
+              </list>
+            </li>
+            <li>
+              <text>Numbers inside a bullet list do not count as a level.</text>
+              <list type="number" gap="xs">
+                <li>
+                  <text>The first number.</text>
+                  <list gap="xs">
+                    <li><text>A circle: the numbers between do not count.</text></li>
+                  </list>
+                </li>
+                <li><text>The second number.</text></li>
+              </list>
+            </li>
+          </list>
+
+          <text font-size="l" font="Helvetica-Bold">A bullet of your choice</text>
+          <list bullet="dash" gap="xs">
+            <li><text>A dash.</text></li>
+            <li><text>Another dash.</text></li>
+          </list>
+          <list bullet="square" gap="xs">
+            <li><text>A square at the top level.</text></li>
+            <li><text>Another square.</text></li>
+          </list>
+          <list bullet="circle" gap="xs">
+            <li><text>A circle at the top level.</text></li>
+            <li><text>Another circle.</text></li>
+          </list>
+
+          <text font-size="l" font="Helvetica-Bold">Numbers</text>
+          <list type="number" gap="xs">
+            <li><text>Decimal, which is the default.</text></li>
+            <li><text>The second item, long enough to wrap onto a second line, where it stays under the words and not under the number.</text></li>
+            <li><text>The third.</text></li>
+          </list>
+          <list type="number" format="lower-alpha" suffix=")" gap="xs">
+            <li><text>Letters, with a bracket after them.</text></li>
+            <li><text>The second letter.</text></li>
+            <li><text>The third letter.</text></li>
+          </list>
+          <list type="number" format="upper-alpha" prefix="(" suffix=")" font-size="s" color="primary" gap="xs">
+            <li><text>Capitals in brackets, in a small blue list.</text></li>
+            <li><text>The second one, in the same color.</text></li>
+          </list>
+          <list type="number" format="lower-roman" start="3" gap="xs">
+            <li><text>Numerals, from three.</text></li>
+            <li><text>Four.</text></li>
+            <li><text>Five.</text></li>
+          </list>
+          <list type="number" format="upper-roman" start="8" indent="32pt" gap="xs">
+            <li><text>Eight: a number of more than one letter needs a wider indent, and ends where the others do.</text></li>
+            <li><text>Nine.</text></li>
+            <li><text>Ten.</text></li>
+          </list>
+
+          <text font-size="l" font="Helvetica-Bold">Clauses</text>
+          <list type="number" gap="xs">
+            <li>
+              <text>The supplier delivers the goods to the address in the order.</text>
+              <list type="number" format="lower-alpha" prefix="(" suffix=")" gap="xs">
+                <li><text>Delivery takes place on a weekday between nine and five.</text></li>
+                <li>
+                  <text>The buyer signs for the goods, and the supplier may refuse delivery when:</text>
+                  <list type="number" format="lower-roman" prefix="(" suffix=")" gap="xs">
+                    <li><text>nobody is at the address to sign, or</text></li>
+                    <li><text>the person who signs is not of age.</text></li>
+                  </list>
+                </li>
+              </list>
+            </li>
+            <li><text>Risk passes to the buyer on delivery.</text></li>
+            <li><text>The buyer pays within thirty days of the invoice.</text></li>
+          </list>
+
+          <text font-size="l" font="Helvetica-Bold">An item that is a box</text>
+          <list gap="xs">
+            <li background="#eef3fc" padding="6pt" radius="4pt">
+              <text font="Helvetica-Bold">A tinted item.</text>
+              <text>A second paragraph in the same item, under the first, with the marker beside the first line only.</text>
+              <list gap="xs">
+                <li><text>A list inside the item.</text></li>
+              </list>
+            </li>
+            <li><text>An item with no box.</text></li>
+          </list>
+
+          <text font-size="l" font="Helvetica-Bold">A wide indent and a wide gap</text>
+          <list type="number" indent="48pt" gap="12pt">
+            <li><text>The words start 48pt from the left edge.</text></li>
+            <li><text>And 12pt below the item before.</text></li>
+          </list>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>
