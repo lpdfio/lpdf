@@ -784,12 +784,12 @@ impl<'a> Writer<'a> {
             }
         }
         for piece in &pieces {
-            if let Piece::Text { text, .. } = piece {
-                if let Some(label) = undefined_note(text) {
-                    return Err(self.fail(line, &format!(
-                        "the footnote [^{label}] has no definition; define it with [^{label}]: and its words, or write \\[ to show it as text"
-                    )));
-                }
+            if let Piece::Text { text, .. } = piece
+                && let Some(label) = undefined_note(text)
+            {
+                return Err(self.fail(line, &format!(
+                    "the footnote [^{label}] has no definition; define it with [^{label}]: and its words, or write \\[ to show it as text"
+                )));
             }
         }
         Ok(pieces)
@@ -928,8 +928,10 @@ impl<'a> Writer<'a> {
         if style.strong { lay(&mut attrs, self.spec.rules.rule("strong")); }
         if style.em {
             let rule = self.spec.rules.rule("em");
-            if !rule.contains_key("font") {
-                if let Some(face) = italic_face(&self.font) { attrs.insert("font".into(), face.into()); }
+            if !rule.contains_key("font")
+                && let Some(face) = italic_face(&self.font)
+            {
+                attrs.insert("font".into(), face.into());
             }
             lay(&mut attrs, rule);
         }
@@ -1257,7 +1259,7 @@ fn escape_text(text: &str) -> String {
 }
 
 fn escape_attr(text: &str) -> String {
-    escape_text(text).replace('"', "&quot;").replace('\n', " ").replace('\t', " ").replace('\r', " ")
+    escape_text(text).replace('"', "&quot;").replace(['\n', '\t', '\r'], " ")
 }
 
 #[cfg(test)]
