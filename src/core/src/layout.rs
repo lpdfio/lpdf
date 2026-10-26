@@ -662,17 +662,34 @@ fn fill_page(
             // keep-next: if the immediately following sibling would not fit on this
             // page after placing this node, and both fit together on the next page,
             // bump this node to the next page so they stay together.
-            let do_keep_next = node.paginate == Paginate::KeepNext
-                && !page.is_empty()
-                && pending.peek().map_or(false, |next| {
+            let keep_next_h = if node.paginate == Paginate::KeepNext && !page.is_empty() {
+                pending.peek().and_then(|next| {
                     let next_h = measure_height(next, avail_w, budget);
                     let remaining_for_next = remaining - h - gap;
-                    next_h > remaining_for_next + 0.5
-                        && h + gap + next_h <= next_budget + 0.5
-                });
+                    (next_h > remaining_for_next + 0.5 && h + gap + next_h <= next_budget + 0.5).then_some(next_h)
+                })
+            } else {
+                None
+            };
 
-            if do_keep_next {
+            if let Some(next_h) = keep_next_h {
+                // The nodes before it that keep with the one after them go on with it, as far as the next page
+                // holds them: a heading above a heading that moves on is not left alone at the foot of the page.
+                let mut room = next_budget + 0.5 - (h + gap + next_h);
+                let mut back = 0;
+                for kept in page.iter().rev().take_while(|n| n.paginate == Paginate::KeepNext) {
+                    let kept_h = gap + measure_height(kept, avail_w, budget);
+                    if kept_h > room { break; }
+                    room -= kept_h;
+                    back += 1;
+                }
+                // A page that would be left empty keeps them: they are already at the top of it.
+                if back == page.len() { back = 0; }
+                let moved = page.split_off(page.len() - back);
                 pending.push_front(node);
+                for kept in moved.into_iter().rev() {
+                    pending.push_front(kept);
+                }
                 break;
             }
             needs_break_after = node.paginate == Paginate::BreakAfter;
@@ -4598,6 +4615,32 @@ mod tests {
 
         let kept = engine_render(&minimal(&body(r#"paginate="keep-next""#)));
         assert_eq!(page_with(kept["pages"].as_array().unwrap(), "HEAD"), Some(2), "keep-next brings the head to the sibling's page");
+    }
+
+    #[test]
+    fn paginate_keep_next_moves_the_keep_next_nodes_before_it_along() {
+        // Two heads in a row, each kept with the one after it: the second moves on with its sibling, and the first
+        // is not left alone at the foot of the page.
+        let body = |attr: &str| {
+            format!(r#"<frame height="700pt" /><text {attr}>H1</text><text {attr}>H2</text><frame height="200pt" /><text>TAIL</text>"#)
+        };
+        let loose = engine_render(&minimal(&body("")));
+        assert_eq!(page_with(loose["pages"].as_array().unwrap(), "H1"), Some(1));
+        assert_eq!(page_with(loose["pages"].as_array().unwrap(), "H2"), Some(1));
+
+        let kept = engine_render(&minimal(&body(r#"paginate="keep-next""#)));
+        let pages = kept["pages"].as_array().unwrap();
+        assert_eq!(page_with(pages, "H2"), Some(2), "the second head goes with its sibling");
+        assert_eq!(page_with(pages, "H1"), Some(2), "and the first goes with the second");
+    }
+
+    #[test]
+    fn paginate_keep_next_leaves_a_page_that_it_would_empty_as_it_was() {
+        // Both heads are already at the top of the page, so there is nothing to gain by moving them.
+        let kept = engine_render(&minimal(r#"<text paginate="keep-next">H1</text><text paginate="keep-next">H2</text><frame height="900pt" />"#));
+        let pages = kept["pages"].as_array().unwrap();
+        assert_eq!(page_with(pages, "H1"), Some(1));
+        assert_eq!(page_with(pages, "H2"), Some(1));
     }
 
     #[test]
