@@ -448,6 +448,7 @@ fn file_options() -> Options {
 /// The data a template gets for the `.md` file `markdown`: `{ "markdown": "…", "title": "…" }`, the text and then
 /// each field of its front matter as a string. A field is a `key: value` line; one with no value on its line, a list
 /// and a nested field are left out.
+#[allow(dead_code)] // for the hosts of the engine, not the WASI binary
 pub fn file_data(markdown: &str) -> String {
     let mut data = serde_json::Map::new();
     let mut in_front_matter = false;
@@ -471,6 +472,7 @@ pub fn file_data(markdown: &str) -> String {
 }
 
 /// A `key: value` line of front matter, with a value that is quoted or plain. `None` for a line that is not one.
+#[allow(dead_code)] // what `file_data` reads
 fn front_matter_field(line: &str) -> Option<(&str, String)> {
     if line.starts_with([' ', '\t', '#', '-']) { return None; }
     let (key, value) = line.split_once(':')?;
@@ -484,6 +486,7 @@ fn front_matter_field(line: &str) -> Option<(&str, String)> {
 
 /// The images of the `.md` file `markdown`, as they are written: relative paths, in order and once each. An image
 /// at a URL is left out, which the engine reports where it is used.
+#[allow(dead_code)] // for the hosts of the engine, not the WASI binary
 pub fn file_images(markdown: &str) -> Vec<String> {
     let mut paths: Vec<String> = Vec::new();
     for event in Parser::new_ext(markdown, file_options()) {
@@ -499,6 +502,7 @@ pub fn file_images(markdown: &str) -> Vec<String> {
 }
 
 /// The asset name of the image at `src` of a `.md` file: the host loads the file under it.
+#[allow(dead_code)] // for the hosts of the engine, not the WASI binary
 pub fn file_image_name(index: usize) -> String {
     format!("markdown-image-{}", index + 1)
 }
@@ -506,6 +510,7 @@ pub fn file_image_name(index: usize) -> String {
 /// The template `template` with an `<image>` declared for each of `srcs`, named by `file_image_name`, so that an
 /// image of the Markdown, which names its file, is an asset. One the template declares itself is not declared
 /// twice.
+#[allow(dead_code)] // for the hosts of the engine, not the WASI binary
 pub fn declare_images(template: &str, srcs: &[String]) -> Result<String, String> {
     let doc = roxmltree::Document::parse(template).map_err(|e| format!("XML parse error: {e}"))?;
     let root = doc.root_element();
