@@ -3664,6 +3664,13 @@ mod tests {
     }
 
     #[test]
+    fn a_cdata_section_holds_the_code_of_a_code_as_it_is() {
+        let text = first_node("<code><![CDATA[\nif a < b && c {\n\tx();\n}\n]]></code>").children.remove(0);
+        let runs: Vec<&str> = text.text_runs.iter().map(|r| r.text.as_str()).collect();
+        assert_eq!(runs, vec!["if a < b && c {\n\tx();\n}\n"]);
+    }
+
+    #[test]
     fn a_code_holds_text_and_spans_only() {
         let err = parse(&minimal("<code>a<frame/></code>")).unwrap_err();
         assert!(err.contains("<frame>") && err.contains("not allowed in <code>"), "{err}");
