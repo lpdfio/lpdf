@@ -2956,6 +2956,7 @@ fn apply_layout_kind_attrs(
         }
         NodeKind::Table => {
             if let Some(v) = a.get("cols") {
+                crate::layout::check_cols(v)?;
                 node.table_cols = v.to_string();
             }
             if let Some(v) = a.get("stripe") {

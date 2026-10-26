@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <document size="a4">
+    <meta title="lpdf Showcase — Table auto" subject="Columns sized by their cells" />
+
+    <!-- A column that is auto takes the width its cells need on one line, and the auto columns share what the fixed
+         columns leave, so short cells are not given the room that long ones need.
+         Expected, top to bottom:
+           1  Benchmarks: the name column is as wide as its longest name and a little more, the numbers beside it
+              are narrow and right-aligned, and every row is one line
+           2  A fixed column and two auto columns: the last is 90pt, the others share the rest
+           3  Prose beside numbers: the numbers keep the width they need, and the prose wraps in the rest
+    -->
+    <section>
+      <layout margin="40pt">
+        <column gap="l">
+          <text font-size="l" font="Helvetica-Bold">Benchmarks</text>
+          <table cols="auto auto auto" border="0.5pt #cccccc" stripe="#f5f5f5">
+            <thead background="#e8ecf0">
+              <td padding="5pt 8pt"><text font-size="s" font="Helvetica-Bold">Benchmark</text></td>
+              <td padding="5pt 8pt" align="end"><text font-size="s" font="Helvetica-Bold">Time (ns/iter)</text></td>
+              <td padding="5pt 8pt" align="end"><text font-size="s" font="Helvetica-Bold">± (ns)</text></td>
+            </thead>
+            <tr>
+              <td padding="5pt 8pt"><text font-size="s">parse_xml/small/example1</text></td>
+              <td padding="5pt 8pt" align="end"><text font-size="s">12,571</text></td>
+              <td padding="5pt 8pt" align="end"><text font-size="s">590</text></td>
+            </tr>
+            <tr>
+              <td padding="5pt 8pt"><text font-size="s">parse_xml/medium/example8</text></td>
+              <td padding="5pt 8pt" align="end"><text font-size="s">273,184</text></td>
+              <td padding="5pt 8pt" align="end"><text font-size="s">74,779</text></td>
+            </tr>
+            <tr>
+              <td padding="5pt 8pt"><text font-size="s">parse_xml/large/bench_large</text></td>
+              <td padding="5pt 8pt" align="end"><text font-size="s">127,280</text></td>
+              <td padding="5pt 8pt" align="end"><text font-size="s">16,997</text></td>
+            </tr>
+          </table>
+
+          <text font-size="l" font="Helvetica-Bold">Fixed and auto</text>
+          <table cols="auto auto 90pt" border="0.5pt #cccccc">
+            <tr>
+              <td padding="5pt 8pt"><text font-size="s">Secrets Manager</text></td>
+              <td padding="5pt 8pt"><text font-size="s">PaySignal__Paddle__ApiKey</text></td>
+              <td padding="5pt 8pt"><text font-size="s">live API key</text></td>
+            </tr>
+            <tr>
+              <td padding="5pt 8pt"><text font-size="s">GitHub repo secret</text></td>
+              <td padding="5pt 8pt"><text font-size="s">PADDLE_CLIENT_TOKEN_PROD</text></td>
+              <td padding="5pt 8pt"><text font-size="s">live client token</text></td>
+            </tr>
+          </table>
+
+          <text font-size="l" font="Helvetica-Bold">Prose beside numbers</text>
+          <table cols="auto auto auto" border="0.5pt #cccccc">
+            <tr>
+              <td padding="5pt 8pt"><text font-size="s">A description that runs on and on: it says what the product is, what it is made of, how it ships and how long the warranty lasts, which takes more than one line at this width.</text></td>
+              <td padding="5pt 8pt" align="end"><text font-size="s">12,571</text></td>
+              <td padding="5pt 8pt" align="end"><text font-size="s">590</text></td>
+            </tr>
+          </table>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

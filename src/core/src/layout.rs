@@ -1246,12 +1246,54 @@ fn keep_width(node: Node, width: f32) -> Node {
 
 // ── Table ─────────────────────────────────────────────────────────────────────
 
+/// One entry of a table's `cols`.
+#[derive(Clone, Copy, PartialEq)]
+enum ColUnit {
+    /// A share of what the fixed and the percent columns leave.
+    Fr(f32),
+    Pt(f32),
+    /// A percentage of the width of the table.
+    Pct(f32),
+    /// The width the cells of the column need.
+    Auto,
+}
+
+fn col_units(spec: &str) -> Vec<ColUnit> {
+    spec.split_whitespace().filter_map(|tok| {
+        if tok == "auto" {
+            Some(ColUnit::Auto)
+        } else if let Some(s) = tok.strip_suffix("fr") {
+            s.parse::<f32>().ok().map(ColUnit::Fr)
+        } else if let Some(s) = tok.strip_suffix("pt") {
+            s.parse::<f32>().ok().map(ColUnit::Pt)
+        } else if let Some(s) = tok.strip_suffix('%') {
+            s.parse::<f32>().ok().map(ColUnit::Pct)
+        } else {
+            tok.parse::<f32>().ok().map(ColUnit::Fr)
+        }
+    }).collect()
+}
+
+/// What is wrong with the `cols` of a table, if anything: an `auto` column takes the width its cells need and the
+/// rest is shared among the `auto` columns, so there is no rest for an `fr` column to share.
+pub(crate) fn check_cols(spec: &str) -> Result<(), String> {
+    let units = col_units(spec);
+    if units.contains(&ColUnit::Auto) && units.iter().any(|u| matches!(u, ColUnit::Fr(_))) {
+        return Err(format!(
+            "cols=\"{spec}\" has auto and fr columns: an auto column takes the width its cells need and the auto columns \
+             share the rest, so use pt or % for the columns that are fixed"
+        ));
+    }
+    Ok(())
+}
+
 /// Resolve a space-separated column-width spec into concrete pt values.
 ///
 /// Units:
 /// - `Nfr`  — fractional share of remaining width after fixed/percent columns.
 /// - `Npt`  — absolute pt value.
 /// - `N%`   — percentage of `avail_w`.
+/// - `auto` — as `1fr` here, where there are no cells to measure: see `table_col_widths`.
 ///
 /// Example: `"2fr 1fr 120pt 20%"` with `avail_w=400` →
 ///   fixed = 120 + 80 = 200, remaining = 200, total_fr = 3,
@@ -1260,42 +1302,167 @@ fn resolve_col_widths(spec: &str, avail_w: f32) -> Vec<f32> {
     if spec.is_empty() {
         return vec![avail_w];
     }
-    enum Unit { Fr(f32), Pt(f32), Pct(f32) }
-    let units: Vec<Unit> = spec.split_whitespace().filter_map(|tok| {
-        if let Some(s) = tok.strip_suffix("fr") {
-            s.parse::<f32>().ok().map(Unit::Fr)
-        } else if let Some(s) = tok.strip_suffix("pt") {
-            s.parse::<f32>().ok().map(Unit::Pt)
-        } else if let Some(s) = tok.strip_suffix('%') {
-            s.parse::<f32>().ok().map(Unit::Pct)
-        } else {
-            tok.parse::<f32>().ok().map(Unit::Fr)
-        }
-    }).collect();
+    let units: Vec<ColUnit> = col_units(spec).into_iter()
+        .map(|u| if u == ColUnit::Auto { ColUnit::Fr(1.0) } else { u })
+        .collect();
     if units.is_empty() {
         return vec![avail_w];
     }
     let fixed: f32 = units.iter().map(|u| match u {
-        Unit::Pt(v)  => *v,
-        Unit::Pct(v) => avail_w * v / 100.0,
-        Unit::Fr(_)  => 0.0,
+        ColUnit::Pt(v)  => *v,
+        ColUnit::Pct(v) => avail_w * v / 100.0,
+        _               => 0.0,
     }).sum();
     let total_fr: f32 = units.iter().map(|u| match u {
-        Unit::Fr(v) => *v,
-        _           => 0.0,
+        ColUnit::Fr(v) => *v,
+        _              => 0.0,
     }).sum();
     let remaining = (avail_w - fixed).max(0.0);
     let fr_unit = if total_fr > 0.0 { remaining / total_fr } else { 0.0 };
     units.iter().map(|u| match u {
-        Unit::Fr(v)  => (v * fr_unit).max(0.0),
-        Unit::Pt(v)  => *v,
-        Unit::Pct(v) => (avail_w * v / 100.0).max(0.0),
+        ColUnit::Fr(v)  => (v * fr_unit).max(0.0),
+        ColUnit::Pt(v)  => *v,
+        ColUnit::Pct(v) => (avail_w * v / 100.0).max(0.0),
+        ColUnit::Auto   => 0.0,
     }).collect()
 }
 
 /// How many columns a table's `cols` spec makes.
 pub(crate) fn table_col_count(spec: &str) -> usize {
-    resolve_col_widths(spec, 0.0).len()
+    col_units(spec).len().max(1)
+}
+
+/// The least a column can be narrowed to, which is its longest word, and the width it takes with each cell on one
+/// line.
+#[derive(Clone, Copy, Default)]
+struct Extent {
+    min: f32,
+    max: f32,
+}
+
+/// The extents of the columns of `rows`. Those of an `auto` column are what its cells need, or those of every
+/// column when `all` is set. A cell that spans columns gives the `auto` columns it covers what the others do not.
+fn column_extents(rows: &[Node], units: &[ColUnit], avail_w: f32, gap: f32, all: bool) -> Vec<Extent> {
+    let n = units.len();
+    let grid = TableGrid::new(rows, n);
+    let measured = |c: usize| all || units[c] == ColUnit::Auto;
+    let mut extents = vec![Extent::default(); n];
+    for (r, row) in rows.iter().enumerate() {
+        for placed in grid.starting(r).iter().filter(|p| p.columns.len() == 1 && measured(p.columns.start)) {
+            let cell = &row.children[placed.cell];
+            let extent = &mut extents[placed.columns.start];
+            extent.min = extent.min.max(measure_min_w(cell));
+            extent.max = extent.max.max(measure_natural_w(cell));
+        }
+    }
+    for (r, row) in rows.iter().enumerate() {
+        for placed in grid.starting(r).iter().filter(|p| p.columns.len() > 1) {
+            let sized: Vec<usize> = placed.columns.clone().filter(|&c| measured(c)).collect();
+            if sized.is_empty() { continue; }
+            let cell = &row.children[placed.cell];
+            let others: f32 = placed.columns.clone().filter(|&c| !measured(c)).map(|c| match units[c] {
+                ColUnit::Pt(v)  => v,
+                ColUnit::Pct(v) => avail_w * v / 100.0,
+                _               => 0.0,
+            }).sum::<f32>() + gap * (placed.columns.len() - 1) as f32;
+            let have_min = others + sized.iter().map(|&c| extents[c].min).sum::<f32>();
+            let have_max = others + sized.iter().map(|&c| extents[c].max).sum::<f32>();
+            let (need_min, need_max) = (measure_min_w(cell), measure_natural_w(cell));
+            for &c in &sized {
+                extents[c].min += (need_min - have_min).max(0.0) / sized.len() as f32;
+                extents[c].max += (need_max - have_max).max(0.0) / sized.len() as f32;
+            }
+        }
+    }
+    extents
+}
+
+/// `mins` cut down to the level at which they add up to `total`: the longest are cut, and a shorter one keeps its
+/// width. `total` is less than their sum.
+fn cut_to_level(mins: &[f32], total: f32) -> Vec<f32> {
+    let mut sorted = mins.to_vec();
+    sorted.sort_by(|a, b| a.total_cmp(b));
+    let mut taken = 0.0_f32;
+    let mut level = 0.0_f32;
+    for (i, min) in sorted.iter().enumerate() {
+        let left = (sorted.len() - i) as f32;
+        if taken + min * left >= total {
+            level = (total - taken) / left;
+            break;
+        }
+        taken += min;
+    }
+    mins.iter().map(|min| min.min(level)).collect()
+}
+
+/// The widths of the columns of a table of `avail_w`. A column with a width of its own has it, and the `auto`
+/// columns share what is left, with a column of short cells keeping the width it needs:
+/// - when every `auto` column fits on one line, each takes that, and the room that is left goes to them in
+///   proportion to it;
+/// - when they do not, each keeps at least its longest word and shares what is left in proportion to how much more
+///   it could use;
+/// - when not even the longest words fit, the longest are cut down to a level, and the shorter keep theirs, so a
+///   name breaks and a number does not.
+fn table_col_widths(rows: &[Node], spec: &str, avail_w: f32, gap: f32) -> Vec<f32> {
+    let units = col_units(spec);
+    if !units.contains(&ColUnit::Auto) {
+        return resolve_col_widths(spec, avail_w);
+    }
+    let n = units.len();
+    let extents = column_extents(rows, &units, avail_w, gap, false);
+    let fixed: f32 = units.iter().map(|u| match u {
+        ColUnit::Pt(v)  => *v,
+        ColUnit::Pct(v) => avail_w * v / 100.0,
+        _               => 0.0,
+    }).sum();
+    let rest = (avail_w - fixed - gap * (n - 1) as f32).max(0.0);
+    let autos: Vec<usize> = (0..n).filter(|&c| units[c] == ColUnit::Auto).collect();
+    let wanted: f32 = autos.iter().map(|&c| extents[c].max).sum();
+    let least: f32 = autos.iter().map(|&c| extents[c].min).sum();
+
+    let mut shares = vec![0.0_f32; n];
+    if wanted <= rest {
+        for &c in &autos {
+            shares[c] = if wanted > 0.0 {
+                extents[c].max + (rest - wanted) * extents[c].max / wanted
+            } else {
+                rest / autos.len() as f32
+            };
+        }
+    } else if least >= rest {
+        let mins: Vec<f32> = autos.iter().map(|&c| extents[c].min).collect();
+        for (&c, width) in autos.iter().zip(cut_to_level(&mins, rest)) {
+            shares[c] = width;
+        }
+    } else {
+        let spread = wanted - least;
+        for &c in &autos {
+            shares[c] = extents[c].min + (rest - least) * (extents[c].max - extents[c].min) / spread;
+        }
+    }
+    units.iter().enumerate().map(|(c, u)| match u {
+        ColUnit::Pt(v)  => *v,
+        ColUnit::Pct(v) => (avail_w * v / 100.0).max(0.0),
+        ColUnit::Fr(_)  => 0.0,
+        ColUnit::Auto   => shares[c],
+    }).collect()
+}
+
+/// The width of a table that is measured as a part of a box around it: its columns and the gaps between them,
+/// each column as wide as its cells need, or as its longest word when `min` is set, and its padding.
+fn measure_table_w(node: &Node, min: bool) -> f32 {
+    let units = col_units(&node.table_cols);
+    if units.is_empty() { return 0.0; }
+    let extents = column_extents(&node.children, &units, 0.0, node.gap, true);
+    let columns: f32 = units.iter().zip(&extents).map(|(u, e)| match u {
+        ColUnit::Pt(v) => *v,
+        _              => if min { e.min } else { e.max },
+    }).sum();
+    let [_pt, pr, _pb, pl] = node.padding;
+    match node.width_constraint {
+        Some(w) => w,
+        None    => columns + node.gap * (units.len() - 1) as f32 + pl + pr,
+    }
 }
 
 /// The width of a cell over `columns`: the columns and the gaps between them.
@@ -1400,7 +1567,7 @@ fn layout_table(
         return (vec![], 0.0);
     }
 
-    let col_widths  = resolve_col_widths(cols_spec, avail_w);
+    let col_widths  = table_col_widths(rows, cols_spec, avail_w, gap);
     let n_cols      = col_widths.len();
     let grid        = TableGrid::new(rows, n_cols);
 
@@ -1548,7 +1715,7 @@ fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Sp
     let inner_full   = (full_page_h - pt - pb).max(0.0);
     let gap          = node.gap;
 
-    let col_widths  = resolve_col_widths(&node.table_cols, inner_w);
+    let col_widths  = table_col_widths(&node.children, &node.table_cols, inner_w, gap);
     let has_thead   = node.children.first()
         .map_or(false, |c| c.kind == NodeKind::TableHead);
 
@@ -1584,7 +1751,13 @@ fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Sp
         return SplitOutcome::NothingFits(vec![node.clone()]);
     }
 
-    let first = Node { children: node.children[..split_idx].to_vec(), ..node.clone() };
+    // The columns of a table sized by its cells stay as wide on the next page as they are on this one.
+    let table_cols = if col_units(&node.table_cols).contains(&ColUnit::Auto) {
+        col_widths.iter().map(|w| format!("{w:.3}pt")).collect::<Vec<_>>().join(" ")
+    } else {
+        node.table_cols.clone()
+    };
+    let first = Node { children: node.children[..split_idx].to_vec(), table_cols: table_cols.clone(), ..node.clone() };
 
     // Carry thead onto the continuation page. Its texts were captured with the first copy, on the page the table
     // started on, so the copy captures nothing.
@@ -1594,7 +1767,7 @@ fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Sp
         forget_captures(&mut header);
         rest_children.insert(0, header);
     }
-    let rest = Node { children: rest_children, ..node.clone() };
+    let rest = Node { children: rest_children, table_cols, ..node.clone() };
     SplitOutcome::First(first, vec![rest])
 }
 
@@ -3293,6 +3466,7 @@ fn measure_natural_w(node: &Node) -> f32 {
             }
             total
         }
+        NodeKind::Table => measure_table_w(node, false),
         NodeKind::Divider => node.thickness,
         NodeKind::Img => node.width_constraint.unwrap_or(100.0),
         NodeKind::Shape => node.width_constraint.unwrap_or(0.0),
@@ -3318,6 +3492,56 @@ fn measure_natural_w(node: &Node) -> f32 {
                 }
             };
             // honour an explicit width constraint if set
+            match node.width_constraint {
+                Some(w) => w,
+                None    => inner + pl + pr,
+            }
+        }
+    }
+}
+
+/// The width of the longest word of a text, or the width of the widest run that stays whole: what the text can be
+/// narrowed to before something runs past it.
+fn text_min_w(node: &Node) -> f32 {
+    let size = node.font_size;
+    let mut widest = 0.0_f32;
+    for run in &node.text_runs {
+        let font = run.font.as_deref().unwrap_or(&node.font);
+        if let Some(note) = &run.footnote {
+            widest = widest.max(word_width(font, &note.number.to_string(), size, true));
+            continue;
+        }
+        let is_span = run.font.is_some() || run.color.is_some()
+                   || run.href.is_some() || run.underline || run.strike || run.background.is_some();
+        // A styled run stays whole, unless the text breaks what is wider than its box.
+        if is_span && !node.break_words && node.pre_tab == 0 {
+            widest = widest.max(text_width(font, &run.text, size));
+        } else {
+            for word in run.text.split_whitespace() {
+                widest = widest.max(text_width(font, word, size));
+            }
+        }
+    }
+    widest
+}
+
+/// The least width of a node: what it can be narrowed to before something in it runs past it. A text breaks at its
+/// spaces, so it is its longest word; a picture of a fixed width, a shape and a barcode do not narrow.
+fn measure_min_w(node: &Node) -> f32 {
+    match node.kind {
+        NodeKind::Text => text_min_w(node),
+        NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field if node.width_fill => 0.0,
+        NodeKind::Divider | NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field => measure_natural_w(node),
+        NodeKind::Table => measure_table_w(node, true),
+        _ => {
+            let [_pt, pr, _pb, pl] = node.padding;
+            let inner = match node.kind {
+                NodeKind::Row => {
+                    let children_w: f32 = node.children.iter().map(measure_min_w).sum();
+                    children_w + node.gap * (node.children.len().saturating_sub(1)) as f32
+                }
+                _ => node.children.iter().map(measure_min_w).fold(0.0_f32, f32::max),
+            };
             match node.width_constraint {
                 Some(w) => w,
                 None    => inner + pl + pr,
@@ -4802,16 +5026,93 @@ mod tests {
 
     #[test]
     fn a_markdown_breaks_a_name_wider_than_its_table_cell_so_it_stays_in_the_cell() {
-        let pages = markdown_pages(&format!("| Key | Value |\n|---|---|\n| `{WIDE_NAME}` | ok |\n"));
+        // Two names that are each wider than half the page: neither column can have its name on one line.
+        let pages = markdown_pages(&format!("| Key | Other |\n|---|---|\n| `{WIDE_NAME}` | `{WIDE_NAME}` |\n"));
         let texts = text_boxes(&pages[0]);
-        let pieces: Vec<&(f64, String, f64, String)> = texts.iter().filter(|t| t.3.contains('_')).collect();
+        let other_x = texts.iter().find(|t| t.3 == "Other").unwrap().0;
+        let pieces: Vec<&(f64, String, f64, String)> = texts.iter().filter(|t| t.3.contains('_') && t.0 < other_x).collect();
         assert!(pieces.len() >= 2, "the name is on more than one line: {pieces:?}");
         assert_eq!(pieces.iter().map(|t| t.3.as_str()).collect::<String>(), WIDE_NAME, "nothing is lost");
-        let value_x = texts.iter().find(|t| t.3 == "Value").unwrap().0;
         for (x, font, size, content) in pieces {
             let right = x + text_width(font, content, *size as f32) as f64;
-            assert!(right <= value_x, "{content} ends at {right}, in the next column, which starts at {value_x}");
+            assert!(right <= other_x, "{content} ends at {right}, in the next column, which starts at {other_x}");
         }
+    }
+
+    // ── Tables sized by their cells ───────────────────────────────────────────
+
+    /// The `x` of the first text of each cell of the first row, which is where its column starts.
+    fn column_starts(tree: &serde_json::Value, row_texts: &[&str]) -> Vec<f64> {
+        let texts = placed_texts(&tree["pages"][0]);
+        row_texts.iter().map(|word| texts.iter().find(|t| t.2 == *word).unwrap().0).collect()
+    }
+
+    fn table_of(cols: &str, rows: &[[&str; 3]]) -> String {
+        let rows: String = rows.iter()
+            .map(|r| format!("<tr>{}</tr>", r.iter().map(|c| format!("<td><text>{c}</text></td>")).collect::<String>()))
+            .collect();
+        format!(r#"<table cols="{cols}">{rows}</table>"#)
+    }
+
+    #[test]
+    fn an_auto_column_takes_the_width_its_cells_need_and_the_room_left_goes_to_the_columns_in_proportion() {
+        let rows = [["parse_xml/small/example1", "12,571", "590"], ["parse_xml/medium/example8", "273,184", "74,779"]];
+        let tree = engine_render(&minimal(&table_of("auto auto auto", &rows)));
+        let starts = column_starts(&tree, &["parse_xml/small/example1", "12,571", "590"]);
+        let texts = placed_texts(&tree["pages"][0]);
+        assert_eq!(texts.len(), 6, "each cell is on one line: {texts:?}");
+        let widths = [starts[1] - starts[0], starts[2] - starts[1], 28.0 + 539.28 - starts[2]];
+        assert!(widths[0] > widths[1] && widths[1] > widths[2], "{widths:?}");
+        // The first column is as wide as its longer name, and more: the room left is shared in proportion.
+        assert!(widths[0] >= text_width("Helvetica", "parse_xml/medium/example8", 11.0) as f64, "{widths:?}");
+        assert!((widths.iter().sum::<f64>() - 539.28).abs() < 0.1, "the columns fill the table: {widths:?}");
+    }
+
+    #[test]
+    fn a_column_of_short_cells_keeps_its_width_when_the_text_beside_it_wraps() {
+        let prose = "words that run on and on until a line of this page is not long enough to hold them all, so they wrap ".repeat(3);
+        let tree = engine_render(&minimal(&table_of("auto auto auto", &[[&prose, "12,571", "590"]])));
+        let starts = column_starts(&tree, &["12,571", "590"]);
+        let number_w = text_width("Helvetica", "12,571", 11.0) as f64;
+        // The number column is as wide as the number, and its neighbor is as narrow as the room left allows.
+        assert!((starts[1] - starts[0] - number_w).abs() < 0.1, "{starts:?}");
+        let lines = placed_texts(&tree["pages"][0]).iter().filter(|t| t.0 < starts[0]).count();
+        assert!(lines > 1, "the prose wraps");
+    }
+
+    #[test]
+    fn auto_columns_share_what_the_fixed_columns_leave() {
+        let tree = engine_render(&minimal(&table_of("auto 90pt 60pt", &[["name", "a", "b"]])));
+        let starts = column_starts(&tree, &["name", "a", "b"]);
+        assert!((starts[1] - 28.0 - (539.28 - 150.0)).abs() < 0.1, "{starts:?}");
+        assert!((starts[2] - starts[1] - 90.0).abs() < 0.1, "{starts:?}");
+    }
+
+    #[test]
+    fn the_longest_names_break_first_when_not_even_the_longest_words_fit() {
+        let name = "x".repeat(120);
+        let tree = engine_render(&minimal(&table_of("auto auto auto", &[[&name, "short", "also"]])));
+        let starts = column_starts(&tree, &["short", "also"]);
+        // The two short columns are as wide as their words, and the name has the rest.
+        assert!((starts[1] - starts[0] - text_width("Helvetica", "short", 11.0) as f64).abs() < 0.1, "{starts:?}");
+        assert!((starts[0] - 28.0 - (539.28 - text_width("Helvetica", "short", 11.0) as f64 - text_width("Helvetica", "also", 11.0) as f64)).abs() < 0.1, "{starts:?}");
+    }
+
+    #[test]
+    fn a_table_sized_by_its_cells_keeps_its_columns_on_the_next_page() {
+        let rows: Vec<[&str; 3]> = (0..120).map(|_| ["a name that is a bit long", "12,571", "590"]).collect();
+        let tree = engine_render(&minimal(&table_of("auto auto auto", &rows)));
+        let pages = tree["pages"].as_array().unwrap();
+        assert!(pages.len() > 1, "the table runs onto a second page");
+        let second_column = |page: &serde_json::Value| placed_texts(page).iter().find(|t| t.2 == "12,571").unwrap().0;
+        assert!((second_column(&pages[0]) - second_column(&pages[1])).abs() < 0.01);
+    }
+
+    #[test]
+    fn auto_beside_fr_is_an_error_that_says_what_to_use() {
+        let xml = minimal(&table_of("auto 1fr", &[["a", "b", "c"]]));
+        let err = match crate::parse::parse(&xml) { Err(e) => e, Ok(_) => panic!("auto beside fr was accepted") };
+        assert!(err.contains("auto and fr") && err.contains("pt or %"), "{err}");
     }
 
     #[test]

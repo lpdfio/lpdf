@@ -1132,7 +1132,7 @@ impl<'a> Writer<'a> {
     fn table(&mut self, aligns: &[pulldown_cmark::Alignment], line: usize) -> Result<Block, String> {
         let columns = aligns.len().max(1);
         let rule = self.spec.rules.rule("table");
-        let mut attrs = format!(" cols=\"{}\"", vec!["1fr"; columns].join(" "));
+        let mut attrs = format!(" cols=\"{}\"", vec!["auto"; columns].join(" "));
         for (key, value) in &rule { push_attr(&mut attrs, key, value); }
 
         let mut head = String::new();
@@ -1475,7 +1475,7 @@ mod tests {
     fn a_table_has_a_header_row_and_takes_the_alignment_of_each_column() {
         let nodes = nodes("| Name | Qty | Mid |\n|:-----|----:|:---:|\n| Pen | 2 | x |\n");
         assert_eq!(nodes[0].kind, NodeKind::Table);
-        assert_eq!(nodes[0].table_cols, "1fr 1fr 1fr");
+        assert_eq!(nodes[0].table_cols, "auto auto auto");
         let head = &nodes[0].children[0];
         assert_eq!(head.kind, NodeKind::TableHead);
         assert_eq!(head.children.iter().map(|c| words(texts(c)[0])).collect::<Vec<_>>(), ["Name", "Qty", "Mid"]);

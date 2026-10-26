@@ -159,6 +159,8 @@ fn showcase_markdown_split() { run_snapshot("showcase-markdown-split"); }
 #[test]
 fn showcase_markdown_wrap() { run_snapshot("showcase-markdown-wrap"); }
 #[test]
+fn showcase_table_auto() { run_snapshot("showcase-table-auto"); }
+#[test]
 fn showcase_lists() { run_snapshot("showcase-lists"); }
 #[test]
 fn showcase_lists_split() { run_snapshot("showcase-lists-split"); }
