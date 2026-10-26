@@ -6,7 +6,7 @@
 
 use crate::parse::{
     Align, Detail, ListBullet, ListFormat, ListSpec, Node, NodeKind, Shape, ShapeKind, TextAlign, TextRun,
-    DEFAULT_LINE_HEIGHT,
+    DEFAULT_LINE_HEIGHT, LIST_ITEM_GAP_UNSET,
 };
 
 /// The space between a marker and the words, as a factor of the font size. The marker column ends this far before
@@ -63,7 +63,7 @@ fn lower_list(list: &mut Node, bullet_depth: usize) {
 
     let mut number = spec.start;
     for item in &mut list.children {
-        lower_item(item, &spec, &marks, number, bullet_depth, inner_depth);
+        lower_item(item, &spec, &marks, list.gap, number, bullet_depth, inner_depth);
         number = number.saturating_add(1);
     }
     list.kind = NodeKind::Column;
@@ -90,8 +90,17 @@ struct Marks {
 }
 
 /// Make `item` a row of its marker and a column that holds what it held. The item's own box, its padding,
-/// background and border, goes around both, and its `gap` goes between the children of the column.
-fn lower_item(item: &mut Node, spec: &ListSpec, marks: &Marks, number: i64, bullet_depth: usize, inner_depth: usize) {
+/// background and border, goes around both. Its `gap` goes between the children of the column, and an item that
+/// sets none spaces them as the list spaces its items: `list_gap`.
+fn lower_item(
+    item:         &mut Node,
+    spec:         &ListSpec,
+    marks:        &Marks,
+    list_gap:     f32,
+    number:       i64,
+    bullet_depth: usize,
+    inner_depth:  usize,
+) {
     // The marker takes the look of the first line of the item: the text it starts with, or the list's own.
     let look = match item.children.first() {
         Some(first) if first.kind == NodeKind::Text => Marks {
@@ -113,7 +122,7 @@ fn lower_item(item: &mut Node, spec: &ListSpec, marks: &Marks, number: i64, bull
 
     let mut content = Node::layout_default();
     content.kind       = NodeKind::Column;
-    content.gap        = item.gap;
+    content.gap        = if item.gap == LIST_ITEM_GAP_UNSET { list_gap } else { item.gap };
     content.width_fill = true;
     content.children   = std::mem::take(&mut item.children);
     for child in &mut content.children {
@@ -278,6 +287,21 @@ mod tests {
             assert_eq!((content.kind.clone(), content.width_fill), (NodeKind::Column, true));
             assert_eq!(content.children[0].kind, NodeKind::Text);
         }
+    }
+
+    #[test]
+    fn what_is_in_an_item_is_spaced_like_the_items_unless_the_item_says_otherwise() {
+        let list = first_node(
+            r#"<list gap="10pt">
+                <li><text>A</text><text>B</text></li>
+                <li gap="0pt"><text>C</text><text>D</text></li>
+                <li gap="4pt"><text>E</text><text>F</text></li>
+            </list>"#,
+            None,
+        );
+        assert_eq!(list.gap, 10.0);
+        let gaps: Vec<f32> = list.children.iter().map(|item| item.children[1].gap).collect();
+        assert_eq!(gaps, [10.0, 0.0, 4.0]);
     }
 
     #[test]

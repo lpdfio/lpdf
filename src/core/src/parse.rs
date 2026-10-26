@@ -460,6 +460,10 @@ pub enum ListBullet {
 /// The width of a list's marker column when `indent` is not set.
 pub const DEFAULT_LIST_INDENT: f32 = 24.0;
 
+/// The `gap` of an `<li>` that sets none: below any gap a document can write, so `lists::lower` can tell it from
+/// `gap="0"` and give the content of the item the gap of its list.
+pub const LIST_ITEM_GAP_UNSET: f32 = -1.0;
+
 /// How a `<list>` marks its items. `lists::lower` reads it, once the data is in and the items are known, and turns
 /// the list into the columns and rows the layout knows. Few nodes are lists, so a node holds it boxed (see `Node`).
 #[derive(Debug, Clone, PartialEq)]
@@ -785,8 +789,8 @@ struct ParsedNode {
 impl ParsedNode {
     fn default_for(kind: NodeKind) -> Self {
         ParsedNode {
+            gap: if kind == NodeKind::ListItem { LIST_ITEM_GAP_UNSET } else { 0.0 },
             kind,
-            gap: 0.0,
             padding: [0.0; 4],
             background: None,
             border: None,
