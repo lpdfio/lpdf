@@ -401,6 +401,7 @@ fn apply_single_node(node: Node, stack: &[&Value], bind: &Bind, out: &mut Vec<No
                     underline: false,
                     strike:    false,
                     bold:      false,
+                    background: None,
                     footnote: None,
                 }]
             };
@@ -493,6 +494,7 @@ mod tests {
             line_height: DEFAULT_LINE_HEIGHT,
             max_lines: None,
             ellipsis: false,
+            pre_tab: 0,
             capture: None,
             url: None,
             image_name: None,
@@ -537,6 +539,7 @@ mod tests {
             underline: false,
             strike: false,
             bold: false,
+            background: None,
             footnote: None,
         }];
         n
@@ -578,6 +581,21 @@ mod tests {
     }
 
     // ── Tests ──────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn data_value_fills_the_text_of_a_code_as_it_is_and_data_if_leaves_the_box_out() {
+        let mut doc = crate::parse::parse(
+            r#"<lpdf version="1"><document size="a4"><section><layout>
+                <code data-value="snippet">fallback</code><code data-if="show">hidden</code>
+            </layout></section></document></lpdf>"#,
+        )
+        .unwrap();
+        apply(&mut doc, r#"{"snippet":"a  b\n\tc","show":false}"#).unwrap();
+        let nodes = layout_children(&doc);
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].children[0].text_runs[0].text, "a  b\n\tc");
+        assert!(nodes[0].children[0].pre_tab > 0);
+    }
 
     #[test]
     fn data_value_substitutes_scalar() {

@@ -545,7 +545,7 @@ fn fill_sinks(node: &mut Node, here: &PageCaptures, before: &HashMap<String, Str
         let words = picked.or_else(|| before.get(&sink.key)).unwrap_or(&sink.fallback).clone();
         node.text_runs = vec![TextRun {
             text: words, leading_space: false, font: None, color: None, href: None,
-            underline: false, strike: false, bold: false, footnote: None,
+            underline: false, strike: false, bold: false, background: None, footnote: None,
         }];
     }
     for child in node.children.iter_mut() { fill_sinks(child, here, before); }
@@ -786,6 +786,7 @@ fn debug_note(text: &str) -> Node {
             underline: false,
             strike: false,
             bold: false,
+            background: None,
             footnote: None,
         }],
         font: "Helvetica".to_string(),
@@ -1644,8 +1645,10 @@ fn out_of_spans(grid: &TableGrid, break_idx: usize, first_body: usize, at_page_t
 /// the rest keeps what is left of the cap, so it still drops the text past it and ends in its ellipsis.
 fn split_text(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
     let line_h  = node.font_size * node.line_height;
-    let lines   = wrap_text_split(node, avail_w);
-    let n_lines = node.max_lines.map_or(lines.len(), |max| lines.len().min(max));
+    let pre     = (node.pre_tab > 0).then(|| pre_lines(node, avail_w));
+    let lines   = if pre.is_none() { wrap_text_split(node, avail_w) } else { Vec::new() };
+    let total   = pre.as_ref().map_or(lines.len(), Vec::len);
+    let n_lines = node.max_lines.map_or(total, |max| total.min(max));
     if n_lines <= 1 || line_h <= 0.0 {
         return SplitOutcome::Atomic;
     }
@@ -1667,12 +1670,18 @@ fn split_text(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Spl
         }
         split_at = room;
     }
-    let first_atoms: Vec<SplitAtom> = lines[..split_at].iter().flatten().cloned().collect();
-    let rest_atoms:  Vec<SplitAtom> = lines[split_at..].iter().flatten().cloned().collect();
-    let first = Node { text_runs: atoms_to_runs(&first_atoms), max_lines: None, ellipsis: false, ..node.clone() };
+    let (first_runs, rest_runs) = match &pre {
+        Some(lines) => (pre_runs(node, &lines[..split_at]), pre_runs(node, &lines[split_at..])),
+        None => {
+            let first_atoms: Vec<SplitAtom> = lines[..split_at].iter().flatten().cloned().collect();
+            let rest_atoms:  Vec<SplitAtom> = lines[split_at..].iter().flatten().cloned().collect();
+            (atoms_to_runs(&first_atoms), atoms_to_runs(&rest_atoms))
+        }
+    };
+    let first = Node { text_runs: first_runs, max_lines: None, ellipsis: false, ..node.clone() };
     // The text is captured on the page where it starts, whole: `captured` stays with the first part.
     let rest  = Node {
-        text_runs: atoms_to_runs(&rest_atoms),
+        text_runs: rest_runs,
         max_lines: node.max_lines.map(|max| max - split_at),
         capture: node.capture.as_ref().map(|c| Box::new(Capture { key: None, ..(**c).clone() })),
         ..node.clone()
@@ -1690,6 +1699,8 @@ struct SplitAtom {
     href:           Option<String>,
     underline:      bool,
     strike:         bool,
+    /// The tint behind the atom: a `<code-span>`'s.
+    background:     Option<String>,
     /// Whether this atom needs a leading space when concatenated after the
     /// previous atom in the output. For the first atom in a line, ignore.
     leading_space:  bool,
@@ -1726,7 +1737,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
     let mut pending_leading = false;
     for (ri, run) in node.text_runs.iter().enumerate() {
         let is_span = run.font.is_some() || run.color.is_some()
-                   || run.href.is_some() || run.underline || run.strike;
+                   || run.href.is_some() || run.underline || run.strike || run.background.is_some();
 
         let run_leading = ri > 0 && run.leading_space;
 
@@ -1738,6 +1749,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
                 href: None,
                 underline: false,
                 strike: false,
+                background: None,
                 leading_space: pending_leading || run_leading,
                 is_span: true,
                 footnote: Some(note.clone()),
@@ -1752,6 +1764,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
                     href: run.href.clone(),
                     underline: run.underline,
                     strike: run.strike,
+                    background: run.background.clone(),
                     leading_space: pending_leading || run_leading,
                     is_span: true,
                     footnote: None,
@@ -1767,6 +1780,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
                     href: None,
                     underline: false,
                     strike: false,
+                    background: None,
                     leading_space: if j == 0 { pending_leading || run_leading } else { true },
                     is_span: false,
                     footnote: None,
@@ -1828,7 +1842,7 @@ fn atoms_to_runs(atoms: &[SplitAtom]) -> Vec<TextRun> {
                 text: String::new(),
                 leading_space: leading,
                 font: None, color: None, href: None,
-                underline: false, strike: false, bold: false,
+                underline: false, strike: false, bold: false, background: None,
                 footnote: Some(note.clone()),
             });
         } else if atom.is_span {
@@ -1841,13 +1855,14 @@ fn atoms_to_runs(atoms: &[SplitAtom]) -> Vec<TextRun> {
                 underline: atom.underline,
                 strike: atom.strike,
                 bold: false,
+                background: atom.background.clone(),
                 footnote: None,
             });
         } else {
             // Try to append to the last plain run.
             let can_append = runs.last().map_or(false, |r| {
                 r.font.is_none() && r.color.is_none() && r.href.is_none()
-                    && !r.underline && !r.strike && r.footnote.is_none()
+                    && !r.underline && !r.strike && r.background.is_none() && r.footnote.is_none()
             });
             if can_append {
                 let r = runs.last_mut().unwrap();
@@ -1863,6 +1878,7 @@ fn atoms_to_runs(atoms: &[SplitAtom]) -> Vec<TextRun> {
                     underline: false,
                     strike: false,
                     bold: false,
+                    background: None,
                     footnote: None,
                 });
             }
@@ -3170,6 +3186,7 @@ pub(crate) fn text_width(font: &str, text: &str, size: f32) -> f32 {
 /// A row uses it for the width of a child without an explicit `width`.
 fn measure_natural_w(node: &Node) -> f32 {
     match node.kind {
+        NodeKind::Text if node.pre_tab > 0 => pre_natural_w(node),
         NodeKind::Text => {
             let size  = node.font_size;
             let space = text_width(&node.font, " ", size);
@@ -3231,6 +3248,8 @@ struct Atom {
     href:      Option<String>,
     underline: bool,
     strike:    bool,
+    /// The tint behind the atom: a `<code-span>`'s.
+    background: Option<String>,
     /// The number of a footnote, drawn small and raised.
     sup:       bool,
 }
@@ -3306,6 +3325,9 @@ fn layout_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
 /// Lay out a text in a box `avail_w` wide, which is what its lines align in. Returns the box, its height, and
 /// whether a line it keeps is wider than the box, which the caller cuts off.
 fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> (RenderNode, f32, bool) {
+    if node.pre_tab > 0 {
+        return layout_pre_text(node, x, y, avail_w);
+    }
     let font_size    = node.font_size;
     let line_height  = font_size * node.line_height;
     let parent_font  = node.font.as_str();
@@ -3316,7 +3338,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     let mut toks: Vec<Tok> = Vec::new();
     for (ri, run) in node.text_runs.iter().enumerate() {
         let is_span = run.font.is_some() || run.color.is_some()
-                   || run.href.is_some() || run.underline || run.strike;
+                   || run.href.is_some() || run.underline || run.strike || run.background.is_some();
         let font  = run.font.as_deref().unwrap_or(parent_font);
         let color = run.color.clone().unwrap_or_else(|| parent_color.clone());
 
@@ -3325,13 +3347,14 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
         if let Some(note) = &run.footnote {
             toks.push(Tok::Word(Atom {
                 text: note.number.to_string(), font: font.to_string(), color,
-                href: None, underline: false, strike: false, sup: true,
+                href: None, underline: false, strike: false, background: None, sup: true,
             }));
         } else if is_span {
             if !run.text.is_empty() {
                 toks.push(Tok::Word(Atom {
                     text: run.text.clone(), font: font.to_string(), color,
-                    href: run.href.clone(), underline: run.underline, strike: run.strike, sup: false,
+                    href: run.href.clone(), underline: run.underline, strike: run.strike,
+                    background: run.background.clone(), sup: false,
                 }));
             }
         } else {
@@ -3339,7 +3362,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 if j > 0 { toks.push(Tok::Space); }
                 toks.push(Tok::Word(Atom {
                     text: word.to_string(), font: font.to_string(), color: color.clone(),
-                    href: None, underline: false, strike: false, sup: false,
+                    href: None, underline: false, strike: false, background: None, sup: false,
                 }));
             }
         }
@@ -3452,7 +3475,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
             let inner_gap = word_gap * atom_spaces(atom) as f32;
             let aw = word_width(&atom.font, &atom.text, font_size, atom.sup) + inner_gap;
 
-            let plain = atom.href.is_none() && !atom.underline && !atom.strike && !atom.sup;
+            let plain = atom.href.is_none() && !atom.underline && !atom.strike && !atom.sup && atom.background.is_none();
 
             if plain {
                 // If font or color changed, flush the current group first.
@@ -3490,7 +3513,11 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 } else {
                     (font_size, line_y)
                 };
-                let mut seg = vec![RenderNode::Text(RenderText {
+                let mut seg = Vec::new();
+                if let Some(tint) = &atom.background {
+                    seg.push(tint_behind(tint, cur_x, line_y, aw, line_height));
+                }
+                seg.push(RenderNode::Text(RenderText {
                     x: cur_x, y: atom_y,
                     content: atom.text.clone(), font: atom.font.clone(),
                     size: atom_size, color: atom.color.clone(),
@@ -3499,7 +3526,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                     // The gaps inside one are widened like the rest of the line.
                     text_align: if inner_gap > 0.0 { "justify" } else { "left" }.to_string(),
                     line_width: 0.0, word_gap: if inner_gap > 0.0 { word_gap } else { 0.0 },
-                })];
+                }));
 
                 if atom.underline {
                     seg.push(RenderNode::Line(RenderLine {
@@ -3549,6 +3576,224 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
         }),
         total_h,
         overflow,
+    )
+}
+
+// ── Preformatted text ─────────────────────────────────────────────────────────
+
+/// A rectangle of `tint` behind a run of a line.
+fn tint_behind(tint: &str, x: f32, y: f32, width: f32, height: f32) -> RenderNode {
+    RenderNode::Box(RenderBox {
+        x, y, width, height, fill: Some(tint.to_string()),
+        border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None, debug_self: false,
+        children: vec![],
+    })
+}
+
+/// A stretch of one line of preformatted text. It comes from one run, so it has one style.
+struct PreSeg {
+    text: String,
+    run:  usize,
+}
+
+/// A character of preformatted text, with the index of the run it came from.
+type PreCell = (char, usize);
+
+/// The characters of a preformatted text, a line at a time. A tab becomes the spaces up to the next multiple of
+/// `pre_tab` columns. A newline ends a line, and the one that ends the text starts no line after it.
+fn pre_cells(node: &Node) -> Vec<Vec<PreCell>> {
+    if node.text_runs.iter().all(|run| run.text.is_empty()) {
+        return Vec::new();
+    }
+    let tab = usize::from(node.pre_tab.max(1));
+    let mut lines: Vec<Vec<PreCell>> = vec![Vec::new()];
+    for (ri, run) in node.text_runs.iter().enumerate() {
+        for c in run.text.chars() {
+            let line = lines.last_mut().expect("there is always a line");
+            match c {
+                '\n' => lines.push(Vec::new()),
+                '\r' => {}
+                '\t' => {
+                    let fill = tab - line.len() % tab;
+                    line.extend(std::iter::repeat_n((' ', ri), fill));
+                }
+                c => line.push((c, ri)),
+            }
+        }
+    }
+    if lines.last().is_some_and(Vec::is_empty) {
+        lines.pop();
+    }
+    lines
+}
+
+/// The width of a character of a preformatted text, in the font of its run.
+fn pre_cell_width(node: &Node, cell: &PreCell) -> f32 {
+    let font = node.text_runs[cell.1].font.as_deref().unwrap_or(node.font.as_str());
+    text_width(font, cell.0.encode_utf8(&mut [0; 4]), node.font_size)
+}
+
+/// End the line being built, without the spaces at its end: they are the break and are not drawn. A line that
+/// holds only spaces is not ended, since a break never makes a blank line.
+fn end_pre_line(out: &mut Vec<Vec<PreCell>>, line: &mut Vec<PreCell>, line_w: &mut f32) {
+    while line.last().is_some_and(|cell| cell.0 == ' ') {
+        line.pop();
+    }
+    if !line.is_empty() {
+        out.push(std::mem::take(line));
+    }
+    *line_w = 0.0;
+}
+
+/// Break a line of a preformatted text where it passes `wrap_w`. It breaks at spaces, and a word that does not
+/// fit on a line of its own is broken at the last character that fits.
+fn wrap_pre_line(node: &Node, cells: &[PreCell], wrap_w: f32) -> Vec<Vec<PreCell>> {
+    let limit = wrap_w + 0.01;
+    let mut out:  Vec<Vec<PreCell>> = Vec::new();
+    let mut line: Vec<PreCell>      = Vec::new();
+    let mut line_w = 0.0_f32;
+    let mut rest = cells;
+    while let Some(first) = rest.first() {
+        let space = first.0 == ' ';
+        let len = rest.iter().take_while(|cell| (cell.0 == ' ') == space).count();
+        let (token, tail) = rest.split_at(len);
+        rest = tail;
+        let widths: Vec<f32> = token.iter().map(|cell| pre_cell_width(node, cell)).collect();
+        let token_w: f32 = widths.iter().sum();
+        if line_w + token_w <= limit {
+            line.extend_from_slice(token);
+            line_w += token_w;
+        } else if space {
+            end_pre_line(&mut out, &mut line, &mut line_w);
+        } else if token_w <= limit && !line.is_empty() {
+            end_pre_line(&mut out, &mut line, &mut line_w);
+            line.extend_from_slice(token);
+            line_w = token_w;
+        } else {
+            for (cell, width) in token.iter().zip(&widths) {
+                if !line.is_empty() && line_w + width > limit {
+                    end_pre_line(&mut out, &mut line, &mut line_w);
+                }
+                line.push(*cell);
+                line_w += width;
+            }
+        }
+    }
+    if !line.is_empty() || out.is_empty() {
+        out.push(line);
+    }
+    out
+}
+
+/// The lines of a preformatted text as they are drawn at `wrap_w`: a line for each one written, and more where
+/// a long one wraps.
+fn pre_lines(node: &Node, wrap_w: f32) -> Vec<Vec<PreSeg>> {
+    let mut lines = Vec::new();
+    for cells in pre_cells(node) {
+        for visual in wrap_pre_line(node, &cells, wrap_w) {
+            let mut segs: Vec<PreSeg> = Vec::new();
+            for (c, ri) in visual {
+                match segs.last_mut() {
+                    Some(seg) if seg.run == ri => seg.text.push(c),
+                    _ => segs.push(PreSeg { text: c.to_string(), run: ri }),
+                }
+            }
+            lines.push(segs);
+        }
+    }
+    lines
+}
+
+/// The width of the longest line of a preformatted text, with no line wrapped.
+fn pre_natural_w(node: &Node) -> f32 {
+    pre_cells(node).iter()
+        .map(|line| line.iter().map(|cell| pre_cell_width(node, cell)).sum::<f32>())
+        .fold(0.0, f32::max)
+}
+
+/// The runs that draw `lines` of a preformatted text again as they are: the text of each stretch, and a newline
+/// between the lines, so that a text split between two pages is laid out on each as it was.
+fn pre_runs(node: &Node, lines: &[Vec<PreSeg>]) -> Vec<TextRun> {
+    let mut runs: Vec<TextRun> = Vec::new();
+    for (li, line) in lines.iter().enumerate() {
+        for seg in line {
+            runs.push(TextRun { text: seg.text.clone(), ..node.text_runs[seg.run].clone() });
+        }
+        if li + 1 == lines.len() {
+            continue;
+        }
+        match runs.last_mut().filter(|_| !line.is_empty()) {
+            Some(last) => last.text.push('\n'),
+            None => runs.push(TextRun {
+                text: "\n".to_string(), leading_space: false, font: None, color: None, href: None,
+                underline: false, strike: false, bold: false, background: None, footnote: None,
+            }),
+        }
+    }
+    runs
+}
+
+/// Lay out a preformatted text: every line written, wrapped at the width of the box. Its lines are at the left
+/// edge, with every stretch placed where the ones before it end.
+fn layout_pre_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32, bool) {
+    let font_size    = node.font_size;
+    let line_height  = font_size * node.line_height;
+    let parent_color = node.text_color.clone().unwrap_or_else(|| "#1a1a1a".into());
+    let lines        = pre_lines(node, avail_w);
+    let mut nodes: Vec<RenderNode> = Vec::new();
+
+    for (li, line) in lines.iter().enumerate() {
+        let line_y = y + li as f32 * line_height;
+        let mut cur_x = x;
+        for seg in line {
+            let run   = &node.text_runs[seg.run];
+            let font  = run.font.as_deref().unwrap_or(node.font.as_str());
+            let color = run.color.clone().unwrap_or_else(|| parent_color.clone());
+            let width = text_width(font, &seg.text, font_size);
+            let marked = run.href.is_some() || run.underline || run.strike || run.background.is_some();
+            // Spaces alone leave nothing to draw, unless something is drawn under or over them.
+            if marked || seg.text.chars().any(|c| c != ' ') {
+                let mut parts = Vec::new();
+                if let Some(tint) = &run.background {
+                    parts.push(tint_behind(tint, cur_x, line_y, width, line_height));
+                }
+                parts.push(RenderNode::Text(RenderText {
+                    x: cur_x, y: line_y, content: seg.text.clone(), font: font.to_string(),
+                    size: font_size, color: color.clone(), text_align: "left".to_string(),
+                    line_width: 0.0, word_gap: 0.0,
+                }));
+                if run.underline {
+                    let uy = line_y + font_size;
+                    parts.push(RenderNode::Line(RenderLine {
+                        x1: cur_x, y1: uy, x2: cur_x + width, y2: uy, color: color.clone(), thickness: 0.75, dash: None,
+                    }));
+                }
+                if run.strike {
+                    let sy = line_y + font_size * 0.5;
+                    parts.push(RenderNode::Line(RenderLine {
+                        x1: cur_x, y1: sy, x2: cur_x + width, y2: sy, color: color.clone(), thickness: 0.75, dash: None,
+                    }));
+                }
+                match &run.href {
+                    Some(href) => nodes.push(RenderNode::Link(RenderLink {
+                        url: href.clone(), x: cur_x, y: line_y, width, height: line_height,
+                        debug_self: false, children: parts,
+                    })),
+                    None => nodes.extend(parts),
+                }
+            }
+            cur_x += width;
+        }
+    }
+
+    let total_h = lines.len() as f32 * line_height;
+    (
+        RenderNode::Box(RenderBox {
+            x, y, width: avail_w, height: total_h, fill: None, border_width: 0.0, border_color: None,
+            radius: 0.0, opacity: 1.0, shadow: None, debug_self: node.debug, children: nodes,
+        }),
+        total_h,
+        false,
     )
 }
 
@@ -3635,6 +3880,9 @@ fn natural_w(node: &Node) -> f32 {
 /// Mirrors the token-building logic in `layout_text` but accumulates widths
 /// instead of word-wrapping.
 fn text_natural_w(node: &Node) -> f32 {
+    if node.pre_tab > 0 {
+        return pre_natural_w(node);
+    }
     let font_size   = node.font_size;
     let parent_font = node.font.as_str();
     let space_w     = text_width(parent_font, " ", font_size);
@@ -3643,7 +3891,7 @@ fn text_natural_w(node: &Node) -> f32 {
 
     for (ri, run) in node.text_runs.iter().enumerate() {
         let is_span = run.font.is_some() || run.color.is_some()
-                   || run.href.is_some() || run.underline || run.strike;
+                   || run.href.is_some() || run.underline || run.strike || run.background.is_some();
         let font = run.font.as_deref().unwrap_or(parent_font);
 
         if ri > 0 && run.leading_space { pending_space = true; }
@@ -4366,6 +4614,244 @@ mod tests {
         let lines: Vec<usize> =
             tree["pages"].as_array().unwrap().iter().map(|p| find_text_content(p).len()).collect();
         assert_eq!(lines, vec![2, 1]);
+    }
+
+    // ── code ──────────────────────────────────────────────────────────────────
+
+    /// Every text of a page tree with where it is: `(x, y, content)`, in the order they are drawn.
+    fn placed_texts(page: &serde_json::Value) -> Vec<(f64, f64, String)> {
+        fn walk(v: &serde_json::Value, out: &mut Vec<(f64, f64, String)>) {
+            if v["type"] == "text" {
+                out.push((v["x"].as_f64().unwrap(), v["y"].as_f64().unwrap(), v["content"].as_str().unwrap().to_string()));
+            }
+            if let Some(arr) = v["nodes"].as_array() {
+                for c in arr { walk(c, out); }
+            }
+        }
+        let mut out = Vec::new();
+        walk(page, &mut out);
+        out
+    }
+
+    /// The boxes of a page tree that are filled with `fill`: `(y, height)`.
+    fn filled_boxes(page: &serde_json::Value, fill: &str) -> Vec<(f64, f64)> {
+        fn walk(v: &serde_json::Value, fill: &str, out: &mut Vec<(f64, f64)>) {
+            if v["type"] == "box" && v["fill"] == fill {
+                out.push((v["y"].as_f64().unwrap(), v["height"].as_f64().unwrap()));
+            }
+            if let Some(arr) = v["nodes"].as_array() {
+                for c in arr { walk(c, fill, out); }
+            }
+        }
+        let mut out = Vec::new();
+        walk(page, fill, &mut out);
+        out
+    }
+
+    /// The contents of the texts of the first page of a layout holding `body`.
+    fn first_page_lines(body: &str) -> Vec<String> {
+        find_text_content(&engine_render(&minimal(body))["pages"][0])
+    }
+
+    #[test]
+    fn a_code_keeps_its_spaces_its_lines_and_its_blank_lines() {
+        let tree = engine_render(&minimal("<code>\nfn a() {\n    b();\n\n}\n</code>"));
+        let texts = placed_texts(&tree["pages"][0]);
+        let contents: Vec<&str> = texts.iter().map(|t| t.2.as_str()).collect();
+        assert_eq!(contents, vec!["fn a() {", "    b();", "}"]);
+        // The blank line takes a line of its own: the closing brace is three lines below the first line.
+        let line_h = 11.0 * 1.2;
+        assert!((texts[2].1 - texts[0].1 - 3.0 * line_h as f64).abs() < 0.05, "{texts:?}");
+    }
+
+    #[test]
+    fn a_code_is_set_in_courier_on_a_tint_with_padding() {
+        let tree = engine_render(&minimal("<code>x</code>"));
+        let page = &tree["pages"][0];
+        let boxes = filled_boxes(page, "#f3f4f6");
+        assert_eq!(boxes.len(), 1, "one tinted box");
+        let texts = placed_texts(page);
+        assert_eq!(texts[0].2, "x");
+        assert!(page.to_string().contains("\"font\":\"Courier\""));
+        // 8pt of padding above the line, and the box is the line and the padding below it.
+        assert!((boxes[0].1 - (11.0 * 1.2 + 16.0)).abs() < 0.05, "{boxes:?}");
+        assert!((texts[0].1 - boxes[0].0 - 8.0).abs() < 0.05, "{texts:?} {boxes:?}");
+    }
+
+    #[test]
+    fn a_tab_fills_to_the_next_multiple_of_the_tab_size() {
+        assert_eq!(first_page_lines("<code>\n\tx\nab\tc\n</code>"), vec!["    x", "ab  c"]);
+        assert_eq!(first_page_lines("<code tab-size=\"8\">\n\tx\nab\tc\n</code>"), vec!["        x", "ab      c"]);
+        assert_eq!(first_page_lines("<code tab-size=\"2\">\n\tx\nabc\td\n</code>"), vec!["  x", "abc d"]);
+    }
+
+    #[test]
+    fn a_line_wider_than_the_box_wraps_at_a_space() {
+        // Courier at 11pt is 6.6pt a character, and 100pt less 16pt of padding leaves room for 12.
+        let lines = first_page_lines(r#"<code width="100pt">alpha beta gamma delta</code>"#);
+        assert_eq!(lines, vec!["alpha beta", "gamma delta"]);
+    }
+
+    #[test]
+    fn a_word_wider_than_a_line_breaks_at_the_edge() {
+        let word = "x".repeat(30);
+        let lines = first_page_lines(&format!(r#"<code width="100pt">{word}</code>"#));
+        assert_eq!(lines.iter().map(String::len).collect::<Vec<_>>(), vec![12, 12, 6]);
+        assert_eq!(lines.concat(), word, "nothing is lost");
+    }
+
+    #[test]
+    fn a_word_that_fits_a_line_of_its_own_moves_down_instead_of_breaking() {
+        let lines = first_page_lines(r#"<code width="100pt">abcdef ghijklmnopq</code>"#);
+        assert_eq!(lines, vec!["abcdef", "ghijklmnopq"]);
+    }
+
+    #[test]
+    fn a_word_with_no_room_left_on_its_line_breaks_where_the_line_ends() {
+        // "ab " leaves room for nine characters, and the word is longer than a whole line.
+        let lines = first_page_lines(&format!(r#"<code width="100pt">ab {}</code>"#, "y".repeat(20)));
+        assert_eq!(lines, vec!["ab yyyyyyyyy", "yyyyyyyyyyy"]);
+    }
+
+    #[test]
+    fn the_indent_and_the_tabs_before_a_wrap_are_kept_and_the_break_is_not_drawn() {
+        let lines = first_page_lines(r#"<code width="100pt">  one two three</code>"#);
+        assert_eq!(lines, vec!["  one two", "three"]);
+    }
+
+    #[test]
+    fn a_span_colors_a_stretch_of_a_line_of_code() {
+        let tree = engine_render(&minimal("<code>let <span color=\"#c0392b\">x</span> = 1;</code>"));
+        let texts = placed_texts(&tree["pages"][0]);
+        assert_eq!(texts.iter().map(|t| t.2.as_str()).collect::<Vec<_>>(), vec!["let ", "x", " = 1;"]);
+        // Each stretch starts where the one before it ends: four characters of 6.6pt, then one.
+        assert!((texts[1].0 - texts[0].0 - 4.0 * 6.6).abs() < 0.05, "{texts:?}");
+        assert!((texts[2].0 - texts[1].0 - 6.6).abs() < 0.05, "{texts:?}");
+        assert!(tree["pages"][0].to_string().contains("#c0392b"));
+    }
+
+    /// The height of a frame that leaves room for `room` lines of a code on a page, and half a line more. The box
+    /// has 8pt of padding above its lines and below them, and a page holds 785.89pt.
+    fn frame_before_code(room: usize) -> f32 {
+        let line_h = 11.0_f32 * 1.2;
+        785.89 - 16.0 - line_h * room as f32 - line_h / 2.0
+    }
+
+    /// A code of `lines` lines, `L001` and on, after a frame that leaves room for `room` of them on the first page.
+    fn code_pages(attrs: &str, lines: usize, room: usize) -> Vec<Vec<String>> {
+        let code: Vec<String> = (1..=lines).map(|n| format!("L{n:03}")).collect();
+        let body = format!(r#"<frame height="{:.2}pt"/><code {attrs}>{}</code>"#, frame_before_code(room), code.join("\n"));
+        let tree = engine_render(&minimal(&body));
+        tree["pages"].as_array().unwrap().iter().map(find_text_content).collect()
+    }
+
+    #[test]
+    fn a_code_taller_than_the_page_splits_between_lines_and_loses_none() {
+        let tree = engine_render(&minimal(&format!(
+            "<code>{}</code>",
+            (1..=150).map(|n| format!("L{n:03}")).collect::<Vec<_>>().join("\n")
+        )));
+        let pages = tree["pages"].as_array().unwrap();
+        assert!(pages.len() >= 2, "it needs more than one page");
+        let all: Vec<String> = pages.iter().flat_map(find_text_content).collect();
+        assert_eq!(all, (1..=150).map(|n| format!("L{n:03}")).collect::<Vec<_>>());
+        // Every page that has lines of it has its own tinted box, padded at the top and the bottom.
+        for page in pages {
+            let boxes = filled_boxes(page, "#f3f4f6");
+            assert_eq!(boxes.len(), 1, "a box for the lines on the page");
+            let lines = placed_texts(page);
+            let (box_y, box_h) = boxes[0];
+            assert!((lines[0].1 - box_y - 8.0).abs() < 0.05, "padded at the top: {lines:?} {boxes:?}");
+            let last_bottom = lines.last().unwrap().1 + 11.0 * 1.2;
+            assert!((box_y + box_h - last_bottom - 8.0).abs() < 0.05, "padded at the bottom: {boxes:?}");
+        }
+    }
+
+    #[test]
+    fn a_code_keeps_widows_and_orphans_like_a_text() {
+        // Room for 5 of 6 lines leaves 1 for the next page, and by default it gets 2.
+        assert_eq!(code_pages("", 6, 5).iter().map(Vec::len).collect::<Vec<_>>(), vec![4, 2]);
+        // With the protection off, it stays alone.
+        assert_eq!(
+            code_pages(r#"widows="1" orphans="1""#, 6, 5).iter().map(Vec::len).collect::<Vec<_>>(),
+            vec![5, 1]
+        );
+    }
+
+    #[test]
+    fn the_lines_of_a_wrapped_line_stay_together_in_order_across_a_split() {
+        // Two long lines, each wrapping to several, and room for the first page to end in the middle of the second.
+        let long = "word ".repeat(40);
+        let body = format!("<frame height=\"700pt\"/><code width=\"200pt\">{long}\n{long}</code>");
+        let tree = engine_render(&minimal(&body));
+        let pages = tree["pages"].as_array().unwrap();
+        assert!(pages.len() >= 2);
+        let words: Vec<String> = pages.iter().flat_map(find_text_content).flat_map(|l| {
+            l.split_whitespace().map(str::to_string).collect::<Vec<_>>()
+        }).collect();
+        assert_eq!(words.len(), 80, "every word is drawn once");
+        assert!(words.iter().all(|w| w == "word"));
+    }
+
+    #[test]
+    fn a_blank_line_that_a_split_leaves_at_the_top_of_a_page_is_kept() {
+        // L1, blank, blank, L4 with room for two lines: the second page starts with the second blank line.
+        let tree = engine_render(&minimal(&format!(
+            "<frame height=\"{:.2}pt\"/><code widows=\"1\" orphans=\"1\">L1\n\n\nL4</code>",
+            frame_before_code(2)
+        )));
+        let all: Vec<String> = tree["pages"].as_array().unwrap().iter().flat_map(find_text_content).collect();
+        assert_eq!(all, vec!["L1", "L4"]);
+        let second = placed_texts(&tree["pages"][1]);
+        let box_y = filled_boxes(&tree["pages"][1], "#f3f4f6")[0].0;
+        assert!((second[0].1 - box_y - 8.0 - 13.2).abs() < 0.05, "one blank line above L4: {second:?}");
+    }
+
+    #[test]
+    fn a_code_span_is_drawn_in_courier_on_a_tint_inside_a_text() {
+        let tree = engine_render(&minimal("<text>Run <code-span>cargo test</code-span> now</text>"));
+        let page = &tree["pages"][0];
+        let boxes = filled_boxes(page, "#f3f4f6");
+        assert_eq!(boxes.len(), 1);
+        let texts = placed_texts(page);
+        assert!(texts.iter().any(|t| t.2 == "cargo test"));
+        assert!(page.to_string().contains("\"font\":\"Courier\""));
+    }
+
+    #[test]
+    fn a_code_span_takes_its_own_font_color_and_tint() {
+        let tree = engine_render(&minimal(
+            r##"<text>Run <code-span font="Times-Roman" color="#336699" background="#ffff00">it</code-span></text>"##,
+        ));
+        let page = &tree["pages"][0];
+        assert_eq!(filled_boxes(page, "#ffff00").len(), 1);
+        let json = page.to_string();
+        assert!(json.contains("\"font\":\"Times-Roman\""));
+        assert!(json.contains("#336699"));
+    }
+
+    #[test]
+    fn a_code_span_stays_with_its_words_when_a_text_splits_across_pages() {
+        // The text splits between lines on the page edge; the tint must follow the code-span into the rest.
+        let words = "alpha ".repeat(2000);
+        let tree = engine_render(&minimal(&format!("<text>{words}<code-span>kept</code-span> end</text>")));
+        let pages = tree["pages"].as_array().unwrap();
+        assert!(pages.len() >= 2);
+        let last = pages.last().unwrap();
+        assert_eq!(filled_boxes(last, "#f3f4f6").len(), 1, "the tint is on the page that has the code-span");
+    }
+
+    #[test]
+    fn a_code_in_a_row_takes_the_width_of_its_longest_line() {
+        let tree = engine_render(&minimal(
+            r#"<row><code>ab
+abcdef</code><text>after</text></row>"#,
+        ));
+        let boxes = filled_boxes(&tree["pages"][0], "#f3f4f6");
+        // Six characters of 6.6pt and 8pt of padding on each side.
+        assert!((boxes[0].1 - (2.0 * 13.2 + 16.0)).abs() < 0.05);
+        let width = tree["pages"][0]["nodes"].to_string();
+        assert!(width.contains("\"width\":55.6"), "{width}");
     }
 
     // ── line-height in the flow ───────────────────────────────────────────────

@@ -260,6 +260,8 @@ pub struct TextRun {
     /// Set on a `<span bold>` while parsing. `resolve_node` folds it into `font` and the field is `false`
     /// from then on.
     pub bold:         bool,
+    /// The tint drawn behind the run: the color of a `<code-span>`. `None` draws nothing.
+    pub background:   Option<String>,
     /// Set on the run an `<fn>` stands for: the anchor, a raised number, with the note it points at. The run has
     /// no text of its own.
     pub footnote:     Option<Box<Footnote>>,
@@ -481,6 +483,9 @@ pub struct Node {
     pub max_lines: Option<usize>,
     /// A text cut short by `max_lines`, or a `text-at` cut short by its width, ends in an ellipsis.
     pub ellipsis: bool,
+    /// 0 for a text that collapses its white space. Any other value is the text of a `<code>`, which keeps its
+    /// spaces and lines, and a tab in it fills to the next multiple of that many columns.
+    pub pre_tab: u8,
     /// What the text records or shows for a running header, boxed: few texts have one.
     pub capture: Option<Box<Capture>>,
     // link
@@ -684,6 +689,7 @@ struct ParsedNode {
     line_height: f32,
     max_lines: Option<usize>,
     ellipsis: bool,
+    pre_tab: u8,
     capture: Option<Box<Capture>>,
     url: Option<String>,
     image_name: Option<String>,
@@ -752,6 +758,7 @@ impl ParsedNode {
             line_height: DEFAULT_LINE_HEIGHT,
             max_lines: None,
             ellipsis: false,
+            pre_tab: 0,
             capture: None,
             url: None,
             image_name: None,
@@ -863,7 +870,7 @@ impl Node {
             color: None, thickness: 1.0, text_runs: Vec::new(),
             font: "Helvetica".to_string(), font_size: 11.0, text_color: None,
             text_align: TextAlign::Left, widows: DEFAULT_WIDOWS, orphans: DEFAULT_ORPHANS,
-            line_height: DEFAULT_LINE_HEIGHT, max_lines: None, ellipsis: false,
+            line_height: DEFAULT_LINE_HEIGHT, max_lines: None, ellipsis: false, pre_tab: 0,
             capture: None,
             url: None, image_name: None,
             img_height_constraint: None, img_aspect: None, shape: None, barcode_type: None, barcode_data: None,
@@ -981,6 +988,7 @@ fn resolve_node(
         line_height:           n.line_height,
         max_lines:             n.max_lines,
         ellipsis:              n.ellipsis,
+        pre_tab:               n.pre_tab,
         capture:               n.capture,
         url:                   n.url,
         image_name:            n.image_name,
@@ -1731,6 +1739,9 @@ fn parse_node(
     asset_images: &HashMap<String, String>,
 ) -> Result<ParsedNode, String> {
     let tag = elem.tag_name().name();
+    if tag == "code" {
+        return parse_code(elem, tokens);
+    }
     let kind = match tag {
         "column"  => NodeKind::Column,
         "row"     => NodeKind::Row,
@@ -1884,7 +1895,7 @@ fn push_plain_run(runs: &mut Vec<TextRun>, raw: &str, prev_ended_space: &mut boo
             text: words.join(" "),
             leading_space: raw.starts_with(char::is_whitespace) || *prev_ended_space,
             font: None, color: None, href: None,
-            underline: false, strike: false, bold: false, footnote: None,
+            underline: false, strike: false, bold: false, background: None, footnote: None,
         });
     }
     *prev_ended_space = raw.ends_with(char::is_whitespace);
@@ -1896,7 +1907,7 @@ fn footnote_run(words: Vec<TextRun>, leading_space: bool) -> TextRun {
     TextRun {
         text: String::new(), leading_space,
         font: None, color: None, href: None,
-        underline: false, strike: false, bold: false,
+        underline: false, strike: false, bold: false, background: None,
         footnote: Some(Box::new(Footnote { runs: words, number: 1 })),
     }
 }
@@ -1940,8 +1951,20 @@ fn read_runs(runs: &mut Vec<TextRun>, elem: &roxmltree::Node, tokens: &Tokens, n
                     underline: child.attribute("underline").map(|v| v == "true").unwrap_or(false),
                     strike:    child.attribute("strike").map(|v| v == "true").unwrap_or(false),
                     bold:      child.attribute("bold").map(|v| v == "true").unwrap_or(false),
+                    background: None,
                     footnote:  None,
                 });
+            }
+            prev_ended_space = raw_span.ends_with(char::is_whitespace);
+        } else if child.is_element() && child.tag_name().name() == "code-span" {
+            let raw_span: String = child
+                .children()
+                .filter(|n| n.is_text())
+                .filter_map(|n| n.text())
+                .collect();
+            let span_text = raw_span.split_whitespace().collect::<Vec<_>>().join(" ");
+            if !span_text.is_empty() {
+                runs.push(code_span_run(&child, span_text, prev_ended_space, tokens)?);
             }
             prev_ended_space = raw_span.ends_with(char::is_whitespace);
         } else if child.is_element() && child.tag_name().name() == "fn" {
@@ -1980,7 +2003,7 @@ fn read_tree_runs(runs: &mut Vec<TextRun>, json: &serde_json::Value, tokens: &To
             continue;
         }
         let kind = child.get("type").and_then(|v| v.as_str());
-        if !matches!(kind, Some("span" | "fn")) {
+        if !matches!(kind, Some("span" | "fn" | "code-span")) {
             continue;
         }
         if !text.is_empty() {
@@ -2005,6 +2028,13 @@ fn read_tree_runs(runs: &mut Vec<TextRun>, json: &serde_json::Value, tokens: &To
             .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
             .unwrap_or_default();
         let span_text = raw_span.split_whitespace().collect::<Vec<_>>().join(" ");
+        if kind == Some("code-span") {
+            if !span_text.is_empty() {
+                runs.push(code_span_run(&JsonAttrs(child), span_text, prev_ended_space, tokens)?);
+            }
+            prev_ended_space = raw_span.ends_with(char::is_whitespace);
+            continue;
+        }
         if !span_text.is_empty() {
             let color = match jattr(child, "color") {
                 Some(v) => Some(tokens.resolve_color(v)?),
@@ -2019,6 +2049,7 @@ fn read_tree_runs(runs: &mut Vec<TextRun>, json: &serde_json::Value, tokens: &To
                 underline: jattr(child, "underline").map(|v| v == "true").unwrap_or(false),
                 strike:    jattr(child, "strike")   .map(|v| v == "true").unwrap_or(false),
                 bold:      jattr(child, "bold")     .map(|v| v == "true").unwrap_or(false),
+                background: None,
                 footnote:  None,
             });
         }
@@ -2028,6 +2059,200 @@ fn read_tree_runs(runs: &mut Vec<TextRun>, json: &serde_json::Value, tokens: &To
         push_plain_run(runs, &text, &mut prev_ended_space);
     }
     Ok(())
+}
+
+// ── Code ──────────────────────────────────────────────────────────────────────
+
+/// The font a `<code>` and a `<code-span>` are set in unless they name another.
+const CODE_FONT: &str = "Courier";
+/// The tint behind a `<code>` and a `<code-span>` unless they name another.
+const CODE_BACKGROUND: &str = "#f3f4f6";
+/// The space token between the edge of a `<code>` and its text unless it has a `padding`.
+const CODE_PADDING: &str = "m";
+/// How many columns a tab fills to in a `<code>` unless it has a `tab-size`.
+const DEFAULT_TAB_SIZE: u8 = 4;
+
+/// The part of a `<code>` that is not a box: its text, and the spans in it.
+enum CodePart<'a> {
+    Text(String),
+    Span(Box<dyn Attrs + 'a>, String),
+}
+
+/// A `<code>` starts on the line after its tag and ends on the line before its end tag, as a `<pre>` does, so
+/// that the tags can stand on lines of their own.
+pub(crate) fn without_first_newline(text: &str) -> &str {
+    text.strip_prefix("\r\n").or_else(|| text.strip_prefix('\n')).unwrap_or(text)
+}
+
+/// The indent of the line that holds the end tag is not code: it is dropped, and the newline before it stays.
+pub(crate) fn without_last_indent(text: &str) -> &str {
+    match text.rfind('\n') {
+        Some(i) if text[i + 1..].chars().all(|c| c == ' ' || c == '\t') => &text[..=i],
+        _ => text,
+    }
+}
+
+/// A run of code in the text's own style.
+fn plain_code_run(text: &str) -> TextRun {
+    TextRun {
+        text: text.to_string(), leading_space: false, font: None, color: None, href: None,
+        underline: false, strike: false, bold: false, background: None, footnote: None,
+    }
+}
+
+/// The run of a `<span>` in a `<code>`: its text as it is written, with the span's style.
+fn code_span_in_code(a: &dyn Attrs, text: String, tokens: &Tokens) -> Result<TextRun, String> {
+    Ok(TextRun {
+        text,
+        leading_space: false,
+        font:       a.get("font").map(str::to_string),
+        color:      a.get("color").map(|v| tokens.resolve_color(v)).transpose()?,
+        href:       a.get("href").map(str::to_string),
+        underline:  a.get("underline").map(|v| v == "true").unwrap_or(false),
+        strike:     a.get("strike").map(|v| v == "true").unwrap_or(false),
+        bold:       a.get("bold").map(|v| v == "true").unwrap_or(false),
+        background: None,
+        footnote:   None,
+    })
+}
+
+/// The runs of a `<code>`: its text as it is written, and a run for each `<span>`.
+fn code_runs(parts: Vec<CodePart>, tokens: &Tokens) -> Result<Vec<TextRun>, String> {
+    let last = parts.len().saturating_sub(1);
+    let mut runs = Vec::new();
+    for (i, part) in parts.into_iter().enumerate() {
+        match part {
+            CodePart::Text(text) => {
+                let mut text = text.as_str();
+                if i == 0    { text = without_first_newline(text); }
+                if i == last { text = without_last_indent(text); }
+                if !text.is_empty() { runs.push(plain_code_run(text)); }
+            }
+            CodePart::Span(attrs, text) => {
+                if !text.is_empty() { runs.push(code_span_in_code(attrs.as_ref(), text, tokens)?); }
+            }
+        }
+    }
+    Ok(runs)
+}
+
+/// What a `<code>` holds besides text and spans is told.
+fn not_in_code(tag: &str, place: &str) -> String {
+    format!("<{tag}>{place}: not allowed in <code>, which holds text and <span>s")
+}
+
+/// The `tab-size` of a `<code>`: a whole number of columns from 1 to 16.
+fn parse_tab_size(v: &str) -> Result<u8, String> {
+    match v.parse::<u8>() {
+        Ok(columns) if (1..=16).contains(&columns) => Ok(columns),
+        _ => Err(format!("invalid tab-size value: '{v}' — expected a whole number from 1 to 16")),
+    }
+}
+
+/// A `<code>`: a column, which splits across pages and has the box attributes, around one text that keeps its
+/// white space. XML and kit trees are read the same way. The box is tinted and padded unless it says otherwise,
+/// and its text is set in the code font.
+fn code_node(a: &impl Attrs, runs: Vec<TextRun>, tokens: &Tokens) -> Result<ParsedNode, String> {
+    let mut boxed = ParsedNode::default_for(NodeKind::Column);
+    apply_box_attrs(&mut boxed, a, tokens)?;
+    if boxed.font.is_none() { boxed.font = Some(CODE_FONT.to_string()); }
+    if a.get("padding").is_none() { boxed.padding = tokens.resolve_spacing(CODE_PADDING)?; }
+    if a.get("background").is_none() { boxed.background = Some(tokens.resolve_fill(CODE_BACKGROUND)?); }
+
+    let mut text = ParsedNode::default_for(NodeKind::Text);
+    text.pre_tab = a.get("tab-size").map(parse_tab_size).transpose()?.unwrap_or(DEFAULT_TAB_SIZE);
+    if let Some(v) = a.get("widows")      { text.widows      = parse_line_limit("widows", v)?; }
+    if let Some(v) = a.get("orphans")     { text.orphans     = parse_line_limit("orphans", v)?; }
+    if let Some(v) = a.get("line-height") { text.line_height = tokens.resolve_line_height(v)?; }
+    text.text_runs = runs;
+    boxed.children.push(text);
+    Ok(boxed)
+}
+
+/// A `<code>` of an XML document. The binding of its text (`data-value`) goes to the text inside, and the rest to
+/// the box, which a `data-source` repeats and a `data-if` leaves out.
+fn parse_code(elem: &roxmltree::Node, tokens: &Tokens) -> Result<ParsedNode, String> {
+    let at = || format!("<code>{}", node_loc(elem));
+    let mut parts = Vec::new();
+    for child in elem.children().filter(|c| c.is_text() || c.is_element()) {
+        if child.is_text() {
+            parts.push(CodePart::Text(child.text().unwrap_or("").to_string()));
+        } else if child.tag_name().name() == "span" {
+            let text: String = child.children().filter_map(|n| n.text().filter(|_| n.is_text())).collect();
+            parts.push(CodePart::Span(Box::new(child), text));
+        } else {
+            return Err(not_in_code(child.tag_name().name(), &node_loc(&child)));
+        }
+    }
+    // Adjacent text is one text, as it is in a tree; only the first and the last are trimmed.
+    let runs = code_runs(merge_code_text(parts), tokens)?;
+    let mut node = code_node(elem, runs, tokens).map_err(|e| format!("{}: {e}", at()))?;
+
+    let bound = read_bound_attrs(elem);
+    check_bound_attrs(&NodeKind::Column, &bound).map_err(|e| format!("{}: {e}", at()))?;
+    let [value, source, only_if, unless] =
+        ["data-value", "data-source", "data-if", "data-if-not"].map(|name| elem.attribute(name).map(str::to_owned));
+    if source.is_some() || only_if.is_some() || unless.is_some() || !bound.is_empty() {
+        node.data_attrs = Some(Box::new(DataAttrs {
+            data_value: None, data_source: source, data_if: only_if, data_if_not: unless, bound,
+        }));
+    }
+    if value.is_some() {
+        node.children[0].data_attrs = Some(Box::new(DataAttrs { data_value: value, ..DataAttrs::default() }));
+    }
+    Ok(node)
+}
+
+/// Join the text pieces that stand next to each other: an XML parser gives them as one, and a tree may not.
+fn merge_code_text(parts: Vec<CodePart>) -> Vec<CodePart> {
+    let mut merged: Vec<CodePart> = Vec::new();
+    for part in parts {
+        match (merged.last_mut(), part) {
+            (Some(CodePart::Text(last)), CodePart::Text(text)) => last.push_str(&text),
+            (_, part) => merged.push(part),
+        }
+    }
+    merged
+}
+
+/// A `code` of a kit tree: its strings and its `span` children.
+fn parse_tree_code(json: &serde_json::Value, tokens: &Tokens) -> Result<ParsedNode, String> {
+    let empty = Vec::new();
+    let children = json.get("nodes").and_then(|v| v.as_array()).unwrap_or(&empty);
+    let mut parts = Vec::new();
+    for child in children {
+        if let Some(s) = child.as_str() {
+            parts.push(CodePart::Text(s.to_string()));
+            continue;
+        }
+        match child.get("type").and_then(|v| v.as_str()) {
+            Some("span") => {
+                let text: String = child.get("nodes").and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+                    .unwrap_or_default();
+                parts.push(CodePart::Span(Box::new(JsonAttrs(child)), text));
+            }
+            other => return Err(not_in_code(other.unwrap_or("?"), "")),
+        }
+    }
+    let runs = code_runs(merge_code_text(parts), tokens)?;
+    code_node(&JsonAttrs(json), runs, tokens).map_err(|e| format!("code: {e}"))
+}
+
+/// The run of a `<code-span>`: its words in the code font on a tint, unless it names others.
+fn code_span_run(a: &impl Attrs, text: String, leading_space: bool, tokens: &Tokens) -> Result<TextRun, String> {
+    Ok(TextRun {
+        text,
+        leading_space,
+        font:       Some(a.get("font").unwrap_or(CODE_FONT).to_string()),
+        color:      a.get("color").map(|v| tokens.resolve_color(v)).transpose()?,
+        href:       None,
+        underline:  false,
+        strike:     false,
+        bold:       false,
+        background: Some(tokens.resolve_color(a.get("background").unwrap_or(CODE_BACKGROUND))?),
+        footnote:   None,
+    })
 }
 
 /// The footnotes in a node and below it: how many numbers a section takes.
@@ -3236,6 +3461,9 @@ fn parse_tree_node(
 ) -> Result<ParsedNode, String> {
     let type_str = json.get("type").and_then(|v| v.as_str())
         .ok_or_else(|| "node missing 'type' field".to_string())?;
+    if type_str == "code" {
+        return parse_tree_code(json, tokens);
+    }
 
     let kind = match type_str {
         "column"  => NodeKind::Column,
@@ -3372,6 +3600,129 @@ mod tests {
                 r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
             )
         }
+    }
+
+    // ── code ─────────────────────────────────────────────────────────────────
+
+    /// The first layout node of a document that holds `body`.
+    fn first_node(body: &str) -> Node {
+        let mut doc = parse(&minimal(body)).unwrap();
+        doc.section_layouts().remove(0).children.remove(0)
+    }
+
+    #[test]
+    fn a_code_is_a_padded_tinted_column_around_a_text_that_keeps_its_white_space() {
+        let code = first_node("<code>\n  a  b\n</code>");
+        assert_eq!(code.kind, NodeKind::Column);
+        assert_eq!(code.padding, [8.0; 4]);
+        assert_eq!(code.background.as_deref(), Some("#f3f4f6"));
+        assert_eq!(code.children.len(), 1);
+        let text = &code.children[0];
+        assert_eq!(text.kind, NodeKind::Text);
+        assert_eq!(text.font, "Courier");
+        assert_eq!(text.pre_tab, 4);
+        assert_eq!(text.text_runs.len(), 1);
+        assert_eq!(text.text_runs[0].text, "  a  b\n");
+    }
+
+    #[test]
+    fn a_code_drops_the_line_break_after_its_start_tag_and_the_indent_before_its_end_tag() {
+        let text = first_node("<column>\n    <code>\n        a\n          b\n    </code>\n</column>").children.remove(0).children.remove(0);
+        assert_eq!(text.text_runs[0].text, "        a\n          b\n");
+    }
+
+    #[test]
+    fn a_code_on_one_line_is_its_text_as_it_is() {
+        let text = first_node("<code>  a  b  </code>").children.remove(0);
+        assert_eq!(text.text_runs[0].text, "  a  b  ");
+    }
+
+    #[test]
+    fn a_code_takes_the_box_attributes_and_the_font_a_code_is_set_in() {
+        let code = first_node(r##"<code font="Times-Roman" font-size="s" color="#336699" padding="2pt" background="#ffeeee" border="1pt #000000" radius="4pt">x</code>"##);
+        assert_eq!(code.padding, [2.0; 4]);
+        assert_eq!(code.background.as_deref(), Some("#ffeeee"));
+        assert_eq!(code.radius, 4.0);
+        let text = &code.children[0];
+        assert_eq!(text.font, "Times-Roman");
+        assert_eq!(text.font_size, 9.0);
+        assert_eq!(text.text_color.as_deref(), Some("#336699"));
+    }
+
+    #[test]
+    fn a_code_has_a_tab_size_widows_orphans_and_line_height_for_its_text() {
+        let text = first_node(r#"<code tab-size="8" widows="3" orphans="4" line-height="1.5">x</code>"#).children.remove(0);
+        assert_eq!((text.pre_tab, text.widows, text.orphans, text.line_height), (8, 3, 4, 1.5));
+    }
+
+    #[test]
+    fn a_span_in_a_code_keeps_its_white_space_and_its_style() {
+        let text = first_node("<code>let <span color=\"#c0392b\" bold=\"true\">  x  </span> = 1;</code>").children.remove(0);
+        let runs: Vec<(&str, Option<&str>)> = text.text_runs.iter().map(|r| (r.text.as_str(), r.color.as_deref())).collect();
+        assert_eq!(runs, vec![("let ", None), ("  x  ", Some("#c0392b")), (" = 1;", None)]);
+        assert_eq!(text.text_runs[1].font.as_deref(), Some("Courier-Bold"));
+    }
+
+    #[test]
+    fn a_code_holds_text_and_spans_only() {
+        let err = parse(&minimal("<code>a<frame/></code>")).unwrap_err();
+        assert!(err.contains("<frame>") && err.contains("not allowed in <code>"), "{err}");
+        let err = parse(&minimal("<code>a<code-span>b</code-span></code>")).unwrap_err();
+        assert!(err.contains("<code-span>") && err.contains("not allowed in <code>"), "{err}");
+        let err = parse(&minimal("<code>a<fn>b</fn></code>")).unwrap_err();
+        assert!(err.contains("<fn>") && err.contains("not allowed in <code>"), "{err}");
+    }
+
+    #[test]
+    fn a_tab_size_is_a_whole_number_of_columns_from_1_to_16() {
+        for bad in ["0", "17", "two", "-1", "2.5"] {
+            let err = parse(&minimal(&format!(r#"<code tab-size="{bad}">x</code>"#))).unwrap_err();
+            assert!(err.contains("invalid tab-size value") && err.contains(bad), "{err}");
+        }
+        for good in ["1", "16"] {
+            assert!(parse(&minimal(&format!(r#"<code tab-size="{good}">x</code>"#))).is_ok());
+        }
+    }
+
+    #[test]
+    fn data_attributes_of_a_code_go_to_the_text_inside_or_the_box() {
+        let code = first_node(r#"<code data-value="snippet" data-if="show" data-source="rows">x</code>"#);
+        let on_box = code.data_attrs.as_ref().unwrap();
+        assert_eq!((on_box.data_source.as_deref(), on_box.data_if.as_deref(), on_box.data_value.as_deref()), (Some("rows"), Some("show"), None));
+        let on_text = code.children[0].data_attrs.as_ref().unwrap();
+        assert_eq!(on_text.data_value.as_deref(), Some("snippet"));
+    }
+
+    #[test]
+    fn a_code_span_is_a_run_in_the_code_font_on_a_tint() {
+        let text = first_node("<text>Run <code-span>cargo test</code-span> now</text>");
+        let runs: Vec<(&str, bool)> = text.text_runs.iter().map(|r| (r.text.as_str(), r.leading_space)).collect();
+        assert_eq!(runs, vec![("Run", false), ("cargo test", true), ("now", true)]);
+        assert_eq!(text.text_runs[1].font.as_deref(), Some("Courier"));
+        assert_eq!(text.text_runs[1].background.as_deref(), Some("#f3f4f6"));
+    }
+
+    #[test]
+    fn a_code_span_takes_a_font_a_color_and_a_tint_of_its_own() {
+        let text = first_node(r##"<text><code-span font="Times-Roman" color="#336699" background="#ffff00">x</code-span></text>"##);
+        let run = &text.text_runs[0];
+        assert_eq!(run.font.as_deref(), Some("Times-Roman"));
+        assert_eq!(run.color.as_deref(), Some("#336699"));
+        assert_eq!(run.background.as_deref(), Some("#ffff00"));
+    }
+
+    #[test]
+    fn a_code_of_a_tree_is_read_like_the_code_of_its_xml() {
+        let tree = r##"{"version":1,"type":"document","attrs":{},"nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","nodes":[
+            {"type":"code","attrs":{"tab-size":"2"},"nodes":["\nlet ",{"type":"span","attrs":{"color":"#c0392b"},"nodes":["x"]},
+            " = 1;\n"]}]}]}]}"##;
+        let mut doc = parse_tree(tree).unwrap();
+        let code = doc.section_layouts().remove(0).children.remove(0);
+        assert_eq!(code.padding, [8.0; 4]);
+        let text = &code.children[0];
+        assert_eq!(text.pre_tab, 2);
+        let runs: Vec<&str> = text.text_runs.iter().map(|r| r.text.as_str()).collect();
+        assert_eq!(runs, vec!["let ", "x", " = 1;\n"]);
     }
 
     #[test]

@@ -171,3 +171,57 @@ fn justified_lines_with_accents_curly_quotes_and_cyrillic_end_at_the_right_edge(
         }
     }
 }
+
+/// The text nodes of the first page of a layout holding `body`, with the font `brand` loaded.
+fn text_nodes_of_layout(body: &str) -> Vec<serde_json::Value> {
+    let mut engine = crate::LpdfEngine::new("");
+    engine.load_font("brand", MONTSERRAT);
+    let xml = format!(
+        r##"<lpdf version="1"><assets><font name="brand" src="brand.ttf"/></assets><document><section><layout margin="20pt">{body}</layout></section></document></lpdf>"##
+    );
+    let json: serde_json::Value = serde_json::from_str(&engine.render(&xml)).expect("layout JSON");
+    let mut out = Vec::new();
+    fn walk(v: &serde_json::Value, out: &mut Vec<serde_json::Value>) {
+        if v["type"] == "text" {
+            out.push(v.clone());
+        }
+        if let Some(children) = v["nodes"].as_array() {
+            for child in children {
+                walk(child, out);
+            }
+        }
+    }
+    walk(&json["pages"][0], &mut out);
+    out
+}
+
+#[test]
+fn a_code_in_an_embedded_font_keeps_its_spaces_and_places_a_span_where_the_face_says() {
+    let nodes = text_nodes_of_layout(r##"<code font="brand">    let <span color="#ff0000">xy</span> = 1;</code>"##);
+    let contents: Vec<&str> = nodes.iter().map(|n| n["content"].as_str().expect("content")).collect();
+    assert_eq!(contents, vec!["    let ", "xy", " = 1;"]);
+    let size = nodes[0]["size"].as_f64().expect("size") as f32;
+    let start = nodes[0]["x"].as_f64().expect("x") as f32;
+    let span_x = nodes[1]["x"].as_f64().expect("x") as f32;
+    let after_x = nodes[2]["x"].as_f64().expect("x") as f32;
+    assert!((span_x - (start + face_width("    let ", size))).abs() < 0.05, "span at {span_x}");
+    assert!((after_x - (span_x + face_width("xy", size))).abs() < 0.05, "text after the span at {after_x}");
+}
+
+#[test]
+fn a_long_line_of_code_in_an_embedded_font_wraps_where_the_face_widths_say() {
+    // A box 150pt wide, with the 8pt of padding on each side leaves 134pt for the lines.
+    let words = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda";
+    let nodes = text_nodes_of_layout(&format!(r#"<code font="brand" width="150pt">{words}</code>"#));
+    let size = nodes[0]["size"].as_f64().expect("size") as f32;
+    let lines: Vec<&str> = nodes.iter().map(|n| n["content"].as_str().expect("content")).collect();
+    assert!(lines.len() > 2, "the line wraps");
+    for line in &lines {
+        assert!(face_width(line, size) <= 134.0 + 0.01, "{line:?} is wider than the box");
+    }
+    for (line, next) in lines.iter().zip(&lines[1..]) {
+        let first_word = next.split(' ').next().expect("a word");
+        assert!(face_width(&format!("{line} {first_word}"), size) > 134.0, "{first_word:?} fits on the line before it");
+    }
+    assert_eq!(lines.join(" "), words, "no word is lost and none is cut");
+}

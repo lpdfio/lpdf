@@ -729,6 +729,7 @@
     <xs:complexType mixed="true">
       <xs:choice minOccurs="0" maxOccurs="unbounded">
         <xs:element ref="span"/>
+        <xs:element ref="code-span"/>
       </xs:choice>
       <xs:attributeGroup ref="AtPositionAttrs"/>
       <xs:attributeGroup ref="TextCore"/>
@@ -827,6 +828,7 @@
       <xs:element ref="frame"/>
       <xs:element ref="link"/>
       <xs:element ref="text"/>
+      <xs:element ref="code"/>
       <xs:element ref="img"/>
       <xs:element ref="divider"/>
       <xs:element ref="table"/>
@@ -1226,6 +1228,57 @@
     </xs:complexType>
   </xs:element>
 
+  <xs:element name="code">
+    <xs:annotation>
+      <xs:documentation>Code, or any text whose spaces and lines matter, in a box. The text is kept as it is written: every space, and a new line wherever one is written, except the line break after the start tag and the indent of the line the end tag stands on. A line longer than the box wraps at a space, and a word with none breaks at the last character that fits, so nothing is cut off. A tab fills to the next multiple of tab-size columns. The box fills the width and grows with its lines, in Courier on a light tint with padding m unless font, background and padding say otherwise. It holds text and span children, which color or style parts of it. It splits across pages between lines, and each part is drawn in its own box. A code element is a column around one text, so the text takes its font, size and color from font, font-size and color.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType mixed="true">
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element ref="span"/>
+      </xs:choice>
+      <xs:attributeGroup ref="FrameBoxAttrs"/>
+      <xs:attributeGroup ref="WidthAttr"/>
+      <xs:attribute name="tab-size">
+        <xs:annotation>
+          <xs:documentation>How many columns a tab fills to: it moves the next character to the next multiple of this many characters from the start of the line. Default 4.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:positiveInteger">
+            <xs:minInclusive value="1"/>
+            <xs:maxInclusive value="16"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+      <xs:attribute name="line-height" type="TokenScaleOrFactor">
+        <xs:annotation>
+          <xs:documentation>The distance between lines, as a factor of the font size: a number above 0, such as 1.5, or a name from the line-height row of the tokens. Default 1.2, which is the token m.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="widows">
+        <xs:annotation>
+          <xs:documentation>The fewest lines of the code that may stand alone at the top of the next page when it splits. Default 2. If fewer would be left, lines move from the first page to the next; 1 turns the protection off.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:positiveInteger">
+            <xs:minInclusive value="1"/>
+            <xs:maxInclusive value="10"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+      <xs:attribute name="orphans">
+        <xs:annotation>
+          <xs:documentation>The fewest lines of the code that may stand alone at the bottom of a page when it splits. Default 2. If fewer would fit, the whole code moves to the next page; 1 turns the protection off.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:positiveInteger">
+            <xs:minInclusive value="1"/>
+            <xs:maxInclusive value="10"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+
   <xs:element name="link">
     <xs:complexType>
       <xs:sequence>
@@ -1299,6 +1352,21 @@
       </xs:attribute>
       <xs:attribute name="underline" type="xs:boolean"/>
       <xs:attribute name="strike"    type="xs:boolean"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="code-span">
+    <xs:annotation>
+      <xs:documentation>A run of code inside a text: its words in Courier on a light tint, the tint drawn behind them. It is the inline twin of code, and like a span it is not broken inside: a run longer than a line runs on past it. White space in it collapses as in the text around it.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType mixed="true">
+      <xs:attribute name="font"       type="xs:string"/>
+      <xs:attribute name="color"      type="Color"/>
+      <xs:attribute name="background" type="Color">
+        <xs:annotation>
+          <xs:documentation>The tint drawn behind the run. Default #f3f4f6.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
     </xs:complexType>
   </xs:element>
 
@@ -1407,6 +1475,7 @@
     <xs:complexType mixed="true">
       <xs:choice minOccurs="0" maxOccurs="unbounded">
         <xs:element ref="span"/>
+        <xs:element ref="code-span"/>
         <xs:element ref="fn"/>
       </xs:choice>
       <xs:attributeGroup ref="TextCore"/>

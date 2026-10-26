@@ -138,14 +138,15 @@ fn to_pascal_case(s: &str) -> String {
         .collect()
 }
 
-/// Whether an element holds text and `span` children: the layout's `text` and the layer's `text-at`.
+/// Whether an element holds text and `span` children: the layout's `text` and `code` and the layer's `text-at`.
 fn is_text_tag(tag: &str) -> bool {
-    matches!(tag, "text" | "text-at")
+    matches!(tag, "text" | "text-at" | "code")
 }
 
-/// The elements that stand inside the words of a text: a `span`, and a `fn`, whose own words are inline too.
+/// The elements that stand inside the words of a text: a `span` and a `code-span`, and a `fn`, whose own words
+/// are inline too.
 fn is_inline_tag(tag: &str) -> bool {
-    matches!(tag, "span" | "fn")
+    matches!(tag, "span" | "code-span" | "fn")
 }
 
 /// Return the canonical JS method name for an XML element tag.
@@ -163,6 +164,7 @@ fn js_method(tag: &str) -> &'static str {
         "link"     => "link",
         "bookmark" => "bookmark",
         "text"     => "text",
+        "code"     => "code",
         "img"      => "img",
         "shape"    => "shape",
         "divider"  => "divider",
@@ -174,6 +176,7 @@ fn js_method(tag: &str) -> &'static str {
         "field"    => "field",
         "region"   => "region",
         "span"     => "span",
+        "code-span" => "codeSpan",
         "fn"       => "fn",
         "rect"     => "rect",
         "circle"   => "circle",
@@ -202,6 +205,7 @@ fn dotnet_method(tag: &str) -> &'static str {
         "link"     => "Link",
         "bookmark" => "Bookmark",
         "text"     => "Text",
+        "code"     => "Code",
         "img"      => "Img",
         "shape"    => "Shape",
         "divider"  => "Divider",
@@ -213,6 +217,7 @@ fn dotnet_method(tag: &str) -> &'static str {
         "field"    => "Field",
         "region"   => "Region",
         "span"     => "Span",
+        "code-span" => "CodeSpan",
         "fn"       => "Fn",
         "rect"     => "Rect",
         "circle"   => "Circle",
@@ -233,9 +238,29 @@ fn single_quoted(val: &str) -> String {
     format!("'{}'", val.replace('\\', "\\\\").replace('\'', "\\'"))
 }
 
-/// A double-quoted string literal, as C# writes one.
+/// A double-quoted string literal, as C# writes one. A line break or a tab in it is written as its escape.
 fn double_quoted(val: &str) -> String {
-    format!("\"{}\"", val.replace('\\', "\\\\").replace('"', "\\\""))
+    format!("\"{}\"", escape_controls(&val.replace('\\', "\\\\").replace('"', "\\\"")))
+}
+
+/// A line break, a carriage return or a tab as its escape, which JS, C# and Python read in a string.
+fn escape_controls(val: &str) -> String {
+    val.replace('\n', "\\n").replace('\r', "\\r").replace('\t', "\\t")
+}
+
+/// A string literal for a piece of the content of a text or a code, in the language of `target`. The content of
+/// a code has lines and tabs, which a single-quoted string reads as they are only in PHP, and not in the way a
+/// PHP double-quoted string reads them; so PHP gets the double-quoted one when the piece has any.
+fn piece_literal(target: Target, text: &str) -> String {
+    match target {
+        Target::Dotnet => double_quoted(text),
+        Target::Js | Target::Python => escape_controls(&single_quoted(text)),
+        Target::Php if text.contains(['\n', '\r', '\t']) => {
+            let escaped = text.replace('\\', "\\\\").replace('"', "\\\"").replace('$', "\\$");
+            format!("\"{}\"", escape_controls(&escaped))
+        }
+        Target::Php => single_quoted(text),
+    }
 }
 
 /// Text content as the engine reads it: runs of whitespace are one space and the ends are trimmed, so a
@@ -244,12 +269,33 @@ fn collapse_whitespace(raw: &str) -> String {
     raw.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// A piece of the content of a `text`, `text-at`, `span` or `fn`, as the generators write it.
+/// A piece of the content of a `text`, `text-at`, `code`, `span`, `code-span` or `fn`, as the generators write it.
 enum TextPiece<'a, 'i> {
     /// A string, with the space that separates it from its neighbour at its edge.
     Str(String),
-    /// A `span` element, or an `fn`.
+    /// A `span` or `code-span` element, or an `fn`.
     Span(Node<'a, 'i>),
+}
+
+/// The content of a `code`, split as the engine reads it (`parse_code` in `parse.rs`): the text between the
+/// spans as it is written, except the line break after the start tag and the indent of the line the end tag
+/// stands on. A string has its lines and tabs, and the code the generators write escapes them.
+fn code_pieces<'a, 'i>(node: &Node<'a, 'i>) -> Vec<TextPiece<'a, 'i>> {
+    let kids: Vec<Node<'a, 'i>> = node.children().filter(|c| c.is_text() || c.is_element()).collect();
+    let last = kids.len().saturating_sub(1);
+    let mut pieces = Vec::new();
+    for (i, child) in kids.into_iter().enumerate() {
+        if child.is_text() {
+            let mut text = child.text().unwrap_or("");
+            if i == 0    { text = crate::parse::without_first_newline(text); }
+            if i == last { text = crate::parse::without_last_indent(text); }
+            if !text.is_empty() { pieces.push(TextPiece::Str(text.to_string())); }
+        } else if child.tag_name().name() == "span" {
+            let raw: String = child.children().filter(|n| n.is_text()).filter_map(|n| n.text()).collect();
+            if !raw.is_empty() { pieces.push(TextPiece::Span(child)); }
+        }
+    }
+    pieces
 }
 
 /// The content of a `text`, `text-at`, `span` or `fn`, split as the engine reads it (`read_text_runs` in `parse.rs`).
@@ -262,6 +308,15 @@ fn text_pieces<'a, 'i>(node: &Node<'a, 'i>) -> Vec<TextPiece<'a, 'i>> {
     enum Run<'a, 'i> {
         Plain(String),
         Span(Node<'a, 'i>),
+    }
+
+    // What is written in a code keeps its white space, in the code and in the spans of it.
+    if node.has_tag_name("code") {
+        return code_pieces(node);
+    }
+    if node.has_tag_name("span") && node.parent_element().is_some_and(|parent| parent.has_tag_name("code")) {
+        let raw: String = node.children().filter(|n| n.is_text()).filter_map(|n| n.text()).collect();
+        return if raw.is_empty() { Vec::new() } else { vec![TextPiece::Str(raw)] };
     }
 
     // Each run, with whether whitespace comes before it.
@@ -278,7 +333,7 @@ fn text_pieces<'a, 'i>(node: &Node<'a, 'i>) -> Vec<TextPiece<'a, 'i>> {
                 }
                 prev_ended_space = raw.ends_with(char::is_whitespace);
             }
-            NodeType::Element if child.tag_name().name() == "span" => {
+            NodeType::Element if matches!(child.tag_name().name(), "span" | "code-span") => {
                 let raw: String = child.children().filter(|n| n.is_text()).filter_map(|n| n.text()).collect();
                 if !collapse_whitespace(&raw).is_empty() {
                     runs.push((Run::Span(child), prev_ended_space));
@@ -904,7 +959,7 @@ impl JsEmitter {
             } else {
                 for piece in text_pieces(node) {
                     match piece {
-                        TextPiece::Str(text) => children.push(single_quoted(&text)),
+                        TextPiece::Str(text) => children.push(piece_literal(Target::Js, &text)),
                         // Emit span at level 0 — parent handles indentation
                         TextPiece::Span(span) => children.push(self.emit_node(&span, 0)),
                     }
@@ -1338,7 +1393,7 @@ impl PhpEmitter {
             } else {
                 for piece in text_pieces(node) {
                     match piece {
-                        TextPiece::Str(text) => children.push(single_quoted(&text)),
+                        TextPiece::Str(text) => children.push(piece_literal(Target::Php, &text)),
                         // Emit span at level 0 — parent handles indentation
                         TextPiece::Span(span) => children.push(self.emit_node(&span, 0)),
                     }
@@ -1547,7 +1602,7 @@ impl PythonEmitter {
             } else {
                 for piece in text_pieces(node) {
                     match piece {
-                        TextPiece::Str(text) => children.push(single_quoted(&text)),
+                        TextPiece::Str(text) => children.push(piece_literal(Target::Python, &text)),
                         // Emit span at level 0 — parent handles indentation
                         TextPiece::Span(span) => children.push(self.emit_node(&span, 0)),
                     }
@@ -1623,6 +1678,7 @@ fn python_method(tag: &str) -> &'static str {
         "link"     => "link",
         "bookmark" => "bookmark",
         "text"     => "text",
+        "code"     => "code",
         "img"      => "img",
         "shape"    => "shape",
         "divider"  => "divider",
@@ -1634,6 +1690,7 @@ fn python_method(tag: &str) -> &'static str {
         "field"    => "field",
         "region"   => "region",
         "span"     => "span",
+        "code-span" => "code_span",
         "fn"       => "fn",
         "rect"     => "rect",
         "circle"   => "circle",
@@ -1927,6 +1984,97 @@ mod tests {
             }
         );
         codegen(&xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap()
+    }
+
+    /// The code a `code` of this XML content makes in a target.
+    fn code_code(target: &str, content: &str) -> String {
+        let xml = format!(
+            "<lpdf version=\"1\"><document><section><layout><code tab-size=\"2\">{content}</code></layout></section></document></lpdf>"
+        );
+        codegen(&xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap()
+    }
+
+    #[test]
+    fn test_a_code_is_written_with_its_lines_and_tabs_escaped_in_every_language() {
+        let content = "\nfn a() {\n\tb(\"x\", '$y');\n}\n";
+        let js = code_code("js", content);
+        assert!(js.contains(r#"L.code({ tabSize: '2' }, ['fn a() {\n\tb("x", \'$y\');\n}\n'])"#), "{js}");
+        let python = code_code("python", content);
+        assert!(python.contains(r#"L.code(CodeAttr(tab_size='2'), ['fn a() {\n\tb("x", \'$y\');\n}\n'])"#), "{python}");
+        let dotnet = code_code("dotnet", content);
+        assert!(dotnet.contains(r#"L.Code("#) && dotnet.contains(r#""fn a() {\n\tb(\"x\", '$y');\n}\n""#), "{dotnet}");
+        let php = code_code("php", content);
+        assert!(php.contains("L::code(") && php.contains(r#""fn a() {\n\tb(\"x\", '\$y');\n}\n""#), "{php}");
+    }
+
+    #[test]
+    fn test_a_code_with_no_line_or_tab_is_a_plain_string_in_php() {
+        let php = code_code("php", "x = 1");
+        assert!(php.contains("['x = 1']"), "{php}");
+    }
+
+    #[test]
+    fn test_a_span_in_a_code_keeps_its_white_space_and_a_code_span_is_written_inline() {
+        let js = code_code("js", "let <span color=\"#c0392b\">  x  </span> = 1;");
+        assert!(js.contains("L.span({ color: '#c0392b' }, ['  x  '])"), "{js}");
+        let xml = "<lpdf version=\"1\"><document><section><layout><text>Run <code-span background=\"#ffff00\">cargo test</code-span> now</text></layout></section></document></lpdf>";
+        let js = codegen(xml, &CodegenOptions { target: "js".into(), indent: 4 }).unwrap();
+        assert!(js.contains("L.codeSpan({ background: '#ffff00' }, ['cargo test'])"), "{js}");
+        assert!(js.contains("'Run ',") && js.contains("' now'"), "{js}");
+        for (target, call) in [("dotnet", "L.CodeSpan("), ("php", "L::codeSpan("), ("python", "L.code_span(")] {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            assert!(out.contains(call), "{target}: {out}");
+        }
+    }
+
+    /// The code's XML, and the tree the SDKs would build from the strings and spans the generator writes for it.
+    fn code_xml_and_tree_pdfs(content: &str) -> (Vec<u8>, Vec<u8>) {
+        let xml = format!(
+            "<lpdf version=\"1\"><document><section><layout><code tab-size=\"3\">{content}</code></layout></section></document></lpdf>"
+        );
+        let parsed = Document::parse(&xml).unwrap();
+        let code = parsed.descendants().find(|n| n.has_tag_name("code")).unwrap();
+        let nodes: Vec<serde_json::Value> = text_pieces(&code)
+            .into_iter()
+            .map(|piece| match piece {
+                TextPiece::Str(s) => serde_json::Value::String(s),
+                TextPiece::Span(span) => {
+                    let attrs: serde_json::Map<String, serde_json::Value> = span
+                        .attributes()
+                        .map(|a| (a.name().to_string(), serde_json::Value::String(a.value().to_string())))
+                        .collect();
+                    let inner: Vec<serde_json::Value> = text_pieces(&span)
+                        .into_iter()
+                        .filter_map(|p| if let TextPiece::Str(s) = p { Some(serde_json::Value::String(s)) } else { None })
+                        .collect();
+                    serde_json::json!({ "type": "span", "attrs": attrs, "nodes": inner })
+                }
+            })
+            .collect();
+        let tree = serde_json::json!({
+            "version": 1, "type": "document", "attrs": {},
+            "nodes": [{ "type": "section", "attrs": {}, "nodes": [{
+                "type": "layout", "nodes": [{ "type": "code", "attrs": { "tab-size": "3" }, "nodes": nodes }]
+            }]}]
+        });
+        (
+            pdf_of(crate::parse::parse(&xml).unwrap()),
+            pdf_of(crate::parse::parse_tree(&tree.to_string()).unwrap()),
+        )
+    }
+
+    #[test]
+    fn test_the_strings_and_spans_written_for_a_code_render_the_pdf_of_the_xml() {
+        for content in [
+            "fn a() {\n\tb();\n}",
+            "\nfn a() {\n    b();\n}\n",
+            "\n    indented\n      more\n    ",
+            "let <span color=\"#c0392b\">  x  </span> = 1;\n  // done",
+            "<span bold=\"true\">a</span> b\n\n\nc",
+        ] {
+            let (from_xml, from_tree) = code_xml_and_tree_pdfs(content);
+            assert_eq!(from_xml, from_tree, "{content:?}");
+        }
     }
 
     #[test]
