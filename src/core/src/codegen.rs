@@ -160,6 +160,8 @@ fn js_method(tag: &str) -> &'static str {
         "column"   => "column",
         "row"      => "row",
         "grid"     => "grid",
+        "list"     => "list",
+        "li"       => "li",
         "frame"    => "frame",
         "link"     => "link",
         "bookmark" => "bookmark",
@@ -201,6 +203,8 @@ fn dotnet_method(tag: &str) -> &'static str {
         "column"   => "Column",
         "row"      => "Row",
         "grid"     => "Grid",
+        "list"     => "List",
+        "li"       => "Li",
         "frame"    => "Frame",
         "link"     => "Link",
         "bookmark" => "Bookmark",
@@ -1674,6 +1678,8 @@ fn python_method(tag: &str) -> &'static str {
         "column"   => "column",
         "row"      => "row",
         "grid"     => "grid",
+        "list"     => "list",
+        "li"       => "li",
         "frame"    => "frame",
         "link"     => "link",
         "bookmark" => "bookmark",
@@ -2354,6 +2360,30 @@ mod tests {
         let opts = CodegenOptions { target: "php".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
         assert!(out.contains("use Lpdf\\Layout\\ShapeAttr;"), "{out}");
+    }
+
+    #[test]
+    fn test_a_list_is_a_list_of_items_with_list_and_li_attribute_classes() {
+        let xml = r##"<lpdf version="1"><document><section><layout>
+            <list type="number" format="lower-alpha" suffix=")"><li><text>One</text><list bullet="dash"><li><text>Two</text></li></list></li></list>
+        </layout></section></document></lpdf>"##;
+        for (target, list, item, class) in [
+            ("js",     "L.list(",  "L.li(",  "L.list({ type: 'number', format: 'lower-alpha', suffix: ')' }, ["),
+            ("python", "L.list(",  "L.li(",  "ListAttr(type='number', format='lower-alpha', suffix=')')"),
+            ("php",    "L::list(", "L::li(", "new ListAttr(type: 'number', format: 'lower-alpha', suffix: ')')"),
+            ("dotnet", "L.List(",  "L.Li(",  "new() { Type = \"number\", Format = \"lower-alpha\", Suffix = \")\" }"),
+        ] {
+            let opts = CodegenOptions { target: target.into(), indent: 4 };
+            let out  = codegen(xml, &opts).unwrap();
+            for expected in [list, item, class] {
+                assert!(out.contains(expected), "{target}: no {expected} in {out}");
+            }
+            assert!(!out.contains("element("), "{target}: {out}");
+        }
+        // PHP imports the classes from the namespace of the layout's elements.
+        let opts = CodegenOptions { target: "php".into(), indent: 4 };
+        let out  = codegen(xml, &opts).unwrap();
+        assert!(out.contains("use Lpdf\\Layout\\ListAttr;"), "{out}");
     }
 
     #[test]

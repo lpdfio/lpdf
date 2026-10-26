@@ -1078,6 +1078,38 @@ mod tests {
     }
 
     #[test]
+    fn a_list_from_the_builder_renders_the_same_from_the_tree_and_from_the_xml() {
+        let layout = |lists: &str| {
+            format!(
+                r##"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
+                    {{"type":"layout","attrs":{{}},"nodes":[{lists}]}}]}}]}}"##
+            )
+        };
+        let item = |words: &str| format!(r#"{{"type":"li","attrs":{{}},"nodes":[{{"type":"text","attrs":{{}},"nodes":["{words}"]}}]}}"#);
+        let list = |attrs: &str| {
+            format!(
+                r#"{{"type":"list","attrs":{{{attrs}}},"nodes":[{},{{"type":"li","attrs":{{}},"nodes":[{{"type":"text","attrs":{{}},"nodes":["B"]}},{{"type":"list","attrs":{{}},"nodes":[{}]}}]}}]}}"#,
+                item("A"),
+                item("Nested")
+            )
+        };
+        let none = render_tree(&layout(""));
+        for attrs in [
+            "",
+            r#""type":"number""#,
+            r#""type":"number","format":"upper-roman","start":"4","prefix":"(","suffix":")","indent":"30pt""#,
+            r#""bullet":"dash","gap":"xs""#,
+        ] {
+            let (from_tree, from_xml) = rendered_both_ways(&layout(&list(attrs)));
+            assert_eq!(from_tree, from_xml, "{attrs}");
+            assert_ne!(from_tree, none, "the tree's list {attrs} is not drawn");
+        }
+        let plain = render_tree(&layout(&list("")));
+        let numbered = render_tree(&layout(&list(r#""type":"number""#)));
+        assert_ne!(numbered, plain, "the tree's type is not read");
+    }
+
+    #[test]
     fn a_layer_font_size_and_color_from_the_builder_render_the_same_from_the_tree_and_from_the_xml() {
         let layer = |attrs: &str| {
             format!(
