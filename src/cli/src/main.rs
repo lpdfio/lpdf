@@ -103,6 +103,7 @@ fn cmd_codegen(args: &[String]) {
 fn cmd_convert(args: &[String]) {
     let mut input:   Option<PathBuf> = None;
     let mut output:  Option<PathBuf> = None;
+    let mut data:    Option<PathBuf> = None;
     let mut license: String          = std::env::var("LPDF_LICENSE").unwrap_or_default();
 
     let mut i = 0;
@@ -114,6 +115,7 @@ fn cmd_convert(args: &[String]) {
             }
             "--input"   => { i += 1; input   = Some(PathBuf::from(require_arg(args, i, "--input"))); }
             "--output"  => { i += 1; output  = Some(PathBuf::from(require_arg(args, i, "--output"))); }
+            "--data"    => { i += 1; data    = Some(PathBuf::from(require_arg(args, i, "--data"))); }
             "--license" => { i += 1; license = require_arg(args, i, "--license").to_owned(); }
             other => { eprintln!("Unknown argument: {other}"); process::exit(1); }
         }
@@ -124,6 +126,10 @@ fn cmd_convert(args: &[String]) {
 
     // ── Folder batch mode ─────────────────────────────────────────────────────
     if input_path.is_dir() {
+        if data.is_some() {
+            eprintln!("--data takes one file and cannot be used when --input is a folder");
+            process::exit(1);
+        }
         let output_dir = output.unwrap_or_else(|| {
             eprintln!("--output <dir> is required when --input is a folder");
             process::exit(1);
@@ -133,10 +139,11 @@ fn cmd_convert(args: &[String]) {
     }
 
     // ── Single file mode ──────────────────────────────────────────────────────
-    let xml = read_file(&input_path);
+    let xml  = read_file(&input_path);
+    let json = data.as_ref().map(read_json_file);
 
     let t0 = Instant::now();
-    let pdf_bytes = lpdf::LpdfEngine::render_xml_to_pdf(&xml, &license, now_unix()).unwrap_or_else(|e| {
+    let pdf_bytes = lpdf::LpdfEngine::render_xml_to_pdf(&xml, json.as_deref(), &license, now_unix()).unwrap_or_else(|e| {
         eprintln!("Render error: {e}");
         process::exit(1);
     });
@@ -308,7 +315,7 @@ fn cmd_convert_batch(input_dir: &PathBuf, output_dir: &PathBuf, license: &str) {
         };
 
         let t0 = Instant::now();
-        let pdf_bytes = match lpdf::LpdfEngine::render_xml_to_pdf(&xml, license, now) {
+        let pdf_bytes = match lpdf::LpdfEngine::render_xml_to_pdf(&xml, None, license, now) {
             Ok(b) => b,
             Err(e) => { eprintln!("Skipping '{}': {e}", xml_path.display()); continue; }
         };
@@ -399,6 +406,18 @@ fn read_file(path: &PathBuf) -> String {
     })
 }
 
+/// Reads a `--data` file and checks that it is JSON, so a syntax error names the file and the
+/// line and column in it. The engine parses the text again to bind it, and its own error
+/// names neither.
+fn read_json_file(path: &PathBuf) -> String {
+    let json = read_file(path);
+    if let Err(e) = serde_json::from_str::<serde_json::Value>(&json) {
+        eprintln!("Invalid JSON in '{}': {e}", path.display());
+        process::exit(1);
+    }
+    json
+}
+
 fn require_arg<'a>(args: &'a [String], i: usize, flag: &str) -> &'a str {
     args.get(i).map(String::as_str).unwrap_or_else(|| {
         eprintln!("{flag} requires a value");
@@ -465,7 +484,7 @@ fn cmd_benchmark(args: &[String]) {
             let t0 = Instant::now();
             // Unlicensed, so the timing includes drawing the attribution line; the clock is
             // therefore irrelevant here.
-            match lpdf::LpdfEngine::render_xml_to_pdf(&xml, "", 0) {
+            match lpdf::LpdfEngine::render_xml_to_pdf(&xml, None, "", 0) {
                 Ok(b) => { last_size = b.len(); }
                 Err(e) => { eprintln!("Error in '{}': {e}", xml_path.display()); break; }
             }
@@ -543,5 +562,6 @@ fn print_convert_help() {
     eprintln!("Options:");
     eprintln!("  --input   <file.xml|dir>   LPDF XML source file, or folder for batch conversion");
     eprintln!("  --output  <file.pdf|dir>   Write PDF to file instead of stdout; required for folder input");
+    eprintln!("  --data    <file.json>      JSON the document's data-* attributes read; not with folder input");
     eprintln!("  --license <token>          License token (or set LPDF_LICENSE env var)");
 }
