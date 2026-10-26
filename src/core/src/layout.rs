@@ -1881,6 +1881,17 @@ fn split_text(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Spl
 
 // ── Text splitting helpers ────────────────────────────────────────────────────
 
+/// How an atom goes on from the one before it, when a word or a styled run was broken to fit a line.
+#[derive(Clone, Copy, PartialEq)]
+enum Join {
+    /// It is a word or a run of the text.
+    No,
+    /// It is the rest of a word that was cut at the edge of the line.
+    Chars,
+    /// It is the next word of a styled run that was broken at a space, so a space of the run's font leads it.
+    Space,
+}
+
 #[derive(Clone)]
 struct SplitAtom {
     text:           String,
@@ -1899,6 +1910,8 @@ struct SplitAtom {
     is_span:        bool,
     /// The note, on the atom that stands for the anchor of a footnote. Its `text` is the number it shows.
     footnote:       Option<Box<Footnote>>,
+    /// Whether it goes on from the atom before it, a piece of a word or a styled run that was broken to fit.
+    join:           Join,
 }
 
 /// A footnote's number is set at this share of the text's size, and its baseline raised by this share of it.
@@ -1949,8 +1962,8 @@ fn break_wide_toks(toks: Vec<Tok>, font_size: f32, wrap_w: f32) -> Vec<Tok> {
         match tok {
             Tok::Word(atom) if !atom.sup && word_width(&atom.font, &atom.text, font_size, false) > wrap_w + 0.01 => {
                 for (i, (text, space)) in pieces_of_wide(&atom.font, &atom.text, font_size, wrap_w).into_iter().enumerate() {
-                    if space { out.push(Tok::Space); }
-                    out.push(Tok::Word(Atom { text, joined: i > 0, ..atom.clone() }));
+                    let join = if i == 0 { Join::No } else if space { Join::Space } else { Join::Chars };
+                    out.push(Tok::Word(Atom { text, join, ..atom.clone() }));
                 }
             }
             other => out.push(other),
@@ -1971,7 +1984,10 @@ fn break_wide_split_atoms(atoms: Vec<SplitAtom>, parent_font: &str, font_size: f
         for (i, (text, space)) in pieces_of_wide(font, &atom.text, font_size, wrap_w).into_iter().enumerate() {
             let mut piece = atom.clone();
             piece.text = text;
-            if i > 0 { piece.leading_space = space; }
+            if i > 0 {
+                piece.leading_space = space;
+                piece.join = if space { Join::Space } else { Join::Chars };
+            }
             out.push(piece);
         }
     }
@@ -2005,6 +2021,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
                 leading_space: pending_leading || run_leading,
                 is_span: true,
                 footnote: Some(note.clone()),
+                join: Join::No,
             });
             pending_leading = false;
         } else if is_span {
@@ -2020,6 +2037,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
                     leading_space: pending_leading || run_leading,
                     is_span: true,
                     footnote: None,
+                    join: Join::No,
                 });
                 pending_leading = false;
             }
@@ -2036,6 +2054,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
                     leading_space: if j == 0 { pending_leading || run_leading } else { true },
                     is_span: false,
                     footnote: None,
+                    join: Join::No,
                 });
                 pending_leading = false;
             }
@@ -2052,19 +2071,49 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
     let mut cur_line: Vec<SplitAtom> = Vec::new();
     let mut cur_w: f32 = 0.0;
 
-    for atom in atoms {
+    let mut atoms: std::collections::VecDeque<SplitAtom> = atoms.into();
+    while let Some(atom) = atoms.pop_front() {
         let font_for_atom = atom.font_override.as_deref().unwrap_or(parent_font);
         let aw = word_width(font_for_atom, &atom.text, font_size, atom.footnote.is_some());
-        let gap = if cur_line.is_empty() || !atom.leading_space { 0.0 } else { space_w };
+        let gap = if cur_line.is_empty() {
+            0.0
+        } else {
+            match atom.join {
+                Join::Space => text_width(font_for_atom, " ", font_size),
+                Join::Chars => 0.0,
+                Join::No    => if atom.leading_space { space_w } else { 0.0 },
+            }
+        };
         if cur_line.is_empty() || cur_w + gap + aw <= avail_w + 0.01 {
             cur_w += gap + aw;
             cur_line.push(atom);
+        } else if node.break_words && atom.is_span && atom.footnote.is_none() && atom.text.contains(' ') {
+            // The same as the lines of the text itself make: a styled run goes on in its next words.
+            for (i, word) in atom.text.split(' ').enumerate().collect::<Vec<_>>().into_iter().rev() {
+                let mut piece = atom.clone();
+                piece.text = word.to_string();
+                if i > 0 {
+                    piece.leading_space = true;
+                    piece.join = Join::Space;
+                }
+                atoms.push_front(piece);
+            }
+            continue;
         } else {
-            // The number of a footnote stays with the word before it, which goes down to the next line too.
-            let carried = if atom.footnote.is_some() && !atom.leading_space && cur_line.len() > 1 { cur_line.pop() } else { None };
+            // An atom with no space before it stays with the ones it is glued to, which go down to the next line
+            // with it, as the lines of the text itself have it.
+            let breakable = |a: &SplitAtom| a.join == Join::Space || (a.join == Join::No && a.leading_space);
+            let carried = if atom.join == Join::No && !atom.leading_space {
+                match cur_line.iter().rposition(|a| breakable(a)) {
+                    Some(start) if start > 0 => cur_line.split_off(start),
+                    _ => Vec::new(),
+                }
+            } else {
+                Vec::new()
+            };
             lines.push(std::mem::take(&mut cur_line));
             cur_w = aw;
-            if let Some(prev) = carried {
+            for prev in carried {
                 let font_for_prev = prev.font_override.as_deref().unwrap_or(parent_font);
                 cur_w += word_width(font_for_prev, &prev.text, font_size, prev.footnote.is_some());
                 cur_line.push(prev);
@@ -2091,6 +2140,18 @@ fn atoms_to_runs(atoms: &[SplitAtom]) -> Vec<TextRun> {
 
     for atom in atoms {
         let leading = if !first_emitted { false } else { atom.leading_space };
+
+        // The pieces of a styled run that was broken to fit a line are the run again.
+        if atom.join != Join::No && atom.is_span && atom.footnote.is_none() {
+            let is_run = |r: &TextRun| r.footnote.is_none() && (r.font.is_some() || r.color.is_some()
+                || r.href.is_some() || r.underline || r.strike || r.background.is_some());
+            if let Some(last) = runs.last_mut().filter(|r| is_run(r)) {
+                if atom.join == Join::Space { last.text.push(' '); }
+                last.text.push_str(&atom.text);
+                first_emitted = true;
+                continue;
+            }
+        }
 
         if let Some(note) = &atom.footnote {
             runs.push(TextRun {
@@ -3522,8 +3583,13 @@ fn text_min_w(node: &Node) -> f32 {
             }
         }
     }
-    widest
+    // A text that breaks what is wider than its box does not hold a column wider than this for a long name, which
+    // would leave the columns beside it a word to a line.
+    if node.break_words { widest.min(MAX_WORD_EMS * size) } else { widest }
 }
+
+/// How many ems wide a word is taken to be, for the least width of a text that breaks long words.
+const MAX_WORD_EMS: f32 = 12.0;
 
 /// The least width of a node: what it can be narrowed to before something in it runs past it. A text breaks at its
 /// spaces, so it is its longest word; a picture of a fixed width, a shape and a barcode do not narrow.
@@ -3563,9 +3629,9 @@ struct Atom {
     background: Option<String>,
     /// The number of a footnote, drawn small and raised.
     sup:       bool,
-    /// Whether it goes on from the atom before it, a piece of a word or a run too wide for a line, so a tint or a
-    /// line under it reaches back across the gap.
-    joined:    bool,
+    /// Whether it goes on from the atom before it, a piece of a word or a run that was broken to fit a line, so a
+    /// tint or a line under it reaches back across the gap.
+    join:      Join,
 }
 
 enum Tok { Space, Word(Atom) }
@@ -3661,14 +3727,14 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
         if let Some(note) = &run.footnote {
             toks.push(Tok::Word(Atom {
                 text: note.number.to_string(), font: font.to_string(), color,
-                href: None, underline: false, strike: false, background: None, sup: true, joined: false,
+                href: None, underline: false, strike: false, background: None, sup: true, join: Join::No,
             }));
         } else if is_span {
             if !run.text.is_empty() {
                 toks.push(Tok::Word(Atom {
                     text: run.text.clone(), font: font.to_string(), color,
                     href: run.href.clone(), underline: run.underline, strike: run.strike,
-                    background: run.background.clone(), sup: false, joined: false,
+                    background: run.background.clone(), sup: false, join: Join::No,
                 }));
             }
         } else {
@@ -3676,7 +3742,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 if j > 0 { toks.push(Tok::Space); }
                 toks.push(Tok::Word(Atom {
                     text: word.to_string(), font: font.to_string(), color: color.clone(),
-                    href: None, underline: false, strike: false, background: None, sup: false, joined: false,
+                    href: None, underline: false, strike: false, background: None, sup: false, join: Join::No,
                 }));
             }
         }
@@ -3699,21 +3765,47 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     let mut cur_line_w    = 0.0_f32;
     let mut pending_space = false;
 
-    for tok in toks {
+    let mut toks: std::collections::VecDeque<Tok> = toks.into();
+    while let Some(tok) = toks.pop_front() {
         match tok {
             Tok::Space => { pending_space = true; }
             Tok::Word(atom) => {
                 let aw  = word_width(&atom.font, &atom.text, font_size, atom.sup);
-                let gap = if cur_line.is_empty() || !pending_space { 0.0 } else { space_w };
+                let gap = if cur_line.is_empty() {
+                    0.0
+                } else {
+                    match atom.join {
+                        Join::Space => text_width(&atom.font, " ", font_size),
+                        Join::Chars => 0.0,
+                        Join::No    => if pending_space { space_w } else { 0.0 },
+                    }
+                };
                 if cur_line.is_empty() || cur_line_w + gap + aw <= fit.wrap_w + 0.01 {
                     cur_line_w += gap + aw;
                     cur_line.push((atom, gap));
+                } else if node.break_words && !atom.sup && atom.text.contains(' ') {
+                    // A styled run of several words that does not fit what is left of the line goes on in the next
+                    // words, so the line is filled and the run is not moved down whole.
+                    for (i, word) in atom.text.split(' ').enumerate().collect::<Vec<_>>().into_iter().rev() {
+                        let join = if i == 0 { atom.join } else { Join::Space };
+                        toks.push_front(Tok::Word(Atom { text: word.to_string(), join, ..atom.clone() }));
+                    }
+                    continue;
                 } else {
-                    // The number of a footnote stays with the word before it, which goes down to the next line too.
-                    let carried = if atom.sup && !pending_space && cur_line.len() > 1 { cur_line.pop() } else { None };
+                    // An atom with no space before it stays with the ones it is glued to, which go down to the next
+                    // line with it: the number of a footnote, or a bracket and the run of code after it.
+                    let glued = atom.join == Join::No && !pending_space;
+                    let carried = if glued {
+                        match cur_line.iter().rposition(|(_, gap)| *gap > 0.0) {
+                            Some(start) => cur_line.split_off(start),
+                            None => Vec::new(),
+                        }
+                    } else {
+                        Vec::new()
+                    };
                     lines.push(std::mem::take(&mut cur_line));
                     cur_line_w = aw;
-                    if let Some((prev, _)) = carried {
+                    for (prev, _) in carried {
                         cur_line_w += word_width(&prev.font, &prev.text, font_size, prev.sup);
                         cur_line.push((prev, 0.0));
                     }
@@ -3831,7 +3923,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                     (font_size, line_y)
                 };
                 // The tint and the lines of a run broken across a gap reach back over it.
-                let lead = if atom.joined && *gap > 0.0 { *gap + word_gap } else { 0.0 };
+                let lead = if atom.join != Join::No && *gap > 0.0 { *gap + word_gap } else { 0.0 };
                 let mut seg = Vec::new();
                 if let Some(tint) = &atom.background {
                     seg.push(tint_behind(tint, cur_x - lead, line_y, aw + lead, line_height));
@@ -5126,6 +5218,77 @@ mod tests {
         for (x, font, size, content) in &texts {
             let right = x + text_width(font, content, *size as f32) as f64;
             assert!(right <= MARKDOWN_RIGHT_EDGE + 0.1, "{content} ends at {right}, past the margin at {MARKDOWN_RIGHT_EDGE}");
+        }
+    }
+
+    /// The tinted boxes of a page tree: `(x, y, width)`.
+    fn tints(page: &serde_json::Value, fill: &str) -> Vec<(f64, f64, f64)> {
+        fn walk(v: &serde_json::Value, fill: &str, out: &mut Vec<(f64, f64, f64)>) {
+            if v["type"] == "box" && v["fill"] == fill {
+                out.push((v["x"].as_f64().unwrap(), v["y"].as_f64().unwrap(), v["width"].as_f64().unwrap()));
+            }
+            if let Some(arr) = v["nodes"].as_array() {
+                for c in arr { walk(c, fill, out); }
+            }
+        }
+        let mut out = Vec::new();
+        walk(page, fill, &mut out);
+        out
+    }
+
+    /// A paragraph of plain words that ends where `span` has room for its first word and not for all of it.
+    fn paragraph_ending_before(span: &str) -> String {
+        let first = span.split(' ').next().unwrap();
+        let room = 595.28 - 108.0;
+        let courier = |text: &str| text_width("Courier", text, 11.0) as f32;
+        let space = text_width("Helvetica", " ", 11.0);
+        (1..300)
+            .map(|n| vec!["word"; n].join(" "))
+            .find(|filler| {
+                let used = text_width("Helvetica", filler, 11.0) + space;
+                used + courier(first) <= room && used + courier(span) > room
+            })
+            .map(|filler| format!("{filler} `{span}` end."))
+            .expect("a filler that leaves room for the first word only")
+    }
+
+    #[test]
+    fn a_markdown_code_span_that_does_not_fit_what_is_left_of_the_line_goes_on_in_its_next_word() {
+        let pages = markdown_pages(&paragraph_ending_before("extractable: false"));
+        let texts = placed_texts(&pages[0]);
+        let y_of = |content: &str| texts.iter().find(|t| t.2 == content).unwrap_or_else(|| panic!("{content} in {texts:?}")).1;
+        assert_eq!(y_of("extractable:"), y_of(texts[0].2.as_str()), "the first word is on the line with the words before it");
+        assert!(y_of("false") > y_of("extractable:"), "and the rest of the run goes down");
+    }
+
+    #[test]
+    fn a_bracket_with_no_space_before_a_code_span_goes_down_with_it() {
+        let room = 595.28 - 108.0;
+        let space = text_width("Helvetica", " ", 11.0);
+        let bracket = text_width("Helvetica", "(", 11.0);
+        let code = text_width("Courier", "libconseal_core.so", 11.0);
+        let filler = (1..300)
+            .map(|n| vec!["word"; n].join(" "))
+            .find(|f| {
+                let used = text_width("Helvetica", f, 11.0) + space;
+                used + bracket <= room && used + bracket + code > room
+            })
+            .expect("a filler with room for the bracket and not for the code after it");
+        let pages = markdown_pages(&format!("{filler} (`libconseal_core.so`) end."));
+        let texts = placed_texts(&pages[0]);
+        assert!(!texts[0].2.contains('('), "the line of words does not end in the bracket: {texts:?}");
+        let y_of = |content: &str| texts.iter().find(|t| t.2.contains(content)).unwrap().1;
+        assert_eq!(y_of("("), y_of("libconseal_core.so"), "the bracket is on the line of the code");
+    }
+
+    #[test]
+    fn the_tint_of_a_code_span_is_one_stretch_across_the_gaps_of_a_line_it_is_broken_on() {
+        let pages = markdown_pages(&format!("{} more", paragraph_ending_before("alpha beta gamma").trim_end_matches(" end.")));
+        let boxes = tints(&pages[0], "#f5f5f5");
+        let on_first_line: Vec<_> = boxes.iter().filter(|b| (b.1 - boxes[0].1).abs() < 0.01).collect();
+        assert!(on_first_line.len() >= 2, "the run has more than one word on the line: {boxes:?}");
+        for pair in on_first_line.windows(2) {
+            assert!((pair[0].0 + pair[0].2 - pair[1].0).abs() < 0.01, "the second reaches back to where the first ends: {pair:?}");
         }
     }
 
