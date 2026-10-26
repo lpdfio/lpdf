@@ -36,7 +36,7 @@ const EXPECTED = {
     RegionAttr: attributes('region', 'layout'),
     LayerAttr: attributes('layer'),
 };
-for (const element of ['column', 'row', 'grid', 'frame', 'link', 'divider', 'span', 'code-span', 'img',
+for (const element of ['column', 'row', 'grid', 'list', 'li', 'frame', 'link', 'divider', 'span', 'code-span', 'img',
     'shape', 'barcode', 'text', 'code', 'td', 'thead', 'tr', 'table', 'field', 'bookmark']) {
     EXPECTED[`${element.split('-').map((word) => word[0].toUpperCase() + word.slice(1)).join('')}Attr`] = attributes(element);
 }
