@@ -33,6 +33,8 @@ mod parse;
 mod data;
 #[path = "../../core/src/layout.rs"]
 mod layout;
+#[path = "../../core/src/lists.rs"]
+mod lists;
 #[path = "../../core/src/render.rs"]
 mod render;
 #[path = "../../core/src/pdf.rs"]

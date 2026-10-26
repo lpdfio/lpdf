@@ -66,6 +66,7 @@ fn bound_section(section: &SectionLayout, options: &TocOptions, entries: Value) 
 
     let mut bound = section.clone();
     bound.children = data::apply_toc(std::mem::take(&mut bound.children), &Value::Object(root), options.indent_step);
+    crate::lists::lower_all(&mut bound.children);
     bound
 }
 

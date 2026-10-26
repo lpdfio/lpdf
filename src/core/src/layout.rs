@@ -2495,7 +2495,7 @@ fn layout_shape(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) 
     let pre_h = node.img_height_constraint.unwrap_or(0.0);
     let w = pre_w.min(avail_w);
     let h = if pre_w > 0.0 { pre_h * (w / pre_w) } else { pre_h };
-    let drawing = node.shape.as_deref().map(|shape| canvas::draw_flow_shape(shape, node.radius, x, y, w, h));
+    let drawing = node.shape().map(|shape| canvas::draw_flow_shape(shape, node.radius, x, y, w, h));
     let shape_box = RenderBox {
         x, y, width: w, height: h,
         fill: None, border_width: 0.0, border_color: None, radius: 0.0,

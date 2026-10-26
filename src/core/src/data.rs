@@ -184,7 +184,7 @@ fn set_bound(node: &mut Node, attr: BoundAttr, value: &str, resolvers: &Resolver
         },
         BoundAttr::Fill => {
             let fill = resolvers.tokens.resolve_fill(value)?;
-            if let Some(shape) = node.shape.as_mut() {
+            if let Some(shape) = node.shape_mut() {
                 shape.fill = Some(fill);
             }
         }
@@ -500,7 +500,7 @@ mod tests {
             image_name: None,
             img_height_constraint: None,
             img_aspect: None,
-            shape: None,
+            detail: None,
             barcode_type: None,
             barcode_data: None,
             barcode_ec: BarcodeEcLevel::M,
@@ -982,7 +982,7 @@ mod tests {
             r##"{"items":[{"color":"#FF0000"},{}]}"##,
         )
         .unwrap();
-        let fills: Vec<_> = nodes.iter().map(|row| row.children[0].shape.as_ref().and_then(|s| s.fill.clone())).collect();
+        let fills: Vec<_> = nodes.iter().map(|row| row.children[0].shape().and_then(|s| s.fill.clone())).collect();
         assert_eq!(fills, vec![Some("#ff0000".to_owned()), Some("#999999".to_owned())]);
     }
 

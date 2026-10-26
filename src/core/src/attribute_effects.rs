@@ -84,6 +84,8 @@ const UNTESTED: &[(&str, &str)] = &[
     ("frame@paginate", PAGINATE),
     ("code@paginate", PAGINATE),
     ("td@paginate", PAGINATE),
+    ("list@paginate", PAGINATE),
+    ("li@paginate", PAGINATE),
     ("text@paginate", PAGINATE),
     ("img@paginate", PAGINATE),
     ("barcode@paginate", PAGINATE),
@@ -127,6 +129,9 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
         // Courier is what a code and a code-span are set in unless they say otherwise.
         ("code@font", &["Times-Roman"]),
         ("code-span@font", &["Times-Roman"]),
+        // The default suffix is a full stop and there is no prefix.
+        ("list@prefix", &["("]),
+        ("list@suffix", &[")"]),
     ];
     if let Some((_, values)) = by_id.iter().find(|(key, _)| *key == id) {
         return Some(values);
@@ -241,6 +246,7 @@ fn values_of_type(doc: &Document, type_name: &str) -> (Vec<String>, bool) {
         "xs:boolean" => (strs(&["true", "false"]), true),
         "xs:string" | "xs:anyURI" => (Vec::new(), false),
         "xs:positiveInteger" => (strs(&["2", "7"]), false),
+        "xs:integer" => (strs(&["4", "0"]), false),
         "xs:decimal" => (strs(&["0.5"]), false),
         other => {
             let simple = top(doc, "simpleType", other).unwrap_or_else(|| panic!("the schema has no type {other}"));
@@ -416,6 +422,7 @@ const TOC: &str = r#"<column data-source="$toc"><text data-value="label">Entry</
 const TWO: &str = "<text>Alpha</text><text>Beta</text>";
 const FOUR: &str = "<text>A</text><text>B</text><text>C</text><text>D</text>";
 const ONE: &str = "<text>Alpha</text>";
+const ITEMS: &str = "<li><text>Alpha</text></li><li><text>Beta</text></li>";
 const LONG: &str = "The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text \
     has to be long enough to wrap before alignment, width and justification can show: more words, and then even more words.";
 const SLOTS: [&str; 6] = ["xs", "s", "m", "l", "xl", "xxl"];
@@ -567,6 +574,16 @@ fn subjects() -> Vec<Subject> {
         Subject::new("grid", |a, c| boxed("grid", a, c)).base(&[("cols", "2")]).content(FOUR),
         Subject::new("frame", |a, c| boxed("frame", a, c)).content(ONE),
         Subject::new("code", |a, c| boxed("code", a, c)).content(CODE),
+        Subject::new("list", |a, c| boxed("list", a, c)).content(ITEMS),
+        // The numbers of a number list are written by format, start, prefix and suffix, which only that list has.
+        Subject::new("list", |a, c| boxed("list", a, c))
+            .base(&[("type", "number")])
+            .only(&["format", "start", "prefix", "suffix"])
+            .content(ITEMS),
+        Subject::new("li", |a, c| {
+            flow(&format!("<list><li {a}>{c}</li><li><text>Beta</text></li></list><text>After</text>"))
+        })
+        .content(TWO),
         Subject::new("link", |a, c| boxed("link", a, c)).base(&[("href", "https://a.example")]).content(TWO),
         // A bookmark shows in the outline. One before it gives a level something to nest under.
         Subject::new("bookmark", |a, c| flow(&format!(r#"<bookmark label="First"/><text>Zero</text><bookmark {a}/>{c}"#)))
@@ -715,7 +732,7 @@ impl Tweak {
     }
 }
 
-const BOXES: [&str; 5] = ["column", "row", "grid", "frame", "td"];
+const BOXES: [&str; 7] = ["column", "row", "grid", "frame", "td", "list", "li"];
 
 fn tweaks() -> HashMap<String, Tweak> {
     let mut t: HashMap<String, Tweak> = HashMap::new();
@@ -727,7 +744,7 @@ fn tweaks() -> HashMap<String, Tweak> {
     for element in BOXES.iter().chain(["img"].iter()) {
         add(&format!("{element}@radius"), Tweak::default().set("background", "#cccccc"));
     }
-    for element in ["column", "row", "grid", "frame", "table"] {
+    for element in ["column", "row", "grid", "frame", "list", "table"] {
         add(&format!("{element}@width"), Tweak::default().set("background", "#cccccc"));
     }
 

@@ -81,6 +81,11 @@ impl Document {
                     }
                 }
             }
+            // The items of a list are known once the data is in, so the lists become columns and rows here. A table
+            // of contents section is bound after it is laid out, and gets its lists then (`toc.rs`).
+            if section.options.toc.is_none() {
+                crate::lists::lower_all(&mut children);
+            }
             // The numbers of a section that counts across the document go on from the notes the earlier ones that
             // do hold, so they are counted here, once the data is in.
             let footnote_counter = section.options.footnote_counter.or(self.footnote_counter).unwrap_or_default();
@@ -350,12 +355,13 @@ impl BoundAttr {
             Self::Color      => matches!(
                 kind,
                 NodeKind::Text | NodeKind::Column | NodeKind::Row | NodeKind::Grid | NodeKind::Frame
-                    | NodeKind::TableCell | NodeKind::Divider | NodeKind::Barcode
+                    | NodeKind::TableCell | NodeKind::List | NodeKind::ListItem | NodeKind::Divider
+                    | NodeKind::Barcode
             ),
             Self::Background => matches!(
                 kind,
                 NodeKind::Column | NodeKind::Row | NodeKind::Grid | NodeKind::Frame | NodeKind::TableCell
-                    | NodeKind::Barcode
+                    | NodeKind::List | NodeKind::ListItem | NodeKind::Barcode
             ),
             Self::Fill       => *kind == NodeKind::Shape,
         }
@@ -431,6 +437,54 @@ pub struct Shape {
     pub stroke_dash:  Option<String>,
 }
 
+/// How a `<list>` numbers its items.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum ListFormat {
+    #[default]
+    Decimal,
+    LowerAlpha,
+    UpperAlpha,
+    LowerRoman,
+    UpperRoman,
+}
+
+/// The shape that marks the items of a bullet `<list>`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ListBullet {
+    Disc,
+    Circle,
+    Square,
+    Dash,
+}
+
+/// The width of a list's marker column when `indent` is not set.
+pub const DEFAULT_LIST_INDENT: f32 = 24.0;
+
+/// How a `<list>` marks its items. `lists::lower` reads it, once the data is in and the items are known, and turns
+/// the list into the columns and rows the layout knows. Few nodes are lists, so a node holds it boxed (see `Node`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ListSpec {
+    /// A number list, not a bullet list.
+    pub numbered: bool,
+    pub format:   ListFormat,
+    /// The number of the first item of a number list.
+    pub start:    i64,
+    pub prefix:   String,
+    pub suffix:   String,
+    /// The shape of a bullet list's marker; `None` takes one by how deep the list is.
+    pub bullet:   Option<ListBullet>,
+    /// The width of the marker column.
+    pub indent:   f32,
+}
+
+/// What only a shape or a list adds to a node. They share one box, so the pointer costs a node 8 bytes and not 16:
+/// `a_node_stays_small` holds the size.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Detail {
+    Shape(Shape),
+    List(ListSpec),
+}
+
 /// One element of the layout. Every node has every field, whatever its kind, and parse and data binding copy
 /// nodes whole, so a field costs its size in every node of a document, set or not: a larger node is a slower
 /// parse. A new field that is a number, a flag or a small enum goes inline. A string, a list or a struct that few
@@ -470,7 +524,8 @@ pub struct Node {
     pub text_runs: Vec<TextRun>,
     pub font: String,
     pub font_size: f32,
-    /// The color of a text, its own or the one it took from the box around it. `None` on every other node.
+    /// The color of a text, its own or the one it took from the box around it, and of a list, which gives it to
+    /// its markers. `None` on every other node.
     pub text_color: Option<String>,
     pub text_align: TextAlign,
     /// The fewest lines of a split text that may stand alone on the next page.
@@ -496,8 +551,9 @@ pub struct Node {
     /// The width over the height of a picture whose width is `fill`, set where the sizes of the images are filled
     /// in. The width comes from the slot the picture is laid out in, and the height follows from this.
     pub img_aspect: Option<f32>,
-    // shape (NodeKind::Shape only), boxed: few nodes are shapes
-    pub shape: Option<Box<Shape>>,
+    /// What a shape or a list adds to its node, boxed together because few nodes are either: read a shape's with
+    /// `shape()`. `lists::lower` takes a list's, which it turns into columns and rows.
+    pub detail: Option<Box<Detail>>,
     // barcode (NodeKind::Barcode only)
     pub barcode_type: Option<BarcodeType>,
     pub barcode_data: Option<String>,
@@ -580,6 +636,10 @@ pub enum NodeKind {
     Shape,
     Barcode,
     Field,
+    /// A `<list>`. It becomes a column once the data is in (`lists::lower`), so the layout never sees it.
+    List,
+    /// An `<li>`. It becomes a row of its marker and its content, with the list.
+    ListItem,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -694,7 +754,7 @@ struct ParsedNode {
     url: Option<String>,
     image_name: Option<String>,
     img_height_constraint: Option<f32>,
-    shape: Option<Box<Shape>>,
+    detail: Option<Box<Detail>>,
     barcode_type: Option<BarcodeType>,
     barcode_data: Option<String>,
     barcode_ec: BarcodeEcLevel,
@@ -763,7 +823,7 @@ impl ParsedNode {
             url: None,
             image_name: None,
             img_height_constraint: None,
-            shape: None,
+            detail: None,
             barcode_type: None,
             barcode_data: None,
             barcode_ec: BarcodeEcLevel::M,
@@ -873,13 +933,28 @@ impl Node {
             line_height: DEFAULT_LINE_HEIGHT, max_lines: None, ellipsis: false, pre_tab: 0,
             capture: None,
             url: None, image_name: None,
-            img_height_constraint: None, img_aspect: None, shape: None, barcode_type: None, barcode_data: None,
+            img_height_constraint: None, img_aspect: None, detail: None, barcode_type: None, barcode_data: None,
             barcode_ec: BarcodeEcLevel::M, barcode_hrt: false, barcode_color: None,
             barcode_bg: None, table_cols: String::new(), stripe: None, col_span: 1, row_span: 1,
             field_kind: None, field_name: None, field_value: None, field_label: None,
             field_options: Vec::new(), field_required: false, field_readonly: false,
             field_checked: false, field_max_len: None, field_group: None,
             field_action_url: None, data_attrs: None, bookmarks: Vec::new(), children: Vec::new(),
+        }
+    }
+
+    /// What a `<shape>` draws.
+    pub fn shape(&self) -> Option<&Shape> {
+        match self.detail.as_deref() {
+            Some(Detail::Shape(shape)) => Some(shape),
+            _                          => None,
+        }
+    }
+
+    pub fn shape_mut(&mut self) -> Option<&mut Shape> {
+        match self.detail.as_deref_mut() {
+            Some(Detail::Shape(shape)) => Some(shape),
+            _                          => None,
         }
     }
 
@@ -953,7 +1028,7 @@ fn resolve_node(
         .into_iter()
         .map(|c| resolve_node(c, &font, font_size, color, fonts))
         .collect();
-    let text_color = is_text.then(|| color.to_string());
+    let text_color = (is_text || n.kind == NodeKind::List).then(|| color.to_string());
 
     Node {
         kind:                  n.kind,
@@ -994,7 +1069,7 @@ fn resolve_node(
         image_name:            n.image_name,
         img_height_constraint: n.img_height_constraint,
         img_aspect:            None,
-        shape:                 n.shape,
+        detail:                n.detail,
         barcode_type:          n.barcode_type,
         barcode_data:          n.barcode_data,
         barcode_ec:            n.barcode_ec,
@@ -1758,6 +1833,8 @@ fn parse_node(
         "thead"   => NodeKind::TableHead,
         "tr"      => NodeKind::TableRow,
         "td"      => NodeKind::TableCell,
+        "list"    => NodeKind::List,
+        "li"      => NodeKind::ListItem,
         other     => return Err(match replaced_element_hint(other) {
             Some(hint) => format!("<{}>{}: {hint}", other, node_loc(elem)),
             None       => format!("<{}>{}: unknown element", other, node_loc(elem)),
@@ -1864,7 +1941,19 @@ fn parse_node(
                         ));
                     }
                 }
-                _ => {}
+                NodeKind::List => {
+                    if child_node.kind != NodeKind::ListItem {
+                        return Err(format!(
+                            "<list>{}: child <{}> is not allowed here — expected <li>",
+                            node_loc(elem), child.tag_name().name()
+                        ));
+                    }
+                }
+                _ => {
+                    if child_node.kind == NodeKind::ListItem {
+                        return Err(format!("<{tag}>{}: <li> belongs inside a <list>", node_loc(elem)));
+                    }
+                }
             }
             node.children.push(child_node);
         }
@@ -2724,6 +2813,7 @@ fn apply_box_attrs(
     let is_box = matches!(
         node.kind,
         NodeKind::Column | NodeKind::Row | NodeKind::Grid | NodeKind::Frame | NodeKind::TableCell
+            | NodeKind::List | NodeKind::ListItem
     );
     if is_box || node.kind == NodeKind::Text {
         if let Some(v) = a.get("color") { node.text_color = Some(tokens.resolve_color(v)?); }
@@ -2827,8 +2917,65 @@ fn apply_layout_kind_attrs(
             node.ellipsis  = a.get("ellipsis").map(|v| v == "true").unwrap_or(false);
             apply_capture_attrs(node, a)?;
         }
+        NodeKind::List => apply_list_attrs(node, a, tokens)?,
+        NodeKind::ListItem => {}
         NodeKind::Link | NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field => {}
     }
+    Ok(())
+}
+
+/// Apply the attributes of a `<list>` / `"list"` node that `apply_box_attrs` has not read: how its items are
+/// marked and how wide the marker column is. An attribute of a number list on a bullet list, and the other way
+/// round, is an error, so that nothing is written that has no effect.
+fn apply_list_attrs(node: &mut ParsedNode, a: &impl Attrs, tokens: &Tokens) -> Result<(), String> {
+    let numbered = match a.get("type").unwrap_or("bullet") {
+        "bullet" => false,
+        "number" => true,
+        other    => return Err(format!("invalid type '{other}': expected bullet or number")),
+    };
+    let only_numbered = ["format", "start", "prefix", "suffix"];
+    if !numbered {
+        if let Some(name) = only_numbered.iter().find(|name| a.get(name).is_some()) {
+            return Err(format!("'{name}' numbers the items of a list with type=\"number\""));
+        }
+    } else if a.get("bullet").is_some() {
+        return Err("'bullet' is the shape of a list with type=\"bullet\"".to_string());
+    }
+    let format = match a.get("format").unwrap_or("decimal") {
+        "decimal"     => ListFormat::Decimal,
+        "lower-alpha" => ListFormat::LowerAlpha,
+        "upper-alpha" => ListFormat::UpperAlpha,
+        "lower-roman" => ListFormat::LowerRoman,
+        "upper-roman" => ListFormat::UpperRoman,
+        other => return Err(format!(
+            "invalid format '{other}': expected decimal, lower-alpha, upper-alpha, lower-roman or upper-roman"
+        )),
+    };
+    let start = match a.get("start") {
+        Some(v) => v.trim().parse::<i64>().map_err(|_| format!("invalid start '{v}': expected a whole number"))?,
+        None    => 1,
+    };
+    let bullet = match a.get("bullet") {
+        None           => None,
+        Some("disc")   => Some(ListBullet::Disc),
+        Some("circle") => Some(ListBullet::Circle),
+        Some("square") => Some(ListBullet::Square),
+        Some("dash")   => Some(ListBullet::Dash),
+        Some(other)    => return Err(format!("invalid bullet '{other}': expected disc, circle, square or dash")),
+    };
+    let indent = match a.get("indent") {
+        Some(v) => tokens.resolve_space(v)?,
+        None    => DEFAULT_LIST_INDENT,
+    };
+    node.detail = Some(Box::new(Detail::List(ListSpec {
+        numbered,
+        format,
+        start,
+        prefix: a.get("prefix").unwrap_or("").to_string(),
+        suffix: a.get("suffix").unwrap_or(".").to_string(),
+        bullet,
+        indent,
+    })));
     Ok(())
 }
 
@@ -2874,13 +3021,13 @@ fn apply_shape_attrs(node: &mut ParsedNode, a: &impl Attrs, tokens: &Tokens) -> 
             node.img_height_constraint = Some(tokens.resolve_height(height).map_err(|e| format!("shape height: {e}"))?);
         }
     }
-    node.shape = Some(Box::new(Shape {
+    node.detail = Some(Box::new(Detail::Shape(Shape {
         kind,
         fill:         a.get("fill").map(|v| tokens.resolve_fill(v)).transpose()?,
         stroke:       a.get("stroke").map(|v| tokens.resolve_color(v)).transpose()?,
         stroke_width: a.get("stroke-width").map(parse_measurement).transpose()?,
         stroke_dash:  a.get("stroke-dash").map(str::to_string),
-    }));
+    })));
     Ok(())
 }
 
@@ -3481,6 +3628,8 @@ fn parse_tree_node(
         "thead"   => NodeKind::TableHead,
         "tr"      => NodeKind::TableRow,
         "td"      => NodeKind::TableCell,
+        "list"    => NodeKind::List,
+        "li"      => NodeKind::ListItem,
         other => return Err(match replaced_element_hint(other) {
             Some(hint) => format!("node type '{other}': {hint}"),
             None       => format!("unknown node type: '{other}'"),
@@ -3563,7 +3712,19 @@ fn parse_tree_node(
                             ));
                         }
                     }
-                    _ => {}
+                    NodeKind::List => {
+                        if child_node.kind != NodeKind::ListItem {
+                            return Err(format!(
+                                "list children must be 'li', got '{}'",
+                                child.get("type").and_then(|v| v.as_str()).unwrap_or("?")
+                            ));
+                        }
+                    }
+                    _ => {
+                        if child_node.kind == NodeKind::ListItem {
+                            return Err(format!("'li' belongs inside a 'list', not in '{type_str}'"));
+                        }
+                    }
                 }
                 node.children.push(child_node);
             }
@@ -3608,6 +3769,69 @@ mod tests {
     fn first_node(body: &str) -> Node {
         let mut doc = parse(&minimal(body)).unwrap();
         doc.section_layouts().remove(0).children.remove(0)
+    }
+
+    // ── lists ────────────────────────────────────────────────────────────────
+
+    fn list_error(body: &str) -> String {
+        parse(&minimal(body)).unwrap_err()
+    }
+
+    #[test]
+    fn a_list_and_its_items_are_in_the_tree_until_the_data_is_in() {
+        let mut doc = parse(&minimal("<list><li><text>A</text></li><li><text>B</text></li></list>")).unwrap();
+        let section = &mut doc.sections[0];
+        let SectionChild::Layout { children, .. } = &mut section.children[0] else { panic!("no layout") };
+        let LayoutChild::Content(list) = &children[0] else { panic!("no content") };
+        assert_eq!(list.kind, NodeKind::List);
+        assert!(matches!(list.detail.as_deref(), Some(Detail::List(spec)) if !spec.numbered && spec.indent == DEFAULT_LIST_INDENT));
+        assert!(list.children.len() == 2 && list.children.iter().all(|item| item.kind == NodeKind::ListItem));
+    }
+
+    #[test]
+    fn a_list_takes_its_numbers_from_type_format_start_prefix_suffix_and_indent() {
+        let mut doc = parse(&minimal(
+            r#"<list type="number" format="upper-roman" start="4" prefix="(" suffix=")" indent="30pt"><li><text>A</text></li></list>"#,
+        ))
+        .unwrap();
+        let SectionChild::Layout { children, .. } = &mut doc.sections[0].children[0] else { panic!("no layout") };
+        let LayoutChild::Content(list) = &children[0] else { panic!("no content") };
+        let Some(Detail::List(spec)) = list.detail.as_deref() else { panic!("no list spec") };
+        assert_eq!(
+            (spec.numbered, spec.format, spec.start, spec.prefix.as_str(), spec.suffix.as_str(), spec.indent),
+            (true, ListFormat::UpperRoman, 4, "(", ")", 30.0)
+        );
+    }
+
+    #[test]
+    fn an_item_belongs_in_a_list_and_a_list_holds_items_only() {
+        let err = list_error("<column><li><text>A</text></li></column>");
+        assert!(err.contains("<li>") && err.contains("belongs inside a <list>"), "{err}");
+        let err = list_error("<list><text>A</text></list>");
+        assert!(err.contains("<list>") && err.contains("expected <li>"), "{err}");
+    }
+
+    #[test]
+    fn what_numbers_a_list_is_refused_on_a_bullet_list_and_the_bullet_on_a_number_list() {
+        for attr in [r#"format="lower-alpha""#, r#"start="2""#, r#"prefix="(""#, r#"suffix=")""#] {
+            let err = list_error(&format!("<list {attr}><li><text>A</text></li></list>"));
+            assert!(err.contains("numbers the items of a list with type=\"number\""), "{attr}: {err}");
+        }
+        let err = list_error(r#"<list type="number" bullet="dash"><li><text>A</text></li></list>"#);
+        assert!(err.contains("'bullet' is the shape of a list with type=\"bullet\""), "{err}");
+    }
+
+    #[test]
+    fn a_list_names_what_it_expected_for_a_value_it_cannot_read() {
+        for (attrs, expected) in [
+            (r#"type="roman""#, "expected bullet or number"),
+            (r#"type="number" format="greek""#, "expected decimal, lower-alpha"),
+            (r#"type="number" start="one""#, "expected a whole number"),
+            (r#"bullet="star""#, "expected disc, circle, square or dash"),
+        ] {
+            let err = list_error(&format!("<list {attrs}><li><text>A</text></li></list>"));
+            assert!(err.contains(expected), "{attrs}: {err}");
+        }
     }
 
     #[test]
@@ -4188,17 +4412,17 @@ mod tests {
         let rect = &nodes[0];
         assert_eq!((rect.width_constraint, rect.img_height_constraint), (Some(40.0), Some(20.0)));
         assert_eq!((rect.radius, rect.opacity), (4.0, 0.5));
-        let shape = rect.shape.as_deref().unwrap();
+        let shape = rect.shape().unwrap();
         assert_eq!(shape.kind, ShapeKind::Rect);
         assert_eq!((shape.fill.as_deref(), shape.stroke.as_deref()), (Some("#112233"), Some("#445566")));
         assert_eq!((shape.stroke_width, shape.stroke_dash.as_deref()), (Some(2.0), Some("3 2")));
 
         let circle = &nodes[1];
-        assert_eq!(circle.shape.as_deref().unwrap().kind, ShapeKind::Circle);
+        assert_eq!(circle.shape().unwrap().kind, ShapeKind::Circle);
         assert_eq!((circle.width_constraint, circle.img_height_constraint), (Some(20.0), Some(20.0)), "the square of side 2r");
 
         let ellipse = &nodes[2];
-        assert_eq!(ellipse.shape.as_deref().unwrap().kind, ShapeKind::Ellipse);
+        assert_eq!(ellipse.shape().unwrap().kind, ShapeKind::Ellipse);
         assert_eq!((ellipse.width_constraint, ellipse.img_height_constraint), (Some(30.0), Some(12.0)));
     }
 
@@ -4245,7 +4469,7 @@ mod tests {
         let shape = &doc.section_layouts()[0].children[0];
         assert_eq!(shape.kind, NodeKind::Shape);
         assert_eq!((shape.width_constraint, shape.img_height_constraint, shape.opacity), (Some(20.0), Some(20.0), 0.5));
-        assert_eq!(shape.shape.as_deref().unwrap().fill.as_deref(), Some("#ff0000"));
+        assert_eq!(shape.shape().unwrap().fill.as_deref(), Some("#ff0000"));
 
         let err = parse_tree(&tree(r#"{"type":"shape","attrs":{"type":"circle"}}"#)).unwrap_err();
         assert!(err.contains("shape: a circle needs 'r'"), "{err}");

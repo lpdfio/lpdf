@@ -224,6 +224,32 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <xs:simpleType name="ListType">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="bullet"/>
+      <xs:enumeration value="number"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="ListFormat">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="decimal"/>
+      <xs:enumeration value="lower-alpha"/>
+      <xs:enumeration value="upper-alpha"/>
+      <xs:enumeration value="lower-roman"/>
+      <xs:enumeration value="upper-roman"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="ListBullet">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="disc"/>
+      <xs:enumeration value="circle"/>
+      <xs:enumeration value="square"/>
+      <xs:enumeration value="dash"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="TextAlignH">
     <xs:restriction base="xs:string">
       <xs:enumeration value="left"/>
@@ -825,6 +851,7 @@
       <xs:element ref="column"/>
       <xs:element ref="row"/>
       <xs:element ref="grid"/>
+      <xs:element ref="list"/>
       <xs:element ref="frame"/>
       <xs:element ref="link"/>
       <xs:element ref="text"/>
@@ -1190,6 +1217,66 @@
       <xs:attribute name="align"   type="AlignFull"/>
       <xs:attribute name="justify" type="Justify"/>
       <xs:attributeGroup ref="WidthAttr"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="list">
+    <xs:annotation>
+      <xs:documentation>A list of items, each with a marker: a bullet drawn as a shape, or a number the engine gives. The items go top to bottom with gap between them, each one a li, and a list nests inside an item. The words of an item start indent from the list's left edge, at every level. A long item splits across pages through the line the page ends in, and its marker stays with the first part.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="li" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attributeGroup ref="BoxAttrs"/>
+      <xs:attribute name="type" type="ListType">
+        <xs:annotation>
+          <xs:documentation>bullet marks each item with a shape, number with a number. Default bullet.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="format" type="ListFormat">
+        <xs:annotation>
+          <xs:documentation>How a number list writes its numbers: decimal (1, 2, 3), lower-alpha (a, b, c, then aa, ab), upper-alpha (A, B, C), lower-roman (i, ii, iii) or upper-roman (I, II, III). A number that a letter or a numeral can't write, below 1 or past 3999 for a numeral, is written in decimal. Default decimal.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="start" type="xs:integer">
+        <xs:annotation>
+          <xs:documentation>The number of a number list's first item, to continue a list that something cut in two. Default 1.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="prefix" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>Text before each number of a number list: prefix="(" and suffix=")" write (a). Default none.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="suffix" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>Text after each number of a number list: suffix=")" writes a). Default a full stop, so a number is written 1.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="bullet" type="ListBullet">
+        <xs:annotation>
+          <xs:documentation>The shape that marks the items of a bullet list. Without it a list uses a disc, a list inside a bullet list a circle, and one inside that a square, then the three again.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="indent" type="TokenScaleOrPt">
+        <xs:annotation>
+          <xs:documentation>The width of the marker's column: the words of an item start this far from the list's left edge, and a list inside an item starts there too. The marker is set at the right of its column, so 9. and 10. end together, and a marker wider than the column is not made to fit. The same length at every level. Default 24pt.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attributeGroup ref="WidthAttr"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="li">
+    <xs:annotation>
+      <xs:documentation>One item of a list: a box that holds what a layout holds, such as a text, an image, a table or another list, and sits beside the item's marker. The words go in a text. data-source repeats the item once for each entry of the data, and the numbers of a number list follow what is made. The item's own box (padding, background, border) surrounds the marker and the content.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attributeGroup ref="BoxAttrs"/>
     </xs:complexType>
   </xs:element>
 
