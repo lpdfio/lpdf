@@ -72,7 +72,7 @@
           <em font="body-italic" />
           <strong font="body-bold" />
           <li bullet="square" gap="s" indent="20pt" />
-          <quote color="primary" bar-color="primary" bar-width="4pt" background="wash" padding="4pt 4pt 4pt 8pt" />
+          <quote color="primary" bar-color="primary" bar-width="4pt" background="wash" padding="s s s m" />
           <code font="Courier" background="#eaf0f6" color="#1f3b57" />
           <a color="primary" underline="false" />
           <table stripe="wash" />

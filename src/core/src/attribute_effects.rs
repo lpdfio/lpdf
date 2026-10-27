@@ -169,6 +169,7 @@ fn pattern_samples(type_name: &str) -> Vec<String> {
     let sample: &[&str] = match type_name {
         "PtValue" | "SignedPtValue" => &["37pt", "143pt"],
         "SpacingValue" => &["17pt", "61pt"],
+        "SpacingMixed" => &["17pt s", "3pt 61pt m"],
         "PageSizeCustom" => &["300pt 400pt"],
         "ColorHex" | "Color" | "Fill" => &["#ff0000"],
         "GradientOffset" => &["50%"],

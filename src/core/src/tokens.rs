@@ -774,6 +774,9 @@ mod tests {
         assert_eq!(t.resolve_spacing("m").unwrap(), [8.0, 8.0, 8.0, 8.0]);
         // two values: top/bottom, left/right
         assert_eq!(t.resolve_spacing("s m").unwrap(), [4.0, 8.0, 4.0, 8.0]);
+        // a length and a slot in one shorthand, as the quote of the default Markdown styles has
+        assert_eq!(t.resolve_spacing("0pt 0pt 0pt m").unwrap(), [0.0, 0.0, 0.0, 8.0]);
+        assert_eq!(t.resolve_spacing("m 3pt xs").unwrap(), [8.0, 3.0, 2.0, 3.0]);
         // four explicit
         assert_eq!(
             t.resolve_spacing("2pt 4pt 6pt 8pt").unwrap(),

@@ -70,9 +70,16 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- spacing: explicit multi-pt shorthand OR a single slot or alias -->
+  <!-- 2 to 4 values, each a length or a slot or alias of the space row, e.g. "s l" | "0pt 0pt 0pt m" | "m 8pt xs" -->
+  <xs:simpleType name="SpacingMixed">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="(0|\d+(\.\d+)?(pt|mm|in)|[a-z][a-z0-9-]*)( (0|\d+(\.\d+)?(pt|mm|in)|[a-z][a-z0-9-]*)){1,3}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- spacing: a shorthand of lengths, a shorthand that has slots or aliases in it, OR a single slot or alias -->
   <xs:simpleType name="SpacingOrToken">
-    <xs:union memberTypes="SpacingValue TokenScale TokenName"/>
+    <xs:union memberTypes="SpacingValue SpacingMixed TokenScale TokenName"/>
   </xs:simpleType>
 
   <xs:simpleType name="PageSizeNamed">
@@ -480,7 +487,7 @@
     <xs:attribute name="gap"        type="TokenScaleOrPt"/>
     <xs:attribute name="padding"    type="SpacingOrToken">
       <xs:annotation>
-        <xs:documentation>Space between the edge of the box and its content, written like CSS: one value for all sides, two for top-bottom and left-right, three for top, left-right and bottom, four for top, right, bottom and left.</xs:documentation>
+        <xs:documentation>Space between the edge of the box and its content, written like CSS: one value for all sides, two for top-bottom and left-right, three for top, left-right and bottom, four for top, right, bottom and left. Each value is a length or a name from the space row of the tokens, and they can be mixed: 0pt 0pt 0pt m.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="height"     type="HeightValue">
@@ -532,7 +539,7 @@
     </xs:attribute>
     <xs:attribute name="padding"    type="SpacingOrToken">
       <xs:annotation>
-        <xs:documentation>Space between the edge of the box and its content, written like CSS: one value for all sides, two for top-bottom and left-right, three for top, left-right and bottom, four for top, right, bottom and left.</xs:documentation>
+        <xs:documentation>Space between the edge of the box and its content, written like CSS: one value for all sides, two for top-bottom and left-right, three for top, left-right and bottom, four for top, right, bottom and left. Each value is a length or a name from the space row of the tokens, and they can be mixed: 0pt 0pt 0pt m.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="height"     type="HeightValue">
