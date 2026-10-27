@@ -32,7 +32,7 @@
 
           Some *emphasis*, some **strong** text, a ~~deleted~~ word, a [link](https://lpdf.io) and `inline code`,
           and one ***bold italic*** word. A soft break
-          is a space.
+          is a space, but a break<br>starts a new line.
 
           ## Second level
 
@@ -69,7 +69,7 @@
           |:-------|----:|:------:|
           | Pen    |   2 | blue   |
           | Ink    |  10 | black  |
-          | Paper  | 500 | A4     |
+          | Paper  | 500 | A4<br>80 gsm |
 
           ![The photo, found by its name](photo)
 

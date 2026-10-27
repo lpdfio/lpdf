@@ -658,11 +658,14 @@ struct Style {
 }
 
 /// A piece of the words of a block.
+#[derive(Clone)]
 enum Piece {
     Text { text: String, style: Style },
     Code { text: String, style: Style },
     Note(String),
     Image { dest: String, line: usize },
+    /// A `<br>`: the words after it begin a new line.
+    Break,
 }
 
 struct Writer<'a> {
@@ -700,6 +703,9 @@ impl<'a> Writer<'a> {
     /// backticks, and a comment is left out.
     fn raw_html(&self, line: usize, html: &str) -> String {
         let message = match first_tag(html) {
+            Some(tag) if is_line_break(tag) => format!(
+                "raw HTML {tag} is not supported on a line of its own: write it at the end of the line it breaks"
+            ),
             Some(tag) if tag.starts_with("<!--") => format!("raw HTML {tag} is not supported: leave the comment out"),
             Some(tag) => format!(
                 "raw HTML {tag} is not supported: to show it as text, write it in backticks, `{tag}`; otherwise write the Markdown it stands for, or leave it out"
@@ -800,6 +806,10 @@ impl<'a> Writer<'a> {
                         _ => String::new(),
                     };
                     return Err(self.raw_html(line, &html));
+                }
+                Event::InlineHtml(html) if is_line_break(&html) => {
+                    let pieces = self.read_pieces(None)?;
+                    self.paragraph(pieces, line, around, &mut blocks)?;
                 }
                 Event::Html(html) | Event::InlineHtml(html) => return Err(self.raw_html(line, &html)),
                 Event::Rule => {
@@ -919,6 +929,10 @@ impl<'a> Writer<'a> {
                     }
                     pieces.push(Piece::Image { dest: dest_url.to_string(), line });
                 }
+                Event::Html(html) | Event::InlineHtml(html) if is_line_break(&html) => {
+                    pieces.push(Piece::Break);
+                    self.at += 1;
+                }
                 Event::Html(html) | Event::InlineHtml(html) => return Err(self.raw_html(line, &html)),
                 // A block that begins ends the words of a block with no tag of its own.
                 Event::Start(_) | Event::Rule | Event::TaskListMarker(_) if until.is_none() => return Ok(()),
@@ -955,7 +969,8 @@ impl<'a> Writer<'a> {
         resolve_font_alias(name, &self.spec.fonts)
     }
 
-    /// `<text>` for the words of a block, wrapped in a box when the rule has a box around the words.
+    /// `<text>` for the words of a block, wrapped in a box when the rule has a box around the words. A block with line
+    /// breaks is a text for each line, one under the other, in a column of their own when the rule has no box.
     fn text_block(&mut self, rule: &Rule, pieces: &[Piece], extra: &[(&str, &str)], bookmark: Option<String>) -> String {
         self.font = self.font_of(rule);
         let mut text_attrs = String::new();
@@ -963,13 +978,23 @@ impl<'a> Writer<'a> {
             if let Some(value) = rule.get(key) { push_attr(&mut text_attrs, key, value); }
         }
         let has_box = BOX_ATTRS.iter().any(|key| rule.contains_key(*key));
+        let broken = pieces.iter().any(|piece| matches!(piece, Piece::Break));
+        let lines = if broken { lines_of(pieces) } else { Vec::new() };
+        let texts: Vec<&[Piece]> = if broken { lines.iter().map(Vec::as_slice).collect() } else { vec![pieces] };
         let mut inner = String::new();
         if !has_box {
             for (key, value) in extra { push_attr(&mut text_attrs, key, value); }
         }
-        inner.push_str(&format!("<text{text_attrs}>"));
-        for piece in pieces { self.write_piece(&mut inner, piece); }
-        inner.push_str("</text>");
+        for line in &texts {
+            inner.push_str(&format!("<text{text_attrs}>"));
+            for piece in *line { self.write_piece(&mut inner, piece); }
+            inner.push_str("</text>");
+        }
+        if texts.is_empty() {
+            inner.push_str(&format!("<text{text_attrs}></text>"));
+        }
+        // The lines stand close, whatever the gap of the box around them.
+        let stacked = if texts.len() > 1 { " gap=\"0pt\"" } else { "" };
         let mut xml = bookmark.unwrap_or_default();
         if has_box {
             let mut box_attrs = String::new();
@@ -977,7 +1002,9 @@ impl<'a> Writer<'a> {
                 if let Some(value) = rule.get(key) { push_attr(&mut box_attrs, key, value); }
             }
             for (key, value) in extra { push_attr(&mut box_attrs, key, value); }
-            xml.push_str(&format!("<column{box_attrs}>{inner}</column>"));
+            xml.push_str(&format!("<column{stacked}{box_attrs}>{inner}</column>"));
+        } else if texts.len() > 1 {
+            xml.push_str(&format!("<column{stacked}>{inner}</column>"));
         } else {
             xml.push_str(&inner);
         }
@@ -1033,7 +1060,7 @@ impl<'a> Writer<'a> {
                 }
             }
             Piece::Note(words) => out.push_str(&format!("<fn>{}</fn>", escape_text(words))),
-            Piece::Image { .. } => {}
+            Piece::Image { .. } | Piece::Break => {}
         }
     }
 
@@ -1043,7 +1070,7 @@ impl<'a> Writer<'a> {
         // An image is a block of its own, so the words around it are blocks too.
         let mut words: Vec<Piece> = Vec::new();
         let flush = |this: &mut Self, words: &mut Vec<Piece>, blocks: &mut Vec<Block>| -> Result<(), String> {
-            if words.iter().all(|piece| matches!(piece, Piece::Text { text, .. } if text.trim().is_empty())) {
+            if words.iter().all(|piece| matches!(piece, Piece::Break) || matches!(piece, Piece::Text { text, .. } if text.trim().is_empty())) {
                 words.clear();
                 return Ok(());
             }
@@ -1087,6 +1114,14 @@ impl<'a> Writer<'a> {
         let number = level as usize;
         let name = format!("h{number}");
         let rule = self.spec.rules.rule(&name);
+        // A heading is one line, so a break in it is a space.
+        let pieces: Vec<Piece> = pieces
+            .into_iter()
+            .map(|piece| match piece {
+                Piece::Break => Piece::Text { text: " ".into(), style: Style::default() },
+                other => other,
+            })
+            .collect();
         let label: String = pieces
             .iter()
             .filter_map(|piece| match piece {
@@ -1290,6 +1325,26 @@ fn describe(event: &Event) -> String {
         Event::TaskListMarker(_) => "a task list".into(),
         _ => "this".into(),
     }
+}
+
+/// Whether some HTML is a `<br>`, which is the one tag that is read: `<br>`, `<br/>` or `<br />`, in any case.
+fn is_line_break(html: &str) -> bool {
+    let tag = html.trim();
+    let Some(inner) = tag.strip_prefix('<').and_then(|rest| rest.strip_suffix('>')) else { return false };
+    inner.strip_suffix('/').unwrap_or(inner).trim_end().eq_ignore_ascii_case("br")
+}
+
+/// The words of a block cut at its breaks, each line without the spaces at its ends. A line with no words is left out,
+/// so breaks in a row, or at the start or the end of the block, are one break or none: a gap is a paragraph's to make.
+fn lines_of(pieces: &[Piece]) -> Vec<Vec<Piece>> {
+    let mut lines: Vec<Vec<Piece>> = pieces.split(|piece| matches!(piece, Piece::Break)).map(<[Piece]>::to_vec).collect();
+    for line in &mut lines {
+        if let Some(Piece::Text { text, .. }) = line.first_mut() { *text = text.trim_start().to_string(); }
+        if let Some(Piece::Text { text, .. }) = line.last_mut() { *text = text.trim_end().to_string(); }
+        line.retain(|piece| !matches!(piece, Piece::Text { text, .. } if text.is_empty()));
+    }
+    lines.retain(|line| !line.is_empty());
+    lines
 }
 
 /// The first tag of some HTML, from its `<` to its `>`, when that is short and on one line.
@@ -1504,8 +1559,77 @@ mod tests {
         assert!(err.contains("in backticks, `<Biller>`"), "{err}");
         let err = error("fine\n\n<div class=\"a\">x</div>\n");
         assert!(err.contains("markdown line 3") && err.contains("raw HTML <div class=\"a\"> is not supported"), "{err}");
-        let err = error("a<br>b\n");
-        assert!(err.contains("raw HTML <br> is not supported"), "{err}");
+    }
+
+    #[test]
+    fn a_br_is_a_line_break_and_no_other_html_is() {
+        for html in ["<b>", "<br class=\"x\">", "</br>", "<brx>", "<img src=\"a.png\">"] {
+            let err = error(&format!("a{html}b\n"));
+            assert!(err.contains("raw HTML") && err.contains("is not supported"), "{html}: {err}");
+        }
+        for html in ["<br>", "<br/>", "<br />", "<BR>", "<Br/>"] {
+            assert!(parse(&document("", "", &format!("a{html}b\n"))).is_ok(), "{html}");
+        }
+    }
+
+    #[test]
+    fn a_br_ends_the_line_of_a_paragraph_whose_lines_are_texts_that_stand_close() {
+        let nodes = nodes("one<br>two<BR/>three <br /> four\n\nnext\n");
+        assert_eq!(nodes.len(), 2);
+        assert_eq!(nodes[0].kind, NodeKind::Column);
+        assert_eq!(nodes[0].gap, 0.0);
+        let lines: Vec<String> = texts(&nodes[0]).into_iter().map(words).collect();
+        assert_eq!(lines, ["one", "two", "three", "four"]);
+        assert_eq!(nodes[1].kind, NodeKind::Text);
+    }
+
+    #[test]
+    fn a_br_keeps_the_styles_of_the_words_around_it_and_the_rules_of_a_paragraph() {
+        let nodes = nodes_in(&document("", r#"<markdown-styles><p font-size="14pt" padding="s"/></markdown-styles>"#, "**one**<br>*two*\n"));
+        assert_eq!(nodes[0].kind, NodeKind::Column);
+        assert_eq!(nodes[0].gap, 0.0);
+        assert_eq!(nodes[0].padding, [4.0; 4]);
+        let lines = texts(&nodes[0]);
+        assert_eq!(lines.len(), 2);
+        assert!(lines.iter().all(|line| line.font_size == 14.0));
+        assert_eq!(lines[0].text_runs[0].font.as_deref(), Some("Helvetica-Bold"));
+        assert_eq!(lines[1].text_runs[0].font.as_deref(), Some("Helvetica-Oblique"));
+    }
+
+    #[test]
+    fn breaks_in_a_row_or_at_the_ends_of_a_block_make_no_empty_line() {
+        let nodes = nodes("<br>one<br><br>two<br>\n");
+        let lines: Vec<String> = texts(&nodes[0]).into_iter().map(words).collect();
+        assert_eq!(lines, ["one", "two"]);
+    }
+
+    #[test]
+    fn a_br_in_a_table_cell_puts_the_words_after_it_on_a_line_of_their_own() {
+        let nodes = nodes("| Name | Note |\n|---|---|\n| **Engine**<br>`sync` | first<br/>second<br />third |\n");
+        let row = &nodes[0].children[1];
+        let cells: Vec<Vec<String>> = row.children.iter().map(|cell| texts(cell).into_iter().map(words).collect()).collect();
+        assert_eq!(cells, [vec!["Engine", "sync"], vec!["first", "second", "third"]]);
+    }
+
+    #[test]
+    fn a_br_in_a_list_item_or_a_quote_breaks_the_line_there() {
+        let nodes = nodes("- an item<br>with a break\n- <br>starts\n\n> a quote<br>with a break\n");
+        let item: Vec<String> = texts(&nodes[0].children[0]).into_iter().map(words).collect();
+        assert_eq!(item, ["an item", "with a break"]);
+        let starts: Vec<String> = texts(&nodes[0].children[1]).into_iter().map(words).collect();
+        assert_eq!(starts, ["starts"]);
+        let quote: Vec<String> = texts(&nodes[1]).into_iter().map(words).collect();
+        assert_eq!(quote, ["a quote", "with a break"]);
+    }
+
+    #[test]
+    fn a_br_in_a_heading_is_a_space_and_one_on_a_line_of_its_own_is_an_error_that_says_where_to_write_it() {
+        let nodes = nodes("# one<br>two\n");
+        assert_eq!(words(&nodes[0]), "one two");
+        assert_eq!(nodes[0].bookmarks[0].label, "one two");
+        let err = error("fine\n\n<br>\n\ntext\n");
+        assert!(err.contains("markdown line 3") && err.contains("raw HTML <br> is not supported on a line of its own"), "{err}");
+        assert!(err.contains("at the end of the line it breaks"), "{err}");
     }
 
     #[test]
