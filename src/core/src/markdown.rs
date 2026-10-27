@@ -40,7 +40,7 @@ const STYLE_PRESETS: [StylePreset; 3] = [
     StylePreset {
         name:        "business",
         label:       "Business",
-        description: "Sans-serif text, navy headings and a teal accent",
+        description: "Compact sans-serif text, navy headings and a teal accent",
         styles:      include_str!("../assets/markdown-presets/business.xml"),
     },
     StylePreset {

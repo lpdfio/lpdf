@@ -1,24 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Business: sans-serif text, navy headings and one teal accent for the links, the rule and the bar of a quote. It
-  is the default rules with the colors changed, so write over any of them, and the tokens still set the sizes.
+  Business: compact sans-serif text, 1pt smaller than the default, with navy headings 2pt smaller and one teal
+  accent for the links, the rule and the bar of a quote. It is the default rules with the colors and the sizes
+  changed, so write over any of them.
 -->
 <markdown-styles>
-    <h1 font-size="xxl" bold="true" line-height="m" color="#1b365d"/>
-    <h2 font-size="xl" bold="true" line-height="m" color="#1b365d"/>
-    <h3 font-size="l" bold="true" line-height="m" color="#1b365d"/>
-    <h4 font-size="m" bold="true" color="#1b365d"/>
-    <h5 font-size="m" bold="true" color="#0e7c86"/>
-    <h6 font-size="s" bold="true" color="#0e7c86"/>
-    <p line-height="l"/>
-    <code font="Courier" font-size="s" line-height="m" background="surface" border="xs line-muted" padding="m"/>
-    <quote color="text-muted" bar-color="#0e7c86" bar-width="3pt" padding="0pt 0pt 0pt m"/>
-    <li gap="xs"/>
+    <h1 font-size="26pt" bold="true" line-height="m" color="#1b365d"/>
+    <h2 font-size="18pt" bold="true" line-height="m" color="#1b365d"/>
+    <h3 font-size="13pt" bold="true" line-height="m" color="#1b365d"/>
+    <h4 font-size="10pt" bold="true" color="#1b365d"/>
+    <h5 font-size="10pt" bold="true" color="#0e7c86"/>
+    <h6 font-size="8pt" bold="true" color="#0e7c86"/>
+    <p font-size="10pt" line-height="l"/>
+    <code font="Courier" font-size="8pt" line-height="m" background="surface" border="xs line-muted" padding="m"/>
+    <quote font-size="10pt" color="text-muted" bar-color="#0e7c86" bar-width="3pt" padding="0pt 0pt 0pt m"/>
+    <li font-size="10pt" gap="xs"/>
     <hr color="#0e7c86" thickness="xs"/>
     <a color="#0e7c86" underline="true"/>
     <strong bold="true"/>
     <del strike="true"/>
     <table head-border="1pt #1b365d" row-border="xs line-muted" stripe="none"/>
-    <th bold="true" padding="s" color="#1b365d"/>
-    <td padding="s"/>
+    <th font-size="10pt" bold="true" padding="s" color="#1b365d"/>
+    <td font-size="10pt" padding="s"/>
 </markdown-styles>
