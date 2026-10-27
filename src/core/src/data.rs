@@ -509,7 +509,7 @@ mod tests {
             max_lines: None,
             ellipsis: false,
             pre_tab: 0,
-            break_words: false,
+            flow_runs: false,
             capture: None,
             url: None,
             image_name: None,

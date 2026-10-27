@@ -608,7 +608,7 @@ pub(crate) fn expand(spec: &MarkdownSpec, markdown: &str) -> Result<Vec<Node>, S
             let mut parsed = parse_node(&child, &spec.tokens, &spec.images).map_err(|e| at_line(block.line, &e))?;
             pending.attach(&mut parsed);
             let mut node = resolve_parsed_node(parsed, &spec.defaults, &spec.fonts);
-            break_words(&mut node);
+            flow_runs(&mut node);
             nodes.push(node);
         }
         pending.finish("markdown").map_err(|e| at_line(block.line, &e))?;
@@ -618,9 +618,9 @@ pub(crate) fn expand(spec: &MarkdownSpec, markdown: &str) -> Result<Vec<Node>, S
 
 /// The texts of a markdown break a word, or a link, wider than their box: a cell of a table or a paragraph holds
 /// names and addresses of any length, and none may run past the margin.
-fn break_words(node: &mut Node) {
-    if node.kind == NodeKind::Text { node.break_words = true; }
-    for child in &mut node.children { break_words(child); }
+fn flow_runs(node: &mut Node) {
+    if node.kind == NodeKind::Text { node.flow_runs = true; }
+    for child in &mut node.children { flow_runs(child); }
 }
 
 /// An error of the parser, which names a place in the XML written here, said as a place in the Markdown.

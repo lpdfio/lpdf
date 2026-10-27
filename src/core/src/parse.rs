@@ -579,10 +579,12 @@ pub struct Node {
     /// 0 for a text that collapses its white space. Any other value is the text of a `<code>`, which keeps its
     /// spaces and lines, and a tab in it fills to the next multiple of that many columns.
     pub pre_tab: u8,
-    /// Whether a word, or a styled run, wider than the text breaks at the last character that fits, so nothing runs
-    /// past the box. A text of the document draws it whole, as it always has; a text written for a `<markdown>`
-    /// breaks it, since a cell of a table or a link holds names of any length.
-    pub break_words: bool,
+    /// Whether a styled run of several words that does not fit what is left of a line goes on in its next words, so
+    /// the line is filled and the run is not moved down whole. A text of the document moves it whole, as it always
+    /// has; a text written for a `<markdown>` fills the line, since a link in a paragraph or in a cell of a table is a
+    /// run of any length. A word or a run wider than a whole line is broken at the last character that fits in every
+    /// text, so nothing runs past the box.
+    pub flow_runs: bool,
     /// What the text records or shows for a running header, boxed: few texts have one.
     pub capture: Option<Box<Capture>>,
     // link
@@ -978,7 +980,7 @@ impl Node {
             font: "Helvetica".to_string(), font_size: 11.0, text_color: None,
             text_align: TextAlign::Left, widows: DEFAULT_WIDOWS, orphans: DEFAULT_ORPHANS,
             line_height: DEFAULT_LINE_HEIGHT, max_lines: None, ellipsis: false, pre_tab: 0,
-            break_words: false, capture: None,
+            flow_runs: false, capture: None,
             url: None, image_name: None,
             img_height_constraint: None, img_aspect: None, detail: None, barcode_type: None, barcode_data: None,
             barcode_ec: BarcodeEcLevel::M, barcode_hrt: false, barcode_color: None,
@@ -1111,7 +1113,7 @@ fn resolve_node(
         max_lines:             n.max_lines,
         ellipsis:              n.ellipsis,
         pre_tab:               n.pre_tab,
-        break_words:           false,
+        flow_runs:             false,
         capture:               n.capture,
         url:                   n.url,
         image_name:            n.image_name,

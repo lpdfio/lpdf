@@ -88,7 +88,7 @@
 
           <column gap="m">
             <text font-size="l" font="Helvetica-Bold">An ellipsis without a cap</text>
-            <text font-size="s" color="muted">ellipsis="true" alone changes nothing: the text wraps whole, and a word wider than its box is drawn whole.</text>
+            <text font-size="s" color="muted">ellipsis="true" alone changes nothing: the text wraps whole, and a word wider than its box is broken at the last character that fits, as in any text.</text>
             <column width="112pt" background="bg" padding="6pt">
               <text font-size="s" ellipsis="true">Shipping is free on orders over fifty dollars. Electroencephalographically</text>
             </column>

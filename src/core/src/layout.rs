@@ -2101,7 +2101,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
     if atoms.is_empty() { return vec![]; }
 
     // The same pieces as the lines of the text itself are made of.
-    let atoms = if node.break_words { break_wide_split_atoms(atoms, parent_font, font_size, avail_w) } else { atoms };
+    let atoms = break_wide_split_atoms(atoms, parent_font, font_size, avail_w);
 
     // Greedy wrap.
     let mut lines: Vec<Vec<SplitAtom>> = Vec::new();
@@ -2124,7 +2124,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
         if cur_line.is_empty() || cur_w + gap + aw <= avail_w + 0.01 {
             cur_w += gap + aw;
             cur_line.push(atom);
-        } else if node.break_words && atom.is_span && atom.footnote.is_none() && atom.text.contains(' ') {
+        } else if node.flow_runs && atom.is_span && atom.footnote.is_none() && atom.text.contains(' ') {
             // The same as the lines of the text itself make: a styled run goes on in its next words.
             for (i, word) in atom.text.split(' ').enumerate().collect::<Vec<_>>().into_iter().rev() {
                 let mut piece = atom.clone();
@@ -3611,8 +3611,8 @@ fn text_min_w(node: &Node) -> f32 {
         }
         let is_span = run.font.is_some() || run.color.is_some()
                    || run.href.is_some() || run.underline || run.strike || run.background.is_some();
-        // A styled run stays whole, unless the text breaks what is wider than its box.
-        if is_span && !node.break_words && node.pre_tab == 0 {
+        // A styled run stays whole, unless the text fills a line with the first words of one.
+        if is_span && !node.flow_runs && node.pre_tab == 0 {
             widest = widest.max(text_width(font, &run.text, size));
         } else {
             for word in run.text.split_whitespace() {
@@ -3620,12 +3620,12 @@ fn text_min_w(node: &Node) -> f32 {
             }
         }
     }
-    // A text that breaks what is wider than its box does not hold a column wider than this for a long name, which
+    // A text breaks what is wider than its box, so it does not hold a column wider than this for a long name, which
     // would leave the columns beside it a word to a line.
-    if node.break_words { widest.min(MAX_WORD_EMS * size) } else { widest }
+    widest.min(MAX_WORD_EMS * size)
 }
 
-/// How many ems wide a word is taken to be, for the least width of a text that breaks long words.
+/// How many ems wide a word is taken to be, for the least width of a text.
 const MAX_WORD_EMS: f32 = 12.0;
 
 /// The least width of a node: what it can be narrowed to before something in it runs past it. A text breaks at its
@@ -3793,8 +3793,8 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
         }), reserved, false);
     }
 
-    // A word, or a styled run, wider than the box would run past it: a text that asks for it breaks it to fit.
-    let toks = if node.break_words { break_wide_toks(toks, font_size, fit.wrap_w) } else { toks };
+    // A word, or a styled run, wider than the box would run past it: it is broken to fit.
+    let toks = break_wide_toks(toks, font_size, fit.wrap_w);
 
     // ── Word-wrap: build lines of (Atom, gap_before_pt) ──────────────────────
     let mut lines: Vec<TextLine> = Vec::new();
@@ -3820,7 +3820,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 if cur_line.is_empty() || cur_line_w + gap + aw <= fit.wrap_w + 0.01 {
                     cur_line_w += gap + aw;
                     cur_line.push((atom, gap));
-                } else if node.break_words && !atom.sup && atom.text.contains(' ') {
+                } else if node.flow_runs && !atom.sup && atom.text.contains(' ') {
                     // A styled run of several words that does not fit what is left of the line goes on in the next
                     // words, so the line is filled and the run is not moved down whole.
                     for (i, word) in atom.text.split(' ').enumerate().collect::<Vec<_>>().into_iter().rev() {
@@ -5211,6 +5211,73 @@ mod tests {
         }
     }
 
+    /// The pages of a layout of 28pt margins holding `body`, and the right edge of its content.
+    fn plain_pages(body: &str) -> Vec<serde_json::Value> {
+        engine_render(&minimal(body))["pages"].as_array().unwrap().clone()
+    }
+
+    const PLAIN_RIGHT_EDGE: f64 = 595.28 - 28.0;
+
+    #[test]
+    fn a_word_wider_than_its_box_breaks_at_the_last_character_that_fits_in_a_text_of_the_document() {
+        let pages = plain_pages(&format!(r#"<column width="120pt"><text>See {WIDE_NAME} and more words</text></column>"#));
+        let texts = text_boxes(&pages[0]);
+        assert!(texts.len() >= 4, "the name is on several lines: {texts:?}");
+        let all: String = texts.iter().map(|t| t.3.as_str()).collect::<Vec<_>>().join("").replace(' ', "");
+        assert_eq!(all, format!("See{WIDE_NAME}andmorewords"), "nothing is lost");
+        for (x, font, size, content) in texts {
+            let right = x + text_width(&font, &content, size as f32) as f64;
+            assert!(right <= 28.0 + 120.0 + 0.1, "{content} ends at {right}, past the box");
+        }
+    }
+
+    #[test]
+    fn a_styled_run_wider_than_a_whole_line_breaks_too() {
+        let pages = plain_pages(&format!(
+            r##"<column width="120pt"><text>See <span color="#cc0000">{WIDE_NAME}</span> and <span color="#00aa00">{WIDE_NAME} {WIDE_NAME}</span> here</text></column>"##
+        ));
+        let texts = text_boxes(&pages[0]);
+        assert!(texts.len() > 6, "the runs are cut into pieces: {texts:?}");
+        for (x, font, size, content) in texts {
+            let right = x + text_width(&font, &content, size as f32) as f64;
+            assert!(right <= 28.0 + 120.0 + 0.1, "{content} ends at {right}, past the box");
+        }
+    }
+
+    #[test]
+    fn a_text_of_the_document_with_wide_words_that_runs_onto_another_page_stays_within_its_margin() {
+        let content = format!("{WIDE_NAME} and some words to fill the lines, ").repeat(80);
+        let pages = plain_pages(&format!("<text>{content}</text>"));
+        assert!(pages.len() > 1, "the text runs onto a second page");
+        for page in &pages {
+            for (x, font, size, content) in text_boxes(page) {
+                let right = x + text_width(&font, &content, size as f32) as f64;
+                assert!(right <= PLAIN_RIGHT_EDGE + 0.1, "{content} ends at {right}, past the margin");
+            }
+        }
+    }
+
+    #[test]
+    fn a_name_wider_than_a_table_cell_breaks_in_the_cell_of_a_table_of_the_document() {
+        let pages = plain_pages(&format!(
+            r#"<table cols="auto auto"><tr><td><text>{WIDE_NAME}{WIDE_NAME}</text></td><td><text>{WIDE_NAME}{WIDE_NAME}</text></td></tr></table>"#
+        ));
+        let texts = text_boxes(&pages[0]);
+        assert!(texts.len() >= 4, "each name is on more than one line: {texts:?}");
+        for (x, font, size, content) in texts {
+            let right = x + text_width(&font, &content, size as f32) as f64;
+            assert!(right <= PLAIN_RIGHT_EDGE + 0.1, "{content} ends at {right}, past the margin");
+        }
+    }
+
+    #[test]
+    fn a_styled_run_that_fits_a_line_goes_down_whole_in_a_text_of_the_document() {
+        // "gamma" would fit what is left of the first line, but the run is moved down whole, as it always was; only
+        // a markdown fills the line with the first words of a run.
+        let (_, lines, _) = flow_text("", r##"alpha beta <span color="#cc0000">gamma delta</span>"##);
+        assert_eq!(lines, ["alpha beta", "gamma delta"]);
+    }
+
     // ── Tables sized by their cells ───────────────────────────────────────────
 
     /// The `x` of the first text of each cell of the first row, which is where its column starts.
@@ -5776,7 +5843,10 @@ abcdef</code><text>after</text></row>"#,
         let content = format!("{CAPPED_WORDS} Incomprehensibilities");
         let (plain, lines, _) = flow_text("", &content);
         assert_eq!(flow_text(r#"ellipsis="true""#, &content).0, plain);
-        assert_eq!(lines.last().unwrap(), "Incomprehensibilities", "the long word is drawn whole: {lines:?}");
+        // It is broken at the last character that fits, in no dots, and every line of it is within the box.
+        assert!(lines.last().unwrap().len() < "Incomprehensibilities".len(), "the long word is broken: {lines:?}");
+        assert!(lines.join("").contains("Incomprehensibilities") && !lines.join("").contains("..."), "{lines:?}");
+        assert!(lines.iter().all(|line| text_width("Helvetica", line, 10.0) <= 90.01), "no line runs past the box: {lines:?}");
     }
 
     #[test]
