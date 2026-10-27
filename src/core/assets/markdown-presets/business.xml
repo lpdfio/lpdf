@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Business: compact sans-serif text, 1pt smaller than the default, with navy headings 2pt smaller and one teal
-  accent for the links, the rule and the bar of a quote. It is the default rules with the colors and the sizes
-  changed, so write over any of them.
+  Business: compact sans-serif text, 1pt smaller than the default, with navy headings that are smaller still, 22pt
+  for the first level down to 8pt for the sixth, and one teal accent for the links, the rule and the bar of a
+  quote. It is the default rules with the colors and the sizes changed, so write over any of them.
 -->
 <markdown-styles>
-    <h1 font-size="26pt" bold="true" line-height="m" color="#1b365d"/>
-    <h2 font-size="18pt" bold="true" line-height="m" color="#1b365d"/>
-    <h3 font-size="13pt" bold="true" line-height="m" color="#1b365d"/>
+    <h1 font-size="22pt" bold="true" line-height="m" color="#1b365d"/>
+    <h2 font-size="15pt" bold="true" line-height="m" color="#1b365d"/>
+    <h3 font-size="12pt" bold="true" line-height="m" color="#1b365d"/>
     <h4 font-size="10pt" bold="true" color="#1b365d"/>
-    <h5 font-size="10pt" bold="true" color="#0e7c86"/>
+    <h5 font-size="9pt" bold="true" color="#0e7c86"/>
     <h6 font-size="8pt" bold="true" color="#0e7c86"/>
     <p font-size="10pt" line-height="l"/>
     <code font="Courier" font-size="8pt" line-height="m" background="surface" border="xs line-muted" padding="m"/>
