@@ -2947,12 +2947,9 @@ fn apply_layout_kind_attrs(
             };
             node.color = Some(match a.get("color") {
                 Some(v) => tokens.resolve_color(v)?,
-                None    => "#000000".into(),
+                None    => tokens.resolve_color("line")?,
             });
-            node.thickness = match a.get("thickness") {
-                Some(v) => tokens.resolve_border_thickness(v)?,
-                None    => 1.0,
-            };
+            node.thickness = tokens.resolve_border_thickness(a.get("thickness").unwrap_or("xs"))?;
         }
         NodeKind::Table => {
             if let Some(v) = a.get("cols") {
@@ -4098,6 +4095,21 @@ mod tests {
         assert_eq!(d.kind, NodeKind::Divider);
         assert_eq!(d.thickness, 0.5);
         assert_eq!(d.color.as_deref(), Some("#e0e0e0"));
+    }
+
+    #[test]
+    fn a_divider_is_a_thin_line_in_the_line_color_unless_it_says_otherwise() {
+        let mut doc = parse(&minimal(r#"<divider/>"#)).unwrap();
+        let d = &doc.section_layouts()[0].children[0];
+        assert_eq!((d.color.as_deref(), d.thickness), (Some("#d4d4d4"), 0.5));
+
+        let mut doc = parse(
+            r##"<lpdf version="1"><tokens><colors><color name="line" value="#336699"/></colors></tokens>
+            <document size="a4"><section><layout margin="28pt"><divider/></layout></section></document></lpdf>"##,
+        )
+        .unwrap();
+        let d = &doc.section_layouts()[0].children[0];
+        assert_eq!(d.color.as_deref(), Some("#336699"));
     }
 
     #[test]
@@ -5359,7 +5371,7 @@ mod tests {
     fn the_color_of_a_box_is_not_the_color_of_a_divider_or_a_barcode() {
         let mut doc = parse(&minimal(r##"<column color="#111111"><divider/><barcode type="qr" data="x" width="50pt"/></column>"##)).unwrap();
         let column = &doc.section_layouts()[0].children[0];
-        assert_eq!(column.children[0].color.as_deref(), Some("#000000"));
+        assert_eq!(column.children[0].color.as_deref(), Some("#d4d4d4"));
         assert_eq!(column.children[1].barcode_color, None);
         assert_eq!(column.children.iter().filter_map(|n| n.text_color.as_deref()).count(), 0, "only a text carries a color");
     }

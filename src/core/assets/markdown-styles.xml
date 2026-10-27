@@ -2,7 +2,7 @@
 <!--
   The look of a <markdown> that sets no styles of its own: what people expect of rendered Markdown, such as
   GitHub's. Clear steps between the headings, comfortable line spacing, code on a light background and links in a
-  color. Every value is a token but the grey of the rule, so a token file alone rebrands all the rest. Copy this file to start your own, and write
+  color. Every value is a token, so a token file alone rebrands it. Copy this file to start your own, and write
   only the rules you change.
 -->
 <markdown-styles>
@@ -16,7 +16,7 @@
     <code font="Courier" font-size="s" line-height="m" background="surface-alt" padding="m"/>
     <quote color="text-muted" bar-color="text-muted" bar-width="3pt" padding="0pt 0pt 0pt m"/>
     <li gap="xs"/>
-    <hr color="#d4d4d4" thickness="xs"/>
+    <hr color="line" thickness="xs"/>
     <a color="primary" underline="true"/>
     <strong bold="true"/>
     <del strike="true"/>
