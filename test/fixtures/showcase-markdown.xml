@@ -14,8 +14,8 @@
          Expected, top to bottom:
            1  An h1, a paragraph with emphasis, strong text, a deleted word, a link and inline code, and a bold
               italic word; the h1 to h6 get smaller and the last two are grey
-           2  A thematic break, then a bullet list with a nested list (a disc, then a circle), and a number list
-              that starts at 3
+           2  A thematic break, then a bullet list with a nested list (a disc, then a circle), a number list
+              that starts at 3, and a task list: a box for each item, ticked when it is [x]
            3  A quote of two paragraphs with a grey bar the height of both, and a block of code that keeps its
               indent, in a thin outline
            4  A table with a header row, a right-aligned and a centered column, and a faint line under each row
@@ -54,6 +54,10 @@
 
           3. Starts at three
           4. And goes on
+
+          - [x] A task that is done
+          - [ ] A task that is not
+          - A plain item in the same list
 
           > A quote that stays together, with a bar the height of both of its paragraphs.
           >

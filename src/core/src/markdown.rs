@@ -482,6 +482,7 @@ fn file_options() -> Options {
     Options::ENABLE_TABLES
         | Options::ENABLE_FOOTNOTES
         | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_TASKLISTS
         | Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
 }
 
@@ -676,6 +677,8 @@ struct Writer<'a> {
     notes:   HashMap<String, String>,
     /// The font the words of the block being written are set in, for the italic of a built-in font.
     font:    String,
+    /// The `[ ]` or `[x]` that began the item being read: `true` for a checked one. `list` takes it with the item.
+    task:    Option<bool>,
 }
 
 impl<'a> Writer<'a> {
@@ -683,7 +686,7 @@ impl<'a> Writer<'a> {
         let events: Vec<(Event, Range<usize>)> = Parser::new_ext(markdown, file_options()).into_offset_iter().collect();
         let mut lines = vec![0];
         lines.extend(markdown.match_indices('\n').map(|(i, _)| i + 1));
-        Writer { spec, events, at: 0, lines, notes: HashMap::new(), font: spec.defaults.font.clone() }
+        Writer { spec, events, at: 0, lines, notes: HashMap::new(), font: spec.defaults.font.clone(), task: None }
     }
 
     /// The line of the Markdown that `offset` is on, counting from 1.
@@ -817,7 +820,8 @@ impl<'a> Writer<'a> {
                     blocks.push(Block { xml: format!("<divider{}/>", attrs_xml(&self.spec.rules.rule("hr"))), line });
                 }
                 Event::Start(Tag::Image { .. } | Tag::Emphasis | Tag::Strong | Tag::Strikethrough | Tag::Link { .. })
-                | Event::Text(_) | Event::Code(_) | Event::SoftBreak | Event::HardBreak | Event::FootnoteReference(_) => {
+                | Event::Text(_) | Event::Code(_) | Event::SoftBreak | Event::HardBreak | Event::FootnoteReference(_)
+                | Event::TaskListMarker(_) => {
                     // The words of a tight list item stand without a paragraph around them.
                     let pieces = self.read_pieces(None)?;
                     self.paragraph(pieces, line, around, &mut blocks)?;
@@ -935,7 +939,11 @@ impl<'a> Writer<'a> {
                 }
                 Event::Html(html) | Event::InlineHtml(html) => return Err(self.raw_html(line, &html)),
                 // A block that begins ends the words of a block with no tag of its own.
-                Event::Start(_) | Event::Rule | Event::TaskListMarker(_) if until.is_none() => return Ok(()),
+                Event::TaskListMarker(checked) => {
+                    self.task = Some(checked);
+                    self.at += 1;
+                }
+                Event::Start(_) | Event::Rule if until.is_none() => return Ok(()),
                 other => return Err(self.fail(line, &format!("{} is not supported here", describe(&other)))),
             }
         }
@@ -1205,9 +1213,14 @@ impl<'a> Writer<'a> {
             match event {
                 Event::Start(Tag::Item) => {
                     self.at += 1;
+                    // An item of a list inside this one reads its own marker, and this item's stays for it.
+                    let outer = self.task.take();
                     let blocks = self.read_blocks(Some(TagEnd::Item), &inner_around)?;
+                    let task = std::mem::replace(&mut self.task, outer);
                     let body: String = blocks.iter().map(|block| block.xml.as_str()).collect();
-                    items.push_str(&format!("<li{item_attrs}>{body}</li>"));
+                    let mut attrs = item_attrs.clone();
+                    if let Some(checked) = task { push_attr(&mut attrs, "checked", &checked.to_string()); }
+                    items.push_str(&format!("<li{attrs}>{body}</li>"));
                 }
                 Event::End(TagEnd::List(_)) => {
                     self.at += 1;
@@ -1741,10 +1754,51 @@ mod tests {
         assert!(err.contains("markdown line 3") && err.contains("table"), "{err}");
     }
 
+    /// The checkbox of each item of a list: `Some(true)` for a tick, `Some(false)` for an open box, and none for the
+    /// bullet or the number of the other items.
+    fn boxes(list: &Node) -> Vec<Option<bool>> {
+        list.children
+            .iter()
+            .map(|item| {
+                let marker = &item.children[0];
+                marker.children.first().and_then(|shape| shape.shape()).filter(|shape| shape.kind == crate::parse::ShapeKind::Checkbox)
+                    .map(|shape| shape.tick.is_some())
+            })
+            .collect()
+    }
+
     #[test]
-    fn task_lists_are_text() {
-        let nodes = nodes("- [ ] todo\n");
-        assert_eq!(words(texts(&nodes[0])[0]), "[ ] todo");
+    fn a_task_item_is_an_item_whose_marker_is_a_checkbox_that_is_ticked_when_it_is_checked() {
+        let nodes = nodes("- [ ] open\n- [x] done\n- [X] done too\n- plain\n");
+        assert_eq!(boxes(&nodes[0]), [Some(false), Some(true), Some(true), None]);
+        let words: Vec<String> = nodes[0].children.iter().map(|item| self::words(texts(&item.children[1])[0])).collect();
+        assert_eq!(words, ["open", "done", "done too", "plain"]);
+    }
+
+    #[test]
+    fn a_loose_task_item_and_a_nested_one_are_checkboxes_too() {
+        let nodes = nodes("- [ ] one\n\n- [x] two\n");
+        assert_eq!(boxes(&nodes[0]), [Some(false), Some(true)]);
+        let nested = nodes_in(&document("", "", "- [x] outer\n  - [ ] inner\n  - plain\n"));
+        assert_eq!(boxes(&nested[0]), [Some(true)]);
+        let inner = &nested[0].children[0].children[1].children[1];
+        assert_eq!(boxes(inner), [Some(false), None]);
+    }
+
+    #[test]
+    fn a_task_marker_that_is_not_at_the_start_of_an_item_is_text() {
+        let nodes = nodes("- todo [ ] here\n\nplain [x] text\n");
+        assert_eq!(boxes(&nodes[0]), [None]);
+        assert_eq!(words(&nodes[1]), "plain [x] text");
+    }
+
+    #[test]
+    fn the_tick_of_a_checkbox_takes_the_color_of_the_words_and_the_outline_the_line_color() {
+        let nodes = nodes_in(&document("", r##"<markdown-styles><p color="#cc0000"/></markdown-styles>"##, "- [x] done\n"));
+        let shape = nodes[0].children[0].children[0].children[0].shape().expect("a shape").clone();
+        assert_eq!(shape.stroke.as_deref(), Some("#737373"));
+        assert_eq!(shape.tick.as_deref(), Some("#cc0000"));
+        assert_eq!(shape.fill, None);
     }
 
     #[test]

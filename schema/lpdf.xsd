@@ -1520,6 +1520,11 @@
         <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
       </xs:sequence>
       <xs:attributeGroup ref="BoxAttrs"/>
+      <xs:attribute name="checked" type="xs:boolean">
+        <xs:annotation>
+          <xs:documentation>Makes the item's marker a checkbox in place of the bullet or the number: an outline in the line color, with a tick in the color of the item's words when this is true, and empty when it is false. The words start where those of a bullet do, and an item of a number list still takes its number. An item without it keeps its bullet or number. A task item of a Markdown, - [ ] or - [x], is one.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
     </xs:complexType>
   </xs:element>
 

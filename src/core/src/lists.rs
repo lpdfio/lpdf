@@ -5,7 +5,7 @@
 //! first part and the lines after it under the words, with nothing in the layout that knows of lists.
 
 use crate::parse::{
-    Align, Detail, ListBullet, ListFormat, ListSpec, Node, NodeKind, Shape, ShapeKind, TextAlign, TextRun,
+    Align, Check, Detail, ListBullet, ListFormat, ListSpec, Node, NodeKind, Shape, ShapeKind, TextAlign, TextRun,
     DEFAULT_LINE_HEIGHT, LIST_ITEM_GAP_UNSET,
 };
 
@@ -26,6 +26,14 @@ const CIRCLE_STROKE: f32 = 0.07;
 const SQUARE_SIDE: f32 = 0.3;
 const DASH_LENGTH: f32 = 0.5;
 const DASH_THICKNESS: f32 = 0.08;
+
+/// Shapes of a checkbox, as factors of the font size: its side, the stroke of its outline, the radius of its corners,
+/// and the space it leaves before the words, beyond what a bullet does, so that the box stands a little left of where
+/// a bullet would.
+const CHECKBOX_SIDE: f32 = 0.95;
+const CHECKBOX_STROKE: f32 = 0.09;
+const CHECKBOX_RADIUS: f32 = 0.2;
+const CHECKBOX_GAP: f32 = 0.3;
 
 /// Turn every list in `nodes` into columns and rows, wherever it stands in the tree.
 pub(crate) fn lower_all(nodes: &mut [Node]) {
@@ -113,8 +121,14 @@ fn lower_item(
     };
 
     let gap = MARKER_GAP * look.font_size;
+    let check = match item.detail.take().map(|detail| *detail) {
+        Some(Detail::Check(check)) => Some(check),
+        _                          => None,
+    };
     let marker_width = (spec.indent - gap).max(0.0);
-    let marker = if spec.numbered {
+    let marker = if let Some(check) = check {
+        checkbox_marker(&check, marker_width, &look)
+    } else if spec.numbered {
         number_marker(&label(spec, number), marker_width, &look)
     } else {
         bullet_marker(spec.bullet.unwrap_or_else(|| bullet_by_depth(bullet_depth)), marker_width, &look)
@@ -236,7 +250,7 @@ fn bullet_marker(bullet: ListBullet, width: f32, look: &Marks) -> Node {
     shape.kind                  = NodeKind::Shape;
     shape.width_constraint      = Some(box_w);
     shape.img_height_constraint = Some(box_h);
-    shape.detail = Some(Box::new(Detail::Shape(Shape { kind, fill, stroke, stroke_width, stroke_dash: None })));
+    shape.detail = Some(Box::new(Detail::Shape(Shape { kind, fill, stroke, stroke_width, stroke_dash: None, tick: None })));
 
     let raise = if bullet == ListBullet::Dash { DASH_RAISE } else { BULLET_RAISE };
     let mut marker = Node::layout_default();
@@ -244,6 +258,35 @@ fn bullet_marker(bullet: ListBullet, width: f32, look: &Marks) -> Node {
     marker.width_constraint = Some(width);
     marker.align            = Align::End;
     marker.padding          = [(size * (1.0 - raise) - box_h / 2.0).max(0.0), 0.0, 0.0, 0.0];
+    marker.children         = vec![shape];
+    marker
+}
+
+/// A column `width` wide that holds a checkbox at its right, as far down as the middle of the item's first line: an
+/// outline in the `line` color, and a tick in the color of the item's words when it is checked.
+fn checkbox_marker(check: &Check, width: f32, look: &Marks) -> Node {
+    let size = look.font_size;
+    let side = CHECKBOX_SIDE * size;
+
+    let mut shape = Node::layout_default();
+    shape.kind                  = NodeKind::Shape;
+    shape.width_constraint      = Some(side);
+    shape.img_height_constraint = Some(side);
+    shape.radius                = CHECKBOX_RADIUS * side;
+    shape.detail = Some(Box::new(Detail::Shape(Shape {
+        kind:         ShapeKind::Checkbox,
+        fill:         None,
+        stroke:       Some(check.line.clone()),
+        stroke_width: Some(CHECKBOX_STROKE * size),
+        stroke_dash:  None,
+        tick:         check.checked.then(|| look.color.clone()),
+    })));
+
+    let mut marker = Node::layout_default();
+    marker.kind             = NodeKind::Column;
+    marker.width_constraint = Some(width);
+    marker.align            = Align::End;
+    marker.padding          = [(size * (1.0 - BULLET_RAISE) - side / 2.0).max(0.0), CHECKBOX_GAP * size, 0.0, 0.0];
     marker.children         = vec![shape];
     marker
 }
@@ -394,6 +437,54 @@ mod tests {
         // An item that does not start with a text takes the list's own look.
         let second = &list.children[1].children[0];
         assert_eq!((second.font_size, second.text_color.as_deref()), (11.0, Some("#336699")));
+    }
+
+    /// The shape in the marker of an item, with the box's tick: `Some(true)` for a checked checkbox, `Some(false)` for
+    /// an open one, and none for a bullet.
+    fn tick_of(item: &Node) -> Option<bool> {
+        let shape = item.children[0].children.first()?.shape()?;
+        (shape.kind == ShapeKind::Checkbox).then(|| shape.tick.is_some())
+    }
+
+    #[test]
+    fn a_checked_item_has_a_checkbox_for_a_marker_that_is_ticked_when_it_is_true() {
+        let list = first_node(
+            r#"<list><li checked="true"><text>A</text></li><li checked="false"><text>B</text></li><li><text>C</text></li></list>"#,
+            None,
+        );
+        let ticks: Vec<Option<bool>> = list.children.iter().map(tick_of).collect();
+        assert_eq!(ticks, [Some(true), Some(false), None]);
+    }
+
+    #[test]
+    fn a_checkbox_takes_the_outline_of_the_line_color_and_the_tick_of_the_words_of_its_item() {
+        let list = first_node(r##"<list><li checked="true"><text color="#cc0000" font-size="20pt">A</text></li></list>"##, None);
+        let marker = &list.children[0].children[0];
+        let shape = marker.children[0].shape().expect("a shape");
+        assert_eq!((shape.stroke.as_deref(), shape.tick.as_deref(), shape.fill.as_ref()), (Some("#737373"), Some("#cc0000"), None));
+        // A box of a little less than the font size, which the font size scales.
+        assert_eq!(marker.children[0].width_constraint, Some(CHECKBOX_SIDE * 20.0));
+    }
+
+    #[test]
+    fn the_words_of_a_checked_item_start_where_those_of_a_bullet_do() {
+        let list = first_node(r#"<list indent="30pt"><li checked="false"><text>A</text></li><li><text>B</text></li></list>"#, None);
+        let widths: Vec<f32> = list.children.iter().map(|item| item.children[0].width_constraint.unwrap() + item.gap).collect();
+        assert_eq!(widths, [30.0, 30.0]);
+    }
+
+    #[test]
+    fn a_checked_item_of_a_number_list_takes_its_number_and_the_next_item_goes_on() {
+        let list = first_node(r#"<list type="number"><li checked="true"><text>A</text></li><li><text>B</text></li></list>"#, None);
+        assert_eq!(tick_of(&list.children[0]), Some(true));
+        assert_eq!(marker_words(&list.children[1]), "2.");
+    }
+
+    #[test]
+    fn checked_is_true_or_false() {
+        let xml = r#"<lpdf version="1"><document size="a4"><section><layout><list><li checked="yes"><text>A</text></li></list></layout></section></document></lpdf>"#;
+        let err = parse(xml).unwrap_err();
+        assert!(err.contains("invalid checked 'yes'") && err.contains("'true' or 'false'"), "{err}");
     }
 
     #[test]

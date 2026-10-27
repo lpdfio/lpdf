@@ -29,6 +29,10 @@
            5  An item with two paragraphs, a list inside it and a box of its own: background and padding go around the
               marker and the words
            6  A wide indent of 48pt, and a list with a gap of 12pt between its items
+           7  Checkboxes: an item with checked is a box in the line color in place of its marker, ticked when it is
+              true and empty when it is false; an item of the same list without it keeps its bullet. The words start
+              where a bullet's do, a long item wraps under them, a list inside an item goes on at the same indent, and
+              a checked item of a number list takes its number
     -->
     <section>
       <layout margin="40pt">
@@ -141,6 +145,24 @@
           <list type="number" indent="48pt" gap="12pt">
             <li><text>The words start 48pt from the left edge.</text></li>
             <li><text>And 12pt below the item before.</text></li>
+          </list>
+
+          <text font-size="l" font="Helvetica-Bold">Checkboxes</text>
+          <list gap="xs">
+            <li checked="true"><text>A checked item: an outline, and a tick in the color of its words.</text></li>
+            <li checked="false"><text>An open item, with the outline only.</text></li>
+            <li><text>An item without checked, which keeps its bullet.</text></li>
+            <li checked="false">
+              <text>An item with a list inside it, whose words wrap onto a second line to show that they stay under the words and not under the box.</text>
+              <list gap="xs">
+                <li checked="true"><text>A checked item inside it.</text></li>
+                <li checked="false"><text color="muted" font-size="s">A small muted one, whose box and tick follow its size and color.</text></li>
+              </list>
+            </li>
+          </list>
+          <list type="number" gap="xs">
+            <li checked="true"><text>The first item of a number list, checked.</text></li>
+            <li><text>The second, numbered 2.</text></li>
           </list>
         </column>
       </layout>

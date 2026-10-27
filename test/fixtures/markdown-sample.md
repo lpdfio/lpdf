@@ -22,6 +22,9 @@ Some *emphasis*, some **strong** text, a ~~deleted~~ word, a [link](https://lpdf
 1. First step
 2. Second step
 
+- [x] A task that is done
+- [ ] A task that is not
+
 > A quote that stays together, with a bar the height of both of its paragraphs.
 >
 > The second paragraph of the quote.

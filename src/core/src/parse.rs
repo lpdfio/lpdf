@@ -432,6 +432,9 @@ pub enum ShapeKind {
     Rect,
     Circle,
     Ellipse,
+    /// The marker of a checked or an open `<li>`: a rounded outline, and a tick in it when `Shape::tick` has a color.
+    /// Only a list makes one, so a `<shape>` can't ask for it.
+    Checkbox,
 }
 
 /// What a `<shape>` draws in its box, which the node's `width_constraint` and `img_height_constraint` size (a
@@ -444,6 +447,8 @@ pub struct Shape {
     pub stroke:       Option<String>,
     pub stroke_width: Option<f32>,
     pub stroke_dash:  Option<String>,
+    /// The color of the tick of a checkbox that is checked.
+    pub tick:         Option<String>,
 }
 
 /// How a `<list>` numbers its items.
@@ -490,12 +495,21 @@ pub struct ListSpec {
     pub indent:   f32,
 }
 
-/// What only a shape or a list adds to a node. They share one box, so the pointer costs a node 8 bytes and not 16:
+/// What an `<li checked>` asks of its marker: a checkbox, ticked or open, in place of the bullet or the number. The
+/// outline is the `line` color, which `lists::lower` can't look up, so the parser keeps it here.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Check {
+    pub checked: bool,
+    pub line:    String,
+}
+
+/// What only a shape, a list or a list item adds to a node. They share one box, so the pointer costs a node 8 bytes and not 16:
 /// `a_node_stays_small` holds the size.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Detail {
     Shape(Shape),
     List(ListSpec),
+    Check(Check),
     /// A `<markdown>` until `markdown::expand` turns it into the nodes of the layout.
     Markdown(Box<crate::markdown::MarkdownSpec>),
 }
@@ -3006,9 +3020,23 @@ fn apply_layout_kind_attrs(
             apply_capture_attrs(node, a)?;
         }
         NodeKind::List => apply_list_attrs(node, a, tokens)?,
-        NodeKind::ListItem | NodeKind::Markdown => {}
+        NodeKind::ListItem => apply_item_attrs(node, a, tokens)?,
+        NodeKind::Markdown => {}
         NodeKind::Link | NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field => {}
     }
+    Ok(())
+}
+
+/// Apply the attributes of an `<li>` / `"li"` node that `apply_box_attrs` has not read: `checked`, which makes
+/// its marker a checkbox, ticked when it is true.
+fn apply_item_attrs(node: &mut ParsedNode, a: &impl Attrs, tokens: &Tokens) -> Result<(), String> {
+    let Some(value) = a.get("checked") else { return Ok(()) };
+    let checked = match value {
+        "true"  => true,
+        "false" => false,
+        other   => return Err(format!("invalid checked '{other}': use 'true' or 'false'")),
+    };
+    node.detail = Some(Box::new(Detail::Check(Check { checked, line: tokens.resolve_color("line")? })));
     Ok(())
 }
 
@@ -3095,7 +3123,7 @@ fn apply_shape_attrs(node: &mut ParsedNode, a: &impl Attrs, tokens: &Tokens) -> 
             node.width_constraint      = Some(side);
             node.img_height_constraint = Some(side);
         }
-        ShapeKind::Rect | ShapeKind::Ellipse => {
+        ShapeKind::Rect | ShapeKind::Ellipse | ShapeKind::Checkbox => {
             if a.get("r").is_some() {
                 return Err(format!("'r' is the radius of a circle; a {type_str} takes 'width' and 'height'"));
             }
@@ -3115,6 +3143,7 @@ fn apply_shape_attrs(node: &mut ParsedNode, a: &impl Attrs, tokens: &Tokens) -> 
         stroke:       a.get("stroke").map(|v| tokens.resolve_color(v)).transpose()?,
         stroke_width: a.get("stroke-width").map(parse_measurement).transpose()?,
         stroke_dash:  a.get("stroke-dash").map(str::to_string),
+        tick:         None,
     })));
     Ok(())
 }
