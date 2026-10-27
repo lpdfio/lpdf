@@ -523,7 +523,7 @@ mod tests {
             barcode_color: None,
             barcode_bg: None,
             table_cols: String::new(),
-            stripe: None,
+            table_style: None,
             col_span: 1,
             row_span: 1,
             field_kind: None,

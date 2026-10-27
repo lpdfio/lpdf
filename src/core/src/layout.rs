@@ -1561,7 +1561,7 @@ fn layout_table(
     gap:       f32,
     cols_spec: &str,
     border:    Option<&(f32, String)>,
-    stripe:    Option<&str>,
+    style:     Option<&crate::parse::TableStyle>,
 ) -> (Vec<RenderNode>, f32) {
     if rows.is_empty() {
         return (vec![], 0.0);
@@ -1591,7 +1591,7 @@ fn layout_table(
             row.background.clone()
         } else {
             let stripe_bg = if data_row_idx % 2 == 1 {
-                stripe.filter(|_| row.background.is_none()).map(str::to_string)
+                style.and_then(|s| s.stripe.as_deref()).filter(|_| row.background.is_none()).map(str::to_string)
             } else {
                 None
             };
@@ -1661,23 +1661,10 @@ fn layout_table(
             x1: x, y1: y + half, x2: x + avail_w, y2: y + half,
             color: bclr.clone(), thickness: *bw, dash: None,
         }));
-        // The rule under a row stops where a cell spans on into the next one.
         let mut ry = y;
         for (i, rh) in row_heights.iter().enumerate() {
             ry += rh;
-            if grid.crosses(i) {
-                for (x1, x2) in row_rules(&grid.crossing_columns(i), &col_widths, gap, x, avail_w) {
-                    nodes.push(RenderNode::Line(RenderLine {
-                        x1, y1: ry - half, x2, y2: ry - half,
-                        color: bclr.clone(), thickness: *bw, dash: None,
-                    }));
-                }
-            } else {
-                nodes.push(RenderNode::Line(RenderLine {
-                    x1: x, y1: ry - half, x2: x + avail_w, y2: ry - half,
-                    color: bclr.clone(), thickness: *bw, dash: None,
-                }));
-            }
+            nodes.extend(rule_under_row(&grid, i, ry, &col_widths, gap, x, avail_w, (*bw, bclr)));
             ry += gap;
         }
 
@@ -1702,7 +1689,45 @@ fn layout_table(
         }
     }
 
+    // The line under the header row, and the line under each of the other rows.
+    if let Some(style) = style {
+        let mut ry = y;
+        for (i, rh) in row_heights.iter().enumerate() {
+            ry += rh;
+            let is_thead = rows[i].kind == NodeKind::TableHead;
+            let line = if is_thead { style.head_border.as_ref().or(style.row_border.as_ref()) } else { style.row_border.as_ref() };
+            if let Some((bw, bclr)) = line {
+                nodes.extend(rule_under_row(&grid, i, ry, &col_widths, gap, x, avail_w, (*bw, bclr)));
+            }
+            ry += gap;
+        }
+    }
+
     (nodes, total_h)
+}
+
+/// The rule along the bottom edge of the row `i`, whose bottom is at `bottom`: one line across the table, or
+/// pieces of it that stop where a cell spans on into the next row.
+fn rule_under_row(
+    grid:       &TableGrid,
+    i:          usize,
+    bottom:     f32,
+    col_widths: &[f32],
+    gap:        f32,
+    x:          f32,
+    width:      f32,
+    line:       (f32, &String),
+) -> Vec<RenderNode> {
+    let (thickness, color) = line;
+    let y = bottom - thickness / 2.0;
+    let pieces = if grid.crosses(i) {
+        row_rules(&grid.crossing_columns(i), col_widths, gap, x, width)
+    } else {
+        vec![(x, x + width)]
+    };
+    pieces.into_iter()
+        .map(|(x1, x2)| RenderNode::Line(RenderLine { x1, y1: y, x2, y2: y, color: color.clone(), thickness, dash: None }))
+        .collect()
 }
 
 /// Splits a table between rows: a row that does not fit goes to the next page whole, and so does the whole table
@@ -2370,7 +2395,7 @@ fn dispatch_children(
         ),
         NodeKind::Table => layout_table(
             &node.children, x, y, avail_w,
-            node.gap, &node.table_cols, node.border.as_ref(), node.stripe.as_deref(),
+            node.gap, &node.table_cols, node.border.as_ref(), node.table_style.as_deref(),
         ),
         NodeKind::TableHead | NodeKind::TableRow | NodeKind::TableCell => layout_column(
             &node.children, x, y, avail_w, avail_h,
@@ -7603,6 +7628,63 @@ abcdef</code><text>after</text></row>"#,
         rules.sort_by(|a, b| a.0.total_cmp(&b.0));
         // The top and the bottom of the table cross it whole, and the rule between the rows starts where the span ends.
         assert_eq!(rules, vec![(28.5, 28.0, 567.28), (40.7, 128.0, 567.28), (53.9, 28.0, 567.28)], "{rules:?}");
+    }
+
+    /// The horizontal lines of a table with a header row and two rows, as (thickness, color, x1, x2), top to bottom.
+    fn lines_of_table(attrs: &str, body: &str) -> Vec<(f64, String, f64, f64)> {
+        let tree = engine_render(&minimal(&format!(r#"<table cols="100pt 100pt" {attrs}>{body}</table>"#)));
+        let round = |v: &serde_json::Value| (v.as_f64().unwrap() * 100.0).round() / 100.0;
+        let mut lines: Vec<(f64, f64, String, f64, f64)> = nodes_of(&tree["pages"][0], "line").iter()
+            .map(|l| (round(&l["y1"]), round(&l["thickness"]), l["color"].as_str().unwrap().to_string(), round(&l["x1"]), round(&l["x2"])))
+            .collect();
+        lines.sort_by(|a, b| a.0.total_cmp(&b.0));
+        lines.into_iter().map(|(_, thickness, color, x1, x2)| (thickness, color, x1, x2)).collect()
+    }
+
+    fn header_and_two_rows() -> String {
+        format!("<thead>{}{}</thead><tr>{}{}</tr><tr>{}{}</tr>", cell("", "H1"), cell("", "H2"), cell("", "A1"), cell("", "A2"), cell("", "B1"), cell("", "B2"))
+    }
+
+    #[test]
+    fn a_table_has_a_line_under_its_header_and_under_each_of_its_rows() {
+        let lines = lines_of_table(r##"head-border="1pt #111111" row-border="0.5pt #dddddd""##, &header_and_two_rows());
+        // The width of the table is the page less the margins, as the grid border has it.
+        let across = (28.0, 567.28);
+        assert_eq!(
+            lines,
+            vec![
+                (1.0, "#111111".to_string(), across.0, across.1),
+                (0.5, "#dddddd".to_string(), across.0, across.1),
+                (0.5, "#dddddd".to_string(), across.0, across.1),
+            ],
+            "the header line takes the place of the row line under the header: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn a_header_line_alone_leaves_the_rows_without_lines_and_a_row_line_alone_goes_under_the_header_too() {
+        let body = header_and_two_rows();
+        assert_eq!(lines_of_table(r##"head-border="1pt #111111""##, &body).len(), 1);
+        let lines = lines_of_table(r##"row-border="0.5pt #dddddd""##, &body);
+        assert_eq!(lines.iter().map(|l| l.1.as_str()).collect::<Vec<_>>(), ["#dddddd"; 3]);
+        assert!(lines_of_table("", &body).is_empty(), "a table with neither has no lines");
+    }
+
+    #[test]
+    fn none_turns_a_line_off() {
+        let body = header_and_two_rows();
+        assert!(lines_of_table(r#"head-border="none" row-border="none""#, &body).is_empty());
+    }
+
+    #[test]
+    fn a_row_line_stops_where_a_cell_spans_on_into_the_next_row() {
+        let lines = lines_of_table(
+            r##"row-border="0.5pt #dddddd""##,
+            &format!("<tr>{}{}</tr><tr>{}</tr>", cell(r#"rowspan="2""#, "A"), cell("", "B"), cell("", "C")),
+        );
+        // The line under the first row starts where the span ends; the one under the last row crosses the table.
+        let from: Vec<f64> = lines.iter().map(|l| l.2).collect();
+        assert_eq!(from, vec![128.0, 28.0], "{lines:?}");
     }
 
     #[test]

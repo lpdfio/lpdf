@@ -413,6 +413,7 @@ impl Default for Tokens {
             ("text", "#1a1a1a"),
             ("text-muted", "#737373"),
             ("line", "#737373"),
+            ("line-muted", "#d4d4d4"),
         ] {
             colors.insert(name.to_string(), val.to_string());
         }
@@ -647,6 +648,7 @@ mod tests {
         assert_eq!(t.resolve_color("primary").unwrap(), "#1763cf");
         assert_eq!(t.resolve_color("surface-alt").unwrap(), "#f5f5f5");
         assert_eq!(t.resolve_color("line").unwrap(), "#737373");
+        assert_eq!(t.resolve_color("line-muted").unwrap(), "#d4d4d4");
     }
 
     // ── Gradients ─────────────────────────────────────────────────────────────

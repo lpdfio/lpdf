@@ -20,7 +20,7 @@
     <a color="primary" underline="true"/>
     <strong bold="true"/>
     <del strike="true"/>
-    <table stripe="surface-alt"/>
+    <table head-border="xs line" row-border="xs line-muted" stripe="none"/>
     <th bold="true" padding="s"/>
     <td padding="s"/>
 </markdown-styles>

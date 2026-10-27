@@ -500,6 +500,15 @@ pub enum Detail {
     Markdown(Box<crate::markdown::MarkdownSpec>),
 }
 
+/// What sets a table's rows apart: the background of every other row, and a line, as a thickness and a color, under
+/// the header row and under each of the other rows.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct TableStyle {
+    pub stripe: Option<String>,
+    pub head_border: Option<(f32, String)>,
+    pub row_border: Option<(f32, String)>,
+}
+
 /// One element of the layout. Every node has every field, whatever its kind, and parse and data binding copy
 /// nodes whole, so a field costs its size in every node of a document, set or not: a larger node is a slower
 /// parse. A new field that is a number, a flag or a small enum goes inline. A string, a list or a struct that few
@@ -582,7 +591,8 @@ pub struct Node {
     pub barcode_bg: Option<String>,
     // table (NodeKind::Table only)
     pub table_cols: String,
-    pub stripe: Option<String>,
+    /// How a table is striped and lined, when it is either.
+    pub table_style: Option<Box<TableStyle>>,
     // table cell (NodeKind::TableCell only)
     /// How many of the table's columns the cell spans, and how many of its rows, from 1.
     pub col_span: u16,
@@ -784,7 +794,7 @@ pub(crate) struct ParsedNode {
     barcode_color: Option<String>,
     barcode_bg: Option<String>,
     table_cols: String,
-    stripe: Option<String>,
+    table_style: Option<Box<TableStyle>>,
     col_span: u16,
     row_span: u16,
     field_kind:       Option<FieldKind>,
@@ -853,7 +863,7 @@ impl ParsedNode {
             barcode_color: None,
             barcode_bg: None,
             table_cols: String::new(),
-            stripe: None,
+            table_style: None,
             col_span: 1,
             row_span: 1,
             field_kind:       None,
@@ -958,7 +968,7 @@ impl Node {
             url: None, image_name: None,
             img_height_constraint: None, img_aspect: None, detail: None, barcode_type: None, barcode_data: None,
             barcode_ec: BarcodeEcLevel::M, barcode_hrt: false, barcode_color: None,
-            barcode_bg: None, table_cols: String::new(), stripe: None, col_span: 1, row_span: 1,
+            barcode_bg: None, table_cols: String::new(), table_style: None, col_span: 1, row_span: 1,
             field_kind: None, field_name: None, field_value: None, field_label: None,
             field_options: Vec::new(), field_required: false, field_readonly: false,
             field_checked: false, field_max_len: None, field_group: None,
@@ -1101,7 +1111,7 @@ fn resolve_node(
         barcode_color:         n.barcode_color,
         barcode_bg:            n.barcode_bg,
         table_cols:            n.table_cols,
-        stripe:                n.stripe,
+        table_style:           n.table_style,
         col_span:              n.col_span,
         row_span:              n.row_span,
         field_kind:            n.field_kind,
@@ -2956,8 +2966,19 @@ fn apply_layout_kind_attrs(
                 crate::layout::check_cols(v)?;
                 node.table_cols = v.to_string();
             }
-            if let Some(v) = a.get("stripe") {
-                node.stripe = Some(tokens.resolve_color(v)?);
+            // `none` turns a stripe or a line off, which a rule of Markdown styles needs to do to a default.
+            let mut style = TableStyle::default();
+            if let Some(v) = a.get("stripe").filter(|v| *v != "none") {
+                style.stripe = Some(tokens.resolve_color(v)?);
+            }
+            if let Some(v) = a.get("head-border").filter(|v| *v != "none") {
+                style.head_border = Some(tokens.resolve_border(v)?);
+            }
+            if let Some(v) = a.get("row-border").filter(|v| *v != "none") {
+                style.row_border = Some(tokens.resolve_border(v)?);
+            }
+            if style != TableStyle::default() {
+                node.table_style = Some(Box::new(style));
             }
         }
         NodeKind::TableHead => {}
@@ -4110,6 +4131,26 @@ mod tests {
         .unwrap();
         let d = &doc.section_layouts()[0].children[0];
         assert_eq!(d.color.as_deref(), Some("#336699"));
+    }
+
+    #[test]
+    fn a_table_is_striped_and_lined_by_its_attributes_and_none_turns_each_off() {
+        let style = |attrs: &str| {
+            let mut doc = parse(&minimal(&format!(r#"<table cols="1fr" {attrs}><tr><td/></tr></table>"#))).unwrap();
+            doc.section_layouts()[0].children[0].table_style.clone()
+        };
+        assert_eq!(style(""), None);
+        assert_eq!(style(r#"stripe="none" head-border="none" row-border="none""#), None);
+        let style = style(r##"stripe="#eeeeee" head-border="xs line" row-border="xs line-muted""##).unwrap();
+        assert_eq!(style.stripe.as_deref(), Some("#eeeeee"));
+        assert_eq!(style.head_border, Some((0.5, "#737373".to_string())));
+        assert_eq!(style.row_border, Some((0.5, "#d4d4d4".to_string())));
+    }
+
+    #[test]
+    fn a_line_of_a_table_that_does_not_read_is_an_error() {
+        let err = parse(&minimal(r#"<table cols="1fr" row-border="thin"><tr><td/></tr></table>"#)).unwrap_err();
+        assert!(err.contains("row-border") || err.contains("border requires"), "{err}");
     }
 
     #[test]

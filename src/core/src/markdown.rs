@@ -42,7 +42,7 @@ const RULES: &[(&str, &[&str])] = &[
     ("strong", &["font", "color", "bold"]),
     ("em", &["font", "color"]),
     ("del", &["font", "color", "strike"]),
-    ("table", &["border", "stripe", "gap", "padding", "background"]),
+    ("table", &["border", "stripe", "head-border", "row-border", "gap", "padding", "background"]),
     ("th", CELL_RULE), ("td", CELL_RULE),
 ];
 
@@ -1391,6 +1391,23 @@ mod tests {
         let styles = r##"<markdown-styles><hr color="#ff0000" thickness="2pt"/></markdown-styles>"##;
         let nodes = nodes_in(&document("", styles, "above\n\n---\n\nbelow\n"));
         assert_eq!(line(&nodes), (Some("#ff0000".into()), 2.0));
+    }
+
+    #[test]
+    fn a_table_has_a_line_under_the_header_and_a_fainter_one_under_each_row_and_no_stripe_unless_the_rules_say_otherwise() {
+        let table = "| A | B |\n|---|---|\n| 1 | 2 |\n";
+        let style = |styles: &str| nodes_in(&document("", styles, table))[0].table_style.clone();
+
+        let default = style("").unwrap();
+        assert_eq!(default.stripe, None);
+        assert_eq!(default.head_border, Some((0.5, "#737373".to_string())));
+        assert_eq!(default.row_border, Some((0.5, "#d4d4d4".to_string())));
+
+        let striped = style(r#"<markdown-styles><table stripe="surface-alt" head-border="none" row-border="none"/></markdown-styles>"#).unwrap();
+        assert_eq!(striped.stripe.as_deref(), Some("#f5f5f5"));
+        assert_eq!((striped.head_border, striped.row_border), (None, None));
+
+        assert_eq!(style(r#"<markdown-styles><table head-border="none" row-border="none"/></markdown-styles>"#), None);
     }
 
     #[test]

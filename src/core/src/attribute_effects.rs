@@ -175,7 +175,7 @@ fn pattern_samples(type_name: &str) -> Vec<String> {
         // A name the document defines in its aliases: any sample would be one nothing defines. The `alias` subject
         // tries a renamed alias, and a slot takes the place of the name in every attribute that accepts either.
         "TokenName" => &[],
-        "BorderValue" => &["2pt #ff0000"],
+        "BorderValue" | "LineValue" => &["2pt #ff0000"],
         "ShadowValue" => &["4pt 5pt #333333", "4pt 5pt #333333 0.5"],
         "PageScope" => &["2"],
         other => panic!("no sample value for the pattern type {other}: add one to pattern_samples"),
