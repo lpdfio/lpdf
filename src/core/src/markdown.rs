@@ -23,6 +23,34 @@ use crate::tokens::{FontDef, Tokens};
 /// The default rules: what a `<markdown>` with no styles looks like.
 const DEFAULT_STYLES: &str = include_str!("../assets/markdown-styles.xml");
 
+/// A look a `.md` file can start from: a file of styles with the words that offer it.
+#[allow(dead_code)] // the WASI binary does not hand it out
+pub struct StylePreset {
+    /// What the preset is called in a file name and in a call.
+    pub name:        &'static str,
+    /// What a menu shows for it.
+    pub label:       &'static str,
+    pub description: &'static str,
+    /// The file of styles: the default rules with the ones the look changes, to copy and edit.
+    pub styles:      &'static str,
+}
+
+#[allow(dead_code)] // the WASI binary does not hand it out
+const STYLE_PRESETS: [StylePreset; 2] = [
+    StylePreset {
+        name:        "business",
+        label:       "Business",
+        description: "Sans-serif text, navy headings and a teal accent",
+        styles:      include_str!("../assets/markdown-presets/business.xml"),
+    },
+    StylePreset {
+        name:        "serif",
+        label:       "Serif",
+        description: "Times for the text and the headings, in black, with a quote in italic",
+        styles:      include_str!("../assets/markdown-presets/serif.xml"),
+    },
+];
+
 /// The default template that wraps a `.md` file for the command line and the extension.
 #[allow(dead_code)] // the WASI binary does not hand it out
 const DEFAULT_TEMPLATE: &str = include_str!("../assets/markdown-template.xml");
@@ -429,6 +457,12 @@ pub fn default_template() -> &'static str {
 #[allow(dead_code)] // the WASI binary does not hand it out
 pub fn default_styles() -> &'static str {
     DEFAULT_STYLES
+}
+
+/// The looks a `.md` file can start from, besides the default one.
+#[allow(dead_code)] // the WASI binary does not hand it out
+pub fn style_presets() -> &'static [StylePreset] {
+    &STYLE_PRESETS
 }
 
 // ── A `.md` file as a document ────────────────────────────────────────────────
@@ -1688,6 +1722,29 @@ mod tests {
         assert_eq!(doc.section_layouts().len(), 1);
         let styles = roxmltree::Document::parse(default_styles()).unwrap();
         assert_eq!(styles.root_element().tag_name().name(), "markdown-styles");
+    }
+
+    /// The rules a file of styles writes, by name.
+    fn rule_names(styles: &str) -> Vec<String> {
+        let doc = roxmltree::Document::parse(styles).unwrap();
+        doc.root_element().children().filter(|n| n.is_element()).map(|n| n.tag_name().name().to_string()).collect()
+    }
+
+    #[test]
+    fn a_preset_is_a_file_of_styles_the_engine_reads_with_a_rule_for_each_rule_of_the_default() {
+        let default = rule_names(default_styles());
+        let mut names = Vec::new();
+        for preset in style_presets() {
+            assert!(!preset.label.is_empty() && !preset.description.is_empty(), "{} has words to offer it", preset.name);
+            assert_eq!(rule_names(preset.styles), default, "{} writes the rules the default does, in its order", preset.name);
+            let inline = &preset.styles[preset.styles.find("<markdown-styles>").unwrap()..];
+            let mut doc = parse(&document("", inline, "# a\n\n`b`\n\n> c\n\n---\n\n| d |\n|---|\n| e |\n")).unwrap();
+            assert!(!doc.section_layouts()[0].children.is_empty(), "{}", preset.name);
+            names.push(preset.name);
+        }
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), style_presets().len(), "the names of the presets differ");
     }
 
     #[test]

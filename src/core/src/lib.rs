@@ -484,6 +484,16 @@ pub fn markdown_default_styles() -> String {
     markdown::default_styles().to_string()
 }
 
+/// The looks a `.md` file can start from besides the default one, as a JSON array of `name`, `label`, `description`
+/// and `styles`: the file of styles, to write beside the `.md` file and edit.
+#[wasm_bindgen]
+pub fn markdown_style_presets() -> String {
+    let presets: Vec<_> = markdown::style_presets().iter()
+        .map(|p| serde_json::json!({ "name": p.name, "label": p.label, "description": p.description, "styles": p.styles }))
+        .collect();
+    serde_json::json!(presets).to_string()
+}
+
 /// The data a template gets for the `.md` file `markdown`, as JSON: the text as `markdown`, and the fields of its
 /// front matter, each a string.
 #[wasm_bindgen]

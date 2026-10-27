@@ -158,6 +158,25 @@ fn showcase_markdown_styles() { run_snapshot("showcase-markdown-styles"); }
 fn showcase_markdown_split() { run_snapshot("showcase-markdown-split"); }
 #[test]
 fn showcase_markdown_wrap() { run_snapshot("showcase-markdown-wrap"); }
+/// One section for each look a `.md` file can start from, each with its styles inline, over the same Markdown:
+/// `markdown-sample.md` in the fixtures directory. There is no fixture file, because the looks are the engine's.
+fn run_snapshot_markdown_presets(name: &str) {
+    let sample = std::fs::read_to_string(fixtures_dir().join("markdown-sample.md")).expect("markdown-sample.md");
+    let mut sections = String::new();
+    for preset in crate::markdown::style_presets() {
+        let styles = &preset.styles[preset.styles.find("<markdown-styles>").expect("a markdown-styles element")..];
+        sections.push_str(&format!(
+            "<section><markdown margin=\"54pt\">{styles}<markdown-content><![CDATA[{sample}]]></markdown-content></markdown></section>"
+        ));
+    }
+    let xml = format!(r#"<lpdf version="1"><document size="a4">{sections}</document></lpdf>"#);
+    let pdf_bytes = crate::LpdfEngine::render_xml_to_pdf_bytes(&xml)
+        .unwrap_or_else(|e| panic!("render failed for {name}: {e}"));
+    check_snapshot(name, &pdf_bytes);
+}
+
+#[test]
+fn showcase_markdown_presets() { run_snapshot_markdown_presets("showcase-markdown-presets"); }
 #[test]
 fn showcase_markdown_tables() { run_snapshot("showcase-markdown-tables"); }
 #[test]

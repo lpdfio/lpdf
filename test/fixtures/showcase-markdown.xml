@@ -17,8 +17,8 @@
            2  A thematic break, then a bullet list with a nested list (a disc, then a circle), and a number list
               that starts at 3
            3  A quote of two paragraphs with a grey bar the height of both, and a block of code that keeps its
-              indent, on a light background
-           4  A table with a header row, a right-aligned and a centered column, and a stripe
+              indent, in a thin outline
+           4  A table with a header row, a right-aligned and a centered column, and a faint line under each row
            5  The image `photo`, found by its name, and the image `avatar`, found by its src
            6  A paragraph with a footnote, whose note stands at the foot of the page
     -->

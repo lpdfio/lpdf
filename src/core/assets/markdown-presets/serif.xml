@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Serif: Times for the text, the headings and the table, in black with dark blue links, and a quote in italic. The
+  bold and the italic of a run follow the font of the rule it is in. It is the default rules with the fonts and
+  the sizes of the text changed, so write over any of them.
+-->
+<markdown-styles>
+    <h1 font="Times-Roman" font-size="xxl" bold="true" line-height="m"/>
+    <h2 font="Times-Roman" font-size="xl" bold="true" line-height="m"/>
+    <h3 font="Times-Roman" font-size="l" bold="true" line-height="m"/>
+    <h4 font="Times-Roman" font-size="12pt" bold="true"/>
+    <h5 font="Times-Roman" font-size="12pt" bold="true" color="text-muted"/>
+    <h6 font="Times-Roman" font-size="m" bold="true" color="text-muted"/>
+    <p font="Times-Roman" font-size="12pt" line-height="l"/>
+    <code font="Courier" font-size="s" line-height="m" background="surface" border="xs line-muted" padding="m"/>
+    <quote font="Times-Italic" font-size="12pt" color="text-muted" bar-color="text-muted" bar-width="3pt" padding="0pt 0pt 0pt m"/>
+    <li font="Times-Roman" font-size="12pt" gap="xs"/>
+    <hr color="line" thickness="xs"/>
+    <a color="#1a3d7c" underline="true"/>
+    <strong bold="true"/>
+    <del strike="true"/>
+    <table head-border="1pt text" row-border="xs line-muted" stripe="none"/>
+    <th font="Times-Roman" font-size="12pt" bold="true" padding="s"/>
+    <td font="Times-Roman" font-size="12pt" padding="s"/>
+</markdown-styles>
