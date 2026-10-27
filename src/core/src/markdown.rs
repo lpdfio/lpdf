@@ -38,10 +38,10 @@ pub struct StylePreset {
 #[allow(dead_code)] // the WASI binary does not hand it out
 const STYLE_PRESETS: [StylePreset; 3] = [
     StylePreset {
-        name:        "business",
-        label:       "Business",
-        description: "Compact sans-serif text, navy headings and a teal accent",
-        styles:      include_str!("../assets/markdown-presets/business.xml"),
+        name:        "sans",
+        label:       "Sans",
+        description: "Sans-serif text with black headings: the look a Markdown has with no styles",
+        styles:      DEFAULT_STYLES,
     },
     StylePreset {
         name:        "serif",
@@ -1356,10 +1356,10 @@ mod tests {
         assert_eq!(nodes[0].kind, NodeKind::Text);
         assert_eq!(words(&nodes[0]), "Release notes");
         assert_eq!(nodes[0].font, "Helvetica-Bold");
-        assert_eq!(nodes[0].font_size, 28.0);
+        assert_eq!(nodes[0].font_size, 20.0);
         assert_eq!(nodes[0].paginate, crate::parse::Paginate::KeepNext);
         assert_eq!((nodes[0].bookmarks[0].label.as_str(), nodes[0].bookmarks[0].level, nodes[0].bookmarks[0].id.as_str()), ("Release notes", 1, "release-notes"));
-        assert_eq!((nodes[1].font_size, nodes[1].bookmarks[0].level), (20.0, 2));
+        assert_eq!((nodes[1].font_size, nodes[1].bookmarks[0].level), (15.5, 2));
     }
 
     #[test]
@@ -1609,7 +1609,7 @@ mod tests {
         let styles = r##"<markdown-styles><h1 color="#ff0000"/><p font-size="l"/></markdown-styles>"##;
         let nodes = nodes_in(&document("", styles, "# T\n\np\n"));
         // the color is new; the size and bold of the default h1 stay
-        assert_eq!((nodes[0].text_color.as_deref(), nodes[0].font_size, nodes[0].font.as_str()), (Some("#ff0000"), 28.0, "Helvetica-Bold"));
+        assert_eq!((nodes[0].text_color.as_deref(), nodes[0].font_size, nodes[0].font.as_str()), (Some("#ff0000"), 20.0, "Helvetica-Bold"));
         assert_eq!(nodes[1].font_size, 14.0);
     }
 
@@ -1734,6 +1734,28 @@ mod tests {
     fn rule_names(styles: &str) -> Vec<String> {
         let doc = roxmltree::Document::parse(styles).unwrap();
         doc.root_element().children().filter(|n| n.is_element()).map(|n| n.tag_name().name().to_string()).collect()
+    }
+
+    /// The font size of each of the headings a file of styles writes, h1 to h6.
+    fn heading_sizes(styles: &str) -> Vec<String> {
+        let doc = roxmltree::Document::parse(styles).unwrap();
+        (1..=6)
+            .map(|level| {
+                let rule = doc.root_element().children().find(|n| n.tag_name().name() == format!("h{level}")).unwrap();
+                rule.attribute("font-size").unwrap().to_string()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn every_look_has_the_headings_on_the_one_scale_and_sans_is_the_default() {
+        let scale = ["20pt", "15.5pt", "13pt", "12pt", "11pt", "10pt"];
+        assert_eq!(heading_sizes(default_styles()), scale);
+        for preset in style_presets() {
+            assert_eq!(heading_sizes(preset.styles), scale, "the headings of {}", preset.name);
+        }
+        assert_eq!(style_presets()[0].name, "sans");
+        assert_eq!(style_presets()[0].styles, default_styles(), "the sans look is the default one, to copy");
     }
 
     #[test]
