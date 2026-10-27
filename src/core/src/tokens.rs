@@ -412,7 +412,7 @@ impl Default for Tokens {
             ("surface-alt", "#f5f5f5"),
             ("text", "#1a1a1a"),
             ("text-muted", "#737373"),
-            ("line", "#d4d4d4"),
+            ("line", "#737373"),
         ] {
             colors.insert(name.to_string(), val.to_string());
         }
@@ -646,7 +646,7 @@ mod tests {
         let t = Tokens::default();
         assert_eq!(t.resolve_color("primary").unwrap(), "#1763cf");
         assert_eq!(t.resolve_color("surface-alt").unwrap(), "#f5f5f5");
-        assert_eq!(t.resolve_color("line").unwrap(), "#d4d4d4");
+        assert_eq!(t.resolve_color("line").unwrap(), "#737373");
     }
 
     // ── Gradients ─────────────────────────────────────────────────────────────

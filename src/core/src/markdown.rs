@@ -1384,9 +1384,9 @@ mod tests {
     }
 
     #[test]
-    fn a_thematic_break_is_a_thin_light_grey_line_unless_the_hr_rule_says_otherwise() {
+    fn a_thematic_break_is_a_thin_grey_line_unless_the_hr_rule_says_otherwise() {
         let line = |nodes: &[Node]| (nodes[1].color.clone(), nodes[1].thickness);
-        assert_eq!(line(&nodes("above\n\n---\n\nbelow\n")), (Some("#d4d4d4".into()), 0.5));
+        assert_eq!(line(&nodes("above\n\n---\n\nbelow\n")), (Some("#737373".into()), 0.5));
 
         let styles = r##"<markdown-styles><hr color="#ff0000" thickness="2pt"/></markdown-styles>"##;
         let nodes = nodes_in(&document("", styles, "above\n\n---\n\nbelow\n"));
