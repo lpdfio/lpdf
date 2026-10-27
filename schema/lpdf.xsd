@@ -1227,6 +1227,15 @@
                   <xs:attribute name="bullet"     type="ListBullet"/>
                 </xs:complexType>
               </xs:element>
+              <xs:element name="hr">
+                <xs:annotation>
+                  <xs:documentation>A thematic break, written --- in Markdown: a divider. color is the color of the line and thickness its thickness, a length or a name from the border row of the tokens.</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:attribute name="color"     type="Color"/>
+                  <xs:attribute name="thickness" type="TokenScaleOrPt"/>
+                </xs:complexType>
+              </xs:element>
               <xs:element name="a">
                 <xs:annotation><xs:documentation>A link, written [text](url) in Markdown.</xs:documentation></xs:annotation>
                 <xs:complexType>

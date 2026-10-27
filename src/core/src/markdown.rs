@@ -37,6 +37,7 @@ const RULES: &[(&str, &[&str])] = &[
         "bar-color", "bar-width",
     ]),
     ("li", &["font", "font-size", "color", "gap", "padding", "background", "border", "indent", "bullet"]),
+    ("hr", &["color", "thickness"]),
     ("a", &["font", "color", "bold", "underline"]),
     ("strong", &["font", "color", "bold"]),
     ("em", &["font", "color"]),
@@ -325,9 +326,9 @@ fn build(a: &impl Attrs, declaration: Declaration, cx: &SectionContext) -> Resul
 }
 
 /// A Markdown that uses a rule, to try the rule with.
-const RULE_SAMPLES: [(&str, &str); 17] = [
+const RULE_SAMPLES: [(&str, &str); 18] = [
     ("h1", "# x"), ("h2", "## x"), ("h3", "### x"), ("h4", "#### x"), ("h5", "##### x"), ("h6", "###### x"),
-    ("p", "x"), ("code", "`x`\n\n```\nx\n```"), ("quote", "> x"), ("li", "- x\n\n1. x"), ("a", "[x](#x)"),
+    ("p", "x"), ("code", "`x`\n\n```\nx\n```"), ("quote", "> x"), ("li", "- x\n\n1. x"), ("hr", "x\n\n---"), ("a", "[x](#x)"),
     ("strong", "**x**"), ("em", "*x*"), ("del", "~~x~~"), ("table", "| x |\n|---|\n| x |"),
     ("th", "| x |\n|---|\n| x |"), ("td", "| x |\n|---|\n| x |"),
 ];
@@ -745,7 +746,7 @@ impl<'a> Writer<'a> {
                 }
                 Event::Rule => {
                     self.at += 1;
-                    blocks.push(Block { xml: "<divider/>".into(), line });
+                    blocks.push(Block { xml: format!("<divider{}/>", attrs_xml(&self.spec.rules.rule("hr"))), line });
                 }
                 Event::Start(Tag::Image { .. } | Tag::Emphasis | Tag::Strong | Tag::Strikethrough | Tag::Link { .. })
                 | Event::Text(_) | Event::Code(_) | Event::SoftBreak | Event::HardBreak | Event::FootnoteReference(_) => {
@@ -1380,6 +1381,16 @@ mod tests {
     fn a_thematic_break_is_a_divider() {
         let nodes = nodes("above\n\n---\n\nbelow\n");
         assert_eq!(nodes.iter().map(|n| n.kind.clone()).collect::<Vec<_>>(), [NodeKind::Text, NodeKind::Divider, NodeKind::Text]);
+    }
+
+    #[test]
+    fn a_thematic_break_is_a_thin_light_grey_line_unless_the_hr_rule_says_otherwise() {
+        let line = |nodes: &[Node]| (nodes[1].color.clone(), nodes[1].thickness);
+        assert_eq!(line(&nodes("above\n\n---\n\nbelow\n")), (Some("#d4d4d4".into()), 0.5));
+
+        let styles = r##"<markdown-styles><hr color="#ff0000" thickness="2pt"/></markdown-styles>"##;
+        let nodes = nodes_in(&document("", styles, "above\n\n---\n\nbelow\n"));
+        assert_eq!(line(&nodes), (Some("#ff0000".into()), 2.0));
     }
 
     #[test]

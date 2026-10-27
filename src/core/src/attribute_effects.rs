@@ -540,6 +540,7 @@ fn subjects() -> Vec<Subject> {
         rule!("code", "Text with `inline code` in it.\n\n```\n{CODE}\n```\n\nAfter"),
         rule!("quote", "> {LONG}\n\nAfter"),
         rule!("li", "- {LONG}\n- Two\n\n1. Three\n\nAfter"),
+        rule!("hr", "Above\n\n---\n\nBelow"),
         rule!("a", "See [the docs](https://a.example) for more."),
         rule!("strong", "A **strong** word."),
         rule!("em", "An *emphasized* word."),
