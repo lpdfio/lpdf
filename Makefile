@@ -490,10 +490,12 @@ build-pages-docs:
 	cd "$(PAGES_DIR)/docs-site" && (test -d node_modules || npm ci) && npm run build
 
 # Renders every XML example in the docs with the engine copy in the pages tree, and fails if the engine
-# rejects one. It needs no npm install.
+# rejects one. It then runs the code the generator writes for each one with the SDK that build-sdk-node
+# built in repos/lpdf-js, so the docs of an element that is not released yet pass. Without that build it
+# uses the published SDK in the docs site's node_modules, which needs npm ci.
 check-pages-docs:
 	@test -d "$(PAGES_DIR)/docs-site" || (echo "ERROR: docs-site not found at $(PAGES_DIR)/docs-site" && exit 1)
-	cd "$(PAGES_DIR)/docs-site" && npm run check
+	cd "$(PAGES_DIR)/docs-site" && $(if $(wildcard repos/lpdf-js/dist/index.js),LPDF_SDK_DIR="$(abspath repos/lpdf-js)" )npm run check
 
 # ── Pages asset sync ──────────────────────────────────────────────────────────
 # Copies the browser WASM build and the demo bundle+assets into the pages asset tree.
