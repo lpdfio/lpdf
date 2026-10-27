@@ -696,6 +696,19 @@ impl<'a> Writer<'a> {
         format!("markdown line {line}: {message}")
     }
 
+    /// The error for raw HTML, which names the first tag and says what to write: a tag that was meant as text goes in
+    /// backticks, and a comment is left out.
+    fn raw_html(&self, line: usize, html: &str) -> String {
+        let message = match first_tag(html) {
+            Some(tag) if tag.starts_with("<!--") => format!("raw HTML {tag} is not supported: leave the comment out"),
+            Some(tag) => format!(
+                "raw HTML {tag} is not supported: to show it as text, write it in backticks, `{tag}`; otherwise write the Markdown it stands for, or leave it out"
+            ),
+            None => "raw HTML is not supported: write the Markdown it stands for, or leave it out".to_string(),
+        };
+        self.fail(line, &message)
+    }
+
     fn blocks(mut self) -> Result<Vec<Block>, String> {
         self.collect_notes();
         self.read_blocks(None, &Around::default())
@@ -781,9 +794,14 @@ impl<'a> Writer<'a> {
                 Event::Start(Tag::FootnoteDefinition(_)) => self.skip(TagEnd::FootnoteDefinition),
                 Event::Start(Tag::MetadataBlock(MetadataBlockKind::YamlStyle)) => self.skip(TagEnd::MetadataBlock(MetadataBlockKind::YamlStyle)),
                 Event::Start(Tag::MetadataBlock(MetadataBlockKind::PlusesStyle)) => self.skip(TagEnd::MetadataBlock(MetadataBlockKind::PlusesStyle)),
-                Event::Start(Tag::HtmlBlock) | Event::Html(_) | Event::InlineHtml(_) => {
-                    return Err(self.fail(line, "raw HTML is not supported: write the Markdown it stands for, or leave it out"));
+                Event::Start(Tag::HtmlBlock) => {
+                    let html = match self.events.get(self.at + 1) {
+                        Some((Event::Html(text), _)) => text.to_string(),
+                        _ => String::new(),
+                    };
+                    return Err(self.raw_html(line, &html));
                 }
+                Event::Html(html) | Event::InlineHtml(html) => return Err(self.raw_html(line, &html)),
                 Event::Rule => {
                     self.at += 1;
                     blocks.push(Block { xml: format!("<divider{}/>", attrs_xml(&self.spec.rules.rule("hr"))), line });
@@ -901,9 +919,7 @@ impl<'a> Writer<'a> {
                     }
                     pieces.push(Piece::Image { dest: dest_url.to_string(), line });
                 }
-                Event::Html(_) | Event::InlineHtml(_) => {
-                    return Err(self.fail(line, "raw HTML is not supported: write the Markdown it stands for, or leave it out"));
-                }
+                Event::Html(html) | Event::InlineHtml(html) => return Err(self.raw_html(line, &html)),
                 // A block that begins ends the words of a block with no tag of its own.
                 Event::Start(_) | Event::Rule | Event::TaskListMarker(_) if until.is_none() => return Ok(()),
                 other => return Err(self.fail(line, &format!("{} is not supported here", describe(&other)))),
@@ -1276,6 +1292,14 @@ fn describe(event: &Event) -> String {
     }
 }
 
+/// The first tag of some HTML, from its `<` to its `>`, when that is short and on one line.
+fn first_tag(html: &str) -> Option<&str> {
+    let start = html.find('<')?;
+    let end = start + html[start..].find('>')?;
+    let tag = &html[start..=end];
+    (tag.chars().count() <= 60 && !tag.contains('\n')).then_some(tag)
+}
+
 fn push_attr(out: &mut String, key: &str, value: &str) {
     out.push_str(&format!(" {key}=\"{}\"", escape_attr(value)));
 }
@@ -1471,6 +1495,30 @@ mod tests {
         assert!(err.contains("markdown line 3") && err.contains("neither"), "{err}");
         let err = error("![x](https://example.com/a.png)\n");
         assert!(err.contains("markdown line 1") && err.contains("not a URL"), "{err}");
+    }
+
+    #[test]
+    fn raw_html_is_an_error_that_names_the_tag_and_says_to_write_it_in_backticks_when_it_is_text() {
+        let err = error("The user can add the sender to <Biller> here.\n");
+        assert!(err.contains("markdown line 1") && err.contains("raw HTML <Biller> is not supported"), "{err}");
+        assert!(err.contains("in backticks, `<Biller>`"), "{err}");
+        let err = error("fine\n\n<div class=\"a\">x</div>\n");
+        assert!(err.contains("markdown line 3") && err.contains("raw HTML <div class=\"a\"> is not supported"), "{err}");
+        let err = error("a<br>b\n");
+        assert!(err.contains("raw HTML <br> is not supported"), "{err}");
+    }
+
+    #[test]
+    fn a_comment_is_raw_html_to_leave_out() {
+        let err = error("one\n\n<!-- a note -->\n\ntwo\n");
+        assert!(err.contains("markdown line 3") && err.contains("<!-- a note --> is not supported: leave the comment out"), "{err}");
+    }
+
+    #[test]
+    fn what_is_not_a_tag_is_not_raw_html() {
+        for markdown in ["`<Biller>` here\n", "\\<Biller> here\n", "&lt;Biller&gt; here\n", "<https://lpdf.io> here\n", "1 < 2 and 3 > 2\n"] {
+            assert!(parse(&document("", "", markdown)).is_ok(), "{markdown}");
+        }
     }
 
     #[test]
