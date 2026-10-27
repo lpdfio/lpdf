@@ -665,7 +665,7 @@ enum Piece {
     Code { text: String, style: Style },
     Note(String),
     Image { dest: String, line: usize },
-    /// A `<br>`: the words after it begin a new line.
+    /// A `<br>`, or two spaces or a backslash at the end of a line: the words after it begin a new line.
     Break,
 }
 
@@ -896,8 +896,13 @@ impl<'a> Writer<'a> {
                     pieces.push(Piece::Code { text: text.to_string(), style: style.clone() });
                     self.at += 1;
                 }
-                Event::SoftBreak | Event::HardBreak => {
+                Event::SoftBreak => {
                     pieces.push(Piece::Text { text: " ".into(), style: style.clone() });
+                    self.at += 1;
+                }
+                // Two spaces or a backslash at the end of a line: a break, as a `<br>` is.
+                Event::HardBreak => {
+                    pieces.push(Piece::Break);
                     self.at += 1;
                 }
                 Event::FootnoteReference(label) => {
@@ -1593,6 +1598,59 @@ mod tests {
         assert_eq!(nodes[0].gap, 0.0);
         let lines: Vec<String> = texts(&nodes[0]).into_iter().map(words).collect();
         assert_eq!(lines, ["one", "two", "three", "four"]);
+        assert_eq!(nodes[1].kind, NodeKind::Text);
+    }
+
+    #[test]
+    fn two_spaces_or_a_backslash_at_the_end_of_a_line_break_it_as_a_br_does() {
+        for markdown in ["one  \ntwo\n", "one\\\ntwo\n", "one<br>two\n", "one   \n  two\n"] {
+            let nodes = nodes(markdown);
+            assert_eq!(nodes.len(), 1, "{markdown:?}");
+            assert_eq!((nodes[0].kind.clone(), nodes[0].gap), (NodeKind::Column, 0.0), "{markdown:?}");
+            let lines: Vec<String> = texts(&nodes[0]).into_iter().map(words).collect();
+            assert_eq!(lines, ["one", "two"], "{markdown:?}");
+        }
+    }
+
+    #[test]
+    fn a_newline_alone_is_a_space_and_one_space_before_it_is_too() {
+        for markdown in ["one\ntwo\n", "one \ntwo\n"] {
+            let nodes = nodes(markdown);
+            assert_eq!((nodes[0].kind.clone(), words(&nodes[0])), (NodeKind::Text, "one two".to_string()), "{markdown:?}");
+        }
+    }
+
+    #[test]
+    fn a_hard_break_at_the_end_of_a_block_breaks_nothing_and_the_next_block_is_apart() {
+        let nodes = nodes("one  \n\ntwo\\\n");
+        assert_eq!(nodes.iter().map(|n| (n.kind.clone(), words(n))).collect::<Vec<_>>(),
+            [(NodeKind::Text, "one".to_string()), (NodeKind::Text, "two\\".to_string())]);
+    }
+
+    #[test]
+    fn a_hard_break_in_a_heading_is_a_space() {
+        let nodes = nodes("one  \ntwo\n===\n");
+        assert_eq!(words(&nodes[0]), "one two");
+        assert_eq!(nodes[0].bookmarks[0].label, "one two");
+    }
+
+    #[test]
+    fn a_hard_break_in_a_list_item_a_quote_and_a_run_of_strong_text_breaks_the_line_there() {
+        let nodes = nodes("- an item  \n  with a break\n\n> a quote\\\n> with a break\n\n**strong  \nacross**\n");
+        let item: Vec<String> = texts(&nodes[0].children[0]).into_iter().map(words).collect();
+        assert_eq!(item, ["an item", "with a break"]);
+        let quote: Vec<String> = texts(&nodes[1]).into_iter().map(words).collect();
+        assert_eq!(quote, ["a quote", "with a break"]);
+        let strong = texts(&nodes[2]);
+        assert_eq!(strong.iter().map(|line| words(line)).collect::<Vec<_>>(), ["strong", "across"]);
+        assert!(strong.iter().all(|line| line.text_runs[0].font.as_deref() == Some("Helvetica-Bold")));
+    }
+
+    #[test]
+    fn two_spaces_in_the_cell_of_a_table_or_in_a_code_span_are_not_a_break() {
+        let nodes = nodes("| a |\n|---|\n| one  two |\n\n`one  \ntwo`\n");
+        let cell = texts(&nodes[0].children[1].children[0].children[0]);
+        assert_eq!(cell.iter().map(|text| words(text)).collect::<Vec<_>>(), ["one two"]);
         assert_eq!(nodes[1].kind, NodeKind::Text);
     }
 

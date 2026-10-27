@@ -180,6 +180,17 @@ fn showcase_markdown_presets() { run_snapshot_markdown_presets("showcase-markdow
 #[test]
 fn showcase_markdown_tables() { run_snapshot("showcase-markdown-tables"); }
 #[test]
+fn showcase_markdown_breaks() { run_snapshot("showcase-markdown-breaks"); }
+
+/// The two lines of the breaks fixture that end in two spaces are what the snapshot shows as breaks: an editor that
+/// strips them turns them into spaces and the snapshot into a different page, so this says why.
+#[test]
+fn the_breaks_fixture_keeps_the_lines_that_end_in_two_spaces() {
+    let fixture = std::fs::read_to_string(fixtures_dir().join("showcase-markdown-breaks.xml")).expect("the fixture");
+    let ending = fixture.lines().filter(|line| line.ends_with("  ") && !line.trim().is_empty()).count();
+    assert_eq!(ending, 3, "three lines of showcase-markdown-breaks.xml end in two spaces, and an editor stripped one");
+}
+#[test]
 fn showcase_table_auto() { run_snapshot("showcase-table-auto"); }
 #[test]
 fn showcase_table_lines() { run_snapshot("showcase-table-lines"); }
