@@ -1394,13 +1394,13 @@ mod tests {
     }
 
     #[test]
-    fn a_table_has_a_line_under_the_header_and_a_fainter_one_under_each_row_and_no_stripe_unless_the_rules_say_otherwise() {
+    fn a_table_has_a_faint_line_under_the_header_and_each_row_and_no_stripe_unless_the_rules_say_otherwise() {
         let table = "| A | B |\n|---|---|\n| 1 | 2 |\n";
         let style = |styles: &str| nodes_in(&document("", styles, table))[0].table_style.clone();
 
         let default = style("").unwrap();
         assert_eq!(default.stripe, None);
-        assert_eq!(default.head_border, Some((0.5, "#737373".to_string())));
+        assert_eq!(default.head_border, Some((0.5, "#d4d4d4".to_string())));
         assert_eq!(default.row_border, Some((0.5, "#d4d4d4".to_string())));
 
         let striped = style(r#"<markdown-styles><table stripe="surface-alt" head-border="none" row-border="none"/></markdown-styles>"#).unwrap();

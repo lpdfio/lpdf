@@ -8,7 +8,7 @@
     <!-- The table rule of the default styles has head-border and row-border set and no stripe; a rule written in the
          markdown changes one attribute at a time. One page for each way.
          Expected, page by page:
-           1  The defaults: a darker line under the header, a fainter line under each row, no stripe
+           1  The defaults: a faint line under the header and under each row, no stripe
            2  A stripe on every other row, no lines
            3  The stripe and the lines
            4  Neither: a table with no look
@@ -18,7 +18,7 @@
         <markdown-content><![CDATA[
           # A table as Markdown has it
 
-          The default: a line under the header and a fainter line under each row, with no stripe.
+          The default: a faint line under the header and under each row, with no stripe.
 
           | Plan | Seats | Price |
           |:-----|------:|------:|
