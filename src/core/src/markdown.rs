@@ -36,7 +36,7 @@ pub struct StylePreset {
 }
 
 #[allow(dead_code)] // the WASI binary does not hand it out
-const STYLE_PRESETS: [StylePreset; 2] = [
+const STYLE_PRESETS: [StylePreset; 3] = [
     StylePreset {
         name:        "business",
         label:       "Business",
@@ -48,6 +48,12 @@ const STYLE_PRESETS: [StylePreset; 2] = [
         label:       "Serif",
         description: "Times for the text and the headings, in black, with a quote in italic",
         styles:      include_str!("../assets/markdown-presets/serif.xml"),
+    },
+    StylePreset {
+        name:        "typewriter",
+        label:       "Typewriter",
+        description: "Courier for everything, in black, with code on a light background",
+        styles:      include_str!("../assets/markdown-presets/typewriter.xml"),
     },
 ];
 

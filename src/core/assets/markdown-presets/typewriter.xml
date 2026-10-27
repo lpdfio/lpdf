@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Typewriter: Courier for everything, in black, with the sizes brought down because Courier is wide, and the links
+  underlined in the color of the text. Code has a light background, so that it stands out from the text around it.
+  It is the default rules with the fonts and the sizes changed, so write over any of them.
+-->
+<markdown-styles>
+    <h1 font="Courier" font-size="22pt" bold="true" line-height="m"/>
+    <h2 font="Courier" font-size="16pt" bold="true" line-height="m"/>
+    <h3 font="Courier" font-size="13pt" bold="true" line-height="m"/>
+    <h4 font="Courier" font-size="11pt" bold="true"/>
+    <h5 font="Courier" font-size="10pt" bold="true" color="text-muted"/>
+    <h6 font="Courier" font-size="9pt" bold="true" color="text-muted"/>
+    <p font="Courier" font-size="10pt" line-height="l"/>
+    <code font="Courier" font-size="9pt" line-height="m" background="surface-alt" border="xs line-muted" padding="m"/>
+    <quote font="Courier" font-size="10pt" color="text-muted" bar-color="text-muted" bar-width="3pt" padding="0pt 0pt 0pt m"/>
+    <li font="Courier" font-size="10pt" gap="xs"/>
+    <hr color="line" thickness="xs"/>
+    <a color="text" underline="true"/>
+    <strong bold="true"/>
+    <del strike="true"/>
+    <table head-border="xs line" row-border="xs line-muted" stripe="none"/>
+    <th font="Courier" font-size="10pt" bold="true" padding="s"/>
+    <td font="Courier" font-size="10pt" padding="s"/>
+</markdown-styles>
