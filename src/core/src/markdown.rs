@@ -1372,7 +1372,7 @@ mod tests {
     fn inline_code_is_a_code_span_and_a_link_is_a_span_with_its_target() {
         let nodes = nodes("see `x` and [the docs](https://lpdf.io) or [up](#intro)\n");
         let runs = &nodes[0].text_runs;
-        assert_eq!((runs[1].text.as_str(), runs[1].font.as_deref(), runs[1].background.as_deref()), ("x", Some("Courier"), Some("#f5f5f5")));
+        assert_eq!((runs[1].text.as_str(), runs[1].font.as_deref(), runs[1].background.as_deref()), ("x", Some("Courier"), Some("#ffffff")));
         assert_eq!((runs[3].text.as_str(), runs[3].href.as_deref(), runs[3].underline), ("the docs", Some("https://lpdf.io"), true));
         assert_eq!(runs[5].href.as_deref(), Some("#intro"));
     }

@@ -5309,7 +5309,7 @@ mod tests {
     #[test]
     fn the_tint_of_a_code_span_is_one_stretch_across_the_gaps_of_a_line_it_is_broken_on() {
         let pages = markdown_pages(&format!("{} more", paragraph_ending_before("alpha beta gamma").trim_end_matches(" end.")));
-        let boxes = tints(&pages[0], "#f5f5f5");
+        let boxes = tints(&pages[0], "#ffffff");
         let on_first_line: Vec<_> = boxes.iter().filter(|b| (b.1 - boxes[0].1).abs() < 0.01).collect();
         assert!(on_first_line.len() >= 2, "the run has more than one word on the line: {boxes:?}");
         for pair in on_first_line.windows(2) {
