@@ -661,12 +661,18 @@ fn fill_page(
         if h <= remaining + 0.5 {
             // keep-next: if the immediately following sibling would not fit on this
             // page after placing this node, and both fit together on the next page,
-            // bump this node to the next page so they stay together.
+            // bump this node to the next page so they stay together. A sibling that
+            // can start on this page, a table with its header and a row or a text with
+            // a few lines, is split there, so the node is not parted from it and the
+            // page is not left half empty.
             let keep_next_h = if node.paginate == Paginate::KeepNext && !page.is_empty() {
                 pending.peek().and_then(|next| {
                     let next_h = measure_height(next, avail_w, budget);
                     let remaining_for_next = remaining - h - gap;
-                    (next_h > remaining_for_next + 0.5 && h + gap + next_h <= next_budget + 0.5).then_some(next_h)
+                    (next_h > remaining_for_next + 0.5
+                        && h + gap + next_h <= next_budget + 0.5
+                        && !starts_within(next, avail_w, remaining_for_next, budget))
+                    .then_some(next_h)
                 })
             } else {
                 None
@@ -851,6 +857,12 @@ fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> 
         // Frame, Divider — atomic by design.
         _                 => SplitOutcome::Atomic,
     }
+}
+
+/// Whether `node` can put a first part of itself in `room`: it splits there, and what it leaves on the page is
+/// something, not a header alone or a line alone, as `split_node_at` sees it.
+fn starts_within(node: &Node, avail_w: f32, room: f32, full_page_h: f32) -> bool {
+    matches!(split_node_at(node, avail_w, room.max(0.0), full_page_h), SplitOutcome::First(..))
 }
 
 /// Whether `split_node_at` can split `node` at all: a text, or a box of `auto` height with children, of a kind
@@ -4973,6 +4985,49 @@ mod tests {
         let pages = kept["pages"].as_array().unwrap();
         assert_eq!(page_with(pages, "H2"), Some(2), "the second head goes with its sibling");
         assert_eq!(page_with(pages, "H1"), Some(2), "and the first goes with the second");
+    }
+
+    /// A table of a header row and `rows` rows of about 41pt, which a page holds whole when it is empty.
+    fn rows_table(rows: usize) -> String {
+        let row = |text: &str| format!(r#"<tr><td padding="14pt"><text>{text}</text></td></tr>"#);
+        let body: String = (1..=rows).map(|n| row(&format!("R{n}"))).collect();
+        format!(r#"<table cols="1fr"><thead><td padding="14pt"><text>TH</text></td></thead>{body}</table>"#)
+    }
+
+    #[test]
+    fn paginate_keep_next_keeps_the_head_with_the_first_rows_of_a_table_that_splits() {
+        // 500pt are used, which leaves room for the head and the header and five rows of the table, not for all of
+        // it, and the table is shorter than a page.
+        let page = |attr: &str, frame: &str| {
+            let tree = engine_render(&minimal(&format!(
+                r#"<frame height="{frame}pt" /><text {attr}>HEAD</text>{}"#, rows_table(12)
+            )));
+            let pages = tree["pages"].as_array().unwrap().clone();
+            (page_with(&pages, "HEAD"), page_with(&pages, "TH"), page_with(&pages, "R12"))
+        };
+        assert_eq!(page(r#"paginate="keep-next""#, "500"), (Some(1), Some(1), Some(2)), "the head stays, with the header on its page");
+        assert_eq!(page("", "500"), (Some(1), Some(1), Some(2)), "as it does without keep-next");
+    }
+
+    #[test]
+    fn paginate_keep_next_moves_the_head_with_a_table_that_cannot_start_on_the_page() {
+        // 735pt are used: there is room for the head and not for the header and a row of the table.
+        let tree = engine_render(&minimal(&format!(
+            r#"<frame height="735pt" /><text paginate="keep-next">HEAD</text>{}"#, rows_table(12)
+        )));
+        let pages = tree["pages"].as_array().unwrap();
+        assert_eq!((page_with(pages, "HEAD"), page_with(pages, "TH")), (Some(2), Some(2)));
+    }
+
+    #[test]
+    fn paginate_keep_next_keeps_the_head_with_the_first_lines_of_a_text_that_splits() {
+        let words = "word ".repeat(700);
+        let tree = engine_render(&minimal(&format!(
+            r#"<frame height="600pt" /><text paginate="keep-next">HEAD</text><text>FIRST {words}</text>"#
+        )));
+        let pages = tree["pages"].as_array().unwrap();
+        assert_eq!((page_with(pages, "HEAD"), page_with(pages, "FIRST")), (Some(1), Some(1)));
+        assert!(pages.len() > 1, "the paragraph goes on to the next page");
     }
 
     #[test]
