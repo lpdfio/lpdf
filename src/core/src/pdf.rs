@@ -559,7 +559,11 @@ struct PreparedFont {
 
 enum PreparedFontKind {
     /// One of the 14 PDF resident Type 1 fonts.  No bytes to embed.
-    Builtin { base_name: &'static str },
+    Builtin {
+        base_name: &'static str,
+        /// Whether the document draws a comparison sign in this font (see `SIGNS`), which then has codes for them.
+        signs: bool,
+    },
     /// Custom TrueType/OpenType font, subsetted and embedded as CIDFont Type2
     /// with Identity-H encoding, giving full Unicode support.
     Truetype {
@@ -618,7 +622,7 @@ impl PreparedFont {
     /// per-glyph advances from `ttf-parser`.
     fn text_width(&self, text: &str, size: f32) -> f32 {
         match &self.kind {
-            PreparedFontKind::Builtin { base_name } => {
+            PreparedFontKind::Builtin { base_name, .. } => {
                 crate::layout::text_width(base_name, text, size)
             }
             PreparedFontKind::Truetype { advances: Some(advances), .. } => advances.text_width(text, size),
@@ -629,12 +633,13 @@ impl PreparedFont {
 
     /// Encode `text` into the raw byte string required by the content stream.
     ///
-    /// - Builtin (Type 1 + WinAnsiEncoding): one Latin-1 byte per character.
+    /// - Builtin (Type 1 + WinAnsiEncoding): one Latin-1 byte per character, and
+    ///   a code of its own for each comparison sign if the font has them.
     /// - Truetype (CIDFont + Identity-H): two big-endian glyph-ID bytes per
     ///   character, resolved via `ttf-parser`.
     fn encode_text(&self, text: &str) -> Vec<u8> {
         match &self.kind {
-            PreparedFontKind::Builtin { .. } => encode_latin1(text),
+            PreparedFontKind::Builtin { signs, .. } => encode_latin1(text, *signs),
             PreparedFontKind::Truetype { char_to_gid, .. } => {
                 let mut out = Vec::with_capacity(text.chars().count() * 2);
                 for c in text.chars() {
@@ -676,11 +681,80 @@ fn parse_hex(hex: &str) -> (f32, f32, f32) {
 /// - `0x00–0x7F`  ASCII, direct.
 /// - `0x80–0x9F`  Windows-1252 extension block (em dash, en dash, curly quotes, …).
 /// - `0xA0–0xFF`  ISO-8859-1 upper half, direct (same in both encodings).
+/// - A comparison sign has the code of `SIGNS` when the font has `signs`: its dictionary names the glyphs.
 /// - A character with none of these is drawn as its `look_alike`, if it has one, and is replaced by `?` if not.
-fn encode_latin1(text: &str) -> Vec<u8> {
+fn encode_latin1(text: &str, signs: bool) -> Vec<u8> {
     text.chars()
-        .map(|c| win1252_byte(c).or_else(|| look_alike(c).and_then(win1252_byte)).unwrap_or(b'?'))
+        .map(|c| {
+            win1252_byte(c)
+                .or_else(|| sign_code(c).filter(|_| signs))
+                .or_else(|| look_alike(c).and_then(win1252_byte))
+                .unwrap_or(b'?')
+        })
         .collect()
+}
+
+/// The comparison signs a built-in font draws although Windows-1252 has no code for them: the glyphs are in the
+/// fonts (the Adobe metrics of the Helvetica, Times and Courier families list them), only the encoding lacks
+/// them. Each has a code that Windows-1252 leaves empty, and the `/Differences` of a font that draws signs
+/// names its glyph. `approxequal` is not in those metrics: a viewer draws it from another font, with no
+/// width, so the dictionary has to give one (`write_sign_encoding`).
+const SIGNS: [(char, u8, &str); 4] = [
+    ('\u{2248}', 0x81, "approxequal"),
+    ('\u{2260}', 0x8D, "notequal"),
+    ('\u{2264}', 0x8F, "lessequal"),
+    ('\u{2265}', 0x90, "greaterequal"),
+];
+
+/// How far a sign advances in the Helvetica and Times families, in thousandths of the size, as their metrics
+/// have it for the three of them that list one; Courier's characters are all 600.
+const SIGN_ADVANCE: u16 = 549;
+
+/// The code a comparison sign has in a font that draws them, if `c` is one.
+fn sign_code(c: char) -> Option<u8> {
+    SIGNS.iter().find(|(sign, ..)| *sign == c).map(|&(_, code, _)| code)
+}
+
+/// How far a comparison sign advances in a font that is not monospace, if `c` is one.
+pub(crate) fn sign_advance(c: char) -> Option<u16> {
+    sign_code(c).map(|_| SIGN_ADVANCE)
+}
+
+/// Whether a built-in font has an encoding that the signs' codes can go in: Symbol and ZapfDingbats have their own.
+fn takes_signs(base_name: &str) -> bool {
+    !matches!(base_name, "Symbol" | "ZapfDingbats")
+}
+
+/// Writes the encoding and the widths of a built-in font that draws the comparison signs: Windows-1252 with
+/// the glyph of each sign at its code, and the width of every code, which is what layout measured. A viewer
+/// advances by these, so the line comes out as layout placed it, `approxequal` included.
+fn write_sign_encoding(font: &mut pdf_writer::writers::Type1Font, base_name: &str) {
+    {
+        let mut encoding = font.encoding_custom();
+        encoding.base_encoding(Name(b"WinAnsiEncoding"));
+        let mut differences = encoding.differences();
+        for (_, code, glyph) in SIGNS {
+            differences.consecutive(code, [Name(glyph.as_bytes())]);
+        }
+    }
+    font.first_char(WIN_ANSI_FIRST)
+        .last_char(u8::MAX)
+        .widths((WIN_ANSI_FIRST..=u8::MAX).map(|code| sign_encoding_width(base_name, code)));
+}
+
+/// The first code of a font's `/Widths`: the space.
+const WIN_ANSI_FIRST: u8 = 32;
+
+/// The width of a code, in thousandths of the size, in a font that draws the signs: what a viewer advanced by
+/// before (the Adobe metrics), and the sign's own for the four signs.
+fn sign_encoding_width(base_name: &str, code: u8) -> f32 {
+    let is_sign = SIGNS.iter().any(|&(_, sign, _)| sign == code);
+    let advance = if is_sign && !base_name.contains("Courier") {
+        Some(SIGN_ADVANCE)
+    } else {
+        crate::layout::afm_code_advance(base_name, code)
+    };
+    f32::from(advance.unwrap_or(0))
 }
 
 /// The ASCII character a built-in font draws for a character it has no glyph for, where one looks much like it: the
@@ -853,20 +927,27 @@ fn resolve_font_kind(
         match def {
             FontDef::Core(b) => {
                 let ps = pdf_builtin_name(b).unwrap_or("Helvetica");
-                PreparedFontKind::Builtin { base_name: ps }
+                builtin_font(ps, used_chars)
             }
             FontDef::Ref(_) => {
                 if let Some(bytes) = registry.get(name) {
                     return prepare_truetype_font(bytes, used_chars);
                 }
                 // Bytes not provided at render time → degrade gracefully.
-                PreparedFontKind::Builtin { base_name: "Helvetica" }
+                builtin_font("Helvetica", used_chars)
             }
         }
     } else {
         let ps = pdf_builtin_name(name).unwrap_or("Helvetica");
-        PreparedFontKind::Builtin { base_name: ps }
+        builtin_font(ps, used_chars)
     }
+}
+
+/// A built-in font that draws the comparison signs when the document uses one in it, so that a document with
+/// none writes the font as it always did.
+fn builtin_font(base_name: &'static str, used_chars: &HashSet<char>) -> PreparedFontKind {
+    let signs = takes_signs(base_name) && used_chars.iter().any(|&c| sign_code(c).is_some());
+    PreparedFontKind::Builtin { base_name, signs }
 }
 
 /// Subset a TrueType/OpenType font to only the glyphs used in the document,
@@ -3223,12 +3304,16 @@ fn assemble_pdf(
         let fids = &font_id_map[name];
 
         match &font.kind {
-            PreparedFontKind::Builtin { base_name } => {
+            PreparedFontKind::Builtin { base_name, signs } => {
                 // Type 1 (built-in resident) font.  Just a font dictionary with
                 // a /BaseFont entry; no font program stream is needed.
-                pdf.type1_font(fids.font_dict_id)
-                   .base_font(Name(base_name.as_bytes()))
-                   .encoding_predefined(Name(b"WinAnsiEncoding"));
+                let mut font_dict = pdf.type1_font(fids.font_dict_id);
+                font_dict.base_font(Name(base_name.as_bytes()));
+                if *signs {
+                    write_sign_encoding(&mut font_dict, base_name);
+                } else {
+                    font_dict.encoding_predefined(Name(b"WinAnsiEncoding"));
+                }
             }
 
             PreparedFontKind::Truetype {
@@ -3471,11 +3556,11 @@ mod tests {
 
     #[test]
     fn a_built_in_font_draws_the_lines_of_a_box_and_the_arrows_as_ascii_and_the_rest_as_a_question_mark() {
-        assert_eq!(encode_latin1("┌──┐ │ └──┘ ├─┼─┤ ╔═╗ ║ ╭╮"), b"+--+ | +--+ +-+-+ +-+ | ++".to_vec());
-        assert_eq!(encode_latin1("a → b ← c ↑ d ▼ e"), b"a > b < c ^ d v e".to_vec());
-        assert_eq!(encode_latin1("5′ 10″, −3\u{2009}x"), b"5' 10\", -3 x".to_vec());
-        assert_eq!(encode_latin1("日本 ✓"), b"?? ?".to_vec(), "a character with no look-alike stays a question mark");
-        assert_eq!(encode_latin1("é — €"), vec![0xE9, b' ', 0x97, b' ', 0x80], "what the encoding has is not replaced");
+        assert_eq!(encode_latin1("┌──┐ │ └──┘ ├─┼─┤ ╔═╗ ║ ╭╮", false), b"+--+ | +--+ +-+-+ +-+ | ++".to_vec());
+        assert_eq!(encode_latin1("a → b ← c ↑ d ▼ e", false), b"a > b < c ^ d v e".to_vec());
+        assert_eq!(encode_latin1("5′ 10″, −3\u{2009}x", false), b"5' 10\", -3 x".to_vec());
+        assert_eq!(encode_latin1("日本 ✓", false), b"?? ?".to_vec(), "a character with no look-alike stays a question mark");
+        assert_eq!(encode_latin1("é — €", false), vec![0xE9, b' ', 0x97, b' ', 0x80], "what the encoding has is not replaced");
     }
 
     #[test]
@@ -3488,6 +3573,142 @@ mod tests {
                 "{font}: {shown}"
             );
         }
+    }
+
+    const BUILT_IN_FONTS: [&str; 10] = [
+        "Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
+        "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic", "Courier", "Courier-BoldOblique",
+    ];
+
+    fn built_in(base_name: &'static str, signs: bool) -> PreparedFont {
+        PreparedFont { resource_name: "F0".to_string(), kind: PreparedFontKind::Builtin { base_name, signs } }
+    }
+
+    #[test]
+    fn a_built_in_font_with_signs_has_a_code_for_each_comparison_sign_and_one_without_draws_a_question_mark() {
+        assert_eq!(built_in("Helvetica", true).encode_text("a ≥ b ≤ c ≠ d ≈ e"), b"a \x90 b \x8F c \x8D d \x81 e".to_vec());
+        assert_eq!(built_in("Helvetica", false).encode_text("a ≥ b ≤ c ≠ d ≈ e"), b"a ? b ? c ? d ? e".to_vec());
+    }
+
+    #[test]
+    fn the_codes_of_the_signs_differ_and_are_ones_that_no_character_of_windows_1252_has() {
+        let codes: HashSet<u8> = SIGNS.iter().map(|&(_, code, _)| code).collect();
+        assert_eq!(codes.len(), SIGNS.len(), "two signs share a code");
+        for c in (0..=0xFFFF).filter_map(char::from_u32) {
+            assert!(win1252_byte(c).is_none_or(|code| !codes.contains(&code)), "{c:?} has the code of a sign");
+        }
+    }
+
+    #[test]
+    fn layout_measures_a_comparison_sign_as_the_viewer_advances_by_the_metrics() {
+        for font in BUILT_IN_FONTS {
+            let expected = if font.starts_with("Courier") { 600.0 } else { 549.0 };
+            for sign in ['≥', '≤', '≠', '≈'] {
+                assert_eq!(crate::layout::text_width(font, &sign.to_string(), 1000.0).round(), expected, "{font}: {sign}");
+            }
+        }
+    }
+
+    /// The `/Widths` of the dictionary of the built-in font that a document with a sign draws in, one for each
+    /// code from the space.
+    fn widths_of(font: &str) -> Vec<f32> {
+        let pdf = render(&format!(r#"<text font="{font}">a ≥ b</text>"#));
+        let (_, dict) = object_with(&pdf, &format!("/BaseFont /{font}\n"));
+        let list = dict.split("/Widths [").nth(1).and_then(|rest| rest.split(']').next()).expect("a /Widths array");
+        list.split_whitespace().map(|width| width.parse().expect("a width")).collect()
+    }
+
+    #[test]
+    fn the_font_of_a_document_with_signs_names_their_glyphs_and_gives_every_code_a_width() {
+        let pdf = render(r#"<text>Node ≥ 22, npm ≤ 10, a ≠ b, 0.1 + 0.2 ≈ 0.3</text>"#);
+        let (_, helvetica) = object_with(&pdf, "/BaseFont /Helvetica\n");
+        assert!(helvetica.contains("/BaseEncoding /WinAnsiEncoding"), "{helvetica}");
+        assert!(helvetica.contains("/Differences [129 /approxequal 141 /notequal 143 /lessequal 144 /greaterequal]"), "{helvetica}");
+        assert!(helvetica.contains("/FirstChar 32") && helvetica.contains("/LastChar 255"), "{helvetica}");
+        assert_eq!(widths_of("Helvetica").len(), 224);
+    }
+
+    #[test]
+    fn the_widths_are_the_adobe_metrics_so_that_a_viewer_advances_as_it_did_without_them() {
+        let width = |font: &str, code: u8| widths_of(font)[usize::from(code) - 32];
+        // Printable ASCII, where the two quotes are what the font has and not what layout has: 191 and 333, not 222.
+        assert_eq!([b' ', b'\'', b'`', b'A', b'i'].map(|code| width("Helvetica", code)), [278.0, 191.0, 333.0, 667.0, 222.0]);
+        // Accented letters, and a bold one that is wider than its regular.
+        assert_eq!([0xE9, 0xC1, 0xDF].map(|code| width("Helvetica", code)), [556.0, 667.0, 611.0]);
+        assert_eq!(width("Helvetica-Bold", 0xC0), 722.0);
+        assert_eq!([b'e', 0xE9].map(|code| width("Times-Italic", code)), [444.0, 444.0]);
+        // The bullet that WinAnsiEncoding draws for a code it leaves empty.
+        assert_eq!([0x7F, 0x9D].map(|code| width("Helvetica", code)), [350.0; 2]);
+        assert!(widths_of("Courier-BoldOblique").iter().all(|&width| width == 600.0));
+        assert_eq!(widths_of("Helvetica-Oblique"), widths_of("Helvetica"));
+        assert_eq!(widths_of("Helvetica-BoldOblique"), widths_of("Helvetica-Bold"));
+    }
+
+    #[test]
+    fn the_width_of_a_sign_in_the_dictionary_is_the_width_layout_measures() {
+        for font in BUILT_IN_FONTS {
+            let widths = widths_of(font);
+            for &(sign, code, _) in &SIGNS {
+                let layout = crate::layout::text_width(font, &sign.to_string(), 1000.0).round();
+                assert_eq!(widths[usize::from(code) - 32], layout, "{font}: {sign}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_metrics_differ_from_layouts_widths_of_ascii_in_nine_places_only() {
+        // Layout measures the straight quote and the grave accent as the curly quotes, which are the codes they have in a
+        // standard encoding, and has 556 for the g of Times-BoldItalic, where the metrics have 500. They stay as
+        // they are, since text in existing documents would move.
+        let mut differs = Vec::new();
+        for font in ["Helvetica", "Helvetica-Bold", "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic"] {
+            for code in 32..=126u8 {
+                if crate::layout::afm_code_advance(font, code) != crate::layout::builtin_char_advance(font, char::from(code)) {
+                    differs.push((font, char::from(code)));
+                }
+            }
+        }
+        assert_eq!(differs, vec![
+            ("Helvetica", '\''), ("Helvetica", '`'), ("Helvetica-Bold", '\''), ("Helvetica-Bold", '`'),
+            ("Times-Roman", '\''), ("Times-Bold", '\''), ("Times-Italic", '\''),
+            ("Times-BoldItalic", '\''), ("Times-BoldItalic", 'g'),
+        ]);
+    }
+
+    #[test]
+    fn a_font_of_a_document_with_no_sign_is_written_as_it_was() {
+        let pdf = render(r#"<text>Node is at least 22, é — €</text>"#);
+        let (_, helvetica) = object_with(&pdf, "/BaseFont /Helvetica\n");
+        assert!(helvetica.contains("/Encoding /WinAnsiEncoding"), "{helvetica}");
+        assert!(!helvetica.contains("/Differences") && !helvetica.contains("/Widths"), "{helvetica}");
+    }
+
+    #[test]
+    fn only_the_font_that_draws_a_sign_is_written_with_codes_for_them() {
+        let pdf = render(r#"<text font="Times-Roman">a ≥ b</text><text font="Courier">no signs</text>"#);
+        assert!(object_with(&pdf, "/BaseFont /Times-Roman\n").1.contains("/Differences"));
+        assert!(!object_with(&pdf, "/BaseFont /Courier\n").1.contains("/Differences"));
+    }
+
+    #[test]
+    fn symbol_and_zapf_dingbats_are_left_with_their_encoding_whatever_they_are_given() {
+        let pdf = render(r#"<text font="Symbol">≥</text><text font="ZapfDingbats">≤</text>"#);
+        for name in ["Symbol", "ZapfDingbats"] {
+            let (_, dict) = object_with(&pdf, &format!("/BaseFont /{name}\n"));
+            assert!(!dict.contains("/Differences") && !dict.contains("/Widths"), "{name}: {dict}");
+        }
+    }
+
+    #[test]
+    fn an_embedded_font_draws_the_comparison_signs_as_it_has_them() {
+        let (name, bytes) = FIXTURE_FONTS.iter()
+            .find(|(_, bytes)| Face::parse(bytes, 0).is_ok_and(|face| ['≥', '≤', '≠', '≈'].iter().all(|&c| face.glyph_index(c).is_some())))
+            .expect("a fixture font with the four signs");
+        let used: HashSet<char> = "a ≥ b ≤ c ≠ d ≈ e".chars().collect();
+        let font = PreparedFont { resource_name: "F0".to_string(), kind: prepare_truetype_font(bytes, &used) };
+        let encoded = font.encode_text("≥≈");
+        let glyphs: Vec<u16> = encoded.chunks(2).map(|pair| u16::from(pair[0]) << 8 | u16::from(pair[1])).collect();
+        assert!(glyphs.iter().all(|&glyph| glyph != 0), "{name} draws a sign as .notdef");
     }
 
     #[test]
