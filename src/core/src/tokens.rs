@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Tokens {
     pub space: [f32; 6],
     pub border: [f32; 6],
@@ -75,7 +75,7 @@ fn parse_stop_offset(val: &str) -> Option<f32> {
 }
 
 /// A font definition resolved from `<assets><fonts>`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FontDef {
     /// One of the 14 PDF core (built-in Type 1) fonts. No bytes needed.
     Core(String),
@@ -412,6 +412,8 @@ impl Default for Tokens {
             ("surface-alt", "#f5f5f5"),
             ("text", "#1a1a1a"),
             ("text-muted", "#737373"),
+            ("line", "#737373"),
+            ("line-muted", "#d4d4d4"),
         ] {
             colors.insert(name.to_string(), val.to_string());
         }
@@ -645,6 +647,8 @@ mod tests {
         let t = Tokens::default();
         assert_eq!(t.resolve_color("primary").unwrap(), "#1763cf");
         assert_eq!(t.resolve_color("surface-alt").unwrap(), "#f5f5f5");
+        assert_eq!(t.resolve_color("line").unwrap(), "#737373");
+        assert_eq!(t.resolve_color("line-muted").unwrap(), "#d4d4d4");
     }
 
     // ── Gradients ─────────────────────────────────────────────────────────────
@@ -770,6 +774,9 @@ mod tests {
         assert_eq!(t.resolve_spacing("m").unwrap(), [8.0, 8.0, 8.0, 8.0]);
         // two values: top/bottom, left/right
         assert_eq!(t.resolve_spacing("s m").unwrap(), [4.0, 8.0, 4.0, 8.0]);
+        // a length and a slot in one shorthand, as the quote of the default Markdown styles has
+        assert_eq!(t.resolve_spacing("0pt 0pt 0pt m").unwrap(), [0.0, 0.0, 0.0, 8.0]);
+        assert_eq!(t.resolve_spacing("m 3pt xs").unwrap(), [8.0, 3.0, 2.0, 3.0]);
         // four explicit
         assert_eq!(
             t.resolve_spacing("2pt 4pt 6pt 8pt").unwrap(),

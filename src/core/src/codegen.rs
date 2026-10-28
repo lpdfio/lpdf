@@ -140,13 +140,37 @@ fn to_pascal_case(s: &str) -> String {
 
 /// Whether an element holds text and `span` children: the layout's `text` and `code` and the layer's `text-at`.
 fn is_text_tag(tag: &str) -> bool {
-    matches!(tag, "text" | "text-at" | "code")
+    matches!(tag, "text" | "text-at" | "code" | "markdown-content")
 }
 
 /// The elements that stand inside the words of a text: a `span` and a `code-span`, and a `fn`, whose own words
 /// are inline too.
 fn is_inline_tag(tag: &str) -> bool {
     matches!(tag, "span" | "code-span" | "fn")
+}
+
+/// The rules a `<markdown-styles>` holds.
+const MARKDOWN_RULES: [&str; 18] = [
+    "h1", "h2", "h3", "h4", "h5", "h6", "p", "code", "quote", "li", "a", "strong", "em", "del", "table", "th", "td",
+    "markdown-styles",
+];
+
+/// The element a node is. A rule of a `<markdown-styles>` shares its name with an element of the layout (`code`,
+/// `li`, `td`, `table`), so it is told apart as `markdown-` and its name: `markdown-code`.
+fn family_tag(node: &Node) -> String {
+    let tag = node.tag_name().name();
+    let in_styles = node.parent_element().is_some_and(|parent| parent.has_tag_name("markdown-styles"));
+    if in_styles && MARKDOWN_RULES.contains(&tag) { format!("markdown-{tag}") } else { tag.to_string() }
+}
+
+/// The name a part of a `<markdown>` has in `LMarkdown`: `styles`, `content` or a rule such as `h1`. `None` for
+/// `markdown` itself, which `L` holds, and for every other element.
+fn markdown_member(family: &str) -> Option<&str> {
+    match family {
+        "markdown-styles"  => Some("styles"),
+        "markdown-content" => Some("content"),
+        other              => other.strip_prefix("markdown-"),
+    }
 }
 
 /// Return the canonical JS method name for an XML element tag.
@@ -189,6 +213,43 @@ fn js_method(tag: &str) -> &'static str {
         "img-at"     => "imgAt",
         "barcode-at" => "barcodeAt",
         _          => "element",
+    }
+}
+
+/// What a JS or Python call for a node is called: `L.text`, and for the parts of a markdown `L.markdown` and
+/// `LMarkdown.styles`.
+fn js_callee(tag: &str, family: &str) -> String {
+    match (tag, markdown_member(family)) {
+        ("markdown", _)   => "L.markdown".to_string(),
+        (_, Some(member)) => format!("LMarkdown.{member}"),
+        _                 => format!("L.{}", js_method(tag)),
+    }
+}
+
+/// What a C# call for a node is called.
+fn dotnet_callee(tag: &str, family: &str) -> String {
+    match (tag, markdown_member(family)) {
+        ("markdown", _)   => "L.Markdown".to_string(),
+        (_, Some(member)) => format!("LMarkdown.{}", to_pascal_case(member)),
+        _                 => format!("L.{}", dotnet_method(tag)),
+    }
+}
+
+/// What a PHP call for a node is called.
+fn php_callee(tag: &str, family: &str) -> String {
+    match (tag, markdown_member(family)) {
+        ("markdown", _)   => "L::markdown".to_string(),
+        (_, Some(member)) => format!("LMarkdown::{member}"),
+        _                 => format!("L::{}", js_method(tag)),
+    }
+}
+
+/// What a Python call for a node is called.
+fn python_callee(tag: &str, family: &str) -> String {
+    match (tag, markdown_member(family)) {
+        ("markdown", _)   => "L.markdown".to_string(),
+        (_, Some(member)) => format!("LMarkdown.{member}"),
+        _                 => format!("L.{}", python_method(tag)),
     }
 }
 
@@ -314,6 +375,14 @@ fn text_pieces<'a, 'i>(node: &Node<'a, 'i>) -> Vec<TextPiece<'a, 'i>> {
         Span(Node<'a, 'i>),
     }
 
+    // The Markdown is one string, which keeps its lines and its indent beyond the one all its lines share.
+    if node.has_tag_name("markdown-content") {
+        let raw: String = node.children().filter(|n| n.is_text()).filter_map(|n| n.text()).collect();
+        // The blank lines around it are the XML's layout, not the Markdown's.
+        let dedented = crate::markdown::dedent(&raw);
+        let text = dedented.trim_start_matches('\n').trim_end();
+        return if text.is_empty() { Vec::new() } else { vec![TextPiece::Str(text.to_string())] };
+    }
     // What is written in a code keeps its white space, in the code and in the spans of it.
     if node.has_tag_name("code") {
         return code_pieces(node);
@@ -632,6 +701,7 @@ fn php_namespace(class: &str) -> &'static str {
         | "FontAttr" | "ImageAttr" => "Lpdf\\Kit",
         "LayerAttr" | "RectAttr" | "CircleAttr" | "EllipseAttr" | "LineAttr" | "PathAttr" | "TextAtAttr"
         | "ImgAtAttr" | "BarcodeAtAttr" => "Lpdf\\Canvas",
+        markdown if markdown.starts_with("Markdown") => "Lpdf\\Markdown",
         _ => "Lpdf\\Layout",
     }
 }
@@ -816,18 +886,20 @@ impl JsEmitter {
             }
         }
 
+        // The assets and tokens are attributes of the document. The SDK reads the fonts and images that
+        // have a src from there.
+        let doc_expr = document_node.map(|doc_node| self.emit_document_node(&doc_node, 0, assets_node, tokens_node));
+
         let mut out = String::new();
 
-        out.push_str("import { L, NoAttr } from '@lpdfio/lpdf'\n");
+        let markdown = if doc_expr.as_deref().is_some_and(|code| code.contains("LMarkdown.")) { ", LMarkdown" } else { "" };
+        out.push_str(&format!("import {{ L{markdown}, NoAttr }} from '@lpdfio/lpdf'\n"));
         out.push('\n');
 
         out.push_str("const engine = L.engine()\n");
         out.push('\n');
 
-        // The assets and tokens are attributes of the document. The SDK reads the fonts and images that
-        // have a src from there.
-        if let Some(doc_node) = document_node {
-            let doc_expr = self.emit_document_node(&doc_node, 0, assets_node, tokens_node);
+        if let Some(doc_expr) = doc_expr {
             out.push_str(&format!("const doc = {doc_expr}\n"));
         }
 
@@ -856,7 +928,8 @@ impl JsEmitter {
             "meta"     => return String::new(), // folded into document
             _ => {}
         }
-        let method    = js_method(tag);
+        let family    = family_tag(node);
+        let method    = js_callee(tag, &family);
         let ind0      = self.ind(level);
         let ind1      = self.ind(level + 1);
 
@@ -875,14 +948,14 @@ impl JsEmitter {
 
         let call = if children.is_empty() {
             // Leaf — no children arg
-            format!("{binding_comments}{ind0}L.{method}({attrs})")
+            format!("{binding_comments}{ind0}{method}({attrs})")
         } else if is_text_tag(tag) {
-            format!("{binding_comments}{}", self.emit_text_call(&ind0, &ind1, method, &attrs, &children))
+            format!("{binding_comments}{}", self.emit_text_call(&ind0, &ind1, &method, &attrs, &children))
         } else if is_inline_tag(tag) {
             // span always inline: L.span({...}, ['content'])
-            format!("{binding_comments}{ind0}L.{method}({attrs}, [{}])", children.join(", "))
+            format!("{binding_comments}{ind0}{method}({attrs}, [{}])", children.join(", "))
         } else {
-            format!("{binding_comments}{}", self.emit_block_call(&ind0, &ind1, method, &attrs, &children))
+            format!("{binding_comments}{}", self.emit_block_call(&ind0, &ind1, &method, &attrs, &children))
         };
 
         call
@@ -891,7 +964,7 @@ impl JsEmitter {
     fn emit_document_node(&self, node: &Node, level: usize, assets: Option<Node>, tokens: Option<Node>) -> String {
         let ind0 = self.ind(level);
         let ind1 = self.ind(level + 1);
-        let method = "document";
+        let method = "L.document";
 
         // Find <meta> child and fold its attributes in
         let meta_node = node.children().find(|n| n.is_element() && n.tag_name().name() == "meta");
@@ -940,7 +1013,7 @@ impl JsEmitter {
                 .filter(|s| !s.is_empty()),
         );
 
-        self.emit_block_call(&ind0, &ind1, method, &attrs, &children)
+        self.emit_block_call(&ind0, &ind1, &method, &attrs, &children)
     }
 
     /// Collect children of a node as emitted strings.
@@ -991,11 +1064,11 @@ impl JsEmitter {
     ) -> String {
         if children.len() == 1 {
             // Inline form
-            format!("{ind0}L.{method}({attrs}, [{}])", children[0])
+            format!("{ind0}{method}({attrs}, [{}])", children[0])
         } else {
             // Multi-line form — children are plain values (strings/inline spans), add indent
             let items: Vec<String> = children.iter().map(|c| format!("{ind1}{c},")).collect();
-            format!("{ind0}L.{method}({attrs}, [\n{}\n{ind0}])", items.join("\n"))
+            format!("{ind0}{method}({attrs}, [\n{}\n{ind0}])", items.join("\n"))
         }
     }
 
@@ -1009,11 +1082,11 @@ impl JsEmitter {
         children: &[String],
     ) -> String {
         if children.is_empty() {
-            return format!("{ind0}L.{method}({attrs})");
+            return format!("{ind0}{method}({attrs})");
         }
         // Children already carry their own leading indentation from emit_node.
         let items: Vec<String> = children.iter().map(|c| format!("{c},")).collect();
-        format!("{ind0}L.{method}({attrs}, [\n{}\n{ind0}])", items.join("\n"))
+        format!("{ind0}{method}({attrs}, [\n{}\n{ind0}])", items.join("\n"))
     }
 }
 
@@ -1093,7 +1166,8 @@ impl DotnetEmitter {
             "meta"     => return String::new(),
             _ => {}
         }
-        let method    = dotnet_method(tag);
+        let family    = family_tag(node);
+        let method    = dotnet_callee(tag, &family);
         let ind0      = self.ind(level);
         let ind1      = self.ind(level + 1);
 
@@ -1105,19 +1179,19 @@ impl DotnetEmitter {
         let children = self.collect_children(node, tag, level, text_content_override.as_deref());
 
         if children.is_empty() {
-            format!("{binding_comments}{ind0}L.{method}({attrs})")
+            format!("{binding_comments}{ind0}{method}({attrs})")
         } else if is_text_tag(tag) {
-            format!("{binding_comments}{}", self.emit_text_call(&ind0, &ind1, method, &attrs, &children))
+            format!("{binding_comments}{}", self.emit_text_call(&ind0, &ind1, &method, &attrs, &children))
         } else if is_inline_tag(tag) {
-            format!("{binding_comments}{ind0}L.{method}({attrs}, [{}])", children.join(", "))
+            format!("{binding_comments}{ind0}{method}({attrs}, [{}])", children.join(", "))
         } else {
-            format!("{binding_comments}{}", self.emit_block_call(&ind0, method, &attrs, &children))
+            format!("{binding_comments}{}", self.emit_block_call(&ind0, &method, &attrs, &children))
         }
     }
 
     fn emit_document_node(&self, node: &Node, level: usize, assets: Option<Node>, tokens: Option<Node>) -> String {
         let ind0   = self.ind(level);
-        let method = "Document";
+        let method = "L.Document";
 
         let meta_node = node.children().find(|n| n.is_element() && n.tag_name().name() == "meta");
         let meta_inline = meta_node.map(|m| {
@@ -1163,7 +1237,7 @@ impl DotnetEmitter {
                 .filter(|s| !s.is_empty()),
         );
 
-        self.emit_block_call(&ind0, method, &attrs, &children)
+        self.emit_block_call(&ind0, &method, &attrs, &children)
     }
 
     fn collect_children(
@@ -1208,10 +1282,10 @@ impl DotnetEmitter {
         children: &[String],
     ) -> String {
         if children.len() == 1 {
-            format!("{ind0}L.{method}({attrs}, [{}])", children[0])
+            format!("{ind0}{method}({attrs}, [{}])", children[0])
         } else {
             let items: Vec<String> = children.iter().map(|c| format!("{ind1}{c},")).collect();
-            format!("{ind0}L.{method}({attrs}, [\n{}\n{ind0}])", items.join("\n"))
+            format!("{ind0}{method}({attrs}, [\n{}\n{ind0}])", items.join("\n"))
         }
     }
 
@@ -1223,10 +1297,10 @@ impl DotnetEmitter {
         children: &[String],
     ) -> String {
         if children.is_empty() {
-            return format!("{ind0}L.{method}({attrs})");
+            return format!("{ind0}{method}({attrs})");
         }
         let items: Vec<String> = children.iter().map(|c| format!("{c},")).collect();
-        format!("{ind0}L.{method}({attrs}, [\n{}\n{ind0}])", items.join("\n"))
+        format!("{ind0}{method}({attrs}, [\n{}\n{ind0}])", items.join("\n"))
     }
 }
 
@@ -1269,6 +1343,9 @@ impl PhpEmitter {
         out.push_str("<?php\n\n");
         out.push_str("require_once 'vendor/autoload.php';\n\n");
         out.push_str("use Lpdf\\L;\n");
+        if body.contains("LMarkdown::") {
+            out.push_str("use Lpdf\\LMarkdown;\n");
+        }
         out.push_str("use const Lpdf\\NoAttr;\n");
         let mut classes: Vec<String> = classes_used(&body)
             .iter()
@@ -1309,31 +1386,32 @@ impl PhpEmitter {
             _ => {}
         }
         // PHP uses same method names as JS (camelCase)
-        let method    = js_method(tag);
+        let family    = family_tag(node);
+        let method    = php_callee(tag, &family);
         let ind0      = self.ind(level);
         let ind1      = self.ind(level + 1);
 
         let binding_comments = data_binding_comments(node, &ind0);
         let data_value = node.attribute("data-value");
-        let attrs = php_attrs(node, tag, None);
+        let attrs = php_attrs(node, &family, None);
         let text_content_override: Option<String> = data_value.map(|p| format!("{{{p}}}"));
 
         let children = self.collect_children(node, tag, level, text_content_override.as_deref());
 
         if children.is_empty() {
-            format!("{binding_comments}{ind0}L::{method}({attrs})")
+            format!("{binding_comments}{ind0}{method}({attrs})")
         } else if is_text_tag(tag) {
-            format!("{binding_comments}{}", self.emit_text_call(&ind0, &ind1, method, &attrs, &children))
+            format!("{binding_comments}{}", self.emit_text_call(&ind0, &ind1, &method, &attrs, &children))
         } else if is_inline_tag(tag) {
-            format!("{binding_comments}{ind0}L::{method}({attrs}, [{}])", children.join(", "))
+            format!("{binding_comments}{ind0}{method}({attrs}, [{}])", children.join(", "))
         } else {
-            format!("{binding_comments}{}", self.emit_block_call(&ind0, method, &attrs, &children))
+            format!("{binding_comments}{}", self.emit_block_call(&ind0, &method, &attrs, &children))
         }
     }
 
     fn emit_document_node(&self, node: &Node, level: usize, assets: Option<Node>, tokens: Option<Node>) -> String {
         let ind0   = self.ind(level);
-        let method = "document";
+        let method = "L::document";
 
         let meta_node = node.children().find(|n| n.is_element() && n.tag_name().name() == "meta");
         let meta_inline = meta_node.map(|m| {
@@ -1379,7 +1457,7 @@ impl PhpEmitter {
                 .filter(|s| !s.is_empty()),
         );
 
-        self.emit_block_call(&ind0, method, &attrs, &children)
+        self.emit_block_call(&ind0, &method, &attrs, &children)
     }
 
     fn collect_children(
@@ -1424,10 +1502,10 @@ impl PhpEmitter {
         children: &[String],
     ) -> String {
         if children.len() == 1 {
-            format!("{ind0}L::{method}({attrs}, [{}])", children[0])
+            format!("{ind0}{method}({attrs}, [{}])", children[0])
         } else {
             let items: Vec<String> = children.iter().map(|c| format!("{ind1}{c},")).collect();
-            format!("{ind0}L::{method}({attrs}, [\n{}\n{ind0}])", items.join("\n"))
+            format!("{ind0}{method}({attrs}, [\n{}\n{ind0}])", items.join("\n"))
         }
     }
 
@@ -1439,10 +1517,10 @@ impl PhpEmitter {
         children: &[String],
     ) -> String {
         if children.is_empty() {
-            return format!("{ind0}L::{method}({attrs})");
+            return format!("{ind0}{method}({attrs})");
         }
         let items: Vec<String> = children.iter().map(|c| format!("{c},")).collect();
-        format!("{ind0}L::{method}({attrs}, [\n{}\n{ind0}])", items.join("\n"))
+        format!("{ind0}{method}({attrs}, [\n{}\n{ind0}])", items.join("\n"))
     }
 }
 
@@ -1483,6 +1561,9 @@ impl PythonEmitter {
         let mut out = String::new();
 
         let mut imports = vec!["L".to_string(), "NoAttr".to_string()];
+        if body.contains("LMarkdown.") {
+            imports.insert(1, "LMarkdown".to_string());
+        }
         let mut classes = classes_used(&body);
         classes.sort();
         imports.extend(classes);
@@ -1518,31 +1599,32 @@ impl PythonEmitter {
             _ => {}
         }
         // Python uses same method names as JS (snake_case only for multi-word: textAt → text_at)
-        let method    = python_method(tag);
+        let family    = family_tag(node);
+        let method    = python_callee(tag, &family);
         let ind0      = self.ind(level);
         let ind1      = self.ind(level + 1);
 
         let binding_comments = data_binding_comments_hash(node, &ind0);
         let data_value = node.attribute("data-value");
-        let attrs = python_attrs(node, tag, None);
+        let attrs = python_attrs(node, &family, None);
         let text_content_override: Option<String> = data_value.map(|p| format!("{{{p}}}"));
 
         let children = self.collect_children(node, tag, level, text_content_override.as_deref());
 
         if children.is_empty() {
-            format!("{binding_comments}{ind0}L.{method}({attrs})")
+            format!("{binding_comments}{ind0}{method}({attrs})")
         } else if is_text_tag(tag) {
-            format!("{binding_comments}{}", self.emit_text_call(&ind0, &ind1, method, &attrs, &children))
+            format!("{binding_comments}{}", self.emit_text_call(&ind0, &ind1, &method, &attrs, &children))
         } else if is_inline_tag(tag) {
-            format!("{binding_comments}{ind0}L.{method}({attrs}, [{}])", children.join(", "))
+            format!("{binding_comments}{ind0}{method}({attrs}, [{}])", children.join(", "))
         } else {
-            format!("{binding_comments}{}", self.emit_block_call(&ind0, method, &attrs, &children))
+            format!("{binding_comments}{}", self.emit_block_call(&ind0, &method, &attrs, &children))
         }
     }
 
     fn emit_document_node(&self, node: &Node, level: usize, assets: Option<Node>, tokens: Option<Node>) -> String {
         let ind0   = self.ind(level);
-        let method = "document";
+        let method = "L.document";
 
         let meta_node = node.children().find(|n| n.is_element() && n.tag_name().name() == "meta");
         let meta_inline = meta_node.map(|m| {
@@ -1588,7 +1670,7 @@ impl PythonEmitter {
                 .filter(|s| !s.is_empty()),
         );
 
-        self.emit_block_call(&ind0, method, &attrs, &children)
+        self.emit_block_call(&ind0, &method, &attrs, &children)
     }
 
     fn collect_children(
@@ -1633,7 +1715,7 @@ impl PythonEmitter {
         children: &[String],
     ) -> String {
         if children.len() == 1 {
-            format!("{ind0}L.{method}({attrs}, [{}])", children[0])
+            format!("{ind0}{method}({attrs}, [{}])", children[0])
         } else {
             // Python: no trailing comma on last item
             let last = children.len() - 1;
@@ -1642,7 +1724,7 @@ impl PythonEmitter {
                 .enumerate()
                 .map(|(i, c)| if i < last { format!("{ind1}{c},") } else { format!("{ind1}{c}") })
                 .collect();
-            format!("{ind0}L.{method}({attrs}, [\n{}\n{ind0}])", items.join("\n"))
+            format!("{ind0}{method}({attrs}, [\n{}\n{ind0}])", items.join("\n"))
         }
     }
 
@@ -1654,7 +1736,7 @@ impl PythonEmitter {
         children: &[String],
     ) -> String {
         if children.is_empty() {
-            return format!("{ind0}L.{method}({attrs})");
+            return format!("{ind0}{method}({attrs})");
         }
         // Python: no trailing comma on last item
         let last = children.len() - 1;
@@ -1663,7 +1745,7 @@ impl PythonEmitter {
             .enumerate()
             .map(|(i, c)| if i < last { format!("{c},") } else { c.clone() })
             .collect();
-        format!("{ind0}L.{method}({attrs}, [\n{}\n{ind0}])", items.join("\n"))
+        format!("{ind0}{method}({attrs}, [\n{}\n{ind0}])", items.join("\n"))
     }
 }
 
@@ -2960,6 +3042,49 @@ mod tests {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(bookmark), "{target}: {out}");
             assert!(out.contains(section), "{target}: {out}");
+        }
+    }
+    /// A section whose content is a markdown with a rule that is named like an element of the layout.
+    const MARKDOWN: &str = r#"<lpdf version="1"><document><section>
+        <markdown margin="54pt">
+            <markdown-styles src="styles.xml"><h1 color="muted"/><code font="Courier"/></markdown-styles>
+            <markdown-content><![CDATA[
+                # Title
+
+                Some `code` and a <b> sign.
+            ]]></markdown-content>
+        </markdown>
+    </section></document></lpdf>"#;
+
+    #[test]
+    fn test_a_markdown_is_l_markdown_and_its_parts_are_lmarkdown_in_every_language() {
+        let text = r#"'# Title\n\nSome `code` and a <b> sign.'"#;
+        let js = codegen(MARKDOWN, &CodegenOptions { target: "js".into(), indent: 4 }).unwrap();
+        assert!(js.contains("import { L, LMarkdown, NoAttr } from '@lpdfio/lpdf'"), "{js}");
+        assert!(js.contains("L.markdown({ margin: '54pt' }, ["), "{js}");
+        assert!(js.contains("LMarkdown.styles({ src: 'styles.xml' }, ["), "{js}");
+        assert!(js.contains("LMarkdown.h1({ color: 'muted' }),") && js.contains("LMarkdown.code({ font: 'Courier' }),"), "{js}");
+        assert!(js.contains(&format!("LMarkdown.content(NoAttr, [{text}])")), "{js}");
+
+        let python = codegen(MARKDOWN, &CodegenOptions { target: "python".into(), indent: 4 }).unwrap();
+        assert!(python.contains("from lpdf import L, LMarkdown, NoAttr, MarkdownAttr, MarkdownCodeAttr, MarkdownH1Attr, MarkdownStylesAttr"), "{python}");
+        assert!(python.contains("L.markdown(MarkdownAttr(margin='54pt'), [") && python.contains("LMarkdown.h1(MarkdownH1Attr(color='muted'))"), "{python}");
+
+        let php = codegen(MARKDOWN, &CodegenOptions { target: "php".into(), indent: 4 }).unwrap();
+        assert!(php.contains("use Lpdf\\LMarkdown;") && php.contains("use Lpdf\\Markdown\\MarkdownCodeAttr;"), "{php}");
+        assert!(php.contains("L::markdown(new MarkdownAttr(margin: '54pt'), [") && php.contains("LMarkdown::code(new MarkdownCodeAttr(font: 'Courier'))"), "{php}");
+
+        let dotnet = codegen(MARKDOWN, &CodegenOptions { target: "dotnet".into(), indent: 4 }).unwrap();
+        assert!(dotnet.contains("L.Markdown(new() { Margin = \"54pt\" }, [") && dotnet.contains("LMarkdown.Styles(new() { Src = \"styles.xml\" }, ["), "{dotnet}");
+        assert!(dotnet.contains("LMarkdown.H1(new() { Color = \"muted\" })") && dotnet.contains("LMarkdown.Content(NoAttr, ["), "{dotnet}");
+    }
+
+    #[test]
+    fn test_a_document_without_a_markdown_imports_no_lmarkdown() {
+        let xml = r#"<lpdf version="1"><document><section><layout><text>Hi</text></layout></section></document></lpdf>"#;
+        for target in ["js", "php", "python"] {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            assert!(!out.contains("LMarkdown"), "{target}: {out}");
         }
     }
 }

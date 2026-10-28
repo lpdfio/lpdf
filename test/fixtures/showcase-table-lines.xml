@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <document size="a4">
+    <meta title="lpdf Showcase — Table lines" subject="Stripes and the lines under the header and the rows of a table" />
+
+    <!-- stripe, head-border and row-border set what tells the rows of a table apart. The tables hold the same rows.
+         Expected, top to bottom:
+           1  No stripe and no line
+           2  Every other row below the header on a light background
+           3  A 1pt line under the header only
+           4  The header line, and a 0.5pt line under each row
+           5  The stripes and the lines together
+           6  Lines between the rows of a table with gaps and cells that span rows: a line stops where a cell
+              spans on into the next row
+    -->
+    <section>
+      <layout margin="40pt">
+      <text font-size="m" bold="true">1  Plain</text>
+      <text font-size="xs" color="text-muted">No stripe and no lines: the table has no look of its own.</text>
+      <table cols="2fr 1fr 1fr" >
+        <thead><td padding="6pt 8pt"><text font-size="s" bold="true">Plan</text></td><td padding="6pt 8pt" align="end"><text font-size="s" bold="true">Seats</text></td><td padding="6pt 8pt" align="end"><text font-size="s" bold="true">Price</text></td></thead>
+          <tr><td padding="6pt 8pt"><text font-size="s">Starter</text></td><td padding="6pt 8pt" align="end"><text font-size="s">5</text></td><td padding="6pt 8pt" align="end"><text font-size="s">$29</text></td></tr>
+          <tr><td padding="6pt 8pt"><text font-size="s">Team</text></td><td padding="6pt 8pt" align="end"><text font-size="s">25</text></td><td padding="6pt 8pt" align="end"><text font-size="s">$99</text></td></tr>
+      </table>
+      <frame height="10pt"/>
+      <text font-size="m" bold="true">2  Striped</text>
+      <text font-size="xs" color="text-muted">stripe: every other row below the header has the color.</text>
+      <table cols="2fr 1fr 1fr" stripe="#f5f5f5">
+        <thead><td padding="6pt 8pt"><text font-size="s" bold="true">Plan</text></td><td padding="6pt 8pt" align="end"><text font-size="s" bold="true">Seats</text></td><td padding="6pt 8pt" align="end"><text font-size="s" bold="true">Price</text></td></thead>
+          <tr><td padding="6pt 8pt"><text font-size="s">Starter</text></td><td padding="6pt 8pt" align="end"><text font-size="s">5</text></td><td padding="6pt 8pt" align="end"><text font-size="s">$29</text></td></tr>
+          <tr><td padding="6pt 8pt"><text font-size="s">Team</text></td><td padding="6pt 8pt" align="end"><text font-size="s">25</text></td><td padding="6pt 8pt" align="end"><text font-size="s">$99</text></td></tr>
+      </table>
+      <frame height="10pt"/>
+      <text font-size="m" bold="true">3  A line under the header</text>
+      <text font-size="xs" color="text-muted">head-border: a thickness and a color, the line under the header row.</text>
+      <table cols="2fr 1fr 1fr" head-border="1pt #737373">
+        <thead><td padding="6pt 8pt"><text font-size="s" bold="true">Plan</text></td><td padding="6pt 8pt" align="end"><text font-size="s" bold="true">Seats</text></td><td padding="6pt 8pt" align="end"><text font-size="s" bold="true">Price</text></td></thead>
+          <tr><td padding="6pt 8pt"><text font-size="s">Starter</text></td><td padding="6pt 8pt" align="end"><text font-size="s">5</text></td><td padding="6pt 8pt" align="end"><text font-size="s">$29</text></td></tr>
+          <tr><td padding="6pt 8pt"><text font-size="s">Team</text></td><td padding="6pt 8pt" align="end"><text font-size="s">25</text></td><td padding="6pt 8pt" align="end"><text font-size="s">$99</text></td></tr>
+      </table>
+      <frame height="10pt"/>
+      <text font-size="m" bold="true">4  Lines between the rows</text>
+      <text font-size="xs" color="text-muted">row-border: the line under each of the other rows. The header line takes the place of the row line under the header.</text>
+      <table cols="2fr 1fr 1fr" head-border="1pt #737373" row-border="0.5pt #d4d4d4">
+        <thead><td padding="6pt 8pt"><text font-size="s" bold="true">Plan</text></td><td padding="6pt 8pt" align="end"><text font-size="s" bold="true">Seats</text></td><td padding="6pt 8pt" align="end"><text font-size="s" bold="true">Price</text></td></thead>
+          <tr><td padding="6pt 8pt"><text font-size="s">Starter</text></td><td padding="6pt 8pt" align="end"><text font-size="s">5</text></td><td padding="6pt 8pt" align="end"><text font-size="s">$29</text></td></tr>
+          <tr><td padding="6pt 8pt"><text font-size="s">Team</text></td><td padding="6pt 8pt" align="end"><text font-size="s">25</text></td><td padding="6pt 8pt" align="end"><text font-size="s">$99</text></td></tr>
+      </table>
+      <frame height="10pt"/>
+      <text font-size="m" bold="true">5  Striped, with lines</text>
+      <text font-size="xs" color="text-muted">Stripe and lines together.</text>
+      <table cols="2fr 1fr 1fr" stripe="#f5f5f5" head-border="1pt #737373" row-border="0.5pt #d4d4d4">
+        <thead><td padding="6pt 8pt"><text font-size="s" bold="true">Plan</text></td><td padding="6pt 8pt" align="end"><text font-size="s" bold="true">Seats</text></td><td padding="6pt 8pt" align="end"><text font-size="s" bold="true">Price</text></td></thead>
+          <tr><td padding="6pt 8pt"><text font-size="s">Starter</text></td><td padding="6pt 8pt" align="end"><text font-size="s">5</text></td><td padding="6pt 8pt" align="end"><text font-size="s">$29</text></td></tr>
+          <tr><td padding="6pt 8pt"><text font-size="s">Team</text></td><td padding="6pt 8pt" align="end"><text font-size="s">25</text></td><td padding="6pt 8pt" align="end"><text font-size="s">$99</text></td></tr>
+      </table>
+      <frame height="10pt"/>
+      <text font-size="m" bold="true">6  A cell that spans rows</text>
+      <text font-size="xs" color="text-muted">The line under a row stops where a cell spans on into the next row, and the gap between rows keeps the lines apart.</text>
+      <table cols="1fr 1fr 1fr" gap="4pt" head-border="1pt #737373" row-border="0.5pt #d4d4d4">
+        <thead><td padding="6pt 8pt"><text font-size="s" bold="true">Team</text></td><td padding="6pt 8pt"><text font-size="s" bold="true">Month</text></td><td padding="6pt 8pt" align="end"><text font-size="s" bold="true">Revenue</text></td></thead>
+        <tr><td padding="6pt 8pt" rowspan="2"><text font-size="s" bold="true">North</text></td><td padding="6pt 8pt"><text font-size="s">January</text></td><td padding="6pt 8pt" align="end"><text font-size="s">$41,200</text></td></tr>
+        <tr><td padding="6pt 8pt"><text font-size="s">February</text></td><td padding="6pt 8pt" align="end"><text font-size="s">$38,900</text></td></tr>
+        <tr><td padding="6pt 8pt" rowspan="2"><text font-size="s" bold="true">South</text></td><td padding="6pt 8pt"><text font-size="s">January</text></td><td padding="6pt 8pt" align="end"><text font-size="s">$27,500</text></td></tr>
+        <tr><td padding="6pt 8pt"><text font-size="s">February</text></td><td padding="6pt 8pt" align="end"><text font-size="s">$31,800</text></td></tr>
+      </table>
+      </layout>
+    </section>
+  </document>
+</lpdf>

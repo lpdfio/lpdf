@@ -30,6 +30,8 @@ md-5 = "0.10"
 aes = "0.8"
 cbc = { version = "0.1", features = ["alloc"] }
 sha2 = "0.10"
+# Markdown parser for <markdown> — same version as core/Cargo.toml
+pulldown-cmark = { version = "0.13", default-features = false }
 
 [build-dependencies]
 sha2 = "0.10"

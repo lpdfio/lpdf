@@ -70,9 +70,16 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- spacing: explicit multi-pt shorthand OR a single slot or alias -->
+  <!-- 2 to 4 values, each a length or a slot or alias of the space row, e.g. "s l" | "0pt 0pt 0pt m" | "m 8pt xs" -->
+  <xs:simpleType name="SpacingMixed">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="(0|\d+(\.\d+)?(pt|mm|in)|[a-z][a-z0-9-]*)( (0|\d+(\.\d+)?(pt|mm|in)|[a-z][a-z0-9-]*)){1,3}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- spacing: a shorthand of lengths, a shorthand that has slots or aliases in it, OR a single slot or alias -->
   <xs:simpleType name="SpacingOrToken">
-    <xs:union memberTypes="SpacingValue TokenScale TokenName"/>
+    <xs:union memberTypes="SpacingValue SpacingMixed TokenScale TokenName"/>
   </xs:simpleType>
 
   <xs:simpleType name="PageSizeNamed">
@@ -126,6 +133,13 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <!-- how many heading levels of a markdown become bookmarks: 0 for none -->
+  <xs:simpleType name="MarkdownBookmarks">
+    <xs:restriction base="xs:nonNegativeInteger">
+      <xs:maxInclusive value="6"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <!-- e.g. "#1763cf" or "#fff" -->
   <xs:simpleType name="ColorHex">
     <xs:restriction base="xs:string">
@@ -172,6 +186,13 @@
   <xs:simpleType name="BorderValue">
     <xs:restriction base="xs:string">
       <xs:pattern value="(\d+(\.\d+)?pt|[a-z][a-z0-9-]*) .+"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- a border as above, or none: e.g. "xs line-muted" or "none" -->
+  <xs:simpleType name="LineValue">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="none|(\d+(\.\d+)?pt|[a-z][a-z0-9-]*) .+"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -466,7 +487,7 @@
     <xs:attribute name="gap"        type="TokenScaleOrPt"/>
     <xs:attribute name="padding"    type="SpacingOrToken">
       <xs:annotation>
-        <xs:documentation>Space between the edge of the box and its content, written like CSS: one value for all sides, two for top-bottom and left-right, three for top, left-right and bottom, four for top, right, bottom and left.</xs:documentation>
+        <xs:documentation>Space between the edge of the box and its content, written like CSS: one value for all sides, two for top-bottom and left-right, three for top, left-right and bottom, four for top, right, bottom and left. Each value is a length or a name from the space row of the tokens, and they can be mixed: 0pt 0pt 0pt m.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="height"     type="HeightValue">
@@ -489,7 +510,7 @@
     </xs:attribute>
     <xs:attribute name="paginate"   type="Paginate">
       <xs:annotation>
-        <xs:documentation>Where the box falls in the page flow. no: never split the box, and move it whole to the next page when it does not fit. break-before: start it on a new page. break-after: start the next sibling on a new page. keep-next: keep it on one page with the sibling that follows, moving both to the next page if that sibling would not fit. break-before, break-after and keep-next take effect on the children of layout; on a box inside another box they are not applied. no applies at any depth.</xs:documentation>
+        <xs:documentation>Where the box falls in the page flow. no: never split the box, and move it whole to the next page when it does not fit. break-before: start it on a new page. break-after: start the next sibling on a new page. keep-next: keep it on one page with the sibling that follows, moving both to the next page if that sibling would not fit and cannot start on this page: a table splits after its header and a row, and a text after a few lines, and then it stays with that first part. break-before, break-after and keep-next take effect on the children of layout; on a box inside another box they are not applied. no applies at any depth.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="debug"      type="xs:boolean"/>
@@ -518,7 +539,7 @@
     </xs:attribute>
     <xs:attribute name="padding"    type="SpacingOrToken">
       <xs:annotation>
-        <xs:documentation>Space between the edge of the box and its content, written like CSS: one value for all sides, two for top-bottom and left-right, three for top, left-right and bottom, four for top, right, bottom and left.</xs:documentation>
+        <xs:documentation>Space between the edge of the box and its content, written like CSS: one value for all sides, two for top-bottom and left-right, three for top, left-right and bottom, four for top, right, bottom and left. Each value is a length or a name from the space row of the tokens, and they can be mixed: 0pt 0pt 0pt m.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="height"     type="HeightValue">
@@ -541,7 +562,7 @@
     </xs:attribute>
     <xs:attribute name="paginate"   type="Paginate">
       <xs:annotation>
-        <xs:documentation>Where the box falls in the page flow. no: never split the box, and move it whole to the next page when it does not fit. break-before: start it on a new page. break-after: start the next sibling on a new page. keep-next: keep it on one page with the sibling that follows, moving both to the next page if that sibling would not fit. break-before, break-after and keep-next take effect on the children of layout; on a box inside another box they are not applied. no applies at any depth.</xs:documentation>
+        <xs:documentation>Where the box falls in the page flow. no: never split the box, and move it whole to the next page when it does not fit. break-before: start it on a new page. break-after: start the next sibling on a new page. keep-next: keep it on one page with the sibling that follows, moving both to the next page if that sibling would not fit and cannot start on this page: a table splits after its header and a row, and a text after a few lines, and then it stays with that first part. break-before, break-after and keep-next take effect on the children of layout; on a box inside another box they are not applied. no applies at any depth.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="debug"      type="xs:boolean"/>
@@ -1106,6 +1127,232 @@
     </xs:complexType>
   </xs:element>
 
+  <!-- What a rule of a markdown can set on a block of text -->
+  <xs:attributeGroup name="MarkdownTextRule">
+    <xs:attribute name="font"        type="xs:string"/>
+    <xs:attribute name="font-size"   type="TokenScaleOrPt"/>
+    <xs:attribute name="bold"        type="xs:boolean"/>
+    <xs:attribute name="color"       type="Color"/>
+    <xs:attribute name="align"       type="TextAlignH"/>
+    <xs:attribute name="line-height" type="TokenScaleOrFactor"/>
+    <xs:attribute name="padding"     type="SpacingOrToken"/>
+    <xs:attribute name="background"  type="Fill"/>
+    <xs:attribute name="border"      type="BorderValue"/>
+    <xs:attribute name="radius"      type="TokenScaleOrPt"/>
+  </xs:attributeGroup>
+
+  <!-- What a rule of a markdown can set on a run of text inside a block -->
+  <xs:attributeGroup name="MarkdownSpanRule">
+    <xs:attribute name="font"  type="xs:string"/>
+    <xs:attribute name="color" type="Color"/>
+  </xs:attributeGroup>
+
+  <!-- What a rule of a markdown can set on a cell -->
+  <xs:attributeGroup name="MarkdownCellRule">
+    <xs:attribute name="font"       type="xs:string"/>
+    <xs:attribute name="font-size"  type="TokenScaleOrPt"/>
+    <xs:attribute name="bold"       type="xs:boolean"/>
+    <xs:attribute name="color"      type="Color"/>
+    <xs:attribute name="align"      type="TextAlignH"/>
+    <xs:attribute name="padding"    type="SpacingOrToken"/>
+    <xs:attribute name="background" type="Fill"/>
+    <xs:attribute name="border"     type="BorderValue"/>
+  </xs:attributeGroup>
+
+  <xs:element name="markdown">
+    <xs:annotation>
+      <xs:documentation>Markdown as the content of a section, where a layout would go. It holds only Markdown: optional markdown-styles, which say how each part of it looks, and one markdown-content, which holds the text. The page, a header, a footer or a cover are not Markdown, so they stay in the XML: layers paint a header and a footer in the margin, and a cover or a table of contents is a section of its own. CommonMark with tables, strikethrough and footnotes; raw HTML is an error that names the line, and a $ is text. A heading is a bookmark, so the table of contents and the outline of the viewer fill themselves.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="markdown-styles" minOccurs="0">
+          <xs:annotation>
+            <xs:documentation>How the parts of the Markdown look. A rule is named after the Markdown it styles and takes the attributes of the element it becomes, so that h1 takes what a text takes. A rule here overrides the same rule of the file that src names, which overrides the defaults: a style that is not set stays what it was. Values are the tokens' (font-size="xxl", color="primary") or plain lengths and colors, and fonts are names from assets. A built-in font needs no rule for italic and bold; an embedded font names the faces: em font="body-italic", strong font="body-bold".</xs:documentation>
+          </xs:annotation>
+          <xs:complexType>
+            <xs:choice minOccurs="0" maxOccurs="unbounded">
+              <xs:element name="h1">
+                <xs:annotation><xs:documentation>A heading of level 1, written # in Markdown.</xs:documentation></xs:annotation>
+                <xs:complexType><xs:attributeGroup ref="MarkdownTextRule"/></xs:complexType>
+              </xs:element>
+              <xs:element name="h2">
+                <xs:annotation><xs:documentation>A heading of level 2, written ## in Markdown.</xs:documentation></xs:annotation>
+                <xs:complexType><xs:attributeGroup ref="MarkdownTextRule"/></xs:complexType>
+              </xs:element>
+              <xs:element name="h3">
+                <xs:annotation><xs:documentation>A heading of level 3, written ### in Markdown.</xs:documentation></xs:annotation>
+                <xs:complexType><xs:attributeGroup ref="MarkdownTextRule"/></xs:complexType>
+              </xs:element>
+              <xs:element name="h4">
+                <xs:annotation><xs:documentation>A heading of level 4, written #### in Markdown.</xs:documentation></xs:annotation>
+                <xs:complexType><xs:attributeGroup ref="MarkdownTextRule"/></xs:complexType>
+              </xs:element>
+              <xs:element name="h5">
+                <xs:annotation><xs:documentation>A heading of level 5, written ##### in Markdown.</xs:documentation></xs:annotation>
+                <xs:complexType><xs:attributeGroup ref="MarkdownTextRule"/></xs:complexType>
+              </xs:element>
+              <xs:element name="h6">
+                <xs:annotation><xs:documentation>A heading of level 6, written ###### in Markdown.</xs:documentation></xs:annotation>
+                <xs:complexType><xs:attributeGroup ref="MarkdownTextRule"/></xs:complexType>
+              </xs:element>
+              <xs:element name="p">
+                <xs:annotation><xs:documentation>A paragraph, and the words of a list item, a quote and a footnote.</xs:documentation></xs:annotation>
+                <xs:complexType><xs:attributeGroup ref="MarkdownTextRule"/></xs:complexType>
+              </xs:element>
+              <xs:element name="code">
+                <xs:annotation>
+                  <xs:documentation>Code: the box of a fenced or indented block, and the run of inline code, which takes the font, the color and the background. The language of a fence is ignored, since there is no highlighting by language.</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:attribute name="font"        type="xs:string"/>
+                  <xs:attribute name="font-size"   type="TokenScaleOrPt"/>
+                  <xs:attribute name="color"       type="Color"/>
+                  <xs:attribute name="line-height" type="TokenScaleOrFactor"/>
+                  <xs:attribute name="padding"     type="SpacingOrToken"/>
+                  <xs:attribute name="background"  type="Fill"/>
+                  <xs:attribute name="border"      type="BorderValue"/>
+                  <xs:attribute name="radius"      type="TokenScaleOrPt"/>
+                  <xs:attribute name="tab-size"    type="xs:positiveInteger"/>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="quote">
+                <xs:annotation>
+                  <xs:documentation>A block quote, written > in Markdown: a bar beside its content. font, font-size, color, line-height and align set the words; padding, background, border and radius the box around the bar and the words; bar-color and bar-width the bar, a strip along the left of the box: bar-width is a length or a name from the space row of the tokens.</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:attributeGroup ref="MarkdownTextRule"/>
+                  <xs:attribute name="bar-color" type="Color"/>
+                  <xs:attribute name="bar-width" type="TokenScaleOrPt"/>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="li">
+                <xs:annotation>
+                  <xs:documentation>An item of a bullet or a numbered list. indent is the width of the marker's column and bullet the shape of a bullet list's marker, as on a list; gap goes between the blocks of an item.</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:attribute name="font"       type="xs:string"/>
+                  <xs:attribute name="font-size"  type="TokenScaleOrPt"/>
+                  <xs:attribute name="color"      type="Color"/>
+                  <xs:attribute name="gap"        type="TokenScaleOrPt"/>
+                  <xs:attribute name="padding"    type="SpacingOrToken"/>
+                  <xs:attribute name="background" type="Fill"/>
+                  <xs:attribute name="border"     type="BorderValue"/>
+                  <xs:attribute name="indent"     type="TokenScaleOrPt"/>
+                  <xs:attribute name="bullet"     type="ListBullet"/>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="hr">
+                <xs:annotation>
+                  <xs:documentation>A thematic break, written --- in Markdown: a divider. color is the color of the line and thickness its thickness, a length or a name from the border row of the tokens.</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:attribute name="color"     type="Color"/>
+                  <xs:attribute name="thickness" type="TokenScaleOrPt"/>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="a">
+                <xs:annotation><xs:documentation>A link, written [text](url) in Markdown.</xs:documentation></xs:annotation>
+                <xs:complexType>
+                  <xs:attributeGroup ref="MarkdownSpanRule"/>
+                  <xs:attribute name="bold"      type="xs:boolean"/>
+                  <xs:attribute name="underline" type="xs:boolean"/>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="strong">
+                <xs:annotation><xs:documentation>Strong text, written **text** in Markdown. Bold in a built-in font; an embedded font names its bold face in font.</xs:documentation></xs:annotation>
+                <xs:complexType>
+                  <xs:attributeGroup ref="MarkdownSpanRule"/>
+                  <xs:attribute name="bold" type="xs:boolean"/>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="em">
+                <xs:annotation><xs:documentation>Emphasis, written *text* in Markdown. Italic in a built-in font; an embedded font names its italic face in font.</xs:documentation></xs:annotation>
+                <xs:complexType><xs:attributeGroup ref="MarkdownSpanRule"/></xs:complexType>
+              </xs:element>
+              <xs:element name="del">
+                <xs:annotation><xs:documentation>Struck-through text, written ~~text~~ in Markdown.</xs:documentation></xs:annotation>
+                <xs:complexType>
+                  <xs:attributeGroup ref="MarkdownSpanRule"/>
+                  <xs:attribute name="strike" type="xs:boolean"/>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="table">
+                <xs:annotation>
+                  <xs:documentation>A table. Its columns are sized by their content: a column takes the width its cells need on one line, the room that is left is shared in proportion, and a name that does not fit breaks at the edge of its cell. stripe is the color of every other row, or none; head-border is the line under the header row and row-border the line under each of the other rows, as thickness and color like border, or none. The default styles draw a line in line-muted under the header and under each row, with no stripe.</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:attribute name="border"     type="BorderValue"/>
+                  <xs:attribute name="stripe"     type="Color"/>
+                  <xs:attribute name="head-border" type="LineValue"/>
+                  <xs:attribute name="row-border" type="LineValue"/>
+                  <xs:attribute name="gap"        type="TokenScaleOrPt"/>
+                  <xs:attribute name="padding"    type="SpacingOrToken"/>
+                  <xs:attribute name="background" type="Fill"/>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="th">
+                <xs:annotation><xs:documentation>A cell of a table's header row.</xs:documentation></xs:annotation>
+                <xs:complexType><xs:attributeGroup ref="MarkdownCellRule"/></xs:complexType>
+              </xs:element>
+              <xs:element name="td">
+                <xs:annotation><xs:documentation>A cell of a table's other rows.</xs:documentation></xs:annotation>
+                <xs:complexType><xs:attributeGroup ref="MarkdownCellRule"/></xs:complexType>
+              </xs:element>
+            </xs:choice>
+            <xs:attribute name="src" type="xs:string">
+              <xs:annotation>
+                <xs:documentation>A file of rules, whose root is a markdown-styles. The rules written here override its rules. The engine reads no files: the SDK, the command line or the extension reads it, as it reads the src of a font or an image.</xs:documentation>
+              </xs:annotation>
+            </xs:attribute>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="markdown-content">
+          <xs:annotation>
+            <xs:documentation>The Markdown. It comes from the data, with data-value, or is written inline, best in a CDATA section, because Markdown uses &lt; and &amp; freely. The common indent of the lines is removed first, so that indenting the XML does not make a code block of it. An inline text is what a document with no data shows. A Markdown that begins with --- ... --- front matter does not draw it.</xs:documentation>
+          </xs:annotation>
+          <xs:complexType mixed="true">
+            <xs:attribute name="data-value" type="xs:string">
+              <xs:annotation>
+                <xs:documentation>The path in the data of a string that holds the Markdown, as data-value fills a text. A path the data lacks leaves it empty.</xs:documentation>
+              </xs:annotation>
+            </xs:attribute>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+      <xs:attribute name="margin" type="SpacingValue">
+        <xs:annotation>
+          <xs:documentation>The space between the page edges and the Markdown: one value for all four sides, or two to four in the order top, right, bottom, left. Defaults to 36pt. A layer draws a header or a footer in it.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="font" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>The font of the Markdown, which a rule can change. Defaults to the document's.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="font-size" type="TokenScaleOrPt">
+        <xs:annotation>
+          <xs:documentation>The size of the text of the Markdown, which a rule can change. Defaults to 11pt.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="color" type="Color">
+        <xs:annotation>
+          <xs:documentation>The color of the text of the Markdown, which a rule can change. Defaults to the text token.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="gap" type="TokenScaleOrPt">
+        <xs:annotation>
+          <xs:documentation>The space between the blocks: headings, paragraphs, lists, code, quotes, tables and images. Default none.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="bookmarks" type="MarkdownBookmarks">
+        <xs:annotation>
+          <xs:documentation>How many levels of headings become bookmarks, for the outline of the viewer and the table of contents: n keeps the levels 1 to n, 0 none. Default 6.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="debug" type="xs:boolean"/>
+    </xs:complexType>
+  </xs:element>
+
   <!-- document: holds default page settings; contains one or more sections.
        layout and layers go inside a section, never directly in document: the engine
        stops with "unexpected element in <document>". -->
@@ -1139,14 +1386,17 @@
        matches only one particle (XSD 1.0's unique particle attribution). -->
   <xs:element name="section">
     <xs:annotation>
-      <xs:documentation>A run of pages with its own settings, which override the document's. Each section paginates on its own. A bookmark as its first child marks its first page. It holds layers and at most one layout, painted in the order they are written: layers before the layout paint under it, and layers after it paint over it. A section with no layout is one page. Its title is accepted but not used: the outline takes its entries from bookmarks.</xs:documentation>
+      <xs:documentation>A run of pages with its own settings, which override the document's. Each section paginates on its own. A bookmark as its first child marks its first page. It holds layers and at most one layout or one markdown, painted in the order they are written: layers before the layout paint under it, and layers after it paint over it. A section with neither is one page. Its title is accepted but not used: the outline takes its entries from bookmarks.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:element ref="bookmark" minOccurs="0"/>
         <xs:element ref="layer" minOccurs="0" maxOccurs="unbounded"/>
         <xs:sequence minOccurs="0">
-          <xs:element ref="layout"/>
+          <xs:choice>
+            <xs:element ref="layout"/>
+            <xs:element ref="markdown"/>
+          </xs:choice>
           <xs:element ref="layer" minOccurs="0" maxOccurs="unbounded"/>
         </xs:sequence>
       </xs:sequence>
@@ -1277,6 +1527,11 @@
         <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
       </xs:sequence>
       <xs:attributeGroup ref="BoxAttrs"/>
+      <xs:attribute name="checked" type="xs:boolean">
+        <xs:annotation>
+          <xs:documentation>Makes the item's marker a checkbox in place of the bullet or the number: an outline in the line color, with a tick in the color of the item's words when this is true, and empty when it is false. The words start where those of a bullet do, and an item of a number list still takes its number. An item without it keeps its bullet or number. A task item of a Markdown, - [ ] or - [x], is one.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
     </xs:complexType>
   </xs:element>
 
@@ -1444,7 +1699,7 @@
 
   <xs:element name="code-span">
     <xs:annotation>
-      <xs:documentation>A run of code inside a text: its words in Courier on a light tint, the tint drawn behind them. It is the inline twin of code, and like a span it is not broken inside: a run longer than a line runs on past it. White space in it collapses as in the text around it.</xs:documentation>
+      <xs:documentation>A run of code inside a text: its words in Courier on a light tint, the tint drawn behind them. It is the inline twin of code, and like a span it is not broken inside, so it goes to the next line whole, and a run longer than a whole line breaks at the last character that fits, so nothing runs past the box. White space in it collapses as in the text around it.</xs:documentation>
     </xs:annotation>
     <xs:complexType mixed="true">
       <xs:attribute name="font"       type="xs:string"/>
@@ -1700,11 +1955,29 @@
            Example: "2fr 1fr 120pt 20%" -->
       <xs:attribute name="cols"       type="xs:string" use="required">
         <xs:annotation>
-          <xs:documentation>Column widths, separated by spaces, in fr, pt or % units: for example 2fr 1fr 120pt 20%.</xs:documentation>
+          <xs:documentation>Column widths, separated by spaces, in fr, pt or % units, or auto: for example 2fr 1fr 120pt 20%. An auto column takes the width its cells need on one line, and the auto columns share what the pt and % columns leave, in proportion to what they need. When they do not fit, each keeps at least its longest word, and when not even those fit, the longest are cut and a short column keeps its width. auto and fr cannot be in one table: use pt or % for the fixed columns. For example auto 90pt 60pt.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
-      <xs:attribute name="border"     type="BorderValue"/>
-      <xs:attribute name="stripe"     type="Color"/>
+      <xs:attribute name="border"     type="BorderValue">
+        <xs:annotation>
+          <xs:documentation>A grid: a line around every cell, as thickness and color, for example 1pt #cccccc.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="stripe"     type="Color">
+        <xs:annotation>
+          <xs:documentation>The background of every other row below the header, or none.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="head-border" type="LineValue">
+        <xs:annotation>
+          <xs:documentation>The line under the header row, across the table, as thickness and color like border, or none: for example xs line.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="row-border" type="LineValue">
+        <xs:annotation>
+          <xs:documentation>The line under each row, across the table, as thickness and color like border, or none: for example xs line-muted. Under the header row, head-border takes its place when it is set. A line stops where a cell spans on into the next row.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attribute name="gap"        type="TokenScaleOrPt"/>
       <xs:attribute name="padding"    type="SpacingOrToken"/>
       <xs:attribute name="background" type="Fill"/>

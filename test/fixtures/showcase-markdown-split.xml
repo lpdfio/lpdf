@@ -1,0 +1,324 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <document size="a4">
+    <meta title="lpdf Showcase — Markdown across pages" subject="What a markdown does where a page ends" />
+
+    <!-- The blocks of a markdown go on from one page to the next as any content does: a list, a quote, a block of
+         code and a table split between their lines, rows and blocks, a heading stays with what follows it, and a
+         table repeats its header row. The notes stand at the foot of the page of their reference.
+         Expected: several pages, with
+           - a bullet list of 40 items and a number list of 30 that split between items, their lines and a long
+             item's lines together on a page
+           - a quote of eight paragraphs whose bar is continuous on each page it is on
+           - a block of code of 110 lines that splits between lines and is on a tinted box on each page
+           - a table of 60 rows, with its header row at the top of each page
+           - two notes at the foot of the last page
+    -->
+    <section>
+      <layer>
+        <text-at anchor="bottom-center" y="-24pt" font-size="xs" color="text-muted">Page {page} of {pages}</text-at>
+      </layer>
+      <markdown margin="54pt">
+        <markdown-content><![CDATA[
+          # A long document
+
+          The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text has to be long enough to wrap before a page can end in the middle of it and show where the rest goes on. The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text has to be long enough to wrap before a page can end in the middle of it and show where the rest goes on.
+
+          ## Lists that cross a page
+
+          - Item 1 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 2 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 3 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 4 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 5 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 6 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 7 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 8 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 9 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 10 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 11 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 12 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 13 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 14 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 15 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 16 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 17 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 18 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 19 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 20 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 21 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 22 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 23 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 24 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 25 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 26 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 27 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 28 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 29 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 30 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 31 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 32 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 33 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 34 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 35 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 36 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 37 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 38 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 39 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+          - Item 40 of a long bullet list, with words enough to wrap onto a second line in the page, so that the lines of an item are split too
+
+          1. A numbered list goes on
+          2. Numbered item 2
+          3. Numbered item 3
+          4. Numbered item 4
+          5. Numbered item 5
+          6. Numbered item 6
+          7. Numbered item 7
+          8. Numbered item 8
+          9. Numbered item 9
+          10. Numbered item 10
+          11. Numbered item 11
+          12. Numbered item 12
+          13. Numbered item 13
+          14. Numbered item 14
+          15. Numbered item 15
+          16. Numbered item 16
+          17. Numbered item 17
+          18. Numbered item 18
+          19. Numbered item 19
+          20. Numbered item 20
+          21. Numbered item 21
+          22. Numbered item 22
+          23. Numbered item 23
+          24. Numbered item 24
+          25. Numbered item 25
+          26. Numbered item 26
+          27. Numbered item 27
+          28. Numbered item 28
+          29. Numbered item 29
+          30. Numbered item 30
+
+          ## A quote of many paragraphs
+
+          > Paragraph 1 of the quote. The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text has to be long enough to wrap before a page can end in the middle of it and show where the rest goes on.
+          >
+          > Paragraph 2 of the quote. The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text has to be long enough to wrap before a page can end in the middle of it and show where the rest goes on.
+          >
+          > Paragraph 3 of the quote. The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text has to be long enough to wrap before a page can end in the middle of it and show where the rest goes on.
+          >
+          > Paragraph 4 of the quote. The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text has to be long enough to wrap before a page can end in the middle of it and show where the rest goes on.
+          >
+          > Paragraph 5 of the quote. The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text has to be long enough to wrap before a page can end in the middle of it and show where the rest goes on.
+          >
+          > Paragraph 6 of the quote. The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text has to be long enough to wrap before a page can end in the middle of it and show where the rest goes on.
+          >
+          > Paragraph 7 of the quote. The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text has to be long enough to wrap before a page can end in the middle of it and show where the rest goes on.
+          >
+          > Paragraph 8 of the quote. The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text has to be long enough to wrap before a page can end in the middle of it and show where the rest goes on.
+          >
+          > Paragraph 9 of the quote. The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text has to be long enough to wrap before a page can end in the middle of it and show where the rest goes on.
+          >
+          > Paragraph 10 of the quote. The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text has to be long enough to wrap before a page can end in the middle of it and show where the rest goes on.
+          >
+          > Paragraph 11 of the quote. The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text has to be long enough to wrap before a page can end in the middle of it and show where the rest goes on.
+          >
+          > Paragraph 12 of the quote. The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text has to be long enough to wrap before a page can end in the middle of it and show where the rest goes on.
+          >
+          > Paragraph 13 of the quote. The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text has to be long enough to wrap before a page can end in the middle of it and show where the rest goes on.
+          >
+          > Paragraph 14 of the quote. The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text has to be long enough to wrap before a page can end in the middle of it and show where the rest goes on.
+
+          ## Code that crosses a page
+
+          ```
+          line 001:  let value_1 = compute(argument_1, 7);
+          line 002:  let value_2 = compute(argument_2, 14);
+          line 003:  let value_3 = compute(argument_3, 21);
+          line 004:  let value_4 = compute(argument_4, 28);
+          line 005:  let value_5 = compute(argument_5, 35);
+          line 006:  let value_6 = compute(argument_6, 42);
+          line 007:  let value_7 = compute(argument_7, 49);
+          line 008:  let value_8 = compute(argument_8, 56);
+          line 009:  let value_9 = compute(argument_9, 63);
+          line 010:  let value_10 = compute(argument_10, 70);
+          line 011:  let value_11 = compute(argument_11, 77);
+          line 012:  let value_12 = compute(argument_12, 84);
+          line 013:  let value_13 = compute(argument_13, 91);
+          line 014:  let value_14 = compute(argument_14, 98);
+          line 015:  let value_15 = compute(argument_15, 105);
+          line 016:  let value_16 = compute(argument_16, 112);
+          line 017:  let value_17 = compute(argument_17, 119);
+          line 018:  let value_18 = compute(argument_18, 126);
+          line 019:  let value_19 = compute(argument_19, 133);
+          line 020:  let value_20 = compute(argument_20, 140);
+          line 021:  let value_21 = compute(argument_21, 147);
+          line 022:  let value_22 = compute(argument_22, 154);
+          line 023:  let value_23 = compute(argument_23, 161);
+          line 024:  let value_24 = compute(argument_24, 168);
+          line 025:  let value_25 = compute(argument_25, 175);
+          line 026:  let value_26 = compute(argument_26, 182);
+          line 027:  let value_27 = compute(argument_27, 189);
+          line 028:  let value_28 = compute(argument_28, 196);
+          line 029:  let value_29 = compute(argument_29, 203);
+          line 030:  let value_30 = compute(argument_30, 210);
+          line 031:  let value_31 = compute(argument_31, 217);
+          line 032:  let value_32 = compute(argument_32, 224);
+          line 033:  let value_33 = compute(argument_33, 231);
+          line 034:  let value_34 = compute(argument_34, 238);
+          line 035:  let value_35 = compute(argument_35, 245);
+          line 036:  let value_36 = compute(argument_36, 252);
+          line 037:  let value_37 = compute(argument_37, 259);
+          line 038:  let value_38 = compute(argument_38, 266);
+          line 039:  let value_39 = compute(argument_39, 273);
+          line 040:  let value_40 = compute(argument_40, 280);
+          line 041:  let value_41 = compute(argument_41, 287);
+          line 042:  let value_42 = compute(argument_42, 294);
+          line 043:  let value_43 = compute(argument_43, 301);
+          line 044:  let value_44 = compute(argument_44, 308);
+          line 045:  let value_45 = compute(argument_45, 315);
+          line 046:  let value_46 = compute(argument_46, 322);
+          line 047:  let value_47 = compute(argument_47, 329);
+          line 048:  let value_48 = compute(argument_48, 336);
+          line 049:  let value_49 = compute(argument_49, 343);
+          line 050:  let value_50 = compute(argument_50, 350);
+          line 051:  let value_51 = compute(argument_51, 357);
+          line 052:  let value_52 = compute(argument_52, 364);
+          line 053:  let value_53 = compute(argument_53, 371);
+          line 054:  let value_54 = compute(argument_54, 378);
+          line 055:  let value_55 = compute(argument_55, 385);
+          line 056:  let value_56 = compute(argument_56, 392);
+          line 057:  let value_57 = compute(argument_57, 399);
+          line 058:  let value_58 = compute(argument_58, 406);
+          line 059:  let value_59 = compute(argument_59, 413);
+          line 060:  let value_60 = compute(argument_60, 420);
+          line 061:  let value_61 = compute(argument_61, 427);
+          line 062:  let value_62 = compute(argument_62, 434);
+          line 063:  let value_63 = compute(argument_63, 441);
+          line 064:  let value_64 = compute(argument_64, 448);
+          line 065:  let value_65 = compute(argument_65, 455);
+          line 066:  let value_66 = compute(argument_66, 462);
+          line 067:  let value_67 = compute(argument_67, 469);
+          line 068:  let value_68 = compute(argument_68, 476);
+          line 069:  let value_69 = compute(argument_69, 483);
+          line 070:  let value_70 = compute(argument_70, 490);
+          line 071:  let value_71 = compute(argument_71, 497);
+          line 072:  let value_72 = compute(argument_72, 504);
+          line 073:  let value_73 = compute(argument_73, 511);
+          line 074:  let value_74 = compute(argument_74, 518);
+          line 075:  let value_75 = compute(argument_75, 525);
+          line 076:  let value_76 = compute(argument_76, 532);
+          line 077:  let value_77 = compute(argument_77, 539);
+          line 078:  let value_78 = compute(argument_78, 546);
+          line 079:  let value_79 = compute(argument_79, 553);
+          line 080:  let value_80 = compute(argument_80, 560);
+          line 081:  let value_81 = compute(argument_81, 567);
+          line 082:  let value_82 = compute(argument_82, 574);
+          line 083:  let value_83 = compute(argument_83, 581);
+          line 084:  let value_84 = compute(argument_84, 588);
+          line 085:  let value_85 = compute(argument_85, 595);
+          line 086:  let value_86 = compute(argument_86, 602);
+          line 087:  let value_87 = compute(argument_87, 609);
+          line 088:  let value_88 = compute(argument_88, 616);
+          line 089:  let value_89 = compute(argument_89, 623);
+          line 090:  let value_90 = compute(argument_90, 630);
+          line 091:  let value_91 = compute(argument_91, 637);
+          line 092:  let value_92 = compute(argument_92, 644);
+          line 093:  let value_93 = compute(argument_93, 651);
+          line 094:  let value_94 = compute(argument_94, 658);
+          line 095:  let value_95 = compute(argument_95, 665);
+          line 096:  let value_96 = compute(argument_96, 672);
+          line 097:  let value_97 = compute(argument_97, 679);
+          line 098:  let value_98 = compute(argument_98, 686);
+          line 099:  let value_99 = compute(argument_99, 693);
+          line 100:  let value_100 = compute(argument_100, 700);
+          line 101:  let value_101 = compute(argument_101, 707);
+          line 102:  let value_102 = compute(argument_102, 714);
+          line 103:  let value_103 = compute(argument_103, 721);
+          line 104:  let value_104 = compute(argument_104, 728);
+          line 105:  let value_105 = compute(argument_105, 735);
+          line 106:  let value_106 = compute(argument_106, 742);
+          line 107:  let value_107 = compute(argument_107, 749);
+          line 108:  let value_108 = compute(argument_108, 756);
+          line 109:  let value_109 = compute(argument_109, 763);
+          line 110:  let value_110 = compute(argument_110, 770);
+          ```
+
+          ## A table that crosses a page
+
+          | No | Name | Qty |
+          |---:|:-----|----:|
+          | 1 | Item 1 | 3 |
+          | 2 | Item 2 | 6 |
+          | 3 | Item 3 | 9 |
+          | 4 | Item 4 | 12 |
+          | 5 | Item 5 | 15 |
+          | 6 | Item 6 | 18 |
+          | 7 | Item 7 | 21 |
+          | 8 | Item 8 | 24 |
+          | 9 | Item 9 | 27 |
+          | 10 | Item 10 | 30 |
+          | 11 | Item 11 | 33 |
+          | 12 | Item 12 | 36 |
+          | 13 | Item 13 | 39 |
+          | 14 | Item 14 | 42 |
+          | 15 | Item 15 | 45 |
+          | 16 | Item 16 | 48 |
+          | 17 | Item 17 | 51 |
+          | 18 | Item 18 | 54 |
+          | 19 | Item 19 | 57 |
+          | 20 | Item 20 | 60 |
+          | 21 | Item 21 | 63 |
+          | 22 | Item 22 | 66 |
+          | 23 | Item 23 | 69 |
+          | 24 | Item 24 | 72 |
+          | 25 | Item 25 | 75 |
+          | 26 | Item 26 | 78 |
+          | 27 | Item 27 | 81 |
+          | 28 | Item 28 | 84 |
+          | 29 | Item 29 | 87 |
+          | 30 | Item 30 | 90 |
+          | 31 | Item 31 | 93 |
+          | 32 | Item 32 | 96 |
+          | 33 | Item 33 | 99 |
+          | 34 | Item 34 | 102 |
+          | 35 | Item 35 | 105 |
+          | 36 | Item 36 | 108 |
+          | 37 | Item 37 | 111 |
+          | 38 | Item 38 | 114 |
+          | 39 | Item 39 | 117 |
+          | 40 | Item 40 | 120 |
+          | 41 | Item 41 | 123 |
+          | 42 | Item 42 | 126 |
+          | 43 | Item 43 | 129 |
+          | 44 | Item 44 | 132 |
+          | 45 | Item 45 | 135 |
+          | 46 | Item 46 | 138 |
+          | 47 | Item 47 | 141 |
+          | 48 | Item 48 | 144 |
+          | 49 | Item 49 | 147 |
+          | 50 | Item 50 | 150 |
+          | 51 | Item 51 | 153 |
+          | 52 | Item 52 | 156 |
+          | 53 | Item 53 | 159 |
+          | 54 | Item 54 | 162 |
+          | 55 | Item 55 | 165 |
+          | 56 | Item 56 | 168 |
+          | 57 | Item 57 | 171 |
+          | 58 | Item 58 | 174 |
+          | 59 | Item 59 | 177 |
+          | 60 | Item 60 | 180 |
+
+          ## Notes
+
+          A claim.[^a] Another claim.[^b]
+
+          [^a]: The first note.
+          [^b]: The second note.
+
+        ]]></markdown-content>
+      </markdown>
+    </section>
+  </document>
+</lpdf>

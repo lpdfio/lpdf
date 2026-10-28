@@ -258,14 +258,14 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
 
     // Fast path: no chrome — standard pagination.
     if top_chrome.is_empty() && bot_chrome.is_empty() {
-        let chunks = footnotes::split_flow(&flow, avail_w, avail_h, avail_h, page.footnote_counter, has_notes);
+        let chunks = footnotes::split_flow(&flow, avail_w, avail_h, avail_h, page.gap, page.footnote_counter, has_notes);
         return chunks
             .into_iter()
             .map(|chunk| {
                 let room = avail_h - chunk.reserve;
                 let (nodes, used) = layout_column(
                     &chunk.nodes, avail_x, avail_y, avail_w, Some(room),
-                    0.0, &Align::Stretch, &Justify::Start,
+                    page.gap, &Align::Stretch, &Justify::Start,
                 );
                 let mut nodes = clip_overflow(nodes, used, avail_y + room, room, page.width);
                 nodes.extend(footnotes::draw_area(&chunk.notes, avail_x, avail_y + avail_h, avail_w, avail_h));
@@ -292,7 +292,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
     let budget_rest  = (avail_h - top_always_h - bot_always_h).max(0.0);
 
     // ── Paginate flow with per-page budgets ──────────────────────────────────
-    let chunks = footnotes::split_flow(&flow, avail_w, budget_first, budget_rest, page.footnote_counter, has_notes);
+    let chunks = footnotes::split_flow(&flow, avail_w, budget_first, budget_rest, page.gap, page.footnote_counter, has_notes);
     let total_pages = chunks.len();
 
     // ── Build each output page ───────────────────────────────────────────────
@@ -340,7 +340,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
         let room = flow_budget - chunk.reserve;
         let (flow_nodes, used) = layout_column(
             &chunk.nodes, avail_x, flow_y, avail_w, Some(room),
-            0.0, &Align::Stretch, &Justify::Start,
+            page.gap, &Align::Stretch, &Justify::Start,
         );
         let flow_nodes = clip_overflow(flow_nodes, used, flow_y + room, room, page.width);
 
@@ -661,18 +661,41 @@ fn fill_page(
         if h <= remaining + 0.5 {
             // keep-next: if the immediately following sibling would not fit on this
             // page after placing this node, and both fit together on the next page,
-            // bump this node to the next page so they stay together.
-            let do_keep_next = node.paginate == Paginate::KeepNext
-                && !page.is_empty()
-                && pending.peek().map_or(false, |next| {
+            // bump this node to the next page so they stay together. A sibling that
+            // can start on this page, a table with its header and a row or a text with
+            // a few lines, is split there, so the node is not parted from it and the
+            // page is not left half empty.
+            let keep_next_h = if node.paginate == Paginate::KeepNext && !page.is_empty() {
+                pending.peek().and_then(|next| {
                     let next_h = measure_height(next, avail_w, budget);
                     let remaining_for_next = remaining - h - gap;
-                    next_h > remaining_for_next + 0.5
+                    (next_h > remaining_for_next + 0.5
                         && h + gap + next_h <= next_budget + 0.5
-                });
+                        && !starts_within(next, avail_w, remaining_for_next, budget))
+                    .then_some(next_h)
+                })
+            } else {
+                None
+            };
 
-            if do_keep_next {
+            if let Some(next_h) = keep_next_h {
+                // The nodes before it that keep with the one after them go on with it, as far as the next page
+                // holds them: a heading above a heading that moves on is not left alone at the foot of the page.
+                let mut room = next_budget + 0.5 - (h + gap + next_h);
+                let mut back = 0;
+                for kept in page.iter().rev().take_while(|n| n.paginate == Paginate::KeepNext) {
+                    let kept_h = gap + measure_height(kept, avail_w, budget);
+                    if kept_h > room { break; }
+                    room -= kept_h;
+                    back += 1;
+                }
+                // A page that would be left empty keeps them: they are already at the top of it.
+                if back == page.len() { back = 0; }
+                let moved = page.split_off(page.len() - back);
                 pending.push_front(node);
+                for kept in moved.into_iter().rev() {
+                    pending.push_front(kept);
+                }
                 break;
             }
             needs_break_after = node.paginate == Paginate::BreakAfter;
@@ -834,6 +857,12 @@ fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> 
         // Frame, Divider — atomic by design.
         _                 => SplitOutcome::Atomic,
     }
+}
+
+/// Whether `node` can put a first part of itself in `room`: it splits there, and what it leaves on the page is
+/// something, not a header alone or a line alone, as `split_node_at` sees it.
+fn starts_within(node: &Node, avail_w: f32, room: f32, full_page_h: f32) -> bool {
+    matches!(split_node_at(node, avail_w, room.max(0.0), full_page_h), SplitOutcome::First(..))
 }
 
 /// Whether `split_node_at` can split `node` at all: a text, or a box of `auto` height with children, of a kind
@@ -1229,12 +1258,54 @@ fn keep_width(node: Node, width: f32) -> Node {
 
 // ── Table ─────────────────────────────────────────────────────────────────────
 
+/// One entry of a table's `cols`.
+#[derive(Clone, Copy, PartialEq)]
+enum ColUnit {
+    /// A share of what the fixed and the percent columns leave.
+    Fr(f32),
+    Pt(f32),
+    /// A percentage of the width of the table.
+    Pct(f32),
+    /// The width the cells of the column need.
+    Auto,
+}
+
+fn col_units(spec: &str) -> Vec<ColUnit> {
+    spec.split_whitespace().filter_map(|tok| {
+        if tok == "auto" {
+            Some(ColUnit::Auto)
+        } else if let Some(s) = tok.strip_suffix("fr") {
+            s.parse::<f32>().ok().map(ColUnit::Fr)
+        } else if let Some(s) = tok.strip_suffix("pt") {
+            s.parse::<f32>().ok().map(ColUnit::Pt)
+        } else if let Some(s) = tok.strip_suffix('%') {
+            s.parse::<f32>().ok().map(ColUnit::Pct)
+        } else {
+            tok.parse::<f32>().ok().map(ColUnit::Fr)
+        }
+    }).collect()
+}
+
+/// What is wrong with the `cols` of a table, if anything: an `auto` column takes the width its cells need and the
+/// rest is shared among the `auto` columns, so there is no rest for an `fr` column to share.
+pub(crate) fn check_cols(spec: &str) -> Result<(), String> {
+    let units = col_units(spec);
+    if units.contains(&ColUnit::Auto) && units.iter().any(|u| matches!(u, ColUnit::Fr(_))) {
+        return Err(format!(
+            "cols=\"{spec}\" has auto and fr columns: an auto column takes the width its cells need and the auto columns \
+             share the rest, so use pt or % for the columns that are fixed"
+        ));
+    }
+    Ok(())
+}
+
 /// Resolve a space-separated column-width spec into concrete pt values.
 ///
 /// Units:
 /// - `Nfr`  — fractional share of remaining width after fixed/percent columns.
 /// - `Npt`  — absolute pt value.
 /// - `N%`   — percentage of `avail_w`.
+/// - `auto` — as `1fr` here, where there are no cells to measure: see `table_col_widths`.
 ///
 /// Example: `"2fr 1fr 120pt 20%"` with `avail_w=400` →
 ///   fixed = 120 + 80 = 200, remaining = 200, total_fr = 3,
@@ -1243,42 +1314,167 @@ fn resolve_col_widths(spec: &str, avail_w: f32) -> Vec<f32> {
     if spec.is_empty() {
         return vec![avail_w];
     }
-    enum Unit { Fr(f32), Pt(f32), Pct(f32) }
-    let units: Vec<Unit> = spec.split_whitespace().filter_map(|tok| {
-        if let Some(s) = tok.strip_suffix("fr") {
-            s.parse::<f32>().ok().map(Unit::Fr)
-        } else if let Some(s) = tok.strip_suffix("pt") {
-            s.parse::<f32>().ok().map(Unit::Pt)
-        } else if let Some(s) = tok.strip_suffix('%') {
-            s.parse::<f32>().ok().map(Unit::Pct)
-        } else {
-            tok.parse::<f32>().ok().map(Unit::Fr)
-        }
-    }).collect();
+    let units: Vec<ColUnit> = col_units(spec).into_iter()
+        .map(|u| if u == ColUnit::Auto { ColUnit::Fr(1.0) } else { u })
+        .collect();
     if units.is_empty() {
         return vec![avail_w];
     }
     let fixed: f32 = units.iter().map(|u| match u {
-        Unit::Pt(v)  => *v,
-        Unit::Pct(v) => avail_w * v / 100.0,
-        Unit::Fr(_)  => 0.0,
+        ColUnit::Pt(v)  => *v,
+        ColUnit::Pct(v) => avail_w * v / 100.0,
+        _               => 0.0,
     }).sum();
     let total_fr: f32 = units.iter().map(|u| match u {
-        Unit::Fr(v) => *v,
-        _           => 0.0,
+        ColUnit::Fr(v) => *v,
+        _              => 0.0,
     }).sum();
     let remaining = (avail_w - fixed).max(0.0);
     let fr_unit = if total_fr > 0.0 { remaining / total_fr } else { 0.0 };
     units.iter().map(|u| match u {
-        Unit::Fr(v)  => (v * fr_unit).max(0.0),
-        Unit::Pt(v)  => *v,
-        Unit::Pct(v) => (avail_w * v / 100.0).max(0.0),
+        ColUnit::Fr(v)  => (v * fr_unit).max(0.0),
+        ColUnit::Pt(v)  => *v,
+        ColUnit::Pct(v) => (avail_w * v / 100.0).max(0.0),
+        ColUnit::Auto   => 0.0,
     }).collect()
 }
 
 /// How many columns a table's `cols` spec makes.
 pub(crate) fn table_col_count(spec: &str) -> usize {
-    resolve_col_widths(spec, 0.0).len()
+    col_units(spec).len().max(1)
+}
+
+/// The least a column can be narrowed to, which is its longest word, and the width it takes with each cell on one
+/// line.
+#[derive(Clone, Copy, Default)]
+struct Extent {
+    min: f32,
+    max: f32,
+}
+
+/// The extents of the columns of `rows`. Those of an `auto` column are what its cells need, or those of every
+/// column when `all` is set. A cell that spans columns gives the `auto` columns it covers what the others do not.
+fn column_extents(rows: &[Node], units: &[ColUnit], avail_w: f32, gap: f32, all: bool) -> Vec<Extent> {
+    let n = units.len();
+    let grid = TableGrid::new(rows, n);
+    let measured = |c: usize| all || units[c] == ColUnit::Auto;
+    let mut extents = vec![Extent::default(); n];
+    for (r, row) in rows.iter().enumerate() {
+        for placed in grid.starting(r).iter().filter(|p| p.columns.len() == 1 && measured(p.columns.start)) {
+            let cell = &row.children[placed.cell];
+            let extent = &mut extents[placed.columns.start];
+            extent.min = extent.min.max(measure_min_w(cell));
+            extent.max = extent.max.max(measure_natural_w(cell));
+        }
+    }
+    for (r, row) in rows.iter().enumerate() {
+        for placed in grid.starting(r).iter().filter(|p| p.columns.len() > 1) {
+            let sized: Vec<usize> = placed.columns.clone().filter(|&c| measured(c)).collect();
+            if sized.is_empty() { continue; }
+            let cell = &row.children[placed.cell];
+            let others: f32 = placed.columns.clone().filter(|&c| !measured(c)).map(|c| match units[c] {
+                ColUnit::Pt(v)  => v,
+                ColUnit::Pct(v) => avail_w * v / 100.0,
+                _               => 0.0,
+            }).sum::<f32>() + gap * (placed.columns.len() - 1) as f32;
+            let have_min = others + sized.iter().map(|&c| extents[c].min).sum::<f32>();
+            let have_max = others + sized.iter().map(|&c| extents[c].max).sum::<f32>();
+            let (need_min, need_max) = (measure_min_w(cell), measure_natural_w(cell));
+            for &c in &sized {
+                extents[c].min += (need_min - have_min).max(0.0) / sized.len() as f32;
+                extents[c].max += (need_max - have_max).max(0.0) / sized.len() as f32;
+            }
+        }
+    }
+    extents
+}
+
+/// `mins` cut down to the level at which they add up to `total`: the longest are cut, and a shorter one keeps its
+/// width. `total` is less than their sum.
+fn cut_to_level(mins: &[f32], total: f32) -> Vec<f32> {
+    let mut sorted = mins.to_vec();
+    sorted.sort_by(|a, b| a.total_cmp(b));
+    let mut taken = 0.0_f32;
+    let mut level = 0.0_f32;
+    for (i, min) in sorted.iter().enumerate() {
+        let left = (sorted.len() - i) as f32;
+        if taken + min * left >= total {
+            level = (total - taken) / left;
+            break;
+        }
+        taken += min;
+    }
+    mins.iter().map(|min| min.min(level)).collect()
+}
+
+/// The widths of the columns of a table of `avail_w`. A column with a width of its own has it, and the `auto`
+/// columns share what is left, with a column of short cells keeping the width it needs:
+/// - when every `auto` column fits on one line, each takes that, and the room that is left goes to them in
+///   proportion to it;
+/// - when they do not, each keeps at least its longest word and shares what is left in proportion to how much more
+///   it could use;
+/// - when not even the longest words fit, the longest are cut down to a level, and the shorter keep theirs, so a
+///   name breaks and a number does not.
+fn table_col_widths(rows: &[Node], spec: &str, avail_w: f32, gap: f32) -> Vec<f32> {
+    let units = col_units(spec);
+    if !units.contains(&ColUnit::Auto) {
+        return resolve_col_widths(spec, avail_w);
+    }
+    let n = units.len();
+    let extents = column_extents(rows, &units, avail_w, gap, false);
+    let fixed: f32 = units.iter().map(|u| match u {
+        ColUnit::Pt(v)  => *v,
+        ColUnit::Pct(v) => avail_w * v / 100.0,
+        _               => 0.0,
+    }).sum();
+    let rest = (avail_w - fixed - gap * (n - 1) as f32).max(0.0);
+    let autos: Vec<usize> = (0..n).filter(|&c| units[c] == ColUnit::Auto).collect();
+    let wanted: f32 = autos.iter().map(|&c| extents[c].max).sum();
+    let least: f32 = autos.iter().map(|&c| extents[c].min).sum();
+
+    let mut shares = vec![0.0_f32; n];
+    if wanted <= rest {
+        for &c in &autos {
+            shares[c] = if wanted > 0.0 {
+                extents[c].max + (rest - wanted) * extents[c].max / wanted
+            } else {
+                rest / autos.len() as f32
+            };
+        }
+    } else if least >= rest {
+        let mins: Vec<f32> = autos.iter().map(|&c| extents[c].min).collect();
+        for (&c, width) in autos.iter().zip(cut_to_level(&mins, rest)) {
+            shares[c] = width;
+        }
+    } else {
+        let spread = wanted - least;
+        for &c in &autos {
+            shares[c] = extents[c].min + (rest - least) * (extents[c].max - extents[c].min) / spread;
+        }
+    }
+    units.iter().enumerate().map(|(c, u)| match u {
+        ColUnit::Pt(v)  => *v,
+        ColUnit::Pct(v) => (avail_w * v / 100.0).max(0.0),
+        ColUnit::Fr(_)  => 0.0,
+        ColUnit::Auto   => shares[c],
+    }).collect()
+}
+
+/// The width of a table that is measured as a part of a box around it: its columns and the gaps between them,
+/// each column as wide as its cells need, or as its longest word when `min` is set, and its padding.
+fn measure_table_w(node: &Node, min: bool) -> f32 {
+    let units = col_units(&node.table_cols);
+    if units.is_empty() { return 0.0; }
+    let extents = column_extents(&node.children, &units, 0.0, node.gap, true);
+    let columns: f32 = units.iter().zip(&extents).map(|(u, e)| match u {
+        ColUnit::Pt(v) => *v,
+        _              => if min { e.min } else { e.max },
+    }).sum();
+    let [_pt, pr, _pb, pl] = node.padding;
+    match node.width_constraint {
+        Some(w) => w,
+        None    => columns + node.gap * (units.len() - 1) as f32 + pl + pr,
+    }
 }
 
 /// The width of a cell over `columns`: the columns and the gaps between them.
@@ -1377,13 +1573,13 @@ fn layout_table(
     gap:       f32,
     cols_spec: &str,
     border:    Option<&(f32, String)>,
-    stripe:    Option<&str>,
+    style:     Option<&crate::parse::TableStyle>,
 ) -> (Vec<RenderNode>, f32) {
     if rows.is_empty() {
         return (vec![], 0.0);
     }
 
-    let col_widths  = resolve_col_widths(cols_spec, avail_w);
+    let col_widths  = table_col_widths(rows, cols_spec, avail_w, gap);
     let n_cols      = col_widths.len();
     let grid        = TableGrid::new(rows, n_cols);
 
@@ -1407,7 +1603,7 @@ fn layout_table(
             row.background.clone()
         } else {
             let stripe_bg = if data_row_idx % 2 == 1 {
-                stripe.filter(|_| row.background.is_none()).map(str::to_string)
+                style.and_then(|s| s.stripe.as_deref()).filter(|_| row.background.is_none()).map(str::to_string)
             } else {
                 None
             };
@@ -1477,23 +1673,10 @@ fn layout_table(
             x1: x, y1: y + half, x2: x + avail_w, y2: y + half,
             color: bclr.clone(), thickness: *bw, dash: None,
         }));
-        // The rule under a row stops where a cell spans on into the next one.
         let mut ry = y;
         for (i, rh) in row_heights.iter().enumerate() {
             ry += rh;
-            if grid.crosses(i) {
-                for (x1, x2) in row_rules(&grid.crossing_columns(i), &col_widths, gap, x, avail_w) {
-                    nodes.push(RenderNode::Line(RenderLine {
-                        x1, y1: ry - half, x2, y2: ry - half,
-                        color: bclr.clone(), thickness: *bw, dash: None,
-                    }));
-                }
-            } else {
-                nodes.push(RenderNode::Line(RenderLine {
-                    x1: x, y1: ry - half, x2: x + avail_w, y2: ry - half,
-                    color: bclr.clone(), thickness: *bw, dash: None,
-                }));
-            }
+            nodes.extend(rule_under_row(&grid, i, ry, &col_widths, gap, x, avail_w, (*bw, bclr)));
             ry += gap;
         }
 
@@ -1518,7 +1701,45 @@ fn layout_table(
         }
     }
 
+    // The line under the header row, and the line under each of the other rows.
+    if let Some(style) = style {
+        let mut ry = y;
+        for (i, rh) in row_heights.iter().enumerate() {
+            ry += rh;
+            let is_thead = rows[i].kind == NodeKind::TableHead;
+            let line = if is_thead { style.head_border.as_ref().or(style.row_border.as_ref()) } else { style.row_border.as_ref() };
+            if let Some((bw, bclr)) = line {
+                nodes.extend(rule_under_row(&grid, i, ry, &col_widths, gap, x, avail_w, (*bw, bclr)));
+            }
+            ry += gap;
+        }
+    }
+
     (nodes, total_h)
+}
+
+/// The rule along the bottom edge of the row `i`, whose bottom is at `bottom`: one line across the table, or
+/// pieces of it that stop where a cell spans on into the next row.
+fn rule_under_row(
+    grid:       &TableGrid,
+    i:          usize,
+    bottom:     f32,
+    col_widths: &[f32],
+    gap:        f32,
+    x:          f32,
+    width:      f32,
+    line:       (f32, &String),
+) -> Vec<RenderNode> {
+    let (thickness, color) = line;
+    let y = bottom - thickness / 2.0;
+    let pieces = if grid.crosses(i) {
+        row_rules(&grid.crossing_columns(i), col_widths, gap, x, width)
+    } else {
+        vec![(x, x + width)]
+    };
+    pieces.into_iter()
+        .map(|(x1, x2)| RenderNode::Line(RenderLine { x1, y1: y, x2, y2: y, color: color.clone(), thickness, dash: None }))
+        .collect()
 }
 
 /// Splits a table between rows: a row that does not fit goes to the next page whole, and so does the whole table
@@ -1531,7 +1752,7 @@ fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Sp
     let inner_full   = (full_page_h - pt - pb).max(0.0);
     let gap          = node.gap;
 
-    let col_widths  = resolve_col_widths(&node.table_cols, inner_w);
+    let col_widths  = table_col_widths(&node.children, &node.table_cols, inner_w, gap);
     let has_thead   = node.children.first()
         .map_or(false, |c| c.kind == NodeKind::TableHead);
 
@@ -1567,7 +1788,13 @@ fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Sp
         return SplitOutcome::NothingFits(vec![node.clone()]);
     }
 
-    let first = Node { children: node.children[..split_idx].to_vec(), ..node.clone() };
+    // The columns of a table sized by its cells stay as wide on the next page as they are on this one.
+    let table_cols = if col_units(&node.table_cols).contains(&ColUnit::Auto) {
+        col_widths.iter().map(|w| format!("{w:.3}pt")).collect::<Vec<_>>().join(" ")
+    } else {
+        node.table_cols.clone()
+    };
+    let first = Node { children: node.children[..split_idx].to_vec(), table_cols: table_cols.clone(), ..node.clone() };
 
     // Carry thead onto the continuation page. Its texts were captured with the first copy, on the page the table
     // started on, so the copy captures nothing.
@@ -1577,7 +1804,7 @@ fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Sp
         forget_captures(&mut header);
         rest_children.insert(0, header);
     }
-    let rest = Node { children: rest_children, ..node.clone() };
+    let rest = Node { children: rest_children, table_cols, ..node.clone() };
     SplitOutcome::First(first, vec![rest])
 }
 
@@ -1691,6 +1918,17 @@ fn split_text(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Spl
 
 // ── Text splitting helpers ────────────────────────────────────────────────────
 
+/// How an atom goes on from the one before it, when a word or a styled run was broken to fit a line.
+#[derive(Clone, Copy, PartialEq)]
+enum Join {
+    /// It is a word or a run of the text.
+    No,
+    /// It is the rest of a word that was cut at the edge of the line.
+    Chars,
+    /// It is the next word of a styled run that was broken at a space, so a space of the run's font leads it.
+    Space,
+}
+
 #[derive(Clone)]
 struct SplitAtom {
     text:           String,
@@ -1709,6 +1947,8 @@ struct SplitAtom {
     is_span:        bool,
     /// The note, on the atom that stands for the anchor of a footnote. Its `text` is the number it shows.
     footnote:       Option<Box<Footnote>>,
+    /// Whether it goes on from the atom before it, a piece of a word or a styled run that was broken to fit.
+    join:           Join,
 }
 
 /// A footnote's number is set at this share of the text's size, and its baseline raised by this share of it.
@@ -1724,6 +1964,71 @@ fn sup_geometry(font_size: f32) -> (f32, f32) {
 /// The width of a word of a line, set in `font_size`, or at the size of a raised number when `sup`.
 fn word_width(font: &str, text: &str, font_size: f32, sup: bool) -> f32 {
     text_width(font, text, if sup { font_size * SUP_SCALE } else { font_size })
+}
+
+/// The pieces of a word, or of a run of words, that is wider than a whole line: its words, and each word that is
+/// still wider cut after the last character that fits, so nothing runs past the box. Each piece comes with whether
+/// a space leads it.
+fn pieces_of_wide(font: &str, text: &str, font_size: f32, wrap_w: f32) -> Vec<(String, bool)> {
+    let fits = |s: &str| text_width(font, s, font_size) <= wrap_w + 0.01;
+    let mut pieces = Vec::new();
+    for (i, word) in text.split(' ').filter(|w| !w.is_empty()).enumerate() {
+        let mut rest = word;
+        let mut first = true;
+        while !fits(rest) {
+            // The longest start that fits, and at least one character, so the word always gets shorter.
+            let mut end = 0;
+            for (at, ch) in rest.char_indices() {
+                let next = at + ch.len_utf8();
+                if end > 0 && !fits(&rest[..next]) { break; }
+                end = next;
+            }
+            pieces.push((rest[..end].to_string(), i > 0 && first));
+            rest = &rest[end..];
+            first = false;
+        }
+        pieces.push((rest.to_string(), i > 0 && first));
+    }
+    pieces
+}
+
+/// Break the words and the styled runs of `toks` that are wider than a whole line into pieces that fit.
+fn break_wide_toks(toks: Vec<Tok>, font_size: f32, wrap_w: f32) -> Vec<Tok> {
+    let mut out = Vec::with_capacity(toks.len());
+    for tok in toks {
+        match tok {
+            Tok::Word(atom) if !atom.sup && word_width(&atom.font, &atom.text, font_size, false) > wrap_w + 0.01 => {
+                for (i, (text, space)) in pieces_of_wide(&atom.font, &atom.text, font_size, wrap_w).into_iter().enumerate() {
+                    let join = if i == 0 { Join::No } else if space { Join::Space } else { Join::Chars };
+                    out.push(Tok::Word(Atom { text, join, ..atom.clone() }));
+                }
+            }
+            other => out.push(other),
+        }
+    }
+    out
+}
+
+/// `break_wide_toks` for the atoms of a text that is split across pages, which must find the same lines.
+fn break_wide_split_atoms(atoms: Vec<SplitAtom>, parent_font: &str, font_size: f32, wrap_w: f32) -> Vec<SplitAtom> {
+    let mut out = Vec::with_capacity(atoms.len());
+    for atom in atoms {
+        let font = atom.font_override.as_deref().unwrap_or(parent_font);
+        if atom.footnote.is_some() || text_width(font, &atom.text, font_size) <= wrap_w + 0.01 {
+            out.push(atom);
+            continue;
+        }
+        for (i, (text, space)) in pieces_of_wide(font, &atom.text, font_size, wrap_w).into_iter().enumerate() {
+            let mut piece = atom.clone();
+            piece.text = text;
+            if i > 0 {
+                piece.leading_space = space;
+                piece.join = if space { Join::Space } else { Join::Chars };
+            }
+            out.push(piece);
+        }
+    }
+    out
 }
 
 /// Tokenize text_runs + wrap into lines. Mirrors the shape of `layout_text`'s
@@ -1753,6 +2058,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
                 leading_space: pending_leading || run_leading,
                 is_span: true,
                 footnote: Some(note.clone()),
+                join: Join::No,
             });
             pending_leading = false;
         } else if is_span {
@@ -1768,6 +2074,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
                     leading_space: pending_leading || run_leading,
                     is_span: true,
                     footnote: None,
+                    join: Join::No,
                 });
                 pending_leading = false;
             }
@@ -1784,6 +2091,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
                     leading_space: if j == 0 { pending_leading || run_leading } else { true },
                     is_span: false,
                     footnote: None,
+                    join: Join::No,
                 });
                 pending_leading = false;
             }
@@ -1792,24 +2100,57 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
 
     if atoms.is_empty() { return vec![]; }
 
+    // The same pieces as the lines of the text itself are made of.
+    let atoms = break_wide_split_atoms(atoms, parent_font, font_size, avail_w);
+
     // Greedy wrap.
     let mut lines: Vec<Vec<SplitAtom>> = Vec::new();
     let mut cur_line: Vec<SplitAtom> = Vec::new();
     let mut cur_w: f32 = 0.0;
 
-    for atom in atoms {
+    let mut atoms: std::collections::VecDeque<SplitAtom> = atoms.into();
+    while let Some(atom) = atoms.pop_front() {
         let font_for_atom = atom.font_override.as_deref().unwrap_or(parent_font);
         let aw = word_width(font_for_atom, &atom.text, font_size, atom.footnote.is_some());
-        let gap = if cur_line.is_empty() || !atom.leading_space { 0.0 } else { space_w };
+        let gap = if cur_line.is_empty() {
+            0.0
+        } else {
+            match atom.join {
+                Join::Space => text_width(font_for_atom, " ", font_size),
+                Join::Chars => 0.0,
+                Join::No    => if atom.leading_space { space_w } else { 0.0 },
+            }
+        };
         if cur_line.is_empty() || cur_w + gap + aw <= avail_w + 0.01 {
             cur_w += gap + aw;
             cur_line.push(atom);
+        } else if node.flow_runs && atom.is_span && atom.footnote.is_none() && atom.text.contains(' ') {
+            // The same as the lines of the text itself make: a styled run goes on in its next words.
+            for (i, word) in atom.text.split(' ').enumerate().collect::<Vec<_>>().into_iter().rev() {
+                let mut piece = atom.clone();
+                piece.text = word.to_string();
+                if i > 0 {
+                    piece.leading_space = true;
+                    piece.join = Join::Space;
+                }
+                atoms.push_front(piece);
+            }
+            continue;
         } else {
-            // The number of a footnote stays with the word before it, which goes down to the next line too.
-            let carried = if atom.footnote.is_some() && !atom.leading_space && cur_line.len() > 1 { cur_line.pop() } else { None };
+            // An atom with no space before it stays with the ones it is glued to, which go down to the next line
+            // with it, as the lines of the text itself have it.
+            let breakable = |a: &SplitAtom| a.join == Join::Space || (a.join == Join::No && a.leading_space);
+            let carried = if atom.join == Join::No && !atom.leading_space {
+                match cur_line.iter().rposition(|a| breakable(a)) {
+                    Some(start) if start > 0 => cur_line.split_off(start),
+                    _ => Vec::new(),
+                }
+            } else {
+                Vec::new()
+            };
             lines.push(std::mem::take(&mut cur_line));
             cur_w = aw;
-            if let Some(prev) = carried {
+            for prev in carried {
                 let font_for_prev = prev.font_override.as_deref().unwrap_or(parent_font);
                 cur_w += word_width(font_for_prev, &prev.text, font_size, prev.footnote.is_some());
                 cur_line.push(prev);
@@ -1836,6 +2177,18 @@ fn atoms_to_runs(atoms: &[SplitAtom]) -> Vec<TextRun> {
 
     for atom in atoms {
         let leading = if !first_emitted { false } else { atom.leading_space };
+
+        // The pieces of a styled run that was broken to fit a line are the run again.
+        if atom.join != Join::No && atom.is_span && atom.footnote.is_none() {
+            let is_run = |r: &TextRun| r.footnote.is_none() && (r.font.is_some() || r.color.is_some()
+                || r.href.is_some() || r.underline || r.strike || r.background.is_some());
+            if let Some(last) = runs.last_mut().filter(|r| is_run(r)) {
+                if atom.join == Join::Space { last.text.push(' '); }
+                last.text.push_str(&atom.text);
+                first_emitted = true;
+                continue;
+            }
+        }
 
         if let Some(note) = &atom.footnote {
             runs.push(TextRun {
@@ -2054,7 +2407,7 @@ fn dispatch_children(
         ),
         NodeKind::Table => layout_table(
             &node.children, x, y, avail_w,
-            node.gap, &node.table_cols, node.border.as_ref(), node.stripe.as_deref(),
+            node.gap, &node.table_cols, node.border.as_ref(), node.table_style.as_deref(),
         ),
         NodeKind::TableHead | NodeKind::TableRow | NodeKind::TableCell => layout_column(
             &node.children, x, y, avail_w, avail_h,
@@ -3169,7 +3522,11 @@ pub(crate) fn text_width(font: &str, text: &str, size: f32) -> f32 {
     // For known builtins use per-character AFM widths.
     if builtin_char_advance(font, ' ').is_some() {
         return text.chars()
-            .map(|c| builtin_char_advance(font, c).unwrap_or(500) as f32 * size / 1000.0)
+            .map(|c| {
+                let drawn = builtin_char_advance(font, c)
+                    .or_else(|| crate::pdf::look_alike(c).and_then(|a| builtin_char_advance(font, a)));
+                drawn.unwrap_or(500) as f32 * size / 1000.0
+            })
             .sum();
     }
     // Unknown font (undefined alias, unsupported builtin, or custom font with no
@@ -3207,6 +3564,7 @@ fn measure_natural_w(node: &Node) -> f32 {
             }
             total
         }
+        NodeKind::Table => measure_table_w(node, false),
         NodeKind::Divider => node.thickness,
         NodeKind::Img => node.width_constraint.unwrap_or(100.0),
         NodeKind::Shape => node.width_constraint.unwrap_or(0.0),
@@ -3240,7 +3598,63 @@ fn measure_natural_w(node: &Node) -> f32 {
     }
 }
 
+/// The width of the longest word of a text, or the width of the widest run that stays whole: what the text can be
+/// narrowed to before something runs past it.
+fn text_min_w(node: &Node) -> f32 {
+    let size = node.font_size;
+    let mut widest = 0.0_f32;
+    for run in &node.text_runs {
+        let font = run.font.as_deref().unwrap_or(&node.font);
+        if let Some(note) = &run.footnote {
+            widest = widest.max(word_width(font, &note.number.to_string(), size, true));
+            continue;
+        }
+        let is_span = run.font.is_some() || run.color.is_some()
+                   || run.href.is_some() || run.underline || run.strike || run.background.is_some();
+        // A styled run stays whole, unless the text fills a line with the first words of one.
+        if is_span && !node.flow_runs && node.pre_tab == 0 {
+            widest = widest.max(text_width(font, &run.text, size));
+        } else {
+            for word in run.text.split_whitespace() {
+                widest = widest.max(text_width(font, word, size));
+            }
+        }
+    }
+    // A text breaks what is wider than its box, so it does not hold a column wider than this for a long name, which
+    // would leave the columns beside it a word to a line.
+    widest.min(MAX_WORD_EMS * size)
+}
+
+/// How many ems wide a word is taken to be, for the least width of a text.
+const MAX_WORD_EMS: f32 = 12.0;
+
+/// The least width of a node: what it can be narrowed to before something in it runs past it. A text breaks at its
+/// spaces, so it is its longest word; a picture of a fixed width, a shape and a barcode do not narrow.
+fn measure_min_w(node: &Node) -> f32 {
+    match node.kind {
+        NodeKind::Text => text_min_w(node),
+        NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field if node.width_fill => 0.0,
+        NodeKind::Divider | NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field => measure_natural_w(node),
+        NodeKind::Table => measure_table_w(node, true),
+        _ => {
+            let [_pt, pr, _pb, pl] = node.padding;
+            let inner = match node.kind {
+                NodeKind::Row => {
+                    let children_w: f32 = node.children.iter().map(measure_min_w).sum();
+                    children_w + node.gap * (node.children.len().saturating_sub(1)) as f32
+                }
+                _ => node.children.iter().map(measure_min_w).fold(0.0_f32, f32::max),
+            };
+            match node.width_constraint {
+                Some(w) => w,
+                None    => inner + pl + pr,
+            }
+        }
+    }
+}
+
 /// A word or a styled run of a text, with the style it is drawn in.
+#[derive(Clone)]
 struct Atom {
     text:      String,
     font:      String,
@@ -3252,6 +3666,9 @@ struct Atom {
     background: Option<String>,
     /// The number of a footnote, drawn small and raised.
     sup:       bool,
+    /// Whether it goes on from the atom before it, a piece of a word or a run that was broken to fit a line, so a
+    /// tint or a line under it reaches back across the gap.
+    join:      Join,
 }
 
 enum Tok { Space, Word(Atom) }
@@ -3347,14 +3764,14 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
         if let Some(note) = &run.footnote {
             toks.push(Tok::Word(Atom {
                 text: note.number.to_string(), font: font.to_string(), color,
-                href: None, underline: false, strike: false, background: None, sup: true,
+                href: None, underline: false, strike: false, background: None, sup: true, join: Join::No,
             }));
         } else if is_span {
             if !run.text.is_empty() {
                 toks.push(Tok::Word(Atom {
                     text: run.text.clone(), font: font.to_string(), color,
                     href: run.href.clone(), underline: run.underline, strike: run.strike,
-                    background: run.background.clone(), sup: false,
+                    background: run.background.clone(), sup: false, join: Join::No,
                 }));
             }
         } else {
@@ -3362,7 +3779,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 if j > 0 { toks.push(Tok::Space); }
                 toks.push(Tok::Word(Atom {
                     text: word.to_string(), font: font.to_string(), color: color.clone(),
-                    href: None, underline: false, strike: false, background: None, sup: false,
+                    href: None, underline: false, strike: false, background: None, sup: false, join: Join::No,
                 }));
             }
         }
@@ -3376,27 +3793,56 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
         }), reserved, false);
     }
 
+    // A word, or a styled run, wider than the box would run past it: it is broken to fit.
+    let toks = break_wide_toks(toks, font_size, fit.wrap_w);
+
     // ── Word-wrap: build lines of (Atom, gap_before_pt) ──────────────────────
     let mut lines: Vec<TextLine> = Vec::new();
     let mut cur_line: TextLine   = Vec::new();
     let mut cur_line_w    = 0.0_f32;
     let mut pending_space = false;
 
-    for tok in toks {
+    let mut toks: std::collections::VecDeque<Tok> = toks.into();
+    while let Some(tok) = toks.pop_front() {
         match tok {
             Tok::Space => { pending_space = true; }
             Tok::Word(atom) => {
                 let aw  = word_width(&atom.font, &atom.text, font_size, atom.sup);
-                let gap = if cur_line.is_empty() || !pending_space { 0.0 } else { space_w };
+                let gap = if cur_line.is_empty() {
+                    0.0
+                } else {
+                    match atom.join {
+                        Join::Space => text_width(&atom.font, " ", font_size),
+                        Join::Chars => 0.0,
+                        Join::No    => if pending_space { space_w } else { 0.0 },
+                    }
+                };
                 if cur_line.is_empty() || cur_line_w + gap + aw <= fit.wrap_w + 0.01 {
                     cur_line_w += gap + aw;
                     cur_line.push((atom, gap));
+                } else if node.flow_runs && !atom.sup && atom.text.contains(' ') {
+                    // A styled run of several words that does not fit what is left of the line goes on in the next
+                    // words, so the line is filled and the run is not moved down whole.
+                    for (i, word) in atom.text.split(' ').enumerate().collect::<Vec<_>>().into_iter().rev() {
+                        let join = if i == 0 { atom.join } else { Join::Space };
+                        toks.push_front(Tok::Word(Atom { text: word.to_string(), join, ..atom.clone() }));
+                    }
+                    continue;
                 } else {
-                    // The number of a footnote stays with the word before it, which goes down to the next line too.
-                    let carried = if atom.sup && !pending_space && cur_line.len() > 1 { cur_line.pop() } else { None };
+                    // An atom with no space before it stays with the ones it is glued to, which go down to the next
+                    // line with it: the number of a footnote, or a bracket and the run of code after it.
+                    let glued = atom.join == Join::No && !pending_space;
+                    let carried = if glued {
+                        match cur_line.iter().rposition(|(_, gap)| *gap > 0.0) {
+                            Some(start) => cur_line.split_off(start),
+                            None => Vec::new(),
+                        }
+                    } else {
+                        Vec::new()
+                    };
                     lines.push(std::mem::take(&mut cur_line));
                     cur_line_w = aw;
-                    if let Some((prev, _)) = carried {
+                    for (prev, _) in carried {
                         cur_line_w += word_width(&prev.font, &prev.text, font_size, prev.sup);
                         cur_line.push((prev, 0.0));
                     }
@@ -3513,9 +3959,11 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 } else {
                     (font_size, line_y)
                 };
+                // The tint and the lines of a run broken across a gap reach back over it.
+                let lead = if atom.join != Join::No && *gap > 0.0 { *gap + word_gap } else { 0.0 };
                 let mut seg = Vec::new();
                 if let Some(tint) = &atom.background {
-                    seg.push(tint_behind(tint, cur_x, line_y, aw, line_height));
+                    seg.push(tint_behind(tint, cur_x - lead, line_y, aw + lead, line_height));
                 }
                 seg.push(RenderNode::Text(RenderText {
                     x: cur_x, y: atom_y,
@@ -3530,7 +3978,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
 
                 if atom.underline {
                     seg.push(RenderNode::Line(RenderLine {
-                        x1: cur_x, y1: line_y + font_size,
+                        x1: cur_x - lead, y1: line_y + font_size,
                         x2: cur_x + aw, y2: line_y + font_size,
                         color: atom.color.clone(), thickness: 0.75,
                         dash: None,
@@ -3539,7 +3987,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 if atom.strike {
                     let sy = line_y + font_size * 0.5;
                     seg.push(RenderNode::Line(RenderLine {
-                        x1: cur_x, y1: sy, x2: cur_x + aw, y2: sy,
+                        x1: cur_x - lead, y1: sy, x2: cur_x + aw, y2: sy,
                         color: atom.color.clone(), thickness: 0.75,
                         dash: None,
                     }));
@@ -3547,8 +3995,8 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
 
                 match &atom.href {
                     Some(href) => all_nodes.push(RenderNode::Link(RenderLink {
-                        url: href.clone(), x: cur_x, y: line_y,
-                        width: aw, height: line_height, debug_self: false, children: seg,
+                        url: href.clone(), x: cur_x - lead, y: line_y,
+                        width: aw + lead, height: line_height, debug_self: false, children: seg,
                     })),
                     None => all_nodes.extend(seg),
                 }
@@ -4523,6 +4971,75 @@ mod tests {
     }
 
     #[test]
+    fn paginate_keep_next_moves_the_keep_next_nodes_before_it_along() {
+        // Two heads in a row, each kept with the one after it: the second moves on with its sibling, and the first
+        // is not left alone at the foot of the page.
+        let body = |attr: &str| {
+            format!(r#"<frame height="700pt" /><text {attr}>H1</text><text {attr}>H2</text><frame height="200pt" /><text>TAIL</text>"#)
+        };
+        let loose = engine_render(&minimal(&body("")));
+        assert_eq!(page_with(loose["pages"].as_array().unwrap(), "H1"), Some(1));
+        assert_eq!(page_with(loose["pages"].as_array().unwrap(), "H2"), Some(1));
+
+        let kept = engine_render(&minimal(&body(r#"paginate="keep-next""#)));
+        let pages = kept["pages"].as_array().unwrap();
+        assert_eq!(page_with(pages, "H2"), Some(2), "the second head goes with its sibling");
+        assert_eq!(page_with(pages, "H1"), Some(2), "and the first goes with the second");
+    }
+
+    /// A table of a header row and `rows` rows of about 41pt, which a page holds whole when it is empty.
+    fn rows_table(rows: usize) -> String {
+        let row = |text: &str| format!(r#"<tr><td padding="14pt"><text>{text}</text></td></tr>"#);
+        let body: String = (1..=rows).map(|n| row(&format!("R{n}"))).collect();
+        format!(r#"<table cols="1fr"><thead><td padding="14pt"><text>TH</text></td></thead>{body}</table>"#)
+    }
+
+    #[test]
+    fn paginate_keep_next_keeps_the_head_with_the_first_rows_of_a_table_that_splits() {
+        // 500pt are used, which leaves room for the head and the header and five rows of the table, not for all of
+        // it, and the table is shorter than a page.
+        let page = |attr: &str, frame: &str| {
+            let tree = engine_render(&minimal(&format!(
+                r#"<frame height="{frame}pt" /><text {attr}>HEAD</text>{}"#, rows_table(12)
+            )));
+            let pages = tree["pages"].as_array().unwrap().clone();
+            (page_with(&pages, "HEAD"), page_with(&pages, "TH"), page_with(&pages, "R12"))
+        };
+        assert_eq!(page(r#"paginate="keep-next""#, "500"), (Some(1), Some(1), Some(2)), "the head stays, with the header on its page");
+        assert_eq!(page("", "500"), (Some(1), Some(1), Some(2)), "as it does without keep-next");
+    }
+
+    #[test]
+    fn paginate_keep_next_moves_the_head_with_a_table_that_cannot_start_on_the_page() {
+        // 735pt are used: there is room for the head and not for the header and a row of the table.
+        let tree = engine_render(&minimal(&format!(
+            r#"<frame height="735pt" /><text paginate="keep-next">HEAD</text>{}"#, rows_table(12)
+        )));
+        let pages = tree["pages"].as_array().unwrap();
+        assert_eq!((page_with(pages, "HEAD"), page_with(pages, "TH")), (Some(2), Some(2)));
+    }
+
+    #[test]
+    fn paginate_keep_next_keeps_the_head_with_the_first_lines_of_a_text_that_splits() {
+        let words = "word ".repeat(700);
+        let tree = engine_render(&minimal(&format!(
+            r#"<frame height="600pt" /><text paginate="keep-next">HEAD</text><text>FIRST {words}</text>"#
+        )));
+        let pages = tree["pages"].as_array().unwrap();
+        assert_eq!((page_with(pages, "HEAD"), page_with(pages, "FIRST")), (Some(1), Some(1)));
+        assert!(pages.len() > 1, "the paragraph goes on to the next page");
+    }
+
+    #[test]
+    fn paginate_keep_next_leaves_a_page_that_it_would_empty_as_it_was() {
+        // Both heads are already at the top of the page, so there is nothing to gain by moving them.
+        let kept = engine_render(&minimal(r#"<text paginate="keep-next">H1</text><text paginate="keep-next">H2</text><frame height="900pt" />"#));
+        let pages = kept["pages"].as_array().unwrap();
+        assert_eq!(page_with(pages, "H1"), Some(1));
+        assert_eq!(page_with(pages, "H2"), Some(1));
+    }
+
+    #[test]
     fn paginate_no_keeps_a_column_whole() {
         // 760pt used leaves room for one line of the column, which splits between its children unless it is kept whole.
         let body = |attr: &str| {
@@ -4646,6 +5163,293 @@ mod tests {
         let mut out = Vec::new();
         walk(page, fill, &mut out);
         out
+    }
+
+    /// Every text of a page tree: `(x, font, size, content)`.
+    fn text_boxes(page: &serde_json::Value) -> Vec<(f64, String, f64, String)> {
+        fn walk(v: &serde_json::Value, out: &mut Vec<(f64, String, f64, String)>) {
+            if v["type"] == "text" {
+                out.push((
+                    v["x"].as_f64().unwrap(), v["font"].as_str().unwrap().to_string(),
+                    v["size"].as_f64().unwrap(), v["content"].as_str().unwrap().to_string(),
+                ));
+            }
+            if let Some(arr) = v["nodes"].as_array() {
+                for c in arr { walk(c, out); }
+            }
+        }
+        let mut out = Vec::new();
+        walk(page, &mut out);
+        out
+    }
+
+    /// The pages of a document with `markdown` in a section with 54pt of margin.
+    fn markdown_pages(markdown: &str) -> Vec<serde_json::Value> {
+        let xml = format!(
+            r#"<lpdf version="1"><document size="a4"><section><markdown margin="54pt"><markdown-content><![CDATA[{markdown}]]></markdown-content></markdown></section></document></lpdf>"#
+        );
+        engine_render(&xml)["pages"].as_array().unwrap().clone()
+    }
+
+    const WIDE_NAME: &str = "Products__lpdf__Tiers__professional__PaddlePriceId";
+
+    /// The right margin of `markdown_pages`.
+    const MARKDOWN_RIGHT_EDGE: f64 = 595.28 - 54.0;
+
+    #[test]
+    fn a_markdown_breaks_a_name_wider_than_its_table_cell_so_it_stays_in_the_cell() {
+        // Two names that are each wider than half the page: neither column can have its name on one line.
+        let pages = markdown_pages(&format!("| Key | Other |\n|---|---|\n| `{WIDE_NAME}` | `{WIDE_NAME}` |\n"));
+        let texts = text_boxes(&pages[0]);
+        let other_x = texts.iter().find(|t| t.3 == "Other").unwrap().0;
+        let pieces: Vec<&(f64, String, f64, String)> = texts.iter().filter(|t| t.3.contains('_') && t.0 < other_x).collect();
+        assert!(pieces.len() >= 2, "the name is on more than one line: {pieces:?}");
+        assert_eq!(pieces.iter().map(|t| t.3.as_str()).collect::<String>(), WIDE_NAME, "nothing is lost");
+        for (x, font, size, content) in pieces {
+            let right = x + text_width(font, content, *size as f32) as f64;
+            assert!(right <= other_x, "{content} ends at {right}, in the next column, which starts at {other_x}");
+        }
+    }
+
+    /// The pages of a layout of 28pt margins holding `body`, and the right edge of its content.
+    fn plain_pages(body: &str) -> Vec<serde_json::Value> {
+        engine_render(&minimal(body))["pages"].as_array().unwrap().clone()
+    }
+
+    const PLAIN_RIGHT_EDGE: f64 = 595.28 - 28.0;
+
+    #[test]
+    fn a_word_wider_than_its_box_breaks_at_the_last_character_that_fits_in_a_text_of_the_document() {
+        let pages = plain_pages(&format!(r#"<column width="120pt"><text>See {WIDE_NAME} and more words</text></column>"#));
+        let texts = text_boxes(&pages[0]);
+        assert!(texts.len() >= 4, "the name is on several lines: {texts:?}");
+        let all: String = texts.iter().map(|t| t.3.as_str()).collect::<Vec<_>>().join("").replace(' ', "");
+        assert_eq!(all, format!("See{WIDE_NAME}andmorewords"), "nothing is lost");
+        for (x, font, size, content) in texts {
+            let right = x + text_width(&font, &content, size as f32) as f64;
+            assert!(right <= 28.0 + 120.0 + 0.1, "{content} ends at {right}, past the box");
+        }
+    }
+
+    #[test]
+    fn a_styled_run_wider_than_a_whole_line_breaks_too() {
+        let pages = plain_pages(&format!(
+            r##"<column width="120pt"><text>See <span color="#cc0000">{WIDE_NAME}</span> and <span color="#00aa00">{WIDE_NAME} {WIDE_NAME}</span> here</text></column>"##
+        ));
+        let texts = text_boxes(&pages[0]);
+        assert!(texts.len() > 6, "the runs are cut into pieces: {texts:?}");
+        for (x, font, size, content) in texts {
+            let right = x + text_width(&font, &content, size as f32) as f64;
+            assert!(right <= 28.0 + 120.0 + 0.1, "{content} ends at {right}, past the box");
+        }
+    }
+
+    #[test]
+    fn a_text_of_the_document_with_wide_words_that_runs_onto_another_page_stays_within_its_margin() {
+        let content = format!("{WIDE_NAME} and some words to fill the lines, ").repeat(80);
+        let pages = plain_pages(&format!("<text>{content}</text>"));
+        assert!(pages.len() > 1, "the text runs onto a second page");
+        for page in &pages {
+            for (x, font, size, content) in text_boxes(page) {
+                let right = x + text_width(&font, &content, size as f32) as f64;
+                assert!(right <= PLAIN_RIGHT_EDGE + 0.1, "{content} ends at {right}, past the margin");
+            }
+        }
+    }
+
+    #[test]
+    fn a_name_wider_than_a_table_cell_breaks_in_the_cell_of_a_table_of_the_document() {
+        let pages = plain_pages(&format!(
+            r#"<table cols="auto auto"><tr><td><text>{WIDE_NAME}{WIDE_NAME}</text></td><td><text>{WIDE_NAME}{WIDE_NAME}</text></td></tr></table>"#
+        ));
+        let texts = text_boxes(&pages[0]);
+        assert!(texts.len() >= 4, "each name is on more than one line: {texts:?}");
+        for (x, font, size, content) in texts {
+            let right = x + text_width(&font, &content, size as f32) as f64;
+            assert!(right <= PLAIN_RIGHT_EDGE + 0.1, "{content} ends at {right}, past the margin");
+        }
+    }
+
+    #[test]
+    fn a_styled_run_that_fits_a_line_goes_down_whole_in_a_text_of_the_document() {
+        // "gamma" would fit what is left of the first line, but the run is moved down whole, as it always was; only
+        // a markdown fills the line with the first words of a run.
+        let (_, lines, _) = flow_text("", r##"alpha beta <span color="#cc0000">gamma delta</span>"##);
+        assert_eq!(lines, ["alpha beta", "gamma delta"]);
+    }
+
+    // ── Tables sized by their cells ───────────────────────────────────────────
+
+    /// The `x` of the first text of each cell of the first row, which is where its column starts.
+    fn column_starts(tree: &serde_json::Value, row_texts: &[&str]) -> Vec<f64> {
+        let texts = placed_texts(&tree["pages"][0]);
+        row_texts.iter().map(|word| texts.iter().find(|t| t.2 == *word).unwrap().0).collect()
+    }
+
+    fn table_of(cols: &str, rows: &[[&str; 3]]) -> String {
+        let rows: String = rows.iter()
+            .map(|r| format!("<tr>{}</tr>", r.iter().map(|c| format!("<td><text>{c}</text></td>")).collect::<String>()))
+            .collect();
+        format!(r#"<table cols="{cols}">{rows}</table>"#)
+    }
+
+    #[test]
+    fn an_auto_column_takes_the_width_its_cells_need_and_the_room_left_goes_to_the_columns_in_proportion() {
+        let rows = [["parse_xml/small/example1", "12,571", "590"], ["parse_xml/medium/example8", "273,184", "74,779"]];
+        let tree = engine_render(&minimal(&table_of("auto auto auto", &rows)));
+        let starts = column_starts(&tree, &["parse_xml/small/example1", "12,571", "590"]);
+        let texts = placed_texts(&tree["pages"][0]);
+        assert_eq!(texts.len(), 6, "each cell is on one line: {texts:?}");
+        let widths = [starts[1] - starts[0], starts[2] - starts[1], 28.0 + 539.28 - starts[2]];
+        assert!(widths[0] > widths[1] && widths[1] > widths[2], "{widths:?}");
+        // The first column is as wide as its longer name, and more: the room left is shared in proportion.
+        assert!(widths[0] >= text_width("Helvetica", "parse_xml/medium/example8", 11.0) as f64, "{widths:?}");
+        assert!((widths.iter().sum::<f64>() - 539.28).abs() < 0.1, "the columns fill the table: {widths:?}");
+    }
+
+    #[test]
+    fn a_column_of_short_cells_keeps_its_width_when_the_text_beside_it_wraps() {
+        let prose = "words that run on and on until a line of this page is not long enough to hold them all, so they wrap ".repeat(3);
+        let tree = engine_render(&minimal(&table_of("auto auto auto", &[[&prose, "12,571", "590"]])));
+        let starts = column_starts(&tree, &["12,571", "590"]);
+        let number_w = text_width("Helvetica", "12,571", 11.0) as f64;
+        // The number column is as wide as the number, and its neighbor is as narrow as the room left allows.
+        assert!((starts[1] - starts[0] - number_w).abs() < 0.1, "{starts:?}");
+        let lines = placed_texts(&tree["pages"][0]).iter().filter(|t| t.0 < starts[0]).count();
+        assert!(lines > 1, "the prose wraps");
+    }
+
+    #[test]
+    fn auto_columns_share_what_the_fixed_columns_leave() {
+        let tree = engine_render(&minimal(&table_of("auto 90pt 60pt", &[["name", "a", "b"]])));
+        let starts = column_starts(&tree, &["name", "a", "b"]);
+        assert!((starts[1] - 28.0 - (539.28 - 150.0)).abs() < 0.1, "{starts:?}");
+        assert!((starts[2] - starts[1] - 90.0).abs() < 0.1, "{starts:?}");
+    }
+
+    #[test]
+    fn the_longest_names_break_first_when_not_even_the_longest_words_fit() {
+        let name = "x".repeat(120);
+        let tree = engine_render(&minimal(&table_of("auto auto auto", &[[&name, "short", "also"]])));
+        let starts = column_starts(&tree, &["short", "also"]);
+        // The two short columns are as wide as their words, and the name has the rest.
+        assert!((starts[1] - starts[0] - text_width("Helvetica", "short", 11.0) as f64).abs() < 0.1, "{starts:?}");
+        assert!((starts[0] - 28.0 - (539.28 - text_width("Helvetica", "short", 11.0) as f64 - text_width("Helvetica", "also", 11.0) as f64)).abs() < 0.1, "{starts:?}");
+    }
+
+    #[test]
+    fn a_table_sized_by_its_cells_keeps_its_columns_on_the_next_page() {
+        let rows: Vec<[&str; 3]> = (0..120).map(|_| ["a name that is a bit long", "12,571", "590"]).collect();
+        let tree = engine_render(&minimal(&table_of("auto auto auto", &rows)));
+        let pages = tree["pages"].as_array().unwrap();
+        assert!(pages.len() > 1, "the table runs onto a second page");
+        let second_column = |page: &serde_json::Value| placed_texts(page).iter().find(|t| t.2 == "12,571").unwrap().0;
+        assert!((second_column(&pages[0]) - second_column(&pages[1])).abs() < 0.01);
+    }
+
+    #[test]
+    fn auto_beside_fr_is_an_error_that_says_what_to_use() {
+        let xml = minimal(&table_of("auto 1fr", &[["a", "b", "c"]]));
+        let err = match crate::parse::parse(&xml) { Err(e) => e, Ok(_) => panic!("auto beside fr was accepted") };
+        assert!(err.contains("auto and fr") && err.contains("pt or %"), "{err}");
+    }
+
+    #[test]
+    fn a_markdown_wraps_a_long_link_a_code_span_with_spaces_and_a_long_word_within_its_margin() {
+        let pages = markdown_pages(&format!(
+            "A [link whose text is long enough that it has to wrap onto a second line of the page](https://lpdf.io) and \
+             `code with spaces that is long enough to need a second line on this page of text, and more` and {WIDE_NAME}{WIDE_NAME}.\n"
+        ));
+        let texts = text_boxes(&pages[0]);
+        assert!(texts.iter().any(|t| t.3.contains("wrap")) && texts.iter().any(|t| t.3.contains("need")), "{texts:?}");
+        for (x, font, size, content) in &texts {
+            let right = x + text_width(font, content, *size as f32) as f64;
+            assert!(right <= MARKDOWN_RIGHT_EDGE + 0.1, "{content} ends at {right}, past the margin at {MARKDOWN_RIGHT_EDGE}");
+        }
+    }
+
+    /// The tinted boxes of a page tree: `(x, y, width)`.
+    fn tints(page: &serde_json::Value, fill: &str) -> Vec<(f64, f64, f64)> {
+        fn walk(v: &serde_json::Value, fill: &str, out: &mut Vec<(f64, f64, f64)>) {
+            if v["type"] == "box" && v["fill"] == fill {
+                out.push((v["x"].as_f64().unwrap(), v["y"].as_f64().unwrap(), v["width"].as_f64().unwrap()));
+            }
+            if let Some(arr) = v["nodes"].as_array() {
+                for c in arr { walk(c, fill, out); }
+            }
+        }
+        let mut out = Vec::new();
+        walk(page, fill, &mut out);
+        out
+    }
+
+    /// A paragraph of plain words that ends where `span` has room for its first word and not for all of it.
+    fn paragraph_ending_before(span: &str) -> String {
+        let first = span.split(' ').next().unwrap();
+        let room = 595.28 - 108.0;
+        let courier = |text: &str| text_width("Courier", text, 11.0) as f32;
+        let space = text_width("Helvetica", " ", 11.0);
+        (1..300)
+            .map(|n| vec!["word"; n].join(" "))
+            .find(|filler| {
+                let used = text_width("Helvetica", filler, 11.0) + space;
+                used + courier(first) <= room && used + courier(span) > room
+            })
+            .map(|filler| format!("{filler} `{span}` end."))
+            .expect("a filler that leaves room for the first word only")
+    }
+
+    #[test]
+    fn a_markdown_code_span_that_does_not_fit_what_is_left_of_the_line_goes_on_in_its_next_word() {
+        let pages = markdown_pages(&paragraph_ending_before("extractable: false"));
+        let texts = placed_texts(&pages[0]);
+        let y_of = |content: &str| texts.iter().find(|t| t.2 == content).unwrap_or_else(|| panic!("{content} in {texts:?}")).1;
+        assert_eq!(y_of("extractable:"), y_of(texts[0].2.as_str()), "the first word is on the line with the words before it");
+        assert!(y_of("false") > y_of("extractable:"), "and the rest of the run goes down");
+    }
+
+    #[test]
+    fn a_bracket_with_no_space_before_a_code_span_goes_down_with_it() {
+        let room = 595.28 - 108.0;
+        let space = text_width("Helvetica", " ", 11.0);
+        let bracket = text_width("Helvetica", "(", 11.0);
+        let code = text_width("Courier", "libconseal_core.so", 11.0);
+        let filler = (1..300)
+            .map(|n| vec!["word"; n].join(" "))
+            .find(|f| {
+                let used = text_width("Helvetica", f, 11.0) + space;
+                used + bracket <= room && used + bracket + code > room
+            })
+            .expect("a filler with room for the bracket and not for the code after it");
+        let pages = markdown_pages(&format!("{filler} (`libconseal_core.so`) end."));
+        let texts = placed_texts(&pages[0]);
+        assert!(!texts[0].2.contains('('), "the line of words does not end in the bracket: {texts:?}");
+        let y_of = |content: &str| texts.iter().find(|t| t.2.contains(content)).unwrap().1;
+        assert_eq!(y_of("("), y_of("libconseal_core.so"), "the bracket is on the line of the code");
+    }
+
+    #[test]
+    fn the_tint_of_a_code_span_is_one_stretch_across_the_gaps_of_a_line_it_is_broken_on() {
+        let pages = markdown_pages(&format!("{} more", paragraph_ending_before("alpha beta gamma").trim_end_matches(" end.")));
+        let boxes = tints(&pages[0], "#ffffff");
+        let on_first_line: Vec<_> = boxes.iter().filter(|b| (b.1 - boxes[0].1).abs() < 0.01).collect();
+        assert!(on_first_line.len() >= 2, "the run has more than one word on the line: {boxes:?}");
+        for pair in on_first_line.windows(2) {
+            assert!((pair[0].0 + pair[0].2 - pair[1].0).abs() < 0.01, "the second reaches back to where the first ends: {pair:?}");
+        }
+    }
+
+    #[test]
+    fn a_markdown_paragraph_with_wide_words_that_runs_onto_another_page_stays_within_its_margin() {
+        let paragraph = format!("{WIDE_NAME} and some words to fill the lines, `{WIDE_NAME}` too, ").repeat(60);
+        let pages = markdown_pages(&format!("{paragraph}\n"));
+        assert!(pages.len() > 1, "the paragraph runs onto a second page");
+        for page in &pages {
+            for (x, font, size, content) in text_boxes(page) {
+                let right = x + text_width(&font, &content, size as f32) as f64;
+                assert!(right <= MARKDOWN_RIGHT_EDGE + 0.1, "{content} ends at {right}, past the margin");
+            }
+        }
     }
 
     /// The contents of the texts of the first page of a layout holding `body`.
@@ -5039,7 +5843,10 @@ abcdef</code><text>after</text></row>"#,
         let content = format!("{CAPPED_WORDS} Incomprehensibilities");
         let (plain, lines, _) = flow_text("", &content);
         assert_eq!(flow_text(r#"ellipsis="true""#, &content).0, plain);
-        assert_eq!(lines.last().unwrap(), "Incomprehensibilities", "the long word is drawn whole: {lines:?}");
+        // It is broken at the last character that fits, in no dots, and every line of it is within the box.
+        assert!(lines.last().unwrap().len() < "Incomprehensibilities".len(), "the long word is broken: {lines:?}");
+        assert!(lines.join("").contains("Incomprehensibilities") && !lines.join("").contains("..."), "{lines:?}");
+        assert!(lines.iter().all(|line| text_width("Helvetica", line, 10.0) <= 90.01), "no line runs past the box: {lines:?}");
     }
 
     #[test]
@@ -6946,6 +7753,63 @@ abcdef</code><text>after</text></row>"#,
         rules.sort_by(|a, b| a.0.total_cmp(&b.0));
         // The top and the bottom of the table cross it whole, and the rule between the rows starts where the span ends.
         assert_eq!(rules, vec![(28.5, 28.0, 567.28), (40.7, 128.0, 567.28), (53.9, 28.0, 567.28)], "{rules:?}");
+    }
+
+    /// The horizontal lines of a table with a header row and two rows, as (thickness, color, x1, x2), top to bottom.
+    fn lines_of_table(attrs: &str, body: &str) -> Vec<(f64, String, f64, f64)> {
+        let tree = engine_render(&minimal(&format!(r#"<table cols="100pt 100pt" {attrs}>{body}</table>"#)));
+        let round = |v: &serde_json::Value| (v.as_f64().unwrap() * 100.0).round() / 100.0;
+        let mut lines: Vec<(f64, f64, String, f64, f64)> = nodes_of(&tree["pages"][0], "line").iter()
+            .map(|l| (round(&l["y1"]), round(&l["thickness"]), l["color"].as_str().unwrap().to_string(), round(&l["x1"]), round(&l["x2"])))
+            .collect();
+        lines.sort_by(|a, b| a.0.total_cmp(&b.0));
+        lines.into_iter().map(|(_, thickness, color, x1, x2)| (thickness, color, x1, x2)).collect()
+    }
+
+    fn header_and_two_rows() -> String {
+        format!("<thead>{}{}</thead><tr>{}{}</tr><tr>{}{}</tr>", cell("", "H1"), cell("", "H2"), cell("", "A1"), cell("", "A2"), cell("", "B1"), cell("", "B2"))
+    }
+
+    #[test]
+    fn a_table_has_a_line_under_its_header_and_under_each_of_its_rows() {
+        let lines = lines_of_table(r##"head-border="1pt #111111" row-border="0.5pt #dddddd""##, &header_and_two_rows());
+        // The width of the table is the page less the margins, as the grid border has it.
+        let across = (28.0, 567.28);
+        assert_eq!(
+            lines,
+            vec![
+                (1.0, "#111111".to_string(), across.0, across.1),
+                (0.5, "#dddddd".to_string(), across.0, across.1),
+                (0.5, "#dddddd".to_string(), across.0, across.1),
+            ],
+            "the header line takes the place of the row line under the header: {lines:?}"
+        );
+    }
+
+    #[test]
+    fn a_header_line_alone_leaves_the_rows_without_lines_and_a_row_line_alone_goes_under_the_header_too() {
+        let body = header_and_two_rows();
+        assert_eq!(lines_of_table(r##"head-border="1pt #111111""##, &body).len(), 1);
+        let lines = lines_of_table(r##"row-border="0.5pt #dddddd""##, &body);
+        assert_eq!(lines.iter().map(|l| l.1.as_str()).collect::<Vec<_>>(), ["#dddddd"; 3]);
+        assert!(lines_of_table("", &body).is_empty(), "a table with neither has no lines");
+    }
+
+    #[test]
+    fn none_turns_a_line_off() {
+        let body = header_and_two_rows();
+        assert!(lines_of_table(r#"head-border="none" row-border="none""#, &body).is_empty());
+    }
+
+    #[test]
+    fn a_row_line_stops_where_a_cell_spans_on_into_the_next_row() {
+        let lines = lines_of_table(
+            r##"row-border="0.5pt #dddddd""##,
+            &format!("<tr>{}{}</tr><tr>{}</tr>", cell(r#"rowspan="2""#, "A"), cell("", "B"), cell("", "C")),
+        );
+        // The line under the first row starts where the span ends; the one under the last row crosses the table.
+        let from: Vec<f64> = lines.iter().map(|l| l.2).collect();
+        assert_eq!(from, vec![128.0, 28.0], "{lines:?}");
     }
 
     #[test]

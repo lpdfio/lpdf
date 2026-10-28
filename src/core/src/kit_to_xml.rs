@@ -321,6 +321,54 @@ fn render_layer(layer: &Value, depth: usize) -> String {
     }
 }
 
+/// A `markdown`: the rules of its `markdown-styles`, which have no content, and its `markdown-content`, whose
+/// text is written as it is in a CDATA section. Markdown uses `<` and `&` freely, and the indent of its lines
+/// means something, so it is not escaped and not indented.
+fn render_markdown(node: &Value, depth: usize) -> String {
+    let pad     = "  ".repeat(depth);
+    let inner   = "  ".repeat(depth + 1);
+    let empty   = serde_json::Map::new();
+    let attrs_s = attrs_str(node.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty), &[]);
+    let mut parts: Vec<String> = Vec::new();
+    for child in node.get("nodes").and_then(|v| v.as_array()).into_iter().flatten() {
+        let kind  = child.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        let attrs = attrs_str(child.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty), &[]);
+        match kind {
+            "markdown-styles" => {
+                let rules: Vec<String> = child
+                    .get("nodes")
+                    .and_then(|v| v.as_array())
+                    .into_iter()
+                    .flatten()
+                    .map(|rule| {
+                        let tag = rule.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                        let attrs = attrs_str(rule.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty), &[]);
+                        format!("{}<{tag}{attrs}/>", "  ".repeat(depth + 2))
+                    })
+                    .collect();
+                if rules.is_empty() {
+                    parts.push(format!("{inner}<markdown-styles{attrs}/>"));
+                } else {
+                    parts.push(format!("{inner}<markdown-styles{attrs}>\n{}\n{inner}</markdown-styles>", rules.join("\n")));
+                }
+            }
+            "markdown-content" => {
+                let text: String = child.get("nodes").and_then(|v| v.as_array()).into_iter().flatten().filter_map(|v| v.as_str()).collect();
+                // `]]>` would end the section, so it is cut in two.
+                let text = text.replace("]]>", "]]]]><![CDATA[>");
+                parts.push(format!("{inner}<markdown-content{attrs}><![CDATA[{text}]]></markdown-content>"));
+            }
+            // Any other child is written as it is, so that reading the XML reports it.
+            _ => parts.push(render_node(child, depth + 1)),
+        }
+    }
+    if parts.is_empty() {
+        format!("{pad}<markdown{attrs_s}/>")
+    } else {
+        format!("{pad}<markdown{attrs_s}>\n{}\n{pad}</markdown>", parts.join("\n"))
+    }
+}
+
 fn render_section(section: &Value, depth: usize) -> String {
     let pad     = "  ".repeat(depth);
     let inner   = "  ".repeat(depth + 1);
@@ -353,6 +401,7 @@ fn render_section(section: &Value, depth: usize) -> String {
                 }
             }
             "layer" => parts.push(render_layer(child, depth + 1)),
+            "markdown" => parts.push(render_markdown(child, depth + 1)),
             "bookmark" => {
                 let bookmark_attrs = child.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
                 parts.push(format!("{inner}<bookmark{}/>", attrs_str(bookmark_attrs, &[])));
@@ -1692,5 +1741,33 @@ mod tests {
         let without = render_tree(&document(shown));
         assert!(from_tree == without, "the tree shows the hidden layer");
         assert!(from_xml == without, "the XML shows the hidden layer");
+    }
+    #[test]
+    fn a_markdown_renders_the_same_from_the_tree_and_from_the_xml() {
+        // Markdown with what XML would take as markup, and the end of a CDATA section, and an indented code block
+        let text = "# A & B < C\\n\\nUse `]]>` or <b>not</b>? No: *emphasis* & **strong**.\\n\\ntext\\n\\n    code\\n";
+        let kit = format!(
+            r##"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
+                {{"type":"markdown","attrs":{{"gap":"6pt","margin":"40pt"}},"nodes":[
+                    {{"type":"markdown-styles","attrs":{{}},"nodes":[{{"type":"h1","attrs":{{"color":"#ff0000"}}}}]}},
+                    {{"type":"markdown-content","attrs":{{}},"nodes":["{text}"]}}]}}]}}]}}"##
+        );
+        // `<b>` is raw HTML, which is an error: both ways say so alike
+        let from_xml = crate::parse::parse(&kit_to_xml(&kit).unwrap()).unwrap_err();
+        let from_tree = crate::parse::parse_tree(&kit).unwrap_err();
+        assert!(from_xml.contains("raw HTML") && from_tree.contains("raw HTML"), "{from_xml} / {from_tree}");
+
+        let kit = kit.replace("<b>not</b>", "not");
+        let (from_tree, from_xml) = rendered_both_ways(&kit);
+        assert_eq!(from_tree, from_xml, "the tree and its XML render the Markdown differently");
+        assert!(kit_to_xml(&kit).unwrap().contains("<![CDATA["));
+    }
+
+    #[test]
+    fn a_markdown_with_no_styles_and_an_empty_one_are_written() {
+        let kit = r#"{"version":1,"type":"document","attrs":{},"nodes":[{"type":"section","attrs":{},"nodes":[
+            {"type":"markdown","attrs":{},"nodes":[{"type":"markdown-styles","attrs":{"src":"s.xml"}},{"type":"markdown-content","attrs":{},"nodes":[]}]}]}]}"#;
+        let xml = kit_to_xml(kit).unwrap();
+        assert!(xml.contains(r#"<markdown-styles src="s.xml"/>"#) && xml.contains("<![CDATA[]]>"), "{xml}");
     }
 }

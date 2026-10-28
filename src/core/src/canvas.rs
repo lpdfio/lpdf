@@ -16,7 +16,7 @@ use crate::parse::{
 use crate::page_scope::page_scope_indices;
 use crate::render::{
     RenderCanvasClip, RenderCanvasEllipse, RenderCanvasLayer,
-    RenderCanvasLine, RenderCanvasPath, RenderCanvasRect,
+    RenderBox, RenderCanvasLine, RenderCanvasPath, RenderCanvasRect,
     RenderNode, RenderPage,
 };
 
@@ -694,8 +694,45 @@ pub(crate) fn draw_flow_shape(shape: &Shape, radius: f32, x: f32, y: f32, w: f32
         ShapeKind::Ellipse => CanvasPrimitive::Ellipse(CanvasEllipse {
             cx, cy, rx: w / 2.0, ry: h / 2.0, fill, stroke, stroke_width, stroke_dash, shadow: None,
         }),
+        ShapeKind::Checkbox => return draw_checkbox(shape, radius, x, y, w, h),
     };
     primitive_to_render_node(&primitive, 1, 1)
+}
+
+/// The three points of a checkbox's tick, as fractions of its box: a short stroke down to the foot, and a long one up
+/// to the right.
+const TICK: [(f32, f32); 3] = [(0.22, 0.54), (0.43, 0.76), (0.80, 0.26)];
+
+/// The stroke of a tick, as a fraction of the side of the box.
+const TICK_STROKE: f32 = 0.14;
+
+/// A checkbox in the box `x`, `y`, `w`, `h`: an outline with rounded corners, and a tick in it when `shape.tick` has
+/// a color. The stroke of the outline is centered on its edge, so the outline is drawn inside the box by half of it
+/// and ends where the box does.
+fn draw_checkbox(shape: &Shape, radius: f32, x: f32, y: f32, w: f32, h: f32) -> RenderNode {
+    let stroke_width = shape.stroke_width.unwrap_or(1.0);
+    let inset = stroke_width / 2.0;
+    let outline = CanvasPrimitive::Rect(CanvasRect {
+        x: x + inset, y: y + inset, w: (w - stroke_width).max(0.0), h: (h - stroke_width).max(0.0),
+        fill: shape.fill.clone(), stroke: shape.stroke.clone(), stroke_width: Some(stroke_width), stroke_dash: None,
+        radius: Some((radius - inset).max(0.0)), shadow: None,
+    });
+    let mut children = vec![primitive_to_render_node(&outline, 1, 1)];
+    if let Some(color) = &shape.tick {
+        let [a, b, c] = TICK.map(|(fx, fy)| format!("{} {}", x + fx * w, y + fy * h));
+        let tick = CanvasPrimitive::Path(CanvasPath {
+            d: format!("M {a} L {b} L {c}"),
+            fill: None, stroke: Some(color.clone()), fill_rule: None,
+            stroke_width: Some(TICK_STROKE * w), stroke_dash: None, line_cap: Some("round".to_string()),
+        });
+        children.push(primitive_to_render_node(&tick, 1, 1));
+    }
+    RenderNode::Box(RenderBox {
+        x, y, width: w, height: h,
+        fill: None, border_width: 0.0, border_color: None, radius: 0.0,
+        opacity: 1.0, shadow: None, debug_self: false,
+        children,
+    })
 }
 
 fn layer_to_render_node(layer: &CanvasLayer, page: usize, pages: usize) -> RenderNode {
@@ -743,5 +780,39 @@ pub(crate) fn apply_canvas_layers(
                 pages[i].nodes.push(node);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn checkbox(tick: Option<&str>) -> Shape {
+        Shape {
+            kind: ShapeKind::Checkbox, fill: None, stroke: Some("#737373".into()), stroke_width: Some(1.0),
+            stroke_dash: None, tick: tick.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn an_open_checkbox_is_an_outline_that_ends_where_its_box_does() {
+        let RenderNode::Box(drawn) = draw_flow_shape(&checkbox(None), 2.0, 10.0, 20.0, 10.0, 10.0) else { panic!("a box") };
+        assert_eq!(drawn.children.len(), 1);
+        let RenderNode::CanvasRect(outline) = &drawn.children[0] else { panic!("a rect") };
+        // The stroke is centered on the edge, so a stroke of 1 puts the rect half of it inside on each side.
+        assert_eq!((outline.x, outline.y, outline.w, outline.h), (10.5, 20.5, 9.0, 9.0));
+        assert_eq!((outline.fill.clone(), outline.stroke.as_deref(), outline.border_radius), (None, Some("#737373"), 1.5));
+    }
+
+    #[test]
+    fn a_checked_checkbox_has_a_tick_of_three_points_inside_the_box_in_the_color_of_the_tick() {
+        let RenderNode::Box(drawn) = draw_flow_shape(&checkbox(Some("#1a1a1a")), 2.0, 0.0, 0.0, 10.0, 10.0) else { panic!("a box") };
+        assert_eq!(drawn.children.len(), 2);
+        let RenderNode::CanvasPath(tick) = &drawn.children[1] else { panic!("a path") };
+        assert_eq!(tick.stroke.as_deref(), Some("#1a1a1a"));
+        assert_eq!((tick.fill.clone(), tick.line_cap), (None, 1));
+        let numbers: Vec<f32> = tick.d.split_whitespace().filter_map(|word| word.parse().ok()).collect();
+        assert_eq!(numbers.len(), 6);
+        assert!(numbers.iter().all(|n| (0.0..=10.0).contains(n)), "{}", tick.d);
     }
 }

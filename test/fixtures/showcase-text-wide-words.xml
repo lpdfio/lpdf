@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="bg"    value="#eef3fc" />
+      <color name="muted" value="#737373" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Wide words" subject="A word or a styled run wider than its box breaks at the last character that fits" />
+
+    <!-- A text breaks a word, or a styled run, that is wider than a whole line at the last character that fits, so
+         nothing runs past its box, in a column, in the cell of a table and across a page. A run that is narrower
+         than a whole line is not broken inside: it goes to the next line whole when it does not fit what is left.
+         Expected, top to bottom (the boxes are on a tint, 150pt wide and 100pt for the third):
+           1  A key of 50 characters in a text: the line before it ends where the key could not start, and the key
+              goes on over three lines
+           2  A red run of the same key, and a green run of two of them, each broken to the box
+           3  A run of two words after "alpha beta" that does not fit what is left of the line: it goes down whole,
+              as "gamma delta" on the second line, though "gamma" alone would fit the first
+           4  A table of two auto columns whose cells hold the key twice: each key breaks in its own cell
+    -->
+    <section>
+      <layout margin="40pt">
+        <column gap="m">
+          <text font-size="xxl" font="Helvetica-Bold">Wide words</text>
+
+          <text font-size="s" color="muted">A key wider than its box</text>
+          <column width="150pt" background="bg" padding="6pt">
+            <text font-size="s">See Products__lpdf__Tiers__professional__PaddlePriceId in the file.</text>
+          </column>
+
+          <text font-size="s" color="muted">A styled run wider than a whole line</text>
+          <column width="150pt" background="bg" padding="6pt">
+            <text font-size="s">A <span color="#cc0000">Products__lpdf__Tiers__professional__PaddlePriceId</span> and <span color="#1e8449">Products__lpdf__Tiers__professional__PaddlePriceId Products__lpdf__Tiers__professional__PaddlePriceId</span> here.</text>
+          </column>
+
+          <text font-size="s" color="muted">A run that fits a line goes down whole</text>
+          <column width="100pt" background="bg" padding="6pt">
+            <text font-size="s">alpha beta <span color="#cc0000">gamma delta</span> epsilon</text>
+          </column>
+
+          <text font-size="s" color="muted">In the cells of a table</text>
+          <table cols="auto auto">
+            <thead background="#e8ecf0">
+              <td padding="5pt 8pt"><text font-size="s" font="Helvetica-Bold">Key</text></td>
+              <td padding="5pt 8pt"><text font-size="s" font="Helvetica-Bold">Other key</text></td>
+            </thead>
+            <tr>
+              <td padding="5pt 8pt"><text font-size="s">Products__lpdf__Tiers__professional__PaddlePriceId__Products__lpdf__Tiers__professional__PaddlePriceId</text></td>
+              <td padding="5pt 8pt"><text font-size="s">Products__lpdf__Tiers__professional__PaddlePriceId__Products__lpdf__Tiers__professional__PaddlePriceId</text></td>
+            </tr>
+          </table>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

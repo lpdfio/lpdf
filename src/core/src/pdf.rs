@@ -676,9 +676,40 @@ fn parse_hex(hex: &str) -> (f32, f32, f32) {
 /// - `0x00–0x7F`  ASCII, direct.
 /// - `0x80–0x9F`  Windows-1252 extension block (em dash, en dash, curly quotes, …).
 /// - `0xA0–0xFF`  ISO-8859-1 upper half, direct (same in both encodings).
-/// - Everything else is replaced by `?`.
+/// - A character with none of these is drawn as its `look_alike`, if it has one, and is replaced by `?` if not.
 fn encode_latin1(text: &str) -> Vec<u8> {
-    text.chars().map(|c| win1252_byte(c).unwrap_or(b'?')).collect()
+    text.chars()
+        .map(|c| win1252_byte(c).or_else(|| look_alike(c).and_then(win1252_byte)).unwrap_or(b'?'))
+        .collect()
+}
+
+/// The ASCII character a built-in font draws for a character it has no glyph for, where one looks much like it: the
+/// lines and corners of a drawn box, arrows, primes, the minus sign and the wide spaces. An embedded font draws
+/// the characters as they are.
+pub(crate) fn look_alike(c: char) -> Option<char> {
+    Some(match c {
+        // Box drawing: a straight line is - or |, and a corner, a tee or a cross is +.
+        '\u{2500}' | '\u{2501}' | '\u{2504}' | '\u{2505}' | '\u{2508}' | '\u{2509}' | '\u{254C}' | '\u{254D}'
+        | '\u{2550}' | '\u{2574}' | '\u{2576}' | '\u{2578}' | '\u{257A}' | '\u{257C}' | '\u{257E}' => '-',
+        '\u{2502}' | '\u{2503}' | '\u{2506}' | '\u{2507}' | '\u{250A}' | '\u{250B}' | '\u{254E}' | '\u{254F}'
+        | '\u{2551}' | '\u{2575}' | '\u{2577}' | '\u{2579}' | '\u{257B}' | '\u{257D}' | '\u{257F}' => '|',
+        '\u{250C}'..='\u{254B}' | '\u{2552}'..='\u{2570}' => '+',
+        '\u{2571}' => '/',
+        '\u{2572}' => '\\',
+        '\u{2573}' => 'X',
+        // Arrows and pointers.
+        '\u{2192}' | '\u{21D2}' | '\u{2794}' | '\u{279C}' | '\u{27A1}' | '\u{27F6}' | '\u{27F9}'
+        | '\u{25B6}' | '\u{25B8}' | '\u{25BA}' => '>',
+        '\u{2190}' | '\u{21D0}' | '\u{27F5}' | '\u{27F8}' | '\u{25C0}' | '\u{25C2}' | '\u{25C4}' => '<',
+        '\u{2191}' | '\u{21D1}' | '\u{25B2}' | '\u{25B4}' => '^',
+        '\u{2193}' | '\u{21D3}' | '\u{25BC}' | '\u{25BE}' => 'v',
+        // Primes, hyphens and the minus sign, and the spaces of other widths.
+        '\u{2032}' => '\'',
+        '\u{2033}' => '"',
+        '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2212}' => '-',
+        '\u{2002}'..='\u{200A}' | '\u{202F}' | '\u{205F}' | '\u{3000}' => ' ',
+        _ => return None,
+    })
 }
 
 /// Map a Unicode scalar to its Windows-1252 / WinAnsiEncoding byte value.
@@ -3437,6 +3468,27 @@ mod tests {
         ("CrimsonTextItalic", include_bytes!("../../../examples/6-book/assets/fonts/CrimsonText-Italic.ttf")),
         ("CrimsonTextSemiBold", include_bytes!("../../../examples/6-book/assets/fonts/CrimsonText-SemiBold.ttf")),
     ];
+
+    #[test]
+    fn a_built_in_font_draws_the_lines_of_a_box_and_the_arrows_as_ascii_and_the_rest_as_a_question_mark() {
+        assert_eq!(encode_latin1("┌──┐ │ └──┘ ├─┼─┤ ╔═╗ ║ ╭╮"), b"+--+ | +--+ +-+-+ +-+ | ++".to_vec());
+        assert_eq!(encode_latin1("a → b ← c ↑ d ▼ e"), b"a > b < c ^ d v e".to_vec());
+        assert_eq!(encode_latin1("5′ 10″, −3\u{2009}x"), b"5' 10\", -3 x".to_vec());
+        assert_eq!(encode_latin1("日本 ✓"), b"?? ?".to_vec(), "a character with no look-alike stays a question mark");
+        assert_eq!(encode_latin1("é — €"), vec![0xE9, b' ', 0x97, b' ', 0x80], "what the encoding has is not replaced");
+    }
+
+    #[test]
+    fn layout_measures_a_look_alike_as_the_character_that_is_drawn() {
+        for (font, drawn) in [("Helvetica", '-'), ("Times-Roman", '|'), ("Helvetica-Bold", '>')] {
+            let shown = match drawn { '-' => '─', '|' => '│', _ => '→' };
+            assert_eq!(
+                crate::layout::text_width(font, &shown.to_string(), 10.0),
+                crate::layout::text_width(font, &drawn.to_string(), 10.0),
+                "{font}: {shown}"
+            );
+        }
+    }
 
     #[test]
     fn layout_and_renderer_measure_text_beyond_ascii_alike() {

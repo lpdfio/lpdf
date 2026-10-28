@@ -151,6 +151,52 @@ fn showcase_code() { run_snapshot("showcase-code"); }
 #[test]
 fn showcase_code_split() { run_snapshot("showcase-code-split"); }
 #[test]
+fn showcase_markdown() { run_snapshot_with_image("showcase-markdown"); }
+#[test]
+fn showcase_markdown_styles() { run_snapshot("showcase-markdown-styles"); }
+#[test]
+fn showcase_markdown_split() { run_snapshot("showcase-markdown-split"); }
+#[test]
+fn showcase_markdown_wrap() { run_snapshot("showcase-markdown-wrap"); }
+/// One section for each look a `.md` file can start from, each with its styles inline, over the same Markdown:
+/// `markdown-sample.md` in the fixtures directory. There is no fixture file, because the looks are the engine's.
+fn run_snapshot_markdown_presets(name: &str) {
+    let sample = std::fs::read_to_string(fixtures_dir().join("markdown-sample.md")).expect("markdown-sample.md");
+    let mut sections = String::new();
+    for preset in crate::markdown::style_presets() {
+        let styles = &preset.styles[preset.styles.find("<markdown-styles>").expect("a markdown-styles element")..];
+        sections.push_str(&format!(
+            "<section><markdown margin=\"54pt\">{styles}<markdown-content><![CDATA[{sample}]]></markdown-content></markdown></section>"
+        ));
+    }
+    let xml = format!(r#"<lpdf version="1"><document size="a4">{sections}</document></lpdf>"#);
+    let pdf_bytes = crate::LpdfEngine::render_xml_to_pdf_bytes(&xml)
+        .unwrap_or_else(|e| panic!("render failed for {name}: {e}"));
+    check_snapshot(name, &pdf_bytes);
+}
+
+#[test]
+fn showcase_markdown_presets() { run_snapshot_markdown_presets("showcase-markdown-presets"); }
+#[test]
+fn showcase_text_wide_words() { run_snapshot("showcase-text-wide-words"); }
+#[test]
+fn showcase_markdown_tables() { run_snapshot("showcase-markdown-tables"); }
+#[test]
+fn showcase_markdown_breaks() { run_snapshot("showcase-markdown-breaks"); }
+
+/// The two lines of the breaks fixture that end in two spaces are what the snapshot shows as breaks: an editor that
+/// strips them turns them into spaces and the snapshot into a different page, so this says why.
+#[test]
+fn the_breaks_fixture_keeps_the_lines_that_end_in_two_spaces() {
+    let fixture = std::fs::read_to_string(fixtures_dir().join("showcase-markdown-breaks.xml")).expect("the fixture");
+    let ending = fixture.lines().filter(|line| line.ends_with("  ") && !line.trim().is_empty()).count();
+    assert_eq!(ending, 3, "three lines of showcase-markdown-breaks.xml end in two spaces, and an editor stripped one");
+}
+#[test]
+fn showcase_table_auto() { run_snapshot("showcase-table-auto"); }
+#[test]
+fn showcase_table_lines() { run_snapshot("showcase-table-lines"); }
+#[test]
 fn showcase_lists() { run_snapshot("showcase-lists"); }
 #[test]
 fn showcase_lists_split() { run_snapshot("showcase-lists-split"); }

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The look of a <markdown> that sets no styles of its own: what people expect of rendered Markdown, such as
+  GitHub's, in the sans-serif of the engine. The headings are one scale, 20, 15.5, 13, 12, 11 and 10pt against a
+  paragraph of 11pt, which the other looks keep to whatever their paragraph is. The colors are tokens, so a token
+  file rebrands them, and so are the paragraph and the other sizes. Copy this file to start your own, and write
+  only the rules you change.
+-->
+<markdown-styles>
+    <h1 font-size="20pt" bold="true" line-height="m"/>
+    <h2 font-size="15.5pt" bold="true" line-height="m"/>
+    <h3 font-size="13pt" bold="true" line-height="m"/>
+    <h4 font-size="12pt" bold="true"/>
+    <h5 font-size="11pt" bold="true" color="text-muted"/>
+    <h6 font-size="10pt" bold="true" color="text-muted"/>
+    <p line-height="l"/>
+    <code font="Courier" font-size="s" line-height="m" background="surface" border="xs line-muted" padding="m"/>
+    <quote color="text-muted" bar-color="text-muted" bar-width="3pt" padding="0pt 0pt 0pt m"/>
+    <li gap="xs"/>
+    <hr color="line" thickness="xs"/>
+    <a color="primary" underline="true"/>
+    <strong bold="true"/>
+    <del strike="true"/>
+    <table head-border="xs line-muted" row-border="xs line-muted" stripe="none"/>
+    <th bold="true" padding="s"/>
+    <td padding="s"/>
+</markdown-styles>

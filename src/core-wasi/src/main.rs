@@ -35,6 +35,8 @@ mod data;
 mod layout;
 #[path = "../../core/src/lists.rs"]
 mod lists;
+#[path = "../../core/src/markdown.rs"]
+mod markdown;
 #[path = "../../core/src/render.rs"]
 mod render;
 #[path = "../../core/src/pdf.rs"]
@@ -93,7 +95,7 @@ fn dispatch(input: &str) -> String {
             if body.len() > 1_048_576 {
                 return r#"{"error":"input exceeds 1 MB limit"}"#.to_string();
             }
-            let mut doc = match parse::parse(body) {
+            let mut doc = match parse::parse_with(body, &build_resources(&req)) {
                 Ok(d)  => d,
                 Err(e) => return serde_json::json!({ "error": e }).to_string(),
             };
@@ -110,7 +112,7 @@ fn dispatch(input: &str) -> String {
             if body.len() > 4_194_304 {
                 return r#"{"error":"input exceeds 4 MB limit"}"#.to_string();
             }
-            let doc = match parse::parse_tree(body) {
+            let doc = match parse::parse_tree_with(body, &build_resources(&req)) {
                 Ok(d)  => d,
                 Err(e) => return serde_json::json!({ "error": e }).to_string(),
             };
@@ -120,7 +122,7 @@ fn dispatch(input: &str) -> String {
             if body.len() > 4_194_304 {
                 return r#"{"error":"input exceeds 4 MB limit"}"#.to_string();
             }
-            match parse::parse_tree(body) {
+            match parse::parse_tree_with(body, &build_resources(&req)) {
                 Ok(d)  => render_doc(d, key, now_unix),
                 Err(e) => serde_json::json!({ "error": e }).to_string(),
             }
@@ -135,7 +137,7 @@ fn dispatch(input: &str) -> String {
             if body.len() > 1_048_576 {
                 return r#"{"error":"input exceeds 1 MB limit"}"#.to_string();
             }
-            match parse::parse(body) {
+            match parse::parse_with(body, &build_resources(&req)) {
                 Ok(d)  => render_doc(d, key, now_unix),
                 Err(e) => serde_json::json!({ "error": e }).to_string(),
             }
@@ -156,6 +158,20 @@ fn build_registry(req: &serde_json::Value) -> pdf::FontRegistry {
         }
     }
     registry
+}
+
+/// Decode the optional `markdown_styles` field of the request: the text of each file that a
+/// `<markdown-styles src>` names, by `src`.
+fn build_resources(req: &serde_json::Value) -> parse::Resources {
+    let mut resources = parse::Resources::default();
+    if let Some(files) = req.get("markdown_styles").and_then(|v| v.as_object()) {
+        for (src, text) in files {
+            if let Some(text) = text.as_str() {
+                resources.markdown_styles.insert(src.clone(), text.to_string());
+            }
+        }
+    }
+    resources
 }
 
 /// Decode the optional `images` field from the request envelope into an `ImageRegistry`.

@@ -1,0 +1,2132 @@
+//! Markdown as the content of a section.
+//!
+//! A `<markdown>` is read into one `NodeKind::Markdown` node that holds a `MarkdownSpec`: the rules that say how
+//! each part looks, the text, and what is needed to read it. `expand` turns the node into the nodes of the layout
+//! once the text is known: in `parse` for a text written inline, in `data::apply` for one that comes from the data.
+//!
+//! The expansion writes the Markdown as Lpdf XML, one element per block, with the attributes of the rules, and reads
+//! that XML with the parser every document goes through. A rule so takes the attributes of the element it becomes,
+//! and tokens, fonts and errors work as they do anywhere else.
+
+use std::collections::{BTreeMap, HashMap};
+use std::ops::Range;
+
+use pulldown_cmark::{Event, HeadingLevel, MetadataBlockKind, Options, Parser, Tag, TagEnd};
+use serde_json::Value;
+
+use crate::parse::{
+    elems, layout_margin, node_loc, parse_node, resolve_font_alias, resolve_parsed_node, Attrs, JsonAttrs, LayoutChild,
+    Node, NodeKind, PendingBookmarks, Section, SectionChild, TextDefaults,
+};
+use crate::tokens::{FontDef, Tokens};
+
+/// The default rules: what a `<markdown>` with no styles looks like.
+const DEFAULT_STYLES: &str = include_str!("../assets/markdown-styles.xml");
+
+/// A look a `.md` file can start from: a file of styles with the words that offer it.
+#[allow(dead_code)] // the WASI binary does not hand it out
+pub struct StylePreset {
+    /// What the preset is called in a file name and in a call.
+    pub name:        &'static str,
+    /// What a menu shows for it.
+    pub label:       &'static str,
+    pub description: &'static str,
+    /// The file of styles: the default rules with the ones the look changes, to copy and edit.
+    pub styles:      &'static str,
+}
+
+#[allow(dead_code)] // the WASI binary does not hand it out
+const STYLE_PRESETS: [StylePreset; 3] = [
+    StylePreset {
+        name:        "sans",
+        label:       "Sans",
+        description: "Sans-serif text with black headings: the look a Markdown has with no styles",
+        styles:      DEFAULT_STYLES,
+    },
+    StylePreset {
+        name:        "serif",
+        label:       "Serif",
+        description: "Times for the text and the headings, in black, with a quote in italic",
+        styles:      include_str!("../assets/markdown-presets/serif.xml"),
+    },
+    StylePreset {
+        name:        "typewriter",
+        label:       "Typewriter",
+        description: "Courier for everything, in black, with code on a light background",
+        styles:      include_str!("../assets/markdown-presets/typewriter.xml"),
+    },
+];
+
+/// The default template that wraps a `.md` file for the command line and the extension.
+#[allow(dead_code)] // the WASI binary does not hand it out
+const DEFAULT_TEMPLATE: &str = include_str!("../assets/markdown-template.xml");
+
+/// The rules a `<markdown-styles>` may hold, each with the attributes it may set.
+const RULES: &[(&str, &[&str])] = &[
+    ("h1", TEXT_RULE), ("h2", TEXT_RULE), ("h3", TEXT_RULE), ("h4", TEXT_RULE), ("h5", TEXT_RULE), ("h6", TEXT_RULE),
+    ("p", TEXT_RULE),
+    ("code", &["font", "font-size", "color", "line-height", "padding", "background", "border", "radius", "tab-size"]),
+    ("quote", &[
+        "font", "font-size", "bold", "color", "align", "line-height", "padding", "background", "border", "radius",
+        "bar-color", "bar-width",
+    ]),
+    ("li", &["font", "font-size", "color", "gap", "padding", "background", "border", "indent", "bullet"]),
+    ("hr", &["color", "thickness"]),
+    ("a", &["font", "color", "bold", "underline"]),
+    ("strong", &["font", "color", "bold"]),
+    ("em", &["font", "color"]),
+    ("del", &["font", "color", "strike"]),
+    ("table", &["border", "stripe", "head-border", "row-border", "gap", "padding", "background"]),
+    ("th", CELL_RULE), ("td", CELL_RULE),
+];
+
+const TEXT_RULE: &[&str] = &[
+    "font", "font-size", "bold", "color", "align", "line-height", "padding", "background", "border", "radius",
+];
+const CELL_RULE: &[&str] = &["font", "font-size", "bold", "color", "align", "padding", "background", "border"];
+
+/// The attributes of a rule that belong to the text inside a block, not to the box around it.
+const TEXT_ATTRS: [&str; 6] = ["font", "font-size", "bold", "color", "align", "line-height"];
+
+/// The attributes of a rule that belong to the box around a block of text.
+const BOX_ATTRS: [&str; 4] = ["padding", "background", "border", "radius"];
+
+/// The space between blocks when `gap` says nothing.
+const DEFAULT_GAP: &str = "l";
+
+/// How many levels of headings are bookmarks when `bookmarks` says nothing.
+const DEFAULT_BOOKMARK_LEVELS: u8 = 6;
+
+// ── Rules ─────────────────────────────────────────────────────────────────────
+
+/// What a rule sets: attribute names and values, in name order.
+type Rule = BTreeMap<String, String>;
+
+/// The rules of a `<markdown>`: the default rules, over which a file and the inline rules are laid, attribute by
+/// attribute, so that a style that is not set stays what it was.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Rules(BTreeMap<String, Rule>);
+
+impl Rules {
+    /// The rules every `<markdown>` starts from.
+    fn defaults() -> Result<Rules, String> {
+        let doc = roxmltree::Document::parse(DEFAULT_STYLES).map_err(|e| format!("default markdown styles: {e}"))?;
+        Rules::from_elem(&doc.root_element())
+    }
+
+    /// The rules written in a `<markdown-styles>`.
+    fn from_elem(styles: &roxmltree::Node) -> Result<Rules, String> {
+        let mut rules = Rules::default();
+        for rule in elems(styles) {
+            let attrs: Vec<(String, String)> =
+                rule.attributes().map(|a| (a.name().to_string(), a.value().to_string())).collect();
+            rules.set(rule.tag_name().name(), attrs).map_err(|e| format!("<{}>{}: {e}", rule.tag_name().name(), node_loc(&rule)))?;
+        }
+        Ok(rules)
+    }
+
+    /// The rules written in a `markdown-styles` node of a kit tree.
+    fn from_tree(styles: &Value) -> Result<Rules, String> {
+        let mut rules = Rules::default();
+        for rule in styles.get("nodes").and_then(Value::as_array).into_iter().flatten() {
+            let name = rule.get("type").and_then(Value::as_str).unwrap_or("?");
+            let attrs: Vec<(String, String)> = rule
+                .get("attrs")
+                .and_then(Value::as_object)
+                .into_iter()
+                .flatten()
+                .map(|(key, value)| (key.clone(), value.as_str().map(str::to_string).unwrap_or_else(|| value.to_string())))
+                .collect();
+            rules.set(name, attrs).map_err(|e| format!("markdown-styles: {name}: {e}"))?;
+        }
+        Ok(rules)
+    }
+
+    /// Set the attributes of the rule `name`, which must be one a `<markdown-styles>` may hold.
+    fn set(&mut self, name: &str, attrs: Vec<(String, String)>) -> Result<(), String> {
+        let allowed = RULES
+            .iter()
+            .find(|(rule, _)| *rule == name)
+            .map(|(_, allowed)| *allowed)
+            .ok_or_else(|| {
+                let names: Vec<&str> = RULES.iter().map(|(rule, _)| *rule).collect();
+                format!("unknown rule — expected {}", names.join(", "))
+            })?;
+        let rule = self.0.entry(name.to_string()).or_default();
+        for (key, value) in attrs {
+            if !allowed.contains(&key.as_str()) {
+                return Err(format!("unknown attribute '{key}' — expected {}", allowed.join(", ")));
+            }
+            rule.insert(key, value);
+        }
+        Ok(())
+    }
+
+    /// Lay `over` on these rules: its attributes replace the ones with the same name.
+    fn lay(&mut self, over: Rules) {
+        for (name, rule) in over.0 {
+            self.0.entry(name).or_default().extend(rule);
+        }
+    }
+
+    fn rule(&self, name: &str) -> Rule {
+        self.0.get(name).cloned().unwrap_or_default()
+    }
+
+}
+
+// ── The spec a `<markdown>` leaves in the tree ────────────────────────────────
+
+/// What the expansion needs, kept in the node until the text is known.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MarkdownSpec {
+    rules:       Rules,
+    /// The Markdown written inline, with its common indent removed. With `data_path`, what a document with no data
+    /// shows.
+    text:        String,
+    /// Where in the data the Markdown is.
+    data_path:   Option<String>,
+    /// How many levels of headings are bookmarks.
+    bookmarks:   u8,
+    /// The space between blocks, as written: a token or a length.
+    gap:         String,
+    tokens:      Tokens,
+    fonts:       HashMap<String, FontDef>,
+    /// The images the document declares: asset name to registry key.
+    images:      HashMap<String, String>,
+    /// The `src` of each image the document declares, to its asset name.
+    image_srcs:  HashMap<String, String>,
+    defaults:    TextDefaults,
+}
+
+/// What the reading of a document keeps for its `<markdown>` elements.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Assets {
+    /// The `src` of each image the document declares, to its asset name.
+    pub image_srcs:   HashMap<String, String>,
+    /// The text of the files that a `<markdown-styles src>` names, loaded by whoever calls the engine.
+    pub styles_files: HashMap<String, String>,
+}
+
+/// What a section hands to the reading of its `<markdown>`.
+pub(crate) struct SectionContext<'a> {
+    pub tokens:      &'a Tokens,
+    pub fonts:       &'a HashMap<String, FontDef>,
+    pub images:      &'a HashMap<String, String>,
+    pub image_srcs:  &'a HashMap<String, String>,
+    pub defaults:    &'a TextDefaults,
+    /// The text of the files that a `<markdown-styles src>` names, loaded by whoever calls the engine.
+    pub styles_files: &'a HashMap<String, String>,
+}
+
+/// What a `<markdown>` says, read from XML or from a kit tree.
+struct Declaration {
+    styles:    Option<(Option<String>, Rules)>,
+    data_path: Option<String>,
+    text:      String,
+}
+
+/// Read a `<markdown>` of an XML document into the child of the section that holds it.
+pub(crate) fn parse_elem(elem: &roxmltree::Node, cx: &SectionContext) -> Result<SectionChild, String> {
+    let at = |e: String| format!("<markdown>{}: {e}", node_loc(elem));
+    let mut declaration = Declaration { styles: None, data_path: None, text: String::new() };
+    let mut seen_content = false;
+    for child in elems(elem) {
+        match child.tag_name().name() {
+            "markdown-styles" => {
+                if declaration.styles.is_some() {
+                    return Err(at("a <markdown> has one <markdown-styles>".into()));
+                }
+                let rules = Rules::from_elem(&child)?;
+                declaration.styles = Some((child.attribute("src").map(str::to_string), rules));
+            }
+            "markdown-content" => {
+                if seen_content {
+                    return Err(at("a <markdown> has one <markdown-content>".into()));
+                }
+                seen_content = true;
+                declaration.data_path = child.attribute("data-value").map(str::to_string);
+                declaration.text = dedent(&child.children().filter(|n| n.is_text()).filter_map(|n| n.text()).collect::<String>());
+            }
+            other => return Err(at(format!(
+                "unexpected child <{other}> — expected <markdown-styles> or <markdown-content>"
+            ))),
+        }
+    }
+    if !seen_content {
+        return Err(at("needs a <markdown-content>".into()));
+    }
+    build(elem, declaration, cx).map_err(|e| if e.starts_with('<') { e } else { at(e) })
+}
+
+/// Read a `markdown` node of a kit tree into the child of the section that holds it.
+pub(crate) fn parse_tree(json: &Value, cx: &SectionContext) -> Result<SectionChild, String> {
+    let mut declaration = Declaration { styles: None, data_path: None, text: String::new() };
+    let mut seen_content = false;
+    for child in json.get("nodes").and_then(Value::as_array).into_iter().flatten() {
+        match child.get("type").and_then(Value::as_str) {
+            Some("markdown-styles") => {
+                if declaration.styles.is_some() {
+                    return Err("markdown: a markdown has one markdown-styles".into());
+                }
+                declaration.styles = Some((
+                    crate::parse::jattr(child, "src").map(str::to_string),
+                    Rules::from_tree(child)?,
+                ));
+            }
+            Some("markdown-content") => {
+                if seen_content {
+                    return Err("markdown: a markdown has one markdown-content".into());
+                }
+                seen_content = true;
+                declaration.data_path = crate::parse::jattr(child, "data-value").map(str::to_string);
+                let text: String = child
+                    .get("nodes")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str)
+                    .collect();
+                declaration.text = dedent(&text);
+            }
+            other => return Err(format!(
+                "markdown: child 'type' must be 'markdown-styles' or 'markdown-content', got {other:?}"
+            )),
+        }
+    }
+    if !seen_content {
+        return Err("markdown: needs a markdown-content".into());
+    }
+    build(&JsonAttrs(json), declaration, cx).map_err(|e| format!("markdown: {e}"))
+}
+
+/// The child of the section for what a `<markdown>` declared and the attributes it carries.
+fn build(a: &impl Attrs, declaration: Declaration, cx: &SectionContext) -> Result<SectionChild, String> {
+    let margin = layout_margin(a, cx.tokens)?;
+    let gap_text = a.get("gap").unwrap_or(DEFAULT_GAP);
+    let gap = cx.tokens.resolve_space(gap_text)?;
+    let bookmarks = match a.get("bookmarks") {
+        None    => DEFAULT_BOOKMARK_LEVELS,
+        Some(v) => v.parse::<u8>().ok().filter(|n| *n <= 6).ok_or_else(|| format!("invalid bookmarks '{v}': expected 0 to 6"))?,
+    };
+    let defaults = cx.defaults.overridden_by(cx.tokens, a.get("font"), a.get("font-size"), a.get("color"))?;
+
+    let mut rules = Rules::defaults()?;
+    let mut written: Vec<String> = Vec::new();
+    if let Some((src, inline)) = declaration.styles {
+        if let Some(src) = src {
+            let file = cx.styles_files.get(&src).ok_or_else(|| format!(
+                "<markdown-styles src=\"{src}\"> is read by whoever renders the document, as the src of a font or an image \
+                 is, and this one did not load it"
+            ))?;
+            let doc = roxmltree::Document::parse(file).map_err(|e| format!("markdown-styles file '{src}': {e}"))?;
+            if doc.root_element().tag_name().name() != "markdown-styles" {
+                return Err(format!("markdown-styles file '{src}': the root element must be <markdown-styles>"));
+            }
+            let file_rules = Rules::from_elem(&doc.root_element()).map_err(|e| format!("markdown-styles file '{src}': {e}"))?;
+            written.extend(file_rules.0.keys().cloned());
+            rules.lay(file_rules);
+        }
+        written.extend(inline.0.keys().cloned());
+        rules.lay(inline);
+    }
+
+    let spec = MarkdownSpec {
+        rules,
+        text: declaration.text,
+        data_path: declaration.data_path,
+        bookmarks,
+        gap: gap_text.to_string(),
+        tokens: cx.tokens.clone(),
+        fonts: cx.fonts.clone(),
+        images: cx.images.clone(),
+        image_srcs: cx.image_srcs.clone(),
+        defaults,
+    };
+    // A rule that was written, in the document or in a file, is tried now: a value that does not read is told with
+    // the name of its rule, not when the first block that uses it comes up.
+    for name in &written {
+        let sample = RULE_SAMPLES.iter().find(|(rule, _)| rule == name).map_or("x", |(_, sample)| *sample);
+        expand(&spec, sample).map_err(|e| {
+            format!("the {name} rule: {}", e.strip_prefix("markdown line 1: ").unwrap_or(&e))
+        })?;
+    }
+
+    let mut node = Node::layout_default();
+    node.kind = NodeKind::Markdown;
+    node.debug = a.get("debug") == Some("true");
+    node.detail = Some(Box::new(crate::parse::Detail::Markdown(Box::new(spec))));
+    Ok(SectionChild::Layout { margin, gap, children: vec![LayoutChild::Content(node)] })
+}
+
+/// A Markdown that uses a rule, to try the rule with.
+const RULE_SAMPLES: [(&str, &str); 18] = [
+    ("h1", "# x"), ("h2", "## x"), ("h3", "### x"), ("h4", "#### x"), ("h5", "##### x"), ("h6", "###### x"),
+    ("p", "x"), ("code", "`x`\n\n```\nx\n```"), ("quote", "> x"), ("li", "- x\n\n1. x"), ("hr", "x\n\n---"), ("a", "[x](#x)"),
+    ("strong", "**x**"), ("em", "*x*"), ("del", "~~x~~"), ("table", "| x |\n|---|\n| x |"),
+    ("th", "| x |\n|---|\n| x |"), ("td", "| x |\n|---|\n| x |"),
+];
+
+/// Remove the indent that all the lines of `text` share, so that indenting the XML does not make a code block of it.
+/// A line with only white space does not count, and is left empty.
+pub(crate) fn dedent(text: &str) -> String {
+    let indent = text
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.len() - line.trim_start_matches([' ', '\t']).len())
+        .min()
+        .unwrap_or(0);
+    let mut out = String::with_capacity(text.len());
+    for (i, line) in text.split('\n').enumerate() {
+        if i > 0 { out.push('\n'); }
+        if !line.trim().is_empty() { out.push_str(line.get(indent..).unwrap_or(line)); }
+    }
+    out
+}
+
+// ── When the text is known ────────────────────────────────────────────────────
+
+/// How far `expand_pending` goes.
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum Pass {
+    /// The document has just been read: expand the Markdown written inline, and check the text that stands in for
+    /// the data of the rest.
+    Read,
+    /// The data is in: expand the Markdown that comes from it.
+    Data,
+    /// Whatever is left, with the text it stands in with.
+    Rest,
+}
+
+/// Expand the `<markdown>` nodes of `sections` that this pass reaches, and settle the ids of the bookmarks they
+/// bring.
+pub(crate) fn expand_pending(sections: &mut [Section], data: Option<&Value>, pass: Pass) -> Result<(), String> {
+    let mut expanded = false;
+    for section in sections.iter_mut() {
+        for child in &mut section.children {
+            let SectionChild::Layout { children, .. } = child else { continue };
+            let mut index = 0;
+            while index < children.len() {
+                let LayoutChild::Content(node) = &children[index] else { index += 1; continue };
+                let Some(spec) = markdown_spec(node) else { index += 1; continue };
+                let debug = node.debug;
+                let text = match (&spec.data_path, pass) {
+                    (None, _) => spec.text.clone(),
+                    (Some(_), Pass::Read) => {
+                        // Nothing to expand yet, but the text that stands in for the data has to read.
+                        expand(spec, &spec.text)?;
+                        index += 1;
+                        continue;
+                    }
+                    (Some(path), Pass::Data) => match data {
+                        Some(root) => crate::data::text_at(path, root)?,
+                        None       => spec.text.clone(),
+                    },
+                    (Some(_), Pass::Rest) => spec.text.clone(),
+                };
+                // The text that stands in was read when the document was; if it fails now, the node is dropped.
+                let mut nodes = if pass == Pass::Rest { expand(spec, &text).unwrap_or_default() } else { expand(spec, &text)? };
+                if debug { nodes.iter_mut().for_each(outline); }
+                let count = nodes.len();
+                children.splice(index..=index, nodes.into_iter().map(LayoutChild::Content));
+                index += count;
+                expanded = true;
+            }
+        }
+    }
+    if expanded {
+        crate::parse::assign_bookmark_ids(sections)?;
+    }
+    Ok(())
+}
+
+/// Outline `node` and every box in it, as `debug` on the `<markdown>` asks.
+fn outline(node: &mut Node) {
+    node.debug = true;
+    node.children.iter_mut().for_each(outline);
+}
+
+fn markdown_spec(node: &Node) -> Option<&MarkdownSpec> {
+    match node.detail.as_deref() {
+        Some(crate::parse::Detail::Markdown(spec)) if node.kind == NodeKind::Markdown => Some(spec),
+        _ => None,
+    }
+}
+
+/// The template that wraps a `.md` file when no other is given.
+#[allow(dead_code)] // the WASI binary does not hand it out
+pub fn default_template() -> &'static str {
+    DEFAULT_TEMPLATE
+}
+
+/// The rules that a `<markdown>` with no styles uses, as the file to start a style of one's own from.
+#[allow(dead_code)] // the WASI binary does not hand it out
+pub fn default_styles() -> &'static str {
+    DEFAULT_STYLES
+}
+
+/// The looks a `.md` file can start from, besides the default one.
+#[allow(dead_code)] // the WASI binary does not hand it out
+pub fn style_presets() -> &'static [StylePreset] {
+    &STYLE_PRESETS
+}
+
+// ── A `.md` file as a document ────────────────────────────────────────────────
+//
+// What the command line and the extension do with a `.md` file, which is the same in both, so it is here: its text
+// and the fields of its front matter go to the template as data, its relative images are declared as assets of the
+// template, and the host loads them.
+
+/// The options the Markdown of a file is read with: those of `expand`, which finds the front matter.
+fn file_options() -> Options {
+    Options::ENABLE_TABLES
+        | Options::ENABLE_FOOTNOTES
+        | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_TASKLISTS
+        | Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
+}
+
+/// The data a template gets for the `.md` file `markdown`: `{ "markdown": "…", "title": "…" }`, the text and then
+/// each field of its front matter as a string. A field is a `key: value` line; one with no value on its line, a list
+/// and a nested field are left out.
+#[allow(dead_code)] // for the hosts of the engine, not the WASI binary
+pub fn file_data(markdown: &str) -> String {
+    let mut data = serde_json::Map::new();
+    let mut in_front_matter = false;
+    for event in Parser::new_ext(markdown, file_options()) {
+        match event {
+            Event::Start(Tag::MetadataBlock(MetadataBlockKind::YamlStyle)) => in_front_matter = true,
+            Event::End(TagEnd::MetadataBlock(_)) => break,
+            Event::Text(text) if in_front_matter => {
+                for line in text.lines() {
+                    if let Some((key, value)) = front_matter_field(line) {
+                        data.insert(key.to_string(), Value::String(value));
+                    }
+                }
+            }
+            _ if !in_front_matter => break,
+            _ => {}
+        }
+    }
+    data.insert("markdown".to_string(), Value::String(markdown.to_string()));
+    Value::Object(data).to_string()
+}
+
+/// A `key: value` line of front matter, with a value that is quoted or plain. `None` for a line that is not one.
+#[allow(dead_code)] // what `file_data` reads
+fn front_matter_field(line: &str) -> Option<(&str, String)> {
+    if line.starts_with([' ', '\t', '#', '-']) { return None; }
+    let (key, value) = line.split_once(':')?;
+    let valid = key.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')
+        && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
+    let value = value.trim();
+    if !valid || value.is_empty() { return None; }
+    let unquoted = ['"', '\''].iter().find_map(|q| value.strip_prefix(*q).and_then(|v| v.strip_suffix(*q)));
+    Some((key, unquoted.unwrap_or(value).to_string()))
+}
+
+/// The images of the `.md` file `markdown`, as they are written: relative paths, in order and once each. An image
+/// at a URL is left out, which the engine reports where it is used.
+#[allow(dead_code)] // for the hosts of the engine, not the WASI binary
+pub fn file_images(markdown: &str) -> Vec<String> {
+    let mut paths: Vec<String> = Vec::new();
+    for event in Parser::new_ext(markdown, file_options()) {
+        if let Event::Start(Tag::Image { dest_url, .. }) = event {
+            let lower = dest_url.to_ascii_lowercase();
+            let is_url = ["http://", "https://", "ftp://", "file://", "data:"].iter().any(|scheme| lower.starts_with(scheme));
+            if !is_url && !dest_url.is_empty() && !paths.iter().any(|path| path == dest_url.as_ref()) {
+                paths.push(dest_url.to_string());
+            }
+        }
+    }
+    paths
+}
+
+/// The asset name of the image at `src` of a `.md` file: the host loads the file under it.
+#[allow(dead_code)] // for the hosts of the engine, not the WASI binary
+pub fn file_image_name(index: usize) -> String {
+    format!("markdown-image-{}", index + 1)
+}
+
+/// The template `template` with an `<image>` declared for each of `srcs`, named by `file_image_name`, so that an
+/// image of the Markdown, which names its file, is an asset. One the template declares itself is not declared
+/// twice.
+#[allow(dead_code)] // for the hosts of the engine, not the WASI binary
+pub fn declare_images(template: &str, srcs: &[String]) -> Result<String, String> {
+    let doc = roxmltree::Document::parse(template).map_err(|e| format!("XML parse error: {e}"))?;
+    let root = doc.root_element();
+    let mut declared: Vec<&str> = Vec::new();
+    for assets in root.children().filter(|n| n.has_tag_name("assets")) {
+        declared.extend(assets.children().filter(|n| n.has_tag_name("image")).filter_map(|image| image.attribute("src")));
+    }
+    let mut images = String::new();
+    for (index, src) in srcs.iter().enumerate() {
+        if !declared.contains(&src.as_str()) {
+            images.push_str(&format!("<image name=\"{}\" src=\"{}\"/>", file_image_name(index), escape_attr(src)));
+        }
+    }
+    if images.is_empty() {
+        return Ok(template.to_string());
+    }
+    let assets = root.children().find(|n| n.has_tag_name("assets"));
+    let (at, written) = match assets {
+        Some(assets) => {
+            let range = assets.range();
+            let text = &template[range.clone()];
+            match text.strip_suffix("/>") {
+                // `<assets/>` becomes `<assets>` with the images and its end tag
+                Some(_) => {
+                    let start_tag = text.trim_end_matches("/>").trim_end();
+                    return Ok(format!("{}{start_tag}>{images}</assets>{}", &template[..range.start], &template[range.end..]));
+                }
+                None => (range.start + text.rfind("</").unwrap_or(text.len()), images),
+            }
+        }
+        None => {
+            let first = elems(&root).next().map_or(template.len(), |n| n.range().start);
+            (first, format!("<assets>{images}</assets>"))
+        }
+    };
+    Ok(format!("{}{written}{}", &template[..at], &template[at..]))
+}
+
+// ── Expansion ─────────────────────────────────────────────────────────────────
+
+/// The nodes of the layout for `markdown`, styled by the rules of `spec`.
+pub(crate) fn expand(spec: &MarkdownSpec, markdown: &str) -> Result<Vec<Node>, String> {
+    let blocks = Writer::new(spec, markdown).blocks()?;
+    let mut nodes = Vec::new();
+    for block in blocks {
+        let xml = format!("<md>{}</md>", block.xml);
+        let doc = roxmltree::Document::parse(&xml).map_err(|e| format!("markdown line {}: {e}", block.line))?;
+        let mut pending = PendingBookmarks::default();
+        for child in elems(&doc.root_element()) {
+            if child.tag_name().name() == "bookmark" {
+                pending.push(crate::parse::xml_bookmark(&child).map_err(|e| at_line(block.line, &e))?);
+                continue;
+            }
+            let mut parsed = parse_node(&child, &spec.tokens, &spec.images).map_err(|e| at_line(block.line, &e))?;
+            pending.attach(&mut parsed);
+            let mut node = resolve_parsed_node(parsed, &spec.defaults, &spec.fonts);
+            flow_runs(&mut node);
+            nodes.push(node);
+        }
+        pending.finish("markdown").map_err(|e| at_line(block.line, &e))?;
+    }
+    Ok(nodes)
+}
+
+/// The texts of a markdown break a word, or a link, wider than their box: a cell of a table or a paragraph holds
+/// names and addresses of any length, and none may run past the margin.
+fn flow_runs(node: &mut Node) {
+    if node.kind == NodeKind::Text { node.flow_runs = true; }
+    for child in &mut node.children { flow_runs(child); }
+}
+
+/// An error of the parser, which names a place in the XML written here, said as a place in the Markdown.
+fn at_line(line: usize, error: &str) -> String {
+    let mut out = String::new();
+    let mut rest = error;
+    while let Some(start) = rest.find(" at line ") {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + " at line ".len()..];
+        let digits = after.chars().take_while(|c| c.is_ascii_digit() || *c == ',' || *c == ' ' || c.is_ascii_alphabetic()).count();
+        rest = after.get(digits..).unwrap_or("");
+    }
+    out.push_str(rest);
+    format!("markdown line {line}: {out}")
+}
+
+/// One block of the Markdown written as XML, and the line it starts on.
+struct Block {
+    xml:  String,
+    line: usize,
+}
+
+/// What the rules of the quotes and the lists around a block say about its words.
+#[derive(Clone, Default)]
+struct Around {
+    text: Vec<Rule>,
+}
+
+/// The style of the words being read.
+#[derive(Clone, Default)]
+struct Style {
+    strong: bool,
+    em:     bool,
+    del:    bool,
+    link:   Option<String>,
+}
+
+/// A piece of the words of a block.
+#[derive(Clone)]
+enum Piece {
+    Text { text: String, style: Style },
+    Code { text: String, style: Style },
+    Note(String),
+    Image { dest: String, line: usize },
+    /// A `<br>`, or two spaces or a backslash at the end of a line: the words after it begin a new line.
+    Break,
+}
+
+struct Writer<'a> {
+    spec:    &'a MarkdownSpec,
+    events:  Vec<(Event<'a>, Range<usize>)>,
+    at:      usize,
+    lines:   Vec<usize>,
+    notes:   HashMap<String, String>,
+    /// The font the words of the block being written are set in, for the italic of a built-in font.
+    font:    String,
+    /// The `[ ]` or `[x]` that began the item being read: `true` for a checked one. `list` takes it with the item.
+    task:    Option<bool>,
+}
+
+impl<'a> Writer<'a> {
+    fn new(spec: &'a MarkdownSpec, markdown: &'a str) -> Self {
+        let events: Vec<(Event, Range<usize>)> = Parser::new_ext(markdown, file_options()).into_offset_iter().collect();
+        let mut lines = vec![0];
+        lines.extend(markdown.match_indices('\n').map(|(i, _)| i + 1));
+        Writer { spec, events, at: 0, lines, notes: HashMap::new(), font: spec.defaults.font.clone(), task: None }
+    }
+
+    /// The line of the Markdown that `offset` is on, counting from 1.
+    fn line(&self, offset: usize) -> usize {
+        self.lines.partition_point(|start| *start <= offset)
+    }
+
+    fn here(&self) -> usize {
+        self.events.get(self.at).map_or(1, |(_, range)| self.line(range.start))
+    }
+
+    fn fail(&self, line: usize, message: &str) -> String {
+        format!("markdown line {line}: {message}")
+    }
+
+    /// The error for raw HTML, which names the first tag and says what to write: a tag that was meant as text goes in
+    /// backticks, and a comment is left out.
+    fn raw_html(&self, line: usize, html: &str) -> String {
+        let message = match first_tag(html) {
+            Some(tag) if is_line_break(tag) => format!(
+                "raw HTML {tag} is not supported on a line of its own: write it at the end of the line it breaks"
+            ),
+            Some(tag) if tag.starts_with("<!--") => format!("raw HTML {tag} is not supported: leave the comment out"),
+            Some(tag) => format!(
+                "raw HTML {tag} is not supported: to show it as text, write it in backticks, `{tag}`; otherwise write the Markdown it stands for, or leave it out"
+            ),
+            None => "raw HTML is not supported: write the Markdown it stands for, or leave it out".to_string(),
+        };
+        self.fail(line, &message)
+    }
+
+    fn blocks(mut self) -> Result<Vec<Block>, String> {
+        self.collect_notes();
+        self.read_blocks(None, &Around::default())
+    }
+
+    /// Read the text of every footnote definition first: a note is written where it is referred to.
+    fn collect_notes(&mut self) {
+        let mut at = 0;
+        while at < self.events.len() {
+            if let Event::Start(Tag::FootnoteDefinition(label)) = &self.events[at].0 {
+                let label = label.to_string();
+                let mut depth = 0;
+                let mut words = String::new();
+                at += 1;
+                while at < self.events.len() {
+                    match &self.events[at].0 {
+                        Event::Start(Tag::FootnoteDefinition(_)) => depth += 1,
+                        Event::End(TagEnd::FootnoteDefinition) if depth == 0 => break,
+                        Event::End(TagEnd::FootnoteDefinition) => depth -= 1,
+                        Event::Text(text) | Event::Code(text) => {
+                            if !words.is_empty() && !words.ends_with(' ') { words.push(' '); }
+                            words.push_str(text);
+                        }
+                        Event::SoftBreak | Event::HardBreak => words.push(' '),
+                        _ => {}
+                    }
+                    at += 1;
+                }
+                self.notes.insert(label, words.trim().to_string());
+            }
+            at += 1;
+        }
+    }
+
+    /// Read blocks until the end of the container `until`, or the end of the text when there is none.
+    fn read_blocks(&mut self, until: Option<TagEnd>, around: &Around) -> Result<Vec<Block>, String> {
+        let mut blocks = Vec::new();
+        while self.at < self.events.len() {
+            let line = self.here();
+            let (event, _) = self.events[self.at].clone();
+            match event {
+                Event::End(end) if Some(end) == until => {
+                    self.at += 1;
+                    return Ok(blocks);
+                }
+                Event::Start(Tag::Paragraph) => {
+                    self.at += 1;
+                    let pieces = self.read_pieces(Some(TagEnd::Paragraph))?;
+                    self.paragraph(pieces, line, around, &mut blocks)?;
+                }
+                Event::Start(Tag::Heading { level, .. }) => {
+                    self.at += 1;
+                    let pieces = self.read_pieces(Some(TagEnd::Heading(level)))?;
+                    blocks.push(self.heading(level, pieces, line)?);
+                }
+                Event::Start(Tag::BlockQuote(_)) => {
+                    self.at += 1;
+                    let inner_around = self.around_quote(around);
+                    let inner = self.read_blocks(Some(TagEnd::BlockQuote(None)), &inner_around)?;
+                    blocks.push(self.quote(inner, line)?);
+                }
+                Event::Start(Tag::CodeBlock(_)) => {
+                    self.at += 1;
+                    let mut text = String::new();
+                    while let Some((event, _)) = self.events.get(self.at) {
+                        self.at += 1;
+                        match event {
+                            Event::Text(t) => text.push_str(t),
+                            Event::End(TagEnd::CodeBlock) => break,
+                            _ => {}
+                        }
+                    }
+                    blocks.push(self.code_block(&text, line));
+                }
+                Event::Start(Tag::List(first)) => {
+                    self.at += 1;
+                    blocks.push(self.list(first, line, around)?);
+                }
+                Event::Start(Tag::Table(aligns)) => {
+                    self.at += 1;
+                    blocks.push(self.table(&aligns, line)?);
+                }
+                Event::Start(Tag::FootnoteDefinition(_)) => self.skip(TagEnd::FootnoteDefinition),
+                Event::Start(Tag::MetadataBlock(MetadataBlockKind::YamlStyle)) => self.skip(TagEnd::MetadataBlock(MetadataBlockKind::YamlStyle)),
+                Event::Start(Tag::MetadataBlock(MetadataBlockKind::PlusesStyle)) => self.skip(TagEnd::MetadataBlock(MetadataBlockKind::PlusesStyle)),
+                Event::Start(Tag::HtmlBlock) => {
+                    let html = match self.events.get(self.at + 1) {
+                        Some((Event::Html(text), _)) => text.to_string(),
+                        _ => String::new(),
+                    };
+                    return Err(self.raw_html(line, &html));
+                }
+                Event::InlineHtml(html) if is_line_break(&html) => {
+                    let pieces = self.read_pieces(None)?;
+                    self.paragraph(pieces, line, around, &mut blocks)?;
+                }
+                Event::Html(html) | Event::InlineHtml(html) => return Err(self.raw_html(line, &html)),
+                Event::Rule => {
+                    self.at += 1;
+                    blocks.push(Block { xml: format!("<divider{}/>", attrs_xml(&self.spec.rules.rule("hr"))), line });
+                }
+                Event::Start(Tag::Image { .. } | Tag::Emphasis | Tag::Strong | Tag::Strikethrough | Tag::Link { .. })
+                | Event::Text(_) | Event::Code(_) | Event::SoftBreak | Event::HardBreak | Event::FootnoteReference(_)
+                | Event::TaskListMarker(_) => {
+                    // The words of a tight list item stand without a paragraph around them.
+                    let pieces = self.read_pieces(None)?;
+                    self.paragraph(pieces, line, around, &mut blocks)?;
+                }
+                other => return Err(self.fail(line, &format!("{} is not supported", describe(&other)))),
+            }
+        }
+        Ok(blocks)
+    }
+
+    /// Step over a block that draws nothing, to the end `end` of it.
+    fn skip(&mut self, end: TagEnd) {
+        self.at += 1;
+        let mut depth = 0;
+        while let Some((event, _)) = self.events.get(self.at) {
+            self.at += 1;
+            match event {
+                Event::Start(tag) if tag.to_end() == end => depth += 1,
+                Event::End(e) if *e == end => {
+                    if depth == 0 { return; }
+                    depth -= 1;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Read the words of a block, up to the end `until` of it or, for a block with no tag of its own, up to the next
+    /// block.
+    fn read_pieces(&mut self, until: Option<TagEnd>) -> Result<Vec<Piece>, String> {
+        let line = self.here();
+        let mut read = Vec::new();
+        self.read_words(until, &Style::default(), &mut read)?;
+        // The parser gives text in pieces, cut where a `[` or a `*` was tried and found to be plain text.
+        let mut pieces: Vec<Piece> = Vec::with_capacity(read.len());
+        for piece in read {
+            match (pieces.last_mut(), piece) {
+                (Some(Piece::Text { text: last, style: before }), Piece::Text { text, style }) if style_eq(before, &style) => {
+                    last.push_str(&text);
+                }
+                (_, piece) => pieces.push(piece),
+            }
+        }
+        for piece in &pieces {
+            if let Piece::Text { text, .. } = piece
+                && let Some(label) = undefined_note(text)
+            {
+                return Err(self.fail(line, &format!(
+                    "the footnote [^{label}] has no definition; define it with [^{label}]: and its words, or write \\[ to show it as text"
+                )));
+            }
+        }
+        Ok(pieces)
+    }
+
+    fn read_words(&mut self, until: Option<TagEnd>, style: &Style, pieces: &mut Vec<Piece>) -> Result<(), String> {
+        while self.at < self.events.len() {
+            let line = self.here();
+            let (event, _) = self.events[self.at].clone();
+            match event {
+                Event::End(end) if Some(end) == until => {
+                    self.at += 1;
+                    return Ok(());
+                }
+                // The end of the container the words stand in.
+                Event::End(_) => return Ok(()),
+                Event::Text(text) => {
+                    pieces.push(Piece::Text { text: text.to_string(), style: style.clone() });
+                    self.at += 1;
+                }
+                Event::Code(text) => {
+                    pieces.push(Piece::Code { text: text.to_string(), style: style.clone() });
+                    self.at += 1;
+                }
+                Event::SoftBreak => {
+                    pieces.push(Piece::Text { text: " ".into(), style: style.clone() });
+                    self.at += 1;
+                }
+                // Two spaces or a backslash at the end of a line: a break, as a `<br>` is.
+                Event::HardBreak => {
+                    pieces.push(Piece::Break);
+                    self.at += 1;
+                }
+                Event::FootnoteReference(label) => {
+                    let note = self.notes.get(label.as_ref()).ok_or_else(|| {
+                        self.fail(line, &format!("the footnote [^{label}] has no definition"))
+                    })?;
+                    pieces.push(Piece::Note(note.clone()));
+                    self.at += 1;
+                }
+                Event::Start(Tag::Emphasis) => {
+                    self.at += 1;
+                    self.read_words(Some(TagEnd::Emphasis), &Style { em: true, ..style.clone() }, pieces)?;
+                }
+                Event::Start(Tag::Strong) => {
+                    self.at += 1;
+                    self.read_words(Some(TagEnd::Strong), &Style { strong: true, ..style.clone() }, pieces)?;
+                }
+                Event::Start(Tag::Strikethrough) => {
+                    self.at += 1;
+                    self.read_words(Some(TagEnd::Strikethrough), &Style { del: true, ..style.clone() }, pieces)?;
+                }
+                Event::Start(Tag::Link { dest_url, .. }) => {
+                    self.at += 1;
+                    let link = Style { link: Some(dest_url.to_string()), ..style.clone() };
+                    self.read_words(Some(TagEnd::Link), &link, pieces)?;
+                }
+                Event::Start(Tag::Image { dest_url, .. }) => {
+                    self.at += 1;
+                    // The alt text is not kept: there are no tagged PDFs yet to carry it.
+                    while let Some((event, _)) = self.events.get(self.at) {
+                        self.at += 1;
+                        if matches!(event, Event::End(TagEnd::Image)) { break; }
+                    }
+                    pieces.push(Piece::Image { dest: dest_url.to_string(), line });
+                }
+                Event::Html(html) | Event::InlineHtml(html) if is_line_break(&html) => {
+                    pieces.push(Piece::Break);
+                    self.at += 1;
+                }
+                Event::Html(html) | Event::InlineHtml(html) => return Err(self.raw_html(line, &html)),
+                // A block that begins ends the words of a block with no tag of its own.
+                Event::TaskListMarker(checked) => {
+                    self.task = Some(checked);
+                    self.at += 1;
+                }
+                Event::Start(_) | Event::Rule if until.is_none() => return Ok(()),
+                other => return Err(self.fail(line, &format!("{} is not supported here", describe(&other)))),
+            }
+        }
+        Ok(())
+    }
+
+    // ── Rules at work ─────────────────────────────────────────────────────────
+
+    /// The attributes of the rule `name` for words, over which the quotes and items around it lay theirs.
+    fn text_rule(&self, name: &str, around: &Around) -> Rule {
+        let mut rule = self.spec.rules.rule(name);
+        if name == "p" {
+            for over in &around.text {
+                for (key, value) in over {
+                    if TEXT_ATTRS.contains(&key.as_str()) { rule.insert(key.clone(), value.clone()); }
+                }
+            }
+        }
+        rule
+    }
+
+    fn around_quote(&self, around: &Around) -> Around {
+        let mut inner = around.clone();
+        inner.text.push(self.spec.rules.rule("quote"));
+        inner
+    }
+
+    /// The font a rule sets the words in, or the one they are in without it.
+    fn font_of(&self, rule: &Rule) -> String {
+        let name = rule.get("font").map(String::as_str).unwrap_or(&self.spec.defaults.font);
+        resolve_font_alias(name, &self.spec.fonts)
+    }
+
+    /// `<text>` for the words of a block, wrapped in a box when the rule has a box around the words. A block with line
+    /// breaks is a text for each line, one under the other, in a column of their own when the rule has no box.
+    fn text_block(&mut self, rule: &Rule, pieces: &[Piece], extra: &[(&str, &str)], bookmark: Option<String>) -> String {
+        self.font = self.font_of(rule);
+        let mut text_attrs = String::new();
+        for key in TEXT_ATTRS {
+            if let Some(value) = rule.get(key) { push_attr(&mut text_attrs, key, value); }
+        }
+        let has_box = BOX_ATTRS.iter().any(|key| rule.contains_key(*key));
+        let broken = pieces.iter().any(|piece| matches!(piece, Piece::Break));
+        let lines = if broken { lines_of(pieces) } else { Vec::new() };
+        let texts: Vec<&[Piece]> = if broken { lines.iter().map(Vec::as_slice).collect() } else { vec![pieces] };
+        let mut inner = String::new();
+        if !has_box {
+            for (key, value) in extra { push_attr(&mut text_attrs, key, value); }
+        }
+        for line in &texts {
+            inner.push_str(&format!("<text{text_attrs}>"));
+            for piece in *line { self.write_piece(&mut inner, piece); }
+            inner.push_str("</text>");
+        }
+        if texts.is_empty() {
+            inner.push_str(&format!("<text{text_attrs}></text>"));
+        }
+        // The lines stand close, whatever the gap of the box around them.
+        let stacked = if texts.len() > 1 { " gap=\"0pt\"" } else { "" };
+        let mut xml = bookmark.unwrap_or_default();
+        if has_box {
+            let mut box_attrs = String::new();
+            for key in BOX_ATTRS {
+                if let Some(value) = rule.get(key) { push_attr(&mut box_attrs, key, value); }
+            }
+            for (key, value) in extra { push_attr(&mut box_attrs, key, value); }
+            xml.push_str(&format!("<column{stacked}{box_attrs}>{inner}</column>"));
+        } else if texts.len() > 1 {
+            xml.push_str(&format!("<column{stacked}>{inner}</column>"));
+        } else {
+            xml.push_str(&inner);
+        }
+        xml
+    }
+
+    /// The attributes a run of words gets from the styles it is in.
+    fn style_attrs(&self, style: &Style) -> Rule {
+        let mut attrs = Rule::new();
+        let lay = |attrs: &mut Rule, rule: Rule| attrs.extend(rule);
+        if style.strong { lay(&mut attrs, self.spec.rules.rule("strong")); }
+        if style.em {
+            let rule = self.spec.rules.rule("em");
+            if !rule.contains_key("font")
+                && let Some(face) = italic_face(&self.font)
+            {
+                attrs.insert("font".into(), face.into());
+            }
+            lay(&mut attrs, rule);
+        }
+        if style.del { lay(&mut attrs, self.spec.rules.rule("del")); }
+        if let Some(link) = &style.link {
+            lay(&mut attrs, self.spec.rules.rule("a"));
+            attrs.insert("href".into(), link.clone());
+        }
+        attrs
+    }
+
+    fn write_piece(&self, out: &mut String, piece: &Piece) {
+        match piece {
+            Piece::Text { text, style } => {
+                let attrs = self.style_attrs(style);
+                if attrs.is_empty() {
+                    out.push_str(&escape_text(text));
+                } else {
+                    out.push_str(&format!("<span{}>{}</span>", attrs_xml(&attrs), escape_text(text)));
+                }
+            }
+            Piece::Code { text, style } => {
+                let code = self.spec.rules.rule("code");
+                if let Some(link) = &style.link {
+                    // A code-span has no link, so a linked run of code is a span in the code font.
+                    let mut attrs = self.style_attrs(style);
+                    attrs.insert("font".into(), code.get("font").cloned().unwrap_or_else(|| "Courier".into()));
+                    attrs.insert("href".into(), link.clone());
+                    out.push_str(&format!("<span{}>{}</span>", attrs_xml(&attrs), escape_text(text)));
+                } else {
+                    let mut attrs = Rule::new();
+                    for key in ["font", "color", "background"] {
+                        if let Some(value) = code.get(key) { attrs.insert(key.into(), value.clone()); }
+                    }
+                    out.push_str(&format!("<code-span{}>{}</code-span>", attrs_xml(&attrs), escape_text(text)));
+                }
+            }
+            Piece::Note(words) => out.push_str(&format!("<fn>{}</fn>", escape_text(words))),
+            Piece::Image { .. } | Piece::Break => {}
+        }
+    }
+
+    // ── Blocks ────────────────────────────────────────────────────────────────
+
+    fn paragraph(&mut self, pieces: Vec<Piece>, line: usize, around: &Around, blocks: &mut Vec<Block>) -> Result<(), String> {
+        // An image is a block of its own, so the words around it are blocks too.
+        let mut words: Vec<Piece> = Vec::new();
+        let flush = |this: &mut Self, words: &mut Vec<Piece>, blocks: &mut Vec<Block>| -> Result<(), String> {
+            if words.iter().all(|piece| matches!(piece, Piece::Break) || matches!(piece, Piece::Text { text, .. } if text.trim().is_empty())) {
+                words.clear();
+                return Ok(());
+            }
+            let rule = this.text_rule("p", around);
+            let xml = this.text_block(&rule, words, &[], None);
+            words.clear();
+            blocks.push(Block { xml, line });
+            Ok(())
+        };
+        for piece in pieces {
+            match piece {
+                Piece::Image { dest, line: image_line } => {
+                    flush(self, &mut words, blocks)?;
+                    let name = self.image_name(&dest, image_line)?;
+                    blocks.push(Block { xml: format!("<img name=\"{}\" width=\"fill\"/>", escape_attr(&name)), line: image_line });
+                }
+                other => words.push(other),
+            }
+        }
+        flush(self, &mut words, blocks)
+    }
+
+    /// The asset an image of the Markdown is: the one named `dest`, or the one whose `src` is.
+    fn image_name(&self, dest: &str, line: usize) -> Result<String, String> {
+        let lower = dest.to_ascii_lowercase();
+        if ["http://", "https://", "ftp://", "file://", "data:"].iter().any(|scheme| lower.starts_with(scheme)) {
+            return Err(self.fail(line, &format!(
+                "an image's source must be the name or the src of an asset, not a URL: '{dest}'"
+            )));
+        }
+        if self.spec.images.contains_key(dest) {
+            return Ok(dest.to_string());
+        }
+        let bare = dest.strip_prefix("./").unwrap_or(dest);
+        self.spec.image_srcs.get(dest).or_else(|| self.spec.image_srcs.get(bare)).cloned().ok_or_else(|| {
+            self.fail(line, &format!("an image's source must be the name or the src of an asset: '{dest}' is neither"))
+        })
+    }
+
+    fn heading(&mut self, level: HeadingLevel, pieces: Vec<Piece>, line: usize) -> Result<Block, String> {
+        let number = level as usize;
+        let name = format!("h{number}");
+        let rule = self.spec.rules.rule(&name);
+        // A heading is one line, so a break in it is a space.
+        let pieces: Vec<Piece> = pieces
+            .into_iter()
+            .map(|piece| match piece {
+                Piece::Break => Piece::Text { text: " ".into(), style: Style::default() },
+                other => other,
+            })
+            .collect();
+        let label: String = pieces
+            .iter()
+            .filter_map(|piece| match piece {
+                Piece::Text { text, .. } | Piece::Code { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        let label = label.split_whitespace().collect::<Vec<_>>().join(" ");
+        let bookmark = (number as u8 <= self.spec.bookmarks && !label.is_empty())
+            .then(|| format!("<bookmark label=\"{}\" level=\"{number}\"/>", escape_attr(&label)));
+        let xml = self.text_block(&rule, &pieces, &[("paginate", "keep-next")], bookmark);
+        Ok(Block { xml, line })
+    }
+
+    /// A quote is a table with a row for each of its blocks: a narrow cell filled with the color of the bar, and the
+    /// cell that holds the block. The bar is cell backgrounds that touch, the space between two blocks being in the
+    /// padding of both cells, and the quote splits across pages between its blocks.
+    fn quote(&self, inner: Vec<Block>, line: usize) -> Result<Block, String> {
+        let rule = self.spec.rules.rule("quote");
+        let tokens = &self.spec.tokens;
+        let invalid = |what: &str, e: String| self.fail(line, &format!("the quote rule: {what}: {e}"));
+        let width = rule.get("bar-width").map(String::as_str).unwrap_or("3pt");
+        let padding = match rule.get("padding") {
+            Some(value) => tokens.resolve_spacing(value).map_err(|e| invalid("padding", e))?,
+            None        => [0.0; 4],
+        };
+        let gap = tokens.resolve_space(&self.spec.gap).map_err(|e| invalid("gap", e))?;
+        let mut bar = String::new();
+        if let Some(color) = rule.get("bar-color") { push_attr(&mut bar, "background", color); }
+        let mut rows = String::new();
+        for (i, block) in inner.iter().enumerate() {
+            let bottom = padding[2] + if i + 1 < inner.len() { gap } else { 0.0 };
+            let mut cell = format!(" padding=\"{}pt {}pt {}pt {}pt\"", padding[0], padding[1], bottom, padding[3]);
+            for key in ["background", "border", "radius"] {
+                if let Some(value) = rule.get(key) { push_attr(&mut cell, key, value); }
+            }
+            rows.push_str(&format!("<tr><td{bar}></td><td{cell}>{}</td></tr>", block.xml));
+        }
+        let xml = if rows.is_empty() { String::new() } else {
+            format!("<table cols=\"{} 1fr\">{rows}</table>", escape_attr(width))
+        };
+        Ok(Block { xml, line })
+    }
+
+    fn code_block(&self, text: &str, line: usize) -> Block {
+        let rule = self.spec.rules.rule("code");
+        let text = text.strip_suffix('\n').unwrap_or(text);
+        // The line break after the start tag is not part of the code, so one is written to keep a first empty line.
+        Block { xml: format!("<code{}>\n{}</code>", attrs_xml(&rule), escape_text(text)), line }
+    }
+
+    fn list(&mut self, first: Option<u64>, line: usize, around: &Around) -> Result<Block, String> {
+        let rule = self.spec.rules.rule("li");
+        let mut attrs = String::new();
+        match first {
+            Some(start) => {
+                push_attr(&mut attrs, "type", "number");
+                if start != 1 { push_attr(&mut attrs, "start", &start.to_string()); }
+            }
+            None => push_attr(&mut attrs, "type", "bullet"),
+        }
+        // The shape of a bullet is the bullet list's alone: a number list writes numbers.
+        for key in ["indent", "bullet", "gap"] {
+            if key == "bullet" && first.is_some() { continue; }
+            if let Some(value) = rule.get(key) { push_attr(&mut attrs, key, value); }
+        }
+        let mut item_attrs = String::new();
+        for key in ["padding", "background", "border"] {
+            if let Some(value) = rule.get(key) { push_attr(&mut item_attrs, key, value); }
+        }
+        let mut inner_around = around.clone();
+        let mut words = Rule::new();
+        for key in ["font", "font-size", "color"] {
+            if let Some(value) = rule.get(key) { words.insert(key.into(), value.clone()); }
+        }
+        inner_around.text.push(words);
+
+        let mut items = String::new();
+        while self.at < self.events.len() {
+            let (event, _) = self.events[self.at].clone();
+            match event {
+                Event::Start(Tag::Item) => {
+                    self.at += 1;
+                    // An item of a list inside this one reads its own marker, and this item's stays for it.
+                    let outer = self.task.take();
+                    let blocks = self.read_blocks(Some(TagEnd::Item), &inner_around)?;
+                    let task = std::mem::replace(&mut self.task, outer);
+                    let body: String = blocks.iter().map(|block| block.xml.as_str()).collect();
+                    let mut attrs = item_attrs.clone();
+                    if let Some(checked) = task { push_attr(&mut attrs, "checked", &checked.to_string()); }
+                    items.push_str(&format!("<li{attrs}>{body}</li>"));
+                }
+                Event::End(TagEnd::List(_)) => {
+                    self.at += 1;
+                    break;
+                }
+                _ => {
+                    return Err(self.fail(self.here(), "a list holds items only"));
+                }
+            }
+        }
+        Ok(Block { xml: format!("<list{attrs}>{items}</list>"), line })
+    }
+
+    fn table(&mut self, aligns: &[pulldown_cmark::Alignment], line: usize) -> Result<Block, String> {
+        let columns = aligns.len().max(1);
+        let rule = self.spec.rules.rule("table");
+        let mut attrs = format!(" cols=\"{}\"", vec!["auto"; columns].join(" "));
+        for (key, value) in &rule { push_attr(&mut attrs, key, value); }
+
+        let mut head = String::new();
+        let mut rows = String::new();
+        while self.at < self.events.len() {
+            let (event, _) = self.events[self.at].clone();
+            self.at += 1;
+            match event {
+                Event::Start(Tag::TableHead) => {
+                    let cells = self.table_cells(aligns, "th", TagEnd::TableHead)?;
+                    head = format!("<thead>{cells}</thead>");
+                }
+                Event::Start(Tag::TableRow) => {
+                    let cells = self.table_cells(aligns, "td", TagEnd::TableRow)?;
+                    rows.push_str(&format!("<tr>{cells}</tr>"));
+                }
+                Event::End(TagEnd::Table) => break,
+                _ => {}
+            }
+        }
+        Ok(Block { xml: format!("<table{attrs}>{head}{rows}</table>"), line })
+    }
+
+    fn table_cells(&mut self, aligns: &[pulldown_cmark::Alignment], rule_name: &str, until: TagEnd) -> Result<String, String> {
+        let rule = self.spec.rules.rule(rule_name);
+        let mut cells = String::new();
+        let mut column = 0;
+        while self.at < self.events.len() {
+            let line = self.here();
+            let (event, _) = self.events[self.at].clone();
+            self.at += 1;
+            match event {
+                Event::Start(Tag::TableCell) => {
+                    let pieces = self.read_pieces(Some(TagEnd::TableCell))?;
+                    if pieces.iter().any(|piece| matches!(piece, Piece::Note(_))) {
+                        return Err(self.fail(line, "a footnote can't be in a table"));
+                    }
+                    if pieces.iter().any(|piece| matches!(piece, Piece::Image { .. })) {
+                        return Err(self.fail(line, "an image can't be in a table cell"));
+                    }
+                    let mut cell = rule.clone();
+                    let align = match aligns.get(column) {
+                        Some(pulldown_cmark::Alignment::Center) => Some("center"),
+                        Some(pulldown_cmark::Alignment::Right)  => Some("right"),
+                        Some(pulldown_cmark::Alignment::Left)   => Some("left"),
+                        _ => None,
+                    };
+                    if let Some(align) = align { cell.insert("align".into(), align.into()); }
+                    let mut box_attrs = String::new();
+                    for key in ["padding", "background", "border"] {
+                        if let Some(value) = cell.remove(key) { push_attr(&mut box_attrs, key, &value); }
+                    }
+                    let text = self.text_block(&cell, &pieces, &[], None);
+                    cells.push_str(&format!("<td{box_attrs}>{text}</td>"));
+                    column += 1;
+                }
+                Event::End(end) if end == until => break,
+                _ => {}
+            }
+        }
+        while column < aligns.len() {
+            cells.push_str("<td><text></text></td>");
+            column += 1;
+        }
+        Ok(cells)
+    }
+}
+
+/// The italic face of a built-in font, or none for a font that has to be named.
+fn italic_face(font: &str) -> Option<&'static str> {
+    Some(match font {
+        "Helvetica" | "Helvetica-Oblique"             => "Helvetica-Oblique",
+        "Helvetica-Bold" | "Helvetica-BoldOblique"    => "Helvetica-Oblique",
+        "Times-Roman" | "Times-Italic"                => "Times-Italic",
+        "Times-Bold" | "Times-BoldItalic"             => "Times-Italic",
+        "Courier" | "Courier-Oblique"                 => "Courier-Oblique",
+        "Courier-Bold" | "Courier-BoldOblique"        => "Courier-Oblique",
+        _ => return None,
+    })
+}
+
+fn style_eq(a: &Style, b: &Style) -> bool {
+    a.strong == b.strong && a.em == b.em && a.del == b.del && a.link == b.link
+}
+
+/// The label of a footnote reference that the parser left in `text` because nothing defines it.
+fn undefined_note(text: &str) -> Option<&str> {
+    let start = text.find("[^")?;
+    let rest = &text[start + 2..];
+    let end = rest.find(']')?;
+    let label = &rest[..end];
+    (!label.is_empty() && !label.contains(char::is_whitespace)).then_some(label)
+}
+
+fn describe(event: &Event) -> String {
+    match event {
+        Event::Start(tag) => format!("{tag:?}").split(['(', ' ', '{']).next().unwrap_or("this").to_string(),
+        Event::TaskListMarker(_) => "a task list".into(),
+        _ => "this".into(),
+    }
+}
+
+/// Whether some HTML is a `<br>`, which is the one tag that is read: `<br>`, `<br/>` or `<br />`, in any case.
+fn is_line_break(html: &str) -> bool {
+    let tag = html.trim();
+    let Some(inner) = tag.strip_prefix('<').and_then(|rest| rest.strip_suffix('>')) else { return false };
+    inner.strip_suffix('/').unwrap_or(inner).trim_end().eq_ignore_ascii_case("br")
+}
+
+/// The words of a block cut at its breaks, each line without the spaces at its ends. A line with no words is left out,
+/// so breaks in a row, or at the start or the end of the block, are one break or none: a gap is a paragraph's to make.
+fn lines_of(pieces: &[Piece]) -> Vec<Vec<Piece>> {
+    let mut lines: Vec<Vec<Piece>> = pieces.split(|piece| matches!(piece, Piece::Break)).map(<[Piece]>::to_vec).collect();
+    for line in &mut lines {
+        if let Some(Piece::Text { text, .. }) = line.first_mut() { *text = text.trim_start().to_string(); }
+        if let Some(Piece::Text { text, .. }) = line.last_mut() { *text = text.trim_end().to_string(); }
+        line.retain(|piece| !matches!(piece, Piece::Text { text, .. } if text.is_empty()));
+    }
+    lines.retain(|line| !line.is_empty());
+    lines
+}
+
+/// The first tag of some HTML, from its `<` to its `>`, when that is short and on one line.
+fn first_tag(html: &str) -> Option<&str> {
+    let start = html.find('<')?;
+    let end = start + html[start..].find('>')?;
+    let tag = &html[start..=end];
+    (tag.chars().count() <= 60 && !tag.contains('\n')).then_some(tag)
+}
+
+fn push_attr(out: &mut String, key: &str, value: &str) {
+    out.push_str(&format!(" {key}=\"{}\"", escape_attr(value)));
+}
+
+fn attrs_xml(rule: &Rule) -> String {
+    let mut out = String::new();
+    for (key, value) in rule { push_attr(&mut out, key, value); }
+    out
+}
+
+/// Text for XML. A control character the format can't hold is dropped.
+fn escape_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            c if (c as u32) < 0x20 && !matches!(c, '\n' | '\t' | '\r') => {}
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+fn escape_attr(text: &str) -> String {
+    escape_text(text).replace('"', "&quot;").replace(['\n', '\t', '\r'], " ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parse::{parse, parse_with, Resources};
+
+    /// A document whose one section is a `<markdown>` with `attrs`, `styles` and the Markdown inline.
+    fn document(attrs: &str, styles: &str, markdown: &str) -> String {
+        format!(
+            r#"<lpdf version="1"><assets><image name="chart" src="img/chart.png"/></assets><document><section>
+            <markdown {attrs}>{styles}<markdown-content><![CDATA[{markdown}]]></markdown-content></markdown>
+            </section></document></lpdf>"#
+        )
+    }
+
+    fn nodes(markdown: &str) -> Vec<Node> {
+        nodes_in(&document("", "", markdown))
+    }
+
+    fn nodes_in(xml: &str) -> Vec<Node> {
+        parse(xml).unwrap().section_layouts().remove(0).children
+    }
+
+    fn error(markdown: &str) -> String {
+        parse(&document("", "", markdown)).unwrap_err()
+    }
+
+    /// The words of a text, with a space where the source has one.
+    fn words(node: &Node) -> String {
+        let mut out = String::new();
+        for run in &node.text_runs {
+            if run.leading_space && !out.is_empty() { out.push(' '); }
+            out.push_str(&run.text);
+        }
+        out
+    }
+
+    /// Every text under `node`, in order.
+    fn texts(node: &Node) -> Vec<&Node> {
+        let mut found = Vec::new();
+        if node.kind == NodeKind::Text { found.push(node); }
+        for child in &node.children { found.extend(texts(child)); }
+        found
+    }
+
+    #[test]
+    fn a_heading_is_a_bold_text_that_stays_with_what_follows_and_a_bookmark() {
+        let nodes = nodes("# Release notes\n\n## Fixes\n");
+        assert_eq!(nodes.len(), 2);
+        assert_eq!(nodes[0].kind, NodeKind::Text);
+        assert_eq!(words(&nodes[0]), "Release notes");
+        assert_eq!(nodes[0].font, "Helvetica-Bold");
+        assert_eq!(nodes[0].font_size, 20.0);
+        assert_eq!(nodes[0].paginate, crate::parse::Paginate::KeepNext);
+        assert_eq!((nodes[0].bookmarks[0].label.as_str(), nodes[0].bookmarks[0].level, nodes[0].bookmarks[0].id.as_str()), ("Release notes", 1, "release-notes"));
+        assert_eq!((nodes[1].font_size, nodes[1].bookmarks[0].level), (15.5, 2));
+    }
+
+    #[test]
+    fn bookmarks_keeps_the_levels_up_to_n_and_zero_keeps_none() {
+        let two = nodes_in(&document(r#"bookmarks="2""#, "", "# A\n\n## B\n\n### C\n"));
+        assert_eq!(two.iter().map(|n| n.bookmarks.len()).collect::<Vec<_>>(), [1, 1, 0]);
+        let none = nodes_in(&document(r#"bookmarks="0""#, "", "# A\n"));
+        assert!(none[0].bookmarks.is_empty());
+    }
+
+    #[test]
+    fn a_heading_id_is_the_slug_of_its_text_and_repeats_take_a_suffix() {
+        let nodes = nodes("# 3.1 Methods\n\n# 3.1 Methods\n");
+        assert_eq!(nodes[0].bookmarks[0].id, "3-1-methods");
+        assert_eq!(nodes[1].bookmarks[0].id, "3-1-methods-2");
+    }
+
+    #[test]
+    fn a_paragraph_is_a_text_and_a_soft_break_is_a_space() {
+        let nodes = nodes("one\ntwo\n\nthree\n");
+        assert_eq!(nodes.len(), 2);
+        assert_eq!(words(&nodes[0]), "one two");
+        assert_eq!(words(&nodes[1]), "three");
+    }
+
+    #[test]
+    fn emphasis_strong_and_strikethrough_are_spans_and_a_built_in_font_gets_its_italic_face() {
+        let nodes = nodes("a *b* **c** ~~d~~ ***e***\n");
+        let runs = &nodes[0].text_runs;
+        assert_eq!(runs.iter().map(|r| r.text.as_str()).collect::<Vec<_>>(), ["a", "b", "c", "d", "e"]);
+        assert_eq!(runs[1].font.as_deref(), Some("Helvetica-Oblique"));
+        assert_eq!(runs[2].font.as_deref(), Some("Helvetica-Bold"));
+        assert!(runs[3].strike);
+        assert_eq!(runs[4].font.as_deref(), Some("Helvetica-BoldOblique"));
+    }
+
+    #[test]
+    fn an_embedded_font_names_its_faces_in_the_rules_of_em_and_strong() {
+        let xml = format!(
+            r#"<lpdf version="1"><assets><font name="body" core="Times-Roman"/><font name="body-italic" core="Times-Italic"/></assets>
+            <document font="body"><section><markdown>
+            <markdown-styles><em font="body-italic"/></markdown-styles>
+            <markdown-content><![CDATA[a *b*]]></markdown-content></markdown></section></document></lpdf>"#
+        );
+        let nodes = nodes_in(&xml);
+        assert_eq!(nodes[0].text_runs[1].font.as_deref(), Some("Times-Italic"));
+    }
+
+    #[test]
+    fn inline_code_is_a_code_span_and_a_link_is_a_span_with_its_target() {
+        let nodes = nodes("see `x` and [the docs](https://lpdf.io) or [up](#intro)\n");
+        let runs = &nodes[0].text_runs;
+        assert_eq!((runs[1].text.as_str(), runs[1].font.as_deref(), runs[1].background.as_deref()), ("x", Some("Courier"), Some("#ffffff")));
+        assert_eq!((runs[3].text.as_str(), runs[3].href.as_deref(), runs[3].underline), ("the docs", Some("https://lpdf.io"), true));
+        assert_eq!(runs[5].href.as_deref(), Some("#intro"));
+    }
+
+    #[test]
+    fn a_thematic_break_is_a_divider() {
+        let nodes = nodes("above\n\n---\n\nbelow\n");
+        assert_eq!(nodes.iter().map(|n| n.kind.clone()).collect::<Vec<_>>(), [NodeKind::Text, NodeKind::Divider, NodeKind::Text]);
+    }
+
+    #[test]
+    fn a_thematic_break_is_a_thin_grey_line_unless_the_hr_rule_says_otherwise() {
+        let line = |nodes: &[Node]| (nodes[1].color.clone(), nodes[1].thickness);
+        assert_eq!(line(&nodes("above\n\n---\n\nbelow\n")), (Some("#737373".into()), 0.5));
+
+        let styles = r##"<markdown-styles><hr color="#ff0000" thickness="2pt"/></markdown-styles>"##;
+        let nodes = nodes_in(&document("", styles, "above\n\n---\n\nbelow\n"));
+        assert_eq!(line(&nodes), (Some("#ff0000".into()), 2.0));
+    }
+
+    #[test]
+    fn a_table_has_a_faint_line_under_the_header_and_each_row_and_no_stripe_unless_the_rules_say_otherwise() {
+        let table = "| A | B |\n|---|---|\n| 1 | 2 |\n";
+        let style = |styles: &str| nodes_in(&document("", styles, table))[0].table_style.clone();
+
+        let default = style("").unwrap();
+        assert_eq!(default.stripe, None);
+        assert_eq!(default.head_border, Some((0.5, "#d4d4d4".to_string())));
+        assert_eq!(default.row_border, Some((0.5, "#d4d4d4".to_string())));
+
+        let striped = style(r#"<markdown-styles><table stripe="surface-alt" head-border="none" row-border="none"/></markdown-styles>"#).unwrap();
+        assert_eq!(striped.stripe.as_deref(), Some("#f5f5f5"));
+        assert_eq!((striped.head_border, striped.row_border), (None, None));
+
+        assert_eq!(style(r#"<markdown-styles><table head-border="none" row-border="none"/></markdown-styles>"#), None);
+    }
+
+    #[test]
+    fn an_image_is_found_by_the_name_of_its_asset_or_by_its_src() {
+        for destination in ["chart", "img/chart.png", "./img/chart.png"] {
+            let nodes = nodes(&format!("![a chart]({destination})\n"));
+            assert_eq!(nodes[0].kind, NodeKind::Img, "{destination}");
+            assert_eq!(nodes[0].image_name.as_deref(), Some("chart"), "{destination}");
+        }
+    }
+
+    #[test]
+    fn words_around_an_image_are_blocks_of_their_own() {
+        let nodes = nodes("before ![x](chart) after\n");
+        assert_eq!(nodes.iter().map(|n| n.kind.clone()).collect::<Vec<_>>(), [NodeKind::Text, NodeKind::Img, NodeKind::Text]);
+    }
+
+    #[test]
+    fn an_image_that_is_not_an_asset_or_is_a_url_is_an_error_that_names_the_line() {
+        let err = error("one\n\n![x](missing.png)\n");
+        assert!(err.contains("markdown line 3") && err.contains("neither"), "{err}");
+        let err = error("![x](https://example.com/a.png)\n");
+        assert!(err.contains("markdown line 1") && err.contains("not a URL"), "{err}");
+    }
+
+    #[test]
+    fn raw_html_is_an_error_that_names_the_tag_and_says_to_write_it_in_backticks_when_it_is_text() {
+        let err = error("The user can add the sender to <Biller> here.\n");
+        assert!(err.contains("markdown line 1") && err.contains("raw HTML <Biller> is not supported"), "{err}");
+        assert!(err.contains("in backticks, `<Biller>`"), "{err}");
+        let err = error("fine\n\n<div class=\"a\">x</div>\n");
+        assert!(err.contains("markdown line 3") && err.contains("raw HTML <div class=\"a\"> is not supported"), "{err}");
+    }
+
+    #[test]
+    fn a_br_is_a_line_break_and_no_other_html_is() {
+        for html in ["<b>", "<br class=\"x\">", "</br>", "<brx>", "<img src=\"a.png\">"] {
+            let err = error(&format!("a{html}b\n"));
+            assert!(err.contains("raw HTML") && err.contains("is not supported"), "{html}: {err}");
+        }
+        for html in ["<br>", "<br/>", "<br />", "<BR>", "<Br/>"] {
+            assert!(parse(&document("", "", &format!("a{html}b\n"))).is_ok(), "{html}");
+        }
+    }
+
+    #[test]
+    fn a_br_ends_the_line_of_a_paragraph_whose_lines_are_texts_that_stand_close() {
+        let nodes = nodes("one<br>two<BR/>three <br /> four\n\nnext\n");
+        assert_eq!(nodes.len(), 2);
+        assert_eq!(nodes[0].kind, NodeKind::Column);
+        assert_eq!(nodes[0].gap, 0.0);
+        let lines: Vec<String> = texts(&nodes[0]).into_iter().map(words).collect();
+        assert_eq!(lines, ["one", "two", "three", "four"]);
+        assert_eq!(nodes[1].kind, NodeKind::Text);
+    }
+
+    #[test]
+    fn two_spaces_or_a_backslash_at_the_end_of_a_line_break_it_as_a_br_does() {
+        for markdown in ["one  \ntwo\n", "one\\\ntwo\n", "one<br>two\n", "one   \n  two\n"] {
+            let nodes = nodes(markdown);
+            assert_eq!(nodes.len(), 1, "{markdown:?}");
+            assert_eq!((nodes[0].kind.clone(), nodes[0].gap), (NodeKind::Column, 0.0), "{markdown:?}");
+            let lines: Vec<String> = texts(&nodes[0]).into_iter().map(words).collect();
+            assert_eq!(lines, ["one", "two"], "{markdown:?}");
+        }
+    }
+
+    #[test]
+    fn a_newline_alone_is_a_space_and_one_space_before_it_is_too() {
+        for markdown in ["one\ntwo\n", "one \ntwo\n"] {
+            let nodes = nodes(markdown);
+            assert_eq!((nodes[0].kind.clone(), words(&nodes[0])), (NodeKind::Text, "one two".to_string()), "{markdown:?}");
+        }
+    }
+
+    #[test]
+    fn a_hard_break_at_the_end_of_a_block_breaks_nothing_and_the_next_block_is_apart() {
+        let nodes = nodes("one  \n\ntwo\\\n");
+        assert_eq!(nodes.iter().map(|n| (n.kind.clone(), words(n))).collect::<Vec<_>>(),
+            [(NodeKind::Text, "one".to_string()), (NodeKind::Text, "two\\".to_string())]);
+    }
+
+    #[test]
+    fn a_hard_break_in_a_heading_is_a_space() {
+        let nodes = nodes("one  \ntwo\n===\n");
+        assert_eq!(words(&nodes[0]), "one two");
+        assert_eq!(nodes[0].bookmarks[0].label, "one two");
+    }
+
+    #[test]
+    fn a_hard_break_in_a_list_item_a_quote_and_a_run_of_strong_text_breaks_the_line_there() {
+        let nodes = nodes("- an item  \n  with a break\n\n> a quote\\\n> with a break\n\n**strong  \nacross**\n");
+        let item: Vec<String> = texts(&nodes[0].children[0]).into_iter().map(words).collect();
+        assert_eq!(item, ["an item", "with a break"]);
+        let quote: Vec<String> = texts(&nodes[1]).into_iter().map(words).collect();
+        assert_eq!(quote, ["a quote", "with a break"]);
+        let strong = texts(&nodes[2]);
+        assert_eq!(strong.iter().map(|line| words(line)).collect::<Vec<_>>(), ["strong", "across"]);
+        assert!(strong.iter().all(|line| line.text_runs[0].font.as_deref() == Some("Helvetica-Bold")));
+    }
+
+    #[test]
+    fn two_spaces_in_the_cell_of_a_table_or_in_a_code_span_are_not_a_break() {
+        let nodes = nodes("| a |\n|---|\n| one  two |\n\n`one  \ntwo`\n");
+        let cell = texts(&nodes[0].children[1].children[0].children[0]);
+        assert_eq!(cell.iter().map(|text| words(text)).collect::<Vec<_>>(), ["one two"]);
+        assert_eq!(nodes[1].kind, NodeKind::Text);
+    }
+
+    #[test]
+    fn a_br_keeps_the_styles_of_the_words_around_it_and_the_rules_of_a_paragraph() {
+        let nodes = nodes_in(&document("", r#"<markdown-styles><p font-size="14pt" padding="s"/></markdown-styles>"#, "**one**<br>*two*\n"));
+        assert_eq!(nodes[0].kind, NodeKind::Column);
+        assert_eq!(nodes[0].gap, 0.0);
+        assert_eq!(nodes[0].padding, [4.0; 4]);
+        let lines = texts(&nodes[0]);
+        assert_eq!(lines.len(), 2);
+        assert!(lines.iter().all(|line| line.font_size == 14.0));
+        assert_eq!(lines[0].text_runs[0].font.as_deref(), Some("Helvetica-Bold"));
+        assert_eq!(lines[1].text_runs[0].font.as_deref(), Some("Helvetica-Oblique"));
+    }
+
+    #[test]
+    fn breaks_in_a_row_or_at_the_ends_of_a_block_make_no_empty_line() {
+        let nodes = nodes("<br>one<br><br>two<br>\n");
+        let lines: Vec<String> = texts(&nodes[0]).into_iter().map(words).collect();
+        assert_eq!(lines, ["one", "two"]);
+    }
+
+    #[test]
+    fn a_br_in_a_table_cell_puts_the_words_after_it_on_a_line_of_their_own() {
+        let nodes = nodes("| Name | Note |\n|---|---|\n| **Engine**<br>`sync` | first<br/>second<br />third |\n");
+        let row = &nodes[0].children[1];
+        let cells: Vec<Vec<String>> = row.children.iter().map(|cell| texts(cell).into_iter().map(words).collect()).collect();
+        assert_eq!(cells, [vec!["Engine", "sync"], vec!["first", "second", "third"]]);
+    }
+
+    #[test]
+    fn a_br_in_a_list_item_or_a_quote_breaks_the_line_there() {
+        let nodes = nodes("- an item<br>with a break\n- <br>starts\n\n> a quote<br>with a break\n");
+        let item: Vec<String> = texts(&nodes[0].children[0]).into_iter().map(words).collect();
+        assert_eq!(item, ["an item", "with a break"]);
+        let starts: Vec<String> = texts(&nodes[0].children[1]).into_iter().map(words).collect();
+        assert_eq!(starts, ["starts"]);
+        let quote: Vec<String> = texts(&nodes[1]).into_iter().map(words).collect();
+        assert_eq!(quote, ["a quote", "with a break"]);
+    }
+
+    #[test]
+    fn a_br_in_a_heading_is_a_space_and_one_on_a_line_of_its_own_is_an_error_that_says_where_to_write_it() {
+        let nodes = nodes("# one<br>two\n");
+        assert_eq!(words(&nodes[0]), "one two");
+        assert_eq!(nodes[0].bookmarks[0].label, "one two");
+        let err = error("fine\n\n<br>\n\ntext\n");
+        assert!(err.contains("markdown line 3") && err.contains("raw HTML <br> is not supported on a line of its own"), "{err}");
+        assert!(err.contains("at the end of the line it breaks"), "{err}");
+    }
+
+    #[test]
+    fn a_comment_is_raw_html_to_leave_out() {
+        let err = error("one\n\n<!-- a note -->\n\ntwo\n");
+        assert!(err.contains("markdown line 3") && err.contains("<!-- a note --> is not supported: leave the comment out"), "{err}");
+    }
+
+    #[test]
+    fn what_is_not_a_tag_is_not_raw_html() {
+        for markdown in ["`<Biller>` here\n", "\\<Biller> here\n", "&lt;Biller&gt; here\n", "<https://lpdf.io> here\n", "1 < 2 and 3 > 2\n"] {
+            assert!(parse(&document("", "", markdown)).is_ok(), "{markdown}");
+        }
+    }
+
+    #[test]
+    fn raw_html_is_an_error_that_names_the_line() {
+        let err = error("fine\n\n<div>x</div>\n");
+        assert!(err.contains("markdown line 3") && err.contains("raw HTML"), "{err}");
+        let err = error("fine <b>x</b>\n");
+        assert!(err.contains("markdown line 1") && err.contains("raw HTML"), "{err}");
+    }
+
+    #[test]
+    fn a_dollar_sign_is_text_whatever_stands_between_two_of_them() {
+        let nodes = nodes("It costs $5 or $6 in all, from $1M—$10M, or $x^2$.\n");
+        assert_eq!(words(&nodes[0]), "It costs $5 or $6 in all, from $1M—$10M, or $x^2$.");
+    }
+
+    #[test]
+    fn dollar_signs_in_the_cells_of_a_table_are_text() {
+        let nodes = nodes("| Tier | Price | Band |\n|---|---|---|\n| Business | $299/yr | $1M—$10M |\n| Scale | $999/yr | Over $10M |\n");
+        assert_eq!(nodes.len(), 1, "a table is one block");
+    }
+
+    #[test]
+    fn front_matter_is_not_drawn() {
+        let nodes = nodes("---\ntitle: Notes\nauthor: Me\n---\n\nBody\n");
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(words(&nodes[0]), "Body");
+    }
+
+    #[test]
+    fn a_code_block_keeps_its_spaces_and_lines_and_ignores_the_language() {
+        let nodes = nodes("```rust\nfn main() {\n    run();\n}\n```\n");
+        assert_eq!(nodes[0].kind, NodeKind::Column);
+        let text = &nodes[0].children[0];
+        assert_eq!(text.text_runs[0].text, "fn main() {\n    run();\n}");
+        assert_eq!(nodes[0].font, "Courier");
+    }
+
+    #[test]
+    fn an_indented_block_is_code_too_and_a_first_empty_line_is_kept() {
+        let nodes = nodes("text\n\n    a\n\n    b\n");
+        assert_eq!(nodes[1].children[0].text_runs[0].text, "a\n\nb");
+    }
+
+    #[test]
+    fn a_bullet_list_and_a_number_list_are_lists_that_nest() {
+        let nodes = nodes("- one\n- two\n  - nested\n\n3. three\n4. four\n");
+        let all: Vec<String> = nodes.iter().flat_map(|n| texts(n)).map(words).collect();
+        // a number list writes its numbers, a bullet list draws shapes
+        assert_eq!(all, ["one", "two", "nested", "3.", "three", "4.", "four"]);
+        // `lists::lower` made columns and rows of them, a marker beside each item
+        assert!(nodes[0].children.iter().all(|item| item.kind == NodeKind::Row));
+        let numbers: Vec<String> = nodes[1].children.iter().map(|item| words(texts(item)[0])).collect();
+        assert_eq!(numbers, ["3.", "4."]);
+    }
+
+    #[test]
+    fn a_quote_has_a_bar_beside_each_of_its_blocks() {
+        let nodes = nodes("> one\n>\n> two\n");
+        assert_eq!(nodes[0].kind, NodeKind::Table);
+        assert_eq!(nodes[0].table_cols, "3pt 1fr");
+        let rows = &nodes[0].children;
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].children[0].background.as_deref(), Some("#737373"));
+        assert_eq!(words(texts(&rows[1])[0]), "two");
+        assert_eq!(texts(&rows[0])[0].text_color.as_deref(), Some("#737373"));
+    }
+
+    #[test]
+    fn a_table_has_a_header_row_and_takes_the_alignment_of_each_column() {
+        let nodes = nodes("| Name | Qty | Mid |\n|:-----|----:|:---:|\n| Pen | 2 | x |\n");
+        assert_eq!(nodes[0].kind, NodeKind::Table);
+        assert_eq!(nodes[0].table_cols, "auto auto auto");
+        let head = &nodes[0].children[0];
+        assert_eq!(head.kind, NodeKind::TableHead);
+        assert_eq!(head.children.iter().map(|c| words(texts(c)[0])).collect::<Vec<_>>(), ["Name", "Qty", "Mid"]);
+        assert_eq!(head.children.iter().map(|c| texts(c)[0].text_align.clone()).collect::<Vec<_>>(),
+            [crate::parse::TextAlign::Left, crate::parse::TextAlign::Right, crate::parse::TextAlign::Center]);
+        assert_eq!(texts(&head.children[0])[0].font, "Helvetica-Bold");
+        assert_eq!(nodes[0].children[1].kind, NodeKind::TableRow);
+    }
+
+    #[test]
+    fn a_footnote_is_a_note_at_its_reference_and_a_missing_definition_is_an_error() {
+        let nodes = nodes("Claim.[^1]\n\n[^1]: The note.\n");
+        assert_eq!(nodes.len(), 1);
+        let note = nodes[0].text_runs.iter().find_map(|r| r.footnote.as_ref()).expect("a footnote run");
+        assert_eq!(note.runs[0].text, "The note.");
+        let err = error("one\n\nClaim.[^2]\n");
+        assert!(err.contains("markdown line 3") && err.contains("[^2]") && err.contains("no definition"), "{err}");
+    }
+
+    #[test]
+    fn a_footnote_in_a_table_cell_is_an_error() {
+        let err = error("| a |\n|---|\n| b[^1] |\n\n[^1]: n\n");
+        assert!(err.contains("markdown line 3") && err.contains("table"), "{err}");
+    }
+
+    /// The checkbox of each item of a list: `Some(true)` for a tick, `Some(false)` for an open box, and none for the
+    /// bullet or the number of the other items.
+    fn boxes(list: &Node) -> Vec<Option<bool>> {
+        list.children
+            .iter()
+            .map(|item| {
+                let marker = &item.children[0];
+                marker.children.first().and_then(|shape| shape.shape()).filter(|shape| shape.kind == crate::parse::ShapeKind::Checkbox)
+                    .map(|shape| shape.tick.is_some())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_task_item_is_an_item_whose_marker_is_a_checkbox_that_is_ticked_when_it_is_checked() {
+        let nodes = nodes("- [ ] open\n- [x] done\n- [X] done too\n- plain\n");
+        assert_eq!(boxes(&nodes[0]), [Some(false), Some(true), Some(true), None]);
+        let words: Vec<String> = nodes[0].children.iter().map(|item| self::words(texts(&item.children[1])[0])).collect();
+        assert_eq!(words, ["open", "done", "done too", "plain"]);
+    }
+
+    #[test]
+    fn a_loose_task_item_and_a_nested_one_are_checkboxes_too() {
+        let nodes = nodes("- [ ] one\n\n- [x] two\n");
+        assert_eq!(boxes(&nodes[0]), [Some(false), Some(true)]);
+        let nested = nodes_in(&document("", "", "- [x] outer\n  - [ ] inner\n  - plain\n"));
+        assert_eq!(boxes(&nested[0]), [Some(true)]);
+        let inner = &nested[0].children[0].children[1].children[1];
+        assert_eq!(boxes(inner), [Some(false), None]);
+    }
+
+    #[test]
+    fn a_task_marker_that_is_not_at_the_start_of_an_item_is_text() {
+        let nodes = nodes("- todo [ ] here\n\nplain [x] text\n");
+        assert_eq!(boxes(&nodes[0]), [None]);
+        assert_eq!(words(&nodes[1]), "plain [x] text");
+    }
+
+    #[test]
+    fn the_tick_of_a_checkbox_takes_the_color_of_the_words_and_the_outline_the_line_color() {
+        let nodes = nodes_in(&document("", r##"<markdown-styles><p color="#cc0000"/></markdown-styles>"##, "- [x] done\n"));
+        let shape = nodes[0].children[0].children[0].children[0].shape().expect("a shape").clone();
+        assert_eq!(shape.stroke.as_deref(), Some("#737373"));
+        assert_eq!(shape.tick.as_deref(), Some("#cc0000"));
+        assert_eq!(shape.fill, None);
+    }
+
+    #[test]
+    fn the_indent_of_the_xml_does_not_make_a_code_block() {
+        let xml = document("", "", "\n        # Title\n\n        text\n");
+        let nodes = nodes_in(&xml);
+        assert_eq!(nodes.iter().map(|n| words(n)).collect::<Vec<_>>(), ["Title", "text"]);
+    }
+
+    #[test]
+    fn dedent_leaves_blank_lines_empty_and_keeps_the_indent_beyond_the_common_one() {
+        assert_eq!(dedent("  a\n\n    b\n  "), "a\n\n  b\n");
+    }
+
+    #[test]
+    fn the_gap_is_the_space_between_the_blocks_of_the_section() {
+        let mut doc = parse(&document(r#"gap="10pt""#, "", "a\n\nb\n")).unwrap();
+        assert_eq!(doc.section_layouts()[0].gap, 10.0);
+        let mut doc = parse(&document("", "", "a\n")).unwrap();
+        assert_eq!(doc.section_layouts()[0].gap, 14.0);
+    }
+
+    #[test]
+    fn the_margin_and_the_font_of_the_markdown_are_its_own() {
+        let mut doc = parse(&document(r##"margin="20pt 30pt" font="Times-Roman" font-size="12pt" color="#ff0000""##, "", "a\n")).unwrap();
+        let layout = doc.section_layouts().remove(0);
+        assert_eq!(layout.margin, [20.0, 30.0, 20.0, 30.0]);
+        assert_eq!((layout.children[0].font.as_str(), layout.children[0].font_size), ("Times-Roman", 12.0));
+        assert_eq!(layout.children[0].text_color.as_deref(), Some("#ff0000"));
+    }
+
+    #[test]
+    fn inline_rules_override_the_defaults_one_attribute_at_a_time() {
+        let styles = r##"<markdown-styles><h1 color="#ff0000"/><p font-size="l"/></markdown-styles>"##;
+        let nodes = nodes_in(&document("", styles, "# T\n\np\n"));
+        // the color is new; the size and bold of the default h1 stay
+        assert_eq!((nodes[0].text_color.as_deref(), nodes[0].font_size, nodes[0].font.as_str()), (Some("#ff0000"), 20.0, "Helvetica-Bold"));
+        assert_eq!(nodes[1].font_size, 14.0);
+    }
+
+    #[test]
+    fn a_rule_has_the_box_of_its_element_around_the_words() {
+        let styles = r##"<markdown-styles><p background="#eeeeee" padding="s"/></markdown-styles>"##;
+        let nodes = nodes_in(&document("", styles, "p\n"));
+        assert_eq!((nodes[0].kind.clone(), nodes[0].background.as_deref(), nodes[0].padding), (NodeKind::Column, Some("#eeeeee"), [4.0; 4]));
+        assert_eq!(words(&nodes[0].children[0]), "p");
+    }
+
+    #[test]
+    fn a_rule_that_is_not_one_or_an_attribute_it_does_not_take_is_an_error() {
+        let err = parse(&document("", "<markdown-styles><h7/></markdown-styles>", "a")).unwrap_err();
+        assert!(err.contains("<h7>") && err.contains("unknown rule"), "{err}");
+        let err = parse(&document("", r#"<markdown-styles><em href="x"/></markdown-styles>"#, "a")).unwrap_err();
+        assert!(err.contains("<em>") && err.contains("unknown attribute 'href'"), "{err}");
+    }
+
+    #[test]
+    fn a_rule_value_that_does_not_read_is_an_error_when_the_document_is() {
+        let err = parse(&document("", r#"<markdown-styles><h1 font-size="huge"/></markdown-styles>"#, "a")).unwrap_err();
+        assert!(err.contains("the h1 rule") && err.contains("huge"), "{err}");
+    }
+
+    #[test]
+    fn a_styles_file_is_laid_under_the_inline_rules_and_over_the_defaults() {
+        let xml = document("", r##"<markdown-styles src="styles.xml"><h2 color="#00ff00"/></markdown-styles>"##, "# a\n\n## b\n");
+        let file = r##"<markdown-styles><h1 color="#ff0000"/><h2 color="#0000ff" font-size="l"/></markdown-styles>"##;
+        let mut resources = Resources::default();
+        resources.markdown_styles.insert("styles.xml".into(), file.into());
+        let nodes = parse_with(&xml, &resources).unwrap().section_layouts().remove(0).children;
+        assert_eq!(nodes[0].text_color.as_deref(), Some("#ff0000"));
+        assert_eq!((nodes[1].text_color.as_deref(), nodes[1].font_size), (Some("#00ff00"), 14.0));
+    }
+
+    #[test]
+    fn a_styles_file_that_was_not_loaded_is_an_error_that_says_so() {
+        let err = parse(&document("", r#"<markdown-styles src="styles.xml"/>"#, "a")).unwrap_err();
+        assert!(err.contains("src=\"styles.xml\"") && err.contains("did not load"), "{err}");
+    }
+
+    #[test]
+    fn the_markdown_comes_from_the_data_and_a_document_with_no_data_shows_its_inline_text() {
+        let xml = r#"<lpdf version="1"><document><section><markdown>
+            <markdown-content data-value="body"><![CDATA[# Fallback]]></markdown-content></markdown></section></document></lpdf>"#;
+        let mut doc = parse(xml).unwrap();
+        crate::data::apply(&mut doc, r##"{"body": "# From data\n\ntext"}"##).unwrap();
+        let nodes = doc.section_layouts().remove(0).children;
+        assert_eq!(nodes.iter().map(words).collect::<Vec<_>>(), ["From data", "text"]);
+        assert_eq!(nodes[0].bookmarks[0].id, "from-data");
+
+        assert_eq!(parse(xml).unwrap().section_layouts()[0].children.iter().map(words).collect::<Vec<_>>(), ["Fallback"]);
+
+        let mut doc = parse(xml).unwrap();
+        crate::data::apply(&mut doc, r#"{"other": 1}"#).unwrap();
+        assert!(doc.section_layouts()[0].children.is_empty());
+    }
+
+    #[test]
+    fn data_that_is_not_a_string_is_an_error_that_names_the_path() {
+        let xml = r#"<lpdf version="1"><document><section><markdown>
+            <markdown-content data-value="body"/></markdown></section></document></lpdf>"#;
+        let mut doc = parse(xml).unwrap();
+        let err = crate::data::apply(&mut doc, r#"{"body": 3}"#).unwrap_err();
+        assert!(err.contains("data-value=\"body\"") && err.contains("a number"), "{err}");
+    }
+
+    #[test]
+    fn markdown_from_the_data_is_read_for_its_errors_like_markdown_written_inline() {
+        let xml = r#"<lpdf version="1"><document><section><markdown>
+            <markdown-content data-value="body"/></markdown></section></document></lpdf>"#;
+        let mut doc = parse(xml).unwrap();
+        let err = crate::data::apply(&mut doc, r#"{"body": "ok\n\n<b>x</b>"}"#).unwrap_err();
+        assert!(err.contains("markdown line 3") && err.contains("raw HTML"), "{err}");
+    }
+
+    #[test]
+    fn a_section_has_a_layout_or_a_markdown_and_not_both_and_a_markdown_needs_its_content() {
+        let both = r#"<lpdf version="1"><document><section><layout/><markdown><markdown-content/></markdown></section></document></lpdf>"#;
+        assert!(parse(both).unwrap_err().contains("not both"));
+        let both = r#"<lpdf version="1"><document><section><markdown><markdown-content/></markdown><layout/></section></document></lpdf>"#;
+        assert!(parse(both).unwrap_err().contains("not both"));
+        let bare = r#"<lpdf version="1"><document><section><markdown/></section></document></lpdf>"#;
+        assert!(parse(bare).unwrap_err().contains("needs a <markdown-content>"));
+        let odd = r#"<lpdf version="1"><document><section><markdown><text/></markdown></section></document></lpdf>"#;
+        assert!(parse(odd).unwrap_err().contains("unexpected child <text>"));
+    }
+
+    #[test]
+    fn layers_paint_over_and_under_the_markdown_where_they_are_written() {
+        let xml = r##"<lpdf version="1"><document><section>
+            <layer><rect x="0pt" y="0pt" width="10pt" height="10pt" fill="#000000"/></layer>
+            <markdown><markdown-content>hi</markdown-content></markdown>
+            <layer><rect x="0pt" y="0pt" width="10pt" height="10pt" fill="#000000"/></layer>
+            </section></document></lpdf>"##;
+        let layout = parse(xml).unwrap().section_layouts().remove(0);
+        assert_eq!((layout.underlays.len(), layout.overlays.len()), (1, 1));
+    }
+
+    #[test]
+    fn a_tree_reads_a_markdown_as_xml_does() {
+        let tree = r##"{"version":1,"type":"document","nodes":[{"type":"section","nodes":[{"type":"markdown","attrs":{"gap":"8pt"},"nodes":[
+            {"type":"markdown-styles","attrs":{},"nodes":[{"type":"h1","attrs":{"color":"#ff0000"}}]},
+            {"type":"markdown-content","attrs":{},"nodes":["    # Title\n\n    text"]}]}]}]}"##;
+        let mut doc = crate::parse::parse_tree(tree).unwrap();
+        let layout = doc.section_layouts().remove(0);
+        assert_eq!(layout.gap, 8.0);
+        assert_eq!(layout.children.iter().map(words).collect::<Vec<_>>(), ["Title", "text"]);
+        assert_eq!(layout.children[0].text_color.as_deref(), Some("#ff0000"));
+    }
+
+    #[test]
+    fn the_default_template_and_styles_are_documents_the_engine_reads() {
+        let mut doc = parse(default_template()).unwrap();
+        assert_eq!(doc.section_layouts().len(), 1);
+        let styles = roxmltree::Document::parse(default_styles()).unwrap();
+        assert_eq!(styles.root_element().tag_name().name(), "markdown-styles");
+    }
+
+    /// The rules a file of styles writes, by name.
+    fn rule_names(styles: &str) -> Vec<String> {
+        let doc = roxmltree::Document::parse(styles).unwrap();
+        doc.root_element().children().filter(|n| n.is_element()).map(|n| n.tag_name().name().to_string()).collect()
+    }
+
+    /// The font size of each of the headings a file of styles writes, h1 to h6.
+    fn heading_sizes(styles: &str) -> Vec<String> {
+        let doc = roxmltree::Document::parse(styles).unwrap();
+        (1..=6)
+            .map(|level| {
+                let rule = doc.root_element().children().find(|n| n.tag_name().name() == format!("h{level}")).unwrap();
+                rule.attribute("font-size").unwrap().to_string()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn every_look_has_the_headings_on_the_one_scale_and_sans_is_the_default() {
+        let scale = ["20pt", "15.5pt", "13pt", "12pt", "11pt", "10pt"];
+        assert_eq!(heading_sizes(default_styles()), scale);
+        for preset in style_presets() {
+            assert_eq!(heading_sizes(preset.styles), scale, "the headings of {}", preset.name);
+        }
+        assert_eq!(style_presets()[0].name, "sans");
+        assert_eq!(style_presets()[0].styles, default_styles(), "the sans look is the default one, to copy");
+    }
+
+    #[test]
+    fn a_preset_is_a_file_of_styles_the_engine_reads_with_a_rule_for_each_rule_of_the_default() {
+        let default = rule_names(default_styles());
+        let mut names = Vec::new();
+        for preset in style_presets() {
+            assert!(!preset.label.is_empty() && !preset.description.is_empty(), "{} has words to offer it", preset.name);
+            assert_eq!(rule_names(preset.styles), default, "{} writes the rules the default does, in its order", preset.name);
+            let inline = &preset.styles[preset.styles.find("<markdown-styles>").unwrap()..];
+            let mut doc = parse(&document("", inline, "# a\n\n`b`\n\n> c\n\n---\n\n| d |\n|---|\n| e |\n")).unwrap();
+            assert!(!doc.section_layouts()[0].children.is_empty(), "{}", preset.name);
+            names.push(preset.name);
+        }
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), style_presets().len(), "the names of the presets differ");
+    }
+
+    #[test]
+    fn the_default_template_renders_a_file_from_the_data_it_is_given() {
+        let mut doc = parse(default_template()).unwrap();
+        crate::data::apply(&mut doc, r##"{"markdown": "# Hello\n\nworld"}"##).unwrap();
+        let layout = doc.section_layouts().remove(0);
+        assert_eq!(layout.children.iter().map(words).collect::<Vec<_>>(), ["Hello", "world"]);
+        assert_eq!(layout.margin, [54.0; 4]);
+    }
+
+    #[test]
+    fn a_long_markdown_renders_to_a_pdf_on_several_pages_with_the_gap_between_blocks() {
+        let body: String = (1..=120).map(|n| format!("Paragraph number {n} of the long text.\n\n")).collect();
+        let xml = document("", "", &body);
+        let pdf = crate::LpdfEngine::render_xml_to_pdf_bytes(&xml).unwrap();
+        assert!(pdf.starts_with(b"%PDF"));
+        let pages = crate::layout::layout_document(&parse(&xml).unwrap().section_layouts());
+        assert!(pages.len() > 2, "{} pages", pages.len());
+    }
+
+    #[test]
+    fn markdown_does_not_change_a_document_without_it() {
+        // the gap of a layout is none, as before
+        let xml = r#"<lpdf version="1"><document><section><layout><text>a</text></layout></section></document></lpdf>"#;
+        assert_eq!(parse(xml).unwrap().section_layouts()[0].gap, 0.0);
+    }
+    #[test]
+    fn a_file_gives_its_text_and_the_fields_of_its_front_matter_as_data() {
+        let file = "---\ntitle: \"Release notes\"\nauthor: Me\ntags:\n  - a\n  - b\n# a comment\nmarkdown: ignored\n---\n\n# Body\n";
+        let data: Value = serde_json::from_str(&file_data(file)).unwrap();
+        assert_eq!(data["title"], "Release notes");
+        assert_eq!(data["author"], "Me");
+        assert_eq!(data["markdown"], file);
+        assert!(data.get("tags").is_none());
+        let plain: Value = serde_json::from_str(&file_data("# Body")).unwrap();
+        assert_eq!(plain, serde_json::json!({ "markdown": "# Body" }));
+    }
+
+    #[test]
+    fn a_file_lists_its_relative_images_once_each_and_not_the_urls() {
+        let file = "![a](img/a.png) and ![b](./b.jpg) and ![a again](img/a.png) and ![u](https://x.org/u.png)\n";
+        assert_eq!(file_images(file), ["img/a.png", "./b.jpg"]);
+    }
+
+    #[test]
+    fn the_images_of_a_file_are_declared_in_the_assets_of_the_template() {
+        let srcs = vec!["img/a.png".to_string(), "b.jpg".to_string()];
+        let declared = declare_images(default_template(), &srcs).unwrap();
+        assert!(declared.contains(r#"<assets><image name="markdown-image-1" src="img/a.png"/><image name="markdown-image-2" src="b.jpg"/></assets>"#), "{declared}");
+        // an assets element of its own gets them too, empty or not
+        let own = r#"<lpdf version="1"><assets><image name="logo" src="logo.png"/></assets><document/></lpdf>"#;
+        let declared = declare_images(own, &srcs).unwrap();
+        assert!(declared.contains(r#"src="logo.png"/><image name="markdown-image-1" src="img/a.png"/><image name="markdown-image-2" src="b.jpg"/></assets>"#), "{declared}");
+        let empty = r#"<lpdf version="1"><assets/><document/></lpdf>"#;
+        assert!(declare_images(empty, &srcs).unwrap().contains(r#"<assets><image name="markdown-image-1""#));
+        // one the template declares is not declared twice
+        let again = r#"<lpdf version="1"><assets><image name="a" src="img/a.png"/></assets><document/></lpdf>"#;
+        let declared = declare_images(again, &srcs).unwrap();
+        assert!(declared.contains(r#"name="markdown-image-2""#) && !declared.contains(r#"src="img/a.png"/><image name="markdown-image-1""#), "{declared}");
+        assert_eq!(declare_images(again, &[]).unwrap(), again);
+    }
+
+    #[test]
+    fn a_file_with_its_images_declared_is_a_document_that_renders_them() {
+        let file = "# T\n\n![a chart](img/chart.png)\n";
+        let template = declare_images(default_template(), &file_images(file)).unwrap();
+        let mut doc = parse(&template).unwrap();
+        crate::data::apply(&mut doc, &file_data(file)).unwrap();
+        let kinds: Vec<NodeKind> = doc.section_layouts().remove(0).children.iter().map(|n| n.kind.clone()).collect();
+        assert_eq!(kinds, [NodeKind::Text, NodeKind::Img]);
+    }
+}

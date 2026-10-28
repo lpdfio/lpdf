@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <document size="a4">
+    <meta title="lpdf Showcase — Markdown line breaks" subject="A line break in a paragraph, a list, a quote and a table cell" />
+
+    <!-- A newline alone is a space. A line ends, and the next begins, at two spaces or a backslash at the end of a
+         line, and at a <br>, <br/> or <br /> anywhere in it. The lines stand close, as the lines of a wrapped
+         paragraph do, with no gap between them; a gap is a new paragraph. Breaks in a row make one, and a heading is
+         one line, so a break in it is a space. Three lines below end in two spaces ("The first line ends in two
+         spaces", "five" and "A task that breaks"): keep them when the file is edited, as an editor may strip them.
+         Expected, top to bottom:
+           1  A heading that reads as one line, "A heading with a break"
+           2  A paragraph of two lines run into one by a newline: the first line wraps on to a second and the
+              second follows it on the same line
+           3  Three paragraphs of two lines each: one broken by two spaces, one by a backslash, one by a <br>
+           4  Six lines in one paragraph: the three forms of <br>, a backslash and two spaces each break one
+           5  A strong run that breaks and keeps its weight on both lines
+           6  Two breaks in a row: two lines and no empty line between them
+           7  A bullet list: a break in an item, a task item that breaks, and a plain item; the lines of an item
+              stand under its words
+           8  A quote whose paragraph breaks, with the bar the height of both lines
+           9  A table whose cells hold two lines: a bold name over code, and two lines of words
+    -->
+    <section>
+      <markdown margin="54pt">
+        <markdown-content><![CDATA[
+          # A heading<br>with a break
+
+          A newline alone is a space: this line is long enough to wrap on to a second line, and the line
+          that follows it in the source runs on from the end of it, in the same paragraph.
+
+          The first line ends in two spaces  
+          and the second begins after them.
+
+          The first line ends in a backslash\
+          and the second begins after it.
+
+          The first line ends in a br<br>and the second begins after it.
+
+          One<br>two<BR/>three<br />four  \
+          five  
+          six
+
+          **A strong run that\
+          breaks and keeps its weight**
+
+          Two breaks in a row<br><br>make one break.
+
+          - An item that breaks<br>on a second line
+          - [ ] A task that breaks  
+            on a second line
+          - A plain item
+
+          > A quote that breaks\
+          > on a second line, with the bar beside both.
+
+          | Package | Note |
+          |---|---|
+          | **Engine**<br>`@lpdf/core` | stable<br>2.4.0 |
+          | **CLI**<br>`@lpdf/cli` | stable<br>2.4.0 |
+        ]]></markdown-content>
+      </markdown>
+    </section>
+  </document>
+</lpdf>

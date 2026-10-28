@@ -12,7 +12,7 @@ export LPDF_PUBLIC_KEY
 PAGES_DIR     ?= repos/lpdf-pages
 PORTAL_UI_DIR ?= ../codesense/portal/ui
 
-.PHONY: build-wasm build-wasi build-cli test-wasm test-wasi \
+.PHONY: build-wasm build-wasi build-cli test-wasm test-wasi test-cli \
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python \
@@ -78,6 +78,13 @@ test-wasi: test-wasm
 	@echo ">>> Running WASI tests..."
 	@echo ""
 	cargo test --manifest-path src/core-wasi/Cargo.toml
+
+test-cli:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Running CLI tests..."
+	@echo ""
+	cargo test --manifest-path src/cli/Cargo.toml
 
 benchmark:
 	@echo ""
@@ -209,7 +216,7 @@ check-sdk-api:
 	node scripts/gen-sdk-api.mjs --check
 	node scripts/check-sdk-parity.mjs
 
-test-all: check-sdk-api test-wasm test-wasi test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python
+test-all: check-sdk-api test-wasm test-wasi test-cli test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python
 
 example-all: example-node example-dotnet example-php example-python
 
@@ -490,10 +497,12 @@ build-pages-docs:
 	cd "$(PAGES_DIR)/docs-site" && (test -d node_modules || npm ci) && npm run build
 
 # Renders every XML example in the docs with the engine copy in the pages tree, and fails if the engine
-# rejects one. It needs no npm install.
+# rejects one. It then runs the code the generator writes for each one with the SDK that build-sdk-node
+# built in repos/lpdf-js, so the docs of an element that is not released yet pass. Without that build it
+# uses the published SDK in the docs site's node_modules, which needs npm ci.
 check-pages-docs:
 	@test -d "$(PAGES_DIR)/docs-site" || (echo "ERROR: docs-site not found at $(PAGES_DIR)/docs-site" && exit 1)
-	cd "$(PAGES_DIR)/docs-site" && npm run check
+	cd "$(PAGES_DIR)/docs-site" && $(if $(wildcard repos/lpdf-js/dist/index.js),LPDF_SDK_DIR="$(abspath repos/lpdf-js)" )npm run check
 
 # ── Pages asset sync ──────────────────────────────────────────────────────────
 # Copies the browser WASM build and the demo bundle+assets into the pages asset tree.

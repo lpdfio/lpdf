@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <document size="a4">
+    <meta title="lpdf Showcase — Markdown tables" subject="The lines and the stripe of a Markdown table, on and off" />
+
+    <!-- The table rule of the default styles has head-border and row-border set and no stripe; a rule written in the
+         markdown changes one attribute at a time. One page for each way.
+         Expected, page by page:
+           1  The defaults: a faint line under the header and under each row, no stripe
+           2  A stripe on every other row, no lines
+           3  The stripe and the lines
+           4  Neither: a table with no look
+    -->
+    <section>
+      <markdown margin="54pt">
+        <markdown-content><![CDATA[
+          # A table as Markdown has it
+
+          The default: a faint line under the header and under each row, with no stripe.
+
+          | Plan | Seats | Price |
+          |:-----|------:|------:|
+          | Starter | 5 | $29 |
+          | Team | 25 | $99 |
+          | Business | 100 | $299 |
+          | Scale | 500 | $999 |
+
+          The text after the table.
+        ]]></markdown-content>
+      </markdown>
+    </section>
+    <section>
+      <markdown margin="54pt">
+        <markdown-styles><table stripe="surface-alt" head-border="none" row-border="none"/></markdown-styles>
+        <markdown-content><![CDATA[
+          # Striped, with no lines
+
+          The stripe is on and both lines are off: `stripe="surface-alt" head-border="none" row-border="none"`.
+
+          | Plan | Seats | Price |
+          |:-----|------:|------:|
+          | Starter | 5 | $29 |
+          | Team | 25 | $99 |
+          | Business | 100 | $299 |
+          | Scale | 500 | $999 |
+
+          The text after the table.
+        ]]></markdown-content>
+      </markdown>
+    </section>
+    <section>
+      <markdown margin="54pt">
+        <markdown-styles><table stripe="surface-alt"/></markdown-styles>
+        <markdown-content><![CDATA[
+          # Striped, with lines
+
+          The stripe is on and the lines stay: `stripe="surface-alt"`.
+
+          | Plan | Seats | Price |
+          |:-----|------:|------:|
+          | Starter | 5 | $29 |
+          | Team | 25 | $99 |
+          | Business | 100 | $299 |
+          | Scale | 500 | $999 |
+
+          The text after the table.
+        ]]></markdown-content>
+      </markdown>
+    </section>
+    <section>
+      <markdown margin="54pt">
+        <markdown-styles><table head-border="none" row-border="none"/></markdown-styles>
+        <markdown-content><![CDATA[
+          # No stripe, no lines
+
+          Both lines are off: `head-border="none" row-border="none"`.
+
+          | Plan | Seats | Price |
+          |:-----|------:|------:|
+          | Starter | 5 | $29 |
+          | Team | 25 | $99 |
+          | Business | 100 | $299 |
+          | Scale | 500 | $999 |
+
+          The text after the table.
+        ]]></markdown-content>
+      </markdown>
+    </section>
+  </document>
+</lpdf>

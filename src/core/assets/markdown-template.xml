@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  What a .md file is wrapped in when it is rendered without a template: A4, a margin of 54pt and the page number
+  in the footer. The Markdown comes in as the data "markdown", and its front matter as the other fields, which
+  the document can show. Copy this file to start your own template, and give it the default styles or yours.
+-->
+<lpdf version="1">
+    <document size="a4">
+        <section>
+            <layer>
+                <text-at anchor="bottom-center" y="-24pt" font-size="xs" color="text-muted">Page {page} of {pages}</text-at>
+            </layer>
+            <markdown margin="54pt">
+                <markdown-content data-value="markdown"/>
+            </markdown>
+        </section>
+    </document>
+</lpdf>
