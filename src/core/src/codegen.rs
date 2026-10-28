@@ -366,9 +366,9 @@ fn code_pieces<'a, 'i>(node: &Node<'a, 'i>) -> Vec<TextPiece<'a, 'i>> {
 /// The content of a `text`, `text-at`, `span` or `fn`, split as the engine reads it (`read_text_runs` in `parse.rs`).
 ///
 /// The words of each stretch of text are one string, and a space falls between two runs where the XML has
-/// whitespace there: at the end of a string before a span, at the start of one after a span, or as a string of
-/// its own between two spans. The SDKs read the strings and spans of a built text the same way, so the code
-/// renders the PDF of the XML. Whitespace at either end of the content is dropped, and so is a span's own.
+/// whitespace there, inside a span's edge or outside it: at the end of a string before a span, at the start of
+/// one after a span, or as a string of its own between two spans. The SDKs read the strings and spans of a built
+/// text the same way, so the code renders the PDF of the XML. Whitespace at either end of the content is dropped.
 fn text_pieces<'a, 'i>(node: &Node<'a, 'i>) -> Vec<TextPiece<'a, 'i>> {
     enum Run<'a, 'i> {
         Plain(String),
@@ -409,7 +409,7 @@ fn text_pieces<'a, 'i>(node: &Node<'a, 'i>) -> Vec<TextPiece<'a, 'i>> {
             NodeType::Element if matches!(child.tag_name().name(), "span" | "code-span") => {
                 let raw: String = child.children().filter(|n| n.is_text()).filter_map(|n| n.text()).collect();
                 if !collapse_whitespace(&raw).is_empty() {
-                    runs.push((Run::Span(child), prev_ended_space));
+                    runs.push((Run::Span(child), raw.starts_with(char::is_whitespace) || prev_ended_space));
                 }
                 prev_ended_space = raw.ends_with(char::is_whitespace);
             }
@@ -2214,10 +2214,10 @@ mod tests {
     }
 
     #[test]
-    fn test_a_spans_own_edges_do_not_make_spaces() {
-        // The engine ignores whitespace at the start of a span, and keeps one at its end for what follows.
+    fn test_the_whitespace_at_a_spans_edges_is_written_beside_it() {
+        // The engine reads whitespace at either edge of a span as a space between the span and its neighbour.
         let out = text_code("js", "text", r#"Total:<span bold="true"> 5</span>"#);
-        assert!(out.contains("'Total:',"), "{out}");
+        assert!(out.contains("'Total: ',"), "{out}");
         assert!(out.contains("['5']"), "{out}");
         let out = text_code("js", "text", r#"<span bold="true">a </span>b"#);
         assert!(out.contains("['a']"), "{out}");
@@ -2309,6 +2309,8 @@ mod tests {
             r#"<span bold="true">a </span><span underline="true">b</span>"#,
             r#"<span bold="true">a </span>b"#,
             r#"Total:<span bold="true"> 5</span>"#,
+            r#"<span bold="true">a</span><span underline="true"> b</span>"#,
+            r#"<span bold="true">per </span><code-span>x</code-span><span bold="true"> call</span>"#,
             r#"Total<fn>The note.</fn> is five."#,
             r#"Total <fn>The <span bold="true">note</span> here.</fn>and more"#,
             r#"A<fn>One.</fn><fn>Two.</fn> b"#,

@@ -1515,6 +1515,13 @@ mod tests {
     }
 
     #[test]
+    fn inline_code_in_bold_or_italic_keeps_the_spaces_around_it() {
+        for markdown in ["**per `text_width` call.**\n", "*per `text_width` call.*\n"] {
+            assert_eq!(words(&nodes(markdown)[0]), "per text_width call.", "{markdown}");
+        }
+    }
+
+    #[test]
     fn a_thematic_break_is_a_divider() {
         let nodes = nodes("above\n\n---\n\nbelow\n");
         assert_eq!(nodes.iter().map(|n| n.kind.clone()).collect::<Vec<_>>(), [NodeKind::Text, NodeKind::Divider, NodeKind::Text]);

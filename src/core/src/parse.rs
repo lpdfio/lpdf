@@ -2124,7 +2124,7 @@ fn read_runs(runs: &mut Vec<TextRun>, elem: &roxmltree::Node, tokens: &Tokens, n
             if !span_text.is_empty() {
                 runs.push(TextRun {
                     text: span_text,
-                    leading_space: prev_ended_space,
+                    leading_space: raw_span.starts_with(char::is_whitespace) || prev_ended_space,
                     font:  child.attribute("font").map(|s| s.to_string()),
                     color: if let Some(v) = child.attribute("color") {
                         Some(tokens.resolve_color(v)?)
@@ -2148,7 +2148,8 @@ fn read_runs(runs: &mut Vec<TextRun>, elem: &roxmltree::Node, tokens: &Tokens, n
                 .collect();
             let span_text = raw_span.split_whitespace().collect::<Vec<_>>().join(" ");
             if !span_text.is_empty() {
-                runs.push(code_span_run(&child, span_text, prev_ended_space, tokens)?);
+                let leading_space = raw_span.starts_with(char::is_whitespace) || prev_ended_space;
+                runs.push(code_span_run(&child, span_text, leading_space, tokens)?);
             }
             prev_ended_space = raw_span.ends_with(char::is_whitespace);
         } else if child.is_element() && child.tag_name().name() == "fn" {
@@ -2212,9 +2213,10 @@ fn read_tree_runs(runs: &mut Vec<TextRun>, json: &serde_json::Value, tokens: &To
             .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
             .unwrap_or_default();
         let span_text = raw_span.split_whitespace().collect::<Vec<_>>().join(" ");
+        let leading_space = raw_span.starts_with(char::is_whitespace) || prev_ended_space;
         if kind == Some("code-span") {
             if !span_text.is_empty() {
-                runs.push(code_span_run(&JsonAttrs(child), span_text, prev_ended_space, tokens)?);
+                runs.push(code_span_run(&JsonAttrs(child), span_text, leading_space, tokens)?);
             }
             prev_ended_space = raw_span.ends_with(char::is_whitespace);
             continue;
@@ -2226,7 +2228,7 @@ fn read_tree_runs(runs: &mut Vec<TextRun>, json: &serde_json::Value, tokens: &To
             };
             runs.push(TextRun {
                 text: span_text,
-                leading_space: prev_ended_space,
+                leading_space,
                 font:      jattr(child, "font").map(str::to_string),
                 color,
                 href:      jattr(child, "href").map(str::to_string),
@@ -4085,6 +4087,50 @@ mod tests {
         assert_eq!(run.font.as_deref(), Some("Times-Roman"));
         assert_eq!(run.color.as_deref(), Some("#336699"));
         assert_eq!(run.background.as_deref(), Some("#ffff00"));
+    }
+
+    /// The words of each run of a text, and whether a space leads it.
+    fn spaced_runs(text: &Node) -> Vec<(&str, bool)> {
+        text.text_runs.iter().map(|r| (r.text.as_str(), r.leading_space)).collect()
+    }
+
+    /// The first node of a kit tree whose layout holds `child`.
+    fn first_tree_node(child: &str) -> Node {
+        let tree = format!(
+            r#"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
+                {{"type":"layout","attrs":{{}},"nodes":[{child}]}}]}}]}}"#
+        );
+        let mut doc = parse_tree(&tree).unwrap();
+        doc.section_layouts().remove(0).children.remove(0)
+    }
+
+    #[test]
+    fn a_span_or_a_code_span_that_starts_with_a_space_keeps_it_after_another() {
+        let xml = first_node(concat!(
+            r#"<text><span bold="true">per </span><code-span>x</code-span><span bold="true"> call</span>"#,
+            r#"<span> a</span><code-span> b</code-span><code-span> c</code-span></text>"#,
+        ));
+        let tree = first_tree_node(concat!(
+            r#"{"type":"text","attrs":{},"nodes":[{"type":"span","attrs":{"bold":"true"},"nodes":["per "]},"#,
+            r#"{"type":"code-span","attrs":{},"nodes":["x"]},{"type":"span","attrs":{"bold":"true"},"nodes":[" call"]},"#,
+            r#"{"type":"span","attrs":{},"nodes":[" a"]},{"type":"code-span","attrs":{},"nodes":[" b"]},"#,
+            r#"{"type":"code-span","attrs":{},"nodes":[" c"]}]}"#,
+        ));
+        let spaced = [("per", false), ("x", true), ("call", true), ("a", true), ("b", true), ("c", true)];
+        assert_eq!(spaced_runs(&xml), spaced, "XML");
+        assert_eq!(spaced_runs(&tree), spaced, "kit tree");
+    }
+
+    #[test]
+    fn no_space_is_added_after_a_code_span_where_the_source_has_none() {
+        let xml = first_node(r#"<text>the <code-span>x</code-span>'s and <code-span>y</code-span><span bold="true">'s</span></text>"#);
+        let tree = first_tree_node(concat!(
+            r#"{"type":"text","attrs":{},"nodes":["the ",{"type":"code-span","attrs":{},"nodes":["x"]},"'s and ","#,
+            r#"{"type":"code-span","attrs":{},"nodes":["y"]},{"type":"span","attrs":{"bold":"true"},"nodes":["'s"]}]}"#,
+        ));
+        let attached = [("the", false), ("x", true), ("'s and", false), ("y", true), ("'s", false)];
+        assert_eq!(spaced_runs(&xml), attached, "XML");
+        assert_eq!(spaced_runs(&tree), attached, "kit tree");
     }
 
     #[test]
