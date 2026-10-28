@@ -787,7 +787,7 @@ pub(crate) fn look_alike(c: char) -> Option<char> {
 }
 
 /// Map a Unicode scalar to its Windows-1252 / WinAnsiEncoding byte value.
-fn win1252_byte(c: char) -> Option<u8> {
+pub(crate) fn win1252_byte(c: char) -> Option<u8> {
     let cp = c as u32;
     // ASCII and ISO-8859-1 upper half are identical in WinAnsiEncoding.
     if cp < 0x80 || (cp >= 0xA0 && cp <= 0xFF) {
@@ -3575,9 +3575,10 @@ mod tests {
         }
     }
 
-    const BUILT_IN_FONTS: [&str; 10] = [
+    const BUILT_IN_FONTS: [&str; 12] = [
         "Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
-        "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic", "Courier", "Courier-BoldOblique",
+        "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic",
+        "Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique",
     ];
 
     fn built_in(base_name: &'static str, signs: bool) -> PreparedFont {
@@ -3631,7 +3632,7 @@ mod tests {
     #[test]
     fn the_widths_are_the_adobe_metrics_so_that_a_viewer_advances_as_it_did_without_them() {
         let width = |font: &str, code: u8| widths_of(font)[usize::from(code) - 32];
-        // Printable ASCII, where the two quotes are what the font has and not what layout has: 191 and 333, not 222.
+        // Printable ASCII, the straight quote and the grave accent among them: 191 and 333, not the curly quotes' 222.
         assert_eq!([b' ', b'\'', b'`', b'A', b'i'].map(|code| width("Helvetica", code)), [278.0, 191.0, 333.0, 667.0, 222.0]);
         // Accented letters, and a bold one that is wider than its regular.
         assert_eq!([0xE9, 0xC1, 0xDF].map(|code| width("Helvetica", code)), [556.0, 667.0, 611.0]);
@@ -3656,23 +3657,20 @@ mod tests {
     }
 
     #[test]
-    fn the_metrics_differ_from_layouts_widths_of_ascii_in_nine_places_only() {
-        // Layout measures the straight quote and the grave accent as the curly quotes, which are the codes they have in a
-        // standard encoding, and has 556 for the g of Times-BoldItalic, where the metrics have 500. They stay as
-        // they are, since text in existing documents would move.
-        let mut differs = Vec::new();
-        for font in ["Helvetica", "Helvetica-Bold", "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic"] {
-            for code in 32..=126u8 {
-                if crate::layout::afm_code_advance(font, code) != crate::layout::builtin_char_advance(font, char::from(code)) {
-                    differs.push((font, char::from(code)));
-                }
+    fn layout_measures_every_character_of_windows_1252_with_the_width_the_metrics_give_its_code() {
+        let drawn: Vec<(char, u8)> = (0..=0xFFFF)
+            .filter_map(char::from_u32)
+            .filter_map(|c| win1252_byte(c).filter(|&code| code >= WIN_ANSI_FIRST).map(|code| (c, code)))
+            .collect();
+        // Every code from the space has a character but the five that WinAnsiEncoding leaves empty.
+        let codes: HashSet<u8> = drawn.iter().map(|&(_, code)| code).collect();
+        assert_eq!(codes, (WIN_ANSI_FIRST..=u8::MAX).filter(|code| ![0x81, 0x8D, 0x8F, 0x90, 0x9D].contains(code)).collect());
+        for font in BUILT_IN_FONTS {
+            for &(c, code) in &drawn {
+                let metrics = crate::layout::afm_code_advance(font, code).map(f32::from);
+                assert_eq!(Some(crate::layout::text_width(font, &c.to_string(), 1000.0).round()), metrics, "{font}: {c:?}");
             }
         }
-        assert_eq!(differs, vec![
-            ("Helvetica", '\''), ("Helvetica", '`'), ("Helvetica-Bold", '\''), ("Helvetica-Bold", '`'),
-            ("Times-Roman", '\''), ("Times-Bold", '\''), ("Times-Italic", '\''),
-            ("Times-BoldItalic", '\''), ("Times-BoldItalic", 'g'),
-        ]);
     }
 
     #[test]
