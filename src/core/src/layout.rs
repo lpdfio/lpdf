@@ -3298,213 +3298,6 @@ fn layout_divider(
 
 // ── Text ──────────────────────────────────────────────────────────────────────
 
-// ── Built-in font metrics (Adobe AFM data) ────────────────────────────────────
-//
-// Glyph advance widths in units of 1/1000 of the point size, indexed by
-// (char_code − 32) for ASCII printable characters 32–126 (95 entries).
-// Source: Adobe AFM files for the 14 standard PDF built-in fonts.
-
-pub(crate) fn builtin_char_advance(font: &str, c: char) -> Option<u16> {
-    let cp = c as u32;
-
-    // ── ASCII range U+0020..=U+007E ──────────────────────────────────────────
-    if (32..=126).contains(&cp) {
-        let idx = (cp - 32) as usize;
-    #[rustfmt::skip]
-    static HELVETICA: [u16; 95] = [
-    //  sp    !    "    #    $    %    &    '    (    )    *    +    ,    -    .    /
-       278, 278, 355, 556, 556, 889, 667, 222, 333, 333, 389, 584, 278, 333, 278, 278,
-    //   0    1    2    3    4    5    6    7    8    9    :    ;    <    =    >    ?
-       556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556,
-    //   @    A    B    C    D    E    F    G    H    I    J    K    L    M    N    O
-      1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778,
-    //   P    Q    R    S    T    U    V    W    X    Y    Z    [    \    ]    ^    _
-       667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556,
-    //   `    a    b    c    d    e    f    g    h    i    j    k    l    m    n    o
-       222, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556,
-    //   p    q    r    s    t    u    v    w    x    y    z    {    |    }    ~
-       556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584,
-    ];
-
-    #[rustfmt::skip]
-    static HELVETICA_BOLD: [u16; 95] = [
-    //  sp    !    "    #    $    %    &    '    (    )    *    +    ,    -    .    /
-       278, 333, 474, 556, 556, 889, 722, 278, 333, 333, 389, 584, 278, 333, 278, 278,
-    //   0    1    2    3    4    5    6    7    8    9    :    ;    <    =    >    ?
-       556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584, 584, 611,
-    //   @    A    B    C    D    E    F    G    H    I    J    K    L    M    N    O
-       975, 722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778,
-    //   P    Q    R    S    T    U    V    W    X    Y    Z    [    \    ]    ^    _
-       667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 333, 278, 333, 584, 556,
-    //   `    a    b    c    d    e    f    g    h    i    j    k    l    m    n    o
-       278, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611,
-    //   p    q    r    s    t    u    v    w    x    y    z    {    |    }    ~
-       611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584,
-    ];
-
-    #[rustfmt::skip]
-    static TIMES_ROMAN: [u16; 95] = [
-    //  sp    !    "    #    $    %    &    '    (    )    *    +    ,    -    .    /
-       250, 333, 408, 500, 500, 833, 778, 333, 333, 333, 500, 564, 250, 333, 250, 278,
-    //   0    1    2    3    4    5    6    7    8    9    :    ;    <    =    >    ?
-       500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 278, 278, 564, 564, 564, 444,
-    //   @    A    B    C    D    E    F    G    H    I    J    K    L    M    N    O
-       921, 722, 667, 667, 722, 611, 556, 722, 722, 333, 389, 722, 611, 889, 722, 722,
-    //   P    Q    R    S    T    U    V    W    X    Y    Z    [    \    ]    ^    _
-       556, 722, 667, 556, 611, 722, 722, 944, 722, 722, 611, 333, 278, 333, 469, 500,
-    //   `    a    b    c    d    e    f    g    h    i    j    k    l    m    n    o
-       333, 444, 500, 444, 500, 444, 333, 500, 500, 278, 278, 500, 278, 778, 500, 500,
-    //   p    q    r    s    t    u    v    w    x    y    z    {    |    }    ~
-       500, 500, 333, 389, 278, 500, 500, 722, 500, 500, 444, 480, 200, 480, 541,
-    ];
-
-    #[rustfmt::skip]
-    static TIMES_BOLD: [u16; 95] = [
-    //  sp    !    "    #    $    %    &    '    (    )    *    +    ,    -    .    /
-       250, 333, 555, 500, 500,1000, 833, 333, 333, 333, 500, 570, 250, 333, 250, 278,
-    //   0    1    2    3    4    5    6    7    8    9    :    ;    <    =    >    ?
-       500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 333, 333, 570, 570, 570, 500,
-    //   @    A    B    C    D    E    F    G    H    I    J    K    L    M    N    O
-       930, 722, 667, 722, 722, 667, 611, 778, 778, 389, 500, 778, 667, 944, 722, 778,
-    //   P    Q    R    S    T    U    V    W    X    Y    Z    [    \    ]    ^    _
-       611, 778, 722, 556, 667, 722, 722,1000, 722, 722, 667, 333, 278, 333, 581, 500,
-    //   `    a    b    c    d    e    f    g    h    i    j    k    l    m    n    o
-       333, 500, 556, 444, 556, 444, 333, 500, 556, 278, 333, 556, 278, 833, 556, 500,
-    //   p    q    r    s    t    u    v    w    x    y    z    {    |    }    ~
-       556, 556, 444, 389, 333, 556, 500, 722, 500, 500, 444, 394, 220, 394, 520,
-    ];
-
-    #[rustfmt::skip]
-    static TIMES_ITALIC: [u16; 95] = [
-    //  sp    !    "    #    $    %    &    '    (    )    *    +    ,    -    .    /
-       250, 333, 420, 500, 500, 833, 778, 333, 333, 333, 500, 675, 250, 333, 250, 278,
-    //   0    1    2    3    4    5    6    7    8    9    :    ;    <    =    >    ?
-       500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 333, 333, 675, 675, 675, 500,
-    //   @    A    B    C    D    E    F    G    H    I    J    K    L    M    N    O
-       920, 611, 611, 667, 722, 611, 611, 722, 722, 333, 444, 667, 556, 833, 667, 722,
-    //   P    Q    R    S    T    U    V    W    X    Y    Z    [    \    ]    ^    _
-       611, 722, 611, 500, 556, 722, 611, 833, 611, 556, 556, 389, 278, 389, 422, 500,
-    //   `    a    b    c    d    e    f    g    h    i    j    k    l    m    n    o
-       333, 500, 500, 444, 500, 444, 278, 500, 500, 278, 278, 444, 278, 722, 500, 500,
-    //   p    q    r    s    t    u    v    w    x    y    z    {    |    }    ~
-       500, 500, 389, 389, 278, 500, 444, 667, 444, 444, 389, 400, 275, 400, 541,
-    ];
-
-    #[rustfmt::skip]
-    static TIMES_BOLD_ITALIC: [u16; 95] = [
-    //  sp    !    "    #    $    %    &    '    (    )    *    +    ,    -    .    /
-       250, 389, 555, 500, 500, 833, 778, 333, 333, 333, 500, 570, 250, 333, 250, 278,
-    //   0    1    2    3    4    5    6    7    8    9    :    ;    <    =    >    ?
-       500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 333, 333, 570, 570, 570, 500,
-    //   @    A    B    C    D    E    F    G    H    I    J    K    L    M    N    O
-       832, 667, 667, 667, 722, 667, 667, 722, 778, 389, 500, 667, 611, 889, 722, 722,
-    //   P    Q    R    S    T    U    V    W    X    Y    Z    [    \    ]    ^    _
-       611, 722, 667, 556, 611, 722, 667, 889, 667, 611, 611, 333, 278, 333, 570, 500,
-    //   `    a    b    c    d    e    f    g    h    i    j    k    l    m    n    o
-       333, 500, 500, 444, 500, 444, 333, 556, 556, 278, 278, 500, 278, 778, 556, 500,
-    //   p    q    r    s    t    u    v    w    x    y    z    {    |    }    ~
-       500, 500, 389, 389, 278, 556, 444, 667, 500, 444, 389, 348, 220, 348, 570,
-    ];
-
-        let table: &[u16; 95] = match font {
-            "Helvetica" | "Helvetica-Oblique"          => &HELVETICA,
-            "Helvetica-Bold" | "Helvetica-BoldOblique" => &HELVETICA_BOLD,
-            "Times-Roman"                              => &TIMES_ROMAN,
-            "Times-Bold"                               => &TIMES_BOLD,
-            "Times-Italic"                             => &TIMES_ITALIC,
-            "Times-BoldItalic"                         => &TIMES_BOLD_ITALIC,
-            _ => return None,
-        };
-        return Some(table[idx]);
-    }
-
-    // ── Extended WinAnsiEncoding characters (U+0080 and above) ──────────────
-    // AFM widths (per 1/1000 em) for the standard PDF built-in Type 1 fonts.
-    // Sources: Adobe standard AFM files for Helvetica and Times-Roman families.
-    let hv = matches!(font, "Helvetica"|"Helvetica-Oblique"|"Helvetica-Bold"|"Helvetica-BoldOblique");
-    let tr = matches!(font, "Times-Roman"|"Times-Bold"|"Times-Italic"|"Times-BoldItalic");
-    if !hv && !tr { return None; }
-
-    // Helper: select between Helvetica and Times values.
-    macro_rules! hv_tr { ($h:expr, $t:expr) => { if hv { $h } else { $t } }; }
-
-    Some(match c {
-        // ── Typographic punctuation ──────────────────────────────────────────
-        '\u{2013}' => hv_tr!(556,  500), // en dash –
-        '\u{2014}' => 1000,              // em dash —  (1 em in all standard fonts)
-        '\u{2018}' | '\u{2019}' => hv_tr!(222, 333), // ' '  left/right single quotation mark
-        '\u{201C}' | '\u{201D}' => hv_tr!(333, 444), // " "  left/right double quotation mark
-        '\u{201A}' | '\u{201E}' => hv_tr!(222, 333), // ‚ „  low-9 quotation marks
-        '\u{2026}' => 1000,              // …  ellipsis
-        '\u{2022}' => hv_tr!(556, 500), // •  bullet
-        '\u{2020}' | '\u{2021}' => hv_tr!(556, 500), // † ‡  dagger / double dagger
-        '\u{2030}' => 1000,              // ‰  per mille
-        '\u{2039}' | '\u{203A}' => hv_tr!(278, 333), // ‹ ›  single guillemets
-        '\u{00AB}' | '\u{00BB}' => hv_tr!(556, 500), // «  »  guillemots
-        '\u{2122}' => hv_tr!(1000, 980), // ™  trademark
-        '\u{00A9}' | '\u{00AE}' => hv_tr!(737, 760), // © ®  copyright / registered
-        '\u{00B0}' => hv_tr!(400, 400),  // °  degree
-        '\u{00B1}' => hv_tr!(584, 564),  // ±  plus-minus
-        '\u{00D7}' | '\u{00F7}' => hv_tr!(584, 564), // × ÷  multiply / divide
-        '\u{00A0}' => hv_tr!(278, 250),  // non-breaking space
-        '\u{00AD}' => hv_tr!(333, 333),  // soft hyphen (same as hyphen)
-        '\u{20AC}' => hv_tr!(556, 500),  // €  euro
-        '\u{0192}' => hv_tr!(556, 500),  // ƒ  florin
-        '\u{02C6}' | '\u{02DC}' => hv_tr!(333, 333), // ˆ ˜  circumflex / tilde accent
-        // ── Letterlike symbols ───────────────────────────────────────────────
-        '\u{00A6}' => hv_tr!(260, 200),  // ¦  broken bar
-        '\u{00A7}' => hv_tr!(556, 500),  // §  section
-        '\u{00B6}' => hv_tr!(556, 556),  // ¶  pilcrow
-        '\u{00B7}' => hv_tr!(278, 250),  // ·  middle dot
-        '\u{00A2}' => hv_tr!(556, 500),  // ¢  cent
-        '\u{00A3}' => hv_tr!(556, 500),  // £  sterling
-        '\u{00A5}' => hv_tr!(556, 500),  // ¥  yen
-        '\u{00B9}' | '\u{00B2}' | '\u{00B3}' => hv_tr!(333, 300), // superscripts 1 2 3
-        '\u{00BC}' | '\u{00BD}' | '\u{00BE}' => hv_tr!(834, 750), // fractions ¼ ½ ¾
-        '\u{00AA}' => hv_tr!(370, 276),  // ª  ordinal feminine
-        '\u{00BA}' => hv_tr!(365, 310),  // º  ordinal masculine
-        '\u{00AC}' => hv_tr!(584, 564),  // ¬  logical not
-        // ── OE / oe ligatures, special letters ───────────────────────────────
-        '\u{0152}' => hv_tr!(1000, 1000), // Œ
-        '\u{0153}' => hv_tr!( 833,  722), // œ
-        '\u{0160}' => hv_tr!( 667,  556), // Š
-        '\u{0161}' => hv_tr!( 500,  389), // š
-        '\u{017D}' => hv_tr!( 611,  611), // Ž
-        '\u{017E}' => hv_tr!( 500,  444), // ž
-        '\u{0178}' => hv_tr!( 667,  722), // Ÿ
-        '\u{00DF}' => hv_tr!( 611,  500), // ß  sharp S
-        // ── Accented uppercase letters ───────────────────────────────────────
-        '\u{00C0}'..='\u{00C5}' => hv_tr!(667, 722), // À Á Â Ã Ä Å  (A-variants)
-        '\u{00C6}' => hv_tr!(1000, 889),              // Æ
-        '\u{00C7}' => hv_tr!( 722, 667),              // Ç
-        '\u{00C8}'..='\u{00CB}' => hv_tr!(667, 611),  // È É Ê Ë  (E-variants)
-        '\u{00CC}'..='\u{00CF}' => hv_tr!(278, 333),  // Ì Í Î Ï  (I-variants)
-        '\u{00D0}' => hv_tr!(722, 722),               // Ð
-        '\u{00D1}' => hv_tr!(722, 722),               // Ñ
-        '\u{00D2}'..='\u{00D6}' => hv_tr!(778, 722),  // Ò Ó Ô Õ Ö  (O-variants)
-        '\u{00D8}' => hv_tr!(778, 722),               // Ø
-        '\u{00D9}'..='\u{00DC}' => hv_tr!(722, 722),  // Ù Ú Û Ü  (U-variants)
-        '\u{00DD}' => hv_tr!(667, 722),               // Ý
-        '\u{00DE}' => hv_tr!(667, 556),               // Þ
-        // ── Accented lowercase letters ───────────────────────────────────────
-        '\u{00E0}'..='\u{00E5}' => hv_tr!(556, 444),  // à á â ã ä å  (a-variants)
-        '\u{00E6}' => hv_tr!(889, 667),               // æ
-        '\u{00E7}' => hv_tr!(500, 444),               // ç
-        '\u{00E8}'..='\u{00EB}' => hv_tr!(556, 444),  // è é ê ë  (e-variants)
-        '\u{00EC}'..='\u{00EF}' => hv_tr!(222, 278),  // ì í î ï  (i-variants)
-        '\u{00F0}' => hv_tr!(556, 500),               // ð
-        '\u{00F1}' => hv_tr!(556, 500),               // ñ
-        '\u{00F2}'..='\u{00F6}' => hv_tr!(556, 500),  // ò ó ô õ ö  (o-variants)
-        '\u{00F8}' => hv_tr!(556, 500),               // ø
-        '\u{00F9}'..='\u{00FC}' => hv_tr!(556, 500),  // ù ú û ü  (u-variants)
-        '\u{00FD}' | '\u{00FF}' => hv_tr!(500, 500),  // ý ÿ
-        '\u{00FE}' => hv_tr!(556, 500),               // þ
-        // fi / fl ligatures
-        '\u{FB01}' | '\u{FB02}' => hv_tr!(500, 556),
-        _ => return None,
-    })
-}
-
 // ── The widths of the codes of WinAnsiEncoding in the Adobe metrics ─────────────
 //
 // How far a viewer advances for each code from the space to 255 when a built-in font has no `/Widths`, in
@@ -3512,10 +3305,9 @@ pub(crate) fn builtin_char_advance(font: &str, c: char) -> Option<u16> {
 // upright). WinAnsiEncoding draws a bullet for the codes it leaves empty, so they have the bullet's width.
 // Courier is 600 for every code.
 //
-// `builtin_char_advance` has values of its own from U+0080 up, and for two characters of Helvetica, which are
-// close to these but differ in places (a bold accented letter has the width of its regular one). They stay as they
-// are, since the text of every document that uses them would move. A font written with a `/Widths`, as the one
-// that draws comparison signs is (`pdf::write_sign_encoding`), takes these, so that a viewer advances as it always did.
+// Layout measures a character by the width of the code it is drawn with (`builtin_char_advance`), and a font
+// written with a `/Widths`, as the one that draws comparison signs is (`pdf::write_sign_encoding`), takes these
+// too, so that a viewer advances as layout measured.
 
 #[rustfmt::skip]
 static AFM_HELVETICA: [u16; 224] = [
@@ -3726,6 +3518,13 @@ pub(crate) fn afm_code_advance(font: &str, code: u8) -> Option<u16> {
         _ => return None,
     };
     Some(table[index])
+}
+
+/// How far a built-in font advances for a character, in thousandths of the size: the width of the code of
+/// Windows-1252 that it is drawn with. None for a character Windows-1252 has no code for, and for a font that is
+/// not of the Helvetica, Times or Courier families.
+pub(crate) fn builtin_char_advance(font: &str, c: char) -> Option<u16> {
+    crate::pdf::win1252_byte(c).and_then(|code| afm_code_advance(font, code))
 }
 
 /// Measure the advance width (in pt) of a string at the given font and size.
