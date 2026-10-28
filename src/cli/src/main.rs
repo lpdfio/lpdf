@@ -78,7 +78,7 @@ fn cmd_codegen(args: &[String]) {
     });
     let elapsed = t0.elapsed().as_secs_f64();
 
-    let out_path = match output {
+    match output {
         Some(ref p) => {
             if let Some(parent) = p.parent() {
                 if !parent.as_os_str().is_empty() {
