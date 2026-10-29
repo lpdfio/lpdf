@@ -89,7 +89,9 @@ const GLIBC_TUNABLES: &str =
     "glibc.malloc.top_pad=268435456:glibc.malloc.trim_threshold=4294967296";
 
 /// Callgrind only. DHAT under Gungraun keeps an allocation only when the benchmark's frame is among the
-/// 12 innermost of its stack, so it misses nearly all of layout's: `allocations.rs` counts them.
+/// innermost of its stack, 12 by default, so it misses nearly all of layout's: `allocations.rs` counts
+/// them. `scripts/bench-counts.sh` runs this binary under DHAT once more, with whole stacks, for the
+/// profiles only.
 fn config() -> LibraryBenchmarkConfig {
     let mut config = LibraryBenchmarkConfig::default();
     config.env("GLIBC_TUNABLES", GLIBC_TUNABLES);

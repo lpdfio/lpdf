@@ -18,6 +18,10 @@ run-name: "${{ inputs.tags && format('Bench counts: backfill {0}', inputs.tags) 
 #   Run workflow     with tags: the backfill of the history. Each tag is measured against the
 #                    release before it, and its counts are saved to lpdf-bench.
 #
+# Each build's profiles are kept in the artifact bench-counts-profiles, to read a change function by
+# function: the Callgrind profile of each benchmark for callgrind_annotate, and a DHAT profile with
+# whole stacks for dh_view.html (scripts/bench-counts.sh).
+#
 # A release, and each tag of a backfill, saves its counts to lpdf-bench as counts/vX.Y.Z.json, with
 # those of the release before it, measured in the same run (job "history"), and writes
 # counts/SUMMARY.md there: a row for each release, to see how the core moved over the releases.
@@ -201,7 +205,8 @@ jobs:
           # Stdin is the list of builds, so nothing in the loop may read it.
           while read -r folder commit name; do
             git worktree add --detach "$RUNNER_TEMP/build" "$commit" < /dev/null
-            if ! sh scripts/bench-counts.sh "$RUNNER_TEMP/build" "$RUNNER_TEMP/counts/$folder" "$name" < /dev/null; then
+            if ! sh scripts/bench-counts.sh "$RUNNER_TEMP/build" "$RUNNER_TEMP/counts/$folder" "$name" \
+              "$RUNNER_TEMP/profiles/$folder" < /dev/null; then
               echo "::error::$name ($commit) could not be built or measured: see the log above."
               mkdir -p "$RUNNER_TEMP/counts/$folder"
               echo "$name did not build or run with the benchmarks of this run" > "$RUNNER_TEMP/counts/$folder/failed"
@@ -262,6 +267,14 @@ jobs:
             ${{ runner.temp }}/counts/
             ${{ runner.temp }}/report/
             ${{ runner.temp }}/history/
+          if-no-files-found: ignore
+
+      # Apart from bench-counts, which the history job downloads.
+      - uses: actions/upload-artifact@v6
+        if: ${{ always() }}
+        with:
+          name: bench-counts-profiles
+          path: ${{ runner.temp }}/profiles/
           if-no-files-found: ignore
 
       - name: Comment on the branch's PR

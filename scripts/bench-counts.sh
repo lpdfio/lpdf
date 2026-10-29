@@ -3,7 +3,7 @@
 # as bench.yml does for each build it compares: the instructions under Valgrind (benches/counts.rs),
 # the allocations with a counting allocator (benches/allocations.rs).
 #
-#   sh scripts/bench-counts.sh <checkout> <out folder> <name>
+#   sh scripts/bench-counts.sh <checkout> <out folder> <name> [<profiles folder>]
 #
 # Copies this repo's benches/counts into <checkout>, a worktree of the build, so that every build of a
 # run is measured by the same benchmarks, and gives it <checkout>'s Cargo.lock, so that each build
@@ -14,19 +14,27 @@
 #   allocations.jsonl   a JSON line for each benchmark: allocations, bytes allocated and peak memory
 #   build.json          {"name": <name>, "commit": <checkout's HEAD>}
 #
-# which scripts/bench-counts-report.mjs reads. Needs Linux on x86-64, Valgrind, Node, and the
+# which scripts/bench-counts-report.mjs reads. Given a <profiles folder>, it keeps there the profiles
+# of each benchmark, to read function by function: Gungraun's output folder, with the Callgrind
+# profiles of the counted run (callgrind_annotate) and, from a second run under DHAT with whole stacks,
+# the DHAT profiles (dh_view.html), with dhat.jsonl, gungraun's JSON line for each. Needs Linux on x86-64, Valgrind, Node, and the
 # gungraun-runner of the version benches/counts/Cargo.toml pins:
 #   cargo install gungraun-runner --version <that version> --locked
 set -eu
 
-if [ $# -ne 3 ]; then
-  echo "usage: sh scripts/bench-counts.sh <checkout> <out folder> <name>" >&2
+if [ $# -ne 3 ] && [ $# -ne 4 ]; then
+  echo "usage: sh scripts/bench-counts.sh <checkout> <out folder> <name> [<profiles folder>]" >&2
   exit 2
 fi
 CHECKOUT=$(cd "$1" && pwd)
 mkdir -p "$2"
 OUT=$(cd "$2" && pwd)
 NAME=$3
+PROFILES=""
+if [ $# -eq 4 ]; then
+  mkdir -p "$4"
+  PROFILES=$(cd "$4" && pwd)
+fi
 HARNESS=$(cd "$(dirname "$0")/../benches/counts" && pwd)
 LIB="$CHECKOUT/src/core/src/lib.rs"
 
@@ -53,6 +61,16 @@ cd "$CHECKOUT/benches/counts"
 cargo bench --bench counts $FEATURES -- --output-format=json --parallel=auto > "$OUT/summary.jsonl"
 # shellcheck disable=SC2086
 cargo bench --bench allocations $FEATURES > "$OUT/allocations.jsonl"
+
+if [ -n "$PROFILES" ]; then
+  # DHAT only here, after the counted run: the instruction runs keep Callgrind only. 500 frames, Valgrind's
+  # most, since DHAT drops an allocation whose stack it cuts off below the benchmark's frame.
+  # shellcheck disable=SC2086
+  cargo bench --bench counts $FEATURES -- --default-tool=dhat --dhat-args=--num-callers=500 \
+    --output-format=json --parallel=auto > "$PROFILES/dhat.jsonl"
+  cp -R target/gungraun/. "$PROFILES/"
+  echo ">>> $NAME: profiles in $PROFILES ($(du -sh "$PROFILES" | cut -f1))"
+fi
 
 node -e 'process.stdout.write(JSON.stringify({ name: process.argv[1], commit: process.argv[2] }) + "\n")' \
   "$NAME" "$COMMIT" > "$OUT/build.json"
