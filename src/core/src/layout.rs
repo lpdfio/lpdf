@@ -1997,10 +1997,11 @@ fn break_wide_toks(toks: Vec<Tok>, font_size: f32, wrap_w: f32) -> Vec<Tok> {
     let mut out = Vec::with_capacity(toks.len());
     for tok in toks {
         match tok {
-            Tok::Word(atom) if !atom.sup && word_width(&atom.font, &atom.text, font_size, false) > wrap_w + 0.01 => {
+            Tok::Word(atom) if !atom.sup && atom.width > wrap_w + 0.01 => {
                 for (i, (text, space)) in pieces_of_wide(&atom.font, &atom.text, font_size, wrap_w).into_iter().enumerate() {
                     let join = if i == 0 { Join::No } else if space { Join::Space } else { Join::Chars };
-                    out.push(Tok::Word(Atom { text, join, ..atom.clone() }));
+                    let width = text_width(&atom.font, &text, font_size);
+                    out.push(Tok::Word(Atom { text, join, width, ..atom.clone() }));
                 }
             }
             other => out.push(other),
@@ -3736,6 +3737,15 @@ struct Atom {
     /// Whether it goes on from the atom before it, a piece of a word or a run that was broken to fit a line, so a
     /// tint or a line under it reaches back across the gap.
     join:      Join,
+    /// Its width on the line (`word_width`), measured once when it is made.
+    width:     f32,
+}
+
+impl Atom {
+    /// Measure the atom's text again, after it changed.
+    fn measure(&mut self, font_size: f32) {
+        self.width = word_width(&self.font, &self.text, font_size, self.sup);
+    }
 }
 
 enum Tok { Space, Word(Atom) }
@@ -3768,15 +3778,15 @@ fn atom_spaces(atom: &Atom) -> usize {
 /// What a justified `line` adds to each of its gaps to end at `avail_w`: the spare width, shared evenly by the
 /// gaps between its words and inside its spans. 0.0 for a line with no gap, with no room to spare, or that
 /// would need more than `MAX_JUSTIFY_STRETCH` spaces of it.
-fn justify_gap(line: &TextLine, font_size: f32, avail_w: f32, space_w: f32) -> f32 {
+fn justify_gap(line: &TextLine, avail_w: f32, space_w: f32) -> f32 {
     let gaps: usize = line.iter().map(|(atom, gap)| usize::from(*gap > 0.0) + atom_spaces(atom)).sum();
     if gaps == 0 { return 0.0; }
-    let per_gap = (avail_w - text_line_width(line, font_size)) / gaps as f32;
+    let per_gap = (avail_w - text_line_width(line)) / gaps as f32;
     if per_gap <= 0.01 || per_gap > MAX_JUSTIFY_STRETCH * space_w { 0.0 } else { per_gap }
 }
 
-fn text_line_width(line: &TextLine, font_size: f32) -> f32 {
-    line.iter().map(|(atom, gap)| gap + word_width(&atom.font, &atom.text, font_size, atom.sup)).sum()
+fn text_line_width(line: &TextLine) -> f32 {
+    line.iter().map(|(atom, gap)| gap + atom.width).sum()
 }
 
 /// Shorten `line` until it and the dots after it fit in `limit`, and end it in them. The last characters go
@@ -3784,14 +3794,15 @@ fn text_line_width(line: &TextLine, font_size: f32) -> f32 {
 fn end_in_ellipsis(line: &mut TextLine, limit: f32, font_size: f32) {
     while let Some((last, _)) = line.last() {
         let dots = text_width(&last.font, ELLIPSIS, font_size);
-        if text_line_width(line, font_size) + dots <= limit + 0.01 {
+        if text_line_width(line) + dots <= limit + 0.01 {
             if let Some((last, _)) = line.last_mut() {
                 last.text.push_str(ELLIPSIS);
+                last.measure(font_size);
             }
             return;
         }
         let emptied = match line.last_mut() {
-            Some((last, _)) => { last.text.pop(); last.text.is_empty() }
+            Some((last, _)) => { last.text.pop(); last.measure(font_size); last.text.is_empty() }
             None => false,
         };
         if emptied { line.pop(); }
@@ -3829,9 +3840,11 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
         if ri > 0 && run.leading_space { toks.push(Tok::Space); }
 
         if let Some(note) = &run.footnote {
+            let text = note.number.to_string();
+            let width = word_width(font, &text, font_size, true);
             toks.push(Tok::Word(Atom {
-                text: note.number.to_string(), font: font.to_string(), color,
-                href: None, underline: false, strike: false, background: None, sup: true, join: Join::No,
+                text, font: font.to_string(), color,
+                href: None, underline: false, strike: false, background: None, sup: true, join: Join::No, width,
             }));
         } else if is_span {
             if !run.text.is_empty() {
@@ -3839,6 +3852,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                     text: run.text.clone(), font: font.to_string(), color,
                     href: run.href.clone(), underline: run.underline, strike: run.strike,
                     background: run.background.clone(), sup: false, join: Join::No,
+                    width: text_width(font, &run.text, font_size),
                 }));
             }
         } else {
@@ -3847,6 +3861,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 toks.push(Tok::Word(Atom {
                     text: word.to_string(), font: font.to_string(), color: color.clone(),
                     href: None, underline: false, strike: false, background: None, sup: false, join: Join::No,
+                    width: text_width(font, word, font_size),
                 }));
             }
         }
@@ -3874,7 +3889,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
         match tok {
             Tok::Space => { pending_space = true; }
             Tok::Word(atom) => {
-                let aw  = word_width(&atom.font, &atom.text, font_size, atom.sup);
+                let aw  = atom.width;
                 let gap = if cur_line.is_empty() {
                     0.0
                 } else {
@@ -3892,7 +3907,8 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                     // words, so the line is filled and the run is not moved down whole.
                     for (i, word) in atom.text.split(' ').enumerate().collect::<Vec<_>>().into_iter().rev() {
                         let join = if i == 0 { atom.join } else { Join::Space };
-                        toks.push_front(Tok::Word(Atom { text: word.to_string(), join, ..atom.clone() }));
+                        let width = text_width(&atom.font, word, font_size);
+                        toks.push_front(Tok::Word(Atom { text: word.to_string(), join, width, ..atom.clone() }));
                     }
                     continue;
                 } else {
@@ -3910,7 +3926,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                     lines.push(std::mem::take(&mut cur_line));
                     cur_line_w = aw;
                     for (prev, _) in carried {
-                        cur_line_w += word_width(&prev.font, &prev.text, font_size, prev.sup);
+                        cur_line_w += prev.width;
                         cur_line.push((prev, 0.0));
                     }
                     cur_line.push((atom, 0.0));
@@ -3927,13 +3943,13 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     if let Some(max) = fit.max_lines { lines.truncate(max); }
     if fit.ellipsis {
         if let Some(last) = lines.last_mut() {
-            if cut || text_line_width(last, font_size) > avail_w + 0.01 {
+            if cut || text_line_width(last) > avail_w + 0.01 {
                 end_in_ellipsis(last, avail_w, font_size);
             }
         }
     }
     let overflow = fit.max_lines.is_some()
-        && lines.iter().any(|line| text_line_width(line, font_size) > avail_w + 0.01);
+        && lines.iter().any(|line| text_line_width(line) > avail_w + 0.01);
 
     let total_h = lines.len().max(node.reserve_lines()) as f32 * line_height;
     let mut all_nodes: Vec<RenderNode> = Vec::new();
@@ -3967,7 +3983,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
         // For justify, the last line is left-aligned (not stretched).
         let is_last_line  = li + 1 == lines.len();
         // Every word of the line is placed here, so a span moves with its neighbours.
-        let word_gap = if align_str == "justify" && !is_last_line { justify_gap(line, font_size, avail_w, space_w) } else { 0.0 };
+        let word_gap = if align_str == "justify" && !is_last_line { justify_gap(line, avail_w, space_w) } else { 0.0 };
         let eff_align_str = match (align_str, word_gap > 0.0) {
             ("justify", false) => "left",
             _                  => align_str,
@@ -3986,7 +4002,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
             cur_x += gap;
             if *gap > 0.0 { cur_x += word_gap; }
             let inner_gap = word_gap * atom_spaces(atom) as f32;
-            let aw = word_width(&atom.font, &atom.text, font_size, atom.sup) + inner_gap;
+            let aw = atom.width + inner_gap;
 
             let plain = atom.href.is_none() && !atom.underline && !atom.strike && !atom.sup && atom.background.is_none();
 
