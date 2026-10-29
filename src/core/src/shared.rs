@@ -35,7 +35,7 @@ pub(crate) fn extract_font_widths(bytes: &[u8]) -> Option<super::tokens::FontWid
     }
 
     let default = per_mille(ttf_parser::GlyphId(0));
-    Some(super::tokens::FontWidths { default, ascii: Vec::new(), advances: advances.into() })
+    Some(super::tokens::FontWidths::new(default, Vec::new(), advances))
 }
 
 /// Parse a JSON permissions object into an `encrypt::Permissions` value.

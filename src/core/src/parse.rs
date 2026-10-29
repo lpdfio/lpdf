@@ -386,12 +386,33 @@ fn check_bound_attrs(kind: &NodeKind, bound: &[(BoundAttr, String)]) -> Result<(
     }
 }
 
-/// The `data-<attr>` bindings an element carries, in `BoundAttr::ALL` order.
-fn read_bound_attrs(a: &impl Attrs) -> Vec<(BoundAttr, String)> {
-    BoundAttr::ALL
-        .iter()
-        .filter_map(|&attr| a.get(attr.data_attribute()).map(|path| (attr, path.to_owned())))
-        .collect()
+/// The data-binding attributes an element carries, read in one pass: `data-value`, `data-source`, `data-if`,
+/// `data-if-not`, and the `data-<attr>` bindings in `BoundAttr::ALL` order.
+fn read_data_attrs(a: &impl Attrs) -> DataAttrs {
+    let mut data = DataAttrs::default();
+    for (name, v) in a.each() {
+        let Some(attr) = name.strip_prefix("data-") else { continue };
+        match attr {
+            "value"  => data.data_value  = Some(v.to_owned()),
+            "source" => data.data_source = Some(v.to_owned()),
+            "if"     => data.data_if     = Some(v.to_owned()),
+            "if-not" => data.data_if_not = Some(v.to_owned()),
+            _ => {
+                if let Some(&bound) = BoundAttr::ALL.iter().find(|b| b.data_attribute() == name) {
+                    data.bound.push((bound, v.to_owned()));
+                }
+            }
+        }
+    }
+    data.bound.sort_by_key(|(bound, _)| BoundAttr::ALL.iter().position(|b| b == bound));
+    data
+}
+
+impl DataAttrs {
+    fn is_empty(&self) -> bool {
+        self.data_value.is_none() && self.data_source.is_none() && self.data_if.is_none()
+            && self.data_if_not.is_none() && self.bound.is_empty()
+    }
 }
 
 /// Which of the texts captured under a name on a page a `capture-ref` text shows.
@@ -1073,10 +1094,11 @@ fn resolve_node(
     // inheriting the text's font, which is already bold when the text is.
     let text_runs = n.text_runs.into_iter().map(|run| resolve_run(run, &inherited, node_bold, fonts)).collect();
 
-    let children = n.children
-        .into_iter()
-        .map(|c| resolve_node(c, &font, font_size, color, fonts))
-        .collect();
+    // Into a buffer of the children's length. While a `ParsedNode` is no smaller than a `Node`, `collect` reuses
+    // the parsed children's buffer in place, with the spare room it grew to as they were pushed, and the document
+    // keeps that room for as long as it lives: up to twice the bytes of its nodes.
+    let mut children = Vec::with_capacity(n.children.len());
+    children.extend(n.children.into_iter().map(|c| resolve_node(c, &font, font_size, color, fonts)));
     let text_color = (is_text || n.kind == NodeKind::List).then(|| color.to_string());
 
     Node {
@@ -1279,8 +1301,8 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                     page_width:  doc_size.0,
                     page_height: doc_size.1,
                     background:  doc_background,
-                    gradients:   tokens.gradients.clone(),
-                    colors:      tokens.colors.clone(),
+                    gradients:   std::mem::take(&mut tokens.gradients),
+                    colors:      std::mem::take(&mut tokens.colors),
                     debug:       doc_debug,
                     footnote_counter: doc_footnote_counter,
                     sections:    sections_xml,
@@ -1365,7 +1387,7 @@ fn parse_tree_assets(
                 .and_then(|v| v.as_array())
                 .map(|arr| arr.iter().map(|n| n.as_u64().unwrap_or(500) as u16).collect())
                 .unwrap_or_default();
-            widths.insert(name.clone(), FontWidths { default, ascii, ..FontWidths::default() });
+            widths.insert(name.clone(), FontWidths::new(default, ascii, HashMap::new()));
         }
         fonts.insert(name, def);
     }
@@ -1944,20 +1966,10 @@ pub(crate) fn parse_node(
 
     // data-binding attributes (valid on any element; boxed to keep Node lean)
     {
-        let dv    = elem.attribute("data-value").map(str::to_owned);
-        let ds    = elem.attribute("data-source").map(str::to_owned);
-        let di    = elem.attribute("data-if").map(str::to_owned);
-        let din   = elem.attribute("data-if-not").map(str::to_owned);
-        let bound = read_bound_attrs(elem);
-        check_bound_attrs(&kind, &bound).map_err(|e| format!("<{}>{}: {e}", tag, node_loc(elem)))?;
-        if dv.is_some() || ds.is_some() || di.is_some() || din.is_some() || !bound.is_empty() {
-            node.data_attrs = Some(Box::new(DataAttrs {
-                data_value:  dv,
-                data_source: ds,
-                data_if:     di,
-                data_if_not: din,
-                bound,
-            }));
+        let data = read_data_attrs(elem);
+        check_bound_attrs(&kind, &data.bound).map_err(|e| format!("<{}>{}: {e}", tag, node_loc(elem)))?;
+        if !data.is_empty() {
+            node.data_attrs = Some(Box::new(data));
         }
     }
 
@@ -2374,14 +2386,11 @@ fn parse_code(elem: &roxmltree::Node, tokens: &Tokens) -> Result<ParsedNode, Str
     let runs = code_runs(merge_code_text(parts), tokens)?;
     let mut node = code_node(elem, runs, tokens).map_err(|e| format!("{}: {e}", at()))?;
 
-    let bound = read_bound_attrs(elem);
-    check_bound_attrs(&NodeKind::Column, &bound).map_err(|e| format!("{}: {e}", at()))?;
-    let [value, source, only_if, unless] =
-        ["data-value", "data-source", "data-if", "data-if-not"].map(|name| elem.attribute(name).map(str::to_owned));
-    if source.is_some() || only_if.is_some() || unless.is_some() || !bound.is_empty() {
-        node.data_attrs = Some(Box::new(DataAttrs {
-            data_value: None, data_source: source, data_if: only_if, data_if_not: unless, bound,
-        }));
+    let mut data = read_data_attrs(elem);
+    check_bound_attrs(&NodeKind::Column, &data.bound).map_err(|e| format!("{}: {e}", at()))?;
+    let value = data.data_value.take();
+    if !data.is_empty() {
+        node.data_attrs = Some(Box::new(data));
     }
     if value.is_some() {
         node.children[0].data_attrs = Some(Box::new(DataAttrs { data_value: value, ..DataAttrs::default() }));
@@ -2495,21 +2504,14 @@ fn at_node_attrs(
     asset_images: &HashMap<String, String>,
     hint:         &str,
 ) -> Result<ParsedNode, String> {
-    if a.get("data-source").is_some() {
+    let data = read_data_attrs(a);
+    if data.data_source.is_some() {
         return Err("'data-source' is not allowed here: every copy would sit in the same place, so a list belongs in the layout".into());
     }
     let mut node = ParsedNode::default_for(kind.clone());
-    let (value, only_if, unless) = (a.get("data-value"), a.get("data-if"), a.get("data-if-not"));
-    let bound = read_bound_attrs(a);
-    check_bound_attrs(&kind, &bound)?;
-    if value.is_some() || only_if.is_some() || unless.is_some() || !bound.is_empty() {
-        node.data_attrs = Some(Box::new(DataAttrs {
-            data_value:  value.map(str::to_owned),
-            data_source: None,
-            data_if:     only_if.map(str::to_owned),
-            data_if_not: unless.map(str::to_owned),
-            bound,
-        }));
+    check_bound_attrs(&kind, &data.bound)?;
+    if !data.is_empty() {
+        node.data_attrs = Some(Box::new(data));
     }
     match kind {
         NodeKind::Text => {
@@ -2789,16 +2791,31 @@ pub(crate) fn jattr<'a>(json: &'a serde_json::Value, key: &str) -> Option<&'a st
 /// so shared node-construction helpers can work with either input format.
 pub(crate) trait Attrs {
     fn get(&self, key: &str) -> Option<&str>;
+    /// Every attribute the element has, by name and value. A helper that reads many attributes, of which an
+    /// element sets one or two, matches on the names in one pass, where a `get` for each would scan the element
+    /// once for every name it asks for.
+    fn each(&self) -> impl Iterator<Item = (&str, &str)> where Self: Sized;
 }
 
 impl<'a, 'b> Attrs for roxmltree::Node<'a, 'b> {
     fn get(&self, key: &str) -> Option<&str> { self.attribute(key) }
+
+    fn each(&self) -> impl Iterator<Item = (&str, &str)> where Self: Sized {
+        // `get` finds only attributes with no namespace, so a namespaced one is skipped here too.
+        self.attributes().filter(|at| at.namespace().is_none()).map(|at| (at.name(), at.value()))
+    }
 }
 
 pub(crate) struct JsonAttrs<'a>(pub &'a serde_json::Value);
 
 impl<'a> Attrs for JsonAttrs<'a> {
     fn get(&self, key: &str) -> Option<&str> { jattr(self.0, key) }
+
+    fn each(&self) -> impl Iterator<Item = (&str, &str)> where Self: Sized {
+        // `get` reads only string values, so any other value is skipped here too.
+        self.0.get("attrs").and_then(|v| v.as_object()).into_iter().flatten()
+            .filter_map(|(name, v)| v.as_str().map(|v| (name.as_str(), v)))
+    }
 }
 
 fn parse_height_mode(v: &str, tokens: &Tokens) -> Result<HeightMode, String> {
@@ -2898,13 +2915,6 @@ fn apply_box_attrs(
     a:      &impl Attrs,
     tokens: &Tokens,
 ) -> Result<(), String> {
-    if let Some(v) = a.get("font")       { node.font      = Some(v.to_string()); }
-    if let Some(v) = a.get("font-size")  { node.font_size = Some(tokens.resolve_text_size(v)?); }
-    if let Some(v) = a.get("gap")        { node.gap       = tokens.resolve_space(v)?; }
-    if let Some(v) = a.get("padding")    { node.padding   = tokens.resolve_spacing(v)?; }
-    if let Some(v) = a.get("background") { node.background = Some(tokens.resolve_fill(v)?); }
-    if let Some(v) = a.get("border")     { node.border    = Some(tokens.resolve_border(v)?); }
-    if let Some(v) = a.get("radius")     { node.radius    = tokens.resolve_radius(v)?; }
     // A box passes its color to the text inside it and fades itself with everything in it. A divider and a
     // barcode have a color of their own, which is not the text's.
     let is_box = matches!(
@@ -2912,25 +2922,29 @@ fn apply_box_attrs(
         NodeKind::Column | NodeKind::Row | NodeKind::Grid | NodeKind::Frame | NodeKind::TableCell
             | NodeKind::List | NodeKind::ListItem
     );
-    if is_box || node.kind == NodeKind::Text {
-        if let Some(v) = a.get("color") { node.text_color = Some(tokens.resolve_color(v)?); }
+    let has_color   = is_box || node.kind == NodeKind::Text;
+    let has_opacity = is_box || node.kind == NodeKind::Shape;
+    let has_height  = !matches!(node.kind, NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field);
+    for (name, v) in a.each() {
+        match name {
+            "font"                   => node.font        = Some(v.to_string()),
+            "font-size"              => node.font_size   = Some(tokens.resolve_text_size(v)?),
+            "gap"                    => node.gap         = tokens.resolve_space(v)?,
+            "padding"                => node.padding     = tokens.resolve_spacing(v)?,
+            "background"             => node.background  = Some(tokens.resolve_fill(v)?),
+            "border"                 => node.border      = Some(tokens.resolve_border(v)?),
+            "radius"                 => node.radius      = tokens.resolve_radius(v)?,
+            "color"   if has_color   => node.text_color  = Some(tokens.resolve_color(v)?),
+            "opacity" if has_opacity => node.opacity     = parse_opacity(v)?,
+            "shadow"  if is_box      => node.shadow      = Some(Box::new(parse_shadow(v, tokens)?)),
+            "height"  if has_height  => node.height_mode = parse_height_mode(v, tokens)?,
+            "width"   if v == "fill" => node.width_fill  = true,
+            "width"                  => node.width_constraint = Some(tokens.resolve_width(v)?),
+            "paginate"               => node.paginate    = parse_paginate_attr(v)?,
+            "debug"                  => node.debug       = v == "true",
+            _                        => {}
+        }
     }
-    if is_box || node.kind == NodeKind::Shape {
-        if let Some(v) = a.get("opacity") { node.opacity = parse_opacity(v)?; }
-    }
-    if is_box {
-        if let Some(v) = a.get("shadow")  { node.shadow  = Some(Box::new(parse_shadow(v, tokens)?)); }
-    }
-    if !matches!(node.kind, NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field) {
-        if let Some(v) = a.get("height") { node.height_mode = parse_height_mode(v, tokens)?; }
-    }
-    match a.get("width") {
-        Some("fill") => node.width_fill = true,
-        Some(v)      => node.width_constraint = Some(tokens.resolve_width(v)?),
-        None         => {}
-    }
-    if let Some(v) = a.get("paginate") { node.paginate = parse_paginate_attr(v)?; }
-    node.debug = a.get("debug").map(|v| v == "true").unwrap_or(false);
     Ok(())
 }
 
@@ -3016,12 +3030,21 @@ fn apply_layout_kind_attrs(
             })?;
         }
         NodeKind::Text => {
-            if let Some(v) = a.get("widows")  { node.widows  = parse_line_limit("widows", v)?; }
-            if let Some(v) = a.get("orphans") { node.orphans = parse_line_limit("orphans", v)?; }
-            if let Some(v) = a.get("line-height") { node.line_height = tokens.resolve_line_height(v)?; }
-            node.max_lines = a.get("max-lines").map(parse_max_lines).transpose()?;
-            node.ellipsis  = a.get("ellipsis").map(|v| v == "true").unwrap_or(false);
-            apply_capture_attrs(node, a)?;
+            let mut has_capture = false;
+            for (name, v) in a.each() {
+                match name {
+                    "widows"      => node.widows      = parse_line_limit("widows", v)?,
+                    "orphans"     => node.orphans     = parse_line_limit("orphans", v)?,
+                    "line-height" => node.line_height = tokens.resolve_line_height(v)?,
+                    "max-lines"   => node.max_lines   = Some(parse_max_lines(v)?),
+                    "ellipsis"    => node.ellipsis    = v == "true",
+                    _             => has_capture |= name.starts_with("capture"),
+                }
+            }
+            // Few texts capture, so the four capture attributes are looked up only when one is there.
+            if has_capture {
+                apply_capture_attrs(node, a)?;
+            }
         }
         NodeKind::List => apply_list_attrs(node, a, tokens)?,
         NodeKind::ListItem => apply_item_attrs(node, a, tokens)?,
@@ -3491,8 +3514,8 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
         page_width:  doc_size.0,
         page_height: doc_size.1,
         background:  doc_background,
-        gradients:   tokens.gradients.clone(),
-        colors:      tokens.colors.clone(),
+        gradients:   std::mem::take(&mut tokens.gradients),
+        colors:      std::mem::take(&mut tokens.colors),
         debug:       doc_debug,
         footnote_counter: doc_footnote_counter,
         sections,
