@@ -2,9 +2,12 @@
 // in two or three builds, the last release first, and the change from each build to the next, with the
 // changes over a threshold marked. Report only: it never fails on what the numbers show.
 //
-// Each build is a folder bench.yml writes:
-//   build.json      {"name": "v0.29.0", "commit": "<sha>"}
-//   summary.jsonl   the output of `cargo bench -- --output-format=json` in benches/counts, a line a benchmark
+// Each build is a folder bench.yml writes (scripts/bench-counts.sh):
+//   build.json          {"name": "v0.29.0", "commit": "<sha>"}
+//   summary.jsonl       instructions and estimated cycles: the output of `cargo bench --bench counts --
+//                       --output-format=json` in benches/counts, a line a benchmark
+//   allocations.jsonl   allocations, bytes allocated and peak memory: the output of `cargo bench --bench
+//                       allocations`, a line a benchmark
 //
 // Usage: node scripts/bench-counts-report.mjs [options] <release> [<main>] <build>
 //   --mark-end-to-end <percent>   instructions or estimated cycles of a whole render (default 3)
@@ -31,39 +34,57 @@ export const STAGES = [
 /** The fixtures, `bench_xs` to `bench_xl`, by the id of their benchmark. */
 export const FIXTURES = ['xs', 's', 'm', 'l', 'xl'];
 
-/** What the table shows, and where gungraun's summary has it. */
+/**
+ * What the table shows. The work is Callgrind's, under the metric of gungraun's summary; the memory is the
+ * counting allocator's, under the same id in its lines.
+ */
 export const MEASURES = [
-    { id: 'instructions', name: 'instructions', tool: 'Callgrind', metric: 'Ir', kind: 'work' },
-    { id: 'estimated_cycles', name: 'estimated cycles', tool: 'Callgrind', metric: 'EstimatedCycles', kind: 'work' },
-    { id: 'allocations', name: 'allocations', tool: 'DHAT', metric: 'TotalBlocks', kind: 'memory' },
-    { id: 'bytes_allocated', name: 'bytes allocated', tool: 'DHAT', metric: 'TotalBytes', kind: 'memory' },
-    // The heap the benchmark holds when the process's heap is at its highest. Not DHAT's `MaximumBytes`,
-    // which adds up each allocation site's own maximum, reached at different times.
-    { id: 'peak_bytes', name: 'peak memory', tool: 'DHAT', metric: 'AtTGmaxBytes', kind: 'memory' },
+    { id: 'instructions', name: 'instructions', metric: 'Ir', kind: 'work' },
+    { id: 'estimated_cycles', name: 'estimated cycles', metric: 'EstimatedCycles', kind: 'work' },
+    { id: 'allocations', name: 'allocations', kind: 'memory' },
+    { id: 'bytes_allocated', name: 'bytes allocated', kind: 'memory' },
+    // The most the heap grew over where it stood when the stage began.
+    { id: 'peak_bytes', name: 'peak memory', kind: 'memory' },
 ];
 
 export const DEFAULT_MARKS = { endToEnd: 3, stage: 10, allocations: 10 };
 
+const lines = text => text.split('\n').filter(line => line.trim()).map(line => JSON.parse(line));
+
 /**
- * The counts of one build, `fixture → stage → measure → number`, from the lines of its summary.
- * A benchmark that lacks a measure is an error: the table would show a gap as if the stage were new.
+ * The counts of one build, `fixture → stage → measure → number`, from the lines of its two files: gungraun's
+ * summary for the work, the counting allocator's for the memory. A benchmark that lacks a measure, or is in
+ * one file and not the other, is an error: the table would show a gap as if the stage were new.
  */
-export function readCounts(summaryText) {
+export function readCounts(summaryText, allocationsText) {
     const counts = {};
-    for (const line of summaryText.split('\n')) {
-        if (!line.trim()) continue;
-        const bench = JSON.parse(line);
-        const totals = Object.fromEntries(bench.profiles.map(p => [p.tool, p.data.total.metrics]));
+    const work = MEASURES.filter(m => m.kind === 'work');
+    for (const bench of lines(summaryText)) {
+        const callgrind = bench.profiles.find(p => p.tool === 'Callgrind')?.data.total.metrics;
         const measures = {};
-        for (const measure of MEASURES) {
-            const value = totals[measure.tool]?.[measure.metric]?.values?.new;
+        for (const measure of work) {
+            const value = callgrind?.[measure.metric]?.values?.new;
             if (typeof value !== 'number') {
-                throw new Error(`${bench.function_name}.${bench.id} has no ${measure.tool} ${measure.metric}`);
+                throw new Error(`${bench.function_name}.${bench.id} has no Callgrind ${measure.metric}`);
             }
             measures[measure.id] = value;
         }
         counts[bench.id] ??= {};
         counts[bench.id][bench.function_name] = measures;
+    }
+    const memory = MEASURES.filter(m => m.kind === 'memory');
+    for (const bench of lines(allocationsText)) {
+        const measures = counts[bench.fixture]?.[bench.stage];
+        if (!measures) throw new Error(`${bench.stage}.${bench.fixture} has allocations but no instructions`);
+        for (const measure of memory) {
+            if (typeof bench[measure.id] !== 'number') throw new Error(`${bench.stage}.${bench.fixture} has no ${measure.id}`);
+            measures[measure.id] = bench[measure.id];
+        }
+    }
+    for (const [fixture, stages] of Object.entries(counts)) {
+        for (const [stage, measures] of Object.entries(stages)) {
+            if (!('allocations' in measures)) throw new Error(`${stage}.${fixture} has instructions but no allocations`);
+        }
     }
     return counts;
 }
@@ -161,6 +182,8 @@ export function markdown(builds, rows, marks = DEFAULT_MARKS, about = {}) {
         '### Instruction and allocation counts',
         '',
         `Builds: ${built}${about.rust ? `, all with ${about.rust}` : ''}.`,
+        'Instructions and estimated cycles from Callgrind; allocations, bytes allocated and peak memory from a counting allocator. ' +
+            'The peak is the most the heap grew over where it stood when the stage began.',
         `Marked (⚠): instructions or estimated cycles up more than ${marks.endToEnd}% end to end or ${marks.stage}% in one stage, ` +
             `allocations, bytes allocated or peak memory up more than ${marks.allocations}%. Report only: the run passes whatever it shows.`,
         '',
@@ -192,8 +215,9 @@ export function history(builds, about = {}) {
 
 /** A build folder of bench.yml: its name, commit and counts. */
 export function readBuild(folder) {
-    const build = JSON.parse(readFileSync(path.join(folder, 'build.json'), 'utf8'));
-    return { name: build.name, commit: build.commit, counts: readCounts(readFileSync(path.join(folder, 'summary.jsonl'), 'utf8')) };
+    const read = file => readFileSync(path.join(folder, file), 'utf8');
+    const build = JSON.parse(read('build.json'));
+    return { name: build.name, commit: build.commit, counts: readCounts(read('summary.jsonl'), read('allocations.jsonl')) };
 }
 
 function usage(message) {

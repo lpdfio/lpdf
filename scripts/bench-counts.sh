@@ -1,6 +1,7 @@
 #!/bin/sh
 # Counts the instructions, estimated cycles and allocations of one build of lpdf with benches/counts,
-# as bench.yml does for each build it compares.
+# as bench.yml does for each build it compares: the instructions under Valgrind (benches/counts.rs),
+# the allocations with a counting allocator (benches/allocations.rs).
 #
 #   sh scripts/bench-counts.sh <checkout> <out folder> <name>
 #
@@ -9,8 +10,9 @@
 # keeps the dependency versions it was released with. Turns on the split-stages feature when
 # <checkout>'s lib.rs has bench_layout_doc and bench_write_pdf. Writes to <out folder>:
 #
-#   summary.jsonl   gungraun's JSON line for each benchmark
-#   build.json      {"name": <name>, "commit": <checkout's HEAD>}
+#   summary.jsonl       gungraun's JSON line for each benchmark: instructions and estimated cycles
+#   allocations.jsonl   a JSON line for each benchmark: allocations, bytes allocated and peak memory
+#   build.json          {"name": <name>, "commit": <checkout's HEAD>}
 #
 # which scripts/bench-counts-report.mjs reads. Needs Linux on x86-64, Valgrind, Node, and the
 # gungraun-runner of the version benches/counts/Cargo.toml pins:
@@ -30,9 +32,9 @@ LIB="$CHECKOUT/src/core/src/lib.rs"
 
 if [ "$HARNESS" != "$CHECKOUT/benches/counts" ]; then
   rm -rf "$CHECKOUT/benches/counts"
-  mkdir -p "$CHECKOUT/benches/counts/benches"
+  mkdir -p "$CHECKOUT/benches/counts"
   cp "$HARNESS/Cargo.toml" "$CHECKOUT/benches/counts/"
-  cp "$HARNESS/benches/"*.rs "$CHECKOUT/benches/counts/benches/"
+  cp -R "$HARNESS/benches" "$CHECKOUT/benches/counts/"
 fi
 cp "$CHECKOUT/Cargo.lock" "$CHECKOUT/benches/counts/Cargo.lock"
 
@@ -48,7 +50,9 @@ echo ">>> $NAME ($COMMIT)${FEATURES:+, with layout and the PDF write apart}"
 # same file in a shared one, and the second build's benchmarks would run for both.
 cd "$CHECKOUT/benches/counts"
 # shellcheck disable=SC2086 # FEATURES is empty or two words
-cargo bench $FEATURES -- --output-format=json --parallel=auto > "$OUT/summary.jsonl"
+cargo bench --bench counts $FEATURES -- --output-format=json --parallel=auto > "$OUT/summary.jsonl"
+# shellcheck disable=SC2086
+cargo bench --bench allocations $FEATURES > "$OUT/allocations.jsonl"
 
 node -e 'process.stdout.write(JSON.stringify({ name: process.argv[1], commit: process.argv[2] }) + "\n")' \
   "$NAME" "$COMMIT" > "$OUT/build.json"
