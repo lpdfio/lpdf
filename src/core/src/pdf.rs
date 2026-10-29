@@ -651,6 +651,12 @@ impl PreparedFont {
             }
         }
     }
+
+    /// Whether a space is the one-byte code 32 in this font, which `Tw` adds its gap to. It is in a built-in font; an
+    /// embedded font has two-byte codes, which `Tw` doesn't touch.
+    fn space_is_code_32(&self) -> bool {
+        matches!(self.kind, PreparedFontKind::Builtin { .. })
+    }
 }
 
 // ── Colour helper ─────────────────────────────────────────────────────────────
@@ -1167,10 +1173,17 @@ fn draw_node(
             content.set_font(Name(&rname), t.size);
             // set_text_matrix positions the text origin precisely.
             content.set_text_matrix([1.0, 0.0, 0.0, 1.0, draw_x, pdf_y]);
-            if t.word_gap > 0.0 {
-                // Layout placed the line's words; the gap it worked out goes in before each space. `Tw`
-                // would not do: it moves only the one-byte code 32, and an embedded font has two-byte codes.
-                // The adjustment is in thousandths of the font size, and a positive one moves back.
+            if t.word_gap > 0.0 && font.space_is_code_32() {
+                // Layout placed the line's words; the gap it worked out goes in at each space. In a built-in
+                // font that is the one-byte code 32, so the line stays one string with the gap in `Tw`. Layout
+                // splits words at any whitespace, so the spaces of a justified line are the gaps it counted.
+                content.set_word_spacing(t.word_gap);
+                content.show(Str(&encoded));
+                content.set_word_spacing(0.0);
+            } else if t.word_gap > 0.0 {
+                // `Tw` would not do: it moves only the one-byte code 32, and an embedded font has two-byte codes.
+                // The gap goes in before each space instead, and a positive adjustment moves back, in thousandths
+                // of the font size.
                 let adjustment = -t.word_gap * 1000.0 / t.size;
                 let mut pieces = t.content.split(' ');
                 let mut positioned = content.show_positioned();
@@ -4039,6 +4052,70 @@ mod tests {
         let (page, groups) = page_and_groups(&pdf);
         assert!(groups[0].1.contains(" cm"), "the transform is applied to the group's content: {}", groups[0].1);
         assert!(!page.contains(" cm"), "{page}");
+    }
+
+    // ── Justified lines ───────────────────────────────────────────────────────
+
+    /// Enough words for a column of 200pt to take several lines.
+    const PARAGRAPH: &str = "Contracts layout layout as line with be on so each footers pages totals measures on be breaks \
+        with to width footers straight contracts straight word breaks layout layout exactly which";
+
+    /// The operators of the page content, one for each line.
+    fn operators(content: &str) -> Vec<&str> {
+        content.lines().collect()
+    }
+
+    /// The indexes of the lines that set a word spacing above zero.
+    fn word_spacings(operators: &[&str]) -> Vec<usize> {
+        (0..operators.len())
+            .filter(|&at| operators[at].strip_suffix(" Tw").is_some_and(|gap| gap.parse::<f32>().is_ok_and(|gap| gap > 0.0)))
+            .collect()
+    }
+
+    fn arrays(operators: &[&str]) -> usize {
+        operators.iter().filter(|line| line.ends_with(" TJ")).count()
+    }
+
+    #[test]
+    fn a_justified_line_in_a_built_in_font_is_one_string_with_a_word_spacing() {
+        let pdf = render_layout(&format!(r#"<column width="200pt"><text align="justify">{PARAGRAPH}</text></column>"#));
+        let page = page_and_groups(&pdf).0;
+        let operators = operators(&page);
+        let spaced = word_spacings(&operators);
+        assert!(spaced.len() > 1, "the paragraph has justified lines: {page}");
+        for at in spaced {
+            assert!(operators[at + 1].ends_with(" Tj"), "the line is shown as one string: {page}");
+            assert_eq!(operators[at + 2], "0 Tw", "the spacing is put back: {page}");
+        }
+        assert_eq!(arrays(&operators), 0, "{page}");
+    }
+
+    #[test]
+    fn a_wide_space_in_a_justified_line_in_a_built_in_font_is_a_gap_like_the_others() {
+        // A built-in font draws a wide space as a space. Layout splits words at it, so `Tw` widens it with the rest.
+        let body = PARAGRAPH.replacen("with to", "with\u{2003}to", 1);
+        let pdf = render_layout(&format!(r#"<column width="200pt"><text align="justify">{body}</text></column>"#));
+        let page = page_and_groups(&pdf).0;
+        assert!(page.contains("(on be breaks with to width footers) Tj"), "{page}");
+        assert_eq!(arrays(&operators(&page)), 0, "{page}");
+    }
+
+    #[test]
+    fn a_justified_line_in_an_embedded_font_is_an_array_with_no_word_spacing() {
+        let bytes = FIXTURE_FONTS[1].1;
+        let xml = format!(
+            r#"<lpdf version="1"><assets><font name="brand" src="brand.ttf"/></assets><document font="brand"><section><layout><column width="200pt"><text align="justify">{PARAGRAPH}</text></column></layout></section></document></lpdf>"#
+        );
+        let mut doc = crate::parse::parse(&xml).expect("parses");
+        crate::layout::set_font_widths(HashMap::from([("brand".to_string(), crate::shared::extract_font_widths(bytes).expect("widths"))]));
+        let pages = crate::layout::layout_document(&doc.section_layouts());
+        let mut registry = FontRegistry::new();
+        registry.register("brand", bytes.to_vec());
+        let pdf = render_pdf(&pages, &doc.fonts, &registry, &ImageRegistry::new(), &doc.meta, &doc.gradients, None, false).expect("renders");
+        let page = page_and_groups(&pdf).0;
+        let operators = operators(&page);
+        assert!(arrays(&operators) > 1, "the justified lines are arrays: {page}");
+        assert!(word_spacings(&operators).is_empty(), "{page}");
     }
 
     // ── Box opacity ───────────────────────────────────────────────────────────
