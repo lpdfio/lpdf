@@ -988,13 +988,19 @@ mod tests {
     #[test]
     fn bench_fonts_lay_out_and_embed_as_an_engine_with_the_fonts_loaded() {
         let xml = include_str!("../../../test/fixtures/bench_fonts.xml");
+        let fonts = bench_fonts(&BENCH_FONTS);
+        // The widths are a thread-local, which any earlier layout on this thread leaves set.
+        layout::set_font_widths(HashMap::new());
+        let in_helvetica_widths = bench_write_pdf_with_fonts(bench_layout_doc(bench_parse(xml).unwrap()), &fonts).unwrap();
+        let in_own_widths = bench_write_pdf_with_fonts(bench_layout_doc_with_fonts(bench_parse(xml).unwrap(), &fonts), &fonts).unwrap();
+        assert_ne!(in_own_widths, in_helvetica_widths, "the fonts' widths change the layout");
+
+        layout::set_font_widths(HashMap::new());
         let mut engine = LpdfEngine::new("");
         for (name, bytes) in BENCH_FONTS {
             engine.load_font(name, bytes);
         }
-        let expected = engine.render_xml(xml, None).unwrap();
-        assert_eq!(bench_render_xml_with_fonts(xml, &bench_fonts(&BENCH_FONTS)).unwrap(), expected);
-        assert_ne!(bench_render_xml(xml).unwrap(), expected, "the fonts' widths change the layout");
+        assert_eq!(in_own_widths, engine.render_xml(xml, None).unwrap());
     }
 
     #[test]
