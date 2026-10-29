@@ -2,7 +2,7 @@
 <!-- bench_m in embedded fonts, for the counts of benches/counts. Written by hand from bench_m, which gen_fixtures
      makes: Crimson Text Regular for the body and SemiBold for the headings, in place of Helvetica and
      Helvetica-Bold, and a second section in Montserrat with Latin and Cyrillic text. Latin text stays below
-     U+024F; the Cyrillic, the dashes and the quotes are above it. The fonts are the examples' (SIL Open Font
+     U+024F, the guillemets with it; the Cyrillic, the dashes and the curly quotes are above it. The fonts are the examples' (SIL Open Font
      License), loaded under their names: body and heading from examples/6-book, sans from examples/5-brochure. -->
 <lpdf version="1">
   <assets>
@@ -847,42 +847,42 @@
     <section>
       <layout margin="40pt">
         <column gap="m" font="sans">
-          <text font-size="m" font="heading">Раздел 1 · Section 1</text>
+          <text font-size="l">Раздел 1 · Section 1</text>
           <text font-size="m">Абзац 1. Движок вёрстки измеряет каждое слово текста по ширине его глифов и переносит строки по ширине колонки. Paragraph 1. The engine measures each word by the advances of its glyphs and wraps the lines to the width of the column.</text>
-          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — Grüße aus Kraków, São Paulo et Zürich.</text>
-          <text font-size="m" font="heading">Раздел 2 · Section 2</text>
+          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — “Grüße” aus Kraków, São Paulo et Zürich.</text>
+          <text font-size="l">Раздел 2 · Section 2</text>
           <text font-size="m">Абзац 2. Движок вёрстки измеряет каждое слово текста по ширине его глифов и переносит строки по ширине колонки. Paragraph 2. The engine measures each word by the advances of its glyphs and wraps the lines to the width of the column.</text>
-          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — Grüße aus Kraków, São Paulo et Zürich.</text>
-          <text font-size="m" font="heading">Раздел 3 · Section 3</text>
+          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — “Grüße” aus Kraków, São Paulo et Zürich.</text>
+          <text font-size="l">Раздел 3 · Section 3</text>
           <text font-size="m">Абзац 3. Движок вёрстки измеряет каждое слово текста по ширине его глифов и переносит строки по ширине колонки. Paragraph 3. The engine measures each word by the advances of its glyphs and wraps the lines to the width of the column.</text>
-          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — Grüße aus Kraków, São Paulo et Zürich.</text>
-          <text font-size="m" font="heading">Раздел 4 · Section 4</text>
+          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — “Grüße” aus Kraków, São Paulo et Zürich.</text>
+          <text font-size="l">Раздел 4 · Section 4</text>
           <text font-size="m">Абзац 4. Движок вёрстки измеряет каждое слово текста по ширине его глифов и переносит строки по ширине колонки. Paragraph 4. The engine measures each word by the advances of its glyphs and wraps the lines to the width of the column.</text>
-          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — Grüße aus Kraków, São Paulo et Zürich.</text>
-          <text font-size="m" font="heading">Раздел 5 · Section 5</text>
+          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — “Grüße” aus Kraków, São Paulo et Zürich.</text>
+          <text font-size="l">Раздел 5 · Section 5</text>
           <text font-size="m">Абзац 5. Движок вёрстки измеряет каждое слово текста по ширине его глифов и переносит строки по ширине колонки. Paragraph 5. The engine measures each word by the advances of its glyphs and wraps the lines to the width of the column.</text>
-          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — Grüße aus Kraków, São Paulo et Zürich.</text>
-          <text font-size="m" font="heading">Раздел 6 · Section 6</text>
+          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — “Grüße” aus Kraków, São Paulo et Zürich.</text>
+          <text font-size="l">Раздел 6 · Section 6</text>
           <text font-size="m">Абзац 6. Движок вёрстки измеряет каждое слово текста по ширине его глифов и переносит строки по ширине колонки. Paragraph 6. The engine measures each word by the advances of its glyphs and wraps the lines to the width of the column.</text>
-          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — Grüße aus Kraków, São Paulo et Zürich.</text>
-          <text font-size="m" font="heading">Раздел 7 · Section 7</text>
+          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — “Grüße” aus Kraków, São Paulo et Zürich.</text>
+          <text font-size="l">Раздел 7 · Section 7</text>
           <text font-size="m">Абзац 7. Движок вёрстки измеряет каждое слово текста по ширине его глифов и переносит строки по ширине колонки. Paragraph 7. The engine measures each word by the advances of its glyphs and wraps the lines to the width of the column.</text>
-          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — Grüße aus Kraków, São Paulo et Zürich.</text>
-          <text font-size="m" font="heading">Раздел 8 · Section 8</text>
+          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — “Grüße” aus Kraków, São Paulo et Zürich.</text>
+          <text font-size="l">Раздел 8 · Section 8</text>
           <text font-size="m">Абзац 8. Движок вёрстки измеряет каждое слово текста по ширине его глифов и переносит строки по ширине колонки. Paragraph 8. The engine measures each word by the advances of its glyphs and wraps the lines to the width of the column.</text>
-          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — Grüße aus Kraków, São Paulo et Zürich.</text>
-          <text font-size="m" font="heading">Раздел 9 · Section 9</text>
+          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — “Grüße” aus Kraków, São Paulo et Zürich.</text>
+          <text font-size="l">Раздел 9 · Section 9</text>
           <text font-size="m">Абзац 9. Движок вёрстки измеряет каждое слово текста по ширине его глифов и переносит строки по ширине колонки. Paragraph 9. The engine measures each word by the advances of its glyphs and wraps the lines to the width of the column.</text>
-          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — Grüße aus Kraków, São Paulo et Zürich.</text>
-          <text font-size="m" font="heading">Раздел 10 · Section 10</text>
+          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — “Grüße” aus Kraków, São Paulo et Zürich.</text>
+          <text font-size="l">Раздел 10 · Section 10</text>
           <text font-size="m">Абзац 10. Движок вёрстки измеряет каждое слово текста по ширине его глифов и переносит строки по ширине колонки. Paragraph 10. The engine measures each word by the advances of its glyphs and wraps the lines to the width of the column.</text>
-          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — Grüße aus Kraków, São Paulo et Zürich.</text>
-          <text font-size="m" font="heading">Раздел 11 · Section 11</text>
+          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — “Grüße” aus Kraków, São Paulo et Zürich.</text>
+          <text font-size="l">Раздел 11 · Section 11</text>
           <text font-size="m">Абзац 11. Движок вёрстки измеряет каждое слово текста по ширине его глифов и переносит строки по ширине колонки. Paragraph 11. The engine measures each word by the advances of its glyphs and wraps the lines to the width of the column.</text>
-          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — Grüße aus Kraków, São Paulo et Zürich.</text>
-          <text font-size="m" font="heading">Раздел 12 · Section 12</text>
+          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — “Grüße” aus Kraków, São Paulo et Zürich.</text>
+          <text font-size="l">Раздел 12 · Section 12</text>
           <text font-size="m">Абзац 12. Движок вёрстки измеряет каждое слово текста по ширине его глифов и переносит строки по ширине колонки. Paragraph 12. The engine measures each word by the advances of its glyphs and wraps the lines to the width of the column.</text>
-          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — Grüße aus Kraków, São Paulo et Zürich.</text>
+          <text font-size="s" color="#475569">Съешь же ещё этих мягких французских булок, да выпей чаю. «Быстрая коричневая лиса» — “Grüße” aus Kraków, São Paulo et Zürich.</text>
         </column>
       </layout>
     </section>
