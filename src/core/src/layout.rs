@@ -2051,6 +2051,13 @@ struct SplitAtom {
     join:           Join,
 }
 
+impl SplitAtom {
+    /// The metrics of the atom's font: its run's own, else `parent`, the text's.
+    fn metrics<'a>(&'a self, parent: Metrics<'a>) -> Metrics<'a> {
+        self.font_override.as_deref().map_or(parent, Metrics::of)
+    }
+}
+
 /// A footnote's number is set at this share of the text's size, and its baseline raised by this share of it.
 const SUP_SCALE: f32 = 0.62;
 const SUP_RISE:  f32 = 0.33;
@@ -2062,8 +2069,8 @@ fn sup_geometry(font_size: f32) -> (f32, f32) {
 }
 
 /// The width of a word of a line, set in `font_size`, or at the size of a raised number when `sup`.
-fn word_width(font: &str, text: &str, font_size: f32, sup: bool) -> f32 {
-    text_width(font, text, if sup { font_size * SUP_SCALE } else { font_size })
+fn word_width(metrics: Metrics, text: &str, font_size: f32, sup: bool) -> f32 {
+    metrics.text_width(text, if sup { font_size * SUP_SCALE } else { font_size })
 }
 
 /// Where each word of `text` is, between its spaces.
@@ -2079,8 +2086,8 @@ fn space_separated(text: &str) -> impl Iterator<Item = Range<usize>> + '_ {
 /// The pieces of a word, or of a run of words, that is wider than a whole line: its words, and each word that is
 /// still wider cut after the last character that fits, so nothing runs past the box. Each piece is where it is in
 /// `text`, with whether a space leads it.
-fn pieces_of_wide(font: &str, text: &str, font_size: f32, wrap_w: f32) -> Vec<(Range<usize>, bool)> {
-    let fits = |s: &str| text_width(font, s, font_size) <= wrap_w + 0.01;
+fn pieces_of_wide(metrics: Metrics, text: &str, font_size: f32, wrap_w: f32) -> Vec<(Range<usize>, bool)> {
+    let fits = |s: &str| metrics.text_width(s, font_size) <= wrap_w + 0.01;
     let mut pieces = Vec::new();
     for (i, word) in space_separated(text).filter(|word| !word.is_empty()).enumerate() {
         let mut rest = word;
@@ -2114,10 +2121,11 @@ fn break_wide_atoms<'a>(atoms: Vec<Atom<'a>>, font_size: f32, wrap_w: f32) -> Ve
             out.push(atom);
             continue;
         }
-        for (i, (range, space)) in pieces_of_wide(atom.font, &atom.text, font_size, wrap_w).into_iter().enumerate() {
+        let metrics = Metrics::of(atom.font);
+        for (i, (range, space)) in pieces_of_wide(metrics, &atom.text, font_size, wrap_w).into_iter().enumerate() {
             let text = atom.piece(range);
             let join = if i == 0 { Join::No } else if space { Join::Space } else { Join::Chars };
-            let width = text_width(atom.font, &text, font_size);
+            let width = metrics.text_width(&text, font_size);
             out.push(Atom { text, join, width, space_before: i == 0 && atom.space_before, ..atom.clone() });
         }
     }
@@ -2125,15 +2133,15 @@ fn break_wide_atoms<'a>(atoms: Vec<Atom<'a>>, font_size: f32, wrap_w: f32) -> Ve
 }
 
 /// `break_wide_atoms` for the atoms of a text that is split across pages, which must find the same lines.
-fn break_wide_split_atoms(atoms: Vec<SplitAtom>, parent_font: &str, font_size: f32, wrap_w: f32) -> Vec<SplitAtom> {
+fn break_wide_split_atoms(atoms: Vec<SplitAtom>, parent: Metrics, font_size: f32, wrap_w: f32) -> Vec<SplitAtom> {
     let mut out = Vec::with_capacity(atoms.len());
     for atom in atoms {
-        let font = atom.font_override.as_deref().unwrap_or(parent_font);
-        if atom.footnote.is_some() || text_width(font, &atom.text, font_size) <= wrap_w + 0.01 {
+        let metrics = atom.metrics(parent);
+        if atom.footnote.is_some() || metrics.text_width(&atom.text, font_size) <= wrap_w + 0.01 {
             out.push(atom);
             continue;
         }
-        for (i, (range, space)) in pieces_of_wide(font, &atom.text, font_size, wrap_w).into_iter().enumerate() {
+        for (i, (range, space)) in pieces_of_wide(metrics, &atom.text, font_size, wrap_w).into_iter().enumerate() {
             let mut piece = atom.clone();
             piece.text = atom.text[range].to_string();
             if i > 0 {
@@ -2149,9 +2157,9 @@ fn break_wide_split_atoms(atoms: Vec<SplitAtom>, parent_font: &str, font_size: f
 /// Tokenize text_runs + wrap into lines. Mirrors the shape of `layout_text`'s
 /// wrap step but preserves the overrides needed to rebuild `TextRun`s.
 fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
-    let font_size   = node.font_size;
-    let parent_font = node.font.as_str();
-    let space_w     = text_width(parent_font, " ", font_size);
+    let font_size      = node.font_size;
+    let parent_metrics = Metrics::of(&node.font);
+    let space_w        = parent_metrics.text_width(" ", font_size);
 
     let mut atoms: Vec<SplitAtom> = Vec::new();
     let mut pending_leading = false;
@@ -2216,7 +2224,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
     if atoms.is_empty() { return vec![]; }
 
     // The same pieces as the lines of the text itself are made of.
-    let atoms = break_wide_split_atoms(atoms, parent_font, font_size, avail_w);
+    let atoms = break_wide_split_atoms(atoms, parent_metrics, font_size, avail_w);
 
     // Greedy wrap.
     let mut lines: Vec<Vec<SplitAtom>> = Vec::new();
@@ -2225,13 +2233,13 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
 
     let mut atoms: std::collections::VecDeque<SplitAtom> = atoms.into();
     while let Some(atom) = atoms.pop_front() {
-        let font_for_atom = atom.font_override.as_deref().unwrap_or(parent_font);
-        let aw = word_width(font_for_atom, &atom.text, font_size, atom.footnote.is_some());
+        let metrics = atom.metrics(parent_metrics);
+        let aw = word_width(metrics, &atom.text, font_size, atom.footnote.is_some());
         let gap = if cur_line.is_empty() {
             0.0
         } else {
             match atom.join {
-                Join::Space => text_width(font_for_atom, " ", font_size),
+                Join::Space => metrics.text_width(" ", font_size),
                 Join::Chars => 0.0,
                 Join::No    => if atom.leading_space { space_w } else { 0.0 },
             }
@@ -2266,8 +2274,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
             lines.push(std::mem::take(&mut cur_line));
             cur_w = aw;
             for prev in carried {
-                let font_for_prev = prev.font_override.as_deref().unwrap_or(parent_font);
-                cur_w += word_width(font_for_prev, &prev.text, font_size, prev.footnote.is_some());
+                cur_w += word_width(prev.metrics(parent_metrics), &prev.text, font_size, prev.footnote.is_some());
                 cur_line.push(prev);
             }
             // Do NOT strip leading_space here. The gap calculation above already
@@ -3731,31 +3738,55 @@ fn table_char_fallback(table: &[u16; 224], c: char) -> u16 {
         .unwrap_or(table[usize::from(b'?') - 32])
 }
 
+/// How the text of a font is measured, found from its name. A loop over the words or the characters of a run
+/// finds it once (`Metrics::of`), so the name is not tested for each of them.
+#[derive(Clone, Copy)]
+enum Metrics<'a> {
+    /// The Courier family, or any font with Courier in its name: monospace, 600/1000 per glyph.
+    Courier,
+    /// A font with a width table of its own (`set_font_widths`), looked up by its name.
+    Embedded(&'a str),
+    /// A built-in font of the Helvetica or Times families, or Helvetica's widths for a font Lpdf has none of.
+    Afm(&'static [u16; 224]),
+}
+
+impl<'a> Metrics<'a> {
+    fn of(font: &'a str) -> Self {
+        if font.contains("Courier") {
+            return Metrics::Courier;
+        }
+        // The width table of an embedded font comes first (read from its bytes, or set_font_metrics).
+        if FONT_WIDTHS.with(|fw| fw.borrow().contains_key(font)) {
+            return Metrics::Embedded(font);
+        }
+        // Unknown font (undefined alias, unsupported builtin, or custom font with no
+        // width table). Use Helvetica metrics as the fallback — this matches what
+        // the renderer does (it also falls back to Helvetica for unknown fonts), so
+        // layout and rendering stay in sync.
+        afm_table(font).map_or_else(|| Metrics::of("Helvetica"), Metrics::Afm)
+    }
+
+    /// The advance width of `text` at `size`, in pt.
+    fn text_width(self, text: &str, size: f32) -> f32 {
+        match self {
+            Metrics::Courier => text.chars().count() as f32 * size * 0.6,
+            Metrics::Embedded(font) => FONT_WIDTHS
+                .with(|fw| fw.borrow().get(font).map(|widths| widths.text_width(text, size)))
+                // The tables were set again since the font was found: measure it as it is now.
+                .unwrap_or_else(|| Metrics::of(font).text_width(text, size)),
+            Metrics::Afm(table) => text.chars()
+                .map(|c| table_char_advance(table, c) as f32 * size / 1000.0)
+                .sum(),
+        }
+    }
+}
+
 /// Measure the advance width (in pt) of a string at the given font and size.
 ///
-/// Uses per-character AFM glyph metrics for the standard PDF built-in fonts.
-/// Falls back to a constant-ratio approximation for Courier (monospace) and
-/// any unknown / custom font.
+/// Uses per-character AFM glyph metrics for the standard PDF built-in fonts, 600/1000 per glyph for Courier,
+/// and the width table of an embedded font. An unknown font is measured as Helvetica.
 pub(crate) fn text_width(font: &str, text: &str, size: f32) -> f32 {
-    // Courier family: monospace, 600/1000 per glyph.
-    if font.contains("Courier") {
-        return text.chars().count() as f32 * size * 0.6;
-    }
-    // Check the width table of an embedded font first (read from its bytes, or set_font_metrics).
-    if let Some(width) = FONT_WIDTHS.with(|fw| fw.borrow().get(font).map(|w| w.text_width(text, size))) {
-        return width;
-    }
-    // For known builtins use per-character AFM widths.
-    if let Some(table) = afm_table(font) {
-        return text.chars()
-            .map(|c| table_char_advance(table, c) as f32 * size / 1000.0)
-            .sum();
-    }
-    // Unknown font (undefined alias, unsupported builtin, or custom font with no
-    // width table). Use Helvetica metrics as the fallback — this matches what
-    // the renderer does (it also falls back to Helvetica for unknown fonts), so
-    // layout and rendering stay in sync.
-    text_width("Helvetica", text, size)
+    Metrics::of(font).text_width(text, size)
 }
 
 /// Measure the natural (preferred/unconstrained) width of a node.
@@ -3772,15 +3803,15 @@ fn measure_natural_w(node: &Node) -> f32 {
             let mut total = 0.0_f32;
             let mut first = true;
             for run in &node.text_runs {
-                let font = run.font.as_deref().unwrap_or(&node.font);
+                let metrics = Metrics::of(run.font.as_deref().unwrap_or(&node.font));
                 if let Some(note) = &run.footnote {
-                    total += word_width(font, &note.number.to_string(), size, true);
+                    total += word_width(metrics, &note.number.to_string(), size, true);
                     first = false;
                     continue;
                 }
                 for (j, word) in run.text.split_whitespace().enumerate() {
                     if !first || j > 0 { total += space; }
-                    total += text_width(font, word, size);
+                    total += metrics.text_width(word, size);
                     first = false;
                 }
             }
@@ -3826,19 +3857,19 @@ fn text_min_w(node: &Node) -> f32 {
     let size = node.font_size;
     let mut widest = 0.0_f32;
     for run in &node.text_runs {
-        let font = run.font.as_deref().unwrap_or(&node.font);
+        let metrics = Metrics::of(run.font.as_deref().unwrap_or(&node.font));
         if let Some(note) = &run.footnote {
-            widest = widest.max(word_width(font, &note.number.to_string(), size, true));
+            widest = widest.max(word_width(metrics, &note.number.to_string(), size, true));
             continue;
         }
         let is_span = run.font.is_some() || run.color.is_some()
                    || run.href.is_some() || run.underline || run.strike || run.background.is_some();
         // A styled run stays whole, unless the text fills a line with the first words of one.
         if is_span && !node.flow_runs && node.pre_tab == 0 {
-            widest = widest.max(text_width(font, &run.text, size));
+            widest = widest.max(metrics.text_width(&run.text, size));
         } else {
             for word in run.text.split_whitespace() {
-                widest = widest.max(text_width(font, word, size));
+                widest = widest.max(metrics.text_width(word, size));
             }
         }
     }
@@ -3899,7 +3930,7 @@ struct Atom<'a> {
 impl<'a> Atom<'a> {
     /// Measure the atom's text again, after it changed.
     fn measure(&mut self, font_size: f32) {
-        self.width = word_width(self.font, &self.text, font_size, self.sup);
+        self.width = word_width(Metrics::of(self.font), &self.text, font_size, self.sup);
     }
 
     /// A piece of the atom's text, `range` of it, borrowed as the text is.
@@ -4014,14 +4045,15 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     for (ri, run) in node.text_runs.iter().enumerate() {
         let is_span = run.font.is_some() || run.color.is_some()
                    || run.href.is_some() || run.underline || run.strike || run.background.is_some();
-        let font  = run.font.as_deref().unwrap_or(parent_font);
-        let color = run.color.as_deref().unwrap_or(parent_color);
+        let font    = run.font.as_deref().unwrap_or(parent_font);
+        let metrics = Metrics::of(font);
+        let color   = run.color.as_deref().unwrap_or(parent_color);
 
         if ri > 0 && run.leading_space { space_before = true; any_space = true; }
 
         if let Some(note) = &run.footnote {
             let text = note.number.to_string();
-            let width = word_width(font, &text, font_size, true);
+            let width = word_width(metrics, &text, font_size, true);
             atoms.push(Atom {
                 text: Cow::Owned(text), font, color, span: None, sup: true, space_before, join: Join::No, width,
             });
@@ -4030,7 +4062,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
             if !run.text.is_empty() {
                 atoms.push(Atom {
                     text: Cow::Borrowed(&run.text), font, color, span: Some(run), sup: false, space_before,
-                    join: Join::No, width: text_width(font, &run.text, font_size),
+                    join: Join::No, width: metrics.text_width(&run.text, font_size),
                 });
                 space_before = false;
             }
@@ -4039,7 +4071,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 if j > 0 { space_before = true; }
                 atoms.push(Atom {
                     text: Cow::Borrowed(word), font, color, span: None, sup: false, space_before, join: Join::No,
-                    width: text_width(font, word, font_size),
+                    width: metrics.text_width(word, font_size),
                 });
                 space_before = false;
             }
@@ -4081,9 +4113,10 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
             // A styled run of several words that does not fit what is left of the line goes on in the next
             // words, so the line is filled and the run is not moved down whole.
             let words: Vec<Range<usize>> = space_separated(&atom.text).collect();
+            let metrics = Metrics::of(atom.font);
             for (i, range) in words.into_iter().enumerate().rev() {
                 let text = atom.piece(range);
-                let width = text_width(atom.font, &text, font_size);
+                let width = metrics.text_width(&text, font_size);
                 let (join, space_before) = if i == 0 { (atom.join, atom.space_before) } else { (Join::Space, false) };
                 atoms.push_front(Atom { text, join, width, space_before, ..atom.clone() });
             }
@@ -4300,8 +4333,8 @@ struct PreSeg {
     run:  usize,
 }
 
-/// A character of preformatted text, with the index of the run it came from.
-type PreCell = (char, usize);
+/// A character of preformatted text, with the index of the run it came from and its width in the font of that run.
+type PreCell = (char, usize, f32);
 
 /// The characters of a preformatted text, a line at a time. A tab becomes the spaces up to the next multiple of
 /// `pre_tab` columns. A newline ends a line, and the one that ends the text starts no line after it.
@@ -4312,6 +4345,7 @@ fn pre_cells(node: &Node) -> Vec<Vec<PreCell>> {
     let tab = usize::from(node.pre_tab.max(1));
     let mut lines: Vec<Vec<PreCell>> = vec![Vec::new()];
     for (ri, run) in node.text_runs.iter().enumerate() {
+        let metrics = Metrics::of(run.font.as_deref().unwrap_or(&node.font));
         for c in run.text.chars() {
             let line = lines.last_mut().expect("there is always a line");
             match c {
@@ -4319,9 +4353,9 @@ fn pre_cells(node: &Node) -> Vec<Vec<PreCell>> {
                 '\r' => {}
                 '\t' => {
                     let fill = tab - line.len() % tab;
-                    line.extend(std::iter::repeat_n((' ', ri), fill));
+                    line.extend(std::iter::repeat_n((' ', ri, metrics.text_width(" ", node.font_size)), fill));
                 }
-                c => line.push((c, ri)),
+                c => line.push((c, ri, metrics.text_width(c.encode_utf8(&mut [0; 4]), node.font_size))),
             }
         }
     }
@@ -4329,12 +4363,6 @@ fn pre_cells(node: &Node) -> Vec<Vec<PreCell>> {
         lines.pop();
     }
     lines
-}
-
-/// The width of a character of a preformatted text, in the font of its run.
-fn pre_cell_width(node: &Node, cell: &PreCell) -> f32 {
-    let font = node.text_runs[cell.1].font.as_deref().unwrap_or(node.font.as_str());
-    text_width(font, cell.0.encode_utf8(&mut [0; 4]), node.font_size)
 }
 
 /// End the line being built, without the spaces at its end: they are the break and are not drawn. A line that
@@ -4351,7 +4379,7 @@ fn end_pre_line(out: &mut Vec<Vec<PreCell>>, line: &mut Vec<PreCell>, line_w: &m
 
 /// Break a line of a preformatted text where it passes `wrap_w`. It breaks at spaces, and a word that does not
 /// fit on a line of its own is broken at the last character that fits.
-fn wrap_pre_line(node: &Node, cells: &[PreCell], wrap_w: f32) -> Vec<Vec<PreCell>> {
+fn wrap_pre_line(cells: &[PreCell], wrap_w: f32) -> Vec<Vec<PreCell>> {
     let limit = wrap_w + 0.01;
     let mut out:  Vec<Vec<PreCell>> = Vec::new();
     let mut line: Vec<PreCell>      = Vec::new();
@@ -4362,8 +4390,7 @@ fn wrap_pre_line(node: &Node, cells: &[PreCell], wrap_w: f32) -> Vec<Vec<PreCell
         let len = rest.iter().take_while(|cell| (cell.0 == ' ') == space).count();
         let (token, tail) = rest.split_at(len);
         rest = tail;
-        let widths: Vec<f32> = token.iter().map(|cell| pre_cell_width(node, cell)).collect();
-        let token_w: f32 = widths.iter().sum();
+        let token_w: f32 = token.iter().map(|cell| cell.2).sum();
         if line_w + token_w <= limit {
             line.extend_from_slice(token);
             line_w += token_w;
@@ -4374,12 +4401,12 @@ fn wrap_pre_line(node: &Node, cells: &[PreCell], wrap_w: f32) -> Vec<Vec<PreCell
             line.extend_from_slice(token);
             line_w = token_w;
         } else {
-            for (cell, width) in token.iter().zip(&widths) {
-                if !line.is_empty() && line_w + width > limit {
+            for cell in token {
+                if !line.is_empty() && line_w + cell.2 > limit {
                     end_pre_line(&mut out, &mut line, &mut line_w);
                 }
                 line.push(*cell);
-                line_w += width;
+                line_w += cell.2;
             }
         }
     }
@@ -4394,9 +4421,9 @@ fn wrap_pre_line(node: &Node, cells: &[PreCell], wrap_w: f32) -> Vec<Vec<PreCell
 fn pre_lines(node: &Node, wrap_w: f32) -> Vec<Vec<PreSeg>> {
     let mut lines = Vec::new();
     for cells in pre_cells(node) {
-        for visual in wrap_pre_line(node, &cells, wrap_w) {
+        for visual in wrap_pre_line(&cells, wrap_w) {
             let mut segs: Vec<PreSeg> = Vec::new();
-            for (c, ri) in visual {
+            for (c, ri, _) in visual {
                 match segs.last_mut() {
                     Some(seg) if seg.run == ri => seg.text.push(c),
                     _ => segs.push(PreSeg { text: c.to_string(), run: ri }),
@@ -4411,7 +4438,7 @@ fn pre_lines(node: &Node, wrap_w: f32) -> Vec<Vec<PreSeg>> {
 /// The width of the longest line of a preformatted text, with no line wrapped.
 fn pre_natural_w(node: &Node) -> f32 {
     pre_cells(node).iter()
-        .map(|line| line.iter().map(|cell| pre_cell_width(node, cell)).sum::<f32>())
+        .map(|line| line.iter().map(|cell| cell.2).sum::<f32>())
         .fold(0.0, f32::max)
 }
 
@@ -4444,6 +4471,10 @@ fn layout_pre_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f3
     let line_height  = font_size * node.line_height;
     let parent_color = node.text_color.clone().unwrap_or_else(|| "#1a1a1a".into());
     let lines        = pre_lines(node, avail_w);
+    // The metrics of each run, found once for all its stretches.
+    let metrics: Vec<Metrics> = node.text_runs.iter()
+        .map(|run| Metrics::of(run.font.as_deref().unwrap_or(&node.font)))
+        .collect();
     let mut nodes: Vec<RenderNode> = Vec::new();
 
     for (li, line) in lines.iter().enumerate() {
@@ -4453,7 +4484,7 @@ fn layout_pre_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f3
             let run   = &node.text_runs[seg.run];
             let font  = run.font.as_deref().unwrap_or(node.font.as_str());
             let color = run.color.clone().unwrap_or_else(|| parent_color.clone());
-            let width = text_width(font, &seg.text, font_size);
+            let width = metrics[seg.run].text_width(&seg.text, font_size);
             let marked = run.href.is_some() || run.underline || run.strike || run.background.is_some();
             // Spaces alone leave nothing to draw, unless something is drawn under or over them.
             if marked || seg.text.chars().any(|c| c != ' ') {
@@ -4596,23 +4627,23 @@ fn text_natural_w(node: &Node) -> f32 {
     for (ri, run) in node.text_runs.iter().enumerate() {
         let is_span = run.font.is_some() || run.color.is_some()
                    || run.href.is_some() || run.underline || run.strike || run.background.is_some();
-        let font = run.font.as_deref().unwrap_or(parent_font);
+        let metrics = Metrics::of(run.font.as_deref().unwrap_or(parent_font));
 
         if ri > 0 && run.leading_space { pending_space = true; }
 
         if let Some(note) = &run.footnote {
             if pending_space { total += space_w; pending_space = false; }
-            total += word_width(font, &note.number.to_string(), font_size, true);
+            total += word_width(metrics, &note.number.to_string(), font_size, true);
         } else if is_span {
             if !run.text.is_empty() {
                 if pending_space { total += space_w; pending_space = false; }
-                total += text_width(font, &run.text, font_size);
+                total += metrics.text_width(&run.text, font_size);
             }
         } else {
             for (j, word) in run.text.split_whitespace().enumerate() {
                 if j > 0 { pending_space = true; }
                 if pending_space { total += space_w; pending_space = false; }
-                total += text_width(font, word, font_size);
+                total += metrics.text_width(word, font_size);
             }
         }
     }

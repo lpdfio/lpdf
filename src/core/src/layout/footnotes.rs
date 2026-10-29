@@ -223,7 +223,7 @@ pub(super) fn draw_area(notes: &[Note], x: f32, bottom: f32, width: f32, cap: f3
 /// Lay out the area with its top at `y`: the rule, then each note with its number hanging at the left.
 fn build_area(notes: &[Note], x: f32, y: f32, width: f32, cap: f32) -> (Vec<RenderNode>, f32) {
     let label_w = notes.iter()
-        .map(|n| word_width(&n.font, &n.number.to_string(), n.size, true))
+        .map(|n| word_width(Metrics::of(&n.font), &n.number.to_string(), n.size, true))
         .fold(0.0_f32, f32::max) + GAP_LABEL;
     let text_w = (width - label_w).max(0.0);
 
