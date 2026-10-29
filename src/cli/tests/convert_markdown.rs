@@ -111,13 +111,12 @@ fn data_adds_to_the_front_matter_and_never_replaces_the_text() {
 }
 
 #[test]
-fn raw_html_is_an_error_that_names_the_line() {
+fn raw_html_and_an_image_at_a_url_are_left_out_and_the_rest_is_converted() {
     let folder = workspace();
-    let input = write(&folder, "notes.md", "# Fine\n\ntext\n\n<div>no</div>\n");
+    let input = write(&folder, "notes.md", "# Fine\n\ntext\n\n<p align=\"center\"><img src=\"https://example.com/a.svg\"></p>\n\n![badge](https://example.com/b.svg)\n");
     let output = convert(&["--input", input.to_str().unwrap(), "--output", folder.join("out.pdf").to_str().unwrap()]);
-    assert!(!output.status.success());
-    let message = stderr(&output);
-    assert!(message.contains("markdown line 5") && message.contains("raw HTML"), "{message}");
+    assert!(output.status.success(), "{}", stderr(&output));
+    read_pdf(&folder.join("out.pdf"));
 }
 
 #[test]

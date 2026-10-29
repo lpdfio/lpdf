@@ -525,21 +525,38 @@ fn front_matter_field(line: &str) -> Option<(&str, String)> {
     Some((key, unquoted.unwrap_or(value).to_string()))
 }
 
-/// The images of the `.md` file `markdown`, as they are written: relative paths, in order and once each. An image
-/// at a URL is left out, which the engine reports where it is used.
+/// The images of the `.md` file `markdown`, as they are written, in `![]()` or in an `<img>`: relative paths, in
+/// order and once each. An image at a URL is left out, as the engine leaves it out.
 #[allow(dead_code)] // for the hosts of the engine, not the WASI binary
 pub fn file_images(markdown: &str) -> Vec<String> {
     let mut paths: Vec<String> = Vec::new();
+    // The lines of an HTML block are read together, since a tag can run over them
+    let mut block = String::new();
     for event in Parser::new_ext(markdown, file_options()) {
-        if let Event::Start(Tag::Image { dest_url, .. }) = event {
-            let lower = dest_url.to_ascii_lowercase();
-            let is_url = ["http://", "https://", "ftp://", "file://", "data:"].iter().any(|scheme| lower.starts_with(scheme));
-            if !is_url && !dest_url.is_empty() && !paths.iter().any(|path| path == dest_url.as_ref()) {
-                paths.push(dest_url.to_string());
+        let html = match event {
+            Event::Start(Tag::Image { dest_url, .. }) => {
+                add_file_image(&mut paths, &dest_url);
+                continue;
             }
+            Event::Html(html) => {
+                block.push_str(&html);
+                continue;
+            }
+            Event::End(TagEnd::HtmlBlock) => std::mem::take(&mut block),
+            Event::InlineHtml(html) => html.to_string(),
+            _ => continue,
+        };
+        for part in read_html(&html) {
+            if let HtmlPart::Image { src, .. } = part { add_file_image(&mut paths, &src); }
         }
     }
     paths
+}
+
+fn add_file_image(paths: &mut Vec<String>, src: &str) {
+    if !is_url(src) && !src.is_empty() && !paths.iter().any(|path| path == src) {
+        paths.push(src.to_string());
+    }
 }
 
 /// The asset name of the image at `src` of a `.md` file: the host loads the file under it.
@@ -664,7 +681,8 @@ enum Piece {
     Text { text: String, style: Style },
     Code { text: String, style: Style },
     Note(String),
-    Image { dest: String, line: usize },
+    /// An image, with the `width` and `height` of an `<img>`, in points, when it had them.
+    Image { dest: String, width: Option<String>, height: Option<String>, line: usize },
     /// A `<br>`, or two spaces or a backslash at the end of a line: the words after it begin a new line.
     Break,
 }
@@ -702,20 +720,19 @@ impl<'a> Writer<'a> {
         format!("markdown line {line}: {message}")
     }
 
-    /// The error for raw HTML, which names the first tag and says what to write: a tag that was meant as text goes in
-    /// backticks, and a comment is left out.
-    fn raw_html(&self, line: usize, html: &str) -> String {
-        let message = match first_tag(html) {
-            Some(tag) if is_line_break(tag) => format!(
-                "raw HTML {tag} is not supported on a line of its own: write it at the end of the line it breaks"
-            ),
-            Some(tag) if tag.starts_with("<!--") => format!("raw HTML {tag} is not supported: leave the comment out"),
-            Some(tag) => format!(
-                "raw HTML {tag} is not supported: to show it as text, write it in backticks, `{tag}`; otherwise write the Markdown it stands for, or leave it out"
-            ),
-            None => "raw HTML is not supported: write the Markdown it stands for, or leave it out".to_string(),
-        };
-        self.fail(line, &message)
+    /// The words, breaks and images that some raw HTML stands for, after `pieces`: the rest of it is left out. A
+    /// picture at a URL is left out too, since an image must be an asset.
+    fn push_html(&self, html: &str, style: &Style, pieces: &mut Vec<Piece>, line: usize) {
+        for part in read_html(html) {
+            match part {
+                HtmlPart::Text(text) => pieces.push(Piece::Text { text, style: style.clone() }),
+                HtmlPart::Break => pieces.push(Piece::Break),
+                HtmlPart::Image { src, width, height } if !is_url(&src) => {
+                    pieces.push(Piece::Image { dest: src, width, height, line });
+                }
+                HtmlPart::Image { .. } => {}
+            }
+        }
     }
 
     fn blocks(mut self) -> Result<Vec<Block>, String> {
@@ -804,17 +821,26 @@ impl<'a> Writer<'a> {
                 Event::Start(Tag::MetadataBlock(MetadataBlockKind::YamlStyle)) => self.skip(TagEnd::MetadataBlock(MetadataBlockKind::YamlStyle)),
                 Event::Start(Tag::MetadataBlock(MetadataBlockKind::PlusesStyle)) => self.skip(TagEnd::MetadataBlock(MetadataBlockKind::PlusesStyle)),
                 Event::Start(Tag::HtmlBlock) => {
-                    let html = match self.events.get(self.at + 1) {
-                        Some((Event::Html(text), _)) => text.to_string(),
-                        _ => String::new(),
-                    };
-                    return Err(self.raw_html(line, &html));
+                    self.at += 1;
+                    // A tag can run over lines, which the parser gives one at a time.
+                    let mut html = String::new();
+                    while let Some((event, _)) = self.events.get(self.at) {
+                        self.at += 1;
+                        match event {
+                            Event::Html(text) => html.push_str(text),
+                            Event::End(TagEnd::HtmlBlock) => break,
+                            _ => {}
+                        }
+                    }
+                    let mut pieces = Vec::new();
+                    self.push_html(&html, &Style::default(), &mut pieces, line);
+                    self.paragraph(pieces, line, around, &mut blocks)?;
                 }
-                Event::InlineHtml(html) if is_line_break(&html) => {
+                // A tag in the words of a tight list item.
+                Event::Html(_) | Event::InlineHtml(_) => {
                     let pieces = self.read_pieces(None)?;
                     self.paragraph(pieces, line, around, &mut blocks)?;
                 }
-                Event::Html(html) | Event::InlineHtml(html) => return Err(self.raw_html(line, &html)),
                 Event::Rule => {
                     self.at += 1;
                     blocks.push(Block { xml: format!("<divider{}/>", attrs_xml(&self.spec.rules.rule("hr"))), line });
@@ -936,13 +962,15 @@ impl<'a> Writer<'a> {
                         self.at += 1;
                         if matches!(event, Event::End(TagEnd::Image)) { break; }
                     }
-                    pieces.push(Piece::Image { dest: dest_url.to_string(), line });
+                    // An image at a URL is left out: an image must be an asset, and a README's are mostly badges.
+                    if !is_url(&dest_url) {
+                        pieces.push(Piece::Image { dest: dest_url.to_string(), width: None, height: None, line });
+                    }
                 }
-                Event::Html(html) | Event::InlineHtml(html) if is_line_break(&html) => {
-                    pieces.push(Piece::Break);
+                Event::Html(html) | Event::InlineHtml(html) => {
+                    self.push_html(&html, style, pieces, line);
                     self.at += 1;
                 }
-                Event::Html(html) | Event::InlineHtml(html) => return Err(self.raw_html(line, &html)),
                 // A block that begins ends the words of a block with no tag of its own.
                 Event::TaskListMarker(checked) => {
                     self.task = Some(checked);
@@ -1095,10 +1123,21 @@ impl<'a> Writer<'a> {
         };
         for piece in pieces {
             match piece {
-                Piece::Image { dest, line: image_line } => {
+                Piece::Image { dest, width, height, line: image_line } => {
                     flush(self, &mut words, blocks)?;
                     let name = self.image_name(&dest, image_line)?;
-                    blocks.push(Block { xml: format!("<img name=\"{}\" width=\"fill\"/>", escape_attr(&name)), line: image_line });
+                    // With only one of them the other follows the picture's proportions, and with neither the picture
+                    // fills the width.
+                    let size = match (width, height) {
+                        (None, None) => " width=\"fill\"".to_string(),
+                        (width, height) => {
+                            let mut size = String::new();
+                            if let Some(width) = width { push_attr(&mut size, "width", &width); }
+                            if let Some(height) = height { push_attr(&mut size, "height", &height); }
+                            size
+                        }
+                    };
+                    blocks.push(Block { xml: format!("<img name=\"{}\"{size}/>", escape_attr(&name)), line: image_line });
                 }
                 other => words.push(other),
             }
@@ -1108,12 +1147,6 @@ impl<'a> Writer<'a> {
 
     /// The asset an image of the Markdown is: the one named `dest`, or the one whose `src` is.
     fn image_name(&self, dest: &str, line: usize) -> Result<String, String> {
-        let lower = dest.to_ascii_lowercase();
-        if ["http://", "https://", "ftp://", "file://", "data:"].iter().any(|scheme| lower.starts_with(scheme)) {
-            return Err(self.fail(line, &format!(
-                "an image's source must be the name or the src of an asset, not a URL: '{dest}'"
-            )));
-        }
         if self.spec.images.contains_key(dest) {
             return Ok(dest.to_string());
         }
@@ -1345,11 +1378,201 @@ fn describe(event: &Event) -> String {
     }
 }
 
-/// Whether some HTML is a `<br>`, which is the one tag that is read: `<br>`, `<br/>` or `<br />`, in any case.
-fn is_line_break(html: &str) -> bool {
-    let tag = html.trim();
-    let Some(inner) = tag.strip_prefix('<').and_then(|rest| rest.strip_suffix('>')) else { return false };
-    inner.strip_suffix('/').unwrap_or(inner).trim_end().eq_ignore_ascii_case("br")
+/// What some raw HTML stands for. Raw HTML is a way to write what Markdown can't for an HTML output, and a PDF has none,
+/// so a tag is left out and the words in it are kept, except for these.
+enum HtmlPart {
+    Text(String),
+    /// A `<br>`, or the start or the end of a block such as a `<p>`: the words after it begin a new line.
+    Break,
+    /// An `<img>` with a `src`, and its `width` and `height` in points when it had them in pixels. Markdown's own image
+    /// has no size, which is the reason to write the tag.
+    Image { src: String, width: Option<String>, height: Option<String> },
+}
+
+/// The tags that put the words around them on lines of their own.
+const LINE_TAGS: [&str; 26] = [
+    "br", "hr", "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "table", "tr", "td", "th",
+    "blockquote", "pre", "details", "summary", "section", "article", "header", "footer", "figcaption",
+];
+
+/// The words, breaks and images in some raw HTML. A comment, a script and a style are left out, and so is a tag that is
+/// not one of these, with the words in it kept.
+fn read_html(html: &str) -> Vec<HtmlPart> {
+    let mut parts: Vec<HtmlPart> = Vec::new();
+    let mut text = String::new();
+    let mut at = 0;
+    while let Some(open) = html[at..].find('<') {
+        let open = at + open;
+        text.push_str(&html[at..open]);
+        let Some(len) = html_tag_len(&html[open..]) else {
+            // A `<` that opens no tag is a character
+            text.push('<');
+            at = open + 1;
+            continue;
+        };
+        let tag = &html[open..open + len];
+        at = open + len;
+        let Some((closing, name, attrs)) = html_tag(tag) else { continue };
+        if !closing && (name == "script" || name == "style") {
+            let lower = html[at..].to_ascii_lowercase();
+            at = match lower.find(&format!("</{name}")) {
+                Some(end) => at + end + html_tag_len(&html[at + end..]).unwrap_or(lower.len() - end),
+                None => html.len(),
+            };
+        } else if name == "img" && !closing {
+            if let Some(src) = html_attr(attrs, "src").filter(|src| !src.trim().is_empty()) {
+                push_html_text(&mut parts, &mut text);
+                parts.push(HtmlPart::Image {
+                    src: src.trim().to_string(),
+                    width: html_attr(attrs, "width").and_then(|width| html_length(&width)),
+                    height: html_attr(attrs, "height").and_then(|height| html_length(&height)),
+                });
+            }
+        } else if LINE_TAGS.contains(&name.as_str()) {
+            push_html_text(&mut parts, &mut text);
+            parts.push(HtmlPart::Break);
+        }
+    }
+    text.push_str(&html[at..]);
+    push_html_text(&mut parts, &mut text);
+    parts
+}
+
+/// The words gathered so far, with the runs of white space in them as one space, as HTML sets them.
+fn push_html_text(parts: &mut Vec<HtmlPart>, text: &mut String) {
+    let words = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    text.clear();
+    if !words.is_empty() {
+        parts.push(HtmlPart::Text(decode_entities(&words)));
+    }
+}
+
+/// How many bytes of `s`, which begins with a `<`, are a tag, a comment or a declaration, or `None` when it is not one
+/// and the `<` is a character. A `>` inside the quotes of an attribute's value does not end the tag.
+fn html_tag_len(s: &str) -> Option<usize> {
+    if s.starts_with("<!--") {
+        // An unterminated comment runs to the end
+        return Some(s.find("-->").map_or(s.len(), |end| end + 3));
+    }
+    let next = s[1..].chars().next()?;
+    let opens = match next {
+        '/' => s[2..].starts_with(|c: char| c.is_ascii_alphabetic()),
+        '!' | '?' => true,
+        _ => next.is_ascii_alphabetic(),
+    };
+    if !opens {
+        return None;
+    }
+    let mut quote: Option<char> = None;
+    let mut last = ' ';
+    for (at, c) in s.char_indices().skip(1) {
+        match quote {
+            Some(open) if c == open => quote = None,
+            Some(_) => {}
+            None if c == '>' => return Some(at + 1),
+            // A quote opens a value only after an `=`
+            None if (c == '"' || c == '\'') && last == '=' => quote = Some(c),
+            None => {}
+        }
+        if quote.is_none() && !c.is_whitespace() { last = c; }
+    }
+    None
+}
+
+/// Whether the tag is a closing one, its name in lower case, and its attributes as written. `None` for a comment or a
+/// declaration.
+fn html_tag(tag: &str) -> Option<(bool, String, &str)> {
+    let inner = tag.strip_prefix('<')?.strip_suffix('>')?;
+    let (closing, inner) = match inner.strip_prefix('/') {
+        Some(rest) => (true, rest),
+        None => (false, inner),
+    };
+    let end = inner.find(|c: char| !c.is_ascii_alphanumeric()).unwrap_or(inner.len());
+    (end > 0).then(|| (closing, inner[..end].to_ascii_lowercase(), &inner[end..]))
+}
+
+/// The value of the attribute `name` among the `attrs` of a tag, quoted or not.
+fn html_attr(attrs: &str, name: &str) -> Option<String> {
+    let mut rest = attrs.trim_start();
+    while !rest.is_empty() {
+        let key_end = rest.find(|c: char| c.is_whitespace() || c == '=').unwrap_or(rest.len());
+        let key = &rest[..key_end];
+        rest = rest[key_end..].trim_start();
+        let mut value = "";
+        if let Some(after) = rest.strip_prefix('=') {
+            let after = after.trim_start();
+            let (found, remaining) = match after.chars().next() {
+                Some(quote @ ('"' | '\'')) => match after[1..].find(quote) {
+                    Some(end) => (&after[1..1 + end], &after[end + 2..]),
+                    None => (&after[1..], ""),
+                },
+                _ => after.split_at(after.find(char::is_whitespace).unwrap_or(after.len())),
+            };
+            value = found;
+            rest = remaining.trim_start();
+        }
+        if key.eq_ignore_ascii_case(name) {
+            return Some(decode_entities(value));
+        }
+    }
+    None
+}
+
+/// An HTML `width` or `height`, which is in pixels with or without `px`, as the points of the schema: a pixel is
+/// 0.75pt. A percentage, or a length in another unit, is `None`.
+fn html_length(value: &str) -> Option<String> {
+    let value = value.trim();
+    let pixels: f32 = value.strip_suffix("px").unwrap_or(value).trim().parse().ok()?;
+    (pixels.is_finite() && pixels > 0.0).then(|| format!("{}pt", pixels * 0.75))
+}
+
+/// The text with the character references of HTML turned into their characters: the five named ones, `&nbsp;` and
+/// those in numbers. What is not one is left as it is.
+fn decode_entities(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find('&') {
+        out.push_str(&rest[..at]);
+        rest = &rest[at..];
+        let decoded = rest.find(';').filter(|end| *end <= 10).and_then(|end| {
+            let name = &rest[1..end];
+            let c = match name {
+                "amp" => '&',
+                "lt" => '<',
+                "gt" => '>',
+                "quot" => '"',
+                "apos" => '\'',
+                "nbsp" => ' ',
+                _ => {
+                    let digits = name.strip_prefix('#')?;
+                    let code = match digits.strip_prefix(['x', 'X']) {
+                        Some(hex) => u32::from_str_radix(hex, 16).ok()?,
+                        None => digits.parse().ok()?,
+                    };
+                    char::from_u32(code)?
+                }
+            };
+            Some((c, end + 1))
+        });
+        match decoded {
+            Some((c, len)) => {
+                out.push(c);
+                rest = &rest[len..];
+            }
+            None => {
+                out.push('&');
+                rest = &rest[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Whether the source of an image is a URL. An image must be an asset, so one at a URL is left out.
+fn is_url(src: &str) -> bool {
+    let lower = src.to_ascii_lowercase();
+    ["http://", "https://", "ftp://", "file://", "data:"].iter().any(|scheme| lower.starts_with(scheme))
 }
 
 /// The words of a block cut at its breaks, each line without the spaces at its ends. A line with no words is left out,
@@ -1363,14 +1586,6 @@ fn lines_of(pieces: &[Piece]) -> Vec<Vec<Piece>> {
     }
     lines.retain(|line| !line.is_empty());
     lines
-}
-
-/// The first tag of some HTML, from its `<` to its `>`, when that is short and on one line.
-fn first_tag(html: &str) -> Option<&str> {
-    let start = html.find('<')?;
-    let end = start + html[start..].find('>')?;
-    let tag = &html[start..=end];
-    (tag.chars().count() <= 60 && !tag.contains('\n')).then_some(tag)
 }
 
 fn push_attr(out: &mut String, key: &str, value: &str) {
@@ -1570,30 +1785,97 @@ mod tests {
     }
 
     #[test]
-    fn an_image_that_is_not_an_asset_or_is_a_url_is_an_error_that_names_the_line() {
+    fn an_image_that_is_not_an_asset_is_an_error_that_names_the_line() {
         let err = error("one\n\n![x](missing.png)\n");
         assert!(err.contains("markdown line 3") && err.contains("neither"), "{err}");
-        let err = error("![x](https://example.com/a.png)\n");
-        assert!(err.contains("markdown line 1") && err.contains("not a URL"), "{err}");
+        let err = error("<img src=\"missing.png\">\n");
+        assert!(err.contains("markdown line 1") && err.contains("neither"), "{err}");
     }
 
     #[test]
-    fn raw_html_is_an_error_that_names_the_tag_and_says_to_write_it_in_backticks_when_it_is_text() {
-        let err = error("The user can add the sender to <Biller> here.\n");
-        assert!(err.contains("markdown line 1") && err.contains("raw HTML <Biller> is not supported"), "{err}");
-        assert!(err.contains("in backticks, `<Biller>`"), "{err}");
-        let err = error("fine\n\n<div class=\"a\">x</div>\n");
-        assert!(err.contains("markdown line 3") && err.contains("raw HTML <div class=\"a\"> is not supported"), "{err}");
-    }
-
-    #[test]
-    fn a_br_is_a_line_break_and_no_other_html_is() {
-        for html in ["<b>", "<br class=\"x\">", "</br>", "<brx>", "<img src=\"a.png\">"] {
-            let err = error(&format!("a{html}b\n"));
-            assert!(err.contains("raw HTML") && err.contains("is not supported"), "{html}: {err}");
+    fn an_image_at_a_url_is_left_out_with_the_words_around_it_kept() {
+        for markdown in [
+            "before ![x](https://example.com/a.png) after\n",
+            "before <img src=\"https://example.com/a.png\" width=\"10\"> after\n",
+            "before <a href=\"https://lpdf.io\"><img src=\"HTTPS://example.com/a.png\"></a> after\n",
+        ] {
+            let nodes = nodes(markdown);
+            assert_eq!(nodes.len(), 1, "{markdown}");
+            assert_eq!(words(&nodes[0]), "before after", "{markdown}");
         }
-        for html in ["<br>", "<br/>", "<br />", "<BR>", "<Br/>"] {
-            assert!(parse(&document("", "", &format!("a{html}b\n"))).is_ok(), "{html}");
+        assert!(nodes("![badge](https://img.shields.io/x.svg)\n").is_empty());
+        let cell = nodes("| Build |\n|---|\n| ![ok](https://img.shields.io/x.svg) passing |\n");
+        assert_eq!(cell.len(), 1);
+    }
+
+    #[test]
+    fn raw_html_is_left_out_and_the_words_in_it_are_kept() {
+        let nodes = nodes("The user can add the sender to <Biller> here, in <b>bold</b> and <span class=\"a\">a span</span>.\n");
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(words(&nodes[0]), "The user can add the sender to here, in bold and a span.");
+    }
+
+    #[test]
+    fn an_html_block_is_a_paragraph_of_its_words_with_its_blocks_on_lines_of_their_own() {
+        let readme = "<p align=\"center\">\n  <a href=\"https://lpdf.io\">\n    <b>Lpdf</b> &amp; friends\n  </a>\n</p>\n\n<h2 align=\"center\">Second</h2><p>and third</p>\n\nafter\n";
+        let nodes = nodes(readme);
+        assert_eq!(nodes.len(), 3);
+        assert_eq!(words(&nodes[0]), "Lpdf & friends");
+        let lines: Vec<String> = texts(&nodes[1]).into_iter().map(words).collect();
+        assert_eq!(lines, ["Second", "and third"]);
+        assert_eq!(words(&nodes[2]), "after");
+    }
+
+    #[test]
+    fn a_comment_a_script_and_a_style_leave_nothing() {
+        let html = "<!-- a note -->\n\n<script>alert(\"<b>\")</script>\n\n<style>p { color: red }</style>\n\none <!-- inside --> two\n";
+        let nodes = nodes(html);
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(words(&nodes[0]), "one two");
+    }
+
+    #[test]
+    fn a_tag_can_run_over_lines_and_hold_a_greater_than_in_its_quotes() {
+        let nodes = nodes("<div\n  title=\"a > b\"\n  align=\"center\">words</div>\n");
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(words(&nodes[0]), "words");
+    }
+
+    #[test]
+    fn an_img_is_an_image_at_the_size_of_its_width_and_height_in_pixels() {
+        let size = |html: &str| {
+            let nodes = nodes(html);
+            assert_eq!(nodes.len(), 1, "{html}");
+            assert_eq!(nodes[0].kind, NodeKind::Img, "{html}");
+            assert_eq!(nodes[0].image_name.as_deref(), Some("chart"), "{html}");
+            (nodes[0].width_fill, nodes[0].width_constraint, nodes[0].img_height_constraint)
+        };
+        assert_eq!(size("<img src=\"chart\">\n"), (true, None, None));
+        assert_eq!(size("<img src=\"img/chart.png\" alt=\"a chart\" width=\"200\">\n"), (false, Some(150.0), None));
+        assert_eq!(size("<IMG SRC='./img/chart.png' Height='100px' />\n"), (false, None, Some(75.0)));
+        assert_eq!(size("<img src=img/chart.png width=40 height=20>\n"), (false, Some(30.0), Some(15.0)));
+        // a percentage is not a length of ours, and the image fills the width as one of Markdown does
+        assert_eq!(size("<img src=\"chart\" width=\"50%\">\n"), (true, None, None));
+    }
+
+    #[test]
+    fn an_img_among_other_tags_stands_between_the_words_around_it() {
+        let nodes = nodes("<p align=\"center\"><img src=\"chart\" width=\"80\"></p>\n\nbefore <img src=\"chart\"> after\n");
+        assert_eq!(nodes.iter().map(|n| n.kind.clone()).collect::<Vec<_>>(), [NodeKind::Img, NodeKind::Text, NodeKind::Img, NodeKind::Text]);
+    }
+
+    #[test]
+    fn character_references_in_raw_html_are_the_characters() {
+        let nodes = nodes("<p>1 &lt; 2 &amp;&amp; 3&nbsp;&gt; 2, &#65;&#x42; &quot;q&quot; &apos;s&apos; &unknown; &amp</p>\n");
+        assert_eq!(words(&nodes[0]), "1 < 2 && 3 > 2, AB \"q\" 's' &unknown; &amp");
+    }
+
+    #[test]
+    fn a_br_is_a_line_break_in_any_form() {
+        for html in ["<br>", "<br/>", "<br />", "<BR>", "<Br/>", "<br class=\"x\">", "</br>"] {
+            let nodes = nodes(&format!("a{html}b\n"));
+            let lines: Vec<String> = texts(&nodes[0]).into_iter().map(words).collect();
+            assert_eq!(lines, ["a", "b"], "{html}");
         }
     }
 
@@ -1701,19 +1983,12 @@ mod tests {
     }
 
     #[test]
-    fn a_br_in_a_heading_is_a_space_and_one_on_a_line_of_its_own_is_an_error_that_says_where_to_write_it() {
-        let nodes = nodes("# one<br>two\n");
-        assert_eq!(words(&nodes[0]), "one two");
-        assert_eq!(nodes[0].bookmarks[0].label, "one two");
-        let err = error("fine\n\n<br>\n\ntext\n");
-        assert!(err.contains("markdown line 3") && err.contains("raw HTML <br> is not supported on a line of its own"), "{err}");
-        assert!(err.contains("at the end of the line it breaks"), "{err}");
-    }
-
-    #[test]
-    fn a_comment_is_raw_html_to_leave_out() {
-        let err = error("one\n\n<!-- a note -->\n\ntwo\n");
-        assert!(err.contains("markdown line 3") && err.contains("<!-- a note --> is not supported: leave the comment out"), "{err}");
+    fn a_br_in_a_heading_is_a_space_and_one_on_a_line_of_its_own_breaks_nothing() {
+        let heading = nodes("# one<br>two\n");
+        assert_eq!(words(&heading[0]), "one two");
+        assert_eq!(heading[0].bookmarks[0].label, "one two");
+        let apart = nodes("fine\n\n<br>\n\ntext\n");
+        assert_eq!(apart.iter().map(words).collect::<Vec<_>>(), ["fine", "text"]);
     }
 
     #[test]
@@ -1724,11 +1999,12 @@ mod tests {
     }
 
     #[test]
-    fn raw_html_is_an_error_that_names_the_line() {
-        let err = error("fine\n\n<div>x</div>\n");
-        assert!(err.contains("markdown line 3") && err.contains("raw HTML"), "{err}");
-        let err = error("fine <b>x</b>\n");
-        assert!(err.contains("markdown line 1") && err.contains("raw HTML"), "{err}");
+    fn raw_html_in_a_list_a_quote_and_a_table_keeps_its_words() {
+        let nodes = nodes("- <b>item</b><br>two\n\n> <i>quoted</i>\n\n| A |\n|---|\n| <u>cell</u> |\n");
+        let item: Vec<String> = texts(&nodes[0].children[0]).into_iter().map(words).collect();
+        assert_eq!(item, ["item", "two"]);
+        assert_eq!(words(texts(&nodes[1])[0]), "quoted");
+        assert_eq!(words(texts(&nodes[2].children[1].children[0])[0]), "cell");
     }
 
     #[test]
@@ -1974,8 +2250,8 @@ mod tests {
         let xml = r#"<lpdf version="1"><document><section><markdown>
             <markdown-content data-value="body"/></markdown></section></document></lpdf>"#;
         let mut doc = parse(xml).unwrap();
-        let err = crate::data::apply(&mut doc, r#"{"body": "ok\n\n<b>x</b>"}"#).unwrap_err();
-        assert!(err.contains("markdown line 3") && err.contains("raw HTML"), "{err}");
+        let err = crate::data::apply(&mut doc, r#"{"body": "ok\n\n![x](missing.png)"}"#).unwrap_err();
+        assert!(err.contains("markdown line 3") && err.contains("neither"), "{err}");
     }
 
     #[test]
@@ -2107,6 +2383,12 @@ mod tests {
     fn a_file_lists_its_relative_images_once_each_and_not_the_urls() {
         let file = "![a](img/a.png) and ![b](./b.jpg) and ![a again](img/a.png) and ![u](https://x.org/u.png)\n";
         assert_eq!(file_images(file), ["img/a.png", "./b.jpg"]);
+    }
+
+    #[test]
+    fn a_file_lists_the_images_of_its_img_tags_too() {
+        let file = "<p align=\"center\">\n  <img\n    src=\"logo.svg\" width=\"80\">\n</p>\n\nand <img src='img/a.png'> or ![a](img/a.png) or <img src=\"https://x.org/u.png\"> or <img alt=\"none\">\n";
+        assert_eq!(file_images(file), ["logo.svg", "img/a.png"]);
     }
 
     #[test]
