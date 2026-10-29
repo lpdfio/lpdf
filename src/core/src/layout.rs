@@ -4402,13 +4402,13 @@ fn shift_y_cross(node: RenderNode, node_h: f32, row_h: f32, align: &Align) -> Re
         Align::Center => (row_h - node_h) / 2.0,
         Align::End => row_h - node_h,
     };
-    if dy == 0.0 {
-        return node;
-    }
     shift_y(node, dy)
 }
 
 fn shift_y(node: RenderNode, dy: f32) -> RenderNode {
+    if dy == 0.0 {
+        return node;
+    }
     match node {
         RenderNode::Box(mut b) => {
             b.y += dy;
@@ -4445,7 +4445,7 @@ fn shift_y(node: RenderNode, dy: f32) -> RenderNode {
             a.y += dy;
             RenderNode::Anchor(a)
         }
-        // What a `<shape>` draws moves with its box.
+        // What a `<shape>` or the checkbox of an `<li>` draws moves with its box.
         RenderNode::CanvasRect(mut r) => {
             r.y += dy;
             RenderNode::CanvasRect(r)
@@ -4453,6 +4453,10 @@ fn shift_y(node: RenderNode, dy: f32) -> RenderNode {
         RenderNode::CanvasEllipse(mut e) => {
             e.cy += dy;
             RenderNode::CanvasEllipse(e)
+        }
+        RenderNode::CanvasPath(mut p) => {
+            p.d = shift_path(&p.d, 0.0, dy);
+            RenderNode::CanvasPath(p)
         }
         // The other canvas nodes use absolute canvas coordinates; y-shifting is a no-op.
         other => other,
@@ -4495,7 +4499,7 @@ fn shift_x(node: RenderNode, dx: f32) -> RenderNode {
             f.x += dx;
             RenderNode::Field(f)
         }
-        // What a `<shape>` draws moves with its box.
+        // What a `<shape>` or the checkbox of an `<li>` draws moves with its box.
         RenderNode::CanvasRect(mut r) => {
             r.x += dx;
             RenderNode::CanvasRect(r)
@@ -4504,9 +4508,30 @@ fn shift_x(node: RenderNode, dx: f32) -> RenderNode {
             e.cx += dx;
             RenderNode::CanvasEllipse(e)
         }
+        RenderNode::CanvasPath(mut p) => {
+            p.d = shift_path(&p.d, dx, 0.0);
+            RenderNode::CanvasPath(p)
+        }
         // The other canvas nodes use absolute canvas coordinates; x-shifting is a no-op.
         other => other,
     }
+}
+
+/// The path `d` moved by `dx` and `dy`. In the flow only the tick of a checkbox is a path, drawn with `M` and `L`
+/// (`canvas::draw_checkbox`), so its numbers are x and y in turn.
+fn shift_path(d: &str, dx: f32, dy: f32) -> String {
+    let mut is_x = true;
+    d.split_whitespace()
+        .map(|word| match word.parse::<f32>() {
+            Ok(n) => {
+                let offset = if is_x { dx } else { dy };
+                is_x = !is_x;
+                (n + offset).to_string()
+            }
+            Err(_) => word.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 // ── Debug overlay ─────────────────────────────────────────────────────────────
@@ -7163,6 +7188,47 @@ abcdef</code><text>after</text></row>"#,
         let dot = &nodes_of(&tree, "canvas-ellipse")[0];
         let cx = dot["cx"].as_f64().unwrap();
         assert!(cx > 28.0 && cx < 28.0 + 539.28 / 2.0, "cx={cx}");
+    }
+
+    /// The numbers of a path's `d`, in order.
+    fn path_numbers(d: &str) -> Vec<f32> {
+        d.split_whitespace().filter_map(|word| word.parse().ok()).collect()
+    }
+
+    #[test]
+    fn a_checked_item_that_a_row_moves_draws_its_tick_inside_its_checkbox() {
+        let list = r#"<column width="200pt"><list><li checked="true"><text>First</text></li></list></column>"#;
+        let rows = [
+            ("centered", format!(r#"<row align="center"><text font-size="40pt">Tall</text>{list}</row>"#)),
+            ("on a later line", format!(r#"<row><frame width="400pt" height="20pt"/>{list}</row>"#)),
+        ];
+        for (case, row) in rows {
+            let tree = engine_render(&minimal(&row));
+            let outline = &nodes_of(&tree, "canvas-rect")[0];
+            let [x, y, w, h] = ["x", "y", "w", "h"].map(|k| outline[k].as_f64().unwrap() as f32);
+            let d = nodes_of(&tree, "canvas-path")[0]["d"].as_str().unwrap().to_string();
+            let points = path_numbers(&d);
+            assert_eq!(points.len(), 6, "{case}: {d}");
+            let inside = points.chunks(2).all(|p| (x..=x + w).contains(&p[0]) && (y..=y + h).contains(&p[1]));
+            assert!(inside, "{case}: the tick {d} is outside its box at {x} {y} {w} {h}");
+        }
+    }
+
+    #[test]
+    fn a_checkbox_laid_out_at_the_origin_and_moved_has_the_tick_of_one_laid_out_in_place() {
+        let shape = crate::parse::Shape {
+            kind: crate::parse::ShapeKind::Checkbox, fill: None, stroke: Some("#737373".into()), stroke_width: Some(1.0),
+            stroke_dash: None, tick: Some("#1a1a1a".into()),
+        };
+        let tick_of = |node: RenderNode| {
+            let RenderNode::Box(checkbox) = node else { panic!("a box") };
+            let Some(RenderNode::CanvasPath(tick)) = checkbox.children.into_iter().nth(1) else { panic!("a tick") };
+            path_numbers(&tick.d)
+        };
+        let in_place = tick_of(canvas::draw_flow_shape(&shape, 2.0, 37.3, 120.7, 8.8, 8.8));
+        let moved = tick_of(shift_x(shift_y(canvas::draw_flow_shape(&shape, 2.0, 0.0, 0.0, 8.8, 8.8), 120.7), 37.3));
+        assert_eq!(in_place.len(), 6);
+        assert!(in_place.iter().zip(&moved).all(|(a, b)| (a - b).abs() < 0.001), "{in_place:?} is not {moved:?}");
     }
 
     // ── Footnotes ─────────────────────────────────────────────────────────────
