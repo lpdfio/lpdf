@@ -653,6 +653,12 @@ pub fn bench_fonts(fonts: &[(&str, &[u8])]) -> BenchFonts {
     loaded
 }
 
+/// The `name` and `src` of each embedded font `xml` declares, in order. A benchmark reads the files of the `src`
+/// as an SDK does and loads them with `bench_fonts`. Used by the instruction-count benchmarks of `benches/counts`.
+pub fn bench_font_srcs(xml: &str) -> Result<Vec<(String, String)>, String> {
+    parse::font_srcs(xml)
+}
+
 /// `bench_layout_doc` with embedded fonts: their advances are set for layout as `render_pdf` sets them, so their
 /// text is measured as in the SDKs. Used by the instruction-count benchmarks of `benches/counts`.
 pub fn bench_layout_doc_with_fonts(mut doc: BenchDoc, fonts: &BenchFonts) -> BenchPages {
@@ -979,16 +985,57 @@ mod tests {
         assert_eq!(whole, split);
     }
 
-    const BENCH_FONTS: [(&str, &[u8]); 3] = [
-        ("body", include_bytes!("../../../test/assets/fonts/CrimsonText-Regular.ttf")),
-        ("heading", include_bytes!("../../../test/assets/fonts/CrimsonText-SemiBold.ttf")),
-        ("sans", include_bytes!("../../../test/assets/fonts/Montserrat-Regular.ttf")),
-    ];
+    /// The fonts a fixture of `test/fixtures` declares, each read from the file its `src` names, relative to the
+    /// fixture, as an SDK reads it. A file that isn't there fails the test, as it fails a preview.
+    fn fixture_fonts(xml: &str) -> Vec<(String, Vec<u8>)> {
+        let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test/fixtures");
+        bench_font_srcs(xml)
+            .unwrap()
+            .into_iter()
+            .map(|(name, src)| {
+                let path = fixtures.join(&src);
+                let bytes = std::fs::read(&path)
+                    .unwrap_or_else(|e| panic!("the font {name}, {}, can't be read: {e}", path.display()));
+                (name, bytes)
+            })
+            .collect()
+    }
+
+    fn font_refs(files: &[(String, Vec<u8>)]) -> Vec<(&str, &[u8])> {
+        files.iter().map(|(name, bytes)| (name.as_str(), bytes.as_slice())).collect()
+    }
+
+    #[test]
+    fn bench_font_srcs_names_each_font_with_a_src_in_order() {
+        let xml = r#"<lpdf version="1">
+            <assets>
+                <font name="body" src="fonts/Body.ttf" />
+                <font name="mono" core="Courier" />
+                <image name="logo" src="logo.png" />
+                <font name="heading" src="../Heading.otf" />
+            </assets>
+            <document size="a4"><section><layout><text>x</text></layout></section></document>
+        </lpdf>"#;
+        assert_eq!(
+            bench_font_srcs(xml).unwrap(),
+            vec![
+                ("body".to_string(), "fonts/Body.ttf".to_string()),
+                ("heading".to_string(), "../Heading.otf".to_string()),
+            ],
+        );
+    }
+
+    #[test]
+    fn bench_font_srcs_rejects_a_font_without_a_name() {
+        let xml = r#"<lpdf version="1"><assets><font src="Body.ttf" /></assets></lpdf>"#;
+        assert!(bench_font_srcs(xml).unwrap_err().contains("missing required attribute 'name'"));
+    }
 
     #[test]
     fn bench_fonts_lay_out_and_embed_as_an_engine_with_the_fonts_loaded() {
         let xml = include_str!("../../../test/fixtures/bench_fonts.xml");
-        let fonts = bench_fonts(&BENCH_FONTS);
+        let files = fixture_fonts(xml);
+        let fonts = bench_fonts(&font_refs(&files));
         // The widths are a thread-local, which any earlier layout on this thread leaves set.
         layout::set_font_widths(HashMap::new());
         let in_helvetica_widths = bench_write_pdf_with_fonts(bench_layout_doc(bench_parse(xml).unwrap()), &fonts).unwrap();
@@ -997,7 +1044,7 @@ mod tests {
 
         layout::set_font_widths(HashMap::new());
         let mut engine = LpdfEngine::new("");
-        for (name, bytes) in BENCH_FONTS {
+        for (name, bytes) in &files {
             engine.load_font(name, bytes);
         }
         assert_eq!(in_own_widths, engine.render_xml(xml, None).unwrap());
@@ -1006,7 +1053,8 @@ mod tests {
     #[test]
     fn bench_layout_and_write_with_fonts_make_the_pdf_of_bench_render_doc_with_fonts() {
         let xml = include_str!("../../../test/fixtures/bench_fonts.xml");
-        let fonts = bench_fonts(&BENCH_FONTS);
+        let files = fixture_fonts(xml);
+        let fonts = bench_fonts(&font_refs(&files));
         let whole = bench_render_doc_with_fonts(bench_parse(xml).unwrap(), &fonts).unwrap();
         let split = bench_write_pdf_with_fonts(bench_layout_doc_with_fonts(bench_parse(xml).unwrap(), &fonts), &fonts).unwrap();
         assert_eq!(whole, split);

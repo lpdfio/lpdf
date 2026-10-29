@@ -9,7 +9,7 @@
 # run is measured by the same benchmarks and fixtures, and gives it <checkout>'s Cargo.lock, so that each
 # build keeps the dependency versions it was released with. Turns on the split-stages feature when
 # <checkout>'s lib.rs has bench_layout_doc and bench_write_pdf, the embedded-fonts feature, with the
-# fonts benchmarks (benches/fonts.rs), when it has bench_layout_doc_with_fonts, and the markdown and
+# fonts benchmarks (benches/fonts.rs), when it has bench_font_srcs, and the markdown and
 # code features when its schema has a <markdown> and a <code>. Writes to <out folder>:
 #
 #   summary.jsonl       gungraun's JSON line for each benchmark: instructions and estimated cycles
@@ -54,7 +54,7 @@ cp "$CHECKOUT/Cargo.lock" "$CHECKOUT/benches/counts/Cargo.lock"
 FEATURES=""
 BENCHES="--bench counts --bench data"
 WITH=""
-if grep -q 'pub fn bench_layout_doc_with_fonts' "$LIB"; then
+if grep -q 'pub fn bench_font_srcs' "$LIB"; then
   FEATURES="embedded-fonts"
   BENCHES="$BENCHES --bench fonts"
   WITH=", with layout and the PDF write apart and the embedded fonts"
