@@ -99,11 +99,31 @@ pub struct FontWidths {
     /// Advance of every character the font maps, normalised to 1000 UPM. Shared, so a
     /// table is cloned into each layout call without copying the map.
     pub advances: Rc<HashMap<char, u16>>,
+    /// `advance` of each code point below `LATIN_END`, indexed by it, so that the text of most
+    /// Latin-script languages is measured without hashing. Empty in a default table.
+    latin: Rc<[u16]>,
 }
 
+/// The end of the code points `FontWidths` keeps in a table: Basic Latin through Latin Extended-B.
+const LATIN_END: u32 = 0x250;
+
 impl FontWidths {
+    pub fn new(default: u16, ascii: Vec<u16>, advances: HashMap<char, u16>) -> Self {
+        let mut widths = FontWidths { default, ascii, advances: advances.into(), latin: Rc::from([]) };
+        widths.latin = (0..LATIN_END).filter_map(char::from_u32).map(|c| widths.lookup(c)).collect();
+        widths
+    }
+
     /// Advance of `c` in 1/1000 em: its own, else the `ascii` entry, else `default`.
     pub fn advance(&self, c: char) -> u16 {
+        match self.latin.get(c as usize) {
+            Some(&advance) => advance,
+            None => self.lookup(c),
+        }
+    }
+
+    /// `advance` without the table.
+    fn lookup(&self, c: char) -> u16 {
         if let Some(&advance) = self.advances.get(&c) {
             return advance;
         }
@@ -782,5 +802,24 @@ mod tests {
             t.resolve_spacing("2pt 4pt 6pt 8pt").unwrap(),
             [2.0, 4.0, 6.0, 8.0]
         );
+    }
+
+    #[test]
+    fn a_font_measures_each_character_by_its_own_advance_below_and_above_the_latin_table() {
+        let advances = HashMap::from([('a', 510), ('ł', 270), ('ɏ', 620), ('ɐ', 530), ('Ж', 880)]);
+        let widths = FontWidths::new(300, Vec::new(), advances);
+        for (c, advance) in [('a', 510), ('ł', 270), ('ɏ', 620), ('ɐ', 530), ('Ж', 880), ('b', 300), ('Я', 300)] {
+            assert_eq!(widths.advance(c), advance, "{c}");
+        }
+    }
+
+    #[test]
+    fn a_font_given_its_ascii_advances_measures_by_them_and_by_its_default_for_the_rest() {
+        let ascii: Vec<u16> = (32..=126).map(|cp| cp as u16 * 2).collect();
+        let widths = FontWidths::new(400, ascii, HashMap::new());
+        assert_eq!(widths.advance('A'), 130);
+        assert_eq!(widths.advance('é'), 400);
+        assert_eq!(widths.advance('Ж'), 400);
+        assert_eq!(FontWidths::default().advance('A'), 0);
     }
 }
