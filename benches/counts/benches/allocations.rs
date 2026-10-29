@@ -9,7 +9,8 @@
 //! PDF write apart with the `split-stages` feature. Each benchmark runs in a process of its own, as under
 //! Gungraun, so that what one leaves behind, such as a buffer made on first use, doesn't change the count
 //! of the next. Reading the fixture, and parsing or laying it out for a later stage, is setup, which
-//! isn't counted.
+//! isn't counted. With the `embedded-fonts` feature, it counts the stages of `bench_fonts` too, under the
+//! fixture `fonts`, as `fonts.rs` does, with its fonts loaded in the setup.
 //!
 //! `cargo bench --bench allocations` prints a JSON line for each benchmark, which
 //! `scripts/bench-counts-report.mjs` reads:
@@ -19,6 +20,8 @@
 //! ```
 
 mod common;
+#[cfg(feature = "embedded-fonts")]
+mod embedded_fonts;
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -28,11 +31,18 @@ use std::sync::atomic::{AtomicI64, AtomicU64, Ordering::Relaxed};
 
 #[cfg(feature = "split-stages")]
 use lpdf::{bench_layout_doc, bench_write_pdf};
+#[cfg(feature = "embedded-fonts")]
+use lpdf::{
+    bench_layout_doc_with_fonts, bench_render_doc_with_fonts, bench_render_xml_with_fonts,
+    bench_write_pdf_with_fonts,
+};
 use lpdf::{bench_parse, bench_render_doc, bench_render_xml};
 
 #[cfg(feature = "split-stages")]
 use common::laid_out;
 use common::{fixture, parsed};
+#[cfg(feature = "embedded-fonts")]
+use embedded_fonts::{fixture_with_fonts, laid_out_with_fonts, parsed_with_fonts};
 
 /// The stages, by the names of their benchmark functions in `counts.rs`.
 #[cfg(not(feature = "split-stages"))]
@@ -41,7 +51,10 @@ const STAGES: &[&str] = &["parse", "render_doc", "end_to_end"];
 const STAGES: &[&str] = &["parse", "layout", "write_pdf", "render_doc", "end_to_end"];
 
 /// The fixtures, by the ids of their benchmarks: `xs` is `bench_xs.xml`.
+#[cfg(not(feature = "embedded-fonts"))]
 const FIXTURES: &[&str] = &["xs", "s", "m", "l", "xl"];
+#[cfg(feature = "embedded-fonts")]
+const FIXTURES: &[&str] = &["xs", "s", "m", "l", "xl", "fonts"];
 
 #[global_allocator]
 static ALLOCATOR: Counting = Counting;
@@ -128,6 +141,10 @@ fn counted<T>(stage: impl FnOnce() -> T) -> Counts {
 
 /// The counts of one stage of one fixture, or `None` for a stage this build doesn't have.
 fn measure(stage: &str, fixture_id: &str) -> Option<Counts> {
+    #[cfg(feature = "embedded-fonts")]
+    if fixture_id == "fonts" {
+        return measure_with_fonts(stage);
+    }
     let name = format!("bench_{fixture_id}");
     let counts = match stage {
         "parse" => {
@@ -151,6 +168,42 @@ fn measure(stage: &str, fixture_id: &str) -> Option<Counts> {
         "end_to_end" => {
             let xml = fixture(&name);
             counted(|| bench_render_xml(black_box(&xml)).expect("the fixture renders"))
+        }
+        _ => return None,
+    };
+    Some(counts)
+}
+
+/// The counts of one stage of `bench_fonts`, its fonts loaded in the setup, or `None` for a stage that isn't one.
+#[cfg(feature = "embedded-fonts")]
+fn measure_with_fonts(stage: &str) -> Option<Counts> {
+    const NAME: &str = "bench_fonts";
+    let counts = match stage {
+        "parse" => {
+            let xml = fixture(NAME);
+            counted(|| bench_parse(black_box(&xml)).expect("the fixture parses"))
+        }
+        "layout" => {
+            let (doc, fonts) = parsed_with_fonts(NAME);
+            counted(|| bench_layout_doc_with_fonts(black_box(doc), &fonts))
+        }
+        "write_pdf" => {
+            let (pages, fonts) = laid_out_with_fonts(NAME);
+            counted(|| {
+                bench_write_pdf_with_fonts(black_box(pages), &fonts).expect("the pages are written")
+            })
+        }
+        "render_doc" => {
+            let (doc, fonts) = parsed_with_fonts(NAME);
+            counted(|| {
+                bench_render_doc_with_fonts(black_box(doc), &fonts).expect("the document renders")
+            })
+        }
+        "end_to_end" => {
+            let (xml, fonts) = fixture_with_fonts(NAME);
+            counted(|| {
+                bench_render_xml_with_fonts(black_box(&xml), &fonts).expect("the fixture renders")
+            })
         }
         _ => return None,
     };

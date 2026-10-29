@@ -633,6 +633,58 @@ pub fn bench_write_pdf(pages: BenchPages) -> Result<Vec<u8>, String> {
     )
 }
 
+/// Embedded fonts, loaded as `LpdfEngine::load_font` loads them: the bytes the PDF write embeds, and the advances
+/// layout measures their text with.
+pub struct BenchFonts {
+    registry: pdf::FontRegistry,
+    widths:   HashMap<String, tokens::FontWidths>,
+}
+
+/// Load each font of `fonts`, a registry key and the bytes of a TTF or OTF file. Not measured: an engine loads its
+/// fonts once, before it renders.
+pub fn bench_fonts(fonts: &[(&str, &[u8])]) -> BenchFonts {
+    let mut loaded = BenchFonts { registry: pdf::FontRegistry::new(), widths: HashMap::new() };
+    for (name, bytes) in fonts {
+        loaded.registry.register(name, bytes.to_vec());
+        if let Some(widths) = shared::extract_font_widths(bytes) {
+            loaded.widths.insert(name.to_string(), widths);
+        }
+    }
+    loaded
+}
+
+/// `bench_layout_doc` with embedded fonts: their advances are set for layout as `render_pdf` sets them, so their
+/// text is measured as in the SDKs. Used by the instruction-count benchmarks of `benches/counts`.
+pub fn bench_layout_doc_with_fonts(mut doc: BenchDoc, fonts: &BenchFonts) -> BenchPages {
+    let lp = doc.0.section_layouts();
+    layout::set_font_widths(fonts.widths.clone());
+    let pages: Vec<render::RenderPage> =
+        layout::layout_document(&lp);
+    BenchPages { pages, doc: doc.0 }
+}
+
+/// `bench_write_pdf` with embedded fonts, which it subsets and embeds. Used by the instruction-count benchmarks of
+/// `benches/counts`.
+pub fn bench_write_pdf_with_fonts(pages: BenchPages, fonts: &BenchFonts) -> Result<Vec<u8>, String> {
+    // Unlicensed, so benchmarks include the cost of the attribution line.
+    pdf::render_pdf(
+        &pages.pages, &pages.doc.fonts,
+        &fonts.registry, &pdf::ImageRegistry::new(),
+        &pages.doc.meta, &pages.doc.gradients, None, false,
+    )
+}
+
+/// `bench_render_doc` with embedded fonts: layout and the PDF write of `bench_layout_doc_with_fonts` and
+/// `bench_write_pdf_with_fonts`.
+pub fn bench_render_doc_with_fonts(doc: BenchDoc, fonts: &BenchFonts) -> Result<Vec<u8>, String> {
+    bench_write_pdf_with_fonts(bench_layout_doc_with_fonts(doc, fonts), fonts)
+}
+
+/// `bench_render_xml` with embedded fonts: parse, then `bench_render_doc_with_fonts`.
+pub fn bench_render_xml_with_fonts(xml: &str, fonts: &BenchFonts) -> Result<Vec<u8>, String> {
+    bench_render_doc_with_fonts(bench_parse(xml)?, fonts)
+}
+
 /// Layout + PDF write on a pre-parsed doc, with its images loaded and sized as `render_pdf` sizes them: the
 /// images of the flow and the `img-at` of the layers are fitted to the pictures' proportions. Used by the
 /// `layers` and `media` benchmarks, whose documents hold images.
@@ -924,6 +976,39 @@ mod tests {
         let xml = include_str!("../../../test/fixtures/bench_xs.xml");
         let whole = bench_render_doc(bench_parse(xml).unwrap()).unwrap();
         let split = bench_write_pdf(bench_layout_doc(bench_parse(xml).unwrap())).unwrap();
+        assert_eq!(whole, split);
+    }
+
+    const BENCH_FONTS: [(&str, &[u8]); 3] = [
+        ("body", include_bytes!("../../../examples/6-book/assets/fonts/CrimsonText-Regular.ttf")),
+        ("heading", include_bytes!("../../../examples/6-book/assets/fonts/CrimsonText-SemiBold.ttf")),
+        ("sans", include_bytes!("../../../examples/5-brochure/assets/fonts/Montserrat-Regular.ttf")),
+    ];
+
+    #[test]
+    fn bench_fonts_lay_out_and_embed_as_an_engine_with_the_fonts_loaded() {
+        let xml = include_str!("../../../test/fixtures/bench_fonts.xml");
+        let fonts = bench_fonts(&BENCH_FONTS);
+        // The widths are a thread-local, which any earlier layout on this thread leaves set.
+        layout::set_font_widths(HashMap::new());
+        let in_helvetica_widths = bench_write_pdf_with_fonts(bench_layout_doc(bench_parse(xml).unwrap()), &fonts).unwrap();
+        let in_own_widths = bench_write_pdf_with_fonts(bench_layout_doc_with_fonts(bench_parse(xml).unwrap(), &fonts), &fonts).unwrap();
+        assert_ne!(in_own_widths, in_helvetica_widths, "the fonts' widths change the layout");
+
+        layout::set_font_widths(HashMap::new());
+        let mut engine = LpdfEngine::new("");
+        for (name, bytes) in BENCH_FONTS {
+            engine.load_font(name, bytes);
+        }
+        assert_eq!(in_own_widths, engine.render_xml(xml, None).unwrap());
+    }
+
+    #[test]
+    fn bench_layout_and_write_with_fonts_make_the_pdf_of_bench_render_doc_with_fonts() {
+        let xml = include_str!("../../../test/fixtures/bench_fonts.xml");
+        let fonts = bench_fonts(&BENCH_FONTS);
+        let whole = bench_render_doc_with_fonts(bench_parse(xml).unwrap(), &fonts).unwrap();
+        let split = bench_write_pdf_with_fonts(bench_layout_doc_with_fonts(bench_parse(xml).unwrap(), &fonts), &fonts).unwrap();
         assert_eq!(whole, split);
     }
 }
