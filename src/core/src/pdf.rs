@@ -3545,13 +3545,13 @@ fn write_outline(pdf: &mut Pdf, ids: &OutlineIds, anchors: &[PlacedAnchor], page
 mod tests {
     use super::*;
 
-    /// Fonts of the examples, as embedded fonts are in a document.
+    /// Fonts of `test/assets/fonts`, as embedded fonts are in a document.
     const FIXTURE_FONTS: [(&str, &[u8]); 5] = [
-        ("Radley", include_bytes!("../../../examples/5-brochure/assets/fonts/Radley-Regular.ttf")),
-        ("Montserrat", include_bytes!("../../../examples/5-brochure/assets/fonts/Montserrat-Regular.ttf")),
-        ("CrimsonText", include_bytes!("../../../examples/6-book/assets/fonts/CrimsonText-Regular.ttf")),
-        ("CrimsonTextItalic", include_bytes!("../../../examples/6-book/assets/fonts/CrimsonText-Italic.ttf")),
-        ("CrimsonTextSemiBold", include_bytes!("../../../examples/6-book/assets/fonts/CrimsonText-SemiBold.ttf")),
+        ("Radley", include_bytes!("../../../test/assets/fonts/Radley-Regular.ttf")),
+        ("Montserrat", include_bytes!("../../../test/assets/fonts/Montserrat-Regular.ttf")),
+        ("CrimsonText", include_bytes!("../../../test/assets/fonts/CrimsonText-Regular.ttf")),
+        ("CrimsonTextItalic", include_bytes!("../../../test/assets/fonts/CrimsonText-Italic.ttf")),
+        ("CrimsonTextSemiBold", include_bytes!("../../../test/assets/fonts/CrimsonText-SemiBold.ttf")),
     ];
 
     #[test]

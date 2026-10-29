@@ -641,7 +641,7 @@ fn layers_section(buf: &mut String, n: usize) {
 /// load that photo themselves and never read `src`, but a preview does, so it names the photo they use, from
 /// `test/fixtures`.
 const IMAGE_ASSETS: &str = r#"  <assets>
-    <image name="photo" src="../../examples/6-book/assets/images/chapter-05-caterpillar.jpg" />
+    <image name="photo" src="../assets/images/chapter-05-caterpillar.jpg" />
   </assets>
 "#;
 
@@ -954,7 +954,7 @@ mod tests {
     // section is one page, and holds the layers, images or barcodes of its kind, all of them.
     #[test]
     fn the_page_fixtures_hold_what_they_are_for() {
-        let photo_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/6-book/assets/images/chapter-05-caterpillar.jpg");
+        let photo_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test/assets/images/chapter-05-caterpillar.jpg");
         let photo = fs::read(&photo_path).unwrap_or_else(|e| panic!("{}: {e}", photo_path.display()));
 
         // The bigger tiers are more of the same pages, and take long to lay out in a debug build.

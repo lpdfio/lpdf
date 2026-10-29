@@ -980,9 +980,9 @@ mod tests {
     }
 
     const BENCH_FONTS: [(&str, &[u8]); 3] = [
-        ("body", include_bytes!("../../../examples/6-book/assets/fonts/CrimsonText-Regular.ttf")),
-        ("heading", include_bytes!("../../../examples/6-book/assets/fonts/CrimsonText-SemiBold.ttf")),
-        ("sans", include_bytes!("../../../examples/5-brochure/assets/fonts/Montserrat-Regular.ttf")),
+        ("body", include_bytes!("../../../test/assets/fonts/CrimsonText-Regular.ttf")),
+        ("heading", include_bytes!("../../../test/assets/fonts/CrimsonText-SemiBold.ttf")),
+        ("sans", include_bytes!("../../../test/assets/fonts/Montserrat-Regular.ttf")),
     ];
 
     #[test]

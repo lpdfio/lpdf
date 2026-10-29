@@ -15,6 +15,11 @@ fn fixtures_dir() -> PathBuf {
         .join("../../test/fixtures")
 }
 
+fn images_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../test/assets/images")
+}
+
 fn snapshots_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../test/snapshots")
@@ -56,15 +61,15 @@ fn run_snapshot(name: &str) {
 }
 
 /// A fixture with pictures: the images `photo`, `avatar` and `tall` are read from `image-sample.png`,
-/// `image-square.png` and `image-tall.png` in the fixtures directory and loaded as an SDK would, so the pictures
+/// `image-square.png` and `image-tall.png` in `test/assets/images` and loaded as an SDK would, so the pictures
 /// are in the PDF. `tall` is four times as high as it is wide.
 fn run_snapshot_with_image(name: &str) {
     let xml_path = fixtures_dir().join(format!("{name}.xml"));
     let xml = std::fs::read_to_string(&xml_path)
         .unwrap_or_else(|_| panic!("fixture not found: {}", xml_path.display()));
-    let photo  = std::fs::read(fixtures_dir().join("image-sample.png")).expect("image-sample.png");
-    let avatar = std::fs::read(fixtures_dir().join("image-square.png")).expect("image-square.png");
-    let tall   = std::fs::read(fixtures_dir().join("image-tall.png")).expect("image-tall.png");
+    let photo  = std::fs::read(images_dir().join("image-sample.png")).expect("image-sample.png");
+    let avatar = std::fs::read(images_dir().join("image-square.png")).expect("image-square.png");
+    let tall   = std::fs::read(images_dir().join("image-tall.png")).expect("image-tall.png");
 
     let images: [(&str, &[u8]); 3] = [("photo", &photo), ("avatar", &avatar), ("tall", &tall)];
     let pdf_bytes = crate::LpdfEngine::render_xml_with_images_to_pdf_bytes(&xml, &images)

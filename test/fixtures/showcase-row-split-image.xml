@@ -2,9 +2,9 @@
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
   <assets>
-    <image name="photo"  src="image-sample.png" />
-    <image name="avatar" src="image-square.png" />
-    <image name="tall"   src="image-tall.png" />
+    <image name="photo"  src="../assets/images/image-sample.png" />
+    <image name="avatar" src="../assets/images/image-square.png" />
+    <image name="tall"   src="../assets/images/image-tall.png" />
   </assets>
   <document size="a4">
     <meta title="lpdf Showcase — Row split: images" subject="Pagination" />

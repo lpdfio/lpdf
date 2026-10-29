@@ -29,10 +29,10 @@ fn image_xml(file: &str) -> String {
     )
 }
 
-/// A photo the repo already holds, so the bench has no fixture of its own to go missing. Where the pictures
-/// come from is in `examples/6-book/assets/images/README.md`.
+/// A photo of the test assets, so the bench has no fixture of its own to go missing. Where it comes from is in
+/// `test/assets/images/README.md`.
 fn jpeg() -> Vec<u8> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/6-book/assets/images/chapter-05-caterpillar.jpg");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test/assets/images/chapter-05-caterpillar.jpg");
     std::fs::read(&path).unwrap_or_else(|e| panic!("the photo of the image bench, {}, can't be read: {e}", path.display()))
 }
 

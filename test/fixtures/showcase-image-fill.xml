@@ -3,8 +3,8 @@
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
   <assets>
-    <image name="photo"  src="image-sample.png" />
-    <image name="avatar" src="image-square.png" />
+    <image name="photo"  src="../assets/images/image-sample.png" />
+    <image name="avatar" src="../assets/images/image-square.png" />
   </assets>
   <tokens>
     <colors>
