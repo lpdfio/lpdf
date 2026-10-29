@@ -135,16 +135,19 @@ test('puts the fixtures of one feature after the sizes, and data binding after p
 
 test('shows a fixture the release lacks with no change, and says it has no baseline', () => {
     const release = build('v0.29.0', [benchmark('parse', 'm', { ir: 1000 })]);
-    const branch = build('branch', [benchmark('parse', 'm', { ir: 1000 }), benchmark('parse', 'markdown', { ir: 7000 }), benchmark('parse', 'code', { ir: 3000 })]);
+    const branch = build('branch', [
+        benchmark('parse', 'm', { ir: 1000 }), benchmark('parse', 'markdown', { ir: 7000 }),
+        benchmark('parse', 'code', { ir: 3000 }), benchmark('parse', 'fonts', { ir: 5000 }),
+    ]);
     const rows = compare([release, branch]);
     const markdownRow = rows.find(r => r.fixture === 'markdown' && r.measure === 'instructions');
     assert.deepEqual(markdownRow.values, [undefined, 7000]);
     assert.equal(markdownRow.changes[0].marked, false);
-    assert.deepEqual(missingFixtures([release, branch]), [{ build: 'v0.29.0', fixtures: ['markdown', 'code'] }]);
+    assert.deepEqual(missingFixtures([release, branch]), [{ build: 'v0.29.0', fixtures: ['markdown', 'code', 'fonts'] }]);
     assert.deepEqual(missingStages([release, branch]), []);
 
     const report = markdown([release, branch], rows);
-    assert.match(report, /`v0\.29\.0` has no `markdown` or `code` fixture, so those rows have no baseline: they compare from the first release that has them\./);
+    assert.match(report, /`v0\.29\.0` has no `markdown`, `code` or `fonts` fixture, so those rows have no baseline: they compare from the first release that has them\./);
     assert.match(report, /\| markdown \| parse \| instructions \| — \| 7,000 \| — \|/);
 });
 

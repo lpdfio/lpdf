@@ -179,6 +179,9 @@ export function missingStages(builds) {
         .filter(m => m.stages.length > 0);
 }
 
+/** `a`, `a or b`, `a, b or c`. */
+const orList = items => items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}`;
+
 /**
  * The fixtures a build lacks that another has, as `{ build, fixtures }`: the release before a feature has no
  * fixture of it, so its rows have no baseline until the next release.
@@ -208,7 +211,7 @@ export function markdown(builds, rows, marks = DEFAULT_MARKS, about = {}) {
         out.push(`\`${build}\` has no ${stages.map(s => stageName(s)).join(' or ')} benchmark, so those rows have no number for it.`, '');
     }
     for (const { build, fixtures } of missingFixtures(builds)) {
-        const named = fixtures.map(f => `\`${f}\``).join(' or ');
+        const named = orList(fixtures.map(f => `\`${f}\``));
         out.push(`\`${build}\` has no ${named} fixture, so those rows have no baseline: they compare from the first release that has them.`, '');
     }
     if (marked.length === 0) {

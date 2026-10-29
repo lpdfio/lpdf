@@ -62,14 +62,13 @@ const SIZES: &[&str] = &["xs", "s", "m", "l", "xl"];
 /// which `justified` is `fixtures/justified.xml`.
 fn fixtures() -> Vec<&'static str> {
     let mut fixtures = SIZES.to_vec();
-    fixtures.push("justified");
+    fixtures.extend(["justified", "data"]);
     #[cfg(feature = "markdown")]
     fixtures.push("markdown");
     #[cfg(feature = "code")]
     fixtures.push("code");
     #[cfg(feature = "embedded-fonts")]
     fixtures.push("fonts");
-    fixtures.push("data");
     fixtures
 }
 
