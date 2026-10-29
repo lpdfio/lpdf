@@ -3586,8 +3586,8 @@ fn afm_table(font: &str) -> Option<&'static [u16; 224]> {
 }
 
 /// How far a character advances in the font of `table`, in thousandths of the size: the code of Windows-1252 it is
-/// drawn with, else a comparison sign's own width, else the width of the character it is drawn as. 500 when none
-/// applies.
+/// drawn with, else a comparison sign's own width, else the width of the character it is drawn as. The width of `?`
+/// when none applies, since that is what `pdf::encode_latin1` draws then.
 fn table_char_advance(table: &[u16; 224], c: char) -> u16 {
     if c.is_ascii() && c >= ' ' {
         return table[c as usize - 32];
@@ -3605,7 +3605,7 @@ fn table_char_fallback(table: &[u16; 224], c: char) -> u16 {
     in_table(c)
         .or_else(|| crate::pdf::sign_advance(c))
         .or_else(|| crate::pdf::look_alike(c).and_then(in_table))
-        .unwrap_or(500)
+        .unwrap_or(table[usize::from(b'?') - 32])
 }
 
 /// Measure the advance width (in pt) of a string at the given font and size.
