@@ -3541,14 +3541,16 @@ pub(crate) fn text_width(font: &str, text: &str, size: f32) -> f32 {
     if let Some(width) = FONT_WIDTHS.with(|fw| fw.borrow().get(font).map(|w| w.text_width(text, size))) {
         return width;
     }
-    // For known builtins use per-character AFM widths.
-    if builtin_char_advance(font, ' ').is_some() {
+    // For known builtins use per-character AFM widths. A character with no code, sign or look-alike is drawn as
+    // `?` (`pdf::encode_latin1`), so it is measured as one.
+    if let Some(question_mark) = builtin_char_advance(font, '?') {
         return text.chars()
             .map(|c| {
                 let drawn = builtin_char_advance(font, c)
                     .or_else(|| crate::pdf::sign_advance(c))
-                    .or_else(|| crate::pdf::look_alike(c).and_then(|a| builtin_char_advance(font, a)));
-                drawn.unwrap_or(500) as f32 * size / 1000.0
+                    .or_else(|| crate::pdf::look_alike(c).and_then(|a| builtin_char_advance(font, a)))
+                    .unwrap_or(question_mark);
+                drawn as f32 * size / 1000.0
             })
             .sum();
     }

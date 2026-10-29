@@ -3575,6 +3575,23 @@ mod tests {
         }
     }
 
+    #[test]
+    fn layout_measures_a_character_drawn_as_a_question_mark_with_the_width_of_one() {
+        // The fi and fl ligatures, the lowest and highest C1 controls, and CJK, Greek and Cyrillic letters have no
+        // code, sign or look-alike in any built-in font.
+        let shown_as_question_mark = ['\u{FB01}', '\u{FB02}', '\u{0080}', '\u{009F}', '日', 'λ', 'ж'];
+        for font in BUILT_IN_FONTS {
+            let question_mark = crate::layout::text_width(font, "?", 1000.0);
+            for shown in shown_as_question_mark {
+                let text = shown.to_string();
+                assert_eq!(encode_latin1(&text, true), b"?".to_vec(), "{shown:?} is not drawn as a question mark");
+                assert_eq!(crate::layout::text_width(font, &text, 1000.0), question_mark, "{font}: {shown:?}");
+            }
+        }
+        assert_eq!(crate::layout::text_width("Helvetica", "日", 1000.0).round(), 556.0);
+        assert_eq!(crate::layout::text_width("Times-Roman", "日", 1000.0).round(), 444.0);
+    }
+
     const BUILT_IN_FONTS: [&str; 12] = [
         "Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
         "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic",
