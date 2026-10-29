@@ -2441,14 +2441,37 @@ fn layout_column(
     let mut sum_fixed = 0.0_f32;
     let mut n_fill = 0usize;
 
+    // While every child so far has a known height and the column starts its
+    // children at `y`, a child's final place is known before it is measured:
+    // an auto-height child is then laid out there once and its tree kept, so
+    // pass 2 doesn't lay it out again (and each nesting level doesn't double
+    // the work below it). With no avail_h, every justify starts at `y`.
+    let starts_at_y = matches!(justify, Justify::Start) || avail_h.is_none();
+    let mut placed: Vec<Option<RenderNode>> = Vec::new();
+    placed.resize_with(n, || None);
+    let mut place_y = Some(y);
+
     for (i, child) in children.iter().enumerate() {
         match &child.height_mode {
-            HeightMode::Fill => n_fill += 1,
+            HeightMode::Fill => {
+                n_fill += 1;
+                place_y = None;
+            }
             HeightMode::Full => {
                 // Deferred — needs avail_h
+                place_y = None;
             }
             HeightMode::Fixed(h) => {
                 sized[i] = Some(*h);
+                sum_fixed += h;
+            }
+            // A link passes its avail_h on to its own children, so it is
+            // measured without one and placed with one, as before.
+            HeightMode::Auto if starts_at_y && place_y.is_some() && child.kind != NodeKind::Link => {
+                let (cw, cx) = column_child_place(child, x, avail_w, align);
+                let (rn, h) = layout_column_child(child, cx, place_y.unwrap_or(y), cw, None, align);
+                placed[i] = Some(rn);
+                sized[i] = Some(h);
                 sum_fixed += h;
             }
             HeightMode::Auto => {
@@ -2457,6 +2480,10 @@ fn layout_column(
                 sized[i] = Some(h);
                 sum_fixed += h;
             }
+        }
+        if let (Some(py), Some(h)) = (place_y, sized[i]) {
+            // The same sum as pass 2, so that the place is the same to the last bit.
+            place_y = Some(py + (h + gap + 0.0));
         }
     }
 
@@ -2504,43 +2531,60 @@ fn layout_column(
     let mut nodes = Vec::with_capacity(n);
     let mut cur_y = start_y;
 
-    for (i, child) in children.iter().enumerate() {
+    for (i, (child, kept)) in children.iter().zip(placed).enumerate() {
         let h = heights[i];
-        let cw = resolve_child_w(child, avail_w, align);
-        // Frames with an explicit width constraint centre horizontally by default
-        let effective_align =
-            if matches!(child.kind, NodeKind::Frame) && child.width_constraint.is_some() {
-                &Align::Center
-            } else {
-                align
-            };
-        let cx = cross_x(x, avail_w, cw, effective_align);
-
-        // For Text nodes the box always spans the full available width, so
-        // cross_x has no visible effect.  Translate the parent's cross-axis
-        // alignment into text_align so the text actually appears centred/right.
-        let text_align_override = if child.kind == NodeKind::Text {
-            match align {
-                Align::Center => Some(TextAlign::Center),
-                Align::End    => Some(TextAlign::Right),
-                _             => None,
+        let rn = match kept {
+            Some(rn) => rn,
+            None => {
+                let (cw, cx) = column_child_place(child, x, avail_w, align);
+                layout_column_child(child, cx, cur_y, cw, Some(h), align).0
             }
-        } else {
-            None
         };
-        let tmp_node: Node;
-        let child_ref: &Node = if let Some(ta) = text_align_override {
-            tmp_node = Node { text_align: ta, ..child.clone() };
-            &tmp_node
-        } else {
-            child
-        };
-        let (rn, _) = layout_node(child_ref, cx, cur_y, cw, Some(h));
         nodes.push(rn);
         cur_y += h + gap + extra_gap;
     }
 
     (nodes, total_h)
+}
+
+/// The width and x a column gives `child`.
+fn column_child_place(child: &Node, x: f32, avail_w: f32, align: &Align) -> (f32, f32) {
+    let cw = resolve_child_w(child, avail_w, align);
+    // Frames with an explicit width constraint centre horizontally by default
+    let effective_align =
+        if matches!(child.kind, NodeKind::Frame) && child.width_constraint.is_some() {
+            &Align::Center
+        } else {
+            align
+        };
+    (cw, cross_x(x, avail_w, cw, effective_align))
+}
+
+/// Lay out a child of a column at its place.
+fn layout_column_child(
+    child: &Node,
+    cx: f32,
+    y: f32,
+    cw: f32,
+    avail_h: Option<f32>,
+    align: &Align,
+) -> (RenderNode, f32) {
+    // For Text nodes the box always spans the full available width, so
+    // cross_x has no visible effect.  Translate the parent's cross-axis
+    // alignment into text_align so the text actually appears centred/right.
+    let text_align_override = if child.kind == NodeKind::Text {
+        match align {
+            Align::Center => Some(TextAlign::Center),
+            Align::End    => Some(TextAlign::Right),
+            _             => None,
+        }
+    } else {
+        None
+    };
+    match text_align_override {
+        Some(ta) => layout_node(&Node { text_align: ta, ..child.clone() }, cx, y, cw, avail_h),
+        None => layout_node(child, cx, y, cw, avail_h),
+    }
 }
 
 // ── Row ───────────────────────────────────────────────────────────────────────
