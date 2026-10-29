@@ -1,5 +1,5 @@
-//! Allocations, bytes allocated and peak memory of each stage of the core pipeline, for each size of
-//! `bench_xs` to `bench_xl`: the stages and fixtures whose instructions `counts.rs` counts.
+//! Allocations, bytes allocated and peak memory of each stage of the core pipeline, for each fixture whose
+//! instructions `counts.rs`, `fonts.rs` and `data.rs` count.
 //!
 //! A global allocator that wraps the system's counts every allocation a stage makes, however deep in the
 //! stack, and the bytes the stage holds. It needs no Valgrind and runs on any machine. It is a binary of
@@ -9,8 +9,9 @@
 //! PDF write apart with the `split-stages` feature. Each benchmark runs in a process of its own, as under
 //! Gungraun, so that what one leaves behind, such as a buffer made on first use, doesn't change the count
 //! of the next. Reading the fixture, and parsing or laying it out for a later stage, is setup, which
-//! isn't counted. With the `embedded-fonts` feature, it counts the stages of `bench_fonts` too, under the
-//! fixture `fonts`, as `fonts.rs` does, with its fonts loaded in the setup.
+//! isn't counted. With the `markdown`, `code` and `embedded-fonts` features, it counts those fixtures too,
+//! as `counts.rs` and `fonts.rs` do, the fonts of `fonts` loaded in the setup. `data` has a stage of its
+//! own, `data`, which binds its data, as in `data.rs`.
 //!
 //! `cargo bench --bench allocations` prints a JSON line for each benchmark, which
 //! `scripts/bench-counts-report.mjs` reads:
@@ -20,6 +21,7 @@
 //! ```
 
 mod common;
+mod data_binding;
 #[cfg(feature = "embedded-fonts")]
 mod embedded_fonts;
 
@@ -29,6 +31,7 @@ use std::io::Write;
 use std::process::{Command, ExitCode, Stdio};
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering::Relaxed};
 
+use lpdf::{bench_data_apply, bench_parse, bench_render_doc, bench_render_xml};
 #[cfg(feature = "split-stages")]
 use lpdf::{bench_layout_doc, bench_write_pdf};
 #[cfg(feature = "embedded-fonts")]
@@ -36,11 +39,13 @@ use lpdf::{
     bench_layout_doc_with_fonts, bench_render_doc_with_fonts, bench_render_xml_with_fonts,
     bench_write_pdf_with_fonts,
 };
-use lpdf::{bench_parse, bench_render_doc, bench_render_xml};
 
 #[cfg(feature = "split-stages")]
 use common::laid_out;
 use common::{fixture, parsed};
+#[cfg(feature = "split-stages")]
+use data_binding::bound_laid_out;
+use data_binding::{bound, fixture_with_data, parsed_with_data};
 #[cfg(feature = "embedded-fonts")]
 use embedded_fonts::{fixture_with_fonts, laid_out_with_fonts, parsed_with_fonts};
 
@@ -50,11 +55,32 @@ const STAGES: &[&str] = &["parse", "render_doc", "end_to_end"];
 #[cfg(feature = "split-stages")]
 const STAGES: &[&str] = &["parse", "layout", "write_pdf", "render_doc", "end_to_end"];
 
-/// The fixtures, by the ids of their benchmarks: `xs` is `bench_xs.xml`.
-#[cfg(not(feature = "embedded-fonts"))]
-const FIXTURES: &[&str] = &["xs", "s", "m", "l", "xl"];
-#[cfg(feature = "embedded-fonts")]
-const FIXTURES: &[&str] = &["xs", "s", "m", "l", "xl", "fonts"];
+/// The sizes of the checkout's `bench_xs.xml` to `bench_xl.xml`, by the ids of their benchmarks.
+const SIZES: &[&str] = &["xs", "s", "m", "l", "xl"];
+
+/// The fixtures this build has, by the ids of their benchmarks: the sizes, then this crate's own, of
+/// which `justified` is `fixtures/justified.xml`.
+fn fixtures() -> Vec<&'static str> {
+    let mut fixtures = SIZES.to_vec();
+    fixtures.push("justified");
+    #[cfg(feature = "markdown")]
+    fixtures.push("markdown");
+    #[cfg(feature = "code")]
+    fixtures.push("code");
+    #[cfg(feature = "embedded-fonts")]
+    fixtures.push("fonts");
+    fixtures.push("data");
+    fixtures
+}
+
+/// The stages of a fixture: those of `STAGES`, and for `data` the binding of its data after parse.
+fn stages(fixture_id: &str) -> Vec<&'static str> {
+    let mut stages = STAGES.to_vec();
+    if fixture_id == "data" {
+        stages.insert(1, "data");
+    }
+    stages
+}
 
 #[global_allocator]
 static ALLOCATOR: Counting = Counting;
@@ -145,7 +171,14 @@ fn measure(stage: &str, fixture_id: &str) -> Option<Counts> {
     if fixture_id == "fonts" {
         return measure_with_fonts(stage);
     }
-    let name = format!("bench_{fixture_id}");
+    if fixture_id == "data" {
+        return measure_with_data(stage);
+    }
+    let name = if SIZES.contains(&fixture_id) {
+        format!("bench_{fixture_id}")
+    } else {
+        fixture_id.to_string()
+    };
     let counts = match stage {
         "parse" => {
             let xml = fixture(&name);
@@ -210,12 +243,51 @@ fn measure_with_fonts(stage: &str) -> Option<Counts> {
     Some(counts)
 }
 
+/// The counts of one stage of `data`, with its data read in the setup, or `None` for a stage that isn't one.
+fn measure_with_data(stage: &str) -> Option<Counts> {
+    const NAME: &str = "data";
+    let counts = match stage {
+        "parse" => {
+            let xml = fixture(NAME);
+            counted(|| bench_parse(black_box(&xml)).expect("the fixture parses"))
+        }
+        "data" => {
+            let (doc, json) = parsed_with_data(NAME);
+            counted(|| bench_data_apply(black_box(doc), &json).expect("the data binds"))
+        }
+        #[cfg(feature = "split-stages")]
+        "layout" => {
+            let doc = bound(NAME);
+            counted(|| bench_layout_doc(black_box(doc)))
+        }
+        #[cfg(feature = "split-stages")]
+        "write_pdf" => {
+            let pages = bound_laid_out(NAME);
+            counted(|| bench_write_pdf(black_box(pages)).expect("the pages are written"))
+        }
+        "render_doc" => {
+            let doc = bound(NAME);
+            counted(|| bench_render_doc(black_box(doc)).expect("the document renders"))
+        }
+        "end_to_end" => {
+            let (xml, json) = fixture_with_data(NAME);
+            counted(|| {
+                let doc = bench_parse(black_box(&xml)).expect("the fixture parses");
+                let doc = bench_data_apply(doc, &json).expect("the data binds");
+                bench_render_doc(doc).expect("the document renders")
+            })
+        }
+        _ => return None,
+    };
+    Some(counts)
+}
+
 /// Runs each benchmark in a process of its own and prints their lines.
 fn measure_all() -> ExitCode {
     let this = std::env::current_exe().expect("the path of this binary");
     let mut stdout = std::io::stdout().lock();
-    for stage in STAGES {
-        for fixture_id in FIXTURES {
+    for fixture_id in fixtures() {
+        for stage in stages(fixture_id) {
             let run = Command::new(&this)
                 .args([stage, fixture_id])
                 .stderr(Stdio::inherit())

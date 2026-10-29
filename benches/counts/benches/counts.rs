@@ -1,5 +1,6 @@
 //! Instructions and estimated cycles of each stage of the core pipeline, for each size of `bench_xs` to
-//! `bench_xl`: the `CORE_SIZES` of `src/core/benches/pipeline.rs`.
+//! `bench_xl`, the `CORE_SIZES` of `src/core/benches/pipeline.rs`, and for this crate's own fixtures of
+//! one feature each, in `fixtures/`: `justified`, and `markdown` and `code`.
 //!
 //! Callgrind counts the instructions and simulates the caches for the estimated cycles. It counts the
 //! benchmark function only: reading the fixture, and parsing or laying it out for a later stage, is
@@ -8,7 +9,9 @@
 //! bench.yml copies this crate into a checkout of each build it compares, so it may only call what every
 //! release since v0.24.0 has: `bench_parse`, `bench_render_doc` and `bench_render_xml`. The stages that
 //! split layout from the PDF write need the `split-stages` feature, which bench.yml turns on for a
-//! checkout whose lib.rs has them.
+//! checkout whose lib.rs has them. Every release since v0.24.0 reads `justified`; `markdown` and `code`
+//! need the `markdown` and `code` features, which bench.yml turns on for a checkout whose schema has the
+//! element, so an earlier release has no rows for them.
 
 mod callgrind;
 mod common;
@@ -32,6 +35,9 @@ use common::{fixture, parsed};
 #[bench::m(args = ("bench_m"), setup = fixture)]
 #[bench::l(args = ("bench_l"), setup = fixture)]
 #[bench::xl(args = ("bench_xl"), setup = fixture)]
+#[bench::justified(args = ("justified"), setup = fixture)]
+#[cfg_attr(feature = "markdown", bench::markdown(args = ("markdown"), setup = fixture))]
+#[cfg_attr(feature = "code", bench::code(args = ("code"), setup = fixture))]
 fn parse(xml: String) -> BenchDoc {
     black_box(bench_parse(black_box(&xml)).expect("the fixture parses"))
 }
@@ -44,6 +50,9 @@ fn parse(xml: String) -> BenchDoc {
 #[bench::m(args = ("bench_m"), setup = parsed)]
 #[bench::l(args = ("bench_l"), setup = parsed)]
 #[bench::xl(args = ("bench_xl"), setup = parsed)]
+#[bench::justified(args = ("justified"), setup = parsed)]
+#[cfg_attr(feature = "markdown", bench::markdown(args = ("markdown"), setup = parsed))]
+#[cfg_attr(feature = "code", bench::code(args = ("code"), setup = parsed))]
 fn layout(doc: BenchDoc) -> BenchPages {
     black_box(bench_layout_doc(black_box(doc)))
 }
@@ -56,6 +65,9 @@ fn layout(doc: BenchDoc) -> BenchPages {
 #[bench::m(args = ("bench_m"), setup = laid_out)]
 #[bench::l(args = ("bench_l"), setup = laid_out)]
 #[bench::xl(args = ("bench_xl"), setup = laid_out)]
+#[bench::justified(args = ("justified"), setup = laid_out)]
+#[cfg_attr(feature = "markdown", bench::markdown(args = ("markdown"), setup = laid_out))]
+#[cfg_attr(feature = "code", bench::code(args = ("code"), setup = laid_out))]
 fn write_pdf(pages: BenchPages) -> Vec<u8> {
     black_box(bench_write_pdf(black_box(pages)).expect("the pages are written"))
 }
@@ -67,6 +79,9 @@ fn write_pdf(pages: BenchPages) -> Vec<u8> {
 #[bench::m(args = ("bench_m"), setup = parsed)]
 #[bench::l(args = ("bench_l"), setup = parsed)]
 #[bench::xl(args = ("bench_xl"), setup = parsed)]
+#[bench::justified(args = ("justified"), setup = parsed)]
+#[cfg_attr(feature = "markdown", bench::markdown(args = ("markdown"), setup = parsed))]
+#[cfg_attr(feature = "code", bench::code(args = ("code"), setup = parsed))]
 fn render_doc(doc: BenchDoc) -> Vec<u8> {
     black_box(bench_render_doc(black_box(doc)).expect("the document renders"))
 }
@@ -78,6 +93,9 @@ fn render_doc(doc: BenchDoc) -> Vec<u8> {
 #[bench::m(args = ("bench_m"), setup = fixture)]
 #[bench::l(args = ("bench_l"), setup = fixture)]
 #[bench::xl(args = ("bench_xl"), setup = fixture)]
+#[bench::justified(args = ("justified"), setup = fixture)]
+#[cfg_attr(feature = "markdown", bench::markdown(args = ("markdown"), setup = fixture))]
+#[cfg_attr(feature = "code", bench::code(args = ("code"), setup = fixture))]
 fn end_to_end(xml: String) -> Vec<u8> {
     black_box(bench_render_xml(black_box(&xml)).expect("the fixture renders"))
 }

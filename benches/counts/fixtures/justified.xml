@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Justified text for benches/counts: paragraphs at three sizes, a bold run in each, and two columns of a
+     grid in each part. Written with the elements every release since v0.24.0 reads, so each one measures
+     this same file. Never edit it: a change moves every count of the fixture. -->
+<lpdf version="1">
+  <document size="a4">
+    <meta title="Bench counts: justified text" />
+    <section>
+      <layout margin="40pt">
+          <text font="Helvetica-Bold" font-size="l">Part 1</text>
+          <text font-size="s" align="justify">Which footers all edges measures each a so its line.<span bold="true"> This invoices then on line an straightforward</span> an on its. Tables always are characterisation addresses all by addresses not measures.</text>
+          <text font-size="m" align="justify">Word footers rarely are so all breaks the on footers. Invoices<span bold="true"> these layout addresses frames quickly the its responsibility pages.</span> Addresses so on footers these be edges line on quickly. These dates dates on layout pages a on this a. Statements breaks contracts then spacing edges all spacing these layout.</text>
+          <text font-size="m" align="justify">Contracts layout layout as line with be on so each. Footers pages totals measures on be breaks<span bold="true"> with to width. Footers straight contracts straight word</span> breaks layout layout exactly which. So layout on exactly these last exactly word always dates. Characterisation footers so spacing by responsibility these its then an.</text>
+          <text font-size="l" align="justify">All spacing an pages addresses a on footers measures a. Dates on statements the last by quickly<span bold="true"> width the straightforward. Addresses frames</span> responsibility against the footers contracts frames to each. Measures exactly its be all measures footers straight last are.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">Line word these on by breaks on these its. Word on last dates all contracts straight word quickly. An quickly its are statements these are its each. Line be on the quickly the invoices straightforward these.</text>
+            <text font-size="s" font="Times-Roman" align="justify">Contracts contracts an responsibility contracts all width a straightforward. Footers footers characterisation contracts totals the in its straight. On a addresses on edges as its pages dates. Measures dates so not this be rarely quickly characterisation.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 2</text>
+          <text font-size="s" align="justify">Exactly which characterisation its footers spacing invoices<span bold="true"> tables width straightforward. The pages invoices with are straight</span> characterisation pages word frames. The totals on invoices to spacing always invoices dates width.</text>
+          <text font-size="m" align="justify">On tables a on a all which contracts this on. Contracts as the straight quickly<span bold="true"> dates to be then the. These the which pages then responsibility</span> breaks footers then this. Be last spacing straightforward then footers against the on measures. Line line against be the with invoices pages on edges.</text>
+          <text font-size="m" align="justify">Width pages so quickly line frames characterisation are so an. Line contracts contracts<span bold="true"> footers each all by word responsibility word. All dates a dates</span> to responsibility layout against so responsibility. By these characterisation characterisation edges frames breaks spacing are layout.</text>
+          <text font-size="l" align="justify">Breaks a its quickly these quickly breaks measures line straight. The<span bold="true"> spacing are spacing statements footers as which a be.</span> Responsibility always totals on the a pages statements invoices to.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">Its a then breaks addresses these its contracts statements. Tables against statements characterisation these measures these so footers. On word be then on tables which rarely breaks. On so frames rarely on a exactly exactly exactly.</text>
+            <text font-size="s" font="Times-Roman" align="justify">Responsibility characterisation addresses footers with addresses by pages its. Be tables quickly edges width the straight this these. Edges contracts against the frames to quickly spacing its. Characterisation an by on rarely as which fit not.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 3</text>
+          <text font-size="s" align="justify">Which straightforward statements always these always the characterisation responsibility on. Each<span bold="true"> so its width invoices the frames layout invoices on. The</span> quickly exactly layout as pages straight an a width. Responsibility as by on an footers straightforward spacing statements tables.</text>
+          <text font-size="m" align="justify">The width straight this always the characterisation<span bold="true"> layout width responsibility. To on so contracts totals this word</span> on measures statements responsibility. All against all breaks footers then these each always contracts. As each not against straightforward exactly with contracts layout all. To characterisation responsibility which on the are as tables are.</text>
+          <text font-size="m" align="justify">All all are then then its this layout addresses to. Then with rarely rarely<span bold="true"> a a dates pages with on. Footers edges measures all these word</span> the with contracts footers. Word breaks tables rarely dates quickly to pages last statements. Rarely not dates footers pages exactly be layout to be.</text>
+          <text font-size="l" align="justify">Characterisation frames which footers totals on straightforward<span bold="true"> a this invoices. On measures layout so dates are</span> addresses a this quickly. Dates pages columns spacing straight breaks responsibility a contracts an.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">With last this not rarely as footers on straightforward. Be as with footers its be dates edges breaks. Totals always then dates which on last pages word. Which on layout pages contracts last last so invoices.</text>
+            <text font-size="s" font="Times-Roman" align="justify">As characterisation on footers by be word invoices frames. Word frames measures to on so each invoices word. Are so pages all word tables quickly last be. Characterisation quickly quickly spacing pages be quickly totals be.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 4</text>
+          <text font-size="s" align="justify">Dates quickly always which frames against with breaks straightforward invoices. Addresses<span bold="true"> all pages layout last layout then are addresses each. Always on</span> last frames by on last this contracts pages. Totals against width always characterisation quickly contracts on statements these. Measures responsibility statements measures to breaks straight frames rarely its.</text>
+          <text font-size="m" align="justify">So on straight be not last addresses word width exactly. Statements width line footers responsibility<span bold="true"> line width always breaks so. Edges an straightforward line last</span> this these width so so. Measures as frames a totals characterisation edges frames the against. Statements word be word word these width by on on.</text>
+          <text font-size="m" align="justify">Word an quickly frames on statements by contracts rarely responsibility.<span bold="true"> By this as characterisation so straightforward not straightforward</span> a straightforward. Responsibility on be edges to against contracts all on then.</text>
+          <text font-size="l" align="justify">Layout contracts layout addresses always by this an on word. Width to measures this by the<span bold="true"> so footers breaks invoices. Against</span> its a always invoices contracts not last straight on. Each addresses invoices with on a are be word rarely.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">Width addresses footers addresses each these be an responsibility. All straightforward measures contracts are straightforward so word then. Then with against pages totals responsibility as layout all. Always straightforward an pages statements are width which to.</text>
+            <text font-size="s" font="Times-Roman" align="justify">These measures a footers on measures statements responsibility always. This exactly on tables each be dates then responsibility. As to the responsibility by characterisation breaks word be. Contracts characterisation as as tables width word invoices the.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 5</text>
+          <text font-size="s" align="justify">Responsibility the pages on quickly always are with the last. Straightforward the breaks<span bold="true"> totals its word width statements responsibility word. Word addresses</span> so footers tables rarely frames exactly which tables.</text>
+          <text font-size="m" align="justify">Straightforward which which its breaks edges measures breaks all are.<span bold="true"> A footers straight the each be characterisation</span> each frames an. So to word on be as all to last these.</text>
+          <text font-size="m" align="justify">All spacing word to straightforward rarely spacing to responsibility statements.<span bold="true"> Are word on by dates on not all addresses</span> to. Against quickly as its last word word width straight be. Last edges these invoices characterisation each invoices contracts last then.</text>
+          <text font-size="l" align="justify">Straightforward on statements each responsibility pages edges tables<span bold="true"> not against. Measures as with totals an this pages frames</span> are footers. Exactly against pages exactly on straight totals pages by contracts.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">Against by often totals the totals breaks invoices word. Breaks measures rarely frames not with the layout measures. Which its which dates tables on measures statements be. Its line tables spacing to layout spacing are rarely.</text>
+            <text font-size="s" font="Times-Roman" align="justify">With footers addresses then are word dates footers straightforward. Word against breaks responsibility with pages line on its. This the layout on the characterisation last with all. Contracts are these word chapters footers tables not line.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 6</text>
+          <text font-size="s" align="justify">Be which rarely dates exactly straightforward quickly edges on then. On width the last the<span bold="true"> last on exactly frames an. Rarely width</span> invoices on addresses contracts measures to dates measures.</text>
+          <text font-size="m" align="justify">Quickly exactly straight on with exactly characterisation<span bold="true"> against word always. On dates the always line which totals</span> as addresses the. On each always a all characterisation breaks word layout line.</text>
+          <text font-size="m" align="justify">Totals be so with straightforward dates word an edges then. Characterisation to straightforward<span bold="true"> to an tables are straight to its. These frames rarely</span> to last responsibility tables are addresses with. Invoices not quickly the quickly invoices width the tables word.</text>
+          <text font-size="l" align="justify">Footers this layout as invoices characterisation on this<span bold="true"> these straightforward. Each spacing an which the exactly</span> word then which the. Word width on by its are then dates measures line. Footers as on rarely with an on last as exactly. Contracts breaks so frames an line these edges the then.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">Last its so then invoices against totals responsibility totals. Are straightforward on are rarely each line tables these. Against the edges a always layout are characterisation breaks. By not word straight characterisation an spacing are be.</text>
+            <text font-size="s" font="Times-Roman" align="justify">The be not edges word to this a line. Word breaks which totals so with responsibility an are. Footers the quickly always rarely breaks spreads rarely by. So its pages against always these totals on as.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 7</text>
+          <text font-size="s" align="justify">As breaks measures then not by straight responsibility on invoices. Are against straight<span bold="true"> frames by contracts so be line width as. Tables which</span> breaks quickly rarely against width word to characterisation.</text>
+          <text font-size="m" align="justify">Footers invoices on rarely layout so characterisation line measures<span bold="true"> invoices. Layout word tables by this these each</span> on these with. On not width word all dates on straightforward frames then.</text>
+          <text font-size="m" align="justify">By addresses invoices these with word by pages each responsibility. Not measures<span bold="true"> each on measures invoices a rarely characterisation each.</span> Width on the dates a footers statements layout each a.</text>
+          <text font-size="l" align="justify">Dates word be word the footers contracts exactly addresses word.<span bold="true"> The a totals edges not as spacing always quickly tables. Addresses</span> word be are on tables spacing totals which frames.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">Contracts rarely frames these straightforward an be a these. Its frames an to on all straight responsibility an. The on frames rarely on by the so against. All statements responsibility be invoices straightforward quickly a then.</text>
+            <text font-size="s" font="Times-Roman" align="justify">Totals which word against all addresses so which on. This responsibility as word pages an as characterisation each. All dates last invoices to layout this its last. Addresses tables on layout its invoices edges rarely frames.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 8</text>
+          <text font-size="s" align="justify">All characterisation then always exactly quickly word exactly<span bold="true"> a breaks. Are contracts then edges a layout</span> footers contracts statements on. Word pages against against a totals are so contracts pages. Pages breaks frames tables then against against an breaks dates.</text>
+          <text font-size="m" align="justify">The responsibility be pages contracts responsibility pages the rarely breaks. Measures statements<span bold="true"> totals width which which the invoices which quickly.</span> Are a statements frames be tables by the footers pages.</text>
+          <text font-size="m" align="justify">Invoices this straight not width word invoices frames characterisation<span bold="true"> a. Straight exactly the pages totals straight as characterisation</span> layout measures. Last against a width tables measures by on footers the.</text>
+          <text font-size="l" align="justify">By layout word footers line word the on are not. On responsibility<span bold="true"> not rarely not responsibility by last</span> layout quickly. Width rarely on word on edges to contracts the measures.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">Then spacing against invoices width measures totals always tables. Frames on exactly totals pages last last tables statements. Breaks line measures quickly statements on not dates are. Dates against footers addresses measures then which this spacing.</text>
+            <text font-size="s" font="Times-Roman" align="justify">Not as on on footers its not as characterisation. Edges on exactly responsibility so these not responsibility on. With responsibility straightforward all against responsibility this all pages. Measures this pages layout width are width tables these.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 9</text>
+          <text font-size="s" align="justify">Last the against the word exactly exactly all layout<span bold="true"> these. Addresses straight contracts addresses exactly</span> totals on invoices edges on. Last spacing totals these on dates width an breaks the. Then tables line by rarely spacing then totals the all. On edges last quickly edges last then this totals measures.</text>
+          <text font-size="m" align="justify">On on tables against last the each width this contracts. On responsibility<span bold="true"> are quickly each the not an on to. Straightforward to</span> then so statements edges this by which width.</text>
+          <text font-size="m" align="justify">Straightforward spacing exactly a characterisation quickly straight totals spacing then.<span bold="true"> These on which characterisation exactly addresses breaks on on</span> totals. Addresses pages word edges measures an to pages contracts addresses. Addresses layout the characterisation on spacing straight on so word. So on addresses addresses totals which be not on addresses.</text>
+          <text font-size="l" align="justify">Are dates width width a spacing width which on dates. Always<span bold="true"> breaks the tables an word footers to the which. Breaks contracts</span> on these be each quickly these its a.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">On word which with an spacing its edges which. Always as invoices dates are word with are layout. All line all characterisation an the frames to not. Are each width to invoices all totals this are.</text>
+            <text font-size="s" font="Times-Roman" align="justify">Against to quickly measures straight tables which addresses addresses. Not rarely not then this its edges all a. The layout layout statements exactly footers statements breaks word footers. By not contracts frames as to not the be.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 10</text>
+          <text font-size="s" align="justify">Spacing measures statements on dates exactly by which with straight.<span bold="true"> Rarely on quickly which characterisation the each these</span> width which. This on on tables exactly an each an then be.</text>
+          <text font-size="m" align="justify">As exactly layout contracts each tables rarely word breaks straight. These word footers straight<span bold="true"> with measures an responsibility tables footers. Are line</span> against then against footers tables spacing on word. Invoices this these a spacing not tables which addresses exactly. Which width on layout which breaks this which word characterisation.</text>
+          <text font-size="m" align="justify">On statements be straight be contracts an straight the exactly. Totals<span bold="true"> exactly its pages edges breaks not line straightforward</span> its. Be tables width the the edges breaks measures line pages.</text>
+          <text font-size="l" align="justify">Statements tables quickly a straight last spacing footers characterisation not. Quickly<span bold="true"> tables word characterisation as</span> these straightforward pages footers rarely. Invoices statements so invoices not as responsibility statements width then. Layout this footers not all the width frames the so. Responsibility pages these the not its paragraph measures each word.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">Layout be to word with this edges straightforward breaks. Invoices layout layout these pages word totals this to. Frames on always word not breaks as layout each. With on dates footers all spacing a word on.</text>
+            <text font-size="s" font="Times-Roman" align="justify">Edges last layout are breaks which then breaks tables. Not straight word which straightforward are all characterisation word. Which edges by always totals be a to both. These exactly statements to an by invoices on addresses.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 11</text>
+          <text font-size="s" align="justify">On a against with rarely each a on statements characterisation. Each not responsibility frames on<span bold="true"> these contracts which to these always.</span> The totals as tables then breaks line on measures pages.</text>
+          <text font-size="m" align="justify">Which to invoices word on always quickly measures by frames. Contracts frames<span bold="true"> totals all then pages against edges each totals. Quickly dates</span> measures straightforward on then with by word line.</text>
+          <text font-size="m" align="justify">Frames an responsibility by addresses by addresses rarely its so. Characterisation then<span bold="true"> each its invoices the edges always layout line.</span> Word always pages the all last responsibility be straight which. Statements measures an which addresses rarely are line on columns.</text>
+          <text font-size="l" align="justify">An are not invoices against word addresses each are on. Frames invoices invoices<span bold="true"> contracts then contracts line quickly</span> breaks addresses. Rarely to straight statements are tables width on all contracts. Straightforward then a measures against the breaks each with width. Quickly its against word dates by tables width quickly always.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">Invoices line totals totals statements be a responsibility are. Addresses invoices be rarely frames pages straightforward on invoices. Width straight against quickly word so as responsibility the. Then pages quickly statements its to so word so.</text>
+            <text font-size="s" font="Times-Roman" align="justify">Spacing are word as which statements not not dates. Characterisation word totals breaks word edges on frames the. Always a by dates tables line this addresses against. A spacing characterisation by on a quickly so its.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 12</text>
+          <text font-size="s" align="justify">Then this its its always its tables straight so on. A quickly<span bold="true"> on the pages breaks then width pages width. Characterisation</span> straight an characterisation width word addresses frames responsibility with. Each each with totals not quickly straightforward on quickly pages. Addresses layout with its measures totals an which quickly the.</text>
+          <text font-size="m" align="justify">This breaks so to chapters edges always totals contracts width. To word as each a straight<span bold="true"> layout layout then the. This addresses straight</span> contracts characterisation the rarely these word word.</text>
+          <text font-size="m" align="justify">This frames by quickly quickly measures measures straightforward<span bold="true"> on edges. All by line all the on which line breaks word.</span> Totals to measures breaks engine addresses the characterisation be rarely.</text>
+          <text font-size="l" align="justify">An by not the the characterisation exactly which its exactly. These on<span bold="true"> the statements addresses on frames statements</span> so be. Its line straight so this responsibility dates straightforward dates contracts.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">Layout on last exactly contracts by pages line invoices. So so its the these the the exactly straightforward. The on a the on pages each responsibility the. Pages not which are always invoices all contracts layout.</text>
+            <text font-size="s" font="Times-Roman" align="justify">Last responsibility spacing responsibility frames so layout measures edges. Not against then dates on always pages layout quickly. On these against so word these the the straightforward. A on straight word invoices straight rarely all all.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 13</text>
+          <text font-size="s" align="justify">Straightforward line by then always straightforward reports the these always. A totals its a layout<span bold="true"> addresses by word quickly all.</span> Each line always edges width be the against layout statements.</text>
+          <text font-size="m" align="justify">On rarely word each straight by straightforward against always responsibility. Quickly<span bold="true"> spacing last edges word its layout each</span> all contracts. Statements on the so a to dates a then as. On pages all are addresses all addresses against measures dates. An dates on layout its breaks word as addresses all.</text>
+          <text font-size="m" align="justify">Invoices quickly straight breaks each its last dates<span bold="true"> the in. Totals each the on edges word word straightforward</span> on which. Edges the footers rarely all be footers these with addresses. Frames to the pages each be on a word dates.</text>
+          <text font-size="l" align="justify">Tables addresses statements line measures these width tables as responsibility. These<span bold="true"> line frames straightforward an</span> to on measures frames by. Breaks these not always exactly so tables each so rarely.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">Quickly an against which the an pages width on. Straight on dates responsibility totals so on tables invoices. The invoices all quickly to on are dates responsibility. Rarely characterisation of width footers by as edges rarely.</text>
+            <text font-size="s" font="Times-Roman" align="justify">To exactly width characterisation dates width responsibility quickly frames. Characterisation characterisation breaks edges characterisation addresses an straight pages. Straightforward on by contracts straight its frames exactly responsibility. Responsibility last line line exactly all tables on not.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 14</text>
+          <text font-size="s" align="justify">Last its exactly addresses statements last width edges this dates. So on edges its on layout<span bold="true"> dates word statements then. Pages spacing so contracts</span> word straight as measures rarely always.</text>
+          <text font-size="m" align="justify">Always layout an so dates invoices to each these<span bold="true"> dates. On contracts are pages</span> characterisation all characterisation dates width to. Tables footers contracts these word edges pages each characterisation addresses. Exactly on edges last on each line on last are.</text>
+          <text font-size="m" align="justify">Statements footers to line quickly always<span bold="true"> invoices layout each edges. Last breaks then exactly against rarely</span> then be width straightforward. Then rarely this the addresses straightforward all a footers word. These straightforward this which on pages width last contracts contracts. Then word invoices with on totals then layout rarely by.</text>
+          <text font-size="l" align="justify">Be so are spacing layout an rarely by an responsibility. The rarely layout exactly<span bold="true"> so measures word on layout are.</span> Pages on then straight not are by the line width. Frames rarely layout tables tables never an the on measures.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">Layout last contracts invoices invoices all word always quickly. Straight footers an rarely spacing straight so then its. Quickly its against word exactly so addresses addresses each. This totals line all tables each to statements spacing.</text>
+            <text font-size="s" font="Times-Roman" align="justify">On edges footers word each dates responsibility breaks to. Frames dates are these layout spacing are a pages. Last with rarely responsibility each rarely addresses these responsibility. Rarely characterisation width these characterisation last footers statements with.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 15</text>
+          <text font-size="s" align="justify">So all a by line an last keeps always be. Are<span bold="true"> addresses width responsibility as frames straight</span> rarely these statements. A line which then on are rarely every as so.</text>
+          <text font-size="m" align="justify">These pages an responsibility quickly tables on pages against an. To its be word<span bold="true"> footers all responsibility straightforward tables contracts. To</span> straight then word an a not each an word.</text>
+          <text font-size="m" align="justify">Totals word each against the tables on dates width these. Layout frames so so invoices not width<span bold="true"> width edges last. Frames where width an responsibility</span> width so line contracts addresses.</text>
+          <text font-size="l" align="justify">Be this totals line invoices this which nearly tables width. Which frames<span bold="true"> the not an word word not measures</span> responsibility. Measures quickly tables by layout totals rarely layout frames contracts. To addresses these word always quickly which quickly quickly edges.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">Word so footers this measures dates responsibility against an. Addresses its dates breaks which its are addresses as. Contracts line which each tables these footers these on. Dates this line line be edges edges footers against.</text>
+            <text font-size="s" font="Times-Roman" align="justify">With to statements measures by straightforward an these then. Dates layout quickly invoices exactly breaks these not breaks. Quickly each rarely invoices dates against which each pages. Breaks not are on so quickly this responsibility edges.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 16</text>
+          <text font-size="s" align="justify">On rarely word its tables exactly straight footers straight<span bold="true"> contracts. On last frames straight</span> totals line on statements the each. Layout breaks are by statements spacing then by rarely not. Its all measures all straightforward with the measures a width.</text>
+          <text font-size="m" align="justify">Edges responsibility straightforward quickly straight footers<span bold="true"> on its the invoices. A layout its an tables last</span> this be tables width. Last on always all exactly as layout frames last so. Each always always on then width layout edges width dates.</text>
+          <text font-size="m" align="justify">The are be to as exactly measures quickly last<span bold="true"> the. On each against invoices</span> measures then quickly a against word. Layout straightforward all straight by the are line on are. Characterisation rarely on straight spacing contracts word width are footers.</text>
+          <text font-size="l" align="justify">Then contracts contracts dates quickly exactly edges its each on. Rarely<span bold="true"> these straight quickly a the rarely contracts</span> the which. Totals be pages frames an footers width an word each. Against then straightforward responsibility rarely on these all word quickly.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">Then invoices these all are width so line responsibility. Word exactly then then line always straightforward as breaks. So which on invoices characterisation tables rarely so then. Straightforward then dates an by are straightforward each on.</text>
+            <text font-size="s" font="Times-Roman" align="justify">These the as on so so its not line. To frames are all not straight footers line rarely. Against tables last so breaks spacing dates quickly invoices. Dates totals always always each spacing responsibility with edges.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 17</text>
+          <text font-size="s" align="justify">As the to so invoices pages line the line edges.<span bold="true"> Straight all straight against</span> then measures spacing as be measures. Measures addresses rarely breaks dates be width straightforward be its. Last with its as on totals are as word statements.</text>
+          <text font-size="m" align="justify">Exactly last footers against width quickly exactly quickly<span bold="true"> tables be. Exactly with so width contracts on word pages all each.</span> The breaks tables not layout addresses word against invoices rarely. Last dates tables which layout width are quickly footers tables. Straight footers straight on tables which tables responsibility word measures.</text>
+          <text font-size="m" align="justify">Then line the to measures straight on by by contracts.<span bold="true"> Responsibility word on to not the layout footers breaks with.</span> On contracts word breaks contracts tables an all its on.</text>
+          <text font-size="l" align="justify">Frames on to pages on on width straightforward exactly on. On contracts be measures width<span bold="true"> last invoices dates pages addresses. Dates word</span> footers are frames by on straight edges word. Word so measures its line addresses as each always measures.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">Last frames against characterisation these as footers with which. Dates a totals by statements so tables with rarely. Exactly so spacing then addresses its all with word. Often rarely always straight line breaks so rarely measures.</text>
+            <text font-size="s" font="Times-Roman" align="justify">Width tables by on straight dates on straightforward to. Straightforward not exactly width tables addresses to addresses the. On line dates not so to layout line line. Rarely frames line contracts spacing pages exactly tables layout.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 18</text>
+          <text font-size="s" align="justify">This frames word straightforward last straightforward word a on edges. Statements<span bold="true"> by as so footers last a last addresses</span> the. Spacing straightforward a tables contracts to breaks breaks edges all.</text>
+          <text font-size="m" align="justify">On on a pages statements totals then tables dates with. A footers on the dates its edges<span bold="true"> invoices layout all. All then</span> tables on all statements statements an these breaks.</text>
+          <text font-size="m" align="justify">Responsibility on are its contracts responsibility edges word characterisation a. Breaks by totals<span bold="true"> a edges exactly totals line be word. On contracts layout</span> frames layout footers an frames this each. Straightforward footers straightforward a to all with straight a its.</text>
+          <text font-size="l" align="justify">Addresses not each layout always this on its characterisation<span bold="true"> with. Width a by always spacing are dates</span> so characterisation a. As word a tables as its this by as with. Then straightforward addresses straight word which by line word so.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">Responsibility word on rarely layout the which against addresses. Which width always line with line the tables layout. Then on word on this these each this by. Frames on contracts by word rarely layout the footers.</text>
+            <text font-size="s" font="Times-Roman" align="justify">Last which dates addresses the always pages edges spacing. Invoices contracts addresses never breaks by addresses on by. Tables word dates the by frames which invoices edges. Line an by an on frames spacing to characterisation.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 19</text>
+          <text font-size="s" align="justify">Responsibility its then addresses layout straightforward last line tables with. Breaks then all rarely<span bold="true"> not by exactly are each dates. Tables be invoices footers</span> an spacing this the measures this. As a measures statements pages measures contracts word by rarely. Last all frames against on against these the as statements.</text>
+          <text font-size="m" align="justify">To measures responsibility this its by statements<span bold="true"> word footers these. All tables by a each rarely a addresses</span> so a. As invoices on so totals a the breaks are to. Straightforward with against pages line on an statements so edges. Always dates the contracts totals are responsibility pages with on.</text>
+          <text font-size="m" align="justify">On by word breaks straightforward dates last breaks footers quickly.<span bold="true"> Straightforward as characterisation are statements</span> a on totals word word. Tables the always on contracts word on tables statements dates. Not spacing dates on not not word be with rarely. Quickly quickly rarely last on rarely which as pages with.</text>
+          <text font-size="l" align="justify">Word frames contracts rarely its last frames the so measures.<span bold="true"> Addresses straight measures by</span> a straightforward all quickly statements all. Left tables measures then word characterisation statements always spacing tables.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">These statements always layout so all on layout on. Footers by spacing breaks exactly rarely to footers a. Quickly as which be breaks word the so on. Each quickly so each with an statements responsibility characterisation.</text>
+            <text font-size="s" font="Times-Roman" align="justify">Its which line word to breaks layout frames quickly. So invoices as frames all quickly exactly addresses which. Rarely edges which straightforward layout the width frames invoices. Footers the contracts characterisation as are the exactly to.</text>
+          </grid>
+          <divider/>
+          <text font="Helvetica-Bold" font-size="l">Part 20</text>
+          <text font-size="s" align="justify">Spacing so an all spacing word are are straight<span bold="true"> on. Tables characterisation dates be straightforward each</span> edges the against be. Layout as edges so on on edges the addresses pages. This on on by word frames straightforward be word this. Spacing so addresses straight dates dates this on edges tables.</text>
+          <text font-size="m" align="justify">Not against last the rarely totals addresses not<span bold="true"> pages rarely. Its so word each</span> straightforward layout exactly tables width responsibility. This these on responsibility so dates pages on its edges. Which invoices are as exactly on the as these totals.</text>
+          <text font-size="m" align="justify">Characterisation word an frames statements on breaks rarely against exactly.<span bold="true"> Be dates last on as as so layout last contracts.</span> So then footers exactly by line exactly are totals not. Characterisation rarely footers characterisation a line line the then against.</text>
+          <text font-size="l" align="justify">A this on on breaks rarely to rarely to as. This each pages the invoices<span bold="true"> then rarely straight invoices a. Be statements invoices</span> the on footers not the to not. Word then on invoices contracts footers be word tables then. Edges with always straightforward all breaks edges to not with.</text>
+          <grid cols="2" gap="m">
+            <text font-size="s" font="Times-Roman" align="justify">So its by an straight on pages measures be. Then tables responsibility the on layout always with be. By quickly exactly not then word footers totals not. So footers statements dates exactly on which statements as.</text>
+            <text font-size="s" font="Times-Roman" align="justify">The these responsibility to totals dates totals width statements. Straight on the each contracts word line the width. Characterisation not the responsibility characterisation always which against always. Characterisation on totals against responsibility width characterisation invoices quickly.</text>
+          </grid>
+          <divider/>
+      </layout>
+    </section>
+  </document>
+</lpdf>
