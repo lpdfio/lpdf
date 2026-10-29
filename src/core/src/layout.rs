@@ -1,4 +1,4 @@
-use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Capture, CaptureMode, Direction, FieldKind, Footnote, HeightMode, Justify, Node, NodeKind, RowKeep, SectionLayout, Paginate, TextAlign, TextRun};
+use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Capture, CaptureMode, Direction, FieldKind, Footnote, HeightMode, Justify, Node, NodeKind, PageScope, RowKeep, SectionLayout, Paginate, TextAlign, TextRun};
 
 // The path is spelled out because the WASI build includes this file from another crate.
 #[path = "layout/footnotes.rs"]
@@ -259,13 +259,14 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
 
     // Fast path: no chrome — standard pagination.
     if top_chrome.is_empty() && bot_chrome.is_empty() {
-        let chunks = footnotes::split_flow(&flow, avail_w, avail_h, avail_h, page.gap, page.footnote_counter, has_notes);
-        return chunks
-            .into_iter()
+        // Each page is laid out as soon as it is filled, so that its nodes and the trees kept for them don't wait
+        // for the pages after it.
+        let start = FlowStart { x: avail_x, first_y: avail_y, rest_y: avail_y };
+        return footnotes::split_flow(&flow, Some(start), avail_w, avail_h, avail_h, page.gap, page.footnote_counter, has_notes)
             .map(|chunk| {
                 let room = avail_h - chunk.reserve;
-                let (nodes, used) = layout_column(
-                    &chunk.nodes, avail_x, avail_y, avail_w, Some(room),
+                let (nodes, used) = layout_column_kept(
+                    &chunk.nodes, chunk.kept, avail_x, avail_y, avail_w, Some(room),
                     page.gap, &Align::Stretch, &Justify::Start,
                 );
                 let mut nodes = clip_overflow(nodes, used, avail_y + room, room, page.width);
@@ -293,7 +294,31 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
     let budget_rest  = (avail_h - top_always_h - bot_always_h).max(0.0);
 
     // ── Paginate flow with per-page budgets ──────────────────────────────────
-    let chunks = footnotes::split_flow(&flow, avail_w, budget_first, budget_rest, page.gap, page.footnote_counter, has_notes);
+    // Where the flow's start is known, a page's flow is laid out as soon as the page is filled, so that its nodes
+    // and the trees kept for them don't wait for the pages after it. The header and the footer wait for the number
+    // of pages, and so does the flow below a header that can be another height on some page.
+    let start = header_height_fixed(&top_chrome)
+        .then_some(FlowStart { x: avail_x, first_y: avail_y + top_first_h, rest_y: avail_y + top_always_h });
+    let chunks: Vec<FilledPage> = footnotes::split_flow(&flow, start, avail_w, budget_first, budget_rest, page.gap, page.footnote_counter, has_notes)
+        .enumerate()
+        .map(|(idx, chunk)| {
+            let flow_budget = if idx == 0 { budget_first } else { budget_rest };
+            let room = flow_budget - chunk.reserve;
+            let captured = page_captures(&chunk.nodes);
+            let flow = match start {
+                Some(start) => {
+                    let (x, y) = start.on_page(idx == 0);
+                    let (nodes, used) = layout_column_kept(
+                        &chunk.nodes, chunk.kept, x, y, avail_w, Some(room),
+                        page.gap, &Align::Stretch, &Justify::Start,
+                    );
+                    PageFlow::Laid { nodes: clip_overflow(nodes, used, y + room, room, page.width), y }
+                }
+                None => PageFlow::Nodes(chunk.nodes),
+            };
+            FilledPage { flow, captured, notes: chunk.notes, room }
+        })
+        .collect();
     let total_pages = chunks.len();
 
     // ── Build each output page ───────────────────────────────────────────────
@@ -304,7 +329,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
         let is_first = idx == 0;
         let page_num = idx + 1;
 
-        let captured = page_captures(&chunk.nodes);
+        let captured = chunk.captured;
         let page_chrome = |chrome: &[Node]| -> Vec<Node> {
             chrome.iter()
                 .filter(|n| page_scope_indices(&n.page_scope, total_pages).contains(&idx))
@@ -338,12 +363,20 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
         // Flow between chromes.
         let flow_y = avail_y + top_h;
         let flow_budget = if is_first { budget_first } else { budget_rest };
-        let room = flow_budget - chunk.reserve;
-        let (flow_nodes, used) = layout_column(
-            &chunk.nodes, avail_x, flow_y, avail_w, Some(room),
-            page.gap, &Align::Stretch, &Justify::Start,
-        );
-        let flow_nodes = clip_overflow(flow_nodes, used, flow_y + room, room, page.width);
+        let room = chunk.room;
+        let flow_nodes = match chunk.flow {
+            PageFlow::Laid { nodes, y } => {
+                debug_assert_eq!(y, flow_y, "the header of page {page_num} is another height than the budgets measured");
+                nodes
+            }
+            PageFlow::Nodes(nodes) => {
+                let (flow_nodes, used) = layout_column(
+                    &nodes, avail_x, flow_y, avail_w, Some(room),
+                    page.gap, &Align::Stretch, &Justify::Start,
+                );
+                clip_overflow(flow_nodes, used, flow_y + room, room, page.width)
+            }
+        };
 
         let mut all_nodes = top_nodes;
         all_nodes.extend(flow_nodes);
@@ -387,6 +420,22 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
     }
 
     pages_out
+}
+
+/// A page of a section with a header or a footer, filled: its flow, what its texts captured, its notes and the
+/// height its flow has.
+struct FilledPage {
+    flow:     PageFlow,
+    captured: PageCaptures,
+    notes:    Vec<footnotes::Note>,
+    room:     f32,
+}
+
+/// The flow of a filled page: laid out at `y` when the page was filled, or its nodes, which wait for the header
+/// above them.
+enum PageFlow {
+    Laid { nodes: Vec<RenderNode>, y: f32 },
+    Nodes(Vec<Node>),
 }
 
 /// The flow of a page, laid out `used` high in a `room` that ends at `bottom`. A flow that runs past it holds a node
@@ -602,48 +651,92 @@ impl<'a> Pending<'a> {
     }
 }
 
-/// Packs `nodes` (stacked vertically with `gap` between adjacent items) into
-/// page-sized chunks. The first chunk gets `budget_first` of vertical space,
-/// every subsequent chunk gets `budget_rest` (this lets callers reserve
-/// different chrome on page 1 vs. later pages).
-///
-/// Splittable: Column (Auto), Grid, Row, Text.
-/// Atomic: Frame, Divider, Link, plus anything with Fixed/Full/Fill.
-///
-/// When a node doesn't fit and can't be split, it moves wholesale to the next
-/// page. If a single atomic node is taller than a full page, it is force-placed,
-/// and the bottom of the page cuts it (`clip_overflow`).
-fn split_into_pages(
-    nodes: &[Node],
-    avail_w: f32,
-    budget_first: f32,
-    budget_rest: f32,
-    gap: f32,
-) -> Vec<Vec<Node>> {
-    if nodes.is_empty() {
-        return vec![vec![]];
-    }
+/// Where the flow of a section's pages starts: its x, and its y on the first page and on the pages after it,
+/// below a header as high as the budgets measured it. It is known while the pages are filled when the header is that
+/// high on every page (`header_height_fixed`).
+#[derive(Clone, Copy)]
+pub(super) struct FlowStart {
+    x:       f32,
+    first_y: f32,
+    rest_y:  f32,
+}
 
-    let mut pending = Pending::new(nodes);
-    let mut pages: Vec<Vec<Node>> = Vec::new();
-    while !pending.is_empty() {
-        let budget = if pages.is_empty() { budget_first } else { budget_rest };
-        pages.push(fill_page(&mut pending, avail_w, budget, budget_rest, gap));
+impl FlowStart {
+    fn on_page(&self, first: bool) -> (f32, f32) {
+        (self.x, if first { self.first_y } else { self.rest_y })
     }
-    pages
+}
+
+/// Whether the header of a section is as high on every page as measured for the budgets: each of its nodes on
+/// every page or on the first one only, with no page number in it. A node for the last page, the odd or the even
+/// ones or a range of them is on some pages and not on others, which the budgets leave room for, and a
+/// `{page}` or `{pages}` can wrap a text to another number of lines. A `capture-ref` text takes its lines whatever
+/// it shows (`reserve_sink_lines`).
+fn header_height_fixed(top_chrome: &[Node]) -> bool {
+    fn has_page_tokens(node: &Node) -> bool {
+        node.text_runs.iter().any(|run| run.text.contains("{page")) || node.children.iter().any(has_page_tokens)
+    }
+    top_chrome.iter().all(|node| {
+        matches!(node.page_scope, None | Some(PageScope::Each) | Some(PageScope::First)) && !has_page_tokens(node)
+    })
+}
+
+/// The tree of a node of a page's flow, which `fill_page` laid out where the page's `layout_column` places it, to
+/// measure it: the column takes it as it is (`layout_column_kept`), instead of laying the node out again. `at` is
+/// the x of the column and the y of the node.
+pub(super) struct Kept {
+    at:   (f32, f32),
+    tree: RenderNode,
+    h:    f32,
+}
+
+/// The height `fill_page` measures `node` at, and its tree when the node's place on the page is known: laid out
+/// there, as the page's `layout_column` lays out an auto-height child, it is the tree that column needs. The height
+/// is the same either way, since a node of auto height doesn't read the height it is given. A link, which passes
+/// it on to its children, and a vertical divider, which takes it, are the two that do, and are measured as before.
+fn measure_on_page(node: &Node, x: f32, place_y: Option<f32>, avail_w: f32, budget: f32) -> (f32, Option<Kept>) {
+    let at_place = node.height_mode == HeightMode::Auto
+        && node.kind != NodeKind::Link
+        && !(node.kind == NodeKind::Divider && node.direction == Direction::Vertical);
+    match place_y {
+        Some(y) if at_place => {
+            let (cw, cx) = column_child_place(node, x, avail_w, &Align::Stretch);
+            let (tree, h) = layout_column_child(node, cx, y, cw, None, &Align::Stretch);
+            (h, Some(Kept { at: (x, y), tree, h }))
+        }
+        _ => (measure_height(node, avail_w, budget), None),
+    }
+}
+
+/// Where the page's `layout_column` places the node after one placed at `place_y`, `h` high: the same sum, while
+/// the column's height for the node is known. That is a node laid out at its place, or one of a fixed height. A
+/// `fill` or `full` node takes what the others leave, and a link or a vertical divider gets another height in the
+/// column than the one `fill_page` measured.
+fn next_place(place_y: Option<f32>, node: &Node, laid_out: bool, h: f32, gap: f32) -> Option<f32> {
+    let known = laid_out || matches!(node.height_mode, HeightMode::Fixed(_));
+    place_y.filter(|_| known).map(|py| py + (h + gap + 0.0))
 }
 
 /// Takes the nodes of one page off `pending`: as many as fit in `budget`, a node that does not fit being split
-/// or sent on whole. `next_budget` is what the page after it has, which keep-next looks at.
+/// or sent on whole. `next_budget` is what the page after it has, which keep-next looks at. `at` is the x and y the
+/// page's flow starts at, when it is known: a node placed whole then comes with its tree, laid out at its place
+/// there (`Kept`).
+///
+/// Splittable: Column (Auto), Grid, Row, Text, Table, Link. Atomic: Frame, Divider, plus anything with
+/// Fixed/Full/Fill. When a node doesn't fit and can't be split, it moves wholesale to the next page. If a single
+/// atomic node is taller than a full page, it is force-placed, and the bottom of the page cuts it (`clip_overflow`).
 fn fill_page(
     pending: &mut Pending,
+    at: Option<(f32, f32)>,
     avail_w: f32,
     budget: f32,
     next_budget: f32,
     gap: f32,
-) -> Vec<Node> {
-    let mut page: Vec<Node> = Vec::new();
+) -> Vec<(Node, Option<Kept>)> {
+    let mut page: Vec<(Node, Option<Kept>)> = Vec::new();
     let mut used_h: f32 = 0.0;
+    let x = at.map_or(0.0, |(x, _)| x);
+    let mut place_y = at.map(|(_, y)| y);
 
     while let Some(node) = pending.pop() {
         // break-before: end the page before this node. Requeue without the flag to avoid an infinite loop on
@@ -654,7 +747,7 @@ fn fill_page(
         }
 
         let gap_before = if page.is_empty() { 0.0 } else { gap };
-        let h = measure_height(&node, avail_w, budget);
+        let (h, tree) = measure_on_page(&node, x, place_y, avail_w, budget);
         let remaining = budget - used_h - gap_before;
 
         let needs_break_after;
@@ -684,7 +777,7 @@ fn fill_page(
                 // holds them: a heading above a heading that moves on is not left alone at the foot of the page.
                 let mut room = next_budget + 0.5 - (h + gap + next_h);
                 let mut back = 0;
-                for kept in page.iter().rev().take_while(|n| n.paginate == Paginate::KeepNext) {
+                for (kept, _) in page.iter().rev().take_while(|(n, _)| n.paginate == Paginate::KeepNext) {
                     let kept_h = gap + measure_height(kept, avail_w, budget);
                     if kept_h > room { break; }
                     room -= kept_h;
@@ -694,7 +787,7 @@ fn fill_page(
                 if back == page.len() { back = 0; }
                 let moved = page.split_off(page.len() - back);
                 pending.push_front(node);
-                for kept in moved.into_iter().rev() {
+                for (kept, _) in moved.into_iter().rev() {
                     pending.push_front(kept);
                 }
                 break;
@@ -711,12 +804,16 @@ fn fill_page(
                     next_h > remaining_for_next + 0.5
                         && h + gap + next_h > next_budget + 0.5
                 });
-            page.push(node);
+            place_y = next_place(place_y, &node, tree.is_some(), h, gap);
+            page.push((node, tree));
             used_h += gap_before + h;
             if warn_keep_next {
                 pending.push_front(make_keep_next_warning());
             }
         } else {
+            // A node that doesn't fit keeps its tree only to be placed whole on an empty page, which a node that
+            // splits never is: its tree goes before its parts are measured.
+            let tree = tree.filter(|_| page.is_empty() && !splittable(&node));
             let target = remaining.max(0.0);
             match split_node_at(&node, avail_w, target, budget) {
                 SplitOutcome::First(first, mut rest) => {
@@ -729,7 +826,7 @@ fn fill_page(
                     }
                     // A part can still be taller than the page, as a table's spanned rows or a row's child can.
                     let cut = node.debug && measure_height(&first, avail_w, budget) > target + 0.5;
-                    page.push(first);
+                    page.push((first, None));
                     for item in rest.into_iter().rev() {
                         pending.push_front(item);
                     }
@@ -748,8 +845,9 @@ fn fill_page(
                         if first.debug && fh > budget + 0.5 {
                             pending.push_front(make_clip_warning());
                         }
-                        page.push(first);
+                        page.push((first, None));
                         used_h = fh.min(budget);
+                        place_y = None;
                     } else {
                         // paginate flags are preserved on rest items via clone
                         for item in rest.into_iter().rev() {
@@ -764,7 +862,8 @@ fn fill_page(
                         if node.debug && h > budget + 0.5 {
                             pending.push_front(make_clip_warning());
                         }
-                        page.push(node);
+                        place_y = next_place(place_y, &node, tree.is_some(), h, gap);
+                        page.push((node, tree));
                         used_h = budget;
                     } else {
                         pending.push_front(node);
@@ -2445,6 +2544,23 @@ fn layout_column(
     align: &Align,
     justify: &Justify,
 ) -> (Vec<RenderNode>, f32) {
+    layout_column_kept(children, Vec::new(), x, y, avail_w, avail_h, gap, align, justify)
+}
+
+/// `layout_column` with the trees `fill_page` kept for the children of a page's flow (`Kept`). A child found at
+/// the place its tree was laid out at takes it, and any other is laid out as `layout_column` lays it out.
+#[allow(clippy::too_many_arguments)]
+fn layout_column_kept(
+    children: &[Node],
+    mut kept: Vec<Option<Kept>>,
+    x: f32,
+    y: f32,
+    avail_w: f32,
+    avail_h: Option<f32>,
+    gap: f32,
+    align: &Align,
+    justify: &Justify,
+) -> (Vec<RenderNode>, f32) {
     if children.is_empty() {
         return (vec![], 0.0);
     }
@@ -2484,8 +2600,15 @@ fn layout_column(
             // A link passes its avail_h on to its own children, so it is
             // measured without one and placed with one, as before.
             HeightMode::Auto if starts_at_y && place_y.is_some() && child.kind != NodeKind::Link => {
-                let (cw, cx) = column_child_place(child, x, avail_w, align);
-                let (rn, h) = layout_column_child(child, cx, place_y.unwrap_or(y), cw, None, align);
+                let py = place_y.unwrap_or(y);
+                let (rn, h) = match kept.get_mut(i).and_then(Option::take) {
+                    // The same place to the last bit, so the tree is the one laid out here.
+                    Some(k) if k.at == (x, py) => (k.tree, k.h),
+                    _ => {
+                        let (cw, cx) = column_child_place(child, x, avail_w, align);
+                        layout_column_child(child, cx, py, cw, None, align)
+                    }
+                };
                 placed[i] = Some(rn);
                 sized[i] = Some(h);
                 sum_fixed += h;
