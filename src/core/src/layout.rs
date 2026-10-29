@@ -3350,7 +3350,7 @@ fn layout_divider(
 // upright). WinAnsiEncoding draws a bullet for the codes it leaves empty, so they have the bullet's width.
 // Courier is 600 for every code.
 //
-// Layout measures a character by the width of the code it is drawn with (`builtin_char_advance`), and a font
+// Layout measures a character by the width of the code it is drawn with (`table_char_advance`), and a font
 // written with a `/Widths`, as the one that draws comparison signs is (`pdf::write_sign_encoding`), takes these
 // too, so that a viewer advances as layout measured.
 
@@ -3553,7 +3553,13 @@ pub(crate) fn afm_code_advance(font: &str, code: u8) -> Option<u16> {
     if font.contains("Courier") {
         return Some(600);
     }
-    let table: &[u16; 224] = match font {
+    afm_table(font).map(|table| table[index])
+}
+
+/// The advances of a built-in font of the Helvetica or Times families, for the codes from the space up. None for
+/// any other font, Courier's included.
+fn afm_table(font: &str) -> Option<&'static [u16; 224]> {
+    Some(match font {
         "Helvetica" | "Helvetica-Oblique"          => &AFM_HELVETICA,
         "Helvetica-Bold" | "Helvetica-BoldOblique" => &AFM_HELVETICA_BOLD,
         "Times-Roman"                              => &AFM_TIMES_ROMAN,
@@ -3561,15 +3567,30 @@ pub(crate) fn afm_code_advance(font: &str, code: u8) -> Option<u16> {
         "Times-Italic"                             => &AFM_TIMES_ITALIC,
         "Times-BoldItalic"                         => &AFM_TIMES_BOLD_ITALIC,
         _ => return None,
-    };
-    Some(table[index])
+    })
 }
 
-/// How far a built-in font advances for a character, in thousandths of the size: the width of the code of
-/// Windows-1252 that it is drawn with. None for a character Windows-1252 has no code for, and for a font that is
-/// not of the Helvetica, Times or Courier families.
-pub(crate) fn builtin_char_advance(font: &str, c: char) -> Option<u16> {
-    crate::pdf::win1252_byte(c).and_then(|code| afm_code_advance(font, code))
+/// How far a character advances in the font of `table`, in thousandths of the size: the code of Windows-1252 it is
+/// drawn with, else a comparison sign's own width, else the width of the character it is drawn as. 500 when none
+/// applies.
+fn table_char_advance(table: &[u16; 224], c: char) -> u16 {
+    if c.is_ascii() && c >= ' ' {
+        return table[c as usize - 32];
+    }
+    table_char_fallback(table, c)
+}
+
+/// `table_char_advance` for a character outside printable ASCII, which few texts have.
+#[cold]
+#[inline(never)]
+fn table_char_fallback(table: &[u16; 224], c: char) -> u16 {
+    let in_table = |c: char| crate::pdf::win1252_byte(c)
+        .and_then(|code| usize::from(code).checked_sub(32))
+        .map(|index| table[index]);
+    in_table(c)
+        .or_else(|| crate::pdf::sign_advance(c))
+        .or_else(|| crate::pdf::look_alike(c).and_then(in_table))
+        .unwrap_or(500)
 }
 
 /// Measure the advance width (in pt) of a string at the given font and size.
@@ -3587,14 +3608,9 @@ pub(crate) fn text_width(font: &str, text: &str, size: f32) -> f32 {
         return width;
     }
     // For known builtins use per-character AFM widths.
-    if builtin_char_advance(font, ' ').is_some() {
+    if let Some(table) = afm_table(font) {
         return text.chars()
-            .map(|c| {
-                let drawn = builtin_char_advance(font, c)
-                    .or_else(|| crate::pdf::sign_advance(c))
-                    .or_else(|| crate::pdf::look_alike(c).and_then(|a| builtin_char_advance(font, a)));
-                drawn.unwrap_or(500) as f32 * size / 1000.0
-            })
+            .map(|c| table_char_advance(table, c) as f32 * size / 1000.0)
             .sum();
     }
     // Unknown font (undefined alias, unsupported builtin, or custom font with no
