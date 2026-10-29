@@ -1,4 +1,4 @@
-// The table of counts/SUMMARY.md in lpdf-bench: one row for each release that has a counts/vX.Y.Z.json,
+// The tables of counts/SUMMARY.md in lpdf-bench: one row for each release that has a counts/vX.Y.Z.json,
 // to see how the instructions, allocations and memory of the core moved from release to release.
 // bench.yml's history job writes it after it has saved the counts of a release. Nobody edits it.
 //
@@ -80,16 +80,31 @@ function stageCell(stage) {
     return `${stage.index.toFixed(1)} (${sign(percent, text)}${text}%)`;
 }
 
+const megabytes = n => (n / 1_000_000).toFixed(2);
+
+/** The quantities of a whole render in the first table. */
 const MEMORY = [
     { title: 'Allocations', measure: 'allocations', format: n => n.toLocaleString('en-US') },
-    { title: 'Bytes allocated', measure: 'bytes_allocated', format: n => (n / 1_000_000).toFixed(2) },
-    { title: 'Peak memory', measure: 'peak_bytes', format: n => (n / 1_000_000).toFixed(2) },
+    { title: 'Bytes allocated', measure: 'bytes_allocated', format: megabytes },
 ];
 
-/** `m / xl` of one measure of a whole render, or `—` when the release lacks it for either fixture. */
-function memoryCell(release, { measure, format }) {
-    const values = SHOWN_FIXTURES.map(fixture => release.counts[fixture]?.end_to_end?.[measure]);
+/** The second table: the peak of each stage. */
+const PEAK = { measure: 'peak_bytes', format: megabytes };
+
+/** `m / xl` of one measure of one stage, or `—` when the release lacks it for either fixture. */
+function memoryCell(release, stage, { measure, format }) {
+    const values = SHOWN_FIXTURES.map(fixture => release.counts[fixture]?.[stage]?.[measure]);
     return values.every(v => v !== undefined) ? values.map(format).join(' / ') : '—';
+}
+
+const stageTitle = stage => stage.name[0].toUpperCase() + stage.name.slice(1);
+
+/** A Markdown table's header and separator: numbers aligned right, the first column and the last `trailingText` left. */
+function tableHead(headers, trailingText) {
+    return [
+        `| ${headers.join(' | ')} |`,
+        `|${headers.map((_, i) => i === 0 || i >= headers.length - trailingText ? '---' : '---:').join('|')}|`,
+    ];
 }
 
 /** The compiler of a release as `1.99.0`, from `rustc 1.99.0 (b940084d7 2026-09-28)`. */
@@ -97,7 +112,7 @@ const rustVersion = rust => rust ? /^rustc (\S+)/.exec(rust)?.[1] ?? rust : '—
 
 const code = version => `\`${version}\``;
 
-/** The file in Markdown: how to read it, then a row for each release. */
+/** The file in Markdown: how to read it, then a row for each release in each table. */
 export function markdown(rows) {
     const first = rows.find(r => r.stages)?.release;
     const shown = SHOWN_FIXTURES.join(' / ');
@@ -112,8 +127,8 @@ export function markdown(rows) {
             '`110.3 (+4.2%)` is 10.3% more instructions than at the start and 4.2% more than at the release before.' +
             (first?.against ? ` The first row shows its step from ${first.against.version}, which has no file here.` : ''),
         '',
-        `The other columns are the quantities of a whole render (end to end), for the fixtures ${SHOWN_FIXTURES.join(' and ')}, as \`${shown}\`. ` +
-            'Peak memory is the heap when it is at its highest. MB = 1,000,000 bytes.',
+        `The allocation columns are the quantities of a whole render (end to end), for the fixtures ${SHOWN_FIXTURES.join(' and ')}, as \`${shown}\`. ` +
+            'MB = 1,000,000 bytes. The instructions come from Callgrind, and the allocations and the peak memory from a counting allocator.',
         '',
         "A — is a number that release's file lacks: the stage had no benchmark yet, or the memory wasn't counted.",
         '',
@@ -129,18 +144,31 @@ export function markdown(rows) {
     }
 
     const headers = [
-        'Release', ...STAGES.map(s => s.name[0].toUpperCase() + s.name.slice(1)),
+        'Release', ...STAGES.map(stageTitle),
         ...MEMORY.map(m => `${m.title} (${shown}${m.measure === 'allocations' ? '' : ', MB'})`), 'Rust',
     ];
+    out.push(...tableHead(headers, 1));
+    for (const { release, stages } of rows) {
+        const cells = stages
+            ? [...STAGES.map(s => stageCell(stages[s.id])), ...MEMORY.map(m => memoryCell(release, 'end_to_end', m))]
+            : ['not measured', ...Array(headers.length - 3).fill('—')];
+        out.push(`| ${[release.version, ...cells, rustVersion(release.rust)].join(' | ')} |`);
+    }
+
     out.push(
-        `| ${headers.join(' | ')} |`,
-        `|${headers.map((_, i) => i === 0 || i === headers.length - 1 ? '---' : '---:').join('|')}|`,
+        '',
+        '## Peak memory of each stage',
+        '',
+        'The most the heap grew over where it stood when the stage began, ' +
+            `for the fixtures ${SHOWN_FIXTURES.join(' and ')}, as \`${shown}\`, in MB.`,
+        '',
+        ...tableHead(['Release', ...STAGES.map(stageTitle)], 0),
     );
     for (const { release, stages } of rows) {
         const cells = stages
-            ? [...STAGES.map(s => stageCell(stages[s.id])), ...MEMORY.map(m => memoryCell(release, m))]
-            : ['not measured', ...Array(headers.length - 3).fill('—')];
-        out.push(`| ${[release.version, ...cells, rustVersion(release.rust)].join(' | ')} |`);
+            ? STAGES.map(s => memoryCell(release, s.id, PEAK))
+            : ['not measured', ...Array(STAGES.length - 1).fill('—')];
+        out.push(`| ${[release.version, ...cells].join(' | ')} |`);
     }
     out.push('');
     return out.join('\n');

@@ -36,7 +36,12 @@ function chain(...steps) {
     });
 }
 
-const rowOf = (report, version) => report.split('\n').find(line => line.startsWith(`| ${version} |`)).split('|').slice(1, -1).map(c => c.trim());
+/** The cells of a release's row in the first table, or with `peak` in the table of the peak of each stage. */
+function rowOf(report, version, { peak = false } = {}) {
+    const lines = report.split('\n');
+    const from = peak ? lines.indexOf('## Peak memory of each stage') : 0;
+    return lines.slice(from).find(line => line.startsWith(`| ${version} |`)).split('|').slice(1, -1).map(c => c.trim());
+}
 
 test('orders v0.10.0 after v0.9.0', () => {
     assert.deepEqual(['v0.10.0', 'v0.9.1', 'v0.9.0', 'v1.0.0'].sort(compareVersions), ['v0.9.0', 'v0.9.1', 'v0.10.0', 'v1.0.0']);
@@ -113,14 +118,28 @@ test('shows allocations as counts and bytes in MB with two decimals, end to end,
     r.counts.m.end_to_end = { instructions: 1000, allocations: 5044, bytes_allocated: 6_765_432, peak_bytes: 1_234_567 };
     r.counts.xl.end_to_end = { instructions: 1000, allocations: 16888, bytes_allocated: 26_260_000, peak_bytes: 9_876_543 };
     const cells = rowOf(markdown(summarize([r])), 'v0.29.0');
-    assert.deepEqual(cells.slice(6, 9), ['5,044 / 16,888', '6.77 / 26.26', '1.23 / 9.88']);
+    assert.deepEqual(cells.slice(6, 8), ['5,044 / 16,888', '6.77 / 26.26']);
+});
+
+test('shows the peak memory of each stage for m and xl in a table of its own, with — for a stage the release lacks', () => {
+    const r = release('v0.30.0', { parse: 100, layout: 300, write_pdf: 200, render_doc: 500, end_to_end: 600 }, undefined);
+    r.counts.m.parse.peak_bytes = 1_179_871;
+    r.counts.xl.parse.peak_bytes = 7_386_425;
+    r.counts.m.write_pdf.peak_bytes = 546_206;
+    r.counts.xl.write_pdf.peak_bytes = 1_199_935;
+    const old = release('v0.29.0', { parse: 100, render_doc: 500, end_to_end: 600 }, undefined);
+    const report = markdown(summarize([old, r]));
+    assert.match(report, /## Peak memory of each stage/);
+    assert.deepEqual(rowOf(report, 'v0.30.0', { peak: true }), ['v0.30.0', '1.18 / 7.39', '0.50 / 0.50', '0.55 / 1.20', '0.50 / 0.50', '0.50 / 0.50']);
+    assert.deepEqual(rowOf(report, 'v0.29.0', { peak: true }), ['v0.29.0', '0.50 / 0.50', '—', '—', '0.50 / 0.50', '0.50 / 0.50']);
 });
 
 test('shows — for the peak memory of a release saved without it', () => {
     const r = release('v0.24.0', { end_to_end: 1000 }, undefined);
     for (const fixture of Object.values(r.counts)) delete fixture.end_to_end.peak_bytes;
-    const cells = rowOf(markdown(summarize([r])), 'v0.24.0');
-    assert.deepEqual(cells.slice(6, 9), ['100 / 100', '1.00 / 1.00', '—']);
+    const report = markdown(summarize([r]));
+    assert.deepEqual(rowOf(report, 'v0.24.0').slice(6, 8), ['100 / 100', '1.00 / 1.00']);
+    assert.deepEqual(rowOf(report, 'v0.24.0', { peak: true }), ['v0.24.0', '—', '—', '—', '—', '—']);
 });
 
 test('shows a release with an error as not measured, and goes on from the release before it', () => {
@@ -133,7 +152,8 @@ test('shows a release with an error as not measured, and goes on from the releas
     assert.equal(rows[2].gap, 'v0.2.0');
 
     const report = markdown(rows);
-    assert.deepEqual(rowOf(report, 'v0.2.0'), ['v0.2.0', 'not measured', '—', '—', '—', '—', '—', '—', '—', '1.99.0']);
+    assert.deepEqual(rowOf(report, 'v0.2.0'), ['v0.2.0', 'not measured', '—', '—', '—', '—', '—', '—', '1.99.0']);
+    assert.deepEqual(rowOf(report, 'v0.2.0', { peak: true }), ['v0.2.0', 'not measured', '—', '—', '—', '—']);
     assert.match(report, /The step of `v0\.3\.0` is from `v0\.2\.0` that has no counts here: the index goes on from `v0\.1\.0`/);
 });
 
@@ -143,6 +163,7 @@ test('says how the index is made and that the file is generated', () => {
     assert.match(report, /don't edit it/);
     assert.match(report, /geometric mean/);
     assert.match(report, /MB = 1,000,000 bytes/);
+    assert.match(report, /the peak memory from a counting allocator/);
     assert.match(report, /fixtures in 0\.27/);
     assert.match(report, /The first row shows its step from v0\.23\.0/);
 });
