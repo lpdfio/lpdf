@@ -317,9 +317,9 @@ fn bench_data_e2e(c: &mut Criterion) {
 /// The name the image fixtures give their picture.
 const PHOTO: &str = "photo";
 
-/// A photo the repo already holds, as the image bench uses.
+/// A photo of the test assets, as the image bench uses.
 fn photo() -> Vec<u8> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/6-book/assets/images/chapter-05-caterpillar.jpg");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test/assets/images/chapter-05-caterpillar.jpg");
     std::fs::read(&path).unwrap_or_else(|e| panic!("the photo of the image fixtures, {}, can't be read: {e}", path.display()))
 }
 

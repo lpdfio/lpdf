@@ -126,7 +126,7 @@ pub(crate) fn render_doc_shared(
 mod tests {
     use super::*;
 
-    const MONTSERRAT: &[u8] = include_bytes!("../../../examples/5-brochure/assets/fonts/Montserrat-Regular.ttf");
+    const MONTSERRAT: &[u8] = include_bytes!("../../../test/assets/fonts/Montserrat-Regular.ttf");
 
     /// The advance of `c` in the face itself, in font units scaled to 1/1000 em.
     fn real_advance(face: &ttf_parser::Face, c: char) -> f32 {

@@ -3,7 +3,7 @@
 
 use ttf_parser::Face;
 
-const MONTSERRAT: &[u8] = include_bytes!("../../../examples/5-brochure/assets/fonts/Montserrat-Regular.ttf");
+const MONTSERRAT: &[u8] = include_bytes!("../../../test/assets/fonts/Montserrat-Regular.ttf");
 
 /// Lay out `paragraph` in the embedded font `brand` and return the text nodes of the page.
 fn laid_out_text_nodes(paragraph: &str) -> Vec<serde_json::Value> {

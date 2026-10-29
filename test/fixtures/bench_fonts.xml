@@ -2,13 +2,13 @@
 <!-- bench_m in embedded fonts, for the counts of benches/counts. Written by hand from bench_m, which gen_fixtures
      makes: Crimson Text Regular for the body and SemiBold for the headings, in place of Helvetica and
      Helvetica-Bold, and a second section in Montserrat with Latin and Cyrillic text. Latin text stays below
-     U+024F, the guillemets with it; the Cyrillic, the dashes and the curly quotes are above it. The fonts are the examples' (SIL Open Font
-     License), loaded under their names: body and heading from examples/6-book, sans from examples/5-brochure. -->
+     U+024F, the guillemets with it; the Cyrillic, the dashes and the curly quotes are above it. The fonts are in
+     test/assets/fonts (SIL Open Font License), which each src names relative to this file. -->
 <lpdf version="1">
   <assets>
-    <font name="body"    src="CrimsonText-Regular.ttf" />
-    <font name="heading" src="CrimsonText-SemiBold.ttf" />
-    <font name="sans"    src="Montserrat-Regular.ttf" />
+    <font name="body"    src="../assets/fonts/CrimsonText-Regular.ttf" />
+    <font name="heading" src="../assets/fonts/CrimsonText-SemiBold.ttf" />
+    <font name="sans"    src="../assets/fonts/Montserrat-Regular.ttf" />
   </assets>
   <document size="a4" font="body">
     <meta title="Benchmark Fixture Fonts" />

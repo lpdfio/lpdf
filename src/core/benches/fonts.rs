@@ -2,12 +2,12 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use lpdf::{bench_render_xml, bench_render_xml_with_font};
 use std::path::PathBuf;
 
-/// The font file the bench embeds: Crimson Text, which the repo already holds for its book example (SIL Open Font
-/// License, `OFL-CrimsonText.txt` beside it), so the bench has no fixture of its own to go missing.
+/// The font file the bench embeds: Crimson Text, one of the fonts the tests keep in `test/assets/fonts` (SIL Open
+/// Font License, `OFL-CrimsonText.txt` beside it), so the bench has no fixture of its own to go missing.
 const FONT_FILE: &str = "CrimsonText-Regular.ttf";
 
 fn font_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/6-book/assets/fonts").join(FONT_FILE)
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test/assets/fonts").join(FONT_FILE)
 }
 
 fn font_xml(font_ref: &str) -> String {

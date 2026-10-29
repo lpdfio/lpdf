@@ -7,20 +7,20 @@ use lpdf::{BenchDoc, BenchFonts, BenchPages, bench_fonts, bench_layout_doc_with_
 
 use crate::common::{fixture, parsed};
 
-/// The fonts of `bench_fonts.xml`, by the keys it names them with, in the examples of the checkout.
+/// The fonts of `bench_fonts.xml`, by the keys it names them with, in `test/assets/fonts` of the checkout.
 const FONTS: &[(&str, &str)] = &[
-    ("body", "6-book/assets/fonts/CrimsonText-Regular.ttf"),
-    ("heading", "6-book/assets/fonts/CrimsonText-SemiBold.ttf"),
-    ("sans", "5-brochure/assets/fonts/Montserrat-Regular.ttf"),
+    ("body", "CrimsonText-Regular.ttf"),
+    ("heading", "CrimsonText-SemiBold.ttf"),
+    ("sans", "Montserrat-Regular.ttf"),
 ];
 
 /// The embedded fonts of `bench_fonts.xml`, loaded as an engine loads them.
 pub fn fonts() -> BenchFonts {
-    let examples = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples");
+    let fonts_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test/assets/fonts");
     let files: Vec<(&str, Vec<u8>)> = FONTS
         .iter()
         .map(|&(name, file)| {
-            let path = examples.join(file);
+            let path = fonts_dir.join(file);
             let bytes = std::fs::read(&path)
                 .unwrap_or_else(|e| panic!("the font {} can't be read: {e}", path.display()));
             (name, bytes)
