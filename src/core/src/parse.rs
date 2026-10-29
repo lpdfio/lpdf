@@ -1447,6 +1447,23 @@ fn parse_assets_elem(
     Ok(())
 }
 
+/// The `name` and `src` of each font `xml` declares in `<assets>` with a `src`, in document order. The parser ignores
+/// a font's `src`, which an adapter reads, so this is for a caller that loads the files as an adapter does.
+pub fn font_srcs(xml: &str) -> Result<Vec<(String, String)>, String> {
+    let doc = roxmltree::Document::parse(xml)
+        .map_err(|e| format!("XML parse error: {e}"))?;
+    let root = doc.root_element();
+    let mut srcs = Vec::new();
+    for assets in elems(&root).filter(|n| n.tag_name().name() == "assets") {
+        for font in elems(&assets).filter(|n| n.tag_name().name() == "font") {
+            if let Some(src) = font.attribute("src") {
+                srcs.push((req_attr(&font, "name")?, src.to_string()));
+            }
+        }
+    }
+    Ok(srcs)
+}
+
 // ── Tokens ────────────────────────────────────────────────────────────────────
 
 fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), String> {

@@ -22,17 +22,21 @@ pub unsafe extern "C" fn getrandom(buffer: *mut u8, length: usize, _flags: u32) 
     length as isize
 }
 
-/// The text of a fixture. `bench_xs` to `bench_xl` and `bench_fonts` are the checkout's, in `test/fixtures`,
+/// The folder of a fixture. `bench_xs` to `bench_xl` and `bench_fonts` are the checkout's, in `test/fixtures`,
 /// written in the syntax of its release. The others are this crate's own, in `fixtures/`, so that every build
 /// of a run reads the same file.
-pub fn fixture(name: &str) -> String {
+pub fn fixture_folder(name: &str) -> PathBuf {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let folder = if name.starts_with("bench_") {
+    if name.starts_with("bench_") {
         manifest.join("../../test/fixtures")
     } else {
         manifest.join("fixtures")
-    };
-    let path = folder.join(format!("{name}.xml"));
+    }
+}
+
+/// The text of a fixture.
+pub fn fixture(name: &str) -> String {
+    let path = fixture_folder(name).join(format!("{name}.xml"));
     std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("the fixture {} can't be read: {e}", path.display()))
 }

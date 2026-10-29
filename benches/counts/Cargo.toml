@@ -17,8 +17,9 @@ publish = false
 # The checkout's lib.rs has bench_layout_doc and bench_write_pdf, which measure layout and the PDF
 # write apart. scripts/bench-counts.sh turns it on where they are, since earlier releases lack them.
 split-stages = []
-# The checkout's lib.rs has the entry points that set embedded fonts' advances for layout, which the
-# `fonts` benchmarks and the `fonts` rows of `allocations` use. scripts/bench-counts.sh turns it on where they are.
+# The checkout's lib.rs has the entry points that set embedded fonts' advances for layout and list the `src` of a
+# fixture's fonts, which the `fonts` benchmarks and the `fonts` rows of `allocations` use. scripts/bench-counts.sh
+# turns it on where they are.
 embedded-fonts = ["split-stages"]
 # The checkout reads a <markdown> and a <code>, which the fixtures `markdown` and `code` of `fixtures/` are
 # made of. scripts/bench-counts.sh turns each on where the checkout's schema has the element.
