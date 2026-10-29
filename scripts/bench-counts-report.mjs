@@ -25,6 +25,8 @@ import { fileURLToPath } from 'node:url';
 /** The stages of benches/counts, in pipeline order, by the name of their benchmark function. */
 export const STAGES = [
     { id: 'parse', name: 'parse' },
+    // The fixture `data` only: its data bound to the parsed document.
+    { id: 'data', name: 'data binding' },
     { id: 'layout', name: 'layout' },
     { id: 'write_pdf', name: 'PDF write' },
     { id: 'render_doc', name: 'layout + PDF write' },
@@ -33,6 +35,9 @@ export const STAGES = [
 
 /** The fixtures, `bench_xs` to `bench_xl`, by the id of their benchmark. */
 export const FIXTURES = ['xs', 's', 'm', 'l', 'xl'];
+
+/** The fixtures of one feature each, in the order of the table, after the sizes. */
+export const FEATURE_FIXTURES = ['justified', 'data', 'markdown', 'code', 'fonts'];
 
 /**
  * What the table shows. The work is Callgrind's, under the metric of gungraun's summary; the memory is the
@@ -112,7 +117,7 @@ const byOrder = order => (a, b) => {
  * and the change from each build to the next, with `marked` set where it grew past its mark.
  */
 export function compare(builds, marks = DEFAULT_MARKS) {
-    const fixtures = [...new Set(builds.flatMap(b => Object.keys(b.counts)))].sort(byOrder(FIXTURES));
+    const fixtures = [...new Set(builds.flatMap(b => Object.keys(b.counts)))].sort(byOrder([...FIXTURES, ...FEATURE_FIXTURES]));
     const stageIds = STAGES.map(s => s.id);
     const rows = [];
     for (const fixture of fixtures) {
@@ -174,6 +179,17 @@ export function missingStages(builds) {
         .filter(m => m.stages.length > 0);
 }
 
+/**
+ * The fixtures a build lacks that another has, as `{ build, fixtures }`: the release before a feature has no
+ * fixture of it, so its rows have no baseline until the next release.
+ */
+export function missingFixtures(builds) {
+    const all = new Set(builds.flatMap(b => Object.keys(b.counts)));
+    return builds
+        .map(b => ({ build: b.name, fixtures: [...all].filter(f => !(f in b.counts)).sort(byOrder(FEATURE_FIXTURES)) }))
+        .filter(m => m.fixtures.length > 0);
+}
+
 /** The report in Markdown: what was compared, the marked rows, and the whole table folded. */
 export function markdown(builds, rows, marks = DEFAULT_MARKS, about = {}) {
     const marked = rows.filter(r => r.changes.some(c => c.marked));
@@ -190,6 +206,10 @@ export function markdown(builds, rows, marks = DEFAULT_MARKS, about = {}) {
     ];
     for (const { build, stages } of missingStages(builds)) {
         out.push(`\`${build}\` has no ${stages.map(s => stageName(s)).join(' or ')} benchmark, so those rows have no number for it.`, '');
+    }
+    for (const { build, fixtures } of missingFixtures(builds)) {
+        const named = fixtures.map(f => `\`${f}\``).join(' or ');
+        out.push(`\`${build}\` has no ${named} fixture, so those rows have no baseline: they compare from the first release that has them.`, '');
     }
     if (marked.length === 0) {
         out.push('**Nothing over the thresholds.**', '');

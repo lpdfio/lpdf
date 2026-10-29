@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { compare, history, markdown, missingStages, readCounts } from './bench-counts-report.mjs';
+import { compare, history, markdown, missingFixtures, missingStages, readCounts } from './bench-counts-report.mjs';
 
 /**
  * The two lines of one benchmark, with only what the report reads: gungraun's JSON line for the work, and the
@@ -120,6 +120,32 @@ test('shows a stage the release lacks with no change, and says why', () => {
     const report = markdown([release, branch], rows);
     assert.match(report, /`v0\.29\.0` has no layout benchmark/);
     assert.match(report, /\| xs \| layout \| instructions \| — \| 5,000 \| — \|/);
+});
+
+test('puts the fixtures of one feature after the sizes, and data binding after parse', () => {
+    const lines = [
+        benchmark('parse', 'code', { ir: 1 }), benchmark('parse', 'data', { ir: 1 }), benchmark('data', 'data', { ir: 1 }),
+        benchmark('parse', 'xl', { ir: 1 }), benchmark('parse', 'justified', { ir: 1 }), benchmark('layout', 'data', { ir: 1 }),
+    ];
+    const rows = compare([build('a', lines), build('b', lines)]).filter(r => r.measure === 'instructions');
+    assert.deepEqual(rows.map(r => `${r.fixture} ${r.stage}`), [
+        'xl parse', 'justified parse', 'data parse', 'data data', 'data layout', 'code parse',
+    ]);
+});
+
+test('shows a fixture the release lacks with no change, and says it has no baseline', () => {
+    const release = build('v0.29.0', [benchmark('parse', 'm', { ir: 1000 })]);
+    const branch = build('branch', [benchmark('parse', 'm', { ir: 1000 }), benchmark('parse', 'markdown', { ir: 7000 }), benchmark('parse', 'code', { ir: 3000 })]);
+    const rows = compare([release, branch]);
+    const markdownRow = rows.find(r => r.fixture === 'markdown' && r.measure === 'instructions');
+    assert.deepEqual(markdownRow.values, [undefined, 7000]);
+    assert.equal(markdownRow.changes[0].marked, false);
+    assert.deepEqual(missingFixtures([release, branch]), [{ build: 'v0.29.0', fixtures: ['markdown', 'code'] }]);
+    assert.deepEqual(missingStages([release, branch]), []);
+
+    const report = markdown([release, branch], rows);
+    assert.match(report, /`v0\.29\.0` has no `markdown` or `code` fixture, so those rows have no baseline: they compare from the first release that has them\./);
+    assert.match(report, /\| markdown \| parse \| instructions \| — \| 7,000 \| — \|/);
 });
 
 test('lists the marked rows above the whole table', () => {
