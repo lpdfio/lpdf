@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+      <color name="accent"  value="#e8f0fc" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Lists in rows" subject="Checklists that a row moves after laying them out" />
+
+    <!-- A row lays a child out where line breaking put it and then moves it to its place: down for align, across for
+         justify, and down to the line it wrapped onto. The tick of a checked item moves with its box, as the box and
+         the words do. Each list has three items: ticked, open and ticked.
+         Expected, top to bottom, with every tick inside its box:
+           1  In a column: the list as a row starts from it, which nothing moves
+           2  align="center": a tall block, and the list halfway down it
+           3  align="end": a tall block, and the list at its foot
+           4  justify="center": the list in the middle of the line
+           5  justify="end": the list at the right edge
+           6  A row that wraps: a wide block, and the list under it on the second line
+           7  align="center" with a column of width fill: the list halfway down the tall block, in the width it leaves
+    -->
+    <section>
+      <layout margin="40pt">
+        <column gap="l">
+          <text font-size="xxl" font="Helvetica-Bold" color="primary">Lists in rows</text>
+
+          <column gap="xs">
+            <text font="Helvetica-Bold" color="muted">In a column</text>
+            <column width="200pt">
+              <list>
+                <li checked="true"><text>Order the goods</text></li>
+                <li checked="false"><text>Sign the delivery note</text></li>
+                <li checked="true"><text>Pay the invoice</text></li>
+              </list>
+            </column>
+          </column>
+
+          <column gap="xs">
+            <text font="Helvetica-Bold" color="muted">align="center"</text>
+            <row gap="m" align="center">
+              <frame width="80pt" height="72pt" background="accent" />
+              <column width="200pt">
+                <list>
+                  <li checked="true"><text>Order the goods</text></li>
+                  <li checked="false"><text>Sign the delivery note</text></li>
+                  <li checked="true"><text>Pay the invoice</text></li>
+                </list>
+              </column>
+            </row>
+          </column>
+
+          <column gap="xs">
+            <text font="Helvetica-Bold" color="muted">align="end"</text>
+            <row gap="m" align="end">
+              <frame width="80pt" height="72pt" background="accent" />
+              <column width="200pt">
+                <list>
+                  <li checked="true"><text>Order the goods</text></li>
+                  <li checked="false"><text>Sign the delivery note</text></li>
+                  <li checked="true"><text>Pay the invoice</text></li>
+                </list>
+              </column>
+            </row>
+          </column>
+
+          <column gap="xs">
+            <text font="Helvetica-Bold" color="muted">justify="center"</text>
+            <row justify="center">
+              <column width="200pt">
+                <list>
+                  <li checked="true"><text>Order the goods</text></li>
+                  <li checked="false"><text>Sign the delivery note</text></li>
+                  <li checked="true"><text>Pay the invoice</text></li>
+                </list>
+              </column>
+            </row>
+          </column>
+
+          <column gap="xs">
+            <text font="Helvetica-Bold" color="muted">justify="end"</text>
+            <row justify="end">
+              <column width="200pt">
+                <list>
+                  <li checked="true"><text>Order the goods</text></li>
+                  <li checked="false"><text>Sign the delivery note</text></li>
+                  <li checked="true"><text>Pay the invoice</text></li>
+                </list>
+              </column>
+            </row>
+          </column>
+
+          <column gap="xs">
+            <text font="Helvetica-Bold" color="muted">On the second line of a row</text>
+            <row gap="m">
+              <frame width="400pt" height="24pt" background="accent" />
+              <column width="200pt">
+                <list>
+                  <li checked="true"><text>Order the goods</text></li>
+                  <li checked="false"><text>Sign the delivery note</text></li>
+                  <li checked="true"><text>Pay the invoice</text></li>
+                </list>
+              </column>
+            </row>
+          </column>
+
+          <column gap="xs">
+            <text font="Helvetica-Bold" color="muted">align="center" with a column of width fill</text>
+            <row gap="m" align="center">
+              <frame width="80pt" height="72pt" background="accent" />
+              <column width="fill">
+                <list>
+                  <li checked="true"><text>Order the goods</text></li>
+                  <li checked="false"><text>Sign the delivery note</text></li>
+                  <li checked="true"><text>Pay the invoice</text></li>
+                </list>
+              </column>
+            </row>
+          </column>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>
