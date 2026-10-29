@@ -1,11 +1,12 @@
 name: Bench counts
 run-name: "${{ inputs.tags && format('Bench counts: backfill {0}', inputs.tags) || format('Bench counts: {0} against the last release', github.ref_name) }}"
 
-# Counts instructions, estimated cycles and allocations of the core pipeline under Valgrind
-# (benches/counts) and reports how they changed since the last release. The counts don't depend on
-# how busy the machine is, and every build of a run is measured on one runner, so a change of 1%
-# between them is a change in the code. Report only: the run passes whatever the numbers show, and
-# it is no required check. `make benchmark` stays for real time; ci.yml only builds and tests.
+# Counts the instructions and estimated cycles of the core pipeline under Valgrind, and its
+# allocations with a counting allocator (benches/counts), and reports how they changed since the
+# last release. The counts don't depend on how busy the machine is, and every build of a run is
+# measured on one runner, so a change of 1% between them is a change in the code. Report only: the
+# run passes whatever the numbers show, and it is no required check. `make benchmark` stays for real
+# time; ci.yml only builds and tests.
 #
 # Starts:
 #   Run workflow     on the branch picked in "Use workflow from". A branch other than main is

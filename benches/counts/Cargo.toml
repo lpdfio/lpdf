@@ -1,4 +1,5 @@
-# The instruction, cycle and allocation counts of the core pipeline, under Valgrind with Gungraun.
+# The counts of the core pipeline: instructions and estimated cycles under Valgrind with Gungraun
+# (benches/counts.rs), and allocations with a counting allocator (benches/allocations.rs).
 #
 # A workspace of its own, outside `src/core`, so that bench.yml can copy it into a checkout of an earlier
 # release and measure every build of a run with the same benchmarks. The workflow copies the checkout's
@@ -25,6 +26,10 @@ gungraun = "=0.20.0"
 name    = "counts"
 harness = false
 
-# Symbols for callgrind_annotate and dh_view; they don't change the code measured.
+[[bench]]
+name    = "allocations"
+harness = false
+
+# Symbols for callgrind_annotate; they don't change the code measured.
 [profile.bench]
 debug = true
