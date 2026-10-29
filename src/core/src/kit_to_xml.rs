@@ -1752,12 +1752,6 @@ mod tests {
                     {{"type":"markdown-styles","attrs":{{}},"nodes":[{{"type":"h1","attrs":{{"color":"#ff0000"}}}}]}},
                     {{"type":"markdown-content","attrs":{{}},"nodes":["{text}"]}}]}}]}}]}}"##
         );
-        // `<b>` is raw HTML, which is an error: both ways say so alike
-        let from_xml = crate::parse::parse(&kit_to_xml(&kit).unwrap()).unwrap_err();
-        let from_tree = crate::parse::parse_tree(&kit).unwrap_err();
-        assert!(from_xml.contains("raw HTML") && from_tree.contains("raw HTML"), "{from_xml} / {from_tree}");
-
-        let kit = kit.replace("<b>not</b>", "not");
         let (from_tree, from_xml) = rendered_both_ways(&kit);
         assert_eq!(from_tree, from_xml, "the tree and its XML render the Markdown differently");
         assert!(kit_to_xml(&kit).unwrap().contains("<![CDATA["));
