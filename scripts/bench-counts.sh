@@ -71,9 +71,9 @@ if [ -n "$PROFILES" ]; then
   # shellcheck disable=SC2086
   if ! cargo bench --bench counts $FEATURES -- --default-tool=dhat --dhat-args=--num-callers=500 \
     --output-format=json --parallel=auto > "$PROFILES/dhat.jsonl"; then
-    echo ">>> $NAME: the DHAT run failed, so its profiles are not all there" >&2
+    echo "::warning::$NAME: the DHAT run failed, so its DHAT profiles are not all there"
   fi
-  cp -R target/gungraun/. "$PROFILES/"
+  cp -R target/gungraun/. "$PROFILES/" || echo "::warning::$NAME: its profiles could not be kept"
   echo ">>> $NAME: profiles in $PROFILES ($(du -sh "$PROFILES" | cut -f1))"
 fi
 
