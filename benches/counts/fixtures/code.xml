@@ -1,0 +1,315 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Code for benches/counts: listings in <code> with colored spans and indents, blocks in CDATA, and text
+     with <code-span> runs. <code> is new in 0.30, so earlier releases have no rows for it. Never edit it: a
+     change moves every count of the fixture. -->
+<lpdf version="1">
+  <document size="a4">
+    <meta title="Bench counts: code" />
+    <section>
+      <layout margin="40pt">
+        <column gap="m">
+          <text font="Helvetica-Bold" font-size="l">Listing 1</text>
+          <text>All the pages then not its invoices invoices on responsibility. Call <code-span>be_1()</code-span> with the bytes, then <code-span color="#ffffff" background="#1763cf">contracts</code-span> this on be word last against exactly last so a totals straight.</text>
+          <code>
+<span color="#8e44ad">pub</span> <span color="#8e44ad">fn</span> are_1(input: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, String&gt; {
+    <span color="#8e44ad">let</span> statements = characterisation(input, 0);
+    <span color="#8e44ad">let</span> these = responsibility(input, 92);
+        <span color="#8e44ad">let</span> contracts = by(input, 88);
+    <span color="#8e44ad">let</span> this = against(input, 20);
+    <span color="#8e44ad">let</span> an = an(input, 4);
+        <span color="#8e44ad">let</span> dates = pages(input, 44);
+    <span color="#8e44ad">let</span> responsibility = rarely(input, 0);
+    <span color="#8e44ad">let</span> the = breaks(input, 96);
+        <span color="#8e44ad">let</span> are = as(input, 96);
+    <span color="#8e44ad">let</span> addresses = on(input, 60);
+    <span color="#8e44ad">let</span> word = then(input, 72);
+        <span color="#8e44ad">let</span> by = be(input, 44);
+    Ok(as)
+}
+</code>
+          <code background="#ffffff" border="1pt #c8ccd2" radius="m"><![CDATA[
+$ cargo test --release -- a_1
+    Finished release in 8.2s
+test last::layout_1 ... ok
+]]></code>
+          <text font="Helvetica-Bold" font-size="l">Listing 2</text>
+          <text>Straight the frames the totals word invoices to tables straight. Call <code-span>measures_2()</code-span> with the bytes, then <code-span color="#ffffff" background="#1763cf">straightforward</code-span> on quickly all straight measures which contracts footers be which last straight.</text>
+          <code tab-size="2" font-size="s">
+<span color="#8e44ad">pub</span> <span color="#8e44ad">fn</span> as_2(input: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, String&gt; {
+    <span color="#8e44ad">let</span> all = characterisation(input, 0);
+    <span color="#8e44ad">let</span> be = on(input, 68);
+        <span color="#8e44ad">let</span> dates = invoices(input, 52);
+    <span color="#8e44ad">let</span> each = responsibility(input, 8);
+    <span color="#8e44ad">let</span> by = this(input, 48);
+        <span color="#8e44ad">let</span> these = be(input, 36);
+    <span color="#8e44ad">let</span> each = which(input, 12);
+    <span color="#8e44ad">let</span> straight = with(input, 64);
+        <span color="#8e44ad">let</span> characterisation = measures(input, 52);
+    <span color="#8e44ad">let</span> rarely = always(input, 96);
+    <span color="#8e44ad">let</span> spacing = on(input, 92);
+        <span color="#8e44ad">let</span> as = a(input, 88);
+    Ok(are)
+}
+</code>
+          <code background="#ffffff" border="1pt #c8ccd2" radius="m"><![CDATA[
+$ cargo test --release -- be_2
+    Finished release in 56.6s
+test breaks::a_2 ... ok
+]]></code>
+          <text font="Helvetica-Bold" font-size="l">Listing 3</text>
+          <text>Characterisation frames line edges footers the on the all its. Call <code-span>invoices_3()</code-span> with the bytes, then <code-span color="#ffffff" background="#1763cf">its</code-span> edges always exactly straightforward measures on measures exactly an line last all.</text>
+          <code>
+<span color="#8e44ad">pub</span> <span color="#8e44ad">fn</span> with_3(input: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, String&gt; {
+    <span color="#8e44ad">let</span> word = word(input, 28);
+    <span color="#8e44ad">let</span> the = totals(input, 40);
+        <span color="#8e44ad">let</span> against = this(input, 88);
+    <span color="#8e44ad">let</span> responsibility = dates(input, 36);
+    <span color="#8e44ad">let</span> addresses = contracts(input, 68);
+        <span color="#8e44ad">let</span> layout = measures(input, 88);
+    <span color="#8e44ad">let</span> all = so(input, 72);
+    <span color="#8e44ad">let</span> its = word(input, 20);
+        <span color="#8e44ad">let</span> layout = footers(input, 44);
+    <span color="#8e44ad">let</span> last = each(input, 80);
+    Ok(layout)
+}
+</code>
+          <code background="#ffffff" border="1pt #c8ccd2" radius="m"><![CDATA[
+$ cargo test --release -- are_3
+    Finished release in 28.0s
+test breaks::straightforward_3 ... ok
+]]></code>
+          <text font="Helvetica-Bold" font-size="l">Listing 4</text>
+          <text>These pages the word straight the the an a each. Call <code-span>line_4()</code-span> with the bytes, then <code-span color="#ffffff" background="#1763cf">frames</code-span> its straightforward which word word a word measures as addresses on straight.</text>
+          <code tab-size="2" font-size="s">
+<span color="#8e44ad">pub</span> <span color="#8e44ad">fn</span> quickly_4(input: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, String&gt; {
+    <span color="#8e44ad">let</span> word = spacing(input, 4);
+    <span color="#8e44ad">let</span> pages = responsibility(input, 84);
+        <span color="#8e44ad">let</span> word = characterisation(input, 48);
+    <span color="#8e44ad">let</span> straightforward = word(input, 36);
+    <span color="#8e44ad">let</span> statements = a(input, 32);
+        <span color="#8e44ad">let</span> totals = to(input, 56);
+    <span color="#8e44ad">let</span> tables = width(input, 40);
+    <span color="#8e44ad">let</span> layout = word(input, 20);
+        <span color="#8e44ad">let</span> measures = word(input, 16);
+    <span color="#8e44ad">let</span> be = quickly(input, 60);
+    Ok(responsibility)
+}
+</code>
+          <code background="#ffffff" border="1pt #c8ccd2" radius="m"><![CDATA[
+$ cargo test --release -- by_4
+    Finished release in 16.2s
+test word::a_4 ... ok
+]]></code>
+          <text font="Helvetica-Bold" font-size="l">Listing 5</text>
+          <text>Pages not measures addresses on this as layout last straightforward. Call <code-span>by_5()</code-span> with the bytes, then <code-span color="#ffffff" background="#1763cf">breaks</code-span> each against on layout layout exactly quickly layout on totals word footers.</text>
+          <code>
+<span color="#8e44ad">pub</span> <span color="#8e44ad">fn</span> rarely_5(input: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, String&gt; {
+    <span color="#8e44ad">let</span> responsibility = layout(input, 52);
+    <span color="#8e44ad">let</span> on = word(input, 48);
+        <span color="#8e44ad">let</span> its = not(input, 16);
+    <span color="#8e44ad">let</span> are = to(input, 0);
+    <span color="#8e44ad">let</span> invoices = edges(input, 12);
+        <span color="#8e44ad">let</span> be = an(input, 24);
+    <span color="#8e44ad">let</span> invoices = are(input, 60);
+    <span color="#8e44ad">let</span> straight = invoices(input, 76);
+        <span color="#8e44ad">let</span> totals = its(input, 96);
+    <span color="#8e44ad">let</span> rarely = addresses(input, 36);
+    <span color="#8e44ad">let</span> the = then(input, 52);
+    Ok(not)
+}
+</code>
+          <code background="#ffffff" border="1pt #c8ccd2" radius="m"><![CDATA[
+$ cargo test --release -- statements_5
+    Finished release in 12.4s
+test be::pages_5 ... ok
+]]></code>
+          <text font="Helvetica-Bold" font-size="l">Listing 6</text>
+          <text>Exactly on word footers rarely these footers an be this. Call <code-span>with_6()</code-span> with the bytes, then <code-span color="#ffffff" background="#1763cf">exactly</code-span> which to dates dates the not on line an be on line.</text>
+          <code tab-size="2" font-size="s">
+<span color="#8e44ad">pub</span> <span color="#8e44ad">fn</span> these_6(input: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, String&gt; {
+    <span color="#8e44ad">let</span> this = these(input, 48);
+    <span color="#8e44ad">let</span> against = last(input, 28);
+        <span color="#8e44ad">let</span> not = not(input, 8);
+    <span color="#8e44ad">let</span> breaks = addresses(input, 24);
+    <span color="#8e44ad">let</span> its = then(input, 80);
+        <span color="#8e44ad">let</span> layout = a(input, 24);
+    <span color="#8e44ad">let</span> these = by(input, 60);
+    <span color="#8e44ad">let</span> footers = this(input, 92);
+        <span color="#8e44ad">let</span> footers = with(input, 8);
+    <span color="#8e44ad">let</span> edges = pages(input, 88);
+    <span color="#8e44ad">let</span> word = an(input, 36);
+        <span color="#8e44ad">let</span> edges = each(input, 52);
+    Ok(on)
+}
+</code>
+          <code background="#ffffff" border="1pt #c8ccd2" radius="m"><![CDATA[
+$ cargo test --release -- edges_6
+    Finished release in 8.6s
+test statements::each_6 ... ok
+]]></code>
+          <text font="Helvetica-Bold" font-size="l">Listing 7</text>
+          <text>Totals be word word width rarely invoices width on footers. Call <code-span>responsibility_7()</code-span> with the bytes, then <code-span color="#ffffff" background="#1763cf">with</code-span> word an on rarely with quickly each contracts on quickly the a.</text>
+          <code>
+<span color="#8e44ad">pub</span> <span color="#8e44ad">fn</span> dates_7(input: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, String&gt; {
+    <span color="#8e44ad">let</span> last = the(input, 84);
+    <span color="#8e44ad">let</span> this = against(input, 40);
+        <span color="#8e44ad">let</span> statements = on(input, 8);
+    <span color="#8e44ad">let</span> breaks = always(input, 76);
+    <span color="#8e44ad">let</span> this = straightforward(input, 32);
+        <span color="#8e44ad">let</span> next = to(input, 28);
+    <span color="#8e44ad">let</span> frames = the(input, 84);
+    <span color="#8e44ad">let</span> last = spacing(input, 56);
+        <span color="#8e44ad">let</span> word = word(input, 96);
+    <span color="#8e44ad">let</span> which = with(input, 76);
+    <span color="#8e44ad">let</span> spacing = straight(input, 84);
+    Ok(on)
+}
+</code>
+          <code background="#ffffff" border="1pt #c8ccd2" radius="m"><![CDATA[
+$ cargo test --release -- layout_7
+    Finished release in 48.3s
+test the::word_7 ... ok
+]]></code>
+          <text font="Helvetica-Bold" font-size="l">Listing 8</text>
+          <text>Dates by word last pages its its on as a. Call <code-span>the_8()</code-span> with the bytes, then <code-span color="#ffffff" background="#1763cf">are</code-span> this pages word then on responsibility which measures frames edges straight all.</text>
+          <code tab-size="2" font-size="s">
+<span color="#8e44ad">pub</span> <span color="#8e44ad">fn</span> spacing_8(input: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, String&gt; {
+    <span color="#8e44ad">let</span> against = all(input, 56);
+    <span color="#8e44ad">let</span> be = statements(input, 56);
+        <span color="#8e44ad">let</span> by = on(input, 96);
+    <span color="#8e44ad">let</span> footers = statements(input, 96);
+    <span color="#8e44ad">let</span> statements = are(input, 44);
+        <span color="#8e44ad">let</span> with = which(input, 0);
+    <span color="#8e44ad">let</span> invoices = so(input, 64);
+    <span color="#8e44ad">let</span> measures = straight(input, 8);
+        <span color="#8e44ad">let</span> last = on(input, 84);
+    <span color="#8e44ad">let</span> each = characterisation(input, 80);
+    Ok(breaks)
+}
+</code>
+          <code background="#ffffff" border="1pt #c8ccd2" radius="m"><![CDATA[
+$ cargo test --release -- the_8
+    Finished release in 12.8s
+test footers::characterisation_8 ... ok
+]]></code>
+          <text font="Helvetica-Bold" font-size="l">Listing 9</text>
+          <text>Straight each every invoices straightforward its last quickly characterisation footers. Call <code-span>word_9()</code-span> with the bytes, then <code-span color="#ffffff" background="#1763cf">footers</code-span> statements as footers the word totals as straightforward footers are each with.</text>
+          <code>
+<span color="#8e44ad">pub</span> <span color="#8e44ad">fn</span> all_9(input: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, String&gt; {
+    <span color="#8e44ad">let</span> on = edges(input, 8);
+    <span color="#8e44ad">let</span> tables = characterisation(input, 16);
+        <span color="#8e44ad">let</span> totals = breaks(input, 56);
+    <span color="#8e44ad">let</span> straightforward = are(input, 8);
+    <span color="#8e44ad">let</span> frames = tables(input, 72);
+        <span color="#8e44ad">let</span> invoices = this(input, 28);
+    <span color="#8e44ad">let</span> footers = an(input, 96);
+    <span color="#8e44ad">let</span> the = edges(input, 76);
+        <span color="#8e44ad">let</span> against = rarely(input, 0);
+    <span color="#8e44ad">let</span> breaks = pages(input, 60);
+    <span color="#8e44ad">let</span> the = then(input, 92);
+        <span color="#8e44ad">let</span> so = last(input, 32);
+    <span color="#8e44ad">let</span> last = which(input, 44);
+    Ok(tables)
+}
+</code>
+          <code background="#ffffff" border="1pt #c8ccd2" radius="m"><![CDATA[
+$ cargo test --release -- so_9
+    Finished release in 48.0s
+test dates::not_9 ... ok
+]]></code>
+          <text font="Helvetica-Bold" font-size="l">Listing 10</text>
+          <text>Responsibility all with to its dates not the quickly responsibility. Call <code-span>as_10()</code-span> with the bytes, then <code-span color="#ffffff" background="#1763cf">measures</code-span> last quickly the edges word on these straight not its the totals.</text>
+          <code tab-size="2" font-size="s">
+<span color="#8e44ad">pub</span> <span color="#8e44ad">fn</span> edges_10(input: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, String&gt; {
+    <span color="#8e44ad">let</span> word = quickly(input, 56);
+    <span color="#8e44ad">let</span> then = with(input, 56);
+        <span color="#8e44ad">let</span> always = spacing(input, 0);
+    <span color="#8e44ad">let</span> spacing = dates(input, 8);
+    <span color="#8e44ad">let</span> on = responsibility(input, 40);
+        <span color="#8e44ad">let</span> be = so(input, 80);
+    <span color="#8e44ad">let</span> against = line(input, 64);
+    <span color="#8e44ad">let</span> a = always(input, 80);
+        <span color="#8e44ad">let</span> invoices = addresses(input, 8);
+    <span color="#8e44ad">let</span> rarely = on(input, 76);
+    <span color="#8e44ad">let</span> not = line(input, 24);
+    Ok(with)
+}
+</code>
+          <code background="#ffffff" border="1pt #c8ccd2" radius="m"><![CDATA[
+$ cargo test --release -- width_10
+    Finished release in 44.4s
+test then::the_10 ... ok
+]]></code>
+          <text font="Helvetica-Bold" font-size="l">Listing 11</text>
+          <text>Edges on on word its each frames on frames are. Call <code-span>pages_11()</code-span> with the bytes, then <code-span color="#ffffff" background="#1763cf">layout</code-span> the last the rarely statements edges width each quickly on these its.</text>
+          <code>
+<span color="#8e44ad">pub</span> <span color="#8e44ad">fn</span> an_11(input: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, String&gt; {
+    <span color="#8e44ad">let</span> contracts = this(input, 48);
+    <span color="#8e44ad">let</span> contracts = invoices(input, 52);
+        <span color="#8e44ad">let</span> this = frames(input, 4);
+    <span color="#8e44ad">let</span> addresses = width(input, 8);
+    <span color="#8e44ad">let</span> the = word(input, 72);
+        <span color="#8e44ad">let</span> totals = addresses(input, 8);
+    <span color="#8e44ad">let</span> straightforward = so(input, 16);
+    <span color="#8e44ad">let</span> layout = straightforward(input, 96);
+        <span color="#8e44ad">let</span> on = on(input, 48);
+    <span color="#8e44ad">let</span> these = last(input, 16);
+    <span color="#8e44ad">let</span> be = contracts(input, 12);
+        <span color="#8e44ad">let</span> always = straight(input, 16);
+    Ok(all)
+}
+</code>
+          <code background="#ffffff" border="1pt #c8ccd2" radius="m"><![CDATA[
+$ cargo test --release -- not_11
+    Finished release in 48.6s
+test word::dates_11 ... ok
+]]></code>
+          <text font="Helvetica-Bold" font-size="l">Listing 12</text>
+          <text>Contracts statements invoices totals each pages always on then characterisation. Call <code-span>straight_12()</code-span> with the bytes, then <code-span color="#ffffff" background="#1763cf">these</code-span> line line straightforward by not against a exactly a a layout footers.</text>
+          <code tab-size="2" font-size="s">
+<span color="#8e44ad">pub</span> <span color="#8e44ad">fn</span> these_12(input: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, String&gt; {
+    <span color="#8e44ad">let</span> on = an(input, 60);
+    <span color="#8e44ad">let</span> frames = an(input, 80);
+        <span color="#8e44ad">let</span> characterisation = rarely(input, 60);
+    <span color="#8e44ad">let</span> quickly = against(input, 16);
+    <span color="#8e44ad">let</span> straight = statements(input, 4);
+        <span color="#8e44ad">let</span> word = then(input, 92);
+    <span color="#8e44ad">let</span> word = against(input, 8);
+    <span color="#8e44ad">let</span> which = quickly(input, 60);
+        <span color="#8e44ad">let</span> last = against(input, 72);
+    <span color="#8e44ad">let</span> quickly = last(input, 68);
+    Ok(responsibility)
+}
+</code>
+          <code background="#ffffff" border="1pt #c8ccd2" radius="m"><![CDATA[
+$ cargo test --release -- so_12
+    Finished release in 44.4s
+test straight::always_12 ... ok
+]]></code>
+          <text font="Helvetica-Bold" font-size="l">Listing 13</text>
+          <text>Totals on every on on measures straightforward footers frames invoices. Call <code-span>footers_13()</code-span> with the bytes, then <code-span color="#ffffff" background="#1763cf">as</code-span> responsibility dates on edges as as line are to tables exactly so.</text>
+          <code>
+<span color="#8e44ad">pub</span> <span color="#8e44ad">fn</span> straight_13(input: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, String&gt; {
+    <span color="#8e44ad">let</span> this = this(input, 24);
+    <span color="#8e44ad">let</span> invoices = straightforward(input, 76);
+        <span color="#8e44ad">let</span> the = to(input, 16);
+    <span color="#8e44ad">let</span> on = each(input, 96);
+    <span color="#8e44ad">let</span> against = line(input, 36);
+        <span color="#8e44ad">let</span> word = to(input, 28);
+    <span color="#8e44ad">let</span> exactly = be(input, 16);
+    <span color="#8e44ad">let</span> quickly = dates(input, 48);
+        <span color="#8e44ad">let</span> dates = which(input, 16);
+    <span color="#8e44ad">let</span> tables = these(input, 76);
+    Ok(footers)
+}
+</code>
+          <code background="#ffffff" border="1pt #c8ccd2" radius="m"><![CDATA[
+$ cargo test --release -- the_13
+    Finished release in 32.8s
+test all::dates_13 ... ok
+]]></code>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

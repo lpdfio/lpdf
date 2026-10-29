@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Markdown for benches/counts: chapters of headings, paragraphs with emphasis, inline code, links and
+     footnotes, lists that nest, task items, quotes, code blocks and tables, in the default styles. A
+     <markdown> is new in 0.30, so earlier releases have no rows for it. Never edit it: a change moves every
+     count of the fixture. -->
+<lpdf version="1">
+  <document size="a4">
+    <meta title="Bench counts: Markdown" />
+    <section>
+      <markdown margin="54pt">
+        <markdown-content><![CDATA[
+# Chapter 1
+
+As the *a* an all **not** against responsibility `straight()` which responsibility [width](https://example.com/width) by ~~measures~~ last breaks which width straightforward responsibility so word. On spacing *with* measures with **on** as a `which()` this headers [line](https://example.com/line) its ~~word~~. Frames footers *invoices* against edges **on** not contracts `statements()` invoices this [as](https://example.com/as) not straightforward by against quickly dates line characterisation.
+
+## 1.1 Overview
+
+Edges on *the* line not **always** frames dates `rarely()` breaks word [word](https://example.com/word) measures an always as as width tables so. The edges *on* a word **responsibility** each this `on()` word pages [characterisation](https://example.com/characterisation) word quickly edges as rarely are responsibility the breaks measures.[^1]
+
+[^1]: Breaks width rarely all breaks not responsibility to against so a on.
+
+A against *addresses* this straight **last** spacing always `breaks()` frames statements [spacing](https://example.com/spacing) to by. Frames the *on* footers contracts **exactly** are these `spacing()` line breaks [characterisation](https://example.com/characterisation) characterisation on.  
+Last then *totals* always word **invoices** characterisation by `tables()` so by [characterisation](https://example.com/characterisation) edges ~~then~~.
+
+### 1.1.1 Steps
+
+- Each pages *with* exactly layout **line** exactly always `line()` statements breaks [this](https://example.com/this) then characterisation are word spacing addresses its measures are these.
+- Responsibility the *straightforward* on on **on** as width `addresses()` be never [always](https://example.com/always) all addresses on footers invoices these each layout.
+  - So these straightforward its as to contracts statements.
+  - The its the are on be on be last.
+- Quickly word *straight* an the **characterisation** contracts a `invoices()` an addresses [this](https://example.com/this) characterisation spacing its be an be its word statements spacing.
+- Rarely which *spacing* an are **last** statements an `an()` an measures [layout](https://example.com/layout) its pages pages word.
+
+3. Invoices line exactly on internationalisation tables these tables word each.
+4. Be dates straight are the tables on on last on tables.
+5. Measures by against exactly these rarely last against its.
+
+- [x] Each tables last the by which.
+- [ ] Straightforward totals measures addresses which measures quickly.
+
+> Be its *be* the straightforward **pages** dates measures `word()` to each [line](https://example.com/line) on quickly then dates tables responsibility last spacing. Addresses footers *last* on pages **by** characterisation all `its()` by layout [the](https://example.com/the) its dates an quickly invoices measures the so.
+>
+> The spacing on its width with with statements these measures addresses with so addresses.
+
+```rust
+fn total_1(items: &[Item]) -> u64 {
+    items.iter().map(|item| item.amount).sum()
+}
+```
+
+## 1.2 Figures
+
+| Item | Quantity | Amount |
+|:---|:---:|---:|
+| to the its | 1 | $624.20 |
+| with are straightforward | 17 | $508.70 |
+| an frames word | 13 | $696.18 |
+| quickly responsibility contracts | 5 | $112.46 |
+| which so not | 5 | $412.10 |
+| which not a | 5 | $784.64 |
+| then quickly spacing | 1 | $596.34 |
+| with layout quickly | 5 | $656.22 |
+
+As the *quickly* on layout **then** quickly width `measures()` as footers [frames](https://example.com/frames) quickly as. Measures each *to* rarely each **addresses** always pages `rarely()` the then [quickly](https://example.com/quickly) characterisation with. The not *breaks* these to **this** width line `responsibility()` line last [addresses](https://example.com/addresses) all ~~tables~~ breaks invoices footers pages dates line.
+
+---
+
+# Chapter 2
+
+On against *measures* as each **these** breaks addresses `layout()` last pages [its](https://example.com/its) on this statements quickly by this on frames responsibility always. Layout on *straightforward* on its **exactly** all responsibility `always()` rarely totals [frames](https://example.com/frames) contracts layout last these with these. With spacing *invoices* to all **a** invoices straight `footers()` always responsibility [on](https://example.com/on) against ~~all~~.
+
+## 2.1 Overview
+
+To spacing *straight* which pages **totals** frames always `on()` layout spacing [always](https://example.com/always) straightforward quickly characterisation which by each breaks line. So by *straightforward* on characterisation **quickly** rarely these `was()` line on [word](https://example.com/word) width contracts all on edges edges.[^2]
+
+[^2]: Spacing last footers invoices which totals statements spacing word always the the.
+
+The addresses *its* last frames **be** exactly as `exactly()` pages by [dates](https://example.com/dates) are on then addresses to these which measures. Exactly totals *spacing* responsibility as **width** the breaks `characterisation()` by totals [each](https://example.com/each) exactly the statements on.  
+On dates *pages* straightforward statements **last** which so `the()` a to [last](https://example.com/last) statements be footers the.
+
+### 2.1.1 Steps
+
+- Word tables *quickly* are totals **against** with invoices `addresses()` not word [be](https://example.com/be) as ~~this~~ an so on contracts width breaks.
+- A on *totals* each against **with** width footers `exactly()` width as [the](https://example.com/the) all breaks.
+  - Contracts then layout edges these not then on.
+  - Frames tables addresses layout straight rarely always by a.
+- Exactly footers *footers* on then **are** responsibility as `on()` so so [characterisation](https://example.com/characterisation) breaks ~~to~~.
+- Edges addresses *layout* statements word **against** spacing contracts `frames()` rarely pages [straightforward](https://example.com/straightforward) its ~~statements~~ line width on are quickly footers.
+
+3. By be by each straight statements contracts with straight this.
+4. Spacing dates totals straight spacing a are are always addresses tables.
+5. On an an by each edges dates totals spacing.
+
+- [x] Dates pages footers word line characterisation.
+- [ ] A on each all these on word.
+
+> As word *always* to on **a** on straightforward `each()` totals edges [so](https://example.com/so) last responsibility so breaks word be. Breaks on *contracts* pages these **tables** by invoices `measures()` by exactly [all](https://example.com/all) not ~~contracts~~ frames width.
+>
+> Word frames characterisation an by so on always against responsibility the the then statements.
+
+```rust
+fn total_2(items: &[Item]) -> u64 {
+    items.iter().map(|item| item.amount).sum()
+}
+```
+
+## 2.2 Figures
+
+| Item | Quantity | Amount |
+|:---|:---:|---:|
+| totals edges with | 13 | $172.70 |
+| spacing on word | 5 | $228.32 |
+| against word spacing | 17 | $964.80 |
+| last quickly line | 1 | $764.44 |
+| this to tables | 9 | $480.90 |
+| its measures on | 13 | $804.46 |
+| each exactly addresses | 17 | $776.12 |
+| spacing exactly width | 1 | $712.96 |
+
+All quickly *which* this totals **word** its word `this()` each its [always](https://example.com/always) characterisation tables characterisation which statements all dates this last layout. All dates *a* are tables **contracts** on line `edges()` by are [then](https://example.com/then) straightforward are responsibility measures. Edges with *contracts* measures characterisation **the** last last `a()` its by [then](https://example.com/then) tables ~~its~~ quickly the width this edges word this characterisation.
+
+---
+
+# Chapter 3
+
+Width straight *always* then with **width** contracts with `which()` this always [characterisation](https://example.com/characterisation) word addresses. On edges *dates* each addresses **each** with responsibility `are()` all are [are](https://example.com/are) on line the spacing its word. Against which *statements* all tables **straight** last all `on()` frames then [all](https://example.com/all) contracts dates tables addresses as by exactly straight.
+
+## 3.1 Overview
+
+Dates last *quickly* by to **its** the invoices `exactly()` contracts tables [exactly](https://example.com/exactly) on statements rarely the these always the be measures so. Exactly invoices *straightforward* the are **line** on then `so()` word which [pages](https://example.com/pages) footers on exactly these straight as each by.[^3]
+
+[^3]: Against on always characterisation edges straightforward layout with statements invoices dates these.
+
+A are *word* this spacing **exactly** invoices with `rarely()` on this [responsibility](https://example.com/responsibility) its to measures layout rarely each. With to *rarely* always this **with** straight breaks `which()` frames as [a](https://example.com/a) spacing ~~footers~~ totals footers which responsibility.  
+Each to *invoices* word on **straightforward** each each `the()` layout straight [with](https://example.com/with) straightforward all measures width are the to totals.
+
+### 3.1.1 Steps
+
+- Tables tables *spacing* straight line **then** not last `on()` the on [word](https://example.com/word) statements pages straight with as line breaks contracts.
+- On each *all* with measures **always** width then `then()` so so [not](https://example.com/not) characterisation contracts statements on on to so this spacing straightforward.
+  - Its contracts as by against exactly which are.
+  - Responsibility as statements responsibility addresses spacing an addresses always.
+- All measures *against* not totals **pages** its contracts `quickly()` measures layout [are](https://example.com/are) quickly last the spacing.
+- Rarely exactly *rarely* then last **rarely** not with `breaks()` contracts are [word](https://example.com/word) exactly ~~as~~ as footers invoices line each against last which.
+
+3. Quickly width width against width addresses with tables width edges.
+4. So totals to which tables responsibility always against the as responsibility.
+5. Footers responsibility its dates responsibility on on the its.
+
+- [x] On on totals be its statements.
+- [ ] Width layout contracts so invoices frames to.
+
+> Against quickly *edges* characterisation all **all** edges the `a()` word edges [straight](https://example.com/straight) last against. Line addresses *measures* breaks word **always** totals straight `so()` with always [keeps](https://example.com/keeps) addresses an this each each against these this a straight.
+>
+> Responsibility on on invoices each on all the statements these by rarely word then.
+
+```rust
+fn total_3(items: &[Item]) -> u64 {
+    items.iter().map(|item| item.amount).sum()
+}
+```
+
+## 3.2 Figures
+
+| Item | Quantity | Amount |
+|:---|:---:|---:|
+| be frames statements | 13 | $396.54 |
+| layout against layout | 13 | $612.90 |
+| spacing be against | 9 | $508.48 |
+| word are breaks | 13 | $460.42 |
+| exactly straight be | 1 | $644.76 |
+| on word these | 13 | $200.34 |
+| addresses measures with | 9 | $604.24 |
+| are each against | 13 | $892.18 |
+
+Which next *pages* measures contracts **straight** by quickly `be()` addresses addresses [frames](https://example.com/frames) on ~~so~~ these layout footers frames. Line so *the* totals layout **dates** footers addresses `so()` line dates [so](https://example.com/so) on ~~addresses~~ which totals. So breaks *by* as measures **rarely** characterisation be `then()` this a [responsibility](https://example.com/responsibility) width breaks tables measures contracts these width each.
+
+---
+
+]]></markdown-content>
+      </markdown>
+    </section>
+  </document>
+</lpdf>

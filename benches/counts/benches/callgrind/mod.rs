@@ -1,4 +1,4 @@
-//! The Callgrind setup of the two instruction-count binaries, `counts.rs` and `fonts.rs`.
+//! The Callgrind setup of the instruction-count binaries, `counts.rs`, `fonts.rs` and `data.rs`.
 
 use gungraun::LibraryBenchmarkConfig;
 

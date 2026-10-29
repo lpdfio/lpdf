@@ -8,7 +8,10 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { FIXTURES, STAGES } from './bench-counts-report.mjs';
+import { FIXTURES, STAGES as ALL_STAGES } from './bench-counts-report.mjs';
+
+/** The stages of the sizes `bench_xs` to `bench_xl`, which the tables follow: data binding is the fixture `data`'s. */
+const STAGES = ALL_STAGES.filter(stage => stage.id !== 'data');
 
 /** The fixtures whose quantities the table shows, a small one and the largest. */
 export const SHOWN_FIXTURES = ['m', 'xl'];

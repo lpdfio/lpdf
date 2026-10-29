@@ -1,5 +1,6 @@
 # The counts of the core pipeline: instructions and estimated cycles under Valgrind with Gungraun
-# (benches/counts.rs), and allocations with a counting allocator (benches/allocations.rs).
+# (benches/counts.rs, fonts.rs and data.rs), and allocations with a counting allocator
+# (benches/allocations.rs). The fixtures of fixtures/ are this crate's, so every build reads the same file.
 #
 # A workspace of its own, outside `src/core`, so that bench.yml can copy it into a checkout of an earlier
 # release and measure every build of a run with the same benchmarks. The workflow copies the checkout's
@@ -19,6 +20,10 @@ split-stages = []
 # The checkout's lib.rs has the entry points that set embedded fonts' advances for layout, which the
 # `fonts` benchmarks and the `fonts` rows of `allocations` use. scripts/bench-counts.sh turns it on where they are.
 embedded-fonts = ["split-stages"]
+# The checkout reads a <markdown> and a <code>, which the fixtures `markdown` and `code` of `fixtures/` are
+# made of. scripts/bench-counts.sh turns each on where the checkout's schema has the element.
+markdown = []
+code     = []
 
 [dev-dependencies]
 lpdf     = { path = "../../src/core" }
@@ -33,6 +38,10 @@ harness = false
 name              = "fonts"
 harness           = false
 required-features = ["embedded-fonts"]
+
+[[bench]]
+name    = "data"
+harness = false
 
 [[bench]]
 name    = "allocations"
