@@ -17,8 +17,10 @@
 # which scripts/bench-counts-report.mjs reads. Given a <profiles folder>, it keeps there the profiles
 # of each benchmark, to read function by function: Gungraun's output folder, with the Callgrind
 # profiles of the counted run (callgrind_annotate) and, from a second run under DHAT with whole stacks,
-# the DHAT profiles (dh_view.html), with dhat.jsonl, gungraun's JSON line for each. Needs Linux on x86-64, Valgrind, Node, and the
-# gungraun-runner of the version benches/counts/Cargo.toml pins:
+# the DHAT profiles (dh_view.html), with dhat.jsonl, gungraun's JSON line for each.
+#
+# Needs Linux on x86-64, Valgrind, Node, and the gungraun-runner of the version
+# benches/counts/Cargo.toml pins:
 #   cargo install gungraun-runner --version <that version> --locked
 set -eu
 
@@ -63,11 +65,14 @@ cargo bench --bench counts $FEATURES -- --output-format=json --parallel=auto > "
 cargo bench --bench allocations $FEATURES > "$OUT/allocations.jsonl"
 
 if [ -n "$PROFILES" ]; then
-  # DHAT only here, after the counted run: the instruction runs keep Callgrind only. 500 frames, Valgrind's
-  # most, since DHAT drops an allocation whose stack it cuts off below the benchmark's frame.
+  # DHAT only here, after the counted run: the instruction runs keep Callgrind only. 500 frames,
+  # Valgrind's most, since DHAT drops an allocation whose stack it cuts off below the benchmark's frame.
+  # The profiles are for reading, so a DHAT run that fails leaves the counts measured.
   # shellcheck disable=SC2086
-  cargo bench --bench counts $FEATURES -- --default-tool=dhat --dhat-args=--num-callers=500 \
-    --output-format=json --parallel=auto > "$PROFILES/dhat.jsonl"
+  if ! cargo bench --bench counts $FEATURES -- --default-tool=dhat --dhat-args=--num-callers=500 \
+    --output-format=json --parallel=auto > "$PROFILES/dhat.jsonl"; then
+    echo ">>> $NAME: the DHAT run failed, so its profiles are not all there" >&2
+  fi
   cp -R target/gungraun/. "$PROFILES/"
   echo ">>> $NAME: profiles in $PROFILES ($(du -sh "$PROFILES" | cut -f1))"
 fi
