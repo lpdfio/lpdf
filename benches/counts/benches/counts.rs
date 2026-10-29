@@ -10,15 +10,17 @@
 //! split layout from the PDF write need the `split-stages` feature, which bench.yml turns on for a
 //! checkout whose lib.rs has them.
 
+mod callgrind;
 mod common;
 
 use std::hint::black_box;
 
-use gungraun::{LibraryBenchmarkConfig, library_benchmark, library_benchmark_group, main};
+use gungraun::{library_benchmark, library_benchmark_group, main};
 use lpdf::{BenchDoc, bench_parse, bench_render_doc, bench_render_xml};
 #[cfg(feature = "split-stages")]
 use lpdf::{BenchPages, bench_layout_doc, bench_write_pdf};
 
+use callgrind::config;
 #[cfg(feature = "split-stages")]
 use common::laid_out;
 use common::{fixture, parsed};
@@ -78,24 +80,6 @@ fn render_doc(doc: BenchDoc) -> Vec<u8> {
 #[bench::xl(args = ("bench_xl"), setup = fixture)]
 fn end_to_end(xml: String) -> Vec<u8> {
     black_box(bench_render_xml(black_box(&xml)).expect("the fixture renders"))
-}
-
-/// glibc's malloc, which Callgrind counts, grows its heap in steps that depend on the address the heap
-/// starts at, and so on the size of the binary: a large block is carved from the heap or mapped on its
-/// own depending on whether the heap has room left, and frees then merge differently. Any change to the
-/// code moved small renders by up to 1% that way. One large heap from the start, never given back,
-/// leaves the allocator with the same work for the same calls.
-const GLIBC_TUNABLES: &str =
-    "glibc.malloc.top_pad=268435456:glibc.malloc.trim_threshold=4294967296";
-
-/// Callgrind only. DHAT under Gungraun keeps an allocation only when the benchmark's frame is among the
-/// innermost of its stack, 12 by default, so it misses nearly all of layout's: `allocations.rs` counts
-/// them. `scripts/bench-counts.sh` runs this binary under DHAT once more, with whole stacks, for the
-/// profiles only.
-fn config() -> LibraryBenchmarkConfig {
-    let mut config = LibraryBenchmarkConfig::default();
-    config.env("GLIBC_TUNABLES", GLIBC_TUNABLES);
-    config
 }
 
 library_benchmark_group!(name = stages, benchmarks = [parse, render_doc, end_to_end]);

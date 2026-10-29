@@ -8,7 +8,8 @@
 # Copies this repo's benches/counts into <checkout>, a worktree of the build, so that every build of a
 # run is measured by the same benchmarks, and gives it <checkout>'s Cargo.lock, so that each build
 # keeps the dependency versions it was released with. Turns on the split-stages feature when
-# <checkout>'s lib.rs has bench_layout_doc and bench_write_pdf. Writes to <out folder>:
+# <checkout>'s lib.rs has bench_layout_doc and bench_write_pdf, and the embedded-fonts feature, with the
+# fonts benchmarks (benches/fonts.rs), when it has bench_layout_doc_with_fonts. Writes to <out folder>:
 #
 #   summary.jsonl       gungraun's JSON line for each benchmark: instructions and estimated cycles
 #   allocations.jsonl   a JSON line for each benchmark: allocations, bytes allocated and peak memory
@@ -49,18 +50,25 @@ fi
 cp "$CHECKOUT/Cargo.lock" "$CHECKOUT/benches/counts/Cargo.lock"
 
 FEATURES=""
-if grep -q 'pub fn bench_layout_doc' "$LIB" && grep -q 'pub fn bench_write_pdf' "$LIB"; then
+BENCHES="--bench counts"
+WITH=""
+if grep -q 'pub fn bench_layout_doc_with_fonts' "$LIB"; then
+  FEATURES="--features embedded-fonts"
+  BENCHES="--bench counts --bench fonts"
+  WITH=", with layout and the PDF write apart and the embedded fonts"
+elif grep -q 'pub fn bench_layout_doc' "$LIB" && grep -q 'pub fn bench_write_pdf' "$LIB"; then
   FEATURES="--features split-stages"
+  WITH=", with layout and the PDF write apart"
 fi
 
 COMMIT=$(git -C "$CHECKOUT" rev-parse HEAD)
-echo ">>> $NAME ($COMMIT)${FEATURES:+, with layout and the PDF write apart}"
+echo ">>> $NAME ($COMMIT)$WITH"
 
 # Each build in a target of its own, in its checkout: Cargo gives two checkouts of the same crate the
 # same file in a shared one, and the second build's benchmarks would run for both.
 cd "$CHECKOUT/benches/counts"
-# shellcheck disable=SC2086 # FEATURES is empty or two words
-cargo bench --bench counts $FEATURES -- --output-format=json --parallel=auto > "$OUT/summary.jsonl"
+# shellcheck disable=SC2086 # FEATURES is empty or two words, BENCHES two or four
+cargo bench $BENCHES $FEATURES -- --output-format=json --parallel=auto > "$OUT/summary.jsonl"
 # shellcheck disable=SC2086
 cargo bench --bench allocations $FEATURES > "$OUT/allocations.jsonl"
 
@@ -69,7 +77,7 @@ if [ -n "$PROFILES" ]; then
   # Valgrind's most, since DHAT drops an allocation whose stack it cuts off below the benchmark's frame.
   # The profiles are for reading, so a DHAT run that fails leaves the counts measured.
   # shellcheck disable=SC2086
-  if ! cargo bench --bench counts $FEATURES -- --default-tool=dhat --dhat-args=--num-callers=500 \
+  if ! cargo bench $BENCHES $FEATURES -- --default-tool=dhat --dhat-args=--num-callers=500 \
     --output-format=json --parallel=auto > "$PROFILES/dhat.jsonl"; then
     echo "::warning::$NAME: the DHAT run failed, so its DHAT profiles are not all there"
   fi

@@ -16,6 +16,9 @@ publish = false
 # The checkout's lib.rs has bench_layout_doc and bench_write_pdf, which measure layout and the PDF
 # write apart. bench.yml turns it on where they are, since earlier releases lack them.
 split-stages = []
+# The checkout's lib.rs has the entry points that set embedded fonts' advances for layout, which the
+# `fonts` benchmarks and the `fonts` rows of `allocations` use. bench.yml turns it on where they are.
+embedded-fonts = ["split-stages"]
 
 [dev-dependencies]
 lpdf     = { path = "../../src/core" }
@@ -25,6 +28,11 @@ gungraun = "=0.20.0"
 [[bench]]
 name    = "counts"
 harness = false
+
+[[bench]]
+name              = "fonts"
+harness           = false
+required-features = ["embedded-fonts"]
 
 [[bench]]
 name    = "allocations"
