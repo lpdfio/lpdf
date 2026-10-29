@@ -1094,10 +1094,11 @@ fn resolve_node(
     // inheriting the text's font, which is already bold when the text is.
     let text_runs = n.text_runs.into_iter().map(|run| resolve_run(run, &inherited, node_bold, fonts)).collect();
 
-    let children = n.children
-        .into_iter()
-        .map(|c| resolve_node(c, &font, font_size, color, fonts))
-        .collect();
+    // Into a buffer of the children's length. While a `ParsedNode` is no smaller than a `Node`, `collect` reuses
+    // the parsed children's buffer in place, with the spare room it grew to as they were pushed, and the document
+    // keeps that room for as long as it lives: up to twice the bytes of its nodes.
+    let mut children = Vec::with_capacity(n.children.len());
+    children.extend(n.children.into_iter().map(|c| resolve_node(c, &font, font_size, color, fonts)));
     let text_color = (is_text || n.kind == NodeKind::List).then(|| color.to_string());
 
     Node {
