@@ -180,6 +180,6 @@ Preview, design, and export PDFs directly in VS Code — entirely offline. Suppo
 
 Report bugs and request features at [github.com/lpdfio/lpdf/issues](https://github.com/lpdfio/lpdf/issues), the one tracker for the engine, the SDKs and the VS Code extension. Questions go to [Discussions](https://github.com/lpdfio/lpdf/discussions). Pull requests are not accepted.
 
---
+---
 
 Dual-licensed: Community License (free) and Commercial License (paid). See [LICENSE](LICENSE) for full terms.
