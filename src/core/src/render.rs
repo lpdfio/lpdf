@@ -29,6 +29,7 @@ pub enum RenderNode {
     CanvasPath(RenderCanvasPath),
     CanvasLayer(RenderCanvasLayer),
     Anchor(RenderAnchor),
+    FootnoteMark(RenderFootnoteMark),
 }
 
 /// The place a bookmark marks: an entry of the PDF outline, and a named destination for `href="#id"` links.
@@ -39,6 +40,15 @@ pub struct RenderAnchor {
     /// Outline depth, 1 to 6.
     pub level: u8,
     /// Top of the marked element, from the top of the page.
+    pub y:     f32,
+}
+
+/// Where the number of a footnote is drawn. It draws nothing: pagination reads it to leave out the note of a number
+/// that the bottom of the page cuts off (`footnotes`).
+pub struct RenderFootnoteMark {
+    /// The footnote's place among those of its flow (`Footnote::index`).
+    pub index: u32,
+    /// Top of the number, from the top of the page.
     pub y:     f32,
 }
 
@@ -300,7 +310,7 @@ fn is_invisible(node: &RenderNode) -> bool {
                 && b.children.is_empty()
                 && !b.debug_self
         }
-        RenderNode::Anchor(_) => true,
+        RenderNode::Anchor(_) | RenderNode::FootnoteMark(_) => true,
         _ => false,
     }
 }
@@ -472,7 +482,7 @@ fn node_to_json(node: &RenderNode) -> Value {
             "nodes": nodes_to_json(&l.children),
         }),
         // Filtered out by `is_invisible`: the JSON pages are what is drawn.
-        RenderNode::Anchor(_) => Value::Null,
+        RenderNode::Anchor(_) | RenderNode::FootnoteMark(_) => Value::Null,
     }
 }
 

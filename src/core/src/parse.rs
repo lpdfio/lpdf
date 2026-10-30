@@ -288,6 +288,9 @@ pub struct Footnote {
     pub runs:   Vec<TextRun>,
     /// The number the anchor and the note show. Layout sets it, from the counter and the page.
     pub number: u32,
+    /// Its place among the footnotes of its flow, in reading order, which layout sets: the laid-out tree marks
+    /// where its number is drawn by it.
+    pub index:  u32,
 }
 
 /// Where the numbers of the footnotes start over (`footnote-counter`).
@@ -2121,7 +2124,7 @@ fn footnote_run(words: Vec<TextRun>, leading_space: bool) -> TextRun {
         text: String::new(), leading_space,
         font: None, color: None, href: None,
         underline: false, strike: false, bold: false, background: None,
-        footnote: Some(Box::new(Footnote { runs: words, number: 1 })),
+        footnote: Some(Box::new(Footnote { runs: words, number: 1, index: 0 })),
     }
 }
 
