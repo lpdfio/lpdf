@@ -8,10 +8,13 @@ mod table_grid;
 #[cfg(test)]
 #[path = "layout/row_split_tests.rs"]
 mod row_split_tests;
+#[cfg(test)]
+#[path = "layout/footnote_clip_tests.rs"]
+mod footnote_clip_tests;
 pub(crate) use table_grid::{Held, Placed};
 use table_grid::TableGrid;
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
-use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderCanvasClip, RenderCanvasLayer, RenderField, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind};
+use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderCanvasClip, RenderCanvasLayer, RenderField, RenderFootnoteMark, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind};
 use crate::tokens::FontWidths;
 use crate::canvas;
 use crate::toc;
@@ -443,7 +446,7 @@ enum PageFlow {
 /// margin or the notes, and what the clip can't hide is fitted to it (`fit_to_clip`). A flow that fits is returned
 /// as it is.
 fn clip_overflow(mut nodes: Vec<RenderNode>, used: f32, bottom: f32, room: f32, page_w: f32) -> Vec<RenderNode> {
-    if used <= room + 0.5 {
+    if !flow_runs_past(used, room) {
         return nodes;
     }
     fit_to_clip(&mut nodes, bottom);
@@ -453,6 +456,11 @@ fn clip_overflow(mut nodes: Vec<RenderNode>, used: f32, bottom: f32, room: f32, 
         opacity:   1.0,
         children:  nodes,
     })]
+}
+
+/// Whether a page's flow laid out `used` high runs past its `room`, and is cut at the bottom of it (`clip_overflow`).
+fn flow_runs_past(used: f32, room: f32) -> bool {
+    used > room + 0.5
 }
 
 /// Fit to a clip at `bottom` what the clip in the content stream doesn't hide: a field that doesn't fit above it is
@@ -720,7 +728,8 @@ fn next_place(place_y: Option<f32>, node: &Node, laid_out: bool, h: f32, gap: f3
 /// Takes the nodes of one page off `pending`: as many as fit in `budget`, a node that does not fit being split
 /// or sent on whole. `next_budget` is what the page after it has, which keep-next looks at. `at` is the x and y the
 /// page's flow starts at, when it is known: a node placed whole then comes with its tree, laid out at its place
-/// there (`Kept`).
+/// there (`Kept`). With the nodes comes whether the page may run past `budget`: its first node was placed whole
+/// without fitting the empty page, or split there with a first part that can be taller than it (`may_run_past`).
 ///
 /// Splittable: Column (Auto), Grid, Row, Text, Table, Link. Atomic: Frame, Divider, plus anything with
 /// Fixed/Full/Fill. When a node doesn't fit and can't be split, it moves wholesale to the next page. If a single
@@ -732,8 +741,9 @@ fn fill_page(
     budget: f32,
     next_budget: f32,
     gap: f32,
-) -> Vec<(Node, Option<Kept>)> {
+) -> (Vec<(Node, Option<Kept>)>, bool) {
     let mut page: Vec<(Node, Option<Kept>)> = Vec::new();
+    let mut runs_past = false;
     let mut used_h: f32 = 0.0;
     let x = at.map_or(0.0, |(x, _)| x);
     let mut place_y = at.map(|(_, y)| y);
@@ -825,6 +835,7 @@ fn fill_page(
                         }
                     }
                     // A part can still be taller than the page, as a table's spanned rows or a row's child can.
+                    runs_past |= page.is_empty() && may_run_past(&first);
                     let cut = node.debug && measure_height(&first, avail_w, budget) > target + 0.5;
                     page.push((first, None));
                     for item in rest.into_iter().rev() {
@@ -842,6 +853,7 @@ fn fill_page(
                         let first = rest.into_iter().next().unwrap_or(node);
                         needs_break_after = first.paginate == Paginate::BreakAfter;
                         let fh = measure_height(&first, avail_w, budget);
+                        runs_past |= fh > budget + 0.5;
                         if first.debug && fh > budget + 0.5 {
                             pending.push_front(make_clip_warning());
                         }
@@ -859,6 +871,7 @@ fn fill_page(
                 SplitOutcome::Atomic => {
                     if page.is_empty() {
                         needs_break_after = node.paginate == Paginate::BreakAfter;
+                        runs_past |= h > budget + 0.5;
                         if node.debug && h > budget + 0.5 {
                             pending.push_front(make_clip_warning());
                         }
@@ -879,7 +892,7 @@ fn fill_page(
         }
     }
 
-    page
+    (page, runs_past)
 }
 
 /// Construct a small red diagnostic text node injected into the layout stream
@@ -963,6 +976,20 @@ fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> 
 /// something, not a header alone or a line alone, as `split_node_at` sees it.
 fn starts_within(node: &Node, avail_w: f32, room: f32, full_page_h: f32) -> bool {
     matches!(split_node_at(node, avail_w, room.max(0.0), full_page_h), SplitOutcome::First(..))
+}
+
+/// Whether a first part that `split_node_at` made on an empty page can be taller than the page: it holds something
+/// the cut can't go through, which is placed whole however tall it is. That is a box that can't split, or a row of a
+/// grid or a table. A text ends at its last line that fits, and so does a column or a row of texts.
+fn may_run_past(part: &Node) -> bool {
+    if !splittable(part) {
+        return true;
+    }
+    match part.kind {
+        NodeKind::Text => false,
+        NodeKind::Grid | NodeKind::Table => true,
+        _ => part.children.iter().any(may_run_past),
+    }
 }
 
 /// Whether `split_node_at` can split `node` at all: a text, or a box of `auto` height with children, of a kind
@@ -3913,8 +3940,8 @@ struct Atom<'a> {
     text:      Cow<'a, str>,
     font:      &'a str,
     color:     &'a str,
-    /// The styled run it is from, which says whether it is a link, underlined, struck or tinted. None for a word of
-    /// the text and for the number of a footnote.
+    /// The styled run it is from, which says whether it is a link, underlined, struck or tinted, or for the number
+    /// of a footnote the run of its anchor. None for a word of the text.
     span:      Option<&'a TextRun>,
     /// The number of a footnote, drawn small and raised.
     sup:       bool,
@@ -4055,7 +4082,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
             let text = note.number.to_string();
             let width = word_width(metrics, &text, font_size, true);
             atoms.push(Atom {
-                text: Cow::Owned(text), font, color, span: None, sup: true, space_before, join: Join::No, width,
+                text: Cow::Owned(text), font, color, span: Some(run), sup: true, space_before, join: Join::No, width,
             });
             space_before = false;
         } else if is_span {
@@ -4253,6 +4280,9 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 let mut seg = Vec::new();
                 if let Some(tint) = atom.background() {
                     seg.push(tint_behind(tint, cur_x - lead, line_y, aw + lead, line_height));
+                }
+                if let Some(note) = atom.span.and_then(|run| run.footnote.as_deref()) {
+                    seg.push(RenderNode::FootnoteMark(RenderFootnoteMark { index: note.index, y: atom_y }));
                 }
                 seg.push(RenderNode::Text(RenderText {
                     x: cur_x, y: atom_y,
@@ -4708,6 +4738,10 @@ fn shift_y(node: RenderNode, dy: f32) -> RenderNode {
         RenderNode::Anchor(mut a) => {
             a.y += dy;
             RenderNode::Anchor(a)
+        }
+        RenderNode::FootnoteMark(mut m) => {
+            m.y += dy;
+            RenderNode::FootnoteMark(m)
         }
         // What a `<shape>` or the checkbox of an `<li>` draws moves with its box.
         RenderNode::CanvasRect(mut r) => {

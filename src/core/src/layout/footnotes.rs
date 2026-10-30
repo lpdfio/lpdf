@@ -6,6 +6,11 @@
 //! room kept back. The second fill is the first one cut short, so it holds no more notes than the first, and they
 //! fit the room. Up to two more fills look for a tighter fit, with the room for fewer notes (see `settle_page`).
 //! A line whose note does not fit moves to the next page, with its anchor.
+//!
+//! A node taller than a page is cut at the bottom of it (`clip_overflow`), and a number below the cut has no note,
+//! on that page or any other. A fill whose page may run past its room lays it out to find where its numbers are
+//! drawn, which the laid-out tree marks, and the notes of those below the cut take no room. More room kept back
+//! moves the cut up and shows fewer numbers, so the search of `settle_page` holds.
 
 use super::*;
 use crate::parse::FootnoteCounter;
@@ -48,34 +53,35 @@ pub(super) fn has_footnotes(nodes: &[Node]) -> bool {
     nodes.iter().any(|node| node.text_runs.iter().any(|run| run.footnote.is_some()) || has_footnotes(&node.children))
 }
 
-/// Give the anchors of a flow their numbers, in reading order. A counter that starts over on every page numbers
-/// them when the page is known; until then every anchor is a 1. `start` is how many notes the earlier sections
-/// that count across the document hold.
+/// Give the anchors of a flow their places among them and their numbers, in reading order. A counter that starts
+/// over on every page numbers them when the page is known; until then every anchor is a 1. `start` is how many
+/// notes the earlier sections that count across the document hold.
 pub(super) fn number_flow(flow: &mut [Node], counter: FootnoteCounter, start: u32) {
-    fn walk(nodes: &mut [Node], next: &mut u32, counter: FootnoteCounter) {
+    fn walk(nodes: &mut [Node], index: &mut u32, first: u32, counter: FootnoteCounter) {
         for node in nodes {
             for run in node.text_runs.iter_mut() {
                 if let Some(note) = run.footnote.as_mut() {
-                    note.number = if counter == FootnoteCounter::Page { 1 } else { *next };
-                    *next += 1;
+                    note.index  = *index;
+                    note.number = if counter == FootnoteCounter::Page { 1 } else { first + *index };
+                    *index += 1;
                 }
             }
-            walk(&mut node.children, next, counter);
+            walk(&mut node.children, index, first, counter);
         }
     }
-    let mut next = if counter == FootnoteCounter::Document { start + 1 } else { 1 };
-    walk(flow, &mut next, counter);
+    let first = if counter == FootnoteCounter::Document { start + 1 } else { 1 };
+    walk(flow, &mut 0, first, counter);
 }
 
-/// The notes of the anchors in `nodes`, in reading order. On a page that counts from 1, the anchors are numbered
-/// here.
-fn take_notes(nodes: &mut [Node], counter: FootnoteCounter) -> Vec<Note> {
-    fn walk(nodes: &mut [Node], page_count: &mut u32, counter: FootnoteCounter, out: &mut Vec<Note>) {
+/// The notes of the anchors in `nodes`, in reading order, but for the numbers `cut_off` by the bottom of the
+/// page. On a page that counts from 1, the anchors shown are numbered here.
+fn take_notes(nodes: &mut [Node], counter: FootnoteCounter, cut_off: &[u32]) -> Vec<Note> {
+    fn walk(nodes: &mut [Node], page_count: &mut u32, counter: FootnoteCounter, cut_off: &[u32], out: &mut Vec<Note>) {
         for node in nodes {
             if node.kind == NodeKind::Text {
                 let size = (node.font_size * NOTE_SIZE_SCALE).max(NOTE_SIZE_MIN);
                 for run in node.text_runs.iter_mut() {
-                    if let Some(note) = run.footnote.as_mut() {
+                    if let Some(note) = run.footnote.as_mut().filter(|note| !cut_off.contains(&note.index)) {
                         if counter == FootnoteCounter::Page {
                             *page_count += 1;
                             note.number = *page_count;
@@ -91,11 +97,33 @@ fn take_notes(nodes: &mut [Node], counter: FootnoteCounter) -> Vec<Note> {
                     }
                 }
             }
-            walk(&mut node.children, page_count, counter, out);
+            walk(&mut node.children, page_count, counter, cut_off, out);
         }
     }
     let mut out = Vec::new();
-    walk(nodes, &mut 0, counter, &mut out);
+    walk(nodes, &mut 0, counter, cut_off, &mut out);
+    out
+}
+
+/// The footnotes of a page's `nodes` whose numbers the bottom of the page cuts off, by index: the nodes laid out
+/// as the page lays them out, and when they run past `room`, every number whose top is at or below it.
+fn numbers_cut_off(nodes: &[Node], avail_w: f32, room: f32, gap: f32) -> Vec<u32> {
+    fn below(tree: &[RenderNode], bottom: f32, out: &mut Vec<u32>) {
+        for node in tree {
+            match node {
+                RenderNode::FootnoteMark(mark) if mark.y >= bottom => out.push(mark.index),
+                RenderNode::Box(b)         => below(&b.children, bottom, out),
+                RenderNode::Link(l)        => below(&l.children, bottom, out),
+                RenderNode::CanvasLayer(l) => below(&l.children, bottom, out),
+                _ => {}
+            }
+        }
+    }
+    let (tree, used) = layout_column(nodes, 0.0, 0.0, avail_w, Some(room), gap, &Align::Stretch, &Justify::Start);
+    let mut out = Vec::new();
+    if flow_runs_past(used, room) {
+        below(&tree, room, &mut out);
+    }
     out
 }
 
@@ -126,7 +154,7 @@ pub(super) fn split_flow<'a>(
         if has_notes {
             return Some(settle_page(&mut pending, at, avail_w, budget, budget_rest, gap, counter));
         }
-        let (nodes, kept) = fill_page(&mut pending, at, avail_w, budget, budget_rest, gap).into_iter().unzip();
+        let (nodes, kept) = fill_page(&mut pending, at, avail_w, budget, budget_rest, gap).0.into_iter().unzip();
         Some(FlowPage { nodes, kept, notes: Vec::new(), reserve: 0.0 })
     })
 }
@@ -144,9 +172,16 @@ struct Fill<'a> {
 #[allow(clippy::too_many_arguments)]
 fn fill<'a>(pending: &Pending<'a>, at: Option<(f32, f32)>, avail_w: f32, budget: f32, next_budget: f32, gap: f32, counter: FootnoteCounter, reserve: f32) -> Fill<'a> {
     let mut rest = pending.clone();
-    let (mut nodes, mut kept): (Vec<Node>, Vec<Option<Kept>>) =
-        fill_page(&mut rest, at, avail_w, (budget - reserve).max(0.0), next_budget, gap).into_iter().unzip();
-    let notes = take_notes(&mut nodes, counter);
+    let room = (budget - reserve).max(0.0);
+    let (page, runs_past) = fill_page(&mut rest, at, avail_w, room, next_budget, gap);
+    let (mut nodes, mut kept): (Vec<Node>, Vec<Option<Kept>>) = page.into_iter().unzip();
+    // Only a page cut at its bottom can hide a number, and only a page whose first node did not fit is cut.
+    let cut_off = if runs_past && has_footnotes(&nodes) {
+        numbers_cut_off(&nodes, avail_w, room, gap)
+    } else {
+        Vec::new()
+    };
+    let notes = take_notes(&mut nodes, counter, &cut_off);
     if counter == FootnoteCounter::Page {
         // The anchors of the page got their numbers here, after the trees of their texts were laid out.
         for (node, tree) in nodes.iter().zip(kept.iter_mut()) {
@@ -160,10 +195,10 @@ fn fill<'a>(pending: &Pending<'a>, at: Option<(f32, f32)>, avail_w: f32, budget:
 /// Fill the next page so that its notes fit under it, and take its nodes off `pending`.
 ///
 /// The first fill has no room kept back and holds `n` notes. A fill with the room for the first `j` of them
-/// holds `k(j)` notes, and `k` falls as `j` grows, since more room kept back leaves less of the flow for the page.
-/// The room fits when `k(j) <= j`, and `j = n` always does. The tightest page is the least `j` that fits, which this
-/// looks for in two steps after the fill with `j = n`, for four fills at most: the `j` that fill held, and if its
-/// notes did not fit, the number it held, which does.
+/// holds `k(j)` notes, and `k` falls as `j` grows, since more room kept back leaves less of the flow for the page,
+/// or moves up the cut of a node taller than the page. The room fits when `k(j) <= j`, and `j = n` always does. The
+/// tightest page is the least `j` that fits, which this looks for in two steps after the fill with `j = n`, for four
+/// fills at most: the `j` that fill held, and if its notes did not fit, the number it held, which does.
 fn settle_page(pending: &mut Pending, at: Option<(f32, f32)>, avail_w: f32, budget: f32, next_budget: f32, gap: f32, counter: FootnoteCounter) -> FlowPage {
     let mut first = fill(pending, at, avail_w, budget, next_budget, gap, counter, 0.0);
     if first.area <= 0.0 {

@@ -1328,8 +1328,9 @@ fn draw_node(
         // not as content stream operations.  Nothing to draw here.
         RenderNode::Field(_) => {}
 
-        // Anchors become the outline and the named destinations; they draw nothing.
-        RenderNode::Anchor(_) => {}
+        // Anchors become the outline and the named destinations; they draw nothing, and neither does the mark of a
+        // footnote's number.
+        RenderNode::Anchor(_) | RenderNode::FootnoteMark(_) => {}
 
         // ── Canvas Rect ───────────────────────────────────────────────────────
         RenderNode::CanvasRect(r) => {
