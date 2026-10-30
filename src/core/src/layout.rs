@@ -729,7 +729,7 @@ fn next_place(place_y: Option<f32>, node: &Node, laid_out: bool, h: f32, gap: f3
 /// or sent on whole. `next_budget` is what the page after it has, which keep-next looks at. `at` is the x and y the
 /// page's flow starts at, when it is known: a node placed whole then comes with its tree, laid out at its place
 /// there (`Kept`). With the nodes comes whether the page may run past `budget`: its first node was placed whole
-/// or in part without fitting the empty page, and may be taller than it.
+/// without fitting the empty page, or split there with a first part that can be taller than it (`may_run_past`).
 ///
 /// Splittable: Column (Auto), Grid, Row, Text, Table, Link. Atomic: Frame, Divider, plus anything with
 /// Fixed/Full/Fill. When a node doesn't fit and can't be split, it moves wholesale to the next page. If a single
@@ -834,9 +834,8 @@ fn fill_page(
                             last.paginate = Paginate::BreakAfter;
                         }
                     }
-                    // A part can still be taller than the page, as a table's spanned rows or a row's child can. A
-                    // text's never is: it ends at its last line that fits.
-                    runs_past = page.is_empty() && first.kind != NodeKind::Text;
+                    // A part can still be taller than the page, as a table's spanned rows or a row's child can.
+                    runs_past |= page.is_empty() && may_run_past(&first);
                     let cut = node.debug && measure_height(&first, avail_w, budget) > target + 0.5;
                     page.push((first, None));
                     for item in rest.into_iter().rev() {
@@ -854,8 +853,8 @@ fn fill_page(
                         let first = rest.into_iter().next().unwrap_or(node);
                         needs_break_after = first.paginate == Paginate::BreakAfter;
                         let fh = measure_height(&first, avail_w, budget);
-                        runs_past = fh > budget + 0.5;
-                        if first.debug && runs_past {
+                        runs_past |= fh > budget + 0.5;
+                        if first.debug && fh > budget + 0.5 {
                             pending.push_front(make_clip_warning());
                         }
                         page.push((first, None));
@@ -872,8 +871,8 @@ fn fill_page(
                 SplitOutcome::Atomic => {
                     if page.is_empty() {
                         needs_break_after = node.paginate == Paginate::BreakAfter;
-                        runs_past = h > budget + 0.5;
-                        if node.debug && runs_past {
+                        runs_past |= h > budget + 0.5;
+                        if node.debug && h > budget + 0.5 {
                             pending.push_front(make_clip_warning());
                         }
                         place_y = next_place(place_y, &node, tree.is_some(), h, gap);
@@ -977,6 +976,20 @@ fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> 
 /// something, not a header alone or a line alone, as `split_node_at` sees it.
 fn starts_within(node: &Node, avail_w: f32, room: f32, full_page_h: f32) -> bool {
     matches!(split_node_at(node, avail_w, room.max(0.0), full_page_h), SplitOutcome::First(..))
+}
+
+/// Whether a first part that `split_node_at` made on an empty page can be taller than the page: it holds something
+/// the cut can't go through, which is placed whole however tall it is. That is a box that can't split, or a row of a
+/// grid or a table. A text ends at its last line that fits, and so does a column or a row of texts.
+fn may_run_past(part: &Node) -> bool {
+    if !splittable(part) {
+        return true;
+    }
+    match part.kind {
+        NodeKind::Text => false,
+        NodeKind::Grid | NodeKind::Table => true,
+        _ => part.children.iter().any(may_run_past),
+    }
 }
 
 /// Whether `split_node_at` can split `node` at all: a text, or a box of `auto` height with children, of a kind
