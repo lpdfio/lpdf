@@ -1,5 +1,68 @@
 # Changelog
 
+## v0.30.0 — 2026-10-30
+### Markdown
+- `<markdown>` takes the place of the `<layout>` in a section and sets Markdown as a styled, paginated PDF: CommonMark with tables, strikethrough and footnotes. It is for a body written in Markdown, such as release notes, an article or documentation, or one that comes from a CMS, a database or a user. The page, a cover, a header and a footer stay in the XML: a `<layer>` draws a header or a footer in the margin the Markdown leaves. The text is inline in `<markdown-content>`, in a CDATA section, or comes from the data with `data-value`
+- Each part becomes the element it stands for: a heading is a text kept with the block after it, and a bookmark, so the viewer's outline and a table of contents fill themselves and `[the methods](#3-1-methods)` links to it; a paragraph is a text; emphasis, strong and struck-through words are spans; inline code is a `code-span` and a code block a `<code>`; `---` is a divider; a quote has a bar beside it; lists nest; `- [ ]` and `- [x]` are checkboxes; a table has a header row that repeats on each page and columns as wide as their cells need; `[^1]` is a footnote. Two spaces or a `\` at the end of a line, or a `<br>`, start a new line in the same paragraph, list item, quote or table cell. A `$` is text: there is no math
+- `<markdown-styles>` holds rules named after the Markdown they style, `h1` to `h6`, `p`, `code`, `quote`, `li`, `hr`, `a`, `strong`, `em`, `del`, `table`, `th` and `td`, which take the attributes of the element they become: `<h1 color="primary"/>`. `src` reads the rules from a file, and the rules written inline are laid over it one attribute at a time. With no styles, the default look uses token names for its colors, so a token file alone rebrands it. In an embedded font, the `em` and `strong` rules name the italic and bold faces
+- An image names an asset by its `name` or by its `src`, so `![](img/photo.png)` keeps the relative path a `.md` file has everywhere else. An image at a URL is left out, since Lpdf does not download
+- Raw HTML is left out, with the words in it kept: a block such as `<p>` or `<div>` puts the words around it on lines of their own, and a comment, a `<script>` or a `<style>` leaves nothing. Two tags are read: `<br>` breaks a line, and `<img src width height>` is an image at that size, in pixels with or without `px`, a pixel being 0.75pt. A README with a centered logo and a row of badges renders, without the badges
+- A mistake is an error that names the line of the Markdown and says what to write instead: an image that is not an asset, a footnote with no definition or in a table, a rule that does not exist
+- A `.md` file is set in a template, a document with a `<markdown>` that reads the file from the data `markdown`. The `key: value` lines of its YAML front matter are data beside it, for a template to show, and its relative images are read relative to the file. With no template of its own, it is set on an A4 page with a 54pt margin and the page number at the foot. The command line and the VS Code extension convert one
+
+### Lists
+- `<list>` holds `<li>` items, each marked with a bullet or a number the engine writes. `type="bullet"` draws a shape, the same in every font: a disc, a circle in a list inside it and a square below that, or the one `bullet` names (`disc`, `circle`, `square`, `dash`). `type="number"` writes `decimal`, `lower-alpha`, `upper-alpha`, `lower-roman` or `upper-roman` numbers, from `start`, with a `prefix` and a `suffix` (`.` by default). `indent` is the width of the marker's column, `gap` the space between items
+- An item holds what a layout holds, and a list inside an item nests under it. A long item wraps under its own words, not under the marker, and splits across pages like a text, the marker staying with the first part. `data-source` on an `<li>` makes an item for each entry of the data, numbered in order
+- `<li checked="true">` and `checked="false"` draw a checkbox in place of the marker: an outline in the `line` color, ticked in the color of the item's words when it is checked
+
+### Code
+- `<code>` is a box for code, or any text whose spaces and lines matter. It keeps every space and line as written, wraps a line longer than the box at a space and breaks a word with none at the last character that fits, and splits across pages. A tab fills to the next multiple of `tab-size` columns, 4 by default. It is set in Courier on a light tint with padding, which `font`, `font-size`, `color`, `background`, `padding`, `border` and `radius` change, and a `<span color>` inside it colors a key word. The tags can stand on lines of their own, as `<pre>` does in HTML
+- `<code-span>` inside a `<text>` is the same look in a line: `Run <code-span>cargo test</code-span> first`
+
+### Tables
+- `auto` in `cols` makes a column as wide as its cells need on one line, so a column of numbers is as narrow as its numbers: `cols="auto 90pt auto"`. The `auto` columns share what the `pt` and `%` columns leave, and when they do not fit the longest names break first. `auto` with `fr` is an error that names the table. A table split across pages keeps the widths of its first page
+- `head-border` draws a line under the header row and `row-border` one under each row, as a thickness and a color like `border`: `head-border="xs line" row-border="xs line-muted"`. A line stops where a cell spans into the next row, and a header repeated on the next page has its line too. `none` turns `stripe`, `head-border` or `row-border` off
+- Two color tokens for lines: `line`, a mid grey (`#737373`), and `line-muted`, a light one (`#d4d4d4`). A document can give them other values in its tokens
+
+### Text
+- A word, or a styled run, wider than a whole line breaks at the last character that fits, so nothing runs past its box or out of a table cell
+- A built-in font draws `≥`, `≤`, `≠` and `≈`, which were drawn as `?`
+- Text in an embedded font is measured with each character's own width, where layout used one average width for anything outside ASCII. Lines with accented letters, curly quotes, dashes or a non-Latin script wrap where the text ends, and a span after such a character sits where it should
+- `align="justify"` justifies text in an embedded font, which came out ragged before. A justified line places its words, so a bold, linked or colored span moves with its neighbours instead of overlapping them
+- Text in a built-in font is measured with the fonts' own widths. An apostrophe was measured as wide as a curly quote, and a few letters and most characters above ASCII were approximate, so a line can now hold a word more than before. A character a built-in font draws as `?` is measured as wide as the `?`
+- A space at the start of a `<span>` that follows another span or a `<code-span>` is kept: `<span>a</span><span> b</span>` reads `a b`
+
+### Layout
+- **Breaking:** a `<divider>` with no `color` or `thickness` is a thin line in the `line` color, 0.5pt in a mid grey, where it was a 1pt black line. Set `color="#000000" thickness="s"` to keep the old line
+- A row splits across pages through a line: each child stops at its last line above the page's end and goes on at the top of the next page, at the width it had. A long bullet made of a marker and a text breaks inside its text instead of moving whole and leaving a gap
+- Content taller than a page, such as an image, a frame, a grid row or a box that does not split, is cut at the bottom of the page, where it was drawn over the footer and past the page's edge. A column or a grid goes on after it on the next page
+- `paginate="keep-next"` lets an element that splits start on the page: a table after its header and a row, a text after a few lines, with the element before it staying on that page. Before, both moved to the next page whenever the second did not fit whole
+
+### Data
+- An attribute takes its value from the data with a `data-` form of its name, the same dot-paths, loop scopes, `/` and `../` as `data-value`: `data-href` on a `<link>`, `data-name` on an `<img>` or `<img-at>` (one of the images declared in `assets`), `data-color` on a text, a box, a divider or a barcode, `data-background` on a box or a barcode, and `data-fill` on a `<shape>`. The attribute without `data-` stays when there is no data or the path has no value. A value that is not a string, a color that does not read or an image that is not declared is an error that names the attribute and the path
+
+### Encryption
+- **Security:** encryption is AES-256 by default, the cipher PDF 2.0 asks for, with the same user and owner passwords and the same eight permission flags. The SDK sends the engine random bytes from the platform's secure generator, so rendering the same document twice gives two different files. Compare, cache or sign the bytes before the encryption, or with RC4-128
+- **Deprecated:** RC4-128, which PDF 2.0 deprecates. It stays available for a reader that cannot open AES-256: `algorithm: 'rc4-128'` in Node.js and PHP, `algorithm='rc4-128'` in Python, `Algorithm = EncryptAlgorithm.Rc4128` in .NET
+
+### Performance
+- Performance improvements in layout and parsing: documents render faster, long ones most of all
+
+### Command line
+- `lpdf convert --data data.json` renders a document bound to data, as the SDKs do
+- `lpdf convert --input notes.md --output notes.pdf` converts a Markdown file, with `--template` for a template of your own and `--data` for fields beside those of its front matter
+
+### SDKs
+- The builders have the new elements: `L.list()` and `L.li()`, `L.code()` and `L.codeSpan()`, and `L.markdown()` with `LMarkdown` for its styles, rules and content, in each language's case (`L.code_span()` and `LMarkdown.del_` in Python, `L.CodeSpan()` in .NET). The `data-` attributes and `checked` on an item come with them
+- The encryption options take an `algorithm`, `aes-256` or `rc4-128`
+
+### VS Code extension
+- **Breaking:** the data of `invoice.xml` is found by name in `invoice.data.json`, no longer in `invoice.json`. Rename the file, or link it with **Lpdf: Link Data File...**
+- **Lpdf: Preview PDF** on a `.md` file shows it as a PDF beside it, and **Export PDF** writes one. The preview follows an edit of the Markdown, its styles, its document and its images, and scrolls with the editor both ways, matching them at each heading
+- **Lpdf: Link Markdown Styles...** offers three looks, Sans, Serif and Typewriter, and writes the one picked beside the file as `notes.styles.xml`, which the preview uses and the author edits. **Lpdf: Create Lpdf Document** writes a document for the file, A4 with a page number, where the page, a header and a footer are yours, and **Lpdf: Link Markdown File...** makes a `.md` file the body of a document with a `<markdown>`
+- **Lpdf: Export Encrypted PDF...** asks for an owner password, an optional open password and the permissions, then writes the PDF encrypted. The passwords are asked for each time and never stored. The setting `lpdf.encryptionAlgorithm` picks `aes-256` (the default) or `rc4-128`
+- Hover, autocomplete and validation follow the schema, so they cover the new elements and attributes
+
 ## v0.29.0 — 2026-10-23
 ### Tables
 - `colspan="n"` on a `<td>` makes the cell as wide as its `n` columns and the gaps between them, so a subtotal label or a full-width heading can sit in a table without nesting one. The cells after it in the row start at the column after its last. A row whose cells span more columns than the table has is an error; a row with fewer leaves its last columns empty. It changes widths only: row heights and page breaks work as before
