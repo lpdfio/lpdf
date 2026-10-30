@@ -8,6 +8,9 @@ mod table_grid;
 #[cfg(test)]
 #[path = "layout/row_split_tests.rs"]
 mod row_split_tests;
+#[cfg(test)]
+#[path = "layout/footnote_clip_tests.rs"]
+mod footnote_clip_tests;
 pub(crate) use table_grid::{Held, Placed};
 use table_grid::TableGrid;
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
