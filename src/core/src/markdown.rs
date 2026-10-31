@@ -2215,6 +2215,16 @@ mod tests {
     }
 
     #[test]
+    fn a_value_of_the_wrong_type_in_a_styles_file_is_an_error_that_names_the_file() {
+        let xml = document("", r#"<markdown-styles src="styles.xml"/>"#, "# a\n");
+        let mut resources = Resources::default();
+        resources.markdown_styles.insert("styles.xml".into(), r#"<markdown-styles><h1 bold="1"/></markdown-styles>"#.into());
+        let err = parse_with(&xml, &resources).unwrap_err();
+        assert!(err.contains("markdown-styles file 'styles.xml': <h1> at line 1, col "), "{err}");
+        assert!(err.ends_with(r#": bold must be true or false, not "1""#), "{err}");
+    }
+
+    #[test]
     fn a_styles_file_that_was_not_loaded_is_an_error_that_says_so() {
         let err = parse(&document("", r#"<markdown-styles src="styles.xml"/>"#, "a")).unwrap_err();
         assert!(err.contains("src=\"styles.xml\"") && err.contains("did not load"), "{err}");
