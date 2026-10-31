@@ -17,7 +17,7 @@ Lpdf runs on Node.js, browser, .NET, PHP, and Python. Under the hood, a single R
 | Node.js  | 20      | LTS release; EOL 2026-04-30 |
 | .NET     | 8.0     | LTS release; EOL 2026-11-10 |
 | PHP      | 8.3     | Current stable; EOL 2025-11-25 |
-| Python   | 3.10    | Stable with extended support; EOL 2026-10-05 |
+| Python   | 3.11    | Security fixes only; EOL 2027-10 |
 
 ### Node.js (20.0+)
 
@@ -131,7 +131,7 @@ $doc = L::document(new DocumentAttr(size: 'letter', margin: '48pt'), [
 $pdf = $engine->render($doc);
 ```
 
-### Python (3.10+)
+### Python (3.11+)
 
 [github.com/lpdfio/lpdf-python](https://github.com/lpdfio/lpdf-python)  -  [pypi.org/project/lpdfio-lpdf](https://pypi.org/project/lpdfio-lpdf/)  -  [lpdf.io/docs](https://lpdf.io/docs/install/?sdk=python&utm_campaign=sdk-python&utm_medium=referral&utm_source=readme)
 
