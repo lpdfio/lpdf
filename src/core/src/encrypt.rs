@@ -16,7 +16,7 @@
 //! RC4-128 (V=2 R=3) is the weakest encryption scheme defined in the PDF specification
 //! and is deprecated by PDF 2.0. It stays as an option for readers that need it. For
 //! environments with stricter security requirements (e.g. PCI-DSS, HIPAA, or ISO 27001
-//! compliance), use AES-256, the default.
+//! compliance), use AES-256.
 
 use md5::{Digest, Md5};
 
@@ -90,10 +90,9 @@ impl Permissions {
 }
 
 /// The cipher a file is encrypted with.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Algorithm {
     /// AES-256-CBC (V=5 R=6). Needs entropy from the host.
-    #[default]
     Aes256,
     /// RC4-128 (V=2 R=3). Deprecated by PDF 2.0.
     Rc4128,
@@ -945,7 +944,6 @@ mod tests {
         assert_eq!(Algorithm::parse("aes-256"), Ok(Algorithm::Aes256));
         assert_eq!(Algorithm::parse("rc4-128"), Ok(Algorithm::Rc4128));
         assert!(Algorithm::parse("aes-128").unwrap_err().contains("aes-128"));
-        assert_eq!(Algorithm::default(), Algorithm::Aes256);
     }
 
     // ── allow ──────────────────────────────────────────────────────────────────
