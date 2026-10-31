@@ -248,9 +248,36 @@ fn a_gradient_of_cmyk_colors_is_an_error_that_names_it() {
 
 // ── The samples of the external check ─────────────────────────────────────────
 
+/// The fonts of `test/assets/fonts` whose font programs the fixtures don't have, each with the name of its sample:
+/// CFF outlines, embedded as OpenType, and the CFF2 and TrueType outlines of a variable font, embedded as TrueType.
+const FONT_SAMPLES: [(&str, &str); 3] = [
+    ("cff", "SourceSans3-Regular.otf"),
+    ("cff2", "SourceSans3VF-Upright.otf"),
+    ("variable-ttf", "SourceSans3VF-Upright.ttf"),
+];
+
+/// A PDF/A-2u page set in `file` of `test/assets/fonts`, rendered unlicensed, so that the attribution line is checked
+/// too.
+fn font_sample(file: &str) -> Vec<u8> {
+    let mut engine = engine(Some(CREATED_ON));
+    engine.load_font("sample", &read(&test_dir().join("assets/fonts").join(file)));
+    let xml = format!(
+        r#"<lpdf version="1"><assets><font name="sample" src="{file}"/></assets><document size="a4" font="sample">
+        <meta title="{file}"/><output pdfa="2u"/><section><layout margin="48pt"><column gap="l">
+        <text font-size="28pt">Source Sans 3 — {file}</text>
+        <text font-size="12pt">Façade, naïve, Ørsted, Łódź, Dvořák — “quoted”, ‘single’, an en dash – and an em dash —,
+        €5 and 3 × 4 ≤ 12. Every glyph here comes from the font named above, embedded and cut down to what the page
+        uses, with a map back to Unicode.</text>
+        <text font-size="9pt">The quick brown fox jumps over the lazy dog. 0123456789 ÀÉÎÕÜ àéîõü ß Œ œ ﬁ</text>
+        </column></layout></section></document></lpdf>"#
+    );
+    engine.render_xml(&xml, None, &RenderEncryption::default()).unwrap_or_else(|e| panic!("{file}: {e}"))
+}
+
 /// Writes the files `scripts/check-pdfa.mjs` hands to veraPDF and qpdf, when `LPDF_PDFA_OUT` names a folder: the two
-/// fixtures, rendered unlicensed, so that the attribution line is checked too, with their fonts and pictures. Without
-/// the variable the test does nothing, so a plain `cargo test` needs no other tool.
+/// fixtures, rendered unlicensed, so that the attribution line is checked too, with their fonts and pictures, and a
+/// page in each font of `FONT_SAMPLES`. Without the variable the test does nothing, so a plain `cargo test` needs no
+/// other tool.
 #[test]
 fn writes_pdfa_samples_for_the_external_check() {
     let Some(dir) = std::env::var_os("LPDF_PDFA_OUT") else { return };
@@ -258,5 +285,16 @@ fn writes_pdfa_samples_for_the_external_check() {
     std::fs::create_dir_all(dir).expect("the samples' folder");
     for level in ["2b", "2u"] {
         std::fs::write(dir.join(format!("pdfa-{level}.pdf")), render_fixture(level)).expect("a sample");
+    }
+    for (name, file) in FONT_SAMPLES {
+        std::fs::write(dir.join(format!("pdfa-2u-{name}.pdf")), font_sample(file)).expect("a sample");
+    }
+}
+
+#[test]
+fn a_page_in_each_kind_of_font_is_a_pdfa_file() {
+    for (_, file) in FONT_SAMPLES {
+        let pdf = text(&font_sample(file));
+        assert!(pdf.contains("<pdfaid:conformance>U</pdfaid:conformance>"), "{file}");
     }
 }
