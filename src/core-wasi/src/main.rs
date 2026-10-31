@@ -16,6 +16,12 @@
 /// { "fonts": { "Inter": "<base64 TTF bytes>", … } }
 /// ```
 ///
+/// The bytes of the files a document carries, its `<attachments>`, come the same way, by the `ref` or, with no ref,
+/// the name of each `<file>`:
+/// ```json
+/// { "files": { "invoice.xml": "<base64 bytes>", … } }
+/// ```
+///
 /// A document asks for encryption in its `<output>`, which names the cipher and the permissions. The
 /// passwords come with the request, never with the template, and AES-256 also needs `entropy`, at least
 /// 32 random bytes from the host's secure generator, base64-encoded:
@@ -46,6 +52,8 @@ mod render;
 mod pdf;
 #[path = "../../core/src/pdfa.rs"]
 mod pdfa;
+#[path = "../../core/src/attachments.rs"]
+mod attachments;
 #[path = "../../core/src/license.rs"]
 mod license;
 #[path = "../../core/src/aes256.rs"]
@@ -194,6 +202,20 @@ fn build_image_registry(req: &serde_json::Value) -> pdf::ImageRegistry {
     registry
 }
 
+/// Decode the optional `files` field of the request: the bytes of the files the document carries, by the `ref` or
+/// name of each `<file>`.
+fn build_file_registry(req: &serde_json::Value) -> attachments::FileRegistry {
+    let mut registry = attachments::FileRegistry::new();
+    if let Some(files) = req.get("files").and_then(|v| v.as_object()) {
+        for (key, val) in files {
+            if let Some(bytes) = val.as_str().and_then(|b64| base64::engine::general_purpose::STANDARD.decode(b64).ok()) {
+                registry.load(key, bytes);
+            }
+        }
+    }
+    registry
+}
+
 /// Decode the optional `metrics` field from the request envelope into a font-widths map.
 /// Format: `{ "fontName": { "default": 500, "ascii": [260, 285, ...] } }`
 /// Kept for backward compatibility; auto-extraction from font bytes is preferred.
@@ -224,6 +246,13 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     if let Err(e) = pdfa::check_render(doc.output.pdfa, created_on) {
         return serde_json::json!({ "error": e }).to_string();
     }
+
+    let file_registry = build_file_registry(req);
+    let attached = std::mem::take(&mut doc.attachments);
+    let files = match attachments::resolve(&attached, &file_registry) {
+        Ok(files) => files,
+        Err(e)    => return serde_json::json!({ "error": e }).to_string(),
+    };
 
     let registry       = build_registry(req);
     let image_registry = build_image_registry(req);
@@ -269,7 +298,7 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     let status = license::check(license_key, now_unix);
 
     // An unlicensed status draws the attribution line on every page.
-    match pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, &doc.gradients, created_on, status.is_licensed(), doc.output.pdfa) {
+    match pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, &doc.gradients, created_on, status.is_licensed(), doc.output.pdfa, &files) {
         Ok(bytes) => {
             let bytes = match &encryption {
                 Some(cfg) => match encrypt::encrypt_pdf(&bytes, cfg) {
@@ -299,7 +328,7 @@ impl LpdfEngine {
         let pages: Vec<render::RenderPage> =
             layout::layout_document(&lp);
         // Unlicensed, as in the core stub, so both crates hash the same attributed bytes.
-        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, doc.output.pdfa)
+        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[])
     }
 }
 
@@ -428,6 +457,30 @@ mod tests {
             let error = answer["error"].as_str().unwrap_or_else(|| panic!("expected an error with {expected:?}"));
             assert!(error.contains(expected), "expected {expected:?}, got {error}");
         }
+    }
+
+    #[test]
+    fn the_files_of_the_request_are_carried_under_the_names_of_their_file() {
+        let xml = r#"<lpdf version="1"><document><attachments><file name="factur-x.xml" ref="invoice" mime="text/xml"/>
+            </attachments><section><layout><text>Hello</text></layout></section></document></lpdf>"#;
+        // "<invoice/>" in base64.
+        let answer = render_request(xml, serde_json::json!({ "files": { "invoice": "PGludm9pY2UvPg==" } }));
+        let text = pdf_text(&answer);
+        assert!(text.contains("/Type /EmbeddedFile") && text.contains("/Subtype /text#2Fxml"), "{answer}");
+        assert!(text.contains("/Size 10"), "the size of the file as loaded");
+
+        let answer = render_request(xml, serde_json::json!({}));
+        let error = answer["error"].as_str().expect("a file with no bytes is an error");
+        assert!(error.contains("file 'factur-x.xml'") && error.contains("loadFile('invoice', bytes)"), "{error}");
+    }
+
+    #[test]
+    fn the_tree_path_reads_attachments_too() {
+        let tree = r#"{"version":1,"type":"document","attrs":{"attachments":[{"name":"a.txt","relationship":"supplement"}]},
+            "nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[{"type":"text","nodes":["x"]}]}]}]}"#;
+        let req = serde_json::json!({ "method": "render_tree_pdf", "input": tree, "files": { "a.txt": "QQ==" } });
+        let answer: serde_json::Value = serde_json::from_str(&dispatch(&req.to_string())).unwrap();
+        assert!(pdf_text(&answer).contains("/AFRelationship /Supplement"), "{answer}");
     }
 
     #[test]

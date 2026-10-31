@@ -79,6 +79,10 @@ const UNTESTED: &[(&str, &str)] = &[
         "read by the SDKs, which load the file and hand it to the engine under the image's name or ref; the engine never sees it",
     ),
     (
+        "file@src",
+        "read by the SDKs, which load the file and hand it to the engine under the file's name or ref; the engine never sees it",
+    ),
+    (
         "markdown:markdown-styles@src",
         "read by whoever renders the document, who loads the file and hands its text to the engine under the src; \
          markdown::tests::a_styles_file_is_laid_under_the_inline_rules_and_over_the_defaults covers it",
@@ -124,6 +128,10 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
         ("alias@name", &["renamed"]),
         ("font@ref", &["custom"]),
         ("image@ref", &["other"]),
+        // The files `render` loads: `terms.txt`, `renamed.txt` and `other`, each with bytes of its own.
+        ("file@name", &["renamed.txt"]),
+        ("file@ref", &["other"]),
+        ("file@description", &["The terms of the sale"]),
         ("barcode@data", &["Another payload"]),
         ("barcode-at@data", &["Another payload"]),
         ("layer@clip", &["20pt 20pt 80pt 80pt"]),
@@ -179,6 +187,7 @@ fn pattern_samples(type_name: &str) -> Vec<String> {
         "BorderValue" | "LineValue" => &["2pt #ff0000"],
         "ShadowValue" => &["4pt 5pt #333333", "4pt 5pt #333333 0.5"],
         "PageScope" => &["2"],
+        "MimeType" => &["text/plain"],
         other => panic!("no sample value for the pattern type {other}: add one to pattern_samples"),
     };
     strs(sample)
@@ -378,8 +387,9 @@ const BLUE_PIXEL: &[u8] = &[
     0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ];
 
-/// Renders with the images `logo` (red) and `other` (blue) and the font `custom` loaded on the engine, a date for a
-/// document that asks for PDF/A, and an owner password and fixed entropy for a document that asks for encryption.
+/// Renders with the images `logo` (red) and `other` (blue), the font `custom` and the files `terms.txt`,
+/// `renamed.txt` and `other` loaded on the engine, a date for a document that asks for PDF/A, and an owner password
+/// and fixed entropy for a document that asks for encryption.
 /// A panic in the engine is an error like any other, so one bad value cannot hide the rest.
 fn render(xml: &str) -> Result<Vec<u8>, String> {
     catch_unwind(AssertUnwindSafe(|| {
@@ -394,6 +404,12 @@ fn render(xml: &str) -> Result<Vec<u8>, String> {
             None => crate::RenderEncryption::default(),
         };
         let config = encryption.resolve(doc.output.encryption.as_ref())?;
+        let mut registry = crate::attachments::FileRegistry::new();
+        registry.load("terms.txt", b"Terms".to_vec());
+        registry.load("renamed.txt", b"Terms".to_vec());
+        registry.load("other", b"Other terms".to_vec());
+        let attached = std::mem::take(&mut doc.attachments);
+        let files = crate::attachments::resolve(&attached, &registry)?;
         let mut images = crate::pdf::ImageRegistry::new();
         images.load("logo", RED_PIXEL.to_vec());
         images.load("other", BLUE_PIXEL.to_vec());
@@ -407,7 +423,7 @@ fn render(xml: &str) -> Result<Vec<u8>, String> {
         let mut fonts = crate::pdf::FontRegistry::new();
         fonts.register("custom", crate::pdf::ATTRIBUTION_FONT.to_vec());
         let created_on = doc.output.pdfa.map(|_| "2026-10-31T09:30:00Z");
-        let bytes = crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, created_on, false, doc.output.pdfa)?;
+        let bytes = crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, created_on, false, doc.output.pdfa, &files)?;
         match config {
             Some(config) => crate::encrypt::encrypt_pdf(&bytes, &config),
             None => Ok(bytes),
@@ -581,6 +597,10 @@ fn subjects() -> Vec<Subject> {
                 &format!(r#"<document font="custom"><output {a}/><section><layout><text>Lpdf</text></layout></section></document>"#),
             )
         }),
+        Subject::new("file", |a, _| {
+            lpdf("", &format!("<document><attachments><file {a}/></attachments><section><layout>{ONE}</layout></section></document>"))
+        })
+        .base(&[("name", "terms.txt")]),
         Subject::new("font", |a, _| {
             lpdf(&format!("<assets><font {a}/></assets>"), r#"<document><section><layout><text font="body">Alpha</text></layout></section></document>"#)
         })

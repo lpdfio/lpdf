@@ -11,6 +11,8 @@ pub struct Document {
     pub meta:        Meta,
     /// How the file is written: `<output>`.
     pub output:      Output,
+    /// The files the PDF carries: `<attachments>`, in document order.
+    pub attachments: Vec<crate::attachments::Attachment>,
     pub fonts:       HashMap<String, FontDef>,
     pub images:      HashMap<String, String>,
     /// Caller-supplied glyph width tables.
@@ -1233,6 +1235,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
     let markdown_assets = markdown::Assets { image_srcs, styles_files: resources.markdown_styles.clone() };
     let mut meta          = Meta::default();
     let mut output        = Output::default();
+    let mut attachments   = Vec::new();
     let mut doc_size      = (595.28_f32, 841.89_f32); // a4
     let mut doc_background: Option<String> = None;
     let mut doc_debug     = false;
@@ -1279,6 +1282,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                             )
                                 .map_err(|e| format!("<output>{}: {e}", node_loc(&doc_child)))?;
                         }
+                        "attachments" => attachments = crate::attachments::from_xml(&doc_child)?,
                         "section" => {
                             sections_xml.push(parse_section_elem(
                                 &doc_child,
@@ -1304,6 +1308,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                         node_loc(&child)
                     ));
                 }
+                crate::attachments::check_pdfa(&attachments, output.pdfa)?;
                 markdown::expand_pending(&mut sections_xml, None, markdown::Pass::Read)?;
                 check_sections(&mut sections_xml)?;
                 let mut resolved_fonts: HashMap<String, FontDef> = HashMap::new();
@@ -1317,6 +1322,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                 return Ok(Document {
                     meta,
                     output,
+                    attachments,
                     fonts:       resolved_fonts,
                     font_widths: HashMap::new(),
                     images:      asset_images,
@@ -3556,6 +3562,13 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
         None => Output::default(),
     };
 
+    // ── Attachments ───────────────────────────────────────────────────────────
+    let attachments = match attrs.get("attachments") {
+        None | Some(serde_json::Value::Null) => Vec::new(),
+        Some(files) => crate::attachments::from_tree(files)?,
+    };
+    crate::attachments::check_pdfa(&attachments, output.pdfa)?;
+
     // ── Document-level page defaults ──────────────────────────────────────────
     let doc_size_str  = attrs.get("size")       .and_then(|v| v.as_str());
     let doc_orient    = attrs.get("orientation").and_then(|v| v.as_str());
@@ -3613,6 +3626,7 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
     Ok(Document {
         meta,
         output,
+        attachments,
         fonts:       resolved_fonts,
         font_widths: asset_font_widths,
         images:      asset_images,

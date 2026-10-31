@@ -25,7 +25,7 @@ const attributes = (element, where = 'global') =>
 
 /** The attributes each class has to have, by class name. */
 const EXPECTED = {
-    DocumentAttr: [...attributes('document'), 'assets', 'tokens', 'meta', 'output'],
+    DocumentAttr: [...attributes('document'), 'assets', 'tokens', 'meta', 'output', 'attachments'],
     SectionAttr: attributes('section'),
     LayoutAttr: attributes('layout'),
     DocumentMeta: attributes('meta'),
@@ -34,6 +34,7 @@ const EXPECTED = {
     DocumentTokens: ['colors', 'gradients', 'aliases', 'space', 'grid', 'border', 'radius', 'width', 'height', 'text-size', 'line-height'],
     FontAttr: attributes('font'),
     ImageAttr: attributes('image'),
+    FileAttr: attributes('file'),
     RegionAttr: attributes('region', 'layout'),
     LayerAttr: attributes('layer'),
 };

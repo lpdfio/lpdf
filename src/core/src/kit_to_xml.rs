@@ -201,6 +201,39 @@ fn render_attributes_element(name: &str, attributes: &serde_json::Map<String, Va
     tag
 }
 
+// ── Attachments ───────────────────────────────────────────────────────────────
+
+/// The attributes of `<file>`, in the order the schema lists them.
+const FILE_ATTRS: [&str; 6] = ["name", "src", "ref", "mime", "relationship", "description"];
+
+/// The `<attachments>` of the kit's `attachments`, a list of files with the attributes of `<file>`, or `None` when it
+/// lists none. A value that is not a string is an error, as on the engine's JSON path: dropped, it would leave the
+/// file without what the kit gave it.
+fn render_attachments(files: &Value, depth: usize) -> Result<Option<String>, String> {
+    let files = files.as_array().ok_or("document attachments must be a list of files")?;
+    if files.is_empty() {
+        return Ok(None);
+    }
+    let pad = "  ".repeat(depth);
+    let item_pad = "  ".repeat(depth + 1);
+    let mut lines = vec![format!("{pad}<attachments>")];
+    for (index, file) in files.iter().enumerate() {
+        let file = file.as_object().ok_or_else(|| format!("document attachments[{index}] must be an object"))?;
+        let mut tag = format!("{item_pad}<file");
+        for key in FILE_ATTRS {
+            match file.get(key) {
+                None | Some(Value::Null) => {}
+                Some(Value::String(value)) => tag.push_str(&format!(" {key}=\"{}\"", escape_attr(value))),
+                Some(other) => return Err(format!("document attachments[{index}]: {key} must be a string, not {other}")),
+            }
+        }
+        tag.push_str("/>");
+        lines.push(tag);
+    }
+    lines.push(format!("{pad}</attachments>"));
+    Ok(Some(lines.join("\n")))
+}
+
 // ── Node rendering ────────────────────────────────────────────────────────────
 
 /// A `span` or a `code-span`, whose content is strings, or an `fn`, whose content is strings and spans.
@@ -464,8 +497,8 @@ pub fn kit_to_xml(json: &str) -> Result<String, String> {
     let empty = serde_json::Map::new();
     let attrs = root.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
 
-    // Document-level attrs (skip assets, tokens, meta, output — written as elements below)
-    let doc_attrs_s = attrs_str(attrs, &["assets", "tokens", "meta", "output"]);
+    // Document-level attrs (skip assets, tokens, meta, output, attachments — written as elements below)
+    let doc_attrs_s = attrs_str(attrs, &["assets", "tokens", "meta", "output", "attachments"]);
 
     let mut lines: Vec<String> = vec![
         r#"<?xml version="1.0" encoding="UTF-8"?>"#.into(),
@@ -512,6 +545,10 @@ pub fn kit_to_xml(json: &str) -> Result<String, String> {
         if let Some(element) = attrs.get(name).and_then(|v| v.as_object()).filter(|e| !e.is_empty()) {
             lines.push(render_attributes_element(name, element, 2));
         }
+    }
+    // then <attachments>
+    if let Some(files) = attrs.get("attachments").filter(|v| !v.is_null()) {
+        lines.extend(render_attachments(files, 2)?);
     }
 
     // sections
@@ -737,6 +774,36 @@ mod tests {
     }
 
     #[test]
+    fn attachments_emitted_after_output_with_each_file() {
+        let json = r#"{
+            "version": 1, "type": "document",
+            "attrs": {
+                "attachments": [
+                    { "name": "invoice.xml", "src": "data/invoice.xml", "mime": "text/xml", "relationship": "data" },
+                    { "name": "terms.txt", "ref": "terms", "description": "Terms & conditions" }
+                ],
+                "output": { "encrypt": "aes-256" }
+            },
+            "nodes": [{"type":"section","attrs":{},"nodes":[{"type":"layout","nodes":[{"type":"text","nodes":["x"]}]}]}]
+        }"#;
+        let xml = kit_to_xml(json).unwrap();
+        assert!(xml.contains(r#"<file name="invoice.xml" src="data/invoice.xml" mime="text/xml" relationship="data"/>"#), "{xml}");
+        assert!(xml.contains(r#"<file name="terms.txt" ref="terms" description="Terms &amp; conditions"/>"#), "{xml}");
+        assert!(xml.find("<output").unwrap() < xml.find("<attachments>").unwrap(), "{xml}");
+        assert!(xml.find("</attachments>").unwrap() < xml.find("<section").unwrap(), "{xml}");
+        let doc = crate::parse::parse(&xml).expect("the XML parses");
+        assert_eq!(doc.attachments.len(), 2);
+    }
+
+    #[test]
+    fn an_attachment_value_that_is_not_a_string_is_an_error() {
+        let json = r#"{"version":1,"type":"document","attrs":{"attachments":[{"name":"a.xml","mime":["text/xml"]}]},
+            "nodes":[{"type":"section","attrs":{},"nodes":[]}]}"#;
+        let error = kit_to_xml(json).unwrap_err();
+        assert!(error.contains("attachments[0]: mime must be a string"), "{error}");
+    }
+
+    #[test]
     fn output_emitted_after_meta() {
         let json = r#"{
             "version": 1,
@@ -817,7 +884,7 @@ mod tests {
         crate::pdf::render_pdf(
             &pages, &doc.fonts,
             &crate::pdf::FontRegistry::new(), &crate::pdf::ImageRegistry::new(),
-            &doc.meta, &doc.gradients, None, false, doc.output.pdfa,
+            &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[],
         )
         .unwrap()
     }

@@ -53,6 +53,7 @@ const CLASSES = [
     { cls: 'LayoutAttr', el: 'layout', where: 'global', area: 'kit' },
     { cls: 'FontAttr', el: 'font', where: 'global', area: 'kit' },
     { cls: 'ImageAttr', el: 'image', where: 'global', area: 'kit' },
+    { cls: 'FileAttr', el: 'file', where: 'global', area: 'kit' },
 ];
 
 // Where the classes of an area live in each SDK.
@@ -176,6 +177,8 @@ const CONSTANTS = [
       doc: 'The values of the `encrypt` attribute of the output: the cipher the PDF is encrypted with.' },
     { name: 'Permission', area: 'kit', file: 'permission', values: () => schema.simpleTypeValues('Permission'),
       doc: 'The words of the `allow` attribute of the output, separated by spaces: what a reader of an encrypted PDF may do.' },
+    { name: 'FileRelationship', area: 'kit', file: 'file_relationship', values: () => schema.simpleTypeValues('FileRelationship'),
+      doc: 'The values of the `relationship` attribute of a file the PDF carries: how it relates to the document.' },
     { name: 'BuiltinFont', area: 'kit', file: 'builtin_font', values: () => schema.simpleTypeValues('BuiltinFont'),
       doc: 'The values of the `core` attribute of a font: the built-in PDF fonts, which need no file.' },
     { name: 'PageScope', area: 'shared', file: 'page_scope', values: () => schema.simpleTypeValues('PageScope'),

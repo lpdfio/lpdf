@@ -566,6 +566,7 @@ mod tests {
         Document {
             meta: Meta::default(),
             output: Default::default(),
+            attachments: Vec::new(),
             fonts: HashMap::new(),
             images: HashMap::new(),
             page_width: 595.28,

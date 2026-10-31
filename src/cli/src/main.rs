@@ -221,8 +221,8 @@ fn engine_for(license: &str) -> lpdf::LpdfEngine {
     engine
 }
 
-/// Load into `engine` the files that `xml` names with a `src`, read relative to `base`: its images and the files of
-/// its Markdown styles. The images of a `.md` file are named `markdown-image-N` and loaded apart, so they are
+/// Load into `engine` the files that `xml` names with a `src`, read relative to `base`: its images, the files of its
+/// Markdown styles and the files it carries. The images of a `.md` file are named `markdown-image-N` and loaded apart, so they are
 /// skipped here.
 fn load_sources(engine: &mut lpdf::LpdfEngine, xml: &str, base: &Path) -> Result<(), String> {
     for file in lpdf::source_files(xml)? {
@@ -238,6 +238,10 @@ fn load_sources(engine: &mut lpdf::LpdfEngine, xml: &str, base: &Path) -> Result
                     .map_err(|e| format!("Failed to read the styles '{}': {e}", path.display()))?;
                 engine.load_markdown_styles(&file.key, &text);
             }
+            lpdf::SourceKind::File => {
+                let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read the file '{}': {e}", path.display()))?;
+                engine.load_file(&file.key, &bytes);
+            }
         }
     }
     Ok(())
@@ -248,7 +252,7 @@ fn folder_of(path: &Path) -> PathBuf {
     path.parent().map(Path::to_path_buf).unwrap_or_default()
 }
 
-/// Render an XML document, with the images and styles files it names.
+/// Render an XML document, with the images, styles files and attachments it names.
 fn render_xml_file(input: &Path, data: Option<&PathBuf>, license: &str, skip_encryption: bool) -> Result<Vec<u8>, String> {
     let xml  = read_file(&input.to_path_buf());
     let encryption = check_encryption(&xml, skip_encryption)?;

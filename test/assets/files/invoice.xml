@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<invoice number="2026-0412" issued="2026-10-31" currency="EUR">
+  <seller>Northwind Paper Co.</seller>
+  <buyer>Lakeside Print Studio</buyer>
+  <line description="A4 paper, 80 g/m², 5 reams" quantity="5" price="4.20"/>
+  <line description="Envelopes, C5, box of 500" quantity="2" price="18.50"/>
+  <total net="58.00" tax="11.02" gross="69.02"/>
+</invoice>

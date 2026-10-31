@@ -279,6 +279,9 @@ fn showcase_encryption_aes256() { run_snapshot_encrypted("showcase-encryption-ae
 fn showcase_pdfa_2b() { check_snapshot("showcase-pdfa-2b", &crate::pdfa_render_tests::render_fixture("2b")); }
 #[test]
 fn showcase_pdfa_2u() { check_snapshot("showcase-pdfa-2u", &crate::pdfa_render_tests::render_fixture("2u")); }
+/// Two files the PDF carries, loaded from their `src` as an SDK loads them.
+#[test]
+fn showcase_attachments() { check_snapshot("showcase-attachments", &crate::attachment_render_tests::render_fixture()); }
 #[test]
 fn showcase_canvas_overlay()  { run_snapshot("showcase-canvas-overlay"); }
 #[test]
