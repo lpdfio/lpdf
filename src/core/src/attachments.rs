@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use miniz_oxide::deflate::compress_to_vec_zlib;
 use pdf_writer::types::AssociationKind;
 use pdf_writer::writers::Catalog;
-use pdf_writer::{Filter, Name, Pdf, Primitive, Ref};
+use pdf_writer::{Filter, Name, Pdf, Ref, Str, TextStr};
 
 use crate::pdfa::PdfA;
 
@@ -209,25 +209,6 @@ pub fn resolve<'a>(files: &'a [Attachment], registry: &'a FileRegistry) -> Resul
 
 // ── Writing ───────────────────────────────────────────────────────────────────
 
-/// A string written as hex, `<…>`. The strings of a file are written so because the RC4-128 pass encrypts a
-/// string in place: a literal string's ciphertext can hold a parenthesis or a backslash that ends or escapes it,
-/// where a hex string's stays hex digits.
-#[derive(Clone, Copy)]
-struct HexStr<'a>(&'a [u8]);
-
-impl Primitive for HexStr<'_> {
-    fn write(self, buf: &mut Vec<u8>) {
-        const DIGITS: &[u8; 16] = b"0123456789ABCDEF";
-        buf.reserve(2 + 2 * self.0.len());
-        buf.push(b'<');
-        for &byte in self.0 {
-            buf.push(DIGITS[usize::from(byte >> 4)]);
-            buf.push(DIGITS[usize::from(byte & 0x0f)]);
-        }
-        buf.push(b'>');
-    }
-}
-
 /// The objects of a file: its embedded file stream and its file specification.
 pub(crate) struct FileIds {
     stream: Ref,
@@ -260,11 +241,12 @@ pub(crate) fn write_catalog(catalog: &mut Catalog, files: &[EmbeddedFile], ids: 
         files.iter().zip(ids).map(|(file, id)| (text_string_bytes(&file.attachment.name), id.spec)).collect();
     keyed.sort();
     {
+        // Each key is written as these bytes, which is how `TextStr` writes the name.
         let mut names = catalog.names();
-        let mut tree = names.insert(Name(b"EmbeddedFiles")).dict();
-        let mut entries = tree.insert(Name(b"Names")).array();
+        let mut tree = names.embedded_files();
+        let mut entries = tree.names();
         for (key, spec) in &keyed {
-            entries.item(HexStr(key)).item(*spec);
+            entries.insert(Str(key), *spec);
         }
     }
     catalog.insert(Name(b"AF")).array().items(ids.iter().map(|id| id.spec));
@@ -285,14 +267,15 @@ pub(crate) fn write_objects(pdf: &mut Pdf, files: &[EmbeddedFile], ids: &[FileId
             // `resolve` refused a file whose size doesn't fit.
             params.size(i32::try_from(file.bytes.len()).unwrap_or(i32::MAX));
             if let Some(date) = mod_date {
-                params.pair(Name(b"ModDate"), HexStr(date.as_bytes()));
+                // A date string, as the document's `/ModDate` is written.
+                params.pair(Name(b"ModDate"), Str(date.as_bytes()));
             }
         }
         let mut spec = pdf.file_spec(id.spec);
-        spec.pair(Name(b"F"), HexStr(attachment.name.as_bytes()));
-        spec.pair(Name(b"UF"), HexStr(&text_string_bytes(&attachment.name)));
+        spec.path(Str(attachment.name.as_bytes()));
+        spec.unic_file(TextStr(&attachment.name));
         if let Some(description) = &attachment.description {
-            spec.pair(Name(b"Desc"), HexStr(&text_string_bytes(description)));
+            spec.description(TextStr(description));
         }
         spec.embedded_file_with_unicode(id.stream);
         spec.association_kind(attachment.relationship.kind());
@@ -384,13 +367,6 @@ mod tests {
         assert!(error.contains("pdfa=\"2b\"") && error.contains("remove the attachments, or remove pdfa"), "{error}");
         assert!(check_pdfa(&files, None).is_ok());
         assert!(check_pdfa(&[], Some(PdfA::parse("2u").unwrap())).is_ok());
-    }
-
-    #[test]
-    fn a_hex_string_is_written_in_hex_digits() {
-        let mut buf = Vec::new();
-        HexStr(b"a)\\").write(&mut buf);
-        assert_eq!(buf, b"<61295C>");
     }
 
     #[test]
