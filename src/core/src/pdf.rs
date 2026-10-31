@@ -567,8 +567,8 @@ enum PreparedFontKind {
         /// Whether the document draws a comparison sign in this font (see `SIGNS`), which then has codes for them.
         signs: bool,
     },
-    /// Custom TrueType/OpenType font, subsetted and embedded as CIDFont Type2
-    /// with Identity-H encoding, giving full Unicode support.
+    /// Custom TrueType/OpenType font, subsetted and embedded as a CIDFont with Identity-H encoding, giving full
+    /// Unicode support: a Type 2 CIDFont for TrueType outlines, a Type 0 one for CFF outlines (`FontProgram`).
     Truetype {
         /// Original full font bytes — used for descriptor metrics (ascender, etc.).
         original_bytes: Vec<u8>,
@@ -614,6 +614,23 @@ impl FaceAdvances {
             .map(|c| self.advances.get(&c).copied().unwrap_or(self.notdef))
             .map(|advance| advance as f32 * scale)
             .sum()
+    }
+}
+
+/// The font program an embedded face is written as, which sets the CIDFont it goes under (ISO 32000-1, 9.9).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FontProgram {
+    /// TrueType outlines: `/FontFile2` under a `/CIDFontType2`.
+    TrueType,
+    /// CFF outlines in an OpenType font: `/FontFile3` with `/Subtype /OpenType` under a `/CIDFontType0`.
+    OpenTypeCff,
+}
+
+impl FontProgram {
+    /// The kind of `program`, read from its OpenType header: `OTTO` for CFF outlines. The subsetter writes a CFF2
+    /// face's outlines as TrueType ones, under TrueType's header.
+    fn of(program: &[u8]) -> Self {
+        if program.starts_with(b"OTTO") { FontProgram::OpenTypeCff } else { FontProgram::TrueType }
     }
 }
 
@@ -1051,8 +1068,10 @@ fn prepare_truetype_font(bytes: &[u8], used_chars: &HashSet<char>) -> PreparedFo
         remapper.remap(*orig_gid);
     }
 
-    // Subset the font.  Fall back to full bytes on error.
-    let (subsetted_bytes, use_remap) = match subsetter::subset(bytes, 0, &remapper) {
+    // Subset the font at its default instance.  `subset` refuses CFF2 outlines, for which PDF has no font program;
+    // this turns them into TrueType ones, and subsets TrueType and CFF outlines as `subset` does.  Fall back to full
+    // bytes on error.
+    let (subsetted_bytes, use_remap) = match subsetter::subset_with_variations(bytes, 0, &[], &remapper) {
         Ok(sub) => (sub, true),
         Err(_)  => (bytes.to_vec(), false),
     };
@@ -3371,8 +3390,8 @@ fn assemble_pdf(
             PreparedFontKind::Truetype {
                 original_bytes, subsetted_bytes, glyph_unicode, glyph_widths, ..
             } => {
-                // Five objects are needed for a proper TrueType composite font:
-                //   [0] Font program stream (subsetted TrueType bytes)
+                // Five objects are needed for a proper composite font:
+                //   [0] Font program stream (the subset, TrueType or OpenType with CFF outlines)
                 //   [1] Font descriptor
                 //   [2] CID font dictionary (the descendant font)
                 //   [3] ToUnicode CMap stream
@@ -3391,12 +3410,18 @@ fn assemble_pdf(
                 let upem = face.units_per_em() as f32;
 
                 // [0] Font program — subsetted + FlateDecode-compressed.
-                // /Length1 must be the *uncompressed* (subsetted) length per the
-                // PDF spec for /FontFile2 TrueType streams.
+                let program = FontProgram::of(subsetted_bytes);
                 let compressed_font = compress_to_vec_zlib(subsetted_bytes, 6);
-                pdf.stream(prog_id, &compressed_font)
-                   .filter(Filter::FlateDecode)
-                   .pair(Name(b"Length1"), subsetted_bytes.len() as i32);
+                {
+                    let mut stream = pdf.stream(prog_id, &compressed_font);
+                    stream.filter(Filter::FlateDecode);
+                    match program {
+                        // /Length1 must be the *uncompressed* (subsetted) length per the
+                        // PDF spec for /FontFile2 TrueType streams.
+                        FontProgram::TrueType => stream.pair(Name(b"Length1"), subsetted_bytes.len() as i32),
+                        FontProgram::OpenTypeCff => stream.pair(Name(b"Subtype"), Name(b"OpenType")),
+                    };
+                }
 
                 // [1] Font descriptor — describes the font's metrics and links
                 //     to the embedded font program.
@@ -3408,23 +3433,28 @@ fn assemble_pdf(
                     .unwrap_or(ascent * 0.7);
                 let fname  = name.replace(' ', "-");
 
-                pdf.font_descriptor(desc_id)
-                   .name(Name(fname.as_bytes()))
-                   .flags(FontFlags::NON_SYMBOLIC)
-                   .bbox(Rect::new(
-                       bbox.x_min as f32 / upem * 1000.0,
-                       bbox.y_min as f32 / upem * 1000.0,
-                       bbox.x_max as f32 / upem * 1000.0,
-                       bbox.y_max as f32 / upem * 1000.0,
-                   ))
-                   .italic_angle(0.0)
-                   .ascent(ascent)
-                   .descent(desc)
-                   .cap_height(cap_h)
-                   .stem_v(80.0)
-                   .font_file2(prog_id);  // /FontFile2 = TrueType
+                {
+                    let mut descriptor = pdf.font_descriptor(desc_id);
+                    descriptor.name(Name(fname.as_bytes()))
+                       .flags(FontFlags::NON_SYMBOLIC)
+                       .bbox(Rect::new(
+                           bbox.x_min as f32 / upem * 1000.0,
+                           bbox.y_min as f32 / upem * 1000.0,
+                           bbox.x_max as f32 / upem * 1000.0,
+                           bbox.y_max as f32 / upem * 1000.0,
+                       ))
+                       .italic_angle(0.0)
+                       .ascent(ascent)
+                       .descent(desc)
+                       .cap_height(cap_h)
+                       .stem_v(80.0);
+                    match program {
+                        FontProgram::TrueType => descriptor.font_file2(prog_id),
+                        FontProgram::OpenTypeCff => descriptor.font_file3(prog_id),
+                    };
+                }
 
-                // [2] CID font dictionary (TrueType descendant).
+                // [2] CID font dictionary (the descendant font).
                 {
                     // Adobe-Identity characterises CID fonts using Identity-H.
                     let sysinfo = pdf_writer::types::SystemInfo {
@@ -3432,14 +3462,20 @@ fn assemble_pdf(
                         ordering:   Str(b"Identity"),
                         supplement: 0,
                     };
+                    let subtype = match program {
+                        FontProgram::TrueType => CidFontType::Type2,
+                        FontProgram::OpenTypeCff => CidFontType::Type0,
+                    };
                     let mut cid = pdf.cid_font(cid_id);
-                    cid.subtype(CidFontType::Type2)
+                    cid.subtype(subtype)
                        .base_font(Name(fname.as_bytes()))
                        .system_info(sysinfo)
                        .font_descriptor(desc_id)
                        .default_width(1000.0);
-                    // Identity is the default, and PDF/A asks for it to be written.
-                    if pdfa.is_some() {
+                    // A Type 2 CIDFont's CIDToGIDMap: Identity is the default, and PDF/A asks for it to be written. A
+                    // Type 0 CIDFont has none: the CFF's own charset maps CIDs to glyphs, which the subsetter writes
+                    // as the identity.
+                    if pdfa.is_some() && program == FontProgram::TrueType {
                         cid.cid_to_gid_map_predefined(Name(b"Identity"));
                     }
 

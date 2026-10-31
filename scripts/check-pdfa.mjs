@@ -2,7 +2,8 @@
 // no code with ours, and checks their structure with qpdf:
 //
 //  - veraPDF reads the level each file declares in its XMP packet and validates the file against that level's
-//    rules: pdfa-2b.pdf must declare PDF/A-2b and pdfa-2u.pdf PDF/A-2u, and break none of their rules;
+//    rules: pdfa-2b.pdf must declare PDF/A-2b, and pdfa-2u.pdf and the three pages in a font of each kind the
+//    fixtures lack (CFF, CFF2, variable TrueType) PDF/A-2u, and break none of their rules;
 //  - qpdf --check finds no syntax or stream error.
 //
 // The samples come from the core's own tests:
@@ -25,6 +26,9 @@ if (!folder) {
 const SAMPLES = [
     { file: 'pdfa-2b.pdf', profile: 'PDF/A-2b validation profile' },
     { file: 'pdfa-2u.pdf', profile: 'PDF/A-2u validation profile' },
+    { file: 'pdfa-2u-cff.pdf', profile: 'PDF/A-2u validation profile' },
+    { file: 'pdfa-2u-cff2.pdf', profile: 'PDF/A-2u validation profile' },
+    { file: 'pdfa-2u-variable-ttf.pdf', profile: 'PDF/A-2u validation profile' },
 ];
 
 const IMAGE = process.env.VERAPDF_IMAGE || 'verapdf/cli:v1.30.2';
