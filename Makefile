@@ -16,7 +16,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python \
-        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api check-encryption \
+        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api check-encryption check-pdfa \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
@@ -71,6 +71,18 @@ check-encryption:
 	rm -rf target/encryption-samples && mkdir -p target/encryption-samples
 	LPDF_ENCRYPT_OUT="$(CURDIR)/target/encryption-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_samples_for_the_external_check
 	node scripts/check-encryption.mjs target/encryption-samples
+
+# check-pdfa has the core write the PDF/A fixtures and validates them with veraPDF, the PDF Association's reference
+# validator, which reads the level each file declares, and with qpdf (`scripts/check-pdfa.mjs`). Needs Docker, which
+# runs veraPDF's image, and qpdf on the PATH: `apt install qpdf` or `brew install qpdf`.
+check-pdfa:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking PDF/A files with veraPDF and qpdf..."
+	@echo ""
+	rm -rf target/pdfa-samples && mkdir -p target/pdfa-samples
+	LPDF_PDFA_OUT="$(CURDIR)/target/pdfa-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_pdfa_samples_for_the_external_check
+	node scripts/check-pdfa.mjs target/pdfa-samples
 
 test-wasi: test-wasm
 	@echo ""

@@ -63,8 +63,11 @@ function files(dir, extension) {
 }
 
 const read = (file) => readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+// The name of a PDF standard keeps its letter a capital in .NET, as the standard writes it: PdfA is pdfa, for PDF/A.
+// codegen.rs writes it so too.
+const STANDARDS = { PdfA: 'pdfa' };
 const kebab = {
-    pascal: (name) => name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase(),
+    pascal: (name) => STANDARDS[name] ?? name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase(),
     camel: (name) => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`),
     snake: (name) => name.replace(/_/g, '-'),
 };

@@ -249,6 +249,8 @@ pub struct Meta {
 pub struct Output {
     /// The cipher of `encrypt` and the permissions of `allow`; `None` when the document is not encrypted.
     pub encryption: Option<crate::encrypt::OutputEncryption>,
+    /// The PDF/A level of `pdfa`; `None` for a plain PDF.
+    pub pdfa: Option<crate::pdfa::PdfA>,
 }
 
 #[derive(Debug, Clone)]
@@ -1272,7 +1274,9 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                     match doc_child.tag_name().name() {
                         "meta" => meta = parse_meta(&doc_child),
                         "output" => {
-                            output = parse_output(doc_child.attribute("encrypt"), doc_child.attribute("allow"))
+                            output = parse_output(
+                                doc_child.attribute("encrypt"), doc_child.attribute("allow"), doc_child.attribute("pdfa"),
+                            )
                                 .map_err(|e| format!("<output>{}: {e}", node_loc(&doc_child)))?;
                         }
                         "section" => {
@@ -1628,22 +1632,28 @@ pub(crate) fn layout_margin(a: &impl Attrs, tokens: &Tokens) -> Result<[f32; 4],
     }
 }
 
-/// Reads the attributes of `<output>`: the cipher of `encrypt` and the permissions of `allow`. `allow` sets what a
-/// reader of an encrypted file may do, so it needs `encrypt`.
-fn parse_output(encrypt: Option<&str>, allow: Option<&str>) -> Result<Output, String> {
+/// Reads the attributes of `<output>`: the cipher of `encrypt` and the permissions of `allow`, and the PDF/A level of
+/// `pdfa`. `allow` sets what a reader of an encrypted file may do, so it needs `encrypt`, and PDF/A forbids
+/// encryption, so `pdfa` and `encrypt` don't go together.
+fn parse_output(encrypt: Option<&str>, allow: Option<&str>, pdfa: Option<&str>) -> Result<Output, String> {
+    let pdfa = pdfa.map(crate::pdfa::PdfA::parse).transpose()?;
     let Some(encrypt) = encrypt else {
         if allow.is_some() {
             return Err("allow sets what a reader of an encrypted file may do, and the document is not encrypted: \
                 add encrypt (encrypt=\"aes-256\"), or remove allow".to_string());
         }
-        return Ok(Output::default());
+        return Ok(Output { encryption: None, pdfa });
     };
+    if let Some(level) = pdfa {
+        return Err(format!("pdfa=\"{}\" and encrypt don't go together: PDF/A forbids encryption, so that an archive \
+            can always open the file. Remove encrypt and allow, or remove pdfa", level.attribute()));
+    }
     let algorithm = crate::encrypt::Algorithm::parse(encrypt)?;
     let permissions = match allow {
         Some(list) => crate::encrypt::Permissions::from_allow(list)?,
         None => crate::encrypt::Permissions::default(),
     };
-    Ok(Output { encryption: Some(crate::encrypt::OutputEncryption { algorithm, permissions }) })
+    Ok(Output { encryption: Some(crate::encrypt::OutputEncryption { algorithm, permissions }), pdfa: None })
 }
 
 fn parse_meta(elem: &roxmltree::Node) -> Meta {
@@ -3541,7 +3551,7 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
                 Some(serde_json::Value::String(s)) => Ok(Some(s.as_str())),
                 Some(other) => Err(format!("document output: {name} must be a string, not {other}")),
             };
-            parse_output(text("encrypt")?, text("allow")?).map_err(|e| format!("document output: {e}"))?
+            parse_output(text("encrypt")?, text("allow")?, text("pdfa")?).map_err(|e| format!("document output: {e}"))?
         }
         None => Output::default(),
     };

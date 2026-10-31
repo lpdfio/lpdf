@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- PDF/A-2b: what the engine draws, in a file veraPDF accepts. Every text is in an embedded font of
+     test/assets/fonts (SIL Open Font License), named relative to this file. The render needs created_on, and the
+     check of `make check-pdfa` renders it with the fonts and the pictures loaded, as an SDK does
+     (`writes_pdfa_samples_for_the_external_check` in lib.rs). showcase-pdfa-2u.xml is the same document at level
+     2u: keep the two the same but for the level. -->
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <assets>
+    <font name="body"    src="../assets/fonts/CrimsonText-Regular.ttf" />
+    <font name="italic"  src="../assets/fonts/CrimsonText-Italic.ttf" />
+    <font name="heading" src="../assets/fonts/CrimsonText-SemiBold.ttf" />
+    <font name="sans"    src="../assets/fonts/Montserrat-Regular.ttf" />
+    <image name="photo"  src="../assets/images/chapter-05-caterpillar.jpg" />
+    <image name="chart"  src="../assets/images/image-sample.png" />
+    <image name="badge"  src="../assets/images/image-square.png" />
+  </assets>
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="ink"     value="#1f2a44" />
+      <color name="muted"   value="#5b6475" />
+      <color name="rule"    value="#dde3ed" />
+      <color name="accent"  value="#e0762b" />
+      <color name="paper"   value="#fbfaf7" />
+    </colors>
+    <gradients>
+      <gradient name="band" type="linear" from="primary" to="accent" angle="90" />
+      <gradient name="glow" type="radial">
+        <stop offset="0%"   color="#ffffff" />
+        <stop offset="60%"  color="#cfe0fb" />
+        <stop offset="100%" color="primary" />
+      </gradient>
+    </gradients>
+  </tokens>
+  <document size="a4" font="body">
+    <meta title="Annual Report — Archive Copy" author="Lpdf Fixtures" subject="PDF/A-2b showcase"
+          keywords="pdf/a, archive, fixture" creator="lpdf test suite" />
+    <output pdfa="2b" />
+
+    <section background="paper">
+      <bookmark label="Overview" />
+      <layer>
+        <rect anchor="top-left" width="595.28pt" height="10pt" fill="gradient:band" />
+        <circle x="540pt" y="70pt" r="28pt" fill="gradient:glow" stroke="primary" stroke-width="1pt" />
+      </layer>
+      <layer opacity="0.15">
+        <text-at x="60pt" y="760pt" font="sans" font-size="40pt" color="ink">ARCHIVE COPY</text-at>
+      </layer>
+      <layout margin="48pt">
+        <column gap="l">
+          <text font="heading" font-size="28pt" color="ink">Annual Report</text>
+          <text font="italic" font-size="13pt" color="muted">Kept as PDF/A: the fonts, the colours and the metadata travel with the file.</text>
+          <divider color="rule" thickness="0.5pt" />
+          <text font-size="12pt">Façade, naïve, Ørsted, Łódź, Dvořák — “quoted”, ‘single’, an en dash – and an em dash —, €5 and 3 × 4 ≤ 12. Every glyph here comes from Crimson Text, embedded and cut down to what the page uses, with a map back to Unicode.</text>
+          <row gap="m">
+            <column width="fill" padding="m" background="#ffffff" border="0.5pt rule" radius="4pt" shadow="3pt 3pt ink 0.25">
+              <text font="heading" font-size="14pt">Revenue</text>
+              <text font="sans" font-size="20pt" color="primary">$4.2M</text>
+            </column>
+            <column width="fill" padding="m" background="#ffffff" border="0.5pt rule" radius="4pt" opacity="0.7">
+              <text font="heading" font-size="14pt">Growth</text>
+              <text font="sans" font-size="20pt" color="accent">+18%</text>
+            </column>
+            <frame width="fill" height="70pt" background="gradient:band" radius="4pt" padding="m">
+              <text font="sans" font-size="11pt" color="#ffffff">Gradient fill</text>
+            </frame>
+          </row>
+          <row gap="m" align="center">
+            <img name="photo" width="140pt" />
+            <img name="chart" width="160pt" />
+            <img name="badge" width="70pt" radius="35pt" />
+          </row>
+          <link href="https://lpdf.io">
+            <text font="sans" font-size="11pt" color="primary">lpdf.io — a link with the print flag</text>
+          </link>
+          <link href="#details">
+            <text font="sans" font-size="11pt" color="primary">Go to the details</text>
+          </link>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="Details" id="details" />
+      <layout margin="48pt">
+        <column gap="m">
+          <text font="heading" font-size="20pt" color="ink">Details</text>
+          <list type="bullet">
+            <li><text>Fonts are embedded and subset.</text></li>
+            <li><text>Colours are RGB under the sRGB output intent.</text></li>
+            <li><text>The XMP packet names the level and repeats the metadata.</text></li>
+          </list>
+          <table cols="2fr 1fr" border="0.5pt rule" stripe="#f3f5f9">
+            <thead background="#e8ecf0">
+              <td padding="4pt 6pt"><text font="heading">Quarter</text></td>
+              <td padding="4pt 6pt"><text font="heading">Units</text></td>
+            </thead>
+            <tr><td padding="4pt 6pt"><text>Q1</text></td><td padding="4pt 6pt"><text>1,204</text></td></tr>
+            <tr><td padding="4pt 6pt"><text>Q2</text></td><td padding="4pt 6pt"><text>1,388</text></td></tr>
+          </table>
+          <row gap="l" align="center">
+            <barcode type="qr" data="https://lpdf.io" width="90pt" />
+            <barcode type="code128" data="LP-2026-0042" width="180pt" height="40pt" />
+          </row>
+          <text font="sans" font-size="9pt" color="muted">Кириллица и латиница — Montserrat, embedded.</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

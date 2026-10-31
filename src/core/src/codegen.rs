@@ -125,8 +125,12 @@ fn to_snake_case(s: &str) -> String {
     s.replace('-', "_")
 }
 
-/// Convert a kebab-case XML attribute name to PascalCase (C# style).
+/// Convert a kebab-case XML attribute name to PascalCase (C# style). The name of a PDF standard keeps its letter a
+/// capital, as the standard writes it: `pdfa` is `PdfA`, for PDF/A.
 fn to_pascal_case(s: &str) -> String {
+    if s == "pdfa" {
+        return "PdfA".to_string();
+    }
     s.split('-')
         .map(|part| {
             let mut chars = part.chars();
@@ -2021,6 +2025,20 @@ mod tests {
     }
 
     #[test]
+    fn pdfa_is_written_in_each_language_s_case() {
+        let xml = r#"<lpdf version="1"><document><output pdfa="2u"/><section><layout><text>x</text></layout></section></document></lpdf>"#;
+        for (target, expected) in [
+            ("js", "output: { pdfa: '2u' }"),
+            ("dotnet", "Output = new() { PdfA = \"2u\" }"),
+            ("php", "output: new DocumentOutput(pdfa: '2u')"),
+            ("python", "output=DocumentOutput(pdfa='2u')"),
+        ] {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            assert!(out.contains(expected), "{target}: {out}");
+        }
+    }
+
+    #[test]
     fn test_output_folded_after_meta() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
@@ -2251,7 +2269,7 @@ mod tests {
         let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts);
         let fonts = crate::pdf::FontRegistry::new();
         let images = crate::pdf::ImageRegistry::new();
-        crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, None, false).unwrap()
+        crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, None, false, doc.output.pdfa).unwrap()
     }
 
     /// The text's XML, and the tree the SDKs would build from the strings and spans the generator writes for it.
@@ -2685,6 +2703,7 @@ mod tests {
         assert_eq!(to_pascal_case("hrt"),           "Hrt");
         assert_eq!(to_pascal_case("xs"),            "Xs");
         assert_eq!(to_pascal_case("text-size"),    "TextSize");
+        assert_eq!(to_pascal_case("pdfa"),          "PdfA");
     }
 
     // ── PHP tests ─────────────────────────────────────────────────────────────

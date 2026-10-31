@@ -44,6 +44,8 @@ mod markdown;
 mod render;
 #[path = "../../core/src/pdf.rs"]
 mod pdf;
+#[path = "../../core/src/pdfa.rs"]
+mod pdfa;
 #[path = "../../core/src/license.rs"]
 mod license;
 #[path = "../../core/src/aes256.rs"]
@@ -218,6 +220,10 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
         Ok(config) => config,
         Err(e)     => return serde_json::json!({ "error": e }).to_string(),
     };
+    let created_on = req["created_on"].as_str();
+    if let Err(e) = pdfa::check_render(doc.output.pdfa, created_on) {
+        return serde_json::json!({ "error": e }).to_string();
+    }
 
     let registry       = build_registry(req);
     let image_registry = build_image_registry(req);
@@ -261,10 +267,9 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     let pages: Vec<render::RenderPage> = layout::layout_document(&lp);
 
     let status = license::check(license_key, now_unix);
-    let created_on = req["created_on"].as_str();
 
     // An unlicensed status draws the attribution line on every page.
-    match pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, &doc.gradients, created_on, status.is_licensed()) {
+    match pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, &doc.gradients, created_on, status.is_licensed(), doc.output.pdfa) {
         Ok(bytes) => {
             let bytes = match &encryption {
                 Some(cfg) => match encrypt::encrypt_pdf(&bytes, cfg) {
@@ -294,7 +299,7 @@ impl LpdfEngine {
         let pages: Vec<render::RenderPage> =
             layout::layout_document(&lp);
         // Unlicensed, as in the core stub, so both crates hash the same attributed bytes.
-        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, &doc.gradients, None, false)
+        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, doc.output.pdfa)
     }
 }
 

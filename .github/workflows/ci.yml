@@ -39,3 +39,8 @@ jobs:
         run: |
           sudo apt-get install -y qpdf
           make check-encryption
+
+      - name: Check PDF/A files with veraPDF and qpdf
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
+        run: make check-pdfa
