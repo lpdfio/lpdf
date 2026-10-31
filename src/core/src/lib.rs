@@ -1153,10 +1153,18 @@ mod tests {
     }
 
     #[test]
-    fn without_allow_everything_is_allowed() {
-        let text = String::from_utf8_lossy(&render_with(&with_output(Some(r#"encrypt="rc4-128""#)), &owner_password("owner")).unwrap())
-            .into_owned();
-        assert!(text.contains(&format!("/P {}", encrypt::compute_p(&encrypt::Permissions::default()))));
+    fn without_allow_nothing_is_allowed_and_all_allows_everything() {
+        let p = |output: &str| {
+            let text = String::from_utf8_lossy(&render_with(&with_output(Some(output)), &owner_password("owner")).unwrap())
+                .into_owned();
+            text.split("/P ").nth(1).and_then(|rest| rest.split(|c: char| !c.is_ascii_digit() && c != '-').next())
+                .unwrap_or_default().to_string()
+        };
+        let none = encrypt::compute_p(&encrypt::Permissions::NONE).to_string();
+        let all = encrypt::compute_p(&encrypt::Permissions::ALL).to_string();
+        assert_eq!(p(r#"encrypt="rc4-128""#), none);
+        assert_eq!(p(r#"encrypt="rc4-128" allow="""#), none);
+        assert_eq!(p(r#"encrypt="rc4-128" allow="all""#), all);
     }
 
     #[test]

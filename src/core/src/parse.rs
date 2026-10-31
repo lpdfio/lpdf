@@ -1650,9 +1650,10 @@ fn parse_output(encrypt: Option<&str>, allow: Option<&str>, pdfa: Option<&str>) 
             can always open the file. Remove encrypt and allow, or remove pdfa", level.attribute()));
     }
     let algorithm = crate::encrypt::Algorithm::parse(encrypt)?;
+    // Permissions come only from naming them: without allow a reader may do nothing, and allow="all" opens all.
     let permissions = match allow {
         Some(list) => crate::encrypt::Permissions::from_allow(list)?,
-        None => crate::encrypt::Permissions::default(),
+        None => crate::encrypt::Permissions::NONE,
     };
     Ok(Output { encryption: Some(crate::encrypt::OutputEncryption { algorithm, permissions }), pdfa: None })
 }

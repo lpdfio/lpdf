@@ -45,28 +45,32 @@ pub struct Permissions {
     pub print_hq:      bool,  // spec bit 12
 }
 
-impl Default for Permissions {
-    fn default() -> Self {
-        Self {
-            print: true, modify: true, copy: true, annotate: true,
-            fill_forms: true, accessibility: true, assemble: true, print_hq: true,
-        }
-    }
-}
-
 /// The words of `allow` on `<output>`, in the schema's order.
-const ALLOW_WORDS: [&str; 7] = ["print", "modify", "copy", "annotate", "fill-forms", "accessibility", "assemble"];
+const ALLOW_WORDS: [&str; 8] = ["all", "print", "modify", "copy", "annotate", "fill-forms", "accessibility", "assemble"];
 
 impl Permissions {
+    /// Every permission: what `allow="all"` gives.
+    pub const ALL: Self = Self {
+        print: true, modify: true, copy: true, annotate: true,
+        fill_forms: true, accessibility: true, assemble: true, print_hq: true,
+    };
+
+    /// No permission: what a document gives a reader without `allow`, with `allow=""`, or with a `null` allow in a
+    /// kit tree, which is how a NaN from JavaScript arrives. Permissions come only from naming them, so a missing
+    /// value locks the file rather than opening it.
+    pub const NONE: Self = Self {
+        print: false, modify: false, copy: false, annotate: false,
+        fill_forms: false, accessibility: false, assemble: false, print_hq: false,
+    };
+
     /// Reads `allow`: the words of what a reader may do, separated by spaces. What it doesn't name is
-    /// denied, so an empty list allows nothing. `print` allows printing at full quality, both print flags.
+    /// denied, so an empty list allows nothing, and `all` names every one. `print` allows printing at full
+    /// quality, both print flags.
     pub fn from_allow(list: &str) -> Result<Self, String> {
-        let mut allowed = Self {
-            print: false, modify: false, copy: false, annotate: false,
-            fill_forms: false, accessibility: false, assemble: false, print_hq: false,
-        };
+        let mut allowed = Self::NONE;
         for word in list.split_whitespace() {
             match word {
+                "all" => allowed = Self::ALL,
                 "print" => {
                     allowed.print = true;
                     allowed.print_hq = true;
@@ -602,18 +606,18 @@ mod tests {
     // P value tests
     #[test]
     fn p_all_allowed() {
-        assert_eq!(compute_p(&Permissions::default()) as u32, 0xFFFF_FFFC);
+        assert_eq!(compute_p(&Permissions::ALL) as u32, 0xFFFF_FFFC);
     }
 
     #[test]
     fn p_no_print() {
-        let p = compute_p(&Permissions { print: false, ..Default::default() }) as u32;
+        let p = compute_p(&Permissions { print: false, ..Permissions::ALL }) as u32;
         assert_eq!(p, 0xFFFF_FFFC & !(1u32 << 2));
     }
 
     #[test]
     fn p_no_copy_no_modify() {
-        let p = compute_p(&Permissions { copy: false, modify: false, ..Default::default() }) as u32;
+        let p = compute_p(&Permissions { copy: false, modify: false, ..Permissions::ALL }) as u32;
         assert_eq!(p, 0xFFFF_FFFC & !(1u32 << 3) & !(1u32 << 4));
     }
 
@@ -627,7 +631,7 @@ mod tests {
         EncryptConfig {
             user_password:  user_pw.to_string(),
             owner_password: owner_pw.to_string(),
-            permissions:    Permissions::default(),
+            permissions:    Permissions::ALL,
             algorithm,
             entropy:        (0u8..48).collect(),
         }
@@ -682,7 +686,7 @@ mod tests {
     fn permissions_only_no_user_password() {
         let plain = render_minimal();
         let cfg = EncryptConfig {
-            permissions: Permissions { print: false, copy: false, modify: false, ..Default::default() },
+            permissions: Permissions { print: false, copy: false, modify: false, ..Permissions::ALL },
             ..config(Algorithm::Rc4128, "", "s3cr3t")
         };
         let enc = encrypt_pdf(&plain, &cfg).expect("encrypt_pdf failed");
@@ -700,7 +704,7 @@ mod tests {
         let plain = crate::LpdfEngine::render_xml_to_pdf_bytes(&xml)
             .expect("render failed");
         let cfg = EncryptConfig {
-            permissions: Permissions { copy: false, modify: false, ..Default::default() },
+            permissions: Permissions { copy: false, modify: false, ..Permissions::ALL },
             ..config(Algorithm::Rc4128, "password", "password")
         };
         let enc = encrypt_pdf(&plain, &cfg).expect("encrypt_pdf failed");
@@ -836,6 +840,20 @@ mod tests {
         let p = compute_p(&Permissions::from_allow("print").unwrap()) as u32;
         assert_ne!(p & (1 << 2), 0, "print");
         assert_ne!(p & (1 << 11), 0, "print at full quality");
+    }
+
+    #[test]
+    fn all_allows_everything_with_or_without_other_words() {
+        assert_eq!(Permissions::from_allow("all").unwrap(), Permissions::ALL);
+        assert_eq!(Permissions::from_allow("print all").unwrap(), Permissions::ALL);
+        assert_eq!(compute_p(&Permissions::from_allow("all").unwrap()) as u32, 0xFFFF_FFFC);
+    }
+
+    #[test]
+    fn an_unknown_word_names_the_words_allow_takes() {
+        let error = Permissions::from_allow("everything").unwrap_err();
+        assert_eq!(error, "unknown permission \"everything\" in allow; expected all, print, modify, copy, annotate, \
+            fill-forms, accessibility, assemble");
     }
 
     #[test]
