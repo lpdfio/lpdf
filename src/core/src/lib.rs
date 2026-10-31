@@ -1215,11 +1215,34 @@ mod tests {
         assert!(parse::parse_tree(&tree(r#"{"encrypt":"aes-256","allow":null}"#)).is_ok(), "a null is no allow, as an SDK sends one");
     }
 
+    /// A document whose strings pdf-writer writes as literal strings, `<output>` asking for RC4-128: its title and
+    /// link URIs, and, since the render is unlicensed, the `CIDSystemInfo` of the attribution font.
+    const PLAIN_STRINGS_XML: &str = r#"<lpdf version="1"><document size="a4">
+        <meta title="Invoice 2026-0412" author="Accounts" subject="Plain ASCII strings" keywords="invoice, rc4"/>
+        <output encrypt="rc4-128"/>
+        <section><layout margin="28pt"><column gap="m">
+            <text>Invoice 2026-0412</text>
+            <link href="https://lpdf.io/docs"><text>lpdf.io/docs</text></link>
+            <text><span href="https://example.com/invoices?id=2026-0412">The invoice online</span></text>
+        </column></layout></section></document></lpdf>"#;
+
+    /// A document whose literal strings pdf-writer writes with escapes: a backslash and unbalanced parentheses in
+    /// its title, subject and link URI, `<output>` asking for RC4-128.
+    const ESCAPED_STRINGS_XML: &str = r#"<lpdf version="1"><document size="a4">
+        <meta title="C:\reports\Q3 (draft" author="R&amp;D (team)" subject="closed) twice) \ once"/>
+        <output encrypt="rc4-128"/>
+        <section><layout margin="28pt"><column gap="m">
+            <text>C:\reports\Q3 (draft</text>
+            <link href="https://example.com/wiki/Report_(draft"><text>The draft</text></link>
+        </column></layout></section></document></lpdf>"#;
+
     /// Writes the files `scripts/check-encryption.mjs` opens with qpdf, when `LPDF_ENCRYPT_OUT` names a folder:
     /// `showcase-encryption` rendered with the cipher and the permissions of its `<output>` and the passwords of
-    /// the render, as a host renders it, and `showcase-attachments` encrypted the same way, so that its files are
-    /// seen to come back whole. Without the variable the test does nothing, so a plain `cargo test` needs no other
-    /// tool.
+    /// the render, as a host renders it, in AES-256 and in RC4-128; two documents of literal strings, plain and
+    /// escaped, in RC4-128, since whether a string came through the old in-place RC4 pass depended on its object
+    /// and the key, so each RC4 document goes under several passwords; and `showcase-attachments` encrypted with
+    /// each cipher, so that its files are seen to come back whole. Without the variable the test does nothing, so a
+    /// plain `cargo test` needs no other tool.
     #[test]
     fn writes_samples_for_the_external_check() {
         let Some(dir) = std::env::var_os("LPDF_ENCRYPT_OUT") else { return };
@@ -1233,13 +1256,19 @@ mod tests {
             ..owner_password(owner)
         };
 
-        let samples = [
-            ("plain.pdf",                &xml, RenderEncryption::skipping(true)),
-            ("aes256-user.pdf",          &xml, passwords(Some("user"), "owner")),
-            ("aes256-open.pdf",          &xml, passwords(None, "owner")),
-            ("aes256-same-password.pdf", &xml, passwords(Some("same"), "same")),
-            ("rc4-user.pdf",             &rc4, passwords(Some("user"), "owner")),
+        let mut samples = vec![
+            ("plain.pdf".to_string(),                xml.as_str(), RenderEncryption::skipping(true)),
+            ("aes256-user.pdf".to_string(),          xml.as_str(), passwords(Some("user"), "owner")),
+            ("aes256-open.pdf".to_string(),          xml.as_str(), passwords(None, "owner")),
+            ("aes256-same-password.pdf".to_string(), xml.as_str(), passwords(Some("same"), "same")),
+            ("plain-strings-plain.pdf".to_string(),  PLAIN_STRINGS_XML, RenderEncryption::skipping(true)),
+            ("escaped-strings-plain.pdf".to_string(), ESCAPED_STRINGS_XML, RenderEncryption::skipping(true)),
         ];
+        for (prefix, xml) in [("rc4", rc4.as_str()), ("plain-strings-rc4", PLAIN_STRINGS_XML), ("escaped-strings-rc4", ESCAPED_STRINGS_XML)] {
+            for (suffix, user, owner) in [("user", Some("user"), "owner"), ("open", None, "owner"), ("same-password", Some("same"), "same")] {
+                samples.push((format!("{prefix}-{suffix}.pdf"), xml, passwords(user, owner)));
+            }
+        }
         for (name, xml, encryption) in samples {
             let bytes = render_with(xml, &encryption).expect("the sample renders");
             std::fs::write(dir.join(name), bytes).expect("could not write a sample");
@@ -1248,6 +1277,7 @@ mod tests {
         let attachments = [
             ("attachments-plain.pdf",  "aes-256", RenderEncryption::skipping(true)),
             ("attachments-aes256.pdf", "aes-256", passwords(Some("user"), "owner")),
+            ("attachments-rc4.pdf",    "rc4-128", passwords(Some("user"), "owner")),
         ];
         for (name, cipher, encryption) in attachments {
             let bytes = attachment_render_tests::render_encrypted(cipher, &encryption);

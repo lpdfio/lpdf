@@ -5,7 +5,8 @@
 //  - it opens with the user password and with the owner password, and a wrong password, or none for a
 //    file that has a user password, is refused;
 //  - decrypting it gives the same objects as the document rendered without encryption: the QDF form
-//    of the two is identical apart from the /ID line, so every string and stream survived the round trip;
+//    of the two is identical apart from the /ID line, so every string and stream survived the round trip,
+//    the literal strings of the RC4 documents, plain and escaped, among them;
 //  - for a document with files in it, each file it gives back with the password is the file of the
 //    unencrypted render, so the files are encrypted with the rest and come back whole.
 //
@@ -26,17 +27,38 @@ if (!folder) {
     process.exit(2);
 }
 
+/** The passwords each document is encrypted under: an open password, none, and the same one for both. */
+const PASSWORDS = [
+    { suffix: 'user', user: 'user', owner: 'owner' },
+    { suffix: 'open', user: '', owner: 'owner' },
+    { suffix: 'same-password', user: 'same', owner: 'same' },
+];
+
+/** RC4-128 samples of one document, `<prefix>-<suffix>.pdf`, under each of the passwords. */
+function rc4Samples(prefix, plain) {
+    return PASSWORDS.map(({ suffix, user, owner }) => ({
+        file: `${prefix}-${suffix}.pdf`, user, owner, revision: 3, method: null, plain,
+    }));
+}
+
 /**
  * The samples `writes_samples_for_the_external_check` writes: who may open each, what it must report, the
- * unencrypted render it must decrypt to, and the files it carries.
+ * unencrypted render it must decrypt to, and the files it carries. The RC4 documents have literal strings, plain
+ * and escaped, and go under several passwords, since each object has its own key.
  */
 const SAMPLES = [
-    { file: 'aes256-user.pdf', user: 'user', owner: 'owner', revision: 6, method: 'AESv3', plain: 'plain.pdf' },
-    { file: 'aes256-open.pdf', user: '', owner: 'owner', revision: 6, method: 'AESv3', plain: 'plain.pdf' },
-    { file: 'aes256-same-password.pdf', user: 'same', owner: 'same', revision: 6, method: 'AESv3', plain: 'plain.pdf' },
-    { file: 'rc4-user.pdf', user: 'user', owner: 'owner', revision: 3, method: null, plain: 'plain.pdf' },
+    ...PASSWORDS.map(({ suffix, user, owner }) => ({
+        file: `aes256-${suffix}.pdf`, user, owner, revision: 6, method: 'AESv3', plain: 'plain.pdf',
+    })),
+    ...rc4Samples('rc4', 'plain.pdf'),
+    ...rc4Samples('plain-strings-rc4', 'plain-strings-plain.pdf'),
+    ...rc4Samples('escaped-strings-rc4', 'escaped-strings-plain.pdf'),
     {
         file: 'attachments-aes256.pdf', user: 'user', owner: 'owner', revision: 6, method: 'AESv3',
+        plain: 'attachments-plain.pdf', attachments: ['invoice.xml', 'terms.txt'],
+    },
+    {
+        file: 'attachments-rc4.pdf', user: 'user', owner: 'owner', revision: 3, method: null,
         plain: 'attachments-plain.pdf', attachments: ['invoice.xml', 'terms.txt'],
     },
 ];
