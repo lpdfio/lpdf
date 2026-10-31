@@ -1,6 +1,7 @@
 pub mod codegen;
 mod aes256;
 mod attachments;
+mod attr_types;
 mod canvas;
 mod data;
 mod encrypt;
@@ -17,6 +18,7 @@ mod pdf;
 mod pdfa;
 mod render;
 mod rewrite;
+mod schema_attrs;
 mod shared;
 mod toc;
 mod tokens;
@@ -1002,7 +1004,7 @@ mod tests {
 
     #[test]
     fn text_node_renders() {
-        let xml = minimal(r#"<text size="m" color="text">Invoice for services rendered</text>"#);
+        let xml = minimal(r#"<text color="text">Invoice for services rendered</text>"#);
         let result = render_value(&xml);
         let page = &result["pages"][0];
         let node = &page["nodes"][0];

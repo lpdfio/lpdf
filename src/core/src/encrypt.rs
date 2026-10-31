@@ -620,7 +620,7 @@ mod tests {
     // ── Full-pipeline tests (require render_xml_to_pdf_bytes) ─────────────────
 
     fn minimal_xml() -> &'static str {
-        r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt"><text size="m">Hello</text></layout></section></document></lpdf>"#
+        r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt"><text>Hello</text></layout></section></document></lpdf>"#
     }
 
     fn config(algorithm: Algorithm, user_pw: &str, owner_pw: &str) -> EncryptConfig {

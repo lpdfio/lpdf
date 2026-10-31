@@ -259,7 +259,6 @@ fn strs(values: &[&str]) -> Vec<String> {
 /// The values to try for a named type, and whether the type is a plain enumeration.
 fn values_of_type(doc: &Document, type_name: &str) -> (Vec<String>, bool) {
     match type_name {
-        "xs:boolean" => (strs(&["true", "false"]), true),
         "xs:string" | "xs:anyURI" => (Vec::new(), false),
         "xs:positiveInteger" => (strs(&["2", "7"]), false),
         "xs:nonNegativeInteger" => (strs(&["2", "0"]), false),

@@ -215,32 +215,6 @@ fn parse_canvas_box_position(
     }
 }
 
-/// What to write instead of an attribute a layer element no longer has.
-fn removed_attr_hint(tag: &str, attr: &str) -> Option<&'static str> {
-    match (tag, attr) {
-        (_, "opacity") => Some("removed; put the element in a <layer> with opacity, which fades everything in it"),
-        ("rect" | "text-at" | "img-at", "w") => Some("renamed to 'width'"),
-        ("rect" | "img-at", "h") => Some("renamed to 'height'"),
-        ("circle", "cx" | "cy") => Some(
-            "removed; 'x' and 'y' place the circle's box, 2r square, so write x = cx - r and y = cy - r",
-        ),
-        ("ellipse", "cx" | "cy") => Some(
-            "removed; 'x' and 'y' place the ellipse's box, 2rx wide and 2ry high, so write x = cx - rx and y = cy - ry",
-        ),
-        _ => None,
-    }
-}
-
-/// Fail on an attribute the element used to take, with what to write instead.
-fn reject_removed_attrs(tag: &str, has: impl Fn(&str) -> bool) -> Result<(), String> {
-    for attr in ["w", "h", "cx", "cy", "opacity"] {
-        if let (true, Some(hint)) = (has(attr), removed_attr_hint(tag, attr)) {
-            return Err(format!("'{attr}' {hint}"));
-        }
-    }
-    Ok(())
-}
-
 /// Parse a transform string such as `"translate(10pt 20pt)"`, `"scale(2)"`,
 /// `"rotate(45 297.64 421)"`, or `"matrix(a b c d e f)"` into a 6-element CTM.
 /// Numbers may be separated by commas or whitespace.  Returns `None` for
@@ -390,7 +364,6 @@ fn parse_placed_elem(elem: &roxmltree::Node, ctx: &LayerContext) -> Result<Canva
 fn parse_canvas_primitive_elem(elem: &roxmltree::Node, ctx: &LayerContext) -> Result<CanvasPrimitive, String> {
     let tag = elem.tag_name().name();
     let located = |e: String| format!("<{tag}>{}: {e}", node_loc(elem));
-    reject_removed_attrs(tag, |a| elem.attribute(a).is_some()).map_err(located)?;
     let (tokens, page_w, page_h) = (ctx.tokens, ctx.page_w, ctx.page_h);
     match tag {
         "rect"       => parse_canvas_rect(elem, tokens, page_w, page_h),
@@ -507,8 +480,6 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
     let get_f32_signed = |k: &str| -> Result<Option<f32>, String> {
         get_attr(k).map(parse_signed_measurement).transpose()
     };
-    reject_removed_attrs(type_str, |a| get_attr(a).is_some())
-        .map_err(|e| format!("canvas primitive '{type_str}': {e}"))?;
     // The position of a primitive: `x` and `y`. With an anchor they are offsets from it.
     let get_pos = || -> Result<(f32, f32), String> {
         let dx = get_f32_signed("x")?.unwrap_or(0.0);

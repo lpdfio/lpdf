@@ -484,7 +484,7 @@ mod tests {
     fn checked_is_true_or_false() {
         let xml = r#"<lpdf version="1"><document size="a4"><section><layout><list><li checked="yes"><text>A</text></li></list></layout></section></document></lpdf>"#;
         let err = parse(xml).unwrap_err();
-        assert!(err.contains("invalid checked 'yes'") && err.contains("'true' or 'false'"), "{err}");
+        assert!(err.contains(r#"<li> at line 1, col 62: checked must be true or false, not "yes""#), "{err}");
     }
 
     #[test]

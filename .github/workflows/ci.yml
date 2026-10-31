@@ -18,6 +18,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # The core's table of attributes and their types is generated from the schema: a schema change that isn't
+      # regenerated fails here. The SDKs' generated files are checked in each SDK's own CI.
+      - name: Check the attribute table against the schema
+        run: node scripts/gen-sdk-api.mjs --check --core
+
       - name: Test core
         env:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}

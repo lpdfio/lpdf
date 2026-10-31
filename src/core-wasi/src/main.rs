@@ -72,6 +72,10 @@ mod page_scope;
 mod canvas;
 #[path = "../../core/src/toc.rs"]
 mod toc;
+#[path = "../../core/src/attr_types.rs"]
+mod attr_types;
+#[path = "../../core/src/schema_attrs.rs"]
+mod schema_attrs;
 
 use std::io::Read;
 use base64::Engine as _;

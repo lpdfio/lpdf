@@ -323,6 +323,7 @@ fn build(a: &impl Attrs, declaration: Declaration, cx: &SectionContext) -> Resul
             if doc.root_element().tag_name().name() != "markdown-styles" {
                 return Err(format!("markdown-styles file '{src}': the root element must be <markdown-styles>"));
             }
+            crate::attr_types::check_xml(doc.root_element()).map_err(|e| format!("markdown-styles file '{src}': {e}"))?;
             let file_rules = Rules::from_elem(&doc.root_element()).map_err(|e| format!("markdown-styles file '{src}': {e}"))?;
             written.extend(file_rules.0.keys().cloned());
             rules.lay(file_rules);
@@ -2211,6 +2212,16 @@ mod tests {
         let nodes = parse_with(&xml, &resources).unwrap().section_layouts().remove(0).children;
         assert_eq!(nodes[0].text_color.as_deref(), Some("#ff0000"));
         assert_eq!((nodes[1].text_color.as_deref(), nodes[1].font_size), (Some("#00ff00"), 14.0));
+    }
+
+    #[test]
+    fn a_value_of_the_wrong_type_in_a_styles_file_is_an_error_that_names_the_file() {
+        let xml = document("", r#"<markdown-styles src="styles.xml"/>"#, "# a\n");
+        let mut resources = Resources::default();
+        resources.markdown_styles.insert("styles.xml".into(), r#"<markdown-styles><h1 bold="1"/></markdown-styles>"#.into());
+        let err = parse_with(&xml, &resources).unwrap_err();
+        assert!(err.contains("markdown-styles file 'styles.xml': <h1> at line 1, col "), "{err}");
+        assert!(err.ends_with(r#": bold must be true or false, not "1""#), "{err}");
     }
 
     #[test]

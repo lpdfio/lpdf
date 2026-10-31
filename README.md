@@ -38,10 +38,10 @@ const doc = L.document({ size: 'letter', margin: '48pt' }, [
             L.column({ gap: '24pt' }, [
                 L.row({ justify: 'between' }, [
                     L.text({ fontSize: '8pt', color: '#888888' }, ['ACME CORP']),
-                    L.text({ fontSize: '22pt', bold: 'true' }, ['Project Proposal']),
+                    L.text({ fontSize: '22pt', bold: true }, ['Project Proposal']),
                 ]),
                 L.divider({ thickness: 'xs' }),
-                L.text({ fontSize: '13pt', bold: 'true' }, ['Scope of Work']),
+                L.text({ fontSize: '13pt', bold: true }, ['Scope of Work']),
                 L.row({ gap: '12pt', align: 'start' }, [
                     L.text({ color: '#888888', width: '24pt' }, ['01']),
                     L.text({ width: 'fill' }, ['Discovery & Research']),
@@ -74,10 +74,10 @@ var doc = L.Document(new() { Size = "letter", Margin = "48pt" }, [
             L.Column(new() { Gap = "24pt" }, [
                 L.Row(new() { Justify = "between" }, [
                     L.Text(new() { FontSize = "8pt", Color = "#888888" }, ["ACME CORP"]),
-                    L.Text(new() { FontSize = "22pt", Bold = "true" }, ["Project Proposal"]),
+                    L.Text(new() { FontSize = "22pt", Bold = true }, ["Project Proposal"]),
                 ]),
                 L.Divider(new() { Thickness = "xs" }),
-                L.Text(new() { FontSize = "13pt", Bold = "true" }, ["Scope of Work"]),
+                L.Text(new() { FontSize = "13pt", Bold = true }, ["Scope of Work"]),
                 L.Row(new() { Gap = "12pt", Align = "start" }, [
                     L.Text(new() { Color = "#888888", Width = "24pt" }, ["01"]),
                     L.Text(new() { Width = "fill" }, ["Discovery & Research"]),
@@ -115,10 +115,10 @@ $doc = L::document(new DocumentAttr(size: 'letter', margin: '48pt'), [
             L::column(new ColumnAttr(gap: '24pt'), [
                 L::row(new RowAttr(justify: 'between'), [
                     L::text(new TextAttr(fontSize: '8pt', color: '#888888'), ['ACME CORP']),
-                    L::text(new TextAttr(fontSize: '22pt', bold: 'true'), ['Project Proposal']),
+                    L::text(new TextAttr(fontSize: '22pt', bold: true), ['Project Proposal']),
                 ]),
                 L::divider(new DividerAttr(thickness: 'xs')),
-                L::text(new TextAttr(fontSize: '13pt', bold: 'true'), ['Scope of Work']),
+                L::text(new TextAttr(fontSize: '13pt', bold: true), ['Scope of Work']),
                 L::row(new RowAttr(gap: '12pt', align: 'start'), [
                     L::text(new TextAttr(color: '#888888', width: '24pt'), ['01']),
                     L::text(new TextAttr(width: 'fill'), ['Discovery & Research']),
@@ -150,10 +150,10 @@ doc = L.document(DocumentAttr(size='letter', margin='48pt'), [
             L.column(ColumnAttr(gap='24pt'), [
                 L.row(RowAttr(justify='between'), [
                     L.text(TextAttr(font_size='8pt', color='#888888'), ['ACME CORP']),
-                    L.text(TextAttr(font_size='22pt', bold='true'), ['Project Proposal']),
+                    L.text(TextAttr(font_size='22pt', bold=True), ['Project Proposal']),
                 ]),
                 L.divider(DividerAttr(thickness='xs')),
-                L.text(TextAttr(font_size='13pt', bold='true'), ['Scope of Work']),
+                L.text(TextAttr(font_size='13pt', bold=True), ['Scope of Work']),
                 L.row(RowAttr(gap='12pt', align='start'), [
                     L.text(TextAttr(color='#888888', width='24pt'), ['01']),
                     L.text(TextAttr(width='fill'), ['Discovery & Research']),
