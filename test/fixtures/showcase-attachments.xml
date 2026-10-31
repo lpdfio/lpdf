@@ -1,0 +1,49 @@
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <!-- Two files the PDF carries. The snapshot tests, `make check-attachments` and the encryption samples of
+       `make check-encryption` load them from src, as an SDK does: src is relative to this file. -->
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+      <color name="rule"    value="#dde3ed" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Attachments" subject="Files the PDF carries" />
+    <attachments>
+      <file name="invoice.xml" src="../assets/files/invoice.xml" mime="text/xml" relationship="data"
+            description="The invoice as data, for software to read" />
+      <file name="terms.txt" src="../assets/files/terms.txt" mime="text/plain" relationship="supplement" />
+    </attachments>
+
+    <section>
+      <layout margin="40pt">
+        <text font-size="xl" bold="true" color="primary">Invoice 2026-0412</text>
+        <text color="muted">Northwind Paper Co. to Lakeside Print Studio, 31 October 2026</text>
+        <divider color="rule" />
+        <table cols="3fr 1fr 1fr">
+          <thead>
+            <td><text bold="true">Item</text></td>
+            <td><text bold="true" align="right">Qty</text></td>
+            <td><text bold="true" align="right">Price</text></td>
+          </thead>
+          <tr>
+            <td><text>A4 paper, 80 g/m², 5 reams</text></td>
+            <td><text align="right">5</text></td>
+            <td><text align="right">4.20</text></td>
+          </tr>
+          <tr>
+            <td><text>Envelopes, C5, box of 500</text></td>
+            <td><text align="right">2</text></td>
+            <td><text align="right">18.50</text></td>
+          </tr>
+        </table>
+        <text align="right" bold="true">Total 69.02 EUR</text>
+        <divider color="rule" />
+        <text color="muted">This PDF carries two files: invoice.xml, the invoice as data, and terms.txt, the terms of sale. A reader lists them in its attachments panel.</text>
+      </layout>
+    </section>
+  </document>
+</lpdf>

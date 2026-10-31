@@ -641,6 +641,30 @@ fn assets_have_src(assets: &Node) -> bool {
         .any(|n| n.is_element() && n.has_attribute("src"))
 }
 
+/// The `<file>` elements of a document's `<attachments>`.
+fn attached_files<'a, 'i>(document: &Node<'a, 'i>) -> Vec<Node<'a, 'i>> {
+    document
+        .children()
+        .filter(|n| n.is_element() && n.tag_name().name() == "attachments")
+        .flat_map(|attachments| attachments.children())
+        .filter(|n| n.is_element() && n.tag_name().name() == "file")
+        .collect()
+}
+
+/// The `attachments` of a document as the list the SDK takes: a `FileAttr` for each `<file>` of its `<attachments>`,
+/// with the attributes of the element. `None` when it carries no file.
+fn attachments_expression(target: Target, document: &Node) -> Option<String> {
+    let files: Vec<String> = attached_files(document)
+        .iter()
+        .map(|file| {
+            let attributes: Vec<(String, String)> =
+                file.attributes().map(|a| (a.name().to_string(), target.literal(a.value()))).collect();
+            target.object("FileAttr", &attributes, false)
+        })
+        .collect();
+    (!files.is_empty()).then(|| format!("[{}]", files.join(", ")))
+}
+
 /// The `tokens` of a document as the object the SDK takes: the colours, the aliases and the scales of the
 /// `<tokens>` element. `None` when it has none.
 fn tokens_expression(target: Target, tokens: &Node) -> Option<String> {
@@ -702,7 +726,7 @@ fn classes_used(code: &str) -> Vec<String> {
 fn php_namespace(class: &str) -> &'static str {
     match class {
         "DocumentAttr" | "DocumentMeta" | "DocumentOutput" | "DocumentAssets" | "DocumentTokens" | "SectionAttr" | "LayoutAttr"
-        | "FontAttr" | "ImageAttr" => "Lpdf\\Kit",
+        | "FontAttr" | "ImageAttr" | "FileAttr" => "Lpdf\\Kit",
         "LayerAttr" | "RectAttr" | "CircleAttr" | "EllipseAttr" | "LineAttr" | "PathAttr" | "TextAtAttr"
         | "ImgAtAttr" | "BarcodeAtAttr" => "Lpdf\\Canvas",
         markdown if markdown.starts_with("Markdown") => "Lpdf\\Markdown",
@@ -942,7 +966,7 @@ impl JsEmitter {
         match tag {
             "lpdf"     => return self.emit_lpdf(node, level),
             "document" => return self.emit_document_node(node, level, None, None),
-            "meta" | "output" => return String::new(), // folded into document
+            "meta" | "output" | "attachments" => return String::new(), // folded into document
             _ => {}
         }
         let family    = family_tag(node);
@@ -1005,6 +1029,9 @@ impl JsEmitter {
             doc_parts.push(Target::Js.member("tokens", &tokens));
         }
         doc_parts.extend(folded);
+        if let Some(files) = attachments_expression(Target::Js, node) {
+            doc_parts.push(Target::Js.member("attachments", &files));
+        }
 
         let attrs = if doc_parts.is_empty() {
             "NoAttr".into()
@@ -1016,7 +1043,7 @@ impl JsEmitter {
         let mut children: Vec<String> = Vec::new();
         children.extend(
             node.children()
-                .filter(|n| n.is_element() && !matches!(n.tag_name().name(), "meta" | "output"))
+                .filter(|n| n.is_element() && !matches!(n.tag_name().name(), "meta" | "output" | "attachments"))
                 .map(|n| self.emit_node(&n, level + 1))
                 .filter(|s| !s.is_empty()),
         );
@@ -1141,8 +1168,9 @@ impl DotnetEmitter {
         }
         out.push('\n');
 
-        // .NET reads the src of a font or image through the engine's SrcFallback.
-        if assets_node.is_some_and(|assets| assets_have_src(&assets)) {
+        // .NET reads the src of a font, an image or a file through the engine's SrcFallback.
+        let files_have_src = document_node.is_some_and(|d| attached_files(&d).iter().any(|f| f.has_attribute("src")));
+        if assets_node.is_some_and(|assets| assets_have_src(&assets)) || files_have_src {
             out.push_str("var engine = L.Engine(new() { SrcFallback = File.ReadAllBytes });\n");
         } else {
             out.push_str("var engine = L.Engine();\n");
@@ -1171,7 +1199,7 @@ impl DotnetEmitter {
         match tag {
             "lpdf"     => return self.emit_lpdf(node, level),
             "document" => return self.emit_document_node(node, level, None, None),
-            "meta" | "output" => return String::new(),
+            "meta" | "output" | "attachments" => return String::new(),
             _ => {}
         }
         let family    = family_tag(node);
@@ -1221,6 +1249,9 @@ impl DotnetEmitter {
             doc_parts.push(Target::Dotnet.member("tokens", &tokens));
         }
         doc_parts.extend(folded);
+        if let Some(files) = attachments_expression(Target::Dotnet, node) {
+            doc_parts.push(Target::Dotnet.member("attachments", &files));
+        }
 
         let attrs = if doc_parts.is_empty() {
             "NoAttr".into()
@@ -1231,7 +1262,7 @@ impl DotnetEmitter {
         let mut children: Vec<String> = Vec::new();
         children.extend(
             node.children()
-                .filter(|n| n.is_element() && !matches!(n.tag_name().name(), "meta" | "output"))
+                .filter(|n| n.is_element() && !matches!(n.tag_name().name(), "meta" | "output" | "attachments"))
                 .map(|n| self.emit_node(&n, level + 1))
                 .filter(|s| !s.is_empty()),
         );
@@ -1381,7 +1412,7 @@ impl PhpEmitter {
         match tag {
             "lpdf"     => return self.emit_lpdf(node, level),
             "document" => return self.emit_document_node(node, level, None, None),
-            "meta" | "output" => return String::new(),
+            "meta" | "output" | "attachments" => return String::new(),
             _ => {}
         }
         // PHP uses same method names as JS (camelCase)
@@ -1432,6 +1463,9 @@ impl PhpEmitter {
             doc_parts.push(Target::Php.member("tokens", &tokens));
         }
         doc_parts.extend(folded);
+        if let Some(files) = attachments_expression(Target::Php, node) {
+            doc_parts.push(Target::Php.member("attachments", &files));
+        }
 
         let attrs = if doc_parts.is_empty() {
             "NoAttr".into()
@@ -1442,7 +1476,7 @@ impl PhpEmitter {
         let mut children: Vec<String> = Vec::new();
         children.extend(
             node.children()
-                .filter(|n| n.is_element() && !matches!(n.tag_name().name(), "meta" | "output"))
+                .filter(|n| n.is_element() && !matches!(n.tag_name().name(), "meta" | "output" | "attachments"))
                 .map(|n| self.emit_node(&n, level + 1))
                 .filter(|s| !s.is_empty()),
         );
@@ -1585,7 +1619,7 @@ impl PythonEmitter {
         match tag {
             "lpdf"     => return self.emit_lpdf(node, level),
             "document" => return self.emit_document_node(node, level, None, None),
-            "meta" | "output" => return String::new(),
+            "meta" | "output" | "attachments" => return String::new(),
             _ => {}
         }
         // Python uses same method names as JS (snake_case only for multi-word: textAt → text_at)
@@ -1636,6 +1670,9 @@ impl PythonEmitter {
             doc_parts.push(Target::Python.member("tokens", &tokens));
         }
         doc_parts.extend(folded);
+        if let Some(files) = attachments_expression(Target::Python, node) {
+            doc_parts.push(Target::Python.member("attachments", &files));
+        }
 
         let attrs = if doc_parts.is_empty() {
             "NoAttr".into()
@@ -1646,7 +1683,7 @@ impl PythonEmitter {
         let mut children: Vec<String> = Vec::new();
         children.extend(
             node.children()
-                .filter(|n| n.is_element() && !matches!(n.tag_name().name(), "meta" | "output"))
+                .filter(|n| n.is_element() && !matches!(n.tag_name().name(), "meta" | "output" | "attachments"))
                 .map(|n| self.emit_node(&n, level + 1))
                 .filter(|s| !s.is_empty()),
         );
@@ -2039,6 +2076,29 @@ mod tests {
     }
 
     #[test]
+    fn attachments_are_a_list_of_files_in_each_language() {
+        let xml = r#"<lpdf version="1"><document><output encrypt="aes-256"/><attachments>
+            <file name="invoice.xml" src="invoice.xml" mime="text/xml" relationship="data"/><file name="terms.txt" ref="terms"/>
+        </attachments><section><layout><text>x</text></layout></section></document></lpdf>"#;
+        for (target, expected) in [
+            ("js", "output: { encrypt: 'aes-256' }, attachments: [{ name: 'invoice.xml', src: 'invoice.xml', mime: 'text/xml', relationship: 'data' }, { name: 'terms.txt', ref: 'terms' }] }"),
+            ("dotnet", "Attachments = [new FileAttr { Name = \"invoice.xml\", Src = \"invoice.xml\", Mime = \"text/xml\", Relationship = \"data\" }, new FileAttr { Name = \"terms.txt\", Ref = \"terms\" }] }"),
+            ("php", "attachments: [new FileAttr(name: 'invoice.xml', src: 'invoice.xml', mime: 'text/xml', relationship: 'data'), new FileAttr(name: 'terms.txt', ref: 'terms')])"),
+            ("python", "attachments=[FileAttr(name='invoice.xml', src='invoice.xml', mime='text/xml', relationship='data'), FileAttr(name='terms.txt', ref='terms')])"),
+        ] {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            assert!(out.contains(expected), "{target}: {out}");
+            assert!(!out.contains("L.attachments") && !out.contains("L.file"), "{target}: {out}");
+        }
+        let dotnet = codegen(xml, &CodegenOptions { target: "dotnet".into(), indent: 4 }).unwrap();
+        assert!(dotnet.contains("SrcFallback = File.ReadAllBytes"), "the file's src is read as an image's is: {dotnet}");
+        let php = codegen(xml, &CodegenOptions { target: "php".into(), indent: 4 }).unwrap();
+        assert!(php.contains("use Lpdf\\Kit\\FileAttr;"), "{php}");
+        let python = codegen(xml, &CodegenOptions { target: "python".into(), indent: 4 }).unwrap();
+        assert!(python.contains("FileAttr"), "{python}");
+    }
+
+    #[test]
     fn test_output_folded_after_meta() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
@@ -2269,7 +2329,7 @@ mod tests {
         let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts);
         let fonts = crate::pdf::FontRegistry::new();
         let images = crate::pdf::ImageRegistry::new();
-        crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, None, false, doc.output.pdfa).unwrap()
+        crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[]).unwrap()
     }
 
     /// The text's XML, and the tree the SDKs would build from the strings and spans the generator writes for it.

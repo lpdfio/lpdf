@@ -41,6 +41,7 @@ use miniz_oxide::deflate::compress_to_vec_zlib;
 use miniz_oxide::inflate::decompress_to_vec_zlib;
 use subsetter::GlyphRemapper;
 
+use crate::attachments::{self, EmbeddedFile};
 use crate::render::{placed_anchors, PlacedAnchor, RenderBox, RenderCanvasLayer, RenderField, RenderNode, RenderPage, RenderedBarcodeKind};
 use crate::parse::{FieldKind, Meta, Shadow};
 use crate::pdfa::{self, FileDate, PdfA};
@@ -2827,6 +2828,7 @@ fn assemble_pdf(
     meta:               &Meta,
     created_on:         Option<&str>,
     pdfa:               Option<&PdfAFile>,
+    files:              &[EmbeddedFile],
 ) -> Result<Vec<u8>, String> {
     let AllocatedIds {
         catalog_id, info_id, pages_id,
@@ -2847,6 +2849,10 @@ fn assemble_pdf(
 
     // A PDF/A file's XMP packet and the profile of its output intent come after them, for the same reason.
     let pdfa_ids = pdfa.map(|_| (alloc.next(), alloc.next()));
+
+    // The files the document carries come last, so a document without any keeps its ids.
+    let file_ids = attachments::allocate(files, || alloc.next());
+    let date = file_date(created_on, pdfa);
 
     let n = pages.len();
     let mut pdf = Pdf::new();
@@ -2871,6 +2877,7 @@ fn assemble_pdf(
                 .info(TextStr(pdfa::SRGB_CONDITION))
                 .dest_output_profile(profile_id);
         }
+        attachments::write_catalog(&mut cat, files, &file_ids);
         if !fields.is_empty() {
             // Build root field refs list.
             let mut root_fields: Vec<Ref> = Vec::new();
@@ -2906,19 +2913,11 @@ fn assemble_pdf(
         info.producer(TextStr(pdfa::PRODUCER));
 
         // A PDF/A file is made and changed at the one date it was given, which its XMP packet repeats.
-        // Otherwise created_on is written as a raw PDF date string if provided.
-        // Format expected: ISO 8601 "YYYY-MM-DDTHH:mm:ss" → "D:YYYYMMDDHHmmss"
-        if let Some(file) = pdfa {
-            let date = file.date.pdf();
+        // DocumentInfo derefs to Dict; raw pairs write the keys its typed API doesn't cover.
+        if let Some(date) = &date {
             info.pair(Name(b"CreationDate"), Str(date.as_bytes()));
-            info.pair(Name(b"ModDate"), Str(date.as_bytes()));
-        } else if let Some(dt) = created_on {
-            let clean: String = dt.chars().filter(|c| c.is_ascii_digit()).collect();
-            if clean.len() >= 8 {
-                let pdf_date = format!("D:{clean}");
-                // DocumentInfo derefs to Dict; use raw pair insertion for
-                // keys not covered by the typed API (like CreationDate).
-                info.pair(Name(b"CreationDate"), Str(pdf_date.as_bytes()));
+            if pdfa.is_some() {
+                info.pair(Name(b"ModDate"), Str(date.as_bytes()));
             }
         }
     }
@@ -3472,6 +3471,9 @@ fn assemble_pdf(
         }
     }
 
+    // -- The files the document carries, dated as the document is --------------
+    attachments::write_objects(&mut pdf, files, &file_ids, date.as_deref());
+
     // -- PDF/A: the XMP packet, the output intent's profile and the file ID -------
     if let (Some(file), Some((xmp_id, profile_id))) = (pdfa, pdfa_ids) {
         // Not compressed, so that a tool that knows nothing of PDF can still find the packet.
@@ -3487,6 +3489,17 @@ fn assemble_pdf(
     }
 
     Ok(pdf.finish())
+}
+
+/// The date of the file as a PDF date: a PDF/A file's date, or else `created_on` (ISO 8601, "YYYY-MM-DDTHH:mm:ss" →
+/// "D:YYYYMMDDHHmmss") when it has a whole date. `None` leaves the file undated, so the same input gives the same
+/// bytes.
+fn file_date(created_on: Option<&str>, pdfa: Option<&PdfAFile>) -> Option<String> {
+    if let Some(file) = pdfa {
+        return Some(file.date.pdf());
+    }
+    let digits: String = created_on?.chars().filter(|c| c.is_ascii_digit()).collect();
+    (digits.len() >= 8).then(|| format!("D:{digits}"))
 }
 
 // ── Main render function ──────────────────────────────────────────────────────
@@ -3508,6 +3521,7 @@ fn assemble_pdf(
 /// - `pdfa`       – The PDF/A level of the document's `<output pdfa>`, or `None`
 ///                  for a plain PDF. A PDF/A file gets its XMP packet, the sRGB
 ///                  output intent and a file ID, and what it cannot hold is an error.
+/// - `files`      – The files of `<attachments>` with their bytes (`attachments::resolve`), carried in the PDF.
 #[allow(clippy::too_many_arguments)]
 pub fn render_pdf(
     pages:          &[RenderPage],
@@ -3519,6 +3533,7 @@ pub fn render_pdf(
     created_on:     Option<&str>,
     licensed:       bool,
     pdfa:           Option<PdfA>,
+    files:          &[EmbeddedFile],
 ) -> Result<Vec<u8>, String> {
     let pdfa = pdfa.map(|level| pdfa::file_date(level, created_on).map(|date| PdfAFile { level, date })).transpose()?;
     // The attribution is the licence signal itself, so it follows `licensed` rather
@@ -3542,7 +3557,7 @@ pub fn render_pdf(
     assemble_pdf(
         pages, &fonts, &sorted_font_names, &sorted_image_names,
         image_registry, &image_res_map, rendered_pages, ids, &fields, &anchors,
-        &used_gradients, meta, created_on, pdfa.as_ref(),
+        &used_gradients, meta, created_on, pdfa.as_ref(), files,
     )
 }
 
@@ -4026,7 +4041,7 @@ mod tests {
         let xml = format!(r#"<lpdf version="1"><document><section><layout>{layout}</layout></section></document></lpdf>"#);
         let mut doc = crate::parse::parse(&xml).expect("parses");
         let pages = crate::layout::layout_document(&doc.section_layouts());
-        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &ImageRegistry::new(), &doc.meta, &doc.gradients, None, licensed, doc.output.pdfa)
+        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &ImageRegistry::new(), &doc.meta, &doc.gradients, None, licensed, doc.output.pdfa, &[])
             .expect("renders")
     }
 
@@ -4264,7 +4279,7 @@ mod tests {
             crate::layout::prefill_section_image_sizes(section, &meta);
         }
         let pages = crate::layout::layout_document(&layouts);
-        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, doc.output.pdfa).expect("renders")
+        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[]).expect("renders")
     }
 
     #[test]
@@ -4296,7 +4311,7 @@ mod tests {
         let pages = crate::layout::layout_document(&doc.section_layouts());
         let mut images = ImageRegistry::new();
         images.load("photo", RED_PIXEL.to_vec());
-        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, doc.output.pdfa).expect("renders");
+        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[]).expect("renders");
         let (page, groups) = page_and_groups(&pdf);
         assert_eq!(groups.len(), 1);
         let (dict, group) = &groups[0];
@@ -4407,7 +4422,7 @@ mod tests {
         let pages = crate::layout::layout_document(&doc.section_layouts());
         let mut registry = FontRegistry::new();
         registry.register("brand", bytes.to_vec());
-        let pdf = render_pdf(&pages, &doc.fonts, &registry, &ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, doc.output.pdfa).expect("renders");
+        let pdf = render_pdf(&pages, &doc.fonts, &registry, &ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[]).expect("renders");
         let page = page_and_groups(&pdf).0;
         let operators = operators(&page);
         assert!(arrays(&operators) > 1, "the justified lines are arrays: {page}");
@@ -4528,7 +4543,7 @@ mod tests {
         let pages = crate::layout::layout_document(&doc.section_layouts());
         let mut images = ImageRegistry::new();
         images.load("photo", RED_PIXEL.to_vec());
-        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, doc.output.pdfa).expect("renders");
+        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[]).expect("renders");
         let (page, groups) = page_and_groups(&pdf);
         assert_eq!(groups.len(), 1);
         assert!(groups[0].1.contains("/I0 Do"), "the image is drawn in the group: {}", groups[0].1);

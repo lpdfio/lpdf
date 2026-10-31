@@ -1,5 +1,6 @@
 pub mod codegen;
 mod aes256;
+mod attachments;
 mod canvas;
 mod data;
 mod encrypt;
@@ -32,6 +33,8 @@ pub struct LpdfEngine {
     fonts:       pdf::FontRegistry,
     /// Per-engine image registry; populated via `load_image`.
     images:      pdf::ImageRegistry,
+    /// The bytes of the files documents carry, by the `ref` or name of their `<file>`; populated via `load_file`.
+    files:       attachments::FileRegistry,
     /// Caller-supplied glyph width tables; populated via `set_font_metrics`.
     /// Used by the layout engine to measure custom-font text accurately.
     font_widths: HashMap<String, tokens::FontWidths>,
@@ -52,6 +55,7 @@ impl LpdfEngine {
             license_key: license_key.to_string(),
             fonts:       pdf::FontRegistry::new(),
             images:      pdf::ImageRegistry::new(),
+            files:       attachments::FileRegistry::new(),
             font_widths: HashMap::new(),
             created_on:  None,
             now_unix:    0,
@@ -75,6 +79,12 @@ impl LpdfEngine {
     /// Call this for every image referenced by `<img name="…">` nodes.
     pub fn load_image(&mut self, name: &str, bytes: &[u8]) {
         self.images.load(name, bytes.to_vec());
+    }
+
+    /// Register the bytes of a file a document carries, for the `<file>` of its `<attachments>` whose `ref`, or with
+    /// no ref whose name, is `name`. The PDF carries them as they are.
+    pub fn load_file(&mut self, name: &str, bytes: &[u8]) {
+        self.files.load(name, bytes.to_vec());
     }
 
     /// Register the text of a file of Markdown rules, the root of which is a `<markdown-styles>`, for the
@@ -181,6 +191,8 @@ impl LpdfEngine {
         let encryption = RenderEncryption { user_password, owner_password, skip_encryption, entropy: entropy.to_vec() };
         let config = encryption.resolve(doc.output.encryption.as_ref()).map_err(|e| JsValue::from_str(&e))?;
         pdfa::check_render(doc.output.pdfa, self.created_on.as_deref()).map_err(|e| JsValue::from_str(&e))?;
+        let attached = std::mem::take(&mut doc.attachments);
+        let files = attachments::resolve(&attached, &self.files).map_err(|e| JsValue::from_str(&e))?;
 
         // Confirm every image declared in the tree has bytes in the registry.
         for (_alias, name) in &doc.images {
@@ -222,7 +234,7 @@ impl LpdfEngine {
             &doc.meta,
             &doc.gradients,
             self.created_on.as_deref(),
-            status.is_licensed(), doc.output.pdfa,
+            status.is_licensed(), doc.output.pdfa, &files,
         )
         .map_err(|e| JsValue::from_str(&e))?;
 
@@ -275,10 +287,12 @@ impl LpdfEngine {
         }
 
         let mut doc = parse::parse_with(xml, &self.resources())?;
-        // Checked before the layout, so a missing or stray password, or a missing date, fails without the work of a
-        // render.
+        // Checked before the layout, so a missing or stray password, a missing date or a file with no bytes fails
+        // without the work of a render.
         let config = encryption.resolve(doc.output.encryption.as_ref())?;
         pdfa::check_render(doc.output.pdfa, self.created_on.as_deref())?;
+        let attached = std::mem::take(&mut doc.attachments);
+        let files = attachments::resolve(&attached, &self.files)?;
 
         if let Some(json) = json_data {
             data::apply(&mut doc, json)?;
@@ -317,7 +331,7 @@ impl LpdfEngine {
             &doc.meta,
             &doc.gradients,
             self.created_on.as_deref(),
-            status.is_licensed(), doc.output.pdfa,
+            status.is_licensed(), doc.output.pdfa, &files,
         )?;
 
         match &config {
@@ -356,6 +370,8 @@ impl LpdfEngine {
         let mut doc = parse::parse(xml)?;
         RenderEncryption::skipping(skip_encryption).resolve(doc.output.encryption.as_ref())?;
         pdfa::check_render(doc.output.pdfa, None)?;
+        // No file is loaded here, so a document that carries files is an error that says how to load them.
+        attachments::resolve(&doc.attachments, &attachments::FileRegistry::new())?;
         if let Some(json) = json_data {
             data::apply(&mut doc, json)?;
         }
@@ -371,7 +387,7 @@ impl LpdfEngine {
             &doc.meta,
             &doc.gradients,
             None,
-            status.is_licensed(), doc.output.pdfa,
+            status.is_licensed(), doc.output.pdfa, &[],
         )
     }
 
@@ -385,7 +401,7 @@ impl LpdfEngine {
         // Render as unlicensed (with the attribution line) to match what the adapters
         // produce when no valid license key is supplied — keeps snapshot hashes
         // consistent between the Rust tests and the adapter test suites.
-        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, doc.output.pdfa)
+        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[])
     }
 
     /// Render XML to PDF bytes with `images` loaded, the way an SDK does: the sizes of the images are known before
@@ -403,7 +419,7 @@ impl LpdfEngine {
             layout::prefill_section_image_sizes(page, &meta);
         }
         let pages: Vec<render::RenderPage> = layout::layout_document(&lp);
-        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &registry, &doc.meta, &doc.gradients, None, false, doc.output.pdfa)
+        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &registry, &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[])
     }
 
     /// Render XML to PDF bytes as `render_xml` does, unlicensed and with built-in fonts only, encrypted as the
@@ -454,6 +470,8 @@ pub enum SourceKind {
     Image,
     /// The `src` of a `<markdown-styles>`, loaded under the `src` itself with `load_markdown_styles`.
     MarkdownStyles,
+    /// The `src` of a `<file>` of `<attachments>`, loaded under the file's `ref` or name with `load_file`.
+    File,
 }
 
 /// A file that a document names with a `src` and whoever renders it loads, as the engine reads no files.
@@ -465,8 +483,8 @@ pub struct SourceFile {
     pub src:  String,
 }
 
-/// The files that the XML document `xml` names with a `src`: its images and the files of its Markdown styles.
-/// A font is not among them: the command line draws in the built-in fonts.
+/// The files that the XML document `xml` names with a `src`: its images, the files of its Markdown styles and the
+/// files it carries. A font is not among them: the command line draws in the built-in fonts.
 pub fn source_files(xml: &str) -> Result<Vec<SourceFile>, String> {
     let doc = roxmltree::Document::parse(xml).map_err(|e| format!("XML parse error: {e}"))?;
     let mut files = Vec::new();
@@ -479,6 +497,10 @@ pub fn source_files(xml: &str) -> Result<Vec<SourceFile>, String> {
             }
             "markdown-styles" => {
                 files.push(SourceFile { kind: SourceKind::MarkdownStyles, key: src.to_string(), src: src.to_string() });
+            }
+            "file" => {
+                let key = node.attribute("ref").or_else(|| node.attribute("name")).unwrap_or(src);
+                files.push(SourceFile { kind: SourceKind::File, key: key.to_string(), src: src.to_string() });
             }
             _ => {}
         }
@@ -629,7 +651,7 @@ pub fn bench_render_doc(mut doc: BenchDoc) -> Result<Vec<u8>, String> {
     pdf::render_pdf(
         &pages, &doc.0.fonts,
         &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
-        &doc.0.meta, &doc.0.gradients, None, false, doc.0.output.pdfa,
+        &doc.0.meta, &doc.0.gradients, None, false, doc.0.output.pdfa, &[],
     )
 }
 
@@ -654,7 +676,7 @@ pub fn bench_write_pdf(pages: BenchPages) -> Result<Vec<u8>, String> {
     pdf::render_pdf(
         &pages.pages, &pages.doc.fonts,
         &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
-        &pages.doc.meta, &pages.doc.gradients, None, false, pages.doc.output.pdfa,
+        &pages.doc.meta, &pages.doc.gradients, None, false, pages.doc.output.pdfa, &[],
     )
 }
 
@@ -701,7 +723,7 @@ pub fn bench_write_pdf_with_fonts(pages: BenchPages, fonts: &BenchFonts) -> Resu
     pdf::render_pdf(
         &pages.pages, &pages.doc.fonts,
         &fonts.registry, &pdf::ImageRegistry::new(),
-        &pages.doc.meta, &pages.doc.gradients, None, false, pages.doc.output.pdfa,
+        &pages.doc.meta, &pages.doc.gradients, None, false, pages.doc.output.pdfa, &[],
     )
 }
 
@@ -735,7 +757,7 @@ pub fn bench_render_doc_with_images(mut doc: BenchDoc, images: &[(&str, &[u8])])
     pdf::render_pdf(
         &pages, &doc.0.fonts,
         &pdf::FontRegistry::new(), &registry,
-        &doc.0.meta, &doc.0.gradients, None, false, doc.0.output.pdfa,
+        &doc.0.meta, &doc.0.gradients, None, false, doc.0.output.pdfa, &[],
     )
 }
 
@@ -756,7 +778,7 @@ pub fn bench_render_xml(xml: &str) -> Result<Vec<u8>, String> {
     pdf::render_pdf(
         &pages, &doc.fonts,
         &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
-        &doc.meta, &doc.gradients, None, false, doc.output.pdfa,
+        &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[],
     )
 }
 
@@ -776,7 +798,7 @@ pub fn bench_render_xml_with_font(
     pdf::render_pdf(
         &pages, &doc.fonts,
         &fonts, &pdf::ImageRegistry::new(),
-        &doc.meta, &doc.gradients, None, false, doc.output.pdfa,
+        &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[],
     )
 }
 
@@ -796,7 +818,7 @@ pub fn bench_render_xml_with_image(
     pdf::render_pdf(
         &pages, &doc.fonts,
         &pdf::FontRegistry::new(), &images,
-        &doc.meta, &doc.gradients, None, false, doc.output.pdfa,
+        &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[],
     )
 }
 
@@ -811,6 +833,9 @@ mod embedded_font_layout_tests;
 
 #[cfg(test)]
 mod pdfa_render_tests;
+
+#[cfg(test)]
+mod attachment_render_tests;
 
 #[cfg(test)]
 mod tests {
@@ -902,7 +927,7 @@ mod tests {
             layout::layout_document(&lp);
         let pdf = pdf::render_pdf(
             &pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
-            &doc.meta, &doc.gradients, None, true, doc.output.pdfa,
+            &doc.meta, &doc.gradients, None, true, doc.output.pdfa, &[],
         ).unwrap();
         assert!(!pdf_contains(&pdf, pdf::ATTRIBUTION_FONT_KEY.as_bytes()));
         assert!(!pdf_contains(&pdf, b"https://lpdf.io"));
@@ -1192,8 +1217,9 @@ mod tests {
 
     /// Writes the files `scripts/check-encryption.mjs` opens with qpdf, when `LPDF_ENCRYPT_OUT` names a folder:
     /// `showcase-encryption` rendered with the cipher and the permissions of its `<output>` and the passwords of
-    /// the render, as a host renders it. Without the variable the test does nothing, so a plain `cargo test` needs
-    /// no other tool.
+    /// the render, as a host renders it, and `showcase-attachments` encrypted the same way, so that its files are
+    /// seen to come back whole. Without the variable the test does nothing, so a plain `cargo test` needs no other
+    /// tool.
     #[test]
     fn writes_samples_for_the_external_check() {
         let Some(dir) = std::env::var_os("LPDF_ENCRYPT_OUT") else { return };
@@ -1216,6 +1242,15 @@ mod tests {
         ];
         for (name, xml, encryption) in samples {
             let bytes = render_with(xml, &encryption).expect("the sample renders");
+            std::fs::write(dir.join(name), bytes).expect("could not write a sample");
+        }
+
+        let attachments = [
+            ("attachments-plain.pdf",  "aes-256", RenderEncryption::skipping(true)),
+            ("attachments-aes256.pdf", "aes-256", passwords(Some("user"), "owner")),
+        ];
+        for (name, cipher, encryption) in attachments {
+            let bytes = attachment_render_tests::render_encrypted(cipher, &encryption);
             std::fs::write(dir.join(name), bytes).expect("could not write a sample");
         }
     }
