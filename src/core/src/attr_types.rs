@@ -459,6 +459,10 @@ mod tests {
         assert_eq!(permissions(r#"{"encrypt":"aes-256","allow":null}"#), Permissions::NONE);
         assert_eq!(permissions(r#"{"encrypt":"aes-256","allow":""}"#), Permissions::NONE);
         assert_eq!(permissions(r#"{"encrypt":"aes-256","allow":"all"}"#), Permissions::ALL);
+    }
+
+    #[test]
+    fn kit_to_xml_writes_a_null_allow_as_no_allow() {
         let xml = kit_to_xml(&tree(r#"{"output":{"encrypt":"aes-256","allow":null}}"#, r#""a""#)).unwrap();
         assert!(xml.contains(r#"<output encrypt="aes-256"/>"#), "{xml}");
     }

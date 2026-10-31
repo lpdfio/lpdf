@@ -3543,8 +3543,8 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
     // ── Output ────────────────────────────────────────────────────────────────
     let output = match attrs.get("output").and_then(|v| v.as_object()) {
         Some(o) => {
-            // Only a string is read: an `allow` given another way is an error, never one that is not there, which
-            // would encrypt with every permission allowed.
+            // Only a string is read: an `allow` given another way is an error, never taken as one that is not there,
+            // which allows nothing, so a value of the wrong type isn't quietly read as a locked file either.
             let text = |name: &str| match o.get(name) {
                 None | Some(serde_json::Value::Null) => Ok(None),
                 Some(serde_json::Value::String(s)) => Ok(Some(s.as_str())),
