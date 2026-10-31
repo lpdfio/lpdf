@@ -16,13 +16,16 @@
 /// { "fonts": { "Inter": "<base64 TTF bytes>", … } }
 /// ```
 ///
-/// Encryption is requested with an `encrypt` object. `algorithm` is `"aes-256"` (the
-/// default) or `"rc4-128"`; AES-256 also needs `entropy`, at least 32 random bytes from
-/// the host's secure generator, base64-encoded:
+/// A document asks for encryption in its `<output>`, which names the cipher and the permissions. The
+/// passwords come with the request, never with the template, and AES-256 also needs `entropy`, at least
+/// 32 random bytes from the host's secure generator, base64-encoded:
 /// ```json
-/// { "encrypt": { "user_password": "", "owner_password": "…", "permissions": { "copy": false },
-///                "algorithm": "aes-256", "entropy": "<base64 random bytes>" } }
+/// { "user_password": "", "owner_password": "…", "entropy": "<base64 random bytes>" }
 /// ```
+/// A render that cannot have the passwords, such as a preview, asks to skip the encryption by name with
+/// `"skip_encryption": true` and gets the file unencrypted. Without it, a document that asks for
+/// encryption and gets no owner password is an error, and so are passwords for a document that doesn't
+/// ask for it.
 
 // Include the pure-Rust core modules by path — no wasm-bindgen involved.
 #[path = "../../core/src/tokens.rs"]
@@ -210,6 +213,12 @@ fn build_font_widths(req: &serde_json::Value) -> std::collections::HashMap<Strin
 }
 
 fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, req: &serde_json::Value) -> String {
+    // Checked before the layout, so a missing or stray password fails without the work of a render.
+    let encryption = match render_encryption(req).and_then(|e| e.resolve(doc.output.encryption.as_ref())) {
+        Ok(config) => config,
+        Err(e)     => return serde_json::json!({ "error": e }).to_string(),
+    };
+
     let registry       = build_registry(req);
     let image_registry = build_image_registry(req);
 
@@ -257,17 +266,12 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     // An unlicensed status draws the attribution line on every page.
     match pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, &doc.gradients, created_on, status.is_licensed()) {
         Ok(bytes) => {
-            let bytes = if let Some(enc) = req.get("encrypt") {
-                let cfg = match encrypt_config(enc) {
-                    Ok(cfg) => cfg,
-                    Err(e)  => return serde_json::json!({ "error": e }).to_string(),
-                };
-                match encrypt::encrypt_pdf(&bytes, &cfg) {
+            let bytes = match &encryption {
+                Some(cfg) => match encrypt::encrypt_pdf(&bytes, cfg) {
                     Ok(b)  => b,
                     Err(e) => return serde_json::json!({ "error": e }).to_string(),
-                }
-            } else {
-                bytes
+                },
+                None => bytes,
             };
             let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
             serde_json::json!({ "pdf": b64 }).to_string()
@@ -294,27 +298,26 @@ impl LpdfEngine {
     }
 }
 
-/// Reads the request's `encrypt` object into a config the core can use.
-fn encrypt_config(enc: &serde_json::Value) -> Result<encrypt::EncryptConfig, String> {
-    let algorithm = match enc["algorithm"].as_str() {
-        Some(name) => encrypt::Algorithm::parse(name)?,
-        None       => encrypt::Algorithm::default(),
-    };
-    let entropy = match enc["entropy"].as_str() {
+/// Reads what the request says about encryption: the passwords, the entropy and `skip_encryption`. The
+/// `encrypt` object of the engines before `<output>` is refused, so that a host that still sends it gets an
+/// error and not a file it believes is encrypted.
+fn render_encryption(req: &serde_json::Value) -> Result<encrypt::RenderEncryption, String> {
+    if req.get("encrypt").is_some() {
+        return Err("the request's encrypt object is gone: the document asks for encryption in its <output>, \
+            and the passwords come as user_password and owner_password".to_string());
+    }
+    let entropy = match req["entropy"].as_str() {
         Some(text) => base64::engine::general_purpose::STANDARD
             .decode(text)
-            .map_err(|e| format!("encrypt.entropy is not valid base64: {e}"))?,
+            .map_err(|e| format!("entropy is not valid base64: {e}"))?,
         None => Vec::new(),
     };
-    let cfg = encrypt::EncryptConfig {
-        user_password:  enc["user_password"] .as_str().unwrap_or("").to_string(),
-        owner_password: enc["owner_password"].as_str().unwrap_or("").to_string(),
-        permissions:    shared::parse_permissions_json(&enc["permissions"].to_string()),
-        algorithm,
+    Ok(encrypt::RenderEncryption {
+        user_password:   req["user_password"].as_str().map(str::to_string),
+        owner_password:  req["owner_password"].as_str().map(str::to_string),
+        skip_encryption: req["skip_encryption"].as_bool().unwrap_or(false),
         entropy,
-    };
-    cfg.validate()?;
-    Ok(cfg)
+    })
 }
 
 fn render_doc(doc: parse::Document, license_key: &str, now_unix: i64) -> String {
@@ -363,5 +366,70 @@ mod tests {
         // in the square, so 100pt high is 50pt wide, and the box touches the corner of the page.
         assert!(matrices.iter().any(|m| m.starts_with("50 0 0 100 10 ")), "{matrices:?}");
         assert!(matrices.iter().any(|m| m.starts_with("50 0 0 100 545.28")), "{matrices:?}");
+    }
+
+    /// A one-page document whose `<output>` has `output`.
+    fn with_output(output: &str) -> String {
+        format!(r#"<lpdf version="1"><document><output {output}/><section><layout><text>Hello</text></layout></section></document></lpdf>"#)
+    }
+
+    /// What `render_pdf` answers for `xml` with the rest of the request in `fields`.
+    fn render_request(xml: &str, fields: serde_json::Value) -> serde_json::Value {
+        let mut req = serde_json::json!({ "method": "render_pdf", "input": xml });
+        for (key, value) in fields.as_object().unwrap() {
+            req[key] = value.clone();
+        }
+        serde_json::from_str(&dispatch(&req.to_string())).unwrap()
+    }
+
+    fn pdf_text(answer: &serde_json::Value) -> String {
+        let bytes = base64::engine::general_purpose::STANDARD.decode(answer["pdf"].as_str().expect(&answer.to_string())).unwrap();
+        String::from_utf8_lossy(&bytes).into_owned()
+    }
+
+    const ENTROPY: &str = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4v";
+
+    #[test]
+    fn a_request_with_passwords_encrypts_as_the_output_asks() {
+        let answer = render_request(
+            &with_output(r#"encrypt="aes-256" allow="print""#),
+            serde_json::json!({ "user_password": "", "owner_password": "owner", "entropy": ENTROPY }),
+        );
+        let text = pdf_text(&answer);
+        assert!(text.contains("/V 5") && text.contains("/CFM /AESV3"), "AES-256 from <output>");
+
+        let answer = render_request(&with_output(r#"encrypt="rc4-128""#), serde_json::json!({ "owner_password": "owner" }));
+        assert!(pdf_text(&answer).contains("/V 2"), "RC4-128 from <output>, with no entropy");
+    }
+
+    #[test]
+    fn skip_encryption_gives_the_file_unencrypted() {
+        let answer = render_request(&with_output(r#"encrypt="aes-256""#), serde_json::json!({ "skip_encryption": true }));
+        assert!(!pdf_text(&answer).contains("/Encrypt"));
+    }
+
+    #[test]
+    fn the_request_errors_say_what_to_change() {
+        let encrypted = with_output(r#"encrypt="aes-256""#);
+        let plain = with_output("");
+        for (xml, fields, expected) in [
+            (&encrypted, serde_json::json!({}), "no owner password"),
+            (&plain, serde_json::json!({ "owner_password": "owner" }), "does not ask for encryption"),
+            (&encrypted, serde_json::json!({ "owner_password": "owner", "skip_encryption": true }), "not both"),
+            (&plain, serde_json::json!({ "encrypt": { "owner_password": "owner" } }), "encrypt object is gone"),
+            (&encrypted, serde_json::json!({ "owner_password": "owner", "entropy": "not base64!" }), "entropy is not valid base64"),
+        ] {
+            let answer = render_request(xml, fields);
+            let error = answer["error"].as_str().unwrap_or_else(|| panic!("expected an error with {expected:?}"));
+            assert!(error.contains(expected), "expected {expected:?}, got {error}");
+        }
+    }
+
+    #[test]
+    fn the_tree_path_reads_output_too() {
+        let tree = r#"{"version":1,"type":"document","attrs":{"output":{"encrypt":"rc4-128"}},"nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[]}]}]}"#;
+        let req = serde_json::json!({ "method": "render_tree_pdf", "input": tree });
+        let answer: serde_json::Value = serde_json::from_str(&dispatch(&req.to_string())).unwrap();
+        assert!(answer["error"].as_str().unwrap().contains("no owner password"), "{answer}");
     }
 }

@@ -9,6 +9,8 @@ use crate::layout::{Held, Placed};
 #[derive(Debug, Clone)]
 pub struct Document {
     pub meta:        Meta,
+    /// How the file is written: `<output>`.
+    pub output:      Output,
     pub fonts:       HashMap<String, FontDef>,
     pub images:      HashMap<String, String>,
     /// Caller-supplied glyph width tables.
@@ -240,6 +242,13 @@ pub struct Meta {
     pub subject: String,
     pub keywords: String,
     pub creator: String,
+}
+
+/// How the file is written, apart from what its pages show: `<output>`.
+#[derive(Debug, Clone, Default)]
+pub struct Output {
+    /// The cipher of `encrypt` and the permissions of `allow`; `None` when the document is not encrypted.
+    pub encryption: Option<crate::encrypt::OutputEncryption>,
 }
 
 #[derive(Debug, Clone)]
@@ -1221,6 +1230,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
 
     let markdown_assets = markdown::Assets { image_srcs, styles_files: resources.markdown_styles.clone() };
     let mut meta          = Meta::default();
+    let mut output        = Output::default();
     let mut doc_size      = (595.28_f32, 841.89_f32); // a4
     let mut doc_background: Option<String> = None;
     let mut doc_debug     = false;
@@ -1261,6 +1271,10 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                 for doc_child in elems(&child) {
                     match doc_child.tag_name().name() {
                         "meta" => meta = parse_meta(&doc_child),
+                        "output" => {
+                            output = parse_output(doc_child.attribute("encrypt"), doc_child.attribute("allow"))
+                                .map_err(|e| format!("<output>{}: {e}", node_loc(&doc_child)))?;
+                        }
                         "section" => {
                             sections_xml.push(parse_section_elem(
                                 &doc_child,
@@ -1298,6 +1312,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                 }
                 return Ok(Document {
                     meta,
+                    output,
                     fonts:       resolved_fonts,
                     font_widths: HashMap::new(),
                     images:      asset_images,
@@ -1611,6 +1626,24 @@ pub(crate) fn layout_margin(a: &impl Attrs, tokens: &Tokens) -> Result<[f32; 4],
         Some(v) => tokens.resolve_spacing(v),
         None    => Ok([DEFAULT_LAYOUT_MARGIN; 4]),
     }
+}
+
+/// Reads the attributes of `<output>`: the cipher of `encrypt` and the permissions of `allow`. `allow` sets what a
+/// reader of an encrypted file may do, so it needs `encrypt`.
+fn parse_output(encrypt: Option<&str>, allow: Option<&str>) -> Result<Output, String> {
+    let Some(encrypt) = encrypt else {
+        if allow.is_some() {
+            return Err("allow sets what a reader of an encrypted file may do, and the document is not encrypted: \
+                add encrypt (encrypt=\"aes-256\"), or remove allow".to_string());
+        }
+        return Ok(Output::default());
+    };
+    let algorithm = crate::encrypt::Algorithm::parse(encrypt)?;
+    let permissions = match allow {
+        Some(list) => crate::encrypt::Permissions::from_allow(list)?,
+        None => crate::encrypt::Permissions::default(),
+    };
+    Ok(Output { encryption: Some(crate::encrypt::OutputEncryption { algorithm, permissions }) })
 }
 
 fn parse_meta(elem: &roxmltree::Node) -> Meta {
@@ -3498,6 +3531,21 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
         Meta::default()
     };
 
+    // ── Output ────────────────────────────────────────────────────────────────
+    let output = match attrs.get("output").and_then(|v| v.as_object()) {
+        Some(o) => {
+            // Only a string is read: an `allow` given another way is an error, never one that is not there, which
+            // would encrypt with every permission allowed.
+            let text = |name: &str| match o.get(name) {
+                None | Some(serde_json::Value::Null) => Ok(None),
+                Some(serde_json::Value::String(s)) => Ok(Some(s.as_str())),
+                Some(other) => Err(format!("document output: {name} must be a string, not {other}")),
+            };
+            parse_output(text("encrypt")?, text("allow")?).map_err(|e| format!("document output: {e}"))?
+        }
+        None => Output::default(),
+    };
+
     // ── Document-level page defaults ──────────────────────────────────────────
     let doc_size_str  = attrs.get("size")       .and_then(|v| v.as_str());
     let doc_orient    = attrs.get("orientation").and_then(|v| v.as_str());
@@ -3554,6 +3602,7 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
     }
     Ok(Document {
         meta,
+        output,
         fonts:       resolved_fonts,
         font_widths: asset_font_widths,
         images:      asset_images,

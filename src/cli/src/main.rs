@@ -106,6 +106,7 @@ fn cmd_convert(args: &[String]) {
     let mut data:    Option<PathBuf> = None;
     let mut template: Option<PathBuf> = None;
     let mut license: String          = std::env::var("LPDF_LICENSE").unwrap_or_default();
+    let mut skip_encryption          = false;
 
     let mut i = 0;
     while i < args.len() {
@@ -119,6 +120,7 @@ fn cmd_convert(args: &[String]) {
             "--output"  => { i += 1; output  = Some(PathBuf::from(require_arg(args, i, "--output"))); }
             "--data"    => { i += 1; data    = Some(PathBuf::from(require_arg(args, i, "--data"))); }
             "--license" => { i += 1; license = require_arg(args, i, "--license").to_owned(); }
+            "--skip-encryption" => { skip_encryption = true; }
             other => { eprintln!("Unknown argument: {other}"); process::exit(1); }
         }
         i += 1;
@@ -140,7 +142,7 @@ fn cmd_convert(args: &[String]) {
             eprintln!("--output <dir> is required when --input is a folder");
             process::exit(1);
         });
-        cmd_convert_batch(&input_path, &output_dir, &license);
+        cmd_convert_batch(&input_path, &output_dir, &license, skip_encryption);
         return;
     }
 
@@ -153,9 +155,9 @@ fn cmd_convert(args: &[String]) {
 
     let t0 = Instant::now();
     let rendered = if is_markdown {
-        render_markdown_file(&input_path, template.as_ref(), data.as_ref(), &license)
+        render_markdown_file(&input_path, template.as_ref(), data.as_ref(), &license, skip_encryption)
     } else {
-        render_xml_file(&input_path, data.as_ref(), &license)
+        render_xml_file(&input_path, data.as_ref(), &license, skip_encryption)
     };
     let pdf_bytes = rendered.unwrap_or_else(|e| {
         eprintln!("Render error: {e}");
@@ -201,6 +203,17 @@ fn is_markdown_file(path: &Path) -> bool {
     matches!(path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref(), Some("md" | "markdown"))
 }
 
+/// The command line takes no passwords, since one on the command line shows in `ps` to anyone on the machine. So it
+/// renders a document that asks for encryption only with --skip-encryption, unencrypted.
+fn check_encryption(xml: &str, skip_encryption: bool) -> Result<lpdf::RenderEncryption, String> {
+    if !skip_encryption && lpdf::asks_for_encryption(xml) {
+        return Err("the document asks for encryption in its <output>, and the command line takes no passwords: add \
+            --skip-encryption to render it unencrypted, or render it with an SDK, which takes the passwords with the render"
+            .to_string());
+    }
+    Ok(lpdf::RenderEncryption::skipping(skip_encryption))
+}
+
 /// An engine for the license `license`, with the clock of this machine.
 fn engine_for(license: &str) -> lpdf::LpdfEngine {
     let mut engine = lpdf::LpdfEngine::new(license);
@@ -236,22 +249,30 @@ fn folder_of(path: &Path) -> PathBuf {
 }
 
 /// Render an XML document, with the images and styles files it names.
-fn render_xml_file(input: &Path, data: Option<&PathBuf>, license: &str) -> Result<Vec<u8>, String> {
+fn render_xml_file(input: &Path, data: Option<&PathBuf>, license: &str, skip_encryption: bool) -> Result<Vec<u8>, String> {
     let xml  = read_file(&input.to_path_buf());
+    let encryption = check_encryption(&xml, skip_encryption)?;
     let json = data.map(read_json_file);
     let mut engine = engine_for(license);
     load_sources(&mut engine, &xml, &folder_of(input))?;
-    engine.render_xml(&xml, json.as_deref())
+    engine.render_xml(&xml, json.as_deref(), &encryption)
 }
 
 /// Render a `.md` file in a template: the one given, or the default. The text and the front matter are the data of
 /// the template, `--data` adds to them, and the images of the Markdown are read relative to the `.md` file.
-fn render_markdown_file(input: &Path, template: Option<&PathBuf>, data: Option<&PathBuf>, license: &str) -> Result<Vec<u8>, String> {
+fn render_markdown_file(
+    input: &Path,
+    template: Option<&PathBuf>,
+    data: Option<&PathBuf>,
+    license: &str,
+    skip_encryption: bool,
+) -> Result<Vec<u8>, String> {
     let markdown = read_file(&input.to_path_buf());
     let template_xml = match template {
         Some(path) => read_file(path),
         None       => lpdf::markdown::default_template().to_string(),
     };
+    let encryption = check_encryption(&template_xml, skip_encryption)?;
     let images = lpdf::markdown::file_images(&markdown);
     let xml = lpdf::markdown::declare_images(&template_xml, &images)?;
 
@@ -279,7 +300,7 @@ fn render_markdown_file(input: &Path, template: Option<&PathBuf>, data: Option<&
         let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read the image '{}': {e}", path.display()))?;
         engine.load_image(&lpdf::markdown::file_image_name(index), &bytes);
     }
-    engine.render_xml(&xml, Some(&fields.to_string()))
+    engine.render_xml(&xml, Some(&fields.to_string()), &encryption)
 }
 
 // ── Subcommand: license ───────────────────────────────────────────────────────
@@ -377,7 +398,7 @@ fn now_unix() -> i64 {
         .unwrap_or(0)
 }
 
-fn cmd_convert_batch(input_dir: &PathBuf, output_dir: &PathBuf, license: &str) {
+fn cmd_convert_batch(input_dir: &PathBuf, output_dir: &PathBuf, license: &str, skip_encryption: bool) {
     // One reading for the whole batch: a run that straddles a key's expiry should produce one
     // kind of PDF, not attributed ones after some file in the middle.
     let now = now_unix();
@@ -414,8 +435,12 @@ fn cmd_convert_batch(input_dir: &PathBuf, output_dir: &PathBuf, license: &str) {
             Err(e) => { eprintln!("Skipping '{}': {e}", xml_path.display()); continue; }
         };
 
+        if let Err(e) = check_encryption(&xml, skip_encryption) {
+            eprintln!("Skipping '{}': {e}", xml_path.display());
+            continue;
+        }
         let t0 = Instant::now();
-        let pdf_bytes = match lpdf::LpdfEngine::render_xml_to_pdf(&xml, None, license, now) {
+        let pdf_bytes = match lpdf::LpdfEngine::render_xml_to_pdf(&xml, None, license, now, skip_encryption) {
             Ok(b) => b,
             Err(e) => { eprintln!("Skipping '{}': {e}", xml_path.display()); continue; }
         };
@@ -530,6 +555,7 @@ fn require_arg<'a>(args: &'a [String], i: usize, flag: &str) -> &'a str {
 fn cmd_benchmark(args: &[String]) {
     let mut input:  Option<PathBuf> = None;
     let mut repeat: u32             = 100;
+    let mut skip_encryption         = false;
 
     let mut i = 0;
     while i < args.len() {
@@ -542,6 +568,7 @@ fn cmd_benchmark(args: &[String]) {
                     .parse::<u32>()
                     .unwrap_or_else(|_| { eprintln!("--repeat must be a positive integer"); process::exit(1); });
             }
+            "--skip-encryption" => { skip_encryption = true; }
             other => { eprintln!("Unknown argument: {other}"); process::exit(1); }
         }
         i += 1;
@@ -577,6 +604,10 @@ fn cmd_benchmark(args: &[String]) {
             Err(e) => { eprintln!("Skipping '{}': {e}", xml_path.display()); continue; }
         };
 
+        if let Err(e) = check_encryption(&xml, skip_encryption) {
+            eprintln!("Error in '{}': {e}", xml_path.display());
+            continue;
+        }
         let mut times: Vec<f64> = Vec::with_capacity(repeat as usize);
         let mut last_size = 0usize;
 
@@ -584,7 +615,7 @@ fn cmd_benchmark(args: &[String]) {
             let t0 = Instant::now();
             // Unlicensed, so the timing includes drawing the attribution line; the clock is
             // therefore irrelevant here.
-            match lpdf::LpdfEngine::render_xml_to_pdf(&xml, None, "", 0) {
+            match lpdf::LpdfEngine::render_xml_to_pdf(&xml, None, "", 0, skip_encryption) {
                 Ok(b) => { last_size = b.len(); }
                 Err(e) => { eprintln!("Error in '{}': {e}", xml_path.display()); break; }
             }
@@ -643,6 +674,7 @@ fn print_benchmark_help() {
     eprintln!("Options:");
     eprintln!("  --input   <file.xml|dir>   XML file or folder of XML files to benchmark");
     eprintln!("  --repeat  <n>              Number of render iterations per file (default: 100)");
+    eprintln!("  --skip-encryption          Render a document whose <output> asks for encryption unencrypted");
 }
 
 fn print_license_help() {
@@ -669,6 +701,8 @@ fn print_convert_help() {
     eprintln!("                             the text from the data \"markdown\" and the front matter from the other fields.");
     eprintln!("                             Without it, a page of A4 with the page number");
     eprintln!("  --license  <token>         License token (or set LPDF_LICENSE env var)");
+    eprintln!("  --skip-encryption          Render a document whose <output> asks for encryption unencrypted. The command");
+    eprintln!("                             line takes no passwords, which would show to anyone on the machine; an SDK does");
     eprintln!();
     eprintln!("A <markdown-styles src> and an <image src> are read relative to the file that names them;");
     eprintln!("the images of a .md file, relative to it.");

@@ -38,25 +38,6 @@ pub(crate) fn extract_font_widths(bytes: &[u8]) -> Option<super::tokens::FontWid
     Some(super::tokens::FontWidths::new(default, Vec::new(), advances))
 }
 
-/// Parse a JSON permissions object into an `encrypt::Permissions` value.
-///
-/// All boolean fields (`print`, `modify`, `copy`, `annotate`, `fill_forms`,
-/// `accessibility`, `assemble`, `print_hq`) default to `true` when absent.
-pub(crate) fn parse_permissions_json(json: &str) -> super::encrypt::Permissions {
-    let v: serde_json::Value = serde_json::from_str(json).unwrap_or(serde_json::Value::Null);
-    let get_bool = |key: &str| v.get(key).and_then(|b| b.as_bool()).unwrap_or(true);
-    super::encrypt::Permissions {
-        print:         get_bool("print"),
-        modify:        get_bool("modify"),
-        copy:          get_bool("copy"),
-        annotate:      get_bool("annotate"),
-        fill_forms:    get_bool("fill_forms"),
-        accessibility: get_bool("accessibility"),
-        assemble:      get_bool("assemble"),
-        print_hq:      get_bool("print_hq"),
-    }
-}
-
 /// Core render-tree-to-JSON logic shared by the WASM engine (`lib.rs`) and the
 /// WASI binary (`core-wasi/main.rs`).
 ///

@@ -186,12 +186,13 @@ fn render_assets(assets: &serde_json::Map<String, Value>, depth: usize) -> Optio
 ")))
 }
 
-// ── Meta element ──────────────────────────────────────────────────────────────
+// ── Meta and output elements ──────────────────────────────────────────────────
 
-fn render_meta(meta: &serde_json::Map<String, Value>, depth: usize) -> String {
+/// An element of attributes alone, such as `<meta>` or `<output>`, from the object the kit gives for it.
+fn render_attributes_element(name: &str, attributes: &serde_json::Map<String, Value>, depth: usize) -> String {
     let pad = "  ".repeat(depth);
-    let mut tag = format!("{pad}<meta");
-    for (k, v) in meta {
+    let mut tag = format!("{pad}<{name}");
+    for (k, v) in attributes {
         if let Some(s) = v.as_str() {
             tag.push_str(&format!(" {}=\"{}\"", k, escape_attr(s)));
         }
@@ -463,8 +464,8 @@ pub fn kit_to_xml(json: &str) -> Result<String, String> {
     let empty = serde_json::Map::new();
     let attrs = root.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
 
-    // Document-level attrs (skip assets, tokens, meta — written as elements below)
-    let doc_attrs_s = attrs_str(attrs, &["assets", "tokens", "meta"]);
+    // Document-level attrs (skip assets, tokens, meta, output — written as elements below)
+    let doc_attrs_s = attrs_str(attrs, &["assets", "tokens", "meta", "output"]);
 
     let mut lines: Vec<String> = vec![
         r#"<?xml version="1.0" encoding="UTF-8"?>"#.into(),
@@ -506,10 +507,10 @@ pub fn kit_to_xml(json: &str) -> Result<String, String> {
 
     lines.push(format!("  <document{doc_attrs_s}>"));
 
-    // <meta>
-    if let Some(meta) = attrs.get("meta").and_then(|v| v.as_object()) {
-        if !meta.is_empty() {
-            lines.push(render_meta(meta, 2));
+    // <meta>, then <output>, as the schema orders them
+    for name in ["meta", "output"] {
+        if let Some(element) = attrs.get(name).and_then(|v| v.as_object()).filter(|e| !e.is_empty()) {
+            lines.push(render_attributes_element(name, element, 2));
         }
     }
 
@@ -733,6 +734,24 @@ mod tests {
         assert!(xml.contains("<meta "));
         assert!(xml.contains(r#"title="My Document""#));
         assert!(xml.contains(r#"author="Alice""#));
+    }
+
+    #[test]
+    fn output_emitted_after_meta() {
+        let json = r#"{
+            "version": 1,
+            "type": "document",
+            "attrs": {
+                "output": { "encrypt": "aes-256", "allow": "print fill-forms" },
+                "meta": { "title": "My Document" }
+            },
+            "nodes": [{"type":"section","attrs":{},"nodes":[]}]
+        }"#;
+        let xml = kit_to_xml(json).unwrap();
+        let output = xml.lines().find(|line| line.trim_start().starts_with("<output")).expect("an <output>");
+        assert!(output.contains(r#"encrypt="aes-256""#) && output.contains(r#"allow="print fill-forms""#), "{xml}");
+        assert!(xml.find("<meta").unwrap() < xml.find("<output").unwrap(), "{xml}");
+        assert!(xml.contains("<document>"), "output is an element, not an attribute: {xml}");
     }
 
     // ── Node rendering ────────────────────────────────────────────────────────

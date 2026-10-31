@@ -22,6 +22,8 @@ mod tokens;
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 
+pub use encrypt::RenderEncryption;
+
 #[wasm_bindgen]
 pub struct LpdfEngine {
     license_key: String,
@@ -37,8 +39,6 @@ pub struct LpdfEngine {
     /// Current Unix timestamp (seconds) used for license expiry checking.
     /// Set via `set_now()`.  Defaults to `0` (expiry check skipped).
     now_unix:    i64,
-    /// Optional encryption config (AES-256 or RC4-128); applied as a post-processing pass.
-    encrypt:     Option<encrypt::EncryptConfig>,
     /// The text of the files that a `<markdown-styles src>` names, by `src`; populated via `load_markdown_styles`.
     markdown_styles: HashMap<String, String>,
 }
@@ -54,47 +54,8 @@ impl LpdfEngine {
             font_widths: HashMap::new(),
             created_on:  None,
             now_unix:    0,
-            encrypt:     None,
             markdown_styles: HashMap::new(),
         }
-    }
-
-    /// Configure encryption applied to every subsequent `render_pdf` call.
-    ///
-    /// `permissions_json` is a JSON object with boolean fields matching the
-    /// `Permissions` struct (`print`, `modify`, `copy`, `annotate`, `fill_forms`,
-    /// `accessibility`, `assemble`, `print_hq`). Omitted fields default to `true`.
-    ///
-    /// `algorithm` is `"aes-256"` or `"rc4-128"`. AES-256 needs `entropy`: at least 32
-    /// random bytes from the host's secure generator, from which the core cuts the file
-    /// key, salts and IVs. RC4-128 ignores it. Fails when the algorithm is unknown or
-    /// AES-256 gets too little entropy.
-    ///
-    /// To apply permissions without an open password, pass an empty `user_password`
-    /// and a non-empty `owner_password`.
-    pub fn set_encryption(
-        &mut self,
-        user_password: &str,
-        owner_password: &str,
-        permissions_json: &str,
-        algorithm: &str,
-        entropy: &[u8],
-    ) -> Result<(), JsValue> {
-        let config = encrypt::EncryptConfig {
-            user_password:  user_password.to_string(),
-            owner_password: owner_password.to_string(),
-            permissions:    shared::parse_permissions_json(permissions_json),
-            algorithm:      encrypt::Algorithm::parse(algorithm).map_err(|e| JsValue::from_str(&e))?,
-            entropy:        entropy.to_vec(),
-        };
-        config.validate().map_err(|e| JsValue::from_str(&e))?;
-        self.encrypt = Some(config);
-        Ok(())
-    }
-
-    /// Remove any previously configured encryption.
-    pub fn clear_encryption(&mut self) {
-        self.encrypt = None;
     }
 
     /// Register raw font bytes (TTF/OTF) for a custom font name.
@@ -171,8 +132,23 @@ impl LpdfEngine {
     /// `json_data` is an optional JSON string used to resolve `data-*`
     /// attributes in the template.  Pass `None` (or `null` / `undefined` from
     /// JavaScript) to render the template with its inline fallback content.
-    pub fn render_pdf(&self, xml: &str, json_data: Option<String>) -> Result<Vec<u8>, JsValue> {
-        self.render_xml(xml, json_data.as_deref()).map_err(|e| JsValue::from_str(&e))
+    ///
+    /// The rest is for a document that asks for encryption in its `<output>`, which sets the cipher and
+    /// the permissions: the passwords, which the template never holds, and `entropy`, at least 32 random
+    /// bytes from the host's secure generator for AES-256. A document that asks for encryption needs an
+    /// owner password, or `skip_encryption` to render it unencrypted, as a preview does; passwords for a
+    /// document that doesn't ask for it are an error, and so are passwords with `skip_encryption`.
+    pub fn render_pdf(
+        &self,
+        xml: &str,
+        json_data: Option<String>,
+        user_password: Option<String>,
+        owner_password: Option<String>,
+        skip_encryption: bool,
+        entropy: &[u8],
+    ) -> Result<Vec<u8>, JsValue> {
+        let encryption = RenderEncryption { user_password, owner_password, skip_encryption, entropy: entropy.to_vec() };
+        self.render_xml(xml, json_data.as_deref(), &encryption).map_err(|e| JsValue::from_str(&e))
     }
 
     /// Render a JSON kit-tree document to PDF bytes.
@@ -181,7 +157,17 @@ impl LpdfEngine {
     /// when an `LpdfDocument` Kit tree is passed to `renderPdf()`, avoiding an
     /// intermediate XML serialisation step. PHP, Python, and .NET adapters also
     /// use this entry point.
-    pub fn render_tree_pdf(&self, json: &str) -> Result<Vec<u8>, JsValue> {
+    ///
+    /// The passwords, `skip_encryption` and `entropy` are those of `render_pdf`, for a document whose
+    /// `output` asks for encryption.
+    pub fn render_tree_pdf(
+        &self,
+        json: &str,
+        user_password: Option<String>,
+        owner_password: Option<String>,
+        skip_encryption: bool,
+        entropy: &[u8],
+    ) -> Result<Vec<u8>, JsValue> {
         if json.len() > 4_194_304 {
             return Err(JsValue::from_str("input exceeds 4 MB limit"));
         }
@@ -189,6 +175,10 @@ impl LpdfEngine {
         // ── Kit mode ──────────────────────────────────────────────────────────
         let mut doc = parse::parse_tree_with(json, &self.resources())
             .map_err(|e| JsValue::from_str(&e))?;
+
+        // Checked before the layout, so a missing or stray password fails without the work of a render.
+        let encryption = RenderEncryption { user_password, owner_password, skip_encryption, entropy: entropy.to_vec() };
+        let config = encryption.resolve(doc.output.encryption.as_ref()).map_err(|e| JsValue::from_str(&e))?;
 
         // Confirm every image declared in the tree has bytes in the registry.
         for (_alias, name) in &doc.images {
@@ -234,7 +224,7 @@ impl LpdfEngine {
         )
         .map_err(|e| JsValue::from_str(&e))?;
 
-        let bytes = match &self.encrypt {
+        let bytes = match &config {
             Some(cfg) => encrypt::encrypt_pdf(&bytes, cfg).map_err(|e| JsValue::from_str(&e))?,
             None      => bytes,
         };
@@ -275,13 +265,16 @@ impl LpdfEngine {
 // Private helpers — not exported to WASM.
 impl LpdfEngine {
     /// Render `xml` to PDF bytes with the fonts, images and styles files loaded on this engine: `render_pdf`, with an
-    /// error that is not a JS value, which the command line and the tests can read.
-    pub fn render_xml(&self, xml: &str, json_data: Option<&str>) -> Result<Vec<u8>, String> {
+    /// error that is not a JS value, which the command line and the tests can read. `encryption` is what the render
+    /// call says about the encryption the document's `<output>` asks for.
+    pub fn render_xml(&self, xml: &str, json_data: Option<&str>, encryption: &RenderEncryption) -> Result<Vec<u8>, String> {
         if xml.len() > 1_048_576 {
             return Err("input exceeds 1 MB limit".to_string());
         }
 
         let mut doc = parse::parse_with(xml, &self.resources())?;
+        // Checked before the layout, so a missing or stray password fails without the work of a render.
+        let config = encryption.resolve(doc.output.encryption.as_ref())?;
 
         if let Some(json) = json_data {
             data::apply(&mut doc, json)?;
@@ -323,7 +316,7 @@ impl LpdfEngine {
             status.is_licensed(),
         )?;
 
-        match &self.encrypt {
+        match &config {
             Some(cfg) => encrypt::encrypt_pdf(&bytes, cfg),
             None      => Ok(bytes),
         }
@@ -346,8 +339,18 @@ impl LpdfEngine {
     ///
     /// `json_data` resolves the template's `data-*` attributes, as it does in `render_pdf`;
     /// `None` renders the template with its inline content.
-    pub fn render_xml_to_pdf(xml: &str, json_data: Option<&str>, license_key: &str, now_unix: i64) -> Result<Vec<u8>, String> {
+    ///
+    /// It takes no passwords, so a document that asks for encryption in its `<output>` renders only with
+    /// `skip_encryption`, unencrypted, and is an error without it.
+    pub fn render_xml_to_pdf(
+        xml: &str,
+        json_data: Option<&str>,
+        license_key: &str,
+        now_unix: i64,
+        skip_encryption: bool,
+    ) -> Result<Vec<u8>, String> {
         let mut doc = parse::parse(xml)?;
+        RenderEncryption::skipping(skip_encryption).resolve(doc.output.encryption.as_ref())?;
         if let Some(json) = json_data {
             data::apply(&mut doc, json)?;
         }
@@ -396,6 +399,13 @@ impl LpdfEngine {
         }
         let pages: Vec<render::RenderPage> = layout::layout_document(&lp);
         pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &registry, &doc.meta, &doc.gradients, None, false)
+    }
+
+    /// Render XML to PDF bytes as `render_xml` does, unlicensed and with built-in fonts only, encrypted as the
+    /// document's `<output>` and `encryption` say. Used by tests.
+    #[cfg(test)]
+    pub(crate) fn render_xml_with_encryption(xml: &str, encryption: &RenderEncryption) -> Result<Vec<u8>, String> {
+        LpdfEngine::new("").render_xml(xml, None, encryption)
     }
 
     fn render_doc(&self, mut doc: parse::Document) -> String {
@@ -469,6 +479,16 @@ pub fn source_files(xml: &str) -> Result<Vec<SourceFile>, String> {
         }
     }
     Ok(files)
+}
+
+/// Whether the XML document `xml` asks for encryption: an `<output>` of its `<document>` with `encrypt`. A document
+/// that does not parse doesn't, and its render says why.
+pub fn asks_for_encryption(xml: &str) -> bool {
+    let Ok(doc) = roxmltree::Document::parse(xml) else { return false };
+    doc.descendants()
+        .filter(|n| n.has_tag_name("document"))
+        .flat_map(|document| document.children())
+        .any(|n| n.has_tag_name("output") && n.attribute("encrypt").is_some())
 }
 
 /// The template that wraps a `.md` file when it is rendered with no template of its own: A4, a margin and the
@@ -836,7 +856,7 @@ mod tests {
 
     #[test]
     fn unlicensed_pdf_embeds_the_attribution_face_and_links_to_lpdf() {
-        let pdf = LpdfEngine::render_xml_to_pdf(&minimal(""), None, "", 0).unwrap();
+        let pdf = LpdfEngine::render_xml_to_pdf(&minimal(""), None, "", 0, false).unwrap();
         assert!(pdf_contains(&pdf, pdf::ATTRIBUTION_FONT_KEY.as_bytes()));
         assert!(pdf_contains(&pdf, b"https://lpdf.io"));
     }
@@ -845,8 +865,8 @@ mod tests {
     fn renders_the_data_into_the_pdf_like_literal_text() {
         let bound = minimal(r#"<text data-value="name">Fallback</text>"#);
         let literal = minimal("<text>Ada</text>");
-        let with_data = LpdfEngine::render_xml_to_pdf(&bound, Some(r#"{"name":"Ada"}"#), "", 0).unwrap();
-        let without_data = LpdfEngine::render_xml_to_pdf(&literal, None, "", 0).unwrap();
+        let with_data = LpdfEngine::render_xml_to_pdf(&bound, Some(r#"{"name":"Ada"}"#), "", 0, false).unwrap();
+        let without_data = LpdfEngine::render_xml_to_pdf(&literal, None, "", 0, false).unwrap();
         assert_eq!(with_data, without_data);
     }
 
@@ -854,14 +874,14 @@ mod tests {
     fn renders_the_inline_content_when_no_data_is_given() {
         let bound = minimal(r#"<text data-value="name">Fallback</text>"#);
         let literal = minimal("<text>Fallback</text>");
-        let without_data = LpdfEngine::render_xml_to_pdf(&bound, None, "", 0).unwrap();
-        let expected = LpdfEngine::render_xml_to_pdf(&literal, None, "", 0).unwrap();
+        let without_data = LpdfEngine::render_xml_to_pdf(&bound, None, "", 0, false).unwrap();
+        let expected = LpdfEngine::render_xml_to_pdf(&literal, None, "", 0, false).unwrap();
         assert_eq!(without_data, expected);
     }
 
     #[test]
     fn rejects_data_that_is_not_json_and_says_where() {
-        let error = LpdfEngine::render_xml_to_pdf(&minimal(""), Some("{\n  \"name\": \n}"), "", 0).unwrap_err();
+        let error = LpdfEngine::render_xml_to_pdf(&minimal(""), Some("{\n  \"name\": \n}"), "", 0, false).unwrap_err();
         assert!(error.contains("line 3"), "{error}");
     }
 
@@ -1048,7 +1068,7 @@ mod tests {
         for (name, bytes) in &files {
             engine.load_font(name, bytes);
         }
-        assert_eq!(in_own_widths, engine.render_xml(xml, None).unwrap());
+        assert_eq!(in_own_widths, engine.render_xml(xml, None, &RenderEncryption::default()).unwrap());
     }
 
     #[test]
@@ -1059,5 +1079,136 @@ mod tests {
         let whole = bench_render_doc_with_fonts(bench_parse(xml).unwrap(), &fonts).unwrap();
         let split = bench_write_pdf_with_fonts(bench_layout_doc_with_fonts(bench_parse(xml).unwrap(), &fonts), &fonts).unwrap();
         assert_eq!(whole, split);
+    }
+
+    // ── <output>: encryption ──────────────────────────────────────────────────
+
+    /// A document with `<output {output}>` after its meta, or none when `output` is `None`.
+    fn with_output(output: Option<&str>) -> String {
+        let element = output.map(|attributes| format!("<output {attributes}/>")).unwrap_or_default();
+        format!(
+            r#"<lpdf version="1"><document size="a4"><meta title="T"/>{element}<section><layout margin="28pt"><text>Hello</text></layout></section></document></lpdf>"#
+        )
+    }
+
+    fn owner_password(owner: &str) -> RenderEncryption {
+        RenderEncryption { owner_password: Some(owner.to_string()), entropy: (0u8..48).collect(), ..Default::default() }
+    }
+
+    fn render_with(xml: &str, encryption: &RenderEncryption) -> Result<Vec<u8>, String> {
+        LpdfEngine::render_xml_with_encryption(xml, encryption)
+    }
+
+    #[test]
+    fn a_document_with_encrypt_is_encrypted_with_its_cipher_and_allow() {
+        let permissions = encrypt::Permissions::from_allow("print copy").unwrap();
+        let p = format!("/P {}", encrypt::compute_p(&permissions));
+        for (cipher, dictionary) in [("aes-256", ["/V 5", "/R 6"]), ("rc4-128", ["/V 2", "/R 3"])] {
+            let xml = with_output(Some(&format!(r#"encrypt="{cipher}" allow="print copy""#)));
+            let text = String::from_utf8_lossy(&render_with(&xml, &owner_password("owner")).unwrap()).into_owned();
+            for expected in dictionary.iter().chain([&p.as_str()]) {
+                assert!(text.contains(expected), "{cipher}: missing {expected}");
+            }
+        }
+    }
+
+    #[test]
+    fn without_allow_everything_is_allowed() {
+        let text = String::from_utf8_lossy(&render_with(&with_output(Some(r#"encrypt="rc4-128""#)), &owner_password("owner")).unwrap())
+            .into_owned();
+        assert!(text.contains(&format!("/P {}", encrypt::compute_p(&encrypt::Permissions::default()))));
+    }
+
+    #[test]
+    fn an_output_that_does_not_encrypt_leaves_the_file_as_it_was() {
+        let without = render_with(&with_output(None), &RenderEncryption::default()).unwrap();
+        assert_eq!(render_with(&with_output(Some("")), &RenderEncryption::default()).unwrap(), without);
+        let skipped = render_with(&with_output(Some(r#"encrypt="aes-256" allow="print""#)), &RenderEncryption::skipping(true));
+        assert_eq!(skipped.unwrap(), without, "skip_encryption gives the file the document gives without <output>");
+    }
+
+    #[test]
+    fn the_render_errors_say_what_to_change() {
+        let encrypted = with_output(Some(r#"encrypt="aes-256""#));
+        let plain = with_output(None);
+        let both = RenderEncryption { skip_encryption: true, ..owner_password("owner") };
+        for (xml, encryption, expected) in [
+            (&encrypted, RenderEncryption::default(), "no owner password"),
+            (&plain, owner_password("owner"), "does not ask for encryption"),
+            (&plain, both.clone(), "not both"),
+            (&encrypted, both, "not both"),
+        ] {
+            let error = render_with(xml, &encryption).unwrap_err();
+            assert!(error.contains(expected), "expected {expected:?}, got {error}");
+        }
+    }
+
+    #[test]
+    fn output_errors_name_the_element_and_what_to_change() {
+        for (attributes, expected) in [
+            (r#"allow="print""#, "add encrypt"),
+            (r#"encrypt="aes-256" allow="print printing""#, "\"printing\""),
+            (r#"encrypt="aes-128""#, "expected aes-256 or rc4-128"),
+        ] {
+            let error = render_with(&with_output(Some(attributes)), &owner_password("owner")).unwrap_err();
+            assert!(error.starts_with("<output>") && error.contains(expected), "{attributes}: {error}");
+        }
+    }
+
+    #[test]
+    fn the_command_line_render_skips_encryption_only_when_asked() {
+        let xml = with_output(Some(r#"encrypt="aes-256""#));
+        let error = LpdfEngine::render_xml_to_pdf(&xml, None, "", 0, false).unwrap_err();
+        assert!(error.contains("no owner password"), "{error}");
+        let skipped = LpdfEngine::render_xml_to_pdf(&xml, None, "", 0, true).unwrap();
+        assert_eq!(skipped, LpdfEngine::render_xml_to_pdf(&with_output(None), None, "", 0, false).unwrap());
+    }
+
+    #[test]
+    fn the_json_path_reads_output() {
+        let tree = |output: &str| format!(
+            r#"{{"version":1,"type":"document","attrs":{{"output":{output}}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[{{"type":"layout","attrs":{{}},"nodes":[]}}]}}]}}"#
+        );
+        let doc = parse::parse_tree(&tree(r#"{"encrypt":"rc4-128","allow":"print"}"#)).unwrap();
+        assert_eq!(doc.output.encryption, Some(encrypt::OutputEncryption {
+            algorithm:   encrypt::Algorithm::Rc4128,
+            permissions: encrypt::Permissions::from_allow("print").unwrap(),
+        }));
+        let error = parse::parse_tree(&tree(r#"{"allow":"print"}"#)).unwrap_err();
+        assert!(error.starts_with("document output:") && error.contains("add encrypt"), "{error}");
+        // An allow that is not a string is refused, not read as no allow, which would allow everything.
+        let error = parse::parse_tree(&tree(r#"{"encrypt":"aes-256","allow":["print"]}"#)).unwrap_err();
+        assert!(error.contains("allow must be a string"), "{error}");
+        assert!(parse::parse_tree(&tree(r#"{"encrypt":"aes-256","allow":null}"#)).is_ok(), "a null is no allow, as an SDK sends one");
+    }
+
+    /// Writes the files `scripts/check-encryption.mjs` opens with qpdf, when `LPDF_ENCRYPT_OUT` names a folder:
+    /// `showcase-encryption` rendered with the cipher and the permissions of its `<output>` and the passwords of
+    /// the render, as a host renders it. Without the variable the test does nothing, so a plain `cargo test` needs
+    /// no other tool.
+    #[test]
+    fn writes_samples_for_the_external_check() {
+        let Some(dir) = std::env::var_os("LPDF_ENCRYPT_OUT") else { return };
+        let dir = std::path::Path::new(&dir);
+        let xml = std::fs::read_to_string(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../../test/fixtures/showcase-encryption.xml")
+        ).expect("fixture not found");
+        let rc4 = xml.replace(r#"encrypt="aes-256""#, r#"encrypt="rc4-128""#);
+        let passwords = |user: Option<&str>, owner: &str| RenderEncryption {
+            user_password: user.map(str::to_string),
+            ..owner_password(owner)
+        };
+
+        let samples = [
+            ("plain.pdf",                &xml, RenderEncryption::skipping(true)),
+            ("aes256-user.pdf",          &xml, passwords(Some("user"), "owner")),
+            ("aes256-open.pdf",          &xml, passwords(None, "owner")),
+            ("aes256-same-password.pdf", &xml, passwords(Some("same"), "same")),
+            ("rc4-user.pdf",             &rc4, passwords(Some("user"), "owner")),
+        ];
+        for (name, xml, encryption) in samples {
+            let bytes = render_with(xml, &encryption).expect("the sample renders");
+            std::fs::write(dir.join(name), bytes).expect("could not write a sample");
+        }
     }
 }
