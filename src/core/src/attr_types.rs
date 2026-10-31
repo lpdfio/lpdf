@@ -168,6 +168,7 @@ fn names(attributes: Attributes, extra: &[&str]) -> String {
 fn unknown(element: &str, name: &str, expected: String) -> String {
     match removed(element, name) {
         Some(hint) => hint,
+        None if expected.is_empty() => format!("unknown attribute '{name}' — {element} takes no attributes"),
         None => format!("unknown attribute '{name}' — expected {expected}"),
     }
 }
@@ -414,6 +415,12 @@ mod tests {
         assert!(error.starts_with("text: unknown attribute 'colr' — expected font-size, font, bold, color,"), "{error}");
         let error = parse_tree(&tree(r#"{"colr":"red"}"#, r#""a""#)).unwrap_err();
         assert!(error.ends_with("footnote-counter, assets, tokens, meta, output, attachments"), "{error}");
+    }
+
+    #[test]
+    fn an_element_that_takes_no_attributes_says_so() {
+        let error = parse(&xml(r#"<tokens foo="x"/>"#, "<layout/>")).unwrap_err();
+        assert!(error.ends_with(": unknown attribute 'foo' — tokens takes no attributes"), "{error}");
     }
 
     #[test]

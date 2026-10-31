@@ -144,16 +144,19 @@ export function loadSchema(path) {
         const minInclusive = facet('minInclusive');
         const minExclusive = facet('minExclusive');
         const maxInclusive = facet('maxInclusive');
+        const maxExclusive = facet('maxExclusive');
         if (minInclusive !== undefined && (type.min === undefined || minInclusive > type.min)) type.min = minInclusive;
         if (minExclusive !== undefined) { type.min = minExclusive; type.minExclusive = true; }
         if (maxInclusive !== undefined) type.max = maxInclusive;
+        if (maxExclusive !== undefined) { type.max = maxExclusive; type.maxExclusive = true; }
         return type;
     }
 
     /**
      * The type of an attribute, as the SDKs and the engine use it: `{ kind }`, where kind is `boolean`, `integer`,
      * `decimal`, `name-or-number` (a name, or a number of the kind `number`: line-height) or `string`. A number
-     * has the bounds the schema gives it, `min` and `max`, with `minExclusive` when its least value is left out.
+     * has the bounds the schema gives it, `min` and `max`, with `minExclusive` or `maxExclusive` when that end is left
+     * out.
      */
     function attributeType(attribute) {
         if (attribute.attrs.type) return namedType(attribute.attrs.type);
