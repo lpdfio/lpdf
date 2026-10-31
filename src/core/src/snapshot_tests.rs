@@ -244,6 +244,8 @@ fn showcase_text_justify() { run_snapshot("showcase-text-justify"); }
 #[test]
 fn showcase_inherited_style() { run_snapshot("showcase-inherited-style"); }
 #[test]
+fn showcase_colors() { run_snapshot("showcase-colors"); }
+#[test]
 fn showcase_shadow() { run_snapshot("showcase-shadow"); }
 #[test]
 fn showcase_gradient() { run_snapshot("showcase-gradient"); }

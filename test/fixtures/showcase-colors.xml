@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="screen-hex" value="#1763cf" />
+      <color name="screen-rgb" value="rgb(23, 99, 207)" />
+      <color name="screen-hsl" value="hsl(215 80% 45%)" />
+      <color name="muted"      value="#737373" />
+      <color name="ink"        value="cmyk(0, 0, 0, 100)" />
+      <color name="print-blue" value="cmyk(91 61 0 19)" />
+      <color name="paper"      value="cmyk(0, 0, 3, 0)" />
+      <color name="rule"       value="cmyk(0 0 0 25)" />
+    </colors>
+    <gradients>
+      <!-- RGB stops, written three ways -->
+      <gradient name="screen" type="linear" from="screen-rgb" to="hsl(0, 100%, 50%)" angle="90" />
+      <!-- CMYK stops, a token among them: a DeviceCMYK shading -->
+      <gradient name="press" type="linear" angle="90">
+        <stop offset="0%"   color="cmyk(0, 100, 100, 0)" />
+        <stop offset="50%"  color="cmyk(0 0 100 0)" />
+        <stop offset="100%" color="ink" />
+      </gradient>
+      <gradient name="glow" type="radial" from="cmyk(0 0 0 0)" to="print-blue" />
+    </gradients>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Colors" subject="hex, cmyk(), rgb() and hsl() colors" />
+
+    <!-- Hex, rgb() and hsl() are RGB: rgb() and hsl() become their hex when the document is read. cmyk() is
+         written as DeviceCMYK. Both mix on one page. -->
+    <section>
+      <layout margin="40pt">
+        <column gap="l">
+
+          <column gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="print-blue">Colors</text>
+            <text font-size="m" color="muted">Hex, rgb() and hsl() for the screen, cmyk() for print, on one page.</text>
+          </column>
+
+          <column gap="s">
+            <text font-size="l" font="Helvetica-Bold">One screen blue, three ways</text>
+            <row gap="l" align="center">
+              <shape type="rect" width="60pt" height="24pt" radius="3pt" fill="#1763cf" />
+              <shape type="rect" width="60pt" height="24pt" radius="3pt" fill="rgb(23, 99, 207)" />
+              <shape type="rect" width="60pt" height="24pt" radius="3pt" fill="hsl(215 80% 45%)" />
+              <text font-size="s" color="muted">#1763cf, rgb(23, 99, 207) and hsl(215 80% 45%)</text>
+            </row>
+            <row gap="l">
+              <text color="screen-hex">screen-hex</text>
+              <text color="screen-rgb">screen-rgb</text>
+              <text color="screen-hsl">screen-hsl</text>
+            </row>
+          </column>
+
+          <column gap="s">
+            <text font-size="l" font="Helvetica-Bold">With commas or with spaces</text>
+            <row gap="m">
+              <column width="110pt" padding="s" background="cmyk(0, 100, 100, 0)" color="cmyk(0 0 0 0)">
+                <text font-size="s">cmyk(0, 100, 100, 0)</text>
+              </column>
+              <column width="110pt" padding="s" background="cmyk(0 100 100 0)" color="cmyk(0, 0, 0, 0)">
+                <text font-size="s">cmyk(0 100 100 0)</text>
+              </column>
+              <column width="110pt" padding="s" border="s rgb(0, 128, 0)">
+                <text font-size="s" color="rgb(0 128 0)">rgb(0 128 0)</text>
+              </column>
+              <column width="110pt" padding="s" border="s hsl(30 100% 45%)">
+                <text font-size="s" color="hsl(30, 100%, 45%)">hsl(30, 100%, 45%)</text>
+              </column>
+            </row>
+          </column>
+
+          <column gap="s">
+            <text font-size="l" font="Helvetica-Bold">Print colors</text>
+            <row gap="l" align="start">
+              <column width="220pt" padding="m" gap="s" background="paper" border="s rule" radius="s" shadow="3pt 3pt ink">
+                <text font="Helvetica-Bold" color="print-blue">Fill, border and an opaque shadow</text>
+                <divider color="cmyk(0 0 0 40)" />
+                <text font-size="s" color="ink">All in DeviceCMYK, with k and K.</text>
+              </column>
+              <column gap="s">
+                <table cols="1fr 1fr" width="180pt" border="xs rule" stripe="cmyk(0 0 0 6)">
+                  <thead><td padding="xs" background="print-blue"><text font-size="s" font="Helvetica-Bold" color="cmyk(0, 0, 0, 0)">Ink</text></td><td padding="xs" background="print-blue"><text font-size="s" font="Helvetica-Bold" color="cmyk(0, 0, 0, 0)">Value</text></td></thead>
+                  <tr><td padding="xs"><text font-size="s">Cyan</text></td><td padding="xs"><text font-size="s">91</text></td></tr>
+                  <tr><td padding="xs"><text font-size="s">Magenta</text></td><td padding="xs"><text font-size="s">61</text></td></tr>
+                  <tr><td padding="xs"><text font-size="s">Black</text></td><td padding="xs"><text font-size="s">19</text></td></tr>
+                </table>
+                <barcode type="qr" data="cmyk(91, 61, 0, 19)" width="48pt" color="ink" />
+              </column>
+            </row>
+          </column>
+
+          <column gap="s">
+            <text font-size="l" font="Helvetica-Bold">Gradients: all RGB, or all CMYK</text>
+            <row gap="m">
+              <column width="200pt" height="36pt" padding="s" background="gradient:screen" radius="s">
+                <text font-size="s" color="#ffffff">screen: rgb() to hsl()</text>
+              </column>
+              <column width="200pt" height="36pt" padding="s" background="gradient:press" radius="s">
+                <text font-size="s" color="cmyk(0 0 0 0)">press: three CMYK stops</text>
+              </column>
+            </row>
+          </column>
+
+        </column>
+      </layout>
+
+      <!-- The shapes of a layer, a CMYK fill with an RGB stroke among them. -->
+      <layer>
+        <text-at x="40pt" y="470pt" font="Helvetica-Bold" font-size="l">On a layer</text-at>
+        <rect x="40pt" y="498pt" width="120pt" height="60pt" radius="6pt" fill="cmyk(0, 30, 100, 0)" stroke="#1763cf" stroke-width="2pt" />
+        <circle x="190pt" y="498pt" r="30pt" fill="gradient:glow" />
+        <ellipse x="270pt" y="503pt" rx="50pt" ry="25pt" fill="hsl(160, 60%, 40%)" stroke="ink" />
+        <line x1="390pt" y1="528pt" x2="550pt" y2="528pt" stroke="cmyk(0 100 0 0)" stroke-width="3pt" />
+        <text-at x="390pt" y="542pt" font-size="s" color="cmyk(0, 100, 0, 0)">A magenta line</text-at>
+      </layer>
+    </section>
+
+    <!-- A section of its own in print colors, its page background CMYK. -->
+    <section background="paper">
+      <layout margin="40pt">
+        <column gap="m">
+          <text font-size="xl" font="Helvetica-Bold" color="ink">A print section</text>
+          <text color="print-blue">The page background, the text and the box below are CMYK, while the page before mixes the two.</text>
+          <column padding="m" background="cmyk(0 0 0 10)" border="m ink">
+            <text color="ink">cmyk(0 0 0 10) behind black ink</text>
+          </column>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>
