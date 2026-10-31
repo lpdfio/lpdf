@@ -271,10 +271,11 @@ fn check_document(attrs: &mut Map<String, Value>) -> Result<(), String> {
     check_element("document", "lpdf", "document", &DOCUMENT_PARTS, attrs)?;
 
     if let Some(assets) = attrs.get_mut("assets").and_then(Value::as_object_mut) {
-        for (list, element) in [("fonts", "font"), ("images", "image")] {
+        // A font of a tree may carry `widths`, the advance widths of its glyphs, which XML has no attribute for.
+        for (list, element, extra) in [("fonts", "font", &["widths"][..]), ("images", "image", &[][..])] {
             for entry in assets.get_mut(list).and_then(Value::as_array_mut).into_iter().flatten() {
                 if let Some(entry) = entry.as_object_mut() {
-                    check_element(&format!("document assets {list}"), "assets", element, &[], entry)?;
+                    check_element(&format!("document assets {list}"), "assets", element, extra, entry)?;
                 }
             }
         }
@@ -413,6 +414,17 @@ mod tests {
         assert!(error.starts_with("text: unknown attribute 'colr' — expected font-size, font, bold, color,"), "{error}");
         let error = parse_tree(&tree(r#"{"colr":"red"}"#, r#""a""#)).unwrap_err();
         assert!(error.ends_with("footnote-counter, assets, tokens, meta, output, attachments"), "{error}");
+    }
+
+    #[test]
+    fn a_font_of_a_tree_carries_its_glyph_widths_beside_its_attributes() {
+        let assets = r#"{"assets":{"fonts":[{"name":"body","core":"Helvetica","widths":{"default":500,"ascii":[]}}]}}"#;
+        let text = r#"{"type":"text","attrs":{"font":"body"},"nodes":["a"]}"#;
+        let doc = parse_tree(&tree(assets, text)).unwrap();
+        assert!(doc.font_widths.contains_key("body"));
+        assert!(kit_to_xml(&tree(assets, text)).unwrap().contains(r#"<font name="body" core="Helvetica"/>"#));
+        let error = parse_tree(&tree(r#"{"assets":{"images":[{"name":"logo","widths":{}}]}}"#, r#""a""#)).unwrap_err();
+        assert_eq!(error, "document assets images: unknown attribute 'widths' — expected name, ref, src");
     }
 
     #[test]
