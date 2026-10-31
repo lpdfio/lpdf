@@ -1488,8 +1488,8 @@ fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), 
                     if color_elem.tag_name().name() == "color" {
                         let name  = req_attr(&color_elem, "name")?;
                         let value = req_attr(&color_elem, "value")?;
-                        let hex   = crate::tokens::normalize_hex(&value)?;
-                        tokens.colors.insert(name, hex);
+                        let color = crate::tokens::normalize_color(&value)?;
+                        tokens.colors.insert(name, color);
                     }
                 }
             }
@@ -1728,7 +1728,7 @@ pub struct Shadow {
 /// Parse a `shadow`: "x y color", and after the color an opacity that fades the shadow alone, as in
 /// "2pt 3pt #000000 0.2".
 pub fn parse_shadow(val: &str, tokens: &Tokens) -> Result<Shadow, String> {
-    let parts: Vec<&str> = val.split_whitespace().collect();
+    let parts = split_outside_parentheses(val);
     if !(3..=4).contains(&parts.len()) {
         return Err(format!(
             "invalid shadow '{val}': expected 'x y color' and optionally an opacity, like '2pt 3pt #000000 0.2'"
@@ -1749,6 +1749,32 @@ pub fn parse_shadow(val: &str, tokens: &Tokens) -> Result<Shadow, String> {
         None => 1.0,
     };
     Ok(Shadow { dx, dy, color, opacity })
+}
+
+/// Split a value at its whitespace, but not inside parentheses, so that a color such as `cmyk(0, 0, 0, 100)` or
+/// `rgb(23 99 207)` stays one part.
+fn split_outside_parentheses(val: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0usize;
+    let mut start: Option<usize> = None;
+    for (i, c) in val.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        if c.is_whitespace() && depth == 0 {
+            if let Some(from) = start.take() {
+                parts.push(&val[from..i]);
+            }
+        } else if start.is_none() {
+            start = Some(i);
+        }
+    }
+    if let Some(from) = start {
+        parts.push(&val[from..]);
+    }
+    parts
 }
 
 /// Thin wrapper: resolve a ParsedNode in isolation (used during XML parse of sections
@@ -3581,7 +3607,7 @@ pub fn parse_tree_tokens_pub(
     if let Some(colors) = obj.get("colors").and_then(|v| v.as_object()) {
         for (k, v) in colors {
             if let Some(s) = v.as_str() {
-                tokens.colors.insert(k.clone(), crate::tokens::normalize_hex(s)?);
+                tokens.colors.insert(k.clone(), crate::tokens::normalize_color(s)?);
             }
         }
     }
@@ -5601,6 +5627,19 @@ mod tests {
     }
 
     #[test]
+    fn a_shadow_takes_a_color_function_written_with_commas_or_spaces() {
+        for (value, expected) in [
+            ("2pt 3pt cmyk(0, 0, 0, 100)", shadow(2.0, 3.0, "cmyk(0, 0, 0, 100)", 1.0)),
+            ("2pt 3pt cmyk(0 0 0 100) 0.5", shadow(2.0, 3.0, "cmyk(0, 0, 0, 100)", 0.5)),
+            ("2pt 3pt rgb(23, 99, 207) 0.5", shadow(2.0, 3.0, "#1763cf", 0.5)),
+            ("2pt  3pt  hsl(215 80% 45%)", shadow(2.0, 3.0, "#1763cf", 1.0)),
+        ] {
+            let mut doc = parse(&minimal(&format!(r#"<column shadow="{value}"/>"#))).unwrap();
+            assert_eq!(doc.section_layouts()[0].children[0].shadow.as_deref().cloned(), expected, "{value}");
+        }
+    }
+
+    #[test]
     fn a_box_in_a_kit_tree_reads_its_shadow() {
         let json = r#"{"version":1,"type":"document","attrs":{},"nodes":[{"type":"section","attrs":{},"nodes":[
             {"type":"layout","attrs":{},"nodes":[{"type":"column","attrs":{"shadow":"2pt 3pt #112233 0.5"},"nodes":[]}]}]}]}"#;
@@ -5620,6 +5659,9 @@ mod tests {
             ("2pt NaNpt #000", "y 'NaNpt' is not a length"),
             ("2pt 3pt #12", "invalid hex color"),
             ("2pt 3pt nope", "unknown color token: 'nope'"),
+            ("2pt 3pt cmyk(0, 0 0, 100)", "it mixes commas and spaces"),
+            ("2pt 3pt rgba(0, 0, 0, 0.5)", "a color has no alpha: fade a box or a layer with opacity"),
+            ("2pt 3pt cmyk(0 0 0 100", "invalid color 'cmyk(0 0 0 100': expected #rgb, #rrggbb"),
             ("2pt 3pt #000 1.5", "opacity '1.5' is not a number from 0 to 1"),
             ("2pt 3pt #000 half", "opacity 'half' is not a number from 0 to 1"),
             ("2pt 3pt #000 -0.1", "opacity '-0.1' is not a number from 0 to 1"),
@@ -6471,6 +6513,38 @@ mod tests {
         assert_eq!(doc.gradients["fade"].angle, 90.0);
         assert_eq!(doc.gradients["multi"].stops, vec![stop_at(0.0, "#ff0000"), stop_at(1.0, "#112233")]);
         assert_eq!(doc.section_layouts()[0].children[0].background.as_deref(), Some("gradient:fade"));
+    }
+
+    #[test]
+    fn a_color_token_takes_hex_cmyk_rgb_and_hsl_in_xml_and_in_a_kit_tree() {
+        let expected = [
+            ("brand", "#1763cf"),
+            ("ink", "cmyk(0, 0, 0, 100)"),
+            ("paper", "cmyk(0, 0, 5, 0)"),
+            ("screen", "#1763cf"),
+            ("sky", "#1763cf"),
+        ];
+        let xml = r##"<lpdf version="1"><tokens><colors><color name="brand" value="#1763CF"/>
+            <color name="ink" value="cmyk(0 0 0 100)"/><color name="paper" value="cmyk(0, 0, 5, 0)"/>
+            <color name="screen" value="rgb(23, 99, 207)"/><color name="sky" value="hsl(215 80% 45%)"/></colors></tokens>
+            <document><section><layout/></section></document></lpdf>"##;
+        let json = r##"{"version":1,"type":"document","attrs":{"tokens":{"colors":{"brand":"#1763CF","ink":"cmyk(0 0 0 100)",
+            "paper":"cmyk(0, 0, 5, 0)","screen":"rgb(23, 99, 207)","sky":"hsl(215 80% 45%)"}}},
+            "nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[]}]}]}"##;
+        for doc in [parse(xml).unwrap(), parse_tree(json).unwrap()] {
+            for (name, color) in expected {
+                assert_eq!(doc.colors[name], color, "{name}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_color_token_that_is_not_a_color_says_so() {
+        let xml = r##"<lpdf version="1"><tokens><colors><color name="ink" value="cmyk(0, 0, 0, 120)"/></colors></tokens>
+            <document><section><layout/></section></document></lpdf>"##;
+        assert_eq!(parse(xml).unwrap_err(), "invalid color 'cmyk(0, 0, 0, 120)': black '120' is not a number from 0 to 100");
+        let json = r##"{"version":1,"type":"document","attrs":{"tokens":{"colors":{"ink":"rgba(0, 0, 0, 0.5)"}}},"nodes":[]}"##;
+        assert!(parse_tree(json).unwrap_err().contains("a color has no alpha"));
     }
 
     #[test]

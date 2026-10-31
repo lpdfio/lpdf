@@ -42,7 +42,7 @@ use subsetter::GlyphRemapper;
 
 use crate::render::{placed_anchors, PlacedAnchor, RenderBox, RenderCanvasLayer, RenderField, RenderNode, RenderPage, RenderedBarcodeKind};
 use crate::parse::{FieldKind, Meta, Shadow};
-use crate::tokens::{FontDef, Gradient, GradientKind, GRADIENT_PREFIX};
+use crate::tokens::{FontDef, Gradient, GradientKind, GRADIENT_PREFIX, is_cmyk};
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -679,6 +679,54 @@ fn parse_hex(hex: &str) -> (f32, f32, f32) {
     (r, g, b)
 }
 
+/// A color as the PDF paints it, each component from 0 to 1. The operator names the color space: `rg` and `RG`
+/// DeviceRGB, `k` and `K` DeviceCMYK, so the two mix on a page with nothing else to set.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Color {
+    Rgb(f32, f32, f32),
+    Cmyk(f32, f32, f32, f32),
+}
+
+impl Color {
+    /// The components, in the order of the color space: what a shading's functions take.
+    fn components(self) -> Vec<f32> {
+        match self {
+            Color::Rgb(r, g, b)     => vec![r, g, b],
+            Color::Cmyk(c, m, y, k) => vec![c, m, y, k],
+        }
+    }
+}
+
+/// Parse a normalised color (`tokens::normalize_color`): `#rrggbb` or `#rgb`, or `cmyk(C, M, Y, K)` with values from
+/// 0 to 100. Colors are checked when the document is read, so a malformed one here is black, as in `parse_hex`.
+fn parse_color(color: &str) -> Color {
+    let Some(values) = color.strip_prefix("cmyk(").and_then(|rest| rest.strip_suffix(')')) else {
+        let (r, g, b) = parse_hex(color);
+        return Color::Rgb(r, g, b);
+    };
+    let inks: Vec<f32> = values.split(',').map(|value| value.trim().parse::<f32>().unwrap_or(0.0) / 100.0).collect();
+    match inks[..] {
+        [c, m, y, k] => Color::Cmyk(c, m, y, k),
+        _            => Color::Cmyk(0.0, 0.0, 0.0, 1.0),
+    }
+}
+
+/// Set the color that fills paint with, in its own color space.
+fn set_fill_color(content: &mut Content, color: &str) {
+    match parse_color(color) {
+        Color::Rgb(r, g, b)     => content.set_fill_rgb(r, g, b),
+        Color::Cmyk(c, m, y, k) => content.set_fill_cmyk(c, m, y, k),
+    };
+}
+
+/// Set the color that strokes paint with, in its own color space.
+fn set_stroke_color(content: &mut Content, color: &str) {
+    match parse_color(color) {
+        Color::Rgb(r, g, b)     => content.set_stroke_rgb(r, g, b),
+        Color::Cmyk(c, m, y, k) => content.set_stroke_cmyk(c, m, y, k),
+    };
+}
+
 // ── Text encoding ─────────────────────────────────────────────────────────────
 
 /// Convert UTF-8 text to WinAnsiEncoding bytes (used by PDF built-in Type 1 fonts).
@@ -1136,9 +1184,8 @@ fn draw_node(
 
         // ── Line ─────────────────────────────────────────────────────────────
         RenderNode::Line(l) => {
-            let (r, g, b) = parse_hex(&l.color);
             content.save_state();
-            content.set_stroke_rgb(r, g, b);
+            set_stroke_color(content, &l.color);
             content.set_line_width(l.thickness);
 
             // Optional dash pattern for dashed/dotted lines.
@@ -1157,8 +1204,6 @@ fn draw_node(
         RenderNode::Text(t) => {
             let font = fonts.get(&t.font).expect("prepare_fonts prepares the font of every text node");
 
-            let (r, g, b) = parse_hex(&t.color);
-
             // node.x is an alignment anchor; compute the true left edge.
             let text_w  = font.text_width(&t.content, t.size);
             let draw_x  = match t.text_align.as_str() {
@@ -1174,7 +1219,7 @@ fn draw_node(
             let rname   = font.resource_name.as_bytes().to_vec();
 
             content.begin_text();
-            content.set_fill_rgb(r, g, b);
+            set_fill_color(content, &t.color);
             content.set_font(Name(&rname), t.size);
             // set_text_matrix positions the text origin precisely.
             content.set_text_matrix([1.0, 0.0, 0.0, 1.0, draw_x, pdf_y]);
@@ -1248,15 +1293,13 @@ fn draw_node(
 
             // Optional background fill.
             if let Some(bg) = &bc.bg {
-                let (r, g, b) = parse_hex(bg);
                 let pdf_y = page_h - bc.y - bc.height;
-                content.set_fill_rgb(r, g, b);
+                set_fill_color(content, bg);
                 content.rect(bc.x, pdf_y, bc.width, bc.height);
                 content.fill_nonzero();
             }
 
-            let (fr, fg, fb) = parse_hex(&bc.color);
-            content.set_fill_rgb(fr, fg, fb);
+            set_fill_color(content, &bc.color);
 
             match &bc.kind {
                 RenderedBarcodeKind::Qr { modules, size } => {
@@ -1359,12 +1402,10 @@ fn draw_node(
             if solid_fill || has_stroke {
                 content.save_state();
                 if solid_fill {
-                    let (rf, gf, bf) = parse_hex(r.fill.as_deref().unwrap_or("#000000"));
-                    content.set_fill_rgb(rf, gf, bf);
+                    set_fill_color(content, r.fill.as_deref().unwrap_or("#000000"));
                 }
                 if has_stroke {
-                    let (rs, gs, bs) = parse_hex(r.stroke.as_deref().unwrap_or("#000000"));
-                    content.set_stroke_rgb(rs, gs, bs);
+                    set_stroke_color(content, r.stroke.as_deref().unwrap_or("#000000"));
                     content.set_line_width(r.stroke_width);
                     if let Some(dash) = &r.stroke_dash {
                         content.set_dash_pattern(dash.iter().copied(), 0.0);
@@ -1387,9 +1428,8 @@ fn draw_node(
 
         // ── Canvas Line ───────────────────────────────────────────────────────
         RenderNode::CanvasLine(l) => {
-            let (r, g, b) = parse_hex(&l.stroke);
             content.save_state();
-            content.set_stroke_rgb(r, g, b);
+            set_stroke_color(content, &l.stroke);
             content.set_line_width(l.stroke_width);
             if l.line_cap > 0 { content.set_line_cap(u8_to_line_cap(l.line_cap)); }
             if l.line_join > 0 { content.set_line_join(u8_to_line_join(l.line_join)); }
@@ -1420,12 +1460,10 @@ fn draw_node(
             if solid_fill || has_stroke {
                 content.save_state();
                 if solid_fill {
-                    let (rf, gf, bf) = parse_hex(e.fill.as_deref().unwrap_or("#000000"));
-                    content.set_fill_rgb(rf, gf, bf);
+                    set_fill_color(content, e.fill.as_deref().unwrap_or("#000000"));
                 }
                 if has_stroke {
-                    let (rs, gs, bs) = parse_hex(e.stroke.as_deref().unwrap_or("#000000"));
-                    content.set_stroke_rgb(rs, gs, bs);
+                    set_stroke_color(content, e.stroke.as_deref().unwrap_or("#000000"));
                     content.set_line_width(e.stroke_width);
                     if let Some(dash) = &e.stroke_dash {
                         content.set_dash_pattern(dash.iter().copied(), 0.0);
@@ -1463,12 +1501,10 @@ fn draw_node(
             if solid_fill || has_stroke {
                 content.save_state();
                 if solid_fill {
-                    let (rf, gf, bf) = parse_hex(p.fill.as_deref().unwrap_or("#000000"));
-                    content.set_fill_rgb(rf, gf, bf);
+                    set_fill_color(content, p.fill.as_deref().unwrap_or("#000000"));
                 }
                 if has_stroke {
-                    let (rs, gs, bs) = parse_hex(p.stroke.as_deref().unwrap_or("#000000"));
-                    content.set_stroke_rgb(rs, gs, bs);
+                    set_stroke_color(content, p.stroke.as_deref().unwrap_or("#000000"));
                     content.set_line_width(p.stroke_width);
                     if p.line_cap > 0 { content.set_line_cap(u8_to_line_cap(p.line_cap)); }
                     if p.line_join > 0 { content.set_line_join(u8_to_line_join(p.line_join)); }
@@ -1542,14 +1578,10 @@ fn draw_box(
         content.save_state();
 
         if solid_fill {
-            let (r, g, bl) = parse_hex(b.fill.as_deref().unwrap_or("#000000"));
-            content.set_fill_rgb(r, g, bl);
+            set_fill_color(content, b.fill.as_deref().unwrap_or("#000000"));
         }
         if has_border {
-            let (r, g, bl) = parse_hex(
-                b.border_color.as_deref().unwrap_or("#000000"),
-            );
-            content.set_stroke_rgb(r, g, bl);
+            set_stroke_color(content, b.border_color.as_deref().unwrap_or("#000000"));
             content.set_line_width(b.border_width);
         }
 
@@ -1657,8 +1689,7 @@ fn draw_shadow(
             content.clip_even_odd();
             content.end_path();
         }
-        let (r, g, b) = parse_hex(&shadow.color);
-        content.set_fill_rgb(r, g, b);
+        set_fill_color(content, &shadow.color);
         outline.path(content, dx, dy);
         content.fill_nonzero();
         content.restore_state();
@@ -1825,24 +1856,21 @@ fn gradient_function_count(gradient: &Gradient) -> usize {
 /// Write a gradient's functions and its shading. The shading is on the unit axis (0, 0) to (1, 0), or the unit
 /// circle, and extends past its ends, so whatever the matrix before `sh` puts over the clip is painted.
 fn write_gradient(pdf: &mut Pdf, gradient: &Gradient, ids: &GradientIds) {
-    let rgb = |hex: &str| {
-        let (r, g, b) = parse_hex(hex);
-        [r, g, b]
-    };
+    let components = |color: &str| parse_color(color).components();
     let stops = &gradient.stops;
     let pieces = stops.len() - 1;
     if pieces == 1 {
         pdf.exponential_function(ids.function_ids[0])
             .domain([0.0, 1.0])
-            .c0(rgb(&stops[0].color))
-            .c1(rgb(&stops[1].color))
+            .c0(components(&stops[0].color))
+            .c1(components(&stops[1].color))
             .n(1.0);
     } else {
         for (piece, pair) in stops.windows(2).enumerate() {
             pdf.exponential_function(ids.function_ids[piece])
                 .domain([0.0, 1.0])
-                .c0(rgb(&pair[0].color))
-                .c1(rgb(&pair[1].color))
+                .c0(components(&pair[0].color))
+                .c1(components(&pair[1].color))
                 .n(1.0);
         }
         pdf.stitching_function(ids.function_ids[pieces])
@@ -1854,7 +1882,12 @@ fn write_gradient(pdf: &mut Pdf, gradient: &Gradient, ids: &GradientIds) {
 
     let function_id = ids.function_ids[ids.function_ids.len() - 1];
     let mut shading = pdf.function_shading(ids.shading_id);
-    shading.color_space().device_rgb();
+    // The stops are all CMYK or all RGB (`Tokens::resolve_gradient`).
+    if stops.iter().all(|stop| is_cmyk(&stop.color)) {
+        shading.color_space().device_cmyk();
+    } else {
+        shading.color_space().device_rgb();
+    }
     match gradient.kind {
         GradientKind::Linear => {
             shading.shading_type(FunctionShadingType::Axial).coords([0.0, 0.0, 1.0, 0.0]);
@@ -2182,13 +2215,11 @@ fn write_field_background_border(
     if has_bg || has_border {
         content.save_state();
         if has_bg {
-            let (r, g, b) = parse_hex(background.as_deref().unwrap_or("#ffffff"));
-            content.set_fill_rgb(r, g, b);
+            set_fill_color(content, background.as_deref().unwrap_or("#ffffff"));
         }
         if has_border {
             let (bw, bc) = border.as_ref().unwrap();
-            let (r, g, b) = parse_hex(bc);
-            content.set_stroke_rgb(r, g, b);
+            set_stroke_color(content, bc);
             content.set_line_width(*bw);
         }
         content.rect(0.0, 0.0, w, h);
@@ -2480,8 +2511,7 @@ fn build_content_streams(
                     });
                 }
             } else {
-                let (r, g, b) = parse_hex(bg);
-                content.set_fill_rgb(r, g, b);
+                set_fill_color(&mut content, bg);
                 content.rect(0.0, 0.0, page.width, page.height);
                 content.fill_nonzero();
             }
@@ -3049,9 +3079,8 @@ fn assemble_pdf(
                     let mut ap_content = Content::new();
                     // Button: filled rectangle with label.
                     let bg = field.background.as_deref().unwrap_or("#1763cf");
-                    let (r, g, b) = parse_hex(bg);
                     ap_content.save_state();
-                    ap_content.set_fill_rgb(r, g, b);
+                    set_fill_color(&mut ap_content, bg);
                     ap_content.rect(0.0, 0.0, w, h);
                     ap_content.fill_nonzero();
                     ap_content.restore_state();
@@ -4827,6 +4856,133 @@ mod tests {
         assert_eq!(groups.len(), 1);
         assert!(groups[0].1.contains("/Sh-fade sh") && !page.contains("/Sh-fade sh"), "{}", groups[0].1);
         assert!(groups[0].0.contains("/Sh-fade "), "{}", groups[0].0);
+    }
+
+    // ── Colors ────────────────────────────────────────────────────────────────
+
+    /// The licensed page of `layout`: no attribution line, which is drawn in RGB.
+    fn licensed_page(layout: &str) -> String {
+        page_and_groups(&render_as(layout, true)).0
+    }
+
+    #[test]
+    fn cmyk_colors_fill_and_stroke_with_the_cmyk_operators() {
+        let page = licensed_page(
+            r##"<column background="cmyk(0, 100, 100, 0)" border="1pt cmyk(100 0 0 0)" height="40pt">
+                <text color="cmyk(0, 0, 0, 100)">A</text><divider color="cmyk(0 0 100 0)"/></column>"##,
+        );
+        assert!(page.contains("0 1 1 0 k"), "the background: {page}");
+        assert!(page.contains("1 0 0 0 K"), "the border: {page}");
+        assert!(page.contains("0 0 0 1 k"), "the text: {page}");
+        assert!(page.contains("0 0 1 0 K"), "the divider: {page}");
+        assert!(!page.contains(" rg") && !page.contains(" RG"), "nothing is in RGB: {page}");
+    }
+
+    #[test]
+    fn cmyk_values_are_written_from_0_to_1() {
+        assert!(licensed_page(r##"<text color="cmyk(91, 61, 0, 19)">A</text>"##).contains("0.91 0.61 0 0.19 k"));
+    }
+
+    #[test]
+    fn layer_shapes_fill_and_stroke_in_cmyk() {
+        let pdf = render_layers(
+            r##"<layer><rect x="10pt" y="10pt" width="40pt" height="40pt" fill="cmyk(0, 100, 100, 0)" stroke="cmyk(100 0 0 0)"/>
+                <line x1="10pt" y1="80pt" x2="90pt" y2="80pt" stroke="cmyk(0, 0, 0, 100)"/></layer>"##,
+        );
+        let (page, _) = page_and_groups(&pdf);
+        assert!(page.contains("0 1 1 0 k") && page.contains("1 0 0 0 K") && page.contains("0 0 0 1 K"), "{page}");
+    }
+
+    #[test]
+    fn a_cmyk_color_token_paints_in_cmyk() {
+        let xml = r##"<lpdf version="1"><tokens><colors><color name="ink" value="cmyk(0 0 0 100)"/></colors></tokens>
+            <document><section><layout><text color="ink">A</text></layout></section></document></lpdf>"##;
+        let (page, _) = page_and_groups(&crate::LpdfEngine::render_xml_to_pdf_bytes(xml).expect("renders"));
+        assert!(page.contains("0 0 0 1 k"), "{page}");
+    }
+
+    #[test]
+    fn rgb_and_hsl_render_the_same_pdf_as_their_hex() {
+        let document = |color: &str| {
+            render_as(
+                &format!(r##"<column background="{color}" border="1pt {color}" shadow="2pt 3pt {color} 0.5"><text color="{color}">A</text></column>"##),
+                false,
+            )
+        };
+        let hex = document("#1763cf");
+        for color in ["rgb(23, 99, 207)", "rgb(23 99 207)", "hsl(215, 80%, 45%)", "hsl(215 80% 45%)"] {
+            assert!(document(color) == hex, "{color} renders differently from #1763cf");
+        }
+    }
+
+    #[test]
+    fn hex_and_cmyk_colors_mix_on_a_page() {
+        let page = licensed_page(r##"<text color="#ff0000">Screen</text><text color="cmyk(91, 61, 0, 19)">Print</text>"##);
+        assert!(page.contains("1 0 0 rg") && page.contains("0.91 0.61 0 0.19 k"), "{page}");
+        assert!(position(&page, "1 0 0 rg") < position(&page, "0.91 0.61 0 0.19 k"), "{page}");
+    }
+
+    #[test]
+    fn hex_and_cmyk_sections_mix_in_a_document() {
+        let xml = r##"<lpdf version="1"><document>
+            <section><layout><text color="#ff0000">Screen</text></layout></section>
+            <section><layout><text color="cmyk(91 61 0 19)">Print</text></layout></section></document></lpdf>"##;
+        let pdf = crate::LpdfEngine::render_xml_to_pdf_bytes(xml).expect("renders");
+        let contents: Vec<String> = streams(&pdf).into_iter().map(|(.., content)| content).collect();
+        assert!(contents.iter().any(|content| content.contains("1 0 0 rg") && content.contains("(Screen) Tj")), "{contents:?}");
+        assert!(contents.iter().any(|content| content.contains("0.91 0.61 0 0.19 k") && content.contains("(Print) Tj")), "{contents:?}");
+    }
+
+    #[test]
+    fn a_shadow_takes_a_cmyk_color_in_either_form() {
+        let page = licensed_page(r##"<column background="#ff0000" shadow="3pt 4pt cmyk(0 0 0 100)"><text>A</text></column>"##);
+        assert!(position(&page, "0 0 0 1 k") < position(&page, "1 0 0 rg"), "the shadow comes first: {page}");
+
+        let pdf = render_as(r##"<column background="#ff0000" shadow="3pt 4pt cmyk(0, 0, 0, 100) 0.5"><text>A</text></column>"##, true);
+        let (_, groups) = page_and_groups(&pdf);
+        assert!(groups.iter().any(|(_, group)| group.contains("0 0 0 1 k")), "the faded shadow is a group: {groups:?}");
+    }
+
+    #[test]
+    fn a_gradient_of_cmyk_stops_is_a_cmyk_shading() {
+        let gradients = r##"<gradient name="ink" type="linear" from="cmyk(0, 100, 100, 0)" to="cmyk(100 0 0 0)"/>
+            <gradient name="bands" type="radial"><stop offset="0%" color="cmyk(0 0 0 0)"/><stop offset="50%" color="cmyk(0, 0, 100, 0)"/>
+            <stop offset="100%" color="cmyk(0, 0, 0, 100)"/></gradient>"##;
+        let pdf = render_gradient_layout(
+            gradients,
+            r##"<column background="gradient:ink" height="50pt"/><column background="gradient:bands" height="50pt"/>"##,
+        );
+        let text = String::from_utf8_lossy(&pdf);
+        let (_, axial) = object_with(&text, "/ShadingType 2");
+        let (_, radial) = object_with(&text, "/ShadingType 3");
+        assert!(axial.contains("/ColorSpace /DeviceCMYK") && radial.contains("/ColorSpace /DeviceCMYK"), "{axial}\n{radial}");
+        assert!(text.contains("/C0 [0 1 1 0]") && text.contains("/C1 [1 0 0 0]"), "the two-color one: {text}");
+        assert!(text.contains("/C0 [0 0 0 0]") && text.contains("/C1 [0 0 1 0]"), "the first band: {text}");
+        assert!(text.contains("/C0 [0 0 1 0]") && text.contains("/C1 [0 0 0 1]"), "the second band: {text}");
+    }
+
+    #[test]
+    fn a_gradient_that_mixes_cmyk_and_rgb_stops_is_an_error_naming_it() {
+        let xml = r##"<lpdf version="1"><tokens><gradients><gradient name="mixed" type="linear" from="cmyk(0, 0, 0, 100)" to="#ffffff"/>
+            </gradients></tokens><document><section><layout/></section></document></lpdf>"##;
+        let err = crate::LpdfEngine::render_xml_to_pdf_bytes(xml).unwrap_err();
+        assert!(err.contains("gradient 'mixed': its stops mix CMYK and RGB colors"), "{err}");
+    }
+
+    #[test]
+    fn a_color_that_is_not_one_stops_the_render_and_names_it() {
+        for (color, says) in [
+            ("rgb(23, 99 207)", "it mixes commas and spaces"),
+            ("rgb(9%, 39%, 81%)", "not percentages"),
+            ("hsl(215, 0.8, 0.45)", "saturation '0.8' needs a %"),
+            ("hsl(2150, 80%, 45%)", "hue '2150' is not a number from 0 to 360"),
+            ("rgba(23, 99, 207, 0.5)", "fade a box or a layer with opacity"),
+            ("rgb(23 99 207 / 50%)", "fade a box or a layer with opacity"),
+        ] {
+            let xml = format!(r#"<lpdf version="1"><document><section><layout><text color="{color}">A</text></layout></section></document></lpdf>"#);
+            let err = crate::LpdfEngine::render_xml_to_pdf_bytes(&xml).unwrap_err();
+            assert!(err.contains(&format!("invalid color '{color}'")) && err.contains(says), "{color}: {err}");
+        }
     }
 
     #[test]

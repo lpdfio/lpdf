@@ -979,6 +979,18 @@ mod tests {
     }
 
     #[test]
+    fn data_color_takes_cmyk_rgb_and_hsl_from_the_data() {
+        let nodes = bound_layout(
+            r#"<column data-color="a"/><column data-color="b"/><column data-background="c"/>"#,
+            r#"{"a":"cmyk(0 0 0 100)","b":"hsl(215, 80%, 45%)","c":"rgb(23 99 207)"}"#,
+        )
+        .unwrap();
+        assert_eq!(nodes[0].text_color.as_deref(), Some("cmyk(0, 0, 0, 100)"));
+        assert_eq!(nodes[1].text_color.as_deref(), Some("#1763cf"));
+        assert_eq!(nodes[2].background.as_deref(), Some("#1763cf"));
+    }
+
+    #[test]
     fn data_background_sets_the_fill_of_a_box_and_the_background_of_a_barcode() {
         let nodes = bound_layout(
             r#"<column data-background="fill"/>

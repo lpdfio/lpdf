@@ -140,24 +140,27 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- e.g. "#1763cf" or "#fff" -->
+  <!-- a color as written: hex, or cmyk() with 0-100 values, rgb() with 0-255 values, or hsl() with a 0-360 hue and
+       saturation and lightness in %. The values are separated by commas or by spaces, not a mix. The pattern checks
+       the form; the engine checks the ranges. e.g. "#1763cf", "#fff", "cmyk(91, 61, 0, 19)", "rgb(23 99 207)",
+       "hsl(215, 80%, 45%)". The same alternatives are in Color, Fill and ShadowValue. -->
   <xs:simpleType name="ColorHex">
     <xs:restriction base="xs:string">
-      <xs:pattern value="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?"/>
+      <xs:pattern value="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|cmyk\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){3}|\d+(\.\d+)?(\s+\d+(\.\d+)?){3})\s*\)|rgb\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){2}|\d+(\.\d+)?(\s+\d+(\.\d+)?){2})\s*\)|hsl\(\s*(\d+(\.\d+)?\s*,\s*\d+(\.\d+)?%\s*,\s*\d+(\.\d+)?%|\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%)\s*\)"/>
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- hex or a named color token e.g. "primary", "surface-alt" -->
+  <!-- a color as written, or a named color token e.g. "primary", "surface-alt" -->
   <xs:simpleType name="Color">
     <xs:restriction base="xs:string">
-      <xs:pattern value="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|[a-z][a-z0-9-]*"/>
+      <xs:pattern value="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|cmyk\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){3}|\d+(\.\d+)?(\s+\d+(\.\d+)?){3})\s*\)|rgb\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){2}|\d+(\.\d+)?(\s+\d+(\.\d+)?){2})\s*\)|hsl\(\s*(\d+(\.\d+)?\s*,\s*\d+(\.\d+)?%\s*,\s*\d+(\.\d+)?%|\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%)\s*\)|[a-z][a-z0-9-]*"/>
     </xs:restriction>
   </xs:simpleType>
 
   <!-- a color, or a gradient of the tokens e.g. "gradient:brand-fade" -->
   <xs:simpleType name="Fill">
     <xs:restriction base="xs:string">
-      <xs:pattern value="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|gradient:[a-z][a-z0-9-]*|[a-z][a-z0-9-]*"/>
+      <xs:pattern value="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|cmyk\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){3}|\d+(\.\d+)?(\s+\d+(\.\d+)?){3})\s*\)|rgb\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){2}|\d+(\.\d+)?(\s+\d+(\.\d+)?){2})\s*\)|hsl\(\s*(\d+(\.\d+)?\s*,\s*\d+(\.\d+)?%\s*,\s*\d+(\.\d+)?%|\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%)\s*\)|gradient:[a-z][a-z0-9-]*|[a-z][a-z0-9-]*"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -178,7 +181,7 @@
   <!-- x offset, y offset, color and optionally an opacity, e.g. "2pt 3pt #000000" or "2pt 3pt text 0.2" -->
   <xs:simpleType name="ShadowValue">
     <xs:restriction base="xs:string">
-      <xs:pattern value="-?\d+(\.\d+)?(pt|mm|in) -?\d+(\.\d+)?(pt|mm|in) (#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|[a-z][a-z0-9-]*)( (0(\.\d+)?|1(\.0+)?|\.\d+))?"/>
+      <xs:pattern value="-?\d+(\.\d+)?(pt|mm|in) -?\d+(\.\d+)?(pt|mm|in) (#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|cmyk\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){3}|\d+(\.\d+)?(\s+\d+(\.\d+)?){3})\s*\)|rgb\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){2}|\d+(\.\d+)?(\s+\d+(\.\d+)?){2})\s*\)|hsl\(\s*(\d+(\.\d+)?\s*,\s*\d+(\.\d+)?%\s*,\s*\d+(\.\d+)?%|\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%)\s*\)|[a-z][a-z0-9-]*)( (0(\.\d+)?|1(\.0+)?|\.\d+))?"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -456,7 +459,7 @@
   <xs:attributeGroup name="DataColorAttr">
     <xs:attribute name="data-color" type="xs:string">
       <xs:annotation>
-        <xs:documentation>Dot-path to a string that sets color: a hex value or a name from the colors row of the tokens. When the path finds nothing, color stays. A value that is not a color is an error that names the path.</xs:documentation>
+        <xs:documentation>Dot-path to a string that sets color: a color as written (hex, cmyk(), rgb() or hsl()) or a name from the colors row of the tokens. When the path finds nothing, color stays. A value that is not a color is an error that names the path.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
   </xs:attributeGroup>
@@ -979,7 +982,7 @@
       </xs:attribute>
       <xs:attribute name="color" type="Color" use="required">
         <xs:annotation>
-          <xs:documentation>The color at the stop: hex or a color token.</xs:documentation>
+          <xs:documentation>The color at the stop: hex, cmyk(), rgb(), hsl() or a color token. The stops of a gradient are all CMYK or all RGB.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
     </xs:complexType>
@@ -1005,12 +1008,12 @@
       </xs:attribute>
       <xs:attribute name="from" type="Color">
         <xs:annotation>
-          <xs:documentation>The first color: hex or a color token. Used with to, when there are no stop children. For a radial gradient it is the center.</xs:documentation>
+          <xs:documentation>The first color: hex, cmyk(), rgb(), hsl() or a color token, CMYK if to is and RGB if it is not. Used with to, when there are no stop children. For a radial gradient it is the center.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="to" type="Color">
         <xs:annotation>
-          <xs:documentation>The last color: hex or a color token. Used with from, when there are no stop children. For a radial gradient it is the edge.</xs:documentation>
+          <xs:documentation>The last color: hex, cmyk(), rgb(), hsl() or a color token. Used with from, when there are no stop children. For a radial gradient it is the edge.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="angle" type="xs:decimal">
