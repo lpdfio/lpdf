@@ -78,6 +78,29 @@ fn a_folder_skips_the_file_without_the_flag_and_converts_it_with_it() {
 }
 
 #[test]
+fn a_markdown_file_in_a_template_that_asks_for_encryption_converts_only_with_skip_encryption() {
+    let folder = workspace();
+    let template = folder.join("template.xml");
+    std::fs::write(
+        &template,
+        r#"<lpdf version="1"><document><output encrypt="rc4-128"/><section><markdown><markdown-content data-value="markdown"/></markdown></section></document></lpdf>"#,
+    )
+    .expect("a template for the test");
+    let input = folder.join("notes.md");
+    std::fs::write(&input, "# Notes\n\nSome text.\n").expect("a .md file for the test");
+    let output_path = folder.join("notes.pdf");
+    let args = ["convert", "--input", input.to_str().unwrap(), "--template", template.to_str().unwrap(), "--output", output_path.to_str().unwrap()];
+
+    let output = lpdf(&args);
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("--skip-encryption"), "{}", stderr(&output));
+
+    let output = lpdf(&[&args[..], &["--skip-encryption"]].concat());
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(!is_encrypted(&std::fs::read(&output_path).expect("the PDF was written")));
+}
+
+#[test]
 fn benchmark_takes_skip_encryption() {
     let folder = workspace();
     let input = encrypted_document(&folder, "locked.xml");
