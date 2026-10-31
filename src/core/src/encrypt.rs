@@ -153,6 +153,8 @@ pub struct RenderEncryption {
 
 impl RenderEncryption {
     /// A render that skips the encryption the document asks for, or asks for none when `skip` is false.
+    // The WASI binary reads skip_encryption from the request, so this is for the engine, the command line and the tests.
+    #[allow(dead_code)]
     pub fn skipping(skip: bool) -> Self {
         Self { skip_encryption: skip, ..Self::default() }
     }
