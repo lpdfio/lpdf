@@ -2826,7 +2826,7 @@ fn assemble_pdf(
     anchors:            &[PlacedAnchor],
     used_gradients:     &[(&str, &Gradient)],
     meta:               &Meta,
-    created_on:         Option<&str>,
+    date:               Option<&str>,
     pdfa:               Option<&PdfAFile>,
     files:              &[EmbeddedFile],
 ) -> Result<Vec<u8>, String> {
@@ -2852,7 +2852,6 @@ fn assemble_pdf(
 
     // The files the document carries come last, so a document without any keeps its ids.
     let file_ids = attachments::allocate(files, || alloc.next());
-    let date = file_date(created_on, pdfa);
 
     let n = pages.len();
     let mut pdf = Pdf::new();
@@ -3491,15 +3490,14 @@ fn assemble_pdf(
     Ok(pdf.finish())
 }
 
-/// The date of the file as a PDF date: a PDF/A file's date, or else `created_on` (ISO 8601, "YYYY-MM-DDTHH:mm:ss" →
-/// "D:YYYYMMDDHHmmss") when it has a whole date. `None` leaves the file undated, so the same input gives the same
-/// bytes.
-fn file_date(created_on: Option<&str>, pdfa: Option<&PdfAFile>) -> Option<String> {
+/// The date of the file as a PDF date: a PDF/A file's date, or else `created_on` read as a PDF/A file's is
+/// (`pdfa::plain_date`), and an error when it is not a date. `None` leaves the file undated, so the same input gives
+/// the same bytes.
+fn file_date(created_on: Option<&str>, pdfa: Option<&PdfAFile>) -> Result<Option<String>, String> {
     if let Some(file) = pdfa {
-        return Some(file.date.pdf());
+        return Ok(Some(file.date.pdf()));
     }
-    let digits: String = created_on?.chars().filter(|c| c.is_ascii_digit()).collect();
-    (digits.len() >= 8).then(|| format!("D:{digits}"))
+    Ok(pdfa::plain_date(created_on)?.map(|date| date.pdf()))
 }
 
 // ── Main render function ──────────────────────────────────────────────────────
@@ -3512,9 +3510,11 @@ fn file_date(created_on: Option<&str>, pdfa: Option<&PdfAFile>) -> Option<String
 /// - `registry`   – Raw font bytes for custom fonts (populated via `load_font`).
 /// - `meta`       – Document metadata (title, author, subject, etc.).
 /// - `gradients`  – The gradients of the document's tokens, which a fill names as `gradient:name`.
-/// - `created_on` – Optional ISO 8601 date string written to `/CreationDate`.
-///                  Required with `pdfa`, which writes it as both dates of the
-///                  Info dictionary and of the XMP packet.
+/// - `created_on` – Optional ISO 8601 date string written to `/CreationDate`
+///                  and each attached file's `/ModDate`, with the precision
+///                  and the time zone it was given in; one that is not a date
+///                  is an error. Required with `pdfa`, which writes it as both
+///                  dates of the Info dictionary and of the XMP packet.
 /// - `licensed`   – `true` when a valid commercial license token was supplied.
 ///                  When `false`, draws the attribution line (the lpdf mark and
 ///                  "Lpdf") in every page's top-right corner.
@@ -3536,6 +3536,7 @@ pub fn render_pdf(
     files:          &[EmbeddedFile],
 ) -> Result<Vec<u8>, String> {
     let pdfa = pdfa.map(|level| pdfa::file_date(level, created_on).map(|date| PdfAFile { level, date })).transpose()?;
+    let date = file_date(created_on, pdfa.as_ref())?;
     // The attribution is the licence signal itself, so it follows `licensed` rather
     // than a separate flag every caller would have to keep in step.
     let attribution = !licensed;
@@ -3557,7 +3558,7 @@ pub fn render_pdf(
     assemble_pdf(
         pages, &fonts, &sorted_font_names, &sorted_image_names,
         image_registry, &image_res_map, rendered_pages, ids, &fields, &anchors,
-        &used_gradients, meta, created_on, pdfa.as_ref(), files,
+        &used_gradients, meta, date.as_deref(), pdfa.as_ref(), files,
     )
 }
 

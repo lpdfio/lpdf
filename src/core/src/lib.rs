@@ -38,7 +38,7 @@ pub struct LpdfEngine {
     /// Caller-supplied glyph width tables; populated via `set_font_metrics`.
     /// Used by the layout engine to measure custom-font text accurately.
     font_widths: HashMap<String, tokens::FontWidths>,
-    /// Optional ISO 8601 creation timestamp for the PDF `/CreationDate` field.
+    /// Optional ISO 8601 creation timestamp for the PDF `/CreationDate` field, read by `pdfa::FileDate::parse`.
     created_on:  Option<String>,
     /// Current Unix timestamp (seconds) used for license expiry checking.
     /// Set via `set_now()`.  Defaults to `0` (expiry check skipped).
@@ -94,8 +94,9 @@ impl LpdfEngine {
         self.markdown_styles.insert(src.to_string(), xml.to_string());
     }
 
-    /// Set an optional ISO 8601 creation timestamp (e.g. `"2024-06-01T12:00:00"`).
-    /// When provided, written as `/CreationDate` in the PDF info dictionary.
+    /// Set an optional ISO 8601 creation timestamp (e.g. `"2024-06-01T12:00:00"`, `"2024-06-01T12:00:00.000Z"` or
+    /// `"2024-06-01T12:00:00+01:00"`). When provided, written as `/CreationDate` in the PDF info dictionary, with
+    /// the precision and the time zone it was given in; a value that is not a date makes the render an error.
     /// Omitting this keeps builds reproducible (no embedded timestamp).
     pub fn set_created_on(&mut self, iso: &str) {
         self.created_on = Some(iso.to_string());
@@ -179,70 +180,8 @@ impl LpdfEngine {
         skip_encryption: bool,
         entropy: &[u8],
     ) -> Result<Vec<u8>, JsValue> {
-        if json.len() > 4_194_304 {
-            return Err(JsValue::from_str("input exceeds 4 MB limit"));
-        }
-
-        // ── Kit mode ──────────────────────────────────────────────────────────
-        let mut doc = parse::parse_tree_with(json, &self.resources())
-            .map_err(|e| JsValue::from_str(&e))?;
-
-        // Checked before the layout, so a missing or stray password fails without the work of a render.
         let encryption = RenderEncryption { user_password, owner_password, skip_encryption, entropy: entropy.to_vec() };
-        let config = encryption.resolve(doc.output.encryption.as_ref()).map_err(|e| JsValue::from_str(&e))?;
-        pdfa::check_render(doc.output.pdfa, self.created_on.as_deref()).map_err(|e| JsValue::from_str(&e))?;
-        let attached = std::mem::take(&mut doc.attachments);
-        let files = attachments::resolve(&attached, &self.files).map_err(|e| JsValue::from_str(&e))?;
-
-        // Confirm every image declared in the tree has bytes in the registry.
-        for (_alias, name) in &doc.images {
-            if self.images.get(name).is_none() {
-                return Err(JsValue::from_str(&format!(
-                    "image '{name}' declared in assets but not loaded via loadImage()"
-                )));
-            }
-            if let Some(bytes) = self.images.get(name) {
-                if let Some(reason) = pdf::image_format_error(bytes) {
-                    return Err(JsValue::from_str(&format!(
-                        "image '{name}': {reason}"
-                    )));
-                }
-            }
-        }
-
-        let meta = pdf::build_image_meta(&self.images);
-        let mut lp = doc.section_layouts();
-        for page in &mut lp {
-            layout::prefill_section_image_sizes(page, &meta);
-        }
-
-        // Merge font widths: engine-level + doc-level (doc-level takes precedence).
-        let mut merged = self.font_widths.clone();
-        merged.extend(std::mem::take(&mut doc.font_widths));
-        layout::set_font_widths(merged);
-
-        let pages: Vec<render::RenderPage> =
-            layout::layout_document(&lp);
-
-        let status = license::check(&self.license_key, self.now_unix);
-        // An unlicensed status draws the attribution line on every page.
-        let bytes = pdf::render_pdf(
-            &pages,
-            &doc.fonts,
-            &self.fonts,
-            &self.images,
-            &doc.meta,
-            &doc.gradients,
-            self.created_on.as_deref(),
-            status.is_licensed(), doc.output.pdfa, &files,
-        )
-        .map_err(|e| JsValue::from_str(&e))?;
-
-        let bytes = match &config {
-            Some(cfg) => encrypt::encrypt_pdf(&bytes, cfg).map_err(|e| JsValue::from_str(&e))?,
-            None      => bytes,
-        };
-        Ok(bytes)
+        self.render_json(json, &encryption).map_err(|e| JsValue::from_str(&e))
     }
 
     pub fn render(&self, xml: &str) -> String {
@@ -287,8 +226,8 @@ impl LpdfEngine {
         }
 
         let mut doc = parse::parse_with(xml, &self.resources())?;
-        // Checked before the layout, so a missing or stray password, a missing date or a file with no bytes fails
-        // without the work of a render.
+        // Checked before the layout, so a missing or stray password, a missing date or one that is not a date, or a
+        // file with no bytes fails without the work of a render.
         let config = encryption.resolve(doc.output.encryption.as_ref())?;
         pdfa::check_render(doc.output.pdfa, self.created_on.as_deref())?;
         let attached = std::mem::take(&mut doc.attachments);
@@ -317,6 +256,69 @@ impl LpdfEngine {
         }
 
         layout::set_font_widths(self.font_widths.clone());
+
+        let pages: Vec<render::RenderPage> =
+            layout::layout_document(&lp);
+
+        let status = license::check(&self.license_key, self.now_unix);
+        // An unlicensed status draws the attribution line on every page.
+        let bytes = pdf::render_pdf(
+            &pages,
+            &doc.fonts,
+            &self.fonts,
+            &self.images,
+            &doc.meta,
+            &doc.gradients,
+            self.created_on.as_deref(),
+            status.is_licensed(), doc.output.pdfa, &files,
+        )?;
+
+        match &config {
+            Some(cfg) => encrypt::encrypt_pdf(&bytes, cfg),
+            None      => Ok(bytes),
+        }
+    }
+
+    /// Render the JSON kit tree `json` to PDF bytes with what is loaded on this engine: `render_tree_pdf`, with an
+    /// error that is not a JS value, which the tests can read. `encryption` is what the render call says about the
+    /// encryption the document's `output` asks for.
+    pub fn render_json(&self, json: &str, encryption: &RenderEncryption) -> Result<Vec<u8>, String> {
+        if json.len() > 4_194_304 {
+            return Err("input exceeds 4 MB limit".to_string());
+        }
+
+        // ── Kit mode ──────────────────────────────────────────────────────────
+        let mut doc = parse::parse_tree_with(json, &self.resources())?;
+
+        // Checked before the layout, so a missing or stray password, a missing date or one that is not a date, or a
+        // file with no bytes fails without the work of a render.
+        let config = encryption.resolve(doc.output.encryption.as_ref())?;
+        pdfa::check_render(doc.output.pdfa, self.created_on.as_deref())?;
+        let attached = std::mem::take(&mut doc.attachments);
+        let files = attachments::resolve(&attached, &self.files)?;
+
+        // Confirm every image declared in the tree has bytes in the registry.
+        for (_alias, name) in &doc.images {
+            if self.images.get(name).is_none() {
+                return Err(format!("image '{name}' declared in assets but not loaded via loadImage()"));
+            }
+            if let Some(bytes) = self.images.get(name) {
+                if let Some(reason) = pdf::image_format_error(bytes) {
+                    return Err(format!("image '{name}': {reason}"));
+                }
+            }
+        }
+
+        let meta = pdf::build_image_meta(&self.images);
+        let mut lp = doc.section_layouts();
+        for page in &mut lp {
+            layout::prefill_section_image_sizes(page, &meta);
+        }
+
+        // Merge font widths: engine-level + doc-level (doc-level takes precedence).
+        let mut merged = self.font_widths.clone();
+        merged.extend(std::mem::take(&mut doc.font_widths));
+        layout::set_font_widths(merged);
 
         let pages: Vec<render::RenderPage> =
             layout::layout_document(&lp);

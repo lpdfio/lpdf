@@ -54,8 +54,9 @@ pub(crate) const SRGB_CONDITION: &str = "sRGB IEC61966-2.1";
 /// The producer the Info dictionary and the XMP packet both name.
 pub(crate) const PRODUCER: &str = "Lpdf (lpdf.io)";
 
-/// The date a PDF/A file is made, from the render's `created_on`: written as `CreationDate` and `ModDate` in the
-/// Info dictionary and as the dates of the XMP packet, with the precision and the time zone it was given in.
+/// The date a file is made, from the render's `created_on`, written with the precision and the time zone it was
+/// given in: a PDF/A file's `CreationDate` and `ModDate` in the Info dictionary and the dates of its XMP packet, and a
+/// plain PDF's `CreationDate` and the `ModDate` of each file it carries.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FileDate {
     year:  u16,
@@ -193,12 +194,23 @@ pub(crate) fn file_date(pdfa: PdfA, created_on: Option<&str>) -> Result<FileDate
     ))
 }
 
-/// Check before the layout that a render of a document with `pdfa` has the date it needs, so that it fails without
-/// the work of a render. Nothing to check without `pdfa`.
+/// The date of a render of a plain PDF, read as a PDF/A file's is: `None` without `created_on`, which leaves the file
+/// undated, so the same input gives the same bytes, and an error that names the value when it is not a date.
+pub(crate) fn plain_date(created_on: Option<&str>) -> Result<Option<FileDate>, String> {
+    created_on
+        .map(|value| FileDate::parse(value).ok_or_else(|| format!(
+            "created_on '{value}' is not a date a PDF file can carry: give an ISO 8601 date, or date and time, such \
+            as 2026-10-31 or 2026-10-31T09:30:00Z"
+        )))
+        .transpose()
+}
+
+/// Check before the layout that the render's `created_on` is a date, and that a render of a document with `pdfa`
+/// has one, so that it fails without the work of a render.
 pub(crate) fn check_render(pdfa: Option<PdfA>, created_on: Option<&str>) -> Result<(), String> {
     match pdfa {
         Some(level) => file_date(level, created_on).map(|_| ()),
-        None => Ok(()),
+        None => plain_date(created_on).map(|_| ()),
     }
 }
 
@@ -321,6 +333,33 @@ mod tests {
         let malformed = file_date(PdfA::Level2u, Some("yesterday")).unwrap_err();
         assert!(malformed.contains("'yesterday'") && malformed.contains("2026-10-31T09:30:00Z"), "{malformed}");
         assert!(check_render(None, None).is_ok(), "no standard, no date needed");
+    }
+
+    #[test]
+    fn a_plain_render_reads_its_date_as_a_pdfa_render_does() {
+        for (value, pdf) in [
+            ("2026-10-31T09:30:00.000Z", "D:20261031093000Z"),
+            ("2026-10-31T09:30:00Z", "D:20261031093000Z"),
+            ("2026-10-31T09:30:00+01:00", "D:20261031093000+01'00"),
+            ("2026-10-31T09:30", "D:20261031093000"),
+            ("2026-10-31T09:30:00", "D:20261031093000"),
+            ("2026-10-31", "D:20261031"),
+        ] {
+            let date = plain_date(Some(value)).unwrap_or_else(|e| panic!("{value}: {e}"));
+            assert_eq!(date.map(|d| d.pdf()).as_deref(), Some(pdf), "{value}");
+            assert!(check_render(None, Some(value)).is_ok(), "{value}");
+        }
+        assert_eq!(plain_date(None), Ok(None), "no date, an undated file");
+    }
+
+    #[test]
+    fn a_plain_created_on_that_is_not_a_date_is_an_error_that_names_it_and_gives_the_form() {
+        for value in ["yesterday", "31.10.2026"] {
+            for error in [plain_date(Some(value)).unwrap_err(), check_render(None, Some(value)).unwrap_err()] {
+                assert!(error.contains(&format!("created_on '{value}'")), "{error}");
+                assert!(error.contains("2026-10-31T09:30:00Z") && !error.contains("pdfa"), "{error}");
+            }
+        }
     }
 
     #[test]

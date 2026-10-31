@@ -107,11 +107,58 @@ fn the_catalog_lists_the_files_by_name_and_as_associated_files() {
 #[test]
 fn the_files_are_dated_as_the_document_is_and_undated_without_a_date() {
     let dated = text(&render_with(&fixture(), Some(CREATED_ON), &RenderEncryption::default()).unwrap());
-    assert_eq!(dated.matches(&format!("/ModDate {}", literal("D:20261031093000"))).count(), 2, "{dated}");
-    assert!(dated.contains("/CreationDate (D:20261031093000)"));
+    assert_eq!(dated.matches(&format!("/ModDate {}", literal("D:20261031093000Z"))).count(), 2, "{dated}");
+    assert!(dated.contains(&format!("/CreationDate {}", literal("D:20261031093000Z"))), "{dated}");
 
     let undated = text(&render_fixture());
-    assert!(!undated.contains("/ModDate"));
+    assert!(!undated.contains("/ModDate") && !undated.contains("/CreationDate"));
+}
+
+#[test]
+fn a_date_with_a_fraction_a_zone_or_an_offset_is_written_as_a_pdfa_file_writes_it() {
+    for (created_on, expected) in [
+        ("2026-10-31T09:30:00.000Z", "D:20261031093000Z"),
+        ("2026-10-31T09:30:00+01:00", "D:20261031093000+01'00"),
+        ("2026-10-31T09:30:00.123-05:30", "D:20261031093000-05'30"),
+        ("2026-10-31T09:30", "D:20261031093000"),
+        ("2026-10-31T09:30:00", "D:20261031093000"),
+        ("2026-10-31", "D:20261031"),
+    ] {
+        let pdf = text(&render_with(&fixture(), Some(created_on), &RenderEncryption::default()).unwrap());
+        assert!(pdf.contains(&format!("/CreationDate {}", literal(expected))), "{created_on}: {pdf}");
+        assert_eq!(pdf.matches(&format!("/ModDate {}", literal(expected))).count(), 2, "{created_on}");
+    }
+}
+
+/// The fixture's one file as a JSON kit tree, with nothing else on its one page.
+const TREE_WITH_A_FILE: &str = r#"{"version":1,"type":"document","attrs":{"attachments":[{"name":"a.txt","relationship":"supplement"}]},
+    "nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[{"type":"text","nodes":["x"]}]}]}]}"#;
+
+#[test]
+fn a_created_on_that_is_not_a_date_is_an_error_before_the_layout_on_both_paths() {
+    for created_on in ["yesterday", "31.10.2026"] {
+        // No file is loaded, so an error that names the date came before the files were looked for, and the layout.
+        let mut engine = LpdfEngine::new("");
+        engine.set_created_on(created_on);
+        let errors = [
+            engine.render_xml(&fixture(), None, &RenderEncryption::default()).unwrap_err(),
+            engine.render_json(TREE_WITH_A_FILE, &RenderEncryption::default()).unwrap_err(),
+        ];
+        for error in errors {
+            assert!(error.contains(&format!("created_on '{created_on}'")), "{error}");
+            assert!(error.contains("2026-10-31T09:30:00Z"), "the form to give: {error}");
+        }
+    }
+}
+
+#[test]
+fn the_json_path_dates_its_files_as_the_xml_path_does() {
+    let mut engine = LpdfEngine::new("");
+    engine.load_file("a.txt", b"A");
+    engine.set_created_on("2026-10-31T09:30:00.000+01:00");
+    let pdf = text(&engine.render_json(TREE_WITH_A_FILE, &RenderEncryption::default()).unwrap());
+    let expected = literal("D:20261031093000+01'00");
+    assert!(pdf.contains(&format!("/CreationDate {expected}")) && pdf.contains(&format!("/ModDate {expected}")), "{pdf}");
 }
 
 #[test]
