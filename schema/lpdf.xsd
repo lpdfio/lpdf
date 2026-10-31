@@ -166,6 +166,26 @@
     <xs:list itemType="Permission"/>
   </xs:simpleType>
 
+  <xs:simpleType name="FileRelationship">
+    <xs:annotation>
+      <xs:documentation>How a file the PDF carries relates to the document: source, the file the document was made from; data, the data its pages show, such as the XML of an e-invoice; alternative, the same content in another form; supplement, more than the pages show; or unspecified.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="source"/>
+      <xs:enumeration value="data"/>
+      <xs:enumeration value="alternative"/>
+      <xs:enumeration value="supplement"/>
+      <xs:enumeration value="unspecified"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- A media type and a subtype, in the letters PDF/A-3 accepts in an embedded file's Subtype (veraPDF rule 6.8-1) -->
+  <xs:simpleType name="MimeType">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[A-Za-z0-9_.+\-]+/[A-Za-z0-9_.+\-]+"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="BookmarkLevel">
     <xs:restriction base="xs:positiveInteger">
       <xs:maxInclusive value="6"/>
@@ -1142,7 +1162,56 @@
       </xs:attribute>
       <xs:attribute name="pdfa" type="PdfALevel">
         <xs:annotation>
-          <xs:documentation>Writes the PDF as PDF/A, for archives, courts, public bodies and banks: 2b, or 2u when its text must also be searchable. The file carries its fonts, the sRGB color profile and its metadata, and the render needs created_on, the date the file carries. What PDF/A cannot hold is an error that says what to change: text in a built-in font such as the default Helvetica (declare a font in assets), a font whose license forbids embedding, a character the font has no glyph for, a CMYK color, a form field, the digits of a barcode, and encrypt.</xs:documentation>
+          <xs:documentation>Writes the PDF as PDF/A, for archives, courts, public bodies and banks: 2b, or 2u when its text must also be searchable. The file carries its fonts, the sRGB color profile and its metadata, and the render needs created_on, the date the file carries. What PDF/A cannot hold is an error that says what to change: text in a built-in font such as the default Helvetica (declare a font in assets), a font whose license forbids embedding, a character the font has no glyph for, a CMYK color, a form field, the digits of a barcode, encrypt, and attachments.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="attachments">
+    <xs:annotation>
+      <xs:documentation>Files the PDF carries inside it, such as the data of an invoice, the source of a report or its terms: a reader lists them in its attachments panel and saves them from there. The engine does not draw them; it carries each as it is. In an encrypted PDF they are encrypted with the rest, under the same passwords. A PDF/A-2 file can carry only files that are PDF/A themselves, so attachments and pdfa are an error.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="file" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="file">
+    <xs:annotation>
+      <xs:documentation>A file the PDF carries, under the name a reader shows. The SDK reads it from src, or it was loaded on the engine under ref or, with no ref, under its own name. A file with no bytes is an error, and so are two files with the same name.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="name" type="xs:string" use="required">
+        <xs:annotation>
+          <xs:documentation>The name a reader shows the file under and saves it as, such as invoice.xml. Each file of the document has a name of its own.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="src" type="xs:anyURI">
+        <xs:annotation>
+          <xs:documentation>A path the SDK reads the file from, when the file was not loaded on the engine.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="ref" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>The key the file was loaded under on the engine, when that is not its name.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="mime" type="MimeType">
+        <xs:annotation>
+          <xs:documentation>The type of the file, such as text/xml, application/pdf or text/csv. Defaults to application/octet-stream, which says only that it is a file.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="relationship" type="FileRelationship">
+        <xs:annotation>
+          <xs:documentation>How the file relates to the document: source, data, alternative, supplement or unspecified, the default. An e-invoice's XML is data.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="description" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>A line about the file, which a reader shows beside its name.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
     </xs:complexType>
@@ -1423,12 +1492,13 @@
        stops with "unexpected element in <document>". -->
   <xs:element name="document">
     <xs:annotation>
-      <xs:documentation>The whole document, and the page settings every section starts from: size, orientation, background and font. It holds an optional meta element, an optional output element and at least one section.</xs:documentation>
+      <xs:documentation>The whole document, and the page settings every section starts from: size, orientation, background and font. It holds an optional meta element, an optional output element, optional attachments and at least one section.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
         <xs:element ref="meta" minOccurs="0"/>
         <xs:element ref="output" minOccurs="0"/>
+        <xs:element ref="attachments" minOccurs="0"/>
         <xs:element ref="section" maxOccurs="unbounded"/>
       </xs:sequence>
       <xs:attribute name="font"        type="xs:string"/>
