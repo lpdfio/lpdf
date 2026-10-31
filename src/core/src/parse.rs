@@ -3533,8 +3533,16 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
 
     // ── Output ────────────────────────────────────────────────────────────────
     let output = match attrs.get("output").and_then(|v| v.as_object()) {
-        Some(o) => parse_output(o.get("encrypt").and_then(|v| v.as_str()), o.get("allow").and_then(|v| v.as_str()))
-            .map_err(|e| format!("document output: {e}"))?,
+        Some(o) => {
+            // Only a string is read: an `allow` given another way is an error, never one that is not there, which
+            // would encrypt with every permission allowed.
+            let text = |name: &str| match o.get(name) {
+                None | Some(serde_json::Value::Null) => Ok(None),
+                Some(serde_json::Value::String(s)) => Ok(Some(s.as_str())),
+                Some(other) => Err(format!("document output: {name} must be a string, not {other}")),
+            };
+            parse_output(text("encrypt")?, text("allow")?).map_err(|e| format!("document output: {e}"))?
+        }
         None => Output::default(),
     };
 

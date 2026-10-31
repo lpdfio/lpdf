@@ -1176,6 +1176,10 @@ mod tests {
         }));
         let error = parse::parse_tree(&tree(r#"{"allow":"print"}"#)).unwrap_err();
         assert!(error.starts_with("document output:") && error.contains("add encrypt"), "{error}");
+        // An allow that is not a string is refused, not read as no allow, which would allow everything.
+        let error = parse::parse_tree(&tree(r#"{"encrypt":"aes-256","allow":["print"]}"#)).unwrap_err();
+        assert!(error.contains("allow must be a string"), "{error}");
+        assert!(parse::parse_tree(&tree(r#"{"encrypt":"aes-256","allow":null}"#)).is_ok(), "a null is no allow, as an SDK sends one");
     }
 
     /// Writes the files `scripts/check-encryption.mjs` opens with qpdf, when `LPDF_ENCRYPT_OUT` names a folder:
