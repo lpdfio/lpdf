@@ -2888,7 +2888,7 @@ mod tests {
         let opts = CodegenOptions { target: "python".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
         assert!(out.contains("output=DocumentOutput(encrypt='aes-256', allow='print fill-forms')"), "{out}");
-        assert!(out.contains("DocumentOutput"), "{out}");
+        assert!(out.contains("from lpdf import L, NoAttr, DocumentAttr, DocumentMeta, DocumentOutput\n"), "{out}");
         assert!(!out.contains("L.output("));
     }
 
