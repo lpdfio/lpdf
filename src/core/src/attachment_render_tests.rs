@@ -61,9 +61,9 @@ fn encrypted_fixture(cipher: &str) -> String {
     fixture().replace("<attachments>", &format!("<output encrypt=\"{cipher}\" />\n    <attachments>"))
 }
 
-/// `text` as the hex string the files' strings are written as.
-fn hex(text: &str) -> String {
-    format!("<{}>", text.bytes().map(|b| format!("{b:02X}")).collect::<String>())
+/// `text`, printable ASCII without a parenthesis or a backslash, as the literal string pdf-writer writes it.
+fn literal(text: &str) -> String {
+    format!("({text})")
 }
 
 #[test]
@@ -73,9 +73,9 @@ fn each_file_is_an_embedded_file_with_a_file_specification() {
     assert_eq!(pdf.matches("/Type /Filespec").count(), 2);
     for expected in [
         "/Subtype /text#2Fxml".to_string(), "/Subtype /text#2Fplain".to_string(),
-        format!("/F {}", hex("invoice.xml")), format!("/UF {}", hex("invoice.xml")),
-        format!("/F {}", hex("terms.txt")), format!("/UF {}", hex("terms.txt")),
-        format!("/Desc {}", hex("The invoice as data, for software to read")),
+        format!("/F {}", literal("invoice.xml")), format!("/UF {}", literal("invoice.xml")),
+        format!("/F {}", literal("terms.txt")), format!("/UF {}", literal("terms.txt")),
+        format!("/Desc {}", literal("The invoice as data, for software to read")),
         "/AFRelationship /Data".to_string(), "/AFRelationship /Supplement".to_string(),
     ] {
         assert!(pdf.contains(&expected), "missing {expected}");
@@ -100,14 +100,14 @@ fn the_catalog_lists_the_files_by_name_and_as_associated_files() {
     assert!(catalog.contains("/EmbeddedFiles"), "{catalog}");
     // A name tree's keys in the order of their bytes, whatever the document's order.
     let names = catalog.split("/Names [").nth(1).expect("the name tree's entries");
-    assert!(names.find(&hex("invoice.xml")).unwrap() < names.find(&hex("terms.txt")).unwrap(), "{catalog}");
+    assert!(names.find(&literal("invoice.xml")).unwrap() < names.find(&literal("terms.txt")).unwrap(), "{catalog}");
     assert!(catalog.contains("/AF ["), "{catalog}");
 }
 
 #[test]
 fn the_files_are_dated_as_the_document_is_and_undated_without_a_date() {
     let dated = text(&render_with(&fixture(), Some(CREATED_ON), &RenderEncryption::default()).unwrap());
-    assert_eq!(dated.matches(&format!("/ModDate {}", hex("D:20261031093000"))).count(), 2, "{dated}");
+    assert_eq!(dated.matches(&format!("/ModDate {}", literal("D:20261031093000"))).count(), 2, "{dated}");
     assert!(dated.contains("/CreationDate (D:20261031093000)"));
 
     let undated = text(&render_fixture());
@@ -140,7 +140,7 @@ fn a_file_loaded_under_its_ref_is_carried_under_its_name() {
     let mut engine = LpdfEngine::new("");
     engine.load_file("invoice-42", b"<invoice/>");
     let pdf = text(&engine.render_xml(xml, None, &RenderEncryption::default()).unwrap());
-    assert!(pdf.contains(&format!("/UF {}", hex("factur-x.xml"))) && !pdf.contains("invoice-42"), "{pdf}");
+    assert!(pdf.contains(&format!("/UF {}", literal("factur-x.xml"))) && !pdf.contains("invoice-42"), "{pdf}");
 }
 
 #[test]

@@ -79,9 +79,8 @@ fn run_snapshot_with_image(name: &str) {
 
 /// `showcase-encryption` rendered as the host would ask: the cipher and the permissions of its `<output>` (no
 /// copying or modifying), and what the render call says. Its `<output>` asks for AES-256, and `cipher` takes its
-/// place, so the RC4 snapshot is the same document in RC4-128. The RC4 snapshot is the output of the engine before
-/// AES-256 existed, and the plain one, with `skip_encryption`, the document before it had an `<output>`: neither
-/// may change.
+/// place, so the RC4 snapshot is the same document in RC4-128. The plain one, with `skip_encryption`, is the
+/// document before it had an `<output>`: it may not change.
 fn run_snapshot_encrypted(name: &str, cipher: &str, encryption: crate::RenderEncryption) {
     let xml_path = fixtures_dir().join("showcase-encryption.xml");
     let xml = std::fs::read_to_string(&xml_path)
