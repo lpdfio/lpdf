@@ -448,6 +448,26 @@ mod tests {
     }
 
     #[test]
+    fn a_tree_without_allow_or_with_a_null_one_allows_nothing_and_all_allows_everything() {
+        use crate::encrypt::Permissions;
+        let permissions = |output: &str| {
+            let doc = parse_tree(&tree(&format!(r#"{{"output":{output}}}"#), r#"{"type":"text","attrs":{},"nodes":["a"]}"#)).unwrap();
+            doc.output.encryption.expect("the document asks for encryption").permissions
+        };
+        // A NaN from JavaScript arrives as null: it locks the file rather than opening it.
+        assert_eq!(permissions(r#"{"encrypt":"aes-256"}"#), Permissions::NONE);
+        assert_eq!(permissions(r#"{"encrypt":"aes-256","allow":null}"#), Permissions::NONE);
+        assert_eq!(permissions(r#"{"encrypt":"aes-256","allow":""}"#), Permissions::NONE);
+        assert_eq!(permissions(r#"{"encrypt":"aes-256","allow":"all"}"#), Permissions::ALL);
+    }
+
+    #[test]
+    fn kit_to_xml_writes_a_null_allow_as_no_allow() {
+        let xml = kit_to_xml(&tree(r#"{"output":{"encrypt":"aes-256","allow":null}}"#, r#""a""#)).unwrap();
+        assert!(xml.contains(r#"<output encrypt="aes-256"/>"#), "{xml}");
+    }
+
+    #[test]
     fn kit_to_xml_refuses_an_output_value_of_the_wrong_json_type_as_the_direct_render_does() {
         let encrypted = tree(r#"{"output":{"encrypt":"aes-256","allow":["print"]}}"#, r#""a""#);
         for error in [kit_to_xml(&encrypted).unwrap_err(), parse_tree(&encrypted).unwrap_err()] {
