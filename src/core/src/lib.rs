@@ -811,6 +811,7 @@ mod tests {
             serde_json::from_str(&engine.render(&minimal(""))).unwrap();
         assert!(!result["watermark"].is_null());
         assert_eq!(result["watermark"]["type"], "lpdf:watermark");
+        assert_eq!(result["watermark"]["text"], "Lpdf", "the words of the line the PDF draws");
     }
 
     #[test]
