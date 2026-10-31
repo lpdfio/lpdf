@@ -3,6 +3,11 @@
 // differing only in the case rule of its language: font-size is fontSize in Node and PHP, font_size in
 // Python and FontSize in .NET.
 //
+// Each attribute has the type the schema gives it: a boolean is `boolean`, `bool` or `bool`, a whole number `number`,
+// `int` or `int`, a number `number`, `float` or `double`, and the rest a string. `line-height`, a name or a factor,
+// is `string | number` in TypeScript, `str | float` in Python, `string|float` in PHP and `LineHeight` in C#, a struct
+// that converts from either. The gradients of the tokens are generated from `<gradient>` and `<stop>` too.
+//
 // A schema attribute marked use="required" is required in every SDK, by each language's own means: a
 // required property in TypeScript, a required `init` property in C#, a field without a default in Python
 // and a constructor parameter without a default in PHP. Data-binding attributes (data-*) are for XML
@@ -11,9 +16,13 @@
 // The constants are strings, so a value goes straight into an attribute: type: FieldType.Text in Node,
 // FieldAttr(type=FieldType.TEXT) in Python.
 //
-// Usage: node scripts/gen-sdk-api.mjs                      write the files of the four SDKs under repos/
+// It also writes the core's table of the attributes of every element and their types, src/core/src/schema_attrs.rs,
+// which the engine checks a document against on both of its paths, XML and the kit tree.
+//
+// Usage: node scripts/gen-sdk-api.mjs                      write the core's table and the files of the four SDKs under repos/
 //        node scripts/gen-sdk-api.mjs --check              list the files that differ, exit 1 if any do
 //        node scripts/gen-sdk-api.mjs --check --sdk node=.  only the SDK in the given folder (an SDK repository's CI)
+//        node scripts/gen-sdk-api.mjs --check --core       only the core's table (the core's CI, which has no SDKs)
 
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
@@ -25,13 +34,15 @@ import { loadSchema } from './lib/xsd.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schema = loadSchema(path.join(root, 'schema/lpdf.xsd'));
 const check = process.argv.includes('--check');
-const { repositories, selected } = sdkRepositories(root, process.argv);
+const coreOnly = process.argv.includes('--core');
+const { repositories, selected } = coreOnly ? { repositories: {}, selected: [] } : sdkRepositories(root, process.argv);
+const CORE_TABLE = path.join(root, 'src/core/src/schema_attrs.rs');
 
 const SDK = {
-    dotnet: path.join(repositories.dotnet, 'src'),
-    node: path.join(repositories.node, 'src'),
-    python: path.join(repositories.python, 'src/lpdf'),
-    php: path.join(repositories.php, 'src'),
+    dotnet: path.join(repositories.dotnet ?? 'repos/lpdf-dotnet', 'src'),
+    node: path.join(repositories.node ?? 'repos/lpdf-js', 'src'),
+    python: path.join(repositories.python ?? 'repos/lpdf-python', 'src/lpdf'),
+    php: path.join(repositories.php ?? 'repos/lpdf-php', 'src'),
 };
 
 // The rules a `<markdown-styles>` holds, each an element of its own in the schema.
@@ -102,6 +113,29 @@ const HEADER = [
     'Do not edit: change the schema and run `make gen-sdk-api`.',
 ];
 
+// The type of an attribute in each language, by its kind (see loadSchema).
+const TYPES = {
+    node: { boolean: 'boolean', integer: 'number', decimal: 'number', 'name-or-number': 'string | number', string: 'string' },
+    python: { boolean: 'bool', integer: 'int', decimal: 'float', 'name-or-number': 'str | float', string: 'str' },
+    php: { boolean: 'bool', integer: 'int', decimal: 'float', 'name-or-number': 'string|float', string: 'string' },
+    dotnet: { boolean: 'bool', integer: 'int', decimal: 'double', 'name-or-number': 'LineHeight', string: 'string' },
+};
+
+function typeOf(language, attribute) {
+    const { kind } = attribute.type;
+    // LineHeight is the C# type of line-height alone; another attribute of a name or a number needs a type of its own.
+    if (kind === 'name-or-number' && attribute.name !== 'line-height') {
+        throw new Error(`${attribute.name} is a name or a number, which only line-height has a type for`);
+    }
+    return TYPES[language][kind];
+}
+
+function phpParameter(attribute, name) {
+    const type = typeOf('php', attribute);
+    if (attribute.required) return `public ${type} $${name},`;
+    return type.includes('|') ? `public ${type}|null $${name} = null,` : `public ?${type} $${name} = null,`;
+}
+
 // ── .NET ──────────────────────────────────────────────────────────────────────
 
 function dotnet(spec, element) {
@@ -110,8 +144,8 @@ function dotnet(spec, element) {
     ordered(element).forEach((a, i) => {
         if (a.doc) lines.push(...(i > 0 ? [''] : []), `    /// <summary>${xmlDoc(a.doc)}</summary>`);
         lines.push(a.required
-            ? `    public required string ${pascal(a.name)} { get; init; }`
-            : `    public string? ${pascal(a.name)} { get; init; }`);
+            ? `    public required ${typeOf('dotnet', a)} ${pascal(a.name)} { get; init; }`
+            : `    public ${typeOf('dotnet', a)}? ${pascal(a.name)} { get; init; }`);
     });
     lines.push('}', '');
     return { file: path.join(SDK.dotnet, PLACES[spec.area].folder, `${spec.cls}.cs`), text: lines.join('\n') };
@@ -125,7 +159,7 @@ function php(spec, element) {
         `final readonly class ${spec.cls}`, '{', '    public function __construct('];
     for (const a of ordered(element)) {
         if (a.doc) lines.push(...(a.doc.length > 80 ? ['        /**', ...wrap(a.doc, 100, '         * '), '         */'] : [`        /** ${a.doc} */`]));
-        lines.push(a.required ? `        public string $${camel(a.name)},` : `        public ?string $${camel(a.name)} = null,`);
+        lines.push(`        ${phpParameter(a, camel(a.name))}`);
     }
     lines.push('    ) {}', '}', '');
     return { file: path.join(SDK.php, PLACES[spec.area].folder, `${spec.cls}.php`), text: lines.join('\n') };
@@ -140,7 +174,7 @@ function python(spec, element) {
     lines.push(doc.length === 1 ? `    """${doc[0].trim()}"""` : ['    """', ...doc, '    """'].join('\n'), '');
     for (const a of ordered(element)) {
         if (a.doc) lines.push(...wrap(a.doc, 96, '    # '));
-        lines.push(a.required ? `    ${snake(a.name)}: str` : `    ${snake(a.name)}: str | None = None`);
+        lines.push(a.required ? `    ${snake(a.name)}: ${typeOf('python', a)}` : `    ${snake(a.name)}: ${typeOf('python', a)} | None = None`);
     }
     lines.push('');
     return { file: path.join(SDK.python, PLACES[spec.area].python, `${snakeFromPascal(spec.cls)}.py`), text: lines.join('\n') };
@@ -152,10 +186,93 @@ function nodeInterface(spec, element) {
     const lines = ['/**', ...wrap(summary(spec, element), 100, ' * '), ' */', `export interface ${spec.cls} {`];
     for (const a of ordered(element)) {
         if (a.doc) lines.push(...(a.doc.length > 80 ? ['  /**', ...wrap(a.doc, 100, '   * '), '   */'] : [`  /** ${a.doc} */`]));
-        lines.push(`  ${camel(a.name)}${a.required ? '' : '?'}: string;`);
+        lines.push(`  ${camel(a.name)}${a.required ? '' : '?'}: ${typeOf('node', a)};`);
     }
     lines.push('}', '');
     return lines.join('\n');
+}
+
+// ── Gradients ─────────────────────────────────────────────────────────────────
+
+// A gradient of the tokens and its stops: the attributes of `<gradient>` but `name`, which is its key in the map of
+// gradients, and its `<stop>` children as `stops`. JS has interfaces and Python TypedDicts, since a field can't be
+// named `from` there; PHP and C# have classes.
+const STOPS_DOC = 'The colors of the gradient, for more than two: each at an offset, in increasing order. Give these, or from and to.';
+
+function gradientParts() {
+    const gradient = schema.element('gradient');
+    const stop = schema.element('stop');
+    return {
+        doc: gradient.doc,
+        attributes: ordered(gradient).filter((a) => a.name !== 'name'),
+        stopDoc: 'One color of a gradient, at an offset along it.',
+        stopAttributes: ordered(stop),
+    };
+}
+
+function gradientFiles() {
+    const { doc, attributes, stopDoc, stopAttributes } = gradientParts();
+    const files = [];
+
+    // .NET: records in Lpdf.Kit.
+    const record = (name, summary, members, extra) => {
+        const lines = [...HEADER.map((h) => `// ${h}`), 'namespace Lpdf.Kit;', '', '#pragma warning disable CS1591',
+            `/// <summary>${xmlDoc(summary)}</summary>`, `public sealed record ${name}`, '{'];
+        members.forEach((a, i) => {
+            if (a.doc) lines.push(...(i > 0 ? [''] : []), `    /// <summary>${xmlDoc(a.doc)}</summary>`);
+            lines.push(a.required
+                ? `    public required ${typeOf('dotnet', a)} ${pascal(a.name)} { get; init; }`
+                : `    public ${typeOf('dotnet', a)}? ${pascal(a.name)} { get; init; }`);
+        });
+        lines.push(...extra, '}', '');
+        return { file: path.join(SDK.dotnet, 'Kit', `${name}.cs`), text: lines.join('\n') };
+    };
+    files.push(record('Gradient', doc, attributes,
+        ['', `    /// <summary>${xmlDoc(STOPS_DOC)}</summary>`, '    public IReadOnlyList<GradientStop>? Stops { get; init; }']));
+    files.push(record('GradientStop', stopDoc, stopAttributes, []));
+
+    // PHP: readonly classes in Lpdf\Kit.
+    const phpClass = (name, summary, members, extra) => {
+        const lines = ['<?php', '', 'declare(strict_types=1);', '', 'namespace Lpdf\\Kit;', '', '/**',
+            ...wrap(summary, 100, ' * '), ' *', ...HEADER.map((h) => ` * ${h}`), ' */', `final readonly class ${name}`, '{'];
+        if (extra.length) lines.push('    /**', ...wrap(`@param list<GradientStop> $stops ${STOPS_DOC}`, 100, '     * '), '     */');
+        lines.push('    public function __construct(');
+        for (const a of members) {
+            if (a.doc) lines.push(...(a.doc.length > 80 ? ['        /**', ...wrap(a.doc, 100, '         * '), '         */'] : [`        /** ${a.doc} */`]));
+            lines.push(`        ${phpParameter(a, camel(a.name))}`);
+        }
+        lines.push(...extra, '    ) {}', '}', '');
+        return { file: path.join(SDK.php, 'Kit', `${name}.php`), text: lines.join('\n') };
+    };
+    files.push(phpClass('Gradient', doc, attributes, ['        public array $stops = [],']));
+    files.push(phpClass('GradientStop', stopDoc, stopAttributes, []));
+
+    // Python: TypedDicts in lpdf.kit, the gradient in the functional form, because `from` is a keyword.
+    const pyStop = [...HEADER.map((h) => `# ${h}`), 'from __future__ import annotations', '', 'from typing import TypedDict', '', '',
+        'class GradientStop(TypedDict):', `    """${stopDoc}"""`, ''];
+    for (const a of stopAttributes) pyStop.push(...wrap(a.doc, 96, '    # '), `    ${snake(a.name)}: ${typeOf('python', a)}`);
+    pyStop.push('');
+    files.push({ file: path.join(SDK.python, 'kit', 'gradient_stop.py'), text: pyStop.join('\n') });
+    const pyGradient = [...HEADER.map((h) => `# ${h}`), 'from __future__ import annotations', '',
+        'from typing import Required, TypedDict', '', 'from .gradient_stop import GradientStop', '',
+        ...wrap(doc, 100, '# '), '# The functional form, because ``from`` is a Python keyword.', 'Gradient = TypedDict(', '    "Gradient",', '    {'];
+    for (const a of attributes) {
+        const type = typeOf('python', a);
+        pyGradient.push(...wrap(a.doc, 92, '        # '), `        "${a.name}": ${a.required ? `Required[${type}]` : type},`);
+    }
+    pyGradient.push(...wrap(STOPS_DOC, 92, '        # '), '        "stops": "list[GradientStop]",', '    },', '    total=False,', ')', '');
+    files.push({ file: path.join(SDK.python, 'kit', 'gradient.py'), text: pyGradient.join('\n') });
+
+    // Node: interfaces in attrs.ts. The type of a gradient lists its values, as the hand-written one did.
+    const kinds = schema.simpleTypeValues('GradientType').map((v) => `'${v}'`).join(' | ');
+    const tsMember = (a, type) => [...(a.doc.length > 80 ? ['  /**', ...wrap(a.doc, 100, '   * '), '   */'] : [`  /** ${a.doc} */`]),
+        `  ${camel(a.name)}${a.required ? '' : '?'}: ${type};`];
+    const node = ['/**', ...wrap(stopDoc, 100, ' * '), ' */', 'export interface GradientStop {'];
+    for (const a of stopAttributes) node.push(...tsMember(a, typeOf('node', a)));
+    node.push('}', '', '/**', ...wrap(doc, 100, ' * '), ' */', 'export interface GradientToken {');
+    for (const a of attributes) node.push(...tsMember(a, a.name === 'type' ? kinds : typeOf('node', a)));
+    node.push(...['  /**', ...wrap(STOPS_DOC, 100, '   * '), '   */'], '  stops?: GradientStop[];', '}', '');
+    return { files, node: node.join('\n') };
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -230,6 +347,78 @@ function constantsFor(spec) {
     };
 }
 
+// ── Core ──────────────────────────────────────────────────────────────────────
+
+/** A number of the schema as Rust writes it: a decimal bound always with a point. */
+function rustNumber(value, kind) {
+    return kind === 'integer' || !Number.isInteger(value) ? String(value) : `${value}.0`;
+}
+
+function rustBound(type, end) {
+    const value = type[end];
+    if (value === undefined) return 'Bound::Open';
+    const exclusive = end === 'min' ? type.minExclusive : type.maxExclusive;
+    return `Bound::${exclusive ? 'Exclusive' : 'Inclusive'}(${rustNumber(value, 'decimal')})`;
+}
+
+function rustKind(type) {
+    const integer = (end) => (type[end] === undefined ? 'None' : `Some(${type[end]})`);
+    switch (type.kind) {
+        case 'boolean': return 'Kind::Boolean';
+        case 'integer': return `Kind::Integer { min: ${integer('min')}, max: ${integer('max')} }`;
+        case 'decimal': return `Kind::Decimal { min: ${rustBound(type, 'min')}, max: ${rustBound(type, 'max')} }`;
+        case 'name-or-number':
+            if (type.number !== 'decimal') throw new Error('a name or a whole number has no kind in the core');
+            return `Kind::NameOrDecimal { min: ${rustBound(type, 'min')}, max: ${rustBound(type, 'max')} }`;
+        default: return 'Kind::Text';
+    }
+}
+
+function rustConst(element) {
+    return [element.within, element.name].filter(Boolean).join('_').replace(/-/g, '_').toUpperCase();
+}
+
+/**
+ * The core's table: a constant with the attributes of each element, in schema order and without the data-*
+ * attributes, and `attributes_of`, which finds the element a name stands for where it is written. A name means the
+ * element declared in its parent when there is one, such as a row of the tokens or a rule of a markdown's styles;
+ * in a layer only a drawing primitive, so that a layout element there is reported by the parser, not by its
+ * attributes; anywhere else the top-level element.
+ */
+function coreTable() {
+    const elements = schema.allElements();
+    const primitives = schema.groupElements('CanvasPrimitives');
+    const lines = [
+        ...HEADER.map((h) => `// ${h}`), '',
+        '//! The attributes of every element of lpdf.xsd and their types.', '',
+        'use crate::attr_types::{Bound, Kind};', '',
+        '/// The attributes of an element, in the order the schema lists them, without the data-* attributes.',
+        'pub(crate) type Attributes = &\'static [(&\'static str, Kind)];', '',
+    ];
+    for (const element of elements) {
+        const attributes = element.attributes.filter((a) => !a.name.startsWith('data-'));
+        lines.push(`const ${rustConst(element)}: Attributes = &[`);
+        for (const a of attributes) lines.push(`    ("${a.name}", ${rustKind(a.type)}),`);
+        lines.push('];', '');
+    }
+    lines.push(
+        '/// The attributes of the element `name` written in the element `parent`, or `None` for an element the schema',
+        '/// does not have there.',
+        'pub(crate) fn attributes_of(parent: &str, name: &str) -> Option<Attributes> {',
+        '    match (parent, name) {',
+    );
+    for (const element of elements.filter((e) => e.within)) {
+        lines.push(`        ("${element.within}", "${element.name}") => Some(${rustConst(element)}),`);
+    }
+    for (const name of primitives) lines.push(`        ("layer", "${name}") => Some(${rustConst({ name })}),`);
+    lines.push('        ("layer", _) => None,');
+    for (const element of elements.filter((e) => !e.within)) {
+        lines.push(`        (_, "${element.name}") => Some(${rustConst(element)}),`);
+    }
+    lines.push('        _ => None,', '    }', '}', '');
+    return { file: CORE_TABLE, text: lines.join('\n') };
+}
+
 // ── Run ───────────────────────────────────────────────────────────────────────
 
 const generated = [];
@@ -249,14 +438,18 @@ generated.push({
     file: path.join(SDK.node, 'constants.ts'),
     text: [...HEADER.map((h) => `// ${h}`), '', ...nodeConstants].join('\n'),
 });
+const gradients = gradientFiles();
+generated.push(...gradients.files);
 generated.push({
     file: path.join(SDK.node, 'attrs.ts'),
-    text: [...HEADER.map((h) => `// ${h}`), '', ...nodeInterfaces].join('\n'),
+    text: [...HEADER.map((h) => `// ${h}`), '', ...nodeInterfaces, gradients.node].join('\n'),
 });
 
-// Only the SDKs asked for: the files of the others are not there to compare with.
+// Only the SDKs asked for: the files of the others are not there to compare with. The core's table goes with all
+// four, or alone.
 const inSelected = (file) => selected.some((language) => file.startsWith(SDK[language] + path.sep));
-const outputs = generated.filter(({ file }) => inSelected(file));
+const withCore = coreOnly || !process.argv.some((a) => a === '--sdk' || a.startsWith('--sdk='));
+const outputs = [...(withCore ? [coreTable()] : []), ...generated.filter(({ file }) => inSelected(file))];
 
 const normal = (s) => s.replace(/\r\n/g, '\n');
 let differing = 0;

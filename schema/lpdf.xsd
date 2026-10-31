@@ -5,6 +5,14 @@
        Simple Types
   ============================================================ -->
 
+  <!-- true or false. XSD's own boolean type also takes 1 and 0, which the engine refuses: one form, as in a kit tree. -->
+  <xs:simpleType name="Boolean">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="true"/>
+      <xs:enumeration value="false"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="TokenScale">
     <xs:restriction base="xs:string">
       <xs:enumeration value="xs"/>
@@ -575,7 +583,7 @@
         <xs:documentation>Where the box falls in the page flow. no: never split the box, and move it whole to the next page when it does not fit. break-before: start it on a new page. break-after: start the next sibling on a new page. keep-next: keep it on one page with the sibling that follows, moving both to the next page if that sibling would not fit and cannot start on this page: a table splits after its header and a row, and a text after a few lines, and then it stays with that first part. break-before, break-after and keep-next take effect on the children of layout; on a box inside another box they are not applied. no applies at any depth.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
-    <xs:attribute name="debug"      type="xs:boolean"/>
+    <xs:attribute name="debug"      type="Boolean"/>
     <xs:attributeGroup ref="DataBindingAttrs"/>
     <xs:attributeGroup ref="DataColorAttr"/>
     <xs:attributeGroup ref="DataBackgroundAttr"/>
@@ -627,7 +635,7 @@
         <xs:documentation>Where the box falls in the page flow. no: never split the box, and move it whole to the next page when it does not fit. break-before: start it on a new page. break-after: start the next sibling on a new page. keep-next: keep it on one page with the sibling that follows, moving both to the next page if that sibling would not fit and cannot start on this page: a table splits after its header and a row, and a text after a few lines, and then it stays with that first part. break-before, break-after and keep-next take effect on the children of layout; on a box inside another box they are not applied. no applies at any depth.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
-    <xs:attribute name="debug"      type="xs:boolean"/>
+    <xs:attribute name="debug"      type="Boolean"/>
     <xs:attributeGroup ref="DataBindingAttrs"/>
     <xs:attributeGroup ref="DataColorAttr"/>
     <xs:attributeGroup ref="DataBackgroundAttr"/>
@@ -684,7 +692,7 @@
   <xs:attributeGroup name="TextCore">
     <xs:attribute name="font-size" type="TokenScaleOrPt"/>
     <xs:attribute name="font"      type="xs:string"/>
-    <xs:attribute name="bold" type="xs:boolean">
+    <xs:attribute name="bold" type="Boolean">
       <xs:annotation>
         <xs:documentation>Use the bold face of the font. It applies to the 14 built-in fonts: Helvetica becomes Helvetica-Bold, Times-Roman becomes Times-Bold, Courier becomes Courier-Bold, and the oblique and italic faces their bold forms. A custom font has no bold face to pick, so name one in font.</xs:documentation>
       </xs:annotation>
@@ -707,7 +715,7 @@
         </xs:restriction>
       </xs:simpleType>
     </xs:attribute>
-    <xs:attribute name="ellipsis" type="xs:boolean">
+    <xs:attribute name="ellipsis" type="Boolean">
       <xs:annotation>
         <xs:documentation>End the last line drawn in an ellipsis when max-lines drops text, shortened to fit the width. Off by default: the text stops at the end of a line. A text-at also ends a line in one when it is cut off at its width. A text in the layout without max-lines is never cut, so there it has no effect.</xs:documentation>
       </xs:annotation>
@@ -747,7 +755,7 @@
         </xs:restriction>
       </xs:simpleType>
     </xs:attribute>
-    <xs:attribute name="hrt"        type="xs:boolean"/>
+    <xs:attribute name="hrt"        type="Boolean"/>
     <xs:attribute name="color"      type="Color"/>
     <xs:attribute name="background" type="Color"/>
     <xs:attributeGroup ref="DataColorAttr"/>
@@ -1249,7 +1257,7 @@
             </xs:attribute>
             <!-- w is for pin="left|right", which are not implemented; it is read and not used -->
             <xs:attribute name="w"     type="PtValue"/>
-            <xs:attribute name="debug" type="xs:boolean"/>
+            <xs:attribute name="debug" type="Boolean"/>
           </xs:complexType>
         </xs:element>
       </xs:choice>
@@ -1265,7 +1273,7 @@
   <xs:attributeGroup name="MarkdownTextRule">
     <xs:attribute name="font"        type="xs:string"/>
     <xs:attribute name="font-size"   type="TokenScaleOrPt"/>
-    <xs:attribute name="bold"        type="xs:boolean"/>
+    <xs:attribute name="bold"        type="Boolean"/>
     <xs:attribute name="color"       type="Color"/>
     <xs:attribute name="align"       type="TextAlignH"/>
     <xs:attribute name="line-height" type="TokenScaleOrFactor"/>
@@ -1285,7 +1293,7 @@
   <xs:attributeGroup name="MarkdownCellRule">
     <xs:attribute name="font"       type="xs:string"/>
     <xs:attribute name="font-size"  type="TokenScaleOrPt"/>
-    <xs:attribute name="bold"       type="xs:boolean"/>
+    <xs:attribute name="bold"       type="Boolean"/>
     <xs:attribute name="color"      type="Color"/>
     <xs:attribute name="align"      type="TextAlignH"/>
     <xs:attribute name="padding"    type="SpacingOrToken"/>
@@ -1388,15 +1396,15 @@
                 <xs:annotation><xs:documentation>A link, written [text](url) in Markdown.</xs:documentation></xs:annotation>
                 <xs:complexType>
                   <xs:attributeGroup ref="MarkdownSpanRule"/>
-                  <xs:attribute name="bold"      type="xs:boolean"/>
-                  <xs:attribute name="underline" type="xs:boolean"/>
+                  <xs:attribute name="bold"      type="Boolean"/>
+                  <xs:attribute name="underline" type="Boolean"/>
                 </xs:complexType>
               </xs:element>
               <xs:element name="strong">
                 <xs:annotation><xs:documentation>Strong text, written **text** in Markdown. Bold in a built-in font; an embedded font names its bold face in font.</xs:documentation></xs:annotation>
                 <xs:complexType>
                   <xs:attributeGroup ref="MarkdownSpanRule"/>
-                  <xs:attribute name="bold" type="xs:boolean"/>
+                  <xs:attribute name="bold" type="Boolean"/>
                 </xs:complexType>
               </xs:element>
               <xs:element name="em">
@@ -1407,7 +1415,7 @@
                 <xs:annotation><xs:documentation>Struck-through text, written ~~text~~ in Markdown.</xs:documentation></xs:annotation>
                 <xs:complexType>
                   <xs:attributeGroup ref="MarkdownSpanRule"/>
-                  <xs:attribute name="strike" type="xs:boolean"/>
+                  <xs:attribute name="strike" type="Boolean"/>
                 </xs:complexType>
               </xs:element>
               <xs:element name="table">
@@ -1483,7 +1491,7 @@
           <xs:documentation>How many levels of headings become bookmarks, for the outline of the viewer and the table of contents: n keeps the levels 1 to n, 0 none. Default 6.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
-      <xs:attribute name="debug" type="xs:boolean"/>
+      <xs:attribute name="debug" type="Boolean"/>
     </xs:complexType>
   </xs:element>
 
@@ -1505,7 +1513,7 @@
       <xs:attribute name="size"        type="PageSize"/>
       <xs:attribute name="orientation" type="Orientation"/>
       <xs:attribute name="background"  type="Fill"/>
-      <xs:attribute name="debug"       type="xs:boolean"/>
+      <xs:attribute name="debug"       type="Boolean"/>
       <xs:attribute name="footnote-counter" type="FootnoteCounter">
         <xs:annotation>
           <xs:documentation>Where the numbers of the footnotes start over: on every page, in every section (the default), or never, so that they run on through the document. A section's own footnote-counter overrides it.</xs:documentation>
@@ -1540,7 +1548,7 @@
       <xs:attribute name="orientation" type="Orientation"/>
       <xs:attribute name="background"  type="Fill"/>
       <xs:attribute name="title"       type="xs:string"/>
-      <xs:attribute name="debug"       type="xs:boolean"/>
+      <xs:attribute name="debug"       type="Boolean"/>
       <xs:attribute name="type"        type="SectionType">
         <xs:annotation>
           <xs:documentation>toc makes the section the document's table of contents. It is laid out after the other sections, with the data $toc: one entry per bookmark outside it, with index, level, label, page, anchor and indent. Repeat an element over it with data-source="$toc". One section per document may be a table of contents.</xs:documentation>
@@ -1663,7 +1671,7 @@
         <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
       </xs:sequence>
       <xs:attributeGroup ref="BoxAttrs"/>
-      <xs:attribute name="checked" type="xs:boolean">
+      <xs:attribute name="checked" type="Boolean">
         <xs:annotation>
           <xs:documentation>Makes the item's marker a checkbox in place of the bullet or the number: an outline in the line color, with a tick in the color of the item's words when this is true, and empty when it is false. The words start where those of a bullet do, and an item of a number list still takes its number. An item without it keeps its bullet or number. A task item of a Markdown, - [ ] or - [x], is one.</xs:documentation>
         </xs:annotation>
@@ -1770,7 +1778,7 @@
       <xs:attribute name="gap"    type="SpacingOrToken"/>
       <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="height" type="HeightValue"/>
-      <xs:attribute name="debug"  type="xs:boolean"/>
+      <xs:attribute name="debug"  type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
       <xs:attributeGroup ref="DataHrefAttr"/>
     </xs:complexType>
@@ -1812,7 +1820,7 @@
       <xs:attribute name="color"     type="Color"/>
       <xs:attribute name="thickness" type="TokenScaleOrPt"/>
       <xs:attributeGroup ref="WidthAttr"/>
-      <xs:attribute name="debug"     type="xs:boolean"/>
+      <xs:attribute name="debug"     type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
       <xs:attributeGroup ref="DataColorAttr"/>
     </xs:complexType>
@@ -1821,15 +1829,15 @@
   <xs:element name="span">
     <xs:complexType mixed="true">
       <xs:attribute name="font"      type="xs:string"/>
-      <xs:attribute name="bold"      type="xs:boolean"/>
+      <xs:attribute name="bold"      type="Boolean"/>
       <xs:attribute name="color"     type="Color"/>
       <xs:attribute name="href"      type="xs:anyURI">
         <xs:annotation>
           <xs:documentation>Makes the span a link: a URL, or #id to jump to the bookmark with that id. In an entry of a table of contents, # alone jumps to that entry's bookmark.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
-      <xs:attribute name="underline" type="xs:boolean"/>
-      <xs:attribute name="strike"    type="xs:boolean"/>
+      <xs:attribute name="underline" type="Boolean"/>
+      <xs:attribute name="strike"    type="Boolean"/>
     </xs:complexType>
   </xs:element>
 
@@ -1876,7 +1884,7 @@
       <xs:attribute name="border"     type="BorderValue"/>
       <xs:attribute name="radius"     type="TokenScaleOrPt"/>
       <xs:attribute name="paginate"   type="Paginate"/>
-      <xs:attribute name="debug"      type="xs:boolean"/>
+      <xs:attribute name="debug"      type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
   </xs:element>
@@ -1895,7 +1903,7 @@
       <xs:attributeGroup ref="BarcodeStyle"/>
       <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="paginate"   type="Paginate"/>
-      <xs:attribute name="debug"      type="xs:boolean"/>
+      <xs:attribute name="debug"      type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
   </xs:element>
@@ -1940,7 +1948,7 @@
           <xs:documentation>How opaque the shape is, from 0 to 1. Default 1.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
-      <xs:attribute name="debug" type="xs:boolean"/>
+      <xs:attribute name="debug" type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
       <xs:attributeGroup ref="DataFillAttr"/>
     </xs:complexType>
@@ -2001,7 +2009,7 @@
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="paginate"  type="Paginate"/>
-      <xs:attribute name="debug"     type="xs:boolean"/>
+      <xs:attribute name="debug"     type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
   </xs:element>
@@ -2120,7 +2128,7 @@
       <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="height"     type="HeightValue"/>
       <xs:attribute name="paginate"   type="Paginate"/>
-      <xs:attribute name="debug"      type="xs:boolean"/>
+      <xs:attribute name="debug"      type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
   </xs:element>
@@ -2147,16 +2155,16 @@
       <xs:attribute name="label"      type="xs:string"/>
       <xs:attribute name="options"    type="xs:string"/>
       <xs:attribute name="group"      type="xs:string"/>
-      <xs:attribute name="checked"    type="xs:boolean"/>
-      <xs:attribute name="required"   type="xs:boolean"/>
-      <xs:attribute name="readonly"   type="xs:boolean"/>
+      <xs:attribute name="checked"    type="Boolean"/>
+      <xs:attribute name="required"   type="Boolean"/>
+      <xs:attribute name="readonly"   type="Boolean"/>
       <xs:attribute name="max-len"    type="xs:positiveInteger"/>
       <xs:attribute name="action-url" type="xs:anyURI"/>
       <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="height"     type="TokenScaleOrPt"/>
       <xs:attribute name="background" type="Color"/>
       <xs:attribute name="border"     type="BorderValue"/>
-      <xs:attribute name="debug"      type="xs:boolean"/>
+      <xs:attribute name="debug"      type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
   </xs:element>

@@ -323,6 +323,7 @@ fn build(a: &impl Attrs, declaration: Declaration, cx: &SectionContext) -> Resul
             if doc.root_element().tag_name().name() != "markdown-styles" {
                 return Err(format!("markdown-styles file '{src}': the root element must be <markdown-styles>"));
             }
+            crate::attr_types::check_xml(doc.root_element()).map_err(|e| format!("markdown-styles file '{src}': {e}"))?;
             let file_rules = Rules::from_elem(&doc.root_element()).map_err(|e| format!("markdown-styles file '{src}': {e}"))?;
             written.extend(file_rules.0.keys().cloned());
             rules.lay(file_rules);
