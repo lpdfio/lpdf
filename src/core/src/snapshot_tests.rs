@@ -77,26 +77,30 @@ fn run_snapshot_with_image(name: &str) {
     check_snapshot(name, &pdf_bytes);
 }
 
-/// `showcase-encryption` encrypted as the host would ask: user and owner passwords, no copying or
-/// modifying, and fixed entropy so that AES-256, which is random otherwise, gives the same file every run.
-/// The RC4 snapshot is the output of the engine before AES-256 existed; it must never change.
-fn run_snapshot_encrypted(name: &str, algorithm: crate::encrypt::Algorithm) {
+/// `showcase-encryption` rendered as the host would ask: the cipher and the permissions of its `<output>` (no
+/// copying or modifying), and what the render call says. Its `<output>` asks for AES-256, and `cipher` takes its
+/// place, so the RC4 snapshot is the same document in RC4-128. The RC4 snapshot is the output of the engine before
+/// AES-256 existed, and the plain one, with `skip_encryption`, the document before it had an `<output>`: neither
+/// may change.
+fn run_snapshot_encrypted(name: &str, cipher: &str, encryption: crate::RenderEncryption) {
     let xml_path = fixtures_dir().join("showcase-encryption.xml");
     let xml = std::fs::read_to_string(&xml_path)
-        .unwrap_or_else(|_| panic!("fixture not found: {}", xml_path.display()));
-    let plain = crate::LpdfEngine::render_xml_to_pdf_bytes(&xml)
+        .unwrap_or_else(|_| panic!("fixture not found: {}", xml_path.display()))
+        .replace(r#"encrypt="aes-256""#, &format!(r#"encrypt="{cipher}""#));
+    let pdf_bytes = crate::LpdfEngine::render_xml_with_encryption(&xml, &encryption)
         .unwrap_or_else(|e| panic!("render failed for {name}: {e}"));
-
-    let config = crate::encrypt::EncryptConfig {
-        user_password:  "user".to_string(),
-        owner_password: "owner".to_string(),
-        permissions:    crate::encrypt::Permissions { copy: false, modify: false, ..Default::default() },
-        algorithm,
-        entropy:        (0u8..48).collect(),
-    };
-    let pdf_bytes = crate::encrypt::encrypt_pdf(&plain, &config)
-        .unwrap_or_else(|e| panic!("encryption failed for {name}: {e}"));
     check_snapshot(name, &pdf_bytes);
+}
+
+/// User and owner passwords, and fixed entropy, so that AES-256, which is random otherwise, gives the same file
+/// every run.
+fn with_passwords() -> crate::RenderEncryption {
+    crate::RenderEncryption {
+        user_password:  Some("user".to_string()),
+        owner_password: Some("owner".to_string()),
+        entropy:        (0u8..48).collect(),
+        ..Default::default()
+    }
 }
 
 fn check_snapshot(name: &str, pdf_bytes: &[u8]) {
@@ -264,11 +268,11 @@ fn showcase_barcode_fit() { run_snapshot("showcase-barcode-fit"); }
 #[test]
 fn showcase_forms() { run_snapshot("showcase-forms"); }
 #[test]
-fn showcase_encryption() { run_snapshot("showcase-encryption"); }
+fn showcase_encryption() { run_snapshot_encrypted("showcase-encryption", "aes-256", crate::RenderEncryption::skipping(true)); }
 #[test]
-fn showcase_encryption_rc4() { run_snapshot_encrypted("showcase-encryption-rc4", crate::encrypt::Algorithm::Rc4128); }
+fn showcase_encryption_rc4() { run_snapshot_encrypted("showcase-encryption-rc4", "rc4-128", with_passwords()); }
 #[test]
-fn showcase_encryption_aes256() { run_snapshot_encrypted("showcase-encryption-aes256", crate::encrypt::Algorithm::Aes256); }
+fn showcase_encryption_aes256() { run_snapshot_encrypted("showcase-encryption-aes256", "aes-256", with_passwords()); }
 #[test]
 fn showcase_canvas_overlay()  { run_snapshot("showcase-canvas-overlay"); }
 #[test]

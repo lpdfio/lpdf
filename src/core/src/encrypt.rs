@@ -34,6 +34,8 @@ const HEX: [u8; 16] = *b"0123456789ABCDEF";
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
+/// What a reader may do without the owner password, as the `/P` integer's flags.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Permissions {
     pub print:         bool,  // spec bit 3
     pub modify:        bool,  // spec bit 4
@@ -54,6 +56,39 @@ impl Default for Permissions {
     }
 }
 
+/// The words of `allow` on `<output>`, in the schema's order.
+const ALLOW_WORDS: [&str; 7] = ["print", "modify", "copy", "annotate", "fill-forms", "accessibility", "assemble"];
+
+impl Permissions {
+    /// Reads `allow`: the words of what a reader may do, separated by spaces. What it doesn't name is
+    /// denied, so an empty list allows nothing. `print` allows printing at full quality, both print flags.
+    pub fn from_allow(list: &str) -> Result<Self, String> {
+        let mut allowed = Self {
+            print: false, modify: false, copy: false, annotate: false,
+            fill_forms: false, accessibility: false, assemble: false, print_hq: false,
+        };
+        for word in list.split_whitespace() {
+            match word {
+                "print" => {
+                    allowed.print = true;
+                    allowed.print_hq = true;
+                }
+                "modify"        => allowed.modify = true,
+                "copy"          => allowed.copy = true,
+                "annotate"      => allowed.annotate = true,
+                "fill-forms"    => allowed.fill_forms = true,
+                "accessibility" => allowed.accessibility = true,
+                "assemble"      => allowed.assemble = true,
+                other => return Err(format!(
+                    "unknown permission \"{other}\" in allow; expected {}",
+                    ALLOW_WORDS.join(", "),
+                )),
+            }
+        }
+        Ok(allowed)
+    }
+}
+
 /// The cipher a file is encrypted with.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Algorithm {
@@ -65,12 +100,12 @@ pub enum Algorithm {
 }
 
 impl Algorithm {
-    /// Reads the name an SDK sends: `aes-256` or `rc4-128`.
+    /// Reads the cipher `encrypt` names on `<output>`: `aes-256` or `rc4-128`.
     pub fn parse(name: &str) -> Result<Self, String> {
         match name {
             "aes-256" => Ok(Self::Aes256),
             "rc4-128" => Ok(Self::Rc4128),
-            other => Err(format!("unknown encryption algorithm \"{other}\", expected \"aes-256\" or \"rc4-128\"")),
+            other => Err(format!("unknown cipher \"{other}\" in encrypt; expected aes-256 or rc4-128")),
         }
     }
 }
@@ -87,12 +122,76 @@ pub struct EncryptConfig {
 
 impl EncryptConfig {
     /// Fails when the algorithm needs more than the config holds, so a bad request is
-    /// refused when it is set and not when the first page renders.
+    /// refused before the document is laid out and not after.
     pub fn validate(&self) -> Result<(), String> {
         match self.algorithm {
             Algorithm::Aes256 => aes256::EntropyStream::new(&self.entropy).map(|_| ()),
             Algorithm::Rc4128 => Ok(()),
         }
+    }
+}
+
+/// The encryption a document asks for in its `<output>`: the cipher of `encrypt` and the
+/// permissions of `allow`. The passwords are not part of it: they come with the render call.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OutputEncryption {
+    pub algorithm:   Algorithm,
+    pub permissions: Permissions,
+}
+
+/// What a render call says about encryption: the passwords and the host's entropy, or that the
+/// render skips the encryption the document asks for, as a preview that has no passwords does. It has no `Debug`,
+/// so that the passwords never end up in a log.
+#[derive(Clone, Default)]
+pub struct RenderEncryption {
+    pub user_password:   Option<String>,
+    pub owner_password:  Option<String>,
+    pub skip_encryption: bool,
+    /// Random bytes from the host's secure generator, 32 or more for AES-256.
+    pub entropy:         Vec<u8>,
+}
+
+impl RenderEncryption {
+    /// A render that skips the encryption the document asks for, or asks for none when `skip` is false.
+    pub fn skipping(skip: bool) -> Self {
+        Self { skip_encryption: skip, ..Self::default() }
+    }
+
+    /// The config to encrypt the document with, or `None` when the file goes out unencrypted. The template is
+    /// the only place that turns encryption on, and only the caller has the passwords, so each error says
+    /// which of the two to change: a document that asks for encryption needs an owner password or
+    /// `skip_encryption`, and passwords for a document that doesn't are refused, so that a file never goes out
+    /// unencrypted while the caller believes it is locked.
+    pub fn resolve(&self, document: Option<&OutputEncryption>) -> Result<Option<EncryptConfig>, String> {
+        let has_passwords = self.user_password.is_some() || self.owner_password.is_some();
+        if has_passwords && self.skip_encryption {
+            return Err("the render got passwords and skip_encryption together: pass the passwords to encrypt the \
+                file, or skip_encryption to render it unencrypted, not both".to_string());
+        }
+        let Some(document) = document else {
+            if has_passwords {
+                return Err("the render got passwords, but the document does not ask for encryption: add encrypt to \
+                    its <output> (<output encrypt=\"aes-256\"/>), or render it without passwords".to_string());
+            }
+            return Ok(None);
+        };
+        if self.skip_encryption {
+            return Ok(None);
+        }
+        let owner_password = match self.owner_password.as_deref() {
+            Some(password) if !password.is_empty() => password,
+            _ => return Err("the document asks for encryption in its <output>, and the render got no owner password: \
+                pass the passwords with the render, or skip_encryption to render it unencrypted".to_string()),
+        };
+        let config = EncryptConfig {
+            user_password:  self.user_password.clone().unwrap_or_default(),
+            owner_password: owner_password.to_string(),
+            permissions:    document.permissions,
+            algorithm:      document.algorithm,
+            entropy:        self.entropy.clone(),
+        };
+        config.validate()?;
+        Ok(Some(config))
     }
 }
 
@@ -150,7 +249,7 @@ fn pad_password(pw: &str) -> [u8; 32] {
 // ISO 32000-1 §7.6.3.3 — compose the P integer.
 // Start from 0xFFFFFFFC (reserved bits 1-2 clear, all others set)
 // then clear the permission bits for any disallowed operation.
-fn compute_p(perms: &Permissions) -> i32 {
+pub(crate) fn compute_p(perms: &Permissions) -> i32 {
     let mut p: u32 = 0xFFFF_FFFC;
     if !perms.print        { p &= !(1 << 2);  }
     if !perms.modify       { p &= !(1 << 3);  }
@@ -839,40 +938,132 @@ mod tests {
         assert!(enc.windows(3).any(|w| w == b"/ID"));
     }
 
-    /// Writes the files `scripts/check-encryption.py` opens with qpdf, when
-    /// `LPDF_ENCRYPT_OUT` names a folder. Without it the test does nothing, so a plain
-    /// `cargo test` needs no other tool.
     #[test]
-    fn writes_samples_for_the_external_check() {
-        let Some(dir) = std::env::var_os("LPDF_ENCRYPT_OUT") else { return };
-        let dir = std::path::Path::new(&dir);
-        let xml = std::fs::read_to_string(
-            concat!(env!("CARGO_MANIFEST_DIR"), "/../../test/fixtures/showcase-encryption.xml")
-        ).expect("fixture not found");
-        let plain = crate::LpdfEngine::render_xml_to_pdf_bytes(&xml).expect("render failed");
-        let no_copy = || Permissions { copy: false, modify: false, ..Default::default() };
-
-        let samples = [
-            ("plain.pdf",              None),
-            ("aes256-user.pdf",        Some(EncryptConfig { permissions: no_copy(), ..config(Algorithm::Aes256, "user", "owner") })),
-            ("aes256-open.pdf",        Some(EncryptConfig { permissions: no_copy(), ..config(Algorithm::Aes256, "", "owner") })),
-            ("aes256-same-password.pdf", Some(config(Algorithm::Aes256, "same", ""))),
-            ("rc4-user.pdf",           Some(EncryptConfig { permissions: no_copy(), ..config(Algorithm::Rc4128, "user", "owner") })),
-        ];
-        for (name, cfg) in samples {
-            let bytes = match cfg {
-                Some(cfg) => encrypt_pdf(&plain, &cfg).expect("encrypt_pdf failed"),
-                None      => plain.clone(),
-            };
-            std::fs::write(dir.join(name), bytes).expect("could not write a sample");
-        }
-    }
-
-    #[test]
-    fn algorithm_names_are_the_ones_the_sdks_send() {
+    fn algorithm_names_are_the_ones_the_schema_has() {
         assert_eq!(Algorithm::parse("aes-256"), Ok(Algorithm::Aes256));
         assert_eq!(Algorithm::parse("rc4-128"), Ok(Algorithm::Rc4128));
         assert!(Algorithm::parse("aes-128").unwrap_err().contains("aes-128"));
         assert_eq!(Algorithm::default(), Algorithm::Aes256);
+    }
+
+    // ── allow ──────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn allow_allows_what_it_names_and_denies_the_rest() {
+        let allowed = Permissions::from_allow("copy  fill-forms\taccessibility").unwrap();
+        assert_eq!(allowed, Permissions {
+            print: false, modify: false, copy: true, annotate: false,
+            fill_forms: true, accessibility: true, assemble: false, print_hq: false,
+        });
+    }
+
+    #[test]
+    fn print_allows_printing_at_full_quality() {
+        let p = compute_p(&Permissions::from_allow("print").unwrap()) as u32;
+        assert_ne!(p & (1 << 2), 0, "print");
+        assert_ne!(p & (1 << 11), 0, "print at full quality");
+    }
+
+    #[test]
+    fn an_empty_allow_allows_nothing() {
+        let p = compute_p(&Permissions::from_allow("").unwrap()) as u32;
+        assert_eq!(p, 0xFFFF_FFFC & !(1 << 2) & !(1 << 3) & !(1 << 4) & !(1 << 5) & !(1 << 8) & !(1 << 9) & !(1 << 10) & !(1 << 11));
+    }
+
+    #[test]
+    fn every_word_of_allow_but_print_is_one_flag() {
+        for (word, bit) in [("modify", 3), ("copy", 4), ("annotate", 5), ("fill-forms", 8), ("accessibility", 9), ("assemble", 10)] {
+            let p = compute_p(&Permissions::from_allow(word).unwrap()) as u32;
+            let nothing = compute_p(&Permissions::from_allow("").unwrap()) as u32;
+            assert_eq!(p, nothing | (1 << bit), "{word}");
+        }
+    }
+
+    #[test]
+    fn an_unknown_word_in_allow_is_named_with_the_words_there_are() {
+        let error = Permissions::from_allow("print printing").unwrap_err();
+        assert!(error.contains("\"printing\""), "{error}");
+        assert!(error.contains("fill-forms"), "{error}");
+    }
+
+    // ── The document's encryption and the render call's ────────────────────────
+
+    fn asks_for(algorithm: Algorithm) -> OutputEncryption {
+        OutputEncryption { algorithm, permissions: Permissions::from_allow("print").unwrap() }
+    }
+
+    /// The error of a render the rules refuse. `EncryptConfig` holds the passwords and has no `Debug`, so the
+    /// result can't be unwrapped.
+    fn refused(result: Result<Option<EncryptConfig>, String>) -> String {
+        match result {
+            Err(error) => error,
+            Ok(_) => panic!("the render was not refused"),
+        }
+    }
+
+    fn call(user: Option<&str>, owner: Option<&str>, skip: bool) -> RenderEncryption {
+        RenderEncryption {
+            user_password:   user.map(str::to_string),
+            owner_password:  owner.map(str::to_string),
+            skip_encryption: skip,
+            entropy:         (0u8..48).collect(),
+        }
+    }
+
+    #[test]
+    fn the_config_takes_the_cipher_and_permissions_of_the_document_and_the_passwords_of_the_render() {
+        let config = call(Some("open"), Some("owner"), false).resolve(Some(&asks_for(Algorithm::Rc4128))).unwrap().unwrap();
+        assert_eq!(config.algorithm, Algorithm::Rc4128);
+        assert_eq!(config.permissions, Permissions::from_allow("print").unwrap());
+        assert_eq!((config.user_password.as_str(), config.owner_password.as_str()), ("open", "owner"));
+    }
+
+    #[test]
+    fn without_an_open_password_anyone_can_open_the_file() {
+        let config = call(None, Some("owner"), false).resolve(Some(&asks_for(Algorithm::Aes256))).unwrap().unwrap();
+        assert_eq!(config.user_password, "");
+    }
+
+    #[test]
+    fn a_document_that_asks_for_encryption_needs_an_owner_password() {
+        for (user, owner) in [(None, None), (Some("open"), None), (None, Some(""))] {
+            let error = refused(call(user, owner, false).resolve(Some(&asks_for(Algorithm::Aes256))));
+            assert!(error.contains("no owner password") && error.contains("skip_encryption"), "{error}");
+        }
+    }
+
+    #[test]
+    fn passwords_for_a_document_that_does_not_ask_for_encryption_are_refused() {
+        for (user, owner) in [(None, Some("owner")), (Some(""), None)] {
+            let error = refused(call(user, owner, false).resolve(None));
+            assert!(error.contains("does not ask for encryption") && error.contains("<output"), "{error}");
+        }
+    }
+
+    #[test]
+    fn passwords_with_skip_encryption_are_refused() {
+        for document in [None, Some(asks_for(Algorithm::Aes256))] {
+            let error = refused(call(None, Some("owner"), true).resolve(document.as_ref()));
+            assert!(error.contains("not both"), "{error}");
+        }
+    }
+
+    #[test]
+    fn skip_encryption_leaves_the_file_unencrypted() {
+        assert!(RenderEncryption::skipping(true).resolve(Some(&asks_for(Algorithm::Aes256))).unwrap().is_none());
+        assert!(RenderEncryption::skipping(true).resolve(None).unwrap().is_none());
+    }
+
+    #[test]
+    fn a_document_without_encrypt_needs_no_passwords() {
+        assert!(RenderEncryption::default().resolve(None).unwrap().is_none());
+    }
+
+    #[test]
+    fn aes256_without_enough_entropy_is_refused_before_the_render() {
+        let short = RenderEncryption { entropy: vec![1; 16], ..call(None, Some("owner"), false) };
+        let error = refused(short.resolve(Some(&asks_for(Algorithm::Aes256))));
+        assert!(error.contains("at least 32 bytes"), "{error}");
+        assert!(short.resolve(Some(&asks_for(Algorithm::Rc4128))).is_ok(), "RC4-128 needs no entropy");
     }
 }

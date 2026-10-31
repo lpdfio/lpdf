@@ -680,13 +680,13 @@ fn tokens_expression(target: Target, tokens: &Node) -> Option<String> {
 }
 
 /// The SDK classes that generated code uses, once each and in the order they first appear: the attribute
-/// classes and the document's meta, assets and tokens.
+/// classes and the document's meta, output, assets and tokens.
 fn classes_used(code: &str) -> Vec<String> {
     let mut used: Vec<String> = Vec::new();
     for word in code.split(|c: char| !c.is_ascii_alphanumeric()) {
         let is_class = word.starts_with(|c: char| c.is_ascii_uppercase())
             && word != "NoAttr"
-            && (word.ends_with("Attr") || matches!(word, "DocumentMeta" | "DocumentAssets" | "DocumentTokens"));
+            && (word.ends_with("Attr") || matches!(word, "DocumentMeta" | "DocumentOutput" | "DocumentAssets" | "DocumentTokens"));
         if is_class && !used.iter().any(|u| u == word) {
             used.push(word.to_string());
         }
@@ -697,7 +697,7 @@ fn classes_used(code: &str) -> Vec<String> {
 /// The PHP namespace of an SDK class.
 fn php_namespace(class: &str) -> &'static str {
     match class {
-        "DocumentAttr" | "DocumentMeta" | "DocumentAssets" | "DocumentTokens" | "SectionAttr" | "LayoutAttr"
+        "DocumentAttr" | "DocumentMeta" | "DocumentOutput" | "DocumentAssets" | "DocumentTokens" | "SectionAttr" | "LayoutAttr"
         | "FontAttr" | "ImageAttr" => "Lpdf\\Kit",
         "LayerAttr" | "RectAttr" | "CircleAttr" | "EllipseAttr" | "LineAttr" | "PathAttr" | "TextAtAttr"
         | "ImgAtAttr" | "BarcodeAtAttr" => "Lpdf\\Canvas",
@@ -706,6 +706,19 @@ fn php_namespace(class: &str) -> &'static str {
     }
 }
 
+
+/// The elements of attributes alone that a document folds into its own attributes, `<meta>` then `<output>`: each
+/// one that has attributes, written by `write` from its name and its attributes.
+fn folded_elements(document: &Node, write: impl Fn(&str, &[(&str, &str)]) -> String) -> Vec<String> {
+    ["meta", "output"]
+        .into_iter()
+        .filter_map(|name| {
+            let element = document.children().find(|n| n.is_element() && n.tag_name().name() == name)?;
+            let attributes: Vec<(&str, &str)> = element.attributes().map(|a| (a.name(), a.value())).collect();
+            (!attributes.is_empty()).then(|| write(name, &attributes))
+        })
+        .collect()
+}
 
 /// An attribute value as a JS string literal. Every attribute is a string in the SDKs, `true` included.
 fn js_attr_value(val: &str) -> String {
@@ -925,7 +938,7 @@ impl JsEmitter {
         match tag {
             "lpdf"     => return self.emit_lpdf(node, level),
             "document" => return self.emit_document_node(node, level, None, None),
-            "meta"     => return String::new(), // folded into document
+            "meta" | "output" => return String::new(), // folded into document
             _ => {}
         }
         let family    = family_tag(node);
@@ -966,21 +979,16 @@ impl JsEmitter {
         let ind1 = self.ind(level + 1);
         let method = "L.document";
 
-        // Find <meta> child and fold its attributes in
-        let meta_node = node.children().find(|n| n.is_element() && n.tag_name().name() == "meta");
-        let meta_inline = meta_node.map(|m| {
-            let meta_parts: Vec<String> = m
-                .attributes()
-                .map(|a| format!("{}: '{}'", to_camel_case(a.name()), a.value().replace('\'', "\\'")))
+        // Fold the attributes of <meta> and <output> in, each as an object under its name
+        let folded = folded_elements(node, |element, attributes| {
+            let parts: Vec<String> = attributes
+                .iter()
+                .map(|(name, value)| format!("{}: '{}'", to_camel_case(name), value.replace('\'', "\\'")))
                 .collect();
-            if meta_parts.is_empty() {
-                String::new()
-            } else {
-                format!("{{ {} }}", meta_parts.join(", "))
-            }
+            format!("{element}: {{ {} }}", parts.join(", "))
         });
 
-        // Build document attrs with optional meta key
+        // Build document attrs with the folded meta and output
         let mut doc_parts: Vec<String> = node
             .attributes()
             .map(|a| format!("{}: {}", to_camel_case(a.name()), js_attr_value(a.value())))
@@ -992,11 +1000,7 @@ impl JsEmitter {
         if let Some(tokens) = tokens.and_then(|t| tokens_expression(Target::Js, &t)) {
             doc_parts.push(Target::Js.member("tokens", &tokens));
         }
-        if let Some(meta_str) = meta_inline {
-            if !meta_str.is_empty() {
-                doc_parts.push(format!("meta: {meta_str}"));
-            }
-        }
+        doc_parts.extend(folded);
 
         let attrs = if doc_parts.is_empty() {
             "NoAttr".into()
@@ -1004,11 +1008,11 @@ impl JsEmitter {
             format!("{{ {} }}", doc_parts.join(", "))
         };
 
-        // Emit children (skip meta)
+        // Emit children (skip meta and output)
         let mut children: Vec<String> = Vec::new();
         children.extend(
             node.children()
-                .filter(|n| n.is_element() && n.tag_name().name() != "meta")
+                .filter(|n| n.is_element() && !matches!(n.tag_name().name(), "meta" | "output"))
                 .map(|n| self.emit_node(&n, level + 1))
                 .filter(|s| !s.is_empty()),
         );
@@ -1163,7 +1167,7 @@ impl DotnetEmitter {
         match tag {
             "lpdf"     => return self.emit_lpdf(node, level),
             "document" => return self.emit_document_node(node, level, None, None),
-            "meta"     => return String::new(),
+            "meta" | "output" => return String::new(),
             _ => {}
         }
         let family    = family_tag(node);
@@ -1193,17 +1197,12 @@ impl DotnetEmitter {
         let ind0   = self.ind(level);
         let method = "L.Document";
 
-        let meta_node = node.children().find(|n| n.is_element() && n.tag_name().name() == "meta");
-        let meta_inline = meta_node.map(|m| {
-            let meta_parts: Vec<String> = m
-                .attributes()
-                .map(|a| format!("{} = \"{}\"", to_pascal_case(a.name()), a.value().replace('"', "\\\"")))
+        let folded = folded_elements(node, |element, attributes| {
+            let parts: Vec<String> = attributes
+                .iter()
+                .map(|(name, value)| format!("{} = \"{}\"", to_pascal_case(name), value.replace('"', "\\\"")))
                 .collect();
-            if meta_parts.is_empty() {
-                String::new()
-            } else {
-                format!("new() {{ {} }}", meta_parts.join(", "))
-            }
+            format!("{} = new() {{ {} }}", to_pascal_case(element), parts.join(", "))
         });
 
         let mut doc_parts: Vec<String> = node
@@ -1217,11 +1216,7 @@ impl DotnetEmitter {
         if let Some(tokens) = tokens.and_then(|t| tokens_expression(Target::Dotnet, &t)) {
             doc_parts.push(Target::Dotnet.member("tokens", &tokens));
         }
-        if let Some(meta_str) = meta_inline {
-            if !meta_str.is_empty() {
-                doc_parts.push(format!("Meta = {meta_str}"));
-            }
-        }
+        doc_parts.extend(folded);
 
         let attrs = if doc_parts.is_empty() {
             "NoAttr".into()
@@ -1232,7 +1227,7 @@ impl DotnetEmitter {
         let mut children: Vec<String> = Vec::new();
         children.extend(
             node.children()
-                .filter(|n| n.is_element() && n.tag_name().name() != "meta")
+                .filter(|n| n.is_element() && !matches!(n.tag_name().name(), "meta" | "output"))
                 .map(|n| self.emit_node(&n, level + 1))
                 .filter(|s| !s.is_empty()),
         );
@@ -1382,7 +1377,7 @@ impl PhpEmitter {
         match tag {
             "lpdf"     => return self.emit_lpdf(node, level),
             "document" => return self.emit_document_node(node, level, None, None),
-            "meta"     => return String::new(),
+            "meta" | "output" => return String::new(),
             _ => {}
         }
         // PHP uses same method names as JS (camelCase)
@@ -1413,17 +1408,12 @@ impl PhpEmitter {
         let ind0   = self.ind(level);
         let method = "L::document";
 
-        let meta_node = node.children().find(|n| n.is_element() && n.tag_name().name() == "meta");
-        let meta_inline = meta_node.map(|m| {
-            let meta_parts: Vec<String> = m
-                .attributes()
-                .map(|a| format!("{}: '{}'", to_camel_case(a.name()), a.value().replace('\'', "\\'")))
+        let folded = folded_elements(node, |element, attributes| {
+            let parts: Vec<String> = attributes
+                .iter()
+                .map(|(name, value)| format!("{}: '{}'", to_camel_case(name), value.replace('\'', "\\'")))
                 .collect();
-            if meta_parts.is_empty() {
-                String::new()
-            } else {
-                format!("new DocumentMeta({})", meta_parts.join(", "))
-            }
+            format!("{element}: new Document{}({})", to_pascal_case(element), parts.join(", "))
         });
 
         let mut doc_parts: Vec<String> = node
@@ -1437,11 +1427,7 @@ impl PhpEmitter {
         if let Some(tokens) = tokens.and_then(|t| tokens_expression(Target::Php, &t)) {
             doc_parts.push(Target::Php.member("tokens", &tokens));
         }
-        if let Some(meta_str) = meta_inline {
-            if !meta_str.is_empty() {
-                doc_parts.push(format!("meta: {meta_str}"));
-            }
-        }
+        doc_parts.extend(folded);
 
         let attrs = if doc_parts.is_empty() {
             "NoAttr".into()
@@ -1452,7 +1438,7 @@ impl PhpEmitter {
         let mut children: Vec<String> = Vec::new();
         children.extend(
             node.children()
-                .filter(|n| n.is_element() && n.tag_name().name() != "meta")
+                .filter(|n| n.is_element() && !matches!(n.tag_name().name(), "meta" | "output"))
                 .map(|n| self.emit_node(&n, level + 1))
                 .filter(|s| !s.is_empty()),
         );
@@ -1595,7 +1581,7 @@ impl PythonEmitter {
         match tag {
             "lpdf"     => return self.emit_lpdf(node, level),
             "document" => return self.emit_document_node(node, level, None, None),
-            "meta"     => return String::new(),
+            "meta" | "output" => return String::new(),
             _ => {}
         }
         // Python uses same method names as JS (snake_case only for multi-word: textAt → text_at)
@@ -1626,17 +1612,12 @@ impl PythonEmitter {
         let ind0   = self.ind(level);
         let method = "L.document";
 
-        let meta_node = node.children().find(|n| n.is_element() && n.tag_name().name() == "meta");
-        let meta_inline = meta_node.map(|m| {
-            let meta_parts: Vec<String> = m
-                .attributes()
-                .map(|a| format!("{}='{}'", to_snake_case(a.name()), a.value().replace('\'', "\\'")))
+        let folded = folded_elements(node, |element, attributes| {
+            let parts: Vec<String> = attributes
+                .iter()
+                .map(|(name, value)| format!("{}='{}'", to_snake_case(name), value.replace('\'', "\\'")))
                 .collect();
-            if meta_parts.is_empty() {
-                String::new()
-            } else {
-                format!("DocumentMeta({})", meta_parts.join(", "))
-            }
+            format!("{element}=Document{}({})", to_pascal_case(element), parts.join(", "))
         });
 
         let mut doc_parts: Vec<String> = node
@@ -1650,11 +1631,7 @@ impl PythonEmitter {
         if let Some(tokens) = tokens.and_then(|t| tokens_expression(Target::Python, &t)) {
             doc_parts.push(Target::Python.member("tokens", &tokens));
         }
-        if let Some(meta_str) = meta_inline {
-            if !meta_str.is_empty() {
-                doc_parts.push(format!("meta={meta_str}"));
-            }
-        }
+        doc_parts.extend(folded);
 
         let attrs = if doc_parts.is_empty() {
             "NoAttr".into()
@@ -1665,7 +1642,7 @@ impl PythonEmitter {
         let mut children: Vec<String> = Vec::new();
         children.extend(
             node.children()
-                .filter(|n| n.is_element() && n.tag_name().name() != "meta")
+                .filter(|n| n.is_element() && !matches!(n.tag_name().name(), "meta" | "output"))
                 .map(|n| self.emit_node(&n, level + 1))
                 .filter(|s| !s.is_empty()),
         );
@@ -2041,6 +2018,22 @@ mod tests {
         assert!(out.contains("meta: { title: 'My Doc', author: 'Alice' }"));
         // meta should NOT appear as its own L.meta() call
         assert!(!out.contains("L.meta("));
+    }
+
+    #[test]
+    fn test_output_folded_after_meta() {
+        let xml = r#"<?xml version="1.0"?>
+<lpdf version="1">
+  <document size="a4">
+    <meta title="My Doc"/>
+    <output encrypt="aes-256" allow="print fill-forms"/>
+    <section><layout><text>x</text></layout></section>
+  </document>
+</lpdf>"#;
+        let opts = CodegenOptions { target: "js".into(), indent: 4 };
+        let out  = codegen(xml, &opts).unwrap();
+        assert!(out.contains("meta: { title: 'My Doc' }, output: { encrypt: 'aes-256', allow: 'print fill-forms' }"), "{out}");
+        assert!(!out.contains("L.output("));
     }
 
     #[test]
@@ -2541,6 +2534,22 @@ mod tests {
     }
 
     #[test]
+    fn test_dotnet_output_folded_after_meta() {
+        let xml = r#"<?xml version="1.0"?>
+<lpdf version="1">
+  <document size="a4">
+    <meta title="My Doc"/>
+    <output encrypt="aes-256" allow="print fill-forms"/>
+    <section><layout><text>x</text></layout></section>
+  </document>
+</lpdf>"#;
+        let opts = CodegenOptions { target: "dotnet".into(), indent: 4 };
+        let out  = codegen(xml, &opts).unwrap();
+        assert!(out.contains("Meta = new() { Title = \"My Doc\" }, Output = new() { Encrypt = \"aes-256\", Allow = \"print fill-forms\" }"), "{out}");
+        assert!(!out.contains("L.Output("));
+    }
+
+    #[test]
     fn test_dotnet_assets_are_attributes_of_the_document() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
@@ -2737,6 +2746,23 @@ mod tests {
     }
 
     #[test]
+    fn test_php_output_folded_after_meta() {
+        let xml = r#"<?xml version="1.0"?>
+<lpdf version="1">
+  <document size="a4">
+    <meta title="My Doc"/>
+    <output encrypt="aes-256" allow="print fill-forms"/>
+    <section><layout><text>x</text></layout></section>
+  </document>
+</lpdf>"#;
+        let opts = CodegenOptions { target: "php".into(), indent: 4 };
+        let out  = codegen(xml, &opts).unwrap();
+        assert!(out.contains("output: new DocumentOutput(encrypt: 'aes-256', allow: 'print fill-forms')"), "{out}");
+        assert!(out.contains("use Lpdf\\Kit\\DocumentOutput;"), "{out}");
+        assert!(!out.contains("L::output("));
+    }
+
+    #[test]
     fn test_php_assets_are_attributes_of_the_document() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
@@ -2847,6 +2873,23 @@ mod tests {
         let out  = codegen(xml, &opts).unwrap();
         assert!(out.contains("meta=DocumentMeta(title='My Doc', author='Alice')"));
         assert!(!out.contains("L.meta("));
+    }
+
+    #[test]
+    fn test_python_output_folded_after_meta() {
+        let xml = r#"<?xml version="1.0"?>
+<lpdf version="1">
+  <document size="a4">
+    <meta title="My Doc"/>
+    <output encrypt="aes-256" allow="print fill-forms"/>
+    <section><layout><text>x</text></layout></section>
+  </document>
+</lpdf>"#;
+        let opts = CodegenOptions { target: "python".into(), indent: 4 };
+        let out  = codegen(xml, &opts).unwrap();
+        assert!(out.contains("output=DocumentOutput(encrypt='aes-256', allow='print fill-forms')"), "{out}");
+        assert!(out.contains("DocumentOutput"), "{out}");
+        assert!(!out.contains("L.output("));
     }
 
     #[test]

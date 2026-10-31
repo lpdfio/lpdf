@@ -266,8 +266,16 @@ fn values_of_type(doc: &Document, type_name: &str) -> (Vec<String>, bool) {
 fn values_of_simple(doc: &Document, simple: Node, name: &str) -> (Vec<String>, bool) {
     let inner = simple
         .children()
-        .find(|n| is(*n, "restriction") || is(*n, "union"))
-        .unwrap_or_else(|| panic!("the type {name} is neither a restriction nor a union"));
+        .find(|n| is(*n, "restriction") || is(*n, "union") || is(*n, "list"))
+        .unwrap_or_else(|| panic!("the type {name} is neither a restriction, a union nor a list"));
+
+    // A list of one item is a value of the list, and the empty list another; none of them is the default.
+    if is(inner, "list") {
+        let item = inner.attribute("itemType").unwrap_or_else(|| panic!("the list {name} has no itemType"));
+        let mut values = values_of_type(doc, item).0;
+        values.push(String::new());
+        return (values, false);
+    }
 
     if is(inner, "union") {
         let mut values = Vec::new();
@@ -370,11 +378,22 @@ const BLUE_PIXEL: &[u8] = &[
     0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ];
 
-/// Renders with the images `logo` (red) and `other` (blue) and the font `custom` loaded on the engine.
+/// Renders with the images `logo` (red) and `other` (blue) and the font `custom` loaded on the engine, and an
+/// owner password and fixed entropy for a document that asks for encryption.
 /// A panic in the engine is an error like any other, so one bad value cannot hide the rest.
 fn render(xml: &str) -> Result<Vec<u8>, String> {
     catch_unwind(AssertUnwindSafe(|| {
         let mut doc = crate::parse::parse(xml)?;
+        // Passwords only for a document that asks for encryption: one that doesn't refuses them.
+        let encryption = match doc.output.encryption {
+            Some(_) => crate::RenderEncryption {
+                owner_password: Some("owner".to_string()),
+                entropy: (0u8..48).collect(),
+                ..Default::default()
+            },
+            None => crate::RenderEncryption::default(),
+        };
+        let config = encryption.resolve(doc.output.encryption.as_ref())?;
         let mut images = crate::pdf::ImageRegistry::new();
         images.load("logo", RED_PIXEL.to_vec());
         images.load("other", BLUE_PIXEL.to_vec());
@@ -387,7 +406,11 @@ fn render(xml: &str) -> Result<Vec<u8>, String> {
         let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts);
         let mut fonts = crate::pdf::FontRegistry::new();
         fonts.register("custom", crate::pdf::ATTRIBUTION_FONT.to_vec());
-        crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, None, false)
+        let bytes = crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, None, false)?;
+        match config {
+            Some(config) => crate::encrypt::encrypt_pdf(&bytes, &config),
+            None => Ok(bytes),
+        }
     }))
     .unwrap_or_else(|_| Err("the engine panicked".to_string()))
 }
@@ -550,6 +573,7 @@ fn subjects() -> Vec<Subject> {
         rule!("th", "| {LONG} | B |\n|---|---|\n| 1 | 2 |\n\nAfter"),
         rule!("td", "| A | B |\n|---|---|\n| {LONG} | 2 |\n\nAfter"),
         Subject::new("meta", |a, _| lpdf("", &format!("<document><meta {a}/><section><layout>{ONE}</layout></section></document>"))),
+        Subject::new("output", |a, _| lpdf("", &format!("<document><output {a}/><section><layout>{ONE}</layout></section></document>"))),
         Subject::new("font", |a, _| {
             lpdf(&format!("<assets><font {a}/></assets>"), r#"<document><section><layout><text font="body">Alpha</text></layout></section></document>"#)
         })
@@ -831,6 +855,9 @@ fn tweaks() -> HashMap<String, Tweak> {
     for rule in ["h1", "h2", "h3", "h4", "h5", "h6", "p", "code", "quote"] {
         add(&format!("markdown:{rule}@radius"), Tweak::default().set("background", "#cccccc"));
     }
+
+    // The permissions are those of an encrypted file.
+    add("output@allow", Tweak::default().set("encrypt", "aes-256"));
 
     // A grid has either cols or col-width.
     add("grid@col-width", Tweak::default().remove("cols"));

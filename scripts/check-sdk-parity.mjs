@@ -4,7 +4,7 @@
 // the schema's. A class that has a property the schema lacks, or lacks one the schema has, is listed.
 //
 // The generated classes cannot drift while `make check-sdk-api` passes; this check also covers the
-// classes that are written by hand: the document, its sections, meta, assets and tokens.
+// classes that are written by hand: the document, its sections, meta, output, assets and tokens.
 //
 // Usage: node scripts/check-sdk-parity.mjs                      the four SDKs under repos/; list the differences, exit 1 if any
 //        node scripts/check-sdk-parity.mjs --sdk node=.          only the SDK in the given folder (an SDK repository's CI)
@@ -25,10 +25,11 @@ const attributes = (element, where = 'global') =>
 
 /** The attributes each class has to have, by class name. */
 const EXPECTED = {
-    DocumentAttr: [...attributes('document'), 'assets', 'tokens', 'meta'],
+    DocumentAttr: [...attributes('document'), 'assets', 'tokens', 'meta', 'output'],
     SectionAttr: attributes('section'),
     LayoutAttr: attributes('layout'),
     DocumentMeta: attributes('meta'),
+    DocumentOutput: attributes('output'),
     DocumentAssets: ['fonts', 'images'],
     DocumentTokens: ['colors', 'gradients', 'aliases', 'space', 'grid', 'border', 'radius', 'width', 'height', 'text-size', 'line-height'],
     FontAttr: attributes('font'),

@@ -565,6 +565,7 @@ mod tests {
         let layout_children: Vec<LayoutChild> = children.into_iter().map(LayoutChild::Content).collect();
         Document {
             meta: Meta::default(),
+            output: Default::default(),
             fonts: HashMap::new(),
             images: HashMap::new(),
             page_width: 595.28,
