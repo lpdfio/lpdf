@@ -900,17 +900,25 @@ fn collect_chars_for_font(nodes: &[RenderNode], font_name: &str, out: &mut HashS
     }
 }
 
-/// Recursively collect all unique font names referenced by text nodes.
+/// Recursively collect every font the nodes draw in: a text's own font, and Helvetica for the caption of a
+/// barcode and for a form field, whose appearance and `/DA` name it as `Helv`.
 fn collect_used_fonts(nodes: &[RenderNode], out: &mut HashSet<String>) {
     for node in nodes {
         match node {
             RenderNode::Text(t) => { out.insert(t.font.clone()); }
+            RenderNode::Barcode(bc) if has_caption(&bc.kind) => { out.insert("Helvetica".to_string()); }
+            RenderNode::Field(_) => { out.insert("Helvetica".to_string()); }
             RenderNode::Box(b)  => collect_used_fonts(&b.children, out),
             RenderNode::Link(l) => collect_used_fonts(&l.children, out),
             RenderNode::CanvasLayer(l) => collect_used_fonts(&l.children, out),
-            RenderNode::Field(_) | _ => {}
+            _ => {}
         }
     }
+}
+
+/// Whether a barcode draws its human-readable text under the bars.
+fn has_caption(kind: &RenderedBarcodeKind) -> bool {
+    matches!(kind, RenderedBarcodeKind::Code128 { hrt: Some(_), .. } | RenderedBarcodeKind::Ean13 { hrt: true, .. })
 }
 
 // ── Font resolution ───────────────────────────────────────────────────────────
@@ -1147,10 +1155,7 @@ fn draw_node(
 
         // ── Text ─────────────────────────────────────────────────────────────
         RenderNode::Text(t) => {
-            // Fall back to Helvetica if the font is not in the prepared map.
-            let font = fonts.get(&t.font)
-                .or_else(|| fonts.get("Helvetica"))
-                .expect("Helvetica must always be present as the fallback font");
+            let font = fonts.get(&t.font).expect("prepare_fonts prepares the font of every text node");
 
             let (r, g, b) = parse_hex(&t.color);
 
@@ -2351,9 +2356,9 @@ struct OutlineIds {
 /// Collect every font name referenced in `pages`, prepare each for embedding,
 /// and return a stable (sorted) name list together with the prepared-font map.
 ///
-/// Helvetica is always included so the attribution's leading words always have a
-/// font. The attribution's name face is added only when `attribution` is set, so a
-/// licensed document embeds nothing for it.
+/// Only the fonts something draws in are prepared, so a document that uses no
+/// Helvetica has none. The attribution's name face is added only when `attribution`
+/// is set, so a licensed document embeds nothing for it.
 fn prepare_fonts(
     pages:       &[RenderPage],
     font_defs:   &HashMap<String, FontDef>,
@@ -2364,7 +2369,6 @@ fn prepare_fonts(
     for page in pages {
         collect_used_fonts(&page.nodes, &mut used_font_names);
     }
-    used_font_names.insert("Helvetica".to_string());
     if attribution {
         used_font_names.insert(ATTRIBUTION_FONT_KEY.to_string());
     }
@@ -2381,9 +2385,6 @@ fn prepare_fonts(
         let mut used: HashSet<char> = HashSet::new();
         for page in pages {
             collect_chars_for_font(&page.nodes, name, &mut used);
-        }
-        if attribution && name == "Helvetica" {
-            used.extend(ATTRIBUTION_PREFIX.chars());
         }
         if name == ATTRIBUTION_FONT_KEY {
             used.extend(ATTRIBUTION_NAME.chars());
@@ -2502,12 +2503,10 @@ fn build_content_streams(
 
 // ── Unlicensed-use attribution ────────────────────────────────────────────────
 //
-// Drawn on every page of an unlicensed render. Deliberately small: the words are a
+// Drawn on every page of an unlicensed render. Deliberately small: the name is a
 // quiet grey and only the mark carries the brand orange, so the line reads as a
-// credit and never competes with the customer's document.
-
-/// Words set before the mark, in Helvetica so they need no embedded font.
-const ATTRIBUTION_PREFIX: &str = "Made with";
+// credit and never competes with the customer's document. It uses no built-in font,
+// only the embedded face of the name.
 
 /// Product name set after the mark, in the lpdf.io wordmark face.
 pub(crate) const ATTRIBUTION_NAME: &str = "Lpdf";
@@ -2527,7 +2526,7 @@ pub(crate) const ATTRIBUTION_FONT: &[u8] = include_bytes!("../assets/fonts/radle
 /// used to centre the name's capitals on the mark.
 const ATTRIBUTION_CAP_HEIGHT: f32 = 1302.0 / 2048.0;
 
-/// Neutral dark grey for the words: about 5.7:1 on white paper, legible without
+/// Neutral dark grey for the name: about 5.7:1 on white paper, legible without
 /// drawing the eye.
 const ATTRIBUTION_TEXT_COLOR: &str = "#666666";
 
@@ -2541,8 +2540,8 @@ const LPDF_MARK: [[(f32, f32); 4]; 2] = [
     [(4.518, 100.0), (37.548, 66.97), (100.0, 66.97), (66.97, 100.0)],
 ];
 
-/// Draw "Made with", the lpdf mark and "Lpdf" right-aligned in the page's top-right
-/// corner, and cover the whole line with one link to lpdf.io.
+/// Draw the lpdf mark and "Lpdf" right-aligned in the page's top-right corner, and
+/// cover the whole line with one link to lpdf.io.
 ///
 /// The line sits 12 pt in from the edges because desktop printers cannot reach the
 /// outer 12–18 pt of a sheet; any closer and printed copies lose it.
@@ -2554,9 +2553,6 @@ fn draw_attribution(
     page_h:  f32,
 ) {
     const PAD:         f32 = 12.0;
-    const PREFIX_SIZE: f32 = 8.0;
-    // A point larger than the words, because a serif reads smaller than Helvetica
-    // at the same size.
     const NAME_SIZE:   f32 = 9.0;
     const MARK_SIZE:   f32 = 9.0;
     const GAP:         f32 = 3.0;
@@ -2564,22 +2560,19 @@ fn draw_attribution(
     // glyphs, the way browsers synthesise the 600 weight the lpdf.io wordmark asks for.
     const BOLD_STROKE: f32 = NAME_SIZE * 0.04;
 
-    let (Some(prefix_font), Some(name_font)) =
-        (fonts.get("Helvetica"), fonts.get(ATTRIBUTION_FONT_KEY))
-    else {
+    let Some(name_font) = fonts.get(ATTRIBUTION_FONT_KEY) else {
         return;
     };
 
-    let prefix_w = prefix_font.text_width(ATTRIBUTION_PREFIX, PREFIX_SIZE);
     // The stroke grows each glyph by half its width on either side.
     let name_w   = name_font.text_width(ATTRIBUTION_NAME, NAME_SIZE) + BOLD_STROKE;
-    let line_w   = prefix_w + GAP + MARK_SIZE + GAP + name_w;
+    let line_w   = MARK_SIZE + GAP + name_w;
 
-    // The mark fills [PAD, PAD + MARK_SIZE] measured down from the top edge, and both
-    // runs of text share one baseline placed so the name's capitals centre on the mark.
+    // The mark fills [PAD, PAD + MARK_SIZE] measured down from the top edge, and the
+    // name's baseline is placed so its capitals centre on the mark.
     let left     = page_w - PAD - line_w;
     let baseline = page_h - (PAD + (MARK_SIZE + NAME_SIZE * ATTRIBUTION_CAP_HEIGHT) / 2.0);
-    let mark_x   = left + prefix_w + GAP;
+    let mark_x   = left;
     let name_x   = mark_x + MARK_SIZE + GAP + BOLD_STROKE / 2.0;
 
     let (tr, tg, tb) = parse_hex(ATTRIBUTION_TEXT_COLOR);
@@ -2588,13 +2581,6 @@ fn draw_attribution(
     // Its own graphics state, so the colours, stroke width and text rendering mode set
     // here cannot leak into anything drawn later on the page.
     content.save_state();
-
-    content.set_fill_rgb(tr, tg, tb);
-    content.begin_text();
-    content.set_font(Name(prefix_font.resource_name.as_bytes()), PREFIX_SIZE);
-    content.set_text_matrix([1.0, 0.0, 0.0, 1.0, left, baseline]);
-    content.show(Str(&prefix_font.encode_text(ATTRIBUTION_PREFIX)));
-    content.end_text();
 
     let scale = MARK_SIZE / 100.0;
     content.set_fill_rgb(mr, mg, mb);
@@ -3070,7 +3056,7 @@ fn assemble_pdf(
                     ap_content.fill_nonzero();
                     ap_content.restore_state();
                     if !field.label.is_empty() {
-                        let font = fonts.get("Helvetica").expect("Helvetica always present");
+                        let font = fonts.get("Helvetica").expect("a document with fields has Helvetica");
                         let font_size = (h * 0.55).max(6.0);
                         let text_w = font.text_width(&field.label, font_size);
                         let text_x = (w - text_w) / 2.0;
@@ -3443,8 +3429,8 @@ fn assemble_pdf(
 /// - `gradients`  – The gradients of the document's tokens, which a fill names as `gradient:name`.
 /// - `created_on` – Optional ISO 8601 date string written to `/CreationDate`.
 /// - `licensed`   – `true` when a valid commercial license token was supplied.
-///                  When `false`, draws the attribution line ("Made with", the lpdf
-///                  mark, "Lpdf") in every page's top-right corner.
+///                  When `false`, draws the attribution line (the lpdf mark and
+///                  "Lpdf") in every page's top-right corner.
 #[allow(clippy::too_many_arguments)]
 pub fn render_pdf(
     pages:          &[RenderPage],
@@ -3791,6 +3777,73 @@ mod tests {
         let cap_height = face.capital_height().expect("face declares a cap height") as f32
             / face.units_per_em() as f32;
         assert_eq!(cap_height, ATTRIBUTION_CAP_HEIGHT);
+    }
+
+    /// A document of `layout` written as a PDF, licensed or with the attribution line.
+    fn render_as(layout: &str, licensed: bool) -> Vec<u8> {
+        let xml = format!(r#"<lpdf version="1"><document><section><layout>{layout}</layout></section></document></lpdf>"#);
+        let mut doc = crate::parse::parse(&xml).expect("parses");
+        let pages = crate::layout::layout_document(&doc.section_layouts());
+        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &ImageRegistry::new(), &doc.meta, &doc.gradients, None, licensed)
+            .expect("renders")
+    }
+
+    /// The numbers of the array that follows `key` in `dict`.
+    fn array_after(dict: &str, key: &str) -> Vec<f32> {
+        let list = dict.split(key).nth(1).and_then(|rest| rest.split(']').next()).unwrap_or_else(|| panic!("no {key} in {dict}"));
+        list.split_whitespace().map(|number| number.parse().expect("a number")).collect()
+    }
+
+    #[test]
+    fn the_attribution_line_is_the_mark_and_the_name_in_the_top_right_corner_under_one_link() {
+        let pdf = render_as("", false);
+        let (page, _) = page_and_groups(&pdf);
+        let text = String::from_utf8_lossy(&pdf);
+        assert_eq!(page.matches(" Tf").count(), 1, "the name is the only text of an empty page: {page}");
+        assert!(!page.contains("Made with"), "{page}");
+        assert_eq!(text.matches("/URI (https://lpdf.io)").count(), 1);
+
+        let (_, link) = object_with(&text, "/URI (https://lpdf.io)");
+        let (_, page_dict) = object_with(&text, "/Type /Page\n");
+        let [x1, y1, x2, y2] = array_after(&link, "/Rect [")[..] else { panic!("a rectangle: {link}") };
+        let [.., width, height] = array_after(&page_dict, "/MediaBox [")[..] else { panic!("a media box: {page_dict}") };
+        assert!((x2 - (width - 12.0)).abs() < 0.01, "the line ends 12 pt in from the right edge: {x2} of {width}");
+        assert!(x1 > width - 60.0 && y1 > height - 30.0 && y2 <= height, "the line is in the top-right corner: {link}");
+    }
+
+    #[test]
+    fn a_document_that_draws_nothing_in_helvetica_has_no_helvetica_licensed_or_not() {
+        for licensed in [true, false] {
+            let pdf = render_as(r#"<text font="Times-Roman">Body</text>"#, licensed);
+            let text = String::from_utf8_lossy(&pdf);
+            assert!(text.contains("/BaseFont /Times-Roman"), "licensed: {licensed}");
+            assert!(!text.contains("/BaseFont /Helvetica"), "licensed: {licensed}");
+        }
+    }
+
+    #[test]
+    fn a_barcode_caption_and_a_form_field_draw_in_helvetica() {
+        for layout in [
+            r#"<barcode type="code128" data="LP-1" hrt="true"/>"#,
+            r#"<barcode type="ean13" data="590123412345" hrt="true"/>"#,
+            r#"<field type="text" name="email"/>"#,
+            r#"<field type="checkbox" name="terms"/>"#,
+        ] {
+            let pdf = render_as(layout, true);
+            assert!(String::from_utf8_lossy(&pdf).contains("/BaseFont /Helvetica\n"), "{layout}");
+        }
+        let pdf = render_as(r#"<barcode type="code128" data="LP-1"/>"#, true);
+        assert!(!String::from_utf8_lossy(&pdf).contains("/BaseFont /Helvetica"), "a barcode without a caption draws no text");
+    }
+
+    #[test]
+    fn a_form_names_helvetica_helv_in_its_default_resources() {
+        let pdf = render_as(r#"<field type="text" name="email"/>"#, true);
+        let text = String::from_utf8_lossy(&pdf);
+        let (helvetica, _) = object_with(&text, "/BaseFont /Helvetica\n");
+        let (_, catalog) = object_with(&text, "/Type /Catalog");
+        assert!(catalog.contains(&format!("/Helv {helvetica} 0 R")), "{catalog}");
+        assert!(text.contains("/DA (/Helv 0 Tf 0 g)"));
     }
 
     // ── Bookmarks ─────────────────────────────────────────────────────────────

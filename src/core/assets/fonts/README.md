@@ -3,8 +3,8 @@
 ## `radley-attribution.ttf`
 
 Radley Regular, cut down to the four glyphs of "Lpdf". Unlicensed renders draw an
-attribution line in the page's top-right corner — "Made with", the lpdf mark, "Lpdf" —
-and the name is set in this face so it matches the lpdf.io wordmark.
+attribution line in the page's top-right corner, the lpdf mark and "Lpdf", and the
+name is set in this face so it matches the lpdf.io wordmark.
 
 **Why a cut-down copy.** The full face is 93 KB and would ship inside every WASM and WASI
 build, licensed users included. The four glyphs come to about 2 KB. Radley has no bold,
