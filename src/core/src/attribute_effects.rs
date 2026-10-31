@@ -378,8 +378,8 @@ const BLUE_PIXEL: &[u8] = &[
     0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ];
 
-/// Renders with the images `logo` (red) and `other` (blue) and the font `custom` loaded on the engine, and an
-/// owner password and fixed entropy for a document that asks for encryption.
+/// Renders with the images `logo` (red) and `other` (blue) and the font `custom` loaded on the engine, a date for a
+/// document that asks for PDF/A, and an owner password and fixed entropy for a document that asks for encryption.
 /// A panic in the engine is an error like any other, so one bad value cannot hide the rest.
 fn render(xml: &str) -> Result<Vec<u8>, String> {
     catch_unwind(AssertUnwindSafe(|| {
@@ -406,7 +406,8 @@ fn render(xml: &str) -> Result<Vec<u8>, String> {
         let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts);
         let mut fonts = crate::pdf::FontRegistry::new();
         fonts.register("custom", crate::pdf::ATTRIBUTION_FONT.to_vec());
-        let bytes = crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, None, false)?;
+        let created_on = doc.output.pdfa.map(|_| "2026-10-31T09:30:00Z");
+        let bytes = crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, created_on, false, doc.output.pdfa)?;
         match config {
             Some(config) => crate::encrypt::encrypt_pdf(&bytes, &config),
             None => Ok(bytes),
@@ -573,7 +574,13 @@ fn subjects() -> Vec<Subject> {
         rule!("th", "| {LONG} | B |\n|---|---|\n| 1 | 2 |\n\nAfter"),
         rule!("td", "| A | B |\n|---|---|\n| {LONG} | 2 |\n\nAfter"),
         Subject::new("meta", |a, _| lpdf("", &format!("<document><meta {a}/><section><layout>{ONE}</layout></section></document>"))),
-        Subject::new("output", |a, _| lpdf("", &format!("<document><output {a}/><section><layout>{ONE}</layout></section></document>"))),
+        // In the font `custom`, which is embedded, and in the letters it has, as PDF/A refuses the rest.
+        Subject::new("output", |a, _| {
+            lpdf(
+                r#"<assets><font name="custom" src="custom.ttf"/></assets>"#,
+                &format!(r#"<document font="custom"><output {a}/><section><layout><text>Lpdf</text></layout></section></document>"#),
+            )
+        }),
         Subject::new("font", |a, _| {
             lpdf(&format!("<assets><font {a}/></assets>"), r#"<document><section><layout><text font="body">Alpha</text></layout></section></document>"#)
         })

@@ -137,6 +137,16 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <xs:simpleType name="PdfALevel">
+    <xs:annotation>
+      <xs:documentation>A level of PDF/A, the ISO 19005 standard for files kept for the long term: 2b keeps the look of every page, and 2u adds that all text maps to Unicode, so it can be searched and copied.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="2b"/>
+      <xs:enumeration value="2u"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="Permission">
     <xs:annotation>
       <xs:documentation>What a reader of an encrypted PDF may do without the owner password: print (at full quality), modify, copy, annotate, fill in forms, extract text for accessibility tools, and assemble (insert, delete and rotate pages).</xs:documentation>
@@ -1117,7 +1127,7 @@
 
   <xs:element name="output">
     <xs:annotation>
-      <xs:documentation>How the PDF file is written, apart from what its pages show: whether it is encrypted, and what a reader may do with it. The passwords are not here: they come with the render call, since they change from one render to the next. A document that asks for encryption renders only with an owner password, or when the render asks to skip the encryption, as a preview does.</xs:documentation>
+      <xs:documentation>How the PDF file is written, apart from what its pages show: whether it is encrypted, and what a reader may do with it, and the standard it meets. The passwords are not here: they come with the render call, since they change from one render to the next. A document that asks for encryption renders only with an owner password, or when the render asks to skip the encryption, as a preview does.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:attribute name="encrypt" type="Cipher">
@@ -1128,6 +1138,11 @@
       <xs:attribute name="allow" type="Permissions">
         <xs:annotation>
           <xs:documentation>What a reader may do without the owner password, separated by spaces: print, modify, copy, annotate, fill-forms, accessibility and assemble. Without allow everything is allowed; allow="" allows nothing. It needs encrypt. Readers that follow the standard honor it, and a tool that does not can remove it, so use an open password when the content must stay private.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="pdfa" type="PdfALevel">
+        <xs:annotation>
+          <xs:documentation>Writes the PDF as PDF/A, for archives, courts, public bodies and banks: 2b, or 2u when its text must also be searchable. The file carries its fonts, the sRGB color profile and its metadata, and the render needs created_on, the date the file carries. What PDF/A cannot hold is an error that says what to change: text in a built-in font such as the default Helvetica (declare a font in assets), a font whose license forbids embedding, a character the font has no glyph for, a CMYK color, a form field, the digits of a barcode, and encrypt.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
     </xs:complexType>

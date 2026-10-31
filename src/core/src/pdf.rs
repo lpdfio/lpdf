@@ -34,14 +34,16 @@ use std::ops::Range;
 
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
 use pdf_writer::writers::Resources;
-use pdf_writer::types::{ActionType, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, FunctionShadingType, HighlightEffect, LineCapStyle, LineJoinStyle, PageMode, Predictor, TextRenderingMode};
-use ttf_parser::Face;
+use pdf_writer::types::{ActionType, AnnotationFlags, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, FunctionShadingType, HighlightEffect, LineCapStyle, LineJoinStyle, OutputIntentSubtype, PageMode, Predictor, TextRenderingMode};
+use md5::{Digest, Md5};
+use ttf_parser::{Face, Permissions};
 use miniz_oxide::deflate::compress_to_vec_zlib;
 use miniz_oxide::inflate::decompress_to_vec_zlib;
 use subsetter::GlyphRemapper;
 
 use crate::render::{placed_anchors, PlacedAnchor, RenderBox, RenderCanvasLayer, RenderField, RenderNode, RenderPage, RenderedBarcodeKind};
 use crate::parse::{FieldKind, Meta, Shadow};
+use crate::pdfa::{self, FileDate, PdfA};
 use crate::tokens::{FontDef, Gradient, GradientKind, GRADIENT_PREFIX, is_cmyk};
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -2824,6 +2826,7 @@ fn assemble_pdf(
     used_gradients:     &[(&str, &Gradient)],
     meta:               &Meta,
     created_on:         Option<&str>,
+    pdfa:               Option<&PdfAFile>,
 ) -> Result<Vec<u8>, String> {
     let AllocatedIds {
         catalog_id, info_id, pages_id,
@@ -2842,6 +2845,9 @@ fn assemble_pdf(
         })
         .collect();
 
+    // A PDF/A file's XMP packet and the profile of its output intent come after them, for the same reason.
+    let pdfa_ids = pdfa.map(|_| (alloc.next(), alloc.next()));
+
     let n = pages.len();
     let mut pdf = Pdf::new();
 
@@ -2854,6 +2860,16 @@ fn assemble_pdf(
             cat.outlines(outline.outline_id);
             // Open with the outline panel showing, as the bookmarks are there to be used.
             cat.page_mode(PageMode::UseOutlines);
+        }
+        if let Some((xmp_id, profile_id)) = pdfa_ids {
+            cat.metadata(xmp_id);
+            cat.output_intents()
+                .push()
+                .subtype(OutputIntentSubtype::PDFA)
+                .output_condition_identifier(TextStr(pdfa::SRGB_CONDITION))
+                .registry_name(TextStr("http://www.color.org"))
+                .info(TextStr(pdfa::SRGB_CONDITION))
+                .dest_output_profile(profile_id);
         }
         if !fields.is_empty() {
             // Build root field refs list.
@@ -2887,11 +2903,16 @@ fn assemble_pdf(
         if !meta.creator.is_empty()  { info.creator(TextStr(&meta.creator)); }
         if !meta.keywords.is_empty() { info.keywords(TextStr(&meta.keywords)); }
         // The same for every render: an unlicensed one is already marked by its attribution line.
-        info.producer(TextStr("Lpdf (lpdf.io)"));
+        info.producer(TextStr(pdfa::PRODUCER));
 
-        // created_on: write as a raw PDF date string if provided.
+        // A PDF/A file is made and changed at the one date it was given, which its XMP packet repeats.
+        // Otherwise created_on is written as a raw PDF date string if provided.
         // Format expected: ISO 8601 "YYYY-MM-DDTHH:mm:ss" → "D:YYYYMMDDHHmmss"
-        if let Some(dt) = created_on {
+        if let Some(file) = pdfa {
+            let date = file.date.pdf();
+            info.pair(Name(b"CreationDate"), Str(date.as_bytes()));
+            info.pair(Name(b"ModDate"), Str(date.as_bytes()));
+        } else if let Some(dt) = created_on {
             let clean: String = dt.chars().filter(|c| c.is_ascii_digit()).collect();
             if clean.len() >= 8 {
                 let pdf_date = format!("D:{clean}");
@@ -3035,6 +3056,10 @@ fn assemble_pdf(
             aw.subtype(AnnotationType::Link)
               .rect(Rect::new(ann.x1, ann.y1, ann.x2, ann.y2))
               .border(0.0, 0.0, 0.0, None);
+            // PDF/A asks every annotation to print, as it is part of the page.
+            if pdfa.is_some() {
+                aw.flags(AnnotationFlags::PRINT);
+            }
             match ann.url.strip_prefix('#') {
                 Some(id) => {
                     aw.action()
@@ -3415,6 +3440,10 @@ fn assemble_pdf(
                        .system_info(sysinfo)
                        .font_descriptor(desc_id)
                        .default_width(1000.0);
+                    // Identity is the default, and PDF/A asks for it to be written.
+                    if pdfa.is_some() {
+                        cid.cid_to_gid_map_predefined(Name(b"Identity"));
+                    }
 
                     // Per-glyph widths so the PDF renderer places characters
                     // with correct spacing.  Written as individual consecutive
@@ -3443,6 +3472,20 @@ fn assemble_pdf(
         }
     }
 
+    // -- PDF/A: the XMP packet, the output intent's profile and the file ID -------
+    if let (Some(file), Some((xmp_id, profile_id))) = (pdfa, pdfa_ids) {
+        // Not compressed, so that a tool that knows nothing of PDF can still find the packet.
+        let xmp = pdfa::xmp_packet(file.level, meta, &file.date);
+        pdf.metadata(xmp_id, &xmp);
+        pdf.icc_profile(profile_id, pdfa::SRGB_PROFILE)
+           .n(3)
+           .alternate()
+           .device_rgb();
+        // From the bytes written so far, so the same document gives the same file.
+        let id = Md5::digest(pdf.as_bytes()).to_vec();
+        pdf.set_file_id((id.clone(), id));
+    }
+
     Ok(pdf.finish())
 }
 
@@ -3457,9 +3500,14 @@ fn assemble_pdf(
 /// - `meta`       – Document metadata (title, author, subject, etc.).
 /// - `gradients`  – The gradients of the document's tokens, which a fill names as `gradient:name`.
 /// - `created_on` – Optional ISO 8601 date string written to `/CreationDate`.
+///                  Required with `pdfa`, which writes it as both dates of the
+///                  Info dictionary and of the XMP packet.
 /// - `licensed`   – `true` when a valid commercial license token was supplied.
 ///                  When `false`, draws the attribution line (the lpdf mark and
 ///                  "Lpdf") in every page's top-right corner.
+/// - `pdfa`       – The PDF/A level of the document's `<output pdfa>`, or `None`
+///                  for a plain PDF. A PDF/A file gets its XMP packet, the sRGB
+///                  output intent and a file ID, and what it cannot hold is an error.
 #[allow(clippy::too_many_arguments)]
 pub fn render_pdf(
     pages:          &[RenderPage],
@@ -3470,7 +3518,9 @@ pub fn render_pdf(
     gradients:      &HashMap<String, Gradient>,
     created_on:     Option<&str>,
     licensed:       bool,
+    pdfa:           Option<PdfA>,
 ) -> Result<Vec<u8>, String> {
+    let pdfa = pdfa.map(|level| pdfa::file_date(level, created_on).map(|date| PdfAFile { level, date })).transpose()?;
     // The attribution is the licence signal itself, so it follows `licensed` rather
     // than a separate flag every caller would have to keep in step.
     let attribution = !licensed;
@@ -3480,17 +3530,180 @@ pub fn render_pdf(
         prepare_images(pages, image_registry);
     let anchors = placed_anchors(pages);
     let used_gradients = used_gradients(pages, gradients);
+    let fields = collect_render_fields(pages);
+    if let Some(file) = &pdfa {
+        refuse_for_pdfa(file.level, pages, &fonts, &sorted_font_names, font_defs, &used_gradients, &fields)?;
+    }
     let mut rendered_pages =
         build_content_streams(pages, &fonts, &image_res_map, gradients, attribution);
     drop_dangling_links(&mut rendered_pages, &anchors);
-    let fields = collect_render_fields(pages);
     let ids =
         allocate_ids(pages, &rendered_pages, &fonts, &sorted_font_names, &sorted_image_names, image_registry, &fields);
     assemble_pdf(
         pages, &fonts, &sorted_font_names, &sorted_image_names,
         image_registry, &image_res_map, rendered_pages, ids, &fields, &anchors,
-        &used_gradients, meta, created_on,
+        &used_gradients, meta, created_on, pdfa.as_ref(),
     )
+}
+
+/// The level and the date of a PDF/A render.
+struct PdfAFile {
+    level: PdfA,
+    date:  FileDate,
+}
+
+// ── PDF/A refusals ────────────────────────────────────────────────────────────
+
+/// Refuse what a PDF/A file cannot hold where only the author can change it, with an error that says what to
+/// change: a form field, text in a font that is not embedded, a font whose licence forbids embedding, a character
+/// the font has no glyph for, which a reader would draw as an empty box, and a CMYK color, which the sRGB output
+/// intent doesn't cover. The engine repairs none of these; it writes the rest of what PDF/A needs itself.
+fn refuse_for_pdfa(
+    level:             PdfA,
+    pages:             &[RenderPage],
+    fonts:             &HashMap<String, PreparedFont>,
+    sorted_font_names: &[String],
+    font_defs:         &HashMap<String, FontDef>,
+    used_gradients:    &[(&str, &Gradient)],
+    fields:            &[(usize, RenderField)],
+) -> Result<(), String> {
+    let refuse = |reason: String| Err(format!("<output pdfa=\"{}\">: {reason}", level.attribute()));
+
+    if let Some((_, field)) = fields.first() {
+        let name = if field.name.is_empty() { String::new() } else { format!(" '{}'", field.name) };
+        return refuse(format!(
+            "the form field{name} can't be in a PDF/A file yet: a field draws its text in Helvetica, which is not \
+            embedded, and PDF/A embeds every font. Remove the field, or remove pdfa"
+        ));
+    }
+
+    for name in sorted_font_names {
+        if let PreparedFontKind::Truetype { original_bytes, .. } = &fonts[name].kind
+            && let Some(reason) = embedding_refused(original_bytes)
+        {
+            return refuse(format!(
+                "the font '{name}' {reason}, and a PDF/A file embeds every font it draws in: use another font"
+            ));
+        }
+    }
+
+    for page in pages {
+        if let Some(reason) = first_in(&page.nodes, &mut |node| font_refusal(node, fonts, font_defs)) {
+            return refuse(reason);
+        }
+    }
+
+    for page in pages {
+        let background = page.background.as_deref().filter(|color| is_cmyk(color));
+        if let Some(color) = background.map(str::to_string).or_else(|| first_in(&page.nodes, &mut cmyk_color)) {
+            return refuse(format!(
+                "the color {color} is CMYK, and the sRGB output intent of a PDF/A file covers RGB colors only: give \
+                it as an RGB color, such as a hex one, or remove pdfa"
+            ));
+        }
+    }
+    if let Some((name, _)) = used_gradients.iter().find(|(_, gradient)| gradient.stops.iter().any(|stop| is_cmyk(&stop.color))) {
+        return refuse(format!(
+            "the gradient '{name}' has CMYK colors, and the sRGB output intent of a PDF/A file covers RGB colors \
+            only: give its colors as RGB ones, such as hex ones, or remove pdfa"
+        ));
+    }
+    Ok(())
+}
+
+/// The first answer `check` gives for a node of `nodes` or of their children, in drawing order.
+fn first_in(nodes: &[RenderNode], check: &mut impl FnMut(&RenderNode) -> Option<String>) -> Option<String> {
+    nodes.iter().find_map(|node| check(node).or_else(|| match node {
+        RenderNode::Box(b)         => first_in(&b.children, check),
+        RenderNode::Link(l)        => first_in(&l.children, check),
+        RenderNode::CanvasLayer(l) => first_in(&l.children, check),
+        _                          => None,
+    }))
+}
+
+/// Why `node` can't be drawn in a PDF/A file for its font: its text is in a font that is not embedded, or has a
+/// character its embedded font has no glyph for, or it is a barcode's digits, which are drawn in Helvetica.
+fn font_refusal(node: &RenderNode, fonts: &HashMap<String, PreparedFont>, font_defs: &HashMap<String, FontDef>) -> Option<String> {
+    match node {
+        RenderNode::Text(t) => match &fonts.get(&t.font)?.kind {
+            PreparedFontKind::Builtin { base_name, .. } => {
+                let text = excerpt(&t.content);
+                Some(match font_defs.get(&t.font) {
+                    Some(FontDef::Ref(_)) => format!(
+                        "the text \"{text}\" is in the font '{}', which <assets> declares, and its file was not loaded, \
+                        so it would be drawn in Helvetica, which is not embedded: check the font's src",
+                        t.font
+                    ),
+                    _ => format!(
+                        "the text \"{text}\" is in {base_name}, a font built into PDF readers, which is not embedded, \
+                        and a PDF/A file embeds every font: declare a font in <assets> and set it with font on the \
+                        document or on the text"
+                    ),
+                })
+            }
+            PreparedFontKind::Truetype { advances: None, .. } => Some(format!(
+                "the font '{}' could not be read as a TrueType or OpenType font, so its glyphs are unknown: use another \
+                font file",
+                t.font
+            )),
+            PreparedFontKind::Truetype { char_to_gid, .. } => {
+                let missing = t.content.chars().find(|c| !char_to_gid.contains_key(c))?;
+                Some(format!(
+                    "the text \"{}\" has '{missing}' (U+{:04X}), which the font '{}' has no glyph for, and a PDF/A file \
+                    may not draw the empty box a reader shows instead: use a font that has it, or leave it out",
+                    excerpt(&t.content), missing as u32, t.font
+                ))
+            }
+        },
+        RenderNode::Barcode(bc) if has_caption(&bc.kind) => Some(
+            "a barcode's digits (hrt) are drawn in Helvetica, which is not embedded, and a PDF/A file embeds every \
+            font: set hrt=\"false\" on the barcode, and write the digits as text in a font of <assets> if they are \
+            needed".to_string(),
+        ),
+        _ => None,
+    }
+}
+
+/// Why an embedded font's licence forbids embedding it, from its OS/2 `fsType`, or `None` when it allows it: a
+/// restricted licence, or one that allows only bitmaps, where the engine embeds outlines.
+fn embedding_refused(bytes: &[u8]) -> Option<&'static str> {
+    let face = Face::parse(bytes, 0).ok()?;
+    match face.permissions()? {
+        Permissions::Restricted => Some("does not allow embedding (its licence, in the OS/2 table, is restricted)"),
+        _ if !face.is_outline_embedding_allowed() => Some("allows embedding its bitmaps only, not its outlines"),
+        _ => None,
+    }
+}
+
+/// The first CMYK color `node` itself paints with, not its children's.
+fn cmyk_color(node: &RenderNode) -> Option<String> {
+    fn shadow(shadow: &Option<Shadow>) -> Option<&str> {
+        shadow.as_ref().map(|s| s.color.as_str())
+    }
+    let colors: Vec<Option<&str>> = match node {
+        RenderNode::Box(b)           => vec![b.fill.as_deref(), b.border_color.as_deref(), shadow(&b.shadow)],
+        RenderNode::Line(l)          => vec![Some(&l.color)],
+        RenderNode::Text(t)          => vec![Some(&t.color)],
+        RenderNode::Barcode(bc)      => vec![Some(&bc.color), bc.bg.as_deref()],
+        RenderNode::Field(f)         => vec![f.background.as_deref(), f.border.as_ref().map(|(_, color)| color.as_str())],
+        RenderNode::CanvasRect(r)    => vec![r.fill.as_deref(), r.stroke.as_deref(), shadow(&r.shadow)],
+        RenderNode::CanvasLine(l)    => vec![Some(&l.stroke)],
+        RenderNode::CanvasEllipse(e) => vec![e.fill.as_deref(), e.stroke.as_deref(), shadow(&e.shadow)],
+        RenderNode::CanvasPath(p)    => vec![p.fill.as_deref(), p.stroke.as_deref()],
+        RenderNode::Link(_) | RenderNode::Image(_) | RenderNode::CanvasLayer(_)
+            | RenderNode::Anchor(_) | RenderNode::FootnoteMark(_) => vec![],
+    };
+    colors.into_iter().flatten().find(|color| is_cmyk(color)).map(str::to_string)
+}
+
+/// The start of a text, for an error that names it.
+fn excerpt(text: &str) -> String {
+    const MAX: usize = 40;
+    let text = text.trim();
+    match text.char_indices().nth(MAX) {
+        Some((end, _)) => format!("{}…", &text[..end]),
+        None => text.to_string(),
+    }
 }
 
 /// Remove the links to an id no bookmark has, such as an `href="#"` outside a table of contents.
@@ -3813,7 +4026,7 @@ mod tests {
         let xml = format!(r#"<lpdf version="1"><document><section><layout>{layout}</layout></section></document></lpdf>"#);
         let mut doc = crate::parse::parse(&xml).expect("parses");
         let pages = crate::layout::layout_document(&doc.section_layouts());
-        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &ImageRegistry::new(), &doc.meta, &doc.gradients, None, licensed)
+        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &ImageRegistry::new(), &doc.meta, &doc.gradients, None, licensed, doc.output.pdfa)
             .expect("renders")
     }
 
@@ -4051,7 +4264,7 @@ mod tests {
             crate::layout::prefill_section_image_sizes(section, &meta);
         }
         let pages = crate::layout::layout_document(&layouts);
-        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false).expect("renders")
+        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, doc.output.pdfa).expect("renders")
     }
 
     #[test]
@@ -4083,7 +4296,7 @@ mod tests {
         let pages = crate::layout::layout_document(&doc.section_layouts());
         let mut images = ImageRegistry::new();
         images.load("photo", RED_PIXEL.to_vec());
-        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false).expect("renders");
+        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, doc.output.pdfa).expect("renders");
         let (page, groups) = page_and_groups(&pdf);
         assert_eq!(groups.len(), 1);
         let (dict, group) = &groups[0];
@@ -4194,7 +4407,7 @@ mod tests {
         let pages = crate::layout::layout_document(&doc.section_layouts());
         let mut registry = FontRegistry::new();
         registry.register("brand", bytes.to_vec());
-        let pdf = render_pdf(&pages, &doc.fonts, &registry, &ImageRegistry::new(), &doc.meta, &doc.gradients, None, false).expect("renders");
+        let pdf = render_pdf(&pages, &doc.fonts, &registry, &ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, doc.output.pdfa).expect("renders");
         let page = page_and_groups(&pdf).0;
         let operators = operators(&page);
         assert!(arrays(&operators) > 1, "the justified lines are arrays: {page}");
@@ -4315,7 +4528,7 @@ mod tests {
         let pages = crate::layout::layout_document(&doc.section_layouts());
         let mut images = ImageRegistry::new();
         images.load("photo", RED_PIXEL.to_vec());
-        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false).expect("renders");
+        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, doc.output.pdfa).expect("renders");
         let (page, groups) = page_and_groups(&pdf);
         assert_eq!(groups.len(), 1);
         assert!(groups[0].1.contains("/I0 Do"), "the image is drawn in the group: {}", groups[0].1);
