@@ -1,10 +1,13 @@
 //! Copies a pdf-writer file object by object, passing every string and stream through a
-//! transform that may change its length.
+//! transform that may change its length: the encryption of both ciphers.
 //!
-//! RC4 keeps lengths, so `encrypt.rs` encrypts in place. AES-CBC does not (an IV and
-//! padding on each string and stream), so offsets, `/Length` values and the xref have to
-//! be rebuilt. This pass does the first two and returns each object's new offset for
-//! the xref writer.
+//! Each string is read with its escapes resolved and written as a hex string of what the
+//! transform makes of it, since ciphertext in a literal string would need escapes of its
+//! own. That changes lengths for either cipher, and AES-CBC also adds an IV and padding to
+//! each string and stream, so offsets, `/Length` values and the xref have to be rebuilt.
+//! This pass does the first two and returns each object's new offset for the xref writer.
+//! The transform gets the number and generation of the object the bytes are in, since
+//! RC4 has a key for each object.
 //!
 //! It reads what pdf-writer writes: a classic xref table, direct `/Length` values and
 //! no object streams. It does not read a file written by anything else.
@@ -15,6 +18,10 @@ use super::encrypt::{ObjectEntry, hex_nibble, read_u32, skip_ws};
 
 const HEX: [u8; 16] = *b"0123456789ABCDEF";
 
+/// What a string or a stream becomes, from the number and generation of the object it is
+/// in and its bytes.
+pub(crate) type Transform<'a> = dyn FnMut(u32, u32, &[u8]) -> Vec<u8> + 'a;
+
 /// A file copied through [`rewrite_objects`].
 pub(crate) struct Rewritten {
     pub bytes:   Vec<u8>,
@@ -24,12 +31,13 @@ pub(crate) struct Rewritten {
 
 /// Copies the header and every object in `entries` from `src` and drops what follows the
 /// last object (the old xref and trailer). Each string is replaced by a hex string of
-/// `transform(its bytes)` and each stream's data by `transform(its data)`, with the
-/// stream's `/Length` set to the new size.
+/// `transform(number, generation, its bytes)` and each stream's data by
+/// `transform(number, generation, its data)`, with the stream's `/Length` set to the new
+/// size, where `number` and `generation` are those of the object the string or stream is in.
 pub(crate) fn rewrite_objects(
     src: &[u8],
     entries: &[ObjectEntry],
-    transform: &mut dyn FnMut(&[u8]) -> Vec<u8>,
+    transform: &mut Transform<'_>,
 ) -> Result<Rewritten, String> {
     let mut ordered: Vec<&ObjectEntry> = entries.iter().collect();
     ordered.sort_by_key(|entry| entry.offset);
@@ -53,11 +61,12 @@ fn rewrite_object(
     src: &[u8],
     entry: &ObjectEntry,
     out: &mut Vec<u8>,
-    transform: &mut dyn FnMut(&[u8]) -> Vec<u8>,
+    transform: &mut Transform<'_>,
 ) -> Result<(), String> {
     let body_start = object_body_start(src, entry.offset).ok_or_else(|| "no `N G obj` at its xref offset".to_string())?;
     out.extend_from_slice(format!("{} {} obj", entry.obj_num, entry.gen_num).as_bytes());
-    copy_body(src, body_start, out, transform)?;
+    let mut in_object = |plain: &[u8]| transform(entry.obj_num, entry.gen_num, plain);
+    copy_body(src, body_start, out, &mut in_object)?;
     out.push(b'\n');
     Ok(())
 }
@@ -316,7 +325,7 @@ mod tests {
     }
 
     fn rewrite_one(file: &[u8]) -> Result<String, String> {
-        let rewritten = rewrite_objects(file, &[entry(1, 0)], &mut |plain| bracket(plain))?;
+        let rewritten = rewrite_objects(file, &[entry(1, 0)], &mut |_, _, plain| bracket(plain))?;
         Ok(String::from_utf8_lossy(&rewritten.bytes).into_owned())
     }
 
@@ -397,11 +406,26 @@ mod tests {
     }
 
     #[test]
+    fn the_transform_gets_the_number_and_generation_of_the_object_it_is_in() {
+        let file = b"%PDF-1.7\n4 0 obj\n(a)\nendobj\n7 2 obj\n<< /Length 1 >>\nstream\nb\nendstream\nendobj\n";
+        let first = file.windows(7).position(|w| w == b"4 0 obj").unwrap();
+        let second = file.windows(7).position(|w| w == b"7 2 obj").unwrap();
+        let entries = [entry(4, first), ObjectEntry { obj_num: 7, gen_num: 2, offset: second }];
+        let mut seen = Vec::new();
+        rewrite_objects(file, &entries, &mut |number, generation, plain| {
+            seen.push((number, generation, plain.to_vec()));
+            plain.to_vec()
+        })
+        .unwrap();
+        assert_eq!(seen, [(4, 0, b"a".to_vec()), (7, 2, b"b".to_vec())]);
+    }
+
+    #[test]
     fn objects_move_to_the_offsets_they_are_written_at() {
         let file = b"%PDF-1.7\n1 0 obj\n(a)\nendobj\n2 0 obj\n(b)\nendobj\nxref\n";
         let first = file.windows(7).position(|w| w == b"1 0 obj").unwrap();
         let second = file.windows(7).position(|w| w == b"2 0 obj").unwrap();
-        let rewritten = rewrite_objects(file, &[entry(1, first), entry(2, second)], &mut |plain| bracket(plain)).unwrap();
+        let rewritten = rewrite_objects(file, &[entry(1, first), entry(2, second)], &mut |_, _, plain| bracket(plain)).unwrap();
 
         assert!(rewritten.bytes.starts_with(b"%PDF-1.7\n"));
         assert!(!rewritten.bytes.windows(4).any(|w| w == b"xref"), "the old xref is dropped");

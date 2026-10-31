@@ -3,14 +3,14 @@
 //!
 //! Applied as a post-processing pass on the raw bytes returned by pdf-writer.
 //!
-//! AES-256 rewrites the file: AES-CBC adds an IV and padding to every string and
-//! stream, so `rewrite.rs` copies the objects into a new buffer with new offsets and
-//! lengths, and this pass writes a fresh xref around them. The random values come from
-//! the host's entropy (`aes256.rs`), so one entropy gives one file.
-//!
-//! RC4 is length-preserving so all object offsets remain valid after encryption; that
-//! pass encrypts in place, appends a new /Encrypt object and rewrites the xref/trailer.
-//! Its output is deterministic without entropy.
+//! Both ciphers rewrite the file: `rewrite.rs` copies the objects into a new buffer,
+//! each string read with its escapes resolved and written as a hex string of its
+//! encrypted bytes, and each stream's data encrypted, and this pass appends the
+//! /Encrypt object and writes a fresh xref and trailer around them. AES-CBC adds an IV
+//! and padding to every string and stream; RC4 keeps the length of each, with a key for
+//! each object, but a literal string still becomes a hex string, so the offsets move
+//! for both. AES-256's random values come from the host's entropy (`aes256.rs`), so one
+//! entropy gives one file; RC4 needs none, so the same input gives the same file.
 //!
 //! # Compliance note
 //! RC4-128 (V=2 R=3) is the weakest encryption scheme defined in the PDF specification
@@ -29,8 +29,6 @@ const PADDING: [u8; 32] = [
     0x2E, 0x2E, 0x00, 0xB6, 0xD0, 0x68, 0x3E, 0x80,
     0x2F, 0x0C, 0xA9, 0xFE, 0x64, 0x53, 0x69, 0x7A,
 ];
-
-const HEX: [u8; 16] = *b"0123456789ABCDEF";
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
@@ -205,10 +203,9 @@ pub(crate) struct ObjectEntry {
 }
 
 struct XrefInfo {
-    entries:     Vec<ObjectEntry>,
-    xref_offset: usize,
-    root_ref:    (u32, u32),
-    info_ref:    Option<(u32, u32)>,
+    entries:  Vec<ObjectEntry>,
+    root_ref: (u32, u32),
+    info_ref: Option<(u32, u32)>,
 }
 
 // ── Crypto primitives ──────────────────────────────────────────────────────────
@@ -318,10 +315,6 @@ fn derive_obj_key(fek: &[u8; 16], obj_num: u32, gen_num: u32) -> [u8; 16] {
 }
 
 // ── Byte helpers ───────────────────────────────────────────────────────────────
-
-fn find_bytes(data: &[u8], needle: &[u8]) -> Option<usize> {
-    data.windows(needle.len()).position(|w| w == needle)
-}
 
 fn rfind_bytes(data: &[u8], needle: &[u8]) -> Option<usize> {
     let n = needle.len();
@@ -443,165 +436,7 @@ fn parse_xref(bytes: &[u8]) -> Result<XrefInfo, String> {
         .ok_or_else(|| "no /Root in trailer".to_string())?;
     let info_ref = parse_ref_in(trailer_slice, b"/Info");
 
-    Ok(XrefInfo { entries, xref_offset, root_ref, info_ref })
-}
-
-// ── Object body scanner ────────────────────────────────────────────────────────
-
-fn encrypt_literal_string(data: &mut [u8], open_pos: usize, end: usize, key: &[u8; 16]) -> usize {
-    let content_start = open_pos + 1;
-    let mut pos = content_start;
-    let mut depth: usize = 1;
-    while pos < end && depth > 0 {
-        match data[pos] {
-            b'\\' => pos += 2,
-            b'(' => { depth += 1; pos += 1; }
-            b')' => {
-                depth -= 1;
-                if depth == 0 {
-                    rc4(key, &mut data[content_start..pos]);
-                    return pos + 1;
-                }
-                pos += 1;
-            }
-            _ => pos += 1,
-        }
-    }
-    pos
-}
-
-fn encrypt_hex_string(data: &mut [u8], open_pos: usize, end: usize, key: &[u8; 16]) -> usize {
-    let hex_start = open_pos + 1;
-    let mut pos = hex_start;
-    while pos < end && data[pos] != b'>' { pos += 1; }
-    if pos >= end { return pos; }
-
-    let hex_bytes: Vec<u8> = data[hex_start..pos].to_vec();
-    // pdf-writer always produces even-length hex strings; skip gracefully if not
-    if hex_bytes.len() % 2 != 0 { return pos + 1; }
-
-    let n = hex_bytes.len() / 2;
-    let mut plain = vec![0u8; n];
-    for i in 0..n {
-        plain[i] = (hex_nibble(hex_bytes[i * 2]) << 4) | hex_nibble(hex_bytes[i * 2 + 1]);
-    }
-    rc4(key, &mut plain);
-    for i in 0..n {
-        data[hex_start + i * 2]     = HEX[plain[i] as usize >> 4];
-        data[hex_start + i * 2 + 1] = HEX[plain[i] as usize & 0xF];
-    }
-    pos + 1
-}
-
-// Parse /Length N from the stream dict bytes (data[dict_start..stream_kw]).
-// Returns None if the key is absent or unparseable.
-fn parse_stream_length(data: &[u8], dict_start: usize, stream_kw: usize) -> Option<usize> {
-    let dict = &data[dict_start..stream_kw];
-    let pos = dict.windows(7).position(|w| w == b"/Length")?;
-    let after = skip_ws(&dict[pos + 7..]);
-    let (n, _) = read_u32(after)?;
-    Some(n as usize)
-}
-
-fn encrypt_stream(data: &mut [u8], stream_kw: usize, end: usize, key: &[u8; 16], length: Option<usize>) -> usize {
-    // Skip "stream" + CRLF or LF
-    let mut stream_start = stream_kw + 6;
-    if stream_start < end && data[stream_start] == b'\r' { stream_start += 1; }
-    if stream_start < end && data[stream_start] == b'\n' { stream_start += 1; }
-
-    if let Some(n) = length {
-        // Length-aware path: encrypt exactly n bytes, then skip the endstream marker.
-        // Required for compressed (binary) streams — scanning byte-by-byte for
-        // \nendstream is unsafe on zlib data that could contain that sequence by chance.
-        let stream_end = (stream_start + n).min(end);
-        rc4(key, &mut data[stream_start..stream_end]);
-        // PDF spec requires an EOL before endstream; skip optional \r and/or \n.
-        let mut pos = stream_end;
-        if pos < end && data[pos] == b'\r' { pos += 1; }
-        if pos < end && data[pos] == b'\n' { pos += 1; }
-        if pos + 9 <= end && &data[pos..pos + 9] == b"endstream" { pos += 9; }
-        return pos;
-    }
-
-    // Fallback: scan for \nendstream boundary.
-    // Safe only for uncompressed / ASCII stream content (e.g. objects with no /Filter).
-    let mut pos = stream_start;
-    while pos < end {
-        // Check \r\nendstream before \nendstream to handle both terminators correctly
-        if pos + 11 <= end && &data[pos..pos + 11] == b"\r\nendstream" {
-            rc4(key, &mut data[stream_start..pos]);
-            return pos + 11;
-        }
-        if pos + 10 <= end && &data[pos..pos + 10] == b"\nendstream" {
-            rc4(key, &mut data[stream_start..pos]);
-            return pos + 10;
-        }
-        pos += 1;
-    }
-    pos
-}
-
-fn scan_body(data: &mut [u8], start: usize, end: usize, key: &[u8; 16]) {
-    let mut pos = start;
-    while pos < end {
-        match data[pos] {
-            b'%' => {
-                pos += 1;
-                while pos < end && data[pos] != b'\n' { pos += 1; }
-                if pos < end { pos += 1; }
-            }
-            b'(' => {
-                pos = encrypt_literal_string(data, pos, end, key);
-            }
-            b'<' => {
-                if pos + 1 < end && data[pos + 1] == b'<' {
-                    pos += 2; // dict open <<, not a hex string
-                } else {
-                    pos = encrypt_hex_string(data, pos, end, key);
-                }
-            }
-            b's' => {
-                if pos + 6 <= end && &data[pos..pos + 6] == b"stream" {
-                    let next = pos + 6;
-                    if next < end && (data[next] == b'\n' || data[next] == b'\r') {
-                        // Parse /Length from the dict preceding the stream keyword so that
-                        // encrypt_stream can encrypt exactly the right number of bytes without
-                        // scanning binary data for the \nendstream sentinel.
-                        let length = parse_stream_length(data, start, pos);
-                        pos = encrypt_stream(data, pos, end, key, length);
-                    } else {
-                        pos += 1;
-                    }
-                } else {
-                    pos += 1;
-                }
-            }
-            _ => pos += 1,
-        }
-    }
-}
-
-fn encrypt_object(out: &mut [u8], offset: usize, key: &[u8; 16]) {
-    // Skip past "N G obj\n" (or "N G obj\r\n") to find body start
-    let obj_slice = &out[offset..];
-    let body_rel = obj_slice.windows(4)
-        .position(|w| w == b" obj")
-        .map(|i| {
-            let mut j = i + 4;
-            if j < obj_slice.len() && obj_slice[j] == b'\r' { j += 1; }
-            if j < obj_slice.len() && obj_slice[j] == b'\n' { j += 1; }
-            j
-        })
-        .unwrap_or(0);
-    let body_start = offset + body_rel;
-
-    // Use \nendobj as boundary — avoids false matches of "endobj" inside binary streams
-    let search = &out[body_start..];
-    let body_end = body_start + find_bytes(search, b"\nendobj").unwrap_or(search.len());
-
-    if body_start < body_end {
-        scan_body(out, body_start, body_end, key);
-    }
+    Ok(XrefInfo { entries, root_ref, info_ref })
 }
 
 // ── Output assembly ────────────────────────────────────────────────────────────
@@ -617,7 +452,7 @@ fn append_encrypt_dict(out: &mut Vec<u8>, obj_num: u32, o: &[u8; 32], u: &[u8; 3
 
 fn write_xref_and_trailer(
     out: &mut Vec<u8>,
-    original_entries: &[ObjectEntry],
+    entries: &[ObjectEntry],
     encrypt_obj_num: u32,
     encrypt_obj_offset: usize,
     xref_info: &XrefInfo,
@@ -625,7 +460,7 @@ fn write_xref_and_trailer(
 ) {
     let new_xref_offset = out.len();
 
-    let mut all: Vec<(u32, u32, usize)> = original_entries.iter()
+    let mut all: Vec<(u32, u32, usize)> = entries.iter()
         .map(|e| (e.obj_num, e.gen_num, e.offset))
         .chain(std::iter::once((encrypt_obj_num, 0u32, encrypt_obj_offset)))
         .collect();
@@ -703,7 +538,7 @@ fn encrypt_pdf_aes256(bytes: &[u8], config: &EncryptConfig) -> Result<Vec<u8>, S
         aes256::setup(&config.user_password, &config.owner_password, p, &config.entropy)?;
 
     let rewrite::Rewritten { bytes: mut out, entries: moved } =
-        rewrite::rewrite_objects(bytes, &xref.entries, &mut |plain| cipher.seal(plain))?;
+        rewrite::rewrite_objects(bytes, &xref.entries, &mut |_, _, plain| cipher.seal(plain))?;
 
     // The /Encrypt dictionary is stored in plaintext, so it is appended after the rewrite.
     let encrypt_obj_num    = moved.iter().map(|e| e.obj_num).max().unwrap_or(0) + 1;
@@ -723,23 +558,19 @@ fn encrypt_pdf_rc4(bytes: &[u8], config: &EncryptConfig) -> Result<Vec<u8>, Stri
     let fek     = derive_fek(&config.user_password, &o_entry, p, &file_id);
     let u_entry = derive_u_entry(&fek, &file_id);
 
-    // Drop the original xref + trailer; keep the object body bytes
-    let mut out = bytes[..xref.xref_offset].to_vec();
+    // Each string and stream is encrypted with the key of the object it is in.
+    let rewrite::Rewritten { bytes: mut out, entries: moved } =
+        rewrite::rewrite_objects(bytes, &xref.entries, &mut |obj_num, gen_num, plain| {
+            let mut sealed = plain.to_vec();
+            rc4(&derive_obj_key(&fek, obj_num, gen_num), &mut sealed);
+            sealed
+        })?;
 
-    // Encrypt all in-use objects in place (RC4 is length-preserving)
-    for entry in &xref.entries {
-        let obj_key = derive_obj_key(&fek, entry.obj_num, entry.gen_num);
-        encrypt_object(&mut out, entry.offset, &obj_key);
-    }
-
-    // Append /Encrypt dict as a new indirect object
-    let encrypt_obj_num    = xref.entries.iter().map(|e| e.obj_num).max().unwrap_or(0) + 1;
+    // The /Encrypt dictionary is stored in plaintext, so it is appended after the rewrite.
+    let encrypt_obj_num    = moved.iter().map(|e| e.obj_num).max().unwrap_or(0) + 1;
     let encrypt_obj_offset = out.len();
     append_encrypt_dict(&mut out, encrypt_obj_num, &o_entry, &u_entry, p);
-
-    // Write fresh xref and trailer referencing the /Encrypt object and /ID
-    write_xref_and_trailer(&mut out, &xref.entries, encrypt_obj_num, encrypt_obj_offset, &xref, &file_id);
-
+    write_xref_and_trailer(&mut out, &moved, encrypt_obj_num, encrypt_obj_offset, &xref, &file_id);
     Ok(out)
 }
 
@@ -880,6 +711,62 @@ mod tests {
         assert_eq!(enc, enc2);
     }
 
+    /// The bytes of the hex string after `key` in the object `number` of `pdf`, found through its xref.
+    fn hex_string_in_object(pdf: &[u8], number: u32, key: &str) -> Vec<u8> {
+        let entry = parse_xref(pdf).unwrap().entries.into_iter().find(|e| e.obj_num == number).expect("the object");
+        let object = String::from_utf8_lossy(&pdf[entry.offset..]).split("endobj").next().unwrap().to_string();
+        let hex = object.split(&format!("{key} <")).nth(1).unwrap_or_else(|| panic!("no hex {key} in {object}"));
+        let hex = hex.split('>').next().unwrap().as_bytes();
+        hex.chunks(2).map(|pair| (hex_nibble(pair[0]) << 4) | hex_nibble(pair[1])).collect()
+    }
+
+    #[test]
+    fn rc4_writes_each_string_as_hex_of_its_value_encrypted_with_the_key_of_its_object() {
+        let xml = r#"<lpdf version="1"><document size="a4"><meta title="C:\reports\Q3 (draft"/><section><layout margin="28pt"><text>Hello</text></layout></section></document></lpdf>"#;
+        let plain = crate::LpdfEngine::render_xml_to_pdf_bytes(xml).expect("render failed");
+        assert!(String::from_utf8_lossy(&plain).contains(r"/Title (C:\\reports\\Q3 \(draft)"), "pdf-writer escapes the title");
+        let cfg = config(Algorithm::Rc4128, "user", "owner");
+        let enc = encrypt_pdf(&plain, &cfg).expect("encrypt_pdf failed");
+
+        let (info, generation) = parse_xref(&enc).unwrap().info_ref.expect("an /Info");
+        let mut title = hex_string_in_object(&enc, info, "/Title");
+        let file_id = md5_hash(&plain);
+        let p = compute_p(&cfg.permissions);
+        let fek = derive_fek("user", &derive_o_entry("user", "owner"), p, &file_id);
+        rc4(&derive_obj_key(&fek, info, generation), &mut title);
+        assert_eq!(title, br"C:\reports\Q3 (draft");
+    }
+
+    /// The values of `/Length` in `pdf`, in the order they are written: not `/Length1` and the like.
+    fn lengths(pdf: &[u8]) -> Vec<String> {
+        let text = String::from_utf8_lossy(pdf);
+        text.split("/Length ").skip(1).map(|rest| rest.chars().take_while(char::is_ascii_digit).collect()).collect()
+    }
+
+    #[test]
+    fn rc4_keeps_the_length_of_each_stream() {
+        let plain = render_minimal();
+        let mut expected = lengths(&plain);
+        assert!(!expected.is_empty(), "the render has streams");
+        expected.push("128".to_string()); // the key length in the /Encrypt dictionary, written last
+        assert_eq!(lengths(&encrypt_minimal("user", "owner")), expected);
+    }
+
+    #[test]
+    fn the_xref_points_at_every_object_for_each_cipher() {
+        for algorithm in [Algorithm::Aes256, Algorithm::Rc4128] {
+            let enc = encrypt_pdf(&render_minimal(), &config(algorithm, "", "owner")).expect("encrypt_pdf failed");
+            let xref = parse_xref(&enc).expect("the new xref parses");
+            assert!(!xref.entries.is_empty());
+            for entry in &xref.entries {
+                let header = format!("{} {} obj", entry.obj_num, entry.gen_num);
+                assert!(enc[entry.offset..].starts_with(header.as_bytes()), "{algorithm:?}: object {} is not at {}", entry.obj_num, entry.offset);
+            }
+            assert!(enc.windows(8).any(|w| w == b"/Encrypt"));
+            assert!(enc.windows(3).any(|w| w == b"/ID"));
+        }
+    }
+
     // ── AES-256 ────────────────────────────────────────────────────────────────
 
     fn encrypt_minimal_aes(user_pw: &str, owner_pw: &str) -> Vec<u8> {
@@ -924,19 +811,6 @@ mod tests {
         let cfg = EncryptConfig { entropy: Vec::new(), ..config(Algorithm::Rc4128, "", "owner") };
         assert!(cfg.validate().is_ok());
         assert!(encrypt_pdf(&render_minimal(), &cfg).is_ok());
-    }
-
-    #[test]
-    fn aes256_xref_points_at_every_object() {
-        let enc = encrypt_minimal_aes("", "owner");
-        let xref = parse_xref(&enc).expect("the new xref parses");
-        assert!(!xref.entries.is_empty());
-        for entry in &xref.entries {
-            let header = format!("{} {} obj", entry.obj_num, entry.gen_num);
-            assert!(enc[entry.offset..].starts_with(header.as_bytes()), "object {} is not at {}", entry.obj_num, entry.offset);
-        }
-        assert!(enc.windows(8).any(|w| w == b"/Encrypt"));
-        assert!(enc.windows(3).any(|w| w == b"/ID"));
     }
 
     #[test]
