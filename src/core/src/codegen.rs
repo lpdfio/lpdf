@@ -14,6 +14,8 @@
 
 use roxmltree::{Document, Node, NodeType};
 
+use crate::attr_types::Kind;
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /// Options for the code generator.
@@ -36,6 +38,8 @@ impl Default for CodegenOptions {
 /// Returns the generated source as a `String`, or an error message.
 pub fn codegen(xml: &str, options: &CodegenOptions) -> Result<String, String> {
     let doc = Document::parse(xml).map_err(|e| format!("XML parse error: {e}"))?;
+    // A value the engine refuses has no literal of its type to be written as.
+    crate::attr_types::check_xml(doc.root_element())?;
 
     match options.target.as_str() {
         "js" => {
@@ -72,6 +76,7 @@ pub fn codegen_fragment(xml: &str, options: &CodegenOptions) -> Result<String, S
     let wrapped = format!("<_f_>{xml}</_f_>");
     let doc = Document::parse(&wrapped).map_err(|e| format!("XML parse error: {e}"))?;
     let root = doc.root_element();
+    crate::attr_types::check_xml(root)?;
 
     let elements: Vec<Node> = root.children().filter(|n| n.is_element()).collect();
     if elements.is_empty() {
@@ -485,15 +490,36 @@ impl Target {
         }
     }
 
-    /// A map from names to strings: `{ a: 'b' }`, `{'a': 'b'}`, `['a' => 'b']` or `new() { ["a"] = "b" }`.
+    /// The value of the attribute `name` of `element`, written as a literal of its type: `true` (`True` in Python) for
+    /// a boolean, a number for a number, and a string for the rest, a name for `line-height` included.
+    fn attribute(self, element: &Node, name: &str, value: &str) -> String {
+        let parent = element.parent_element().map_or("", |p| p.tag_name().name());
+        let kind = crate::attr_types::kind_of(parent, element.tag_name().name(), name);
+        self.typed(kind, value)
+    }
+
+    /// `value` written as a literal of `kind`.
+    fn typed(self, kind: Kind, value: &str) -> String {
+        if kind == Kind::Boolean {
+            return match (self, value) {
+                (Target::Python, "true") => "True".to_string(),
+                (Target::Python, _) => "False".to_string(),
+                _ => value.to_string(),
+            };
+        }
+        crate::attr_types::number_text(kind, value).unwrap_or_else(|| self.literal(value))
+    }
+
+    /// A map from names to values written in the language: `{ a: 'b' }`, `{'a': 'b'}`, `['a' => 'b']` or
+    /// `new() { ["a"] = "b" }`.
     fn map(self, entries: &[(String, String)]) -> String {
         let items: Vec<String> = entries
             .iter()
             .map(|(key, value)| match self {
-                Target::Js     => format!("{}: {}", js_key(key), single_quoted(value)),
-                Target::Python => format!("{}: {}", single_quoted(key), single_quoted(value)),
-                Target::Php    => format!("{} => {}", single_quoted(key), single_quoted(value)),
-                Target::Dotnet => format!("[{}] = {}", double_quoted(key), double_quoted(value)),
+                Target::Js     => format!("{}: {value}", js_key(key)),
+                Target::Python => format!("{}: {value}", single_quoted(key)),
+                Target::Php    => format!("{} => {value}", single_quoted(key)),
+                Target::Dotnet => format!("[{}] = {value}", double_quoted(key)),
             })
             .collect();
         let items = items.join(", ");
@@ -505,39 +531,12 @@ impl Target {
         }
     }
 
-    /// A value nested in a map: text, a list, or a map of values. A list is a list of maps, as `stops` is; in C# it
-    /// is a `List<Dictionary<string, object>>`, so a gradient fits the `Dictionary<string, object>` it sits in.
-    fn value(self, value: &Value) -> String {
-        match value {
-            Value::Text(text) => self.literal(text),
-            Value::List(items) => {
-                let items = items.iter().map(|item| self.value(item)).collect::<Vec<_>>().join(", ");
-                match self {
-                    Target::Dotnet => format!("new List<Dictionary<string, object>> {{ {items} }}"),
-                    _              => format!("[{items}]"),
-                }
-            }
-            Value::Map(entries) => {
-                let items: Vec<String> = entries
-                    .iter()
-                    .map(|(key, value)| {
-                        let value = self.value(value);
-                        match self {
-                            Target::Js     => format!("{}: {value}", js_key(key)),
-                            Target::Python => format!("{}: {value}", single_quoted(key)),
-                            Target::Php    => format!("{} => {value}", single_quoted(key)),
-                            Target::Dotnet => format!("[{}] = {value}", double_quoted(key)),
-                        }
-                    })
-                    .collect();
-                let items = items.join(", ");
-                match self {
-                    Target::Js     => format!("{{ {items} }}"),
-                    Target::Python => format!("{{{items}}}"),
-                    Target::Php    => format!("[{items}]"),
-                    Target::Dotnet => format!("new() {{ {items} }}"),
-                }
-            }
+    /// A gradient or one of its stops, with members written in the language: an object in JS, a dictionary in
+    /// Python, where a `from` can't be a field, and an object of `class` in PHP and C#.
+    fn record(self, class: &str, members: &[(String, String)]) -> String {
+        match self {
+            Target::Python => self.map(members),
+            _ => self.object(class, members, false),
         }
     }
 
@@ -563,42 +562,35 @@ impl Target {
     }
 }
 
-/// A value of a nested map, before it is written in an SDK's language.
-enum Value {
-    Text(String),
-    List(Vec<Value>),
-    Map(Vec<(String, Value)>),
-}
-
-/// The attributes of an element as a map of text, leaving out the ones named in `skip`.
-fn attribute_map(element: &Node, skip: &[&str]) -> Vec<(String, Value)> {
+/// The attributes of an element, each written as a literal of its type, leaving out the ones named in `skip`.
+fn written_attributes(target: Target, element: &Node, skip: &[&str]) -> Vec<(String, String)> {
     element
         .attributes()
         .filter(|a| !skip.contains(&a.name()))
-        .map(|a| (a.name().to_string(), Value::Text(a.value().to_string())))
+        .map(|a| (a.name().to_string(), target.attribute(element, a.name(), a.value())))
         .collect()
 }
 
 /// The `<gradients>` of the tokens as the map the SDKs take: each gradient's name to its attributes, and its
-/// `stops` as a list.
-fn gradients_value(gradients: &Node) -> Value {
-    let entries = gradients
+/// `stops` as a list. PHP and C# have a `Gradient` and a `GradientStop` class, JS and Python plain objects.
+fn gradients_expression(target: Target, gradients: &Node) -> String {
+    let entries: Vec<(String, String)> = gradients
         .children()
         .filter(|n| n.is_element() && n.tag_name().name() == "gradient")
         .map(|gradient| {
-            let mut members = attribute_map(&gradient, &["name"]);
-            let stops: Vec<Value> = gradient
+            let mut members = written_attributes(target, &gradient, &["name"]);
+            let stops: Vec<String> = gradient
                 .children()
                 .filter(|n| n.is_element() && n.tag_name().name() == "stop")
-                .map(|stop| Value::Map(attribute_map(&stop, &[])))
+                .map(|stop| target.record("GradientStop", &written_attributes(target, &stop, &[])))
                 .collect();
             if !stops.is_empty() {
-                members.push(("stops".to_string(), Value::List(stops)));
+                members.push(("stops".to_string(), format!("[{}]", stops.join(", "))));
             }
-            (gradient.attribute("name").unwrap_or("").to_string(), Value::Map(members))
+            (gradient.attribute("name").unwrap_or("").to_string(), target.record("Gradient", &members))
         })
         .collect();
-    Value::Map(entries)
+    target.map(&entries)
 }
 
 /// A key of a JS object literal: bare when it is an identifier, such as `primary`, quoted when it is not,
@@ -620,11 +612,7 @@ fn assets_expression(target: Target, assets: &Node) -> Option<String> {
             .children()
             .filter(|n| n.is_element() && n.tag_name().name() == tag)
             .map(|asset| {
-                let attributes: Vec<(String, String)> = asset
-                    .attributes()
-                    .map(|a| (a.name().to_string(), target.literal(a.value())))
-                    .collect();
-                target.object(class, &attributes, false)
+                target.object(class, &written_attributes(target, &asset, &[]), false)
             })
             .collect();
         if !declared.is_empty() {
@@ -656,11 +644,7 @@ fn attached_files<'a, 'i>(document: &Node<'a, 'i>) -> Vec<Node<'a, 'i>> {
 fn attachments_expression(target: Target, document: &Node) -> Option<String> {
     let files: Vec<String> = attached_files(document)
         .iter()
-        .map(|file| {
-            let attributes: Vec<(String, String)> =
-                file.attributes().map(|a| (a.name().to_string(), target.literal(a.value()))).collect();
-            target.object("FileAttr", &attributes, false)
-        })
+        .map(|file| target.object("FileAttr", &written_attributes(target, file, &[]), false))
         .collect();
     (!files.is_empty()).then(|| format!("[{}]", files.join(", ")))
 }
@@ -673,7 +657,7 @@ fn tokens_expression(target: Target, tokens: &Node) -> Option<String> {
         let tag = child.tag_name().name();
         if tag == "gradients" {
             if child.children().any(|n| n.is_element()) {
-                members.push((tag.to_string(), target.value(&gradients_value(&child))));
+                members.push((tag.to_string(), gradients_expression(target, &child)));
             }
             continue;
         }
@@ -690,15 +674,13 @@ fn tokens_expression(target: Target, tokens: &Node) -> Option<String> {
                 .map(|c| {
                     (
                         c.attribute("name").unwrap_or("").to_string(),
-                        c.attribute("value").unwrap_or("").to_string(),
+                        target.literal(c.attribute("value").unwrap_or("")),
                     )
                 })
                 .collect()
         } else {
-            child
-                .attributes()
-                .map(|a| (a.name().to_string(), a.value().to_string()))
-                .collect()
+            // A row of slots, each a length, or a factor in the line-height row.
+            written_attributes(target, &child, &[])
         };
         if !entries.is_empty() {
             members.push((tag.to_string(), target.map(&entries)));
@@ -714,7 +696,8 @@ fn classes_used(code: &str) -> Vec<String> {
     for word in code.split(|c: char| !c.is_ascii_alphanumeric()) {
         let is_class = word.starts_with(|c: char| c.is_ascii_uppercase())
             && word != "NoAttr"
-            && (word.ends_with("Attr") || matches!(word, "DocumentMeta" | "DocumentOutput" | "DocumentAssets" | "DocumentTokens"));
+            && (word.ends_with("Attr")
+                || matches!(word, "DocumentMeta" | "DocumentOutput" | "DocumentAssets" | "DocumentTokens" | "Gradient" | "GradientStop"));
         if is_class && !used.iter().any(|u| u == word) {
             used.push(word.to_string());
         }
@@ -726,7 +709,7 @@ fn classes_used(code: &str) -> Vec<String> {
 fn php_namespace(class: &str) -> &'static str {
     match class {
         "DocumentAttr" | "DocumentMeta" | "DocumentOutput" | "DocumentAssets" | "DocumentTokens" | "SectionAttr" | "LayoutAttr"
-        | "FontAttr" | "ImageAttr" | "FileAttr" => "Lpdf\\Kit",
+        | "FontAttr" | "ImageAttr" | "FileAttr" | "Gradient" | "GradientStop" => "Lpdf\\Kit",
         "LayerAttr" | "RectAttr" | "CircleAttr" | "EllipseAttr" | "LineAttr" | "PathAttr" | "TextAtAttr"
         | "ImgAtAttr" | "BarcodeAtAttr" => "Lpdf\\Canvas",
         markdown if markdown.starts_with("Markdown") => "Lpdf\\Markdown",
@@ -748,11 +731,6 @@ fn folded_elements(document: &Node, write: impl Fn(&str, &[(&str, &str)]) -> Str
         .collect()
 }
 
-/// An attribute value as a JS string literal. Every attribute is a string in the SDKs, `true` included.
-fn js_attr_value(val: &str) -> String {
-    single_quoted(val)
-}
-
 /// Emit JS object literal for the attributes of a node.
 ///
 /// `extra_attrs` are additional key/value pairs injected by the caller
@@ -763,7 +741,7 @@ fn js_attrs(node: &Node, extra_attrs: Option<&[(&str, String)]>) -> String {
     let mut parts: Vec<String> = node
         .attributes()
         .filter(|a| !is_data_binding(a.name()))
-        .map(|a| format!("{}: {}", to_camel_case(a.name()), js_attr_value(a.value())))
+        .map(|a| format!("{}: {}", to_camel_case(a.name()), Target::Js.attribute(node, a.name(), a.value())))
         .collect();
 
     if let Some(extras) = extra_attrs {
@@ -808,11 +786,6 @@ fn data_binding_comments_hash(node: &Node, indent_str: &str) -> String {
         .collect()
 }
 
-/// An attribute value as a PHP string literal. Every attribute is a string in the SDKs, `true` included.
-fn php_attr_value(val: &str) -> String {
-    single_quoted(val)
-}
-
 /// Emit a PHP named-arg constructor call for the attributes of a node.
 ///
 /// Returns `"NoAttr"` when there are no attributes.
@@ -820,7 +793,7 @@ fn php_attrs(node: &Node, tag: &str, extra_attrs: Option<&[(&str, String)]>) -> 
     let mut parts: Vec<String> = node
         .attributes()
         .filter(|a| !is_data_binding(a.name()))
-        .map(|a| format!("{}: {}", to_camel_case(a.name()), php_attr_value(a.value())))
+        .map(|a| format!("{}: {}", to_camel_case(a.name()), Target::Php.attribute(node, a.name(), a.value())))
         .collect();
 
     if let Some(extras) = extra_attrs {
@@ -850,7 +823,7 @@ fn python_attrs(node: &Node, tag: &str, extra_attrs: Option<&[(&str, String)]>) 
     let mut parts: Vec<String> = node
         .attributes()
         .filter(|a| !is_data_binding(a.name()))
-        .map(|a| format!("{}={}", to_snake_case(a.name()), python_attr_value(a.value())))
+        .map(|a| format!("{}={}", to_snake_case(a.name()), Target::Python.attribute(node, a.name(), a.value())))
         .collect();
 
     if let Some(extras) = extra_attrs {
@@ -867,16 +840,6 @@ fn python_attrs(node: &Node, tag: &str, extra_attrs: Option<&[(&str, String)]>) 
     }
 }
 
-/// An attribute value as a Python string literal. Every attribute is a string in the SDKs, `true` included.
-fn python_attr_value(val: &str) -> String {
-    single_quoted(val)
-}
-
-/// An attribute value as a C# string literal. Every attribute is a string in the SDKs, `true` included.
-fn dotnet_attr_value(val: &str) -> String {
-    double_quoted(val)
-}
-
 /// Emit a C# `new() { ... }` initializer for the attributes of a node.
 ///
 /// Returns `"NoAttr"` when there are no attributes.
@@ -884,7 +847,7 @@ fn dotnet_attrs(node: &Node, extra_attrs: Option<&[(&str, String)]>) -> String {
     let mut parts: Vec<String> = node
         .attributes()
         .filter(|a| !is_data_binding(a.name()))
-        .map(|a| format!("{} = {}", to_pascal_case(a.name()), dotnet_attr_value(a.value())))
+        .map(|a| format!("{} = {}", to_pascal_case(a.name()), Target::Dotnet.attribute(node, a.name(), a.value())))
         .collect();
 
     if let Some(extras) = extra_attrs {
@@ -1019,7 +982,7 @@ impl JsEmitter {
         // Build document attrs with the folded meta and output
         let mut doc_parts: Vec<String> = node
             .attributes()
-            .map(|a| format!("{}: {}", to_camel_case(a.name()), js_attr_value(a.value())))
+            .map(|a| format!("{}: {}", to_camel_case(a.name()), Target::Js.attribute(node, a.name(), a.value())))
             .collect();
 
         if let Some(assets) = assets.and_then(|a| assets_expression(Target::Js, &a)) {
@@ -1239,7 +1202,7 @@ impl DotnetEmitter {
 
         let mut doc_parts: Vec<String> = node
             .attributes()
-            .map(|a| format!("{} = {}", to_pascal_case(a.name()), dotnet_attr_value(a.value())))
+            .map(|a| format!("{} = {}", to_pascal_case(a.name()), Target::Dotnet.attribute(node, a.name(), a.value())))
             .collect();
 
         if let Some(assets) = assets.and_then(|a| assets_expression(Target::Dotnet, &a)) {
@@ -1453,7 +1416,7 @@ impl PhpEmitter {
 
         let mut doc_parts: Vec<String> = node
             .attributes()
-            .map(|a| format!("{}: {}", to_camel_case(a.name()), php_attr_value(a.value())))
+            .map(|a| format!("{}: {}", to_camel_case(a.name()), Target::Php.attribute(node, a.name(), a.value())))
             .collect();
 
         if let Some(assets) = assets.and_then(|a| assets_expression(Target::Php, &a)) {
@@ -1660,7 +1623,7 @@ impl PythonEmitter {
 
         let mut doc_parts: Vec<String> = node
             .attributes()
-            .map(|a| format!("{}={}", to_snake_case(a.name()), python_attr_value(a.value())))
+            .map(|a| format!("{}={}", to_snake_case(a.name()), Target::Python.attribute(node, a.name(), a.value())))
             .collect();
 
         if let Some(assets) = assets.and_then(|a| assets_expression(Target::Python, &a)) {
@@ -1825,15 +1788,38 @@ mod tests {
         assert_eq!(to_camel_case("col-width"),    "colWidth");
     }
 
+    const TYPED: &str = r#"<lpdf version="1"><document debug="false"><section><layout>
+<grid cols="3" opacity=".5"><text bold="true" line-height="1.5">a</text><text line-height="m">b</text></grid>
+</layout></section></document></lpdf>"#;
+
     #[test]
-    fn test_attr_value_is_always_a_string() {
-        // The SDKs take every attribute as a string, so a boolean is the string "true".
-        assert_eq!(js_attr_value("true"),     "'true'");
-        assert_eq!(js_attr_value("false"),    "'false'");
-        assert_eq!(js_attr_value("a4"),       "'a4'");
-        assert_eq!(php_attr_value("true"),    "'true'");
-        assert_eq!(python_attr_value("true"), "'true'");
-        assert_eq!(dotnet_attr_value("true"), "\"true\"");
+    fn test_typed_attributes_are_written_as_literals_of_their_type() {
+        let code = |target: &str| codegen(TYPED, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+        let js = code("js");
+        for written in ["{ debug: false }", "L.grid({ cols: 3, opacity: 0.5 }", "L.text({ bold: true, lineHeight: 1.5 }", "{ lineHeight: 'm' }"] {
+            assert!(js.contains(written), "{written}: {js}");
+        }
+        let python = code("python");
+        for written in ["debug=False", "GridAttr(cols=3, opacity=0.5)", "TextAttr(bold=True, line_height=1.5)", "line_height='m'"] {
+            assert!(python.contains(written), "{written}: {python}");
+        }
+        let php = code("php");
+        for written in ["debug: false", "new GridAttr(cols: 3, opacity: 0.5)", "new TextAttr(bold: true, lineHeight: 1.5)", "lineHeight: 'm'"] {
+            assert!(php.contains(written), "{written}: {php}");
+        }
+        let dotnet = code("dotnet");
+        for written in ["Debug = false", "new() { Cols = 3, Opacity = 0.5 }", "new() { Bold = true, LineHeight = 1.5 }", "LineHeight = \"m\""] {
+            assert!(dotnet.contains(written), "{written}: {dotnet}");
+        }
+    }
+
+    #[test]
+    fn test_a_value_the_engine_refuses_is_refused_with_the_engine_s_error() {
+        let xml = TYPED.replace(r#"bold="true""#, r#"bold="1""#);
+        let error = codegen(&xml, &CodegenOptions { target: "js".into(), indent: 4 }).unwrap_err();
+        assert!(error.contains("bold must be true or false, not \"1\""), "{error}");
+        let error = codegen_fragment(r#"<grid cols="x"/>"#, &CodegenOptions { target: "js".into(), indent: 4 }).unwrap_err();
+        assert!(error.contains("cols must be a whole number from 1 to 12"), "{error}");
     }
 
     #[test]
@@ -1984,16 +1970,17 @@ mod tests {
         let code = |target: &str| codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
 
         assert!(code("js").contains(
-            "gradients: { fade: { type: 'linear', from: 'brand', to: '#ffffff', angle: '90' }, sunset: { type: 'radial', stops: [{ offset: '0%', color: '#f97316' }, { offset: '100%', color: '#8b5cf6' }] } }"
+            "gradients: { fade: { type: 'linear', from: 'brand', to: '#ffffff', angle: 90 }, sunset: { type: 'radial', stops: [{ offset: '0%', color: '#f97316' }, { offset: '100%', color: '#8b5cf6' }] } }"
         ), "{}", code("js"));
         assert!(code("python").contains(
-            "gradients={'fade': {'type': 'linear', 'from': 'brand', 'to': '#ffffff', 'angle': '90'}, 'sunset': {'type': 'radial', 'stops': [{'offset': '0%', 'color': '#f97316'}, {'offset': '100%', 'color': '#8b5cf6'}]}}"
+            "gradients={'fade': {'type': 'linear', 'from': 'brand', 'to': '#ffffff', 'angle': 90}, 'sunset': {'type': 'radial', 'stops': [{'offset': '0%', 'color': '#f97316'}, {'offset': '100%', 'color': '#8b5cf6'}]}}"
         ), "{}", code("python"));
         assert!(code("php").contains(
-            "gradients: ['fade' => ['type' => 'linear', 'from' => 'brand', 'to' => '#ffffff', 'angle' => '90'], 'sunset' => ['type' => 'radial', 'stops' => [['offset' => '0%', 'color' => '#f97316'], ['offset' => '100%', 'color' => '#8b5cf6']]]]"
+            "gradients: ['fade' => new Gradient(type: 'linear', from: 'brand', to: '#ffffff', angle: 90), 'sunset' => new Gradient(type: 'radial', stops: [new GradientStop(offset: '0%', color: '#f97316'), new GradientStop(offset: '100%', color: '#8b5cf6')])]"
         ), "{}", code("php"));
+        assert!(code("php").contains("use Lpdf\\Kit\\Gradient;") && code("php").contains("use Lpdf\\Kit\\GradientStop;"), "{}", code("php"));
         assert!(code("dotnet").contains(
-            "Gradients: new() { [\"fade\"] = new() { [\"type\"] = \"linear\", [\"from\"] = \"brand\", [\"to\"] = \"#ffffff\", [\"angle\"] = \"90\" }, [\"sunset\"] = new() { [\"type\"] = \"radial\", [\"stops\"] = new List<Dictionary<string, object>> { new() { [\"offset\"] = \"0%\", [\"color\"] = \"#f97316\" }, new() { [\"offset\"] = \"100%\", [\"color\"] = \"#8b5cf6\" } } } }"
+            "Gradients: new() { [\"fade\"] = new Gradient { Type = \"linear\", From = \"brand\", To = \"#ffffff\", Angle = 90 }, [\"sunset\"] = new Gradient { Type = \"radial\", Stops = [new GradientStop { Offset = \"0%\", Color = \"#f97316\" }, new GradientStop { Offset = \"100%\", Color = \"#8b5cf6\" }] } }"
         ), "{}", code("dotnet"));
     }
 
@@ -2157,9 +2144,9 @@ mod tests {
     fn test_a_code_is_written_with_its_lines_and_tabs_escaped_in_every_language() {
         let content = "\nfn a() {\n\tb(\"x\", '$y');\n}\n";
         let js = code_code("js", content);
-        assert!(js.contains(r#"L.code({ tabSize: '2' }, ['fn a() {\n\tb("x", \'$y\');\n}\n'])"#), "{js}");
+        assert!(js.contains(r#"L.code({ tabSize: 2 }, ['fn a() {\n\tb("x", \'$y\');\n}\n'])"#), "{js}");
         let python = code_code("python", content);
-        assert!(python.contains(r#"L.code(CodeAttr(tab_size='2'), ['fn a() {\n\tb("x", \'$y\');\n}\n'])"#), "{python}");
+        assert!(python.contains(r#"L.code(CodeAttr(tab_size=2), ['fn a() {\n\tb("x", \'$y\');\n}\n'])"#), "{python}");
         let dotnet = code_code("dotnet", content);
         assert!(dotnet.contains(r#"L.Code("#) && dotnet.contains(r#""fn a() {\n\tb(\"x\", '$y');\n}\n""#), "{dotnet}");
         let php = code_code("php", content);
@@ -2186,6 +2173,16 @@ mod tests {
         }
     }
 
+    /// An attribute as the SDKs put it in a tree: a boolean as `true` or `false`, the rest as text, as the spans have
+    /// no number.
+    fn tree_value(element: &Node, attribute: roxmltree::Attribute) -> serde_json::Value {
+        let parent = element.parent_element().map_or("", |p| p.tag_name().name());
+        match crate::attr_types::kind_of(parent, element.tag_name().name(), attribute.name()) {
+            Kind::Boolean => serde_json::Value::Bool(attribute.value() == "true"),
+            _ => serde_json::Value::String(attribute.value().to_string()),
+        }
+    }
+
     /// The code's XML, and the tree the SDKs would build from the strings and spans the generator writes for it.
     fn code_xml_and_tree_pdfs(content: &str) -> (Vec<u8>, Vec<u8>) {
         let xml = format!(
@@ -2198,10 +2195,8 @@ mod tests {
             .map(|piece| match piece {
                 TextPiece::Str(s) => serde_json::Value::String(s),
                 TextPiece::Span(span) => {
-                    let attrs: serde_json::Map<String, serde_json::Value> = span
-                        .attributes()
-                        .map(|a| (a.name().to_string(), serde_json::Value::String(a.value().to_string())))
-                        .collect();
+                    let attrs: serde_json::Map<String, serde_json::Value> =
+                        span.attributes().map(|a| (a.name().to_string(), tree_value(&span, a))).collect();
                     let inner: Vec<serde_json::Value> = text_pieces(&span)
                         .into_iter()
                         .filter_map(|p| if let TextPiece::Str(s) = p { Some(serde_json::Value::String(s)) } else { None })
@@ -2213,7 +2208,7 @@ mod tests {
         let tree = serde_json::json!({
             "version": 1, "type": "document", "attrs": {},
             "nodes": [{ "type": "section", "attrs": {}, "nodes": [{
-                "type": "layout", "nodes": [{ "type": "code", "attrs": { "tab-size": "3" }, "nodes": nodes }]
+                "type": "layout", "nodes": [{ "type": "code", "attrs": { "tab-size": 3 }, "nodes": nodes }]
             }]}]
         });
         (
@@ -2240,7 +2235,7 @@ mod tests {
     fn test_a_footnote_is_written_as_an_inline_call_holding_its_words() {
         let content = r#"Total<fn>The <span bold="true">note</span>.</fn> here"#;
         let js = text_code("js", "text", content);
-        assert!(js.contains("L.fn(NoAttr, ['The ', L.span({ bold: 'true' }, ['note']), '.'])"), "{js}");
+        assert!(js.contains("L.fn(NoAttr, ['The ', L.span({ bold: true }, ['note']), '.'])"), "{js}");
         let dotnet = text_code("dotnet", "text", content);
         assert!(dotnet.contains("L.Fn(") && dotnet.contains("\"The \""), "{dotnet}");
         let php = text_code("php", "text", content);
@@ -2253,7 +2248,7 @@ mod tests {
     fn test_space_before_a_span_stays_on_its_string() {
         let out = text_code("js", "text", r#"See the <span bold="true">docs</span>"#);
         assert!(out.contains("'See the ',\n"), "{out}");
-        assert!(out.contains("L.span({ bold: 'true' }, ['docs'])"), "{out}");
+        assert!(out.contains("L.span({ bold: true }, ['docs'])"), "{out}");
     }
 
     #[test]
@@ -2346,10 +2341,8 @@ mod tests {
                 .map(|piece| match piece {
                     TextPiece::Str(s) => serde_json::Value::String(s),
                     TextPiece::Span(inline) => {
-                        let attrs: serde_json::Map<String, serde_json::Value> = inline
-                            .attributes()
-                            .map(|a| (a.name().to_string(), serde_json::Value::String(a.value().to_string())))
-                            .collect();
+                        let attrs: serde_json::Map<String, serde_json::Value> =
+                            inline.attributes().map(|a| (a.name().to_string(), tree_value(&inline, a))).collect();
                         serde_json::json!({ "type": inline.tag_name().name(), "attrs": attrs, "nodes": inline_nodes(&inline) })
                     }
                 })
@@ -2696,10 +2689,10 @@ mod tests {
   </document>
 </lpdf>"##;
         for (target, row, attr) in [
-            ("js",     "lineHeight: { xs: '1', m: '1.2' }",                       "lineHeight: 'l'"),
-            ("dotnet", "LineHeight: new() { [\"xs\"] = \"1\", [\"m\"] = \"1.2\" }", "LineHeight = \"l\""),
-            ("php",    "lineHeight: ['xs' => '1', 'm' => '1.2']",                  "lineHeight: 'l'"),
-            ("python", "line_height={'xs': '1', 'm': '1.2'}",                      "line_height='l'"),
+            ("js",     "lineHeight: { xs: 1, m: 1.2 }",                       "lineHeight: 'l'"),
+            ("dotnet", "LineHeight: new() { [\"xs\"] = 1, [\"m\"] = 1.2 }", "LineHeight = \"l\""),
+            ("php",    "lineHeight: ['xs' => 1, 'm' => 1.2]",                  "lineHeight: 'l'"),
+            ("python", "line_height={'xs': 1, 'm': 1.2}",                      "line_height='l'"),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(row), "{target}: the row is not written as {row}\n{out}");
@@ -3008,7 +3001,7 @@ mod tests {
     }
 
     #[test]
-    fn test_python_bool_attr() {
+    fn test_python_bool_attr_is_a_python_boolean() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
   <document>
@@ -3019,7 +3012,7 @@ mod tests {
 </lpdf>"#;
         let opts = CodegenOptions { target: "python".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
-        assert!(out.contains("bold='true'"));
+        assert!(out.contains("bold=True"), "{out}");
     }
 
     #[test]
@@ -3158,10 +3151,10 @@ mod tests {
             <section><layout><bookmark label="Methods" level="2"/><text>Methods</text></layout></section>
         </document></lpdf>"#;
         for (target, bookmark, section) in [
-            ("js", "L.bookmark({ label: 'Methods', level: '2' })", "L.section({ type: 'toc' }"),
-            ("php", "L::bookmark(new BookmarkAttr(label: 'Methods', level: '2'))", "L::section(new SectionAttr(type: 'toc')"),
-            ("python", "L.bookmark(BookmarkAttr(label='Methods', level='2'))", "L.section(SectionAttr(type='toc')"),
-            ("dotnet", "L.Bookmark(new() { Label = \"Methods\", Level = \"2\" })", "L.Section(new() { Type = \"toc\" }"),
+            ("js", "L.bookmark({ label: 'Methods', level: 2 })", "L.section({ type: 'toc' }"),
+            ("php", "L::bookmark(new BookmarkAttr(label: 'Methods', level: 2))", "L::section(new SectionAttr(type: 'toc')"),
+            ("python", "L.bookmark(BookmarkAttr(label='Methods', level=2))", "L.section(SectionAttr(type='toc')"),
+            ("dotnet", "L.Bookmark(new() { Label = \"Methods\", Level = 2 })", "L.Section(new() { Type = \"toc\" }"),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(bookmark), "{target}: {out}");

@@ -181,7 +181,7 @@ pub enum SectionChild {
 const DEFAULT_LAYOUT_MARGIN: f32 = 36.0;
 
 /// What to write instead of `margin` on a document or a section, which no longer have one.
-const MARGIN_MOVED: &str = "margin moved to <layout>; set it there, in each section: only the flowing content keeps to a margin";
+pub(crate) const MARGIN_MOVED: &str = "margin moved to <layout>; set it there, in each section: only the flowing content keeps to a margin";
 
 /// Per-section overrides; `None` fields inherit document-level defaults.
 #[derive(Debug, Clone, Default)]
@@ -1213,6 +1213,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
             root.tag_name().name(), node_loc(&root)
         ));
     }
+    crate::attr_types::check_xml(root)?;
 
     // ── Pass 0: collect <assets> ─────────────────────────────────────────────
     let mut asset_fonts:  HashMap<String, FontDef>   = HashMap::new();
@@ -1246,9 +1247,6 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
         match child.tag_name().name() {
             "assets" | "tokens" => { /* already handled */ }
             "document" => {
-                if child.attribute("font-size").is_some() {
-                    return Err("<document> does not allow font-size".into());
-                }
                 if let Some(v) = child.attribute("font") {
                     doc_font = Some(v.to_string());
                 }
@@ -1257,9 +1255,6 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                 }
                 if let Some("landscape") = child.attribute("orientation") {
                     doc_size = (doc_size.1, doc_size.0);
-                }
-                if child.attribute("margin").is_some() {
-                    return Err(format!("<document>{}: {MARGIN_MOVED}", node_loc(&child)));
                 }
                 if let Some(v) = child.attribute("background") {
                     doc_background = Some(tokens.resolve_fill(v)?);
@@ -1900,9 +1895,6 @@ fn parse_section_elem(
     asset_images:   &HashMap<String, String>,
     markdown:       &markdown::Assets,
 ) -> Result<Section, String> {
-    if elem.attribute("margin").is_some() {
-        return Err(format!("<section>{}: {MARGIN_MOVED}", node_loc(elem)));
-    }
     // Inherit doc-level defaults, then apply section overrides.
     let mut size       = doc_size;
     let mut background = doc_background;
@@ -2877,7 +2869,8 @@ fn opt_attr(elem: &roxmltree::Node, name: &str) -> String {
 
 // ── Shared node construction helpers ─────────────────────────────────────────
 
-/// Read a string attribute from a JSON node's "attrs" object.
+/// Read an attribute from a JSON node's "attrs" object: text, since the attribute check has written each typed value
+/// as its text (`attr_types`).
 pub(crate) fn jattr<'a>(json: &'a serde_json::Value, key: &str) -> Option<&'a str> {
     json.get("attrs")?.get(key)?.as_str()
 }
@@ -2907,7 +2900,8 @@ impl<'a> Attrs for JsonAttrs<'a> {
     fn get(&self, key: &str) -> Option<&str> { jattr(self.0, key) }
 
     fn each(&self) -> impl Iterator<Item = (&str, &str)> where Self: Sized {
-        // `get` reads only string values, so any other value is skipped here too.
+        // The attribute check has written every typed value as its text, so only a null is left to skip, as `get`
+        // does.
         self.0.get("attrs").and_then(|v| v.as_object()).into_iter().flatten()
             .filter_map(|(name, v)| v.as_str().map(|v| (name.as_str(), v)))
     }
@@ -3353,9 +3347,6 @@ fn apply_barcode_attrs(
     a:    &impl Attrs,
     tokens: &Tokens,
 ) -> Result<(), String> {
-    if a.get("size").is_some() {
-        return Err("'size' removed; use 'width' or 'height', which a QR code takes either of".to_string());
-    }
     let type_str = a.get("type")
         .ok_or_else(|| "<barcode> missing required attribute 'type'".to_string())?;
     node.barcode_type = Some(match type_str {
@@ -3503,7 +3494,7 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
 
 /// Parse a kit tree with the files its `src` attributes name loaded in `resources`.
 pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, String> {
-    let root: serde_json::Value = serde_json::from_str(json)
+    let mut root: serde_json::Value = serde_json::from_str(json)
         .map_err(|e| format!("JSON parse error: {e}"))?;
 
     match root.get("version").and_then(|v| v.as_u64()) {
@@ -3514,6 +3505,7 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
     if root.get("type").and_then(|v| v.as_str()) != Some("document") {
         return Err("tree root 'type' must be 'document'".into());
     }
+    crate::attr_types::check_tree(&mut root)?;
 
     let empty_map = serde_json::Map::new();
     let attrs = root.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty_map);
@@ -3574,9 +3566,6 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
     let doc_orient    = attrs.get("orientation").and_then(|v| v.as_str());
     let doc_bg_s      = attrs.get("background") .and_then(|v| v.as_str());
 
-    if attrs.contains_key("margin") {
-        return Err(format!("document: {MARGIN_MOVED}"));
-    }
     let mut doc_size = if let Some(s) = doc_size_str {
         parse_page_size(s)?
     } else {
@@ -3696,16 +3685,10 @@ pub fn parse_tree_tokens_pub(
     Ok(())
 }
 
-/// Read one gradient of a Kit tree's tokens: `{ type, from, to, angle, stops: [{ offset, color }] }`. The angle
-/// may be a number or a string.
+/// Read one gradient of a Kit tree's tokens: `{ type, from, to, angle, stops: [{ offset, color }] }`. The attribute
+/// check has written the angle, a number in the tree, as its text.
 fn parse_tree_gradient(name: &str, def: &serde_json::Value, tokens: &Tokens) -> Result<Gradient, String> {
-    let text = |key: &str| {
-        def.get(key).and_then(|v| match v {
-            serde_json::Value::String(s) => Some(s.clone()),
-            serde_json::Value::Number(n) => Some(n.to_string()),
-            _                            => None,
-        })
-    };
+    let text = |key: &str| def.get(key).and_then(|v| v.as_str()).map(str::to_string);
     let kind = text("type").ok_or_else(|| format!("gradient '{name}': missing type"))?;
     let (angle, from, to) = (text("angle"), text("from"), text("to"));
 
@@ -3743,9 +3726,6 @@ fn parse_tree_section(
     asset_images:   &HashMap<String, String>,
     markdown:       &markdown::Assets,
 ) -> Result<Section, String> {
-    if json.get("attrs").is_some_and(|attrs| attrs.get("margin").is_some()) {
-        return Err(format!("section: {MARGIN_MOVED}"));
-    }
     let mut size       = doc_size;
     let mut background = doc_background;
     let a = JsonAttrs(json);
@@ -4115,7 +4095,7 @@ mod tests {
         for (attrs, expected) in [
             (r#"type="roman""#, "expected bullet or number"),
             (r#"type="number" format="greek""#, "expected decimal, lower-alpha"),
-            (r#"type="number" start="one""#, "expected a whole number"),
+            (r#"type="number" start="one""#, r#"start must be a whole number, not "one""#),
             (r#"bullet="star""#, "expected disc, circle, square or dash"),
         ] {
             let err = list_error(&format!("<list {attrs}><li><text>A</text></li></list>"));
@@ -4197,7 +4177,7 @@ mod tests {
     fn a_tab_size_is_a_whole_number_of_columns_from_1_to_16() {
         for bad in ["0", "17", "two", "-1", "2.5"] {
             let err = parse(&minimal(&format!(r#"<code tab-size="{bad}">x</code>"#))).unwrap_err();
-            assert!(err.contains("invalid tab-size value") && err.contains(bad), "{err}");
+            assert!(err.contains(&format!(r#"tab-size must be a whole number from 1 to 16, not "{bad}""#)), "{err}");
         }
         for good in ["1", "16"] {
             assert!(parse(&minimal(&format!(r#"<code tab-size="{good}">x</code>"#))).is_ok());
@@ -4253,8 +4233,8 @@ mod tests {
             r#"<span> a</span><code-span> b</code-span><code-span> c</code-span></text>"#,
         ));
         let tree = first_tree_node(concat!(
-            r#"{"type":"text","attrs":{},"nodes":[{"type":"span","attrs":{"bold":"true"},"nodes":["per "]},"#,
-            r#"{"type":"code-span","attrs":{},"nodes":["x"]},{"type":"span","attrs":{"bold":"true"},"nodes":[" call"]},"#,
+            r#"{"type":"text","attrs":{},"nodes":[{"type":"span","attrs":{"bold":true},"nodes":["per "]},"#,
+            r#"{"type":"code-span","attrs":{},"nodes":["x"]},{"type":"span","attrs":{"bold":true},"nodes":[" call"]},"#,
             r#"{"type":"span","attrs":{},"nodes":[" a"]},{"type":"code-span","attrs":{},"nodes":[" b"]},"#,
             r#"{"type":"code-span","attrs":{},"nodes":[" c"]}]}"#,
         ));
@@ -4268,7 +4248,7 @@ mod tests {
         let xml = first_node(r#"<text>the <code-span>x</code-span>'s and <code-span>y</code-span><span bold="true">'s</span></text>"#);
         let tree = first_tree_node(concat!(
             r#"{"type":"text","attrs":{},"nodes":["the ",{"type":"code-span","attrs":{},"nodes":["x"]},"'s and ","#,
-            r#"{"type":"code-span","attrs":{},"nodes":["y"]},{"type":"span","attrs":{"bold":"true"},"nodes":["'s"]}]}"#,
+            r#"{"type":"code-span","attrs":{},"nodes":["y"]},{"type":"span","attrs":{"bold":true},"nodes":["'s"]}]}"#,
         ));
         let attached = [("the", false), ("x", true), ("'s and", false), ("y", true), ("'s", false)];
         assert_eq!(spaced_runs(&xml), attached, "XML");
@@ -4278,7 +4258,7 @@ mod tests {
     #[test]
     fn a_code_of_a_tree_is_read_like_the_code_of_its_xml() {
         let tree = r##"{"version":1,"type":"document","attrs":{},"nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","nodes":[
-            {"type":"code","attrs":{"tab-size":"2"},"nodes":["\nlet ",{"type":"span","attrs":{"color":"#c0392b"},"nodes":["x"]},
+            {"type":"code","attrs":{"tab-size":2},"nodes":["\nlet ",{"type":"span","attrs":{"color":"#c0392b"},"nodes":["x"]},
             " = 1;\n"]}]}]}]}"##;
         let mut doc = parse_tree(tree).unwrap();
         let code = doc.section_layouts().remove(0).children.remove(0);
@@ -4403,7 +4383,7 @@ mod tests {
         assert_eq!(text(""), (None, false));
         for value in ["0", "-1", "two", "1.5"] {
             let err = parse(&minimal(&format!(r#"<text max-lines="{value}">Hi</text>"#))).unwrap_err();
-            assert!(err.contains(&format!("invalid max-lines '{value}'")) && err.contains("at line"), "{err}");
+            assert!(err.contains(&format!(r#"max-lines must be a whole number of 1 or more, not "{value}""#)) && err.contains("at line"), "{err}");
         }
     }
 
@@ -4419,7 +4399,12 @@ mod tests {
         assert_eq!(line_height(r#"line-height="xs""#), 1.0);
         assert_eq!(line_height(r#"line-height="m""#), 1.2);
         assert_eq!(line_height(r#"line-height="xxl""#), 2.0);
-        for value in ["0", "-1", "tall", "1.5pt", ""] {
+        // A number out of range is refused by its type; a name the tokens don't have by the parser.
+        for value in ["0", "-1"] {
+            let err = parse(&minimal(&format!(r#"<text line-height="{value}">Hi</text>"#))).unwrap_err();
+            assert!(err.contains(&format!(r#"line-height must be a name or a number above 0, not "{value}""#)) && err.contains("at line"), "{err}");
+        }
+        for value in ["tall", "1.5pt", ""] {
             let err = parse(&minimal(&format!(r#"<text line-height="{value}">Hi</text>"#))).unwrap_err();
             assert!(err.contains(&format!("invalid line-height '{value}'")) && err.contains("at line"), "{err}");
         }
@@ -4446,7 +4431,7 @@ mod tests {
         assert!(err.contains("<line-height> missing 'xxl' attribute"), "{err}");
         for bad in ["0", "-1", "1.5pt", "tall"] {
             let err = tokens(&format!(r#"<line-height xs="{bad}" s="1.1" m="1.2" l="1.4" xl="1.6" xxl="2"/>"#)).unwrap_err();
-            assert!(err.contains("<line-height> 'xs': invalid factor") && err.contains(&format!("'{bad}'")), "{err}");
+            assert!(err.contains("<line-height>") && err.contains(&format!(r#"xs must be a number above 0, not "{bad}""#)), "{err}");
         }
     }
 
@@ -4833,7 +4818,7 @@ mod tests {
             r#"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
                 {{"type":"layout","attrs":{{}},"nodes":[{shape}]}}]}}]}}"#
         );
-        let mut doc = parse_tree(&tree(r##"{"type":"shape","attrs":{"type":"circle","r":"10pt","fill":"#ff0000","opacity":"0.5"}}"##)).unwrap();
+        let mut doc = parse_tree(&tree(r##"{"type":"shape","attrs":{"type":"circle","r":"10pt","fill":"#ff0000","opacity":0.5}}"##)).unwrap();
         let shape = &doc.section_layouts()[0].children[0];
         assert_eq!(shape.kind, NodeKind::Shape);
         assert_eq!((shape.width_constraint, shape.img_height_constraint, shape.opacity), (Some(20.0), Some(20.0), 0.5));
@@ -4891,7 +4876,7 @@ mod tests {
                 {{"type":"layout","attrs":{{}},"nodes":[{text}]}}]}}]}}"#
         );
         let mut doc = parse_tree(&tree(
-            r#"{"type":"text","attrs":{},"nodes":["The model",{"type":"fn","attrs":{},"nodes":["First ",{"type":"span","attrs":{"bold":"true"},"nodes":["proposed"]}]}," describes."]}"#,
+            r#"{"type":"text","attrs":{},"nodes":["The model",{"type":"fn","attrs":{},"nodes":["First ",{"type":"span","attrs":{"bold":true},"nodes":["proposed"]}]}," describes."]}"#,
         )).unwrap();
         let runs = &doc.section_layouts()[0].children[0].text_runs;
         let texts: Vec<_> = runs.iter().map(|r| (r.text.as_str(), r.footnote.is_some())).collect();
@@ -5598,7 +5583,7 @@ mod tests {
             boxed("column", r##""color":"#111111""##, &[
                 text("", "a"),
                 boxed("row", r##""color":"#222222""##, &[text("", "b"), text(r##""color":"#333333""##, "c")]),
-                boxed("grid", r#""cols":"2""#, &[text("", "d")]),
+                boxed("grid", r#""cols":2"#, &[text("", "d")]),
                 boxed("frame", r#""color":"primary""#, &[text("", "e")]),
             ]),
             boxed("table", r#""cols":"1fr""#, &[boxed("tr", "", &[boxed("td", r##""color":"#444444""##, &[text("", "f")])])]),
@@ -5658,7 +5643,7 @@ mod tests {
     #[test]
     fn a_box_in_a_kit_tree_reads_its_opacity() {
         let json = r#"{"version":1,"type":"document","attrs":{},"nodes":[{"type":"section","attrs":{},"nodes":[
-            {"type":"layout","attrs":{},"nodes":[{"type":"column","attrs":{"opacity":"0.5"},"nodes":[]}]}]}]}"#;
+            {"type":"layout","attrs":{},"nodes":[{"type":"column","attrs":{"opacity":0.5},"nodes":[]}]}]}]}"#;
         let mut doc = parse_tree(json).unwrap();
         assert_eq!(doc.section_layouts()[0].children[0].opacity, 0.5);
     }
@@ -5667,7 +5652,7 @@ mod tests {
     fn an_opacity_that_is_not_a_number_from_0_to_1_says_so() {
         for opacity in ["1.5", "-0.1", "half", "", "NaN"] {
             let err = parse(&minimal(&format!(r#"<column opacity="{opacity}"/>"#))).unwrap_err();
-            assert!(err.contains("<column>") && err.contains(&format!("invalid opacity '{opacity}'")), "{err}");
+            assert!(err.contains("<column>") && err.contains(&format!(r#"opacity must be a number from 0 to 1, not "{opacity}""#)), "{err}");
         }
     }
 
@@ -5900,8 +5885,8 @@ mod tests {
         let head = r#"<assets><image name="logo"/></assets>"#;
         for (body, expected) in [
             (r#"<text-at x="0pt" y="0pt" max-lines="2">Hi</text-at>"#, "'max-lines' of 2 needs a 'width'"),
-            (r#"<text-at x="0pt" y="0pt" max-lines="0">Hi</text-at>"#, "invalid max-lines"),
-            (r#"<text-at x="0pt" y="0pt" line-height="0">Hi</text-at>"#, "invalid line-height"),
+            (r#"<text-at x="0pt" y="0pt" max-lines="0">Hi</text-at>"#, "max-lines must be a whole number of 1 or more"),
+            (r#"<text-at x="0pt" y="0pt" line-height="0">Hi</text-at>"#, "line-height must be a name or a number above 0"),
             (r#"<text-at x="0pt" y="0pt" line-height="tall">Hi</text-at>"#, "invalid line-height 'tall'"),
             (r#"<text-at x="0pt" y="0pt" width="fill">Hi</text-at>"#, "invalid width"),
             (r#"<text-at x="0pt" y="0pt" data-source="items">Hi</text-at>"#, "a list belongs in the layout"),
@@ -5995,8 +5980,7 @@ mod tests {
             let err = parse(&minimal(&format!(r#"<text {attr}="{value}">Words</text>"#))).unwrap_err();
             assert!(err.contains("<text>"), "{err}");
             assert!(err.contains("at line"), "{err}");
-            assert!(err.contains(&format!("invalid {attr} value: '{value}'")), "{err}");
-            assert!(err.contains("1 to 10"), "{err}"); // allowed values present
+            assert!(err.contains(&format!(r#"{attr} must be a whole number from 1 to 10, not "{value}""#)), "{err}");
         }
     }
 
@@ -6022,13 +6006,20 @@ mod tests {
 
     #[test]
     fn err_invalid_colspan() {
+        // A value that isn't a whole number of 1 or more is refused by its type; one past what a table can hold by
+        // the parser.
         for value in ["0", "-1", "two", "1.5", "", "70000"] {
             let err = parse(&minimal(&format!(
                 r#"<table cols="1fr"><tr><td colspan="{value}"><text>A</text></td></tr></table>"#
             ))).unwrap_err();
             assert!(err.contains("<td>"), "{err}");
             assert!(err.contains("at line"), "{err}");
-            assert!(err.contains(&format!("invalid colspan value: '{value}'")), "{err}");
+            let says = if value == "70000" {
+                format!("invalid colspan value: '{value}'")
+            } else {
+                format!(r#"colspan must be a whole number of 1 or more, not "{value}""#)
+            };
+            assert!(err.contains(&says), "{err}");
         }
     }
 
@@ -6064,13 +6055,20 @@ mod tests {
 
     #[test]
     fn err_invalid_rowspan() {
+        // A value that isn't a whole number of 1 or more is refused by its type; one past what a table can hold by
+        // the parser.
         for value in ["0", "-1", "two", "1.5", "", "70000"] {
             let err = parse(&minimal(&format!(
                 r#"<table cols="1fr"><tr><td rowspan="{value}"><text>A</text></td></tr></table>"#
             ))).unwrap_err();
             assert!(err.contains("<td>"), "{err}");
             assert!(err.contains("at line"), "{err}");
-            assert!(err.contains(&format!("invalid rowspan value: '{value}'")), "{err}");
+            let says = if value == "70000" {
+                format!("invalid rowspan value: '{value}'")
+            } else {
+                format!(r#"rowspan must be a whole number of 1 or more, not "{value}""#)
+            };
+            assert!(err.contains(&says), "{err}");
         }
     }
 
@@ -6489,7 +6487,7 @@ mod tests {
                 {"type":"layout","nodes":[{"type":"text","attrs":{},"nodes":["TOC"]}]}]},
             {"type":"section","attrs":{},"nodes":[
                 {"type":"layout","nodes":[
-                    {"type":"bookmark","attrs":{"label":"Methods","level":"2"}},
+                    {"type":"bookmark","attrs":{"label":"Methods","level":2}},
                     {"type":"text","attrs":{},"nodes":["Methods"]}]}]}]}"#;
         let mut doc = parse_tree(json).unwrap();
         let layouts = doc.section_layouts();
@@ -6574,10 +6572,10 @@ mod tests {
     }
 
     #[test]
-    fn a_kit_tree_defines_gradients_with_a_number_or_a_string_for_the_angle() {
+    fn a_kit_tree_defines_gradients_with_a_number_for_the_angle() {
         let json = r##"{"version":1,"type":"document","attrs":{"tokens":{"colors":{"brand":"#112233"},"gradients":{
             "fade":{"type":"linear","from":"brand","to":"#fff","angle":90},
-            "same":{"type":"linear","from":"brand","to":"#fff","angle":"90"},
+            "same":{"type":"linear","from":"brand","to":"#fff","angle":90.0},
             "multi":{"type":"radial","stops":[{"offset":"0%","color":"#f00"},{"offset":"100%","color":"brand"}]}}}},
             "nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[
                 {"type":"column","attrs":{"background":"gradient:fade"},"nodes":[]}]}]}]}"##;
@@ -6586,6 +6584,9 @@ mod tests {
         assert_eq!(doc.gradients["fade"].angle, 90.0);
         assert_eq!(doc.gradients["multi"].stops, vec![stop_at(0.0, "#ff0000"), stop_at(1.0, "#112233")]);
         assert_eq!(doc.section_layouts()[0].children[0].background.as_deref(), Some("gradient:fade"));
+
+        let error = parse_tree(&json.replacen(r#""angle":90}"#, r#""angle":"90"}"#, 1)).unwrap_err();
+        assert_eq!(error, r#"gradient: angle must be a number, not "90""#);
     }
 
     #[test]
@@ -6643,7 +6644,7 @@ mod tests {
         for (gradient, says) in [
             (r##"<gradient name="fade" type="linear" from="#f00"/>"##, "gradient 'fade': give from and to"),
             (r##"<gradient name="fade" type="conic" from="#f00" to="#00f"/>"##, "invalid type 'conic'"),
-            (r##"<gradient name="fade" type="linear" from="#f00" to="#00f" angle="up"/>"##, "invalid angle 'up'"),
+            (r##"<gradient name="fade" type="linear" from="#f00" to="#00f" angle="up"/>"##, r#"angle must be a number, not "up""#),
             (r##"<gradient type="linear" from="#f00" to="#00f"/>"##, "missing required attribute 'name'"),
             (r##"<gradient name="fade" from="#f00" to="#00f"/>"##, "missing required attribute 'type'"),
             (r##"<gradient name="fade" type="linear"><stop color="#f00"/></gradient>"##, "<stop>"),

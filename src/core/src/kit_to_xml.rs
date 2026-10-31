@@ -28,7 +28,8 @@ fn escape_text(s: &str) -> String {
 // ── Attribute helpers ─────────────────────────────────────────────────────────
 
 /// Serialise a JSON object's string-valued entries as XML attribute pairs,
-/// skipping the keys listed in `skip`.
+/// skipping the keys listed in `skip`. The attribute check has written each typed value as its text, and refused a
+/// value of the wrong JSON type, so only a null is left out.
 fn attrs_str(obj: &serde_json::Map<String, Value>, skip: &[&str]) -> String {
     let mut out = String::new();
     for (k, v) in obj {
@@ -118,8 +119,8 @@ fn render_tokens(tokens: &serde_json::Map<String, Value>, depth: usize) -> Strin
     lines.join("\n")
 }
 
-/// One `<gradient>` of the tokens, from its entry in the Kit tree: `{ type, from, to, angle, stops }`. A number
-/// is written as it is, so the angle may be one.
+/// One `<gradient>` of the tokens, from its entry in the Kit tree: `{ type, from, to, angle, stops }`. The attribute
+/// check has written the angle, a number in the tree, as its text.
 fn render_gradient(name: &str, gradient: &Value, depth: usize) -> Vec<String> {
     let pad = "  ".repeat(depth);
     let Some(gradient) = gradient.as_object() else {
@@ -127,13 +128,8 @@ fn render_gradient(name: &str, gradient: &Value, depth: usize) -> Vec<String> {
     };
     let mut tag = format!("{pad}<gradient name=\"{}\"", escape_attr(name));
     for key in ["type", "from", "to", "angle"] {
-        let text = match gradient.get(key) {
-            Some(Value::String(s)) => Some(s.clone()),
-            Some(Value::Number(n)) => Some(n.to_string()),
-            _                      => None,
-        };
-        if let Some(text) = text {
-            tag.push_str(&format!(" {key}=\"{}\"", escape_attr(&text)));
+        if let Some(text) = gradient.get(key).and_then(Value::as_str) {
+            tag.push_str(&format!(" {key}=\"{}\"", escape_attr(text)));
         }
     }
     let stops: Vec<&Value> = gradient.get("stops").and_then(|v| v.as_array()).into_iter().flatten().collect();
@@ -484,7 +480,7 @@ fn render_layout_node(node: &Value, depth: usize) -> String {
 /// lpdf XML string. The output is well-formed and passes through `render_pdf`
 /// without modification.
 pub fn kit_to_xml(json: &str) -> Result<String, String> {
-    let root: Value = serde_json::from_str(json)
+    let mut root: Value = serde_json::from_str(json)
         .map_err(|e| format!("JSON parse error: {e}"))?;
 
     if root.get("version").and_then(|v| v.as_u64()) != Some(1) {
@@ -493,6 +489,9 @@ pub fn kit_to_xml(json: &str) -> Result<String, String> {
     if root.get("type").and_then(|v| v.as_str()) != Some("document") {
         return Err("kit JSON root type must be 'document'".into());
     }
+    // Every attribute is checked against its type and written as its text, so a value of the wrong JSON type is an
+    // error here as on the direct render, never one that is left out of the XML.
+    crate::attr_types::check_tree(&mut root)?;
 
     let empty = serde_json::Map::new();
     let attrs = root.get("attrs").and_then(|v| v.as_object()).unwrap_or(&empty);
@@ -682,7 +681,7 @@ mod tests {
                 "tokens": {
                     "space": { "m": "8pt", "l": "16pt" },
                     "height": { "m": "30pt" },
-                    "text-size":  { "body": "12pt" }
+                    "text-size":  { "s": "12pt" }
                 }
             },
             "nodes": [{"type":"section","attrs":{},"nodes":[]}]
@@ -691,7 +690,7 @@ mod tests {
         assert!(xml.contains("<tokens>"));
         assert!(xml.contains("<space ") && xml.contains(r#"m="8pt""#));
         assert!(xml.contains("<height ") && xml.contains(r#"m="30pt""#));
-        assert!(xml.contains("<text-size ") && xml.contains(r#"body="12pt""#));
+        assert!(xml.contains("<text-size ") && xml.contains(r#"s="12pt""#));
     }
 
     #[test]
@@ -937,7 +936,7 @@ mod tests {
     fn a_code_and_a_code_span_render_the_same_from_a_tree_and_from_its_xml() {
         let kit = doc_with_layout_child(
             r##"{"type":"column","attrs":{},"nodes":[
-                {"type":"code","attrs":{"tab-size":"2","font-size":"s"},"nodes":["\nif a < b && c {\n\treturn ",
+                {"type":"code","attrs":{"tab-size":2,"font-size":"s"},"nodes":["\nif a < b && c {\n\treturn ",
                     {"type":"span","attrs":{"color":"#c0392b"},"nodes":["x"]},";\n}\n"]},
                 {"type":"text","attrs":{},"nodes":["Run ",{"type":"code-span","attrs":{"background":"#ffff00"},"nodes":["cargo test"]}," now"]}]}"##,
         );
@@ -994,16 +993,16 @@ mod tests {
 
     #[test]
     fn a_tree_text_with_widows_out_of_range_is_rejected() {
-        let err = crate::parse::parse_tree(&doc_with_text_attrs(r#"{"widows":"11"}"#)).err().expect("widows go from 1 to 10");
-        assert!(err.contains("invalid widows value: '11'"), "{err}");
+        let err = crate::parse::parse_tree(&doc_with_text_attrs(r#"{"widows":11}"#)).err().expect("widows go from 1 to 10");
+        assert!(err.contains("text: widows must be a whole number from 1 to 10, not 11"), "{err}");
     }
 
     #[test]
     fn a_tree_table_cell_takes_colspan_and_a_row_that_spans_too_much_is_rejected() {
         let table = |first: &str, second: &str| doc_with_layout_child(&format!(
             r#"{{"type":"table","attrs":{{"cols":"1fr 1fr"}},"nodes":[{{"type":"tr","attrs":{{}},"nodes":[
-                {{"type":"td","attrs":{{"colspan":"{first}"}},"nodes":[{{"type":"text","attrs":{{}},"nodes":["A"]}}]}},
-                {{"type":"td","attrs":{{"colspan":"{second}"}},"nodes":[{{"type":"text","attrs":{{}},"nodes":["B"]}}]}}]}}]}}"#
+                {{"type":"td","attrs":{{"colspan":{first}}},"nodes":[{{"type":"text","attrs":{{}},"nodes":["A"]}}]}},
+                {{"type":"td","attrs":{{"colspan":{second}}},"nodes":[{{"type":"text","attrs":{{}},"nodes":["B"]}}]}}]}}]}}"#
         ));
         let mut doc = crate::parse::parse_tree(&table("1", "1")).expect("two cells fit two columns");
         let layouts = doc.section_layouts();
@@ -1013,7 +1012,7 @@ mod tests {
         assert!(err.contains("span 3 columns, but the table has 2"), "{err}");
 
         let err = crate::parse::parse_tree(&table("0", "1")).err().expect("colspan starts at 1");
-        assert!(err.contains("invalid colspan value: '0'"), "{err}");
+        assert!(err.contains("td: colspan must be a whole number of 1 or more, not 0"), "{err}");
     }
 
     #[test]
@@ -1027,24 +1026,24 @@ mod tests {
         ));
 
         let mut doc = crate::parse::parse_tree(&table(&[
-            tr(&[td(r#""rowspan":"2""#, "A"), td("", "B")]),
+            tr(&[td(r#""rowspan":2"#, "A"), td("", "B")]),
             tr(&[td("", "C")]),
         ])).expect("the second row has the one free column to itself");
         let layouts = doc.section_layouts();
         assert_eq!(layouts[0].children[0].children[0].children[0].row_span, 2);
 
-        let err = crate::parse::parse_tree(&table(&[tr(&[td("", "A"), td("", "B")]), tr(&[td(r#""rowspan":"2""#, "C")])]))
+        let err = crate::parse::parse_tree(&table(&[tr(&[td("", "A"), td("", "B")]), tr(&[td(r#""rowspan":2"#, "C")])]))
             .err().expect("the span runs past the last row");
         assert!(err.contains("a rowspan that runs 1 row past the last row of the table"), "{err}");
 
         let err = crate::parse::parse_tree(&table(&[
-            tr(&[td(r#""rowspan":"2""#, "A"), td("", "B")]),
+            tr(&[td(r#""rowspan":2"#, "A"), td("", "B")]),
             tr(&[td("", "C"), td("", "D")]),
         ])).err().expect("the second row has a cell too many");
         assert!(err.contains("span 2 columns, but only 1 of the table's 2 are free"), "{err}");
 
-        let err = crate::parse::parse_tree(&table(&[tr(&[td(r#""rowspan":"0""#, "A")])])).err().expect("rowspan starts at 1");
-        assert!(err.contains("invalid rowspan value: '0'"), "{err}");
+        let err = crate::parse::parse_tree(&table(&[tr(&[td(r#""rowspan":0"#, "A")])])).err().expect("rowspan starts at 1");
+        assert!(err.contains("td: rowspan must be a whole number of 1 or more, not 0"), "{err}");
     }
 
     #[test]
@@ -1069,13 +1068,13 @@ mod tests {
 
     #[test]
     fn attribute_names_are_written_as_they_are() {
-        let xml = kit_to_xml(&doc_with_text_attrs(r#"{"align":"right","bold":"true"}"#)).unwrap();
+        let xml = kit_to_xml(&doc_with_text_attrs(r#"{"align":"right","bold":true}"#)).unwrap();
         assert!(xml.contains(r#"<text align="right" bold="true">"#), "{xml}");
     }
 
     #[test]
     fn text_from_the_builder_renders_the_same_from_the_tree_and_from_the_xml() {
-        let kit = doc_with_text_attrs(r#"{"align":"right","bold":"true"}"#);
+        let kit = doc_with_text_attrs(r#"{"align":"right","bold":true}"#);
         let (from_tree, from_xml) = rendered_both_ways(&kit);
         assert_eq!(from_tree, from_xml);
     }
@@ -1087,7 +1086,7 @@ mod tests {
                 r#"{{"type":"text","attrs":{attrs},"nodes":["A text long enough to wrap to a few lines at this width"]}}"#
             ))
         };
-        let kit = text(r#"{"width":"60pt","max-lines":"2","ellipsis":"true"}"#);
+        let kit = text(r#"{"width":"60pt","max-lines":2,"ellipsis":true}"#);
         let (from_tree, from_xml) = rendered_both_ways(&kit);
         assert_eq!(from_tree, from_xml);
         assert_ne!(from_tree, render_tree(&text(r#"{"width":"60pt"}"#)), "the tree's cap is not read");
@@ -1099,11 +1098,11 @@ mod tests {
             doc_with_layout_child(&format!(
                 r##"{{"type":"column","attrs":{attrs},"nodes":[
                     {{"type":"text","attrs":{{}},"nodes":["Inherits"]}},
-                    {{"type":"row","attrs":{{"opacity":"0.25"}},"nodes":[{{"type":"text","attrs":{{"color":"#00aa00"}},"nodes":["Own"]}}]}}]}}"##
+                    {{"type":"row","attrs":{{"opacity":0.25}},"nodes":[{{"type":"text","attrs":{{"color":"#00aa00"}},"nodes":["Own"]}}]}}]}}"##
             ))
         };
         let plain = render_tree(&column(r##"{"background":"#cccccc"}"##));
-        for attrs in [r##"{"background":"#cccccc","color":"danger"}"##, r##"{"background":"#cccccc","opacity":"0.5"}"##] {
+        for attrs in [r##"{"background":"#cccccc","color":"danger"}"##, r##"{"background":"#cccccc","opacity":0.5}"##] {
             let (from_tree, from_xml) = rendered_both_ways(&column(attrs));
             assert_eq!(from_tree, from_xml, "{attrs}");
             assert_ne!(from_tree, plain, "the tree's {attrs} is not read");
@@ -1203,7 +1202,7 @@ mod tests {
         let none = render_tree(&layout(""));
         for shape in [
             r##"{"type":"shape","attrs":{"type":"rect","width":"60pt","height":"12pt","radius":"6pt","fill":"#00ff00","stroke":"#000000","stroke-width":"2pt"}}"##,
-            r##"{"type":"shape","attrs":{"type":"circle","r":"8pt","fill":"#0000ff","opacity":"0.5"}}"##,
+            r##"{"type":"shape","attrs":{"type":"circle","r":"8pt","fill":"#0000ff","opacity":0.5}}"##,
             r##"{"type":"shape","attrs":{"type":"ellipse","width":"40pt","height":"20pt","stroke":"#ff0000","stroke-dash":"3 2"}}"##,
         ] {
             let (from_tree, from_xml) = rendered_both_ways(&layout(shape));
@@ -1232,7 +1231,7 @@ mod tests {
         for attrs in [
             "",
             r#""type":"number""#,
-            r#""type":"number","format":"upper-roman","start":"4","prefix":"(","suffix":")","indent":"30pt""#,
+            r#""type":"number","format":"upper-roman","start":4,"prefix":"(","suffix":")","indent":"30pt""#,
             r#""bullet":"dash","gap":"xs""#,
         ] {
             let (from_tree, from_xml) = rendered_both_ways(&layout(&list(attrs)));
@@ -1265,7 +1264,7 @@ mod tests {
     /// A document whose line-height row has 3 at `xxl`, holding one text that wraps at 60pt.
     fn doc_with_line_height_row_and_text(text_attrs: &str) -> String {
         format!(
-            r#"{{"version":1,"type":"document","attrs":{{"tokens":{{"line-height":{{"xs":"1","s":"1.1","m":"1.2","l":"1.4","xl":"1.6","xxl":"3"}}}}}},
+            r#"{{"version":1,"type":"document","attrs":{{"tokens":{{"line-height":{{"xs":1,"s":1.1,"m":1.2,"l":1.4,"xl":1.6,"xxl":3}}}}}},
                 "nodes":[{{"type":"section","attrs":{{}},"nodes":[{{"type":"layout","nodes":[
                 {{"type":"text","attrs":{text_attrs},"nodes":["A text long enough to wrap to a few lines at this width"]}}]}}]}}]}}"#
         )
@@ -1274,23 +1273,38 @@ mod tests {
     #[test]
     fn a_line_height_from_the_builder_renders_the_same_from_the_tree_and_from_the_xml() {
         let plain = render_tree(&doc_with_line_height_row_and_text(r#"{"width":"60pt"}"#));
-        for line_height in ["2", "l", "xxl"] {
-            let kit = doc_with_line_height_row_and_text(&format!(r#"{{"width":"60pt","line-height":"{line_height}"}}"#));
+        // A factor is a number, a token a string.
+        for line_height in ["2", r#""l""#, r#""xxl""#] {
+            let kit = doc_with_line_height_row_and_text(&format!(r#"{{"width":"60pt","line-height":{line_height}}}"#));
             let (from_tree, from_xml) = rendered_both_ways(&kit);
             assert_eq!(from_tree, from_xml, "line-height {line_height}");
             assert_ne!(from_tree, plain, "the tree's line-height {line_height} is not read");
         }
         // A token is looked up in the row the tree gives, not in the default one.
         let from_row = render_tree(&doc_with_line_height_row_and_text(r#"{"width":"60pt","line-height":"xxl"}"#));
-        let factor = render_tree(&doc_with_line_height_row_and_text(r#"{"width":"60pt","line-height":"3"}"#));
+        let factor = render_tree(&doc_with_line_height_row_and_text(r#"{"width":"60pt","line-height":3}"#));
         assert_eq!(from_row, factor, "xxl is 3 in this row, and 2 in the default one");
     }
 
     #[test]
     fn a_line_height_row_with_a_value_that_is_not_a_factor_is_rejected_in_a_tree() {
-        let kit = doc_with_line_height_row_and_text(r#"{}"#).replace(r#""xxl":"3""#, r#""xxl":"0""#);
+        let kit = doc_with_line_height_row_and_text(r#"{}"#).replace(r#""xxl":3"#, r#""xxl":0"#);
         let err = crate::parse::parse_tree(&kit).err().expect("0 is not a factor above 0");
-        assert!(err.contains("invalid line-height token 'xxl': '0'"), "{err}");
+        assert!(err.contains("line-height: xxl must be a number above 0, not 0"), "{err}");
+        let kit = doc_with_line_height_row_and_text(r#"{}"#).replace(r#""xxl":3"#, r#""xxl":"3""#);
+        let err = crate::parse::parse_tree(&kit).err().expect("a factor is a number");
+        assert!(err.contains(r#"line-height: xxl must be a number above 0, not "3""#), "{err}");
+    }
+
+    #[test]
+    fn a_line_height_factor_written_as_a_string_is_refused_and_a_token_is_not() {
+        let err = kit_to_xml(&doc_with_line_height_row_and_text(r#"{"line-height":"1.5"}"#)).err().expect("a factor is a number");
+        assert!(err.contains(r#"text: line-height must be a name or a number above 0, not "1.5""#), "{err}");
+        assert!(crate::parse::parse_tree(&doc_with_line_height_row_and_text(r#"{"line-height":"1.5"}"#)).is_err());
+        let xml = kit_to_xml(&doc_with_line_height_row_and_text(r#"{"line-height":1.5}"#)).unwrap();
+        assert!(xml.contains(r#"line-height="1.5""#), "{xml}");
+        let xml = kit_to_xml(&doc_with_line_height_row_and_text(r#"{"line-height":"m"}"#)).unwrap();
+        assert!(xml.contains(r#"line-height="m""#), "{xml}");
     }
 
     #[test]
@@ -1315,22 +1329,21 @@ mod tests {
     }
 
     #[test]
-    fn text_align_is_not_an_alias_for_align() {
-        let aliased = render_tree(&doc_with_text_attrs(r#"{"text-align":"right"}"#));
-        let plain = render_tree(&doc_with_text_attrs("{}"));
-        assert_eq!(aliased, plain);
+    fn text_align_is_not_an_alias_for_align_but_an_attribute_text_does_not_have() {
+        let err = crate::parse::parse_tree(&doc_with_text_attrs(r#"{"text-align":"right"}"#)).err().expect("text has no text-align");
+        assert!(err.contains("text: unknown attribute 'text-align' — expected font-size, font, bold, color, align,"), "{err}");
     }
 
     #[test]
     fn bold_text_differs_from_regular_text() {
-        let bold = render_xml(&kit_to_xml(&doc_with_text_attrs(r#"{"bold":"true"}"#)).unwrap());
+        let bold = render_xml(&kit_to_xml(&doc_with_text_attrs(r#"{"bold":true}"#)).unwrap());
         let plain = render_xml(&kit_to_xml(&doc_with_text_attrs("{}")).unwrap());
         assert_ne!(bold, plain);
     }
 
     #[test]
     fn bold_text_is_the_same_as_naming_the_bold_font() {
-        let bold = render_xml(&kit_to_xml(&doc_with_text_attrs(r#"{"bold":"true"}"#)).unwrap());
+        let bold = render_xml(&kit_to_xml(&doc_with_text_attrs(r#"{"bold":true}"#)).unwrap());
         let named = render_xml(&kit_to_xml(&doc_with_text_attrs(r#"{"font":"Helvetica-Bold"}"#)).unwrap());
         assert_eq!(bold, named);
     }
@@ -1388,7 +1401,7 @@ mod tests {
     #[test]
     fn bold_span_is_written_and_renders() {
         let json = doc_with_layout_child(
-            r#"{"type":"text","attrs":{},"nodes":["a ",{"type":"span","attrs":{"bold":"true"},"nodes":["b"]}]}"#,
+            r#"{"type":"text","attrs":{},"nodes":["a ",{"type":"span","attrs":{"bold":true},"nodes":["b"]}]}"#,
         );
         assert!(kit_to_xml(&json).unwrap().contains(r#"<span bold="true">b</span>"#));
         let (from_tree, from_xml) = rendered_both_ways(&json);
@@ -1398,7 +1411,7 @@ mod tests {
     #[test]
     fn footnote_is_written_with_its_words_and_spans_and_renders() {
         let json = doc_with_layout_child(
-            r#"{"type":"text","attrs":{},"nodes":["a",{"type":"fn","attrs":{},"nodes":["The ",{"type":"span","attrs":{"bold":"true"},"nodes":["note"]},"."]}," b"]}"#,
+            r#"{"type":"text","attrs":{},"nodes":["a",{"type":"fn","attrs":{},"nodes":["The ",{"type":"span","attrs":{"bold":true},"nodes":["note"]},"."]}," b"]}"#,
         );
         assert!(kit_to_xml(&json).unwrap().contains(r#"a<fn>The <span bold="true">note</span>.</fn> b"#), "{}", kit_to_xml(&json).unwrap());
         let (from_tree, from_xml) = rendered_both_ways(&json);
@@ -1499,18 +1512,24 @@ mod tests {
 
     #[test]
     fn the_attributes_a_layer_element_lost_fail_in_the_tree_and_in_the_xml_naming_the_new_ones() {
-        for (node, attr, replacement) in [
-            (r#""type":"rect","attrs":{"w":"10pt","height":"10pt"}"#, "w", "'width'"),
-            (r#""type":"rect","attrs":{"width":"10pt","h":"10pt"}"#, "h", "'height'"),
-            (r#""type":"circle","attrs":{"cx":"10pt","r":"5pt"}"#, "cx", "'x' and 'y'"),
-            (r#""type":"circle","attrs":{"cy":"10pt","r":"5pt"}"#, "cy", "'x' and 'y'"),
-            (r#""type":"ellipse","attrs":{"cx":"10pt","rx":"5pt","ry":"3pt"}"#, "cx", "'x' and 'y'"),
-            (r#""type":"text-at","attrs":{"w":"100pt"},"nodes":["Hi"]"#, "w", "'width'"),
+        for (tag, attrs, attr, replacement) in [
+            ("rect", [("w", "10pt"), ("height", "10pt")], "w", "'width'"),
+            ("rect", [("width", "10pt"), ("h", "10pt")], "h", "'height'"),
+            ("circle", [("cx", "10pt"), ("r", "5pt")], "cx", "'x' and 'y'"),
+            ("circle", [("cy", "10pt"), ("r", "5pt")], "cy", "'x' and 'y'"),
+            ("ellipse", [("cx", "10pt"), ("rx", "5pt")], "cx", "'x' and 'y'"),
+            ("text-at", [("w", "100pt"), ("x", "0pt")], "w", "'width'"),
         ] {
-            let json = doc_with_layer_child(&format!("{{{node}}}"));
+            let json_attrs: Vec<String> = attrs.iter().map(|(name, value)| format!(r#""{name}":"{value}""#)).collect();
+            let json = doc_with_layer_child(&format!(r#"{{"type":"{tag}","attrs":{{{}}}}}"#, json_attrs.join(",")));
+            let xml_attrs: String = attrs.iter().map(|(name, value)| format!(r#" {name}="{value}""#)).collect();
+            let xml = format!(
+                r#"<lpdf version="1"><document><section><layer><{tag}{xml_attrs}/></layer></section></document></lpdf>"#
+            );
             let from_tree = crate::parse::parse_tree(&json).err().expect("the tree is rejected");
-            let from_xml = crate::parse::parse(&kit_to_xml(&json).unwrap()).err().expect("the XML is rejected");
-            for err in [from_tree, from_xml] {
+            let to_xml = kit_to_xml(&json).err().expect("the tree is not written as XML");
+            let from_xml = crate::parse::parse(&xml).err().expect("the XML is rejected");
+            for err in [from_tree, to_xml, from_xml] {
                 assert!(err.contains(&format!("'{attr}'")) && err.contains(replacement), "{attr}: {err}");
             }
         }
@@ -1577,7 +1596,7 @@ mod tests {
             let kit = format!(
                 r##"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[
                     {{"type":"layer","attrs":{{}},"nodes":[
-                        {{"type":"text-at","attrs":{{"anchor":"{anchor}","x":"-12pt","y":"12pt","width":"90pt","max-lines":"2","ellipsis":"true","align":"center"}},
+                        {{"type":"text-at","attrs":{{"anchor":"{anchor}","x":"-12pt","y":"12pt","width":"90pt","max-lines":2,"ellipsis":true,"align":"center"}},
                           "nodes":["A text that does not fit on one line ",{{"type":"span","attrs":{{"font":"Helvetica-Bold"}},"nodes":["in its box"]}}]}},
                         {{"type":"barcode-at","attrs":{{"type":"qr","data":"x","anchor":"{anchor}","x":"-12pt","y":"12pt","width":"50pt"}}}}]}}]}}]}}"##
             );
@@ -1624,7 +1643,7 @@ mod tests {
                         "attrs": {},
                         "nodes": [
                             "Total: ",
-                            { "type": "span", "attrs": { "bold": "true" }, "nodes": ["$100"] }
+                            { "type": "span", "attrs": { "bold": true }, "nodes": ["$100"] }
                         ]
                     }]
                 }]
@@ -1768,7 +1787,7 @@ mod tests {
                     {"type":"bookmark","attrs":{"label":"Methods"}},
                     {"type":"text","attrs":{},"nodes":["Methods"]},
                     {"type":"column","attrs":{},"nodes":[
-                        {"type":"bookmark","attrs":{"label":"Data","level":"2","id":"data"}},
+                        {"type":"bookmark","attrs":{"label":"Data","level":2,"id":"data"}},
                         {"type":"text","attrs":{},"nodes":["Data"]}]}]}]}]}"##;
         let xml = kit_to_xml(kit).unwrap();
         assert!(xml.contains(r#"<bookmark label="Contents"/>"#), "{xml}");
@@ -1822,7 +1841,7 @@ mod tests {
             r#"{{"version":1,"type":"document","attrs":{{}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[{layers}]}}]}}"#
         );
         let shown = r##"{"type":"layer","attrs":{},"nodes":[{"type":"rect","attrs":{"x":"10pt","y":"10pt","width":"50pt","height":"50pt","fill":"#00ff00"}}]}"##;
-        let hidden = r##"{"type":"layer","attrs":{"opacity":"0"},"nodes":[{"type":"rect","attrs":{"x":"40pt","y":"40pt","width":"50pt","height":"50pt","fill":"#ff0000"}}]}"##;
+        let hidden = r##"{"type":"layer","attrs":{"opacity":0},"nodes":[{"type":"rect","attrs":{"x":"40pt","y":"40pt","width":"50pt","height":"50pt","fill":"#ff0000"}}]}"##;
         let (from_tree, from_xml) = rendered_both_ways(&document(&format!("{shown},{hidden}")));
         let without = render_tree(&document(shown));
         assert!(from_tree == without, "the tree shows the hidden layer");

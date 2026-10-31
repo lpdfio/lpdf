@@ -5045,7 +5045,7 @@ mod tests {
 
     #[test]
     fn text_produces_box_with_text_children() {
-        let tree = engine_render(&minimal(r#"<text size="m">Hello world</text>"#));
+        let tree = engine_render(&minimal(r#"<text>Hello world</text>"#));
         let node = &tree["pages"][0]["nodes"][0];
         assert_eq!(node["type"], "box");
         let kids = node["nodes"].as_array().unwrap();
@@ -5174,7 +5174,7 @@ mod tests {
         // Generate a text block tall enough to need at least 2 pages.
         let word = "lorem ipsum dolor sit amet ";
         let paragraph = word.repeat(400); // plenty of wrapped lines
-        let body = format!(r#"<text size="m">{paragraph}</text>"#);
+        let body = format!(r#"<text>{paragraph}</text>"#);
         let tree = engine_render(&minimal(&body));
         let pages = tree["pages"].as_array().unwrap();
         assert!(pages.len() >= 2, "expected text to split, got {} pages", pages.len());
@@ -5200,7 +5200,7 @@ mod tests {
         // A region pinned to bottom with no page= (defaults to each) must appear on every page.
         let filler = r#"<frame height="120pt" />"#;
         let body = format!(
-            r#"<region pin="bottom"><text size="s">FOOTER</text></region>{}"#,
+            r#"<region pin="bottom"><text>FOOTER</text></region>{}"#,
             filler.repeat(10)
         );
         let tree = engine_render(&minimal(&body));
@@ -5250,7 +5250,7 @@ mod tests {
     fn repeat_first_renders_only_on_first_page() {
         let filler = r#"<frame height="120pt" />"#;
         let body = format!(
-            r#"<region pin="top" page="first"><text size="s">COVER HEADER</text></region>{}"#,
+            r#"<region pin="top" page="first"><text>COVER HEADER</text></region>{}"#,
             filler.repeat(10)
         );
         let tree = engine_render(&minimal(&body));
@@ -5266,7 +5266,7 @@ mod tests {
     fn page_number_tokens_substituted_per_page() {
         let filler = r#"<frame height="120pt" />"#;
         let body = format!(
-            r#"<region pin="bottom"><text size="s">Page {{page}} of {{pages}}</text></region>{}"#,
+            r#"<region pin="bottom"><text>Page {{page}} of {{pages}}</text></region>{}"#,
             filler.repeat(10)
         );
         let tree = engine_render(&minimal(&body));
@@ -6437,7 +6437,7 @@ abcdef</code><text>after</text></row>"#,
 
     #[test]
     fn span_underline_emits_line_decoration() {
-        let body = r#"<text size="m"><span underline="true">hello</span></text>"#;
+        let body = r#"<text><span underline="true">hello</span></text>"#;
         let tree = engine_render(&minimal(body));
         let kids = tree["pages"][0]["nodes"][0]["nodes"].as_array().unwrap();
         // span atom produces a text node + an underline line node
@@ -6448,7 +6448,7 @@ abcdef</code><text>after</text></row>"#,
 
     #[test]
     fn span_strike_emits_line_decoration() {
-        let body = r#"<text size="m"><span strike="true">hello</span></text>"#;
+        let body = r#"<text><span strike="true">hello</span></text>"#;
         let tree = engine_render(&minimal(body));
         let kids = tree["pages"][0]["nodes"][0]["nodes"].as_array().unwrap();
         let types: Vec<&str> = kids.iter().filter_map(|k| k["type"].as_str()).collect();
@@ -6458,7 +6458,7 @@ abcdef</code><text>after</text></row>"#,
 
     #[test]
     fn span_href_wraps_in_link_node() {
-        let body = r#"<text size="m"><span href="https://example.com">click here</span></text>"#;
+        let body = r#"<text><span href="https://example.com">click here</span></text>"#;
         let tree = engine_render(&minimal(body));
         let kids = tree["pages"][0]["nodes"][0]["nodes"].as_array().unwrap();
         let link = kids.iter().find(|k| k["type"] == "link").expect("no link node in children");
