@@ -36,11 +36,11 @@ pub enum GradientKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct GradientStop {
     pub offset: f32,
-    /// A normalised hex color.
+    /// A normalised color: hex, or `cmyk(…)` when every stop of the gradient is.
     pub color: String,
 }
 
-/// A gradient of the tokens, resolved: every color is hex and the stops are in order.
+/// A gradient of the tokens, resolved: its colors are all hex or all CMYK, and the stops are in order.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Gradient {
     pub kind: GradientKind,
@@ -174,6 +174,9 @@ pub fn normalize_hex(s: &str) -> Result<String, String> {
         Some(h) => h,
         None => return Err(format!("color must start with '#': {s}")),
     };
+    if !h.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!("invalid hex color: {s}"));
+    }
     match h.len() {
         3 => {
             let chars: Vec<char> = h.chars().collect();
@@ -187,6 +190,130 @@ pub fn normalize_hex(s: &str) -> Result<String, String> {
         6 => Ok(format!("#{}", h.to_lowercase())),
         _ => Err(format!("invalid hex color: {s}")),
     }
+}
+
+/// What a color can be written as, for the error that says a value is none of them.
+const COLOR_FORMS: &str = "#rgb, #rrggbb, cmyk(C, M, Y, K), rgb(R, G, B) or hsl(H, S%, L%)";
+
+/// Why a color with an alpha is refused: a color is always solid.
+const NO_ALPHA: &str = "a color has no alpha: fade a box or a layer with opacity";
+
+/// Whether a normalised color is CMYK, which the PDF writer paints in DeviceCMYK. Any other is `#rrggbb`.
+pub fn is_cmyk(color: &str) -> bool {
+    color.starts_with("cmyk(")
+}
+
+/// Read a color written as hex, `cmyk(…)`, `rgb(…)` or `hsl(…)`, in the form the PDF writer takes: `#rrggbb`, or
+/// `cmyk(C, M, Y, K)` with the values from 0 to 100 separated by commas.
+///
+/// The values of a function are separated by commas or by spaces, as in CSS, but not by both. A color is read
+/// strictly, so that a typo is an error rather than a wrong color in the PDF: a malformed color, a value out of its
+/// range (a hue too, which doesn't wrap), a percentage in `rgb()` and a missing `%` in `hsl()`. A color has no
+/// alpha: `opacity` fades a box or a layer.
+pub fn normalize_color(s: &str) -> Result<String, String> {
+    if s.starts_with('#') {
+        return normalize_hex(s);
+    }
+    let fail = |reason: String| format!("invalid color '{s}': {reason}");
+    let (name, args) = s
+        .strip_suffix(')')
+        .and_then(|call| call.split_once('('))
+        .ok_or_else(|| fail(format!("expected {COLOR_FORMS}")))?;
+    if matches!(name, "rgba" | "hsla") || args.contains('/') {
+        return Err(fail(NO_ALPHA.into()));
+    }
+    let values = color_values(args).map_err(fail)?;
+    match name {
+        "cmyk" => cmyk_color(&values),
+        "rgb"  => rgb_color(&values),
+        "hsl"  => hsl_color(&values),
+        _      => Err(format!("unknown function '{name}()': expected cmyk(), rgb() or hsl()")),
+    }
+    .map_err(fail)
+}
+
+/// The values between the parentheses of a color function: separated by commas, or by spaces, but not a mix.
+fn color_values(args: &str) -> Result<Vec<&str>, String> {
+    let values: Vec<&str> = if args.contains(',') {
+        args.split(',').map(str::trim).collect()
+    } else {
+        args.split_whitespace().collect()
+    };
+    if values.iter().any(|value| value.contains(char::is_whitespace)) {
+        return Err("it mixes commas and spaces: separate the values with one or the other".into());
+    }
+    if values.iter().any(|value| value.is_empty()) {
+        return Err("a comma has no value on one side of it".into());
+    }
+    Ok(values)
+}
+
+/// A value of a color function, `channel` in the error: a number from 0 to `max`, written as digits with an
+/// optional decimal part after a dot, as the schema's pattern has it.
+fn color_channel(text: &str, channel: &str, max: f64) -> Result<f64, String> {
+    let (whole, fraction) = text.split_once('.').unwrap_or((text, "0"));
+    let is_digits = |part: &str| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit());
+    (is_digits(whole) && is_digits(fraction))
+        .then(|| text.parse::<f64>().ok())
+        .flatten()
+        .filter(|value| *value <= max)
+        .ok_or_else(|| format!("{channel} '{text}' is not a number from 0 to {max}"))
+}
+
+/// `#rrggbb` of three channels from 0 to 255, each rounded to the nearest whole number.
+fn hex_of(red: f64, green: f64, blue: f64) -> String {
+    format!("#{:02x}{:02x}{:02x}", red.round() as u8, green.round() as u8, blue.round() as u8)
+}
+
+fn cmyk_color(values: &[&str]) -> Result<String, String> {
+    let [c, m, y, k] = values else {
+        return Err(format!("expected 4 values, as in cmyk(0, 0, 0, 100), but found {}", values.len()));
+    };
+    let c = color_channel(c, "cyan", 100.0)?;
+    let m = color_channel(m, "magenta", 100.0)?;
+    let y = color_channel(y, "yellow", 100.0)?;
+    let k = color_channel(k, "black", 100.0)?;
+    Ok(format!("cmyk({c}, {m}, {y}, {k})"))
+}
+
+fn rgb_color(values: &[&str]) -> Result<String, String> {
+    let [r, g, b] = values else {
+        return Err(match values.len() {
+            4 => NO_ALPHA.into(),
+            n => format!("expected 3 values, as in rgb(23, 99, 207), but found {n}"),
+        });
+    };
+    if values.iter().any(|value| value.ends_with('%')) {
+        return Err("rgb() takes numbers from 0 to 255, not percentages".into());
+    }
+    Ok(hex_of(color_channel(r, "red", 255.0)?, color_channel(g, "green", 255.0)?, color_channel(b, "blue", 255.0)?))
+}
+
+fn hsl_color(values: &[&str]) -> Result<String, String> {
+    let [h, s, l] = values else {
+        return Err(match values.len() {
+            4 => NO_ALPHA.into(),
+            n => format!("expected 3 values, as in hsl(215, 80%, 45%), but found {n}"),
+        });
+    };
+    let hue = color_channel(h, "hue", 360.0)?;
+    // Without the %, a fraction such as 0.8 would read as 0.8% and give a near-gray, so the % is required.
+    let percent = |text: &str, channel: &str| match text.strip_suffix('%') {
+        Some(number) => color_channel(number, channel, 100.0)
+            .map(|value| value / 100.0)
+            .map_err(|_| format!("{channel} '{text}' is not a percentage from 0% to 100%")),
+        None => Err(format!("{channel} '{text}' needs a %, as in hsl(215, 80%, 45%)")),
+    };
+    let saturation = percent(s, "saturation")?;
+    let lightness = percent(l, "lightness")?;
+
+    // The conversion of CSS Color 4.
+    let a = saturation * lightness.min(1.0 - lightness);
+    let channel = |n: f64| {
+        let k = (n + hue / 30.0) % 12.0;
+        (lightness - a * (k - 3.0).min(9.0 - k).clamp(-1.0, 1.0)) * 255.0
+    };
+    Ok(hex_of(channel(0.0), channel(8.0), channel(4.0)))
 }
 
 impl Tokens {
@@ -287,9 +414,10 @@ impl Tokens {
         })
     }
 
+    /// A color as written (`normalize_color`) or a name from the `colors` row.
     pub fn resolve_color(&self, val: &str) -> Result<String, String> {
-        if val.starts_with('#') {
-            return normalize_hex(val);
+        if val.starts_with('#') || val.contains('(') {
+            return normalize_color(val);
         }
         if val.starts_with(GRADIENT_PREFIX) {
             return Err(format!(
@@ -362,6 +490,10 @@ impl Tokens {
                 )));
             }
             stops.push(GradientStop { offset, color });
+        }
+        // A PDF shading has one color space, and lpdf doesn't convert between the two models.
+        if stops.iter().any(|stop| is_cmyk(&stop.color)) && !stops.iter().all(|stop| is_cmyk(&stop.color)) {
+            return Err(fail("its stops mix CMYK and RGB colors: a gradient is all one or the other".into()));
         }
 
         // A gradient keeps its first color up to the first stop and its last color after the last, so the
@@ -671,6 +803,146 @@ mod tests {
         assert_eq!(t.resolve_color("line-muted").unwrap(), "#d4d4d4");
     }
 
+    // ── Color formats ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn rgb_and_hsl_become_the_hex_of_the_same_color_in_either_form() {
+        for (written, hex) in [
+            ("rgb(23, 99, 207)", "#1763cf"),
+            ("rgb(23 99 207)", "#1763cf"),
+            ("rgb(23,99,207)", "#1763cf"),
+            ("rgb( 0 , 0 , 0 )", "#000000"),
+            ("rgb(255 255 255)", "#ffffff"),
+            ("rgb(0.4, 127.5, 254.6)", "#0080ff"),
+            ("hsl(215, 80%, 45%)", "#1763cf"),
+            ("hsl(215 80% 45%)", "#1763cf"),
+            ("hsl(0, 100%, 50%)", "#ff0000"),
+            ("hsl(120 100% 25%)", "#008000"),
+            ("hsl(240, 100%, 50%)", "#0000ff"),
+            ("hsl(360, 100%, 50%)", "#ff0000"),
+            ("hsl(0, 0%, 100%)", "#ffffff"),
+            ("hsl(300, 0%, 50%)", "#808080"),
+        ] {
+            assert_eq!(normalize_color(written).unwrap(), hex, "{written}");
+        }
+    }
+
+    #[test]
+    fn cmyk_keeps_its_values_written_with_commas() {
+        for (written, normalised) in [
+            ("cmyk(0, 0, 0, 100)", "cmyk(0, 0, 0, 100)"),
+            ("cmyk(91 61 0 19)", "cmyk(91, 61, 0, 19)"),
+            ("cmyk(91,61,0,19)", "cmyk(91, 61, 0, 19)"),
+            ("cmyk( 12.50 , 0 , 0.0 , 7.25 )", "cmyk(12.5, 0, 0, 7.25)"),
+        ] {
+            assert_eq!(normalize_color(written).unwrap(), normalised, "{written}");
+            assert!(is_cmyk(normalised));
+        }
+        assert!(!is_cmyk("#1763cf"));
+    }
+
+    #[test]
+    fn a_color_as_written_resolves_beside_the_color_tokens() {
+        let mut t = Tokens::default();
+        t.colors.insert("ink".into(), normalize_color("cmyk(0 0 0 100)").unwrap());
+        assert_eq!(t.resolve_color("cmyk(0 0 0 100)").unwrap(), "cmyk(0, 0, 0, 100)");
+        assert_eq!(t.resolve_color("rgb(23, 99, 207)").unwrap(), "#1763cf");
+        assert_eq!(t.resolve_color("hsl(215 80% 45%)").unwrap(), "#1763cf");
+        assert_eq!(t.resolve_color("ink").unwrap(), "cmyk(0, 0, 0, 100)");
+        assert_eq!(t.resolve_fill("cmyk(0, 100, 100, 0)").unwrap(), "cmyk(0, 100, 100, 0)");
+        assert_eq!(t.resolve_border("s cmyk(0 0 0 100)").unwrap(), (1.0, "cmyk(0, 0, 0, 100)".to_string()));
+    }
+
+    #[test]
+    fn a_color_that_is_not_one_is_an_error_that_names_it() {
+        for (written, says) in [
+            ("cmyk(0, 0, 100)", "expected 4 values, as in cmyk(0, 0, 0, 100), but found 3"),
+            ("cmyk(0, 0, x, 100)", "yellow 'x' is not a number from 0 to 100"),
+            ("cmyk(0%, 0%, 0%, 100%)", "cyan '0%' is not a number from 0 to 100"),
+            ("rgb(23, 99)", "expected 3 values, as in rgb(23, 99, 207), but found 2"),
+            ("rgb()", "expected 3 values, as in rgb(23, 99, 207), but found 0"),
+            ("hsl(215, 80%)", "expected 3 values, as in hsl(215, 80%, 45%), but found 2"),
+            ("rgb(1, , 3)", "a comma has no value on one side of it"),
+            ("rgb(1, 2, 3,)", "a comma has no value on one side of it"),
+            ("rgb(.5, 2, 3)", "red '.5' is not a number from 0 to 255"),
+            ("rgb(1e2, 2, 3)", "red '1e2' is not a number from 0 to 255"),
+            ("hsl(215deg, 80%, 45%)", "hue '215deg' is not a number from 0 to 360"),
+            ("lab(50 20 30)", "unknown function 'lab()': expected cmyk(), rgb() or hsl()"),
+            ("RGB(23, 99, 207)", "unknown function 'RGB()'"),
+            ("rgb(23, 99, 207", "expected #rgb, #rrggbb, cmyk(C, M, Y, K), rgb(R, G, B) or hsl(H, S%, L%)"),
+            ("#ggg", "invalid hex color: #ggg"),
+            ("#12345", "invalid hex color: #12345"),
+            ("#é1", "invalid hex color: #é1"),
+        ] {
+            let err = normalize_color(written).unwrap_err();
+            assert!(err.contains(written) && err.contains(says), "{written}: {err}");
+        }
+    }
+
+    #[test]
+    fn commas_and_spaces_do_not_mix_in_one_color() {
+        for written in ["rgb(23, 99 207)", "rgb(23 99, 207)", "cmyk(0, 0 0, 100)", "hsl(215 80%, 45%)"] {
+            let err = normalize_color(written).unwrap_err();
+            assert_eq!(
+                err,
+                format!("invalid color '{written}': it mixes commas and spaces: separate the values with one or the other")
+            );
+        }
+    }
+
+    #[test]
+    fn rgb_takes_no_percentages_and_hsl_needs_them() {
+        assert_eq!(
+            normalize_color("rgb(9%, 39%, 81%)").unwrap_err(),
+            "invalid color 'rgb(9%, 39%, 81%)': rgb() takes numbers from 0 to 255, not percentages"
+        );
+        assert_eq!(
+            normalize_color("hsl(215, 0.8, 0.45)").unwrap_err(),
+            "invalid color 'hsl(215, 0.8, 0.45)': saturation '0.8' needs a %, as in hsl(215, 80%, 45%)"
+        );
+        assert_eq!(
+            normalize_color("hsl(215 80% 45)").unwrap_err(),
+            "invalid color 'hsl(215 80% 45)': lightness '45' needs a %, as in hsl(215, 80%, 45%)"
+        );
+        assert!(normalize_color("hsl(215%, 80%, 45%)").unwrap_err().contains("hue '215%' is not a number from 0 to 360"));
+    }
+
+    #[test]
+    fn a_value_out_of_its_range_is_an_error_and_a_hue_does_not_wrap() {
+        for (written, says) in [
+            ("cmyk(101, 0, 0, 0)", "cyan '101' is not a number from 0 to 100"),
+            ("cmyk(0 0 0 100.5)", "black '100.5' is not a number from 0 to 100"),
+            ("cmyk(0, -1, 0, 0)", "magenta '-1' is not a number from 0 to 100"),
+            ("rgb(256, 0, 0)", "red '256' is not a number from 0 to 255"),
+            ("rgb(0 0 -1)", "blue '-1' is not a number from 0 to 255"),
+            ("hsl(361, 80%, 45%)", "hue '361' is not a number from 0 to 360"),
+            ("hsl(2150, 80%, 45%)", "hue '2150' is not a number from 0 to 360"),
+            ("hsl(-10, 80%, 45%)", "hue '-10' is not a number from 0 to 360"),
+            ("hsl(215, 120%, 45%)", "saturation '120%' is not a percentage from 0% to 100%"),
+            ("hsl(215 80% 145%)", "lightness '145%' is not a percentage from 0% to 100%"),
+        ] {
+            assert_eq!(normalize_color(written).unwrap_err(), format!("invalid color '{written}': {says}"));
+        }
+    }
+
+    #[test]
+    fn a_color_with_an_alpha_points_to_opacity() {
+        for written in [
+            "rgba(23, 99, 207, 0.5)",
+            "hsla(215, 80%, 45%, 0.5)",
+            "rgb(23 99 207 / 50%)",
+            "hsl(215 80% 45% / 0.5)",
+            "rgb(23, 99, 207, 0.5)",
+            "hsl(215, 80%, 45%, 0.5)",
+            "cmyk(0 0 0 100 / 50%)",
+        ] {
+            assert_eq!(
+                normalize_color(written).unwrap_err(),
+                format!("invalid color '{written}': a color has no alpha: fade a box or a layer with opacity")
+            );
+        }
+    }
+
     // ── Gradients ─────────────────────────────────────────────────────────────
 
     fn spec<'a>(kind: &'a str, from: Option<&'a str>, to: Option<&'a str>) -> GradientSpec<'a> {
@@ -702,6 +974,35 @@ mod tests {
         tokens.colors.insert("primary".into(), "#112233".into());
         let gradient = tokens.resolve_gradient("fade", &spec("linear", Some("primary"), Some("#fff"))).unwrap();
         assert_eq!(gradient.stops[0].color, "#112233");
+    }
+
+    #[test]
+    fn a_gradient_of_cmyk_colors_keeps_them_and_one_of_rgb_and_hsl_has_hex() {
+        let mut tokens = Tokens::default();
+        tokens.colors.insert("ink".into(), "cmyk(0, 0, 0, 100)".into());
+        let cmyk = GradientSpec {
+            stops: vec![("0%", "cmyk(0 100 100 0)"), ("50%", "ink"), ("100%", "cmyk(100, 0, 0, 0)")],
+            ..spec("linear", None, None)
+        };
+        assert_eq!(
+            tokens.resolve_gradient("print", &cmyk).unwrap().stops,
+            vec![stop_of(0.0, "cmyk(0, 100, 100, 0)"), stop_of(0.5, "cmyk(0, 0, 0, 100)"), stop_of(1.0, "cmyk(100, 0, 0, 0)")]
+        );
+        let rgb = spec("linear", Some("rgb(23 99 207)"), Some("hsl(0, 100%, 50%)"));
+        assert_eq!(tokens.resolve_gradient("screen", &rgb).unwrap().stops, vec![stop_of(0.0, "#1763cf"), stop_of(1.0, "#ff0000")]);
+    }
+
+    #[test]
+    fn a_gradient_that_mixes_cmyk_and_rgb_is_an_error_naming_it() {
+        let mut tokens = Tokens::default();
+        tokens.colors.insert("ink".into(), "cmyk(0, 0, 0, 100)".into());
+        for (from, to) in [("cmyk(0, 0, 0, 100)", "#ffffff"), ("primary", "ink"), ("rgb(0 0 0)", "cmyk(0 0 0 100)")] {
+            assert_eq!(
+                tokens.resolve_gradient("mixed", &spec("linear", Some(from), Some(to))).unwrap_err(),
+                "gradient 'mixed': its stops mix CMYK and RGB colors: a gradient is all one or the other",
+                "{from} to {to}"
+            );
+        }
     }
 
     #[test]
