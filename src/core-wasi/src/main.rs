@@ -484,6 +484,33 @@ mod tests {
     }
 
     #[test]
+    fn the_created_on_of_the_request_is_written_as_a_pdf_date() {
+        for (created_on, expected) in [
+            ("2026-10-31T09:30:00.000Z", "/CreationDate (D:20261031093000Z)"),
+            ("2026-10-31T09:30:00+01:00", "/CreationDate (D:20261031093000+01'00)"),
+        ] {
+            let answer = render_request(&with_output(""), serde_json::json!({ "created_on": created_on }));
+            assert!(pdf_text(&answer).contains(expected), "{created_on}: {answer}");
+        }
+        assert!(!pdf_text(&render_request(&with_output(""), serde_json::json!({}))).contains("/CreationDate"));
+    }
+
+    #[test]
+    fn a_created_on_that_is_not_a_date_is_an_error_before_the_layout_on_both_methods() {
+        // The file is not in the request, so an error that names the date came before the files were looked for.
+        let xml = r#"<lpdf version="1"><document><attachments><file name="a.txt" relationship="supplement"/></attachments>
+            <section><layout><text>x</text></layout></section></document></lpdf>"#;
+        let tree = r#"{"version":1,"type":"document","attrs":{"attachments":[{"name":"a.txt","relationship":"supplement"}]},
+            "nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[]}]}]}"#;
+        for (method, input) in [("render_pdf", xml), ("render_tree_pdf", tree)] {
+            let req = serde_json::json!({ "method": method, "input": input, "created_on": "31.10.2026" });
+            let answer: serde_json::Value = serde_json::from_str(&dispatch(&req.to_string())).unwrap();
+            let error = answer["error"].as_str().unwrap_or_else(|| panic!("{method}: {answer}"));
+            assert!(error.contains("created_on '31.10.2026'") && error.contains("2026-10-31T09:30:00Z"), "{method}: {error}");
+        }
+    }
+
+    #[test]
     fn the_tree_path_reads_output_too() {
         let tree = r#"{"version":1,"type":"document","attrs":{"output":{"encrypt":"rc4-128"}},"nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[]}]}]}"#;
         let req = serde_json::json!({ "method": "render_tree_pdf", "input": tree });
