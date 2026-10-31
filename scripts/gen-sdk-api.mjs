@@ -11,9 +11,13 @@
 // The constants are strings, so a value goes straight into an attribute: type: FieldType.Text in Node,
 // FieldAttr(type=FieldType.TEXT) in Python.
 //
-// Usage: node scripts/gen-sdk-api.mjs                      write the files of the four SDKs under repos/
+// It also writes the core's table of the attributes of every element and their types, src/core/src/schema_attrs.rs,
+// which the engine checks a document against on both of its paths, XML and the kit tree.
+//
+// Usage: node scripts/gen-sdk-api.mjs                      write the core's table and the files of the four SDKs under repos/
 //        node scripts/gen-sdk-api.mjs --check              list the files that differ, exit 1 if any do
 //        node scripts/gen-sdk-api.mjs --check --sdk node=.  only the SDK in the given folder (an SDK repository's CI)
+//        node scripts/gen-sdk-api.mjs --check --core       only the core's table (the core's CI, which has no SDKs)
 
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
@@ -25,13 +29,15 @@ import { loadSchema } from './lib/xsd.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schema = loadSchema(path.join(root, 'schema/lpdf.xsd'));
 const check = process.argv.includes('--check');
-const { repositories, selected } = sdkRepositories(root, process.argv);
+const coreOnly = process.argv.includes('--core');
+const { repositories, selected } = coreOnly ? { repositories: {}, selected: [] } : sdkRepositories(root, process.argv);
+const CORE_TABLE = path.join(root, 'src/core/src/schema_attrs.rs');
 
 const SDK = {
-    dotnet: path.join(repositories.dotnet, 'src'),
-    node: path.join(repositories.node, 'src'),
-    python: path.join(repositories.python, 'src/lpdf'),
-    php: path.join(repositories.php, 'src'),
+    dotnet: path.join(repositories.dotnet ?? 'repos/lpdf-dotnet', 'src'),
+    node: path.join(repositories.node ?? 'repos/lpdf-js', 'src'),
+    python: path.join(repositories.python ?? 'repos/lpdf-python', 'src/lpdf'),
+    php: path.join(repositories.php ?? 'repos/lpdf-php', 'src'),
 };
 
 // The rules a `<markdown-styles>` holds, each an element of its own in the schema.
@@ -230,6 +236,78 @@ function constantsFor(spec) {
     };
 }
 
+// ── Core ──────────────────────────────────────────────────────────────────────
+
+/** A number of the schema as Rust writes it: a decimal bound always with a point. */
+function rustNumber(value, kind) {
+    return kind === 'integer' || !Number.isInteger(value) ? String(value) : `${value}.0`;
+}
+
+function rustBound(type, end) {
+    const value = type[end];
+    if (value === undefined) return 'Bound::Open';
+    const exclusive = end === 'min' ? type.minExclusive : type.maxExclusive;
+    return `Bound::${exclusive ? 'Exclusive' : 'Inclusive'}(${rustNumber(value, 'decimal')})`;
+}
+
+function rustKind(type) {
+    const integer = (end) => (type[end] === undefined ? 'None' : `Some(${type[end]})`);
+    switch (type.kind) {
+        case 'boolean': return 'Kind::Boolean';
+        case 'integer': return `Kind::Integer { min: ${integer('min')}, max: ${integer('max')} }`;
+        case 'decimal': return `Kind::Decimal { min: ${rustBound(type, 'min')}, max: ${rustBound(type, 'max')} }`;
+        case 'name-or-number':
+            if (type.number !== 'decimal') throw new Error('a name or a whole number has no kind in the core');
+            return `Kind::NameOrDecimal { min: ${rustBound(type, 'min')}, max: ${rustBound(type, 'max')} }`;
+        default: return 'Kind::Text';
+    }
+}
+
+function rustConst(element) {
+    return [element.within, element.name].filter(Boolean).join('_').replace(/-/g, '_').toUpperCase();
+}
+
+/**
+ * The core's table: a constant with the attributes of each element, in schema order and without the data-*
+ * attributes, and `attributes_of`, which finds the element a name stands for where it is written. A name means the
+ * element declared in its parent when there is one, such as a row of the tokens or a rule of a markdown's styles;
+ * in a layer only a drawing primitive, so that a layout element there is reported by the parser, not by its
+ * attributes; anywhere else the top-level element.
+ */
+function coreTable() {
+    const elements = schema.allElements();
+    const primitives = schema.groupElements('CanvasPrimitives');
+    const lines = [
+        ...HEADER.map((h) => `// ${h}`), '',
+        '//! The attributes of every element of lpdf.xsd and their types.', '',
+        'use crate::attr_types::{Bound, Kind};', '',
+        '/// The attributes of an element, in the order the schema lists them, without the data-* attributes.',
+        'pub(crate) type Attributes = &\'static [(&\'static str, Kind)];', '',
+    ];
+    for (const element of elements) {
+        const attributes = element.attributes.filter((a) => !a.name.startsWith('data-'));
+        lines.push(`const ${rustConst(element)}: Attributes = &[`);
+        for (const a of attributes) lines.push(`    ("${a.name}", ${rustKind(a.type)}),`);
+        lines.push('];', '');
+    }
+    lines.push(
+        '/// The attributes of the element `name` written in the element `parent`, or `None` for an element the schema',
+        '/// does not have there.',
+        'pub(crate) fn attributes_of(parent: &str, name: &str) -> Option<Attributes> {',
+        '    match (parent, name) {',
+    );
+    for (const element of elements.filter((e) => e.within)) {
+        lines.push(`        ("${element.within}", "${element.name}") => Some(${rustConst(element)}),`);
+    }
+    for (const name of primitives) lines.push(`        ("layer", "${name}") => Some(${rustConst({ name })}),`);
+    lines.push('        ("layer", _) => None,');
+    for (const element of elements.filter((e) => !e.within)) {
+        lines.push(`        (_, "${element.name}") => Some(${rustConst(element)}),`);
+    }
+    lines.push('        _ => None,', '    }', '}', '');
+    return { file: CORE_TABLE, text: lines.join('\n') };
+}
+
 // ── Run ───────────────────────────────────────────────────────────────────────
 
 const generated = [];
@@ -254,9 +332,11 @@ generated.push({
     text: [...HEADER.map((h) => `// ${h}`), '', ...nodeInterfaces].join('\n'),
 });
 
-// Only the SDKs asked for: the files of the others are not there to compare with.
+// Only the SDKs asked for: the files of the others are not there to compare with. The core's table goes with all
+// four, or alone.
 const inSelected = (file) => selected.some((language) => file.startsWith(SDK[language] + path.sep));
-const outputs = generated.filter(({ file }) => inSelected(file));
+const withCore = coreOnly || !process.argv.some((a) => a === '--sdk' || a.startsWith('--sdk='));
+const outputs = [...(withCore ? [coreTable()] : []), ...generated.filter(({ file }) => inSelected(file))];
 
 const normal = (s) => s.replace(/\r\n/g, '\n');
 let differing = 0;
