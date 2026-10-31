@@ -70,7 +70,7 @@ Unlicensed Use is not a substitute for a Professional or Enterprise License. An 
 
 Unlicensed Use is subject to the following restriction:
 
-**Attribution.** Each document rendered shall include an attribution notice in the form specified in the Software documentation. This notice may not be suppressed, removed, or obscured.
+**Attribution.** Each document rendered shall include the Lpdf attribution in the top-right corner. This notice may not be suppressed, removed, or obscured.
 
 This restriction is lifted upon obtaining a valid license key. Community keys are available at no cost at lpdf.io.
 
