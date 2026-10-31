@@ -5,7 +5,9 @@
 //  - it opens with the user password and with the owner password, and a wrong password, or none for a
 //    file that has a user password, is refused;
 //  - decrypting it gives the same objects as the document rendered without encryption: the QDF form
-//    of the two is identical apart from the /ID line, so every string and stream survived the round trip.
+//    of the two is identical apart from the /ID line, so every string and stream survived the round trip;
+//  - for a document with files in it, each file it gives back with the password is the file of the
+//    unencrypted render, so the files are encrypted with the rest and come back whole.
 //
 // The samples come from the core's own tests:
 //   LPDF_ENCRYPT_OUT=<folder> cargo test --manifest-path src/core/Cargo.toml --lib writes_samples_for_the_external_check
@@ -24,25 +26,32 @@ if (!folder) {
     process.exit(2);
 }
 
-/** The samples `writes_samples_for_the_external_check` writes: who may open each, and what it must report. */
+/**
+ * The samples `writes_samples_for_the_external_check` writes: who may open each, what it must report, the
+ * unencrypted render it must decrypt to, and the files it carries.
+ */
 const SAMPLES = [
-    { file: 'aes256-user.pdf', user: 'user', owner: 'owner', revision: 6, method: 'AESv3' },
-    { file: 'aes256-open.pdf', user: '', owner: 'owner', revision: 6, method: 'AESv3' },
-    { file: 'aes256-same-password.pdf', user: 'same', owner: 'same', revision: 6, method: 'AESv3' },
-    { file: 'rc4-user.pdf', user: 'user', owner: 'owner', revision: 3, method: null },
+    { file: 'aes256-user.pdf', user: 'user', owner: 'owner', revision: 6, method: 'AESv3', plain: 'plain.pdf' },
+    { file: 'aes256-open.pdf', user: '', owner: 'owner', revision: 6, method: 'AESv3', plain: 'plain.pdf' },
+    { file: 'aes256-same-password.pdf', user: 'same', owner: 'same', revision: 6, method: 'AESv3', plain: 'plain.pdf' },
+    { file: 'rc4-user.pdf', user: 'user', owner: 'owner', revision: 3, method: null, plain: 'plain.pdf' },
+    {
+        file: 'attachments-aes256.pdf', user: 'user', owner: 'owner', revision: 6, method: 'AESv3',
+        plain: 'attachments-plain.pdf', attachments: ['invoice.xml', 'terms.txt'],
+    },
 ];
 
 const scratch = mkdtempSync(path.join(tmpdir(), 'lpdf-encryption-'));
 const failures = [];
 
-/** Runs qpdf; a non-zero exit is data here, not an error. */
+/** Runs qpdf; a non-zero exit is data here, not an error. `stdout` keeps the bytes, as a file comes back. */
 function qpdf(...args) {
-    const run = spawnSync('qpdf', args, { encoding: 'latin1', maxBuffer: 64 * 1024 * 1024 });
+    const run = spawnSync('qpdf', args, { maxBuffer: 64 * 1024 * 1024 });
     if (run.error) {
         console.error(`could not run qpdf: ${run.error.message}`);
         process.exit(2);
     }
-    return { status: run.status, output: `${run.stdout}${run.stderr}` };
+    return { status: run.status, stdout: run.stdout, output: `${run.stdout.toString('latin1')}${run.stderr.toString('latin1')}` };
 }
 
 function expect(ok, message) {
@@ -58,16 +67,21 @@ function qdf(file, password) {
     return { lines: text.split('\n').filter((line) => !/^\s*\/ID \[/.test(line)) };
 }
 
-const plainFile = path.join(folder, 'plain.pdf');
-const plain = qdf(plainFile, '');
-if (plain.error) {
-    console.error(`plain.pdf: ${plain.error}`);
-    process.exit(1);
+/** The QDF form of each unencrypted render the samples are compared with, by file name. */
+const plains = new Map();
+for (const name of new Set(SAMPLES.map((sample) => sample.plain))) {
+    const plain = qdf(path.join(folder, name), '');
+    if (plain.error) {
+        console.error(`${name}: ${plain.error}`);
+        process.exit(1);
+    }
+    plains.set(name, plain);
 }
 
 for (const sample of SAMPLES) {
     const file = path.join(folder, sample.file);
     const name = sample.file;
+    const plain = plains.get(sample.plain);
 
     const shown = qpdf('--show-encryption', `--password=${sample.owner}`, file);
     expect(shown.status === 0, `${name}: qpdf could not read the encryption: ${shown.output.trim()}`);
@@ -95,6 +109,15 @@ for (const sample of SAMPLES) {
             at === -1 && decrypted.lines.length === plain.lines.length,
             `${name}: decrypted with the ${who} password it differs from the unencrypted render at line ${at + 1}: `
                 + `${JSON.stringify(decrypted.lines[at])} against ${JSON.stringify(plain.lines[at])}`,
+        );
+    }
+
+    for (const attachment of sample.attachments ?? []) {
+        const shown = qpdf(`--show-attachment=${attachment}`, `--password=${sample.user}`, file);
+        const expected = qpdf(`--show-attachment=${attachment}`, path.join(folder, sample.plain));
+        expect(
+            shown.status === 0 && expected.status === 0 && Buffer.compare(shown.stdout, expected.stdout) === 0,
+            `${name}: the file ${attachment} does not come back whole with the user password: ${shown.output.trim()}`,
         );
     }
 

@@ -40,6 +40,11 @@ jobs:
           sudo apt-get install -y qpdf
           make check-encryption
 
+      - name: Check the files a PDF carries with qpdf
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
+        run: make check-attachments
+
       - name: Check PDF/A files with veraPDF and qpdf
         env:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
