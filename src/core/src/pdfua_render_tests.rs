@@ -258,6 +258,32 @@ fn a_link_that_wraps_is_one_link_described_by_all_its_words() {
 }
 
 #[test]
+fn a_link_that_runs_onto_the_next_page_is_one_link_described_by_all_its_words() {
+    let lines = "<text>A line.</text>".repeat(48);
+    let words: Vec<String> = (0..150).map(|i| format!("word{i}")).collect();
+    let xml = document(&format!(r#"{lines}<text>See <span href="https://lpdf.io/docs">{}</span> for more.</text>"#, words.join(" ")));
+    let pdf = text(&render(&xml).expect("renders"));
+    assert!(count(&pdf, "/Type /Page\n") >= 2, "the link runs onto the next page");
+    let all = format!("/Contents ({})", words.join(" "));
+    assert!(count(&pdf, &all) >= 2, "every part, on both pages, says all its words");
+    assert_eq!(count(&pdf, "/Contents (word"), count(&pdf, &all), "no part says only its own page's words");
+}
+
+#[test]
+fn an_image_between_two_links_to_one_url_leaves_them_two_links_in_order() {
+    let xml = document(
+        r#"<link href="https://a.example"><img name="chart" alt="First" width="40pt"/></link>
+        <img name="chart" alt="Middle" width="40pt"/>
+        <link href="https://a.example"><img name="chart" alt="Last" width="40pt"/></link>"#,
+    );
+    let pdf = text(&render(&xml).expect("renders"));
+    assert!(pdf.contains("/Contents (First)") && pdf.contains("/Contents (Last)"), "each link says its own figure");
+    assert!(!pdf.contains("First Last"));
+    let at = |alt: &str| pdf.find(&format!("/Alt ({alt})")).expect(alt);
+    assert!(at("First") < at("Middle") && at("Middle") < at("Last"), "the figures are written in the order they are read");
+}
+
+#[test]
 fn a_region_on_the_side_stays_in_the_reading_and_a_header_is_decoration() {
     let side = render(&document(r#"<region pin="left"><img name="chart" width="40pt"/></region><text>Body</text>"#)).unwrap_err();
     assert!(side.contains("the image 'chart' has no alt"), "a side region is read, so its image needs alt: {side}");
