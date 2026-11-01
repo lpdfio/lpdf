@@ -311,31 +311,30 @@ fn a_link_that_toc_repeats_is_a_link_in_each_entry() {
     assert!(pdf.contains("/Contents (Intro)") && pdf.contains("/Contents (Data)"));
 }
 
-/// A PDF/UA document whose table of contents lists seventy parts, each on a page of its own, with `layer` after the
-/// layout of the table's section.
-fn long_toc(layer: &str) -> String {
-    let parts: String = (1..=70)
-        .map(|n| format!(r#"<bookmark label="Part {n}"/><text paginate="break-before">Part {n}</text>"#))
-        .collect();
-    format!(
-        r#"<lpdf version="1"><assets><font name="body" src="body.ttf"/></assets>
-        <document font="body"><meta title="Report" lang="en"/><output pdfua="1"/>
-        <section type="toc"><layout><column data-source="$toc"><text data-value="label">Part</text></column></layout>{layer}</section>
-        <section><layout>{parts}</layout></section>
-        </document></lpdf>"#
-    )
+/// The fixture `showcase-pdfua-toc.xml`: twelve chapters of two sections, a page each, whose table of contents runs
+/// onto a second page, with a layer with alt on each page of it.
+fn toc_fixture() -> String {
+    String::from_utf8(read(&test_dir().join("fixtures/showcase-pdfua-toc.xml"))).expect("UTF-8")
+}
+
+/// The fixture `showcase-pdfua-toc.xml` rendered as an SDK renders it, unlicensed: for the snapshot test.
+pub(crate) fn render_toc_fixture() -> Vec<u8> {
+    render(&toc_fixture()).unwrap_or_else(|e| panic!("showcase-pdfua-toc: {e}"))
 }
 
 #[test]
 fn a_table_of_contents_on_two_pages_is_one_toc_whatever_is_drawn_between_its_pages() {
-    // Unlicensed, so the attribution line's link comes after each page's entries; and then a layer with alt, a figure
-    // drawn after each page's entries too.
-    let stamp = r##"<layer alt="A draft stamp"><rect x="20pt" y="20pt" width="40pt" height="20pt" fill="#cc0000"/></layer>"##;
-    for layer in ["", stamp] {
-        let pdf = text(&render(&long_toc(layer)).expect("renders"));
-        assert_eq!(count(&pdf, "/Type /Page\n") - 70, 2, "the table of contents runs onto a second page");
-        assert_eq!(count(&pdf, "/S /TOCI\n"), 70);
-        assert_eq!(count(&pdf, "/S /TOC\n"), 1, "with {layer:?}");
+    // Unlicensed, so the attribution line's link comes after each page's entries, and so does the fixture's layer, a
+    // figure. Without the layer, the attribution's link alone.
+    let with_layer = toc_fixture();
+    let start = with_layer.find("<layer alt=").expect("the fixture's layer");
+    let end = start + with_layer[start..].find("</layer>").expect("the end of the layer") + "</layer>".len();
+    let without_layer = format!("{}{}", &with_layer[..start], &with_layer[end..]);
+    for (xml, case) in [(&with_layer, "with the layer"), (&without_layer, "without the layer")] {
+        let pdf = text(&render(xml).expect("renders"));
+        assert_eq!(count(&pdf, "/Type /Page\n"), 14, "two pages of contents, and a page for each chapter, {case}");
+        assert_eq!(count(&pdf, "/S /TOCI\n"), 36, "an entry for each chapter and each section, {case}");
+        assert_eq!(count(&pdf, "/S /TOC\n"), 1, "{case}");
     }
 }
 
@@ -382,6 +381,7 @@ fn writes_pdfua_samples_for_the_external_check() {
     std::fs::create_dir_all(dir).expect("the samples' folder");
     std::fs::write(dir.join("pdfua-1.pdf"), render_fixture()).expect("a sample");
     std::fs::write(dir.join("pdfua-1-toc-links.pdf"), render(&toc_of_links()).expect("renders")).expect("a sample");
+    std::fs::write(dir.join("pdfua-1-toc.pdf"), render_toc_fixture()).expect("a sample");
     let xml = String::from_utf8(read(&test_dir().join("fixtures/showcase-pdfua.xml"))).expect("UTF-8")
         .replace(r#"<output pdfua="1" />"#, r#"<output pdfa="2u" pdfua="1" />"#);
     std::fs::write(dir.join("pdfua-1-pdfa-2u.pdf"), render(&xml).expect("renders")).expect("a sample");
