@@ -270,6 +270,25 @@ fn a_link_that_runs_onto_the_next_page_is_one_link_described_by_all_its_words() 
 }
 
 #[test]
+fn a_link_around_a_text_that_runs_onto_the_next_page_is_one_link() {
+    // Unlicensed, so the attribution line, with a link of its own, is drawn after page 1; and a footnote's note at the
+    // foot of page 1. Neither splits the link.
+    let lines = "<text>A line.</text>".repeat(48);
+    let words: Vec<String> = (0..150).map(|i| format!("word{i}")).collect();
+    let xml = document(&format!(
+        r#"{lines}<link href="https://x.example"><text>{}<fn>A note.</fn></text></link>"#,
+        words.join(" ")
+    ));
+    let pdf = text(&render(&xml).expect("renders"));
+    let pages = count(&pdf, "/Type /Page\n");
+    assert!(pages >= 2, "the link runs onto the next page");
+    assert!(pdf.contains("/S /Note\n"));
+    assert_eq!(count(&pdf, "/S /Link\n"), pages + 1, "one link, and the attribution's on each page");
+    assert!(!pdf.contains("/Contents (https://x.example)"), "no part is described only by its URL");
+    assert!(count(&pdf, &format!("/Contents ({}", words[0])) >= 2, "every part says the link's words");
+}
+
+#[test]
 fn an_image_between_two_links_to_one_url_leaves_them_two_links_in_order() {
     let xml = document(
         r#"<link href="https://a.example"><img name="chart" alt="First" width="40pt"/></link>

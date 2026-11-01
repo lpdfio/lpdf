@@ -299,12 +299,13 @@ impl Marks {
         }
     }
 
-    /// Go into a link to `url`, whose annotation is the next one numbered: its words are drawn in it. A link that wraps
-    /// onto another line or page is drawn as a link for each part, and a part to the same URL drawn right after the one
-    /// before, in the same element, goes on in its element, which then holds an annotation for each part. Inside a
-    /// figure or an artifact, the link is an element of its own under it, with no words, as its annotation still is in
-    /// the structure.
-    pub(crate) fn begin_link(&mut self, url: &str) -> Option<OpenLink> {
+    /// Go into a link to `url`, whose annotation is the next one numbered: its words are drawn in it. A link is drawn
+    /// as a link for each part when it runs onto another line or page, and the parts stay one element, which holds an
+    /// annotation for each: a `<link>` around content by its tag `id`, as a paragraph is; a link of a text's words,
+    /// which has no id, when its part, to the same URL, is drawn right after the one before in the same element.
+    /// Inside a figure or an artifact, the link is an element of its own under it, with no words, as its annotation
+    /// still is in the structure.
+    pub(crate) fn begin_link(&mut self, url: &str, id: u32) -> Option<OpenLink> {
         if !self.on {
             return None;
         }
@@ -313,6 +314,7 @@ impl Marks {
             self.element(0, Kind::Link, self.seal_owner)
         } else {
             let link = match self.last_links.get(&parent) {
+                _ if id != 0 => self.element(id, Kind::Link, parent),
                 Some((last_url, link)) if last_url == url => *link,
                 _ => self.element(0, Kind::Link, parent),
             };
@@ -336,12 +338,14 @@ impl Marks {
     }
 
     /// The link of the attribution line, which is drawn as an artifact: an element of its own under the document,
-    /// with the name it shows.
+    /// with the name it shows. It is drawn after each page's content and is not part of it, so it ends no link of the
+    /// document.
     pub(crate) fn attribution_link(&mut self, words: &str) -> Option<LinkMark> {
         if !self.on {
             return None;
         }
-        let element = self.element(0, Kind::Link, 0);
+        let element = self.new_element(Kind::Link, 0, None);
+        self.elements[0].kids.push(Kid::Element(element));
         self.elements[element].words.push_str(words);
         let number = self.annotation();
         self.elements[element].kids.push(Kid::Annotation(number));
@@ -573,7 +577,7 @@ mod tests {
         let mut link = None;
         marks.whole(&mut content, Some(&figure), |c, m| {
             m.content(c, "City", |_, _| {});
-            let open = m.begin_link("https://a.example");
+            let open = m.begin_link("https://a.example", 0);
             link = m.end_link(open);
         });
         let bytes = String::from_utf8(content.finish()).unwrap();
@@ -585,7 +589,7 @@ mod tests {
 
     /// Draw a link to `url` with `words` in it, in the element the drawing is in.
     fn link(marks: &mut Marks, content: &mut Content, url: &str, words: &str) -> Option<LinkMark> {
-        let open = marks.begin_link(url);
+        let open = marks.begin_link(url, 0);
         marks.content(content, words, |_, _| {});
         marks.end_link(open)
     }
@@ -617,11 +621,11 @@ mod tests {
         let mut content = Content::new();
         marks.begin_page(0);
         let figure = |alt: &str| tag(0, TagKind::Figure(alt.into()));
-        let open = marks.begin_link("https://a.example");
+        let open = marks.begin_link("https://a.example", 0);
         marks.whole(&mut content, Some(&figure("First")), |_, _| {});
         let first = marks.end_link(open).expect("a link");
         marks.whole(&mut content, Some(&figure("Middle")), |_, _| {});
-        let open = marks.begin_link("https://a.example");
+        let open = marks.begin_link("https://a.example", 0);
         marks.whole(&mut content, Some(&figure("Last")), |_, _| {});
         let last = marks.end_link(open).expect("a link");
         assert_ne!(first.element, last.element);
@@ -660,7 +664,7 @@ mod tests {
         let mut marks = Marks::tagged();
         let mut content = Content::new();
         marks.begin_page(0);
-        let open = marks.begin_link("https://a.example");
+        let open = marks.begin_link("https://a.example", 0);
         marks.whole(&mut content, Some(&tag(0, TagKind::Figure("A chart".into()))), |_, _| {});
         let mark = marks.end_link(open).expect("a link");
         assert_eq!(marks.elements[mark.element].words, "A chart");

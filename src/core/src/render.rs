@@ -240,6 +240,9 @@ pub struct RenderLink {
     pub width: f32,
     pub height: f32,
     pub debug_self: bool,
+    /// In a tagged section, the tag id of a `<link>` around content, which its parts on later pages share, so they
+    /// stay one link. 0 for a link of a text's words, and in a section that is not tagged.
+    pub tag_id: u32,
     pub children: Vec<RenderNode>,
 }
 

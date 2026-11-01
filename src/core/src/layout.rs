@@ -3177,7 +3177,7 @@ fn layout_link(
         HeightMode::Auto => content_h + pt + pb,
     };
     (
-        RenderNode::Link(RenderLink { url, x, y, width: avail_w, height, debug_self: node.debug, children }),
+        RenderNode::Link(RenderLink { url, x, y, width: avail_w, height, debug_self: node.debug, tag_id: node.tag_id, children }),
         height,
     )
 }
@@ -4462,7 +4462,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 match atom.href() {
                     Some(href) => all_nodes.push(RenderNode::Link(RenderLink {
                         url: href.to_string(), x: cur_x - lead, y: line_y,
-                        width: aw + lead, height: line_height, debug_self: false, children: seg,
+                        width: aw + lead, height: line_height, debug_self: false, tag_id: 0, children: seg,
                     })),
                     None => all_nodes.extend(seg),
                 }
@@ -4689,7 +4689,7 @@ fn layout_pre_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f3
                 match &run.href {
                     Some(href) => nodes.push(RenderNode::Link(RenderLink {
                         url: href.clone(), x: cur_x, y: line_y, width, height: line_height,
-                        debug_self: false, children: parts,
+                        debug_self: false, tag_id: 0, children: parts,
                     })),
                     None => nodes.extend(parts),
                 }
