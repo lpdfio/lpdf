@@ -3500,8 +3500,7 @@ fn assemble_pdf(
                     if let Some(ml) = field.max_len { fw.text_max_len(ml as i32); }
                     fw.vartext_default_appearance(Str(b"/Helv 0 Tf 0 g"));
                     let mut aw = fw.into_annotation();
-                    aw.subtype(AnnotationType::Widget)
-                      .rect(rect)
+                    aw.rect(rect)
                       .page(page_id)
                       .highlight(HighlightEffect::None)
                       .border(0.0, 0.0, 0.0, None);
@@ -3523,8 +3522,7 @@ fn assemble_pdf(
                     }
                     fw.vartext_default_appearance(Str(b"/Helv 0 Tf 0 g"));
                     let mut aw = fw.into_annotation();
-                    aw.subtype(AnnotationType::Widget)
-                      .rect(rect)
+                    aw.rect(rect)
                       .page(page_id)
                       .highlight(HighlightEffect::None)
                       .border(0.0, 0.0, 0.0, None);
@@ -3547,8 +3545,7 @@ fn assemble_pdf(
                     if !field.name.is_empty() { fw.partial_name(TextStr(&field.name)); }
                     fw.checkbox_value(checked_state);
                     let mut aw = fw.into_annotation();
-                    aw.subtype(AnnotationType::Widget)
-                      .rect(rect)
+                    aw.rect(rect)
                       .page(page_id)
                       .highlight(HighlightEffect::None)
                       .border(0.0, 0.0, 0.0, None);
@@ -3572,8 +3569,7 @@ fn assemble_pdf(
                         let mut fw = pdf.form_field(fa.widget_id);
                         fw.parent(parent_id);
                         let mut aw = fw.into_annotation();
-                        aw.subtype(AnnotationType::Widget)
-                          .rect(rect)
+                        aw.rect(rect)
                           .page(page_id)
                           .highlight(HighlightEffect::None)
                           .border(0.0, 0.0, 0.0, None);
@@ -3593,8 +3589,7 @@ fn assemble_pdf(
                     fw.field_flags(FieldFlags::PUSHBUTTON);
                     if !field.name.is_empty() { fw.partial_name(TextStr(&field.name)); }
                     let mut aw = fw.into_annotation();
-                    aw.subtype(AnnotationType::Widget)
-                      .rect(rect)
+                    aw.rect(rect)
                       .page(page_id)
                       .highlight(HighlightEffect::None)
                       .border(0.0, 0.0, 0.0, None);
@@ -4814,6 +4809,20 @@ mod tests {
         let (_, catalog) = object_with(&text, "/Type /Catalog");
         assert!(catalog.contains(&format!("/Helv {helvetica} 0 R")), "{catalog}");
         assert!(text.contains("/DA (/Helv 0 Tf 0 g)"));
+    }
+
+    /// pdf-writer's `into_annotation` writes the widget's subtype, so a second one is a duplicated key, which qpdf
+    /// warns about and a strict reader may refuse.
+    #[test]
+    fn every_field_is_a_widget_that_names_its_subtype_once() {
+        let xml = include_str!("../../../test/fixtures/showcase-forms.xml");
+        let bytes = crate::LpdfEngine::render_xml_to_pdf_bytes(xml).expect("renders");
+        let pdf = String::from_utf8_lossy(&bytes);
+        let widgets: Vec<&str> = pdf.split("endobj").filter(|object| object.contains("/Subtype /Widget")).collect();
+        assert_eq!(widgets.len(), xml.matches("<field ").count());
+        for widget in widgets {
+            assert_eq!(widget.matches("/Subtype").count(), 1, "{widget}");
+        }
     }
 
     // ── Bookmarks ─────────────────────────────────────────────────────────────
