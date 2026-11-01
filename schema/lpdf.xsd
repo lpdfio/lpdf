@@ -348,6 +348,13 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <xs:simpleType name="Ocg">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="print"/>
+      <xs:enumeration value="screen"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="ListType">
     <xs:restriction base="xs:string">
       <xs:enumeration value="bullet"/>
@@ -578,6 +585,15 @@
     </xs:attribute>
   </xs:attributeGroup>
 
+  <!-- ocg, on every element that draws: the layout's, a layer, and what a layer draws -->
+  <xs:attributeGroup name="OcgAttr">
+    <xs:attribute name="ocg" type="Ocg">
+      <xs:annotation>
+        <xs:documentation>Puts the element, and everything in it, in an optional content group, which the viewer shows or hides. print: printed, and not shown on screen. screen: shown on screen, and not printed. The element keeps its room either way, so nothing moves. An element with a group inside an element with another shows only where both show. Acrobat, Chrome and Firefox switch the groups; Preview and Safari show everything, on screen and in print. Hidden content is still in the file, where it can be selected and copied: it is not a way to keep anything secret. A link in print content is drawn and does nothing, and a form field can't be in print content: use a frame with a border for a box filled in by hand. With pdfa, pdfua or pdfx on the output, everything shows.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:attributeGroup>
+
   <!-- Box attrs shared by all layout elements -->
   <xs:attributeGroup name="BoxAttrs">
     <xs:attribute name="font"       type="xs:string"/>
@@ -617,6 +633,7 @@
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="debug"      type="Boolean"/>
+    <xs:attributeGroup ref="OcgAttr"/>
     <xs:attributeGroup ref="DataBindingAttrs"/>
     <xs:attributeGroup ref="DataColorAttr"/>
     <xs:attributeGroup ref="DataBackgroundAttr"/>
@@ -669,6 +686,7 @@
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="debug"      type="Boolean"/>
+    <xs:attributeGroup ref="OcgAttr"/>
     <xs:attributeGroup ref="DataBindingAttrs"/>
     <xs:attributeGroup ref="DataColorAttr"/>
     <xs:attributeGroup ref="DataBackgroundAttr"/>
@@ -805,6 +823,7 @@
       <xs:attribute name="radius" type="PtValue"/>
       <xs:attributeGroup ref="CanvasFillStrokeAttrs"/>
       <xs:attributeGroup ref="CanvasShadowAttrs"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -824,6 +843,7 @@
       <xs:attribute name="anchor" type="Anchor"/>
       <xs:attributeGroup ref="CanvasFillStrokeAttrs"/>
       <xs:attributeGroup ref="CanvasShadowAttrs"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -844,6 +864,7 @@
       <xs:attribute name="anchor" type="Anchor"/>
       <xs:attributeGroup ref="CanvasFillStrokeAttrs"/>
       <xs:attributeGroup ref="CanvasShadowAttrs"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -857,6 +878,7 @@
       <xs:attribute name="stroke-width" type="PtValue"/>
       <xs:attribute name="stroke-dash"  type="xs:string"/>
       <xs:attribute name="line-cap"     type="LineCap"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -869,6 +891,7 @@
       <xs:attribute name="stroke-width" type="PtValue"/>
       <xs:attribute name="stroke-dash"  type="xs:string"/>
       <xs:attribute name="line-cap"     type="LineCap"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -889,6 +912,7 @@
         </xs:annotation>
       </xs:attribute>
       <xs:attributeGroup ref="DataValueAttrs"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -902,6 +926,7 @@
       <xs:attribute name="width"  type="PtValue"/>
       <xs:attribute name="height" type="PtValue"/>
       <xs:attributeGroup ref="DataConditionAttrs"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -920,6 +945,7 @@
       <xs:attributeGroup ref="AtPositionAttrs"/>
       <xs:attribute name="width" type="PtValue"/>
       <xs:attributeGroup ref="DataValueAttrs"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -967,6 +993,7 @@
         </xs:annotation>
       </xs:attribute>
       <xs:attributeGroup ref="DataConditionAttrs"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -1879,6 +1906,7 @@
       <xs:attribute name="debug"  type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
       <xs:attributeGroup ref="DataHrefAttr"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -1921,6 +1949,7 @@
       <xs:attribute name="debug"     type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
       <xs:attributeGroup ref="DataColorAttr"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -1989,6 +2018,7 @@
       <xs:attribute name="paginate"   type="Paginate"/>
       <xs:attribute name="debug"      type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -2013,6 +2043,7 @@
       <xs:attribute name="paginate"   type="Paginate"/>
       <xs:attribute name="debug"      type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -2059,6 +2090,7 @@
       <xs:attribute name="debug" type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
       <xs:attributeGroup ref="DataFillAttr"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -2124,6 +2156,7 @@
       <xs:attribute name="paginate"  type="Paginate"/>
       <xs:attribute name="debug"     type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -2179,6 +2212,7 @@
       </xs:sequence>
       <xs:attribute name="background" type="Fill"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -2195,6 +2229,7 @@
       </xs:attribute>
       <xs:attribute name="background" type="Fill"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -2243,6 +2278,7 @@
       <xs:attribute name="paginate"   type="Paginate"/>
       <xs:attribute name="debug"      type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 
@@ -2279,6 +2315,7 @@
       <xs:attribute name="border"     type="BorderValue"/>
       <xs:attribute name="debug"      type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
+      <xs:attributeGroup ref="OcgAttr"/>
     </xs:complexType>
   </xs:element>
 

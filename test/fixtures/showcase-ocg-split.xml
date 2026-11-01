@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <!-- Content in a group that splits across pages, and repeats on each: every part keeps its group. Print content is
+       red and screen content blue, the colors `make check-ocg` looks for; everything else shows everywhere. -->
+  <tokens>
+    <colors>
+      <color name="print"  value="#c00000"/>
+      <color name="screen" value="#0047ab"/>
+      <color name="muted"  value="#737373"/>
+    </colors>
+  </tokens>
+  <document size="a5">
+    <meta title="lpdf Showcase — Optional content across pages"
+          subject="ocg on a box split across pages, a repeated region and a repeated table header"/>
+
+  <section>
+    <layout margin="32pt">
+      <!-- A region repeated on every page, with a leaf of each group -->
+      <region pin="bottom">
+        <row>
+          <text font-size="8pt" color="print" ocg="print">Printed page {page} of {pages}</text>
+          <text width="fill" align="right" font-size="8pt" color="screen" ocg="screen">Page {page} of {pages} on screen</text>
+        </row>
+      </region>
+
+      <column gap="10pt">
+        <text font-size="16pt" bold="true">Terms and notes</text>
+
+        <!-- A box in a group, split across pages: each part is in the group -->
+        <column ocg="print" gap="6pt" border="1pt print" padding="8pt">
+          <text bold="true" color="print">For the printed copy</text>
+          <text color="print">1. Keep this copy with your records. It is the copy the law asks you to keep, and the one an auditor will want to see.</text>
+          <text color="print">2. Sign each page in the margin where the paper copy is filed.</text>
+          <text color="print">3. A copy printed from the screen version is not a signed copy.</text>
+          <text color="print">4. Return the slip on the last page with your payment, by post or at the counter.</text>
+          <text color="print">5. Payments by cheque take five working days to clear.</text>
+          <text color="print">6. Payments by transfer name the invoice number as the reference.</text>
+          <text color="print">7. Questions about this invoice go to the address in the header.</text>
+          <text color="print">8. Late payments carry interest at the rate the contract states.</text>
+          <text color="print">9. Partial payments are applied to the oldest invoice first.</text>
+          <text color="print">10. The goods stay ours until the invoice is paid in full.</text>
+          <text color="print">11. Disputes go before the courts of the seller's seat.</text>
+          <text color="print">12. Nothing on this page changes the terms of the contract.</text>
+          <text color="print">13. Prices are in euros and include VAT where VAT is due.</text>
+          <text color="print">14. Keep the receipt the counter gives you for a payment in cash.</text>
+          <text color="print">15. Note 15 of the printed copy: it is here so that the box runs past the foot of the first page and on to the next one.</text>
+          <text color="print">16. Note 16 of the printed copy: it is here so that the box runs past the foot of the first page and on to the next one.</text>
+          <text color="print">17. Note 17 of the printed copy: it is here so that the box runs past the foot of the first page and on to the next one.</text>
+          <text color="print">18. Note 18 of the printed copy: it is here so that the box runs past the foot of the first page and on to the next one.</text>
+          <text color="print">19. Note 19 of the printed copy: it is here so that the box runs past the foot of the first page and on to the next one.</text>
+          <text color="print">20. Note 20 of the printed copy: it is here so that the box runs past the foot of the first page and on to the next one.</text>
+          <text color="print">21. Note 21 of the printed copy: it is here so that the box runs past the foot of the first page and on to the next one.</text>
+          <text color="print">22. Note 22 of the printed copy: it is here so that the box runs past the foot of the first page and on to the next one.</text>
+          <text color="print">23. Note 23 of the printed copy: it is here so that the box runs past the foot of the first page and on to the next one.</text>
+          <text color="print">24. Note 24 of the printed copy: it is here so that the box runs past the foot of the first page and on to the next one.</text>
+          <text color="print">25. Note 25 of the printed copy: it is here so that the box runs past the foot of the first page and on to the next one.</text>
+          <text color="print">26. Note 26 of the printed copy: it is here so that the box runs past the foot of the first page and on to the next one.</text>
+        </column>
+
+        <!-- A text in a group -->
+        <text color="screen" ocg="screen">On screen, every reference in these notes is a link, and the payment page opens from the first page. A printed copy has no links, so this paragraph is left off the paper, and the numbered notes before it are left off the screen. Neither moves to take the room the other leaves.</text>
+
+        <!-- A table whose header row repeats on every page it runs onto, in a group -->
+        <table cols="1fr 60pt" border="0.5pt muted">
+          <thead ocg="screen"><td><text bold="true" color="screen">Payment (on screen)</text></td><td><text bold="true" color="screen" align="right">EUR</text></td></thead>
+          <tr><td><text>Deposit</text></td><td><text align="right">200.00</text></td></tr>
+          <tr><td><text>First instalment</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Second instalment</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Third instalment</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Fourth instalment</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Fifth instalment</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Sixth instalment</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Seventh instalment</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Eighth instalment</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Ninth instalment</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Tenth instalment</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Eleventh instalment</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Twelfth instalment</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Thirteenth instalment</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Fourteenth instalment</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Fifteenth instalment</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Sixteenth instalment</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 17</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 18</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 19</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 20</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 21</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 22</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 23</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 24</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 25</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 26</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 27</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 28</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 29</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 30</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 31</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 32</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 33</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 34</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 35</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 36</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 37</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 38</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 39</text></td><td><text align="right">300.00</text></td></tr>
+          <tr><td><text>Instalment 40</text></td><td><text align="right">300.00</text></td></tr>
+        </table>
+      </column>
+    </layout>
+  </section>
+  </document>
+</lpdf>

@@ -20,6 +20,7 @@ const RECT: Attributes = &[
     ("stroke-width", Kind::Text),
     ("stroke-dash", Kind::Text),
     ("shadow", Kind::Text),
+    ("ocg", Kind::Text),
 ];
 
 const CIRCLE: Attributes = &[
@@ -32,6 +33,7 @@ const CIRCLE: Attributes = &[
     ("stroke-width", Kind::Text),
     ("stroke-dash", Kind::Text),
     ("shadow", Kind::Text),
+    ("ocg", Kind::Text),
 ];
 
 const ELLIPSE: Attributes = &[
@@ -45,6 +47,7 @@ const ELLIPSE: Attributes = &[
     ("stroke-width", Kind::Text),
     ("stroke-dash", Kind::Text),
     ("shadow", Kind::Text),
+    ("ocg", Kind::Text),
 ];
 
 const LINE: Attributes = &[
@@ -56,6 +59,7 @@ const LINE: Attributes = &[
     ("stroke-width", Kind::Text),
     ("stroke-dash", Kind::Text),
     ("line-cap", Kind::Text),
+    ("ocg", Kind::Text),
 ];
 
 const PATH: Attributes = &[
@@ -66,6 +70,7 @@ const PATH: Attributes = &[
     ("stroke-width", Kind::Text),
     ("stroke-dash", Kind::Text),
     ("line-cap", Kind::Text),
+    ("ocg", Kind::Text),
 ];
 
 const TEXT_AT: Attributes = &[
@@ -81,6 +86,7 @@ const TEXT_AT: Attributes = &[
     ("max-lines", Kind::Integer { min: Some(1), max: None }),
     ("ellipsis", Kind::Boolean),
     ("width", Kind::Text),
+    ("ocg", Kind::Text),
 ];
 
 const IMG_AT: Attributes = &[
@@ -90,6 +96,7 @@ const IMG_AT: Attributes = &[
     ("anchor", Kind::Text),
     ("width", Kind::Text),
     ("height", Kind::Text),
+    ("ocg", Kind::Text),
 ];
 
 const BARCODE_AT: Attributes = &[
@@ -104,6 +111,7 @@ const BARCODE_AT: Attributes = &[
     ("y", Kind::Text),
     ("anchor", Kind::Text),
     ("width", Kind::Text),
+    ("ocg", Kind::Text),
 ];
 
 const LAYER: Attributes = &[
@@ -115,6 +123,7 @@ const LAYER: Attributes = &[
     ("font-size", Kind::Text),
     ("color", Kind::Text),
     ("alt", Kind::Text),
+    ("ocg", Kind::Text),
 ];
 
 const FONT: Attributes = &[
@@ -536,6 +545,7 @@ const COLUMN: Attributes = &[
     ("shadow", Kind::Text),
     ("paginate", Kind::Text),
     ("debug", Kind::Boolean),
+    ("ocg", Kind::Text),
     ("align", Kind::Text),
     ("justify", Kind::Text),
     ("width", Kind::Text),
@@ -555,6 +565,7 @@ const ROW: Attributes = &[
     ("shadow", Kind::Text),
     ("paginate", Kind::Text),
     ("debug", Kind::Boolean),
+    ("ocg", Kind::Text),
     ("align", Kind::Text),
     ("justify", Kind::Text),
     ("width", Kind::Text),
@@ -574,6 +585,7 @@ const LIST: Attributes = &[
     ("shadow", Kind::Text),
     ("paginate", Kind::Text),
     ("debug", Kind::Boolean),
+    ("ocg", Kind::Text),
     ("type", Kind::Text),
     ("format", Kind::Text),
     ("start", Kind::Integer { min: None, max: None }),
@@ -598,6 +610,7 @@ const LI: Attributes = &[
     ("shadow", Kind::Text),
     ("paginate", Kind::Text),
     ("debug", Kind::Boolean),
+    ("ocg", Kind::Text),
     ("checked", Kind::Boolean),
 ];
 
@@ -615,6 +628,7 @@ const GRID: Attributes = &[
     ("shadow", Kind::Text),
     ("paginate", Kind::Text),
     ("debug", Kind::Boolean),
+    ("ocg", Kind::Text),
     ("width", Kind::Text),
     ("col-width", Kind::Text),
     ("cols", Kind::Integer { min: Some(1), max: Some(12) }),
@@ -633,6 +647,7 @@ const FRAME: Attributes = &[
     ("shadow", Kind::Text),
     ("paginate", Kind::Text),
     ("debug", Kind::Boolean),
+    ("ocg", Kind::Text),
     ("width", Kind::Text),
 ];
 
@@ -649,6 +664,7 @@ const CODE: Attributes = &[
     ("shadow", Kind::Text),
     ("paginate", Kind::Text),
     ("debug", Kind::Boolean),
+    ("ocg", Kind::Text),
     ("width", Kind::Text),
     ("tab-size", Kind::Integer { min: Some(1), max: Some(16) }),
     ("line-height", Kind::NameOrDecimal { min: Bound::Exclusive(0.0), max: Bound::Open }),
@@ -662,6 +678,7 @@ const LINK: Attributes = &[
     ("width", Kind::Text),
     ("height", Kind::Text),
     ("debug", Kind::Boolean),
+    ("ocg", Kind::Text),
 ];
 
 const BOOKMARK: Attributes = &[
@@ -676,6 +693,7 @@ const DIVIDER: Attributes = &[
     ("thickness", Kind::Text),
     ("width", Kind::Text),
     ("debug", Kind::Boolean),
+    ("ocg", Kind::Text),
 ];
 
 const SPAN: Attributes = &[
@@ -710,6 +728,7 @@ const IMG: Attributes = &[
     ("radius", Kind::Text),
     ("paginate", Kind::Text),
     ("debug", Kind::Boolean),
+    ("ocg", Kind::Text),
 ];
 
 const BARCODE: Attributes = &[
@@ -724,6 +743,7 @@ const BARCODE: Attributes = &[
     ("alt", Kind::Text),
     ("paginate", Kind::Text),
     ("debug", Kind::Boolean),
+    ("ocg", Kind::Text),
 ];
 
 const SHAPE: Attributes = &[
@@ -738,6 +758,7 @@ const SHAPE: Attributes = &[
     ("stroke-dash", Kind::Text),
     ("opacity", Kind::Decimal { min: Bound::Inclusive(0.0), max: Bound::Inclusive(1.0) }),
     ("debug", Kind::Boolean),
+    ("ocg", Kind::Text),
 ];
 
 const TEXT: Attributes = &[
@@ -759,6 +780,7 @@ const TEXT: Attributes = &[
     ("capture-fallback", Kind::Text),
     ("paginate", Kind::Text),
     ("debug", Kind::Boolean),
+    ("ocg", Kind::Text),
 ];
 
 const TD: Attributes = &[
@@ -775,6 +797,7 @@ const TD: Attributes = &[
     ("shadow", Kind::Text),
     ("paginate", Kind::Text),
     ("debug", Kind::Boolean),
+    ("ocg", Kind::Text),
     ("colspan", Kind::Integer { min: Some(1), max: None }),
     ("rowspan", Kind::Integer { min: Some(1), max: None }),
     ("align", Kind::Text),
@@ -783,11 +806,13 @@ const TD: Attributes = &[
 
 const THEAD: Attributes = &[
     ("background", Kind::Text),
+    ("ocg", Kind::Text),
 ];
 
 const TR: Attributes = &[
     ("keep", Kind::Text),
     ("background", Kind::Text),
+    ("ocg", Kind::Text),
 ];
 
 const TABLE: Attributes = &[
@@ -803,6 +828,7 @@ const TABLE: Attributes = &[
     ("height", Kind::Text),
     ("paginate", Kind::Text),
     ("debug", Kind::Boolean),
+    ("ocg", Kind::Text),
 ];
 
 const FIELD: Attributes = &[
@@ -822,6 +848,7 @@ const FIELD: Attributes = &[
     ("background", Kind::Text),
     ("border", Kind::Text),
     ("debug", Kind::Boolean),
+    ("ocg", Kind::Text),
 ];
 
 /// The attributes of the element `name` written in the element `parent`, or `None` for an element the schema

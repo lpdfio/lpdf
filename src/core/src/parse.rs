@@ -98,6 +98,13 @@ impl Document {
                     }
                 }
             }
+            // A PDF/A, PDF/UA or PDF/X file shows everything: PDF/A-2 and PDF/UA-1 forbid the entry that switches a group
+            // between screen and print, and a PDF/X file shows everything as they do. So the groups go before the
+            // layout, which then lays out what the document without them would.
+            if self.output.pdfa.is_some() || self.output.pdfua.is_some() || self.output.pdfx.is_some() {
+                children.iter_mut().for_each(forget_ocg);
+                underlays.iter_mut().chain(overlays.iter_mut()).for_each(canvas::CanvasLayer::forget_ocg);
+            }
             // The items of a list are known once the data is in, so the lists become columns and rows here. A table
             // of contents section is bound after it is laid out, and gets its lists then (`toc.rs`).
             if section.options.toc.is_none() {
@@ -120,6 +127,12 @@ impl Document {
         }
         result
     }
+}
+
+/// Take `node` and every node below it out of their optional content groups.
+pub(crate) fn forget_ocg(node: &mut Node) {
+    node.ocg = None;
+    node.children.iter_mut().for_each(forget_ocg);
 }
 
 /// Convert a `LayoutRegion` to a `Node` that the layout engine can handle.
@@ -621,6 +634,27 @@ impl Role {
     }
 }
 
+/// An optional content group: `ocg="print"` or `ocg="screen"` on an element, which puts it and everything in it in
+/// content the viewer shows only when printing, or only on screen. The element keeps its room either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Ocg {
+    /// Printed, and not shown on screen.
+    Print,
+    /// Shown on screen, and not printed.
+    Screen,
+}
+
+impl Ocg {
+    /// The group an `ocg` attribute names.
+    pub fn of(value: &str) -> Result<Self, String> {
+        match value {
+            "print"  => Ok(Ocg::Print),
+            "screen" => Ok(Ocg::Screen),
+            other    => Err(format!("invalid ocg value: '{other}' (expected 'print' or 'screen')")),
+        }
+    }
+}
+
 /// One element of the layout. Every node has every field, whatever its kind, and parse and data binding copy
 /// nodes whole, so a field costs its size in every node of a document, set or not: a larger node is a slower
 /// parse. A new field that is a number, a flag or a small enum goes inline. A string, a list or a struct that few
@@ -651,6 +685,9 @@ pub struct Node {
     /// The structure element the node is drawn in, in a tagged PDF: every part of a node split across lines or pages
     /// has the same, so it stays one element. 0 in a document that is not tagged (`layout::number_for_tags`).
     pub tag_id: u32,
+    /// The optional content group the node and everything in it are in: drawn only when printing, or only on screen.
+    /// `None` shows everywhere, as does every node of a document whose output is PDF/A, PDF/UA or PDF/X.
+    pub ocg: Option<Ocg>,
     pub debug: bool,
     // layout-specific
     pub align: Align,
@@ -882,6 +919,7 @@ pub(crate) struct ParsedNode {
     paginate: Paginate,
     keep: RowKeep,
     role: Role,
+    ocg: Option<Ocg>,
     debug: bool,
     align: Align,
     justify: Justify,
@@ -952,6 +990,7 @@ impl ParsedNode {
             paginate: Paginate::None,
             keep: RowKeep::None,
             role: Role::Auto,
+            ocg: None,
             debug: false,
             align: Align::Stretch,
             justify: Justify::Start,
@@ -1078,7 +1117,7 @@ impl Node {
             kind: NodeKind::Column,
             gap: 0.0, padding: [0.0; 4], background: None, border: None, radius: 0.0, opacity: 1.0, shadow: None,
             height_mode: HeightMode::Auto, width_constraint: None, width_fill: false,
-            page_scope: None, paginate: Paginate::None, keep: RowKeep::None, role: Role::Auto, tag_id: 0, debug: false,
+            page_scope: None, paginate: Paginate::None, keep: RowKeep::None, role: Role::Auto, tag_id: 0, ocg: None, debug: false,
             align: Align::Stretch, justify: Justify::Start,
             cols: 1, col_width: None, direction: Direction::Horizontal,
             color: None, thickness: 1.0, text_runs: Vec::new(),
@@ -1210,6 +1249,7 @@ fn resolve_node(
         keep:                  n.keep,
         role:                  n.role,
         tag_id:                0,
+        ocg:                   n.ocg,
         debug:                 n.debug,
         align:                 n.align,
         justify:               n.justify,
@@ -2305,6 +2345,9 @@ pub(crate) fn parse_node(
             return Err(format!("<table>{}: {}", node_loc(elem), footnote_not_here("a table")));
         }
     }
+    if let Some(reason) = field_in_print(&node) {
+        return Err(format!("<{tag}>{}: {reason}", node_loc(elem)));
+    }
 
     Ok(node)
 }
@@ -2692,6 +2735,31 @@ fn footnote_not_here(place: &str) -> String {
     format!("<fn> is not supported in {place}: put footnotes in the texts of the layout, outside tables and regions")
 }
 
+/// Why `node` can't be what it is, when it is print content (`ocg="print"`) that is or holds a form field. A field there
+/// could be filled neither on screen, where print content is hidden, nor on paper. `None` for any other node.
+fn field_in_print(node: &ParsedNode) -> Option<String> {
+    fn first_field(node: &ParsedNode) -> Option<&ParsedNode> {
+        if node.kind == NodeKind::Field {
+            return Some(node);
+        }
+        node.children.iter().find_map(first_field)
+    }
+    if node.ocg != Some(Ocg::Print) {
+        return None;
+    }
+    let field = first_field(node)?;
+    let name = field.field_name.as_deref().map(|name| format!(" '{name}'")).unwrap_or_default();
+    let what = if std::ptr::eq(field, node) {
+        format!("a form field can't be ocg=\"print\": the field{name}")
+    } else {
+        format!("ocg=\"print\" holds the form field{name}, which")
+    };
+    Some(format!(
+        "{what} could be filled neither on screen, where print content is hidden, nor on paper: use a <frame> with a \
+        border for a box filled in by hand"
+    ))
+}
+
 // ── Text, images and barcodes at fixed places ───────────────────────────────
 
 /// The node kind a layer's `text-at`, `img-at` or `barcode-at` becomes: the one its flow version has.
@@ -2740,6 +2808,7 @@ fn at_node_attrs(
     if !data.is_empty() {
         node.data_attrs = Some(Box::new(data));
     }
+    node.ocg = a.get("ocg").map(Ocg::of).transpose()?;
     match kind {
         NodeKind::Text => {
             if let Some(v) = a.get("font")      { node.font      = Some(v.to_string()); }
@@ -3171,6 +3240,7 @@ fn apply_box_attrs(
             "width"                  => node.width_constraint = Some(tokens.resolve_width(v)?),
             "paginate"               => node.paginate    = parse_paginate_attr(v)?,
             "debug"                  => node.debug       = v == "true",
+            "ocg"                    => node.ocg         = Some(Ocg::of(v)?),
             _                        => {}
         }
     }
@@ -4177,6 +4247,9 @@ fn parse_tree_node(
         if kind == NodeKind::Table && node.children.iter().any(parsed_has_footnote) {
             return Err(format!("table: {}", footnote_not_here("a table")));
         }
+    }
+    if let Some(reason) = field_in_print(&node) {
+        return Err(format!("{type_str}: {reason}"));
     }
 
     Ok(node)

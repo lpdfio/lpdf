@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <!-- What is printed is red, what is shown on screen is blue, and what is in both groups at once, which never shows,
+       is green. Everything else is gray: it shows everywhere. The colors are the ones `make check-ocg` looks for. -->
+  <tokens>
+    <colors>
+      <color name="print"  value="#c00000"/>
+      <color name="screen" value="#0047ab"/>
+      <color name="never"  value="#008a00"/>
+      <color name="muted"  value="#737373"/>
+      <color name="rule"   value="#d0d0d0"/>
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Optional content (ocg)"
+          subject="ocg=print and ocg=screen: what goes on paper and what stays on screen"/>
+
+  <section>
+    <!-- A layer in a group: a stamp on the printed copy. And in a layer of no group, a text-at in one, at the same place:
+         only one of the two shows, on screen or in print. -->
+    <layer ocg="print">
+      <text-at x="40pt" y="16pt" font-size="9pt" bold="true" color="print">PRINTED COPY</text-at>
+    </layer>
+    <layer>
+      <text-at x="40pt" y="16pt" font-size="9pt" bold="true" color="screen" ocg="screen">VIEWED ON SCREEN</text-at>
+    </layer>
+
+    <layout margin="40pt">
+      <!-- A region in every page's header, with a leaf in a group -->
+      <region pin="top">
+        <row gap="12pt">
+          <text font-size="18pt" bold="true">Invoice 2026-1105</text>
+          <text width="fill" align="right" font-size="9pt" color="print" ocg="print">Copy for your records</text>
+        </row>
+        <divider color="rule"/>
+      </region>
+
+      <column gap="14pt" padding="16pt 0pt 0pt 0pt">
+        <text>Thank you for your order. The amount below is due by 30 November 2026.</text>
+
+        <table cols="1fr 80pt" border="0.5pt rule">
+          <thead background="#f2f2f2"><td><text bold="true">Item</text></td><td><text bold="true" align="right">Amount</text></td></thead>
+          <tr><td><text>Design work, October</text></td><td><text align="right">1,000.00</text></td></tr>
+          <tr><td><text>Hosting, one year</text></td><td><text align="right">240.00</text></td></tr>
+          <!-- A row in a group -->
+          <tr ocg="screen"><td><text color="screen">Pay by card online and save the transfer fee</text></td><td><text color="screen" align="right">−5.00</text></td></tr>
+          <tr><td><text bold="true">Total due</text></td><td><text bold="true" align="right">EUR 1,240.00</text></td></tr>
+        </table>
+
+        <!-- Leaves: a link to pay online on screen; the bank details on paper -->
+        <link href="https://example.com/pay/2026-1105" ocg="screen">
+          <text font-size="14pt" bold="true" color="screen">Pay online at example.com/pay/2026-1105</text>
+        </link>
+        <text ocg="print" color="print">Pay by bank transfer to IBAN DE00 1234 5678 9012 3456 78, reference 2026-1105.</text>
+        <!-- A link in print content: its words are printed, and nothing is clickable on screen -->
+        <text ocg="print" color="print">Terms of payment: <span href="https://example.com/terms" color="print">example.com/terms</span></text>
+
+        <!-- A leaf that draws a line, and a container: the return slip, on paper only -->
+        <divider color="print" thickness="1pt" ocg="print"/>
+        <column ocg="print" border="1pt print" padding="12pt" gap="8pt">
+          <text bold="true" color="print">Return slip — cut along the line above and send it with your payment</text>
+          <row gap="8pt" align="center">
+            <text color="print">Invoice 2026-1105 · EUR 1,240.00 · Amount paid:</text>
+            <frame width="120pt" height="20pt" border="0.5pt print"/>
+          </row>
+          <!-- A group inside a group: screen content in print content never shows, nor does its link -->
+          <link href="https://example.com/never"><text color="never" ocg="screen">A screen note inside the slip: it never shows.</text></link>
+        </column>
+        <column ocg="screen">
+          <text color="never" ocg="print">A print note inside screen content: it never shows either.</text>
+        </column>
+
+        <text color="muted" font-size="9pt">Content in a group is still in the file: it is hidden, not removed.</text>
+      </column>
+    </layout>
+
+    <!-- What a layer draws, in a group of its own: a mark beside the slip on screen, and in print -->
+    <layer>
+      <rect anchor="bottom-right" x="-40pt" y="-60pt" width="24pt" height="24pt" fill="screen" ocg="screen"/>
+      <circle anchor="bottom-right" x="-70pt" y="-60pt" r="12pt" fill="print" ocg="print"/>
+    </layer>
+  </section>
+  </document>
+</lpdf>

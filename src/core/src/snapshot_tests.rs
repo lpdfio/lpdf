@@ -315,3 +315,7 @@ fn showcase_region_chrome()  { run_snapshot("showcase-region-chrome"); }
 fn showcase_region_page_scope() { run_snapshot("showcase-region-page-scope"); }
 #[test]
 fn showcase_toc() { run_snapshot("showcase-toc"); }
+#[test]
+fn showcase_ocg() { check_snapshot("showcase-ocg", &crate::ocg_render_tests::render_fixture("showcase-ocg")); }
+#[test]
+fn showcase_ocg_split() { check_snapshot("showcase-ocg-split", &crate::ocg_render_tests::render_fixture("showcase-ocg-split")); }

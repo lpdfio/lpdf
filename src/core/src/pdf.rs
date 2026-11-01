@@ -43,7 +43,7 @@ use subsetter::GlyphRemapper;
 
 use crate::attachments::{self, EmbeddedFile};
 use crate::render::{placed_anchors, PlacedAnchor, RenderBox, RenderCanvasLayer, RenderField, RenderNode, RenderPage, RenderedBarcodeKind};
-use crate::parse::{FieldKind, Meta, Output, Shadow};
+use crate::parse::{FieldKind, Meta, Ocg, Output, Shadow};
 use crate::pdfa::{self, FileDate, PdfA, Standards, XmpIds};
 use crate::pdfx::{PdfXVersion, PressProfile, ProfileSpace};
 use crate::pdfua::PdfUa;
@@ -1173,7 +1173,7 @@ struct DrawResources<'a> {
     image_res_map: &'a HashMap<String, String>,
     gradients:     &'a HashMap<String, Gradient>,
     /// Whether a link is an annotation over its content. A PDF/X file allows nothing clickable on the printed page, so
-    /// its links draw their content alone.
+    /// its links draw their content alone, as do the links in print content (`ocg="print"`), which is hidden on screen.
     links:         bool,
 }
 
@@ -1242,6 +1242,13 @@ fn draw_drawn(
     match node {
         // ── Box ──────────────────────────────────────────────────────────────
         RenderNode::Box(b) => {
+            // A box in an optional content group is marked content that names it, around all the box draws. Print
+            // content is hidden on screen, where a link is clicked, so its links draw their content alone.
+            if let Some(ocg) = b.ocg {
+                content.begin_marked_content_with_properties(Name(b"OC")).properties_named(Name(ocg_resource_name(ocg).as_bytes()));
+            }
+            let in_group = DrawResources { links: res.links && b.ocg != Some(Ocg::Print), ..*res };
+            let res = &in_group;
             let percent = opacity_percent(b.opacity);
             if percent >= 100 {
                 draw_box(content, annots, groups, marks, b, res, page_h);
@@ -1249,6 +1256,9 @@ fn draw_drawn(
                 draw_faded(content, groups, marks, percent, |content, groups, marks| {
                     draw_box(content, annots, groups, marks, b, res, page_h);
                 });
+            }
+            if b.ocg.is_some() {
+                content.end_marked_content();
             }
         }
 
@@ -1893,6 +1903,40 @@ fn collect_used_opacities(nodes: &[RenderNode], out: &mut HashSet<u32>) {
             RenderNode::Link(l) => collect_used_opacities(&l.children, out),
             _                   => {}
         }
+    }
+}
+
+/// The optional content groups the pages draw in, in the order they are first drawn, so that the same document gives
+/// the same objects. Empty for a document without `ocg`, which writes nothing of optional content.
+fn used_groups(pages: &[RenderPage]) -> Vec<Ocg> {
+    fn collect(nodes: &[RenderNode], out: &mut Vec<Ocg>) {
+        for node in nodes {
+            match node {
+                RenderNode::Box(b) => {
+                    if let Some(ocg) = b.ocg && !out.contains(&ocg) {
+                        out.push(ocg);
+                    }
+                    collect(&b.children, out);
+                }
+                RenderNode::Link(l)        => collect(&l.children, out),
+                RenderNode::CanvasLayer(l) => collect(&l.children, out),
+                _                          => {}
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for page in pages {
+        collect(&page.nodes, &mut out);
+    }
+    out
+}
+
+/// The name a page's or a group's resources give the optional content group `ocg`, which the marked content of what
+/// is in it names.
+fn ocg_resource_name(ocg: Ocg) -> &'static str {
+    match ocg {
+        Ocg::Print  => "OCPrint",
+        Ocg::Screen => "OCScreen",
     }
 }
 
@@ -2946,6 +2990,7 @@ fn assemble_pdf(
     marks:              &Marks,
     press:              Option<&PressProfile>,
     linearize:          bool,
+    ocgs:               &[Ocg],
 ) -> Result<Vec<u8>, String> {
     // What PDF/A alone asks for: an output intent, a file ID, and links that print.
     let pdfa = file.filter(|file| file.standards.pdfa.is_some());
@@ -2985,6 +3030,9 @@ fn assemble_pdf(
         elements: marks.elements.iter().map(|_| alloc.next()).collect(),
     });
     let keys = ParentKeys::of(marks, &rendered_pages);
+
+    // The optional content groups last: a document without them keeps its ids.
+    let ocg_ids: Vec<(Ocg, Ref)> = ocgs.iter().map(|ocg| (*ocg, alloc.next())).collect();
 
     let n = pages.len();
     let mut pdf = Pdf::new();
@@ -3027,6 +3075,9 @@ fn assemble_pdf(
                 .dest_output_profile(ids.press);
         }
         attachments::write_catalog(&mut cat, files, &file_ids);
+        if !ocg_ids.is_empty() {
+            write_oc_properties(&mut cat, &ocg_ids);
+        }
         // A tagged PDF: the structure, the language a screen reader reads it in, and the title shown in place of the
         // file name (ISO 14289-1, 7.1 and 7.2).
         if let Some(structure) = &structure {
@@ -3142,6 +3193,16 @@ fn assemble_pdf(
                 }
             }
         }
+        // The optional content groups, which the marked content of any page or group may name.
+        if !ocg_ids.is_empty() {
+            let mut properties = resources.insert(Name(b"Properties")).dict();
+            for (ocg, id) in &ocg_ids {
+                let name = ocg_resource_name(*ocg);
+                if named(name) {
+                    properties.pair(Name(name.as_bytes()), *id);
+                }
+            }
+        }
         // The shadings of the gradients, which any page or group may paint.
         if !used_gradients.is_empty() {
             let mut shading_res = resources.shadings();
@@ -3232,6 +3293,11 @@ fn assemble_pdf(
                 form.struct_parents(key);
             }
         }
+    }
+
+    // -- Optional content groups -----------------------------------------------
+    for (ocg, id) in &ocg_ids {
+        write_ocg(&mut pdf, *ocg, *id);
     }
 
     // -- Opacity ExtGState objects ---------------------------------------------
@@ -3761,6 +3827,43 @@ struct PressIds {
     srgb:  Ref,
 }
 
+/// The catalog's `/OCProperties`: the optional content groups, all of them on, and the events that switch them by
+/// their usage when the viewer shows or prints the page (ISO 32000-1, 8.11.4). Both groups start on, so a viewer that
+/// doesn't apply the usage shows everything, as a document without groups does, rather than hiding print content
+/// that would then never print.
+fn write_oc_properties(cat: &mut pdf_writer::writers::Catalog, ocg_ids: &[(Ocg, Ref)]) {
+    let refs = || ocg_ids.iter().map(|(_, id)| *id);
+    let mut properties = cat.insert(Name(b"OCProperties")).dict();
+    properties.insert(Name(b"OCGs")).array().items(refs());
+    let mut config = properties.insert(Name(b"D")).dict();
+    config.pair(Name(b"Name"), TextStr("Screen and print"));
+    config.pair(Name(b"BaseState"), Name(b"ON"));
+    config.insert(Name(b"Order")).array().items(refs());
+    let mut events = config.insert(Name(b"AS")).array();
+    for event in [b"View".as_slice(), b"Print".as_slice()] {
+        let mut usage = events.push().dict();
+        usage.pair(Name(b"Event"), Name(event));
+        usage.insert(Name(b"OCGs")).array().items(refs());
+        usage.insert(Name(b"Category")).array().item(Name(event));
+    }
+}
+
+/// The optional content group `ocg`: the name a viewer's layers panel shows, and its usage, on in print and off on
+/// screen for `print`, the other way round for `screen`.
+fn write_ocg(pdf: &mut Pdf, ocg: Ocg, id: Ref) {
+    let (name, printed) = match ocg {
+        Ocg::Print  => ("Print only", true),
+        Ocg::Screen => ("Screen only", false),
+    };
+    let state = |on: bool| Name(if on { b"ON".as_slice() } else { b"OFF".as_slice() });
+    let mut group = pdf.indirect(id).dict();
+    group.pair(Name(b"Type"), Name(b"OCG"));
+    group.pair(Name(b"Name"), TextStr(name));
+    let mut usage = group.insert(Name(b"Usage")).dict();
+    usage.insert(Name(b"Print")).dict().pair(Name(b"PrintState"), state(printed));
+    usage.insert(Name(b"View")).dict().pair(Name(b"ViewState"), state(!printed));
+}
+
 /// The sheet of `page`: the trimmed page grown by its bleed on every side, its MediaBox and BleedBox. Without a bleed
 /// it is the page itself, written as it was before bleeds existed.
 fn bled(page: &RenderPage) -> Rect {
@@ -3871,6 +3974,7 @@ pub fn render_pdf(
         pages, &fonts, &sorted_font_names, &sorted_image_names,
         image_registry, &image_res_map, rendered_pages, ids, &fields, &anchors,
         &used_gradients, meta, date.as_deref(), file.as_ref(), files, &marks, press, output.linearize,
+        &used_groups(pages),
     )
 }
 

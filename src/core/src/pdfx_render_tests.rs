@@ -48,7 +48,7 @@ fn engine(created_on: Option<&str>) -> LpdfEngine {
     engine
 }
 
-fn render(xml: &str) -> Result<Vec<u8>, String> {
+pub(crate) fn render(xml: &str) -> Result<Vec<u8>, String> {
     engine(Some(CREATED_ON)).render_xml(xml, None, &RenderEncryption::default())
 }
 
