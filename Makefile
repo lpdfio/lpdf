@@ -134,7 +134,7 @@ check-pdfx:
 
 # check-ocg has the core write the samples of optional content (ocg) and renders them with pdf.js, Firefox's viewer, as it
 # shows a page and as it prints one: print content must show only in print and screen content only on screen, on every
-# page, and a PDF/A, PDF/UA or PDF/X file must show both (`scripts/check-ocg.mjs`). Installs pdf.js in target/pdfjs on
+# page; a PDF/A or PDF/UA file must show both, and a PDF/X file the print version (`scripts/check-ocg.mjs`). Installs pdf.js in target/pdfjs on
 # first use; needs Node and npm.
 PDFJS_VERSION ?= 5.6.205
 check-ocg:

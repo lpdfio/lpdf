@@ -5,8 +5,9 @@
 //  - A sample that switches its groups must show blue and no red on screen, red and no blue in print, and green in
 //    neither, on every page it names: a page that shows print content on screen means a part of a group, split
 //    across pages or repeated on each, was drawn out of it.
-//  - A sample of PDF/A, PDF/UA or PDF/X must show both red and blue on screen and in print: those files show
-//    everything.
+//  - A sample of PDF/A or PDF/UA must show both red and blue on screen and in print: those files show everything.
+//  - A sample of PDF/X must show red and no blue on screen and in print: it is the print version, with the screen
+//    group in the file and off.
 //
 // pdf.js reads each group's print and view usage for the intent, as Acrobat applies them through the /AS events; it
 // shares no code with the core.
@@ -41,15 +42,16 @@ const SHOWN = 12;
 const SCALE = 1.5;
 
 /**
- * The samples `writes_ocg_samples_for_the_external_check` writes. `switches`: the groups switch, on every page.
- * `everything`: the file shows both groups.
+ * The samples `writes_ocg_samples_for_the_external_check` writes, and what each shows. `switches`: the groups switch,
+ * on every page. `everything`: the file shows both groups, somewhere. `print`: the file shows the print version, on
+ * screen and in print, somewhere.
  */
 const SAMPLES = [
-    { file: 'ocg.pdf', switches: true },
-    { file: 'ocg-split.pdf', switches: true, pages: 3 },
-    { file: 'ocg-pdfa-2u.pdf', switches: false },
-    { file: 'ocg-pdfua-1.pdf', switches: false },
-    { file: 'ocg-pdfx.pdf', switches: false },
+    { file: 'ocg.pdf', shows: 'switches' },
+    { file: 'ocg-split.pdf', shows: 'switches', pages: 3 },
+    { file: 'ocg-pdfa-2u.pdf', shows: 'everything' },
+    { file: 'ocg-pdfua-1.pdf', shows: 'everything' },
+    { file: 'ocg-pdfx.pdf', shows: 'print' },
 ];
 
 const pdfjsRoot = path.resolve(pdfjsFolder, 'node_modules/pdfjs-dist');
@@ -78,10 +80,9 @@ async function colorsOf(doc, page, intent) {
 
 /** What a page of `sample` must show for `intent`, and must not. */
 function expected(sample, intent) {
-    if (!sample.switches) return { shown: ['print', 'screen'], hidden: ['never'] };
-    return intent === 'print'
-        ? { shown: ['print'], hidden: ['screen', 'never'] }
-        : { shown: ['screen'], hidden: ['print', 'never'] };
+    if (sample.shows === 'everything') return { shown: ['print', 'screen'], hidden: ['never'] };
+    if (sample.shows === 'print' || intent === 'print') return { shown: ['print'], hidden: ['screen', 'never'] };
+    return { shown: ['screen'], hidden: ['print', 'never'] };
 }
 
 const checked = [];
@@ -99,7 +100,7 @@ for (const sample of SAMPLES) {
     if (sample.pages && doc.numPages !== sample.pages) {
         failures.push(`${sample.file}: ${doc.numPages} pages, expected ${sample.pages}: the fixture no longer splits where it should`);
     }
-    // A file that shows everything need show each color only somewhere; one that switches must on every page.
+    // A file that switches must show its colors on every page; any other, somewhere.
     const anywhere = { display: {}, print: {} };
     for (let number = 1; number <= doc.numPages; number++) {
         const page = await doc.getPage(number);
@@ -112,15 +113,15 @@ for (const sample of SAMPLES) {
             }
             for (const name of shown) {
                 anywhere[intent][name] = (anywhere[intent][name] ?? 0) + counts[name];
-                if (sample.switches && counts[name] < SHOWN) failures.push(`${where}: shows no ${name} content`);
+                if (sample.shows === 'switches' && counts[name] < SHOWN) failures.push(`${where}: shows no ${name} content`);
             }
         }
     }
-    if (!sample.switches) {
+    if (sample.shows !== 'switches') {
         for (const intent of ['display', 'print']) {
             for (const name of expected(sample, intent).shown) {
                 if ((anywhere[intent][name] ?? 0) < SHOWN) {
-                    failures.push(`${sample.file}, ${intent === 'print' ? 'printed' : 'on screen'}: shows no ${name} content, and the file should show everything`);
+                    failures.push(`${sample.file}, ${intent === 'print' ? 'printed' : 'on screen'}: shows no ${name} content`);
                 }
             }
         }

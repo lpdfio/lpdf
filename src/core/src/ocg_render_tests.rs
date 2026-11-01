@@ -328,7 +328,7 @@ fn an_ocg_other_than_print_or_screen_is_an_error_that_names_it() {
     }
 }
 
-// ── PDF/A, PDF/UA and PDF/X show everything ──────────────────────────────────
+// ── PDF/A and PDF/UA show everything; PDF/X is the print version ────────────
 
 /// What `with_groups` adds to a document's first layout: content of each group, a link in print content, and a field
 /// in screen content where the standard allows one.
@@ -375,10 +375,45 @@ fn a_pdfua_file_shows_everything_and_tags_it_as_usual() {
     assert_eq!(pdf, plain);
 }
 
+/// The number of the object a `/<name> N 0 R` pair of `file` names.
+fn object_of(file: &str, name: &str) -> String {
+    let at = file.find(&format!("/{name} ")).unwrap_or_else(|| panic!("{name} in {file}")) + name.len() + 2;
+    file[at..].split_whitespace().next().expect("a number").to_string()
+}
+
 #[test]
-fn a_pdfx_file_shows_everything() {
+fn a_pdfx_file_is_the_print_version_with_screen_content_kept_and_off() {
     let xml = with_groups(&fixture("showcase-pdfx"));
-    assert_shows_everything(&crate::pdfx_render_tests::render(&xml).expect("renders"), false);
+    let pdf = crate::pdfx_render_tests::render(&xml).expect("renders");
+    let file = text(&pdf);
+    let marked = contents(&pdf);
+    assert!(marked.contains("/OC /OCPrint BDC") && marked.contains("/OC /OCScreen BDC"), "both groups are in the file");
+
+    let properties = &file[file.find("/OCProperties").expect("the groups are written")..];
+    let config = &properties[properties.find("/D <<").expect("the default configuration")..];
+    let config = &config[..config.find(">>").unwrap()];
+    assert!(config.contains("/Name (Print)"), "{config}");
+    assert!(config.contains(&format!("/OFF [{} 0 R]", object_of(&file, "OCScreen"))), "screen is off: {config}");
+    assert!(config.contains("/Order"), "a layers panel lists both: {config}");
+    assert!(!config.contains("/AS"), "nothing switches between screen and print: {config}");
+    assert!(!file.contains("/Usage"), "no group has a usage");
+    assert!(!file.contains("(https://example.com/terms)"), "a PDF/X file has no links");
+}
+
+#[test]
+fn pdfua_beside_pdfx_drops_the_groups_and_pdfx_alone_keeps_them() {
+    fn any_group(nodes: &[crate::parse::Node]) -> bool {
+        nodes.iter().any(|node| node.ocg.is_some() || any_group(&node.children))
+    }
+    let grouped = with_groups(&fixture("showcase-pdfx"));
+    // PDF/A and PDF/X don't go together: the parser refuses both.
+    for (output, kept) in [("", true), (r#"pdfua="1" "#, false)] {
+        let xml = grouped.replacen("<output ", &format!("<output {output}"), 1);
+        let mut doc = parse::parse(&xml).unwrap_or_else(|e| panic!("{output}: {e}"));
+        let layouts = doc.section_layouts();
+        assert_eq!(layouts.iter().any(|l| any_group(&l.children)), kept, "{output}");
+        assert_eq!(layouts.iter().flat_map(|l| l.overlays.iter()).any(|l| l.ocg.is_some()), kept, "{output}");
+    }
 }
 
 #[test]
@@ -392,8 +427,8 @@ fn a_field_in_print_content_is_an_error_with_pdfa_too() {
 // ── Samples for the external check ───────────────────────────────────────────
 
 /// Write the samples `make check-ocg` renders with pdf.js, to the folder `LPDF_OCG_OUT` names: the two fixtures,
-/// which switch their groups, and a PDF/A, a PDF/UA and a PDF/X file with groups, which show everything. Without
-/// `LPDF_OCG_OUT` it writes nothing.
+/// which switch their groups, a PDF/A and a PDF/UA file with groups, which show everything, and a PDF/X file with
+/// groups, which is the print version. Without `LPDF_OCG_OUT` it writes nothing.
 #[test]
 fn writes_ocg_samples_for_the_external_check() {
     let Some(dir) = std::env::var_os("LPDF_OCG_OUT") else { return };

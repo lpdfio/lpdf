@@ -3076,7 +3076,7 @@ fn assemble_pdf(
         }
         attachments::write_catalog(&mut cat, files, &file_ids);
         if !ocg_ids.is_empty() {
-            write_oc_properties(&mut cat, &ocg_ids);
+            write_oc_properties(&mut cat, &ocg_ids, pdfx.is_some());
         }
         // A tagged PDF: the structure, the language a screen reader reads it in, and the title shown in place of the
         // file name (ISO 14289-1, 7.1 and 7.2).
@@ -3297,7 +3297,7 @@ fn assemble_pdf(
 
     // -- Optional content groups -----------------------------------------------
     for (ocg, id) in &ocg_ids {
-        write_ocg(&mut pdf, *ocg, *id);
+        write_ocg(&mut pdf, *ocg, *id, pdfx.is_none());
     }
 
     // -- Opacity ExtGState objects ---------------------------------------------
@@ -3827,18 +3827,29 @@ struct PressIds {
     srgb:  Ref,
 }
 
-/// The catalog's `/OCProperties`: the optional content groups, all of them on, and the events that switch them by
-/// their usage when the viewer shows or prints the page (ISO 32000-1, 8.11.4). Both groups start on, so a viewer that
-/// doesn't apply the usage shows everything, as a document without groups does, rather than hiding print content
-/// that would then never print.
-fn write_oc_properties(cat: &mut pdf_writer::writers::Catalog, ocg_ids: &[(Ocg, Ref)]) {
+/// The catalog's `/OCProperties`: the optional content groups, listed in `/Order` so a viewer's layers panel shows them
+/// (ISO 32000-1, 8.11.4.3).
+///
+/// - In any other file than PDF/X, both groups start on, and the events of `/AS` switch them by their usage as the
+///   viewer shows or prints the page (8.11.4.4). A viewer that doesn't apply the usage shows everything, as a document
+///   without groups does, rather than hiding print content that would then never print.
+/// - In a PDF/X file, the print version: PDF/X-4 has no switching between screen and print, and a press prints what is
+///   on by default. So `print` is on and `screen` is off, with no `/AS`, and a reader can turn `screen` on by hand.
+fn write_oc_properties(cat: &mut pdf_writer::writers::Catalog, ocg_ids: &[(Ocg, Ref)], print_version: bool) {
     let refs = || ocg_ids.iter().map(|(_, id)| *id);
     let mut properties = cat.insert(Name(b"OCProperties")).dict();
     properties.insert(Name(b"OCGs")).array().items(refs());
     let mut config = properties.insert(Name(b"D")).dict();
-    config.pair(Name(b"Name"), TextStr("Screen and print"));
+    config.pair(Name(b"Name"), TextStr(if print_version { "Print" } else { "Screen and print" }));
     config.pair(Name(b"BaseState"), Name(b"ON"));
+    if print_version {
+        let screen = ocg_ids.iter().filter(|(ocg, _)| *ocg == Ocg::Screen).map(|(_, id)| *id);
+        config.insert(Name(b"OFF")).array().items(screen);
+    }
     config.insert(Name(b"Order")).array().items(refs());
+    if print_version {
+        return;
+    }
     let mut events = config.insert(Name(b"AS")).array();
     for event in [b"View".as_slice(), b"Print".as_slice()] {
         let mut usage = events.push().dict();
@@ -3848,9 +3859,9 @@ fn write_oc_properties(cat: &mut pdf_writer::writers::Catalog, ocg_ids: &[(Ocg, 
     }
 }
 
-/// The optional content group `ocg`: the name a viewer's layers panel shows, and its usage, on in print and off on
-/// screen for `print`, the other way round for `screen`.
-fn write_ocg(pdf: &mut Pdf, ocg: Ocg, id: Ref) {
+/// The optional content group `ocg`: the name a viewer's layers panel shows, and, with `usage`, whether it is printed
+/// and shown: on in print and off on screen for `print`, the other way round for `screen`. A PDF/X file has no usage.
+fn write_ocg(pdf: &mut Pdf, ocg: Ocg, id: Ref, usage: bool) {
     let (name, printed) = match ocg {
         Ocg::Print  => ("Print only", true),
         Ocg::Screen => ("Screen only", false),
@@ -3859,9 +3870,11 @@ fn write_ocg(pdf: &mut Pdf, ocg: Ocg, id: Ref) {
     let mut group = pdf.indirect(id).dict();
     group.pair(Name(b"Type"), Name(b"OCG"));
     group.pair(Name(b"Name"), TextStr(name));
-    let mut usage = group.insert(Name(b"Usage")).dict();
-    usage.insert(Name(b"Print")).dict().pair(Name(b"PrintState"), state(printed));
-    usage.insert(Name(b"View")).dict().pair(Name(b"ViewState"), state(!printed));
+    if usage {
+        let mut usage = group.insert(Name(b"Usage")).dict();
+        usage.insert(Name(b"Print")).dict().pair(Name(b"PrintState"), state(printed));
+        usage.insert(Name(b"View")).dict().pair(Name(b"ViewState"), state(!printed));
+    }
 }
 
 /// The sheet of `page`: the trimmed page grown by its bleed on every side, its MediaBox and BleedBox. Without a bleed

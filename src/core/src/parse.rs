@@ -98,10 +98,10 @@ impl Document {
                     }
                 }
             }
-            // A PDF/A, PDF/UA or PDF/X file shows everything: PDF/A-2 and PDF/UA-1 forbid the entry that switches a group
-            // between screen and print, and a PDF/X file shows everything as they do. So the groups go before the
-            // layout, which then lays out what the document without them would.
-            if self.output.pdfa.is_some() || self.output.pdfua.is_some() || self.output.pdfx.is_some() {
+            // A PDF/A or PDF/UA file shows everything: PDF/A-2 and PDF/UA-1 forbid the entry that switches a group
+            // between screen and print. So the groups go before the layout, which then lays out what the document
+            // without them would. A PDF/X file keeps them, as the print version (`pdf::write_oc_properties`).
+            if self.output.pdfa.is_some() || self.output.pdfua.is_some() {
                 children.iter_mut().for_each(forget_ocg);
                 underlays.iter_mut().chain(overlays.iter_mut()).for_each(canvas::CanvasLayer::forget_ocg);
             }
@@ -686,7 +686,7 @@ pub struct Node {
     /// has the same, so it stays one element. 0 in a document that is not tagged (`layout::number_for_tags`).
     pub tag_id: u32,
     /// The optional content group the node and everything in it are in: drawn only when printing, or only on screen.
-    /// `None` shows everywhere, as does every node of a document whose output is PDF/A, PDF/UA or PDF/X.
+    /// `None` shows everywhere, as does every node of a document whose output is PDF/A or PDF/UA.
     pub ocg: Option<Ocg>,
     pub debug: bool,
     // layout-specific
