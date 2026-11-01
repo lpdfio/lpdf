@@ -114,6 +114,7 @@ const LAYER: Attributes = &[
     ("font", Kind::Text),
     ("font-size", Kind::Text),
     ("color", Kind::Text),
+    ("alt", Kind::Text),
 ];
 
 const FONT: Attributes = &[
@@ -245,12 +246,14 @@ const META: Attributes = &[
     ("subject", Kind::Text),
     ("keywords", Kind::Text),
     ("creator", Kind::Text),
+    ("lang", Kind::Text),
 ];
 
 const OUTPUT: Attributes = &[
     ("encrypt", Kind::Text),
     ("allow", Kind::Text),
     ("pdfa", Kind::Text),
+    ("pdfua", Kind::Text),
 ];
 
 const ATTACHMENTS: Attributes = &[
@@ -684,6 +687,7 @@ const FN: Attributes = &[
 
 const IMG: Attributes = &[
     ("name", Kind::Text),
+    ("alt", Kind::Text),
     ("height", Kind::Text),
     ("width", Kind::Text),
     ("font", Kind::Text),
@@ -706,6 +710,7 @@ const BARCODE: Attributes = &[
     ("color", Kind::Text),
     ("background", Kind::Text),
     ("width", Kind::Text),
+    ("alt", Kind::Text),
     ("paginate", Kind::Text),
     ("debug", Kind::Boolean),
 ];
@@ -734,6 +739,7 @@ const TEXT: Attributes = &[
     ("max-lines", Kind::Integer { min: Some(1), max: None }),
     ("ellipsis", Kind::Boolean),
     ("width", Kind::Text),
+    ("role", Kind::Text),
     ("widows", Kind::Integer { min: Some(1), max: Some(10) }),
     ("orphans", Kind::Integer { min: Some(1), max: Some(10) }),
     ("capture", Kind::Text),

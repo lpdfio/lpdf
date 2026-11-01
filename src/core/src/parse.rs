@@ -108,6 +108,7 @@ impl Document {
                 bookmark: section.bookmark,
                 toc: section.options.toc,
                 footnote_counter, footnote_start,
+                tagged: self.output.pdfua.is_some(),
             });
         }
         result
@@ -120,6 +121,8 @@ fn region_to_compat_node(reg: LayoutRegion) -> Node {
     Node {
         kind:       NodeKind::Column,
         page_scope: Some(reg.page.unwrap_or(PageScope::Each)),
+        // A header or a footer is drawn on every page, so a screen reader skips it.
+        role:       Role::Artifact,
         debug:      reg.debug,
         children:   reg.children,
         ..Node::layout_default()
@@ -244,6 +247,9 @@ pub struct Meta {
     pub subject: String,
     pub keywords: String,
     pub creator: String,
+    /// The language the document is written in, as a language tag such as `en-US`: `/Lang` in a PDF/UA file, which
+    /// a screen reader reads it in. Empty when the document doesn't say.
+    pub lang: String,
 }
 
 /// How the file is written, apart from what its pages show: `<output>`.
@@ -253,6 +259,8 @@ pub struct Output {
     pub encryption: Option<crate::encrypt::OutputEncryption>,
     /// The PDF/A level of `pdfa`; `None` for a plain PDF.
     pub pdfa: Option<crate::pdfa::PdfA>,
+    /// The PDF/UA part of `pdfua`; `None` for a file that is not tagged.
+    pub pdfua: Option<crate::pdfua::PdfUa>,
 }
 
 #[derive(Debug, Clone)]
@@ -273,6 +281,9 @@ pub struct SectionLayout {
     /// How many notes the sections before this one that count across the document hold: its own numbering
     /// goes on from there when it counts across the document too.
     pub footnote_start: u32,
+    /// Whether the layout says what each thing it draws is, for the structure of a tagged PDF: a document with
+    /// `<output pdfua>`. No other document pays for it.
+    pub tagged: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -540,7 +551,7 @@ pub struct Check {
     pub line:    String,
 }
 
-/// What only a shape, a list or a list item adds to a node. They share one box, so the pointer costs a node 8 bytes and not 16:
+/// What only a shape, a list, a list item, or an image or a barcode with `alt` adds to a node. They share one box, so the pointer costs a node 8 bytes and not 16:
 /// `a_node_stays_small` holds the size.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Detail {
@@ -549,6 +560,9 @@ pub enum Detail {
     Check(Check),
     /// A `<markdown>` until `markdown::expand` turns it into the nodes of the layout.
     Markdown(Box<crate::markdown::MarkdownSpec>),
+    /// What an image or a barcode shows or is for, read by a screen reader in a tagged PDF; empty marks it as
+    /// decoration, which a reader skips.
+    Alt(String),
 }
 
 /// What sets a table's rows apart: the background of every other row, and a line, as a thickness and a color, under
@@ -558,6 +572,39 @@ pub struct TableStyle {
     pub stripe: Option<String>,
     pub head_border: Option<(f32, String)>,
     pub row_border: Option<(f32, String)>,
+}
+
+/// What a node is to a reader of a tagged PDF, where its kind alone doesn't say: a heading, the parts of a list the
+/// layout turned into rows, a table's header cell, an entry of the table of contents, or what is drawn and not read.
+/// `Auto` takes it from the kind: a text is a paragraph, a table a table. Only a document with `<output pdfua>` reads
+/// it (`layout::tag_of`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Role {
+    #[default]
+    Auto,
+    /// A text with `role="h1"` to `"h6"`: its level, 1 to 6.
+    Heading(u8),
+    /// Drawn, not read: a header or a footer, which is on every page, or the marker of a checked item.
+    Artifact,
+    /// A list, its items, and the marker and the content of an item.
+    List,
+    ListItem,
+    ListLabel,
+    ListBody,
+    /// A cell of the table's header row: a column header.
+    HeaderCell,
+    /// An entry of the table of contents, made from `$toc`.
+    TocItem,
+}
+
+impl Role {
+    /// The role of a `role` attribute on a text: `h1` to `h6`.
+    pub fn of_text(value: &str) -> Result<Self, String> {
+        match value.as_bytes() {
+            [b'h', level @ b'1'..=b'6'] => Ok(Role::Heading(level - b'0')),
+            _ => Err(format!("invalid role '{value}': a text's role is a heading level, h1 to h6")),
+        }
+    }
 }
 
 /// One element of the layout. Every node has every field, whatever its kind, and parse and data binding copy
@@ -585,6 +632,11 @@ pub struct Node {
     pub paginate: Paginate,
     /// Whether a table row stays with the row after it across a page break.
     pub keep: RowKeep,
+    /// What the node is to a reader of a tagged PDF, where its kind alone doesn't say.
+    pub role: Role,
+    /// The structure element the node is drawn in, in a tagged PDF: every part of a node split across lines or pages
+    /// has the same, so it stays one element. 0 in a document that is not tagged (`layout::number_for_tags`).
+    pub tag_id: u32,
     pub debug: bool,
     // layout-specific
     pub align: Align,
@@ -815,6 +867,7 @@ pub(crate) struct ParsedNode {
     page_scope: Option<PageScope>,
     paginate: Paginate,
     keep: RowKeep,
+    role: Role,
     debug: bool,
     align: Align,
     justify: Justify,
@@ -884,6 +937,7 @@ impl ParsedNode {
             page_scope: None,
             paginate: Paginate::None,
             keep: RowKeep::None,
+            role: Role::Auto,
             debug: false,
             align: Align::Stretch,
             justify: Justify::Start,
@@ -1010,7 +1064,7 @@ impl Node {
             kind: NodeKind::Column,
             gap: 0.0, padding: [0.0; 4], background: None, border: None, radius: 0.0, opacity: 1.0, shadow: None,
             height_mode: HeightMode::Auto, width_constraint: None, width_fill: false,
-            page_scope: None, paginate: Paginate::None, keep: RowKeep::None, debug: false,
+            page_scope: None, paginate: Paginate::None, keep: RowKeep::None, role: Role::Auto, tag_id: 0, debug: false,
             align: Align::Stretch, justify: Justify::Start,
             cols: 1, col_width: None, direction: Direction::Horizontal,
             color: None, thickness: 1.0, text_runs: Vec::new(),
@@ -1052,6 +1106,14 @@ impl Node {
     /// The lines a `capture-ref` text always takes; 0 for every other node.
     pub fn reserve_lines(&self) -> usize {
         self.capture.as_ref().map_or(0, |c| c.reserve_lines)
+    }
+
+    /// The `alt` of an image or a barcode: what it shows or is for, or `""` for decoration. `None` without one.
+    pub fn alt(&self) -> Option<&str> {
+        match self.detail.as_deref() {
+            Some(Detail::Alt(alt)) => Some(alt),
+            _                      => None,
+        }
     }
 }
 
@@ -1132,6 +1194,8 @@ fn resolve_node(
         page_scope:            n.page_scope,
         paginate:              n.paginate,
         keep:                  n.keep,
+        role:                  n.role,
+        tag_id:                0,
         debug:                 n.debug,
         align:                 n.align,
         justify:               n.justify,
@@ -1274,6 +1338,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                         "output" => {
                             output = parse_output(
                                 doc_child.attribute("encrypt"), doc_child.attribute("allow"), doc_child.attribute("pdfa"),
+                                doc_child.attribute("pdfua"),
                             )
                                 .map_err(|e| format!("<output>{}: {e}", node_loc(&doc_child)))?;
                         }
@@ -1633,17 +1698,19 @@ pub(crate) fn layout_margin(a: &impl Attrs, tokens: &Tokens) -> Result<[f32; 4],
     }
 }
 
-/// Reads the attributes of `<output>`: the cipher of `encrypt` and the permissions of `allow`, and the PDF/A level of
-/// `pdfa`. `allow` sets what a reader of an encrypted file may do, so it needs `encrypt`, and PDF/A forbids
-/// encryption, so `pdfa` and `encrypt` don't go together.
-fn parse_output(encrypt: Option<&str>, allow: Option<&str>, pdfa: Option<&str>) -> Result<Output, String> {
+/// Reads the attributes of `<output>`: the cipher of `encrypt` and the permissions of `allow`, the PDF/A level of
+/// `pdfa` and the PDF/UA part of `pdfua`. `allow` sets what a reader of an encrypted file may do, so it needs
+/// `encrypt`, and PDF/A forbids encryption, so `pdfa` and `encrypt` don't go together. PDF/UA lets a screen reader
+/// read an encrypted file, so with `pdfua` an `allow` must name `accessibility`.
+fn parse_output(encrypt: Option<&str>, allow: Option<&str>, pdfa: Option<&str>, pdfua: Option<&str>) -> Result<Output, String> {
     let pdfa = pdfa.map(crate::pdfa::PdfA::parse).transpose()?;
+    let pdfua = pdfua.map(crate::pdfua::PdfUa::parse).transpose()?;
     let Some(encrypt) = encrypt else {
         if allow.is_some() {
             return Err("allow sets what a reader of an encrypted file may do, and the document is not encrypted: \
                 add encrypt (encrypt=\"aes-256\"), or remove allow".to_string());
         }
-        return Ok(Output { encryption: None, pdfa });
+        return Ok(Output { encryption: None, pdfa, pdfua });
     };
     if let Some(level) = pdfa {
         return Err(format!("pdfa=\"{}\" and encrypt don't go together: PDF/A forbids encryption, so that an archive \
@@ -1655,7 +1722,10 @@ fn parse_output(encrypt: Option<&str>, allow: Option<&str>, pdfa: Option<&str>) 
         Some(list) => crate::encrypt::Permissions::from_allow(list)?,
         None => crate::encrypt::Permissions::NONE,
     };
-    Ok(Output { encryption: Some(crate::encrypt::OutputEncryption { algorithm, permissions }), pdfa: None })
+    if let Some(part) = pdfua {
+        crate::pdfua::check_permissions(part, permissions)?;
+    }
+    Ok(Output { encryption: Some(crate::encrypt::OutputEncryption { algorithm, permissions }), pdfa: None, pdfua })
 }
 
 fn parse_meta(elem: &roxmltree::Node) -> Meta {
@@ -1665,6 +1735,7 @@ fn parse_meta(elem: &roxmltree::Node) -> Meta {
         subject: opt_attr(elem, "subject"),
         keywords: opt_attr(elem, "keywords"),
         creator: opt_attr(elem, "creator"),
+        lang: opt_attr(elem, "lang"),
     }
 }
 
@@ -3128,6 +3199,7 @@ fn apply_layout_kind_attrs(
                     "line-height" => node.line_height = tokens.resolve_line_height(v)?,
                     "max-lines"   => node.max_lines   = Some(parse_max_lines(v)?),
                     "ellipsis"    => node.ellipsis    = v == "true",
+                    "role"        => node.role        = Role::of_text(v)?,
                     _             => has_capture |= name.starts_with("capture"),
                 }
             }
@@ -3331,6 +3403,9 @@ fn apply_img_attrs(
     // Store the registry key (ref ?? name) so the render engine can look up bytes.
     let registry_key = asset_images.get(&name).unwrap().clone();
     node.image_name = Some(registry_key);
+    if let Some(alt) = a.get("alt") {
+        node.detail = Some(Box::new(Detail::Alt(alt.to_string())));
+    }
     // `height` on <img> sets the display height constraint (not HeightMode).
     if let Some(v) = a.get("height") {
         node.img_height_constraint = Some(match tokens {
@@ -3374,6 +3449,10 @@ fn apply_barcode_attrs(
 
     // Human-readable text below 1D barcodes
     node.barcode_hrt = a.get("hrt").map(|v| v == "true").unwrap_or(false);
+
+    if let Some(alt) = a.get("alt") {
+        node.detail = Some(Box::new(Detail::Alt(alt.to_string())));
+    }
 
     // Bar color
     node.barcode_color = if let Some(v) = a.get("color") {
@@ -3535,6 +3614,7 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
             subject:  m.get("subject") .and_then(|v| v.as_str()).unwrap_or("").to_string(),
             keywords: m.get("keywords").and_then(|v| v.as_str()).unwrap_or("").to_string(),
             creator:  m.get("creator") .and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            lang:     m.get("lang")    .and_then(|v| v.as_str()).unwrap_or("").to_string(),
         }
     } else {
         Meta::default()
@@ -3550,7 +3630,8 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
                 Some(serde_json::Value::String(s)) => Ok(Some(s.as_str())),
                 Some(other) => Err(format!("document output: {name} must be a string, not {other}")),
             };
-            parse_output(text("encrypt")?, text("allow")?, text("pdfa")?).map_err(|e| format!("document output: {e}"))?
+            parse_output(text("encrypt")?, text("allow")?, text("pdfa")?, text("pdfua")?)
+                .map_err(|e| format!("document output: {e}"))?
         }
         None => Output::default(),
     };

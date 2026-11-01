@@ -17,7 +17,7 @@ use crate::page_scope::page_scope_indices;
 use crate::render::{
     RenderCanvasClip, RenderCanvasEllipse, RenderCanvasLayer,
     RenderBox, RenderCanvasLine, RenderCanvasPath, RenderCanvasRect,
-    RenderNode, RenderPage,
+    RenderNode, RenderPage, Tag, TagKind,
 };
 
 // ── Canvas types ──────────────────────────────────────────────────────────────
@@ -132,6 +132,9 @@ pub struct CanvasLayer {
     /// Draw the layer only when this value is truthy, and only when `data_if_not` is falsy. Bound by `data.rs`.
     pub data_if:     Option<String>,
     pub data_if_not: Option<String>,
+    /// What the layer shows, which makes it one figure a screen reader reads in a tagged PDF. Without it the layer is
+    /// decoration, as a header is.
+    pub alt:         Option<String>,
 }
 
 // ── Anchor helpers ────────────────────────────────────────────────────────────
@@ -423,6 +426,7 @@ pub(crate) fn parse_layer_elem(elem: &roxmltree::Node, ctx: &LayerContext) -> Re
         children, page, opacity, transform, clip,
         data_if:     elem.attribute("data-if").map(str::to_string),
         data_if_not: elem.attribute("data-if-not").map(str::to_string),
+        alt:         elem.attribute("alt").map(str::to_string),
     })
 }
 
@@ -456,6 +460,7 @@ pub(crate) fn parse_tree_layer(json: &serde_json::Value, ctx: &LayerContext) -> 
         children, page, opacity, transform, clip,
         data_if:     jattr(json, "data-if").map(str::to_string),
         data_if_not: jattr(json, "data-if-not").map(str::to_string),
+        alt:         jattr(json, "alt").map(str::to_string),
     })
 }
 
@@ -698,7 +703,7 @@ fn draw_checkbox(shape: &Shape, radius: f32, x: f32, y: f32, w: f32, h: f32) -> 
         });
         children.push(primitive_to_render_node(&tick, 1, 1));
     }
-    RenderNode::Box(RenderBox {
+    RenderNode::Box(RenderBox { tag: None,
         x, y, width: w, height: h,
         fill: None, border_width: 0.0, border_color: None, radius: 0.0,
         opacity: 1.0, shadow: None, debug_self: false,
@@ -710,7 +715,16 @@ fn layer_to_render_node(layer: &CanvasLayer, page: usize, pages: usize) -> Rende
     let children = layer.children.iter()
         .map(|p| primitive_to_render_node(p, page, pages))
         .collect();
-    RenderNode::CanvasLayer(RenderCanvasLayer {
+    // In a tagged section a layer is decoration, as a header is, unless its `alt` says what it shows: then it is one
+    // figure, read where the layer is written.
+    let tag = crate::layout::tagging().then(|| {
+        let kind = match layer.alt.as_deref().map(str::trim) {
+            Some(alt) if !alt.is_empty() => TagKind::Figure(alt.to_string()),
+            _ => TagKind::Artifact,
+        };
+        Box::new(Tag { id: 0, kind })
+    });
+    RenderNode::CanvasLayer(RenderCanvasLayer { tag,
         transform: layer.transform,
         clip:      layer.clip.map(|[x, y, w, h]| RenderCanvasClip { x, y, w, h, border_radius: 0.0 }),
         opacity:   layer.opacity.unwrap_or(1.0).clamp(0.0, 1.0),

@@ -1,0 +1,235 @@
+//! PDF/UA renders of whole documents, with fonts and pictures loaded as an SDK loads them: the structure a tagged
+//! file gets, what it refuses, and the sample `make check-pdfua` hands to veraPDF and qpdf. The WASI crate has its
+//! own `LpdfEngine`, so these run with the core library only.
+
+use std::path::{Path, PathBuf};
+
+use crate::{LpdfEngine, RenderEncryption};
+
+const CREATED_ON: &str = "2026-10-31T09:30:00Z";
+
+fn test_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test")
+}
+
+fn read(path: &Path) -> Vec<u8> {
+    std::fs::read(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+}
+
+/// An unlicensed engine with the fonts and pictures the fixture declares, loaded under their names, as an SDK loads
+/// what a document's `src` attributes name.
+fn engine(created_on: Option<&str>) -> LpdfEngine {
+    let mut engine = LpdfEngine::new("");
+    let fonts = test_dir().join("assets/fonts");
+    for (name, file) in [
+        ("body", "CrimsonText-Regular.ttf"), ("heading", "CrimsonText-SemiBold.ttf"), ("sans", "Montserrat-Regular.ttf"),
+    ] {
+        engine.load_font(name, &read(&fonts.join(file)));
+    }
+    let images = test_dir().join("assets/images");
+    for (name, file) in [("chart", "image-sample.png"), ("badge", "image-square.png")] {
+        engine.load_image(name, &read(&images.join(file)));
+    }
+    if let Some(date) = created_on {
+        engine.set_created_on(date);
+    }
+    engine
+}
+
+fn render(xml: &str) -> Result<Vec<u8>, String> {
+    engine(Some(CREATED_ON)).render_xml(xml, None, &RenderEncryption::default())
+}
+
+/// The fixture `showcase-pdfua.xml` rendered as an SDK renders it, unlicensed: for the snapshot test.
+pub(crate) fn render_fixture() -> Vec<u8> {
+    let xml = String::from_utf8(read(&test_dir().join("fixtures/showcase-pdfua.xml"))).expect("UTF-8");
+    render(&xml).unwrap_or_else(|e| panic!("showcase-pdfua: {e}"))
+}
+
+fn text(pdf: &[u8]) -> String {
+    String::from_utf8_lossy(pdf).into_owned()
+}
+
+/// How many times `needle` is in `haystack`.
+fn count(haystack: &str, needle: &str) -> usize {
+    haystack.matches(needle).count()
+}
+
+/// The content streams of `pdf`, inflated: where the marked content is.
+fn contents(pdf: &[u8]) -> String {
+    let mut out = String::new();
+    let mut at = 0;
+    while let Some(start) = find(&pdf[at..], b"stream\n").map(|i| at + i + 7) {
+        let Some(end) = find(&pdf[start..], b"\nendstream").map(|i| start + i) else { break };
+        if let Ok(inflated) = miniz_oxide::inflate::decompress_to_vec_zlib(&pdf[start..end]) {
+            out.push_str(&String::from_utf8_lossy(&inflated));
+        }
+        at = end;
+    }
+    out
+}
+
+fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack.windows(needle.len()).position(|w| w == needle)
+}
+
+/// A PDF/UA document in the font `body`, with the title and the language it needs, and `layout` as its one layout.
+fn document(layout: &str) -> String {
+    format!(
+        r#"<lpdf version="1"><assets><font name="body" src="body.ttf"/><image name="chart" src="chart.png"/></assets>
+        <document font="body"><meta title="Report" lang="en"/><output pdfua="1"/>
+        <section><layout>{layout}</layout></section></document></lpdf>"#
+    )
+}
+
+// ── What a PDF/UA file gets ───────────────────────────────────────────────────
+
+#[test]
+fn the_catalog_says_the_file_is_tagged_in_a_language_and_shows_its_title() {
+    let pdf = text(&render_fixture());
+    for expected in [
+        "/MarkInfo <<\n    /Marked true\n  >>", "/Lang (en-US)", "/StructTreeRoot", "/DisplayDocTitle true",
+        "/ParentTree", "/ParentTreeNextKey", "/Tabs /S", "/StructParents", "/StructParent",
+    ] {
+        assert!(pdf.contains(expected), "{expected}");
+    }
+}
+
+#[test]
+fn the_xmp_packet_names_pdfua_part_1_and_the_dates_of_created_on() {
+    let pdf = text(&render_fixture());
+    assert!(pdf.contains("<pdfuaid:part>1</pdfuaid:part>"));
+    assert!(pdf.contains("<dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">Annual Report — Accessible Copy</rdf:li></rdf:Alt></dc:title>"));
+    assert!(pdf.contains("<xmp:CreateDate>2026-10-31T09:30:00Z</xmp:CreateDate>"));
+    assert!(pdf.contains("/ModDate (D:20261031093000Z)"));
+}
+
+#[test]
+fn each_thing_the_fixture_shows_has_its_structure_element() {
+    let pdf = text(&render_fixture());
+    for kind in [
+        "Document", "H1", "H2", "H3", "P", "Table", "THead", "TBody", "TR", "TH", "TD", "L", "LI", "Lbl", "LBody",
+        "Link", "Note", "TOC", "TOCI", "Figure",
+    ] {
+        assert!(pdf.contains(&format!("/S /{kind}\n")), "no {kind} element");
+    }
+    // The header cells head their columns, and the cells that span say so.
+    assert_eq!(count(&pdf, "/Scope /Column"), 5, "the three header cells of the table and the two of the Markdown's");
+    assert!(pdf.contains("/RowSpan 2") && pdf.contains("/ColSpan 2"));
+    // The chart, the barcode and the map are figures with their descriptions; the badge is decoration.
+    for alt in [
+        "/Alt (A bar chart of the units sold in each quarter, rising from left to right)",
+        "/Alt (QR code to pay this invoice)", "/Alt (A map of the two regions: North above South)",
+    ] {
+        assert!(pdf.contains(alt), "{alt}");
+    }
+    assert_eq!(count(&pdf, "/S /Figure\n"), 3);
+    // A note has an id, and the ids are in the tree of ids.
+    assert!(pdf.contains("/ID (note-1)") && pdf.contains("/IDTree"));
+}
+
+#[test]
+fn a_link_is_described_by_its_words_and_found_from_its_element() {
+    let pdf = text(&render_fixture());
+    assert!(pdf.contains("/Contents (the project's site)"), "the link in a text");
+    assert!(pdf.contains("/Contents (Go to the details)"), "a link around a text");
+    assert!(pdf.contains("/Contents (Lpdf)"), "the attribution's link");
+    assert!(pdf.contains("/Type /OBJR"));
+}
+
+#[test]
+fn the_decoration_is_marked_as_artifacts_and_the_text_with_mcids() {
+    let content = contents(&render_fixture());
+    assert!(count(&content, "/Artifact BMC") > 20, "the header, the footer, rules, borders, backgrounds and the band");
+    assert!(content.contains("/H1 <<\n  /MCID 0\n>> BDC"), "the first heading is the page's first content");
+    assert!(content.contains("/Figure <<"), "a figure is marked as a whole");
+    let opened = count(&content, " BDC") + count(&content, " BMC");
+    assert_eq!(opened, count(&content, "EMC"), "every marked sequence is closed");
+}
+
+#[test]
+fn a_text_split_across_pages_stays_one_paragraph() {
+    let long = "Words that fill the page. ".repeat(400);
+    let pdf = text(&render(&document(&format!("<text>{long}</text>"))).expect("renders"));
+    assert!(count(&pdf, "/Type /Page\n") >= 2, "the text runs onto a second page");
+    assert_eq!(count(&pdf, "/S /P\n"), 1, "one paragraph, with marked content on each page");
+}
+
+#[test]
+fn markdown_headings_carry_their_level() {
+    let xml = r#"<lpdf version="1"><assets><font name="body" src="body.ttf"/></assets>
+        <document font="body"><meta title="Report" lang="en"/><output pdfua="1"/>
+        <section><markdown><markdown-content><![CDATA[# Top
+
+## Under it
+
+Words.
+]]></markdown-content></markdown></section></document></lpdf>"#;
+    let pdf = text(&render(xml).expect("renders"));
+    assert!(pdf.contains("/S /H1\n") && pdf.contains("/S /H2\n") && pdf.contains("/S /P\n"));
+}
+
+#[test]
+fn a_document_without_pdfua_is_not_tagged_whatever_its_new_attributes_say() {
+    let plain = r#"<lpdf version="1"><assets><image name="chart" src="chart.png"/></assets>
+        <document><meta title="Report" lang="en"/><section><layout>
+        <text role="h1">Report</text><img name="chart" width="40pt" alt="A chart"/>
+        </layout></section></document></lpdf>"#;
+    let bare = r#"<lpdf version="1"><assets><image name="chart" src="chart.png"/></assets>
+        <document><meta title="Report"/><section><layout>
+        <text>Report</text><img name="chart" width="40pt"/>
+        </layout></section></document></lpdf>"#;
+    assert_eq!(render(plain).expect("renders"), render(bare).expect("renders"), "lang, role and alt change nothing");
+    let pdf = text(&render(plain).expect("renders"));
+    for absent in ["/StructTreeRoot", "/MarkInfo", "/Lang", "pdfuaid"] {
+        assert!(!pdf.contains(absent), "{absent}");
+    }
+}
+
+#[test]
+fn pdfua_combines_with_pdfa_in_one_xmp_packet() {
+    let xml = document(r#"<text role="h1">Report</text>"#).replace(r#"<output pdfua="1"/>"#, r#"<output pdfa="2u" pdfua="1"/>"#);
+    let pdf = text(&render(&xml).expect("renders"));
+    assert!(pdf.contains("<pdfaid:part>2</pdfaid:part>") && pdf.contains("<pdfuaid:part>1</pdfuaid:part>"));
+    assert!(pdf.contains("<pdfaSchema:prefix>pdfuaid</pdfaSchema:prefix>") && pdf.contains("/StructTreeRoot"));
+}
+
+// ── What it refuses ───────────────────────────────────────────────────────────
+
+#[test]
+fn a_render_without_created_on_is_an_error_that_names_it() {
+    let error = engine(None).render_xml(&document("<text>x</text>"), None, &RenderEncryption::default()).unwrap_err();
+    assert!(error.starts_with("<output pdfua=\"1\">") && error.contains("created_on"), "{error}");
+}
+
+#[test]
+fn text_in_a_built_in_font_is_an_error_that_names_the_text() {
+    let error = render(&document(r#"<text font="Helvetica">Plain words</text>"#)).unwrap_err();
+    assert!(error.starts_with("<output pdfua=\"1\">") && error.contains("\"Plain words\"") && error.contains("PDF/UA"), "{error}");
+}
+
+#[test]
+fn an_image_without_alt_is_an_error_that_names_it() {
+    let error = render(&document(r#"<img name="chart" width="40pt"/>"#)).unwrap_err();
+    assert!(error.contains("the image 'chart' has no alt"), "{error}");
+}
+
+#[test]
+fn an_encrypted_pdfua_file_must_allow_accessibility() {
+    let xml = document("<text>x</text>").replace(r#"<output pdfua="1"/>"#, r#"<output pdfua="1" encrypt="aes-256" allow="print"/>"#);
+    let error = render(&xml).unwrap_err();
+    assert!(error.contains("add accessibility to allow"), "{error}");
+}
+
+/// Write the sample `make check-pdfua` validates with veraPDF and qpdf, into the folder `LPDF_PDFUA_OUT` names. It
+/// does nothing without it, so `cargo test` writes no files.
+#[test]
+fn writes_pdfua_samples_for_the_external_check() {
+    let Some(dir) = std::env::var_os("LPDF_PDFUA_OUT") else { return };
+    let dir = Path::new(&dir);
+    std::fs::create_dir_all(dir).expect("the samples' folder");
+    std::fs::write(dir.join("pdfua-1.pdf"), render_fixture()).expect("a sample");
+    let xml = String::from_utf8(read(&test_dir().join("fixtures/showcase-pdfua.xml"))).expect("UTF-8")
+        .replace(r#"<output pdfua="1" />"#, r#"<output pdfa="2u" pdfua="1" />"#);
+    std::fs::write(dir.join("pdfua-1-pdfa-2u.pdf"), render(&xml).expect("renders")).expect("a sample");
+}

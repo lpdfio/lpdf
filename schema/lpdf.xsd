@@ -155,6 +155,29 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <xs:simpleType name="PdfUaPart">
+    <xs:annotation>
+      <xs:documentation>A part of PDF/UA, the ISO 14289 standard for PDFs that a screen reader can read: 1, the part the accessibility laws and the validators point at.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="TextRole">
+    <xs:annotation>
+      <xs:documentation>What a text is to a reader, beyond a paragraph: a heading of level 1 to 6.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="h1"/>
+      <xs:enumeration value="h2"/>
+      <xs:enumeration value="h3"/>
+      <xs:enumeration value="h4"/>
+      <xs:enumeration value="h5"/>
+      <xs:enumeration value="h6"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="Permission">
     <xs:annotation>
       <xs:documentation>What a reader of an encrypted PDF may do without the owner password: all of what follows, or print (at full quality), modify, copy, annotate, fill in forms, extract text for accessibility tools, and assemble (insert, delete and rotate pages).</xs:documentation>
@@ -929,6 +952,11 @@
           <xs:documentation>The color of the text-at in the layer that sets none of its own. Defaults to the text token.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
+      <xs:attribute name="alt" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>In a PDF/UA document, what the layer shows, which a screen reader reads as one figure at the layer's place in the document: a layer before the layout before it, one after the layout after it. Without alt a layer is decoration, as a header is, and a screen reader skips it with all its text: a watermark, a running title, a logo's letters. A document without pdfua ignores it.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attributeGroup ref="DataConditionAttrs"/>
     </xs:complexType>
   </xs:element>
@@ -1151,6 +1179,11 @@
       <xs:attribute name="subject"  type="xs:string"/>
       <xs:attribute name="keywords" type="xs:string"/>
       <xs:attribute name="creator"  type="xs:string"/>
+      <xs:attribute name="lang"     type="xs:string">
+        <xs:annotation>
+          <xs:documentation>The language the document is written in, as a language tag such as en, en-US or de-CH, which a screen reader reads it in. A PDF/UA document needs it.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
     </xs:complexType>
   </xs:element>
 
@@ -1172,6 +1205,11 @@
       <xs:attribute name="pdfa" type="PdfALevel">
         <xs:annotation>
           <xs:documentation>Writes the PDF as PDF/A, for archives, courts, public bodies and banks: 2b, or 2u when its text must also be searchable. The file carries its fonts, the sRGB color profile and its metadata, and the render needs created_on, the date the file carries. What PDF/A cannot hold is an error that says what to change: text in a built-in font such as the default Helvetica (declare a font in assets), a font whose license forbids embedding, a character the font has no glyph for, a CMYK color, a form field, the digits of a barcode, encrypt, and attachments.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="pdfua" type="PdfUaPart">
+        <xs:annotation>
+          <xs:documentation>Writes the PDF as PDF/UA-1, a tagged PDF a screen reader can read: what each text, heading, table, list, link, footnote and image is, in reading order, and the rest marked as decoration. It combines with pdfa. The render needs created_on, the date the file carries. What PDF/UA cannot hold is an error that says what to change: no title or lang on meta, an img or a barcode without alt (alt="" marks one as decoration), headings that do not start at h1 or skip a level on the way down, text in a built-in font such as the default Helvetica (declare a font in assets), a font whose license forbids embedding, a character the font has no glyph for, the digits of a barcode, a form field, and an allow that leaves out accessibility.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
     </xs:complexType>
@@ -1875,6 +1913,11 @@
     <xs:complexType>
       <!-- <img> takes a slot or a length for its height, not HeightMode (fill/full) -->
       <xs:attributeGroup ref="ImgCore"/>
+      <xs:attribute name="alt"        type="xs:string">
+        <xs:annotation>
+          <xs:documentation>What the image shows, which a screen reader reads in a PDF/UA document; alt="" marks it as decoration, which a reader skips. A PDF/UA document needs it on every image of the layout. A document without pdfua ignores it.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attribute name="height"     type="TokenScaleOrPt"/>
       <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="font"       type="xs:string"/>
@@ -1903,6 +1946,11 @@
       </xs:attribute>
       <xs:attributeGroup ref="BarcodeStyle"/>
       <xs:attributeGroup ref="WidthAttr"/>
+      <xs:attribute name="alt"        type="xs:string">
+        <xs:annotation>
+          <xs:documentation>What the barcode is for, which a screen reader reads in a PDF/UA document in place of its data, which means nothing read aloud: "QR code to pay this invoice". alt="" marks it as decoration. A PDF/UA document needs it on every barcode of the layout. A document without pdfua ignores it.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attribute name="paginate"   type="Paginate"/>
       <xs:attribute name="debug"      type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
@@ -1967,6 +2015,11 @@
       </xs:choice>
       <xs:attributeGroup ref="TextCore"/>
       <xs:attributeGroup ref="WidthAttr"/>
+      <xs:attribute name="role" type="TextRole">
+        <xs:annotation>
+          <xs:documentation>Makes the text a heading, h1 to h6, which a PDF/UA document tags as one: a screen reader lists the headings and moves between them. A text without role is a paragraph. A PDF/UA document's headings start at h1 and go down one level at a time. It changes nothing a page shows: set the size and the weight as on any text. A document without pdfua ignores it.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attribute name="widows">
         <xs:annotation>
           <xs:documentation>The fewest lines of the text that may stand alone at the top of the next page when it splits. Default 2. If fewer would be left, lines move from the first page to the next; 1 turns the protection off.</xs:documentation>

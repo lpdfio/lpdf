@@ -883,7 +883,7 @@ mod tests {
         crate::pdf::render_pdf(
             &pages, &doc.fonts,
             &crate::pdf::FontRegistry::new(), &crate::pdf::ImageRegistry::new(),
-            &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[],
+            &doc.meta, &doc.gradients, None, false, &doc.output, &[],
         )
         .unwrap()
     }

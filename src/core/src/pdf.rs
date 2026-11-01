@@ -34,7 +34,7 @@ use std::ops::Range;
 
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
 use pdf_writer::writers::Resources;
-use pdf_writer::types::{ActionType, AnnotationFlags, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, FunctionShadingType, HighlightEffect, LineCapStyle, LineJoinStyle, OutputIntentSubtype, PageMode, Predictor, TextRenderingMode};
+use pdf_writer::types::{ActionType, AnnotationFlags, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, FunctionShadingType, HighlightEffect, LineCapStyle, LineJoinStyle, OutputIntentSubtype, PageMode, Predictor, TabOrder, TableHeaderScope, TextRenderingMode};
 use md5::{Digest, Md5};
 use ttf_parser::{Face, Permissions};
 use miniz_oxide::deflate::compress_to_vec_zlib;
@@ -43,8 +43,10 @@ use subsetter::GlyphRemapper;
 
 use crate::attachments::{self, EmbeddedFile};
 use crate::render::{placed_anchors, PlacedAnchor, RenderBox, RenderCanvasLayer, RenderField, RenderNode, RenderPage, RenderedBarcodeKind};
-use crate::parse::{FieldKind, Meta, Shadow};
-use crate::pdfa::{self, FileDate, PdfA};
+use crate::parse::{FieldKind, Meta, Output, Shadow};
+use crate::pdfa::{self, FileDate, PdfA, Standards};
+use crate::pdfua::PdfUa;
+use crate::tagging::{Kid, Kind, LinkMark, Marks};
 use crate::tokens::{FontDef, Gradient, GradientKind, GRADIENT_PREFIX, is_cmyk};
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -947,6 +949,8 @@ struct AnnotData {
     x2:  f32,
     y2:  f32,
     url: String,
+    /// The link element of a tagged PDF that holds the annotation, and the number it lists it by.
+    mark: Option<LinkMark>,
 }
 
 // ── Glyph-usage scanner ───────────────────────────────────────────────────────
@@ -1173,19 +1177,59 @@ fn draw_nodes(
     content:       &mut Content,
     annots:        &mut Vec<AnnotData>,
     groups:        &mut Vec<PageGroup>,
+    marks:         &mut Marks,
     nodes:         &[RenderNode],
     res:           &DrawResources,
     page_h:        f32,
 ) {
     for node in nodes {
-        draw_node(content, annots, groups, node, res, page_h);
+        draw_node(content, annots, groups, marks, node, res, page_h);
     }
 }
 
+/// Draw `node`, and in a tagged PDF mark what it is (`tagging`): a line of text is content of the element it is in,
+/// a figure is marked as a whole, a box with a tag is an element that what it holds goes in, and what is drawn and
+/// not read, such as a rule or a shape, is an artifact. In a PDF that is not tagged `marks` is off and adds nothing.
 fn draw_node(
     content:       &mut Content,
     annots:        &mut Vec<AnnotData>,
     groups:        &mut Vec<PageGroup>,
+    marks:         &mut Marks,
+    node:          &RenderNode,
+    res:           &DrawResources,
+    page_h:        f32,
+) {
+    if marks.marking() {
+        let mut draw = |content: &mut Content, marks: &mut Marks| draw_drawn(content, annots, groups, marks, node, res, page_h);
+        match node {
+            RenderNode::Text(t) => return marks.content(content, &t.content, draw),
+            RenderNode::Line(_) | RenderNode::CanvasRect(_) | RenderNode::CanvasLine(_) | RenderNode::CanvasEllipse(_)
+                | RenderNode::CanvasPath(_) => return marks.artifact(content, draw),
+            RenderNode::Image(i) => return marks.whole(content, i.tag.as_deref(), draw),
+            RenderNode::Barcode(bc) => return marks.whole(content, bc.tag.as_deref(), draw),
+            RenderNode::CanvasLayer(l) if l.tag.is_some() => return marks.whole(content, l.tag.as_deref(), draw),
+            RenderNode::Box(b) => {
+                if let Some(tag) = b.tag.as_deref() {
+                    if marks.is_whole(tag) {
+                        return marks.whole(content, Some(tag), draw);
+                    }
+                    let entered = marks.enter(tag);
+                    draw(content, marks);
+                    return marks.leave(entered);
+                }
+            }
+            _ => {}
+        }
+    }
+    draw_drawn(content, annots, groups, marks, node, res, page_h);
+}
+
+/// Draw `node` itself; what it holds goes through `draw_node`.
+fn draw_drawn(
+    content:       &mut Content,
+    annots:        &mut Vec<AnnotData>,
+    groups:        &mut Vec<PageGroup>,
+    marks:         &mut Marks,
     node:          &RenderNode,
     res:           &DrawResources,
     page_h:        f32,
@@ -1196,10 +1240,10 @@ fn draw_node(
         RenderNode::Box(b) => {
             let percent = opacity_percent(b.opacity);
             if percent >= 100 {
-                draw_box(content, annots, groups, b, res, page_h);
+                draw_box(content, annots, groups, marks, b, res, page_h);
             } else {
-                draw_faded(content, groups, percent, |content, groups| {
-                    draw_box(content, annots, groups, b, res, page_h);
+                draw_faded(content, groups, marks, percent, |content, groups, marks| {
+                    draw_box(content, annots, groups, marks, b, res, page_h);
                 });
             }
         }
@@ -1273,8 +1317,11 @@ fn draw_node(
 
         // ── Link ─────────────────────────────────────────────────────────────
         RenderNode::Link(lk) => {
-            // Draw child nodes first (they appear inside the link area).
-            draw_nodes(content, annots, groups, &lk.children, res, page_h);
+            // Draw child nodes first (they appear inside the link area). In a tagged PDF they are drawn in the link's
+            // element, which holds the annotation too.
+            let link = marks.begin_link();
+            draw_nodes(content, annots, groups, marks, &lk.children, res, page_h);
+            let mark = marks.end_link(link);
 
             // Collect the annotation rect in bottom-up PDF coordinates.
             // The annotation PDF object will be written during assembly.
@@ -1286,6 +1333,7 @@ fn draw_node(
                 x2:  lk.x + lk.width,
                 y2:  y_top,
                 url: lk.url.clone(),
+                mark,
             });
         }
 
@@ -1408,7 +1456,7 @@ fn draw_node(
             let has_stroke = r.stroke.is_some() && r.stroke_width > 0.0;
             if let Some(shadow) = &r.shadow {
                 let outline = Outline::Rect { x: r.x, y: page_h - r.y - r.h, w: r.w, h: r.h, radius: r.border_radius };
-                draw_shadow(content, groups, shadow, &outline, has_fill);
+                draw_shadow(content, groups, marks, shadow, &outline, has_fill);
             }
             let pdf_y = page_h - r.y - r.h;
             if let Some((name, gradient)) = r.fill.as_deref().and_then(|fill| gradient_of(fill, gradients)) {
@@ -1470,7 +1518,7 @@ fn draw_node(
             let has_stroke = e.stroke.is_some() && e.stroke_width > 0.0;
             if let Some(shadow) = &e.shadow {
                 let outline = Outline::Ellipse { cx: e.cx, cy: page_h - e.cy, rx: e.rx, ry: e.ry };
-                draw_shadow(content, groups, shadow, &outline, has_fill);
+                draw_shadow(content, groups, marks, shadow, &outline, has_fill);
             }
             if let Some((name, gradient)) = e.fill.as_deref().and_then(|fill| gradient_of(fill, gradients)) {
                 let bounds = (e.cx - e.rx, page_h - e.cy - e.ry, 2.0 * e.rx, 2.0 * e.ry);
@@ -1552,11 +1600,11 @@ fn draw_node(
             let percent = opacity_percent(layer.opacity);
             if percent >= 100 {
                 content.save_state();
-                draw_layer(content, annots, groups, layer, res, page_h);
+                draw_layer(content, annots, groups, marks, layer, res, page_h);
                 content.restore_state();
             } else {
-                draw_faded(content, groups, percent, |content, groups| {
-                    draw_layer(content, annots, groups, layer, res, page_h);
+                draw_faded(content, groups, marks, percent, |content, groups, marks| {
+                    draw_layer(content, annots, groups, marks, layer, res, page_h);
                 });
             }
         }
@@ -1568,6 +1616,7 @@ fn draw_box(
     content:       &mut Content,
     annots:        &mut Vec<AnnotData>,
     groups:        &mut Vec<PageGroup>,
+    marks:         &mut Marks,
     b:             &RenderBox,
     res:           &DrawResources,
     page_h:        f32,
@@ -1581,49 +1630,57 @@ fn draw_box(
     // Flip the box y from top-down to bottom-up.
     let pdf_y = page_h - b.y - b.height;
 
+    // The box's shadow, background and border are drawn, not read: in a tagged PDF each is an artifact.
     if let Some(shadow) = &b.shadow {
         let outline = Outline::Rect { x: b.x, y: pdf_y, w: b.width, h: b.height, radius: b.radius };
-        draw_shadow(content, groups, shadow, &outline, has_fill);
+        marks.artifact(content, |content, marks| draw_shadow(content, groups, marks, shadow, &outline, has_fill));
     }
 
     if let Some((name, gradient)) = b.fill.as_deref().and_then(|fill| gradient_of(fill, gradients)) {
-        fill_with_gradient(content, name, gradient, (b.x, pdf_y, b.width, b.height), false, |content| {
-            if b.radius > 0.0 {
-                rounded_rect(content, b.x, pdf_y, b.width, b.height, b.radius);
-            } else {
-                content.rect(b.x, pdf_y, b.width, b.height);
-            }
+        marks.artifact(content, |content, _| {
+            fill_with_gradient(content, name, gradient, (b.x, pdf_y, b.width, b.height), false, |content| {
+                if b.radius > 0.0 {
+                    rounded_rect(content, b.x, pdf_y, b.width, b.height, b.radius);
+                } else {
+                    content.rect(b.x, pdf_y, b.width, b.height);
+                }
+            });
         });
     }
 
     if solid_fill || has_border {
-        content.save_state();
-
-        if solid_fill {
-            set_fill_color(content, b.fill.as_deref().unwrap_or("#000000"));
-        }
-        if has_border {
-            set_stroke_color(content, b.border_color.as_deref().unwrap_or("#000000"));
-            content.set_line_width(b.border_width);
-        }
-
-        if b.radius > 0.0 {
-            rounded_rect(content, b.x, pdf_y, b.width, b.height, b.radius);
-        } else {
-            content.rect(b.x, pdf_y, b.width, b.height);
-        }
-
-        match (solid_fill, has_border) {
-            (true,  true)  => { content.fill_nonzero_and_stroke(); }
-            (true,  false) => { content.fill_nonzero(); }
-            (false, true)  => { content.stroke(); }
-            (false, false) => { content.end_path(); }
-        }
-
-        content.restore_state();
+        marks.artifact(content, |content, _| draw_box_paint(content, b, pdf_y, solid_fill, has_border));
     }
 
-    draw_nodes(content, annots, groups, &b.children, res, page_h);
+    draw_nodes(content, annots, groups, marks, &b.children, res, page_h);
+}
+
+/// The fill and the border of a box.
+fn draw_box_paint(content: &mut Content, b: &RenderBox, pdf_y: f32, solid_fill: bool, has_border: bool) {
+    content.save_state();
+
+    if solid_fill {
+        set_fill_color(content, b.fill.as_deref().unwrap_or("#000000"));
+    }
+    if has_border {
+        set_stroke_color(content, b.border_color.as_deref().unwrap_or("#000000"));
+        content.set_line_width(b.border_width);
+    }
+
+    if b.radius > 0.0 {
+        rounded_rect(content, b.x, pdf_y, b.width, b.height, b.radius);
+    } else {
+        content.rect(b.x, pdf_y, b.width, b.height);
+    }
+
+    match (solid_fill, has_border) {
+        (true,  true)  => { content.fill_nonzero_and_stroke(); }
+        (true,  false) => { content.fill_nonzero(); }
+        (false, true)  => { content.stroke(); }
+        (false, false) => { content.end_path(); }
+    }
+
+    content.restore_state();
 }
 
 /// What `draw` writes, faded to `percent` of its strength, which is below 100.
@@ -1636,19 +1693,24 @@ fn draw_box(
 ///
 /// At 0% nothing shows. It can't be faded to nothing: no ExtGState is written for 0%, and a viewer ignores a
 /// `gs` that names a missing one, which would draw the group at full strength.
+///
+/// In a tagged PDF the group is a content stream of its own, which its marked content is counted in (`Marks::begin_group`).
 fn draw_faded(
     content: &mut Content,
     groups:  &mut Vec<PageGroup>,
+    marks:   &mut Marks,
     percent: u32,
-    draw:    impl FnOnce(&mut Content, &mut Vec<PageGroup>),
+    draw:    impl FnOnce(&mut Content, &mut Vec<PageGroup>, &mut Marks),
 ) {
     if percent == 0 {
         return;
     }
     let first_nested = groups.len();
     let mut group = Content::new();
-    draw(&mut group, groups);
+    let back = marks.begin_group();
+    draw(&mut group, groups, marks);
     let nested = first_nested..groups.len();
+    marks.end_group(back, groups.len());
     let name = group_resource_name(groups.len());
     groups.push(PageGroup { content: group.finish(), nested });
 
@@ -1693,13 +1755,14 @@ impl Outline {
 fn draw_shadow(
     content: &mut Content,
     groups:  &mut Vec<PageGroup>,
+    marks:   &mut Marks,
     shadow:  &Shadow,
     outline: &Outline,
     covers:  bool,
 ) {
     // The offset is down on the page and the outline is bottom-up.
     let (dx, dy) = (shadow.dx, -shadow.dy);
-    let draw = |content: &mut Content, _: &mut Vec<PageGroup>| {
+    let draw = |content: &mut Content, _: &mut Vec<PageGroup>, _: &mut Marks| {
         content.save_state();
         if !covers {
             // Keep the shadow out of the shape: clip to a rectangle around both with the shape cut out.
@@ -1717,8 +1780,8 @@ fn draw_shadow(
         content.restore_state();
     };
     match opacity_percent(shadow.opacity) {
-        100.. => draw(content, groups),
-        percent => draw_faded(content, groups, percent, draw),
+        100.. => draw(content, groups, marks),
+        percent => draw_faded(content, groups, marks, percent, draw),
     }
 }
 
@@ -1727,6 +1790,7 @@ fn draw_layer(
     content:       &mut Content,
     annots:        &mut Vec<AnnotData>,
     groups:        &mut Vec<PageGroup>,
+    marks:         &mut Marks,
     layer:         &RenderCanvasLayer,
     res:           &DrawResources,
     page_h:        f32,
@@ -1743,19 +1807,22 @@ fn draw_layer(
         content.transform([a, -b, -c, d, c * page_h + e, page_h - d * page_h - f]);
     }
 
-    // Apply optional clip rect.
+    // Apply optional clip rect. Around a flow cut at the foot of a page, in a tagged PDF, the clipping path is an
+    // artifact of its own, and the clip holds on after it.
     if let Some(clip) = &layer.clip {
         let clip_pdf_y = page_h - clip.y - clip.h;
-        if clip.border_radius > 0.0 {
-            rounded_rect(content, clip.x, clip_pdf_y, clip.w, clip.h, clip.border_radius);
-        } else {
-            content.rect(clip.x, clip_pdf_y, clip.w, clip.h);
-        }
-        content.clip_nonzero();
-        content.end_path();
+        marks.artifact(content, |content, _| {
+            if clip.border_radius > 0.0 {
+                rounded_rect(content, clip.x, clip_pdf_y, clip.w, clip.h, clip.border_radius);
+            } else {
+                content.rect(clip.x, clip_pdf_y, clip.w, clip.h);
+            }
+            content.clip_nonzero();
+            content.end_path();
+        });
     }
 
-    draw_nodes(content, annots, groups, &layer.children, res, page_h);
+    draw_nodes(content, annots, groups, marks, &layer.children, res, page_h);
 }
 
 /// The name a page's resources give its `index`th transparency group.
@@ -2514,43 +2581,50 @@ fn build_content_streams(
     image_res_map: &HashMap<String, String>,
     gradients:     &HashMap<String, Gradient>,
     attribution:   bool,
+    marks:         &mut Marks,
 ) -> Vec<RenderedPage> {
     let mut rendered_pages: Vec<RenderedPage> = Vec::new();
     let res = DrawResources { fonts, image_res_map, gradients };
 
-    for page in pages {
+    for (index, page) in pages.iter().enumerate() {
         let mut content = Content::new();
         let mut annots: Vec<AnnotData> = Vec::new();
         let mut groups: Vec<PageGroup> = Vec::new();
+        marks.begin_page(index);
 
         // Draw optional page background before any nodes.
         if let Some(bg) = &page.background {
-            if is_gradient_fill(bg) {
-                if let Some((name, gradient)) = gradient_of(bg, gradients) {
-                    let bounds = (0.0, 0.0, page.width, page.height);
-                    fill_with_gradient(&mut content, name, gradient, bounds, false, |content| {
-                        content.rect(0.0, 0.0, page.width, page.height);
-                    });
-                }
-            } else {
-                set_fill_color(&mut content, bg);
-                content.rect(0.0, 0.0, page.width, page.height);
-                content.fill_nonzero();
-            }
+            marks.artifact(&mut content, |content, _| draw_page_background(content, page, bg, gradients));
         }
 
         // Draw all render-tree nodes.
-        draw_nodes(&mut content, &mut annots, &mut groups, &page.nodes, &res, page.height);
+        draw_nodes(&mut content, &mut annots, &mut groups, marks, &page.nodes, &res, page.height);
 
         // Drawn last so it sits above the page's own content.
         if attribution {
-            draw_attribution(&mut content, &mut annots, fonts, page.width, page.height);
+            draw_attribution(&mut content, &mut annots, marks, fonts, page.width, page.height);
         }
 
         rendered_pages.push(RenderedPage { content: content.finish(), annots, groups });
     }
 
     rendered_pages
+}
+
+/// The background of a page: a color, or a gradient across the whole page.
+fn draw_page_background(content: &mut Content, page: &RenderPage, bg: &str, gradients: &HashMap<String, Gradient>) {
+    if is_gradient_fill(bg) {
+        if let Some((name, gradient)) = gradient_of(bg, gradients) {
+            let bounds = (0.0, 0.0, page.width, page.height);
+            fill_with_gradient(content, name, gradient, bounds, false, |content| {
+                content.rect(0.0, 0.0, page.width, page.height);
+            });
+        }
+    } else {
+        set_fill_color(content, bg);
+        content.rect(0.0, 0.0, page.width, page.height);
+        content.fill_nonzero();
+    }
 }
 
 // ── Unlicensed-use attribution ────────────────────────────────────────────────
@@ -2600,6 +2674,7 @@ const LPDF_MARK: [[(f32, f32); 4]; 2] = [
 fn draw_attribution(
     content: &mut Content,
     annots:  &mut Vec<AnnotData>,
+    marks:   &mut Marks,
     fonts:   &HashMap<String, PreparedFont>,
     page_w:  f32,
     page_h:  f32,
@@ -2630,33 +2705,36 @@ fn draw_attribution(
     let (tr, tg, tb) = parse_hex(ATTRIBUTION_TEXT_COLOR);
     let (mr, mg, mb) = parse_hex(ATTRIBUTION_MARK_COLOR);
 
-    // Its own graphics state, so the colours, stroke width and text rendering mode set
-    // here cannot leak into anything drawn later on the page.
-    content.save_state();
+    // A credit, not part of the document: in a tagged PDF it is an artifact, and its link an element of its own.
+    marks.artifact(content, |content, _| {
+        // Its own graphics state, so the colours, stroke width and text rendering mode set
+        // here cannot leak into anything drawn later on the page.
+        content.save_state();
 
-    let scale = MARK_SIZE / 100.0;
-    content.set_fill_rgb(mr, mg, mb);
-    for shape in &LPDF_MARK {
-        let (x0, y0) = shape[0];
-        content.move_to(mark_x + x0 * scale, page_h - (PAD + y0 * scale));
-        for &(x, y) in &shape[1..] {
-            content.line_to(mark_x + x * scale, page_h - (PAD + y * scale));
+        let scale = MARK_SIZE / 100.0;
+        content.set_fill_rgb(mr, mg, mb);
+        for shape in &LPDF_MARK {
+            let (x0, y0) = shape[0];
+            content.move_to(mark_x + x0 * scale, page_h - (PAD + y0 * scale));
+            for &(x, y) in &shape[1..] {
+                content.line_to(mark_x + x * scale, page_h - (PAD + y * scale));
+            }
+            content.close_path();
         }
-        content.close_path();
-    }
-    content.fill_nonzero();
+        content.fill_nonzero();
 
-    content.set_fill_rgb(tr, tg, tb);
-    content.set_stroke_rgb(tr, tg, tb);
-    content.set_line_width(BOLD_STROKE);
-    content.begin_text();
-    content.set_text_rendering_mode(TextRenderingMode::FillStroke);
-    content.set_font(Name(name_font.resource_name.as_bytes()), NAME_SIZE);
-    content.set_text_matrix([1.0, 0.0, 0.0, 1.0, name_x, baseline]);
-    content.show(Str(&name_font.encode_text(ATTRIBUTION_NAME)));
-    content.end_text();
+        content.set_fill_rgb(tr, tg, tb);
+        content.set_stroke_rgb(tr, tg, tb);
+        content.set_line_width(BOLD_STROKE);
+        content.begin_text();
+        content.set_text_rendering_mode(TextRenderingMode::FillStroke);
+        content.set_font(Name(name_font.resource_name.as_bytes()), NAME_SIZE);
+        content.set_text_matrix([1.0, 0.0, 0.0, 1.0, name_x, baseline]);
+        content.show(Str(&name_font.encode_text(ATTRIBUTION_NAME)));
+        content.end_text();
 
-    content.restore_state();
+        content.restore_state();
+    });
 
     // One target for the whole line, with slack below and above so the name's
     // descender and a fingertip both land inside it.
@@ -2666,6 +2744,7 @@ fn draw_attribution(
         x2:  page_w - PAD,
         y2:  page_h - (PAD - 2.0),
         url: ATTRIBUTION_URL.to_string(),
+        mark: marks.attribution_link(ATTRIBUTION_NAME),
     });
 }
 
@@ -2846,9 +2925,12 @@ fn assemble_pdf(
     used_gradients:     &[(&str, &Gradient)],
     meta:               &Meta,
     date:               Option<&str>,
-    pdfa:               Option<&PdfAFile>,
+    file:               Option<&StandardFile>,
     files:              &[EmbeddedFile],
+    marks:              &Marks,
 ) -> Result<Vec<u8>, String> {
+    // What PDF/A alone asks for: an output intent, a file ID, and links that print.
+    let pdfa = file.filter(|file| file.standards.pdfa.is_some());
     let AllocatedIds {
         catalog_id, info_id, pages_id,
         page_ids, content_ids, annot_ids,
@@ -2866,11 +2948,20 @@ fn assemble_pdf(
         })
         .collect();
 
-    // A PDF/A file's XMP packet and the profile of its output intent come after them, for the same reason.
-    let pdfa_ids = pdfa.map(|_| (alloc.next(), alloc.next()));
+    // The XMP packet of a PDF/A or PDF/UA file, and the profile of a PDF/A file's output intent, come after them, for
+    // the same reason.
+    let xmp_id = file.map(|_| alloc.next());
+    let profile_id = pdfa.map(|_| alloc.next());
 
     // The files the document carries come last, so a document without any keeps its ids.
     let file_ids = attachments::allocate(files, || alloc.next());
+
+    // A tagged PDF's structure after them: the root and an object for each element.
+    let structure = marks.is_on().then(|| StructureIds {
+        root:     alloc.next(),
+        elements: marks.elements.iter().map(|_| alloc.next()).collect(),
+    });
+    let keys = ParentKeys::of(marks, &rendered_pages);
 
     let n = pages.len();
     let mut pdf = Pdf::new();
@@ -2885,8 +2976,10 @@ fn assemble_pdf(
             // Open with the outline panel showing, as the bookmarks are there to be used.
             cat.page_mode(PageMode::UseOutlines);
         }
-        if let Some((xmp_id, profile_id)) = pdfa_ids {
+        if let Some(xmp_id) = xmp_id {
             cat.metadata(xmp_id);
+        }
+        if let Some(profile_id) = profile_id {
             cat.output_intents()
                 .push()
                 .subtype(OutputIntentSubtype::PDFA)
@@ -2896,6 +2989,16 @@ fn assemble_pdf(
                 .dest_output_profile(profile_id);
         }
         attachments::write_catalog(&mut cat, files, &file_ids);
+        // A tagged PDF: the structure, the language a screen reader reads it in, and the title shown in place of the
+        // file name (ISO 14289-1, 7.1 and 7.2).
+        if let Some(structure) = &structure {
+            cat.mark_info().marked(true);
+            if !meta.lang.is_empty() {
+                cat.lang(TextStr(&meta.lang));
+            }
+            cat.pair(Name(b"StructTreeRoot"), structure.root);
+            cat.viewer_preferences().display_doc_title(true);
+        }
         if !fields.is_empty() {
             // Build root field refs list.
             let mut root_fields: Vec<Ref> = Vec::new();
@@ -2934,7 +3037,7 @@ fn assemble_pdf(
         // DocumentInfo derefs to Dict; raw pairs write the keys its typed API doesn't cover.
         if let Some(date) = &date {
             info.pair(Name(b"CreationDate"), Str(date.as_bytes()));
-            if pdfa.is_some() {
+            if file.is_some() {
                 info.pair(Name(b"ModDate"), Str(date.as_bytes()));
             }
         }
@@ -3004,6 +3107,15 @@ fn assemble_pdf(
         // Add the content stream reference.
         pw.contents(content_id);
 
+        // In a tagged PDF the annotations go in the order of the structure, and the marked content of the page is
+        // found through the parent tree.
+        if structure.is_some() {
+            pw.tab_order(TabOrder::StructureOrder);
+            if let Some(key) = keys.page(i) {
+                pw.struct_parents(key);
+            }
+        }
+
         // Add the per-page annotation array if there are any link annotations
         // or form field annotations.
         let page_annot_ids = &annot_ids[i];
@@ -3037,6 +3149,9 @@ fn assemble_pdf(
             form.bbox(Rect::new(0.0, 0.0, pages[i].width, pages[i].height));
             form.group().transparency().isolated(true).color_space().device_rgb();
             write_resources(&mut form.resources(), &group_ids[i], group.nested.clone());
+            if let Some(key) = keys.group(i, j) {
+                form.struct_parents(key);
+            }
         }
     }
 
@@ -3076,6 +3191,14 @@ fn assemble_pdf(
             // PDF/A asks every annotation to print, as it is part of the page.
             if pdfa.is_some() {
                 aw.flags(AnnotationFlags::PRINT);
+            }
+            // In a tagged PDF a link is described by its words, and found from its element (ISO 14289-1, 7.18.5).
+            if let Some(mark) = ann.mark {
+                let words = marks.elements[mark.element].words.trim();
+                aw.contents(TextStr(if words.is_empty() { &ann.url } else { words }));
+                if let Some(key) = keys.annotation(mark.number) {
+                    aw.struct_parent(key);
+                }
             }
             match ann.url.strip_prefix('#') {
                 Some(id) => {
@@ -3475,7 +3598,7 @@ fn assemble_pdf(
                     // A Type 2 CIDFont's CIDToGIDMap: Identity is the default, and PDF/A asks for it to be written. A
                     // Type 0 CIDFont has none: the CFF's own charset maps CIDs to glyphs, which the subsetter writes
                     // as the identity.
-                    if pdfa.is_some() && program == FontProgram::TrueType {
+                    if file.is_some() && program == FontProgram::TrueType {
                         cid.cid_to_gid_map_predefined(Name(b"Identity"));
                     }
 
@@ -3509,11 +3632,18 @@ fn assemble_pdf(
     // -- The files the document carries, dated as the document is --------------
     attachments::write_objects(&mut pdf, files, &file_ids, date.as_deref());
 
-    // -- PDF/A: the XMP packet, the output intent's profile and the file ID -------
-    if let (Some(file), Some((xmp_id, profile_id))) = (pdfa, pdfa_ids) {
+    // -- A tagged PDF's structure ----------------------------------------------------
+    if let Some(structure) = &structure {
+        write_structure(&mut pdf, marks, structure, &keys, &page_ids, &group_ids, &annot_ids, &rendered_pages);
+    }
+
+    // -- PDF/A and PDF/UA: the XMP packet; PDF/A: the output intent's profile and the file ID -------
+    if let (Some(file), Some(xmp_id)) = (file, xmp_id) {
         // Not compressed, so that a tool that knows nothing of PDF can still find the packet.
-        let xmp = pdfa::xmp_packet(file.level, meta, &file.date);
+        let xmp = pdfa::xmp_packet(file.standards, meta, &file.date);
         pdf.metadata(xmp_id, &xmp);
+    }
+    if let Some(profile_id) = profile_id {
         pdf.icc_profile(profile_id, pdfa::SRGB_PROFILE)
            .n(3)
            .alternate()
@@ -3529,8 +3659,8 @@ fn assemble_pdf(
 /// The date of the file as a PDF date: a PDF/A file's date, or else `created_on` read as a PDF/A file's is
 /// (`pdfa::plain_date`), and an error when it is not a date. `None` leaves the file undated, so the same input gives
 /// the same bytes.
-fn file_date(created_on: Option<&str>, pdfa: Option<&PdfAFile>) -> Result<Option<String>, String> {
-    if let Some(file) = pdfa {
+fn file_date(created_on: Option<&str>, standard: Option<&StandardFile>) -> Result<Option<String>, String> {
+    if let Some(file) = standard {
         return Ok(Some(file.date.pdf()));
     }
     Ok(pdfa::plain_date(created_on)?.map(|date| date.pdf()))
@@ -3554,9 +3684,10 @@ fn file_date(created_on: Option<&str>, pdfa: Option<&PdfAFile>) -> Result<Option
 /// - `licensed`   – `true` when a valid commercial license token was supplied.
 ///                  When `false`, draws the attribution line (the lpdf mark and
 ///                  "Lpdf") in every page's top-right corner.
-/// - `pdfa`       – The PDF/A level of the document's `<output pdfa>`, or `None`
-///                  for a plain PDF. A PDF/A file gets its XMP packet, the sRGB
-///                  output intent and a file ID, and what it cannot hold is an error.
+/// - `output`     – The document's `<output>`: with `pdfa`, a PDF/A file gets its
+///                  XMP packet, the sRGB output intent and a file ID; with `pdfua`,
+///                  a PDF/UA file is tagged, with its structure, its marked content
+///                  and its XMP packet. What either cannot hold is an error.
 /// - `files`      – The files of `<attachments>` with their bytes (`attachments::resolve`), carried in the PDF.
 #[allow(clippy::too_many_arguments)]
 pub fn render_pdf(
@@ -3568,11 +3699,14 @@ pub fn render_pdf(
     gradients:      &HashMap<String, Gradient>,
     created_on:     Option<&str>,
     licensed:       bool,
-    pdfa:           Option<PdfA>,
+    output:         &Output,
     files:          &[EmbeddedFile],
 ) -> Result<Vec<u8>, String> {
-    let pdfa = pdfa.map(|level| pdfa::file_date(level, created_on).map(|date| PdfAFile { level, date })).transpose()?;
-    let date = file_date(created_on, pdfa.as_ref())?;
+    let standards = Standards::of(output);
+    let file = standards.any()
+        .then(|| pdfa::file_date(standards, created_on).map(|date| StandardFile { standards, date }))
+        .transpose()?;
+    let date = file_date(created_on, file.as_ref())?;
     // The attribution is the licence signal itself, so it follows `licensed` rather
     // than a separate flag every caller would have to keep in step.
     let attribution = !licensed;
@@ -3583,25 +3717,29 @@ pub fn render_pdf(
     let anchors = placed_anchors(pages);
     let used_gradients = used_gradients(pages, gradients);
     let fields = collect_render_fields(pages);
-    if let Some(file) = &pdfa {
-        refuse_for_pdfa(file.level, pages, &fonts, &sorted_font_names, font_defs, &used_gradients, &fields)?;
+    if let Some(level) = standards.pdfa {
+        refuse_for_pdfa(level, pages, &fonts, &sorted_font_names, font_defs, &used_gradients, &fields)?;
     }
+    if let Some(part) = standards.pdfua {
+        refuse_for_pdfua(part, pages, &fonts, &sorted_font_names, font_defs)?;
+    }
+    let mut marks = if standards.pdfua.is_some() { Marks::tagged() } else { Marks::off() };
     let mut rendered_pages =
-        build_content_streams(pages, &fonts, &image_res_map, gradients, attribution);
+        build_content_streams(pages, &fonts, &image_res_map, gradients, attribution, &mut marks);
     drop_dangling_links(&mut rendered_pages, &anchors);
     let ids =
         allocate_ids(pages, &rendered_pages, &fonts, &sorted_font_names, &sorted_image_names, image_registry, &fields);
     assemble_pdf(
         pages, &fonts, &sorted_font_names, &sorted_image_names,
         image_registry, &image_res_map, rendered_pages, ids, &fields, &anchors,
-        &used_gradients, meta, date.as_deref(), pdfa.as_ref(), files,
+        &used_gradients, meta, date.as_deref(), file.as_ref(), files, &marks,
     )
 }
 
-/// The level and the date of a PDF/A render.
-struct PdfAFile {
-    level: PdfA,
-    date:  FileDate,
+/// The standards and the date of a render of a document that asks for PDF/A or PDF/UA.
+struct StandardFile {
+    standards: Standards,
+    date:      FileDate,
 }
 
 // ── PDF/A refusals ────────────────────────────────────────────────────────────
@@ -3640,7 +3778,7 @@ fn refuse_for_pdfa(
     }
 
     for page in pages {
-        if let Some(reason) = first_in(&page.nodes, &mut |node| font_refusal(node, fonts, font_defs)) {
+        if let Some(reason) = first_in(&page.nodes, &mut |node| font_refusal(node, fonts, font_defs, "PDF/A")) {
             return refuse(reason);
         }
     }
@@ -3663,6 +3801,35 @@ fn refuse_for_pdfa(
     Ok(())
 }
 
+/// Refuse what a PDF/UA file cannot hold where only the author can change it: text in a font that is not embedded, a
+/// font whose licence forbids embedding, and a character the font has no glyph for, which a reader would draw as an
+/// empty box (ISO 14289-1, 7.21.4 and 7.21.8). A form field, an image without `alt` and the rest of what the author
+/// writes are refused before the layout (`pdfua::check`).
+fn refuse_for_pdfua(
+    part:              PdfUa,
+    pages:             &[RenderPage],
+    fonts:             &HashMap<String, PreparedFont>,
+    sorted_font_names: &[String],
+    font_defs:         &HashMap<String, FontDef>,
+) -> Result<(), String> {
+    let refuse = |reason: String| Err(format!("<output pdfua=\"{}\">: {reason}", part.attribute()));
+    for name in sorted_font_names {
+        if let PreparedFontKind::Truetype { original_bytes, .. } = &fonts[name].kind
+            && let Some(reason) = embedding_refused(original_bytes)
+        {
+            return refuse(format!(
+                "the font '{name}' {reason}, and a PDF/UA file embeds every font it draws in: use another font"
+            ));
+        }
+    }
+    for page in pages {
+        if let Some(reason) = first_in(&page.nodes, &mut |node| font_refusal(node, fonts, font_defs, "PDF/UA")) {
+            return refuse(reason);
+        }
+    }
+    Ok(())
+}
+
 /// The first answer `check` gives for a node of `nodes` or of their children, in drawing order.
 fn first_in(nodes: &[RenderNode], check: &mut impl FnMut(&RenderNode) -> Option<String>) -> Option<String> {
     nodes.iter().find_map(|node| check(node).or_else(|| match node {
@@ -3673,9 +3840,15 @@ fn first_in(nodes: &[RenderNode], check: &mut impl FnMut(&RenderNode) -> Option<
     }))
 }
 
-/// Why `node` can't be drawn in a PDF/A file for its font: its text is in a font that is not embedded, or has a
-/// character its embedded font has no glyph for, or it is a barcode's digits, which are drawn in Helvetica.
-fn font_refusal(node: &RenderNode, fonts: &HashMap<String, PreparedFont>, font_defs: &HashMap<String, FontDef>) -> Option<String> {
+/// Why `node` can't be drawn in a file of `standard`, PDF/A or PDF/UA, for its font: its text is in a font that is not
+/// embedded, or has a character its embedded font has no glyph for, or it is a barcode's digits, which are drawn in
+/// Helvetica.
+fn font_refusal(
+    node:      &RenderNode,
+    fonts:     &HashMap<String, PreparedFont>,
+    font_defs: &HashMap<String, FontDef>,
+    standard:  &str,
+) -> Option<String> {
     match node {
         RenderNode::Text(t) => match &fonts.get(&t.font)?.kind {
             PreparedFontKind::Builtin { base_name, .. } => {
@@ -3688,7 +3861,7 @@ fn font_refusal(node: &RenderNode, fonts: &HashMap<String, PreparedFont>, font_d
                     ),
                     _ => format!(
                         "the text \"{text}\" is in {base_name}, a font built into PDF readers, which is not embedded, \
-                        and a PDF/A file embeds every font: declare a font in <assets> and set it with font on the \
+                        and a {standard} file embeds every font: declare a font in <assets> and set it with font on the \
                         document or on the text"
                     ),
                 })
@@ -3701,17 +3874,17 @@ fn font_refusal(node: &RenderNode, fonts: &HashMap<String, PreparedFont>, font_d
             PreparedFontKind::Truetype { char_to_gid, .. } => {
                 let missing = t.content.chars().find(|c| !char_to_gid.contains_key(c))?;
                 Some(format!(
-                    "the text \"{}\" has '{missing}' (U+{:04X}), which the font '{}' has no glyph for, and a PDF/A file \
-                    may not draw the empty box a reader shows instead: use a font that has it, or leave it out",
+                    "the text \"{}\" has '{missing}' (U+{:04X}), which the font '{}' has no glyph for, and a {standard} \
+                    file may not draw the empty box a reader shows instead: use a font that has it, or leave it out",
                     excerpt(&t.content), missing as u32, t.font
                 ))
             }
         },
-        RenderNode::Barcode(bc) if has_caption(&bc.kind) => Some(
-            "a barcode's digits (hrt) are drawn in Helvetica, which is not embedded, and a PDF/A file embeds every \
+        RenderNode::Barcode(bc) if has_caption(&bc.kind) => Some(format!(
+            "a barcode's digits (hrt) are drawn in Helvetica, which is not embedded, and a {standard} file embeds every \
             font: set hrt=\"false\" on the barcode, and write the digits as text in a font of <assets> if they are \
-            needed".to_string(),
-        ),
+            needed"
+        )),
         _ => None,
     }
 }
@@ -3755,6 +3928,179 @@ fn excerpt(text: &str) -> String {
     match text.char_indices().nth(MAX) {
         Some((end, _)) => format!("{}…", &text[..end]),
         None => text.to_string(),
+    }
+}
+
+// ── Tagged PDF: the structure ─────────────────────────────────────────────────
+
+/// The objects of a tagged PDF's structure: its root, and one for each element of `Marks::elements`.
+struct StructureIds {
+    root:     Ref,
+    elements: Vec<Ref>,
+}
+
+/// What a key of the parent tree finds: the elements of the marked content of a stream, by MCID, or the element of
+/// a link annotation.
+enum ParentEntry {
+    Stream(usize),
+    Annotation(usize),
+}
+
+/// The keys of the parent tree (ISO 32000-1, 14.7.4.4): one for each content stream that holds marked content, a page
+/// or a transparency group, then one for each link annotation that is written. A page or a group gives its key in
+/// `/StructParents`, an annotation in `/StructParent`.
+struct ParentKeys {
+    entries:     Vec<(i32, ParentEntry)>,
+    pages:       HashMap<usize, i32>,
+    groups:      HashMap<(usize, usize), i32>,
+    annotations: HashMap<usize, i32>,
+}
+
+impl ParentKeys {
+    /// The keys of the streams `marks` drew marked content in, and of the annotations of `rendered_pages` that a link
+    /// element holds. Empty for a document that is not tagged.
+    fn of(marks: &Marks, rendered_pages: &[RenderedPage]) -> Self {
+        let mut keys = ParentKeys { entries: Vec::new(), pages: HashMap::new(), groups: HashMap::new(), annotations: HashMap::new() };
+        for (index, stream) in marks.streams.iter().enumerate().filter(|(_, stream)| !stream.owners.is_empty()) {
+            let key = keys.entries.len() as i32;
+            match stream.group {
+                Some(group) => keys.groups.insert((stream.page, group), key),
+                None => keys.pages.insert(stream.page, key),
+            };
+            keys.entries.push((key, ParentEntry::Stream(index)));
+        }
+        for mark in rendered_pages.iter().flat_map(|page| &page.annots).filter_map(|annot| annot.mark) {
+            let key = keys.entries.len() as i32;
+            keys.annotations.insert(mark.number, key);
+            keys.entries.push((key, ParentEntry::Annotation(mark.element)));
+        }
+        keys
+    }
+
+    fn page(&self, page: usize) -> Option<i32> {
+        self.pages.get(&page).copied()
+    }
+
+    fn group(&self, page: usize, group: usize) -> Option<i32> {
+        self.groups.get(&(page, group)).copied()
+    }
+
+    fn annotation(&self, number: usize) -> Option<i32> {
+        self.annotations.get(&number).copied()
+    }
+}
+
+/// The id of the `n`th note, from 1: a `Note` element has one (ISO 14289-1, 7.9).
+fn note_id(n: usize) -> String {
+    format!("note-{n}")
+}
+
+/// Write the structure of a tagged PDF: the root with its parent tree and the ids of its notes, and each element,
+/// with what it holds in reading order. A link annotation that was dropped (`drop_dangling_links`) is left out of its
+/// element.
+#[allow(clippy::too_many_arguments)]
+fn write_structure(
+    pdf:            &mut Pdf,
+    marks:          &Marks,
+    ids:            &StructureIds,
+    keys:           &ParentKeys,
+    page_ids:       &[Ref],
+    group_ids:      &[Vec<Ref>],
+    annot_ids:      &[Vec<Ref>],
+    rendered_pages: &[RenderedPage],
+) {
+    let annotations: HashMap<usize, (Ref, Ref)> = rendered_pages.iter().enumerate()
+        .flat_map(|(page, rendered)| rendered.annots.iter().enumerate().map(move |(j, annot)| (page, j, annot)))
+        .filter_map(|(page, j, annot)| annot.mark.map(|mark| (mark.number, (annot_ids[page][j], page_ids[page]))))
+        .collect();
+    let notes: Vec<usize> = (0..marks.elements.len()).filter(|&i| marks.elements[i].kind == Kind::Note).collect();
+
+    {
+        let mut root = pdf.indirect(ids.root).start::<pdf_writer::writers::StructTreeRoot>();
+        root.child(ids.elements[0]);
+        {
+            let mut tree = root.insert(Name(b"ParentTree")).dict();
+            let mut nums = tree.insert(Name(b"Nums")).array();
+            for (key, entry) in &keys.entries {
+                nums.item(*key);
+                match entry {
+                    ParentEntry::Stream(stream) => {
+                        nums.push().array().items(marks.streams[*stream].owners.iter().map(|owner| ids.elements[*owner]));
+                    }
+                    ParentEntry::Annotation(element) => {
+                        nums.item(ids.elements[*element]);
+                    }
+                }
+            }
+        }
+        root.parent_tree_next_key(keys.entries.len() as i32);
+        if !notes.is_empty() {
+            // A name tree's keys are in the order of their bytes.
+            let mut by_id: Vec<(String, Ref)> = notes.iter().enumerate()
+                .map(|(n, &element)| (note_id(n + 1), ids.elements[element]))
+                .collect();
+            by_id.sort();
+            let mut tree = root.id_tree();
+            let mut names = tree.names();
+            for (id, element) in &by_id {
+                names.insert(Str(id.as_bytes()), *element);
+            }
+        }
+    }
+
+    for (index, element) in marks.elements.iter().enumerate() {
+        let mut written = pdf.struct_element(ids.elements[index]);
+        written.custom_kind(Name(element.kind.name()));
+        written.parent(if index == 0 { ids.root } else { ids.elements[element.parent] });
+        if index != 0 {
+            written.page(page_ids[element.page]);
+        }
+        match &element.kind {
+            Kind::Figure(alt) => {
+                written.alt(TextStr(alt));
+            }
+            Kind::Note => {
+                let n = notes.iter().position(|&note| note == index).map_or(0, |n| n + 1);
+                written.id(Str(note_id(n).as_bytes()));
+            }
+            // A header cell heads its column, which lets a reader find the headers of each data cell.
+            Kind::TH { col_span, row_span } => {
+                let mut attributes = written.attributes();
+                let mut table = attributes.push().table();
+                table.scope(TableHeaderScope::Column);
+                if *col_span > 1 { table.col_span(i32::from(*col_span)); }
+                if *row_span > 1 { table.row_span(i32::from(*row_span)); }
+            }
+            Kind::TD { col_span, row_span } if *col_span > 1 || *row_span > 1 => {
+                let mut attributes = written.attributes();
+                let mut table = attributes.push().table();
+                if *col_span > 1 { table.col_span(i32::from(*col_span)); }
+                if *row_span > 1 { table.row_span(i32::from(*row_span)); }
+            }
+            _ => {}
+        }
+        let mut kids = written.children();
+        for kid in &element.kids {
+            match *kid {
+                Kid::Element(child) => {
+                    kids.struct_element(ids.elements[child]);
+                }
+                Kid::Marked { stream, mcid } => {
+                    let stream = &marks.streams[stream];
+                    let mut marked = kids.marked_content_ref();
+                    marked.page(page_ids[stream.page]);
+                    if let Some(group) = stream.group {
+                        marked.stream(group_ids[stream.page][group]);
+                    }
+                    marked.marked_content_id(mcid);
+                }
+                Kid::Annotation(number) => {
+                    if let Some(&(annotation, page)) = annotations.get(&number) {
+                        kids.object_ref().object(annotation).page(page);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -4078,7 +4424,7 @@ mod tests {
         let xml = format!(r#"<lpdf version="1"><document><section><layout>{layout}</layout></section></document></lpdf>"#);
         let mut doc = crate::parse::parse(&xml).expect("parses");
         let pages = crate::layout::layout_document(&doc.section_layouts());
-        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &ImageRegistry::new(), &doc.meta, &doc.gradients, None, licensed, doc.output.pdfa, &[])
+        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &ImageRegistry::new(), &doc.meta, &doc.gradients, None, licensed, &doc.output, &[])
             .expect("renders")
     }
 
@@ -4316,7 +4662,7 @@ mod tests {
             crate::layout::prefill_section_image_sizes(section, &meta);
         }
         let pages = crate::layout::layout_document(&layouts);
-        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[]).expect("renders")
+        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[]).expect("renders")
     }
 
     #[test]
@@ -4348,7 +4694,7 @@ mod tests {
         let pages = crate::layout::layout_document(&doc.section_layouts());
         let mut images = ImageRegistry::new();
         images.load("photo", RED_PIXEL.to_vec());
-        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[]).expect("renders");
+        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[]).expect("renders");
         let (page, groups) = page_and_groups(&pdf);
         assert_eq!(groups.len(), 1);
         let (dict, group) = &groups[0];
@@ -4459,7 +4805,7 @@ mod tests {
         let pages = crate::layout::layout_document(&doc.section_layouts());
         let mut registry = FontRegistry::new();
         registry.register("brand", bytes.to_vec());
-        let pdf = render_pdf(&pages, &doc.fonts, &registry, &ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[]).expect("renders");
+        let pdf = render_pdf(&pages, &doc.fonts, &registry, &ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, &doc.output, &[]).expect("renders");
         let page = page_and_groups(&pdf).0;
         let operators = operators(&page);
         assert!(arrays(&operators) > 1, "the justified lines are arrays: {page}");
@@ -4580,7 +4926,7 @@ mod tests {
         let pages = crate::layout::layout_document(&doc.section_layouts());
         let mut images = ImageRegistry::new();
         images.load("photo", RED_PIXEL.to_vec());
-        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[]).expect("renders");
+        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[]).expect("renders");
         let (page, groups) = page_and_groups(&pdf);
         assert_eq!(groups.len(), 1);
         assert!(groups[0].1.contains("/I0 Do"), "the image is drawn in the group: {}", groups[0].1);

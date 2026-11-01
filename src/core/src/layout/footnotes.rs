@@ -304,13 +304,20 @@ fn build_area(notes: &[Note], x: f32, y: f32, width: f32, cap: f32) -> (Vec<Rend
         let max_lines = (lines[i] < natural[i]).then_some(lines[i]);
         let (body, h) = layout_text(&note_text(n, max_lines), x + label_w, cursor, text_w);
         let (sup_size, dy) = sup_geometry(n.size);
-        out.push(RenderNode::Text(RenderText {
+        let label = RenderNode::Text(RenderText {
             x, y: cursor + dy,
             content: n.number.to_string(), font: n.font.clone(), size: sup_size,
             color: n.color.clone().unwrap_or_else(|| "#1a1a1a".to_string()),
             text_align: "left".to_string(), line_width: 0.0, word_gap: 0.0,
-        }));
-        out.push(body);
+        });
+        // In a tagged section, a note is one, with its number and its words.
+        if tagging() {
+            let tag = Some(Box::new(Tag { id: 0, kind: TagKind::Note }));
+            out.push(tagged_box(tag, x, cursor, width, h, vec![label, body]));
+        } else {
+            out.push(label);
+            out.push(body);
+        }
         cursor += h;
     }
     (out, cursor - y)

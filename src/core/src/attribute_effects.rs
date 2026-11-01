@@ -133,6 +133,11 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
         ("file@ref", &["other"]),
         ("file@description", &["The terms of the sale"]),
         ("barcode@data", &["Another payload"]),
+        // What PDF/UA reads: the subjects of a PDF/UA document set a first value, which these change.
+        ("meta@lang", &["de-CH"]),
+        ("img@alt", &["The company's logo", ""]),
+        ("barcode@alt", &["QR code to pay this invoice", ""]),
+        ("layer@alt", &["A map of the cities"]),
         ("barcode-at@data", &["Another payload"]),
         ("layer@clip", &["20pt 20pt 80pt 80pt"]),
         ("bookmark@id", &["chosen"]),
@@ -421,8 +426,8 @@ fn render(xml: &str) -> Result<Vec<u8>, String> {
         let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts);
         let mut fonts = crate::pdf::FontRegistry::new();
         fonts.register("custom", crate::pdf::ATTRIBUTION_FONT.to_vec());
-        let created_on = doc.output.pdfa.map(|_| "2026-10-31T09:30:00Z");
-        let bytes = crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, created_on, false, doc.output.pdfa, &files)?;
+        let created_on = (doc.output.pdfa.is_some() || doc.output.pdfua.is_some()).then_some("2026-10-31T09:30:00Z");
+        let bytes = crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, created_on, false, &doc.output, &files)?;
         match config {
             Some(config) => crate::encrypt::encrypt_pdf(&bytes, &config),
             None => Ok(bytes),
@@ -464,6 +469,20 @@ impl Subject {
 }
 
 const IMAGES: &str = r#"<assets><image name="logo"/><image name="other"/></assets>"#;
+
+/// The `<output>` and the `<meta>` of a PDF/UA document.
+const PDFUA: &str = r#"<output pdfua="1"/>"#;
+const PDFUA_META: &str = r#"title="T" lang="en""#;
+
+/// A PDF/UA document: its `assets`, `meta` attributes, `output`, the content of its layout and the `layers` after it,
+/// set in the font `custom`, which is embedded, as PDF/UA embeds every font. Its text has only the letters the font
+/// has: Lpdf.
+fn pdfua(assets: &str, meta: &str, output: &str, layout: &str, layers: &str) -> String {
+    lpdf(
+        &format!(r#"<assets><font name="custom" src="custom.ttf"/>{assets}</assets>"#),
+        &format!(r#"<document font="custom"><meta {meta}/>{output}<section><layout>{layout}</layout>{layers}</section></document>"#),
+    )
+}
 const BOOKMARKED: &str =
     r#"<bookmark label="Methods"/><text>Methods</text><bookmark label="Data" level="2"/><text>Data</text>"#;
 /// The content of a table of contents: one text per entry.
@@ -596,6 +615,25 @@ fn subjects() -> Vec<Subject> {
                 &format!(r#"<document font="custom"><output {a}/><section><layout><text>Lpdf</text></layout></section></document>"#),
             )
         }),
+        // PDF/UA: the attributes a tagged PDF reads, which a document without pdfua ignores.
+        Subject::new("output", |a, _| pdfua("", r#"title="T" lang="en""#, &format!("<output {a}/>"), "<text>Lpdf</text>", ""))
+            .only(&["pdfua"]),
+        Subject::new("meta", |a, _| pdfua("", &format!(r#"title="T" {a}"#), PDFUA, "<text>Lpdf</text>", ""))
+            .only(&["lang"])
+            .base(&[("lang", "en")]),
+        // After an h1, as the headings of a PDF/UA document start at it: only h1 and h2 render.
+        Subject::new("text", |a, _| pdfua("", PDFUA_META, PDFUA, &format!(r#"<text role="h1">Lpdf</text><text {a}>Lpdf</text>"#), ""))
+            .only(&["role"]),
+        Subject::new("img", |a, _| pdfua(r#"<image name="logo"/>"#, PDFUA_META, PDFUA, &format!("<img {a}/>"), ""))
+            .only(&["alt"])
+            .base(&[("name", "logo"), ("width", "80pt"), ("alt", "A logo")]),
+        Subject::new("barcode", |a, _| pdfua("", PDFUA_META, PDFUA, &format!("<barcode {a}/>"), ""))
+            .only(&["alt"])
+            .base(&[("type", "qr"), ("data", "Lpdf"), ("height", "40pt"), ("alt", "Pay")]),
+        Subject::new("layer", |a, _| {
+            pdfua("", PDFUA_META, PDFUA, "<text>Lpdf</text>", &format!(r#"<layer {a}><text-at x="40" y="40">Lpdf</text-at></layer>"#))
+        })
+        .only(&["alt"]),
         Subject::new("file", |a, _| {
             lpdf("", &format!("<document><attachments><file {a}/></attachments><section><layout>{ONE}</layout></section></document>"))
         })

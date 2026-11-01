@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- PDF/UA-1: each thing the engine tags, in a file veraPDF's PDF/UA-1 profile accepts and a screen reader reads.
+     Headings and paragraphs, a table with a header row and cells that span, a number list with a bullet list in it,
+     links in a text and around one, a footnote, the table of contents, an image with alt and one that is decoration, a
+     barcode with alt, Markdown, a layer with alt, and a header, a footer and a layer without alt, which are decoration.
+     Every text is in an embedded font of test/assets/fonts (SIL Open Font License), named relative to this file. The
+     render needs created_on, and the check of `make check-pdfua` renders it with the fonts and the pictures loaded, as
+     an SDK does (`writes_pdfua_samples_for_the_external_check` in pdfua_render_tests.rs). On the RC it is read with
+     VoiceOver: the headings, the table, the list, the alt texts and the map, and nothing of the decoration. -->
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <assets>
+    <font name="body"    src="../assets/fonts/CrimsonText-Regular.ttf" />
+    <font name="heading" src="../assets/fonts/CrimsonText-SemiBold.ttf" />
+    <font name="sans"    src="../assets/fonts/Montserrat-Regular.ttf" />
+    <image name="chart"  src="../assets/images/image-sample.png" />
+    <image name="badge"  src="../assets/images/image-square.png" />
+  </assets>
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="ink"     value="#1f2a44" />
+      <color name="muted"   value="#5b6475" />
+      <color name="rule"    value="#dde3ed" />
+      <color name="accent"  value="#e0762b" />
+    </colors>
+  </tokens>
+  <document size="a4" font="body">
+    <meta title="Annual Report — Accessible Copy" author="Lpdf Fixtures" subject="PDF/UA-1 showcase"
+          keywords="pdf/ua, accessibility, fixture" creator="lpdf test suite" lang="en-US" />
+    <output pdfua="1" />
+
+    <section>
+      <bookmark label="Overview" />
+      <!-- Decoration: a band and a running title, which a screen reader skips. -->
+      <layer>
+        <rect anchor="top-left" width="595.28pt" height="8pt" fill="primary" />
+        <text-at x="400pt" y="20pt" font="sans" font-size="8pt" color="muted">ACCESSIBLE COPY</text-at>
+      </layer>
+      <layout margin="48pt">
+        <region pin="top">
+          <text font="sans" font-size="9pt" color="muted">Annual Report 2026</text>
+        </region>
+        <column gap="m">
+          <text role="h1" font="heading" font-size="26pt" color="ink">Annual Report</text>
+          <text font-size="12pt">This report is tagged for assistive technology: a screen reader announces its headings,
+            reads its tables cell by cell with their headers, and skips the page furniture. The figures come from the
+            quarterly returns<fn>The returns of the four regions, as filed at the end of each quarter.</fn>, and the
+            method is on <span href="https://lpdf.io" color="primary" underline="true">the project's site</span>.</text>
+
+          <text role="h2" font="heading" font-size="17pt" color="ink">Highlights</text>
+          <list type="number" gap="xs">
+            <li><text>Units grew in every quarter.</text></li>
+            <li>
+              <text>Two regions reported:</text>
+              <list type="bullet">
+                <li><text>North, with both quarters.</text></li>
+                <li><text>South, with the first quarter only.</text></li>
+              </list>
+            </li>
+          </list>
+          <row gap="m" align="center">
+            <img name="chart" width="160pt" alt="A bar chart of the units sold in each quarter, rising from left to right" />
+            <img name="badge" width="40pt" alt="" />
+          </row>
+
+          <divider color="rule" thickness="0.5pt" />
+          <text role="h2" font="heading" font-size="17pt" color="ink">Units by quarter</text>
+          <table cols="2fr 1fr 1fr" border="0.5pt rule">
+            <thead background="#e8ecf0">
+              <td padding="4pt 6pt"><text font="heading">Region</text></td>
+              <td padding="4pt 6pt"><text font="heading">Q1</text></td>
+              <td padding="4pt 6pt"><text font="heading">Q2</text></td>
+            </thead>
+            <tr>
+              <td padding="4pt 6pt" rowspan="2"><text>North</text></td>
+              <td padding="4pt 6pt"><text>1,204</text></td>
+              <td padding="4pt 6pt"><text>1,388</text></td>
+            </tr>
+            <tr>
+              <td padding="4pt 6pt"><text>1,150</text></td>
+              <td padding="4pt 6pt"><text>1,302</text></td>
+            </tr>
+            <tr>
+              <td padding="4pt 6pt"><text>South</text></td>
+              <td padding="4pt 6pt" colspan="2"><text>No figures for the second quarter yet</text></td>
+            </tr>
+          </table>
+
+          <row gap="l" align="center">
+            <barcode type="qr" data="https://lpdf.io/pay/0042" width="72pt" alt="QR code to pay this invoice" />
+            <link href="#details">
+              <text font="sans" font-size="11pt" color="primary">Go to the details</text>
+            </link>
+          </row>
+        </column>
+        <region pin="bottom">
+          <text font="sans" font-size="9pt" color="muted" align="right">Page {page} of {pages}</text>
+        </region>
+      </layout>
+      <!-- A figure: read as one, with its description, after the page's content. -->
+      <layer alt="A map of the two regions: North above South">
+        <circle x="470pt" y="690pt" r="22pt" fill="#cfe0fb" stroke="primary" stroke-width="1pt" />
+        <circle x="470pt" y="750pt" r="22pt" fill="#fbe0cf" stroke="accent" stroke-width="1pt" />
+        <text-at x="455pt" y="684pt" font="sans" font-size="9pt" color="ink">North</text-at>
+        <text-at x="455pt" y="744pt" font="sans" font-size="9pt" color="ink">South</text-at>
+      </layer>
+    </section>
+
+    <section type="toc" toc-indent-step="12pt">
+      <bookmark label="Contents" id="contents" />
+      <layout margin="48pt">
+        <column gap="m">
+          <text role="h2" font="heading" font-size="17pt" color="ink">Contents</text>
+          <column gap="xs">
+            <column data-source="$toc">
+              <link href="#">
+                <row justify="between">
+                  <text data-value="label">Entry</text>
+                  <text data-value="page" color="muted">0</text>
+                </row>
+              </link>
+            </column>
+          </column>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="Details" id="details" />
+      <layout margin="48pt">
+        <column gap="m">
+          <text role="h2" font="heading" font-size="17pt" color="ink">Details</text>
+          <text role="h3" font="heading" font-size="13pt" color="ink">How the figures were counted</text>
+          <text>Each region counts the units it shipped in the quarter, and the totals are checked against the
+            invoices before they are filed. A region that has not filed shows no figure.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <markdown margin="48pt" bookmarks="2">
+        <markdown-content><![CDATA[
+## Notes from Markdown
+
+A paragraph with a [link](https://lpdf.io) and **strong** words, written in Markdown and tagged as the rest is.
+
+- A first point
+- A second point
+
+| Item | Count |
+|---|---|
+| Pens | 3 |
+| Pads | 12 |
+        ]]></markdown-content>
+      </markdown>
+    </section>
+  </document>
+</lpdf>
