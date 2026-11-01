@@ -93,4 +93,6 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Compile the C# the codegen writes against lpdf-dotnet ${{ steps.sdk.outputs.ref }}
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
         run: make check-codegen-dotnet
