@@ -1391,6 +1391,12 @@ fn line_cut(node: &Node, line: &RowLine, room: f32, full_page: bool, full_page_h
             .zip(&line.widths)
             .map(|(child, &width)| child_cut(child, width, cut, full_page, full_page_h))
             .fold(cut, f32::min);
+        // However close to the top the cut is, a child that suits only its top keeps the line whole: a cut a
+        // rounding error below the top keeps nothing of it on this page, and a child that can't split there would
+        // be placed whole with nothing left for the next.
+        if lowest <= 0.0 {
+            return 0.0;
+        }
         if lowest + 0.01 >= cut {
             break;
         }

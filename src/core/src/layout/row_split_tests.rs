@@ -11,13 +11,17 @@ const BODY_BOTTOM: f64 = 813.89;
 /// The height of a line of 11pt text.
 const LINE: f64 = 13.2;
 
-fn render(body: &str) -> Value {
+/// The pages the layout makes of `body`.
+fn pages_of(body: &str) -> Vec<RenderPage> {
     let xml = format!(
         r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
     );
     let mut doc = parse(&xml).unwrap();
-    let pages: Vec<_> = doc.section_layouts().iter().flat_map(layout_page).collect();
-    serde_json::from_str(&crate::render::pages_to_json(&pages, Value::Null, Value::Null)).unwrap()
+    doc.section_layouts().iter().flat_map(layout_page).collect()
+}
+
+fn render(body: &str) -> Value {
+    serde_json::from_str(&crate::render::pages_to_json(&pages_of(body), Value::Null, Value::Null)).unwrap()
 }
 
 /// A frame that leaves `left` of the room of the first page.
@@ -625,4 +629,106 @@ fn a_page_whose_flow_fits_is_not_clipped() {
     let tree = render(&format!("{}<text>Last line.</text>", filler(LINE)));
     assert_eq!(page_count(&tree), 1);
     assert_eq!(clip(&tree, 0), None);
+}
+
+// ── Nested lists and rows ─────────────────────────────────────────────────────
+
+/// `depth` items, each inside the one before it by `wrap`, which takes an item's own texts and what goes in it
+/// after them. Each item starts with `paragraphs` texts of ten words numbered in reading order: `n0001 n0002 …`.
+fn nested(depth: usize, paragraphs: usize, wrap: fn(&str, &str) -> String) -> String {
+    let mut next = 0;
+    let own: Vec<String> = (0..depth)
+        .map(|_| {
+            (0..paragraphs)
+                .map(|_| {
+                    let text = (next + 1..=next + 10).map(|i| format!("n{i:04}")).collect::<Vec<_>>().join(" ");
+                    next += 10;
+                    format!("<text>{text}</text>")
+                })
+                .collect()
+        })
+        .collect();
+    own.iter().rev().fold(String::new(), |inside, texts| wrap(texts, inside.as_str()))
+}
+
+/// A list item 8pt in, holding `own` and then `inside`.
+fn in_list(own: &str, inside: &str) -> String {
+    format!(r#"<list indent="8pt"><li>{own}{inside}</li></list>"#)
+}
+
+/// A row of a marker 8pt wide and a column that fills the rest, holding `own` and then `inside`.
+fn in_row(own: &str, inside: &str) -> String {
+    format!(r#"<row><column width="8pt"><text>-</text></column><column width="fill">{own}{inside}</column></row>"#)
+}
+
+/// Runs `test` on a thread with room for 48 levels of nesting: a debug build's frames are larger than a release
+/// build's, and run out of the 2 MB a test thread has. A panic in it is the test's.
+fn on_deep_stack(test: impl FnOnce() + Send + 'static) {
+    let thread = std::thread::Builder::new().stack_size(32 << 20).spawn(test).expect("a thread for the test");
+    if let Err(panic) = thread.join() {
+        std::panic::resume_unwind(panic);
+    }
+}
+
+/// The texts of `page` in the order they are drawn, each with the bottom of its line. Read from the pages, not
+/// from their JSON, which nests deeper than `serde_json` reads for a document nested this deep.
+fn texts_on(page: &RenderPage) -> Vec<(String, f32)> {
+    fn walk(node: &RenderNode, out: &mut Vec<(String, f32)>) {
+        match node {
+            RenderNode::Text(text) => out.push((text.content.clone(), text.y + text.size * 1.2)),
+            RenderNode::Box(RenderBox { children, .. })
+            | RenderNode::Link(RenderLink { children, .. })
+            | RenderNode::CanvasLayer(RenderCanvasLayer { children, .. }) => {
+                for child in children {
+                    walk(child, out);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for node in &page.nodes {
+        walk(node, &mut out);
+    }
+    out
+}
+
+/// Each word of `body` is on a page in order, and no page runs past its body.
+fn assert_every_word_inside(body: &str, words: usize) {
+    let pages = pages_of(body);
+    assert!(pages.len() > 2, "{} pages", pages.len());
+    let texts: Vec<_> = pages.iter().map(texts_on).collect();
+    let found: Vec<String> = texts.iter().flatten()
+        .flat_map(|(content, _)| content.split_whitespace().filter(|word| word.starts_with('n')).map(str::to_string))
+        .collect();
+    assert_eq!(found, expected("n", words));
+    for (page, texts) in texts.iter().enumerate() {
+        let bottom = texts.iter().map(|(_, bottom)| f64::from(*bottom)).fold(0.0, f64::max);
+        assert!(bottom <= BODY_BOTTOM + 0.01, "page {page} has text down to {bottom}, below {BODY_BOTTOM}");
+    }
+}
+
+#[test]
+fn a_list_nested_past_two_pages_keeps_every_word_on_the_pages() {
+    on_deep_stack(|| assert_every_word_inside(&nested(45, 2, in_list), 900));
+}
+
+#[test]
+fn rows_nested_past_two_pages_keep_every_word_on_the_pages() {
+    on_deep_stack(|| assert_every_word_inside(&nested(45, 2, in_row), 900));
+}
+
+#[test]
+fn a_row_left_a_rounding_error_of_room_goes_on_whole_to_the_next_page() {
+    // Where a page ends at the top of a row nested in others, the room left for it is worked out from the tops of
+    // the boxes around it, and can come to a rounding error instead of nothing. Nothing of the row fits there: it
+    // goes on whole, and is not placed whole on this page with nothing left of it for the next.
+    let xml = format!(
+        r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt">{}</layout></section></document></lpdf>"#,
+        item("", &words("w", 40)),
+    );
+    let mut doc = parse(&xml).unwrap();
+    let sections = doc.section_layouts();
+    let outcome = split_node_at(&sections[0].children[0], 539.28, 0.00002, ROOM as f32);
+    assert!(matches!(outcome, SplitOutcome::NothingFits(_)), "the row keeps something in a room of 0.00002pt");
 }
