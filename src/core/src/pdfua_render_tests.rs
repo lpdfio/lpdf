@@ -311,6 +311,34 @@ fn a_link_that_toc_repeats_is_a_link_in_each_entry() {
     assert!(pdf.contains("/Contents (Intro)") && pdf.contains("/Contents (Data)"));
 }
 
+/// A PDF/UA document whose table of contents lists seventy parts, each on a page of its own, with `layer` after the
+/// layout of the table's section.
+fn long_toc(layer: &str) -> String {
+    let parts: String = (1..=70)
+        .map(|n| format!(r#"<bookmark label="Part {n}"/><text paginate="break-before">Part {n}</text>"#))
+        .collect();
+    format!(
+        r#"<lpdf version="1"><assets><font name="body" src="body.ttf"/></assets>
+        <document font="body"><meta title="Report" lang="en"/><output pdfua="1"/>
+        <section type="toc"><layout><column data-source="$toc"><text data-value="label">Part</text></column></layout>{layer}</section>
+        <section><layout>{parts}</layout></section>
+        </document></lpdf>"#
+    )
+}
+
+#[test]
+fn a_table_of_contents_on_two_pages_is_one_toc_whatever_is_drawn_between_its_pages() {
+    // Unlicensed, so the attribution line's link comes after each page's entries; and then a layer with alt, a figure
+    // drawn after each page's entries too.
+    let stamp = r##"<layer alt="A draft stamp"><rect x="20pt" y="20pt" width="40pt" height="20pt" fill="#cc0000"/></layer>"##;
+    for layer in ["", stamp] {
+        let pdf = text(&render(&long_toc(layer)).expect("renders"));
+        assert_eq!(count(&pdf, "/Type /Page\n") - 70, 2, "the table of contents runs onto a second page");
+        assert_eq!(count(&pdf, "/S /TOCI\n"), 70);
+        assert_eq!(count(&pdf, "/S /TOC\n"), 1, "with {layer:?}");
+    }
+}
+
 #[test]
 fn an_image_between_two_links_to_one_url_leaves_them_two_links_in_order() {
     let xml = document(
