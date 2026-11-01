@@ -16,7 +16,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python \
-        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-codegen-dotnet \
+        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-ocg check-codegen-dotnet \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
@@ -131,6 +131,22 @@ check-pdfx:
 	rm -rf target/pdfx-samples && mkdir -p target/pdfx-samples
 	LPDF_PDFX_OUT="$(CURDIR)/target/pdfx-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_the_pdfx_sample_for_the_external_check
 	node scripts/check-pdfx.mjs target/pdfx-samples
+
+# check-ocg has the core write the samples of optional content (ocg) and renders them with pdf.js, Firefox's viewer, as it
+# shows a page and as it prints one: print content must show only in print and screen content only on screen, on every
+# page, and a PDF/A, PDF/UA or PDF/X file must show both (`scripts/check-ocg.mjs`). Installs pdf.js in target/pdfjs on
+# first use; needs Node and npm.
+PDFJS_VERSION ?= 5.6.205
+check-ocg:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking optional content with pdf.js..."
+	@echo ""
+	test -f target/pdfjs/node_modules/pdfjs-dist/package.json && grep -q '"version": "$(PDFJS_VERSION)"' target/pdfjs/node_modules/pdfjs-dist/package.json \
+		|| npm install --prefix target/pdfjs --no-audit --no-fund --no-save pdfjs-dist@$(PDFJS_VERSION)
+	rm -rf target/ocg-samples && mkdir -p target/ocg-samples
+	LPDF_OCG_OUT="$(CURDIR)/target/ocg-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_ocg_samples_for_the_external_check
+	node scripts/check-ocg.mjs target/ocg-samples target/pdfjs
 
 # check-codegen-dotnet compiles the C# the codegen writes for every fixture against the .NET SDK in repos/lpdf-dotnet,
 # with the engine built from this checkout (`scripts/check-codegen-dotnet.mjs`). Needs the .NET 8 SDK or later.

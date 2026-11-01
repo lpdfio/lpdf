@@ -3,9 +3,10 @@
 //
 //  - veraPDF reads the standards each file declares in its XMP packet and validates the file against each one's
 //    rules. For PDF/A: pdfa-2b.pdf must declare PDF/A-2b, and pdfa-2u.pdf and the three pages in a font of each kind
-//    the fixtures lack (CFF, CFF2, variable TrueType) PDF/A-2u. For PDF/UA: pdfua-1.pdf must declare PDF/UA-1, and
-//    pdfua-1-pdfa-2u.pdf both PDF/A-2u and PDF/UA-1, and pdfua-1-toc-links.pdf, a table of contents of the links $toc
-//    repeats, PDF/UA-1. None may break a rule;
+//    the fixtures lack (CFF, CFF2, variable TrueType) PDF/A-2u, and so must pdfa-2u-ocg.pdf, the fixture with content
+//    in optional content groups. For PDF/UA: pdfua-1.pdf must declare PDF/UA-1, and pdfua-1-pdfa-2u.pdf both PDF/A-2u
+//    and PDF/UA-1, and pdfua-1-toc-links.pdf, a table of contents of the links $toc repeats, and pdfua-1-ocg.pdf, the
+//    fixture with content in optional content groups, PDF/UA-1. None may break a rule;
 //  - qpdf --check finds no syntax or stream error.
 //
 // The samples come from the core's own tests:
@@ -29,12 +30,14 @@ const SAMPLE_SETS = {
         { file: 'pdfa-2u-cff.pdf', profiles: ['PDF/A-2u validation profile'] },
         { file: 'pdfa-2u-cff2.pdf', profiles: ['PDF/A-2u validation profile'] },
         { file: 'pdfa-2u-variable-ttf.pdf', profiles: ['PDF/A-2u validation profile'] },
+        { file: 'pdfa-2u-ocg.pdf', profiles: ['PDF/A-2u validation profile'] },
     ],
     // writes_pdfua_samples_for_the_external_check
     pdfua: [
         { file: 'pdfua-1.pdf', profiles: ['PDF/UA-1 validation profile'] },
         { file: 'pdfua-1-pdfa-2u.pdf', profiles: ['PDF/A-2u validation profile', 'PDF/UA-1 validation profile'] },
         { file: 'pdfua-1-toc-links.pdf', profiles: ['PDF/UA-1 validation profile'] },
+        { file: 'pdfua-1-ocg.pdf', profiles: ['PDF/UA-1 validation profile'] },
     ],
 };
 const SAMPLES = SAMPLE_SETS[standard];
