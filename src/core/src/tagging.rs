@@ -127,6 +127,9 @@ pub(crate) struct Marks {
     /// wraps onto another line, or onto the next page, where its paragraph is entered again, is drawn as a link of
     /// its own and goes on in it. Anything else drawn in the element ends it: words, a figure, an element.
     last_links:      HashMap<usize, (String, usize)>,
+    /// The element of each `<link>` around content, by its tag id. Apart from `by_id`: the node of a link can be
+    /// something else as well, such as an entry of the table of contents, whose element has the same id.
+    link_ids:        HashMap<u32, usize>,
 }
 
 /// Where the drawing was before it entered an element, to go back to.
@@ -140,6 +143,7 @@ impl Marks {
         Marks {
             on: false, elements: Vec::new(), by_id: HashMap::new(), streams: Vec::new(), stream: 0, page: 0,
             parent: 0, sealed: false, seal_owner: 0, annotations: 0, last_links: HashMap::new(),
+            link_ids: HashMap::new(),
         }
     }
 
@@ -314,7 +318,14 @@ impl Marks {
             self.element(0, Kind::Link, self.seal_owner)
         } else {
             let link = match self.last_links.get(&parent) {
-                _ if id != 0 => self.element(id, Kind::Link, parent),
+                _ if id != 0 => match self.link_ids.get(&id) {
+                    Some(&link) => link,
+                    None => {
+                        let link = self.element(0, Kind::Link, parent);
+                        self.link_ids.insert(id, link);
+                        link
+                    }
+                },
                 Some((last_url, link)) if last_url == url => *link,
                 _ => self.element(0, Kind::Link, parent),
             };
@@ -657,6 +668,22 @@ mod tests {
         assert_eq!(first.element, second.element, "the part on the next page goes on in the link");
         assert_eq!(marks.elements[first.element].words, "the guide to it");
         assert_ne!(third.element, first.element, "a link in another paragraph is another one");
+    }
+
+    #[test]
+    fn a_link_and_another_element_of_one_node_are_two_elements() {
+        let mut marks = Marks::tagged();
+        let mut content = Content::new();
+        marks.begin_page(0);
+        // A `<link>` that `$toc` repeats is an entry of the table of contents and a link, under one tag id.
+        let entry = marks.enter(&tag(5, TagKind::TocItem));
+        let open = marks.begin_link("#intro", 5);
+        marks.content(&mut content, "Intro", |_, _| {});
+        let link = marks.end_link(open).expect("a link");
+        marks.leave(entry);
+        assert_eq!(marks.elements[link.element].kind, Kind::Link);
+        let toci = marks.elements[link.element].parent;
+        assert_eq!(marks.elements[toci].kind, Kind::TOCI, "the link is in the entry");
     }
 
     #[test]

@@ -288,6 +288,28 @@ fn a_link_around_a_text_that_runs_onto_the_next_page_is_one_link() {
     assert!(count(&pdf, &format!("/Contents ({}", words[0])) >= 2, "every part says the link's words");
 }
 
+/// A PDF/UA document with a table of contents whose entries are the `<link>` that `$toc` repeats, and two sections
+/// with a bookmark each.
+fn toc_of_links() -> String {
+    r##"<lpdf version="1"><assets><font name="body" src="body.ttf"/></assets>
+    <document font="body"><meta title="Report" lang="en"/><output pdfua="1"/>
+    <section><bookmark label="Intro"/><layout><text role="h1">Intro</text></layout></section>
+    <section type="toc"><layout><link href="#" data-source="$toc"><text data-value="label">Entry</text></link></layout></section>
+    <section><bookmark label="Data"/><layout><text role="h1">Data</text></layout></section>
+    </document></lpdf>"##.to_string()
+}
+
+#[test]
+fn a_link_that_toc_repeats_is_a_link_in_each_entry() {
+    let pdf = text(&render(&toc_of_links()).expect("renders"));
+    let entries = count(&pdf, "/S /TOCI\n");
+    assert_eq!(entries, 2);
+    // The render is unlicensed: the attribution line has a link of its own on each page.
+    let pages = count(&pdf, "/Type /Page\n");
+    assert_eq!(count(&pdf, "/S /Link\n"), entries + pages, "a link in each entry");
+    assert!(pdf.contains("/Contents (Intro)") && pdf.contains("/Contents (Data)"));
+}
+
 #[test]
 fn an_image_between_two_links_to_one_url_leaves_them_two_links_in_order() {
     let xml = document(
@@ -330,6 +352,7 @@ fn writes_pdfua_samples_for_the_external_check() {
     let dir = Path::new(&dir);
     std::fs::create_dir_all(dir).expect("the samples' folder");
     std::fs::write(dir.join("pdfua-1.pdf"), render_fixture()).expect("a sample");
+    std::fs::write(dir.join("pdfua-1-toc-links.pdf"), render(&toc_of_links()).expect("renders")).expect("a sample");
     let xml = String::from_utf8(read(&test_dir().join("fixtures/showcase-pdfua.xml"))).expect("UTF-8")
         .replace(r#"<output pdfua="1" />"#, r#"<output pdfa="2u" pdfua="1" />"#);
     std::fs::write(dir.join("pdfua-1-pdfa-2u.pdf"), render(&xml).expect("renders")).expect("a sample");
