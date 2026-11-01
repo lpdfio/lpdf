@@ -4028,7 +4028,7 @@ fn first_in(nodes: &[RenderNode], check: &mut impl FnMut(&RenderNode) -> Option<
     }))
 }
 
-/// Why `node` can't be drawn in a file of `standard`, PDF/A or PDF/UA, for its font: its text is in a font that is not
+/// Why `node` can't be drawn in a file of `standard`, PDF/A, PDF/UA or PDF/X, for its font: its text is in a font that is not
 /// embedded, or has a character its embedded font has no glyph for, or it is a barcode's digits, which are drawn in
 /// Helvetica.
 fn font_refusal(

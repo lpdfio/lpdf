@@ -395,6 +395,41 @@ fn pdfx_with_encryption_pdfa_or_attachments_is_an_error_when_the_document_is_rea
 }
 
 #[test]
+fn a_font_whose_licence_forbids_embedding_is_an_error() {
+    let mut engine = engine(Some(CREATED_ON));
+    let font = read(&test_dir().join("assets/fonts/CrimsonText-Regular.ttf"));
+    engine.load_font("body", &crate::pdfa_render_tests::restricted(&font));
+    let error = engine.render_xml(&document("", "", "<text>A</text>"), None, &RenderEncryption::default()).unwrap_err();
+    assert!(error.starts_with("<output pdfx=\"4\">") && error.contains("'body'") && error.contains("does not allow embedding"), "{error}");
+    assert!(error.contains("a PDF/X file embeds every font"), "{error}");
+}
+
+/// An engine like `engine`, whose press profile `press` prints in RGB.
+fn rgb_press_engine() -> LpdfEngine {
+    let mut engine = engine(Some(CREATED_ON));
+    engine.load_profile("press", &crate::pdfx::test_profile(b"prtr", b"RGB ", "Digital press"));
+    engine
+}
+
+#[test]
+fn a_cmyk_page_background_with_a_profile_that_is_not_cmyk_is_an_error() {
+    let xml = document("", "", "<text>A</text>").replace("<section>", r#"<section background="cmyk(0, 0, 10, 0)">"#);
+    let error = rgb_press_engine().render_xml(&xml, None, &RenderEncryption::default()).unwrap_err();
+    assert!(error.contains("cmyk(0, 0, 10, 0)") && error.contains("'press' prints in an RGB color space"), "{error}");
+    assert!(render(&xml).is_ok(), "with a CMYK press profile it renders");
+}
+
+#[test]
+fn a_gradient_of_cmyk_colors_with_a_profile_that_is_not_cmyk_is_an_error() {
+    let tokens = r#"<tokens><gradients><gradient name="ink" type="linear" from="cmyk(0 0 0 100)" to="cmyk(0 0 0 0)"/></gradients></tokens>"#;
+    let xml = document("", "", r#"<column background="gradient:ink" height="20pt"/>"#)
+        .replacen("</assets>", &format!("</assets>{tokens}"), 1);
+    let error = rgb_press_engine().render_xml(&xml, None, &RenderEncryption::default()).unwrap_err();
+    assert!(error.contains("the gradient 'ink' has CMYK colors") && error.contains("RGB color space"), "{error}");
+    assert!(render(&xml).is_ok(), "with a CMYK press profile it renders");
+}
+
+#[test]
 fn a_cmyk_color_with_a_profile_that_is_not_cmyk_is_an_error() {
     let mut engine = engine(Some(CREATED_ON));
     engine.load_profile("press", &crate::pdfx::test_profile(b"prtr", b"RGB ", "Digital press"));
