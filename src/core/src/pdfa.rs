@@ -2,7 +2,8 @@
 //! names both, and the sRGB profile of the output intent. What a PDF/A file refuses is checked in `pdf.rs`, where
 //! the fonts, the colours and the fields are known.
 
-use crate::parse::Meta;
+use crate::parse::{Meta, Output};
+use crate::pdfua::PdfUa;
 
 /// A level of PDF/A, as `<output pdfa>` writes it. Part 2 is the first that allows the opacity, shadows and
 /// gradients the engine draws. Level b keeps the look of the pages; level u adds that every character maps to
@@ -177,19 +178,54 @@ fn days_in_month(year: u16, month: u8) -> u8 {
     }
 }
 
-/// The date of a render of a document that asks for `pdfa`. The engine has no clock, so the render must give
+/// The standards a document's `<output>` asks for: PDF/A, PDF/UA or both. A file that meets one carries its date
+/// and an XMP packet that names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct Standards {
+    pub pdfa:  Option<PdfA>,
+    pub pdfua: Option<PdfUa>,
+}
+
+impl Standards {
+    pub(crate) fn of(output: &Output) -> Self {
+        Standards { pdfa: output.pdfa, pdfua: output.pdfua }
+    }
+
+    /// Whether the document asks for any standard.
+    pub(crate) fn any(self) -> bool {
+        self.pdfa.is_some() || self.pdfua.is_some()
+    }
+
+    /// The attributes of `<output>` that ask for them, for messages: `pdfa="2b" pdfua="1"`.
+    fn attributes(self) -> String {
+        let pdfa = self.pdfa.map(|level| format!("pdfa=\"{}\"", level.attribute()));
+        let pdfua = self.pdfua.map(|part| format!("pdfua=\"{}\"", part.attribute()));
+        [pdfa, pdfua].into_iter().flatten().collect::<Vec<_>>().join(" ")
+    }
+
+    /// What a file that meets them is called, for messages: `PDF/A`, `PDF/UA`, or `PDF/A and PDF/UA`.
+    fn names(self) -> &'static str {
+        match (self.pdfa.is_some(), self.pdfua.is_some()) {
+            (true, true) => "PDF/A and PDF/UA",
+            (false, true) => "PDF/UA",
+            _ => "PDF/A",
+        }
+    }
+}
+
+/// The date of a render of a document that asks for a standard. The engine has no clock, so the render must give
 /// `created_on`: missing or not a date, it is an error that says so.
-pub(crate) fn file_date(pdfa: PdfA, created_on: Option<&str>) -> Result<FileDate, String> {
-    let level = pdfa.attribute();
+pub(crate) fn file_date(standards: Standards, created_on: Option<&str>) -> Result<FileDate, String> {
+    let (attributes, names) = (standards.attributes(), standards.names());
     let Some(value) = created_on else {
         return Err(format!(
-            "<output pdfa=\"{level}\"> needs the date the file is made, and the render got no created_on: a PDF/A \
+            "<output {attributes}> needs the date the file is made, and the render got no created_on: a {names} \
             file carries its date, and the engine has no clock. Pass the date with the render, as createdOn, \
             CreatedOn or created_on in the SDK's render options, such as 2026-10-31T09:30:00Z"
         ));
     };
     FileDate::parse(value).ok_or_else(|| format!(
-        "<output pdfa=\"{level}\">: created_on '{value}' is not a date a PDF/A file can carry: give an ISO 8601 date, \
+        "<output {attributes}>: created_on '{value}' is not a date a {names} file can carry: give an ISO 8601 date, \
         or date and time, such as 2026-10-31 or 2026-10-31T09:30:00Z"
     ))
 }
@@ -205,23 +241,31 @@ pub(crate) fn plain_date(created_on: Option<&str>) -> Result<Option<FileDate>, S
         .transpose()
 }
 
-/// Check before the layout that the render's `created_on` is a date, and that a render of a document with `pdfa`
-/// has one, so that it fails without the work of a render.
-pub(crate) fn check_render(pdfa: Option<PdfA>, created_on: Option<&str>) -> Result<(), String> {
-    match pdfa {
-        Some(level) => file_date(level, created_on).map(|_| ()),
-        None => plain_date(created_on).map(|_| ()),
+/// Check before the layout that the render's `created_on` is a date, and that a render of a document that asks for a
+/// standard has one, so that it fails without the work of a render.
+pub(crate) fn check_render(output: &Output, created_on: Option<&str>) -> Result<(), String> {
+    let standards = Standards::of(output);
+    if standards.any() {
+        file_date(standards, created_on).map(|_| ())
+    } else {
+        plain_date(created_on).map(|_| ())
     }
 }
 
-/// The XMP packet of a PDF/A file: the part and level, and the same title, author, subject, keywords, creator,
-/// producer and dates as the Info dictionary. UTF-8, with no `bytes` or `encoding` in its header, which PDF/A
-/// forbids.
-pub(crate) fn xmp_packet(pdfa: PdfA, meta: &Meta, date: &FileDate) -> Vec<u8> {
+/// The XMP packet of a PDF/A or PDF/UA file: the part and level of each standard, and the same title, author,
+/// subject, keywords, creator, producer and dates as the Info dictionary. UTF-8, with no `bytes` or `encoding` in its
+/// header, which PDF/A forbids. PDF/A-2 accepts only the properties of the schemas it predefines, so a file that is
+/// PDF/A and PDF/UA describes the PDF/UA identification schema in an extension schema (ISO 19005-2, 6.6.2.3).
+pub(crate) fn xmp_packet(standards: Standards, meta: &Meta, date: &FileDate) -> Vec<u8> {
     let mut properties = String::new();
     let mut add = |name: &str, value: String| properties.push_str(&format!("   <{name}>{value}</{name}>\n"));
-    add("pdfaid:part", pdfa.part().to_string());
-    add("pdfaid:conformance", pdfa.conformance().to_string());
+    if let Some(pdfa) = standards.pdfa {
+        add("pdfaid:part", pdfa.part().to_string());
+        add("pdfaid:conformance", pdfa.conformance().to_string());
+    }
+    if let Some(pdfua) = standards.pdfua {
+        add("pdfuaid:part", pdfua.part().to_string());
+    }
     add("dc:format", "application/pdf".to_string());
     let alt = |text: &str| format!("<rdf:Alt><rdf:li xml:lang=\"x-default\">{}</rdf:li></rdf:Alt>", xml_text(text));
     if !meta.title.is_empty() {
@@ -245,12 +289,22 @@ pub(crate) fn xmp_packet(pdfa: PdfA, meta: &Meta, date: &FileDate) -> Vec<u8> {
     add("xmp:ModifyDate", when.clone());
     add("xmp:MetadataDate", when);
 
+    let mut namespaces = String::new();
+    if standards.pdfa.is_some() {
+        namespaces.push_str("    xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\"\n");
+    }
+    if standards.pdfua.is_some() {
+        namespaces.push_str("    xmlns:pdfuaid=\"http://www.aiim.org/pdfua/ns/id/\"\n");
+    }
+    let extension = if standards.pdfa.is_some() && standards.pdfua.is_some() { PDFUA_EXTENSION_SCHEMA } else { "" };
+
     format!(
         "<?xpacket begin=\"\u{FEFF}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n\
         <x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n\
         \x20<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n\
+        {extension}\
         \x20 <rdf:Description rdf:about=\"\"\n\
-        \x20   xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\"\n\
+        {namespaces}\
         \x20   xmlns:dc=\"http://purl.org/dc/elements/1.1/\"\n\
         \x20   xmlns:pdf=\"http://ns.adobe.com/pdf/1.3/\"\n\
         \x20   xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\">\n\
@@ -262,6 +316,33 @@ pub(crate) fn xmp_packet(pdfa: PdfA, meta: &Meta, date: &FileDate) -> Vec<u8> {
     )
     .into_bytes()
 }
+
+/// The PDF/UA identification schema described for PDF/A, which predefines only its own schemas and those of XMP:
+/// its namespace, its prefix and its one property, `part`.
+const PDFUA_EXTENSION_SCHEMA: &str = "  <rdf:Description rdf:about=\"\"\n\
+    xmlns:pdfaExtension=\"http://www.aiim.org/pdfa/ns/extension/\"\n\
+    xmlns:pdfaSchema=\"http://www.aiim.org/pdfa/ns/schema#\"\n\
+    xmlns:pdfaProperty=\"http://www.aiim.org/pdfa/ns/property#\">\n\
+   <pdfaExtension:schemas>\n\
+    <rdf:Bag>\n\
+     <rdf:li rdf:parseType=\"Resource\">\n\
+      <pdfaSchema:schema>PDF/UA Universal Accessibility Schema</pdfaSchema:schema>\n\
+      <pdfaSchema:namespaceURI>http://www.aiim.org/pdfua/ns/id/</pdfaSchema:namespaceURI>\n\
+      <pdfaSchema:prefix>pdfuaid</pdfaSchema:prefix>\n\
+      <pdfaSchema:property>\n\
+       <rdf:Seq>\n\
+        <rdf:li rdf:parseType=\"Resource\">\n\
+         <pdfaProperty:name>part</pdfaProperty:name>\n\
+         <pdfaProperty:valueType>Integer</pdfaProperty:valueType>\n\
+         <pdfaProperty:category>internal</pdfaProperty:category>\n\
+         <pdfaProperty:description>The part of ISO 14289 the file conforms to</pdfaProperty:description>\n\
+        </rdf:li>\n\
+       </rdf:Seq>\n\
+      </pdfaSchema:property>\n\
+     </rdf:li>\n\
+    </rdf:Bag>\n\
+   </pdfaExtension:schemas>\n\
+  </rdf:Description>\n";
 
 /// `text` as XML character data: the markup characters escaped, and the characters XML 1.0 cannot hold at all,
 /// such as most control characters, left out.
@@ -326,13 +407,27 @@ mod tests {
         }
     }
 
+    fn pdfa(level: PdfA) -> Standards {
+        Standards { pdfa: Some(level), pdfua: None }
+    }
+
     #[test]
     fn a_missing_or_malformed_created_on_is_an_error_that_names_it() {
-        let missing = file_date(PdfA::Level2b, None).unwrap_err();
+        let missing = file_date(pdfa(PdfA::Level2b), None).unwrap_err();
         assert!(missing.contains("pdfa=\"2b\"") && missing.contains("created_on") && missing.contains("createdOn"), "{missing}");
-        let malformed = file_date(PdfA::Level2u, Some("yesterday")).unwrap_err();
+        let malformed = file_date(pdfa(PdfA::Level2u), Some("yesterday")).unwrap_err();
         assert!(malformed.contains("'yesterday'") && malformed.contains("2026-10-31T09:30:00Z"), "{malformed}");
-        assert!(check_render(None, None).is_ok(), "no standard, no date needed");
+        assert!(check_render(&Output::default(), None).is_ok(), "no standard, no date needed");
+    }
+
+    #[test]
+    fn a_pdfua_render_needs_created_on_too_and_the_error_names_each_standard() {
+        let ua = Standards { pdfa: None, pdfua: Some(PdfUa::Part1) };
+        let missing = file_date(ua, None).unwrap_err();
+        assert!(missing.starts_with("<output pdfua=\"1\">") && missing.contains("a PDF/UA file carries its date"), "{missing}");
+        let both = Standards { pdfa: Some(PdfA::Level2b), pdfua: Some(PdfUa::Part1) };
+        let missing = file_date(both, None).unwrap_err();
+        assert!(missing.starts_with("<output pdfa=\"2b\" pdfua=\"1\">") && missing.contains("PDF/A and PDF/UA"), "{missing}");
     }
 
     #[test]
@@ -347,7 +442,7 @@ mod tests {
         ] {
             let date = plain_date(Some(value)).unwrap_or_else(|e| panic!("{value}: {e}"));
             assert_eq!(date.map(|d| d.pdf()).as_deref(), Some(pdf), "{value}");
-            assert!(check_render(None, Some(value)).is_ok(), "{value}");
+            assert!(check_render(&Output::default(), Some(value)).is_ok(), "{value}");
         }
         assert_eq!(plain_date(None), Ok(None), "no date, an undated file");
     }
@@ -355,7 +450,7 @@ mod tests {
     #[test]
     fn a_plain_created_on_that_is_not_a_date_is_an_error_that_names_it_and_gives_the_form() {
         for value in ["yesterday", "31.10.2026"] {
-            for error in [plain_date(Some(value)).unwrap_err(), check_render(None, Some(value)).unwrap_err()] {
+            for error in [plain_date(Some(value)).unwrap_err(), check_render(&Output::default(), Some(value)).unwrap_err()] {
                 assert!(error.contains(&format!("created_on '{value}'")), "{error}");
                 assert!(error.contains("2026-10-31T09:30:00Z") && !error.contains("pdfa"), "{error}");
             }
@@ -366,9 +461,9 @@ mod tests {
     fn the_xmp_packet_names_the_level_and_repeats_the_info_dictionary() {
         let meta = Meta {
             title: "Q3 <report> & notes".into(), author: "Ann Lee".into(), subject: "Sales".into(),
-            keywords: "sales, q3".into(), creator: "Billing".into(),
+            keywords: "sales, q3".into(), creator: "Billing".into(), lang: "en".into(),
         };
-        let xmp = String::from_utf8(xmp_packet(PdfA::Level2u, &meta, &date("2026-10-31T09:30:00Z"))).unwrap();
+        let xmp = String::from_utf8(xmp_packet(pdfa(PdfA::Level2u), &meta, &date("2026-10-31T09:30:00Z"))).unwrap();
         for expected in [
             "<pdfaid:part>2</pdfaid:part>", "<pdfaid:conformance>U</pdfaid:conformance>",
             "<dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">Q3 &lt;report&gt; &amp; notes</rdf:li></rdf:Alt></dc:title>",
@@ -387,12 +482,25 @@ mod tests {
 
     #[test]
     fn the_xmp_packet_leaves_out_what_the_meta_does_not_set() {
-        let xmp = String::from_utf8(xmp_packet(PdfA::Level2b, &Meta::default(), &date("2026-10-31"))).unwrap();
+        let xmp = String::from_utf8(xmp_packet(pdfa(PdfA::Level2b), &Meta::default(), &date("2026-10-31"))).unwrap();
         assert!(xmp.contains("<pdfaid:conformance>B</pdfaid:conformance>"), "{xmp}");
         for absent in ["dc:title", "dc:creator", "dc:description", "pdf:Keywords", "xmp:CreatorTool"] {
             assert!(!xmp.contains(absent), "{absent}\n{xmp}");
         }
         assert!(xmp.contains("<xmp:CreateDate>2026-10-31</xmp:CreateDate>"), "{xmp}");
+    }
+
+    #[test]
+    fn a_pdfua_packet_names_its_part_and_describes_the_schema_only_beside_pdfa() {
+        let meta = Meta { title: "Invoice".into(), ..Meta::default() };
+        let ua = Standards { pdfa: None, pdfua: Some(PdfUa::Part1) };
+        let xmp = String::from_utf8(xmp_packet(ua, &meta, &date("2026-10-31"))).unwrap();
+        assert!(xmp.contains("<pdfuaid:part>1</pdfuaid:part>") && xmp.contains("xmlns:pdfuaid="), "{xmp}");
+        assert!(!xmp.contains("pdfaid:") && !xmp.contains("pdfaExtension"), "{xmp}");
+        let both = Standards { pdfa: Some(PdfA::Level2u), pdfua: Some(PdfUa::Part1) };
+        let xmp = String::from_utf8(xmp_packet(both, &meta, &date("2026-10-31"))).unwrap();
+        assert!(xmp.contains("<pdfaid:part>2</pdfaid:part>") && xmp.contains("<pdfuaid:part>1</pdfuaid:part>"), "{xmp}");
+        assert!(xmp.contains("<pdfaSchema:prefix>pdfuaid</pdfaSchema:prefix>"), "{xmp}");
     }
 
     #[test]

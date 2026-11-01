@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde_json::Value;
 
 use crate::canvas::{CanvasLayer, CanvasPrimitive};
-use crate::parse::{BoundAttr, Document, Node, NodeKind, TextRun, TOC_DATA_KEY};
+use crate::parse::{BoundAttr, Document, Node, NodeKind, Role, TextRun, TOC_DATA_KEY};
 use crate::tokens::Tokens;
 
 // ── Path resolution ───────────────────────────────────────────────────────────
@@ -440,6 +440,8 @@ fn apply_single_node(node: Node, stack: &[&Value], bind: &Bind, out: &mut Vec<No
 /// Indent an item expanded from `$toc` by its entry's level, and point the item's `href="#"` links at the
 /// entry's bookmark.
 fn finish_toc_entry(node: &mut Node, entry: &Value, indent_step: f32) {
+    // An entry of the table of contents, which a tagged PDF writes as one (`TOCI`).
+    node.role = Role::TocItem;
     let level = entry.get("level").and_then(Value::as_u64).unwrap_or(1);
     node.padding[3] += level.saturating_sub(1) as f32 * indent_step;
     if let Some(anchor) = entry.get("anchor").and_then(Value::as_str) {
@@ -490,6 +492,8 @@ mod tests {
             page_scope: None,
             paginate: Paginate::None,
             keep: RowKeep::None,
+            role: Role::Auto,
+            tag_id: 0,
             debug: false,
             align: Align::Stretch,
             justify: Justify::Start,

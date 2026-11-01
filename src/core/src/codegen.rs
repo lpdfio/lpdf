@@ -130,11 +130,13 @@ fn to_snake_case(s: &str) -> String {
     s.replace('-', "_")
 }
 
-/// Convert a kebab-case XML attribute name to PascalCase (C# style). The name of a PDF standard keeps its letter a
-/// capital, as the standard writes it: `pdfa` is `PdfA`, for PDF/A.
+/// Convert a kebab-case XML attribute name to PascalCase (C# style). The name of a PDF standard keeps its letters
+/// capitals, as the standard writes it: `pdfa` is `PdfA`, for PDF/A, and `pdfua` is `PdfUa`, for PDF/UA.
 fn to_pascal_case(s: &str) -> String {
-    if s == "pdfa" {
-        return "PdfA".to_string();
+    match s {
+        "pdfa" => return "PdfA".to_string(),
+        "pdfua" => return "PdfUa".to_string(),
+        _ => {}
     }
     s.split('-')
         .map(|part| {
@@ -2088,6 +2090,22 @@ mod tests {
     }
 
     #[test]
+    fn pdfua_lang_alt_and_role_are_written_in_each_language_s_case() {
+        let xml = r#"<lpdf version="1"><assets><image name="logo" src="logo.png"/></assets><document><meta title="T" lang="en"/><output pdfua="1"/><section><layout><text role="h1">x</text><img name="logo" alt="Logo"/></layout></section></document></lpdf>"#;
+        for (target, expected) in [
+            ("js", ["pdfua: '1'", "lang: 'en'", "role: 'h1'", "alt: 'Logo'"]),
+            ("dotnet", ["PdfUa = \"1\"", "Lang = \"en\"", "Role = \"h1\"", "Alt = \"Logo\""]),
+            ("php", ["pdfua: '1'", "lang: 'en'", "role: 'h1'", "alt: 'Logo'"]),
+            ("python", ["pdfua='1'", "lang='en'", "role='h1'", "alt='Logo'"]),
+        ] {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            for piece in expected {
+                assert!(out.contains(piece), "{target}: {piece}\n{out}");
+            }
+        }
+    }
+
+    #[test]
     fn test_output_folded_after_meta() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
@@ -2326,7 +2344,7 @@ mod tests {
         let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts);
         let fonts = crate::pdf::FontRegistry::new();
         let images = crate::pdf::ImageRegistry::new();
-        crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, None, false, doc.output.pdfa, &[]).unwrap()
+        crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[]).unwrap()
     }
 
     /// The text's XML, and the tree the SDKs would build from the strings and spans the generator writes for it.
@@ -2761,6 +2779,7 @@ mod tests {
         assert_eq!(to_pascal_case("xs"),            "Xs");
         assert_eq!(to_pascal_case("text-size"),    "TextSize");
         assert_eq!(to_pascal_case("pdfa"),          "PdfA");
+        assert_eq!(to_pascal_case("pdfua"),         "PdfUa");
     }
 
     // ── PHP tests ─────────────────────────────────────────────────────────────

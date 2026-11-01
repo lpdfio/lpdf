@@ -5,7 +5,7 @@
 //! first part and the lines after it under the words, with nothing in the layout that knows of lists.
 
 use crate::parse::{
-    Align, Check, Detail, ListBullet, ListFormat, ListSpec, Node, NodeKind, Shape, ShapeKind, TextAlign, TextRun,
+    Align, Check, Detail, ListBullet, ListFormat, ListSpec, Node, NodeKind, Role, Shape, ShapeKind, TextAlign, TextRun,
     DEFAULT_LINE_HEIGHT, LIST_ITEM_GAP_UNSET,
 };
 
@@ -75,6 +75,7 @@ fn lower_list(list: &mut Node, bullet_depth: usize) {
         number = number.saturating_add(1);
     }
     list.kind = NodeKind::Column;
+    list.role = Role::List;
 }
 
 fn default_spec() -> ListSpec {
@@ -126,16 +127,19 @@ fn lower_item(
         _                          => None,
     };
     let marker_width = (spec.indent - gap).max(0.0);
+    // A number is the item's label, which a screen reader reads; a bullet or a checkbox is a shape, drawn and not
+    // read, as a reader says that a list item is one.
     let marker = if let Some(check) = check {
-        checkbox_marker(&check, marker_width, &look)
+        Node { role: Role::Artifact, ..checkbox_marker(&check, marker_width, &look) }
     } else if spec.numbered {
-        number_marker(&label(spec, number), marker_width, &look)
+        Node { role: Role::ListLabel, ..number_marker(&label(spec, number), marker_width, &look) }
     } else {
-        bullet_marker(spec.bullet.unwrap_or_else(|| bullet_by_depth(bullet_depth)), marker_width, &look)
+        Node { role: Role::Artifact, ..bullet_marker(spec.bullet.unwrap_or_else(|| bullet_by_depth(bullet_depth)), marker_width, &look) }
     };
 
     let mut content = Node::layout_default();
     content.kind       = NodeKind::Column;
+    content.role       = Role::ListBody;
     content.gap        = if item.gap == LIST_ITEM_GAP_UNSET { list_gap } else { item.gap };
     content.width_fill = true;
     content.children   = std::mem::take(&mut item.children);
@@ -144,6 +148,7 @@ fn lower_item(
     }
 
     item.kind     = NodeKind::Row;
+    item.role     = Role::ListItem;
     item.gap      = gap;
     item.align    = Align::Start;
     item.children = vec![marker, content];

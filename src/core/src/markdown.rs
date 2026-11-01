@@ -682,8 +682,9 @@ enum Piece {
     Text { text: String, style: Style },
     Code { text: String, style: Style },
     Note(String),
-    /// An image, with the `width` and `height` of an `<img>`, in points, when it had them.
-    Image { dest: String, width: Option<String>, height: Option<String>, line: usize },
+    /// An image, with the `width` and `height` of an `<img>`, in points, when it had them, and its alt text: the
+    /// words of `![…]`, or the `alt` of an `<img>`, which a tagged PDF carries.
+    Image { dest: String, width: Option<String>, height: Option<String>, alt: Option<String>, line: usize },
     /// A `<br>`, or two spaces or a backslash at the end of a line: the words after it begin a new line.
     Break,
 }
@@ -728,8 +729,8 @@ impl<'a> Writer<'a> {
             match part {
                 HtmlPart::Text(text) => pieces.push(Piece::Text { text, style: style.clone() }),
                 HtmlPart::Break => pieces.push(Piece::Break),
-                HtmlPart::Image { src, width, height } if !is_url(&src) => {
-                    pieces.push(Piece::Image { dest: src, width, height, line });
+                HtmlPart::Image { src, width, height, alt } if !is_url(&src) => {
+                    pieces.push(Piece::Image { dest: src, width, height, alt, line });
                 }
                 HtmlPart::Image { .. } => {}
             }
@@ -958,14 +959,21 @@ impl<'a> Writer<'a> {
                 }
                 Event::Start(Tag::Image { dest_url, .. }) => {
                     self.at += 1;
-                    // The alt text is not kept: there are no tagged PDFs yet to carry it.
+                    // The words in the brackets are the alt text, which a tagged PDF carries.
+                    let mut alt = String::new();
                     while let Some((event, _)) = self.events.get(self.at) {
                         self.at += 1;
-                        if matches!(event, Event::End(TagEnd::Image)) { break; }
+                        match event {
+                            Event::End(TagEnd::Image) => break,
+                            Event::Text(text) | Event::Code(text) => alt.push_str(text),
+                            Event::SoftBreak | Event::HardBreak => alt.push(' '),
+                            _ => {}
+                        }
                     }
                     // An image at a URL is left out: an image must be an asset, and a README's are mostly badges.
                     if !is_url(&dest_url) {
-                        pieces.push(Piece::Image { dest: dest_url.to_string(), width: None, height: None, line });
+                        let alt = Some(alt.split_whitespace().collect::<Vec<_>>().join(" "));
+                        pieces.push(Piece::Image { dest: dest_url.to_string(), width: None, height: None, alt, line });
                     }
                 }
                 Event::Html(html) | Event::InlineHtml(html) => {
@@ -1024,9 +1032,9 @@ impl<'a> Writer<'a> {
         let lines = if broken { lines_of(pieces) } else { Vec::new() };
         let texts: Vec<&[Piece]> = if broken { lines.iter().map(Vec::as_slice).collect() } else { vec![pieces] };
         let mut inner = String::new();
-        if !has_box {
-            for (key, value) in extra { push_attr(&mut text_attrs, key, value); }
-        }
+        // A role says what the text is, so it stays on the text when a box goes around it.
+        let (text_extra, box_extra): (Vec<_>, Vec<_>) = extra.iter().partition(|(key, _)| !has_box || *key == "role");
+        for (key, value) in text_extra { push_attr(&mut text_attrs, key, value); }
         for line in &texts {
             inner.push_str(&format!("<text{text_attrs}>"));
             for piece in *line { self.write_piece(&mut inner, piece); }
@@ -1043,7 +1051,7 @@ impl<'a> Writer<'a> {
             for key in BOX_ATTRS {
                 if let Some(value) = rule.get(key) { push_attr(&mut box_attrs, key, value); }
             }
-            for (key, value) in extra { push_attr(&mut box_attrs, key, value); }
+            for (key, value) in box_extra { push_attr(&mut box_attrs, key, value); }
             xml.push_str(&format!("<column{stacked}{box_attrs}>{inner}</column>"));
         } else if texts.len() > 1 {
             xml.push_str(&format!("<column{stacked}>{inner}</column>"));
@@ -1124,7 +1132,7 @@ impl<'a> Writer<'a> {
         };
         for piece in pieces {
             match piece {
-                Piece::Image { dest, width, height, line: image_line } => {
+                Piece::Image { dest, width, height, alt, line: image_line } => {
                     flush(self, &mut words, blocks)?;
                     let name = self.image_name(&dest, image_line)?;
                     // With only one of them the other follows the picture's proportions, and with neither the picture
@@ -1138,7 +1146,8 @@ impl<'a> Writer<'a> {
                             size
                         }
                     };
-                    blocks.push(Block { xml: format!("<img name=\"{}\"{size}/>", escape_attr(&name)), line: image_line });
+                    let alt = alt.map(|alt| format!(" alt=\"{}\"", escape_attr(&alt))).unwrap_or_default();
+                    blocks.push(Block { xml: format!("<img name=\"{}\"{size}{alt}/>", escape_attr(&name)), line: image_line });
                 }
                 other => words.push(other),
             }
@@ -1179,7 +1188,9 @@ impl<'a> Writer<'a> {
         let label = label.split_whitespace().collect::<Vec<_>>().join(" ");
         let bookmark = (number as u8 <= self.spec.bookmarks && !label.is_empty())
             .then(|| format!("<bookmark label=\"{}\" level=\"{number}\"/>", escape_attr(&label)));
-        let xml = self.text_block(&rule, &pieces, &[("paginate", "keep-next")], bookmark);
+        // Its level is its role, which a tagged PDF writes as its heading tag.
+        let role = format!("h{number}");
+        let xml = self.text_block(&rule, &pieces, &[("paginate", "keep-next"), ("role", &role)], bookmark);
         Ok(Block { xml, line })
     }
 
@@ -1386,8 +1397,8 @@ enum HtmlPart {
     /// A `<br>`, or the start or the end of a block such as a `<p>`: the words after it begin a new line.
     Break,
     /// An `<img>` with a `src`, and its `width` and `height` in points when it had them in pixels. Markdown's own image
-    /// has no size, which is the reason to write the tag.
-    Image { src: String, width: Option<String>, height: Option<String> },
+    /// has no size, which is the reason to write the tag. `alt` is its alt text, when it has one.
+    Image { src: String, width: Option<String>, height: Option<String>, alt: Option<String> },
 }
 
 /// The tags that put the words around them on lines of their own.
@@ -1427,6 +1438,7 @@ fn read_html(html: &str) -> Vec<HtmlPart> {
                     src: src.trim().to_string(),
                     width: html_attr(attrs, "width").and_then(|width| html_length(&width)),
                     height: html_attr(attrs, "height").and_then(|height| html_length(&height)),
+                    alt: html_attr(attrs, "alt").map(|alt| alt.trim().to_string()),
                 });
             }
         } else if LINE_TAGS.contains(&name.as_str()) {

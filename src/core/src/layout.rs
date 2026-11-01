@@ -1,4 +1,4 @@
-use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Capture, CaptureMode, Direction, FieldKind, Footnote, HeightMode, Justify, Node, NodeKind, PageScope, RowKeep, SectionLayout, Paginate, TextAlign, TextRun};
+use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Capture, CaptureMode, Direction, FieldKind, Footnote, HeightMode, Justify, Node, NodeKind, PageScope, Role, RowKeep, SectionLayout, Paginate, TextAlign, TextRun};
 
 // The path is spelled out because the WASI build includes this file from another crate.
 #[path = "layout/footnotes.rs"]
@@ -14,12 +14,12 @@ mod footnote_clip_tests;
 pub(crate) use table_grid::{Held, Placed};
 use table_grid::TableGrid;
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
-use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderCanvasClip, RenderCanvasLayer, RenderField, RenderFootnoteMark, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind};
+use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderCanvasClip, RenderCanvasLayer, RenderField, RenderFootnoteMark, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind, Tag, TagKind};
 use crate::tokens::FontWidths;
 use crate::canvas;
 use crate::toc;
 use std::borrow::Cow;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::ops::Range;
 
@@ -28,6 +28,97 @@ use std::ops::Range;
 // real glyph metrics instead of the 0.44 constant fallback.
 thread_local! {
     static FONT_WIDTHS: RefCell<HashMap<String, FontWidths>> = RefCell::new(HashMap::new());
+}
+
+// ── Tags of a tagged PDF ─────────────────────────────────────────────────────
+// A section of a document with `<output pdfua>` is laid out with tags, which say what each drawn thing is to a
+// reader (`render::Tag`). Every other section is laid out as it always was, and pays for nothing.
+thread_local! {
+    /// Whether the section being laid out is tagged, for what draws nodes that have no tag id of their own: the notes
+    /// of footnotes, and layers.
+    static TAGGING: Cell<bool> = const { Cell::new(false) };
+    /// The last tag id given. Ids count on across the sections of a document, and the passes of a table of contents.
+    static LAST_TAG_ID: Cell<u32> = const { Cell::new(0) };
+}
+
+/// Whether the section being laid out is tagged.
+pub(crate) fn tagging() -> bool {
+    TAGGING.with(Cell::get)
+}
+
+/// Give `node` and every node below it a tag id of its own, so that the parts a node is split into keep it, and the
+/// cells of a table's header row their role, as `header_row` says they are in one.
+fn number_for_tags(node: &mut Node, header_row: bool) {
+    node.tag_id = LAST_TAG_ID.with(|last| {
+        let id = last.get() + 1;
+        last.set(id);
+        id
+    });
+    if header_row && node.kind == NodeKind::TableCell && node.role == Role::Auto {
+        node.role = Role::HeaderCell;
+    }
+    let head = node.kind == NodeKind::TableHead;
+    for child in &mut node.children {
+        number_for_tags(child, head);
+    }
+}
+
+/// What `node` is to a reader of a tagged PDF: its role, or what its kind makes it. `None` for a node that groups
+/// others and adds nothing a reader needs, such as a column, and for one whose tag is set where it is drawn: a link.
+pub(crate) fn tag_of(node: &Node) -> Option<TagKind> {
+    let cell = |header: bool| TagKind::TableCell { header, col_span: node.col_span, row_span: node.row_span, column: 0 };
+    Some(match node.role {
+        Role::Artifact      => TagKind::Artifact,
+        Role::Heading(level) => TagKind::Heading(level),
+        Role::List          => TagKind::List,
+        Role::ListItem      => TagKind::ListItem,
+        Role::ListLabel     => TagKind::ListLabel,
+        Role::ListBody      => TagKind::ListBody,
+        Role::HeaderCell    => cell(true),
+        Role::TocItem       => TagKind::TocItem,
+        Role::Auto => match node.kind {
+            NodeKind::Text      => TagKind::Paragraph,
+            NodeKind::Table     => TagKind::Table,
+            NodeKind::TableHead => TagKind::TableHead,
+            NodeKind::TableRow  => TagKind::TableRow,
+            NodeKind::TableCell => cell(false),
+            // An image or a barcode with words in its alt shows something; with alt="" it is decoration.
+            NodeKind::Img | NodeKind::Barcode => match node.alt() {
+                Some(alt) if !alt.trim().is_empty() => TagKind::Figure(alt.to_string()),
+                _ => TagKind::Artifact,
+            },
+            _ => return None,
+        },
+    })
+}
+
+/// `rendered` with `tag` on it: on the box, the image or the barcode it is, or on a box that draws nothing around it.
+fn with_tag(rendered: RenderNode, tag: Tag, x: f32, y: f32, width: f32, height: f32) -> RenderNode {
+    let tag = Some(Box::new(tag));
+    match rendered {
+        RenderNode::Box(mut b) if b.tag.is_none() => {
+            b.tag = tag;
+            RenderNode::Box(b)
+        }
+        RenderNode::Image(mut i) => {
+            i.tag = tag;
+            RenderNode::Image(i)
+        }
+        RenderNode::Barcode(mut bc) => {
+            bc.tag = tag;
+            RenderNode::Barcode(bc)
+        }
+        other => tagged_box(tag, x, y, width, height, vec![other]),
+    }
+}
+
+/// A box that draws nothing of its own, around `children`, with `tag` on it.
+fn tagged_box(tag: Option<Box<Tag>>, x: f32, y: f32, width: f32, height: f32, children: Vec<RenderNode>) -> RenderNode {
+    RenderNode::Box(RenderBox {
+        x, y, width, height,
+        fill: None, border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None, debug_self: false,
+        tag, children,
+    })
 }
 
 /// Install caller-supplied width tables for the current layout call.
@@ -148,6 +239,21 @@ fn prefill_node(node: &mut Node, meta: &ImageMeta) {
 // ── Public entry point ────────────────────────────────────────────────────────
 
 pub fn layout_page(page: &SectionLayout) -> Vec<RenderPage> {
+    if !page.tagged {
+        return layout_section(page);
+    }
+    // The section's nodes are numbered once its data is in, so a node that `data-source` repeats is one of its own.
+    let mut tagged = page.clone();
+    for node in &mut tagged.children {
+        number_for_tags(node, false);
+    }
+    TAGGING.with(|on| on.set(true));
+    let pages = layout_section(&tagged);
+    TAGGING.with(|on| on.set(false));
+    pages
+}
+
+fn layout_section(page: &SectionLayout) -> Vec<RenderPage> {
     let mut pages = layout_page_impl(page);
     for rp in &mut pages {
         apply_debug_overlay(&mut rp.nodes);
@@ -192,6 +298,7 @@ pub fn layout_page(page: &SectionLayout) -> Vec<RenderPage> {
 /// Lay out every section in document order. A table of contents section is laid out after the others, once
 /// their pages are known; see `toc`.
 pub fn layout_document(sections: &[SectionLayout]) -> Vec<RenderPage> {
+    LAST_TAG_ID.with(|last| last.set(0));
     let toc = sections.iter().enumerate().find_map(|(i, s)| s.toc.as_ref().map(|options| (i, options)));
     match toc {
         Some((toc_index, options)) => toc::layout_with_toc(sections, toc_index, options),
@@ -450,7 +557,7 @@ fn clip_overflow(mut nodes: Vec<RenderNode>, used: f32, bottom: f32, room: f32, 
         return nodes;
     }
     fit_to_clip(&mut nodes, bottom);
-    vec![RenderNode::CanvasLayer(RenderCanvasLayer {
+    vec![RenderNode::CanvasLayer(RenderCanvasLayer { tag: None,
         transform: None,
         clip:      Some(RenderCanvasClip { x: 0.0, y: 0.0, w: page_w, h: bottom, border_radius: 0.0 }),
         opacity:   1.0,
@@ -476,7 +583,7 @@ fn fit_to_clip(nodes: &mut Vec<RenderNode>, bottom: f32) {
                 let mut children = std::mem::take(&mut l.children);
                 fit_to_clip(&mut children, bottom);
                 let (x, y, width, height) = (l.x, l.y, l.width, l.height);
-                *node = RenderNode::Box(RenderBox {
+                *node = RenderNode::Box(RenderBox { tag: None,
                     x, y, width, height,
                     fill: None, border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None,
                     debug_self: false, children,
@@ -1739,7 +1846,7 @@ fn layout_table(
 
         // Emit row background box (must be below cells in draw order).
         if let Some(bg) = row_bg {
-            nodes.push(RenderNode::Box(RenderBox {
+            nodes.push(RenderNode::Box(RenderBox { tag: None,
                 x, y: row_y, width: avail_w, height: row_h,
                 fill: Some(bg),
                 border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None,
@@ -1749,6 +1856,11 @@ fn layout_table(
 
         // Pass 2: lay out each cell at its column position, stretched to row_h. A cell that spans rows is laid out
         // once the last of its rows has its background, so that no background drawn later covers it.
+        //
+        // In a tagged section the cells of a row are drawn in a box tagged as the row, which the layout does not
+        // draw otherwise, and a cell that spans rows in a box tagged as the row it starts in.
+        let tags_rows = row.tag_id != 0;
+        let mut row_cells = Vec::new();
         let mut cell_x   = x;
         let mut next_col = 0;
         for placed in grid.starting(i) {
@@ -1759,17 +1871,30 @@ fn layout_table(
             let cell_w = span_width(&col_widths, &placed.columns, gap);
             if placed.rows == 1 {
                 let stretched = Node { height_mode: crate::parse::HeightMode::Full, ..row.children[placed.cell].clone() };
-                let (rn, _) = layout_node(&stretched, cell_x, row_y, cell_w, Some(row_h));
-                nodes.push(rn);
+                let (mut rn, _) = layout_node(&stretched, cell_x, row_y, cell_w, Some(row_h));
+                if tags_rows {
+                    set_cell_column(&mut rn, placed.columns.start);
+                }
+                row_cells.push(rn);
             }
             cell_x  += cell_w + gap;
             next_col = placed.columns.end;
+        }
+        if tags_rows {
+            nodes.push(tagged_box(row_tag(row), x, row_y, avail_w, row_h, row_cells));
+        } else {
+            nodes.extend(row_cells);
         }
         for placed in grid.spans_ending(i) {
             let top       = row_ys[placed.row];
             let stretched = Node { height_mode: crate::parse::HeightMode::Full, ..rows[placed.row].children[placed.cell].clone() };
             let cell_x    = column_x(&col_widths, placed.columns.start, gap, x);
-            let (rn, _)   = layout_node(&stretched, cell_x, top, span_width(&col_widths, &placed.columns, gap), Some(row_y + row_h - top));
+            let cell_w    = span_width(&col_widths, &placed.columns, gap);
+            let (mut rn, _) = layout_node(&stretched, cell_x, top, cell_w, Some(row_y + row_h - top));
+            if tags_rows {
+                set_cell_column(&mut rn, placed.columns.start);
+                rn = tagged_box(row_tag(&rows[placed.row]), cell_x, top, cell_w, row_y + row_h - top, vec![rn]);
+            }
             nodes.push(rn);
         }
 
@@ -1843,6 +1968,22 @@ fn layout_table(
     }
 
     (nodes, total_h)
+}
+
+/// The tag of a table's row in a tagged section: the header row, or a row of the body.
+fn row_tag(row: &Node) -> Option<Box<Tag>> {
+    let kind = if row.kind == NodeKind::TableHead { TagKind::TableHead } else { TagKind::TableRow };
+    Some(Box::new(Tag { id: row.tag_id, kind }))
+}
+
+/// Note on a tagged cell the column it starts in.
+fn set_cell_column(rendered: &mut RenderNode, column: usize) {
+    if let RenderNode::Box(b) = rendered
+        && let Some(tag) = b.tag.as_deref_mut()
+        && let TagKind::TableCell { column: at, .. } = &mut tag.kind
+    {
+        *at = u16::try_from(column).unwrap_or(u16::MAX);
+    }
 }
 
 /// The rule along the bottom edge of the row `i`, whose bottom is at `bottom`: one line across the table, or
@@ -2432,6 +2573,12 @@ fn layout_node(
         NodeKind::Field => layout_field(node, node_x, y, node_w),
         _ => layout_container(node, node_x, y, node_w, avail_h),
     };
+    // In a tagged section, a node says what it is: a node with no tag id is one the layout made, as a note of a
+    // debug node is.
+    let rendered = match (node.tag_id != 0).then(|| tag_of(node)).flatten() {
+        Some(kind) => with_tag(rendered, Tag { id: node.tag_id, kind }, node_x, y, node_w, h),
+        None => rendered,
+    };
     if node.bookmarks.is_empty() {
         return (rendered, h);
     }
@@ -2460,7 +2607,7 @@ fn with_anchors(rendered: RenderNode, bookmarks: &[Bookmark], x: f32, y: f32, wi
             l.children.splice(0..0, anchors);
             RenderNode::Link(l)
         }
-        leaf => RenderNode::Box(RenderBox {
+        leaf => RenderNode::Box(RenderBox { tag: None,
             x, y, width, height,
             fill: None, border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None, debug_self: false,
             children: anchors.chain(std::iter::once(leaf)).collect(),
@@ -2506,7 +2653,7 @@ fn layout_container(
     };
 
     (
-        RenderNode::Box(RenderBox {
+        RenderNode::Box(RenderBox { tag: None,
             x,
             y,
             width: avail_w,
@@ -3030,7 +3177,7 @@ fn layout_link(
         HeightMode::Auto => content_h + pt + pb,
     };
     (
-        RenderNode::Link(RenderLink { url, x, y, width: avail_w, height, debug_self: node.debug, children }),
+        RenderNode::Link(RenderLink { url, x, y, width: avail_w, height, debug_self: node.debug, tag_id: node.tag_id, children }),
         height,
     )
 }
@@ -3052,7 +3199,7 @@ fn layout_img(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
         }
     };
     let name = node.image_name.clone().unwrap_or_default();
-    (RenderNode::Image(RenderImage { x, y, width: w, height: h, name, radius: node.radius }), h)
+    (RenderNode::Image(RenderImage { tag: None, x, y, width: w, height: h, name, radius: node.radius }), h)
 }
 
 // ── Shape ─────────────────────────────────────────────────────────────────────
@@ -3066,7 +3213,7 @@ fn layout_shape(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) 
     let w = pre_w.min(avail_w);
     let h = if pre_w > 0.0 { pre_h * (w / pre_w) } else { pre_h };
     let drawing = node.shape().map(|shape| canvas::draw_flow_shape(shape, node.radius, x, y, w, h));
-    let shape_box = RenderBox {
+    let shape_box = RenderBox { tag: None,
         x, y, width: w, height: h,
         fill: None, border_width: 0.0, border_color: None, radius: 0.0,
         opacity: node.opacity, shadow: None,
@@ -3133,7 +3280,7 @@ fn layout_barcode(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32
                             modules.push(code[(col, row)] == qrcode::Color::Dark);
                         }
                     }
-                    let bc = RenderBarcode {
+                    let bc = RenderBarcode { tag: None,
                         x, y, width: size_pt, height: size_pt,
                         kind: RenderedBarcodeKind::Qr { modules, size: sz },
                         color, bg, debug_self: node.debug,
@@ -3150,7 +3297,7 @@ fn layout_barcode(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32
             match encode_code128(&data) {
                 Ok(bars) => {
                     let (w, h) = fit_linear_barcode(node, &bars, avail_w);
-                    let bc = RenderBarcode {
+                    let bc = RenderBarcode { tag: None,
                         x, y, width: w, height: h,
                         kind: RenderedBarcodeKind::Code128 { bars, hrt: hrt_text },
                         color, bg, debug_self: node.debug,
@@ -3165,7 +3312,7 @@ fn layout_barcode(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32
             match encode_ean13(&data) {
                 Ok(bars) => {
                     let (w, h) = fit_linear_barcode(node, &bars, avail_w);
-                    let bc = RenderBarcode {
+                    let bc = RenderBarcode { tag: None,
                         x, y, width: w, height: h,
                         kind: RenderedBarcodeKind::Ean13 { bars, digits: data, hrt: node.barcode_hrt },
                         color, bg, debug_self: node.debug,
@@ -3235,7 +3382,7 @@ fn barcode_flow_width(node: &Node) -> Option<f32> {
 /// Return an empty box placeholder for an invalid/unencodable barcode.
 fn fallback_barcode(x: f32, y: f32, w: f32, _reason: &str) -> (RenderNode, f32) {
     let h = 40.0_f32;
-    let b = crate::render::RenderBox {
+    let b = crate::render::RenderBox { tag: None,
         x, y, width: w, height: h,
         fill: Some("#eeeeee".to_string()),
         border_width: 0.5,
@@ -4107,7 +4254,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
 
     if atoms.is_empty() && !any_space {
         let reserved = node.reserve_lines() as f32 * line_height;
-        return (RenderNode::Box(RenderBox {
+        return (RenderNode::Box(RenderBox { tag: None,
             x, y, width: 0.0, height: reserved, fill: None,
             border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None, debug_self: false, children: vec![],
         }), reserved, false);
@@ -4315,7 +4462,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 match atom.href() {
                     Some(href) => all_nodes.push(RenderNode::Link(RenderLink {
                         url: href.to_string(), x: cur_x - lead, y: line_y,
-                        width: aw + lead, height: line_height, debug_self: false, children: seg,
+                        width: aw + lead, height: line_height, debug_self: false, tag_id: 0, children: seg,
                     })),
                     None => all_nodes.extend(seg),
                 }
@@ -4335,7 +4482,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     }
 
     (
-        RenderNode::Box(RenderBox {
+        RenderNode::Box(RenderBox { tag: None,
             x, y, width: avail_w, height: total_h,
             fill: None, border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None,
             debug_self: node.debug,
@@ -4350,7 +4497,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
 
 /// A rectangle of `tint` behind a run of a line.
 fn tint_behind(tint: &str, x: f32, y: f32, width: f32, height: f32) -> RenderNode {
-    RenderNode::Box(RenderBox {
+    RenderNode::Box(RenderBox { tag: None,
         x, y, width, height, fill: Some(tint.to_string()),
         border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None, debug_self: false,
         children: vec![],
@@ -4542,7 +4689,7 @@ fn layout_pre_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f3
                 match &run.href {
                     Some(href) => nodes.push(RenderNode::Link(RenderLink {
                         url: href.clone(), x: cur_x, y: line_y, width, height: line_height,
-                        debug_self: false, children: parts,
+                        debug_self: false, tag_id: 0, children: parts,
                     })),
                     None => nodes.extend(parts),
                 }
@@ -4553,7 +4700,7 @@ fn layout_pre_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f3
 
     let total_h = lines.len() as f32 * line_height;
     (
-        RenderNode::Box(RenderBox {
+        RenderNode::Box(RenderBox { tag: None,
             x, y, width: avail_w, height: total_h, fill: None, border_width: 0.0, border_color: None,
             radius: 0.0, opacity: 1.0, shadow: None, debug_self: node.debug, children: nodes,
         }),
@@ -4602,7 +4749,7 @@ pub(crate) fn layout_placed(placed: &canvas::PlacedNode, page: usize, pages: usi
     if !overflow {
         return moved;
     }
-    RenderNode::CanvasLayer(RenderCanvasLayer {
+    RenderNode::CanvasLayer(RenderCanvasLayer { tag: None,
         transform: None,
         clip:      Some(RenderCanvasClip { x: left, y: top, w, h, border_radius: 0.0 }),
         opacity:   1.0,

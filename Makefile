@@ -16,7 +16,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python \
-        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api check-encryption check-attachments check-pdfa check-codegen-dotnet \
+        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api check-encryption check-attachments check-pdfa check-pdfua check-codegen-dotnet \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
@@ -94,6 +94,17 @@ check-pdfa:
 	rm -rf target/pdfa-samples && mkdir -p target/pdfa-samples
 	LPDF_PDFA_OUT="$(CURDIR)/target/pdfa-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_pdfa_samples_for_the_external_check
 	node scripts/check-pdfa.mjs target/pdfa-samples
+
+# check-pdfua has the core write the PDF/UA fixture, alone and as PDF/A-2u too, and validates it with veraPDF's PDF/UA-1
+# profile (and PDF/A-2u's for the second) and with qpdf (`scripts/check-pdfa.mjs`). Needs Docker and qpdf, as check-pdfa.
+check-pdfua:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking PDF/UA files with veraPDF and qpdf..."
+	@echo ""
+	rm -rf target/pdfua-samples && mkdir -p target/pdfua-samples
+	LPDF_PDFUA_OUT="$(CURDIR)/target/pdfua-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_pdfua_samples_for_the_external_check
+	node scripts/check-pdfa.mjs target/pdfua-samples pdfua
 
 # check-codegen-dotnet compiles the C# the codegen writes for every fixture against the .NET SDK in repos/lpdf-dotnet,
 # with the engine built from this checkout (`scripts/check-codegen-dotnet.mjs`). Needs the .NET 8 SDK or later.

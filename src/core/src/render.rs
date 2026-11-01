@@ -32,6 +32,45 @@ pub enum RenderNode {
     FootnoteMark(RenderFootnoteMark),
 }
 
+/// What a drawn node is to a reader of a tagged PDF: the structure element it is drawn in, or decoration. Only the
+/// layout of a document with `<output pdfua>` sets one (`layout::tag_of`); `pdf.rs` writes them as the structure tree
+/// and the marked content of the pages. Boxed where it is held, so a document that is not tagged pays 8 bytes a node.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Tag {
+    /// The element. The parts of a node that is split across lines or pages share it, so they stay one element;
+    /// 0 is an element of its own.
+    pub id:   u32,
+    pub kind: TagKind,
+}
+
+/// The kinds of structure element the layout tags, and decoration.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TagKind {
+    Paragraph,
+    /// A heading, its level 1 to 6.
+    Heading(u8),
+    Table,
+    /// The header row of a table: a `THead` with its one row.
+    TableHead,
+    /// A row of the table's body.
+    TableRow,
+    /// A cell: a header cell of the header row, or a data cell, the columns and rows it spans, and the column it starts
+    /// in, which keeps the cells of a row in order when a cell that spans rows is drawn after the rows it spans.
+    TableCell { header: bool, col_span: u16, row_span: u16, column: u16 },
+    List,
+    ListItem,
+    ListLabel,
+    ListBody,
+    /// An image, a barcode or a layer, with what it shows.
+    Figure(String),
+    /// A footnote's note, at the foot of its page.
+    Note,
+    /// An entry of the table of contents.
+    TocItem,
+    /// Drawn, not read: a header, a footer, a layer without `alt`, an image with `alt=""`.
+    Artifact,
+}
+
 /// The place a bookmark marks: an entry of the PDF outline, and a named destination for `href="#id"` links.
 /// It draws nothing.
 pub struct RenderAnchor {
@@ -99,6 +138,7 @@ pub struct RenderBarcode {
     pub color:      String,
     pub bg:         Option<String>,
     pub debug_self: bool,
+    pub tag:        Option<Box<Tag>>,
 }
 
 pub enum RenderedBarcodeKind {
@@ -119,6 +159,7 @@ pub struct RenderImage {
     pub name: String,
     /// The corner radius the picture is clipped to; 0 draws it as a rectangle.
     pub radius: f32,
+    pub tag: Option<Box<Tag>>,
 }
 
 #[derive(Clone)]
@@ -156,6 +197,7 @@ pub struct RenderBox {
     /// A copy of the box's outline, offset and filled, drawn under the box. Faded with the box.
     pub shadow: Option<Shadow>,
     pub debug_self: bool,
+    pub tag: Option<Box<Tag>>,
     pub children: Vec<RenderNode>,
 }
 
@@ -198,6 +240,9 @@ pub struct RenderLink {
     pub width: f32,
     pub height: f32,
     pub debug_self: bool,
+    /// In a tagged section, the tag id of a `<link>` around content, which its parts on later pages share, so they
+    /// stay one link. 0 for a link of a text's words, and in a section that is not tagged.
+    pub tag_id: u32,
     pub children: Vec<RenderNode>,
 }
 
@@ -269,6 +314,7 @@ pub struct RenderCanvasLayer {
     pub clip: Option<RenderCanvasClip>,
     /// 0.0–1.0 opacity (1.0 = fully opaque).
     pub opacity: f32,
+    pub tag: Option<Box<Tag>>,
     pub children: Vec<RenderNode>,
 }
 
