@@ -65,6 +65,7 @@ const CLASSES = [
     { cls: 'FontAttr', el: 'font', where: 'global', area: 'kit' },
     { cls: 'ImageAttr', el: 'image', where: 'global', area: 'kit' },
     { cls: 'FileAttr', el: 'file', where: 'global', area: 'kit' },
+    { cls: 'ProfileAttr', el: 'profile', where: 'global', area: 'kit' },
 ];
 
 // Where the classes of an area live in each SDK.

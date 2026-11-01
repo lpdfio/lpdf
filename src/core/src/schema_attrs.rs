@@ -130,6 +130,12 @@ const IMAGE: Attributes = &[
     ("src", Kind::Text),
 ];
 
+const PROFILE: Attributes = &[
+    ("name", Kind::Text),
+    ("ref", Kind::Text),
+    ("src", Kind::Text),
+];
+
 const COLOR: Attributes = &[
     ("name", Kind::Text),
     ("value", Kind::Text),
@@ -254,6 +260,8 @@ const OUTPUT: Attributes = &[
     ("allow", Kind::Text),
     ("pdfa", Kind::Text),
     ("pdfua", Kind::Text),
+    ("pdfx", Kind::Text),
+    ("profile", Kind::Text),
 ];
 
 const ATTACHMENTS: Attributes = &[
@@ -491,6 +499,7 @@ const DOCUMENT: Attributes = &[
     ("font", Kind::Text),
     ("size", Kind::Text),
     ("orientation", Kind::Text),
+    ("bleed", Kind::Text),
     ("background", Kind::Text),
     ("debug", Kind::Boolean),
     ("footnote-counter", Kind::Text),
@@ -499,6 +508,7 @@ const DOCUMENT: Attributes = &[
 const SECTION: Attributes = &[
     ("size", Kind::Text),
     ("orientation", Kind::Text),
+    ("bleed", Kind::Text),
     ("background", Kind::Text),
     ("title", Kind::Text),
     ("debug", Kind::Boolean),
@@ -869,6 +879,7 @@ pub(crate) fn attributes_of(parent: &str, name: &str) -> Option<Attributes> {
         (_, "layer") => Some(LAYER),
         (_, "font") => Some(FONT),
         (_, "image") => Some(IMAGE),
+        (_, "profile") => Some(PROFILE),
         (_, "color") => Some(COLOR),
         (_, "alias") => Some(ALIAS),
         (_, "stop") => Some(STOP),

@@ -30,11 +30,12 @@ const EXPECTED = {
     LayoutAttr: attributes('layout'),
     DocumentMeta: attributes('meta'),
     DocumentOutput: attributes('output'),
-    DocumentAssets: ['fonts', 'images'],
+    DocumentAssets: ['fonts', 'images', 'profiles'],
     DocumentTokens: ['colors', 'gradients', 'aliases', 'space', 'grid', 'border', 'radius', 'width', 'height', 'text-size', 'line-height'],
     FontAttr: attributes('font'),
     ImageAttr: attributes('image'),
     FileAttr: attributes('file'),
+    ProfileAttr: attributes('profile'),
     RegionAttr: attributes('region', 'layout'),
     LayerAttr: attributes('layer'),
 };
@@ -65,9 +66,9 @@ function files(dir, extension) {
 
 const read = (file) => readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
 // The name of a PDF standard keeps its letters capitals in .NET, as the standard writes it: PdfA is pdfa, for PDF/A,
-// and PdfUa is pdfua, for PDF/UA.
+// PdfUa is pdfua, for PDF/UA, and PdfX is pdfx, for PDF/X.
 // codegen.rs writes it so too.
-const STANDARDS = { PdfA: 'pdfa', PdfUa: 'pdfua' };
+const STANDARDS = { PdfA: 'pdfa', PdfUa: 'pdfua', PdfX: 'pdfx' };
 const kebab = {
     pascal: (name) => STANDARDS[name] ?? name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase(),
     camel: (name) => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`),
