@@ -87,7 +87,7 @@ var doc = L.Document(new() { Size = "letter", Margin = "48pt" }, [
     ]),
 ]);
 
-var pdf = await engine.Render(doc);
+var pdf = engine.Render(doc);
 ```
 
 ### PHP (8.3+)

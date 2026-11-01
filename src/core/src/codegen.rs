@@ -1142,7 +1142,7 @@ impl DotnetEmitter {
 
         out.push_str(&body);
         out.push('\n');
-        out.push_str("var pdf = await engine.Render(doc);\n");
+        out.push_str("var pdf = engine.Render(doc);\n");
 
         out
     }
@@ -2567,7 +2567,8 @@ mod tests {
         assert!(out.contains("L.Document("));
         assert!(out.contains("L.Section("));
         assert!(out.contains("L.Text(new() { FontSize = \"12pt\" }, [\"Hello\"])"));
-        assert!(out.contains("var pdf = await engine.Render(doc);"));
+        assert!(out.contains("var pdf = engine.Render(doc);"));
+        assert!(!out.contains("await"), "{out}");
     }
 
     #[test]
