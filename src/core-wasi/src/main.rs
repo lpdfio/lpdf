@@ -479,6 +479,19 @@ mod tests {
     }
 
     #[test]
+    fn a_request_for_a_document_that_asks_for_linearize_gets_it_after_the_encryption() {
+        let plain = pdf_text(&render_request(&with_output(r#"linearize="true""#), serde_json::json!({})));
+        assert!(plain.contains("<< /Linearized 1 "), "linearized from <output>");
+
+        let answer = render_request(
+            &with_output(r#"encrypt="aes-256" linearize="true""#),
+            serde_json::json!({ "owner_password": "owner", "entropy": ENTROPY }),
+        );
+        let text = pdf_text(&answer);
+        assert!(text.contains("<< /Linearized 1 ") && text.contains("/CFM /AESV3"), "encrypted, then linearized");
+    }
+
+    #[test]
     fn skip_encryption_gives_the_file_unencrypted() {
         let answer = render_request(&with_output(r#"encrypt="aes-256""#), serde_json::json!({ "skip_encryption": true }));
         assert!(!pdf_text(&answer).contains("/Encrypt"));
