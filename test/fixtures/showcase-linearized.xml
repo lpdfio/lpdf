@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Fast web view on one page: the file is linearized, with page 1, the only page, and everything it draws first. The
+     fonts and pictures are those of test/assets, named relative to this file; the tests render it with them loaded,
+     as an SDK does (`linearize_render_tests.rs`), and `make check-linearization` checks the file with qpdf. -->
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <assets>
+    <font name="body"    src="../assets/fonts/CrimsonText-Regular.ttf" />
+    <font name="heading" src="../assets/fonts/CrimsonText-SemiBold.ttf" />
+    <image name="photo"  src="../assets/images/chapter-05-caterpillar.jpg" />
+  </assets>
+  <tokens>
+    <colors>
+      <color name="ink"     value="#1f2a44" />
+      <color name="primary" value="#1763cf" />
+    </colors>
+  </tokens>
+  <document size="a5" font="body">
+    <meta title="Advice from a Caterpillar" author="Lpdf Fixtures" subject="Fast web view, one page" />
+    <output linearize="true" />
+
+    <section>
+      <layout margin="40pt">
+        <column gap="m">
+          <text font="heading" font-size="22pt" color="ink">Advice from a Caterpillar</text>
+          <row gap="m">
+            <img name="photo" width="110pt" />
+            <text font-size="11pt" color="ink">The Caterpillar and Alice looked at each other for some time in silence:
+              at last the Caterpillar took the hookah out of its mouth, and addressed her in a languid, sleepy voice.
+              "Who are you?" said the Caterpillar.</text>
+          </row>
+          <text font-size="10pt">The whole book is at <span href="https://www.gutenberg.org/ebooks/11" color="primary" underline="true">Project Gutenberg</span>.</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

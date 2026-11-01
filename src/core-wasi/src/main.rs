@@ -74,6 +74,12 @@ mod aes256;
 mod encrypt;
 #[path = "../../core/src/rewrite.rs"]
 mod rewrite;
+#[path = "../../core/src/objects.rs"]
+mod objects;
+#[path = "../../core/src/hints.rs"]
+mod hints;
+#[path = "../../core/src/linearize.rs"]
+mod linearize;
 #[path = "../../core/src/shared.rs"]
 mod shared;
 #[path = "../../core/src/kit_to_xml.rs"]
@@ -339,12 +345,9 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     // An unlicensed status draws the attribution line on every page.
     match pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, &doc.gradients, created_on, status.is_licensed(), &doc.output, &files, press.as_ref()) {
         Ok(bytes) => {
-            let bytes = match &encryption {
-                Some(cfg) => match encrypt::encrypt_pdf(&bytes, cfg) {
-                    Ok(b)  => b,
-                    Err(e) => return serde_json::json!({ "error": e }).to_string(),
-                },
-                None => bytes,
+            let bytes = match shared::finish_file(bytes, encryption.as_ref(), doc.output.linearize) {
+                Ok(b)  => b,
+                Err(e) => return serde_json::json!({ "error": e }).to_string(),
             };
             let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
             serde_json::json!({ "pdf": b64 }).to_string()
@@ -473,6 +476,19 @@ mod tests {
 
         let answer = render_request(&with_output(r#"encrypt="rc4-128""#), serde_json::json!({ "owner_password": "owner" }));
         assert!(pdf_text(&answer).contains("/V 2"), "RC4-128 from <output>, with no entropy");
+    }
+
+    #[test]
+    fn a_request_for_a_document_that_asks_for_linearize_gets_it_after_the_encryption() {
+        let plain = pdf_text(&render_request(&with_output(r#"linearize="true""#), serde_json::json!({})));
+        assert!(plain.contains("<< /Linearized 1 "), "linearized from <output>");
+
+        let answer = render_request(
+            &with_output(r#"encrypt="aes-256" linearize="true""#),
+            serde_json::json!({ "owner_password": "owner", "entropy": ENTROPY }),
+        );
+        let text = pdf_text(&answer);
+        assert!(text.contains("<< /Linearized 1 ") && text.contains("/CFM /AESV3"), "encrypted, then linearized");
     }
 
     #[test]

@@ -203,7 +203,7 @@ fn length_value_range(dict: &[u8]) -> Result<Range<usize>, String> {
 
 /// Reads the literal string whose `(` is at `open`: its bytes with escapes resolved, and
 /// the position after the closing `)`.
-fn read_literal_string(src: &[u8], open: usize) -> Option<(Vec<u8>, usize)> {
+pub(crate) fn read_literal_string(src: &[u8], open: usize) -> Option<(Vec<u8>, usize)> {
     let mut plain = Vec::new();
     let mut depth = 1usize;
     let mut pos = open + 1;
@@ -268,7 +268,7 @@ fn read_literal_string(src: &[u8], open: usize) -> Option<(Vec<u8>, usize)> {
 
 /// Reads the hex string whose `<` is at `open`: its bytes (an odd last digit counts as
 /// followed by 0), and the position after the closing `>`.
-fn read_hex_string(src: &[u8], open: usize) -> Option<(Vec<u8>, usize)> {
+pub(crate) fn read_hex_string(src: &[u8], open: usize) -> Option<(Vec<u8>, usize)> {
     let mut nibbles = Vec::new();
     let mut pos = open + 1;
     loop {
@@ -294,15 +294,15 @@ fn push_hex_string(out: &mut Vec<u8>, bytes: &[u8]) {
     out.push(b'>');
 }
 
-fn regular_run_end(src: &[u8], from: usize) -> usize {
+pub(crate) fn regular_run_end(src: &[u8], from: usize) -> usize {
     from + src[from..].iter().take_while(|&&b| !is_whitespace(b) && !is_delimiter(b)).count()
 }
 
-fn is_whitespace(byte: u8) -> bool {
+pub(crate) fn is_whitespace(byte: u8) -> bool {
     matches!(byte, 0 | b'\t' | b'\n' | 0x0C | b'\r' | b' ')
 }
 
-fn is_delimiter(byte: u8) -> bool {
+pub(crate) fn is_delimiter(byte: u8) -> bool {
     matches!(byte, b'(' | b')' | b'<' | b'>' | b'[' | b']' | b'{' | b'}' | b'/' | b'%')
 }
 

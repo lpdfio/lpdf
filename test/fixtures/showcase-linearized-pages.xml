@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Fast web view on many pages, which share fonts and pictures in each of the ways the linearized file sorts them:
+       - body and heading are on every page, so they go with page 1, which other pages then name as shared objects
+       - badge is on page 1 only, and goes with it
+       - photo is on pages 2 and 4, not on page 1: the section of the objects the other pages share
+       - chart is on page 3 only, and the gradient on page 4 only: each goes with its page
+       - sans is on pages 3, 5 and 6: shared by other pages than page 1
+       - the faded layers of pages 1 and 3 share one opacity, which goes with page 1
+     The bookmarks make an outline the document opens with, which goes with page 1 too, and the cover links to page 2.
+     The last section runs onto a second page. The fonts and pictures are those of test/assets, named relative to this
+     file; the tests render it with them loaded, as an SDK does (`linearize_render_tests.rs`), and
+     `make check-linearization` checks the file with qpdf. -->
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <assets>
+    <font name="body"    src="../assets/fonts/CrimsonText-Regular.ttf" />
+    <font name="heading" src="../assets/fonts/CrimsonText-SemiBold.ttf" />
+    <font name="sans"    src="../assets/fonts/Montserrat-Regular.ttf" />
+    <image name="photo"  src="../assets/images/chapter-05-caterpillar.jpg" />
+    <image name="chart"  src="../assets/images/image-sample.png" />
+    <image name="badge"  src="../assets/images/image-square.png" />
+  </assets>
+  <tokens>
+    <colors>
+      <color name="ink"     value="#1f2a44" />
+      <color name="muted"   value="#5b6475" />
+      <color name="primary" value="#1763cf" />
+      <color name="accent"  value="#e0762b" />
+    </colors>
+    <gradients>
+      <gradient name="band" type="linear" from="primary" to="accent" angle="90" />
+    </gradients>
+  </tokens>
+  <document size="a5" font="body">
+    <meta title="A Catalogue in Six Pages" author="Lpdf Fixtures" subject="Fast web view, shared fonts and pictures" />
+    <output linearize="true" />
+
+    <section>
+      <bookmark label="Cover" />
+      <layer opacity="0.35">
+        <circle x="360pt" y="60pt" r="40pt" fill="accent" />
+      </layer>
+      <layout margin="40pt">
+        <column gap="m">
+          <text font="heading" font-size="24pt" color="ink">A Catalogue in Six Pages</text>
+          <img name="badge" width="60pt" />
+          <text font-size="11pt" color="ink">Page 1 comes first in the file, with what it draws, so a browser shows it
+            while the rest of the file is still on its way.</text>
+          <text font-size="11pt"><span href="#pictures" color="primary" underline="true">On to the pictures</span></text>
+        </column>
+        <region pin="bottom">
+          <text font-size="9pt" color="muted" align="right">Page {page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="Pictures" id="pictures" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text font="heading" font-size="18pt" color="ink">Pictures</text>
+          <img name="photo" width="160pt" />
+          <text font-size="11pt">The picture on this page is on page 4 too. Both pages name it among the objects they
+            share, which come after the last page.</text>
+        </column>
+        <region pin="bottom">
+          <text font-size="9pt" color="muted" align="right">Page {page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="Charts" />
+      <layer opacity="0.35">
+        <rect x="40pt" y="300pt" width="340pt" height="40pt" fill="primary" />
+      </layer>
+      <layout margin="40pt">
+        <column gap="m">
+          <text font="heading" font-size="18pt" color="ink">Charts</text>
+          <img name="chart" width="200pt" />
+          <text font="sans" font-size="10pt" color="muted">This chart is on this page only, and goes with it.</text>
+        </column>
+        <region pin="bottom">
+          <text font-size="9pt" color="muted" align="right">Page {page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="The picture again" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text font="heading" font-size="18pt" color="ink">The picture again</text>
+          <frame height="30pt" background="gradient:band" radius="4pt" />
+          <img name="photo" width="120pt" />
+        </column>
+        <region pin="bottom">
+          <text font-size="9pt" color="muted" align="right">Page {page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="Notes" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text font="heading" font-size="18pt" color="ink">Notes</text>
+          <text font="sans" font-size="11pt">So she was considering in her own mind (as well as she could, for the hot
+            day made her feel very sleepy and stupid), whether the pleasure of making a daisy-chain would be worth the
+            trouble of getting up and picking the daisies, when suddenly a White Rabbit with pink eyes ran close by her.
+            There was nothing so very remarkable in that; nor did Alice think it so very much out of the way to hear the
+            Rabbit say to itself, "Oh dear! Oh dear! I shall be late!" (when she thought it over afterwards, it occurred
+            to her that she ought to have wondered at this, but at the time it all seemed quite natural); but when the
+            Rabbit actually took a watch out of its waistcoat-pocket, and looked at it, and then hurried on, Alice
+            started to her feet, for it flashed across her mind that she had never before seen a rabbit with either a
+            waistcoat-pocket, or a watch to take out of it, and burning with curiosity, she ran across the field after
+            it, and fortunately was just in time to see it pop down a large rabbit-hole under the hedge.</text>
+          <text font="sans" font-size="11pt">In another moment down went Alice after it, never once considering how in
+            the world she was to get out again. The rabbit-hole went straight on like a tunnel for some way, and then
+            dipped suddenly down, so suddenly that Alice had not a moment to think about stopping herself before she
+            found herself falling down a very deep well. Either the well was very deep, or she fell very slowly, for
+            she had plenty of time as she went down to look about her and to wonder what was going to happen next.
+            First, she tried to look down and make out what she was coming to, but it was too dark to see anything;
+            then she looked at the sides of the well, and noticed that they were filled with cupboards and
+            book-shelves; here and there she saw maps and pictures hung upon pegs.</text>
+          <text font="sans" font-size="11pt">She took down a jar from one of the shelves as she passed; it was labelled
+            "ORANGE MARMALADE", but to her great disappointment it was empty: she did not like to drop the jar for fear
+            of killing somebody underneath, so managed to put it into one of the cupboards as she fell past it. "Well!"
+            thought Alice to herself, "after such a fall as this, I shall think nothing of tumbling down stairs! How
+            brave they'll all think me at home! Why, I wouldn't say anything about it, even if I fell off the top of
+            the house!" (Which was very likely true.) Down, down, down. Would the fall never come to an end?</text>
+        </column>
+        <region pin="bottom">
+          <text font-size="9pt" color="muted" align="right">Page {page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+  </document>
+</lpdf>

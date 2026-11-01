@@ -6,6 +6,24 @@
 
 use std::collections::HashMap;
 
+use super::encrypt::{self, EncryptConfig};
+use super::linearize;
+
+/// The file the PDF writer wrote, finished as the render and the document's `<output>` ask: encrypted when the render
+/// resolved a config, then linearized when the document asks for `linearize`, in that order, since any change to a
+/// linearized file moves the offsets its hints give.
+pub(crate) fn finish_file(bytes: Vec<u8>, encryption: Option<&EncryptConfig>, linearize: bool) -> Result<Vec<u8>, String> {
+    match (encryption, linearize) {
+        (None, false) => Ok(bytes),
+        (Some(config), false) => encrypt::encrypt_pdf(&bytes, config),
+        (None, true) => linearize::linearize(&bytes, None),
+        (Some(config), true) => {
+            let mut encrypted = encrypt::encrypt(&bytes, config)?;
+            linearize::linearize(&encrypted.bytes, Some(&mut encrypted.cipher))
+        }
+    }
+}
+
 /// Extract the advance width of every character the font maps from raw TrueType/OpenType
 /// font bytes, normalised to 1/1000 em units. A character the font does not map gets the
 /// advance of glyph 0 (.notdef), which is the glyph the encoder writes for it.

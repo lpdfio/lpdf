@@ -16,7 +16,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python \
-        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api check-encryption check-attachments check-pdfa check-pdfua check-pdfx check-codegen-dotnet \
+        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-codegen-dotnet \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
@@ -71,6 +71,19 @@ check-encryption:
 	rm -rf target/encryption-samples && mkdir -p target/encryption-samples
 	LPDF_ENCRYPT_OUT="$(CURDIR)/target/encryption-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_samples_for_the_external_check
 	node scripts/check-encryption.mjs target/encryption-samples
+
+# check-linearization has the core write linearized PDFs, each with the same document not linearized, and checks them
+# with qpdf: --check-linearization reads the hint tables back against the file, --check reads the file, each encrypted
+# one opens with each password, and each page shows what the other render's does (`scripts/check-linearization.mjs`).
+# Needs qpdf on the PATH.
+check-linearization:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking linearized PDFs with qpdf..."
+	@echo ""
+	rm -rf target/linearize-samples && mkdir -p target/linearize-samples
+	LPDF_LINEARIZE_OUT="$(CURDIR)/target/linearize-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_linearized_samples_for_the_external_check
+	node scripts/check-linearization.mjs target/linearize-samples
 
 # check-attachments has the core write the fixture that carries files, and opens it with qpdf: each file is listed with
 # its type and date, and comes back whole (`scripts/check-attachments.mjs`). Needs qpdf on the PATH.

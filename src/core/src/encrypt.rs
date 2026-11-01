@@ -206,10 +206,13 @@ pub(crate) struct ObjectEntry {
     pub(crate) offset:  usize,
 }
 
-struct XrefInfo {
-    entries:  Vec<ObjectEntry>,
-    root_ref: (u32, u32),
-    info_ref: Option<(u32, u32)>,
+/// What the xref table and the trailer of a file say: where each object is, and the catalog and Info objects.
+pub(crate) struct XrefInfo {
+    pub(crate) entries:  Vec<ObjectEntry>,
+    pub(crate) root_ref: (u32, u32),
+    pub(crate) info_ref: Option<(u32, u32)>,
+    /// Where the `trailer` keyword is.
+    pub(crate) trailer:  usize,
 }
 
 // ── Crypto primitives ──────────────────────────────────────────────────────────
@@ -368,7 +371,7 @@ fn to_hex(bytes: &[u8]) -> String {
 
 // ── Xref parser ────────────────────────────────────────────────────────────────
 
-fn parse_xref(bytes: &[u8]) -> Result<XrefInfo, String> {
+pub(crate) fn parse_xref(bytes: &[u8]) -> Result<XrefInfo, String> {
     // Locate `startxref` in the last 256 bytes of the file
     let tail_start = bytes.len().saturating_sub(256);
     let tail = &bytes[tail_start..];
@@ -440,7 +443,7 @@ fn parse_xref(bytes: &[u8]) -> Result<XrefInfo, String> {
         .ok_or_else(|| "no /Root in trailer".to_string())?;
     let info_ref = parse_ref_in(trailer_slice, b"/Info");
 
-    Ok(XrefInfo { entries, root_ref, info_ref })
+    Ok(XrefInfo { entries, root_ref, info_ref, trailer: xref_offset + pos })
 }
 
 // ── Output assembly ────────────────────────────────────────────────────────────
@@ -529,13 +532,66 @@ fn append_aes256_encrypt_dict(out: &mut Vec<u8>, obj_num: u32, entries: &aes256:
 /// Returns `Err` if the config is not usable (AES-256 without enough entropy) or the
 /// PDF structure is malformed (e.g. missing or corrupt xref).
 pub fn encrypt_pdf(bytes: &[u8], config: &EncryptConfig) -> Result<Vec<u8>, String> {
+    encrypt(bytes, config).map(|encrypted| encrypted.bytes)
+}
+
+/// A file the encryption pass wrote, and the cipher it wrote it with.
+pub(crate) struct Encrypted {
+    pub(crate) bytes:  Vec<u8>,
+    pub(crate) cipher: FileCipher,
+}
+
+/// The cipher a file was encrypted with, kept for the linearization pass, which runs after this one: it gives the
+/// objects new numbers, and adds the hint stream, which is encrypted as every other stream is.
+pub(crate) enum FileCipher {
+    /// AES-256, under the one key of the file. Each string or stream it encrypts after the file's own gets a fresh IV
+    /// from the host's entropy, after theirs, so one entropy still gives one file.
+    Aes256(aes256::ObjectCipher),
+    /// RC4-128, with a key for each object, made from the file key and the object's number and generation.
+    Rc4([u8; 16]),
+}
+
+impl FileCipher {
+    /// `plain`, a string or the data of a stream of object `number` `generation`, encrypted.
+    pub(crate) fn seal(&mut self, number: u32, generation: u32, plain: &[u8]) -> Vec<u8> {
+        match self {
+            Self::Aes256(cipher) => cipher.seal(plain),
+            Self::Rc4(file_key) => {
+                let mut sealed = plain.to_vec();
+                rc4(&derive_obj_key(file_key, number, generation), &mut sealed);
+                sealed
+            }
+        }
+    }
+
+    /// Whether the key of a string or a stream is that of the object it is in, so that one whose object gets another
+    /// number has to be encrypted again: RC4's is, AES-256's is the file's.
+    pub(crate) fn keys_by_object(&self) -> bool {
+        matches!(self, Self::Rc4(_))
+    }
+
+    /// `sealed`, a string or the data of a stream encrypted for object `from`, encrypted for object `to` instead, each a
+    /// number and a generation. RC4 is its own inverse, so the key of `from` takes its encryption off. Under AES-256 the
+    /// bytes stay as they are.
+    pub(crate) fn reseal(&self, from: (u32, u32), to: (u32, u32), sealed: &[u8]) -> Vec<u8> {
+        let mut bytes = sealed.to_vec();
+        if let Self::Rc4(file_key) = self {
+            rc4(&derive_obj_key(file_key, from.0, from.1), &mut bytes);
+            rc4(&derive_obj_key(file_key, to.0, to.1), &mut bytes);
+        }
+        bytes
+    }
+}
+
+/// Encrypts the file as `encrypt_pdf` does, and keeps the cipher, for the linearization pass after it.
+pub(crate) fn encrypt(bytes: &[u8], config: &EncryptConfig) -> Result<Encrypted, String> {
     match config.algorithm {
         Algorithm::Aes256 => encrypt_pdf_aes256(bytes, config),
         Algorithm::Rc4128 => encrypt_pdf_rc4(bytes, config),
     }
 }
 
-fn encrypt_pdf_aes256(bytes: &[u8], config: &EncryptConfig) -> Result<Vec<u8>, String> {
+fn encrypt_pdf_aes256(bytes: &[u8], config: &EncryptConfig) -> Result<Encrypted, String> {
     let xref = parse_xref(bytes)?;
     let p = compute_p(&config.permissions);
     let aes256::Aes256Setup { entries, file_id, mut cipher } =
@@ -549,10 +605,10 @@ fn encrypt_pdf_aes256(bytes: &[u8], config: &EncryptConfig) -> Result<Vec<u8>, S
     let encrypt_obj_offset = out.len();
     append_aes256_encrypt_dict(&mut out, encrypt_obj_num, &entries, p);
     write_xref_and_trailer(&mut out, &moved, encrypt_obj_num, encrypt_obj_offset, &xref, &file_id);
-    Ok(out)
+    Ok(Encrypted { bytes: out, cipher: FileCipher::Aes256(cipher) })
 }
 
-fn encrypt_pdf_rc4(bytes: &[u8], config: &EncryptConfig) -> Result<Vec<u8>, String> {
+fn encrypt_pdf_rc4(bytes: &[u8], config: &EncryptConfig) -> Result<Encrypted, String> {
     let xref = parse_xref(bytes)?;
 
     // File ID: MD5 of the unencrypted bytes — deterministic, no random salt needed
@@ -575,7 +631,7 @@ fn encrypt_pdf_rc4(bytes: &[u8], config: &EncryptConfig) -> Result<Vec<u8>, Stri
     let encrypt_obj_offset = out.len();
     append_encrypt_dict(&mut out, encrypt_obj_num, &o_entry, &u_entry, p);
     write_xref_and_trailer(&mut out, &moved, encrypt_obj_num, encrypt_obj_offset, &xref, &file_id);
-    Ok(out)
+    Ok(Encrypted { bytes: out, cipher: FileCipher::Rc4(fek) })
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────

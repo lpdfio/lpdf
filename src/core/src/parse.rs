@@ -270,6 +270,9 @@ pub struct Output {
     pub pdfua: Option<crate::pdfua::PdfUa>,
     /// The PDF/X version of `pdfx` and the press profile `profile` names; `None` for a file that is not for a press.
     pub pdfx: Option<crate::pdfx::PdfX>,
+    /// Whether the file is linearized, for fast web view (`linearize`): page 1 and the hints that find every other page
+    /// at its start, after the encryption, if any.
+    pub linearize: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1357,6 +1360,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                                 doc_child.attribute("pdfua"), doc_child.attribute("pdfx"), doc_child.attribute("profile"),
                             )
                                 .map_err(|e| format!("<output>{}: {e}", node_loc(&doc_child)))?;
+                            output.linearize = doc_child.attribute("linearize") == Some("true");
                         }
                         "attachments" => attachments = crate::attachments::from_xml(&doc_child)?,
                         "section" => {
@@ -1757,7 +1761,7 @@ fn parse_output(
             return Err("allow sets what a reader of an encrypted file may do, and the document is not encrypted: \
                 add encrypt (encrypt=\"aes-256\"), or remove allow".to_string());
         }
-        return Ok(Output { encryption: None, pdfa, pdfua, pdfx });
+        return Ok(Output { encryption: None, pdfa, pdfua, pdfx, linearize: false });
     };
     if let Some(x) = &pdfx {
         return Err(format!("pdfx=\"{}\" and encrypt don't go together: PDF/X forbids encryption, so that the printer \
@@ -1776,7 +1780,9 @@ fn parse_output(
     if let Some(part) = pdfua {
         crate::pdfua::check_permissions(part, permissions)?;
     }
-    Ok(Output { encryption: Some(crate::encrypt::OutputEncryption { algorithm, permissions }), pdfa: None, pdfua, pdfx: None })
+    Ok(Output {
+        encryption: Some(crate::encrypt::OutputEncryption { algorithm, permissions }), pdfa: None, pdfua, pdfx: None, linearize: false,
+    })
 }
 
 fn parse_meta(elem: &roxmltree::Node) -> Meta {
@@ -3693,8 +3699,11 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
                 Some(serde_json::Value::String(s)) => Ok(Some(s.as_str())),
                 Some(other) => Err(format!("document output: {name} must be a string, not {other}")),
             };
-            parse_output(text("encrypt")?, text("allow")?, text("pdfa")?, text("pdfua")?, text("pdfx")?, text("profile")?)
-                .map_err(|e| format!("document output: {e}"))?
+            let mut output =
+                parse_output(text("encrypt")?, text("allow")?, text("pdfa")?, text("pdfua")?, text("pdfx")?, text("profile")?)
+                    .map_err(|e| format!("document output: {e}"))?;
+            output.linearize = text("linearize")? == Some("true");
+            output
         }
         None => Output::default(),
     };

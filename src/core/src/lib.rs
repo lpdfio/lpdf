@@ -5,13 +5,16 @@ mod attr_types;
 mod canvas;
 mod data;
 mod encrypt;
+mod hints;
 mod kit_to_xml;
 mod layout;
+mod linearize;
 mod lists;
 pub mod markdown;
 // Public for native consumers — the CLI's `license` command reports a key's standing from the
 // typed result rather than parsing the JSON one back.
 pub mod license;
+mod objects;
 mod page_scope;
 mod parse;
 mod pdf;
@@ -289,10 +292,7 @@ impl LpdfEngine {
             status.is_licensed(), &doc.output, &files, press.as_ref(),
         )?;
 
-        match &config {
-            Some(cfg) => encrypt::encrypt_pdf(&bytes, cfg),
-            None      => Ok(bytes),
-        }
+        shared::finish_file(bytes, config.as_ref(), doc.output.linearize)
     }
 
     /// Render the JSON kit tree `json` to PDF bytes with what is loaded on this engine: `render_tree_pdf`, with an
@@ -354,10 +354,7 @@ impl LpdfEngine {
             status.is_licensed(), &doc.output, &files, press.as_ref(),
         )?;
 
-        match &config {
-            Some(cfg) => encrypt::encrypt_pdf(&bytes, cfg),
-            None      => Ok(bytes),
-        }
+        shared::finish_file(bytes, config.as_ref(), doc.output.linearize)
     }
 
     /// What the caller loaded for the `src` attributes of the document, for the parser.
@@ -402,7 +399,7 @@ impl LpdfEngine {
         let pages: Vec<render::RenderPage> =
             layout::layout_document(&lp);
         let status = license::check(license_key, now_unix);
-        pdf::render_pdf(
+        let bytes = pdf::render_pdf(
             &pages,
             &doc.fonts,
             &pdf::FontRegistry::new(),
@@ -411,7 +408,8 @@ impl LpdfEngine {
             &doc.gradients,
             None,
             status.is_licensed(), &doc.output, &[], None,
-        )
+        )?;
+        shared::finish_file(bytes, None, doc.output.linearize)
     }
 
     /// Render XML to PDF bytes without WASM error types — used by tests.
@@ -886,6 +884,9 @@ mod source_file_tests {
 
 #[cfg(test)]
 mod pdfx_render_tests;
+
+#[cfg(test)]
+mod linearize_render_tests;
 
 #[cfg(test)]
 mod attachment_render_tests;

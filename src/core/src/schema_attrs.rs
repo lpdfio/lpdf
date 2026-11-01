@@ -262,6 +262,7 @@ const OUTPUT: Attributes = &[
     ("pdfua", Kind::Text),
     ("pdfx", Kind::Text),
     ("profile", Kind::Text),
+    ("linearize", Kind::Boolean),
 ];
 
 const ATTACHMENTS: Attributes = &[
