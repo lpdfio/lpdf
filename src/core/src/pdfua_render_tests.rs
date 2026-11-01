@@ -212,6 +212,41 @@ fn text_in_a_built_in_font_is_an_error_that_names_the_text() {
 }
 
 #[test]
+fn a_character_the_font_has_no_glyph_for_is_an_error_that_names_it() {
+    let error = render(&document("<text>Price 日本</text>")).unwrap_err();
+    assert!(error.starts_with("<output pdfua=\"1\">") && error.contains("'日' (U+65E5)") && error.contains("PDF/UA"), "{error}");
+}
+
+#[test]
+fn a_font_whose_licence_forbids_embedding_is_an_error() {
+    let mut engine = engine(Some(CREATED_ON));
+    engine.load_font("body", &restricted(&read(&test_dir().join("assets/fonts/CrimsonText-Regular.ttf"))));
+    let error = engine.render_xml(&document("<text>A</text>"), None, &RenderEncryption::default()).unwrap_err();
+    assert!(error.starts_with("<output pdfua=\"1\">") && error.contains("'body'") && error.contains("does not allow embedding"), "{error}");
+}
+
+/// `font` with the embedding permission of its OS/2 table set to restricted (`fsType` 2).
+fn restricted(font: &[u8]) -> Vec<u8> {
+    let mut font = font.to_vec();
+    let tables = u16::from_be_bytes([font[4], font[5]]) as usize;
+    let os2 = (0..tables)
+        .map(|i| 12 + 16 * i)
+        .find(|&record| &font[record..record + 4] == b"OS/2")
+        .map(|record| u32::from_be_bytes(font[record + 8..record + 12].try_into().unwrap()) as usize)
+        .expect("an OS/2 table");
+    font[os2 + 8..os2 + 10].copy_from_slice(&2u16.to_be_bytes());
+    font
+}
+
+#[test]
+fn the_digits_of_a_barcode_are_an_error() {
+    let barcode = |hrt: &str| document(&format!(r#"<barcode type="code128" data="ABC" height="40pt" alt="Order number"{hrt}/>"#));
+    let error = render(&barcode(r#" hrt="true""#)).unwrap_err();
+    assert!(error.starts_with("<output pdfua=\"1\">") && error.contains("hrt=\"false\""), "{error}");
+    assert!(render(&barcode("")).is_ok(), "without its digits it renders");
+}
+
+#[test]
 fn a_link_that_wraps_is_one_link_described_by_all_its_words() {
     let xml = document(r#"<column width="120pt"><text>See <span href="https://lpdf.io/docs">the guide to accessible documents on the site</span> for more.</text></column>"#);
     let pdf = text(&render(&xml).expect("renders"));
