@@ -55,6 +55,11 @@ jobs:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
         run: make check-pdfa
 
+      - name: Check PDF/UA files with veraPDF and qpdf
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
+        run: make check-pdfua
+
   csharp:
     name: Compile the generated C#
     # On pull requests only. A codegen change that goes with a change to the .NET SDK's API merges here before the
