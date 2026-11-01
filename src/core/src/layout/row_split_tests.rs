@@ -661,6 +661,11 @@ fn in_row(own: &str, inside: &str) -> String {
     format!(r#"<row><column width="8pt"><text>-</text></column><column width="fill">{own}{inside}</column></row>"#)
 }
 
+/// A column 8pt in, holding `own` and then `inside`: the same text as `in_list` and `in_row`, as wide.
+fn in_column(own: &str, inside: &str) -> String {
+    format!(r#"<column padding="0 0 0 8pt">{own}{inside}</column>"#)
+}
+
 /// Runs `test` on a thread with room for 48 levels of nesting: a debug build's frames are larger than a release
 /// build's, and run out of the 2 MB a test thread has. A panic in it is the test's.
 fn on_deep_stack(test: impl FnOnce() + Send + 'static) {
@@ -731,4 +736,35 @@ fn a_row_left_a_rounding_error_of_room_goes_on_whole_to_the_next_page() {
     let sections = doc.section_layouts();
     let outcome = split_node_at(&sections[0].children[0], 539.28, 0.00002, ROOM as f32);
     assert!(matches!(outcome, SplitOutcome::NothingFits(_)), "the row keeps something in a room of 0.00002pt");
+}
+
+/// The work of laying out `body` (`LAYOUT_WORK`).
+fn work_of(body: &str) -> usize {
+    LAYOUT_WORK.with(|work| work.set(0));
+    pages_of(body);
+    LAYOUT_WORK.with(Cell::get)
+}
+
+/// The work of `wrap` nested `depth` deep, three texts in each, against that of columns holding the same text.
+fn work_against_columns(depth: usize, wrap: fn(&str, &str) -> String) -> f64 {
+    work_of(&nested(depth, 3, wrap)) as f64 / work_of(&nested(depth, 3, in_column)) as f64
+}
+
+/// Twice as deep, from 24 levels to 47, the text runs over twice the pages, 2 and then 4, and each page lays out
+/// what is left of it, so the work of nested columns grows faster than their depth. A list or a row nested as deep
+/// takes as much more work, not a power of the depth more, as it did when each level of a split laid out the levels
+/// inside it again.
+fn assert_work_grows_as_columns(wrap: fn(&str, &str) -> String) {
+    let (half, full) = (work_against_columns(24, wrap), work_against_columns(47, wrap));
+    assert!(full < 1.5 * half, "{full:.1} times the work of columns at 47 levels, {half:.1} times at 24");
+}
+
+#[test]
+fn a_nested_list_split_across_pages_takes_as_much_more_work_as_nested_columns() {
+    on_deep_stack(|| assert_work_grows_as_columns(in_list));
+}
+
+#[test]
+fn nested_rows_split_across_pages_take_as_much_more_work_as_nested_columns() {
+    on_deep_stack(|| assert_work_grows_as_columns(in_row));
 }

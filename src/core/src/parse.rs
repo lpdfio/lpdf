@@ -1136,6 +1136,43 @@ impl Node {
         }
     }
 
+    /// This node with `children` in place of its own, which are not copied. A split makes each part of a node this
+    /// way: copying the whole node, to drop its children right after, copied all that was under it at every level
+    /// of a nested list. Every field is named, so that a new one can't be left out.
+    pub fn with_children(&self, children: Vec<Node>) -> Node {
+        let Node {
+            kind, gap, padding, background, border, radius, opacity, shadow, height_mode, width_constraint,
+            width_fill, page_scope, paginate, keep, role, tag_id, ocg, debug, align, justify, cols, col_width,
+            direction, color, thickness, text_runs, font, font_size, text_color, text_align, widows, orphans,
+            line_height, max_lines, ellipsis, pre_tab, flow_runs, capture, url, image_name, img_height_constraint,
+            img_aspect, detail, barcode_type, barcode_data, barcode_ec, barcode_hrt, barcode_color, barcode_bg,
+            table_cols, table_style, col_span, row_span, field_kind, field_name, field_value, field_label,
+            field_options, field_required, field_readonly, field_checked, field_max_len, field_group,
+            field_action_url, data_attrs, bookmarks, children: _,
+        } = self;
+        Node {
+            kind: kind.clone(), gap: *gap, padding: *padding, background: background.clone(), border: border.clone(),
+            radius: *radius, opacity: *opacity, shadow: shadow.clone(), height_mode: height_mode.clone(),
+            width_constraint: *width_constraint, width_fill: *width_fill, page_scope: page_scope.clone(),
+            paginate: paginate.clone(), keep: *keep, role: *role, tag_id: *tag_id, ocg: *ocg, debug: *debug,
+            align: align.clone(), justify: justify.clone(), cols: *cols, col_width: *col_width,
+            direction: direction.clone(), color: color.clone(), thickness: *thickness, text_runs: text_runs.clone(),
+            font: font.clone(), font_size: *font_size, text_color: text_color.clone(), text_align: text_align.clone(),
+            widows: *widows, orphans: *orphans, line_height: *line_height, max_lines: *max_lines,
+            ellipsis: *ellipsis, pre_tab: *pre_tab, flow_runs: *flow_runs, capture: capture.clone(), url: url.clone(),
+            image_name: image_name.clone(), img_height_constraint: *img_height_constraint, img_aspect: *img_aspect,
+            detail: detail.clone(), barcode_type: barcode_type.clone(), barcode_data: barcode_data.clone(),
+            barcode_ec: barcode_ec.clone(), barcode_hrt: *barcode_hrt, barcode_color: barcode_color.clone(),
+            barcode_bg: barcode_bg.clone(), table_cols: table_cols.clone(), table_style: table_style.clone(),
+            col_span: *col_span, row_span: *row_span, field_kind: field_kind.clone(), field_name: field_name.clone(),
+            field_value: field_value.clone(), field_label: field_label.clone(), field_options: field_options.clone(),
+            field_required: *field_required, field_readonly: *field_readonly, field_checked: *field_checked,
+            field_max_len: *field_max_len, field_group: field_group.clone(),
+            field_action_url: field_action_url.clone(), data_attrs: data_attrs.clone(), bookmarks: bookmarks.clone(),
+            children,
+        }
+    }
+
     /// What a `<shape>` draws.
     pub fn shape(&self) -> Option<&Shape> {
         match self.detail.as_deref() {

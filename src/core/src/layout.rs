@@ -20,7 +20,7 @@ use crate::canvas;
 use crate::toc;
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 // ── Per-call custom font width tables ────────────────────────────────────────
@@ -837,11 +837,8 @@ pub(super) struct Kept {
 /// is the same either way, since a node of auto height doesn't read the height it is given. A link, which passes
 /// it on to its children, and a vertical divider, which takes it, are the two that do, and are measured as before.
 fn measure_on_page(node: &Node, x: f32, place_y: Option<f32>, avail_w: f32, budget: f32) -> (f32, Option<Kept>) {
-    let at_place = node.height_mode == HeightMode::Auto
-        && node.kind != NodeKind::Link
-        && !(node.kind == NodeKind::Divider && node.direction == Direction::Vertical);
     match place_y {
-        Some(y) if at_place => {
+        Some(y) if sized_by_width(node) => {
             let (cw, cx) = column_child_place(node, x, avail_w, &Align::Stretch);
             let (tree, h) = layout_column_child(node, cx, y, cw, None, &Align::Stretch);
             (h, Some(Kept { at: (x, y), tree, h }))
@@ -1093,6 +1090,7 @@ fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> 
     if !splittable(node) {
         return SplitOutcome::Atomic;
     }
+    let _kept = SplitMemo::keep(node);
 
     match node.kind {
         NodeKind::Column  => split_column(node, avail_w, target_h, full_page_h),
@@ -1167,20 +1165,20 @@ fn split_column(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> S
         // First child itself overflows — try to recurse into it.
         match split_node_at(&node.children[0], inner_w, inner_target, inner_full) {
             SplitOutcome::First(child_first, child_rest) => {
-                let first_node = Node { children: vec![child_first], ..node.clone() };
+                let first_node = node.with_children(vec![child_first]);
                 let mut rest_children = child_rest;
                 rest_children.extend_from_slice(&node.children[1..]);
                 if rest_children.is_empty() {
                     return SplitOutcome::First(first_node, Vec::new());
                 }
-                let rest_node = Node { children: rest_children, ..node.clone() };
+                let rest_node = node.with_children(rest_children);
                 SplitOutcome::First(first_node, vec![rest_node])
             }
             // A first child taller than a page has nowhere better to go. On a full page it stays, cut at the
             // bottom of the page (`clip_overflow`), and the children after it go on to the next.
             SplitOutcome::NothingFits(_) | SplitOutcome::Atomic if n > 1 && inner_target + 0.5 >= inner_full => {
-                let first = Node { children: node.children[..1].to_vec(), ..node.clone() };
-                let rest  = Node { children: node.children[1..].to_vec(), ..node.clone() };
+                let first = node.with_children(node.children[..1].to_vec());
+                let rest  = node.with_children(node.children[1..].to_vec());
                 SplitOutcome::First(first, vec![rest])
             }
             SplitOutcome::NothingFits(_) | SplitOutcome::Atomic => {
@@ -1197,17 +1195,17 @@ fn split_column(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> S
                 first_children.push(child_first);
                 let mut rest_children: Vec<Node> = child_rest;
                 rest_children.extend_from_slice(&node.children[split_idx + 1..]);
-                let first = Node { children: first_children, ..node.clone() };
+                let first = node.with_children(first_children);
                 if rest_children.is_empty() {
                     return SplitOutcome::First(first, Vec::new());
                 }
-                let rest  = Node { children: rest_children, ..node.clone() };
+                let rest  = node.with_children(rest_children);
                 SplitOutcome::First(first, vec![rest])
             }
             // Unsplittable or nothing fits — fall back to hard cut before it.
             SplitOutcome::NothingFits(_) | SplitOutcome::Atomic => {
-                let first = Node { children: node.children[..split_idx].to_vec(), ..node.clone() };
-                let rest  = Node { children: node.children[split_idx..].to_vec(), ..node.clone() };
+                let first = node.with_children(node.children[..split_idx].to_vec());
+                let rest  = node.with_children(node.children[split_idx..].to_vec());
                 SplitOutcome::First(first, vec![rest])
             }
         }
@@ -1259,8 +1257,8 @@ fn split_grid(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Spl
     }
 
     let item_split = (split_row * cols).min(node.children.len());
-    let first = Node { children: node.children[..item_split].to_vec(), ..node.clone() };
-    let rest  = Node { children: node.children[item_split..].to_vec(), ..node.clone() };
+    let first = node.with_children(node.children[..item_split].to_vec());
+    let rest  = node.with_children(node.children[item_split..].to_vec());
     SplitOutcome::First(first, vec![rest])
 }
 
@@ -1348,11 +1346,11 @@ fn split_row(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Spli
     // Only the first line of a row with a full page is at the top of a page, where a child taller than a page
     // can't do better.
     let full_page = fit == 0 && inner_target + 0.5 >= inner_full;
-    let cut = line_cut(node, line, inner_target - line_top, full_page, inner_full);
+    let cut = line_cut(node, line, inner_w, inner_target - line_top, full_page, inner_full);
     if cut <= 0.0 {
         if fit == 0 { return SplitOutcome::NothingFits(vec![node.clone()]); }
-        let first = Node { children: node.children[..line.start].to_vec(), ..node.clone() };
-        let rest  = Node { children: node.children[line.start..].to_vec(), ..node.clone() };
+        let first = node.with_children(node.children[..line.start].to_vec());
+        let rest  = node.with_children(node.children[line.start..].to_vec());
         return SplitOutcome::First(first, vec![rest]);
     }
 
@@ -1363,7 +1361,7 @@ fn split_row(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Spli
         first_children.push(first);
         rests.push((rest, child.width_fill, width));
     }
-    let first = Node { children: first_children, ..node.clone() };
+    let first = node.with_children(first_children);
     // What is left of the line starts the row's next part, with an empty box in the place of each child that
     // ended. A line with nothing left, such as a child taller than the page beside others that ended, leaves none.
     let mut rest_children: Vec<Node> = if rests.iter().any(|(rest, ..)| rest.is_some()) {
@@ -1375,14 +1373,29 @@ fn split_row(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Spli
     if rest_children.is_empty() {
         return SplitOutcome::First(first, Vec::new());
     }
-    let rest = Node { children: rest_children, ..node.clone() };
+    let rest = node.with_children(rest_children);
     SplitOutcome::First(first, vec![rest])
 }
 
-/// The highest cut through `line`, at most `room` below its top, that suits every child of it. Each child is asked
-/// (`child_cut`), and the lowest answer is asked again until no child lowers it. An answer is the cut asked, or
-/// the top of something in the child, so it ends. `0` when only the top of the line suits them all.
-fn line_cut(node: &Node, line: &RowLine, room: f32, full_page: bool, full_page_h: f32) -> f32 {
+/// How far apart two cuts through a line may be and still be taken as the same (`line_cut`).
+const CUT_TOLERANCE: f32 = 0.01;
+
+/// The highest cut through `line` of `node`, `inner_w` wide inside, at most `room` below its top, that suits every
+/// child of it. Each child is asked (`child_cut`), and the lowest answer is asked again until no child lowers it.
+/// An answer is the cut asked, or the top of something in the child, so it ends. `0` when only the top of the line
+/// suits them all. A split keeps the cuts it finds (`SplitMemo`).
+fn line_cut(node: &Node, line: &RowLine, inner_w: f32, room: f32, full_page: bool, full_page_h: f32) -> f32 {
+    let key = (node as *const Node, inner_w.to_bits(), line.start, full_page, full_page_h.to_bits());
+    if let Some(cut) = SplitMemo::cut(&key, room) {
+        return cut;
+    }
+    let cut = find_line_cut(node, line, room, full_page, full_page_h);
+    SplitMemo::found_cut(key, room, cut);
+    cut
+}
+
+/// `line_cut`, asking the children.
+fn find_line_cut(node: &Node, line: &RowLine, room: f32, full_page: bool, full_page_h: f32) -> f32 {
     let children = &node.children[line.start..line.end];
     let mut cut = room;
     while cut > 0.0 {
@@ -1397,7 +1410,7 @@ fn line_cut(node: &Node, line: &RowLine, room: f32, full_page: bool, full_page_h
         if lowest <= 0.0 {
             return 0.0;
         }
-        if lowest + 0.01 >= cut {
+        if lowest + CUT_TOLERANCE >= cut {
             break;
         }
         cut = lowest;
@@ -1416,6 +1429,7 @@ fn line_cut(node: &Node, line: &RowLine, room: f32, full_page: bool, full_page_h
 /// - A column asks the child the cut falls in, and a row the line (`column_cut`, `row_cut`).
 /// - A grid or a table ends between its rows, at the bottom of the part it would keep.
 fn child_cut(node: &Node, avail_w: f32, y: f32, full_page: bool, full_page_h: f32) -> f32 {
+    count_work();
     let h = measure_height(node, avail_w, full_page_h);
     if h <= y + 0.5 {
         return y;
@@ -1489,7 +1503,7 @@ fn row_cut(node: &Node, avail_w: f32, y: f32, full_page: bool, full_page_h: f32)
             top += line.height;
             continue;
         }
-        let cut = line_cut(node, line, inner_target - top, full_page && r == 0, inner_full);
+        let cut = line_cut(node, line, inner_w, inner_target - top, full_page && r == 0, inner_full);
         return if cut > 0.0 { pt + top + cut + pb } else if r == 0 { 0.0 } else { pt + top + pb };
     }
     y
@@ -2098,7 +2112,7 @@ fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Sp
     } else {
         node.table_cols.clone()
     };
-    let first = Node { children: node.children[..split_idx].to_vec(), table_cols: table_cols.clone(), ..node.clone() };
+    let first = Node { table_cols: table_cols.clone(), ..node.with_children(node.children[..split_idx].to_vec()) };
 
     // Carry thead onto the continuation page. Its texts were captured with the first copy, on the page the table
     // started on, so the copy captures nothing.
@@ -2108,7 +2122,7 @@ fn split_table(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Sp
         forget_captures(&mut header);
         rest_children.insert(0, header);
     }
-    let rest = Node { children: rest_children, table_cols, ..node.clone() };
+    let rest = Node { table_cols, ..node.with_children(rest_children) };
     SplitOutcome::First(first, vec![rest])
 }
 
@@ -2577,9 +2591,149 @@ fn measure_height(node: &Node, avail_w: f32, avail_h: f32) -> f32 {
             let cw = own_width(node)
                 .map(|w| w.min(avail_w))
                 .unwrap_or(avail_w);
+            if let Some(h) = SplitMemo::height(node, cw) {
+                return h;
+            }
             let (_, h) = layout_node(node, 0.0, 0.0, cw, Some(avail_h));
             h
         }
+    }
+}
+
+/// Whether the height of `node` comes from the width it is laid out at alone: a node of `auto` height, but not a
+/// link, which passes the height it is given on to its children, nor a vertical divider, which takes it.
+fn sized_by_width(node: &Node) -> bool {
+    node.height_mode == HeightMode::Auto
+        && node.kind != NodeKind::Link
+        && !(node.kind == NodeKind::Divider && node.direction == Direction::Vertical)
+}
+
+thread_local! {
+    /// What a split (`split_node_at`) found about the nodes of the tree it splits, while it lasts. A split asks for
+    /// the height of the same nodes again at each level it goes down, and finding where a page's edge cuts a row asks
+    /// for the cut through each row inside it again at every level, and then again for each part it makes: the time
+    /// of a split grew with the square of the depth of nested columns, and with about its fourth power for a nested
+    /// list. Kept, each node is laid out once at each width, and each line of a row asked once.
+    static SPLIT_MEMO: RefCell<Option<SplitMemo>> = const { RefCell::new(None) };
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The work of the layout, counted for the tests: each node laid out (`layout_node`) and each cut asked
+    /// (`child_cut`). A test compares it between documents, where a time would depend on the machine.
+    static LAYOUT_WORK: Cell<usize> = const { Cell::new(0) };
+}
+
+/// Count a step of the layout's work, in the tests (`LAYOUT_WORK`).
+fn count_work() {
+    #[cfg(test)]
+    LAYOUT_WORK.with(|work| work.set(work.get() + 1));
+}
+
+/// A row, the width inside it, the first child of one of its lines, whether the line is at the top of a full page,
+/// and the height of a full page: what a cut through a line depends on, besides where it is asked (`line_cut`).
+type LineKey = (*const Node, u32, usize, bool, u32);
+
+/// The heights and the line cuts of the nodes of the tree being split. Only the nodes of that tree are kept: the
+/// split only reads it, so they stay where they are and as they are until it ends, and no other node can take one
+/// of their addresses meanwhile. A node the split makes, such as a first part it measures, is laid out each time.
+struct SplitMemo {
+    nodes:   HashSet<*const Node>,
+    /// The height of a node laid out at a width, as `layout_node` found it.
+    heights: HashMap<(*const Node, u32), f32>,
+    /// For a line of a row, each cut it was asked at with the cut `line_cut` gave.
+    cuts:    HashMap<LineKey, Vec<(f32, f32)>>,
+}
+
+/// Ends the keeping when the split that started it ends.
+struct SplitMemoKept {
+    started: bool,
+}
+
+impl Drop for SplitMemoKept {
+    fn drop(&mut self) {
+        if self.started {
+            SPLIT_MEMO.with(|memo| *memo.borrow_mut() = None);
+        }
+    }
+}
+
+impl SplitMemo {
+    /// Keep what is found about the nodes of `root` until the guard returned is dropped, unless a split around this
+    /// one already keeps it.
+    fn keep(root: &Node) -> SplitMemoKept {
+        let started = SPLIT_MEMO.with(|memo| {
+            let mut memo = memo.borrow_mut();
+            if memo.is_some() {
+                return false;
+            }
+            let mut nodes = HashSet::new();
+            let mut stack = vec![root];
+            while let Some(node) = stack.pop() {
+                nodes.insert(node as *const Node);
+                stack.extend(&node.children);
+            }
+            *memo = Some(SplitMemo { nodes, heights: HashMap::new(), cuts: HashMap::new() });
+            true
+        });
+        SplitMemoKept { started }
+    }
+
+    /// The height of `node` laid out `width` wide, when it is kept.
+    fn height(node: &Node, width: f32) -> Option<f32> {
+        SPLIT_MEMO.with(|memo| {
+            memo.borrow().as_ref().and_then(|memo| memo.heights.get(&(node as *const Node, width.to_bits())).copied())
+        })
+    }
+
+    /// Keep the height `layout_node` found for `node` laid out `width` wide, while a split keeps what it finds and
+    /// the node is of the tree it splits.
+    fn found_height(node: &Node, width: f32, h: f32) {
+        if !sized_by_width(node) {
+            return;
+        }
+        SPLIT_MEMO.with(|memo| {
+            if let Some(memo) = memo.borrow_mut().as_mut() {
+                let key = node as *const Node;
+                if memo.nodes.contains(&key) {
+                    memo.heights.insert((key, width.to_bits()), h);
+                }
+            }
+        });
+    }
+
+    /// The cut through a line asked at `room`, when it was asked there before, or near a cut that every child of
+    /// the line took. The split asks again at the cut its parent found, and a parent's line at the cut a child's
+    /// line found, each worked out from the top of another box, so the same place comes back a rounding error
+    /// apart: within what `line_cut` takes as the same, every child takes that cut too.
+    fn cut(key: &LineKey, room: f32) -> Option<f32> {
+        SPLIT_MEMO.with(|memo| {
+            let memo = memo.borrow();
+            memo.as_ref()?.cuts.get(key)?.iter().find_map(|&(asked, cut)| {
+                if asked.to_bits() == room.to_bits() {
+                    Some(cut)
+                } else if cut == asked && cut > 0.0 && (room - asked).abs() < CUT_TOLERANCE {
+                    Some(room)
+                } else {
+                    None
+                }
+            })
+        })
+    }
+
+    /// Keep the cut `line_cut` gave asked at `room`, and that every child of the line took `cut`.
+    fn found_cut(key: LineKey, room: f32, cut: f32) {
+        SPLIT_MEMO.with(|memo| {
+            if let Some(memo) = memo.borrow_mut().as_mut() {
+                if memo.nodes.contains(&key.0) {
+                    let cuts = memo.cuts.entry(key).or_default();
+                    cuts.push((room, cut));
+                    if cut != room && cut > 0.0 {
+                        cuts.push((cut, cut));
+                    }
+                }
+            }
+        });
     }
 }
 
@@ -2593,6 +2747,7 @@ fn layout_node(
     avail_w: f32,
     avail_h: Option<f32>,
 ) -> (RenderNode, f32) {
+    count_work();
     // Resolve actual width from constraint or available
     let (node_w, node_x) = match own_width(node) {
         Some(w) => (w.min(avail_w), x),
@@ -2620,6 +2775,7 @@ fn layout_node(
     } else {
         with_anchors(rendered, &node.bookmarks, node_x, y, node_w, h)
     };
+    SplitMemo::found_height(node, node_w, h);
     (in_group(rendered, node.ocg, node_x, y, node_w, h), h)
 }
 
