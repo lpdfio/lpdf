@@ -829,6 +829,18 @@ mod tests {
     }
 
     #[test]
+    fn linearize_is_written_as_the_xml_has_it() {
+        let json = r#"{
+            "version": 1, "type": "document",
+            "attrs": { "output": { "encrypt": "aes-256", "linearize": true } },
+            "nodes": [{"type":"section","attrs":{},"nodes":[{"type":"layout","nodes":[{"type":"text","nodes":["x"]}]}]}]
+        }"#;
+        let xml = kit_to_xml(json).unwrap();
+        assert!(xml.contains(r#"<output encrypt="aes-256" linearize="true"/>"#), "{xml}");
+        assert!(crate::parse::parse(&xml).expect("the XML parses").output.linearize);
+    }
+
+    #[test]
     fn output_emitted_after_meta() {
         let json = r#"{
             "version": 1,

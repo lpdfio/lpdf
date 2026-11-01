@@ -723,14 +723,18 @@ fn php_namespace(class: &str) -> &'static str {
 
 
 /// The elements of attributes alone that a document folds into its own attributes, `<meta>` then `<output>`: each
-/// one that has attributes, written by `write` from its name and its attributes.
-fn folded_elements(document: &Node, write: impl Fn(&str, &[(&str, &str)]) -> String) -> Vec<String> {
+/// one that has attributes, written by `write` from its name and its attributes as members of `target`, each a literal
+/// of its type, as `linearize: true`.
+fn folded_elements(document: &Node, target: Target, write: impl Fn(&str, &[String]) -> String) -> Vec<String> {
     ["meta", "output"]
         .into_iter()
         .filter_map(|name| {
             let element = document.children().find(|n| n.is_element() && n.tag_name().name() == name)?;
-            let attributes: Vec<(&str, &str)> = element.attributes().map(|a| (a.name(), a.value())).collect();
-            (!attributes.is_empty()).then(|| write(name, &attributes))
+            let members: Vec<String> = element
+                .attributes()
+                .map(|a| target.member(a.name(), &target.attribute(&element, a.name(), a.value())))
+                .collect();
+            (!members.is_empty()).then(|| write(name, &members))
         })
         .collect()
 }
@@ -975,13 +979,7 @@ impl JsEmitter {
         let method = "L.document";
 
         // Fold the attributes of <meta> and <output> in, each as an object under its name
-        let folded = folded_elements(node, |element, attributes| {
-            let parts: Vec<String> = attributes
-                .iter()
-                .map(|(name, value)| format!("{}: '{}'", to_camel_case(name), value.replace('\'', "\\'")))
-                .collect();
-            format!("{element}: {{ {} }}", parts.join(", "))
-        });
+        let folded = folded_elements(node, Target::Js, |element, members| format!("{element}: {{ {} }}", members.join(", ")));
 
         // Build document attrs with the folded meta and output
         let mut doc_parts: Vec<String> = node
@@ -1198,12 +1196,8 @@ impl DotnetEmitter {
         let ind0   = self.ind(level);
         let method = "L.Document";
 
-        let folded = folded_elements(node, |element, attributes| {
-            let parts: Vec<String> = attributes
-                .iter()
-                .map(|(name, value)| format!("{} = \"{}\"", to_pascal_case(name), value.replace('"', "\\\"")))
-                .collect();
-            format!("{} = new() {{ {} }}", to_pascal_case(element), parts.join(", "))
+        let folded = folded_elements(node, Target::Dotnet, |element, members| {
+            format!("{} = new() {{ {} }}", to_pascal_case(element), members.join(", "))
         });
 
         let mut doc_parts: Vec<String> = node
@@ -1412,12 +1406,8 @@ impl PhpEmitter {
         let ind0   = self.ind(level);
         let method = "L::document";
 
-        let folded = folded_elements(node, |element, attributes| {
-            let parts: Vec<String> = attributes
-                .iter()
-                .map(|(name, value)| format!("{}: '{}'", to_camel_case(name), value.replace('\'', "\\'")))
-                .collect();
-            format!("{element}: new Document{}({})", to_pascal_case(element), parts.join(", "))
+        let folded = folded_elements(node, Target::Php, |element, members| {
+            format!("{element}: new Document{}({})", to_pascal_case(element), members.join(", "))
         });
 
         let mut doc_parts: Vec<String> = node
@@ -1619,12 +1609,8 @@ impl PythonEmitter {
         let ind0   = self.ind(level);
         let method = "L.document";
 
-        let folded = folded_elements(node, |element, attributes| {
-            let parts: Vec<String> = attributes
-                .iter()
-                .map(|(name, value)| format!("{}='{}'", to_snake_case(name), value.replace('\'', "\\'")))
-                .collect();
-            format!("{element}=Document{}({})", to_pascal_case(element), parts.join(", "))
+        let folded = folded_elements(node, Target::Python, |element, members| {
+            format!("{element}=Document{}({})", to_pascal_case(element), members.join(", "))
         });
 
         let mut doc_parts: Vec<String> = node
@@ -2109,6 +2095,20 @@ mod tests {
         assert!(php.contains("use Lpdf\\Kit\\ProfileAttr;"), "{php}");
         let python = codegen(xml, &CodegenOptions { target: "python".into(), indent: 4 }).unwrap();
         assert!(python.contains("ProfileAttr"), "{python}");
+    }
+
+    #[test]
+    fn a_boolean_of_output_is_written_as_a_boolean_and_its_text_as_a_string() {
+        let xml = r#"<lpdf version="1"><document><output encrypt="aes-256" linearize="true"/><section><layout><text>x</text></layout></section></document></lpdf>"#;
+        for (target, expected) in [
+            ("js", "output: { encrypt: 'aes-256', linearize: true }"),
+            ("dotnet", "Output = new() { Encrypt = \"aes-256\", Linearize = true }"),
+            ("php", "output: new DocumentOutput(encrypt: 'aes-256', linearize: true)"),
+            ("python", "output=DocumentOutput(encrypt='aes-256', linearize=True)"),
+        ] {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            assert!(out.contains(expected), "{target}: {expected}\n{out}");
+        }
     }
 
     #[test]
