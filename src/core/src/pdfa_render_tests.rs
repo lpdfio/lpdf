@@ -187,7 +187,7 @@ fn a_font_whose_licence_forbids_embedding_is_an_error() {
 }
 
 /// `font` with the embedding permission of its OS/2 table set to restricted (`fsType` 2).
-fn restricted(font: &[u8]) -> Vec<u8> {
+pub(crate) fn restricted(font: &[u8]) -> Vec<u8> {
     let mut font = font.to_vec();
     let tables = u16::from_be_bytes([font[4], font[5]]) as usize;
     let os2 = (0..tables)

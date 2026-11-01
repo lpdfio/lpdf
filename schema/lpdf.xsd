@@ -164,6 +164,15 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <xs:simpleType name="PdfXVersion">
+    <xs:annotation>
+      <xs:documentation>A version of PDF/X, the ISO 15930 standard for files sent to a commercial printer: 4, which keeps RGB colors, images and transparency, tied to color profiles.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="4"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="TextRole">
     <xs:annotation>
       <xs:documentation>What a text is to a reader, beyond a paragraph: a heading of level 1 to 6.</xs:documentation>
@@ -1044,6 +1053,30 @@
     </xs:complexType>
   </xs:element>
 
+  <!-- Color profile asset declared in <assets> -->
+  <xs:element name="profile">
+    <xs:annotation>
+        <xs:documentation>Declares an ICC color profile that the profile attribute of output names: the profile of the printing press a PDF/X file is made for, which the printer gives out. The SDK reads the file from src, or the profile was loaded on the engine under ref or, with no ref, under its own name. The engine bundles no press profile.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+    <xs:attribute name="name" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>The name that the profile attribute of output uses to pick this profile: lowercase letters, digits and -, starting with a letter.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="ref" type="xs:string">
+      <xs:annotation>
+        <xs:documentation>The key the profile was loaded under on the engine, when that is not its name.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="src" type="xs:anyURI">
+      <xs:annotation>
+        <xs:documentation>A path the SDK reads the ICC profile from, when the profile was not loaded on the engine.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+
   <xs:element name="color">
     <xs:complexType>
       <xs:attribute name="name"  type="xs:string" use="required"/>
@@ -1157,12 +1190,13 @@
     </xs:complexType>
   </xs:element>
 
-  <!-- Asset declarations: fonts and images used by layout elements -->
+  <!-- Asset declarations: fonts and images used by layout elements, and the color profiles of output -->
   <xs:element name="assets">
     <xs:complexType>
       <xs:choice minOccurs="0" maxOccurs="unbounded">
         <xs:element ref="font"/>
         <xs:element ref="image"/>
+        <xs:element ref="profile"/>
       </xs:choice>
     </xs:complexType>
   </xs:element>
@@ -1189,7 +1223,7 @@
 
   <xs:element name="output">
     <xs:annotation>
-      <xs:documentation>How the PDF file is written, apart from what its pages show: whether it is encrypted, and what a reader may do with it, and the standard it meets. The passwords are not here: they come with the render call, since they change from one render to the next. A document that asks for encryption renders only with an owner password, or when the render asks to skip the encryption, as a preview does.</xs:documentation>
+      <xs:documentation>How the PDF file is written, apart from what its pages show: whether it is encrypted, and what a reader may do with it, and the standards it meets. The passwords are not here: they come with the render call, since they change from one render to the next. A document that asks for encryption renders only with an owner password, or when the render asks to skip the encryption, as a preview does.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:attribute name="encrypt" type="Cipher">
@@ -1210,6 +1244,16 @@
       <xs:attribute name="pdfua" type="PdfUaPart">
         <xs:annotation>
           <xs:documentation>Writes the PDF as PDF/UA-1, a tagged PDF a screen reader can read: what each text, heading, table, list, link, footnote and image is, in reading order, and the rest marked as decoration. It combines with pdfa. The render needs created_on, the date the file carries. What PDF/UA cannot hold is an error that says what to change: no title or lang on meta, an img or a barcode without alt (alt="" marks one as decoration), headings that do not start at h1 or skip a level on the way down, text in a built-in font such as the default Helvetica (declare a font in assets), a font whose license forbids embedding, a character the font has no glyph for, the digits of a barcode, a form field, and an allow that leaves out accessibility.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="pdfx" type="PdfXVersion">
+        <xs:annotation>
+          <xs:documentation>Writes the PDF as PDF/X-4, for a commercial printer: every page gets a TrimBox and a BleedBox, the file carries the printer's color profile, named by profile, as its output intent, RGB colors and images are tied to the sRGB profile, and the file carries its title, dates and version. The render needs created_on, the date the file carries. Links are left out, since PDF/X allows nothing clickable on the printed page: their text prints as without pdfx. What PDF/X cannot hold is an error that says what to change: no profile, a profile that is not a printer profile, no title on meta, text in a built-in font such as the default Helvetica (declare a font in assets), a font whose license forbids embedding, a character the font has no glyph for, the digits of a barcode, a form field, a CMYK color with a profile that is not a CMYK one, encrypt, pdfa, and attachments. It combines with pdfua.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="profile" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>The profile of assets that a PDF/X file is made for: the ICC profile of the printing press, such as a FOGRA39 or GRACoL one, which the printer gives out. It must be a printer profile, gray, RGB or CMYK. It needs pdfx, and pdfx needs it.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
     </xs:complexType>
@@ -1551,6 +1595,11 @@
       <xs:attribute name="font"        type="xs:string"/>
       <xs:attribute name="size"        type="PageSize"/>
       <xs:attribute name="orientation" type="Orientation"/>
+      <xs:attribute name="bleed"       type="PtValue">
+        <xs:annotation>
+          <xs:documentation>How far the page reaches past its trim edge on every side, for a background or an image that runs off the page when it is cut: such as 3mm, which most printers ask for. The PDF page grows by it: its TrimBox is the page's size and its BleedBox the grown page, and the page background fills the bleed. Layout and positions keep to the trimmed page, so a document lays out the same with or without it. A section's own bleed overrides it.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attribute name="background"  type="Fill"/>
       <xs:attribute name="debug"       type="Boolean"/>
       <xs:attribute name="footnote-counter" type="FootnoteCounter">
@@ -1585,6 +1634,11 @@
       </xs:sequence>
       <xs:attribute name="size"        type="PageSize"/>
       <xs:attribute name="orientation" type="Orientation"/>
+      <xs:attribute name="bleed"       type="PtValue">
+        <xs:annotation>
+          <xs:documentation>How far this section's pages reach past their trim edge on every side. Overrides the document's bleed; 0mm takes it away.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attribute name="background"  type="Fill"/>
       <xs:attribute name="title"       type="xs:string"/>
       <xs:attribute name="debug"       type="Boolean"/>

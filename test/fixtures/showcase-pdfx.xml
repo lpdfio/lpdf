@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- PDF/X-4: a page for a commercial printer, made for the FOGRA39 press profile of test/assets/profiles. It mixes
+     CMYK colors with hex ones, a JPEG and a PNG with alpha, which are RGB, a gradient, transparency and a link, which
+     the file leaves out. The pages bleed 3mm, the background runs into the bleed, and the second section bleeds 5mm.
+     Every text is in an embedded font of test/assets/fonts, named relative to this file. The render needs created_on;
+     the tests render it with the fonts, the pictures and the profile loaded, as an SDK does
+     (`pdfx_render_tests.rs`). -->
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <assets>
+    <font name="body"    src="../assets/fonts/CrimsonText-Regular.ttf" />
+    <font name="italic"  src="../assets/fonts/CrimsonText-Italic.ttf" />
+    <font name="heading" src="../assets/fonts/CrimsonText-SemiBold.ttf" />
+    <font name="sans"    src="../assets/fonts/Montserrat-Regular.ttf" />
+    <image name="photo"  src="../assets/images/chapter-05-caterpillar.jpg" />
+    <image name="chart"  src="../assets/images/image-sample.png" />
+    <image name="badge"  src="../assets/images/image-square.png" />
+    <profile name="press" src="../assets/profiles/FOGRA39L_coated.icc" />
+  </assets>
+  <tokens>
+    <colors>
+      <color name="process-cyan" value="cmyk(100, 0, 0, 0)" />
+      <color name="rich-black"   value="cmyk(60, 40, 40, 100)" />
+      <color name="paper"        value="cmyk(0, 2, 6, 0)" />
+      <color name="primary"      value="#1763cf" />
+      <color name="ink"          value="#1f2a44" />
+      <color name="muted"        value="#5b6475" />
+      <color name="accent"       value="#e0762b" />
+    </colors>
+    <gradients>
+      <gradient name="band" type="linear" from="primary" to="accent" angle="90" />
+      <gradient name="ink-fade" type="linear" from="cmyk(0 0 0 100)" to="cmyk(0 0 0 0)" angle="90" />
+    </gradients>
+  </tokens>
+  <document size="a4" font="body" bleed="3mm">
+    <meta title="Spring Brochure — Press Copy" author="Lpdf Fixtures" subject="PDF/X-4 showcase"
+          keywords="pdf/x, print, fixture" creator="lpdf test suite" />
+    <output pdfx="4" profile="press" />
+
+    <section background="paper">
+      <bookmark label="Cover" />
+      <layer>
+        <rect anchor="top-left" width="595.28pt" height="120pt" fill="process-cyan" />
+        <rect x="0pt" y="120pt" width="595.28pt" height="8pt" fill="gradient:band" />
+      </layer>
+      <layer opacity="0.35">
+        <circle x="520pt" y="60pt" r="36pt" fill="#ffffff" />
+      </layer>
+      <layout margin="48pt">
+        <column gap="l">
+          <text font="heading" font-size="34pt" color="#ffffff">Spring Collection</text>
+          <text font="italic" font-size="14pt" color="rich-black">Made for the press: CMYK where it was given, RGB tied to sRGB, every font embedded.</text>
+          <text font-size="12pt" color="ink">The cyan band and the paper tone are process colors, cmyk() as the printer separates them. The headings, the photo and the chart are RGB, which the file maps to sRGB, so the press profile converts them the same way on any RIP. The page runs 3mm past its trim on every side, so the band and the paper tone reach the edge of the sheet after it is cut.</text>
+          <row gap="m">
+            <column width="fill" padding="m" background="#ffffff" border="0.5pt process-cyan" radius="4pt" shadow="3pt 3pt rich-black 0.25">
+              <text font="heading" font-size="14pt" color="rich-black">Process</text>
+              <text font="sans" font-size="20pt" color="process-cyan">C 100</text>
+            </column>
+            <column width="fill" padding="m" background="#ffffff" border="0.5pt #dde3ed" radius="4pt" opacity="0.7">
+              <text font="heading" font-size="14pt">Screen</text>
+              <text font="sans" font-size="20pt" color="accent">#e0762b</text>
+            </column>
+            <frame width="fill" height="70pt" background="gradient:ink-fade" radius="4pt" padding="m">
+              <text font="sans" font-size="11pt" color="#ffffff">CMYK gradient</text>
+            </frame>
+          </row>
+          <row gap="m" align="center">
+            <img name="photo" width="140pt" />
+            <img name="chart" width="160pt" />
+            <img name="badge" width="70pt" radius="35pt" />
+          </row>
+          <link href="https://lpdf.io">
+            <text font="sans" font-size="11pt" color="primary">lpdf.io — a link, which a PDF/X file prints and does not make clickable</text>
+          </link>
+        </column>
+      </layout>
+    </section>
+
+    <section bleed="5mm" background="#f3f5f9">
+      <bookmark label="Price list" />
+      <layout margin="48pt">
+        <column gap="m">
+          <text font="heading" font-size="20pt" color="rich-black">Price list</text>
+          <list type="bullet">
+            <li><text>This section bleeds 5mm, which overrides the document's 3mm.</text></li>
+            <li><text>Its background is a hex color, RGB under sRGB.</text></li>
+          </list>
+          <table cols="2fr 1fr" border="0.5pt #dde3ed" stripe="#ffffff">
+            <thead background="cmyk(20, 0, 0, 0)">
+              <td padding="4pt 6pt"><text font="heading">Item</text></td>
+              <td padding="4pt 6pt"><text font="heading">Price</text></td>
+            </thead>
+            <tr><td padding="4pt 6pt"><text>Linen shirt</text></td><td padding="4pt 6pt"><text>€49</text></td></tr>
+            <tr><td padding="4pt 6pt"><text>Canvas bag</text></td><td padding="4pt 6pt"><text>€29</text></td></tr>
+          </table>
+          <barcode type="qr" data="https://lpdf.io" width="80pt" color="rich-black" />
+          <text font="sans" font-size="9pt" color="muted">Кириллица и латиница — Montserrat, embedded.</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

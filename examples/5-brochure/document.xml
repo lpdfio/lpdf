@@ -18,6 +18,15 @@
                      0pt so its panels reach the edge, and the inside page's is 36pt
       justify        justify="between" on a column spreads its parts from top to bottom of its height
       barcode        a QR code, dark on light so that it scans on the dark band
+      pdfx           written for a commercial printer, as PDF/X-4: <output pdfx="4" profile="press">,
+                     with the printer's profile declared in <assets> (a FOGRA39 one, in assets/profiles).
+                     The render needs created_on, the date the file carries, and every text an embedded font
+      bleed          bleed="3mm" on the document: each page reaches 3mm past its trim edge, the sand
+                     background fills it, and the cover's panel, drawn from x=-9pt, runs off the edge
+      cmyk           brass is a process color, cmyk(), as the printer separates it; the greens and the
+                     sand are hex, which the file ties to sRGB, as it does the chart, an RGB image
+      link           the address on the cover is a link: a PDF/X file prints its text and leaves out
+                     what makes it clickable
 
     All the text is in the layout. A text-at in a layer is one line unless it has a width and
     max-lines, which wrap it. A layer can also be turned with transform, as the contract's watermark
@@ -26,6 +35,8 @@
   <assets>
     <font name="display" src="assets/fonts/Radley-Regular.ttf" />
     <font name="text"    src="assets/fonts/Montserrat-Regular.ttf" />
+    <image name="chart"  src="assets/images/committed-capital.png" />
+    <profile name="press" src="assets/profiles/FOGRA39L_coated.icc" />
   </assets>
 
   <!-- the greens are for panels and the sand for the page. Brass on the dark green is 4.2 to 1, enough
@@ -34,7 +45,7 @@
   <tokens>
     <colors>
       <color name="primary"     value="#12372a" />
-      <color name="brass"       value="#b9893a" />
+      <color name="brass"       value="cmyk(0, 26, 69, 27)" />
       <color name="brass-light" value="#d9b36a" />
       <color name="brass-dark"  value="#7a561a" />
       <color name="sand"        value="#f6f1e7" />
@@ -48,16 +59,17 @@
     <text-size xs="7pt" s="8.5pt" m="10pt" l="18pt" xl="34pt" xxl="48pt" />
   </tokens>
 
-  <document size="a4" orientation="landscape" font="text">
+  <document size="a4" orientation="landscape" font="text" bleed="3mm">
     <meta title="Coldwater Row Capital: brochure" subject="Investor brochure (sample)" author="Coldwater Row Capital" />
+    <output pdfx="4" profile="press" />
 
     <!-- PAGE 1: the cover. A green panel to x=500, and the layout is two stacks, one on the panel and
          one beside it. The page is 842 by 595 points -->
     <section background="sand">
 
       <layer>
-        <rect x="0pt" y="0pt" width="500pt" height="595pt" fill="primary" />
-        <rect x="500pt" y="0pt" width="4pt" height="595pt" fill="brass" />
+        <rect x="-9pt" y="-9pt" width="509pt" height="613pt" fill="primary" />
+        <rect x="500pt" y="-9pt" width="4pt" height="613pt" fill="brass" />
         <!-- the mark: three bars, beside the name -->
         <rect x="48pt" y="62pt" width="6pt" height="10pt" fill="brass" />
         <rect x="57pt" y="56pt" width="6pt" height="16pt" fill="brass" />
@@ -131,6 +143,10 @@
                   <text font-size="s" color="text-muted">average time we stay invested</text>
                 </column>
               </column>
+              <column gap="xs">
+                <img name="chart" width="fill" />
+                <text font-size="xs" color="text-muted">Committed capital by fund, Fund I to Fund V</text>
+              </column>
             </column>
 
             <text font-size="s" color="ink">
@@ -141,7 +157,9 @@
             <column gap="s">
               <divider color="brass" thickness="s" />
               <text font-size="s" color="primary">partners@coldwaterrow.example</text>
-              <text font-size="s" color="text-muted">www.coldwaterrow.example</text>
+              <link href="https://www.coldwaterrow.example">
+                <text font-size="s" color="text-muted">www.coldwaterrow.example</text>
+              </link>
             </column>
           </column>
 
@@ -154,8 +172,8 @@
     <section background="sand">
 
       <layer>
-        <rect anchor="bottom-left" width="842pt" height="133pt" fill="primary" />
-        <rect x="0pt" y="462pt" width="842pt" height="3pt" fill="brass" />
+        <rect x="-9pt" y="462pt" width="860pt" height="142pt" fill="primary" />
+        <rect x="-9pt" y="462pt" width="860pt" height="3pt" fill="brass" />
       </layer>
       <layer opacity="0.12">
         <circle x="680pt" y="-100pt" r="110pt" fill="brass" />

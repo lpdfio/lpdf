@@ -8,6 +8,9 @@ use crate::parse::{FieldKind, Shadow};
 pub struct RenderPage {
     pub width: f32,
     pub height: f32,
+    /// How far the page reaches past its trim edge, the `width` by `height` the layout fills, on every side. The PDF
+    /// page grows by it, and its background fills it; 0 for none.
+    pub bleed: f32,
     pub background: Option<String>,
     pub margin: [f32; 4],
     pub nodes: Vec<RenderNode>,

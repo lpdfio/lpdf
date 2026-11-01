@@ -131,11 +131,13 @@ fn to_snake_case(s: &str) -> String {
 }
 
 /// Convert a kebab-case XML attribute name to PascalCase (C# style). The name of a PDF standard keeps its letters
-/// capitals, as the standard writes it: `pdfa` is `PdfA`, for PDF/A, and `pdfua` is `PdfUa`, for PDF/UA.
+/// capitals, as the standard writes it: `pdfa` is `PdfA`, for PDF/A, `pdfua` is `PdfUa`, for PDF/UA, and `pdfx` is
+/// `PdfX`, for PDF/X.
 fn to_pascal_case(s: &str) -> String {
     match s {
         "pdfa" => return "PdfA".to_string(),
         "pdfua" => return "PdfUa".to_string(),
+        "pdfx" => return "PdfX".to_string(),
         _ => {}
     }
     s.split('-')
@@ -605,11 +607,11 @@ fn js_key(name: &str) -> String {
     }
 }
 
-/// The `assets` of a document as the object the SDK takes: the fonts and images the `<assets>` element
-/// declares, each with the attributes of its element. `None` when it declares none.
+/// The `assets` of a document as the object the SDK takes: the fonts, images and colour profiles the `<assets>`
+/// element declares, each with the attributes of its element. `None` when it declares none.
 fn assets_expression(target: Target, assets: &Node) -> Option<String> {
     let mut members: Vec<(String, String)> = Vec::new();
-    for (list, tag, class) in [("fonts", "font", "FontAttr"), ("images", "image", "ImageAttr")] {
+    for (list, tag, class) in [("fonts", "font", "FontAttr"), ("images", "image", "ImageAttr"), ("profiles", "profile", "ProfileAttr")] {
         let declared: Vec<String> = assets
             .children()
             .filter(|n| n.is_element() && n.tag_name().name() == tag)
@@ -624,7 +626,7 @@ fn assets_expression(target: Target, assets: &Node) -> Option<String> {
     (!members.is_empty()).then(|| target.object("DocumentAssets", &members, true))
 }
 
-/// Whether any font or image of an `<assets>` element has a `src` the SDK has to read.
+/// Whether any font, image or colour profile of an `<assets>` element has a `src` the SDK has to read.
 fn assets_have_src(assets: &Node) -> bool {
     assets
         .children()
@@ -711,7 +713,7 @@ fn classes_used(code: &str) -> Vec<String> {
 fn php_namespace(class: &str) -> &'static str {
     match class {
         "DocumentAttr" | "DocumentMeta" | "DocumentOutput" | "DocumentAssets" | "DocumentTokens" | "SectionAttr" | "LayoutAttr"
-        | "FontAttr" | "ImageAttr" | "FileAttr" | "Gradient" | "GradientStop" => "Lpdf\\Kit",
+        | "FontAttr" | "ImageAttr" | "FileAttr" | "ProfileAttr" | "Gradient" | "GradientStop" => "Lpdf\\Kit",
         "LayerAttr" | "RectAttr" | "CircleAttr" | "EllipseAttr" | "LineAttr" | "PathAttr" | "TextAtAttr"
         | "ImgAtAttr" | "BarcodeAtAttr" => "Lpdf\\Canvas",
         markdown if markdown.starts_with("Markdown") => "Lpdf\\Markdown",
@@ -2090,6 +2092,26 @@ mod tests {
     }
 
     #[test]
+    fn pdfx_its_profile_and_bleed_are_written_in_each_language() {
+        let xml = r#"<lpdf version="1"><assets><profile name="press" src="press.icc"/></assets><document bleed="3mm"><meta title="T"/><output pdfx="4" profile="press"/><section bleed="5mm"><layout><text>x</text></layout></section></document></lpdf>"#;
+        for (target, expected) in [
+            ("js", ["assets: { profiles: [{ name: 'press', src: 'press.icc' }] }", "output: { pdfx: '4', profile: 'press' }", "bleed: '3mm'", "bleed: '5mm'"]),
+            ("dotnet", ["Assets = new DocumentAssets(Profiles: [new ProfileAttr { Name = \"press\", Src = \"press.icc\" }])", "PdfX = \"4\", Profile = \"press\"", "Bleed = \"3mm\"", "Bleed = \"5mm\""]),
+            ("php", ["assets: new DocumentAssets(profiles: [new ProfileAttr(name: 'press', src: 'press.icc')])", "output: new DocumentOutput(pdfx: '4', profile: 'press')", "bleed: '3mm'", "bleed: '5mm'"]),
+            ("python", ["assets=DocumentAssets(profiles=[ProfileAttr(name='press', src='press.icc')])", "output=DocumentOutput(pdfx='4', profile='press')", "bleed='3mm'", "bleed='5mm'"]),
+        ] {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            for part in expected {
+                assert!(out.contains(part), "{target}: {part}\n{out}");
+            }
+        }
+        let php = codegen(xml, &CodegenOptions { target: "php".into(), indent: 4 }).unwrap();
+        assert!(php.contains("use Lpdf\\Kit\\ProfileAttr;"), "{php}");
+        let python = codegen(xml, &CodegenOptions { target: "python".into(), indent: 4 }).unwrap();
+        assert!(python.contains("ProfileAttr"), "{python}");
+    }
+
+    #[test]
     fn pdfua_lang_alt_and_role_are_written_in_each_language_s_case() {
         let xml = r#"<lpdf version="1"><assets><image name="logo" src="logo.png"/></assets><document><meta title="T" lang="en"/><output pdfua="1"/><section><layout><text role="h1">x</text><img name="logo" alt="Logo"/></layout></section></document></lpdf>"#;
         for (target, expected) in [
@@ -2344,7 +2366,7 @@ mod tests {
         let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts);
         let fonts = crate::pdf::FontRegistry::new();
         let images = crate::pdf::ImageRegistry::new();
-        crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[]).unwrap()
+        crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[], None).unwrap()
     }
 
     /// The text's XML, and the tree the SDKs would build from the strings and spans the generator writes for it.
@@ -2780,6 +2802,7 @@ mod tests {
         assert_eq!(to_pascal_case("text-size"),    "TextSize");
         assert_eq!(to_pascal_case("pdfa"),          "PdfA");
         assert_eq!(to_pascal_case("pdfua"),         "PdfUa");
+        assert_eq!(to_pascal_case("pdfx"),          "PdfX");
     }
 
     // ── PHP tests ─────────────────────────────────────────────────────────────
