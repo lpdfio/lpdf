@@ -54,3 +54,43 @@ jobs:
         env:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
         run: make check-pdfa
+
+  csharp:
+    name: Compile the generated C#
+    # On pull requests only. A codegen change that goes with a change to the .NET SDK's API merges here before the
+    # SDK's PR, so it is compiled against the lpdf-dotnet branch of the same name when there is one. On a push to main,
+    # lpdf-dotnet's main lacks that change until the SDK's PR merges.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Pick the lpdf-dotnet branch
+        id: sdk
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          if git ls-remote --exit-code --heads https://github.com/lpdfio/lpdf-dotnet.git "refs/heads/$BRANCH" > /dev/null; then
+            echo "ref=$BRANCH" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=main" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        with:
+          repository: lpdfio/lpdf-dotnet
+          ref: ${{ steps.sdk.outputs.ref }}
+          path: repos/lpdf-dotnet
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Compile the C# the codegen writes against lpdf-dotnet ${{ steps.sdk.outputs.ref }}
+        run: make check-codegen-dotnet

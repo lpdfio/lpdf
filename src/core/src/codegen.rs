@@ -1129,6 +1129,8 @@ impl DotnetEmitter {
         if !classes_used(&body).is_empty() {
             out.push_str("using Lpdf.Kit;\n");
         }
+        // `NoAttr` is a static member of `L`, written bare as the other targets write it.
+        out.push_str("using static Lpdf.L;\n");
         out.push('\n');
 
         // .NET reads the src of a font, an image or a file through the engine's SrcFallback.
@@ -2588,6 +2590,7 @@ mod tests {
         let opts = CodegenOptions { target: "dotnet".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
         assert!(out.contains("L.Column(NoAttr, ["));
+        assert!(out.contains("using static Lpdf.L;\n"), "{out}");
     }
 
     #[test]
