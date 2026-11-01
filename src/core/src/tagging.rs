@@ -130,6 +130,10 @@ pub(crate) struct Marks {
     /// The element of each `<link>` around content, by its tag id. Apart from `by_id`: the node of a link can be
     /// something else as well, such as an entry of the table of contents, whose element has the same id.
     link_ids:        HashMap<u32, usize>,
+    /// The `TOC` of each element that holds entries of the table of contents, by that element, made with its first
+    /// entry. The entries stay in it whatever is drawn between them on another page, such as the attribution's link or
+    /// a layer's figure: a document has one table of contents, whose entries `$toc` expands one after the other.
+    tocs:            HashMap<usize, usize>,
 }
 
 /// Where the drawing was before it entered an element, to go back to.
@@ -143,7 +147,7 @@ impl Marks {
         Marks {
             on: false, elements: Vec::new(), by_id: HashMap::new(), streams: Vec::new(), stream: 0, page: 0,
             parent: 0, sealed: false, seal_owner: 0, annotations: 0, last_links: HashMap::new(),
-            link_ids: HashMap::new(),
+            link_ids: HashMap::new(), tocs: HashMap::new(),
         }
     }
 
@@ -283,11 +287,15 @@ impl Marks {
             TagKind::ListLabel => self.element(tag.id, Kind::Lbl, parent),
             TagKind::ListBody => self.element(tag.id, Kind::LBody, parent),
             TagKind::Note => self.element(tag.id, Kind::Note, parent),
-            // The entries of a table of contents stand in a `TOC`: the one just before, or a new one.
+            // The entries of a table of contents stand in one `TOC` in the element they are in (`tocs`).
             TagKind::TocItem => {
-                let toc = match self.elements[parent].kids.last() {
-                    Some(Kid::Element(last)) if self.elements[*last].kind == Kind::TOC => *last,
-                    _ => self.element(0, Kind::TOC, parent),
+                let toc = match self.tocs.get(&parent) {
+                    Some(&toc) => toc,
+                    None => {
+                        let toc = self.element(0, Kind::TOC, parent);
+                        self.tocs.insert(parent, toc);
+                        toc
+                    }
                 };
                 self.element(tag.id, Kind::TOCI, toc)
             }
@@ -576,6 +584,29 @@ mod tests {
         }
         assert_eq!(kinds(&marks, 0), [Kind::TOC]);
         assert_eq!(kinds(&marks, 1), [Kind::TOCI, Kind::TOCI]);
+    }
+
+    #[test]
+    fn entries_of_a_table_of_contents_on_two_pages_stay_in_one_toc_whatever_is_drawn_between_them() {
+        let attribution: fn(&mut Marks, &mut Content) = |marks, _| {
+            marks.attribution_link("Lpdf");
+        };
+        let figure: fn(&mut Marks, &mut Content) = |marks, content| {
+            marks.whole(content, Some(&tag(0, TagKind::Figure("A stamp".into()))), |_, _| {});
+        };
+        for (between, kind) in [(attribution, Kind::Link), (figure, Kind::Figure("A stamp".into()))] {
+            let mut marks = Marks::tagged();
+            let mut content = Content::new();
+            marks.begin_page(0);
+            let entry = marks.enter(&tag(1, TagKind::TocItem));
+            marks.leave(entry);
+            between(&mut marks, &mut content);
+            marks.begin_page(1);
+            let entry = marks.enter(&tag(2, TagKind::TocItem));
+            marks.leave(entry);
+            assert_eq!(kinds(&marks, 0), [Kind::TOC, kind]);
+            assert_eq!(kinds(&marks, 1), [Kind::TOCI, Kind::TOCI]);
+        }
     }
 
     #[test]

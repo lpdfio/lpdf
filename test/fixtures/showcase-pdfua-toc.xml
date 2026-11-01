@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- PDF/UA-1: a table of contents that runs onto a second page, which a screen reader reads as one. A layer with alt is
+     a figure drawn after the entries of each of its pages, and an unlicensed render draws the attribution line's link
+     there too: neither starts a second TOC. Each chapter has an entry, and each of its sections an entry of level 2.
+     Every text is in an embedded font of test/assets/fonts (SIL Open Font License), named relative to this file. The
+     render needs created_on, and the check of `make check-pdfua` renders it with the fonts loaded, as an SDK does
+     (`writes_pdfua_samples_for_the_external_check` in pdfua_render_tests.rs). -->
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <assets>
+    <font name="body"    src="../assets/fonts/CrimsonText-Regular.ttf" />
+    <font name="heading" src="../assets/fonts/CrimsonText-SemiBold.ttf" />
+  </assets>
+  <tokens>
+    <colors>
+      <color name="ink"   value="#1f2a44" />
+      <color name="muted" value="#5b6475" />
+    </colors>
+  </tokens>
+  <document size="a5" font="body">
+    <meta title="Staff Handbook — Accessible Copy" author="Lpdf Fixtures" subject="PDF/UA-1 table of contents on two pages"
+          keywords="pdf/ua, accessibility, table of contents, fixture" creator="lpdf test suite" lang="en-US" />
+    <output pdfua="1" />
+
+    <section type="toc" toc-indent-step="14pt">
+      <bookmark label="Contents" id="contents" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text role="h1" font="heading" font-size="17pt" color="ink">Contents</text>
+          <column gap="xs">
+            <column data-source="$toc">
+              <link href="#">
+                <row justify="between">
+                  <text data-value="label">Entry</text>
+                  <text data-value="page" color="muted">0</text>
+                </row>
+              </link>
+            </column>
+          </column>
+        </column>
+      </layout>
+      <!-- After the layout, so drawn after the entries of each page of the contents, and read as a figure there. -->
+      <layer alt="Stamp: internal copy">
+        <text-at anchor="bottom-right" x="-40pt" y="-24pt" font-size="xs" align="right" color="muted">INTERNAL COPY</text-at>
+      </layer>
+    </section>
+
+    <section>
+      <bookmark label="1. Welcome" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text role="h1" font="heading" font-size="17pt" color="ink">1. Welcome</text>
+          <text>This handbook says how we work together, and where to turn when it doesn't say.</text>
+          <bookmark label="Our story" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Our story</text>
+          <text>We started as four people in a rented room, and we still work as a small team does.</text>
+          <bookmark label="Our values" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Our values</text>
+          <text>Say what you mean, finish what you start, and leave the work better than you found it.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="2. Getting started" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text role="h1" font="heading" font-size="17pt" color="ink">2. Getting started</text>
+          <text>Your first week is for meeting the team and setting up, not for shipping.</text>
+          <bookmark label="Your first day" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Your first day</text>
+          <text>Your manager meets you at the door at nine and walks you through the day.</text>
+          <bookmark label="Accounts and access" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Accounts and access</text>
+          <text>Your accounts are ready before you arrive; the help desk resets anything that isn't.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="3. Working hours" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text role="h1" font="heading" font-size="17pt" color="ink">3. Working hours</text>
+          <text>We keep a few hours in common and leave the rest of the day to you.</text>
+          <bookmark label="Core hours" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Core hours</text>
+          <text>Be reachable from ten to three, in your own time zone.</text>
+          <bookmark label="Time off" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Time off</text>
+          <text>Book leave in the calendar two weeks ahead, and tell your team the same day.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="4. Pay and benefits" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text role="h1" font="heading" font-size="17pt" color="ink">4. Pay and benefits</text>
+          <text>Pay and cover are the same for every role at the same level.</text>
+          <bookmark label="Payroll" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Payroll</text>
+          <text>Salaries are paid on the last working day of each month.</text>
+          <bookmark label="Health cover" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Health cover</text>
+          <text>Cover starts on your first day and includes your family.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="5. Travel" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text role="h1" font="heading" font-size="17pt" color="ink">5. Travel</text>
+          <text>Travel when meeting in person changes the outcome, and not otherwise.</text>
+          <bookmark label="Booking" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Booking</text>
+          <text>Book through the travel desk so that we know where you are.</text>
+          <bookmark label="Expenses" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Expenses</text>
+          <text>Claim within a month, with a photo of each receipt.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="6. Equipment" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text role="h1" font="heading" font-size="17pt" color="ink">6. Equipment</text>
+          <text>You choose the tools you work with, within a budget for each.</text>
+          <bookmark label="Laptops" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Laptops</text>
+          <text>A laptop is replaced every three years, or sooner when it fails.</text>
+          <bookmark label="Phones" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Phones</text>
+          <text>A work phone is yours to ask for when you are on call.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="7. Security" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text role="h1" font="heading" font-size="17pt" color="ink">7. Security</text>
+          <text>Everyone keeps the company safe, not only the security team.</text>
+          <bookmark label="Passwords" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Passwords</text>
+          <text>Use the password manager and a security key for every account that takes one.</text>
+          <bookmark label="Reporting an incident" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Reporting an incident</text>
+          <text>Report anything odd at once; a false alarm costs nothing.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="8. Communication" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text role="h1" font="heading" font-size="17pt" color="ink">8. Communication</text>
+          <text>Write it down, so that the people who weren't there can read it.</text>
+          <bookmark label="Meetings" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Meetings</text>
+          <text>A meeting has an agenda, ends on time, and leaves notes.</text>
+          <bookmark label="Writing well" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Writing well</text>
+          <text>Lead with the point, keep it short, and say what you need from the reader.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="9. Learning" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text role="h1" font="heading" font-size="17pt" color="ink">9. Learning</text>
+          <text>A day a month is set aside for learning something new.</text>
+          <bookmark label="Courses" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Courses</text>
+          <text>Pick any course that helps your work; we pay for it.</text>
+          <bookmark label="Mentoring" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Mentoring</text>
+          <text>Ask anyone to mentor you; most people say yes.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="10. Health and safety" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text role="h1" font="heading" font-size="17pt" color="ink">10. Health and safety</text>
+          <text>Look after yourself first; the work can wait.</text>
+          <bookmark label="At the office" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">At the office</text>
+          <text>Fire exits are marked in green, and the first aid kit is by the kitchen.</text>
+          <bookmark label="Working from home" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Working from home</text>
+          <text>We pay for a desk and a chair that suit you.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="11. Conduct" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text role="h1" font="heading" font-size="17pt" color="ink">11. Conduct</text>
+          <text>Treat everyone as you would want to be treated.</text>
+          <bookmark label="Respect at work" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Respect at work</text>
+          <text>Disagree with ideas, never with people.</text>
+          <bookmark label="Raising a concern" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Raising a concern</text>
+          <text>Talk to your manager, to people operations, or to the confidential line.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="12. Leaving" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text role="h1" font="heading" font-size="17pt" color="ink">12. Leaving</text>
+          <text>When you move on, we want you to leave on good terms.</text>
+          <bookmark label="Notice" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Notice</text>
+          <text>Give a month's notice, or what your contract says.</text>
+          <bookmark label="Handing over" level="2" />
+          <text role="h2" font="heading" font-size="13pt" color="ink">Handing over</text>
+          <text>Write down what only you know before your last day.</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

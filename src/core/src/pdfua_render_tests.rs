@@ -311,6 +311,33 @@ fn a_link_that_toc_repeats_is_a_link_in_each_entry() {
     assert!(pdf.contains("/Contents (Intro)") && pdf.contains("/Contents (Data)"));
 }
 
+/// The fixture `showcase-pdfua-toc.xml`: twelve chapters of two sections, a page each, whose table of contents runs
+/// onto a second page, with a layer with alt on each page of it.
+fn toc_fixture() -> String {
+    String::from_utf8(read(&test_dir().join("fixtures/showcase-pdfua-toc.xml"))).expect("UTF-8")
+}
+
+/// The fixture `showcase-pdfua-toc.xml` rendered as an SDK renders it, unlicensed: for the snapshot test.
+pub(crate) fn render_toc_fixture() -> Vec<u8> {
+    render(&toc_fixture()).unwrap_or_else(|e| panic!("showcase-pdfua-toc: {e}"))
+}
+
+#[test]
+fn a_table_of_contents_on_two_pages_is_one_toc_whatever_is_drawn_between_its_pages() {
+    // Unlicensed, so the attribution line's link comes after each page's entries, and so does the fixture's layer, a
+    // figure. Without the layer, the attribution's link alone.
+    let with_layer = toc_fixture();
+    let start = with_layer.find("<layer alt=").expect("the fixture's layer");
+    let end = start + with_layer[start..].find("</layer>").expect("the end of the layer") + "</layer>".len();
+    let without_layer = format!("{}{}", &with_layer[..start], &with_layer[end..]);
+    for (xml, case) in [(&with_layer, "with the layer"), (&without_layer, "without the layer")] {
+        let pdf = text(&render(xml).expect("renders"));
+        assert_eq!(count(&pdf, "/Type /Page\n"), 14, "two pages of contents, and a page for each chapter, {case}");
+        assert_eq!(count(&pdf, "/S /TOCI\n"), 36, "an entry for each chapter and each section, {case}");
+        assert_eq!(count(&pdf, "/S /TOC\n"), 1, "{case}");
+    }
+}
+
 #[test]
 fn an_image_between_two_links_to_one_url_leaves_them_two_links_in_order() {
     let xml = document(
@@ -354,6 +381,7 @@ fn writes_pdfua_samples_for_the_external_check() {
     std::fs::create_dir_all(dir).expect("the samples' folder");
     std::fs::write(dir.join("pdfua-1.pdf"), render_fixture()).expect("a sample");
     std::fs::write(dir.join("pdfua-1-toc-links.pdf"), render(&toc_of_links()).expect("renders")).expect("a sample");
+    std::fs::write(dir.join("pdfua-1-toc.pdf"), render_toc_fixture()).expect("a sample");
     let xml = String::from_utf8(read(&test_dir().join("fixtures/showcase-pdfua.xml"))).expect("UTF-8")
         .replace(r#"<output pdfua="1" />"#, r#"<output pdfa="2u" pdfua="1" />"#);
     std::fs::write(dir.join("pdfua-1-pdfa-2u.pdf"), render(&xml).expect("renders")).expect("a sample");

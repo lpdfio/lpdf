@@ -281,6 +281,9 @@ fn showcase_pdfa_2u() { check_snapshot("showcase-pdfa-2u", &crate::pdfa_render_t
 /// The structure of a tagged PDF, with the fonts and pictures loaded as an SDK loads them.
 #[test]
 fn showcase_pdfua() { check_snapshot("showcase-pdfua", &crate::pdfua_render_tests::render_fixture()); }
+/// A table of contents on two pages, which stays one `TOC`.
+#[test]
+fn showcase_pdfua_toc() { check_snapshot("showcase-pdfua-toc", &crate::pdfua_render_tests::render_toc_fixture()); }
 
 #[test]
 fn showcase_pdfx() { check_snapshot("showcase-pdfx", &crate::pdfx_render_tests::render_fixture()); }
