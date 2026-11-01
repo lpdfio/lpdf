@@ -1319,7 +1319,7 @@ fn draw_drawn(
         RenderNode::Link(lk) => {
             // Draw child nodes first (they appear inside the link area). In a tagged PDF they are drawn in the link's
             // element, which holds the annotation too.
-            let link = marks.begin_link();
+            let link = marks.begin_link(&lk.url);
             draw_nodes(content, annots, groups, marks, &lk.children, res, page_h);
             let mark = marks.end_link(link);
 

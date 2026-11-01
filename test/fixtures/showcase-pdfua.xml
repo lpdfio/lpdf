@@ -2,7 +2,8 @@
 <!-- PDF/UA-1: each thing the engine tags, in a file veraPDF's PDF/UA-1 profile accepts and a screen reader reads.
      Headings and paragraphs, a table with a header row and cells that span, a number list with a bullet list in it,
      links in a text and around one, a footnote, the table of contents, an image with alt and one that is decoration, a
-     barcode with alt, Markdown, a layer with alt, and a header, a footer and a layer without alt, which are decoration.
+     barcode with alt, Markdown with a link that wraps onto the next line, a layer with alt, and a header, a footer and
+     a layer without alt, which are decoration.
      Every text is in an embedded font of test/assets/fonts (SIL Open Font License), named relative to this file. The
      render needs created_on, and the check of `make check-pdfua` renders it with the fonts and the pictures loaded, as
      an SDK does (`writes_pdfua_samples_for_the_external_check` in pdfua_render_tests.rs). On the RC it is read with
@@ -144,7 +145,8 @@
         <markdown-content><![CDATA[
 ## Notes from Markdown
 
-A paragraph with a [link](https://lpdf.io) and **strong** words, written in Markdown and tagged as the rest is.
+A paragraph with **strong** words, written in Markdown and tagged as the rest is, and a link that wraps onto the
+next line: [the method of the report, with the steps of each count, the returns of every region as they were filed, and the checks made against the invoices of each quarter](https://lpdf.io).
 
 - A first point
 - A second point

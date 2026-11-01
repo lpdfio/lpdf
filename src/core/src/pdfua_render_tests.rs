@@ -132,6 +132,9 @@ fn each_thing_the_fixture_shows_has_its_structure_element() {
 fn a_link_is_described_by_its_words_and_found_from_its_element() {
     let pdf = text(&render_fixture());
     assert!(pdf.contains("/Contents (the project's site)"), "the link in a text");
+    let wrapped = "/Contents (the method of the report, with the steps of each count, the returns of every region as they were \
+        filed, and the checks made against the invoices of each quarter)";
+    assert!(count(&pdf, wrapped) >= 2, "the link of the Markdown, which wraps: each part says all its words");
     assert!(pdf.contains("/Contents (Go to the details)"), "a link around a text");
     assert!(pdf.contains("/Contents (Lpdf)"), "the attribution's link");
     assert!(pdf.contains("/Type /OBJR"));
@@ -206,6 +209,24 @@ fn a_render_without_created_on_is_an_error_that_names_it() {
 fn text_in_a_built_in_font_is_an_error_that_names_the_text() {
     let error = render(&document(r#"<text font="Helvetica">Plain words</text>"#)).unwrap_err();
     assert!(error.starts_with("<output pdfua=\"1\">") && error.contains("\"Plain words\"") && error.contains("PDF/UA"), "{error}");
+}
+
+#[test]
+fn a_link_that_wraps_is_one_link_described_by_all_its_words() {
+    let xml = document(r#"<column width="120pt"><text>See <span href="https://lpdf.io/docs">the guide to accessible documents on the site</span> for more.</text></column>"#);
+    let pdf = text(&render(&xml).expect("renders"));
+    // The render is unlicensed, so the attribution line has a link, and an element, of its own.
+    let parts = count(&pdf, "/Subtype /Link") - 1;
+    assert!(parts > 1, "the link wraps onto several lines, an annotation on each");
+    assert_eq!(count(&pdf, "/S /Link\n"), 2, "one link element, and the attribution's");
+    assert_eq!(count(&pdf, "/Contents (the guide to accessible documents on the site)"), parts);
+}
+
+#[test]
+fn a_region_on_the_side_stays_in_the_reading_and_a_header_is_decoration() {
+    let side = render(&document(r#"<region pin="left"><img name="chart" width="40pt"/></region><text>Body</text>"#)).unwrap_err();
+    assert!(side.contains("the image 'chart' has no alt"), "a side region is read, so its image needs alt: {side}");
+    assert!(render(&document(r#"<region pin="top"><img name="chart" width="40pt"/></region><text>Body</text>"#)).is_ok());
 }
 
 #[test]

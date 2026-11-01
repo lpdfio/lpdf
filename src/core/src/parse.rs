@@ -70,9 +70,11 @@ impl Document {
                         for lc in layout_children {
                             match lc {
                                 LayoutChild::Content(node) => middle.push(node),
+                                // A header or a footer is drawn on every page, so a screen reader skips it. A region
+                                // that stays in the flow is read with it.
                                 LayoutChild::Region(reg) => match reg.pin {
-                                    RegionPin::Top    => top.push(region_to_compat_node(reg)),
-                                    RegionPin::Bottom => bottom.push(region_to_compat_node(reg)),
+                                    RegionPin::Top    => top.push(Node { role: Role::Artifact, ..region_to_compat_node(reg) }),
+                                    RegionPin::Bottom => bottom.push(Node { role: Role::Artifact, ..region_to_compat_node(reg) }),
                                     // Not implemented: stays where it is written.
                                     RegionPin::Left | RegionPin::Right => middle.push(region_to_compat_node(reg)),
                                 },
@@ -121,8 +123,6 @@ fn region_to_compat_node(reg: LayoutRegion) -> Node {
     Node {
         kind:       NodeKind::Column,
         page_scope: Some(reg.page.unwrap_or(PageScope::Each)),
-        // A header or a footer is drawn on every page, so a screen reader skips it.
-        role:       Role::Artifact,
         debug:      reg.debug,
         children:   reg.children,
         ..Node::layout_default()

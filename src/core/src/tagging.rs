@@ -123,6 +123,9 @@ pub(crate) struct Marks {
     seal_owner:      usize,
     /// How many annotations `annotation` has numbered.
     annotations:     usize,
+    /// The link drawn last, while nothing has been read since: the element it is in, its URL and its element. The next
+    /// part of a link that wraps onto another line or page, drawn as a link of its own, goes on in it.
+    last_link:       Option<(usize, String, usize)>,
 }
 
 /// Where the drawing was before it entered an element, to go back to.
@@ -135,7 +138,7 @@ impl Marks {
     pub(crate) fn off() -> Self {
         Marks {
             on: false, elements: Vec::new(), by_id: HashMap::new(), streams: Vec::new(), stream: 0, page: 0,
-            parent: 0, sealed: false, seal_owner: 0, annotations: 0,
+            parent: 0, sealed: false, seal_owner: 0, annotations: 0, last_link: None,
         }
     }
 
@@ -176,6 +179,10 @@ impl Marks {
         if self.parent == 0 {
             return self.artifact(content, draw);
         }
+        // Words read outside the last link end it: a link drawn after them is another one.
+        if self.last_link.as_ref().is_some_and(|(_, _, link)| *link != self.parent) {
+            self.last_link = None;
+        }
         let owner = self.parent;
         let mcid = self.next_mcid(owner);
         self.add_words(words);
@@ -199,6 +206,8 @@ impl Marks {
     pub(crate) fn whole(&mut self, content: &mut Content, tag: Option<&Tag>, draw: impl FnOnce(&mut Content, &mut Self)) {
         match tag.map(|tag| &tag.kind) {
             Some(TagKind::Figure(alt)) if self.marking() => {
+                // What a figure shows is what a link around it says.
+                self.add_words(alt);
                 let figure = self.element(0, Kind::Figure(alt.clone()), self.parent);
                 let mcid = self.next_mcid(figure);
                 content.begin_marked_content_with_properties(Name(b"Figure")).properties().identify(mcid);
@@ -225,6 +234,7 @@ impl Marks {
         if !self.marking() {
             return None;
         }
+        self.last_link = None;
         let parent = self.parent;
         self.parent = match &tag.kind {
             TagKind::Paragraph => self.element(tag.id, Kind::P, parent),
@@ -289,10 +299,11 @@ impl Marks {
         }
     }
 
-    /// Go into a link, whose annotation is the next one numbered: its words are drawn in it. Inside a figure or an
-    /// artifact, the link is an element of its own under it, with no words, as its annotation still is in the
-    /// structure.
-    pub(crate) fn begin_link(&mut self) -> Option<(Entered, usize)> {
+    /// Go into a link to `url`, whose annotation is the next one numbered: its words are drawn in it. A link that wraps
+    /// onto another line or page is drawn as a link for each part, and a part drawn right after the one before, to the
+    /// same URL, goes on in its element, which then holds an annotation for each part. Inside a figure or an artifact,
+    /// the link is an element of its own under it, with no words, as its annotation still is in the structure.
+    pub(crate) fn begin_link(&mut self, url: &str) -> Option<OpenLink> {
         if !self.on {
             return None;
         }
@@ -300,20 +311,26 @@ impl Marks {
         let link = if self.sealed {
             self.element(0, Kind::Link, self.seal_owner)
         } else {
-            let link = self.element(0, Kind::Link, parent);
+            let link = match &self.last_link {
+                Some((at, last_url, link)) if *at == parent && last_url == url => *link,
+                _ => self.element(0, Kind::Link, parent),
+            };
             self.parent = link;
             link
         };
-        Some((Entered { parent }, link))
+        Some(OpenLink { entered: Entered { parent }, element: link, url: url.to_string() })
     }
 
     /// Leave the link `begin_link` went into, and number its annotation: the number goes to the annotation's data,
     /// and the link lists it after its words.
-    pub(crate) fn end_link(&mut self, link: Option<(Entered, usize)>) -> Option<LinkMark> {
-        let (entered, element) = link?;
+    pub(crate) fn end_link(&mut self, link: Option<OpenLink>) -> Option<LinkMark> {
+        let OpenLink { entered, element, url } = link?;
         self.parent = entered.parent;
         let number = self.annotation();
         self.elements[element].kids.push(Kid::Annotation(number));
+        if !self.sealed {
+            self.last_link = Some((self.parent, url, element));
+        }
         Some(LinkMark { element, number })
     }
 
@@ -424,6 +441,13 @@ impl Marks {
         self.sealed = sealed;
         self.seal_owner = seal_owner;
     }
+}
+
+/// A link `begin_link` went into: where the drawing was, its element and its URL.
+pub(crate) struct OpenLink {
+    entered: Entered,
+    element: usize,
+    url:     String,
 }
 
 /// The element of a link annotation, and the number `Marks` gave the annotation.
@@ -545,7 +569,7 @@ mod tests {
         let mut link = None;
         marks.whole(&mut content, Some(&figure), |c, m| {
             m.content(c, "City", |_, _| {});
-            let open = m.begin_link();
+            let open = m.begin_link("https://a.example");
             link = m.end_link(open);
         });
         let bytes = String::from_utf8(content.finish()).unwrap();
@@ -553,6 +577,45 @@ mod tests {
         assert_eq!(kinds(&marks, 0), [Kind::Figure("A map".into())]);
         assert_eq!(kinds(&marks, 1), [Kind::Link]);
         assert_eq!(link, Some(LinkMark { element: 2, number: 1 }));
+    }
+
+    /// Draw a link to `url` with `words` in it, in the element the drawing is in.
+    fn link(marks: &mut Marks, content: &mut Content, url: &str, words: &str) -> Option<LinkMark> {
+        let open = marks.begin_link(url);
+        marks.content(content, words, |_, _| {});
+        marks.end_link(open)
+    }
+
+    #[test]
+    fn the_parts_of_a_link_that_wraps_stay_one_link_with_an_annotation_for_each() {
+        let mut marks = Marks::tagged();
+        let mut content = Content::new();
+        marks.begin_page(0);
+        let p = marks.enter(&tag(1, TagKind::Paragraph));
+        marks.content(&mut content, "See", |_, _| {});
+        let first = link(&mut marks, &mut content, "https://a.example", "the guide").expect("a link");
+        let second = link(&mut marks, &mut content, "https://a.example", "to it").expect("a link");
+        marks.content(&mut content, "and", |_, _| {});
+        let third = link(&mut marks, &mut content, "https://a.example", "again").expect("a link");
+        let other = link(&mut marks, &mut content, "https://b.example", "elsewhere").expect("a link");
+        marks.leave(p);
+        assert_eq!(first.element, second.element, "the part on the next line goes on in the link");
+        assert_ne!(first.number, second.number, "each part has its annotation");
+        assert_eq!(marks.elements[first.element].words, "the guide to it");
+        assert_ne!(third.element, first.element, "after words read outside it, a link is another one");
+        assert_ne!(other.element, third.element, "a link to another URL is another one");
+        assert_eq!(kinds(&marks, 1), [Kind::Link, Kind::Link, Kind::Link]);
+    }
+
+    #[test]
+    fn a_figure_s_description_is_what_a_link_around_it_says() {
+        let mut marks = Marks::tagged();
+        let mut content = Content::new();
+        marks.begin_page(0);
+        let open = marks.begin_link("https://a.example");
+        marks.whole(&mut content, Some(&tag(0, TagKind::Figure("A chart".into()))), |_, _| {});
+        let mark = marks.end_link(open).expect("a link");
+        assert_eq!(marks.elements[mark.element].words, "A chart");
     }
 
     #[test]
