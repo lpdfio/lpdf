@@ -357,4 +357,7 @@ fn writes_pdfua_samples_for_the_external_check() {
     let xml = String::from_utf8(read(&test_dir().join("fixtures/showcase-pdfua.xml"))).expect("UTF-8")
         .replace(r#"<output pdfua="1" />"#, r#"<output pdfa="2u" pdfua="1" />"#);
     std::fs::write(dir.join("pdfua-1-pdfa-2u.pdf"), render(&xml).expect("renders")).expect("a sample");
+    // With content in optional content groups, which a PDF/UA file leaves out of them.
+    let grouped = crate::ocg_render_tests::with_groups(&String::from_utf8(read(&test_dir().join("fixtures/showcase-pdfua.xml"))).expect("UTF-8"));
+    std::fs::write(dir.join("pdfua-1-ocg.pdf"), render(&grouped).expect("renders")).expect("a sample");
 }

@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 use crate::tokens::{FontDef, Tokens};
 use crate::parse::{
-    Node, PageScope, Shadow, Shape, ShapeKind, TextDefaults,
+    Node, Ocg, PageScope, Shadow, Shape, ShapeKind, TextDefaults,
     parse_measurement, parse_shadow, parse_signed_measurement, parse_page_scope,
     elems, jattr, node_loc, at_element_for, parse_at_node, parse_tree_at_node,
 };
@@ -41,6 +41,7 @@ pub struct CanvasRect {
     pub stroke_dash:  Option<String>,
     pub radius:       Option<f32>,
     pub shadow:       Option<Shadow>,
+    pub ocg:          Option<Ocg>,
 }
 
 /// Circle: `cx`/`cy` is the centre point, worked out from the box `x` and `y` place.
@@ -54,6 +55,7 @@ pub struct CanvasCircle {
     pub stroke_width: Option<f32>,
     pub stroke_dash:  Option<String>,
     pub shadow:       Option<Shadow>,
+    pub ocg:          Option<Ocg>,
 }
 
 /// Ellipse: `cx`/`cy` is the centre point, worked out from the box `x` and `y` place.
@@ -68,6 +70,7 @@ pub struct CanvasEllipse {
     pub stroke_width: Option<f32>,
     pub stroke_dash:  Option<String>,
     pub shadow:       Option<Shadow>,
+    pub ocg:          Option<Ocg>,
 }
 
 /// Line: no anchor — absolute coordinates always required.
@@ -81,6 +84,7 @@ pub struct CanvasLine {
     pub stroke_width: Option<f32>,
     pub stroke_dash:  Option<String>,
     pub line_cap:     Option<String>,
+    pub ocg:          Option<Ocg>,
 }
 
 /// Path: no anchor — coordinates are embedded in the SVG `d` string.
@@ -93,6 +97,7 @@ pub struct CanvasPath {
     pub stroke_width: Option<f32>,
     pub stroke_dash:  Option<String>,
     pub line_cap:     Option<String>,
+    pub ocg:          Option<Ocg>,
 }
 
 /// A `text-at`, `img-at` or `barcode-at`: the text, image or barcode of the layout, put at a fixed place. It is
@@ -135,6 +140,25 @@ pub struct CanvasLayer {
     /// What the layer shows, which makes it one figure a screen reader reads in a tagged PDF. Without it the layer is
     /// decoration, as a header is.
     pub alt:         Option<String>,
+    /// The optional content group the layer and everything it draws are in (`Node::ocg`).
+    pub ocg:         Option<Ocg>,
+}
+
+impl CanvasLayer {
+    /// Take the layer and everything it draws out of their optional content groups.
+    pub(crate) fn forget_ocg(&mut self) {
+        self.ocg = None;
+        for child in &mut self.children {
+            match child {
+                CanvasPrimitive::Rect(r)    => r.ocg = None,
+                CanvasPrimitive::Circle(c)  => c.ocg = None,
+                CanvasPrimitive::Ellipse(e) => e.ocg = None,
+                CanvasPrimitive::Line(l)    => l.ocg = None,
+                CanvasPrimitive::Path(p)    => p.ocg = None,
+                CanvasPrimitive::Placed(p)  => crate::parse::forget_ocg(&mut p.node),
+            }
+        }
+    }
 }
 
 // ── Anchor helpers ────────────────────────────────────────────────────────────
@@ -284,6 +308,11 @@ fn opt_canvas_shadow(elem: &roxmltree::Node, tokens: &Tokens) -> Result<Option<S
     elem.attribute("shadow").map(|v| parse_shadow(v, tokens)).transpose()
 }
 
+/// The optional content group of a layer or of what it draws.
+fn opt_ocg(elem: &roxmltree::Node) -> Result<Option<Ocg>, String> {
+    elem.attribute("ocg").map(Ocg::of).transpose()
+}
+
 fn parse_canvas_rect(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_h: f32) -> Result<CanvasPrimitive, String> {
     let w            = parse_measurement(elem.attribute("width").unwrap_or("0pt"))?;
     let h            = parse_measurement(elem.attribute("height").unwrap_or("0pt"))?;
@@ -294,7 +323,8 @@ fn parse_canvas_rect(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_
     let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
     let radius       = elem.attribute("radius").map(parse_measurement).transpose()?;
     let shadow       = opt_canvas_shadow(elem, tokens)?;
-    Ok(CanvasPrimitive::Rect(CanvasRect { x, y, w, h, fill, stroke, stroke_width, stroke_dash, radius, shadow }))
+    let ocg          = opt_ocg(elem)?;
+    Ok(CanvasPrimitive::Rect(CanvasRect { x, y, w, h, fill, stroke, stroke_width, stroke_dash, radius, shadow, ocg }))
 }
 
 fn parse_canvas_circle(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_h: f32) -> Result<CanvasPrimitive, String> {
@@ -306,7 +336,8 @@ fn parse_canvas_circle(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, pag
     let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
     let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
     let shadow       = opt_canvas_shadow(elem, tokens)?;
-    Ok(CanvasPrimitive::Circle(CanvasCircle { cx, cy, r, fill, stroke, stroke_width, stroke_dash, shadow }))
+    let ocg          = opt_ocg(elem)?;
+    Ok(CanvasPrimitive::Circle(CanvasCircle { cx, cy, r, fill, stroke, stroke_width, stroke_dash, shadow, ocg }))
 }
 
 fn parse_canvas_ellipse(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_h: f32) -> Result<CanvasPrimitive, String> {
@@ -319,7 +350,8 @@ fn parse_canvas_ellipse(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, pa
     let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
     let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
     let shadow       = opt_canvas_shadow(elem, tokens)?;
-    Ok(CanvasPrimitive::Ellipse(CanvasEllipse { cx, cy, rx, ry, fill, stroke, stroke_width, stroke_dash, shadow }))
+    let ocg          = opt_ocg(elem)?;
+    Ok(CanvasPrimitive::Ellipse(CanvasEllipse { cx, cy, rx, ry, fill, stroke, stroke_width, stroke_dash, shadow, ocg }))
 }
 
 fn parse_canvas_line(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
@@ -331,7 +363,8 @@ fn parse_canvas_line(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPr
     let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
     let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
     let line_cap     = elem.attribute("line-cap").map(str::to_string);
-    Ok(CanvasPrimitive::Line(CanvasLine { x1, y1, x2, y2, stroke, stroke_width, stroke_dash, line_cap }))
+    let ocg          = opt_ocg(elem)?;
+    Ok(CanvasPrimitive::Line(CanvasLine { x1, y1, x2, y2, stroke, stroke_width, stroke_dash, line_cap, ocg }))
 }
 
 fn parse_canvas_path(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
@@ -342,7 +375,8 @@ fn parse_canvas_path(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPr
     let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
     let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
     let line_cap     = elem.attribute("line-cap").map(str::to_string);
-    Ok(CanvasPrimitive::Path(CanvasPath { d, fill, stroke, fill_rule, stroke_width, stroke_dash, line_cap }))
+    let ocg          = opt_ocg(elem)?;
+    Ok(CanvasPrimitive::Path(CanvasPath { d, fill, stroke, fill_rule, stroke_width, stroke_dash, line_cap, ocg }))
 }
 
 /// What a layer's elements are read against: the document's assets and tokens, the defaults its section gives
@@ -427,6 +461,7 @@ pub(crate) fn parse_layer_elem(elem: &roxmltree::Node, ctx: &LayerContext) -> Re
         data_if:     elem.attribute("data-if").map(str::to_string),
         data_if_not: elem.attribute("data-if-not").map(str::to_string),
         alt:         elem.attribute("alt").map(str::to_string),
+        ocg:         opt_ocg(elem).map_err(located)?,
     })
 }
 
@@ -461,6 +496,7 @@ pub(crate) fn parse_tree_layer(json: &serde_json::Value, ctx: &LayerContext) -> 
         data_if:     jattr(json, "data-if").map(str::to_string),
         data_if_not: jattr(json, "data-if-not").map(str::to_string),
         alt:         jattr(json, "alt").map(str::to_string),
+        ocg:         jattr(json, "ocg").map(Ocg::of).transpose().map_err(|e| format!("layer: {e}"))?,
     })
 }
 
@@ -478,6 +514,9 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
     };
     let get_shadow = || -> Result<Option<Shadow>, String> {
         get_attr("shadow").map(|v| parse_shadow(v, tokens)).transpose()
+    };
+    let get_ocg = || -> Result<Option<Ocg>, String> {
+        get_attr("ocg").map(Ocg::of).transpose()
     };
     let get_f32 = |k: &str| -> Result<Option<f32>, String> {
         get_attr(k).map(parse_measurement).transpose()
@@ -520,6 +559,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
                 stroke_dash:  get_attr("stroke-dash").map(str::to_string),
                 radius:       get_f32("radius")?,
                 shadow:       get_shadow()?,
+                ocg:          get_ocg()?,
             }))
         }
         "circle" => {
@@ -532,6 +572,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
                 stroke_width: get_f32("stroke-width")?,
                 stroke_dash:  get_attr("stroke-dash").map(str::to_string),
                 shadow:       get_shadow()?,
+                ocg:          get_ocg()?,
             }))
         }
         "ellipse" => {
@@ -545,6 +586,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
                 stroke_width: get_f32("stroke-width")?,
                 stroke_dash:  get_attr("stroke-dash").map(str::to_string),
                 shadow:       get_shadow()?,
+                ocg:          get_ocg()?,
             }))
         }
         "line" => Ok(CanvasPrimitive::Line(CanvasLine {
@@ -556,6 +598,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
             stroke_width: get_f32("stroke-width")?,
             stroke_dash:  get_attr("stroke-dash").map(str::to_string),
             line_cap:     get_attr("line-cap").map(str::to_string),
+            ocg:          get_ocg()?,
         })),
         "path" => Ok(CanvasPrimitive::Path(CanvasPath {
             d:            get_attr("d").unwrap_or("").to_string(),
@@ -565,6 +608,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
             stroke_width: get_f32("stroke-width")?,
             stroke_dash:  get_attr("stroke-dash").map(str::to_string),
             line_cap:     get_attr("line-cap").map(str::to_string),
+            ocg:          get_ocg()?,
         })),
         "text-at" | "img-at" | "barcode-at" => {
             let node = parse_tree_at_node(json, tokens, ctx.asset_images, ctx.asset_fonts, ctx.text)
@@ -595,6 +639,20 @@ fn line_cap_to_u8(s: &str) -> u8 {
 /// `page` is the number of the page the layer is drawn on, counted from 1 in its section, and `pages` how many
 /// pages the section has: what `{page}` and `{pages}` in a `text-at` stand for.
 fn primitive_to_render_node(prim: &CanvasPrimitive, page: usize, pages: usize) -> RenderNode {
+    let ocg = match prim {
+        CanvasPrimitive::Rect(r)    => r.ocg,
+        CanvasPrimitive::Circle(c)  => c.ocg,
+        CanvasPrimitive::Ellipse(e) => e.ocg,
+        CanvasPrimitive::Line(l)    => l.ocg,
+        CanvasPrimitive::Path(p)    => p.ocg,
+        // Put in its group where it is laid out, which knows its box.
+        CanvasPrimitive::Placed(_)  => None,
+    };
+    crate::layout::in_group(primitive_drawing(prim, page, pages), ocg, 0.0, 0.0, 0.0, 0.0)
+}
+
+/// What a layer's element draws, out of any group.
+fn primitive_drawing(prim: &CanvasPrimitive, page: usize, pages: usize) -> RenderNode {
     match prim {
         CanvasPrimitive::Rect(r) => RenderNode::CanvasRect(RenderCanvasRect {
             x:             r.x,
@@ -662,13 +720,13 @@ pub(crate) fn draw_flow_shape(shape: &Shape, radius: f32, x: f32, y: f32, w: f32
     let (cx, cy) = (x + w / 2.0, y + h / 2.0);
     let primitive = match shape.kind {
         ShapeKind::Rect => CanvasPrimitive::Rect(CanvasRect {
-            x, y, w, h, fill, stroke, stroke_width, stroke_dash, radius: Some(radius), shadow: None,
+            x, y, w, h, fill, stroke, stroke_width, stroke_dash, radius: Some(radius), shadow: None, ocg: None,
         }),
         ShapeKind::Circle => CanvasPrimitive::Circle(CanvasCircle {
-            cx, cy, r: w / 2.0, fill, stroke, stroke_width, stroke_dash, shadow: None,
+            cx, cy, r: w / 2.0, fill, stroke, stroke_width, stroke_dash, shadow: None, ocg: None,
         }),
         ShapeKind::Ellipse => CanvasPrimitive::Ellipse(CanvasEllipse {
-            cx, cy, rx: w / 2.0, ry: h / 2.0, fill, stroke, stroke_width, stroke_dash, shadow: None,
+            cx, cy, rx: w / 2.0, ry: h / 2.0, fill, stroke, stroke_width, stroke_dash, shadow: None, ocg: None,
         }),
         ShapeKind::Checkbox => return draw_checkbox(shape, radius, x, y, w, h),
     };
@@ -691,7 +749,7 @@ fn draw_checkbox(shape: &Shape, radius: f32, x: f32, y: f32, w: f32, h: f32) -> 
     let outline = CanvasPrimitive::Rect(CanvasRect {
         x: x + inset, y: y + inset, w: (w - stroke_width).max(0.0), h: (h - stroke_width).max(0.0),
         fill: shape.fill.clone(), stroke: shape.stroke.clone(), stroke_width: Some(stroke_width), stroke_dash: None,
-        radius: Some((radius - inset).max(0.0)), shadow: None,
+        radius: Some((radius - inset).max(0.0)), shadow: None, ocg: None,
     });
     let mut children = vec![primitive_to_render_node(&outline, 1, 1)];
     if let Some(color) = &shape.tick {
@@ -699,11 +757,11 @@ fn draw_checkbox(shape: &Shape, radius: f32, x: f32, y: f32, w: f32, h: f32) -> 
         let tick = CanvasPrimitive::Path(CanvasPath {
             d: format!("M {a} L {b} L {c}"),
             fill: None, stroke: Some(color.clone()), fill_rule: None,
-            stroke_width: Some(TICK_STROKE * w), stroke_dash: None, line_cap: Some("round".to_string()),
+            stroke_width: Some(TICK_STROKE * w), stroke_dash: None, line_cap: Some("round".to_string()), ocg: None,
         });
         children.push(primitive_to_render_node(&tick, 1, 1));
     }
-    RenderNode::Box(RenderBox { tag: None,
+    RenderNode::Box(RenderBox { tag: None, ocg: None,
         x, y, width: w, height: h,
         fill: None, border_width: 0.0, border_color: None, radius: 0.0,
         opacity: 1.0, shadow: None, debug_self: false,
@@ -724,12 +782,13 @@ fn layer_to_render_node(layer: &CanvasLayer, page: usize, pages: usize) -> Rende
         };
         Box::new(Tag { id: 0, kind })
     });
-    RenderNode::CanvasLayer(RenderCanvasLayer { tag,
+    let drawn = RenderNode::CanvasLayer(RenderCanvasLayer { tag,
         transform: layer.transform,
         clip:      layer.clip.map(|[x, y, w, h]| RenderCanvasClip { x, y, w, h, border_radius: 0.0 }),
         opacity:   layer.opacity.unwrap_or(1.0).clamp(0.0, 1.0),
         children,
-    })
+    });
+    crate::layout::in_group(drawn, layer.ocg, 0.0, 0.0, 0.0, 0.0)
 }
 
 /// Stamp layers onto the render pages produced by `layout_page`.

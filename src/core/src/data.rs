@@ -492,6 +492,7 @@ mod tests {
             page_scope: None,
             paginate: Paginate::None,
             keep: RowKeep::None,
+            ocg: None,
             role: Role::Auto,
             tag_id: 0,
             debug: false,

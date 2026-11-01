@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use serde_json::{json, Value};
-use crate::parse::{FieldKind, Shadow};
+use crate::parse::{FieldKind, Ocg, Shadow};
 
 // ── Render tree types ─────────────────────────────────────────────────────────
 
@@ -201,6 +201,10 @@ pub struct RenderBox {
     pub shadow: Option<Shadow>,
     pub debug_self: bool,
     pub tag: Option<Box<Tag>>,
+    /// The optional content group the box and everything in it are in, which the viewer shows only when printing
+    /// or only on screen; `None` shows everywhere. A node of the layout in a group is drawn in a box that has it, its
+    /// own or one that draws nothing around it (`layout::in_group`).
+    pub ocg: Option<Ocg>,
     pub children: Vec<RenderNode>,
 }
 
@@ -388,6 +392,9 @@ fn node_to_json(node: &RenderNode) -> Value {
             }
             if let Some(s) = &b.shadow {
                 v["shadow"] = shadow_to_json(s);
+            }
+            if let Some(ocg) = b.ocg {
+                v["ocg"] = json!(match ocg { Ocg::Print => "print", Ocg::Screen => "screen" });
             }
             v
         }

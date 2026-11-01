@@ -1,4 +1,4 @@
-use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Capture, CaptureMode, Direction, FieldKind, Footnote, HeightMode, Justify, Node, NodeKind, PageScope, Role, RowKeep, SectionLayout, Paginate, TextAlign, TextRun};
+use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Capture, CaptureMode, Direction, FieldKind, Footnote, HeightMode, Justify, Node, NodeKind, Ocg, PageScope, Role, RowKeep, SectionLayout, Paginate, TextAlign, TextRun};
 
 // The path is spelled out because the WASI build includes this file from another crate.
 #[path = "layout/footnotes.rs"]
@@ -117,8 +117,32 @@ fn tagged_box(tag: Option<Box<Tag>>, x: f32, y: f32, width: f32, height: f32, ch
     RenderNode::Box(RenderBox {
         x, y, width, height,
         fill: None, border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None, debug_self: false,
-        tag, children,
+        tag, ocg: None, children,
     })
+}
+
+// ── Optional content ─────────────────────────────────────────────────────────
+// A node with `ocg` is drawn in a box that names the group, so the group holds everything the node draws, and a node
+// in it with a group of its own is a box inside that box, which shows only when both groups do. The box takes no room
+// of its own: hidden content keeps its place, and nothing moves.
+
+/// `rendered` in the optional content group `ocg`: the group goes on the box it is, or on a box that draws nothing
+/// around it, `x`, `y`, `width`, `height`. `None` leaves it as it is.
+pub(crate) fn in_group(rendered: RenderNode, ocg: Option<Ocg>, x: f32, y: f32, width: f32, height: f32) -> RenderNode {
+    let Some(ocg) = ocg else {
+        return rendered;
+    };
+    match rendered {
+        RenderNode::Box(mut b) if b.ocg.is_none() => {
+            b.ocg = Some(ocg);
+            RenderNode::Box(b)
+        }
+        other => RenderNode::Box(RenderBox {
+            x, y, width, height,
+            fill: None, border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None, debug_self: false,
+            tag: None, ocg: Some(ocg), children: vec![other],
+        }),
+    }
 }
 
 /// Install caller-supplied width tables for the current layout call.
@@ -586,7 +610,7 @@ fn fit_to_clip(nodes: &mut Vec<RenderNode>, bottom: f32) {
                 let mut children = std::mem::take(&mut l.children);
                 fit_to_clip(&mut children, bottom);
                 let (x, y, width, height) = (l.x, l.y, l.width, l.height);
-                *node = RenderNode::Box(RenderBox { tag: None,
+                *node = RenderNode::Box(RenderBox { tag: None, ocg: None,
                     x, y, width, height,
                     fill: None, border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None,
                     debug_self: false, children,
@@ -1847,9 +1871,10 @@ fn layout_table(
             row.background.clone().or(stripe_bg)
         };
 
-        // Emit row background box (must be below cells in draw order).
+        // Emit row background box (must be below cells in draw order). A row in an optional content group has its
+        // background in it with its cells.
         if let Some(bg) = row_bg {
-            nodes.push(RenderNode::Box(RenderBox { tag: None,
+            nodes.push(RenderNode::Box(RenderBox { tag: None, ocg: row.ocg,
                 x, y: row_y, width: avail_w, height: row_h,
                 fill: Some(bg),
                 border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None,
@@ -1885,6 +1910,8 @@ fn layout_table(
         }
         if tags_rows {
             nodes.push(tagged_box(row_tag(row), x, row_y, avail_w, row_h, row_cells));
+        } else if row.ocg.is_some() {
+            nodes.push(in_group(tagged_box(None, x, row_y, avail_w, row_h, row_cells), row.ocg, x, row_y, avail_w, row_h));
         } else {
             nodes.extend(row_cells);
         }
@@ -1898,7 +1925,7 @@ fn layout_table(
                 set_cell_column(&mut rn, placed.columns.start);
                 rn = tagged_box(row_tag(&rows[placed.row]), cell_x, top, cell_w, row_y + row_h - top, vec![rn]);
             }
-            nodes.push(rn);
+            nodes.push(in_group(rn, rows[placed.row].ocg, cell_x, top, cell_w, row_y + row_h - top));
         }
 
         row_y += row_h + gap;
@@ -2582,10 +2609,12 @@ fn layout_node(
         Some(kind) => with_tag(rendered, Tag { id: node.tag_id, kind }, node_x, y, node_w, h),
         None => rendered,
     };
-    if node.bookmarks.is_empty() {
-        return (rendered, h);
-    }
-    (with_anchors(rendered, &node.bookmarks, node_x, y, node_w, h), h)
+    let rendered = if node.bookmarks.is_empty() {
+        rendered
+    } else {
+        with_anchors(rendered, &node.bookmarks, node_x, y, node_w, h)
+    };
+    (in_group(rendered, node.ocg, node_x, y, node_w, h), h)
 }
 
 fn anchor(bookmark: &Bookmark, y: f32) -> RenderNode {
@@ -2610,7 +2639,7 @@ fn with_anchors(rendered: RenderNode, bookmarks: &[Bookmark], x: f32, y: f32, wi
             l.children.splice(0..0, anchors);
             RenderNode::Link(l)
         }
-        leaf => RenderNode::Box(RenderBox { tag: None,
+        leaf => RenderNode::Box(RenderBox { tag: None, ocg: None,
             x, y, width, height,
             fill: None, border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None, debug_self: false,
             children: anchors.chain(std::iter::once(leaf)).collect(),
@@ -2656,7 +2685,7 @@ fn layout_container(
     };
 
     (
-        RenderNode::Box(RenderBox { tag: None,
+        RenderNode::Box(RenderBox { tag: None, ocg: None,
             x,
             y,
             width: avail_w,
@@ -3216,7 +3245,7 @@ fn layout_shape(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) 
     let w = pre_w.min(avail_w);
     let h = if pre_w > 0.0 { pre_h * (w / pre_w) } else { pre_h };
     let drawing = node.shape().map(|shape| canvas::draw_flow_shape(shape, node.radius, x, y, w, h));
-    let shape_box = RenderBox { tag: None,
+    let shape_box = RenderBox { tag: None, ocg: None,
         x, y, width: w, height: h,
         fill: None, border_width: 0.0, border_color: None, radius: 0.0,
         opacity: node.opacity, shadow: None,
@@ -3385,7 +3414,7 @@ fn barcode_flow_width(node: &Node) -> Option<f32> {
 /// Return an empty box placeholder for an invalid/unencodable barcode.
 fn fallback_barcode(x: f32, y: f32, w: f32, _reason: &str) -> (RenderNode, f32) {
     let h = 40.0_f32;
-    let b = crate::render::RenderBox { tag: None,
+    let b = crate::render::RenderBox { tag: None, ocg: None,
         x, y, width: w, height: h,
         fill: Some("#eeeeee".to_string()),
         border_width: 0.5,
@@ -4257,7 +4286,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
 
     if atoms.is_empty() && !any_space {
         let reserved = node.reserve_lines() as f32 * line_height;
-        return (RenderNode::Box(RenderBox { tag: None,
+        return (RenderNode::Box(RenderBox { tag: None, ocg: None,
             x, y, width: 0.0, height: reserved, fill: None,
             border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None, debug_self: false, children: vec![],
         }), reserved, false);
@@ -4485,7 +4514,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     }
 
     (
-        RenderNode::Box(RenderBox { tag: None,
+        RenderNode::Box(RenderBox { tag: None, ocg: None,
             x, y, width: avail_w, height: total_h,
             fill: None, border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None,
             debug_self: node.debug,
@@ -4500,7 +4529,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
 
 /// A rectangle of `tint` behind a run of a line.
 fn tint_behind(tint: &str, x: f32, y: f32, width: f32, height: f32) -> RenderNode {
-    RenderNode::Box(RenderBox { tag: None,
+    RenderNode::Box(RenderBox { tag: None, ocg: None,
         x, y, width, height, fill: Some(tint.to_string()),
         border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None, debug_self: false,
         children: vec![],
@@ -4703,7 +4732,7 @@ fn layout_pre_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f3
 
     let total_h = lines.len() as f32 * line_height;
     (
-        RenderNode::Box(RenderBox { tag: None,
+        RenderNode::Box(RenderBox { tag: None, ocg: None,
             x, y, width: avail_w, height: total_h, fill: None, border_width: 0.0, border_color: None,
             radius: 0.0, opacity: 1.0, shadow: None, debug_self: node.debug, children: nodes,
         }),
@@ -4749,15 +4778,17 @@ pub(crate) fn layout_placed(placed: &canvas::PlacedNode, page: usize, pages: usi
     let (w, h) = render_size(&rendered);
     let (left, top) = canvas::apply_anchor_offset(&placed.anchor, placed.x, placed.y, w, h);
     let moved = shift_x(shift_y(rendered, top), left);
-    if !overflow {
-        return moved;
-    }
-    RenderNode::CanvasLayer(RenderCanvasLayer { tag: None,
-        transform: None,
-        clip:      Some(RenderCanvasClip { x: left, y: top, w, h, border_radius: 0.0 }),
-        opacity:   1.0,
-        children:  vec![moved],
-    })
+    let placed_node = if !overflow {
+        moved
+    } else {
+        RenderNode::CanvasLayer(RenderCanvasLayer { tag: None,
+            transform: None,
+            clip:      Some(RenderCanvasClip { x: left, y: top, w, h, border_radius: 0.0 }),
+            opacity:   1.0,
+            children:  vec![moved],
+        })
+    };
+    in_group(placed_node, node.ocg, left, top, w, h)
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

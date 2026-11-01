@@ -42,7 +42,7 @@ fn engine(created_on: Option<&str>) -> LpdfEngine {
     engine
 }
 
-fn render(xml: &str) -> Result<Vec<u8>, String> {
+pub(crate) fn render(xml: &str) -> Result<Vec<u8>, String> {
     engine(Some(CREATED_ON)).render_xml(xml, None, &RenderEncryption::default())
 }
 
@@ -289,6 +289,9 @@ fn writes_pdfa_samples_for_the_external_check() {
     for (name, file) in FONT_SAMPLES {
         std::fs::write(dir.join(format!("pdfa-2u-{name}.pdf")), font_sample(file)).expect("a sample");
     }
+    // With content in optional content groups, which a PDF/A file leaves out of them.
+    let grouped = crate::ocg_render_tests::with_groups(&fixture("2u"));
+    std::fs::write(dir.join("pdfa-2u-ocg.pdf"), render(&grouped).expect("renders")).expect("a sample");
 }
 
 #[test]
