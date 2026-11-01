@@ -4,7 +4,7 @@
 //  - qpdf finds the file linearized, and `--check-linearization` reads the hint tables back against the file with no
 //    error: the first page's section, its end, the page offsets and lengths, the shared objects, the outline;
 //  - `--check` finds no error in the file's structure or its streams. A warning qpdf gives the same document rendered
-//    without linearize, which this card did not bring, is not counted against the linearized one;
+//    without linearize, which linearizing does not bring, is not counted against the linearized one;
 //  - an encrypted file reports the cipher it was asked for, opens with the user password and with the owner password,
 //    refuses a wrong one, and is linearized under each;
 //  - each page shows what the same document shows rendered without linearize: its dictionary, its content and every
