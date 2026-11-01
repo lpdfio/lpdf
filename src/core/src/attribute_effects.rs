@@ -83,6 +83,11 @@ const UNTESTED: &[(&str, &str)] = &[
         "read by the SDKs, which load the file and hand it to the engine under the file's name or ref; the engine never sees it",
     ),
     (
+        "profile@src",
+        "read by the SDKs, which load the ICC file and hand it to the engine under the profile's name or ref; the engine \
+         never sees it",
+    ),
+    (
         "markdown:markdown-styles@src",
         "read by whoever renders the document, who loads the file and hands its text to the engine under the src; \
          markdown::tests::a_styles_file_is_laid_under_the_inline_rules_and_over_the_defaults covers it",
@@ -132,6 +137,10 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
         ("file@name", &["renamed.txt"]),
         ("file@ref", &["other"]),
         ("file@description", &["The terms of the sale"]),
+        // The press profiles `render` loads: `press` and `other`, each with bytes of its own.
+        ("output@profile", &["other"]),
+        ("profile@name", &["renamed"]),
+        ("profile@ref", &["other"]),
         ("barcode@data", &["Another payload"]),
         // What PDF/UA reads: the subjects of a PDF/UA document set a first value, which these change.
         ("meta@lang", &["de-CH"]),
@@ -173,6 +182,7 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
         "subject" => &["Subject"],
         "keywords" => &["key words"],
         "creator" => &["Creator"],
+        "bleed" => &["3mm"],
         _ => return None,
     })
 }
@@ -391,9 +401,12 @@ const BLUE_PIXEL: &[u8] = &[
     0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ];
 
-/// Renders with the images `logo` (red) and `other` (blue), the font `custom` and the files `terms.txt`,
-/// `renamed.txt` and `other` loaded on the engine, a date for a document that asks for PDF/A, and an owner password
-/// and fixed entropy for a document that asks for encryption.
+/// The press profile a PDF/X document renders with: the FOGRA39 printer profile of the test assets.
+const PRESS_PROFILE: &[u8] = include_bytes!("../../../test/assets/profiles/FOGRA39L_coated.icc");
+
+/// Renders with the images `logo` (red) and `other` (blue), the font `custom`, the files `terms.txt`, `renamed.txt` and
+/// `other` and the press profiles `press` and `other` loaded on the engine, a date for a document that asks for a standard, and an
+/// owner password and fixed entropy for a document that asks for encryption.
 /// A panic in the engine is an error like any other, so one bad value cannot hide the rest.
 fn render(xml: &str) -> Result<Vec<u8>, String> {
     catch_unwind(AssertUnwindSafe(|| {
@@ -426,8 +439,15 @@ fn render(xml: &str) -> Result<Vec<u8>, String> {
         let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts);
         let mut fonts = crate::pdf::FontRegistry::new();
         fonts.register("custom", crate::pdf::ATTRIBUTION_FONT.to_vec());
-        let created_on = (doc.output.pdfa.is_some() || doc.output.pdfua.is_some()).then_some("2026-10-31T09:30:00Z");
-        let bytes = crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, created_on, false, &doc.output, &files)?;
+        let mut profiles = crate::pdfx::ProfileRegistry::new();
+        profiles.load("press", PRESS_PROFILE.to_vec());
+        profiles.load("other", crate::pdfx::test_profile(b"prtr", b"CMYK", "Another press"));
+        let press = crate::pdfx::resolve(doc.output.pdfx.as_ref(), &doc.profiles, &profiles, &doc.meta)?;
+        let created_on = crate::pdfa::Standards::of(&doc.output).any().then_some("2026-10-31T09:30:00Z");
+        let bytes = crate::pdf::render_pdf(
+            &pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, created_on, false, &doc.output, &files,
+            press.as_ref(),
+        )?;
         match config {
             Some(config) => crate::encrypt::encrypt_pdf(&bytes, &config),
             None => Ok(bytes),
@@ -481,6 +501,16 @@ fn pdfua(assets: &str, meta: &str, output: &str, layout: &str, layers: &str) -> 
     lpdf(
         &format!(r#"<assets><font name="custom" src="custom.ttf"/>{assets}</assets>"#),
         &format!(r#"<document font="custom"><meta {meta}/>{output}<section><layout>{layout}</layout>{layers}</section></document>"#),
+    )
+}
+/// A PDF/X document with the `output` attributes given: the press profiles `press` and `other` in its assets, a title,
+/// and the text set in the font `custom`, which is embedded, as PDF/X embeds every font. A document that asks for
+/// pdfx and names no profile gets `press`, as pdfx needs one.
+fn pdfx(assets: &str, output: &str) -> String {
+    let profile = if output.contains("pdfx=") && !output.contains("profile=") { r#" profile="press""# } else { "" };
+    lpdf(
+        &format!(r#"<assets><font name="custom" src="custom.ttf"/>{assets}<profile name="other"/></assets>"#),
+        &format!(r#"<document font="custom"><meta title="T"/><output {output}{profile}/><section><layout><text>Lpdf</text></layout></section></document>"#),
     )
 }
 const BOOKMARKED: &str =
@@ -615,6 +645,12 @@ fn subjects() -> Vec<Subject> {
                 &format!(r#"<document font="custom"><output {a}/><section><layout><text>Lpdf</text></layout></section></document>"#),
             )
         }),
+        // PDF/X: the version, which needs a profile, and the profile, which needs the version.
+        Subject::new("output", |a, _| pdfx(r#"<profile name="press"/>"#, a)).only(&["pdfx"]),
+        Subject::new("output", |a, _| pdfx(r#"<profile name="press"/>"#, a))
+            .only(&["profile"])
+            .base(&[("pdfx", "4"), ("profile", "press")]),
+        Subject::new("profile", |a, _| pdfx(&format!("<profile {a}/>"), r#"pdfx="4" profile="press""#)).base(&[("name", "press")]),
         // PDF/UA: the attributes a tagged PDF reads, which a document without pdfua ignores.
         Subject::new("output", |a, _| pdfua("", r#"title="T" lang="en""#, &format!("<output {a}/>"), "<text>Lpdf</text>", ""))
             .only(&["pdfua"]),
@@ -936,6 +972,7 @@ fn tweaks() -> HashMap<String, Tweak> {
     add("color@name", Tweak::default().error_counts());
     add("gradient@name", Tweak::default().error_counts());
     add("alias@name", Tweak::default().error_counts());
+    add("profile@name", Tweak::default().error_counts());
     // A font is a core font or a registry key, not both.
     add("font@ref", Tweak::default().without("core"));
 

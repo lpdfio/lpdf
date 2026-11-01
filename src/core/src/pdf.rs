@@ -34,7 +34,7 @@ use std::ops::Range;
 
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
 use pdf_writer::writers::Resources;
-use pdf_writer::types::{ActionType, AnnotationFlags, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, FunctionShadingType, HighlightEffect, LineCapStyle, LineJoinStyle, OutputIntentSubtype, PageMode, Predictor, TabOrder, TableHeaderScope, TextRenderingMode};
+use pdf_writer::types::{ActionType, AnnotationFlags, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, FunctionShadingType, HighlightEffect, LineCapStyle, LineJoinStyle, OutputIntentSubtype, PageMode, Predictor, TabOrder, TableHeaderScope, TextRenderingMode, TrappingStatus};
 use md5::{Digest, Md5};
 use ttf_parser::{Face, Permissions};
 use miniz_oxide::deflate::compress_to_vec_zlib;
@@ -44,7 +44,8 @@ use subsetter::GlyphRemapper;
 use crate::attachments::{self, EmbeddedFile};
 use crate::render::{placed_anchors, PlacedAnchor, RenderBox, RenderCanvasLayer, RenderField, RenderNode, RenderPage, RenderedBarcodeKind};
 use crate::parse::{FieldKind, Meta, Output, Shadow};
-use crate::pdfa::{self, FileDate, PdfA, Standards};
+use crate::pdfa::{self, FileDate, PdfA, Standards, XmpIds};
+use crate::pdfx::{PdfXVersion, PressProfile, ProfileSpace};
 use crate::pdfua::PdfUa;
 use crate::tagging::{Kid, Kind, LinkMark, Marks};
 use crate::tokens::{FontDef, Gradient, GradientKind, GRADIENT_PREFIX, is_cmyk};
@@ -1171,6 +1172,9 @@ struct DrawResources<'a> {
     fonts:         &'a HashMap<String, PreparedFont>,
     image_res_map: &'a HashMap<String, String>,
     gradients:     &'a HashMap<String, Gradient>,
+    /// Whether a link is an annotation over its content. A PDF/X file allows nothing clickable on the printed page, so
+    /// its links draw their content alone.
+    links:         bool,
 }
 
 fn draw_nodes(
@@ -1234,7 +1238,7 @@ fn draw_drawn(
     res:           &DrawResources,
     page_h:        f32,
 ) {
-    let DrawResources { fonts, image_res_map, gradients } = *res;
+    let DrawResources { fonts, image_res_map, gradients, .. } = *res;
     match node {
         // ── Box ──────────────────────────────────────────────────────────────
         RenderNode::Box(b) => {
@@ -1316,6 +1320,10 @@ fn draw_drawn(
         }
 
         // ── Link ─────────────────────────────────────────────────────────────
+        // In a PDF/X file the content prints as it would in a link, and nothing is clickable.
+        RenderNode::Link(lk) if !res.links => {
+            draw_nodes(content, annots, groups, marks, &lk.children, res, page_h);
+        }
         RenderNode::Link(lk) => {
             // Draw child nodes first (they appear inside the link area). In a tagged PDF they are drawn in the link's
             // element, which holds the annotation too.
@@ -2581,10 +2589,11 @@ fn build_content_streams(
     image_res_map: &HashMap<String, String>,
     gradients:     &HashMap<String, Gradient>,
     attribution:   bool,
+    links:         bool,
     marks:         &mut Marks,
 ) -> Vec<RenderedPage> {
     let mut rendered_pages: Vec<RenderedPage> = Vec::new();
-    let res = DrawResources { fonts, image_res_map, gradients };
+    let res = DrawResources { fonts, image_res_map, gradients, links };
 
     for (index, page) in pages.iter().enumerate() {
         let mut content = Content::new();
@@ -2602,7 +2611,7 @@ fn build_content_streams(
 
         // Drawn last so it sits above the page's own content.
         if attribution {
-            draw_attribution(&mut content, &mut annots, marks, fonts, page.width, page.height);
+            draw_attribution(&mut content, &mut annots, marks, fonts, page.width, page.height, links);
         }
 
         rendered_pages.push(RenderedPage { content: content.finish(), annots, groups });
@@ -2611,18 +2620,21 @@ fn build_content_streams(
     rendered_pages
 }
 
-/// The background of a page: a color, or a gradient across the whole page.
+/// The background of a page: a color, or a gradient across the whole page, its bleed included, so that it runs off
+/// the page when the press cuts it.
 fn draw_page_background(content: &mut Content, page: &RenderPage, bg: &str, gradients: &HashMap<String, Gradient>) {
+    let (x, y) = (0.0 - page.bleed, 0.0 - page.bleed);
+    let (w, h) = (page.width + 2.0 * page.bleed, page.height + 2.0 * page.bleed);
     if is_gradient_fill(bg) {
         if let Some((name, gradient)) = gradient_of(bg, gradients) {
-            let bounds = (0.0, 0.0, page.width, page.height);
+            let bounds = (x, y, w, h);
             fill_with_gradient(content, name, gradient, bounds, false, |content| {
-                content.rect(0.0, 0.0, page.width, page.height);
+                content.rect(x, y, w, h);
             });
         }
     } else {
         set_fill_color(content, bg);
-        content.rect(0.0, 0.0, page.width, page.height);
+        content.rect(x, y, w, h);
         content.fill_nonzero();
     }
 }
@@ -2678,6 +2690,7 @@ fn draw_attribution(
     fonts:   &HashMap<String, PreparedFont>,
     page_w:  f32,
     page_h:  f32,
+    link:    bool,
 ) {
     const PAD:         f32 = 12.0;
     const NAME_SIZE:   f32 = 9.0;
@@ -2737,7 +2750,10 @@ fn draw_attribution(
     });
 
     // One target for the whole line, with slack below and above so the name's
-    // descender and a fingertip both land inside it.
+    // descender and a fingertip both land inside it. A PDF/X file has none: it prints the line alone.
+    if !link {
+        return;
+    }
     annots.push(AnnotData {
         x1:  left,
         y1:  page_h - (PAD + MARK_SIZE + 3.0),
@@ -2928,9 +2944,13 @@ fn assemble_pdf(
     file:               Option<&StandardFile>,
     files:              &[EmbeddedFile],
     marks:              &Marks,
+    press:              Option<&PressProfile>,
 ) -> Result<Vec<u8>, String> {
     // What PDF/A alone asks for: an output intent, a file ID, and links that print.
     let pdfa = file.filter(|file| file.standards.pdfa.is_some());
+    // What PDF/X alone asks for: the version, the press profile as the output intent, the page boxes, RGB tied to
+    // sRGB, and a file ID.
+    let pdfx: Option<(PdfXVersion, &PressProfile)> = file.and_then(|file| file.standards.pdfx).zip(press);
     let AllocatedIds {
         catalog_id, info_id, pages_id,
         page_ids, content_ids, annot_ids,
@@ -2952,6 +2972,8 @@ fn assemble_pdf(
     // the same reason.
     let xmp_id = file.map(|_| alloc.next());
     let profile_id = pdfa.map(|_| alloc.next());
+    // A PDF/X file's press profile, and the sRGB profile its pages map RGB to.
+    let press_ids = pdfx.map(|_| PressIds { press: alloc.next(), srgb: alloc.next() });
 
     // The files the document carries come last, so a document without any keeps its ids.
     let file_ids = attachments::allocate(files, || alloc.next());
@@ -2965,6 +2987,10 @@ fn assemble_pdf(
 
     let n = pages.len();
     let mut pdf = Pdf::new();
+    // PDF/X-4 is a profile of PDF 1.6, which its header names.
+    if pdfx.is_some() {
+        pdf.set_version(1, 6);
+    }
 
     // -- Catalog ---------------------------------------------------------------
     {
@@ -2987,6 +3013,17 @@ fn assemble_pdf(
                 .registry_name(TextStr("http://www.color.org"))
                 .info(TextStr(pdfa::SRGB_CONDITION))
                 .dest_output_profile(profile_id);
+        }
+        // The press the file is made for, by the profile the printer gave out. Not a condition of a registry, so
+        // "Custom", with the profile's own description.
+        if let (Some((_, press)), Some(ids)) = (pdfx, &press_ids) {
+            cat.output_intents()
+                .push()
+                .subtype(OutputIntentSubtype::PDFX)
+                .output_condition_identifier(TextStr("Custom"))
+                .output_condition(TextStr(&press.description))
+                .info(TextStr(&press.description))
+                .dest_output_profile(ids.press);
         }
         attachments::write_catalog(&mut cat, files, &file_ids);
         // A tagged PDF: the structure, the language a screen reader reads it in, and the title shown in place of the
@@ -3041,6 +3078,11 @@ fn assemble_pdf(
                 info.pair(Name(b"ModDate"), Str(date.as_bytes()));
             }
         }
+        // A PDF/X file names its version, and says it is not trapped: Lpdf doesn't trap.
+        if let Some((version, _)) = pdfx {
+            info.pair(Name(b"GTS_PDFXVersion"), TextStr(version.name()));
+            info.trapped(TrappingStatus::NotTrapped);
+        }
     }
 
     // -- Pages tree ------------------------------------------------------------
@@ -3055,6 +3097,11 @@ fn assemble_pdf(
     // (over-inclusion is harmless and avoids a second per-page scan), the ExtGStates for opacity, and the
     // groups it draws: the `drawn` positions in `groups`, the form XObjects of the page.
     let write_resources = |resources: &mut Resources<'_>, groups: &[Ref], drawn: Range<usize>| {
+        // In a PDF/X file every RGB color and image, drawn as DeviceRGB, is sRGB: the device space a press can't print
+        // as it is gets a meaning (ISO 32000-1, 8.6.5.6).
+        if let Some(ids) = &press_ids {
+            resources.color_spaces().insert(Name(b"DefaultRGB")).array().item(Name(b"ICCBased")).item(ids.srgb);
+        }
         {
             let mut font_res = resources.fonts();
             for name in sorted_font_names {
@@ -3099,8 +3146,16 @@ fn assemble_pdf(
         let content_id = content_ids[i];
 
         let mut pw = pdf.page(page_id);
-        pw.parent(pages_id)
-          .media_box(Rect::new(0.0, 0.0, page.width, page.height));
+        pw.parent(pages_id);
+        // The page the layout fills is the trimmed page. With a bleed, the sheet reaches past it on every side; a PDF/X
+        // file names both boxes even without one.
+        let trim = Rect::new(0.0, 0.0, page.width, page.height);
+        if page.bleed > 0.0 || pdfx.is_some() {
+            let sheet = bled(page);
+            pw.media_box(sheet).bleed_box(sheet).trim_box(trim);
+        } else {
+            pw.media_box(trim);
+        }
 
         write_resources(&mut pw.resources(), &group_ids[i], 0..group_ids[i].len());
 
@@ -3146,8 +3201,16 @@ fn assemble_pdf(
             let compressed = compress_to_vec_zlib(&group.content, 6);
             let mut form = pdf.form_xobject(group_ids[i][j], &compressed);
             form.filter(Filter::FlateDecode);
-            form.bbox(Rect::new(0.0, 0.0, pages[i].width, pages[i].height));
-            form.group().transparency().isolated(true).color_space().device_rgb();
+            form.bbox(bled(&pages[i]));
+            // A PDF/X file blends in sRGB, as its pages draw RGB.
+            {
+                let mut attributes = form.group();
+                let space = attributes.transparency().isolated(true).color_space();
+                match &press_ids {
+                    Some(ids) => space.icc_based(ids.srgb),
+                    None => space.device_rgb(),
+                }
+            }
             write_resources(&mut form.resources(), &group_ids[i], group.nested.clone());
             if let Some(key) = keys.group(i, j) {
                 form.struct_parents(key);
@@ -3637,10 +3700,11 @@ fn assemble_pdf(
         write_structure(&mut pdf, marks, structure, &keys, &page_ids, &group_ids, &annot_ids, &rendered_pages);
     }
 
-    // -- PDF/A and PDF/UA: the XMP packet; PDF/A: the output intent's profile and the file ID -------
+    // -- PDF/A, PDF/UA and PDF/X: the XMP packet; PDF/A and PDF/X: the output intent's profile and the file ID ----
     if let (Some(file), Some(xmp_id)) = (file, xmp_id) {
         // Not compressed, so that a tool that knows nothing of PDF can still find the packet.
-        let xmp = pdfa::xmp_packet(file.standards, meta, &file.date);
+        let ids = pdfx.map(|_| xmp_ids(pdf.as_bytes()));
+        let xmp = pdfa::xmp_packet(file.standards, meta, &file.date, ids.as_ref());
         pdf.metadata(xmp_id, &xmp);
     }
     if let Some(profile_id) = profile_id {
@@ -3648,12 +3712,55 @@ fn assemble_pdf(
            .n(3)
            .alternate()
            .device_rgb();
+    }
+    if let (Some((_, press)), Some(ids)) = (pdfx, &press_ids) {
+        let compressed = compress_to_vec_zlib(press.bytes, 6);
+        let mut profile = pdf.icc_profile(ids.press, &compressed);
+        profile.filter(Filter::FlateDecode);
+        profile.n(press.space.components());
+        let alternate = profile.alternate();
+        match press.space {
+            ProfileSpace::Gray => alternate.device_gray(),
+            ProfileSpace::Rgb => alternate.device_rgb(),
+            ProfileSpace::Cmyk => alternate.device_cmyk(),
+        }
+        drop(profile);
+        pdf.icc_profile(ids.srgb, pdfa::SRGB_PROFILE)
+           .n(3)
+           .alternate()
+           .device_rgb();
+    }
+    if pdfa.is_some() || pdfx.is_some() {
         // From the bytes written so far, so the same document gives the same file.
         let id = Md5::digest(pdf.as_bytes()).to_vec();
         pdf.set_file_id((id.clone(), id));
     }
 
     Ok(pdf.finish())
+}
+
+/// The objects of a PDF/X file's colour: the press profile of its output intent, and the sRGB profile it maps RGB to.
+struct PressIds {
+    press: Ref,
+    srgb:  Ref,
+}
+
+/// The sheet of `page`: the trimmed page grown by its bleed on every side, its MediaBox and BleedBox. Without a bleed
+/// it is the page itself, written as it was before bleeds existed.
+fn bled(page: &RenderPage) -> Rect {
+    Rect::new(0.0 - page.bleed, 0.0 - page.bleed, page.width + page.bleed, page.height + page.bleed)
+}
+
+/// The XMP media management ids of a PDF/X file, from the bytes written before its XMP packet, so that the same
+/// document gives the same file: the document's, and the rendition's, which differs from it.
+fn xmp_ids(bytes: &[u8]) -> XmpIds {
+    let uuid = |digest: &[u8]| {
+        let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
+        format!("uuid:{}-{}-{}-{}-{}", &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32])
+    };
+    let document = Md5::digest(bytes);
+    let instance = Md5::new().chain_update(b"instance").chain_update(bytes).finalize();
+    XmpIds { document: uuid(&document), instance: uuid(&instance) }
 }
 
 /// The date of the file as a PDF date: a PDF/A file's date, or else `created_on` read as a PDF/A file's is
@@ -3701,8 +3808,19 @@ pub fn render_pdf(
     licensed:       bool,
     output:         &Output,
     files:          &[EmbeddedFile],
+    press:          Option<&PressProfile>,
 ) -> Result<Vec<u8>, String> {
     let standards = Standards::of(output);
+    // The press profile of a PDF/X file, which the caller read from the document's `<profile>` (`pdfx::resolve`).
+    let press = match (&output.pdfx, press) {
+        (Some(pdfx), None) => return Err(format!(
+            "<output pdfx=\"{}\">: the profile '{}' of <assets> was not loaded: give it a src the SDK reads the ICC \
+            file from, or load it on the engine with loadProfile",
+            pdfx.version.attribute(), pdfx.profile
+        )),
+        (Some(_), press) => press,
+        (None, _) => None,
+    };
     let file = standards.any()
         .then(|| pdfa::file_date(standards, created_on).map(|date| StandardFile { standards, date }))
         .transpose()?;
@@ -3723,16 +3841,20 @@ pub fn render_pdf(
     if let Some(part) = standards.pdfua {
         refuse_for_pdfua(part, pages, &fonts, &sorted_font_names, font_defs)?;
     }
+    if let (Some(version), Some(press)) = (standards.pdfx, press) {
+        refuse_for_pdfx(version, press, pages, &fonts, &sorted_font_names, font_defs, &used_gradients, &fields)?;
+    }
     let mut marks = if standards.pdfua.is_some() { Marks::tagged() } else { Marks::off() };
+    let links = standards.pdfx.is_none();
     let mut rendered_pages =
-        build_content_streams(pages, &fonts, &image_res_map, gradients, attribution, &mut marks);
+        build_content_streams(pages, &fonts, &image_res_map, gradients, attribution, links, &mut marks);
     drop_dangling_links(&mut rendered_pages, &anchors);
     let ids =
         allocate_ids(pages, &rendered_pages, &fonts, &sorted_font_names, &sorted_image_names, image_registry, &fields);
     assemble_pdf(
         pages, &fonts, &sorted_font_names, &sorted_image_names,
         image_registry, &image_res_map, rendered_pages, ids, &fields, &anchors,
-        &used_gradients, meta, date.as_deref(), file.as_ref(), files, &marks,
+        &used_gradients, meta, date.as_deref(), file.as_ref(), files, &marks, press,
     )
 }
 
@@ -3825,6 +3947,72 @@ fn refuse_for_pdfua(
     for page in pages {
         if let Some(reason) = first_in(&page.nodes, &mut |node| font_refusal(node, fonts, font_defs, "PDF/UA")) {
             return refuse(reason);
+        }
+    }
+    Ok(())
+}
+
+/// Refuse what a PDF/X file cannot hold where only the author can change it, with an error that says what to change:
+/// a form field, which is an annotation on the printed page, text in a font that is not embedded, a font whose licence
+/// forbids embedding, a character the font has no glyph for, and a CMYK color when the press profile is not a CMYK one,
+/// so that nothing on the page is in a device space the output intent doesn't describe. RGB colors are mapped to sRGB,
+/// and links are left out; the engine writes the rest of what PDF/X needs itself.
+#[allow(clippy::too_many_arguments)]
+fn refuse_for_pdfx(
+    version:           PdfXVersion,
+    press:             &PressProfile,
+    pages:             &[RenderPage],
+    fonts:             &HashMap<String, PreparedFont>,
+    sorted_font_names: &[String],
+    font_defs:         &HashMap<String, FontDef>,
+    used_gradients:    &[(&str, &Gradient)],
+    fields:            &[(usize, RenderField)],
+) -> Result<(), String> {
+    let refuse = |reason: String| Err(format!("<output pdfx=\"{}\">: {reason}", version.attribute()));
+
+    if let Some((_, field)) = fields.first() {
+        let name = if field.name.is_empty() { String::new() } else { format!(" '{}'", field.name) };
+        return refuse(format!(
+            "the form field{name} can't be in a PDF/X file: a field is something to click and type in on the printed \
+            page, and PDF/X holds only what the press prints. Remove the field, or remove pdfx"
+        ));
+    }
+
+    for name in sorted_font_names {
+        if let PreparedFontKind::Truetype { original_bytes, .. } = &fonts[name].kind
+            && let Some(reason) = embedding_refused(original_bytes)
+        {
+            return refuse(format!(
+                "the font '{name}' {reason}, and a PDF/X file embeds every font it draws in: use another font"
+            ));
+        }
+    }
+
+    for page in pages {
+        if let Some(reason) = first_in(&page.nodes, &mut |node| font_refusal(node, fonts, font_defs, "PDF/X")) {
+            return refuse(reason);
+        }
+    }
+
+    if press.space != ProfileSpace::Cmyk {
+        let because = format!(
+            "and the profile '{}' prints in {} color space, not CMYK",
+            press.name, press.space.article()
+        );
+        for page in pages {
+            let background = page.background.as_deref().filter(|color| is_cmyk(color));
+            if let Some(color) = background.map(str::to_string).or_else(|| first_in(&page.nodes, &mut cmyk_color)) {
+                return refuse(format!(
+                    "the color {color} is CMYK, {because}: give it as an RGB color, such as a hex one, or use a CMYK \
+                    profile of the press"
+                ));
+            }
+        }
+        if let Some((name, _)) = used_gradients.iter().find(|(_, gradient)| gradient.stops.iter().any(|stop| is_cmyk(&stop.color))) {
+            return refuse(format!(
+                "the gradient '{name}' has CMYK colors, {because}: give its colors as RGB ones, such as hex ones, or \
+                use a CMYK profile of the press"
+            ));
         }
     }
     Ok(())
@@ -4424,7 +4612,7 @@ mod tests {
         let xml = format!(r#"<lpdf version="1"><document><section><layout>{layout}</layout></section></document></lpdf>"#);
         let mut doc = crate::parse::parse(&xml).expect("parses");
         let pages = crate::layout::layout_document(&doc.section_layouts());
-        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &ImageRegistry::new(), &doc.meta, &doc.gradients, None, licensed, &doc.output, &[])
+        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &ImageRegistry::new(), &doc.meta, &doc.gradients, None, licensed, &doc.output, &[], None)
             .expect("renders")
     }
 
@@ -4662,7 +4850,7 @@ mod tests {
             crate::layout::prefill_section_image_sizes(section, &meta);
         }
         let pages = crate::layout::layout_document(&layouts);
-        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[]).expect("renders")
+        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[], None).expect("renders")
     }
 
     #[test]
@@ -4694,7 +4882,7 @@ mod tests {
         let pages = crate::layout::layout_document(&doc.section_layouts());
         let mut images = ImageRegistry::new();
         images.load("photo", RED_PIXEL.to_vec());
-        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[]).expect("renders");
+        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[], None).expect("renders");
         let (page, groups) = page_and_groups(&pdf);
         assert_eq!(groups.len(), 1);
         let (dict, group) = &groups[0];
@@ -4805,7 +4993,7 @@ mod tests {
         let pages = crate::layout::layout_document(&doc.section_layouts());
         let mut registry = FontRegistry::new();
         registry.register("brand", bytes.to_vec());
-        let pdf = render_pdf(&pages, &doc.fonts, &registry, &ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, &doc.output, &[]).expect("renders");
+        let pdf = render_pdf(&pages, &doc.fonts, &registry, &ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, &doc.output, &[], None).expect("renders");
         let page = page_and_groups(&pdf).0;
         let operators = operators(&page);
         assert!(arrays(&operators) > 1, "the justified lines are arrays: {page}");
@@ -4926,7 +5114,7 @@ mod tests {
         let pages = crate::layout::layout_document(&doc.section_layouts());
         let mut images = ImageRegistry::new();
         images.load("photo", RED_PIXEL.to_vec());
-        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[]).expect("renders");
+        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[], None).expect("renders");
         let (page, groups) = page_and_groups(&pdf);
         assert_eq!(groups.len(), 1);
         assert!(groups[0].1.contains("/I0 Do"), "the image is drawn in the group: {}", groups[0].1);

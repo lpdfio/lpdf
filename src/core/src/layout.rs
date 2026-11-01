@@ -330,6 +330,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
         return vec![RenderPage {
             width: page.width,
             height: page.height,
+            bleed: page.bleed,
             background: page.background.clone(),
             margin: page.margin,
             nodes,
@@ -384,6 +385,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
                 RenderPage {
                     width: page.width,
                     height: page.height,
+                    bleed: page.bleed,
                     background: page.background.clone(),
                     margin: page.margin,
                     nodes,
@@ -496,6 +498,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
         pages_out.push(RenderPage {
             width: page.width,
             height: page.height,
+            bleed: page.bleed,
             background: page.background.clone(),
             margin: page.margin,
             nodes: all_nodes,
@@ -523,7 +526,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
         let mut all = top_nodes;
         all.extend(bot_nodes);
         pages_out.push(RenderPage {
-            width: page.width, height: page.height,
+            width: page.width, height: page.height, bleed: page.bleed,
             background: page.background.clone(), margin: page.margin,
             nodes: all,
         });

@@ -13,7 +13,7 @@ use pdf_writer::types::AssociationKind;
 use pdf_writer::writers::Catalog;
 use pdf_writer::{Filter, Name, Pdf, Ref, Str, TextStr};
 
-use crate::pdfa::PdfA;
+use crate::parse::Output;
 
 /// The type of a file whose `mime` is not given: any file.
 const DEFAULT_MIME: &str = "application/octet-stream";
@@ -147,17 +147,26 @@ pub(crate) fn from_tree(value: &serde_json::Value) -> Result<Vec<Attachment>, St
     Ok(files)
 }
 
-/// Refuses attachments in a PDF/A-2 document: the standard lets it carry only files that are PDF/A themselves
-/// (veraPDF rule 6.8-5), which the engine can't check.
-pub(crate) fn check_pdfa(files: &[Attachment], pdfa: Option<PdfA>) -> Result<(), String> {
-    match (files.first(), pdfa) {
-        (Some(file), Some(level)) => Err(format!(
+/// Refuses attachments in a document whose `<output>` asks for a standard that can't carry them: PDF/A-2, which lets a
+/// file carry only files that are PDF/A themselves (veraPDF rule 6.8-5), which the engine can't check, and PDF/X,
+/// whose file carries nothing the press doesn't print.
+pub(crate) fn check_standards(files: &[Attachment], output: &Output) -> Result<(), String> {
+    let Some(file) = files.first() else { return Ok(()) };
+    if let Some(level) = output.pdfa {
+        return Err(format!(
             "<output pdfa=\"{}\">: the file '{}' can't be in a PDF/A-2 file, which carries only files that are PDF/A \
             themselves, and the engine can't check that: remove the attachments, or remove pdfa",
             level.attribute(), file.name
-        )),
-        _ => Ok(()),
+        ));
     }
+    if let Some(pdfx) = &output.pdfx {
+        return Err(format!(
+            "<output pdfx=\"{}\">: the file '{}' can't be in a PDF/X file, which holds only what the press prints: \
+            remove the attachments, or remove pdfx",
+            pdfx.version.attribute(), file.name
+        ));
+    }
+    Ok(())
 }
 
 /// The bytes loaded for the files of documents, by the key they were loaded under.
@@ -361,12 +370,19 @@ mod tests {
     }
 
     #[test]
-    fn attachments_in_a_pdfa_2_document_are_an_error() {
+    fn attachments_in_a_pdfa_2_or_a_pdfx_document_are_an_error() {
         let files = xml_files(r#"<file name="a.xml"/>"#).unwrap();
-        let error = check_pdfa(&files, Some(PdfA::parse("2b").unwrap())).unwrap_err();
+        let pdfa = Output { pdfa: Some(crate::pdfa::PdfA::parse("2b").unwrap()), ..Output::default() };
+        let error = check_standards(&files, &pdfa).unwrap_err();
         assert!(error.contains("pdfa=\"2b\"") && error.contains("remove the attachments, or remove pdfa"), "{error}");
-        assert!(check_pdfa(&files, None).is_ok());
-        assert!(check_pdfa(&[], Some(PdfA::parse("2u").unwrap())).is_ok());
+        let pdfx = Output {
+            pdfx: Some(crate::pdfx::PdfX { version: crate::pdfx::PdfXVersion::X4, profile: "press".into() }),
+            ..Output::default()
+        };
+        let error = check_standards(&files, &pdfx).unwrap_err();
+        assert!(error.contains("pdfx=\"4\"") && error.contains("'a.xml'") && error.contains("or remove pdfx"), "{error}");
+        assert!(check_standards(&files, &Output::default()).is_ok());
+        assert!(check_standards(&[], &pdfx).is_ok());
     }
 
     #[test]

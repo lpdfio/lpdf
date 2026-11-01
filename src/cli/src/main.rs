@@ -222,7 +222,7 @@ fn engine_for(license: &str) -> lpdf::LpdfEngine {
 }
 
 /// Load into `engine` the files that `xml` names with a `src`, read relative to `base`: its images, the files of its
-/// Markdown styles and the files it carries. The images of a `.md` file are named `markdown-image-N` and loaded apart, so they are
+/// Markdown styles, the files it carries and its colour profiles. The images of a `.md` file are named `markdown-image-N` and loaded apart, so they are
 /// skipped here.
 fn load_sources(engine: &mut lpdf::LpdfEngine, xml: &str, base: &Path) -> Result<(), String> {
     for file in lpdf::source_files(xml)? {
@@ -241,6 +241,10 @@ fn load_sources(engine: &mut lpdf::LpdfEngine, xml: &str, base: &Path) -> Result
             lpdf::SourceKind::File => {
                 let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read the file '{}': {e}", path.display()))?;
                 engine.load_file(&file.key, &bytes);
+            }
+            lpdf::SourceKind::Profile => {
+                let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read the profile '{}': {e}", path.display()))?;
+                engine.load_profile(&file.key, &bytes);
             }
         }
     }

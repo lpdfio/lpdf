@@ -15,11 +15,15 @@ pub struct Document {
     pub attachments: Vec<crate::attachments::Attachment>,
     pub fonts:       HashMap<String, FontDef>,
     pub images:      HashMap<String, String>,
+    /// The colour profiles of `<assets>`: the key each was loaded under (its `ref`, or its name), by name.
+    pub profiles:    HashMap<String, String>,
     /// Caller-supplied glyph width tables.
     pub font_widths: HashMap<String, FontWidths>,
     // Document-level page defaults (inherited by each section unless overridden)
     pub page_width:  f32,
     pub page_height: f32,
+    /// How far each page reaches past its trim edge, which a section's own `bleed` overrides: 0 for none.
+    pub bleed:       f32,
     pub background:  Option<String>,
     /// The gradients of the tokens, which a background or a fill names as `gradient:name`.
     pub gradients:   HashMap<String, Gradient>,
@@ -45,6 +49,7 @@ impl Document {
         for section in std::mem::take(&mut self.sections) {
             let width  = section.options.size.map(|(w, _)| w).unwrap_or(self.page_width);
             let height = section.options.size.map(|(_, h)| h).unwrap_or(self.page_height);
+            let bleed  = section.options.bleed.unwrap_or(self.bleed);
             let bg     = section.options.background
                             .or_else(|| self.background.clone());
             let debug  = section.options.debug.unwrap_or(self.debug);
@@ -106,7 +111,7 @@ impl Document {
                 document_notes += children.iter().map(count_footnotes).sum::<u32>();
             }
             result.push(SectionLayout {
-                width, height, margin, gap, background: bg, debug, children, underlays, overlays,
+                width, height, bleed, margin, gap, background: bg, debug, children, underlays, overlays,
                 bookmark: section.bookmark,
                 toc: section.options.toc,
                 footnote_counter, footnote_start,
@@ -190,6 +195,8 @@ pub(crate) const MARGIN_MOVED: &str = "margin moved to <layout>; set it there, i
 #[derive(Debug, Clone, Default)]
 pub struct SectionOptions {
     pub size:       Option<(f32, f32)>,
+    /// The section's own `bleed`, which overrides the document's.
+    pub bleed:      Option<f32>,
     pub background: Option<String>,
     pub debug:      Option<bool>,
     /// Parsed but not yet surfaced to the render pipeline.
@@ -261,12 +268,16 @@ pub struct Output {
     pub pdfa: Option<crate::pdfa::PdfA>,
     /// The PDF/UA part of `pdfua`; `None` for a file that is not tagged.
     pub pdfua: Option<crate::pdfua::PdfUa>,
+    /// The PDF/X version of `pdfx` and the press profile `profile` names; `None` for a file that is not for a press.
+    pub pdfx: Option<crate::pdfx::PdfX>,
 }
 
 #[derive(Debug, Clone)]
 pub struct SectionLayout {
     pub width: f32,
     pub height: f32,
+    /// How far the pages reach past their trim edge, on every side; 0 for none.
+    pub bleed: f32,
     pub margin: [f32; 4], // the layout's: top, right, bottom, left
     /// The space between the nodes that stand directly in the flow.
     pub gap: f32,
@@ -1283,9 +1294,10 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
     let mut asset_fonts:  HashMap<String, FontDef>   = HashMap::new();
     let mut asset_images: HashMap<String, String>     = HashMap::new();
     let mut image_srcs:   HashMap<String, String>     = HashMap::new();
+    let mut profiles:     HashMap<String, String>     = HashMap::new();
     for child in elems(&root) {
         if child.tag_name().name() == "assets" {
-            parse_assets_elem(&child, &mut asset_fonts, &mut asset_images, &mut image_srcs)?;
+            parse_assets_elem(&child, &mut asset_fonts, &mut asset_images, &mut image_srcs, &mut profiles)?;
         }
     }
 
@@ -1302,6 +1314,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
     let mut output        = Output::default();
     let mut attachments   = Vec::new();
     let mut doc_size      = (595.28_f32, 841.89_f32); // a4
+    let mut doc_bleed     = 0.0_f32;
     let mut doc_background: Option<String> = None;
     let mut doc_debug     = false;
     let mut doc_font: Option<String> = None;
@@ -1319,6 +1332,9 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                 }
                 if let Some("landscape") = child.attribute("orientation") {
                     doc_size = (doc_size.1, doc_size.0);
+                }
+                if let Some(v) = child.attribute("bleed") {
+                    doc_bleed = parse_bleed(v).map_err(|e| format!("<document>{}: {e}", node_loc(&child)))?;
                 }
                 if let Some(v) = child.attribute("background") {
                     doc_background = Some(tokens.resolve_fill(v)?);
@@ -1338,7 +1354,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                         "output" => {
                             output = parse_output(
                                 doc_child.attribute("encrypt"), doc_child.attribute("allow"), doc_child.attribute("pdfa"),
-                                doc_child.attribute("pdfua"),
+                                doc_child.attribute("pdfua"), doc_child.attribute("pdfx"), doc_child.attribute("profile"),
                             )
                                 .map_err(|e| format!("<output>{}: {e}", node_loc(&doc_child)))?;
                         }
@@ -1368,7 +1384,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                         node_loc(&child)
                     ));
                 }
-                crate::attachments::check_pdfa(&attachments, output.pdfa)?;
+                crate::attachments::check_standards(&attachments, &output)?;
                 markdown::expand_pending(&mut sections_xml, None, markdown::Pass::Read)?;
                 check_sections(&mut sections_xml)?;
                 let mut resolved_fonts: HashMap<String, FontDef> = HashMap::new();
@@ -1386,8 +1402,10 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                     fonts:       resolved_fonts,
                     font_widths: HashMap::new(),
                     images:      asset_images,
+                    profiles,
                     page_width:  doc_size.0,
                     page_height: doc_size.1,
+                    bleed:       doc_bleed,
                     background:  doc_background,
                     gradients:   std::mem::take(&mut tokens.gradients),
                     colors:      std::mem::take(&mut tokens.colors),
@@ -1464,6 +1482,7 @@ fn parse_tree_assets(
     images:     &mut HashMap<String, String>,
     image_srcs: &mut HashMap<String, String>,
     widths:     &mut HashMap<String, FontWidths>,
+    profiles:   &mut HashMap<String, String>,
 ) -> Result<(), String> {
     for font in tree_asset_entries(assets, "fonts")? {
         let name = tree_asset_name(font, "fonts")?;
@@ -1485,6 +1504,11 @@ fn parse_tree_assets(
         if let Some(src) = image.get("src").and_then(|v| v.as_str()) { image_srcs.insert(src.to_string(), name.clone()); }
         images.insert(name, key);
     }
+    for profile in tree_asset_entries(assets, "profiles")? {
+        let name = tree_asset_name(profile, "profiles")?;
+        let key = profile.get("ref").and_then(|v| v.as_str()).unwrap_or(&name).to_string();
+        profiles.insert(name, key);
+    }
     Ok(())
 }
 
@@ -1505,6 +1529,7 @@ fn parse_assets_elem(
     fonts:        &mut HashMap<String, FontDef>,
     images:       &mut HashMap<String, String>,
     image_srcs:   &mut HashMap<String, String>,
+    profiles:     &mut HashMap<String, String>,
 ) -> Result<(), String> {
     for child in elems(elem) {
         match child.tag_name().name() {
@@ -1528,6 +1553,13 @@ fn parse_assets_elem(
                 // Markdown image is, when the Markdown names the file.
                 if let Some(src) = child.attribute("src") { image_srcs.insert(src.to_string(), name.clone()); }
                 images.insert(name, key);
+            }
+            "profile" => {
+                let name = req_attr(&child, "name")?;
+                validate_asset_name(&name)?;
+                // src is the adapter's, which loads the file under the key.
+                let key = child.attribute("ref").unwrap_or(&name).to_string();
+                profiles.insert(name, key);
             }
             other => return Err(format!("<{}>{}: unknown element in <assets>", other, node_loc(&child))),
         }
@@ -1699,19 +1731,38 @@ pub(crate) fn layout_margin(a: &impl Attrs, tokens: &Tokens) -> Result<[f32; 4],
 }
 
 /// Reads the attributes of `<output>`: the cipher of `encrypt` and the permissions of `allow`, the PDF/A level of
-/// `pdfa` and the PDF/UA part of `pdfua`. `allow` sets what a reader of an encrypted file may do, so it needs
-/// `encrypt`, and PDF/A forbids encryption, so `pdfa` and `encrypt` don't go together. PDF/UA lets a screen reader
-/// read an encrypted file, so with `pdfua` an `allow` must name `accessibility`.
-fn parse_output(encrypt: Option<&str>, allow: Option<&str>, pdfa: Option<&str>, pdfua: Option<&str>) -> Result<Output, String> {
+/// `pdfa`, the PDF/UA part of `pdfua`, and the PDF/X version of `pdfx` with the press profile `profile` names.
+/// `allow` sets what a reader of an encrypted file may do, so it needs `encrypt`, and PDF/A and PDF/X forbid
+/// encryption, so neither goes with `encrypt`. A PDF/A file keeps to its sRGB output intent and a PDF/X file to the
+/// press profile, so `pdfa` and `pdfx` don't go together either. PDF/UA lets a screen reader read an encrypted file,
+/// so with `pdfua` an `allow` must name `accessibility`.
+fn parse_output(
+    encrypt: Option<&str>,
+    allow:   Option<&str>,
+    pdfa:    Option<&str>,
+    pdfua:   Option<&str>,
+    pdfx:    Option<&str>,
+    profile: Option<&str>,
+) -> Result<Output, String> {
     let pdfa = pdfa.map(crate::pdfa::PdfA::parse).transpose()?;
     let pdfua = pdfua.map(crate::pdfua::PdfUa::parse).transpose()?;
+    let pdfx = crate::pdfx::parse(pdfx, profile)?;
+    if let (Some(x), Some(level)) = (&pdfx, pdfa) {
+        return Err(format!("pdfx=\"{}\" and pdfa=\"{}\" don't go together: a PDF/A file keeps to the sRGB profile, \
+            its output intent, and a PDF/X file to the press profile, its own. Remove pdfa or pdfx",
+            x.version.attribute(), level.attribute()));
+    }
     let Some(encrypt) = encrypt else {
         if allow.is_some() {
             return Err("allow sets what a reader of an encrypted file may do, and the document is not encrypted: \
                 add encrypt (encrypt=\"aes-256\"), or remove allow".to_string());
         }
-        return Ok(Output { encryption: None, pdfa, pdfua });
+        return Ok(Output { encryption: None, pdfa, pdfua, pdfx });
     };
+    if let Some(x) = &pdfx {
+        return Err(format!("pdfx=\"{}\" and encrypt don't go together: PDF/X forbids encryption, so that the printer \
+            can open the file. Remove encrypt and allow, or remove pdfx", x.version.attribute()));
+    }
     if let Some(level) = pdfa {
         return Err(format!("pdfa=\"{}\" and encrypt don't go together: PDF/A forbids encryption, so that an archive \
             can always open the file. Remove encrypt and allow, or remove pdfa", level.attribute()));
@@ -1725,7 +1776,7 @@ fn parse_output(encrypt: Option<&str>, allow: Option<&str>, pdfa: Option<&str>, 
     if let Some(part) = pdfua {
         crate::pdfua::check_permissions(part, permissions)?;
     }
-    Ok(Output { encryption: Some(crate::encrypt::OutputEncryption { algorithm, permissions }), pdfa: None, pdfua })
+    Ok(Output { encryption: Some(crate::encrypt::OutputEncryption { algorithm, permissions }), pdfa: None, pdfua, pdfx: None })
 }
 
 fn parse_meta(elem: &roxmltree::Node) -> Meta {
@@ -1777,6 +1828,12 @@ pub fn parse_measurement(s: &str) -> Result<f32, String> {
     } else {
         s.parse().map_err(|_| format!("invalid measurement: '{s}'"))
     }
+}
+
+/// A `bleed`: how far a page reaches past its trim edge, a length of zero or more, such as `3mm`.
+fn parse_bleed(value: &str) -> Result<f32, String> {
+    parse_measurement(value).ok().filter(|b| b.is_finite() && *b >= 0.0)
+        .ok_or_else(|| format!("bleed '{value}' is not a length: give one such as 3mm"))
 }
 
 /// Parse a `PageScope` from its string representation.
@@ -1971,6 +2028,10 @@ fn parse_section_elem(
     let mut size       = doc_size;
     let mut background = doc_background;
     let debug = apply_page_overrides(&mut size, &mut background, elem, tokens, doc_debug)?;
+    let bleed = elem.attribute("bleed")
+        .map(parse_bleed)
+        .transpose()
+        .map_err(|e| format!("<section>{}: {e}", node_loc(elem)))?;
     let title = elem.attribute("title").map(str::to_string);
     let toc = parse_section_toc(elem, tokens).map_err(|e| format!("<section>{}: {e}", node_loc(elem)))?;
     let footnote_counter = elem.attribute("footnote-counter")
@@ -2056,6 +2117,7 @@ fn parse_section_elem(
         children,
         options: SectionOptions {
             size:       if size != doc_size { Some(size) } else { None },
+            bleed,
             background,
             debug:      Some(debug),
             title,
@@ -3595,8 +3657,9 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
     let mut asset_images:      HashMap<String, String>     = HashMap::new();
     let mut asset_font_widths: HashMap<String, FontWidths> = HashMap::new();
     let mut image_srcs:        HashMap<String, String>     = HashMap::new();
+    let mut profiles:          HashMap<String, String>     = HashMap::new();
     if let Some(assets) = attrs.get("assets").and_then(|v| v.as_object()) {
-        parse_tree_assets(assets, &mut asset_fonts, &mut asset_images, &mut image_srcs, &mut asset_font_widths)?;
+        parse_tree_assets(assets, &mut asset_fonts, &mut asset_images, &mut image_srcs, &mut asset_font_widths, &mut profiles)?;
     }
     let markdown_assets = markdown::Assets { image_srcs, styles_files: resources.markdown_styles.clone() };
 
@@ -3630,7 +3693,7 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
                 Some(serde_json::Value::String(s)) => Ok(Some(s.as_str())),
                 Some(other) => Err(format!("document output: {name} must be a string, not {other}")),
             };
-            parse_output(text("encrypt")?, text("allow")?, text("pdfa")?, text("pdfua")?)
+            parse_output(text("encrypt")?, text("allow")?, text("pdfa")?, text("pdfua")?, text("pdfx")?, text("profile")?)
                 .map_err(|e| format!("document output: {e}"))?
         }
         None => Output::default(),
@@ -3641,7 +3704,7 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
         None | Some(serde_json::Value::Null) => Vec::new(),
         Some(files) => crate::attachments::from_tree(files)?,
     };
-    crate::attachments::check_pdfa(&attachments, output.pdfa)?;
+    crate::attachments::check_standards(&attachments, &output)?;
 
     // ── Document-level page defaults ──────────────────────────────────────────
     let doc_size_str  = attrs.get("size")       .and_then(|v| v.as_str());
@@ -3656,6 +3719,11 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
     if doc_orient == Some("landscape") {
         doc_size = (doc_size.1, doc_size.0);
     }
+    let doc_bleed = attrs.get("bleed").and_then(|v| v.as_str())
+        .map(parse_bleed)
+        .transpose()
+        .map_err(|e| format!("document: {e}"))?
+        .unwrap_or(0.0);
     let doc_background = if let Some(s) = doc_bg_s {
         Some(tokens.resolve_fill(s)?)
     } else {
@@ -3701,8 +3769,10 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
         fonts:       resolved_fonts,
         font_widths: asset_font_widths,
         images:      asset_images,
+        profiles,
         page_width:  doc_size.0,
         page_height: doc_size.1,
+        bleed:       doc_bleed,
         background:  doc_background,
         gradients:   std::mem::take(&mut tokens.gradients),
         colors:      std::mem::take(&mut tokens.colors),
@@ -3812,6 +3882,10 @@ fn parse_tree_section(
     let mut background = doc_background;
     let a = JsonAttrs(json);
     let debug = apply_page_overrides(&mut size, &mut background, &a, tokens, doc_debug)?;
+    let bleed = a.get("bleed")
+        .map(parse_bleed)
+        .transpose()
+        .map_err(|e| format!("section: {e}"))?;
     let title = jattr(json, "title").map(str::to_string);
     let toc = parse_section_toc(&a, tokens).map_err(|e| format!("section: {e}"))?;
     let footnote_counter = a.get("footnote-counter")
@@ -3894,6 +3968,7 @@ fn parse_tree_section(
         children,
         options: SectionOptions {
             size:       if size != doc_size { Some(size) } else { None },
+            bleed,
             background,
             debug:      Some(debug),
             title,

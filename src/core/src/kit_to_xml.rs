@@ -147,9 +147,10 @@ fn render_gradient(name: &str, gradient: &Value, depth: usize) -> Vec<String> {
 
 // ── Assets block ──────────────────────────────────────────────────────────────
 
-/// The attributes of the `<font>` and `<image>` elements, in the order the schema lists them.
-const FONT_ATTRS:  [&str; 4] = ["name", "core", "ref", "src"];
-const IMAGE_ATTRS: [&str; 3] = ["name", "ref", "src"];
+/// The attributes of the `<font>`, `<image>` and `<profile>` elements, in the order the schema lists them.
+const FONT_ATTRS:    [&str; 4] = ["name", "core", "ref", "src"];
+const IMAGE_ATTRS:   [&str; 3] = ["name", "ref", "src"];
+const PROFILE_ATTRS: [&str; 3] = ["name", "ref", "src"];
 
 fn render_asset(tag: &str, attrs: &[&str], entry: &Value, pad: &str) -> Option<String> {
     let entry = entry.as_object()?;
@@ -168,7 +169,11 @@ fn render_assets(assets: &serde_json::Map<String, Value>, depth: usize) -> Optio
     let item_pad = "  ".repeat(depth + 1);
     let mut items: Vec<String> = Vec::new();
 
-    for (kind, tag, attrs) in [("fonts", "font", &FONT_ATTRS[..]), ("images", "image", &IMAGE_ATTRS[..])] {
+    for (kind, tag, attrs) in [
+        ("fonts", "font", &FONT_ATTRS[..]),
+        ("images", "image", &IMAGE_ATTRS[..]),
+        ("profiles", "profile", &PROFILE_ATTRS[..]),
+    ] {
         let entries = assets.get(kind).and_then(|v| v.as_array()).into_iter().flatten();
         items.extend(entries.filter_map(|entry| render_asset(tag, attrs, entry, &item_pad)));
     }
@@ -803,6 +808,27 @@ mod tests {
     }
 
     #[test]
+    fn profiles_pdfx_and_bleed_are_written_as_the_xml_has_them() {
+        let json = r#"{
+            "version": 1, "type": "document",
+            "attrs": {
+                "bleed": "3mm",
+                "assets": { "profiles": [{ "name": "press", "ref": "fogra39", "src": "profiles/press.icc" }] },
+                "meta": { "title": "Flyer" },
+                "output": { "pdfx": "4", "profile": "press" }
+            },
+            "nodes": [{"type":"section","attrs":{"bleed":"5mm"},"nodes":[{"type":"layout","nodes":[{"type":"text","nodes":["x"]}]}]}]
+        }"#;
+        let xml = kit_to_xml(json).unwrap();
+        assert!(xml.contains(r#"<profile name="press" ref="fogra39" src="profiles/press.icc"/>"#), "{xml}");
+        assert!(xml.contains(r#"<output pdfx="4" profile="press"/>"#), "{xml}");
+        assert!(xml.contains(r#"<document bleed="3mm">"#) && xml.contains(r#"<section bleed="5mm">"#), "{xml}");
+        let doc = crate::parse::parse(&xml).expect("the XML parses");
+        assert_eq!(doc.profiles.get("press").map(String::as_str), Some("fogra39"));
+        assert_eq!(doc.output.pdfx.map(|x| x.profile), Some("press".to_string()));
+    }
+
+    #[test]
     fn output_emitted_after_meta() {
         let json = r#"{
             "version": 1,
@@ -883,7 +909,7 @@ mod tests {
         crate::pdf::render_pdf(
             &pages, &doc.fonts,
             &crate::pdf::FontRegistry::new(), &crate::pdf::ImageRegistry::new(),
-            &doc.meta, &doc.gradients, None, false, &doc.output, &[],
+            &doc.meta, &doc.gradients, None, false, &doc.output, &[], None,
         )
         .unwrap()
     }

@@ -22,6 +22,12 @@
 /// { "files": { "invoice.xml": "<base64 bytes>", … } }
 /// ```
 ///
+/// And so do the ICC colour profiles of its `<assets>`, such as the press profile of a PDF/X document, by the `ref`
+/// or the name of each `<profile>`:
+/// ```json
+/// { "profiles": { "press": "<base64 ICC bytes>", … } }
+/// ```
+///
 /// A document asks for encryption in its `<output>`, which names the cipher and the permissions. The
 /// passwords come with the request, never with the template, and AES-256 also needs `entropy`, at least
 /// 32 random bytes from the host's secure generator, base64-encoded:
@@ -54,6 +60,8 @@ mod pdf;
 mod pdfa;
 #[path = "../../core/src/pdfua.rs"]
 mod pdfua;
+#[path = "../../core/src/pdfx.rs"]
+mod pdfx;
 #[path = "../../core/src/tagging.rs"]
 mod tagging;
 #[path = "../../core/src/attachments.rs"]
@@ -224,6 +232,20 @@ fn build_file_registry(req: &serde_json::Value) -> attachments::FileRegistry {
     registry
 }
 
+/// Decode the optional `profiles` field of the request: the bytes of the ICC colour profiles of the document's
+/// `<assets>`, by the `ref` or name of each `<profile>`.
+fn build_profile_registry(req: &serde_json::Value) -> pdfx::ProfileRegistry {
+    let mut registry = pdfx::ProfileRegistry::new();
+    if let Some(profiles) = req.get("profiles").and_then(|v| v.as_object()) {
+        for (key, val) in profiles {
+            if let Some(bytes) = val.as_str().and_then(|b64| base64::engine::general_purpose::STANDARD.decode(b64).ok()) {
+                registry.load(key, bytes);
+            }
+        }
+    }
+    registry
+}
+
 /// Decode the optional `metrics` field from the request envelope into a font-widths map.
 /// Format: `{ "fontName": { "default": 500, "ascii": [260, 285, ...] } }`
 /// Kept for backward compatibility; auto-extraction from font bytes is preferred.
@@ -254,6 +276,12 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     if let Err(e) = pdfa::check_render(&doc.output, created_on) {
         return serde_json::json!({ "error": e }).to_string();
     }
+
+    let profile_registry = build_profile_registry(req);
+    let press = match pdfx::resolve(doc.output.pdfx.as_ref(), &doc.profiles, &profile_registry, &doc.meta) {
+        Ok(press) => press,
+        Err(e)    => return serde_json::json!({ "error": e }).to_string(),
+    };
 
     let file_registry = build_file_registry(req);
     let attached = std::mem::take(&mut doc.attachments);
@@ -309,7 +337,7 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     let status = license::check(license_key, now_unix);
 
     // An unlicensed status draws the attribution line on every page.
-    match pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, &doc.gradients, created_on, status.is_licensed(), &doc.output, &files) {
+    match pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, &doc.gradients, created_on, status.is_licensed(), &doc.output, &files, press.as_ref()) {
         Ok(bytes) => {
             let bytes = match &encryption {
                 Some(cfg) => match encrypt::encrypt_pdf(&bytes, cfg) {
@@ -339,7 +367,7 @@ impl LpdfEngine {
         let pages: Vec<render::RenderPage> =
             layout::layout_document(&lp);
         // Unlicensed, as in the core stub, so both crates hash the same attributed bytes.
-        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, &doc.output, &[])
+        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, &doc.output, &[], None)
     }
 }
 
@@ -483,6 +511,24 @@ mod tests {
         let answer = render_request(xml, serde_json::json!({}));
         let error = answer["error"].as_str().expect("a file with no bytes is an error");
         assert!(error.contains("file 'factur-x.xml'") && error.contains("loadFile('invoice', bytes)"), "{error}");
+    }
+
+    #[test]
+    fn the_profiles_of_the_request_are_the_press_profiles_of_a_pdfx_document() {
+        let xml = r#"<lpdf version="1"><assets><font name="body" src="body.ttf"/><profile name="press" ref="fogra39"/></assets>
+            <document font="body"><meta title="Flyer"/><output pdfx="4" profile="press"/><section><layout><text>Lpdf</text></layout></section></document></lpdf>"#;
+        let font = base64::engine::general_purpose::STANDARD.encode(pdf::ATTRIBUTION_FONT);
+        let profile = base64::engine::general_purpose::STANDARD
+            .encode(include_bytes!("../../../test/assets/profiles/FOGRA39L_coated.icc"));
+        let fields = serde_json::json!({ "fonts": { "body": font }, "created_on": "2026-10-31T09:30:00Z" });
+        let mut with_profile = fields.clone();
+        with_profile["profiles"] = serde_json::json!({ "fogra39": profile });
+        let text = pdf_text(&render_request(xml, with_profile));
+        assert!(text.contains("/S /GTS_PDFX") && text.contains("/Info (FOGRA39L Coated)") && text.contains("/TrimBox"), "{text}");
+
+        let answer = render_request(xml, fields);
+        let error = answer["error"].as_str().expect("a profile with no bytes is an error");
+        assert!(error.contains("profile 'press'") && error.contains("loadProfile('fogra39', bytes)"), "{error}");
     }
 
     #[test]
