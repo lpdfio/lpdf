@@ -1,5 +1,57 @@
 # Changelog
 
+## v0.31.0 — 2026-11-01
+### Attributes
+- **Breaking:** every attribute is checked against the schema before the document is read, in XML and in a document built in code. A value that isn't of its type is an error that names the element, the attribute and the type: `<grid> at line 3, col 5: cols must be a whole number from 1 to 12, not "x"`. A boolean is `true` or `false`: `bold="1"` and `bold="yes"`, which read as false, are errors, and the VS Code extension flags them as you type. An attribute the element doesn't have, such as `agle` on a gradient, was ignored and is now an error that lists the attributes the element has
+- **Breaking:** in the SDKs' builders an attribute takes its own type: `bold: true`, `cols: 3`, `opacity: 0.5`, and `lineHeight` a factor such as `1.5` or a token name such as `'m'`. `bold: 'true'` doesn't compile in TypeScript or C#, and a number written as a string, such as `cols: '3'`, is an error when the document renders. In JavaScript, a `NaN` or an infinity is refused when the document is built
+
+### Encryption
+- **Breaking:** a document says that it is encrypted, on a new `<output>` element after `<meta>`: `<output encrypt="aes-256" allow="print fill-forms"/>`, where it was set on the engine. `encrypt` is `aes-256` or `rc4-128`. `allow` lists what a reader may do without the owner password, separated by spaces: `print`, `modify`, `copy`, `annotate`, `fill-forms`, `accessibility`, `assemble`, or `all`. A permission comes only from naming it, so without `allow`, or with `allow=""`, a reader may do nothing without the owner password. `print` allows printing at full quality: printing at low quality only is no longer offered
+- **Breaking:** the passwords come with each render, since they change from one render to the next and can't sit in a template: `userPassword` and `ownerPassword` in the render options (`UserPassword` and `OwnerPassword` in .NET, `user_password` and `owner_password` in Python). `setEncryption`, `clearEncryption` and their option types are gone from every SDK. A document that asks for encryption and gets no owner password is an error, and so are passwords for a document that doesn't ask for it, so a file never goes out unencrypted while the caller believes it is locked. `skipEncryption` renders a document that asks for encryption without it, for a preview
+- RC4-128 keeps strings intact. A title, or any text the PDF stores as a string, could lose its value or break its object when its encrypted bytes held a parenthesis or a backslash, and `C:\reports` came back with its backslashes doubled
+
+### PDF/A
+- `pdfa="2b"` or `pdfa="2u"` on `<output>` writes PDF/A-2b or PDF/A-2u (ISO 19005), the PDF that archives, courts, public bodies and banks ask for, made to look the same decades from now. The file carries XMP metadata, the sRGB output intent, its fonts and a file ID, and the same document gives the same bytes. veraPDF, the reference validator, passes both levels
+- A PDF/A render needs a creation date, `createdOn` in the render options, as an ISO 8601 date, or date and time with an optional zone
+- What PDF/A forbids is an error that says what to change, since the engine changes nothing in the document by itself: text in a built-in font (embed a font instead), a font whose license forbids embedding, a character its font has no glyph for, a CMYK color, a form field, a barcode's printed digits, and encryption
+
+### Attachments
+- `<attachments>`, after `<output>`, embeds files in the PDF, which a reader lists in its attachments panel: `<file name="invoice.xml" src="invoice.xml" mime="text/xml" relationship="data"/>`. An e-invoice carries its XML for software to read, and a report can carry its source or its terms. `relationship` is `source`, `data`, `alternative`, `supplement` or `unspecified`, and `description` is the description a reader shows for it
+- The SDK reads a file's `src`, or takes the bytes from `loadFile(name, bytes)` on the engine (`LoadFile` in .NET, `load_file` in Python), under the file's `ref` or its name. An encrypted PDF encrypts its files with the rest. Attachments in a PDF/A document are an error, since PDF/A-2 may carry only files that are PDF/A themselves
+
+### Colors
+- **Breaking:** a malformed color is an error that names it. A hex color with a character that isn't a hex digit, such as `#ggg`, was drawn black
+- A color can be written as `cmyk(C, M, Y, K)` with values from 0 to 100, `rgb(R, G, B)` from 0 to 255, or `hsl(H, S%, L%)`, wherever a color goes: attributes, tokens, `data-color`, borders and shadows. The values are separated by commas or by spaces. `cmyk()` is written to the PDF as CMYK, so a printer separates its plates without converting from RGB, which shifts colors
+- A gradient's colors are all CMYK or all RGB. A value out of its range is an error, and so is an alpha, which points to `opacity`
+
+### Fonts
+- An OpenType font with CFF outlines (most `.otf` files) is embedded in the form PDF defines for it, where it was written as a TrueType font, which a reader may draw wrongly. A variable font with CFF2 outlines is embedded as a subset at its default instance, where it was embedded whole and macOS drew each of its glyphs as a dot
+
+### Footnotes
+- Content taller than a page that can't split, such as a frame or a grid row, is cut at the bottom of the page. A footnote whose number falls below the cut now has no note, on that page or any other, and its note takes no room, so the page shows more of the content. With `footnote-counter="page"` the numbers shown run 1, 2, … in reading order; with `section` or `document`, the numbers cut off are skipped
+
+### Metadata
+- The creation date is written as a date a PDF reader understands, with the precision and time zone it is given in. A date with a fraction, such as `2026-10-31T09:30:00.000Z` from JavaScript's `toISOString()`, or with an offset such as `+01:00`, gave a date readers showed wrongly or not at all. A value that isn't a date is now an error that names it and gives the form, where `31.10.2026` gave a wrong year
+
+### Command line
+- The command line takes no passwords, since a password on it shows in `ps` to anyone on the machine. A document that asks for encryption is an error unless `convert` or `benchmark` is given `--skip-encryption`, which renders it unencrypted
+- `convert` reads the `src` of attached files relative to the document
+
+### SDKs
+- **Breaking:** in .NET, `Render` returns `byte[]` and `L.ToXml` returns `string`, on the caller's thread: drop the `await`. To render on another thread, write `await Task.Run(() => engine.Render(doc))`
+- **Breaking:** the Python SDK needs Python 3.11 or later, which its enums need; it said 3.10
+- **Breaking:** the PHP SDK needs the `dom` extension, which most PHP builds include and some Linux distributions package apart (`php-xml`)
+- The builders have `output` (`encrypt`, `allow` and `pdfa`) and `attachments` on the document's attributes, with the constants `Cipher` and `Permission`, and `FileAttr` for an attached file
+- The SDKs read the `src` of a font, an image, Markdown styles and an attached file as the engine reads the XML: entities are decoded, and a comment or a CDATA section is left out, so an element shown as text in a code block is not loaded
+
+### VS Code extension
+- **Breaking:** **Lpdf: Export Encrypted PDF...** and the `lpdf.encryptionAlgorithm` setting are gone. **Export PDF** encrypts a document whose `<output>` asks for it, asking for the owner password and an optional open password, each typed twice. The preview renders it unencrypted, and says so once
+- **Preview PDF** and **Export PDF** write PDF/A for a document that asks for it, dated with the time of the render, and embed the files of `<attachments>` from their `src`, beside the document or at the root of its workspace folder. The preview follows an edit of an attached file
+- **Lpdf: Compare PDF with branch...** shows a PDF beside its version on a branch or a tag, next to **Compare PDF with HEAD** in the Explorer's menu and in the PDF tab's menu
+- **Generate Code** writes each attribute as a literal of its type (`cols: 3`, `bold: true`, `True` in Python), and its C# compiles: it imports `NoAttr` with `using static Lpdf.L;` and calls `Render` without `await`
+- Hover, autocomplete and validation follow the schema, so they cover `<output>`, `<attachments>`, the new color forms and the boolean values
+- Lpdf installs from Open VSX, the extension registry of Cursor, VSCodium and other editors built on VS Code
+
 ## v0.30.0 — 2026-10-30
 ### Markdown
 - `<markdown>` takes the place of the `<layout>` in a section and sets Markdown as a styled, paginated PDF: CommonMark with tables, strikethrough and footnotes. It is for a body written in Markdown, such as release notes, an article or documentation, or one that comes from a CMS, a database or a user. The page, a cover, a header and a footer stay in the XML: a `<layer>` draws a header or a footer in the margin the Markdown leaves. The text is inline in `<markdown-content>`, in a CDATA section, or comes from the data with `data-value`
