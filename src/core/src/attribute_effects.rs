@@ -406,7 +406,8 @@ const PRESS_PROFILE: &[u8] = include_bytes!("../../../test/assets/profiles/FOGRA
 
 /// Renders with the images `logo` (red) and `other` (blue), the font `custom`, the files `terms.txt`, `renamed.txt` and
 /// `other` and the press profiles `press` and `other` loaded on the engine, a date for a document that asks for a standard, and an
-/// owner password and fixed entropy for a document that asks for encryption.
+/// owner password and fixed entropy for a document that asks for encryption, then encrypted and linearized as the engine
+/// finishes a file.
 /// A panic in the engine is an error like any other, so one bad value cannot hide the rest.
 fn render(xml: &str) -> Result<Vec<u8>, String> {
     catch_unwind(AssertUnwindSafe(|| {
@@ -448,10 +449,7 @@ fn render(xml: &str) -> Result<Vec<u8>, String> {
             &pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, created_on, false, &doc.output, &files,
             press.as_ref(),
         )?;
-        match config {
-            Some(config) => crate::encrypt::encrypt_pdf(&bytes, &config),
-            None => Ok(bytes),
-        }
+        crate::shared::finish_file(bytes, config.as_ref(), doc.output.linearize)
     }))
     .unwrap_or_else(|_| Err("the engine panicked".to_string()))
 }

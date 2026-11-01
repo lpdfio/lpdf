@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Fast web view of an encrypted file: the file is encrypted first, with the passwords of the render call, and
+     linearized last, since any change after linearizing moves the offsets its hints give. Its strings, in the links,
+     the bookmarks and the document information, are encrypted with the rest; under RC4, whose key is each object's,
+     they are encrypted again when their objects get the numbers of the linearized file. The tests render it in
+     AES-256, as it asks, and in RC4-128 (`linearize_render_tests.rs`), and `make check-linearization` opens each with
+     each password in qpdf. -->
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <assets>
+    <font name="body"    src="../assets/fonts/CrimsonText-Regular.ttf" />
+    <font name="heading" src="../assets/fonts/CrimsonText-SemiBold.ttf" />
+    <image name="photo"  src="../assets/images/chapter-05-caterpillar.jpg" />
+  </assets>
+  <tokens>
+    <colors>
+      <color name="ink"     value="#1f2a44" />
+      <color name="primary" value="#1763cf" />
+    </colors>
+  </tokens>
+  <document size="a5" font="body">
+    <meta title="Statement — October" author="Lpdf Fixtures" subject="Fast web view of an encrypted file" />
+    <output encrypt="aes-256" allow="print copy accessibility" linearize="true" />
+
+    <section>
+      <bookmark label="Summary" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text font="heading" font-size="20pt" color="ink">Statement for October</text>
+          <text font-size="11pt">The balance, the payments and the fees of the month. The details are on
+            <span href="#details" color="primary" underline="true">page 2</span>, and the terms at
+            <span href="https://lpdf.io" color="primary" underline="true">lpdf.io</span>.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="Details" id="details" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text font="heading" font-size="16pt" color="ink">Details</text>
+          <img name="photo" width="120pt" />
+          <text font-size="11pt">Each payment is listed with its date and its reference.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <bookmark label="Fees" />
+      <layout margin="40pt">
+        <column gap="m">
+          <text font="heading" font-size="16pt" color="ink">Fees</text>
+          <text font-size="11pt">No fees were charged this month.</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

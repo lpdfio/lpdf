@@ -284,6 +284,16 @@ fn showcase_pdfua() { check_snapshot("showcase-pdfua", &crate::pdfua_render_test
 
 #[test]
 fn showcase_pdfx() { check_snapshot("showcase-pdfx", &crate::pdfx_render_tests::render_fixture()); }
+/// Linearized files, with the fonts and pictures loaded as an SDK loads them: one page, six pages that share fonts and
+/// pictures, and an encrypted file, in AES-256 with fixed entropy and in RC4-128.
+#[test]
+fn showcase_linearized() { check_snapshot("showcase-linearized", &crate::linearize_render_tests::render_fixture("showcase-linearized", false)); }
+#[test]
+fn showcase_linearized_pages() { check_snapshot("showcase-linearized-pages", &crate::linearize_render_tests::render_fixture("showcase-linearized-pages", false)); }
+#[test]
+fn showcase_linearized_encrypted() { check_snapshot("showcase-linearized-encrypted", &crate::linearize_render_tests::render_fixture("showcase-linearized-encrypted", false)); }
+#[test]
+fn showcase_linearized_encrypted_rc4() { check_snapshot("showcase-linearized-encrypted-rc4", &crate::linearize_render_tests::render_fixture("showcase-linearized-encrypted", true)); }
 /// Two files the PDF carries, loaded from their `src` as an SDK loads them.
 #[test]
 fn showcase_attachments() { check_snapshot("showcase-attachments", &crate::attachment_render_tests::render_fixture()); }

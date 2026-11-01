@@ -2945,6 +2945,7 @@ fn assemble_pdf(
     files:              &[EmbeddedFile],
     marks:              &Marks,
     press:              Option<&PressProfile>,
+    linearize:          bool,
 ) -> Result<Vec<u8>, String> {
     // What PDF/A alone asks for: an output intent, a file ID, and links that print.
     let pdfa = file.filter(|file| file.standards.pdfa.is_some());
@@ -3095,8 +3096,11 @@ fn assemble_pdf(
     // -- Resources -------------------------------------------------------------
     // What a page, or a transparency group, draws with: all fonts and images used anywhere in this document
     // (over-inclusion is harmless and avoids a second per-page scan), the ExtGStates for opacity, and the
-    // groups it draws: the `drawn` positions in `groups`, the form XObjects of the page.
-    let write_resources = |resources: &mut Resources<'_>, groups: &[Ref], drawn: Range<usize>| {
+    // groups it draws: the `drawn` positions in `groups`, the form XObjects of the page. A linearized file puts page 1
+    // and everything it reaches first, so there each page and group names only the fonts, images, opacities and
+    // shadings its content stream does (`used`): named on every page, they would all go before page 1 shows.
+    let write_resources = |resources: &mut Resources<'_>, groups: &[Ref], drawn: Range<usize>, used: Option<&HashSet<&[u8]>>| {
+        let named = |name: &str| used.is_none_or(|used| used.contains(name.as_bytes()));
         // In a PDF/X file every RGB color and image, drawn as DeviceRGB, is sRGB: the device space a press can't print
         // as it is gets a meaning (ISO 32000-1, 8.6.5.6).
         if let Some(ids) = &press_ids {
@@ -3106,6 +3110,9 @@ fn assemble_pdf(
             let mut font_res = resources.fonts();
             for name in sorted_font_names {
                 let font = &fonts[name];
+                if !named(&font.resource_name) {
+                    continue;
+                }
                 let fid  = font_id_map[name].font_dict_id;
                 font_res.pair(Name(font.resource_name.as_bytes()), fid);
             }
@@ -3115,6 +3122,9 @@ fn assemble_pdf(
             let mut xobj_res = resources.x_objects();
             for name in sorted_image_names {
                 let res_name = &image_res_map[name];
+                if !named(res_name) {
+                    continue;
+                }
                 let img_id   = image_id_map[name];
                 xobj_res.pair(Name(res_name.as_bytes()), img_id);
             }
@@ -3126,14 +3136,20 @@ fn assemble_pdf(
         if !opacity_gs_ids.is_empty() {
             let mut gs_res = resources.ext_g_states();
             for (pct, gs_id) in &opacity_gs_ids {
-                gs_res.pair(Name(opacity_gs_name(*pct).as_bytes()), *gs_id);
+                let gs_name = opacity_gs_name(*pct);
+                if named(&gs_name) {
+                    gs_res.pair(Name(gs_name.as_bytes()), *gs_id);
+                }
             }
         }
         // The shadings of the gradients, which any page or group may paint.
         if !used_gradients.is_empty() {
             let mut shading_res = resources.shadings();
             for ((name, _), gradient) in used_gradients.iter().zip(&gradient_ids) {
-                shading_res.pair(Name(shading_resource_name(name).as_bytes()), gradient.shading_id);
+                let shading_name = shading_resource_name(name);
+                if named(&shading_name) {
+                    shading_res.pair(Name(shading_name.as_bytes()), gradient.shading_id);
+                }
             }
         }
     };
@@ -3157,7 +3173,7 @@ fn assemble_pdf(
             pw.media_box(trim);
         }
 
-        write_resources(&mut pw.resources(), &group_ids[i], 0..group_ids[i].len());
+        write_resources(&mut pw.resources(), &group_ids[i], 0..group_ids[i].len(), linearize.then(|| content_names(&rendered_pages[i].content)).as_ref());
 
         // Add the content stream reference.
         pw.contents(content_id);
@@ -3211,7 +3227,7 @@ fn assemble_pdf(
                     None => space.device_rgb(),
                 }
             }
-            write_resources(&mut form.resources(), &group_ids[i], group.nested.clone());
+            write_resources(&mut form.resources(), &group_ids[i], group.nested.clone(), linearize.then(|| content_names(&group.content)).as_ref());
             if let Some(key) = keys.group(i, j) {
                 form.struct_parents(key);
             }
@@ -3854,8 +3870,17 @@ pub fn render_pdf(
     assemble_pdf(
         pages, &fonts, &sorted_font_names, &sorted_image_names,
         image_registry, &image_res_map, rendered_pages, ids, &fields, &anchors,
-        &used_gradients, meta, date.as_deref(), file.as_ref(), files, &marks, press,
+        &used_gradients, meta, date.as_deref(), file.as_ref(), files, &marks, press, output.linearize,
     )
+}
+
+/// The names a content stream uses: each `/Name` in it. A `/` in a string or in an inline image's data counts too,
+/// which can only add a name the stream does not use, never leave out one it does.
+fn content_names(content: &[u8]) -> HashSet<&[u8]> {
+    content.iter().enumerate()
+        .filter(|(_, byte)| **byte == b'/')
+        .map(|(at, _)| &content[at + 1..crate::rewrite::regular_run_end(content, at + 1)])
+        .collect()
 }
 
 /// The standards and the date of a render of a document that asks for PDF/A or PDF/UA.

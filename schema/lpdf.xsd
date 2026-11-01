@@ -1256,6 +1256,11 @@
           <xs:documentation>The profile of assets that a PDF/X file is made for: the ICC profile of the printing press, such as a FOGRA39 or GRACoL one, which the printer gives out. It must be a printer profile, gray, RGB or CMYK. It needs pdfx, and pdfx needs it.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
+      <xs:attribute name="linearize" type="Boolean">
+        <xs:annotation>
+          <xs:documentation>Writes the PDF linearized, for fast web view: page 1 comes first in the file, with hints that say where every other page is, so a viewer that fetches the file from a server by byte ranges, as a browser does, shows page 1 while the rest downloads and fetches any other page on its own. It helps large documents read on the web, such as statements, catalogues and books, and changes nothing a viewer shows. Each page then names only the fonts and images it draws. With encrypt the file is encrypted first and linearized last. Any change to the file afterwards, such as a stamp or a signature added by another tool, ends the linearization. It combines with every other attribute of output. Without it, or with false, the file is not linearized.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
     </xs:complexType>
   </xs:element>
 

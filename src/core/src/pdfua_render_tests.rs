@@ -36,7 +36,8 @@ fn engine(created_on: Option<&str>) -> LpdfEngine {
     engine
 }
 
-fn render(xml: &str) -> Result<Vec<u8>, String> {
+/// `xml` rendered as an SDK renders it, unlicensed and dated, with the fixture's fonts and pictures loaded.
+pub(crate) fn render(xml: &str) -> Result<Vec<u8>, String> {
     engine(Some(CREATED_ON)).render_xml(xml, None, &RenderEncryption::default())
 }
 
