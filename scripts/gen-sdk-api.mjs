@@ -13,6 +13,9 @@
 // and a constructor parameter without a default in PHP. Data-binding attributes (data-*) are for XML
 // templates and are left out.
 //
+// Python's fields are keyword-only: they follow the schema's order, so a new attribute in the middle of an
+// element would move the positional arguments after it.
+//
 // The constants are strings, so a value goes straight into an attribute: type: FieldType.Text in Node,
 // FieldAttr(type=FieldType.TEXT) in Python.
 //
@@ -170,7 +173,7 @@ function php(spec, element) {
 
 function python(spec, element) {
     const lines = [...HEADER.map((h) => `# ${h}`), 'from __future__ import annotations', '', 'from dataclasses import dataclass', '', '',
-        '@dataclass(frozen=True)', `class ${spec.cls}:`];
+        '@dataclass(frozen=True, kw_only=True)', `class ${spec.cls}:`];
     const doc = wrap(summary(spec, element), 92, '    ');
     lines.push(doc.length === 1 ? `    """${doc[0].trim()}"""` : ['    """', ...doc, '    """'].join('\n'), '');
     for (const a of ordered(element)) {
