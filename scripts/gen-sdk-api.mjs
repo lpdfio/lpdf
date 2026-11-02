@@ -324,10 +324,11 @@ function constantsFor(spec) {
         ...values.map((v) => `    public const string ${pascal(v)} = "${v}";`), '}', '',
     ];
 
+    // Untyped constants: typed class constants need PHP 8.3, and the PHP SDK runs on 8.2.
     const phpLines = [
         '<?php', '', 'declare(strict_types=1);', '', `namespace ${area.php};`, '', '/**',
         ...wrap(spec.doc, 100, ' * '), ' *', ...HEADER.map((h) => ` * ${h}`), ' */', `final class ${spec.name}`, '{',
-        ...values.map((v) => `    public const string ${pascal(v)} = '${v}';`), '}', '',
+        ...values.map((v) => `    public const ${pascal(v)} = '${v}';`), '}', '',
     ];
 
     const pythonLines = [
