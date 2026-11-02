@@ -405,17 +405,24 @@ fn update(pdf: &[u8], out: &[u8]) -> String {
 }
 
 #[test]
-fn an_unlicensed_stamp_draws_the_line_over_the_images_and_links_it_to_lpdf_io() {
-    let pdf = build(&[LETTER], Resources::OnPage, false, None);
-    let out = stamped_unlicensed(&pdf, &[("i", quarters(60, 30, &[]))], json!([{ "image": "i", "page": "1", "x": 72, "y": 72, "width": 60, "height": 30 }]));
+fn an_unlicensed_stamp_draws_the_line_once_in_the_page_corner_over_the_images_and_links_it_to_lpdf_io() {
+    let pdf = build(&[LETTER, LETTER], Resources::OnPage, false, None);
+    let out = stamped_unlicensed(&pdf, &[("i", quarters(60, 30, &[]))], json!([
+        { "image": "i", "page": "1", "x": 72, "y": 72, "width": 60, "height": 30 },
+        { "image": "i", "page": "1", "x": 72, "y": 600, "width": 60, "height": 30 },
+    ]));
     let doc = reopen(&out);
     let drawn = drawn(&doc, 1);
-    let image = drawn.find("/LpdfStamp0 Do").expect("the image");
-    // Over the box: its bottom 2 pt above the box's top, 72 pt down, which is 792 - 70 in the PDF's space.
-    let line = drawn.find(" 722 cm ").expect(&drawn);
-    assert!(image < line, "the line is drawn after the image");
-    assert!(drawn.contains("0.8431 0.4353 0.0157 rg") && drawn.contains(" B Q\n"), "{drawn}");
+    let image = drawn.rfind("/LpdfStamp0 Do").expect("the image");
+    // In the page's top-right corner: its bottom 12 + 9 pt down, which is 792 - 21 in the PDF's space.
+    let line = drawn.find(" 771 cm ").expect(&drawn);
+    // Last on the page: after the images, at the end of the page's last content stream, over all it shows.
+    assert!(image < line && drawn.ends_with(" B Q\nEMC\n"), "{drawn}");
+    assert_eq!(drawn.matches(" B Q\n").count(), 1, "one line for the page's two stamps");
+    assert!(drawn.contains("0.8431 0.4353 0.0157 rg"), "{drawn}");
     let annots = page(&doc, 1).get(b"Annots").and_then(Object::as_array).expect("a link");
+    assert_eq!(annots.len(), 1);
+    assert!(page(&doc, 2).get(b"Annots").is_err(), "a page with no stamp gets no line");
     let link = doc.get_dictionary(annots[0].as_reference().unwrap()).unwrap();
     assert_eq!(link.get(b"Subtype").and_then(Object::as_name).unwrap(), b"Link");
     let uri = link.get(b"A").and_then(Object::as_dict).and_then(|a| a.get(b"URI")).and_then(Object::as_str).unwrap();
@@ -642,11 +649,11 @@ fn pdfa(pdf: &[u8], part_1: bool) -> Vec<u8> {
     ]))
 }
 
-/// Without a license key: a box in the middle of the page, with its line above it; one at the top of the page, with
-/// its line below it; one the size of the page, with its line in the page's top-right corner, over the stamps; and a
-/// page turned by 90 degrees, with its lines upright beside their boxes.
+/// Without a license key: a page of stamps, one of them the size of the page, with one line in its top-right corner
+/// over them all; a page turned by 90 degrees, with its line upright in the corner as shown; and a page with no stamp
+/// and no line.
 fn unlicensed() -> Vec<u8> {
-    let pdf = build(&[LETTER, LETTER.rotate(90)], Resources::OnPage, false, None);
+    let pdf = build(&[LETTER, LETTER.rotate(90), LETTER], Resources::OnPage, false, None);
     stamped_unlicensed(&pdf, &[small(), ("frame", frame(150, 90)), ("page", frame(612, 792))], json!([
         { "image": "frame", "page": "1", "x": 72, "y": 300, "width": 150, "height": 90 },
         { "image": "small", "page": "1", "x": 72, "y": 300, "width": 150, "height": 90 },

@@ -208,7 +208,7 @@ fn dispatch(request: String) -> String {
 }
 
 /// A `stamp` request: the PDF in `pdf`, as base64, and the `stamps`, each naming a PNG of the request's `images`;
-/// `licensed` when the request's key is, else each stamp gets the attribution line beside its box.
+/// `licensed` when the request's key is, else each stamped page gets the attribution line.
 /// Answers `{ "pdf": "<base64>" }`, the file with the stamps added as an incremental update, or `{ "error": "…" }`.
 fn stamp_request(req: &mut serde_json::Value, licensed: bool, before: i64) -> String {
     let error = |e: String| serde_json::json!({ "error": e }).to_string();

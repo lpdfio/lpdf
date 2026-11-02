@@ -11,8 +11,8 @@
 //! `justify`. A PDF/A file of parts 1 to 3 stays PDF/A: the image is drawn in the sRGB profile `pdfa.rs` bundles, and
 //! what PDF/A-1 can't hold, a soft mask, is an error.
 //!
-//! Without a valid license key each stamp gets the attribution line a render draws, the Lpdf mark and name, above its
-//! box, or below it, or in the page's top-right corner (`Attribution`): it says which area of the page Lpdf made.
+//! Without a valid license key each stamped page gets the attribution line a render draws, the Lpdf mark and name,
+//! once, in its top-right corner over the stamps (`Attribution`).
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -146,8 +146,8 @@ fn parse_stamp(item: &serde_json::Value) -> Result<Stamp, String> {
 }
 
 /// Draw each stamp over its pages of `pdf`, and return the file with the update appended: the input, byte for byte,
-/// then the new objects, a cross-reference section and a trailer. Unless `licensed`, each stamp gets the attribution
-/// line beside its box.
+/// then the new objects, a cross-reference section and a trailer. Unless `licensed`, each stamped page gets the
+/// attribution line in its top-right corner.
 pub(crate) fn stamp(pdf: &[u8], stamps: &[Stamp], images: &ImageRegistry, licensed: bool) -> Result<Vec<u8>, String> {
     // The images, decoded once each, by name, in the order the stamps first use them.
     let mut decoded: Vec<(String, Png)> = Vec::new();
@@ -249,8 +249,6 @@ pub(crate) fn stamp(pdf: &[u8], stamps: &[Stamp], images: &ImageRegistry, licens
         }
         content.push_str("/Artifact BMC\n");
         let mut transparent = false;
-        // Where the attribution lines go, `[left, top]` on the page as shown: one for each place, drawn over the images.
-        let mut lines: Vec<[f32; 2]> = Vec::new();
         for &i in list {
             let stamp = &stamps[i];
             let png = &decoded.iter().find(|(name, _)| *name == stamp.image).expect("decoded above").1;
@@ -263,19 +261,14 @@ pub(crate) fn stamp(pdf: &[u8], stamps: &[Stamp], images: &ImageRegistry, licens
                 xobjects.set(name.as_bytes(), Object::Reference(image_ids[stamp.image.as_str()]));
                 name
             });
-            let area = place_box(stamp, geometry.size());
-            if let Some(line) = &attribution {
-                let at = line.place(area, geometry.size());
-                if !lines.contains(&at) {
-                    lines.push(at);
-                }
-            }
-            let [a, b, c, d, e, f] = geometry.matrix(place_image(stamp, png, area));
+            let [a, b, c, d, e, f] = geometry.matrix(place_image(stamp, png, place_box(stamp, geometry.size())));
             content.push_str(&format!(
                 "q {} {} {} {} {} {} cm /{name} Do Q\n", num(a), num(b), num(c), num(d), num(e), num(f),
             ));
         }
-        if let Some(line) = &attribution {
+        // Where the attribution line goes, `[left, top]` on the page as shown, drawn over the images.
+        let corner = attribution.as_ref().map(|line| line.place(geometry.size()));
+        if let (Some(line), Some(at)) = (&attribution, corner) {
             // In sRGB on a PDF/A file, under a name the page's resources don't have.
             let space = srgb.map(|profile| {
                 let mut spaces = match resources.get(b"ColorSpace").ok().map(|o| prev.dereference(o)) {
@@ -287,9 +280,7 @@ pub(crate) fn stamp(pdf: &[u8], stamps: &[Stamp], images: &ImageRegistry, licens
                 resources.set("ColorSpace", spaces);
                 name
             });
-            for &at in &lines {
-                content.push_str(&line.draw(geometry.line_matrix(at), space.as_deref()));
-            }
+            content.push_str(&line.draw(geometry.line_matrix(at), space.as_deref()));
         }
         content.push_str("EMC\n");
         resources.set("XObject", xobjects);
@@ -321,15 +312,12 @@ pub(crate) fn stamp(pdf: &[u8], stamps: &[Stamp], images: &ImageRegistry, licens
             }
             page.set("Group", group);
         }
-        if attribution.is_some() && !tagged && !lines.is_empty() {
+        if let (Some(line), Some(at), false) = (&attribution, corner, tagged) {
             let mut annots = match page.get(b"Annots").ok().map(|o| prev.dereference(o)) {
                 Some(Ok((_, Object::Array(a)))) => a.clone(),
                 _ => Vec::new(),
             };
-            for &at in &lines {
-                let link = attribution.as_ref().expect("an unlicensed stamp").link(&geometry, at, pdfa_part.is_some());
-                annots.push(Object::Reference(update.add_object(link)));
-            }
+            annots.push(Object::Reference(update.add_object(line.link(&geometry, at, pdfa_part.is_some()))));
             page.set("Annots", annots);
         }
         update.set_object(page_id, page);
@@ -445,12 +433,9 @@ fn place_image(stamp: &Stamp, png: &Png, [x, y, _, _]: [f32; 4]) -> [f32; 4] {
     [x + offset(stamp.align, stamp.width - w), y + offset(stamp.justify, stamp.height - h), w, h]
 }
 
-/// The room between a stamp's box and its attribution line, in pt.
-const LINE_GAP: f32 = 2.0;
-
-/// The attribution line of an unlicensed stamp: a render's (`draw_attribution` in `pdf.rs`), the mark and the name, at
-/// its sizes and in its colours. The name is drawn as the outlines of its glyphs in the face the engine carries for it,
-/// so the update holds no font, of which a PDF/A file would ask more.
+/// The attribution line of an unlicensed stamp's page: a render's (`draw_attribution` in `pdf.rs`), the mark and the
+/// name, at its sizes and in its colours. The name is drawn as the outlines of its glyphs in the face the engine
+/// carries for it, so the update holds no font, of which a PDF/A file would ask more.
 struct Attribution {
     width: f32,
     /// The mark and the name as paths, from the line's bottom-left corner, y up.
@@ -492,22 +477,10 @@ impl Attribution {
         Attribution { width, mark, name: name.path }
     }
 
-    /// Where the line goes beside a stamp's box `[x, y, width, height]` on a page of the given size as shown,
-    /// `[left, top]`: above the box, its right edge on the box's; below it when there is no room above; and in the
-    /// page's top-right corner, where a render's goes, when there is room for neither. Never in the box, which is the
-    /// caller's.
-    fn place(&self, [x, y, w, h]: [f32; 4], (page_w, page_h): (f32, f32)) -> [f32; 2] {
-        let (left, right) = (x + w - self.width, x + w);
-        let fits = |top: f32| left >= 0.0 && right <= page_w && top >= 0.0 && top + ATTRIBUTION_MARK_SIZE <= page_h;
-        let above = y - LINE_GAP - ATTRIBUTION_MARK_SIZE;
-        let below = y + h + LINE_GAP;
-        if fits(above) {
-            [left, above]
-        } else if fits(below) {
-            [left, below]
-        } else {
-            [page_w - ATTRIBUTION_PAD - self.width, ATTRIBUTION_PAD]
-        }
+    /// Where the line goes on a page of the given size as shown, `[left, top]`: in its top-right corner, where a
+    /// render's goes.
+    fn place(&self, (page_w, _): (f32, f32)) -> [f32; 2] {
+        [page_w - ATTRIBUTION_PAD - self.width, ATTRIBUTION_PAD]
     }
 
     /// The line drawn with `matrix`, which takes its space to the page's, in the color space named `space`, the page's
@@ -841,24 +814,16 @@ mod tests {
     }
 
     #[test]
-    fn the_line_goes_above_the_box_then_below_it_then_in_the_page_corner_and_never_in_the_box() {
+    fn the_line_goes_in_the_page_corner_where_a_render_puts_it() {
         let line = Attribution::new();
         assert!(line.width > ATTRIBUTION_MARK_SIZE + ATTRIBUTION_GAP + ATTRIBUTION_NAME_SIZE);
-        let page = (612.0, 792.0);
-        // Room above: 2 pt over the box, its right edge on the box's.
-        let [left, top] = line.place([100.0, 100.0, 200.0, 50.0], page);
-        assert!((left + line.width - 300.0).abs() < 0.01 && (top - 89.0).abs() < 0.01, "{left} {top}");
-        // A box at the top of the page: 2 pt under it.
-        assert_eq!(line.place([100.0, 5.0, 200.0, 50.0], page)[1], 57.0);
-        // The height of the page, as a watermark's: in its top-right corner, 12 pt in, where a render's goes.
-        let [left, top] = line.place([0.0, 0.0, 612.0, 792.0], page);
+        // 12 pt in from the top and the right of the page as shown.
+        let [left, top] = line.place((612.0, 792.0));
         assert!((left + line.width - 600.0).abs() < 0.01 && top == 12.0, "{left} {top}");
-        // A box narrower than the line at the page's left edge: neither above nor below fits on the page.
-        assert_eq!(line.place([0.0, 300.0, 10.0, 10.0], page)[1], 12.0);
     }
 
     #[test]
-    fn the_line_stands_upright_beside_its_box_on_a_turned_page() {
+    fn the_line_stands_upright_on_a_turned_page() {
         // The line's bottom-left corner, 9 pt under its top, in the PDF's space of a page turned clockwise.
         let [a, b, c, d, e, f] = geometry(90).line_matrix([10.0, 20.0]);
         assert_eq!((e, f), (129.0, 60.0));

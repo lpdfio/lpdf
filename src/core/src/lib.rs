@@ -233,8 +233,8 @@ impl LpdfEngine {
     ///
     /// `stamps` is a JSON list of stamps, each with an `image`, the name of a PNG loaded with `load_image`, a `page`
     /// scope, a box (`x`, `y`, `anchor`, `width`, `height`, placed as a layer element is) and how the image sits in it
-    /// (`align`, `justify`, `scale`, `max-grow`). Without a valid license key, each stamp gets the attribution line of a
-    /// render beside its box.
+    /// (`align`, `justify`, `scale`, `max-grow`). Without a valid license key, each stamped page gets the attribution
+    /// line of a render in its top-right corner.
     pub fn stamp(&self, pdf: &[u8], stamps: &str) -> Result<Vec<u8>, JsValue> {
         self.stamp_pdf(pdf, stamps).map_err(|e| JsValue::from_str(&e))
     }
