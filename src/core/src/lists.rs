@@ -308,7 +308,7 @@ mod tests {
         );
         let mut doc = parse(&xml).unwrap();
         if let Some(data) = data {
-            crate::data::apply(&mut doc, data).unwrap();
+            crate::data::apply(&mut doc, &crate::data::parse(data).unwrap()).unwrap();
         }
         doc.section_layouts().remove(0).children.remove(0)
     }

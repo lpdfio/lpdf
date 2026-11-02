@@ -73,6 +73,9 @@ pub(crate) fn render_doc_shared(
     let section_layouts = doc.section_layouts();
     let pages: Vec<super::render::RenderPage> =
         super::layout::layout_document(&section_layouts);
+    if let Err(e) = super::memory::check() {
+        return serde_json::json!({ "error": e }).to_string();
+    }
 
     let fonts: serde_json::Map<String, serde_json::Value> = doc.fonts
         .into_iter()
@@ -118,7 +121,10 @@ pub(crate) fn render_doc_shared(
             output = val.to_string();
         }
     }
-    output
+    match super::memory::check() {
+        Ok(()) => output,
+        Err(e) => serde_json::json!({ "error": e }).to_string(),
+    }
 }
 
 #[cfg(test)]

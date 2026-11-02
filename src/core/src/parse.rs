@@ -1408,6 +1408,9 @@ pub struct Resources {
 pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> {
     let doc = roxmltree::Document::parse(xml)
         .map_err(|e| format!("XML parse error: {e}"))?;
+    // Before anything walks the elements, as the walks below go one call deeper for each level.
+    crate::nesting::check_xml(&doc)?;
+    crate::memory::check()?;
 
     let root = doc.root_element();
     if root.tag_name().name() != "lpdf" {
@@ -2284,6 +2287,7 @@ pub(crate) fn parse_node(
     tokens:       &Tokens,
     asset_images: &HashMap<String, String>,
 ) -> Result<ParsedNode, String> {
+    crate::memory::check()?;
     let tag = elem.tag_name().name();
     if tag == "code" {
         return parse_code(elem, tokens);
@@ -3861,8 +3865,8 @@ pub fn parse_tree(json: &str) -> Result<Document, String> {
 
 /// Parse a kit tree with the files its `src` attributes name loaded in `resources`.
 pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, String> {
-    let mut root: serde_json::Value = serde_json::from_str(json)
-        .map_err(|e| format!("JSON parse error: {e}"))?;
+    let mut root = crate::nesting::parse_tree_json(json)?;
+    crate::memory::check()?;
 
     match root.get("version").and_then(|v| v.as_u64()) {
         Some(1) => {}
@@ -4262,6 +4266,7 @@ fn parse_tree_node(
     tokens:       &Tokens,
     asset_images: &HashMap<String, String>,
 ) -> Result<ParsedNode, String> {
+    crate::memory::check()?;
     let type_str = json.get("type").and_then(|v| v.as_str())
         .ok_or_else(|| "node missing 'type' field".to_string())?;
     if type_str == "code" {

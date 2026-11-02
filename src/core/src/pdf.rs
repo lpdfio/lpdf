@@ -2636,11 +2636,12 @@ fn build_content_streams(
     attribution:   bool,
     links:         bool,
     marks:         &mut Marks,
-) -> Vec<RenderedPage> {
+) -> Result<Vec<RenderedPage>, String> {
     let mut rendered_pages: Vec<RenderedPage> = Vec::new();
     let res = DrawResources { fonts, image_res_map, gradients, links };
 
     for (index, page) in pages.iter().enumerate() {
+        crate::memory::check()?;
         let mut content = Content::new();
         let mut annots: Vec<AnnotData> = Vec::new();
         let mut groups: Vec<PageGroup> = Vec::new();
@@ -2662,7 +2663,7 @@ fn build_content_streams(
         rendered_pages.push(RenderedPage { content: content.finish(), annots, groups });
     }
 
-    rendered_pages
+    Ok(rendered_pages)
 }
 
 /// The background of a page: a color, or a gradient across the whole page, its bleed included, so that it runs off
@@ -3269,6 +3270,7 @@ fn assemble_pdf(
 
     // -- Content streams -------------------------------------------------------
     for (i, page) in rendered_pages.iter().enumerate() {
+        crate::memory::check()?;
         let compressed = compress_to_vec_zlib(&page.content, 6);
         pdf.stream(content_ids[i], &compressed)
            .filter(Filter::FlateDecode);
@@ -4009,7 +4011,7 @@ pub fn render_pdf(
     let mut marks = if standards.pdfua.is_some() { Marks::tagged() } else { Marks::off() };
     let links = standards.pdfx.is_none();
     let mut rendered_pages =
-        build_content_streams(pages, &fonts, &image_res_map, gradients, attribution, links, &mut marks);
+        build_content_streams(pages, &fonts, &image_res_map, gradients, attribution, links, &mut marks)?;
     drop_dangling_links(&mut rendered_pages, &anchors);
     let ids =
         allocate_ids(pages, &rendered_pages, &fonts, &sorted_font_names, &sorted_image_names, image_registry, &fields);

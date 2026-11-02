@@ -8873,7 +8873,7 @@ abcdef</code><text>after</text></row>"#,
             r#"<table cols="1fr 1fr"><tr data-source="items"><td rowspan="2"><text data-value="name">n</text></td><td><text data-value="name">n</text></td></tr><tr><td><text>last</text></td></tr></table>"#,
         );
         let mut doc = parse(&xml).unwrap();
-        crate::data::apply(&mut doc, r#"{"items":[{"name":"a"},{"name":"b"},{"name":"c"}]}"#).unwrap();
+        crate::data::apply(&mut doc, &crate::data::parse(r#"{"items":[{"name":"a"},{"name":"b"},{"name":"c"}]}"#).unwrap()).unwrap();
         let layouts = doc.section_layouts();
         let pages: Vec<_> = layouts.iter().flat_map(layout_page).collect();
         assert!(!pages.is_empty());
@@ -8889,7 +8889,7 @@ abcdef</code><text>after</text></row>"#,
         let mut doc = parse(xml).unwrap();
         crate::data::apply(
             &mut doc,
-            r##"{"items":[{"color":"#00ff00","tone":"late","label":"One"},{"label":"Two"}]}"##,
+            &crate::data::parse(r##"{"items":[{"color":"#00ff00","tone":"late","label":"One"},{"label":"Two"}]}"##).unwrap(),
         )
         .unwrap();
         let lp = doc.section_layouts();
