@@ -40,7 +40,8 @@
 /// ask for it.
 ///
 /// A render may allocate `max_memory_mb` megabytes, 1024 when the request leaves it out, from 1 to 4096; one
-/// that needs more is an error that names the cap (`memory.rs`):
+/// that needs more is an error that names the cap (`memory.rs`). What the request parses into counts, its document,
+/// data and files, from when it is parsed:
 /// ```json
 /// { "max_memory_mb": 512 }
 /// ```
@@ -123,6 +124,9 @@ fn main() {
 }
 
 fn dispatch(request: String) -> String {
+    // The render's cap counts from here, so the data the request carries counts toward it, as it does in the JS build,
+    // which parses it in the render.
+    let before = memory::live();
     let mut req: serde_json::Value = match serde_json::from_str(&request) {
         Ok(v) => v,
         Err(e) => return serde_json::json!({ "error": format!("request parse error: {e}") }).to_string(),
@@ -160,10 +164,8 @@ fn dispatch(request: String) -> String {
         Ok(cap) => cap,
         Err(e)  => return serde_json::json!({ "error": e }).to_string(),
     };
-    // Loaded before the cap starts, as an engine loads them before it renders.
-    let loaded = Loaded::of(&req);
+    let _cap = memory::start_from(cap, before);
     let resources = build_resources(&req);
-    let _cap = memory::start(cap);
     let parsed = match method.as_str() {
         "render_tree_pdf" | "render_tree" => parse::parse_tree_with(&body, &resources),
         _ => parse::parse_with(&body, &resources),
@@ -183,9 +185,9 @@ fn dispatch(request: String) -> String {
                     return serde_json::json!({ "error": e }).to_string();
                 }
             }
-            render_pdf_doc(doc, &key, now_unix, &req, loaded)
+            render_pdf_doc(doc, &key, now_unix, &req)
         }
-        "render_tree_pdf" => render_pdf_doc(doc, &key, now_unix, &req, loaded),
+        "render_tree_pdf" => render_pdf_doc(doc, &key, now_unix, &req),
         _ => render_doc(doc, &key, now_unix),
     }
 }
@@ -198,25 +200,6 @@ fn render_cap(req: &serde_json::Value) -> Result<u32, String> {
             Some(mb) => memory::cap_mb(Some(mb)),
             None => Err(memory::cap_error(&mb.to_string())),
         },
-    }
-}
-
-/// The files of the request, decoded: what an engine loads before it renders.
-struct Loaded {
-    fonts:    pdf::FontRegistry,
-    images:   pdf::ImageRegistry,
-    files:    attachments::FileRegistry,
-    profiles: pdfx::ProfileRegistry,
-}
-
-impl Loaded {
-    fn of(req: &serde_json::Value) -> Loaded {
-        Loaded {
-            fonts:    build_registry(req),
-            images:   build_image_registry(req),
-            files:    build_file_registry(req),
-            profiles: build_profile_registry(req),
-        }
     }
 }
 
@@ -312,8 +295,7 @@ fn build_font_widths(req: &serde_json::Value) -> std::collections::HashMap<Strin
     map
 }
 
-fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, req: &serde_json::Value, loaded: Loaded) -> String {
-    let Loaded { fonts: registry, images: image_registry, files: file_registry, profiles: profile_registry } = loaded;
+fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, req: &serde_json::Value) -> String {
     // Checked before the layout, so a missing or stray password fails without the work of a render.
     let encryption = match render_encryption(req).and_then(|e| e.resolve(doc.output.encryption.as_ref())) {
         Ok(config) => config,
@@ -324,16 +306,21 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
         return serde_json::json!({ "error": e }).to_string();
     }
 
+    let profile_registry = build_profile_registry(req);
     let press = match pdfx::resolve(doc.output.pdfx.as_ref(), &doc.profiles, &profile_registry, &doc.meta) {
         Ok(press) => press,
         Err(e)    => return serde_json::json!({ "error": e }).to_string(),
     };
 
+    let file_registry = build_file_registry(req);
     let attached = std::mem::take(&mut doc.attachments);
     let files = match attachments::resolve(&attached, &file_registry) {
         Ok(files) => files,
         Err(e)    => return serde_json::json!({ "error": e }).to_string(),
     };
+
+    let registry       = build_registry(req);
+    let image_registry = build_image_registry(req);
 
     // Confirm every image declared in <assets> has bytes in the registry.
     for (_alias, name) in &doc.images {
@@ -475,7 +462,7 @@ mod tests {
             <layer><img-at name="logo" anchor="top-right" width="100pt" height="100pt"/></layer>
         </section></document></lpdf>"#;
         let req = serde_json::json!({ "images": { "logo": TALL_PNG } });
-        let out = render_pdf_doc(parse::parse(xml).unwrap(), "", 0, &req, Loaded::of(&req));
+        let out = render_pdf_doc(parse::parse(xml).unwrap(), "", 0, &req);
         let out: serde_json::Value = serde_json::from_str(&out).unwrap();
         let pdf = base64::engine::general_purpose::STANDARD.decode(out["pdf"].as_str().expect(&out.to_string())).unwrap();
 
@@ -650,6 +637,16 @@ mod tests {
         }
         assert!(answer("render_pdf", &xml, serde_json::json!({ "max_memory_mb": 64 }))["pdf"].is_string());
         assert!(answer("render_pdf", &xml, serde_json::json!({}))["pdf"].is_string(), "1024 MB when left out");
+    }
+
+    #[test]
+    fn the_data_of_the_request_counts_toward_the_cap() {
+        let xml = r#"<lpdf version="1"><document><section><layout><text data-value="title">x</text></layout></section></document></lpdf>"#;
+        let rows: Vec<serde_json::Value> = (0..50_000).map(|i| serde_json::json!({ "name": format!("Row {i}") })).collect();
+        let data = serde_json::json!({ "title": "Report", "rows": rows });
+        let error = answer("render_pdf", xml, serde_json::json!({ "data": data, "max_memory_mb": 1 }));
+        assert!(error["error"].as_str().unwrap_or_default().contains("its cap of 1 MB"), "{error}");
+        assert!(answer("render_pdf", xml, serde_json::json!({ "data": data, "max_memory_mb": 64 }))["pdf"].is_string());
     }
 
     #[test]

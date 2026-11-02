@@ -112,10 +112,21 @@ pub(crate) struct Cap(());
 
 /// Start the cap of a render: from here, the render may hold `cap_mb` megabytes more than this thread holds now.
 pub(crate) fn start(cap_mb: u32) -> Cap {
+    start_from(cap_mb, live())
+}
+
+/// Start the cap of a render that began when this thread held `live` bytes, as `live()` read them: what the render
+/// allocated since counts too.
+pub(crate) fn start_from(cap_mb: u32, live: i64) -> Cap {
     CAP_MB.set(cap_mb);
-    LIMIT.set(LIVE.get() + i64::from(cap_mb) * BYTES_PER_MB);
-    PASSED.set(false);
+    LIMIT.set(live + i64::from(cap_mb) * BYTES_PER_MB);
+    PASSED.set(LIVE.get() > LIMIT.get());
     Cap(())
+}
+
+/// The bytes this thread holds now, for `start_from`.
+pub(crate) fn live() -> i64 {
+    LIVE.get()
 }
 
 impl Drop for Cap {
@@ -164,6 +175,15 @@ mod tests {
         let small = vec![0u8; 1000];
         assert_eq!(check(), Ok(()));
         drop((before, small));
+    }
+
+    #[test]
+    fn a_render_started_earlier_counts_what_it_allocated_before_its_cap_started() {
+        let before = live();
+        let request = vec![0u8; 2 * BYTES_PER_MB as usize];
+        let _cap = start_from(1, before);
+        assert!(check().is_err(), "the request it read counts");
+        drop(request);
     }
 
     #[test]
