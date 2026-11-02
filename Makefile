@@ -16,7 +16,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python \
-        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-ocg check-codegen-dotnet \
+        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-facturx check-ocg check-codegen-dotnet \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
@@ -131,6 +131,19 @@ check-pdfx:
 	rm -rf target/pdfx-samples && mkdir -p target/pdfx-samples
 	LPDF_PDFX_OUT="$(CURDIR)/target/pdfx-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_the_pdfx_sample_for_the_external_check
 	node scripts/check-pdfx.mjs target/pdfx-samples
+
+# check-facturx has the core write the Factur-X samples and validates them with the Mustang CLI, the open checker of
+# Factur-X and ZUGFeRD, which runs veraPDF inside it and reads the invoice's metadata and XML: a PDF it calls invalid
+# fails the check, and so does a copy with a wrong fx:ConformanceLevel that it passes (`scripts/check-facturx.mjs`). Needs
+# Java 11 or later on the PATH; the script downloads the CLI, pinned to its version and checksum, into target/mustang.
+check-facturx:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking Factur-X invoices with the Mustang CLI..."
+	@echo ""
+	rm -rf target/facturx-samples && mkdir -p target/facturx-samples
+	LPDF_FACTURX_OUT="$(CURDIR)/target/facturx-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_facturx_samples_for_the_external_check
+	node scripts/check-facturx.mjs target/facturx-samples
 
 # check-ocg has the core write the samples of optional content (ocg) and renders them with pdf.js, Firefox's viewer, as it
 # shows a page and as it prints one: print content must show only in print and screen content only on screen, on every

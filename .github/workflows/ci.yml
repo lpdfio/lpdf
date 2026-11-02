@@ -70,6 +70,12 @@ jobs:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
         run: make check-pdfx
 
+      # Java 17, the runner's default, runs the Mustang CLI, which needs 11 or later.
+      - name: Check Factur-X invoices with the Mustang CLI
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
+        run: make check-facturx
+
       - name: Check optional content with pdf.js
         env:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
