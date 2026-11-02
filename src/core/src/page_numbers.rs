@@ -120,6 +120,11 @@ pub(crate) fn number_sections(sections: &[SectionLayout], counts: &[usize]) -> V
     out
 }
 
+/// What `{page}` prints on each page of sections with `numbers`, which have `counts[i]` pages.
+pub(crate) fn page_labels(numbers: &[SectionNumbers], counts: &[usize]) -> Vec<String> {
+    numbers.iter().zip(counts).flat_map(|(numbers, &count)| (0..count).map(|i| numbers.page(i))).collect()
+}
+
 /// Give the sections of a run the number of pages it has.
 fn close_run(run: &mut [SectionNumbers], counts: &[usize]) {
     let pages = counts.iter().sum();
@@ -187,8 +192,7 @@ mod tests {
 
     /// The labels of every page of sections with `counts` pages each.
     fn labels(sections: &[SectionLayout], counts: &[usize]) -> Vec<String> {
-        let numbers = number_sections(sections, counts);
-        numbers.iter().zip(counts).flat_map(|(n, &count)| (0..count).map(|i| n.page(i))).collect()
+        page_labels(&number_sections(sections, counts), counts)
     }
 
     #[test]

@@ -92,6 +92,8 @@ mod page_scope;
 mod canvas;
 #[path = "../../core/src/toc.rs"]
 mod toc;
+#[path = "../../core/src/references.rs"]
+mod references;
 #[path = "../../core/src/attr_types.rs"]
 mod attr_types;
 #[path = "../../core/src/schema_attrs.rs"]
@@ -319,7 +321,7 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
 
     let meta = pdf::build_image_meta(&image_registry);
     let mut lp = doc.section_layouts();
-    if let Err(e) = pdfua::check(doc.output.pdfua, &doc.meta, &lp) {
+    if let Err(e) = pdfua::check(doc.output.pdfua, &doc.meta, &lp).and_then(|()| references::check(&lp)) {
         return serde_json::json!({ "error": e }).to_string();
     }
     for page in &mut lp {

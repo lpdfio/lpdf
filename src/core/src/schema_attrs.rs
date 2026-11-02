@@ -688,6 +688,7 @@ const BOOKMARK: Attributes = &[
     ("label", Kind::Text),
     ("level", Kind::Integer { min: Some(1), max: Some(6) }),
     ("id", Kind::Text),
+    ("ref-only", Kind::Boolean),
 ];
 
 const DIVIDER: Attributes = &[
@@ -704,6 +705,7 @@ const SPAN: Attributes = &[
     ("bold", Kind::Boolean),
     ("color", Kind::Text),
     ("href", Kind::Text),
+    ("bookmark-ref", Kind::Text),
     ("underline", Kind::Boolean),
     ("strike", Kind::Boolean),
 ];

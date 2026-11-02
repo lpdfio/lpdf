@@ -616,7 +616,7 @@ fn a_bookmark_below_the_clip_marks_the_clip() {
     let mut nodes = vec![RenderNode::Box(RenderBox {
         x: 0.0, y: 700.0, width: 100.0, height: 400.0,
         fill: None, border_width: 0.0, border_color: None, radius: 0.0, opacity: 1.0, shadow: None, debug_self: false, tag: None,
-        ocg: None, children: vec![RenderNode::Anchor(RenderAnchor { id: "deep".into(), label: "Deep".into(), level: 1, y: 950.0 })],
+        ocg: None, children: vec![RenderNode::Anchor(RenderAnchor { id: "deep".into(), label: "Deep".into(), level: 1, ref_only: false, y: 950.0 })],
     })];
     fit_to_clip(&mut nodes, 800.0);
     let RenderNode::Box(b) = &nodes[0] else { panic!("a box") };

@@ -96,12 +96,14 @@ pub enum TagKind {
 /// The place a bookmark marks: an entry of the PDF outline, and a named destination for `href="#id"` links.
 /// It draws nothing.
 pub struct RenderAnchor {
-    pub id:    String,
-    pub label: String,
+    pub id:       String,
+    pub label:    String,
     /// Outline depth, 1 to 6.
-    pub level: u8,
+    pub level:    u8,
+    /// A target for links and references only, which the outline and the table of contents leave out (`ref-only`).
+    pub ref_only: bool,
     /// Top of the marked element, from the top of the page.
-    pub y:     f32,
+    pub y:        f32,
 }
 
 /// Where the number of a footnote is drawn. It draws nothing: pagination reads it to leave out the note of a number
