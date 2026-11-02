@@ -124,7 +124,7 @@ impl Document {
                 toc: section.options.toc,
                 footnote_counter, footnote_start,
                 page_numbering: section.options.page_numbering,
-                tagged: self.output.pdfua.is_some(),
+                tagged: crate::pdfa::Standards::of(&self.output).tagged(),
             });
         }
         result
@@ -285,7 +285,7 @@ pub struct Output {
     pub encryption: Option<crate::encrypt::OutputEncryption>,
     /// The PDF/A level of `pdfa`; `None` for a plain PDF.
     pub pdfa: Option<crate::pdfa::PdfA>,
-    /// The PDF/UA part of `pdfua`; `None` for a file that is not tagged.
+    /// The PDF/UA part of `pdfua`; `None` for a file that is not PDF/UA, which is tagged only at PDF/A level a.
     pub pdfua: Option<crate::pdfua::PdfUa>,
     /// The PDF/X version of `pdfx` and the press profile `profile` names; `None` for a file that is not for a press.
     pub pdfx: Option<crate::pdfx::PdfX>,
@@ -320,7 +320,7 @@ pub struct SectionLayout {
     /// What the section says about its page numbers, which `page_numbers` reads across the sections.
     pub page_numbering: PageNumbering,
     /// Whether the layout says what each thing it draws is, for the structure of a tagged PDF: a document with
-    /// `<output pdfua>`. No other document pays for it.
+    /// `<output pdfua>`, or with a `pdfa` of level a. No other document pays for it.
     pub tagged: bool,
 }
 
@@ -654,8 +654,8 @@ pub struct TableStyle {
 
 /// What a node is to a reader of a tagged PDF, where its kind alone doesn't say: a heading, the parts of a list the
 /// layout turned into rows, a table's header cell, an entry of the table of contents, or what is drawn and not read.
-/// `Auto` takes it from the kind: a text is a paragraph, a table a table. Only a document with `<output pdfua>` reads
-/// it (`layout::tag_of`).
+/// `Auto` takes it from the kind: a text is a paragraph, a table a table. Only a tagged document, with `<output pdfua>`
+/// or a `pdfa` of level a, reads it (`layout::tag_of`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Role {
     #[default]

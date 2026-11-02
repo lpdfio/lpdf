@@ -81,7 +81,7 @@ pub(crate) fn check(part: Option<PdfUa>, meta: &Meta, sections: &[SectionLayout]
 
 /// Whether `value` is a language tag as PDF reads one (RFC 3066): letters, then parts of letters and digits, each one
 /// to eight long, joined by hyphens.
-fn is_language_tag(value: &str) -> bool {
+pub(crate) fn is_language_tag(value: &str) -> bool {
     let mut parts = value.split('-');
     let first_is_letters = parts.next().is_some_and(|p| (1..=8).contains(&p.len()) && p.bytes().all(|b| b.is_ascii_alphabetic()));
     first_is_letters && parts.all(|p| (1..=8).contains(&p.len()) && p.bytes().all(|b| b.is_ascii_alphanumeric()))

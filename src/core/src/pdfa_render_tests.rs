@@ -135,20 +135,137 @@ fn pdfa_is_read_from_the_json_of_an_sdk() {
     assert_eq!(doc.output.pdfa, Some(crate::pdfa::PdfA::Level2u));
     let doc = crate::parse::parse_tree(&tree(r#"{"pdfa":"3b"}"#)).expect("parses");
     assert_eq!(doc.output.pdfa, Some(crate::pdfa::PdfA::Level3b));
-    let error = crate::parse::parse_tree(&tree(r#"{"pdfa":"3a"}"#)).unwrap_err();
-    assert!(error.contains("'3a'") && error.contains("2b, 2u, 3b or 3u"), "{error}");
+    let doc = crate::parse::parse_tree(&tree(r#"{"pdfa":"2a"}"#)).expect("parses");
+    assert_eq!(doc.output.pdfa, Some(crate::pdfa::PdfA::Level2a));
+    let doc = crate::parse::parse_tree(&tree(r#"{"pdfa":"3a"}"#)).expect("parses");
+    assert_eq!(doc.output.pdfa, Some(crate::pdfa::PdfA::Level3a));
+    let error = crate::parse::parse_tree(&tree(r#"{"pdfa":"1a"}"#)).unwrap_err();
+    assert!(error.contains("'1a'") && error.contains("2a, 2b, 2u, 3a, 3b or 3u"), "{error}");
     assert_eq!(crate::parse::parse_tree(&tree(r#"{"pdfa":null}"#)).expect("parses").output.pdfa, None);
     let error = crate::parse::parse_tree(&tree(r#"{"pdfa":2}"#)).unwrap_err();
     assert!(error.contains("pdfa must be a string"), "{error}");
+}
+
+// ── Level a ───────────────────────────────────────────────────────────────────
+
+/// `xml` with its `pdfa="2b"` at `level`.
+fn at_level(xml: &str, level: &str) -> String {
+    xml.replace(r#"pdfa="2b""#, &format!(r#"pdfa="{level}""#))
+}
+
+#[test]
+fn level_a_tags_the_file_and_declares_pdfa_level_a_only() {
+    for level in ["2a", "3a"] {
+        let xml = fixture("2a").replace(r#"pdfa="2a""#, &format!(r#"pdfa="{level}""#));
+        let pdf = text(&render(&xml).unwrap_or_else(|e| panic!("{level}: {e}")));
+        for expected in [
+            "/MarkInfo <<\n    /Marked true\n  >>", "/StructTreeRoot", "/Lang (en)", "/ParentTree", "/StructParents",
+            "/S /H1\n", "/S /H2\n", "/S /Table\n", "/S /L\n", "/S /Link\n",
+            "/Alt (Alice looks up at the Caterpillar, who sits on a mushroom and smokes a hookah)",
+            "<pdfaid:conformance>A</pdfaid:conformance>",
+        ] {
+            assert!(pdf.contains(expected), "{level}: {expected}");
+        }
+        assert!(pdf.contains(&format!("<pdfaid:part>{}</pdfaid:part>", &level[..1])), "{level}");
+        assert_eq!(pdf.matches("/S /Figure\n").count(), 1, "{level}: the pictures without alt are decoration");
+        for absent in ["pdfuaid", "pdfaExtension", "/RoleMap"] {
+            assert!(!pdf.contains(absent), "{level}: {absent}");
+        }
+    }
+}
+
+#[test]
+fn level_a_does_not_run_the_checks_of_pdfua() {
+    // No title, no lang, a picture and a barcode without alt, and a first heading of h3: each an error with pdfua.
+    let assets = r#"<image name="chart" src="chart.png"/>"#;
+    let layout = r#"<text role="h3">Fees</text><img name="chart" width="40pt"/><barcode type="qr" data="pay" width="40pt"/>"#;
+    for level in ["2a", "3a"] {
+        let pdf = text(&render(&at_level(&document(assets, layout), level)).unwrap_or_else(|e| panic!("{level}: {e}")));
+        assert!(pdf.contains("/StructTreeRoot") && pdf.contains("<pdfaid:conformance>A</pdfaid:conformance>"), "{level}");
+        for absent in ["/Lang", "pdfuaid", "/S /Figure"] {
+            assert!(!pdf.contains(absent), "{level}: {absent}");
+        }
+    }
+}
+
+#[test]
+fn level_a_with_pdfua_runs_the_checks_of_pdfua_and_declares_both() {
+    for level in ["2a", "3a"] {
+        let output = format!(r#"pdfa="{level}" pdfua="1""#);
+        let bare = document("", "<text>A</text>").replace(r#"pdfa="2b""#, &output);
+        let error = refused(&bare);
+        assert!(error.starts_with(r#"<output pdfua="1">"#) && error.contains("add title to <meta>"), "{level}: {error}");
+        let xml = bare.replace("<output ", r#"<meta title="Fees" lang="en"/><output "#);
+        let pdf = text(&render(&xml).unwrap_or_else(|e| panic!("{level}: {e}")));
+        for expected in [
+            "<pdfaid:conformance>A</pdfaid:conformance>", "<pdfuaid:part>1</pdfuaid:part>",
+            "<pdfaSchema:prefix>pdfuaid</pdfaSchema:prefix>", "/StructTreeRoot", "/Lang (en)",
+        ] {
+            assert!(pdf.contains(expected), "{level}: {expected}");
+        }
+    }
+}
+
+/// A text with U+F890, a character of the private use area that Crimson Text, the font `body`, draws.
+const PRIVATE_USE: &str = "<text>Call us \u{F890} today</text>";
+
+#[test]
+fn a_private_use_character_is_an_error_at_level_a_that_says_what_to_change() {
+    for (level, other) in [("2a", "2u"), ("3a", "3u")] {
+        let error = refused(&at_level(&document("", PRIVATE_USE), level));
+        assert!(error.starts_with(&format!(r#"<output pdfa="{level}">"#)), "{error}");
+        assert!(error.contains("\"Call us \u{F890} today\" has U+F890") && error.contains("private use area"), "{error}");
+        assert!(error.contains("ActualText") && error.contains(&format!(r#"use pdfa="{other}""#)), "{error}");
+    }
+}
+
+#[test]
+fn a_private_use_character_is_found_in_a_layer_and_a_table_and_in_the_planes_past_the_first() {
+    let in_layer = document("", "<text>A</text>").replace(
+        "<section>",
+        "<section><layer><text-at x=\"40pt\" y=\"40pt\">Mark \u{F891}</text-at></layer>",
+    );
+    let error = refused(&at_level(&in_layer, "2a"));
+    assert!(error.contains("U+F891"), "{error}");
+    let in_table = document("", "<table cols=\"1fr\"><tr><td><text>Cell \u{F892}</text></td></tr></table>");
+    let error = refused(&at_level(&in_table, "2a"));
+    assert!(error.contains("U+F892"), "{error}");
+    for (c, code) in [('\u{F0000}', "U+F0000"), ('\u{10FFFD}', "U+10FFFD")] {
+        // Crimson Text has no glyph here, so the font's own refusal names the character first, at every level.
+        let error = refused(&at_level(&document("", &format!("<text>{c}</text>")), "2a"));
+        assert!(error.contains(code) && error.contains("no glyph"), "{error}");
+    }
+}
+
+#[test]
+fn a_private_use_character_renders_at_the_other_levels_and_with_pdfua_alone() {
+    for level in ["2b", "2u", "3b", "3u"] {
+        render(&at_level(&document("", PRIVATE_USE), level)).unwrap_or_else(|e| panic!("{level}: {e}"));
+    }
+    let pdfua = document("", PRIVATE_USE).replace(r#"<output pdfa="2b"/>"#, r#"<meta title="T" lang="en"/><output pdfua="1"/>"#);
+    render(&pdfua).expect("PDF/UA alone renders it");
+}
+
+#[test]
+fn a_lang_that_is_not_a_language_tag_is_an_error_at_level_a_only() {
+    let xml = document("", "<text>A</text>").replace("<output ", r#"<meta lang="english language"/><output "#);
+    for level in ["2a", "3a"] {
+        let error = refused(&at_level(&xml, level));
+        assert!(error.starts_with(&format!(r#"<output pdfa="{level}">"#)), "{error}");
+        assert!(error.contains("lang 'english language' is not a language tag") && error.contains("leave lang out"), "{error}");
+    }
+    for level in ["2b", "2u", "3b", "3u"] {
+        render(&at_level(&xml, level)).unwrap_or_else(|e| panic!("{level}: {e}"));
+    }
 }
 
 // ── What it refuses ───────────────────────────────────────────────────────────
 
 #[test]
 fn a_level_the_engine_does_not_write_is_an_error() {
-    let xml = document("", "<text>A</text>").replace(r#"pdfa="2b""#, r#"pdfa="2a""#);
+    let xml = document("", "<text>A</text>").replace(r#"pdfa="2b""#, r#"pdfa="1a""#);
     let error = refused(&xml);
-    assert!(error.contains("<output>") && error.contains("'2a'") && error.contains("2b, 2u, 3b or 3u"), "{error}");
+    assert!(error.contains("<output>") && error.contains("'1a'") && error.contains("2a, 2b, 2u, 3a, 3b or 3u"), "{error}");
 }
 
 #[test]
@@ -289,17 +406,17 @@ fn font_sample(file: &str) -> Vec<u8> {
     engine.render_xml(&xml, None, &RenderEncryption::default()).unwrap_or_else(|e| panic!("{file}: {e}"))
 }
 
-/// Writes the files `scripts/check-pdfa.mjs` hands to veraPDF and qpdf, when `LPDF_PDFA_OUT` names a folder: the two
+/// Writes the files `scripts/check-pdfa.mjs` hands to veraPDF and qpdf, when `LPDF_PDFA_OUT` names a folder: the three
 /// fixtures, rendered unlicensed, so that the attribution line is checked too, with their fonts and pictures, each
-/// at its level of part 2 and of part 3, a page in each font of `FONT_SAMPLES`, and the Factur-X invoice of
-/// `showcase-facturx.xml`, a PDF/A-3b file that carries files. Without the variable the test does nothing, so a plain
+/// at its level of part 2 and of part 3, a page in each font of `FONT_SAMPLES`, the Factur-X invoice of
+/// `showcase-facturx.xml`, a PDF/A-3b file that carries files, and the PDF/UA fixture at levels 2a and 3a. Without the variable the test does nothing, so a plain
 /// `cargo test` needs no other tool.
 #[test]
 fn writes_pdfa_samples_for_the_external_check() {
     let Some(dir) = std::env::var_os("LPDF_PDFA_OUT") else { return };
     let dir = Path::new(&dir);
     std::fs::create_dir_all(dir).expect("the samples' folder");
-    for level in ["2b", "2u"] {
+    for level in ["2a", "2b", "2u"] {
         std::fs::write(dir.join(format!("pdfa-{level}.pdf")), render_fixture(level)).expect("a sample");
         let part_3 = level.replace('2', "3");
         let xml = fixture(level).replace(&format!(r#"pdfa="{level}""#), &format!(r#"pdfa="{part_3}""#));
@@ -313,6 +430,11 @@ fn writes_pdfa_samples_for_the_external_check() {
     // With content in optional content groups, which a PDF/A file leaves out of them.
     let grouped = crate::ocg_render_tests::with_groups(&fixture("2u"));
     std::fs::write(dir.join("pdfa-2u-ocg.pdf"), render(&grouped).expect("renders")).expect("a sample");
+    // Level a with PDF/UA beside it: the PDF/UA fixture, which says what PDF/UA asks.
+    for level in ["2a", "3a"] {
+        let pdf = crate::pdfua_render_tests::render_fixture_beside_pdfa(level);
+        std::fs::write(dir.join(format!("pdfa-{level}-pdfua-1.pdf")), pdf).expect("a sample");
+    }
 }
 
 #[test]

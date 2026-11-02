@@ -147,11 +147,13 @@
 
   <xs:simpleType name="PdfALevel">
     <xs:annotation>
-      <xs:documentation>A level of PDF/A, the ISO 19005 standard for files kept for the long term: 2b keeps the look of every page, and 2u adds that all text maps to Unicode, so it can be searched and copied. 3b and 3u are the same levels in part 3, which also carries files of any kind, as a Factur-X or ZUGFeRD e-invoice carries its XML.</xs:documentation>
+      <xs:documentation>A level of PDF/A, the ISO 19005 standard for files kept for the long term: 2b keeps the look of every page, 2u adds that all text maps to Unicode, so it can be searched and copied, and 2a adds to 2u the tagged structure a screen reader reads. 3a, 3b and 3u are the same levels in part 3, which also carries files of any kind, as a Factur-X or ZUGFeRD e-invoice carries its XML.</xs:documentation>
     </xs:annotation>
     <xs:restriction base="xs:string">
+      <xs:enumeration value="2a"/>
       <xs:enumeration value="2b"/>
       <xs:enumeration value="2u"/>
+      <xs:enumeration value="3a"/>
       <xs:enumeration value="3b"/>
       <xs:enumeration value="3u"/>
     </xs:restriction>
@@ -1002,7 +1004,7 @@
       </xs:attribute>
       <xs:attribute name="alt" type="xs:string">
         <xs:annotation>
-          <xs:documentation>In a PDF/UA document, what the layer shows, which a screen reader reads as one figure at the layer's place in the document: a layer before the layout before it, one after the layout after it. Without alt a layer is decoration, as a header is, and a screen reader skips it with all its text: a watermark, a running title, a logo's letters. A document without pdfua ignores it.</xs:documentation>
+          <xs:documentation>In a tagged document, one with pdfua or a pdfa of level a, what the layer shows, which a screen reader reads as one figure at the layer's place in the document: a layer before the layout before it, one after the layout after it. Without alt a layer is decoration, as a header is, and a screen reader skips it with all its text: a watermark, a running title, a logo's letters. A document that is not tagged ignores it.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attributeGroup ref="DataConditionAttrs"/>
@@ -1255,7 +1257,7 @@
       <xs:attribute name="creator"  type="xs:string"/>
       <xs:attribute name="lang"     type="xs:string">
         <xs:annotation>
-          <xs:documentation>The language the document is written in, as a language tag such as en, en-US or de-CH, which a screen reader reads it in. A PDF/UA document needs it.</xs:documentation>
+          <xs:documentation>The language the document is written in, as a language tag such as en, en-US or de-CH, which a screen reader reads it in. A PDF/UA document needs it, and a PDF/A document of level a takes it only as a language tag.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
     </xs:complexType>
@@ -1278,12 +1280,12 @@
       </xs:attribute>
       <xs:attribute name="pdfa" type="PdfALevel">
         <xs:annotation>
-          <xs:documentation>Writes the PDF as PDF/A, for archives, courts, public bodies and banks: 2b, or 2u when its text must also be searchable, and 3b or 3u to carry attachments of any kind. The file carries its fonts, the sRGB color profile and its metadata, and the render needs created_on, the date the file carries. What PDF/A cannot hold is an error that says what to change: text in a built-in font such as the default Helvetica (declare a font in assets), a font whose license forbids embedding, a character the font has no glyph for, a CMYK color, a form field, the digits of a barcode, encrypt, and attachments in 2b or 2u. With 3b or 3u, an attachment named factur-x.xml, or xrechnung.xml for the XRECHNUNG profile, makes the file a Factur-X or ZUGFeRD e-invoice: the engine reads the profile from BT-24 of that XML and names the invoice in the file's metadata. The XML is attached as given, and its content is not checked: check it with the Factur-X package's XSD and Schematron or a checker such as the Mustang CLI. A file named so in a document without 3b or 3u is an error, and so are factur-x.xml and xrechnung.xml together.</xs:documentation>
+          <xs:documentation>Writes the PDF as PDF/A, for archives, courts, public bodies and banks: 2b, or 2u when its text must also be searchable, or 2a when it must also be tagged, and 3a, 3b or 3u to carry attachments of any kind. The file carries its fonts, the sRGB color profile and its metadata, and the render needs created_on, the date the file carries. What PDF/A cannot hold is an error that says what to change: text in a built-in font such as the default Helvetica (declare a font in assets), a font whose license forbids embedding, a character the font has no glyph for, a CMYK color, a form field, the digits of a barcode, encrypt, and attachments in 2a, 2b or 2u. Level a, 2a or 3a, tags the file as pdfua does, with what each text, heading, table, list, link and image is, but runs none of PDF/UA's checks: a level-a file may have no title and no lang, and an img or a barcode without alt is decoration. Write pdfua="1" beside it for a file a screen reader can use, which asks for those too. In level a, a lang that is not a language tag is an error, and so is a character of Unicode's private use area, such as an icon font's symbols, since level a gives each such character words of its own, which the engine does not write. With 3a, 3b or 3u, an attachment named factur-x.xml, or xrechnung.xml for the XRECHNUNG profile, makes the file a Factur-X or ZUGFeRD e-invoice: the engine reads the profile from BT-24 of that XML and names the invoice in the file's metadata. The XML is attached as given, and its content is not checked: check it with the Factur-X package's XSD and Schematron or a checker such as the Mustang CLI. A file named so in a document without 3a, 3b or 3u is an error, and so are factur-x.xml and xrechnung.xml together.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="pdfua" type="PdfUaPart">
         <xs:annotation>
-          <xs:documentation>Writes the PDF as PDF/UA-1, a tagged PDF a screen reader can read: what each text, heading, table, list, link, footnote and image is, in reading order, and the rest marked as decoration. It combines with pdfa. The render needs created_on, the date the file carries. What PDF/UA cannot hold is an error that says what to change: no title or lang on meta, an img or a barcode without alt (alt="" marks one as decoration), headings that do not start at h1 or skip a level on the way down, text in a built-in font such as the default Helvetica (declare a font in assets), a font whose license forbids embedding, a character the font has no glyph for, the digits of a barcode, a form field, and an allow that leaves out accessibility.</xs:documentation>
+          <xs:documentation>Writes the PDF as PDF/UA-1, a tagged PDF a screen reader can read: what each text, heading, table, list, link, footnote and image is, in reading order, and the rest marked as decoration. It combines with pdfa. The render needs created_on, the date the file carries. What PDF/UA cannot hold is an error that says what to change: no title or lang on meta, an img or a barcode without alt (alt="" marks one as decoration), headings that do not start at h1 or skip a level on the way down, text in a built-in font such as the default Helvetica (declare a font in assets), a font whose license forbids embedding, a character the font has no glyph for, the digits of a barcode, a form field, and an allow that leaves out accessibility. With pdfa 2a or 3a beside it, the file is PDF/A level a and PDF/UA both.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="pdfx" type="PdfXVersion">
@@ -2046,7 +2048,7 @@
       <xs:attributeGroup ref="ImgCore"/>
       <xs:attribute name="alt"        type="xs:string">
         <xs:annotation>
-          <xs:documentation>What the image shows, which a screen reader reads in a PDF/UA document; alt="" marks it as decoration, which a reader skips. A PDF/UA document needs it on every image of the layout. A document without pdfua ignores it.</xs:documentation>
+          <xs:documentation>What the image shows, which a screen reader reads in a tagged document, one with pdfua or a pdfa of level a; alt="" marks it as decoration, which a reader skips. A PDF/UA document needs it on every image of the layout; at PDF/A level a without pdfua, an image without it is decoration. A document that is not tagged ignores it.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="height"     type="TokenScaleOrPt"/>
@@ -2080,7 +2082,7 @@
       <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="alt"        type="xs:string">
         <xs:annotation>
-          <xs:documentation>What the barcode is for, which a screen reader reads in a PDF/UA document in place of its data, which means nothing read aloud: "QR code to pay this invoice". alt="" marks it as decoration. A PDF/UA document needs it on every barcode of the layout. A document without pdfua ignores it.</xs:documentation>
+          <xs:documentation>What the barcode is for, which a screen reader reads in a tagged document, one with pdfua or a pdfa of level a, in place of its data, which means nothing read aloud: "QR code to pay this invoice". alt="" marks it as decoration. A PDF/UA document needs it on every barcode of the layout; at PDF/A level a without pdfua, a barcode without it is decoration. A document that is not tagged ignores it.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="paginate"   type="Paginate"/>
@@ -2151,7 +2153,7 @@
       <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="role" type="TextRole">
         <xs:annotation>
-          <xs:documentation>Makes the text a heading, h1 to h6, which a PDF/UA document tags as one: a screen reader lists the headings and moves between them. A text without role is a paragraph. A PDF/UA document's headings start at h1 and go down one level at a time. It changes nothing a page shows: set the size and the weight as on any text. A document without pdfua ignores it.</xs:documentation>
+          <xs:documentation>Makes the text a heading, h1 to h6, which a tagged document, one with pdfua or a pdfa of level a, tags as one: a screen reader lists the headings and moves between them. A text without role is a paragraph. A PDF/UA document's headings start at h1 and go down one level at a time. It changes nothing a page shows: set the size and the weight as on any text. A document that is not tagged ignores it.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="widows">

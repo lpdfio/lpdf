@@ -10,32 +10,41 @@ use crate::pdfx::PdfXVersion;
 /// A level of PDF/A, as `<output pdfa>` writes it. Part 2 is the first that allows the opacity, shadows and
 /// gradients the engine draws. Part 3 is part 2 with files of any kind attached, such as the XML of a Factur-X
 /// invoice (`facturx.rs`). Level b keeps the look of the pages; level u adds that every character maps to Unicode,
-/// which every embedded font of the engine does.
+/// which every embedded font of the engine does; level a adds to level u the tagged structure a screen reader reads,
+/// the one `pdfua` writes too (`tagging.rs`), without PDF/UA's own checks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PdfA {
+    Level2a,
     Level2b,
     Level2u,
+    Level3a,
     Level3b,
     Level3u,
 }
 
 impl PdfA {
-    /// The level of a `pdfa` attribute: `2b`, `2u`, `3b` or `3u`.
+    /// The level of a `pdfa` attribute: `2a`, `2b`, `2u`, `3a`, `3b` or `3u`.
     pub fn parse(value: &str) -> Result<Self, String> {
         match value {
+            "2a" => Ok(PdfA::Level2a),
             "2b" => Ok(PdfA::Level2b),
             "2u" => Ok(PdfA::Level2u),
+            "3a" => Ok(PdfA::Level3a),
             "3b" => Ok(PdfA::Level3b),
             "3u" => Ok(PdfA::Level3u),
-            other => Err(format!("pdfa '{other}' is not a PDF/A level the engine writes: use 2b, 2u, 3b or 3u")),
+            other => Err(format!(
+                "pdfa '{other}' is not a PDF/A level the engine writes: use 2a, 2b, 2u, 3a, 3b or 3u"
+            )),
         }
     }
 
     /// The value of the `pdfa` attribute, for messages: `2b`.
     pub fn attribute(self) -> &'static str {
         match self {
+            PdfA::Level2a => "2a",
             PdfA::Level2b => "2b",
             PdfA::Level2u => "2u",
+            PdfA::Level3a => "3a",
             PdfA::Level3b => "3b",
             PdfA::Level3u => "3u",
         }
@@ -44,17 +53,23 @@ impl PdfA {
     /// The part of ISO 19005, as `pdfaid:part` writes it.
     pub(crate) fn part(self) -> u8 {
         match self {
-            PdfA::Level2b | PdfA::Level2u => 2,
-            PdfA::Level3b | PdfA::Level3u => 3,
+            PdfA::Level2a | PdfA::Level2b | PdfA::Level2u => 2,
+            PdfA::Level3a | PdfA::Level3b | PdfA::Level3u => 3,
         }
     }
 
     /// The conformance level, as `pdfaid:conformance` writes it.
     fn conformance(self) -> &'static str {
         match self {
+            PdfA::Level2a | PdfA::Level3a => "A",
             PdfA::Level2b | PdfA::Level3b => "B",
             PdfA::Level2u | PdfA::Level3u => "U",
         }
+    }
+
+    /// Whether the level asks for a tagged file: level a.
+    pub(crate) fn tagged(self) -> bool {
+        matches!(self, PdfA::Level2a | PdfA::Level3a)
     }
 }
 
@@ -207,6 +222,11 @@ impl Standards {
     /// Whether the document asks for any standard.
     pub(crate) fn any(self) -> bool {
         self.pdfa.is_some() || self.pdfua.is_some() || self.pdfx.is_some()
+    }
+
+    /// Whether the file is tagged: PDF/UA, or a level of PDF/A that asks for it, level a.
+    pub(crate) fn tagged(self) -> bool {
+        self.pdfua.is_some() || self.pdfa.is_some_and(PdfA::tagged)
     }
 
     /// The attributes of `<output>` that ask for them, for messages: `pdfa="2b" pdfua="1"`.
@@ -444,17 +464,36 @@ mod tests {
     #[test]
     fn a_level_is_read_from_its_attribute_value() {
         for (value, level, part, conformance) in [
+            ("2a", PdfA::Level2a, 2, "A"),
             ("2b", PdfA::Level2b, 2, "B"),
             ("2u", PdfA::Level2u, 2, "U"),
+            ("3a", PdfA::Level3a, 3, "A"),
             ("3b", PdfA::Level3b, 3, "B"),
             ("3u", PdfA::Level3u, 3, "U"),
         ] {
             assert_eq!(PdfA::parse(value), Ok(level));
             assert_eq!((level.attribute(), level.part(), level.conformance()), (value, part, conformance));
         }
-        for other in ["2a", "3a", "1b", "4", "3B", ""] {
+        for other in ["1a", "1b", "4", "3B", "2A", ""] {
             let error = PdfA::parse(other).unwrap_err();
-            assert!(error.contains("use 2b, 2u, 3b or 3u"), "{error}");
+            assert!(error.contains("use 2a, 2b, 2u, 3a, 3b or 3u"), "{error}");
+        }
+    }
+
+    #[test]
+    fn level_a_and_pdfua_tag_the_file_and_the_other_levels_do_not() {
+        for (pdfa, pdfua, tagged) in [
+            (Some(PdfA::Level2a), None, true),
+            (Some(PdfA::Level3a), None, true),
+            (Some(PdfA::Level2b), None, false),
+            (Some(PdfA::Level2u), None, false),
+            (Some(PdfA::Level3b), None, false),
+            (Some(PdfA::Level3u), None, false),
+            (None, Some(PdfUa::Part1), true),
+            (Some(PdfA::Level2u), Some(PdfUa::Part1), true),
+            (None, None, false),
+        ] {
+            assert_eq!(Standards { pdfa, pdfua, pdfx: None }.tagged(), tagged, "{pdfa:?} {pdfua:?}");
         }
     }
 
@@ -567,6 +606,15 @@ mod tests {
             assert!(!xmp.contains(absent), "{absent}\n{xmp}");
         }
         assert!(xmp.contains("<xmp:CreateDate>2026-10-31</xmp:CreateDate>"), "{xmp}");
+    }
+
+    #[test]
+    fn a_level_a_packet_names_conformance_a_and_no_pdfua() {
+        for level in [PdfA::Level2a, PdfA::Level3a] {
+            let xmp = String::from_utf8(xmp_packet(pdfa(level), &Meta::default(), &date("2026-10-31"), None, None)).unwrap();
+            assert!(xmp.contains("<pdfaid:conformance>A</pdfaid:conformance>"), "{xmp}");
+            assert!(!xmp.contains("pdfuaid") && !xmp.contains("pdfaExtension"), "{xmp}");
+        }
     }
 
     #[test]

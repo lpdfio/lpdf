@@ -36,8 +36,9 @@ thread_local! {
 }
 
 // ── Tags of a tagged PDF ─────────────────────────────────────────────────────
-// A section of a document with `<output pdfua>` is laid out with tags, which say what each drawn thing is to a
-// reader (`render::Tag`). Every other section is laid out as it always was, and pays for nothing.
+// A section of a tagged document, with `<output pdfua>` or a `pdfa` of level a, is laid out with tags, which say what
+// each drawn thing is to a reader (`render::Tag`). Every other section is laid out as it always was, and pays for
+// nothing.
 thread_local! {
     /// Whether the section being laid out is tagged, for what draws nodes that have no tag id of their own: the notes
     /// of footnotes, and layers.

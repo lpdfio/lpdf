@@ -159,15 +159,15 @@ pub(crate) fn check_document(files: &[Attachment], output: &Output) -> Result<()
         Some(level) if level.part() == 3 => {}
         Some(level) => {
             return Err(format!(
-                "<output pdfa=\"{}\">: {switch}: write pdfa=\"3b\" or pdfa=\"3u\", or give the file another name if it \
-                is not the invoice",
+                "<output pdfa=\"{}\">: {switch}: write pdfa=\"3a\", pdfa=\"3b\" or pdfa=\"3u\", or give the file \
+                another name if it is not the invoice",
                 level.attribute()
             ));
         }
         None => {
             return Err(format!(
-                "{switch}, and <output> has no pdfa: add pdfa=\"3b\" or pdfa=\"3u\" to <output>, or give the file \
-                another name if it is not the invoice"
+                "{switch}, and <output> has no pdfa: add pdfa=\"3a\", pdfa=\"3b\" or pdfa=\"3u\" to <output>, or give \
+                the file another name if it is not the invoice"
             ));
         }
     }

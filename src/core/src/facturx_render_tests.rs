@@ -62,8 +62,8 @@ fn unlisted_files() -> String {
 }
 
 /// The cases of the fixture that have a snapshot hash and a sample of `make check-facturx` each, by name: the
-/// fixture as it is written, each profile, level 3u, the defaults written as given, BT-24 as real files write it,
-/// other files beside the invoice, and `facturx-strict` on what the spec allows.
+/// fixture as it is written, each profile, levels 3u and 3a, the defaults written as given, BT-24 as real files write
+/// it, other files beside the invoice, and `facturx-strict` on what the spec allows.
 pub(crate) fn cases() -> Vec<(&'static str, String)> {
     let level = |level: &str| format!(r#"pdfa="{level}""#);
     let invoice = |src: &str| file("factur-x.xml", src, "");
@@ -74,6 +74,7 @@ pub(crate) fn cases() -> Vec<(&'static str, String)> {
         ("basic", document(&level("3b"), &invoice("basic.xml"))),
         ("extended", document(&level("3b"), &invoice("extended.xml"))),
         ("en16931-3u", document(&level("3u"), &invoice("en16931.xml"))),
+        ("en16931-3a", document(&level("3a"), &invoice("en16931.xml"))),
         ("xrechnung-3.0", document(&level("3b"), &file("xrechnung.xml", "xrechnung-3.0.xml", ""))),
         ("xrechnung-2.1", document(&level("3b"), &file("xrechnung.xml", "xrechnung-2.1.xml", ""))),
         ("xrechnung-as-factur-x", document(&level("3b"), &invoice("xrechnung-3.0.xml"))),
@@ -195,6 +196,16 @@ fn level_3u_is_named_in_the_xmp_packet() {
     let packet = xmp(&pdf);
     assert!(packet.contains("<pdfaid:part>3</pdfaid:part>") && packet.contains("<pdfaid:conformance>U</pdfaid:conformance>"));
     assert_eq!(invoice_properties(&pdf), expected("factur-x.xml", "1.0", "EN 16931"));
+}
+
+#[test]
+fn level_3a_is_named_in_the_xmp_packet_and_tags_the_invoice() {
+    let pdf = render(&case("en16931-3a")).expect("renders");
+    let packet = xmp(&pdf);
+    assert!(packet.contains("<pdfaid:part>3</pdfaid:part>") && packet.contains("<pdfaid:conformance>A</pdfaid:conformance>"));
+    assert!(!packet.contains("pdfuaid"), "{packet}");
+    assert_eq!(invoice_properties(&pdf), expected("factur-x.xml", "1.0", "EN 16931"));
+    assert!(String::from_utf8_lossy(&pdf).contains("/StructTreeRoot"));
 }
 
 #[test]
@@ -353,7 +364,7 @@ fn the_json_path_makes_the_same_invoice() {
         assert_eq!(written(&pdf, "factur-x.xml"), ("Data".to_string(), "text/xml".to_string()), "{level}");
     }
     let error = render(&tree(r#"{"pdfa":"2u"}"#, r#"{"name":"factur-x.xml"}"#)).unwrap_err();
-    assert!(error.contains("pdfa=\"3b\" or pdfa=\"3u\""), "{error}");
+    assert!(error.contains("pdfa=\"3a\", pdfa=\"3b\" or pdfa=\"3u\""), "{error}");
     let strict = tree(r#"{"pdfa":"3b","facturx-strict":true}"#, r#"{"name":"factur-x.xml"},{"name":"notes.txt"}"#);
     let error = render(&strict).unwrap_err();
     assert!(error.contains("facturx-strict") && error.contains("'notes.txt' has no mime"), "{error}");
@@ -366,11 +377,11 @@ fn the_invoice_file_in_a_document_that_is_not_pdfa_3_is_an_error_that_says_what_
     for output in [r#"pdfa="2b""#, r#"pdfa="2u""#] {
         let error = refused(&document(output, &file("factur-x.xml", "en16931.xml", "")));
         assert!(error.contains(&format!("<output {output}>")) && error.contains("Factur-X invoice"), "{error}");
-        assert!(error.contains("write pdfa=\"3b\" or pdfa=\"3u\"") && error.contains("another name"), "{error}");
+        assert!(error.contains("write pdfa=\"3a\", pdfa=\"3b\" or pdfa=\"3u\"") && error.contains("another name"), "{error}");
     }
     let xml = document(r#"pdfa="3b""#, &file("xrechnung.xml", "xrechnung-3.0.xml", "")).replace(r#"<output pdfa="3b" />"#, "");
     let error = refused(&xml);
-    assert!(error.contains("'xrechnung.xml'") && error.contains("<output> has no pdfa") && error.contains("add pdfa=\"3b\""), "{error}");
+    assert!(error.contains("'xrechnung.xml'") && error.contains("<output> has no pdfa") && error.contains("add pdfa=\"3a\", pdfa=\"3b\" or pdfa=\"3u\""), "{error}");
     // Checked when the document is read, before a file is looked for.
     assert!(crate::parse::parse(&xml).is_err());
 }

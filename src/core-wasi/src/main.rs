@@ -598,7 +598,38 @@ mod tests {
         }
         let answer = render_request(&xml("2b"), fields);
         let error = answer["error"].as_str().expect("an invoice in PDF/A-2 is an error");
-        assert!(error.contains("pdfa=\"3b\" or pdfa=\"3u\""), "{error}");
+        assert!(error.contains("pdfa=\"3a\", pdfa=\"3b\" or pdfa=\"3u\""), "{error}");
+    }
+
+    #[test]
+    fn a_level_a_request_is_a_tagged_pdfa_file_on_both_paths() {
+        let font = base64::engine::general_purpose::STANDARD.encode(pdf::ATTRIBUTION_FONT);
+        let fields = serde_json::json!({ "fonts": { "body": font }, "created_on": "2026-10-31T09:30:00Z" });
+        let xml = |level: &str| format!(
+            r#"<lpdf version="1"><assets><font name="body" src="body.ttf"/></assets><document font="body"><output pdfa="{level}"/>
+            <section><layout><text>Lpdf</text></layout></section></document></lpdf>"#
+        );
+        let tree = |level: &str| format!(
+            r#"{{"version":1,"type":"document","attrs":{{"font":"body","assets":{{"fonts":[{{"name":"body","src":"body.ttf"}}]}},"output":{{"pdfa":"{level}"}}}},
+            "nodes":[{{"type":"section","attrs":{{}},"nodes":[{{"type":"layout","attrs":{{}},"nodes":[{{"type":"text","nodes":["Lpdf"]}}]}}]}}]}}"#
+        );
+        for (level, part) in [("2a", "2"), ("3a", "3")] {
+            let from_tree = {
+                let mut req = fields.clone();
+                req["method"] = "render_tree_pdf".into();
+                req["input"] = tree(level).into();
+                serde_json::from_str::<serde_json::Value>(&dispatch(req.to_string())).unwrap()
+            };
+            for answer in [render_request(&xml(level), fields.clone()), from_tree] {
+                let text = pdf_text(&answer);
+                assert!(text.contains(&format!("<pdfaid:part>{part}</pdfaid:part>")), "{level}: {text}");
+                assert!(text.contains("<pdfaid:conformance>A</pdfaid:conformance>") && text.contains("/StructTreeRoot"), "{level}");
+                assert!(!text.contains("pdfuaid"), "{level}");
+            }
+        }
+        let answer = render_request(&xml("1a"), fields);
+        let error = answer["error"].as_str().expect("a level the engine doesn't write is an error");
+        assert!(error.contains("use 2a, 2b, 2u, 3a, 3b or 3u"), "{error}");
     }
 
     #[test]

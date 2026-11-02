@@ -47,6 +47,14 @@ pub(crate) fn render_fixture() -> Vec<u8> {
     render(&xml).unwrap_or_else(|e| panic!("showcase-pdfua: {e}"))
 }
 
+/// The fixture `showcase-pdfua.xml` with `pdfa` at `level` beside its `pdfua`, rendered as an SDK renders it: for the
+/// samples of `make check-pdfua`, and of `make check-pdfa` at level a.
+pub(crate) fn render_fixture_beside_pdfa(level: &str) -> Vec<u8> {
+    let xml = String::from_utf8(read(&test_dir().join("fixtures/showcase-pdfua.xml"))).expect("UTF-8")
+        .replace(r#"<output pdfua="1" />"#, &format!(r#"<output pdfa="{level}" pdfua="1" />"#));
+    render(&xml).unwrap_or_else(|e| panic!("showcase-pdfua at pdfa {level}: {e}"))
+}
+
 fn text(pdf: &[u8]) -> String {
     String::from_utf8_lossy(pdf).into_owned()
 }
@@ -408,9 +416,7 @@ fn writes_pdfua_samples_for_the_external_check() {
     std::fs::write(dir.join("pdfua-1-toc-links.pdf"), render(&toc_of_links()).expect("renders")).expect("a sample");
     std::fs::write(dir.join("pdfua-1-toc.pdf"), render_toc_fixture()).expect("a sample");
     std::fs::write(dir.join("pdfua-1-references.pdf"), render(&references()).expect("renders")).expect("a sample");
-    let xml = String::from_utf8(read(&test_dir().join("fixtures/showcase-pdfua.xml"))).expect("UTF-8")
-        .replace(r#"<output pdfua="1" />"#, r#"<output pdfa="2u" pdfua="1" />"#);
-    std::fs::write(dir.join("pdfua-1-pdfa-2u.pdf"), render(&xml).expect("renders")).expect("a sample");
+    std::fs::write(dir.join("pdfua-1-pdfa-2u.pdf"), render_fixture_beside_pdfa("2u")).expect("a sample");
     // With content in optional content groups, which a PDF/UA file leaves out of them.
     let grouped = crate::ocg_render_tests::with_groups(&String::from_utf8(read(&test_dir().join("fixtures/showcase-pdfua.xml"))).expect("UTF-8"));
     std::fs::write(dir.join("pdfua-1-ocg.pdf"), render(&grouped).expect("renders")).expect("a sample");
