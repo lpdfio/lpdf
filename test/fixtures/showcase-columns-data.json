@@ -803,402 +803,402 @@
       "price": "1.04"
     },
     {
-      "name": "Rope, manila, for the season",
+      "name": "Rope, manila, heavy",
       "unit": "per metre",
       "price": "1.41"
     },
     {
-      "name": "Rope, hemp, for the season",
+      "name": "Rope, hemp, heavy",
       "unit": "per metre",
       "price": "1.78"
     },
     {
-      "name": "Rope, cotton, for the season",
+      "name": "Rope, cotton, heavy",
       "unit": "per metre",
       "price": "2.15"
     },
     {
-      "name": "Twine, tarred, for the season",
+      "name": "Twine, tarred, heavy",
       "unit": "per ball",
       "price": "2.52"
     },
     {
-      "name": "Net needle, wood, for the season",
+      "name": "Net needle, wood, heavy",
       "unit": "each",
       "price": "2.89"
     },
     {
-      "name": "Net needle, bone, for the season",
+      "name": "Net needle, bone, heavy",
       "unit": "each",
       "price": "3.26"
     },
     {
-      "name": "Hook, cod, for the season",
+      "name": "Hook, cod, heavy",
       "unit": "per dozen",
       "price": "3.63"
     },
     {
-      "name": "Hook, haddock, for the season",
+      "name": "Hook, haddock, heavy",
       "unit": "per dozen",
       "price": "4.00"
     },
     {
-      "name": "Line, hand, for the season",
+      "name": "Line, hand, heavy",
       "unit": "per coil",
       "price": "4.37"
     },
     {
-      "name": "Sinker, lead, for the season",
+      "name": "Sinker, lead, heavy",
       "unit": "per pound",
       "price": "4.74"
     },
     {
-      "name": "Float, cork, for the season",
+      "name": "Float, cork, heavy",
       "unit": "each",
       "price": "5.11"
     },
     {
-      "name": "Float, glass, for the season",
+      "name": "Float, glass, heavy",
       "unit": "each",
       "price": "5.48"
     },
     {
-      "name": "Oar, ash, for the season",
+      "name": "Oar, ash, heavy",
       "unit": "each",
       "price": "5.85"
     },
     {
-      "name": "Rowlock, brass, for the season",
+      "name": "Rowlock, brass, heavy",
       "unit": "per pair",
       "price": "6.22"
     },
     {
-      "name": "Bailer, tin, for the season",
+      "name": "Bailer, tin, heavy",
       "unit": "each",
       "price": "6.59"
     },
     {
-      "name": "Anchor, grapnel, for the season",
+      "name": "Anchor, grapnel, heavy",
       "unit": "each",
       "price": "6.96"
     },
     {
-      "name": "Shackle, galvanised, for the season",
+      "name": "Shackle, galvanised, heavy",
       "unit": "each",
       "price": "7.33"
     },
     {
-      "name": "Thimble, galvanised, for the season",
+      "name": "Thimble, galvanised, heavy",
       "unit": "each",
       "price": "7.70"
     },
     {
-      "name": "Block, single, for the season",
+      "name": "Block, single, heavy",
       "unit": "each",
       "price": "8.07"
     },
     {
-      "name": "Block, double, for the season",
+      "name": "Block, double, heavy",
       "unit": "each",
       "price": "8.44"
     },
     {
-      "name": "Paint, anti-fouling, for the season",
+      "name": "Paint, anti-fouling, heavy",
       "unit": "per tin",
       "price": "8.81"
     },
     {
-      "name": "Paint, white, for the season",
+      "name": "Paint, white, heavy",
       "unit": "per tin",
       "price": "9.18"
     },
     {
-      "name": "Varnish, spar, for the season",
+      "name": "Varnish, spar, heavy",
       "unit": "per tin",
       "price": "9.55"
     },
     {
-      "name": "Tar, Stockholm, for the season",
+      "name": "Tar, Stockholm, heavy",
       "unit": "per tin",
       "price": "9.92"
     },
     {
-      "name": "Oakum, for the season",
+      "name": "Oakum, heavy",
       "unit": "per pound",
       "price": "0.59"
     },
     {
-      "name": "Caulking cotton, for the season",
+      "name": "Caulking cotton, heavy",
       "unit": "per pound",
       "price": "0.96"
     },
     {
-      "name": "Nails, copper, for the season",
+      "name": "Nails, copper, heavy",
       "unit": "per pound",
       "price": "1.33"
     },
     {
-      "name": "Rivets, copper, for the season",
+      "name": "Rivets, copper, heavy",
       "unit": "per pound",
       "price": "1.70"
     },
     {
-      "name": "Canvas, sail, for the season",
+      "name": "Canvas, sail, heavy",
       "unit": "per yard",
       "price": "2.07"
     },
     {
-      "name": "Thread, sail, for the season",
+      "name": "Thread, sail, heavy",
       "unit": "per hank",
       "price": "2.44"
     },
     {
-      "name": "Palm, sail, for the season",
+      "name": "Palm, sail, heavy",
       "unit": "each",
       "price": "2.81"
     },
     {
-      "name": "Lamp, paraffin, for the season",
+      "name": "Lamp, paraffin, heavy",
       "unit": "each",
       "price": "3.18"
     },
     {
-      "name": "Wick, lamp, for the season",
+      "name": "Wick, lamp, heavy",
       "unit": "per dozen",
       "price": "3.55"
     },
     {
-      "name": "Chimney, lamp, for the season",
+      "name": "Chimney, lamp, heavy",
       "unit": "each",
       "price": "3.92"
     },
     {
-      "name": "Oil, paraffin, for the season",
+      "name": "Oil, paraffin, heavy",
       "unit": "per gallon",
       "price": "4.29"
     },
     {
-      "name": "Oilskin, coat, for the season",
+      "name": "Oilskin, coat, heavy",
       "unit": "each",
       "price": "4.66"
     },
     {
-      "name": "Oilskin, trousers, for the season",
+      "name": "Oilskin, trousers, heavy",
       "unit": "per pair",
       "price": "5.03"
     },
     {
-      "name": "Sou’wester, for the season",
+      "name": "Sou’wester, heavy",
       "unit": "each",
       "price": "5.40"
     },
     {
-      "name": "Boots, sea, for the season",
+      "name": "Boots, sea, heavy",
       "unit": "per pair",
       "price": "5.77"
     },
     {
-      "name": "Gansey, wool, for the season",
+      "name": "Gansey, wool, heavy",
       "unit": "each",
       "price": "6.14"
     },
     {
-      "name": "Rope, manila, for the boat",
+      "name": "Rope, manila, light",
       "unit": "per metre",
       "price": "6.51"
     },
     {
-      "name": "Rope, hemp, for the boat",
+      "name": "Rope, hemp, light",
       "unit": "per metre",
       "price": "6.88"
     },
     {
-      "name": "Rope, cotton, for the boat",
+      "name": "Rope, cotton, light",
       "unit": "per metre",
       "price": "7.25"
     },
     {
-      "name": "Twine, tarred, for the boat",
+      "name": "Twine, tarred, light",
       "unit": "per ball",
       "price": "7.62"
     },
     {
-      "name": "Net needle, wood, for the boat",
+      "name": "Net needle, wood, light",
       "unit": "each",
       "price": "7.99"
     },
     {
-      "name": "Net needle, bone, for the boat",
+      "name": "Net needle, bone, light",
       "unit": "each",
       "price": "8.36"
     },
     {
-      "name": "Hook, cod, for the boat",
+      "name": "Hook, cod, light",
       "unit": "per dozen",
       "price": "8.73"
     },
     {
-      "name": "Hook, haddock, for the boat",
+      "name": "Hook, haddock, light",
       "unit": "per dozen",
       "price": "9.10"
     },
     {
-      "name": "Line, hand, for the boat",
+      "name": "Line, hand, light",
       "unit": "per coil",
       "price": "9.47"
     },
     {
-      "name": "Sinker, lead, for the boat",
+      "name": "Sinker, lead, light",
       "unit": "per pound",
       "price": "9.84"
     },
     {
-      "name": "Float, cork, for the boat",
+      "name": "Float, cork, light",
       "unit": "each",
       "price": "0.51"
     },
     {
-      "name": "Float, glass, for the boat",
+      "name": "Float, glass, light",
       "unit": "each",
       "price": "0.88"
     },
     {
-      "name": "Oar, ash, for the boat",
+      "name": "Oar, ash, light",
       "unit": "each",
       "price": "1.25"
     },
     {
-      "name": "Rowlock, brass, for the boat",
+      "name": "Rowlock, brass, light",
       "unit": "per pair",
       "price": "1.62"
     },
     {
-      "name": "Bailer, tin, for the boat",
+      "name": "Bailer, tin, light",
       "unit": "each",
       "price": "1.99"
     },
     {
-      "name": "Anchor, grapnel, for the boat",
+      "name": "Anchor, grapnel, light",
       "unit": "each",
       "price": "2.36"
     },
     {
-      "name": "Shackle, galvanised, for the boat",
+      "name": "Shackle, galvanised, light",
       "unit": "each",
       "price": "2.73"
     },
     {
-      "name": "Thimble, galvanised, for the boat",
+      "name": "Thimble, galvanised, light",
       "unit": "each",
       "price": "3.10"
     },
     {
-      "name": "Block, single, for the boat",
+      "name": "Block, single, light",
       "unit": "each",
       "price": "3.47"
     },
     {
-      "name": "Block, double, for the boat",
+      "name": "Block, double, light",
       "unit": "each",
       "price": "3.84"
     },
     {
-      "name": "Paint, anti-fouling, for the boat",
+      "name": "Paint, anti-fouling, light",
       "unit": "per tin",
       "price": "4.21"
     },
     {
-      "name": "Paint, white, for the boat",
+      "name": "Paint, white, light",
       "unit": "per tin",
       "price": "4.58"
     },
     {
-      "name": "Varnish, spar, for the boat",
+      "name": "Varnish, spar, light",
       "unit": "per tin",
       "price": "4.95"
     },
     {
-      "name": "Tar, Stockholm, for the boat",
+      "name": "Tar, Stockholm, light",
       "unit": "per tin",
       "price": "5.32"
     },
     {
-      "name": "Oakum, for the boat",
+      "name": "Oakum, light",
       "unit": "per pound",
       "price": "5.69"
     },
     {
-      "name": "Caulking cotton, for the boat",
+      "name": "Caulking cotton, light",
       "unit": "per pound",
       "price": "6.06"
     },
     {
-      "name": "Nails, copper, for the boat",
+      "name": "Nails, copper, light",
       "unit": "per pound",
       "price": "6.43"
     },
     {
-      "name": "Rivets, copper, for the boat",
+      "name": "Rivets, copper, light",
       "unit": "per pound",
       "price": "6.80"
     },
     {
-      "name": "Canvas, sail, for the boat",
+      "name": "Canvas, sail, light",
       "unit": "per yard",
       "price": "7.17"
     },
     {
-      "name": "Thread, sail, for the boat",
+      "name": "Thread, sail, light",
       "unit": "per hank",
       "price": "7.54"
     },
     {
-      "name": "Palm, sail, for the boat",
+      "name": "Palm, sail, light",
       "unit": "each",
       "price": "7.91"
     },
     {
-      "name": "Lamp, paraffin, for the boat",
+      "name": "Lamp, paraffin, light",
       "unit": "each",
       "price": "8.28"
     },
     {
-      "name": "Wick, lamp, for the boat",
+      "name": "Wick, lamp, light",
       "unit": "per dozen",
       "price": "8.65"
     },
     {
-      "name": "Chimney, lamp, for the boat",
+      "name": "Chimney, lamp, light",
       "unit": "each",
       "price": "9.02"
     },
     {
-      "name": "Oil, paraffin, for the boat",
+      "name": "Oil, paraffin, light",
       "unit": "per gallon",
       "price": "9.39"
     },
     {
-      "name": "Oilskin, coat, for the boat",
+      "name": "Oilskin, coat, light",
       "unit": "each",
       "price": "9.76"
     },
     {
-      "name": "Oilskin, trousers, for the boat",
+      "name": "Oilskin, trousers, light",
       "unit": "per pair",
       "price": "0.43"
     },
     {
-      "name": "Sou’wester, for the boat",
+      "name": "Sou’wester, light",
       "unit": "each",
       "price": "0.80"
     },
     {
-      "name": "Boots, sea, for the boat",
+      "name": "Boots, sea, light",
       "unit": "per pair",
       "price": "1.17"
     },
     {
-      "name": "Gansey, wool, for the boat",
+      "name": "Gansey, wool, light",
       "unit": "each",
       "price": "1.54"
     },

@@ -30,7 +30,8 @@
            3  three columns with two insets: a square picture at the top of the first, and a box near the foot of the
               third; the text starts below the picture, and in the third column runs down to the box and carries on
               below it
-           4  the end of that text, at the top of the first column
+           4  the end of that text, under the picture, and the box again: an inset with no page is on every page of
+              its section
            5  two columns with a box of 80pt at the top of both, which holds more text than fits: its last lines are
               cut at its foot, and the columns start below it
            6  two columns over a box across both, near the foot of the page, which leaves the notes too little room:
