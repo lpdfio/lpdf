@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="muted" value="#737373" />
+    </colors>
+  </tokens>
+  <document size="a5">
+    <meta title="lpdf Showcase — Page Letters" subject="Pages numbered in letters past z" />
+
+    <!-- page-format="lower-alpha" numbers the pages a, b, c. Past z, page letters repeat one letter, aa, bb, cc, as a
+         PDF viewer counts page labels, where a list's letters go aa, ab, ac. The contents take the first page, a, and
+         the plates follow from b.
+         Expected: Plate 25 on page z, Plate 26 on aa, Plate 27 on bb, Plate 29 on dd, in the footer, the contents and
+         the viewer alike; the footer of each page says "of dd", 30 pages. -->
+    <section type="toc" page-format="lower-alpha">
+      <layout margin="24pt">
+        <text font-size="l" font="Helvetica-Bold">Plates</text>
+        <column data-source="$toc">
+          <link href="#">
+            <row justify="between">
+              <text data-value="label">Entry</text>
+              <text data-value="page">0</text>
+            </row>
+          </link>
+        </column>
+        <region pin="bottom">
+          <text font-size="s" color="muted" align="center">{page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+    <section>
+      <layout margin="24pt">
+        <column><bookmark label="Plate 1"/><text font-size="xl">Plate 1</text></column>
+        <column paginate="break-before"><bookmark label="Plate 2"/><text font-size="xl">Plate 2</text></column>
+        <column paginate="break-before"><bookmark label="Plate 3"/><text font-size="xl">Plate 3</text></column>
+        <column paginate="break-before"><bookmark label="Plate 4"/><text font-size="xl">Plate 4</text></column>
+        <column paginate="break-before"><bookmark label="Plate 5"/><text font-size="xl">Plate 5</text></column>
+        <column paginate="break-before"><bookmark label="Plate 6"/><text font-size="xl">Plate 6</text></column>
+        <column paginate="break-before"><bookmark label="Plate 7"/><text font-size="xl">Plate 7</text></column>
+        <column paginate="break-before"><bookmark label="Plate 8"/><text font-size="xl">Plate 8</text></column>
+        <column paginate="break-before"><bookmark label="Plate 9"/><text font-size="xl">Plate 9</text></column>
+        <column paginate="break-before"><bookmark label="Plate 10"/><text font-size="xl">Plate 10</text></column>
+        <column paginate="break-before"><bookmark label="Plate 11"/><text font-size="xl">Plate 11</text></column>
+        <column paginate="break-before"><bookmark label="Plate 12"/><text font-size="xl">Plate 12</text></column>
+        <column paginate="break-before"><bookmark label="Plate 13"/><text font-size="xl">Plate 13</text></column>
+        <column paginate="break-before"><bookmark label="Plate 14"/><text font-size="xl">Plate 14</text></column>
+        <column paginate="break-before"><bookmark label="Plate 15"/><text font-size="xl">Plate 15</text></column>
+        <column paginate="break-before"><bookmark label="Plate 16"/><text font-size="xl">Plate 16</text></column>
+        <column paginate="break-before"><bookmark label="Plate 17"/><text font-size="xl">Plate 17</text></column>
+        <column paginate="break-before"><bookmark label="Plate 18"/><text font-size="xl">Plate 18</text></column>
+        <column paginate="break-before"><bookmark label="Plate 19"/><text font-size="xl">Plate 19</text></column>
+        <column paginate="break-before"><bookmark label="Plate 20"/><text font-size="xl">Plate 20</text></column>
+        <column paginate="break-before"><bookmark label="Plate 21"/><text font-size="xl">Plate 21</text></column>
+        <column paginate="break-before"><bookmark label="Plate 22"/><text font-size="xl">Plate 22</text></column>
+        <column paginate="break-before"><bookmark label="Plate 23"/><text font-size="xl">Plate 23</text></column>
+        <column paginate="break-before"><bookmark label="Plate 24"/><text font-size="xl">Plate 24</text></column>
+        <column paginate="break-before"><bookmark label="Plate 25"/><text font-size="xl">Plate 25</text></column>
+        <column paginate="break-before"><bookmark label="Plate 26"/><text font-size="xl">Plate 26</text></column>
+        <column paginate="break-before"><bookmark label="Plate 27"/><text font-size="xl">Plate 27</text></column>
+        <column paginate="break-before"><bookmark label="Plate 28"/><text font-size="xl">Plate 28</text></column>
+        <column paginate="break-before"><bookmark label="Plate 29"/><text font-size="xl">Plate 29</text></column>
+        <region pin="bottom">
+          <text font-size="s" color="muted" align="center">{page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+  </document>
+</lpdf>

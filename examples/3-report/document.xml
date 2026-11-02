@@ -10,8 +10,8 @@
       region       text pinned to the top or bottom of every page, outside the flow. The one
                    written first is the header, the one written last is the footer
       page scope   page="each", "first" or "2-last" says which pages a region or a layer
-                   is on. {page} and {pages} become the page number and the page count, counted
-                   within a section: a report that numbers its pages is one section
+                   is on. {page} and {pages} become the page number and the page count. Pages
+                   count on from one section to the next, so the count takes in the map
       sections     each section sets its own page. The last one here is tabloid, landscape, and
                    holds only layers: a world map drawn as paths, with a marker for each site
       paginate     paginate="no" on a box keeps it whole: a heading column moves to the next page

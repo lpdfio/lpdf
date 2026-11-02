@@ -17,6 +17,7 @@ use crate::page_scope::{chrome_in_budget, page_scope_indices};
 use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderCanvasClip, RenderCanvasLayer, RenderField, RenderFootnoteMark, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind, Tag, TagKind};
 use crate::tokens::FontWidths;
 use crate::canvas;
+use crate::page_numbers::{self, PageTokens, SectionNumbers};
 use crate::toc;
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
@@ -262,23 +263,84 @@ fn prefill_node(node: &mut Node, meta: &ImageMeta) {
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
+/// Lay out one section on its own, its pages numbered from its own `page-start`, or 1.
+#[cfg(test)]
 pub fn layout_page(page: &SectionLayout) -> Vec<RenderPage> {
+    let filled = fill_section(page);
+    let numbers = SectionNumbers::alone(&page.page_numbering, filled.page_count());
+    finish_section(page, filled, &numbers)
+}
+
+/// Lay out a section whose pages have `numbers`.
+pub(crate) fn layout_numbered(page: &SectionLayout, numbers: &SectionNumbers) -> Vec<RenderPage> {
+    finish_section(page, fill_section(page), numbers)
+}
+
+/// A section laid out but for what waits for the numbers of its pages, which depend on the sections around it:
+/// its header and footer, and its layers (`finish_section`). How many pages it has is known.
+pub(crate) enum FilledSection {
+    /// A section with no header or footer: its pages, laid out.
+    Laid(Vec<RenderPage>),
+    /// A section with a header or a footer.
+    Chrome(ChromePages),
+}
+
+impl FilledSection {
+    pub(crate) fn page_count(&self) -> usize {
+        match self {
+            Self::Laid(pages)   => pages.len(),
+            // A section whose flow is empty is one page, with its header and footer.
+            Self::Chrome(chrome) => chrome.pages.len().max(1),
+        }
+    }
+}
+
+/// The pages of a section with a header or a footer, filled. The header and the footer are laid out once the pages'
+/// numbers are known (`finish_chrome`), and so is a flow that waits for the header above it.
+pub(crate) struct ChromePages {
+    top:          Vec<Node>,
+    bottom:       Vec<Node>,
+    budget_first: f32,
+    budget_rest:  f32,
+    pages:        Vec<FilledPage>,
+}
+
+/// Fill the pages of `page`: all of it but what shows their numbers.
+pub(crate) fn fill_section(page: &SectionLayout) -> FilledSection {
     if !page.tagged {
-        return layout_section(page);
+        return fill_pages(page);
     }
     // The section's nodes are numbered once its data is in, so a node that `data-source` repeats is one of its own.
     let mut tagged = page.clone();
     for node in &mut tagged.children {
         number_for_tags(node, false);
     }
-    TAGGING.with(|on| on.set(true));
-    let pages = layout_section(&tagged);
-    TAGGING.with(|on| on.set(false));
-    pages
+    with_tagging(|| fill_pages(&tagged))
 }
 
-fn layout_section(page: &SectionLayout) -> Vec<RenderPage> {
-    let mut pages = layout_page_impl(page);
+/// Finish the pages `fill_section` filled for `page`, which have `numbers`: the header and the footer, the layers,
+/// the outlines of `debug` and the section's own bookmark.
+pub(crate) fn finish_section(page: &SectionLayout, filled: FilledSection, numbers: &SectionNumbers) -> Vec<RenderPage> {
+    if page.tagged {
+        with_tagging(|| finish_pages(page, filled, numbers))
+    } else {
+        finish_pages(page, filled, numbers)
+    }
+}
+
+/// Run `lay_out` with the layout saying what each thing it draws is, for a tagged section.
+fn with_tagging<T>(lay_out: impl FnOnce() -> T) -> T {
+    TAGGING.with(|on| on.set(true));
+    let out = lay_out();
+    TAGGING.with(|on| on.set(false));
+    out
+}
+
+fn finish_pages(page: &SectionLayout, filled: FilledSection, numbers: &SectionNumbers) -> Vec<RenderPage> {
+    let mut pages = match filled {
+        FilledSection::Laid(pages)    => pages,
+        FilledSection::Chrome(chrome) => finish_chrome(page, chrome, numbers),
+    };
     for rp in &mut pages {
         apply_debug_overlay(&mut rp.nodes);
         if page.debug {
@@ -310,8 +372,8 @@ fn layout_section(page: &SectionLayout) -> Vec<RenderPage> {
             rp.nodes.extend(overlay);
         }
     }
-    canvas::apply_canvas_layers(&mut pages, &page.underlays, true);
-    canvas::apply_canvas_layers(&mut pages, &page.overlays, false);
+    canvas::apply_canvas_layers(&mut pages, &page.underlays, true, numbers);
+    canvas::apply_canvas_layers(&mut pages, &page.overlays, false, numbers);
     // The section's own bookmark points at the top of its first page, ahead of the bookmarks in its layout.
     if let (Some(bookmark), Some(first)) = (&page.bookmark, pages.first_mut()) {
         first.nodes.insert(0, anchor(bookmark, 0.0));
@@ -319,18 +381,37 @@ fn layout_section(page: &SectionLayout) -> Vec<RenderPage> {
     pages
 }
 
-/// Lay out every section in document order. A table of contents section is laid out after the others, once
-/// their pages are known; see `toc`.
+/// Lay out every section in document order. The pages count on from one section to the next, so the sections
+/// are filled first, and finished once the number of each page is known (`page_numbers`). A table of contents
+/// section is laid out after the others, once their pages are known; see `toc`.
 pub fn layout_document(sections: &[SectionLayout]) -> Vec<RenderPage> {
     LAST_TAG_ID.with(|last| last.set(0));
     let toc = sections.iter().enumerate().find_map(|(i, s)| s.toc.as_ref().map(|options| (i, options)));
-    match toc {
-        Some((toc_index, options)) => toc::layout_with_toc(sections, toc_index, options),
-        None                       => sections.iter().flat_map(layout_page).collect(),
+    if let Some((toc_index, options)) = toc {
+        return toc::layout_with_toc(sections, toc_index, options);
     }
+    let filled: Vec<FilledSection> = sections.iter().map(fill_section).collect();
+    let counts: Vec<usize> = filled.iter().map(FilledSection::page_count).collect();
+    let numbers = page_numbers::number_sections(sections, &counts);
+    let mut pages: Vec<RenderPage> = sections.iter().zip(filled).zip(&numbers)
+        .flat_map(|((section, filled), numbers)| finish_section(section, filled, numbers))
+        .collect();
+    page_numbers::mark_label_ranges(&mut pages, sections, &numbers, &counts);
+    pages
 }
 
-fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
+/// Whether the header, the footer or a layer of `page` shows `{page}` or `{pages}`.
+pub(crate) fn shows_page_numbers(page: &SectionLayout) -> bool {
+    page.children.iter().filter(|node| node.page_scope.is_some()).any(has_page_tokens)
+        || page.underlays.iter().chain(&page.overlays).any(canvas::CanvasLayer::shows_page_numbers)
+}
+
+/// Whether a text of `node` or below it shows `{page}` or `{pages}`.
+pub(crate) fn has_page_tokens(node: &Node) -> bool {
+    node.text_runs.iter().any(|run| run.text.contains("{page")) || node.children.iter().any(has_page_tokens)
+}
+
+fn fill_pages(page: &SectionLayout) -> FilledSection {
     let [mt, mr, mb, ml] = page.margin;
     let avail_x = ml;
     let avail_y = mt;
@@ -351,14 +432,15 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
             &page.children, avail_x, avail_y, avail_w, Some(avail_h),
             0.0, &Align::Stretch, &Justify::Start,
         );
-        return vec![RenderPage {
+        return FilledSection::Laid(vec![RenderPage {
             width: page.width,
             height: page.height,
             bleed: page.bleed,
             background: page.background.clone(),
             margin: page.margin,
             nodes,
-        }];
+            label: None,
+        }]);
     }
 
     // ── Partition direct children into chrome (top/bottom) and flow ──────────
@@ -397,7 +479,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
         // Each page is laid out as soon as it is filled, so that its nodes and the trees kept for them don't wait
         // for the pages after it.
         let start = FlowStart { x: avail_x, first_y: avail_y, rest_y: avail_y };
-        return footnotes::split_flow(&flow, Some(start), avail_w, avail_h, avail_h, page.gap, page.footnote_counter, has_notes)
+        return FilledSection::Laid(footnotes::split_flow(&flow, Some(start), avail_w, avail_h, avail_h, page.gap, page.footnote_counter, has_notes)
             .map(|chunk| {
                 let room = avail_h - chunk.reserve;
                 let (nodes, used) = layout_column_kept(
@@ -413,9 +495,10 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
                     background: page.background.clone(),
                     margin: page.margin,
                     nodes,
+                    label: None,
                 }
             })
-            .collect();
+            .collect());
     }
 
     // ── Measure chrome heights ────────────────────────────────────────────────
@@ -455,6 +538,18 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
             FilledPage { flow, captured, notes: chunk.notes, room }
         })
         .collect();
+    FilledSection::Chrome(ChromePages { top: top_chrome, bottom: bot_chrome, budget_first, budget_rest, pages: chunks })
+}
+
+/// Lay out the header and the footer of a section's filled pages, which have `numbers`, and a flow that waited for
+/// the header above it.
+fn finish_chrome(page: &SectionLayout, chrome: ChromePages, numbers: &SectionNumbers) -> Vec<RenderPage> {
+    let [mt, mr, mb, ml] = page.margin;
+    let avail_x = ml;
+    let avail_y = mt;
+    let avail_w = (page.width - ml - mr).max(0.0);
+    let avail_h = (page.height - mt - mb).max(0.0);
+    let ChromePages { top: top_chrome, bottom: bot_chrome, budget_first, budget_rest, pages: chunks } = chrome;
     let total_pages = chunks.len();
 
     // ── Build each output page ───────────────────────────────────────────────
@@ -470,7 +565,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
             chrome.iter()
                 .filter(|n| page_scope_indices(&n.page_scope, total_pages).contains(&idx))
                 .map(|n| {
-                    let mut node = substitute_page_tokens(n, page_num, total_pages);
+                    let mut node = substitute_page_tokens(n, PageTokens::new(numbers, idx));
                     fill_sinks(&mut node, &captured, &latest);
                     node
                 })
@@ -526,6 +621,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
             background: page.background.clone(),
             margin: page.margin,
             nodes: all_nodes,
+            label: None,
         });
     }
 
@@ -535,7 +631,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
             chrome.iter()
                 .filter(|n| page_scope_indices(&n.page_scope, 1).contains(&0))
                 .map(|n| {
-                    let mut node = substitute_page_tokens(n, 1, 1);
+                    let mut node = substitute_page_tokens(n, PageTokens::new(numbers, 0));
                     fill_sinks(&mut node, &PageCaptures::new(), &HashMap::new());
                     node
                 })
@@ -553,6 +649,7 @@ fn layout_page_impl(page: &SectionLayout) -> Vec<RenderPage> {
             width: page.width, height: page.height, bleed: page.bleed,
             background: page.background.clone(), margin: page.margin,
             nodes: all,
+            label: None,
         });
     }
 
@@ -652,30 +749,31 @@ fn measure_chrome_height(chrome: &[Node], avail_w: f32, include_first: bool) -> 
 
 // ── Page-number token substitution ────────────────────────────────────────────
 
-/// Produce a copy of `node` with `{page}` / `{pages}` tokens inside any
-/// descendant `<text>` replaced by the given page index / total pages.
-fn substitute_page_tokens(node: &Node, page: usize, total: usize) -> Node {
+/// A copy of `node` with `{page}` and `{pages}` in each text below it replaced by what `tokens` print.
+fn substitute_page_tokens(node: &Node, tokens: PageTokens) -> Node {
     let mut n = node.clone();
-    substitute_in_place(&mut n, page, total);
+    substitute_in_place(&mut n, tokens);
     n
 }
 
-fn substitute_in_place(n: &mut Node, page: usize, total: usize) {
+fn substitute_in_place(n: &mut Node, tokens: PageTokens) {
     if n.kind == NodeKind::Text {
         for run in n.text_runs.iter_mut() {
-            substitute_in_text(&mut run.text, page, total);
+            substitute_in_text(&mut run.text, tokens);
         }
     }
     for c in n.children.iter_mut() {
-        substitute_in_place(c, page, total);
+        substitute_in_place(c, tokens);
     }
 }
 
-fn substitute_in_text(s: &mut String, page: usize, total: usize) {
-    if !s.contains('{') { return; }
-    *s = s
-        .replace("{page}", &page.to_string())
-        .replace("{pages}", &total.to_string());
+fn substitute_in_text(s: &mut String, tokens: PageTokens) {
+    if s.contains("{page}") {
+        *s = s.replace("{page}", &tokens.page());
+    }
+    if s.contains("{pages}") {
+        *s = s.replace("{pages}", &tokens.pages());
+    }
 }
 
 // ── Running headers ───────────────────────────────────────────────────────────
@@ -815,9 +913,6 @@ impl FlowStart {
 /// `{page}` or `{pages}` can wrap a text to another number of lines. A `capture-ref` text takes its lines whatever
 /// it shows (`reserve_sink_lines`).
 fn header_height_fixed(top_chrome: &[Node]) -> bool {
-    fn has_page_tokens(node: &Node) -> bool {
-        node.text_runs.iter().any(|run| run.text.contains("{page")) || node.children.iter().any(has_page_tokens)
-    }
     top_chrome.iter().all(|node| {
         matches!(node.page_scope, None | Some(PageScope::Each) | Some(PageScope::First)) && !has_page_tokens(node)
     })
@@ -4916,13 +5011,13 @@ fn render_size(node: &RenderNode) -> (f32, f32) {
 }
 
 /// Lay out a layer's `text-at`, `img-at` or `barcode-at`: the node of the layout, through the layout's own
-/// measuring, wrapping and drawing, and then put where the layer says. `page` is the number of the page it
-/// is drawn on, and `pages` how many the section has, for `{page}` and `{pages}`.
+/// measuring, wrapping and drawing, and then put where the layer says. `tokens` print `{page}` and `{pages}` for
+/// the page it is drawn on.
 ///
 /// The box is laid out at the origin and moved once its size is known, since an anchor other than the top
 /// left corner needs it. A `text-at` with a line wider than its box is clipped to the box.
-pub(crate) fn layout_placed(placed: &canvas::PlacedNode, page: usize, pages: usize) -> RenderNode {
-    let node = substitute_page_tokens(&placed.node, page, pages);
+pub(crate) fn layout_placed(placed: &canvas::PlacedNode, tokens: PageTokens) -> RenderNode {
+    let node = substitute_page_tokens(&placed.node, tokens);
     let (rendered, overflow) = match node.kind {
         NodeKind::Text => {
             let width = node.width_constraint.unwrap_or_else(|| text_natural_w(&node));

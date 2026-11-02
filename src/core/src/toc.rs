@@ -5,11 +5,16 @@
 // TOC is laid out last: the other sections first, then the TOC with page numbers that assume its length, again
 // until that length holds. A longer TOC only makes page numbers bigger, which can only make it longer, so the
 // length settles; a TOC of one page, the usual case, takes one pass.
+//
+// Each page number is the one its footer prints (`page_numbers`), which the TOC's length moves too. Where a
+// bookmark lands doesn't depend on the numbers, so the other sections are laid out once, numbered as if the TOC
+// is one page long, and laid out again only when its length moved the numbers one of them shows.
 
 use serde_json::{json, Map, Value};
 
 use crate::data;
-use crate::layout::layout_page;
+use crate::layout::{fill_section, finish_section, layout_numbered, shows_page_numbers, FilledSection};
+use crate::page_numbers::{self, SectionNumbers};
 use crate::parse::{SectionLayout, TocOptions, TOC_DATA_KEY};
 use crate::render::{placed_anchors, RenderPage};
 
@@ -18,30 +23,59 @@ const MAX_PASSES: usize = 4;
 
 /// Lay out `sections`, of which the one at `toc_index` is the table of contents.
 pub(crate) fn layout_with_toc(sections: &[SectionLayout], toc_index: usize, options: &TocOptions) -> Vec<RenderPage> {
-    let before: Vec<RenderPage> = sections[..toc_index].iter().flat_map(layout_page).collect();
-    let after:  Vec<RenderPage> = sections[toc_index + 1..].iter().flat_map(layout_page).collect();
-
+    let filled: Vec<Option<FilledSection>> = sections.iter().enumerate()
+        .map(|(i, section)| (i != toc_index).then(|| fill_section(section)))
+        .collect();
     // A section lays out to one page at least, so one is the first guess.
-    let mut toc_len = 1;
-    let mut toc_pages = Vec::new();
-    for _ in 0..MAX_PASSES {
-        let entries = toc_entries(&before, &after, toc_len, options.indent_step);
-        toc_pages = layout_page(&bound_section(&sections[toc_index], options, entries));
-        if toc_pages.len() == toc_len {
+    let mut counts: Vec<usize> = filled.iter().map(|f| f.as_ref().map_or(1, FilledSection::page_count)).collect();
+    let guessed = page_numbers::number_sections(sections, &counts);
+    let mut laid: Vec<Vec<RenderPage>> = sections.iter().zip(filled).zip(&guessed)
+        .map(|((section, filled), numbers)| filled.map_or_else(Vec::new, |f| finish_section(section, f, numbers)))
+        .collect();
+
+    let (mut toc, mut toc_filled) = toc_pass(sections, toc_index, options, &laid, &counts);
+    for _ in 1..MAX_PASSES {
+        if toc_filled.page_count() == counts[toc_index] {
             break;
         }
-        toc_len = toc_pages.len();
+        counts[toc_index] = toc_filled.page_count();
+        (toc, toc_filled) = toc_pass(sections, toc_index, options, &laid, &counts);
     }
+    counts[toc_index] = toc_filled.page_count();
 
-    before.into_iter().chain(toc_pages).chain(after).collect()
+    let numbers = page_numbers::number_sections(sections, &counts);
+    laid[toc_index] = finish_section(&toc, toc_filled, &numbers[toc_index]);
+    for (i, section) in sections.iter().enumerate() {
+        if i != toc_index && numbers[i] != guessed[i] && shows_page_numbers(section) {
+            laid[i] = layout_numbered(section, &numbers[i]);
+        }
+    }
+    let mut pages: Vec<RenderPage> = laid.into_iter().flatten().collect();
+    page_numbers::mark_label_ranges(&mut pages, sections, &numbers, &counts);
+    pages
 }
 
-/// `$toc`: the bookmarks of the pages before and after the TOC, numbered as if the TOC is `toc_len` pages long.
-fn toc_entries(before: &[RenderPage], after: &[RenderPage], toc_len: usize, indent_step: f32) -> Value {
-    let first_after = before.len() + toc_len;
-    let placed = placed_anchors(before).into_iter()
-        .map(|p| (p.page + 1, p.anchor))
-        .chain(placed_anchors(after).into_iter().map(|p| (first_after + p.page + 1, p.anchor)));
+/// The TOC section bound to the entries of the other sections' pages `laid`, numbered as if the sections have
+/// `counts` pages, and filled.
+fn toc_pass(
+    sections:  &[SectionLayout],
+    toc_index: usize,
+    options:   &TocOptions,
+    laid:      &[Vec<RenderPage>],
+    counts:    &[usize],
+) -> (SectionLayout, FilledSection) {
+    let numbers = page_numbers::number_sections(sections, counts);
+    let entries = toc_entries(laid, toc_index, &numbers, options.indent_step);
+    let toc = bound_section(&sections[toc_index], options, entries);
+    let filled = fill_section(&toc);
+    (toc, filled)
+}
+
+/// `$toc`: the bookmarks of the sections' pages `laid` but the TOC's, each with the number its page shows.
+fn toc_entries(laid: &[Vec<RenderPage>], toc_index: usize, numbers: &[SectionNumbers], indent_step: f32) -> Value {
+    let placed = laid.iter().zip(numbers).enumerate()
+        .filter(|&(i, _)| i != toc_index)
+        .flat_map(|(_, (pages, numbers))| placed_anchors(pages).into_iter().map(move |p| (numbers.page(p.page), p.anchor)));
     let entries = placed
         .enumerate()
         .map(|(i, (page, anchor))| json!({
@@ -73,7 +107,7 @@ fn bound_section(section: &SectionLayout, options: &TocOptions, entries: Value) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layout::layout_document;
+    use crate::layout::{layout_document, layout_page};
     use crate::parse::parse;
     use crate::render::RenderNode;
 
@@ -119,12 +153,15 @@ mod tests {
                </layout></section>
                <section><layout><bookmark label="Methods"/><text>Methods</text></layout></section>"#,
         )).unwrap().section_layouts();
-        let after: Vec<RenderPage> = sections[1..].iter().flat_map(layout_page).collect();
+        let laid: Vec<Vec<RenderPage>> = sections.iter()
+            .map(|section| if section.toc.is_some() { Vec::new() } else { layout_page(section) })
+            .collect();
+        let numbers = page_numbers::number_sections(&sections, &[1, 1, 1]);
 
-        assert_eq!(toc_entries(&[], &after, 1, 14.0), json!([
-            { "index": 1, "level": 1, "label": "Introduction", "page": 2, "anchor": "#introduction", "indent": "0pt" },
-            { "index": 2, "level": 2, "label": "Background",   "page": 2, "anchor": "#background",   "indent": "14pt" },
-            { "index": 3, "level": 1, "label": "Methods",      "page": 3, "anchor": "#methods",      "indent": "0pt" },
+        assert_eq!(toc_entries(&laid, 0, &numbers, 14.0), json!([
+            { "index": 1, "level": 1, "label": "Introduction", "page": "2", "anchor": "#introduction", "indent": "0pt" },
+            { "index": 2, "level": 2, "label": "Background",   "page": "2", "anchor": "#background",   "indent": "14pt" },
+            { "index": 3, "level": 1, "label": "Methods",      "page": "3", "anchor": "#methods",      "indent": "0pt" },
         ]));
     }
 

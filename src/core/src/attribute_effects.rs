@@ -160,6 +160,7 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
         // The default suffix is a full stop and there is no prefix.
         ("list@prefix", &["("]),
         ("list@suffix", &[")"]),
+        ("section@page-prefix", &["A-"]),
     ];
     if let Some((_, values)) = by_id.iter().find(|(key, _)| *key == id) {
         return Some(values);
@@ -611,6 +612,11 @@ fn subjects() -> Vec<Subject> {
             lpdf("", &format!("<document><section footnote-counter=\"document\"><layout>{NOTE}</layout></section><section {a}><layout>{}</layout></section></document>", noted_pages()))
         })
         .only(&["footnote-counter"]),
+        // The numbers of the pages, in a footer that prints them.
+        Subject::new("section", |a, _| {
+            lpdf("", &format!("<document><section {a}><layout><text>One</text><region pin=\"bottom\"><text>Page {{page}} of {{pages}}</text></region></layout></section></document>"))
+        })
+        .only(&["page-start", "page-format", "page-prefix"]),
         Subject::new("layout", |a, c| lpdf("", &format!("<document><section><layout {a}>{c}</layout></section></document>"))).content(ONE),
         // A markdown: its own attributes, over headings and paragraphs of several lines.
         Subject::new("markdown", |a, c| {
