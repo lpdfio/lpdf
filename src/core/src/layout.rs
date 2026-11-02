@@ -4292,10 +4292,11 @@ pub(crate) fn text_width(font: &str, text: &str, size: f32) -> f32 {
 
 /// The room a run keeps after its words, set in `metrics` at `size`. A reference keeps room for the widest words it
 /// has shown, so that a layout in which its words move its bookmark back and forth settles (`references`); 0 for
-/// any other run. A reference broken across lines, being wider than a line, keeps none.
+/// any other run. In a text, a reference broken across lines, being wider than a line, keeps none; in a `<code>`, the
+/// room follows its last character.
 fn room_after(run: &TextRun, metrics: Metrics, size: f32) -> f32 {
     run.reference.as_ref().map_or(0.0, |reference| {
-        (metrics.text_width(&reference.widest, size) - metrics.text_width(&run.text, size)).max(0.0)
+        (metrics.text_width(&reference.widest, size) - metrics.text_width(&reference.shown, size)).max(0.0)
     })
 }
 
@@ -4845,10 +4846,16 @@ fn tint_behind(tint: &str, x: f32, y: f32, width: f32, height: f32) -> RenderNod
 struct PreSeg {
     text: String,
     run:  usize,
+    /// The room a reference keeps after its last character, when the stretch ends the reference (`room_after`).
+    room: f32,
 }
 
 /// A character of preformatted text, with the index of the run it came from and its width in the font of that run.
 type PreCell = (char, usize, f32);
+
+/// The cell after the last character of a reference that holds its room (`room_after`): it is as wide as the room,
+/// goes with the word before it, and draws nothing. U+FFFF is not a character, and an XML document cannot hold it.
+const ROOM_CELL: char = '\u{FFFF}';
 
 /// The characters of a preformatted text, a line at a time. A tab becomes the spaces up to the next multiple of
 /// `pre_tab` columns. A newline ends a line, and the one that ends the text starts no line after it.
@@ -4871,6 +4878,10 @@ fn pre_cells(node: &Node) -> Vec<Vec<PreCell>> {
                 }
                 c => line.push((c, ri, metrics.text_width(c.encode_utf8(&mut [0; 4]), node.font_size))),
             }
+        }
+        let room = room_after(run, metrics, node.font_size);
+        if room > 0.0 {
+            lines.last_mut().expect("there is always a line").push((ROOM_CELL, ri, room));
         }
     }
     if lines.last().is_some_and(Vec::is_empty) {
@@ -4937,11 +4948,12 @@ fn pre_lines(node: &Node, wrap_w: f32) -> Vec<Vec<PreSeg>> {
     for cells in pre_cells(node) {
         for visual in wrap_pre_line(&cells, wrap_w) {
             let mut segs: Vec<PreSeg> = Vec::new();
-            for (c, ri, _) in visual {
-                match segs.last_mut() {
-                    Some(seg) if seg.run == ri => seg.text.push(c),
-                    _ => segs.push(PreSeg { text: c.to_string(), run: ri }),
+            for (c, ri, width) in visual {
+                if segs.last().is_none_or(|seg| seg.run != ri) {
+                    segs.push(PreSeg { text: String::new(), run: ri, room: 0.0 });
                 }
+                let seg = segs.last_mut().expect("a stretch for the run");
+                if c == ROOM_CELL { seg.room += width } else { seg.text.push(c) }
             }
             lines.push(segs);
         }
@@ -4962,12 +4974,16 @@ fn pre_runs(node: &Node, lines: &[Vec<PreSeg>]) -> Vec<TextRun> {
     let mut runs: Vec<TextRun> = Vec::new();
     for (li, line) in lines.iter().enumerate() {
         for seg in line {
-            runs.push(TextRun { text: seg.text.clone(), ..node.text_runs[seg.run].clone() });
+            // Only the stretch that ends a reference keeps its room, which its run gives it again.
+            let run = &node.text_runs[seg.run];
+            let reference = if seg.room > 0.0 { run.reference.clone() } else { None };
+            runs.push(TextRun { text: seg.text.clone(), reference, ..run.clone() });
         }
         if li + 1 == lines.len() {
             continue;
         }
-        match runs.last_mut().filter(|_| !line.is_empty()) {
+        // A newline after a reference's room goes in a run of its own, so the room stays on this line.
+        match runs.last_mut().filter(|last| !line.is_empty() && last.reference.is_none()) {
             Some(last) => last.text.push('\n'),
             None => runs.push(TextRun {
                 text: "\n".to_string(), leading_space: false, font: None, color: None, href: None,
@@ -4998,10 +5014,10 @@ fn layout_pre_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f3
             let run   = &node.text_runs[seg.run];
             let font  = run.font.as_deref().unwrap_or(node.font.as_str());
             let color = run.color.clone().unwrap_or_else(|| parent_color.clone());
-            let width = metrics[seg.run].text_width(&seg.text, font_size);
+            let width = metrics[seg.run].text_width(&seg.text, font_size) + seg.room;
             let marked = run.href.is_some() || run.underline || run.strike || run.background.is_some();
             // Spaces alone leave nothing to draw, unless something is drawn under or over them.
-            if marked || seg.text.chars().any(|c| c != ' ') {
+            if !seg.text.is_empty() && (marked || seg.text.chars().any(|c| c != ' ')) {
                 let mut parts = Vec::new();
                 if let Some(tint) = &run.background {
                     parts.push(tint_behind(tint, cur_x, line_y, width, line_height));

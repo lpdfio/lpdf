@@ -352,6 +352,9 @@ pub struct Reference {
     pub words:  String,
     /// Where the span is written, for an error: `<span> at line 3, col 9` in XML, `span` in a kit tree.
     pub place:  String,
+    /// The words it shows, with the page and the label in them. A run of a `<code>` split across pages holds some
+    /// of them, so the room it keeps is counted from these.
+    pub shown:  String,
     /// The widest words it has shown: its line keeps room for them, so that a layout which moves its bookmark
     /// back and forth settles (`references`).
     pub widest: String,
@@ -2541,7 +2544,7 @@ fn read_runs(runs: &mut Vec<TextRun>, elem: &roxmltree::Node, tokens: &Tokens, n
 /// The reference of a span with `bookmark-ref`, whose `words` show its bookmark's page and label, or `None` for
 /// any other span. The words may hold no other `{…}` token, since nothing would fill it in and the editor can't
 /// catch a typo there.
-fn span_reference(a: &impl Attrs, words: &str, place: &str) -> Result<Option<Box<Reference>>, String> {
+fn span_reference<A: Attrs + ?Sized>(a: &A, words: &str, place: &str) -> Result<Option<Box<Reference>>, String> {
     let Some(id) = a.get("bookmark-ref") else { return Ok(None) };
     if a.get("href").is_some() {
         return Err("a span with bookmark-ref links to its bookmark already: leave out href".into());
@@ -2552,12 +2555,12 @@ fn span_reference(a: &impl Attrs, words: &str, place: &str) -> Result<Option<Box
         ));
     }
     Ok(Some(Box::new(Reference {
-        id: id.to_string(), words: words.to_string(), place: place.to_string(), widest: String::new(),
+        id: id.to_string(), words: words.to_string(), place: place.to_string(), shown: String::new(), widest: String::new(),
     })))
 }
 
 /// The link of a span: its `href`, or the bookmark its `reference` names.
-fn span_href(a: &impl Attrs, reference: Option<&Reference>) -> Option<String> {
+fn span_href<A: Attrs + ?Sized>(a: &A, reference: Option<&Reference>) -> Option<String> {
     match reference {
         Some(reference) => Some(format!("#{}", reference.id)),
         None            => a.get("href").map(str::to_string),
@@ -2666,10 +2669,11 @@ const CODE_PADDING: &str = "m";
 /// How many columns a tab fills to in a `<code>` unless it has a `tab-size`.
 const DEFAULT_TAB_SIZE: u8 = 4;
 
-/// The part of a `<code>` that is not a box: its text, and the spans in it.
+/// The part of a `<code>` that is not a box: its text, and the spans in it, each with its text and where it is
+/// written (`Reference::place`).
 enum CodePart<'a> {
     Text(String),
-    Span(Box<dyn Attrs + 'a>, String),
+    Span(Box<dyn Attrs + 'a>, String, String),
 }
 
 /// A `<code>` starts on the line after its tag and ends on the line before its end tag, as a `<pre>` does, so
@@ -2694,20 +2698,21 @@ fn plain_code_run(text: &str) -> TextRun {
     }
 }
 
-/// The run of a `<span>` in a `<code>`: its text as it is written, with the span's style.
-fn code_span_in_code(a: &dyn Attrs, text: String, tokens: &Tokens) -> Result<TextRun, String> {
+/// The run of a `<span>` in a `<code>`, written at `place`: its text as it is written, with the span's style.
+fn code_span_in_code(a: &dyn Attrs, text: String, place: &str, tokens: &Tokens) -> Result<TextRun, String> {
+    let reference = span_reference(a, &text, place).map_err(|e| format!("{place}: {e}"))?;
     Ok(TextRun {
         text,
         leading_space: false,
         font:       a.get("font").map(str::to_string),
         color:      a.get("color").map(|v| tokens.resolve_color(v)).transpose()?,
-        href:       a.get("href").map(str::to_string),
+        href:       span_href(a, reference.as_deref()),
         underline:  a.get("underline").map(|v| v == "true").unwrap_or(false),
         strike:     a.get("strike").map(|v| v == "true").unwrap_or(false),
         bold:       a.get("bold").map(|v| v == "true").unwrap_or(false),
         background: None,
         footnote:   None,
-        reference:  None,
+        reference,
     })
 }
 
@@ -2723,17 +2728,13 @@ fn code_runs(parts: Vec<CodePart>, tokens: &Tokens) -> Result<Vec<TextRun>, Stri
                 if i == last { text = without_last_indent(text); }
                 if !text.is_empty() { runs.push(plain_code_run(text)); }
             }
-            CodePart::Span(attrs, text) => {
-                if !text.is_empty() { runs.push(code_span_in_code(attrs.as_ref(), text, tokens)?); }
+            CodePart::Span(attrs, text, place) => {
+                if !text.is_empty() { runs.push(code_span_in_code(attrs.as_ref(), text, &place, tokens)?); }
             }
         }
     }
     Ok(runs)
 }
-
-/// What a span of a `<code>` with `bookmark-ref` is told: a code's text is laid out by rules of its own, which keep no
-/// room for the words of a reference.
-const REFERENCE_IN_CODE: &str = "bookmark-ref is not allowed on a span in <code>: put the reference in a <text>";
 
 /// What a `<code>` holds besides text and spans is told.
 fn not_in_code(tag: &str, place: &str) -> String {
@@ -2777,11 +2778,8 @@ fn parse_code(elem: &roxmltree::Node, tokens: &Tokens) -> Result<ParsedNode, Str
         if child.is_text() {
             parts.push(CodePart::Text(child.text().unwrap_or("").to_string()));
         } else if child.tag_name().name() == "span" {
-            if child.attribute("bookmark-ref").is_some() {
-                return Err(format!("<span>{}: {REFERENCE_IN_CODE}", node_loc(&child)));
-            }
             let text: String = child.children().filter_map(|n| n.text().filter(|_| n.is_text())).collect();
-            parts.push(CodePart::Span(Box::new(child), text));
+            parts.push(CodePart::Span(Box::new(child), text, format!("<span>{}", node_loc(&child))));
         } else {
             return Err(not_in_code(child.tag_name().name(), &node_loc(&child)));
         }
@@ -2826,13 +2824,10 @@ fn parse_tree_code(json: &serde_json::Value, tokens: &Tokens) -> Result<ParsedNo
         }
         match child.get("type").and_then(|v| v.as_str()) {
             Some("span") => {
-                if jattr(child, "bookmark-ref").is_some() {
-                    return Err(format!("span: {REFERENCE_IN_CODE}"));
-                }
                 let text: String = child.get("nodes").and_then(|v| v.as_array())
                     .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
                     .unwrap_or_default();
-                parts.push(CodePart::Span(Box::new(JsonAttrs(child)), text));
+                parts.push(CodePart::Span(Box::new(JsonAttrs(child)), text, "span".to_string()));
             }
             other => return Err(not_in_code(other.unwrap_or("?"), "")),
         }

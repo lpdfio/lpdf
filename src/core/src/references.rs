@@ -110,6 +110,7 @@ fn fill_run(run: &mut TextRun, font: &str, labels: &HashMap<String, String>, pag
     if text_width(font, &words, 1.0) > text_width(font, &reference.widest, 1.0) {
         reference.widest = words.clone();
     }
+    reference.shown = words.clone();
     if run.text == words {
         return false;
     }
@@ -366,11 +367,55 @@ mod tests {
     }
 
     #[test]
-    fn a_reference_takes_no_href_and_no_place_in_code() {
+    fn a_reference_takes_no_href() {
         let err = parse(&document(r##"<section><layout><text><span bookmark-ref="a" href="#a">x</span></text></layout></section>"##)).unwrap_err();
         assert!(err.contains("leave out href"), "{err}");
-        let err = parse(&document(r#"<section><layout><code><span bookmark-ref="a">x</span></code></layout></section>"#)).unwrap_err();
-        assert!(err.contains("not allowed on a span in <code>"), "{err}");
+    }
+
+    #[test]
+    fn a_reference_in_code_keeps_room_after_its_last_character_and_settles() {
+        // The flip of `showcase-reference-flip`, with the sentence in a code: there it wraps at the space before
+        // "viii.", and "ix." in the room of "viii." keeps it wrapped.
+        let flip = include_str!("../../../test/fixtures/showcase-reference-flip.xml").replace(
+            r#"<text width="240pt" font-size="10" line-height="1.5" paginate="break-before">The notice period is set out <span bookmark-ref="notice">on page {bookmark-page}</span>.</text>"#,
+            r#"<code width="240pt" padding="0" font-size="10" line-height="1.5" paginate="break-before">The notice period is set out <span bookmark-ref="notice">on page {bookmark-page}</span>.</code>"#,
+        );
+        assert!(flip.contains("<code "), "the fixture's sentence moved");
+        let sections = parse(&flip).unwrap().section_layouts();
+        assert_eq!(passes(&sections), 3);
+        let pages = layout_document(&sections);
+        assert_eq!(page_of(&pages, "notice"), 8, "clause 4 is on page ix");
+        assert_eq!(texts(&pages[7])[..4], ["The notice period is set out ", "on page", "ix", "."]);
+        // "ix" and the room of the two characters "viii" has more, in Courier at 10pt.
+        let width = links_of(&pages[7], "ix")[0].width;
+        assert!((width - 24.0).abs() < 0.01, "{width}");
+    }
+
+    #[test]
+    fn a_reference_in_code_split_across_pages_keeps_its_room_on_the_next() {
+        // A hundred lines of code, which run onto a second page, with a reference on the last line that has shown
+        // wider words before.
+        let lines: String = (1..100).map(|n| format!("line {n}\n")).collect();
+        let mut sections = sections(&format!(
+            r#"<section><layout>
+                   <code>{lines}see <span bookmark-ref="end">page {{bookmark-page}}</span>
+next</code>
+                   <bookmark id="end" label="The end"/>
+                   <text paginate="break-before">The end.</text>
+               </layout></section>"#
+        ));
+        for_each_text_mut(&mut sections, &mut |node| {
+            for run in &mut node.text_runs {
+                if let Some(reference) = run.reference.as_deref_mut() {
+                    reference.widest = "page 9999".to_string();
+                }
+            }
+        });
+        let pages = layout_document(&sections);
+        assert_eq!(page_of(&pages, "end"), 2);
+        let link = links_of(&pages[1], "page 3")[0];
+        assert_eq!(link.width, text_width("Courier", "page 9999", 11.0), "the room of the widest words");
+        assert!(texts(&pages[1]).contains(&"next".to_string()), "the line after the reference");
     }
 
     #[test]
