@@ -309,7 +309,7 @@ mod rendered {
     use crate::render::{RenderNode, RenderPage};
 
     fn render(sections: &str) -> Vec<RenderPage> {
-        layout_document(&parse(&format!(r#"<lpdf version="1"><document>{sections}</document></lpdf>"#)).unwrap().section_layouts())
+        layout_document(&parse(&format!(r#"<lpdf version="1"><document>{sections}</document></lpdf>"#)).unwrap().section_layouts()).unwrap()
     }
 
     /// The texts of `page`, in the order they are drawn.
@@ -541,7 +541,7 @@ mod rendered {
                 {{"type":"layout","attrs":{{}},"nodes":[{{"type":"region","attrs":{{"pin":"bottom"}},"nodes":[{{"type":"text","attrs":{{}},"nodes":["p. {{page}}/{{pages}}"]}}]}}]}}]}}]}}"#
         );
         let mut doc = parse_tree(&tree(r#"{"page-start":4,"page-format":"upper-alpha","page-prefix":"B-"}"#)).unwrap();
-        assert_eq!(footers(&layout_document(&doc.section_layouts())), ["B-D/A"]);
+        assert_eq!(footers(&layout_document(&doc.section_layouts()).unwrap()), ["B-D/A"]);
         let error = parse_tree(&tree(r#"{"page-start":0}"#)).err().unwrap_or_default();
         assert_eq!(error, "section: page-start must be a whole number from 1 to 2147483647, not 0");
     }

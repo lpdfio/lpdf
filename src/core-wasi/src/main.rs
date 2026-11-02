@@ -406,7 +406,10 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     if let Err(e) = memory::check() {
         return serde_json::json!({ "error": e }).to_string();
     }
-    let pages: Vec<render::RenderPage> = layout::layout_document(&lp);
+    let pages: Vec<render::RenderPage> = match layout::layout_document(&lp) {
+        Ok(pages) => pages,
+        Err(e)    => return serde_json::json!({ "error": e }).to_string(),
+    };
     if let Err(e) = memory::check() {
         return serde_json::json!({ "error": e }).to_string();
     }
@@ -439,7 +442,7 @@ impl LpdfEngine {
         let mut doc = parse::parse(xml)?;
         let lp = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
-            layout::layout_document(&lp);
+            layout::layout_document(&lp)?;
         // Unlicensed, as in the core stub, so both crates hash the same attributed bytes.
         pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, &doc.output, &[], None)
     }

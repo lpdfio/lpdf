@@ -4860,7 +4860,7 @@ mod tests {
     fn render_as(layout: &str, licensed: bool) -> Vec<u8> {
         let xml = format!(r#"<lpdf version="1"><document><section><layout>{layout}</layout></section></document></lpdf>"#);
         let mut doc = crate::parse::parse(&xml).expect("parses");
-        let pages = crate::layout::layout_document(&doc.section_layouts());
+        let pages = crate::layout::layout_document(&doc.section_layouts()).unwrap();
         render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &ImageRegistry::new(), &doc.meta, &doc.gradients, None, licensed, &doc.output, &[], None)
             .expect("renders")
     }
@@ -5135,7 +5135,7 @@ mod tests {
         for section in &mut layouts {
             crate::layout::prefill_section_image_sizes(section, &meta);
         }
-        let pages = crate::layout::layout_document(&layouts);
+        let pages = crate::layout::layout_document(&layouts).unwrap();
         render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[], None).expect("renders")
     }
 
@@ -5165,7 +5165,7 @@ mod tests {
             </section></document></lpdf>"#;
         // Built from the modules both crates share: the core library's `bench_render_xml_with_image` is not in the WASI crate.
         let mut doc = crate::parse::parse(xml).expect("parses");
-        let pages = crate::layout::layout_document(&doc.section_layouts());
+        let pages = crate::layout::layout_document(&doc.section_layouts()).unwrap();
         let mut images = ImageRegistry::new();
         images.load("photo", RED_PIXEL.to_vec());
         let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[], None).expect("renders");
@@ -5276,7 +5276,7 @@ mod tests {
         );
         let mut doc = crate::parse::parse(&xml).expect("parses");
         crate::layout::set_font_widths(HashMap::from([("brand".to_string(), crate::shared::extract_font_widths(bytes).expect("widths"))]));
-        let pages = crate::layout::layout_document(&doc.section_layouts());
+        let pages = crate::layout::layout_document(&doc.section_layouts()).unwrap();
         let mut registry = FontRegistry::new();
         registry.register("brand", bytes.to_vec());
         let pdf = render_pdf(&pages, &doc.fonts, &registry, &ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, &doc.output, &[], None).expect("renders");
@@ -5397,7 +5397,7 @@ mod tests {
             <column opacity="0.5"><img name="photo" width="100pt" height="100pt"/></column>
             </layout></section></document></lpdf>"#;
         let mut doc = crate::parse::parse(xml).expect("parses");
-        let pages = crate::layout::layout_document(&doc.section_layouts());
+        let pages = crate::layout::layout_document(&doc.section_layouts()).unwrap();
         let mut images = ImageRegistry::new();
         images.load("photo", RED_PIXEL.to_vec());
         let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[], None).expect("renders");

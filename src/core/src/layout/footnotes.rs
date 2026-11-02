@@ -31,6 +31,8 @@ const RULE_SHARE:      f32 = 1.0 / 3.0;
 
 /// A note on a page: its number, its words and the type it is set in, which is the text's it belongs to.
 pub(super) struct Note {
+    /// The place of its anchor among the anchors of the flow, in reading order.
+    pub index:   u32,
     number:      u32,
     runs:        Vec<TextRun>,
     font:        String,
@@ -76,6 +78,14 @@ pub(super) fn number_flow(flow: &mut [Node], counter: FootnoteCounter, start: u3
 /// The notes of the anchors in `nodes`, in reading order, but for the numbers `cut_off` by the bottom of the
 /// page. On a page that counts from 1, the anchors shown are numbered here.
 fn take_notes(nodes: &mut [Node], counter: FootnoteCounter, cut_off: &[u32]) -> Vec<Note> {
+    let mut out = Vec::new();
+    take_notes_into(nodes, counter, cut_off, &mut 0, &mut out);
+    out
+}
+
+/// `take_notes` for one part of a page, after the parts before it, which held `page_count` notes and put theirs
+/// in `out`: the columns of a page are one page of notes.
+pub(super) fn take_notes_into(nodes: &mut [Node], counter: FootnoteCounter, cut_off: &[u32], page_count: &mut u32, out: &mut Vec<Note>) {
     fn walk(nodes: &mut [Node], page_count: &mut u32, counter: FootnoteCounter, cut_off: &[u32], out: &mut Vec<Note>) {
         for node in nodes {
             if node.kind == NodeKind::Text {
@@ -87,6 +97,7 @@ fn take_notes(nodes: &mut [Node], counter: FootnoteCounter, cut_off: &[u32]) -> 
                             note.number = *page_count;
                         }
                         out.push(Note {
+                            index:       note.index,
                             number:      note.number,
                             runs:        note.runs.clone(),
                             font:        node.font.clone(),
@@ -100,14 +111,12 @@ fn take_notes(nodes: &mut [Node], counter: FootnoteCounter, cut_off: &[u32]) -> 
             walk(&mut node.children, page_count, counter, cut_off, out);
         }
     }
-    let mut out = Vec::new();
-    walk(nodes, &mut 0, counter, cut_off, &mut out);
-    out
+    walk(nodes, page_count, counter, cut_off, out);
 }
 
 /// The footnotes of a page's `nodes` whose numbers the bottom of the page cuts off, by index: the nodes laid out
 /// as the page lays them out, and when they run past `room`, every number whose top is at or below it.
-fn numbers_cut_off(nodes: &[Node], avail_w: f32, room: f32, gap: f32) -> Vec<u32> {
+pub(super) fn numbers_cut_off(nodes: &[Node], avail_w: f32, room: f32, gap: f32) -> Vec<u32> {
     fn below(tree: &[RenderNode], bottom: f32, out: &mut Vec<u32>) {
         for node in tree {
             match node {
@@ -161,18 +170,21 @@ pub(super) fn split_flow<'a>(
     })
 }
 
-/// One try at a page: what is left of the flow, the page, its notes and the height they need.
-struct Fill<'a> {
-    rest:  Pending<'a>,
-    nodes: Vec<Node>,
-    kept:  Vec<Option<Kept>>,
-    notes: Vec<Note>,
-    area:  f32,
+/// One try at a page: what is left of the flow, what the page holds, its notes and the height they need. A page
+/// in one column holds its nodes with their trees; a page in columns, those of each of its parts.
+pub(super) struct Fill<'a, P> {
+    pub rest:  Pending<'a>,
+    pub page:  P,
+    pub notes: Vec<Note>,
+    pub area:  f32,
 }
+
+/// The nodes of a page in one column, with the trees `fill_page` kept for them.
+type PageNodes = (Vec<Node>, Vec<Option<Kept>>);
 
 /// Fill the next page, whose flow starts `at` when that is known, with `reserve` kept back for notes.
 #[allow(clippy::too_many_arguments)]
-fn fill<'a>(pending: &Pending<'a>, at: Option<(f32, f32)>, avail_w: f32, budget: f32, next_budget: f32, gap: f32, counter: FootnoteCounter, reserve: f32) -> Fill<'a> {
+fn fill<'a>(pending: &Pending<'a>, at: Option<(f32, f32)>, avail_w: f32, budget: f32, next_budget: f32, gap: f32, counter: FootnoteCounter, reserve: f32) -> Fill<'a, PageNodes> {
     let mut rest = pending.clone();
     let room = (budget - reserve).max(0.0);
     let (page, runs_past) = fill_page(&mut rest, at, avail_w, room, next_budget, gap);
@@ -185,27 +197,42 @@ fn fill<'a>(pending: &Pending<'a>, at: Option<(f32, f32)>, avail_w: f32, budget:
     };
     let notes = take_notes(&mut nodes, counter, &cut_off);
     if counter == FootnoteCounter::Page {
-        // The anchors of the page got their numbers here, after the trees of their texts were laid out.
-        for (node, tree) in nodes.iter().zip(kept.iter_mut()) {
-            if has_footnotes(std::slice::from_ref(node)) { *tree = None; }
-        }
+        forget_numbered_trees(&nodes, &mut kept);
     }
     let area = area_height(&notes, avail_w, budget);
-    Fill { rest, nodes, kept, notes, area }
+    Fill { rest, page: (nodes, kept), notes, area }
+}
+
+/// Drop the trees of the nodes that hold an anchor: on a page that counts from 1, the anchors got their numbers
+/// after the trees of their texts were laid out.
+pub(super) fn forget_numbered_trees(nodes: &[Node], kept: &mut [Option<Kept>]) {
+    for (node, tree) in nodes.iter().zip(kept.iter_mut()) {
+        if has_footnotes(std::slice::from_ref(node)) { *tree = None; }
+    }
 }
 
 /// Fill the next page so that its notes fit under it, and take its nodes off `pending`.
+fn settle_page(pending: &mut Pending, at: Option<(f32, f32)>, avail_w: f32, budget: f32, next_budget: f32, gap: f32, counter: FootnoteCounter) -> FlowPage {
+    let ((nodes, kept), notes, reserve) = settle(pending, avail_w, budget, |pending, reserve| {
+        fill(pending, at, avail_w, budget, next_budget, gap, counter, reserve)
+    });
+    FlowPage { nodes, kept, notes, reserve }
+}
+
+/// Fill the next page with `fill`, which keeps back the room it is given for notes, so that the page's notes fit
+/// under it, and take what it holds off `pending`: the page, its notes and the room kept back for them, in a page
+/// `avail_w` wide whose flow has `budget` of height.
 ///
 /// The first fill has no room kept back and holds `n` notes. A fill with the room for the first `j` of them
 /// holds `k(j)` notes, and `k` falls as `j` grows, since more room kept back leaves less of the flow for the page,
 /// or moves up the cut of a node taller than the page. The room fits when `k(j) <= j`, and `j = n` always does. The
 /// tightest page is the least `j` that fits, which this looks for in two steps after the fill with `j = n`, for four
 /// fills at most: the `j` that fill held, and if its notes did not fit, the number it held, which does.
-fn settle_page(pending: &mut Pending, at: Option<(f32, f32)>, avail_w: f32, budget: f32, next_budget: f32, gap: f32, counter: FootnoteCounter) -> FlowPage {
-    let mut first = fill(pending, at, avail_w, budget, next_budget, gap, counter, 0.0);
+pub(super) fn settle<'a, P>(pending: &mut Pending<'a>, avail_w: f32, budget: f32, fill: impl Fn(&Pending<'a>, f32) -> Fill<'a, P>) -> (P, Vec<Note>, f32) {
+    let mut first = fill(pending, 0.0);
     if first.area <= 0.0 {
         *pending = first.rest;
-        return FlowPage { nodes: first.nodes, kept: first.kept, notes: first.notes, reserve: 0.0 };
+        return (first.page, first.notes, 0.0);
     }
     // The fills after it need only its notes. Its nodes and their trees go, and so does each fill as soon as it
     // can't be the page, so that no more than two fills are alive at a time.
@@ -215,16 +242,16 @@ fn settle_page(pending: &mut Pending, at: Option<(f32, f32)>, avail_w: f32, budg
     // Fill with the room the first `j` notes of the first fill need.
     let with_room = |j: usize| {
         let reserve = area_height(&first_notes[..j], avail_w, budget);
-        (fill(pending, at, avail_w, budget, next_budget, gap, counter, reserve), reserve)
+        (fill(pending, reserve), reserve)
     };
-    let fits = |(fill, reserve): &(Fill, f32)| fill.area <= *reserve + 0.01;
+    let fits = |(fill, reserve): &(Fill<P>, f32)| fill.area <= *reserve + 0.01;
 
     let mut chosen = with_room(n);
     if !fits(&chosen) {
         // Not a start of the first fill after all: keep back what this one needs, and take the result as it is.
         let reserve = chosen.0.area;
         drop(chosen);
-        chosen = (fill(pending, at, avail_w, budget, next_budget, gap, counter, reserve), reserve);
+        chosen = (fill(pending, reserve), reserve);
     } else if chosen.0.notes.len() < n {
         let held = chosen.0.notes.len();
         let tight = with_room(held);
@@ -241,7 +268,7 @@ fn settle_page(pending: &mut Pending, at: Option<(f32, f32)>, avail_w: f32, budg
     }
     let (fill, reserve) = chosen;
     *pending = fill.rest;
-    FlowPage { nodes: fill.nodes, kept: fill.kept, notes: fill.notes, reserve }
+    (fill.page, fill.notes, reserve)
 }
 
 /// The height of the area for `notes` in a box `width` wide: the room above the rule, the rule and the notes.

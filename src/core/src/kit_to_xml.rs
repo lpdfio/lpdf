@@ -926,7 +926,7 @@ mod tests {
     // The render pipeline as the engine runs it, unlicensed. Built on the modules both crates share.
     fn render_document(mut doc: crate::parse::Document) -> Vec<u8> {
         let layouts = doc.section_layouts();
-        let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts);
+        let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts).unwrap();
         crate::pdf::render_pdf(
             &pages, &doc.fonts,
             &crate::pdf::FontRegistry::new(), &crate::pdf::ImageRegistry::new(),

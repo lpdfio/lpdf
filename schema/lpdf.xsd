@@ -124,6 +124,16 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <xs:simpleType name="ColumnFill">
+    <xs:annotation>
+      <xs:documentation>How the columns of a section's last page fill: in order, as on every other page, or levelled.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="auto"/>
+      <xs:enumeration value="balance"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="FootnoteCounter">
     <xs:annotation>
       <xs:documentation>Where the numbers of the footnotes start over: on every page, in every section, or never.</xs:documentation>
@@ -475,7 +485,7 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- Pin positions for layout regions; top/bottom implemented in Phase 2;
+  <!-- Pin positions for layout regions: top, bottom and inset are implemented;
        left/right schema-valid but implementation deferred. -->
   <xs:simpleType name="RegionPin">
     <xs:restriction base="xs:string">
@@ -483,6 +493,7 @@
       <xs:enumeration value="bottom"/>
       <xs:enumeration value="left"/>
       <xs:enumeration value="right"/>
+      <xs:enumeration value="inset"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -1367,14 +1378,15 @@
     <xs:complexType>
       <xs:choice minOccurs="0" maxOccurs="unbounded">
         <xs:group ref="LayoutContent"/>
-        <!-- Pinned region: reserves a slot at the specified edge of the content area.
-             pin="top|bottom" implemented in this phase.
+        <!-- Pinned region: reserves a slot at the specified edge of the content area, or a block
+             inside the section's columns (pin="inset").
+             pin="top|bottom|inset" implemented.
              pin="left|right" schema-valid but deferred (requires w attribute).
              Only valid as a direct child of <layout>, not inside containers. Several regions on one
              edge stack in the order they are written. -->
         <xs:element name="region">
           <xs:annotation>
-            <xs:documentation>Pins content to the top or bottom edge of pages, outside the normal flow, for headers and footers. It reserves that space on every page it appears on. Only allowed directly inside layout. Where it is written among the flow does not matter: pin chooses the edge, and regions on one edge stack in the order written.</xs:documentation>
+            <xs:documentation>Pins content to the top or bottom edge of pages, outside the normal flow, for headers and footers. It reserves that space on every page it appears on. Only allowed directly inside layout. Where it is written among the flow does not matter: pin chooses the edge, and regions on one edge stack in the order written. With pin set to inset, it is a block at a spot inside the section's columns instead, such as a picture or a box across two columns of a newsletter: top and height place it, col and colspan say which columns it covers, and those columns flow around it, filling above it and carrying on below it.</xs:documentation>
           </xs:annotation>
           <xs:complexType>
             <xs:sequence>
@@ -1382,17 +1394,49 @@
             </xs:sequence>
             <xs:attribute name="pin"   type="RegionPin" use="required">
               <xs:annotation>
-                <xs:documentation>Which edge the region sticks to. top and bottom work. left and right pass validation but are not implemented yet.</xs:documentation>
+                <xs:documentation>Which edge the region sticks to. top and bottom work. left and right pass validation but are not implemented yet. inset places the region inside the columns, where top, height, col and colspan say.</xs:documentation>
               </xs:annotation>
             </xs:attribute>
             <xs:attribute name="page"  type="PageScope">
               <xs:annotation>
-                <xs:documentation>Which pages show the region: each, first, last, odd, even, or a range such as 2-last. odd and even follow the number printed on the page, so in a section that starts on page 4 even shows on its first page. first, last and ranges count the section's own pages, whatever their numbers. Defaults to each.</xs:documentation>
+                <xs:documentation>Which pages show the region: each, first, last, odd, even, or a range such as 2-last. odd and even follow the number printed on the page, so in a section that starts on page 4 even shows on its first page. first, last and ranges count the section's own pages, whatever their numbers. Defaults to each. An inset on last goes on the last page of the flow filled without it; if it then pushes text on to a new page, it stays where it is, one page before the end.</xs:documentation>
               </xs:annotation>
             </xs:attribute>
             <!-- w is for pin="left|right", which are not implemented; it is read and not used -->
             <xs:attribute name="w"     type="PtValue"/>
             <xs:attribute name="debug" type="Boolean"/>
+            <xs:attribute name="col">
+              <xs:annotation>
+                <xs:documentation>For pin set to inset: the column the inset starts in, counted from 1 at the left. Defaults to 1. With colspan, it may not run past the section's columns. An error on any other pin.</xs:documentation>
+              </xs:annotation>
+              <xs:simpleType>
+                <xs:restriction base="xs:positiveInteger">
+                  <xs:minInclusive value="1"/>
+                  <xs:maxInclusive value="12"/>
+                </xs:restriction>
+              </xs:simpleType>
+            </xs:attribute>
+            <xs:attribute name="colspan">
+              <xs:annotation>
+                <xs:documentation>For pin set to inset: how many columns the inset covers, from col. It is as wide as those columns and the gaps between them. Defaults to 1. An error on any other pin.</xs:documentation>
+              </xs:annotation>
+              <xs:simpleType>
+                <xs:restriction base="xs:positiveInteger">
+                  <xs:minInclusive value="1"/>
+                  <xs:maxInclusive value="12"/>
+                </xs:restriction>
+              </xs:simpleType>
+            </xs:attribute>
+            <xs:attribute name="top"   type="PtValue">
+              <xs:annotation>
+                <xs:documentation>For pin set to inset, and required with it: how far below the top of the columns the inset starts, under the headers. An error on any other pin.</xs:documentation>
+              </xs:annotation>
+            </xs:attribute>
+            <xs:attribute name="height" type="PtValue">
+              <xs:annotation>
+                <xs:documentation>For pin set to inset, and required with it: how tall the inset is. Content taller than it is clipped at its foot, and the inset is never cut across pages: one whose top and height reach below the room the headers and footers leave, on a page it is on, is an error. Footnotes give way to it. An error on any other pin.</xs:documentation>
+              </xs:annotation>
+            </xs:attribute>
           </xs:complexType>
         </xs:element>
       </xs:choice>
@@ -1722,6 +1766,32 @@
       <xs:attribute name="page-prefix" type="xs:string">
         <xs:annotation>
           <xs:documentation>Text before the section's page numbers: page-prefix="A-" numbers them A-1, A-2. {page} prints it and {pages} does not. Without it a section keeps the prefix of the section before; page-prefix="" takes it away.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="columns">
+        <xs:annotation>
+          <xs:documentation>Sets the section's flow in this many columns, for a layout and a markdown alike. Each column fills like a small page, left to right, and what is left after the last one goes on to the next page. Headers, footers, footnotes and layers keep the full width of the page. Missing or 1 is one column, as without it.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:positiveInteger">
+            <xs:minInclusive value="1"/>
+            <xs:maxInclusive value="12"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+      <xs:attribute name="column-gap" type="TokenScaleOrPt">
+        <xs:annotation>
+          <xs:documentation>The space between two columns, as gap takes it: a space token or a length. Defaults to l. Ignored when columns is missing or 1.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="column-rule" type="BorderValue">
+        <xs:annotation>
+          <xs:documentation>A line in the middle of the gap between two columns, as border takes it: a thickness and a color, such as 0.5pt #ccc. It runs from the top of the columns to the foot of the tallest on the page, only between columns that hold something, and skips an inset that covers its gap. Ignored when columns is missing or 1.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="column-fill" type="ColumnFill">
+        <xs:annotation>
+          <xs:documentation>How the columns of the last page fill. auto, the default, fills them in order as on every other page, so the last can be short or empty; balance levels them as evenly as the content allows. CSS's default is balance. Ignored when columns is missing or 1.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
     </xs:complexType>

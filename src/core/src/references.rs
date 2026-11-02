@@ -214,7 +214,7 @@ mod tests {
     }
 
     fn render(body: &str) -> Vec<RenderPage> {
-        layout_document(&sections(body))
+        layout_document(&sections(body)).unwrap()
     }
 
     /// The texts drawn on `page`, in the order they are drawn, with the links they are in.
@@ -313,7 +313,7 @@ mod tests {
         let sections = parse(xml).unwrap().section_layouts();
         // No page, then viii, which pushes clause 4 to ix, then ix in the room of viii.
         assert_eq!(passes(&sections), 3);
-        let pages = layout_document(&sections);
+        let pages = layout_document(&sections).unwrap();
         assert_eq!(page_of(&pages, "notice"), 8, "clause 4 is on page ix");
         let page_viii = texts(&pages[7]);
         assert!(page_viii.contains(&"on page ix".to_string()), "{page_viii:?}");
@@ -338,7 +338,7 @@ mod tests {
     /// How many times `sections` are laid out, the whole document each time.
     fn passes(sections: &[SectionLayout]) -> usize {
         layout::DOCUMENT_PASSES.with(|passes| passes.set(0));
-        layout_document(sections);
+        layout_document(sections).unwrap();
         layout::DOCUMENT_PASSES.with(|passes| passes.get())
     }
 
@@ -387,7 +387,7 @@ mod tests {
         assert!(flip.contains("<code "), "the fixture's sentence moved");
         let sections = parse(&flip).unwrap().section_layouts();
         assert_eq!(passes(&sections), 3);
-        let pages = layout_document(&sections);
+        let pages = layout_document(&sections).unwrap();
         assert_eq!(page_of(&pages, "notice"), 8, "clause 4 is on page ix");
         assert_eq!(texts(&pages[7])[..4], ["The notice period is set out ", "on page", "ix", "."]);
         // "ix" and the room of the two characters "viii" has more, in Courier at 10pt.
@@ -415,7 +415,7 @@ next</code>
                 }
             }
         });
-        let pages = layout_document(&sections);
+        let pages = layout_document(&sections).unwrap();
         assert_eq!(page_of(&pages, "end"), 2);
         let link = links_of(&pages[1], "page 3")[0];
         assert_eq!(link.width, text_width("Courier", "page 9999", 11.0), "the room of the widest words");
@@ -428,7 +428,7 @@ next</code>
             {"type":"text","attrs":{},"nodes":["See ",{"type":"span","attrs":{"bookmark-ref":"a"},"nodes":["page {bookmark-page}"]}]},
             {"type":"bookmark","attrs":{"id":"a","label":"A"}},
             {"type":"text","attrs":{"paginate":"break-before"},"nodes":["A"]}]}]}]}"#;
-        let pages = layout_document(&crate::parse::parse_tree(tree).unwrap().section_layouts());
+        let pages = layout_document(&crate::parse::parse_tree(tree).unwrap().section_layouts()).unwrap();
         assert_eq!(texts(&pages[0]), ["See", "page 2"]);
 
         let tree = tree.replace(r#""bookmark-ref":"a""#, r#""bookmark-ref":"b""#);

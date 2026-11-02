@@ -294,6 +294,8 @@ const CONSTANTS = [
       doc: 'The values of the `type` attribute of a section.' },
     { name: 'FootnoteCounter', area: 'kit', file: 'footnote_counter', values: () => schema.simpleTypeValues('FootnoteCounter'),
       doc: 'The values of the `footnote-counter` attribute of a document or a section.' },
+    { name: 'ColumnFill', area: 'kit', file: 'column_fill', values: () => schema.simpleTypeValues('ColumnFill'),
+      doc: 'The values of the `column-fill` attribute of a section: how the columns of its last page fill.' },
     { name: 'Cipher', area: 'kit', file: 'cipher', values: () => schema.simpleTypeValues('Cipher'),
       doc: 'The values of the `encrypt` attribute of the output: the cipher the PDF is encrypted with.' },
     { name: 'Permission', area: 'kit', file: 'permission', values: () => schema.simpleTypeValues('Permission'),

@@ -446,7 +446,7 @@ fn render(xml: &str) -> Result<Vec<u8>, String> {
         for section in &mut layouts {
             crate::layout::prefill_section_image_sizes(section, &meta);
         }
-        let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts);
+        let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts)?;
         let mut fonts = crate::pdf::FontRegistry::new();
         fonts.register("custom", crate::pdf::ATTRIBUTION_FONT.to_vec());
         let mut profiles = crate::pdfx::ProfileRegistry::new();
@@ -625,6 +625,14 @@ fn subjects() -> Vec<Subject> {
             lpdf("", &format!("<document><section {a}><layout><text>One</text><region pin=\"bottom\"><text>Page {{page}} of {{pages}}</text></region></layout></section></document>"))
         })
         .only(&["page-start", "page-format", "page-prefix"]),
+        // A flow of several pages, for the columns it is set in.
+        Subject::new("section", |a, _| lpdf("", &format!("<document><section {a}><layout>{}</layout></section></document>", pages())))
+            .only(&["columns"]),
+        // The same flow in three columns: a first page of three full ones, which the rule goes between, and a last page
+        // that holds a part of one, which balance levels.
+        Subject::new("section", |a, _| lpdf("", &format!("<document><section {a}><layout>{}</layout></section></document>", pages())))
+            .only(&["column-gap", "column-rule", "column-fill"])
+            .base(&[("columns", "3")]),
         Subject::new("layout", |a, c| lpdf("", &format!("<document><section><layout {a}>{c}</layout></section></document>"))).content(ONE),
         // A markdown: its own attributes, over headings and paragraphs of several lines.
         Subject::new("markdown", |a, c| {
@@ -854,6 +862,12 @@ fn subjects() -> Vec<Subject> {
             lpdf("", &format!("<document><section><layout><region {a}><text>Header</text></region>{}</layout></section></document>", pages()))
         })
         .base(&[("pin", "top")]),
+        // An inset in a section of eight columns, so that any column and span tried fit, which the flow goes around.
+        Subject::new("region", |a, _| {
+            lpdf("", &format!("<document><section columns=\"8\"><layout><region {a}><text>Inset</text></region>{}</layout></section></document>", pages()))
+        })
+        .only(&["col", "colspan", "top", "height"])
+        .base(&[("pin", "inset"), ("top", "20pt"), ("height", "60pt")]),
         Subject::new("layer", |a, _| {
             lpdf(
                 "",

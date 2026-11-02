@@ -72,7 +72,7 @@ pub(crate) fn check(part: Option<PdfUa>, meta: &Meta, sections: &[SectionLayout]
     }
     let mut last_level = 0;
     for section in sections {
-        for node in &section.children {
+        for node in section.children.iter().chain(section.insets.iter().map(|inset| &inset.node)) {
             check_node(part, node, &mut last_level)?;
         }
     }

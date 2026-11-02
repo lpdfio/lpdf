@@ -308,7 +308,7 @@ impl LpdfEngine {
 
         memory::check()?;
         let pages: Vec<render::RenderPage> =
-            layout::layout_document(&lp);
+            layout::layout_document(&lp)?;
         memory::check()?;
 
         let status = license::check(&self.license_key, self.now_unix);
@@ -371,7 +371,7 @@ impl LpdfEngine {
 
         memory::check()?;
         let pages: Vec<render::RenderPage> =
-            layout::layout_document(&lp);
+            layout::layout_document(&lp)?;
         memory::check()?;
 
         let status = license::check(&self.license_key, self.now_unix);
@@ -443,7 +443,7 @@ impl LpdfEngine {
         pdfua::check(doc.output.pdfua, &doc.meta, &lp)?;
         references::check(&lp)?;
         let pages: Vec<render::RenderPage> =
-            layout::layout_document(&lp);
+            layout::layout_document(&lp)?;
         let status = license::check(license_key, now_unix);
         let bytes = pdf::render_pdf(
             &pages,
@@ -464,7 +464,7 @@ impl LpdfEngine {
         let mut doc = parse::parse(xml)?;
         let lp = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
-            layout::layout_document(&lp);
+            layout::layout_document(&lp)?;
         // Render as unlicensed (with the attribution line) to match what the adapters
         // produce when no valid license key is supplied — keeps snapshot hashes
         // consistent between the Rust tests and the adapter test suites.
@@ -485,7 +485,7 @@ impl LpdfEngine {
         for page in &mut lp {
             layout::prefill_section_image_sizes(page, &meta);
         }
-        let pages: Vec<render::RenderPage> = layout::layout_document(&lp);
+        let pages: Vec<render::RenderPage> = layout::layout_document(&lp)?;
         pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &registry, &doc.meta, &doc.gradients, None, false, &doc.output, &[], None)
     }
 
@@ -719,7 +719,7 @@ pub fn bench_parse_tree(json: &str) -> Result<BenchDoc, String> {
 pub fn bench_render_doc(mut doc: BenchDoc) -> Result<Vec<u8>, String> {
     let lp = doc.0.section_layouts();
     let pages: Vec<render::RenderPage> =
-        layout::layout_document(&lp);
+        layout::layout_document(&lp)?;
     // Unlicensed, so benchmarks include the cost of the attribution line.
     pdf::render_pdf(
         &pages, &doc.0.fonts,
@@ -730,7 +730,8 @@ pub fn bench_render_doc(mut doc: BenchDoc) -> Result<Vec<u8>, String> {
 
 /// Laid-out pages, with the document whose fonts, metadata and gradients the PDF write reads.
 pub struct BenchPages {
-    pages: Vec<render::RenderPage>,
+    /// The pages, or the error the layout found, which the PDF write returns.
+    pages: Result<Vec<render::RenderPage>, String>,
     doc:   parse::Document,
 }
 
@@ -738,8 +739,7 @@ pub struct BenchPages {
 /// `bench_render_doc` measures in two. Used by the instruction-count benchmarks of `benches/counts`.
 pub fn bench_layout_doc(mut doc: BenchDoc) -> BenchPages {
     let lp = doc.0.section_layouts();
-    let pages: Vec<render::RenderPage> =
-        layout::layout_document(&lp);
+    let pages = layout::layout_document(&lp);
     BenchPages { pages, doc: doc.0 }
 }
 
@@ -747,7 +747,7 @@ pub fn bench_layout_doc(mut doc: BenchDoc) -> BenchPages {
 pub fn bench_write_pdf(pages: BenchPages) -> Result<Vec<u8>, String> {
     // Unlicensed, so benchmarks include the cost of the attribution line.
     pdf::render_pdf(
-        &pages.pages, &pages.doc.fonts,
+        &pages.pages?, &pages.doc.fonts,
         &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
         &pages.doc.meta, &pages.doc.gradients, None, false, &pages.doc.output, &[], None,
     )
@@ -784,8 +784,7 @@ pub fn bench_font_srcs(xml: &str) -> Result<Vec<(String, String)>, String> {
 pub fn bench_layout_doc_with_fonts(mut doc: BenchDoc, fonts: &BenchFonts) -> BenchPages {
     let lp = doc.0.section_layouts();
     layout::set_font_widths(fonts.widths.clone());
-    let pages: Vec<render::RenderPage> =
-        layout::layout_document(&lp);
+    let pages = layout::layout_document(&lp);
     BenchPages { pages, doc: doc.0 }
 }
 
@@ -794,7 +793,7 @@ pub fn bench_layout_doc_with_fonts(mut doc: BenchDoc, fonts: &BenchFonts) -> Ben
 pub fn bench_write_pdf_with_fonts(pages: BenchPages, fonts: &BenchFonts) -> Result<Vec<u8>, String> {
     // Unlicensed, so benchmarks include the cost of the attribution line.
     pdf::render_pdf(
-        &pages.pages, &pages.doc.fonts,
+        &pages.pages?, &pages.doc.fonts,
         &fonts.registry, &pdf::ImageRegistry::new(),
         &pages.doc.meta, &pages.doc.gradients, None, false, &pages.doc.output, &[], None,
     )
@@ -825,7 +824,7 @@ pub fn bench_render_doc_with_images(mut doc: BenchDoc, images: &[(&str, &[u8])])
         layout::prefill_section_image_sizes(page, &meta);
     }
     let pages: Vec<render::RenderPage> =
-        layout::layout_document(&lp);
+        layout::layout_document(&lp)?;
     // Unlicensed, so benchmarks include the cost of the attribution line.
     pdf::render_pdf(
         &pages, &doc.0.fonts,
@@ -846,7 +845,7 @@ pub fn bench_render_xml(xml: &str) -> Result<Vec<u8>, String> {
     let mut doc = parse::parse(xml)?;
     let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
-        layout::layout_document(&lp);
+        layout::layout_document(&lp)?;
     // Unlicensed, so benchmarks include the cost of the attribution line.
     pdf::render_pdf(
         &pages, &doc.fonts,
@@ -864,7 +863,7 @@ pub fn bench_render_xml_with_font(
     let mut doc = parse::parse(xml)?;
     let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
-        layout::layout_document(&lp);
+        layout::layout_document(&lp)?;
     let mut fonts = pdf::FontRegistry::new();
     fonts.register(font_name, font_bytes.to_vec());
     // Unlicensed, so benchmarks include the cost of the attribution line.
@@ -884,7 +883,7 @@ pub fn bench_render_xml_with_image(
     let mut doc = parse::parse(xml)?;
     let lp = doc.section_layouts();
     let pages: Vec<render::RenderPage> =
-        layout::layout_document(&lp);
+        layout::layout_document(&lp)?;
     let mut images = pdf::ImageRegistry::new();
     images.load(image_name, image_bytes.to_vec());
     // Unlicensed, so benchmarks include the cost of the attribution line.
@@ -1033,7 +1032,7 @@ mod tests {
         let mut doc = parse::parse(&minimal("")).unwrap();
         let lp = doc.section_layouts();
         let pages: Vec<render::RenderPage> =
-            layout::layout_document(&lp);
+            layout::layout_document(&lp).unwrap();
         let pdf = pdf::render_pdf(
             &pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(),
             &doc.meta, &doc.gradients, None, true, &doc.output, &[], None,

@@ -296,6 +296,10 @@ const LAYOUT_REGION: Attributes = &[
     ("page", Kind::Text),
     ("w", Kind::Text),
     ("debug", Kind::Boolean),
+    ("col", Kind::Integer { min: Some(1), max: Some(12) }),
+    ("colspan", Kind::Integer { min: Some(1), max: Some(12) }),
+    ("top", Kind::Text),
+    ("height", Kind::Text),
 ];
 
 const MARKDOWN: Attributes = &[
@@ -529,6 +533,10 @@ const SECTION: Attributes = &[
     ("page-start", Kind::Integer { min: Some(1), max: Some(2147483647) }),
     ("page-format", Kind::Text),
     ("page-prefix", Kind::Text),
+    ("columns", Kind::Integer { min: Some(1), max: Some(12) }),
+    ("column-gap", Kind::Text),
+    ("column-rule", Kind::Text),
+    ("column-fill", Kind::Text),
 ];
 
 const LPDF: Attributes = &[
