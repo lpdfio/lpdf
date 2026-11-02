@@ -311,6 +311,31 @@ fn a_link_that_toc_repeats_is_a_link_in_each_entry() {
     assert!(pdf.contains("/Contents (Intro)") && pdf.contains("/Contents (Data)"));
 }
 
+/// A tagged report whose text refers to its data and to a table that only references reach (`ref-only`).
+fn references() -> String {
+    r##"<lpdf version="1"><assets><font name="body" src="body.ttf"/></assets>
+    <document font="body"><meta title="Report" lang="en"/><output pdfua="1"/>
+    <section><layout>
+        <text role="h1">Intro</text>
+        <text>The data are in <span bookmark-ref="data">{bookmark-label} on page {bookmark-page}</span>, and the prices in <span bookmark-ref="prices">{bookmark-label}</span>.</text>
+    </layout></section>
+    <section><bookmark id="data" label="Data"/><layout>
+        <text role="h1">Data</text>
+        <bookmark id="prices" label="Table 3" ref-only="true"/>
+        <text>Prices</text>
+    </layout></section>
+    </document></lpdf>"##.to_string()
+}
+
+#[test]
+fn each_reference_is_a_link_of_the_tagged_file() {
+    let pdf = text(&render(&references()).expect("renders"));
+    // The render is unlicensed: the attribution line has a link of its own on each page.
+    let pages = count(&pdf, "/Type /Page\n");
+    assert_eq!(count(&pdf, "/S /Link\n"), 2 + pages);
+    assert!(pdf.contains("/Title (Data)") && !pdf.contains("/Title (Table 3)"));
+}
+
 /// The fixture `showcase-pdfua-toc.xml`: twelve chapters of two sections, a page each, whose table of contents runs
 /// onto a second page, with a layer with alt on each page of it.
 fn toc_fixture() -> String {
@@ -382,6 +407,7 @@ fn writes_pdfua_samples_for_the_external_check() {
     std::fs::write(dir.join("pdfua-1.pdf"), render_fixture()).expect("a sample");
     std::fs::write(dir.join("pdfua-1-toc-links.pdf"), render(&toc_of_links()).expect("renders")).expect("a sample");
     std::fs::write(dir.join("pdfua-1-toc.pdf"), render_toc_fixture()).expect("a sample");
+    std::fs::write(dir.join("pdfua-1-references.pdf"), render(&references()).expect("renders")).expect("a sample");
     let xml = String::from_utf8(read(&test_dir().join("fixtures/showcase-pdfua.xml"))).expect("UTF-8")
         .replace(r#"<output pdfua="1" />"#, r#"<output pdfa="2u" pdfua="1" />"#);
     std::fs::write(dir.join("pdfua-1-pdfa-2u.pdf"), render(&xml).expect("renders")).expect("a sample");

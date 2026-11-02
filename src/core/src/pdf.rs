@@ -2518,8 +2518,9 @@ struct GradientIds {
 /// keeps the ids it had before bookmarks existed.
 struct OutlineIds {
     dests_id:   Ref,
-    outline_id: Ref,
-    /// One outline item per anchor, in the order of the anchors.
+    /// `None` when every bookmark is `ref-only`: the file has named destinations and no outline.
+    outline_id: Option<Ref>,
+    /// One outline item per anchor the outline lists, in the order of the anchors.
     item_ids:   Vec<Ref>,
 }
 
@@ -2941,11 +2942,12 @@ fn allocate_ids(
         .map(|page| (0..page.groups.len()).map(|_| alloc.next()).collect())
         .collect();
 
-    let anchor_count = placed_anchors(pages).len();
-    let outline = (anchor_count > 0).then(|| OutlineIds {
+    let anchors = placed_anchors(pages);
+    let listed = anchors.iter().filter(|placed| !placed.anchor.ref_only).count();
+    let outline = (!anchors.is_empty()).then(|| OutlineIds {
         dests_id:   alloc.next(),
-        outline_id: alloc.next(),
-        item_ids:   (0..anchor_count).map(|_| alloc.next()).collect(),
+        outline_id: (listed > 0).then(|| alloc.next()),
+        item_ids:   (0..listed).map(|_| alloc.next()).collect(),
     });
 
     AllocatedIds {
@@ -3047,9 +3049,11 @@ fn assemble_pdf(
         cat.pages(pages_id);
         if let Some(outline) = &outline {
             cat.destinations(outline.dests_id);
-            cat.outlines(outline.outline_id);
-            // Open with the outline panel showing, as the bookmarks are there to be used.
-            cat.page_mode(PageMode::UseOutlines);
+            if let Some(outline_id) = outline.outline_id {
+                cat.outlines(outline_id);
+                // Open with the outline panel showing, as the bookmarks are there to be used.
+                cat.page_mode(PageMode::UseOutlines);
+            }
         }
         if let Some(xmp_id) = xmp_id {
             cat.metadata(xmp_id);
@@ -4468,8 +4472,9 @@ fn drop_dangling_links(rendered_pages: &mut [RenderedPage], anchors: &[PlacedAnc
     }
 }
 
-/// Write the `/Dests` dictionary, a named destination per anchor, and the outline. The outline nests the
-/// anchors by level: an anchor's parent is the closest anchor before it with a lower level.
+/// Write the `/Dests` dictionary, a named destination per anchor, and the outline of the anchors that are not
+/// `ref-only`. The outline nests them by level: an anchor's parent is the closest anchor before it with a lower
+/// level.
 fn write_outline(pdf: &mut Pdf, ids: &OutlineIds, anchors: &[PlacedAnchor], page_ids: &[Ref], pages: &[RenderPage]) {
     {
         let mut dests = pdf.destinations(ids.dests_id);
@@ -4480,6 +4485,8 @@ fn write_outline(pdf: &mut Pdf, ids: &OutlineIds, anchors: &[PlacedAnchor], page
                 .xyz(0.0, top, None);
         }
     }
+    let Some(outline_id) = ids.outline_id else { return };
+    let anchors: Vec<&PlacedAnchor> = anchors.iter().filter(|placed| !placed.anchor.ref_only).collect();
 
     let n = anchors.len();
     let mut parents: Vec<Option<usize>> = vec![None; n];
@@ -4518,7 +4525,7 @@ fn write_outline(pdf: &mut Pdf, ids: &OutlineIds, anchors: &[PlacedAnchor], page
     }
 
     {
-        let mut root = pdf.outline(ids.outline_id);
+        let mut root = pdf.outline(outline_id);
         if let (Some(&first), Some(&last)) = (top_level.first(), top_level.last()) {
             root.first(ids.item_ids[first]).last(ids.item_ids[last]);
         }
@@ -4527,7 +4534,7 @@ fn write_outline(pdf: &mut Pdf, ids: &OutlineIds, anchors: &[PlacedAnchor], page
     for (i, placed) in anchors.iter().enumerate() {
         let mut item = pdf.outline_item(ids.item_ids[i]);
         item.title(TextStr(&placed.anchor.label));
-        item.parent(parents[i].map_or(ids.outline_id, |p| ids.item_ids[p]));
+        item.parent(parents[i].map_or(outline_id, |p| ids.item_ids[p]));
         if let Some(p) = prev[i] { item.prev(ids.item_ids[p]); }
         if let Some(nx) = next[i] { item.next(ids.item_ids[nx]); }
         if let (Some(&first), Some(&last)) = (children[i].first(), children[i].last()) {
@@ -4929,6 +4936,29 @@ mod tests {
     fn document_without_bookmarks_has_no_outline() {
         let pdf = render("<text>Plain</text>");
         assert!(!pdf.contains("/Outlines") && !pdf.contains("/Dests") && !pdf.contains("/PageMode"));
+    }
+
+    #[test]
+    fn a_ref_only_bookmark_is_a_destination_that_the_outline_leaves_out() {
+        let pdf = render(r##"<text>See <span href="#prices">the prices</span></text>
+            <bookmark label="Methods"/><text>Methods</text>
+            <bookmark id="prices" label="Table 3" ref-only="true"/><text>Prices</text>"##);
+        let (_, root) = object_with(&pdf, "/Type /Outlines");
+        assert!(root.contains("/Count 1"), "{root}");
+        assert!(!pdf.contains("/Title (Table 3)"));
+        let (_, dests) = object_with(&pdf, "/methods [");
+        assert!(dests.contains("/prices ["), "{dests}");
+        let (_, link) = object_with(&pdf, "/D /prices");
+        assert!(link.contains("/S /GoTo"), "{link}");
+    }
+
+    #[test]
+    fn ref_only_bookmarks_alone_make_destinations_and_no_outline() {
+        let pdf = render(r##"<text>See <span href="#prices">the prices</span></text>
+            <bookmark id="prices" label="Table 3" ref-only="true"/><text>Prices</text>"##);
+        let (_, catalog) = object_with(&pdf, "/Type /Catalog");
+        assert!(catalog.contains("/Dests") && !catalog.contains("/Outlines") && !catalog.contains("/PageMode"), "{catalog}");
+        assert!(pdf.contains("/D /prices"));
     }
 
     // ── Layer opacity ─────────────────────────────────────────────────────────

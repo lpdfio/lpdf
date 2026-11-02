@@ -22,6 +22,7 @@ mod pdf;
 mod pdfa;
 mod pdfua;
 mod pdfx;
+mod references;
 mod tagging;
 mod render;
 mod rewrite;
@@ -271,6 +272,7 @@ impl LpdfEngine {
         let meta = pdf::build_image_meta(&self.images);
         let mut lp = doc.section_layouts();
         pdfua::check(doc.output.pdfua, &doc.meta, &lp)?;
+        references::check(&lp)?;
         for page in &mut lp {
             layout::prefill_section_image_sizes(page, &meta);
         }
@@ -330,6 +332,7 @@ impl LpdfEngine {
         let meta = pdf::build_image_meta(&self.images);
         let mut lp = doc.section_layouts();
         pdfua::check(doc.output.pdfua, &doc.meta, &lp)?;
+        references::check(&lp)?;
         for page in &mut lp {
             layout::prefill_section_image_sizes(page, &meta);
         }
@@ -397,6 +400,7 @@ impl LpdfEngine {
         }
         let lp = doc.section_layouts();
         pdfua::check(doc.output.pdfua, &doc.meta, &lp)?;
+        references::check(&lp)?;
         let pages: Vec<render::RenderPage> =
             layout::layout_document(&lp);
         let status = license::check(license_key, now_unix);

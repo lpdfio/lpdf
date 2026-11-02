@@ -1,4 +1,4 @@
-use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Capture, CaptureMode, Direction, FieldKind, Footnote, HeightMode, Justify, Node, NodeKind, Ocg, PageScope, Role, RowKeep, SectionLayout, Paginate, TextAlign, TextRun};
+use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Capture, CaptureMode, Direction, FieldKind, Footnote, HeightMode, Justify, Node, NodeKind, Ocg, PageScope, Role, RowKeep, SectionLayout, Paginate, Reference, TextAlign, TextRun};
 
 // The path is spelled out because the WASI build includes this file from another crate.
 #[path = "layout/footnotes.rs"]
@@ -18,6 +18,7 @@ use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderCanvasClip, Re
 use crate::tokens::FontWidths;
 use crate::canvas;
 use crate::page_numbers::{self, PageTokens, SectionNumbers};
+use crate::references;
 use crate::toc;
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
@@ -381,10 +382,28 @@ fn finish_pages(page: &SectionLayout, filled: FilledSection, numbers: &SectionNu
     pages
 }
 
-/// Lay out every section in document order. The pages count on from one section to the next, so the sections
+/// Lay out every section in document order. A document with cross-references is laid out until each shows the
+/// page its bookmark is on (`references`).
+pub fn layout_document(sections: &[SectionLayout]) -> Vec<RenderPage> {
+    if references::any(sections) {
+        return references::layout_with_references(sections);
+    }
+    lay_out_document(sections).pages
+}
+
+/// The pages of a document, with the numbers of each section's pages and how many it has.
+pub(crate) struct LaidDocument {
+    pub pages:   Vec<RenderPage>,
+    pub numbers: Vec<SectionNumbers>,
+    pub counts:  Vec<usize>,
+}
+
+/// Lay out every section in document order, once. The pages count on from one section to the next, so the sections
 /// are filled first, and finished once the number of each page is known (`page_numbers`). A table of contents
 /// section is laid out after the others, once their pages are known; see `toc`.
-pub fn layout_document(sections: &[SectionLayout]) -> Vec<RenderPage> {
+pub(crate) fn lay_out_document(sections: &[SectionLayout]) -> LaidDocument {
+    #[cfg(test)]
+    DOCUMENT_PASSES.with(|passes| passes.set(passes.get() + 1));
     LAST_TAG_ID.with(|last| last.set(0));
     let toc = sections.iter().enumerate().find_map(|(i, s)| s.toc.as_ref().map(|options| (i, options)));
     if let Some((toc_index, options)) = toc {
@@ -397,7 +416,7 @@ pub fn layout_document(sections: &[SectionLayout]) -> Vec<RenderPage> {
         .flat_map(|((section, filled), numbers)| finish_section(section, filled, numbers))
         .collect();
     page_numbers::mark_label_ranges(&mut pages, sections, &numbers, &counts);
-    pages
+    LaidDocument { pages, numbers, counts }
 }
 
 /// Whether the header, the footer or a layer of `page` shows `{page}` or `{pages}`.
@@ -835,7 +854,7 @@ fn fill_sinks(node: &mut Node, here: &PageCaptures, before: &HashMap<String, Str
         let words = picked.or_else(|| before.get(&sink.key)).unwrap_or(&sink.fallback).clone();
         node.text_runs = vec![TextRun {
             text: words, leading_space: false, font: None, color: None, href: None,
-            underline: false, strike: false, bold: false, background: None, footnote: None,
+            underline: false, strike: false, bold: false, background: None, footnote: None, reference: None,
         }];
     }
     for child in node.children.iter_mut() { fill_sinks(child, here, before); }
@@ -1150,6 +1169,7 @@ fn debug_note(text: &str) -> Node {
             bold: false,
             background: None,
             footnote: None,
+            reference: None,
         }],
         font: "Helvetica".to_string(),
         font_size: 7.0,
@@ -2360,6 +2380,10 @@ struct SplitAtom {
     is_span:        bool,
     /// The note, on the atom that stands for the anchor of a footnote. Its `text` is the number it shows.
     footnote:       Option<Box<Footnote>>,
+    /// The reference of its run, which the run is rebuilt with.
+    reference:      Option<Box<Reference>>,
+    /// The room it keeps after its text (`room_after`); 0 for a piece of a run that was broken.
+    room:           f32,
     /// Whether it goes on from the atom before it, a piece of a word or a styled run that was broken to fit.
     join:           Join,
 }
@@ -2450,13 +2474,14 @@ fn break_wide_split_atoms(atoms: Vec<SplitAtom>, parent: Metrics, font_size: f32
     let mut out = Vec::with_capacity(atoms.len());
     for atom in atoms {
         let metrics = atom.metrics(parent);
-        if atom.footnote.is_some() || metrics.text_width(&atom.text, font_size) <= wrap_w + 0.01 {
+        if atom.footnote.is_some() || metrics.text_width(&atom.text, font_size) + atom.room <= wrap_w + 0.01 {
             out.push(atom);
             continue;
         }
         for (i, (range, space)) in pieces_of_wide(metrics, &atom.text, font_size, wrap_w).into_iter().enumerate() {
             let mut piece = atom.clone();
             piece.text = atom.text[range].to_string();
+            piece.room = 0.0;
             if i > 0 {
                 piece.leading_space = space;
                 piece.join = if space { Join::Space } else { Join::Chars };
@@ -2494,6 +2519,8 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
                 leading_space: pending_leading || run_leading,
                 is_span: true,
                 footnote: Some(note.clone()),
+                reference: None,
+                room: 0.0,
                 join: Join::No,
             });
             pending_leading = false;
@@ -2510,6 +2537,8 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
                     leading_space: pending_leading || run_leading,
                     is_span: true,
                     footnote: None,
+                    reference: run.reference.clone(),
+                    room: room_after(run, Metrics::of(run.font.as_deref().unwrap_or(&node.font)), font_size),
                     join: Join::No,
                 });
                 pending_leading = false;
@@ -2527,6 +2556,8 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
                     leading_space: if j == 0 { pending_leading || run_leading } else { true },
                     is_span: false,
                     footnote: None,
+                    reference: None,
+                    room: 0.0,
                     join: Join::No,
                 });
                 pending_leading = false;
@@ -2547,7 +2578,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
     let mut atoms: std::collections::VecDeque<SplitAtom> = atoms.into();
     while let Some(atom) = atoms.pop_front() {
         let metrics = atom.metrics(parent_metrics);
-        let aw = word_width(metrics, &atom.text, font_size, atom.footnote.is_some());
+        let aw = word_width(metrics, &atom.text, font_size, atom.footnote.is_some()) + atom.room;
         let gap = if cur_line.is_empty() {
             0.0
         } else {
@@ -2565,6 +2596,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
             for (i, word) in atom.text.split(' ').enumerate().collect::<Vec<_>>().into_iter().rev() {
                 let mut piece = atom.clone();
                 piece.text = word.to_string();
+                piece.room = 0.0;
                 if i > 0 {
                     piece.leading_space = true;
                     piece.join = Join::Space;
@@ -2587,7 +2619,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
             lines.push(std::mem::take(&mut cur_line));
             cur_w = aw;
             for prev in carried {
-                cur_w += word_width(prev.metrics(parent_metrics), &prev.text, font_size, prev.footnote.is_some());
+                cur_w += word_width(prev.metrics(parent_metrics), &prev.text, font_size, prev.footnote.is_some()) + prev.room;
                 cur_line.push(prev);
             }
             // Do NOT strip leading_space here. The gap calculation above already
@@ -2632,6 +2664,7 @@ fn atoms_to_runs(atoms: &[SplitAtom]) -> Vec<TextRun> {
                 font: None, color: None, href: None,
                 underline: false, strike: false, bold: false, background: None,
                 footnote: Some(note.clone()),
+                reference: None,
             });
         } else if atom.is_span {
             runs.push(TextRun {
@@ -2645,6 +2678,7 @@ fn atoms_to_runs(atoms: &[SplitAtom]) -> Vec<TextRun> {
                 bold: false,
                 background: atom.background.clone(),
                 footnote: None,
+                reference: atom.reference.clone(),
             });
         } else {
             // Try to append to the last plain run.
@@ -2668,6 +2702,7 @@ fn atoms_to_runs(atoms: &[SplitAtom]) -> Vec<TextRun> {
                     bold: false,
                     background: None,
                     footnote: None,
+                    reference: None,
                 });
             }
         }
@@ -2717,6 +2752,8 @@ thread_local! {
     /// The work of the layout, counted for the tests: each node laid out (`layout_node`) and each cut asked
     /// (`child_cut`). A test compares it between documents, where a time would depend on the machine.
     static LAYOUT_WORK: Cell<usize> = const { Cell::new(0) };
+    /// How many times the whole document was laid out (`lay_out_document`), counted for the tests.
+    pub(crate) static DOCUMENT_PASSES: Cell<usize> = const { Cell::new(0) };
 }
 
 /// Count a step of the layout's work, in the tests (`LAYOUT_WORK`).
@@ -2876,9 +2913,10 @@ fn layout_node(
 
 fn anchor(bookmark: &Bookmark, y: f32) -> RenderNode {
     RenderNode::Anchor(RenderAnchor {
-        id:    bookmark.id.clone(),
-        label: bookmark.label.clone(),
-        level: bookmark.level,
+        id:       bookmark.id.clone(),
+        label:    bookmark.label.clone(),
+        level:    bookmark.level,
+        ref_only: bookmark.ref_only,
         y,
     })
 }
@@ -4252,6 +4290,16 @@ pub(crate) fn text_width(font: &str, text: &str, size: f32) -> f32 {
     Metrics::of(font).text_width(text, size)
 }
 
+/// The room a run keeps after its words, set in `metrics` at `size`. A reference keeps room for the widest words it
+/// has shown, so that a layout in which its words move its bookmark back and forth settles (`references`); 0 for
+/// any other run. In a text, a reference broken across lines, being wider than a line, keeps none; in a `<code>`, the
+/// room follows its last character.
+fn room_after(run: &TextRun, metrics: Metrics, size: f32) -> f32 {
+    run.reference.as_ref().map_or(0.0, |reference| {
+        (metrics.text_width(&reference.widest, size) - metrics.text_width(&reference.shown, size)).max(0.0)
+    })
+}
+
 /// Measure the natural (preferred/unconstrained) width of a node.
 ///
 /// For text nodes this is the width of all runs placed on a single line.
@@ -4277,6 +4325,7 @@ fn measure_natural_w(node: &Node) -> f32 {
                     total += metrics.text_width(word, size);
                     first = false;
                 }
+                total += room_after(run, metrics, size);
             }
             total
         }
@@ -4329,7 +4378,7 @@ fn text_min_w(node: &Node) -> f32 {
                    || run.href.is_some() || run.underline || run.strike || run.background.is_some();
         // A styled run stays whole, unless the text fills a line with the first words of one.
         if is_span && !node.flow_runs && node.pre_tab == 0 {
-            widest = widest.max(metrics.text_width(&run.text, size));
+            widest = widest.max(metrics.text_width(&run.text, size) + room_after(run, metrics, size));
         } else {
             for word in run.text.split_whitespace() {
                 widest = widest.max(metrics.text_width(word, size));
@@ -4525,7 +4574,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
             if !run.text.is_empty() {
                 atoms.push(Atom {
                     text: Cow::Borrowed(&run.text), font, color, span: Some(run), sup: false, space_before,
-                    join: Join::No, width: metrics.text_width(&run.text, font_size),
+                    join: Join::No, width: metrics.text_width(&run.text, font_size) + room_after(run, metrics, font_size),
                 });
                 space_before = false;
             }
@@ -4797,10 +4846,16 @@ fn tint_behind(tint: &str, x: f32, y: f32, width: f32, height: f32) -> RenderNod
 struct PreSeg {
     text: String,
     run:  usize,
+    /// The room a reference keeps after its last character, when the stretch ends the reference (`room_after`).
+    room: f32,
 }
 
 /// A character of preformatted text, with the index of the run it came from and its width in the font of that run.
 type PreCell = (char, usize, f32);
+
+/// The cell after the last character of a reference that holds its room (`room_after`): it is as wide as the room,
+/// goes with the word before it, and draws nothing. U+FFFF is not a character, and an XML document cannot hold it.
+const ROOM_CELL: char = '\u{FFFF}';
 
 /// The characters of a preformatted text, a line at a time. A tab becomes the spaces up to the next multiple of
 /// `pre_tab` columns. A newline ends a line, and the one that ends the text starts no line after it.
@@ -4823,6 +4878,10 @@ fn pre_cells(node: &Node) -> Vec<Vec<PreCell>> {
                 }
                 c => line.push((c, ri, metrics.text_width(c.encode_utf8(&mut [0; 4]), node.font_size))),
             }
+        }
+        let room = room_after(run, metrics, node.font_size);
+        if room > 0.0 {
+            lines.last_mut().expect("there is always a line").push((ROOM_CELL, ri, room));
         }
     }
     if lines.last().is_some_and(Vec::is_empty) {
@@ -4889,11 +4948,12 @@ fn pre_lines(node: &Node, wrap_w: f32) -> Vec<Vec<PreSeg>> {
     for cells in pre_cells(node) {
         for visual in wrap_pre_line(&cells, wrap_w) {
             let mut segs: Vec<PreSeg> = Vec::new();
-            for (c, ri, _) in visual {
-                match segs.last_mut() {
-                    Some(seg) if seg.run == ri => seg.text.push(c),
-                    _ => segs.push(PreSeg { text: c.to_string(), run: ri }),
+            for (c, ri, width) in visual {
+                if segs.last().is_none_or(|seg| seg.run != ri) {
+                    segs.push(PreSeg { text: String::new(), run: ri, room: 0.0 });
                 }
+                let seg = segs.last_mut().expect("a stretch for the run");
+                if c == ROOM_CELL { seg.room += width } else { seg.text.push(c) }
             }
             lines.push(segs);
         }
@@ -4914,16 +4974,20 @@ fn pre_runs(node: &Node, lines: &[Vec<PreSeg>]) -> Vec<TextRun> {
     let mut runs: Vec<TextRun> = Vec::new();
     for (li, line) in lines.iter().enumerate() {
         for seg in line {
-            runs.push(TextRun { text: seg.text.clone(), ..node.text_runs[seg.run].clone() });
+            // Only the stretch that ends a reference keeps its room, which its run gives it again.
+            let run = &node.text_runs[seg.run];
+            let reference = if seg.room > 0.0 { run.reference.clone() } else { None };
+            runs.push(TextRun { text: seg.text.clone(), reference, ..run.clone() });
         }
         if li + 1 == lines.len() {
             continue;
         }
-        match runs.last_mut().filter(|_| !line.is_empty()) {
+        // A newline after a reference's room goes in a run of its own, so the room stays on this line.
+        match runs.last_mut().filter(|last| !line.is_empty() && last.reference.is_none()) {
             Some(last) => last.text.push('\n'),
             None => runs.push(TextRun {
                 text: "\n".to_string(), leading_space: false, font: None, color: None, href: None,
-                underline: false, strike: false, bold: false, background: None, footnote: None,
+                underline: false, strike: false, bold: false, background: None, footnote: None, reference: None,
             }),
         }
     }
@@ -4950,10 +5014,10 @@ fn layout_pre_text(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f3
             let run   = &node.text_runs[seg.run];
             let font  = run.font.as_deref().unwrap_or(node.font.as_str());
             let color = run.color.clone().unwrap_or_else(|| parent_color.clone());
-            let width = metrics[seg.run].text_width(&seg.text, font_size);
+            let width = metrics[seg.run].text_width(&seg.text, font_size) + seg.room;
             let marked = run.href.is_some() || run.underline || run.strike || run.background.is_some();
             // Spaces alone leave nothing to draw, unless something is drawn under or over them.
-            if marked || seg.text.chars().any(|c| c != ' ') {
+            if !seg.text.is_empty() && (marked || seg.text.chars().any(|c| c != ' ')) {
                 let mut parts = Vec::new();
                 if let Some(tint) = &run.background {
                     parts.push(tint_behind(tint, cur_x, line_y, width, line_height));
@@ -5105,7 +5169,7 @@ fn text_natural_w(node: &Node) -> f32 {
         } else if is_span {
             if !run.text.is_empty() {
                 if pending_space { total += space_w; pending_space = false; }
-                total += metrics.text_width(&run.text, font_size);
+                total += metrics.text_width(&run.text, font_size) + room_after(run, metrics, font_size);
             }
         } else {
             for (j, word) in run.text.split_whitespace().enumerate() {

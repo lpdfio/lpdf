@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <document size="300pt 190pt" font="Courier">
+    <meta title="lpdf Showcase — A Reference That Flips" subject="A cross-reference whose number moves its own target, settled by the room it keeps" />
+
+    <!-- A reference whose words move its target. In Courier every character is 6pt wide at 10pt, so the 240pt
+         texts hold 40 characters, and each line is 15pt high in a flow 150pt high.
+         Page viii starts with "The notice period is set out on page ix.", 40 characters: one line. With
+         "viii" in it, it is 42 and wraps, which pushes clause 4, the last line of page viii, onto page ix. With
+         "ix" it fits again, and clause 4 goes back to viii. So the reference keeps room for "on page viii", the
+         widest words it has shown: it stays two lines, clause 4 stays on ix, and the sentence says ix.
+         Expected: page ix holds "4. Notice. Either party may end it.", and the sentence on page viii says
+         "on page ix", with a gap of two characters after it before the full stop. -->
+    <section page-format="lower-roman">
+      <layout margin="20pt">
+        <text width="240pt" font-size="10" line-height="1.5">The front matter starts here.</text>
+        <text width="240pt" font-size="10" line-height="1.5" paginate="break-before">Front matter, page ii.</text>
+        <text width="240pt" font-size="10" line-height="1.5" paginate="break-before">Front matter, page iii.</text>
+        <text width="240pt" font-size="10" line-height="1.5" paginate="break-before">Front matter, page iv.</text>
+        <text width="240pt" font-size="10" line-height="1.5" paginate="break-before">Front matter, page v.</text>
+        <text width="240pt" font-size="10" line-height="1.5" paginate="break-before">Front matter, page vi.</text>
+        <text width="240pt" font-size="10" line-height="1.5" paginate="break-before">Front matter, page vii.</text>
+        <text width="240pt" font-size="10" line-height="1.5" paginate="break-before">The notice period is set out <span bookmark-ref="notice">on page {bookmark-page}</span>.</text>
+        <!-- Eight lines, so that clause 4 is the last line of page viii when the sentence above is one line. -->
+        <column height="120pt" />
+        <bookmark id="notice" label="Clause 4"/>
+        <text width="240pt" font-size="10" line-height="1.5">4. Notice. Either party may end it.</text>
+      </layout>
+      <layer>
+        <text-at x="20pt" y="174pt" font-size="8" color="#737373">Page {page}</text-at>
+      </layer>
+    </section>
+  </document>
+</lpdf>
