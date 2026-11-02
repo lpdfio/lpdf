@@ -55,8 +55,9 @@ pub enum RenderNode {
 }
 
 /// What a drawn node is to a reader of a tagged PDF: the structure element it is drawn in, or decoration. Only the
-/// layout of a document with `<output pdfua>` sets one (`layout::tag_of`); `pdf.rs` writes them as the structure tree
-/// and the marked content of the pages. Boxed where it is held, so a document that is not tagged pays 8 bytes a node.
+/// layout of a tagged document, with `<output pdfua>` or a `pdfa` of level a, sets one (`layout::tag_of`); `pdf.rs`
+/// writes them as the structure tree and the marked content of the pages. Boxed where it is held, so a document that
+/// is not tagged pays 8 bytes a node.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Tag {
     /// The element. The parts of a node that is split across lines or pages share it, so they stay one element;

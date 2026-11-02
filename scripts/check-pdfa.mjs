@@ -2,12 +2,14 @@
 // shares no code with ours, and checks their structure with qpdf:
 //
 //  - veraPDF reads the standards each file declares in its XMP packet and validates the file against each one's
-//    rules. For PDF/A: pdfa-2b.pdf must declare PDF/A-2b, and pdfa-2u.pdf and the three pages in a font of each kind
-//    the fixtures lack (CFF, CFF2, variable TrueType) PDF/A-2u, and so must pdfa-2u-ocg.pdf, the fixture with content
-//    in optional content groups. pdfa-3b.pdf and pdfa-3u.pdf, the two fixtures at the levels of part 3, must declare
-//    PDF/A-3b and PDF/A-3u, and so must pdfa-3b-facturx.pdf, a Factur-X invoice that carries its XML and six other
-//    files, PDF/A-3b. For PDF/UA: pdfua-1.pdf must declare PDF/UA-1, and pdfua-1-pdfa-2u.pdf both PDF/A-2u
-//    and PDF/UA-1, and pdfua-1-toc-links.pdf, a table of contents of the links $toc repeats, pdfua-1-toc.pdf, the
+//    rules. For PDF/A: pdfa-2b.pdf must declare PDF/A-2b, pdfa-2a.pdf, the tagged fixture, PDF/A-2a, and pdfa-2u.pdf
+//    and the three pages in a font of each kind the fixtures lack (CFF, CFF2, variable TrueType) PDF/A-2u, and so must
+//    pdfa-2u-ocg.pdf, the fixture with content in optional content groups. pdfa-3a.pdf, pdfa-3b.pdf and pdfa-3u.pdf,
+//    the three fixtures at the levels of part 3, must declare PDF/A-3a, PDF/A-3b and PDF/A-3u, and
+//    pdfa-3b-facturx.pdf, a Factur-X invoice that carries its XML and six other files, PDF/A-3b. pdfa-2a-pdfua-1.pdf
+//    and pdfa-3a-pdfua-1.pdf, the PDF/UA fixture at level a, must declare PDF/A-2a or PDF/A-3a and PDF/UA-1. For
+//    PDF/UA: pdfua-1.pdf must declare PDF/UA-1, and pdfua-1-pdfa-2u.pdf both PDF/A-2u and PDF/UA-1, and
+//    pdfua-1-toc-links.pdf, a table of contents of the links $toc repeats, pdfua-1-toc.pdf, the
 //    fixture with a table of contents on two pages, pdfua-1-ocg.pdf, the fixture with content in optional content
 //    groups, and pdfua-1-references.pdf, a report whose text refers to its pages, PDF/UA-1. None may break a rule;
 //  - qpdf --check finds no syntax or stream error.
@@ -28,15 +30,19 @@ const [folder, standard = 'pdfa'] = process.argv.slice(2);
 const SAMPLE_SETS = {
     // writes_pdfa_samples_for_the_external_check
     pdfa: [
+        { file: 'pdfa-2a.pdf', profiles: ['PDF/A-2a validation profile'] },
         { file: 'pdfa-2b.pdf', profiles: ['PDF/A-2b validation profile'] },
         { file: 'pdfa-2u.pdf', profiles: ['PDF/A-2u validation profile'] },
         { file: 'pdfa-2u-cff.pdf', profiles: ['PDF/A-2u validation profile'] },
         { file: 'pdfa-2u-cff2.pdf', profiles: ['PDF/A-2u validation profile'] },
         { file: 'pdfa-2u-variable-ttf.pdf', profiles: ['PDF/A-2u validation profile'] },
         { file: 'pdfa-2u-ocg.pdf', profiles: ['PDF/A-2u validation profile'] },
+        { file: 'pdfa-3a.pdf', profiles: ['PDF/A-3a validation profile'] },
         { file: 'pdfa-3b.pdf', profiles: ['PDF/A-3b validation profile'] },
         { file: 'pdfa-3u.pdf', profiles: ['PDF/A-3u validation profile'] },
         { file: 'pdfa-3b-facturx.pdf', profiles: ['PDF/A-3b validation profile'] },
+        { file: 'pdfa-2a-pdfua-1.pdf', profiles: ['PDF/A-2a validation profile', 'PDF/UA-1 validation profile'] },
+        { file: 'pdfa-3a-pdfua-1.pdf', profiles: ['PDF/A-3a validation profile', 'PDF/UA-1 validation profile'] },
     ],
     // writes_pdfua_samples_for_the_external_check
     pdfua: [

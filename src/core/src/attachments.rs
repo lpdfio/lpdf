@@ -168,8 +168,8 @@ pub(crate) fn check_standards(files: &[Attachment], output: &Output) -> Result<(
     if let Some(level) = output.pdfa.filter(|level| level.part() == 2) {
         return Err(format!(
             "<output pdfa=\"{}\">: the file '{}' can't be in a PDF/A-2 file, which carries only files that are PDF/A \
-            themselves, and the engine can't check that: remove the attachments, or remove pdfa, or write pdfa=\"3b\" \
-            or pdfa=\"3u\", which carries files of any kind",
+            themselves, and the engine can't check that: remove the attachments, or remove pdfa, or write pdfa=\"3a\", \
+            pdfa=\"3b\" or pdfa=\"3u\", which carries files of any kind",
             level.attribute(), file.name
         ));
     }
@@ -417,7 +417,7 @@ mod tests {
         let files = xml_files(r#"<file name="a.xml"/>"#).unwrap();
         let error = check_standards(&files, &pdfa("2b")).unwrap_err();
         assert!(error.contains("pdfa=\"2b\"") && error.contains("remove the attachments, or remove pdfa"), "{error}");
-        assert!(error.contains("pdfa=\"3b\" or pdfa=\"3u\", which carries files of any kind"), "{error}");
+        assert!(error.contains("pdfa=\"3a\", pdfa=\"3b\" or pdfa=\"3u\", which carries files of any kind"), "{error}");
         let pdfx = Output {
             pdfx: Some(crate::pdfx::PdfX { version: crate::pdfx::PdfXVersion::X4, profile: "press".into() }),
             ..Output::default()

@@ -3959,7 +3959,8 @@ fn file_date(created_on: Option<&str>, standard: Option<&StandardFile>) -> Resul
 /// - `output`     – The document's `<output>`: with `pdfa`, a PDF/A file gets its
 ///                  XMP packet, the sRGB output intent and a file ID; with `pdfua`,
 ///                  a PDF/UA file is tagged, with its structure, its marked content
-///                  and its XMP packet. What either cannot hold is an error.
+///                  and its XMP packet, and so is a PDF/A file of level a. What
+///                  either cannot hold is an error.
 /// - `files`      – The files of `<attachments>` with their bytes (`attachments::resolve`), carried in the PDF.
 #[allow(clippy::too_many_arguments)]
 pub fn render_pdf(
@@ -4002,6 +4003,9 @@ pub fn render_pdf(
     let fields = collect_render_fields(pages);
     if let Some(level) = standards.pdfa {
         refuse_for_pdfa(level, pages, &fonts, &sorted_font_names, font_defs, &used_gradients, &fields)?;
+        if level.tagged() {
+            refuse_for_level_a(level, meta, pages)?;
+        }
     }
     if let Some(part) = standards.pdfua {
         refuse_for_pdfua(part, pages, &fonts, &sorted_font_names, font_defs)?;
@@ -4009,7 +4013,7 @@ pub fn render_pdf(
     if let (Some(version), Some(press)) = (standards.pdfx, press) {
         refuse_for_pdfx(version, press, pages, &fonts, &sorted_font_names, font_defs, &used_gradients, &fields)?;
     }
-    let mut marks = if standards.pdfua.is_some() { Marks::tagged() } else { Marks::off() };
+    let mut marks = if standards.tagged() { Marks::tagged() } else { Marks::off() };
     let links = standards.pdfx.is_none();
     let mut rendered_pages =
         build_content_streams(pages, &fonts, &image_res_map, gradients, attribution, links, &mut marks)?;
@@ -4096,6 +4100,51 @@ fn refuse_for_pdfa(
         ));
     }
     Ok(())
+}
+
+/// Refuse what a PDF/A file of level a cannot hold beyond the other levels, where only the author can change it: a
+/// `lang` that is not a language tag, which the catalog's `Lang` must be (ISO 19005-2, 6.7.4), and a character of
+/// Unicode's private use area, which means only what its font draws, so the file gives it replacement text
+/// (`ActualText`, 6.2.11.7.3), which the engine doesn't write. The rest of what level a asks, the tagged structure, the
+/// engine writes itself. PDF/UA's own checks, such as an `alt` on every image, run only with `pdfua` (`pdfua::check`).
+fn refuse_for_level_a(level: PdfA, meta: &Meta, pages: &[RenderPage]) -> Result<(), String> {
+    let refuse = |reason: String| Err(format!("<output pdfa=\"{}\">: {reason}", level.attribute()));
+    if !meta.lang.is_empty() && !crate::pdfua::is_language_tag(&meta.lang) {
+        return refuse(format!(
+            "lang '{}' is not a language tag, and a tagged PDF/A file says its language with one: give one such as \
+            en, en-US or de-CH, or leave lang out",
+            meta.lang
+        ));
+    }
+    for page in pages {
+        if let Some(reason) = first_in(&page.nodes, &mut private_use_refusal) {
+            return refuse(format!(
+                "{reason}, and a PDF/A file of level a gives such a character words of its own (ActualText), which \
+                the engine doesn't write: write the character it stands for if Unicode has one, or show the symbol \
+                as an img with alt, or use pdfa=\"{}u\" if the file need not be tagged",
+                level.part()
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The text of `node` that has a character of Unicode's private use area, such as an icon font's symbols, for an error
+/// that names it.
+fn private_use_refusal(node: &RenderNode) -> Option<String> {
+    let RenderNode::Text(t) = node else { return None };
+    let found = t.content.chars().find(|c| is_private_use(*c))?;
+    Some(format!(
+        "the text \"{}\" has U+{:04X}, a character of Unicode's private use area, which means only what its font \
+        draws, as an icon font's symbols do",
+        excerpt(&t.content), found as u32
+    ))
+}
+
+/// Whether `c` is in a private use area of Unicode: the one of the Basic Multilingual Plane, U+E000 to U+F8FF, or
+/// planes 15 and 16.
+fn is_private_use(c: char) -> bool {
+    matches!(c as u32, 0xE000..=0xF8FF | 0xF_0000..=0xF_FFFD | 0x10_0000..=0x10_FFFD)
 }
 
 /// Refuse what a PDF/UA file cannot hold where only the author can change it: text in a font that is not embedded, a
@@ -4559,6 +4608,16 @@ mod tests {
         ("CrimsonTextItalic", include_bytes!("../../../test/assets/fonts/CrimsonText-Italic.ttf")),
         ("CrimsonTextSemiBold", include_bytes!("../../../test/assets/fonts/CrimsonText-SemiBold.ttf")),
     ];
+
+    #[test]
+    fn the_private_use_areas_are_the_three_unicode_sets_aside() {
+        for c in ['\u{E000}', '\u{F890}', '\u{F8FF}', '\u{F0000}', '\u{FFFFD}', '\u{100000}', '\u{10FFFD}'] {
+            assert!(is_private_use(c), "U+{:04X}", c as u32);
+        }
+        for c in ['A', '\u{D7FF}', '\u{F900}', '\u{FFFF}', '\u{EFFFF}', '\u{FFFFE}', '\u{10FFFE}'] {
+            assert!(!is_private_use(c), "U+{:04X}", c as u32);
+        }
+    }
 
     #[test]
     fn a_built_in_font_draws_the_lines_of_a_box_and_the_arrows_as_ascii_and_the_rest_as_a_question_mark() {
