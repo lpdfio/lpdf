@@ -233,7 +233,8 @@ impl LpdfEngine {
     ///
     /// `stamps` is a JSON list of stamps, each with an `image`, the name of a PNG loaded with `load_image`, a `page`
     /// scope, a box (`x`, `y`, `anchor`, `width`, `height`, placed as a layer element is) and how the image sits in it
-    /// (`align`, `justify`, `scale`, `max-grow`).
+    /// (`align`, `justify`, `scale`, `max-grow`). Without a valid license key, each stamp gets the attribution line of a
+    /// render beside its box.
     pub fn stamp(&self, pdf: &[u8], stamps: &str) -> Result<Vec<u8>, JsValue> {
         self.stamp_pdf(pdf, stamps).map_err(|e| JsValue::from_str(&e))
     }
@@ -397,7 +398,8 @@ impl LpdfEngine {
         let _cap = memory::start(self.max_memory_mb);
         let stamps: serde_json::Value = serde_json::from_str(stamps).map_err(|e| format!("the stamps could not be read: {e}"))?;
         let stamps = stamp::parse_stamps(&stamps)?;
-        stamp::stamp(pdf, &stamps, &self.images)
+        let licensed = license::check(&self.license_key, self.now_unix).is_licensed();
+        stamp::stamp(pdf, &stamps, &self.images, licensed)
     }
 
     /// What the caller loaded for the `src` attributes of the document, for the parser.

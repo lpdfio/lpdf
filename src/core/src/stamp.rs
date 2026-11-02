@@ -10,6 +10,9 @@
 //! turned by its `/Rotate`. The image is fitted in the box without distortion and placed in it by `align` and
 //! `justify`. A PDF/A file of parts 1 to 3 stays PDF/A: the image is drawn in the sRGB profile `pdfa.rs` bundles, and
 //! what PDF/A-1 can't hold, a soft mask, is an error.
+//!
+//! Without a valid license key each stamp gets the attribution line a render draws, the Lpdf mark and name, above its
+//! box, or below it, or in the page's top-right corner (`Attribution`): it says which area of the page Lpdf made.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -19,7 +22,11 @@ use miniz_oxide::deflate::compress_to_vec_zlib;
 use crate::canvas::{apply_anchor_offset, parse_anchor, resolve_anchor, Anchor};
 use crate::page_scope::page_scope_indices;
 use crate::parse::{parse_measurement, parse_page_scope, parse_signed_measurement, PageScope};
-use crate::pdf::ImageRegistry;
+use crate::pdf::{
+    parse_hex, ImageRegistry, ATTRIBUTION_BOLD_STROKE, ATTRIBUTION_CAP_HEIGHT, ATTRIBUTION_FONT, ATTRIBUTION_GAP,
+    ATTRIBUTION_MARK_COLOR, ATTRIBUTION_MARK_SIZE, ATTRIBUTION_NAME, ATTRIBUTION_NAME_SIZE, ATTRIBUTION_PAD,
+    ATTRIBUTION_TEXT_COLOR, ATTRIBUTION_URL, LPDF_MARK,
+};
 use crate::pdfa;
 use crate::png::{self, Png};
 
@@ -139,8 +146,9 @@ fn parse_stamp(item: &serde_json::Value) -> Result<Stamp, String> {
 }
 
 /// Draw each stamp over its pages of `pdf`, and return the file with the update appended: the input, byte for byte,
-/// then the new objects, a cross-reference section and a trailer.
-pub(crate) fn stamp(pdf: &[u8], stamps: &[Stamp], images: &ImageRegistry) -> Result<Vec<u8>, String> {
+/// then the new objects, a cross-reference section and a trailer. Unless `licensed`, each stamp gets the attribution
+/// line beside its box.
+pub(crate) fn stamp(pdf: &[u8], stamps: &[Stamp], images: &ImageRegistry, licensed: bool) -> Result<Vec<u8>, String> {
     // The images, decoded once each, by name, in the order the stamps first use them.
     let mut decoded: Vec<(String, Png)> = Vec::new();
     for (i, stamp) in stamps.iter().enumerate() {
@@ -210,6 +218,13 @@ pub(crate) fn stamp(pdf: &[u8], stamps: &[Stamp], images: &ImageRegistry) -> Res
     // The `q` that saves the graphics state before a page's own content, which may leave it changed.
     let save = update.add_object(Stream::new(Dictionary::new(), b"q\n".to_vec()));
     let output_intent = prev.catalog().is_ok_and(|c| c.has(b"OutputIntents"));
+    // A tagged file needs every link in its structure tree, which the stamp leaves as it is: there the line has none.
+    let tagged = prev.catalog().is_ok_and(|c| {
+        c.has(b"StructTreeRoot")
+            || c.get(b"MarkInfo").ok().and_then(|m| prev.dereference(m).ok()?.1.as_dict().ok())
+                .and_then(|m| m.get(b"Marked").ok()?.as_bool().ok()).unwrap_or(false)
+    });
+    let attribution = (!licensed).then(Attribution::new);
 
     for (&index, list) in &on_page {
         let page_id = pages[&(index as u32 + 1)];
@@ -234,6 +249,8 @@ pub(crate) fn stamp(pdf: &[u8], stamps: &[Stamp], images: &ImageRegistry) -> Res
         }
         content.push_str("/Artifact BMC\n");
         let mut transparent = false;
+        // Where the attribution lines go, `[left, top]` on the page as shown: one for each place, drawn over the images.
+        let mut lines: Vec<[f32; 2]> = Vec::new();
         for &i in list {
             let stamp = &stamps[i];
             let png = &decoded.iter().find(|(name, _)| *name == stamp.image).expect("decoded above").1;
@@ -246,10 +263,33 @@ pub(crate) fn stamp(pdf: &[u8], stamps: &[Stamp], images: &ImageRegistry) -> Res
                 xobjects.set(name.as_bytes(), Object::Reference(image_ids[stamp.image.as_str()]));
                 name
             });
-            let [a, b, c, d, e, f] = geometry.matrix(place_image(stamp, png, geometry.size()));
+            let area = place_box(stamp, geometry.size());
+            if let Some(line) = &attribution {
+                let at = line.place(area, geometry.size());
+                if !lines.contains(&at) {
+                    lines.push(at);
+                }
+            }
+            let [a, b, c, d, e, f] = geometry.matrix(place_image(stamp, png, area));
             content.push_str(&format!(
                 "q {} {} {} {} {} {} cm /{name} Do Q\n", num(a), num(b), num(c), num(d), num(e), num(f),
             ));
+        }
+        if let Some(line) = &attribution {
+            // In sRGB on a PDF/A file, under a name the page's resources don't have.
+            let space = srgb.map(|profile| {
+                let mut spaces = match resources.get(b"ColorSpace").ok().map(|o| prev.dereference(o)) {
+                    Some(Ok((_, Object::Dictionary(d)))) => d.clone(),
+                    _ => Dictionary::new(),
+                };
+                let name = (0..).map(|k| format!("LpdfColor{k}")).find(|n| !spaces.has(n.as_bytes())).expect("a free name");
+                spaces.set(name.as_bytes(), vec![Object::Name(b"ICCBased".to_vec()), Object::Reference(profile)]);
+                resources.set("ColorSpace", spaces);
+                name
+            });
+            for &at in &lines {
+                content.push_str(&line.draw(geometry.line_matrix(at), space.as_deref()));
+            }
         }
         content.push_str("EMC\n");
         resources.set("XObject", xobjects);
@@ -280,6 +320,17 @@ pub(crate) fn stamp(pdf: &[u8], stamps: &[Stamp], images: &ImageRegistry) -> Res
                 group.set("CS", vec![Object::Name(b"ICCBased".to_vec()), Object::Reference(srgb)]);
             }
             page.set("Group", group);
+        }
+        if attribution.is_some() && !tagged && !lines.is_empty() {
+            let mut annots = match page.get(b"Annots").ok().map(|o| prev.dereference(o)) {
+                Some(Ok((_, Object::Array(a)))) => a.clone(),
+                _ => Vec::new(),
+            };
+            for &at in &lines {
+                let link = attribution.as_ref().expect("an unlicensed stamp").link(&geometry, at, pdfa_part.is_some());
+                annots.push(Object::Reference(update.add_object(link)));
+            }
+            page.set("Annots", annots);
         }
         update.set_object(page_id, page);
     }
@@ -360,9 +411,9 @@ fn add_image(doc: &mut Document, png: &Png, srgb: Option<ObjectId>) -> ObjectId 
     doc.add_object(stream)
 }
 
-/// Where the image of a stamp lands on a page of the given size as a viewer shows it: `[x, y, width, height]`, from
+/// Where the box of a stamp lands on a page of the given size as a viewer shows it: `[x, y, width, height]`, from
 /// the top-left corner, y down.
-fn place_image(stamp: &Stamp, png: &Png, (page_w, page_h): (f32, f32)) -> [f32; 4] {
+fn place_box(stamp: &Stamp, (page_w, page_h): (f32, f32)) -> [f32; 4] {
     let (x, y) = match &stamp.anchor {
         Some(anchor) => {
             let (ax, ay) = resolve_anchor(anchor, page_w, page_h);
@@ -370,6 +421,11 @@ fn place_image(stamp: &Stamp, png: &Png, (page_w, page_h): (f32, f32)) -> [f32; 
         }
         None => (stamp.x, stamp.y),
     };
+    [x, y, stamp.width, stamp.height]
+}
+
+/// Where the image of a stamp lands in its box `[x, y, width, height]`, on the page as a viewer shows it.
+fn place_image(stamp: &Stamp, png: &Png, [x, y, _, _]: [f32; 4]) -> [f32; 4] {
     // The natural size: from the resolution the PNG records, or a pixel to a point.
     let (natural_w, natural_h) = match png.dpi {
         Some((across, down)) => (png.width as f32 / across * 72.0, png.height as f32 / down * 72.0),
@@ -387,6 +443,167 @@ fn place_image(stamp: &Stamp, png: &Png, (page_w, page_h): (f32, f32)) -> [f32; 
         Place::End    => room,
     };
     [x + offset(stamp.align, stamp.width - w), y + offset(stamp.justify, stamp.height - h), w, h]
+}
+
+/// The room between a stamp's box and its attribution line, in pt.
+const LINE_GAP: f32 = 2.0;
+
+/// The attribution line of an unlicensed stamp: a render's (`draw_attribution` in `pdf.rs`), the mark and the name, at
+/// its sizes and in its colours. The name is drawn as the outlines of its glyphs in the face the engine carries for it,
+/// so the update holds no font, of which a PDF/A file would ask more.
+struct Attribution {
+    width: f32,
+    /// The mark and the name as paths, from the line's bottom-left corner, y up.
+    mark:  String,
+    name:  String,
+}
+
+impl Attribution {
+    fn new() -> Self {
+        let scale = ATTRIBUTION_MARK_SIZE / 100.0;
+        let mut mark = String::new();
+        for shape in &LPDF_MARK {
+            for (i, &(x, y)) in shape.iter().enumerate() {
+                let op = if i == 0 { "m" } else { "l" };
+                mark.push_str(&format!("{} {} {op} ", num(x * scale), num(ATTRIBUTION_MARK_SIZE - y * scale)));
+            }
+            mark.push_str("h ");
+        }
+        let face = ttf_parser::Face::parse(ATTRIBUTION_FONT, 0).expect("the engine's own face");
+        let scale = ATTRIBUTION_NAME_SIZE / face.units_per_em() as f32;
+        let mut name = Outline {
+            path:  String::new(),
+            scale,
+            // After the mark, and half the stroke, which grows each glyph on either side.
+            x:     ATTRIBUTION_MARK_SIZE + ATTRIBUTION_GAP + ATTRIBUTION_BOLD_STROKE / 2.0,
+            // The name's capitals centre on the mark.
+            y:     (ATTRIBUTION_MARK_SIZE - ATTRIBUTION_NAME_SIZE * ATTRIBUTION_CAP_HEIGHT) / 2.0,
+            last:  (0.0, 0.0),
+        };
+        let mut advance = 0.0;
+        for c in ATTRIBUTION_NAME.chars() {
+            let Some(glyph) = face.glyph_index(c) else { continue };
+            face.outline_glyph(glyph, &mut name);
+            let step = face.glyph_hor_advance(glyph).unwrap_or(0) as f32 * scale;
+            name.x += step;
+            advance += step;
+        }
+        let width = ATTRIBUTION_MARK_SIZE + ATTRIBUTION_GAP + advance + ATTRIBUTION_BOLD_STROKE;
+        Attribution { width, mark, name: name.path }
+    }
+
+    /// Where the line goes beside a stamp's box `[x, y, width, height]` on a page of the given size as shown,
+    /// `[left, top]`: above the box, its right edge on the box's; below it when there is no room above; and in the
+    /// page's top-right corner, where a render's goes, when there is room for neither. Never in the box, which is the
+    /// caller's.
+    fn place(&self, [x, y, w, h]: [f32; 4], (page_w, page_h): (f32, f32)) -> [f32; 2] {
+        let (left, right) = (x + w - self.width, x + w);
+        let fits = |top: f32| left >= 0.0 && right <= page_w && top >= 0.0 && top + ATTRIBUTION_MARK_SIZE <= page_h;
+        let above = y - LINE_GAP - ATTRIBUTION_MARK_SIZE;
+        let below = y + h + LINE_GAP;
+        if fits(above) {
+            [left, above]
+        } else if fits(below) {
+            [left, below]
+        } else {
+            [page_w - ATTRIBUTION_PAD - self.width, ATTRIBUTION_PAD]
+        }
+    }
+
+    /// The line drawn with `matrix`, which takes its space to the page's, in the color space named `space`, the page's
+    /// sRGB on a PDF/A file, or else in the device's RGB.
+    fn draw(&self, [a, b, c, d, e, f]: [f32; 6], space: Option<&str>) -> String {
+        let color = |hex: &str, fill: bool| {
+            let (r, g, b) = parse_hex(hex);
+            let rgb = format!("{} {} {}", num(r), num(g), num(b));
+            match (space, fill) {
+                (Some(name), true)  => format!("/{name} cs {rgb} sc"),
+                (Some(name), false) => format!("/{name} CS {rgb} SC"),
+                (None, true)        => format!("{rgb} rg"),
+                (None, false)       => format!("{rgb} RG"),
+            }
+        };
+        format!(
+            "q {} {} {} {} {} {} cm {} {}f {} {} {} w {}B Q\n",
+            num(a), num(b), num(c), num(d), num(e), num(f),
+            color(ATTRIBUTION_MARK_COLOR, true), self.mark,
+            color(ATTRIBUTION_TEXT_COLOR, true), color(ATTRIBUTION_TEXT_COLOR, false), num(ATTRIBUTION_BOLD_STROKE),
+            self.name,
+        )
+    }
+
+    /// The link to lpdf.io over the line at `[left, top]`, with slack below and above, as a render's has. On a PDF/A
+    /// file it prints, as PDF/A asks of every annotation.
+    fn link(&self, geometry: &Geometry, [left, top]: [f32; 2], print: bool) -> Dictionary {
+        let (x1, y1) = geometry.point(left, top - 2.0);
+        let (x2, y2) = geometry.point(left + self.width, top + ATTRIBUTION_MARK_SIZE + 3.0);
+        let rect = vec![x1.min(x2).into(), y1.min(y2).into(), x1.max(x2).into(), y1.max(y2).into()];
+        let mut action = Dictionary::new();
+        action.set("S", Object::Name(b"URI".to_vec()));
+        action.set("URI", Object::string_literal(ATTRIBUTION_URL));
+        let mut link = Dictionary::new();
+        link.set("Type", Object::Name(b"Annot".to_vec()));
+        link.set("Subtype", Object::Name(b"Link".to_vec()));
+        link.set("Rect", Object::Array(rect));
+        link.set("Border", vec![0.into(), 0.into(), 0.into()]);
+        link.set("A", action);
+        if print {
+            link.set("F", 4);
+        }
+        link
+    }
+}
+
+/// A glyph's outline as a PDF path, `scale` from font units to pt, moved to `(x, y)`, its quadratic curves made cubic.
+struct Outline {
+    path:  String,
+    scale: f32,
+    x:     f32,
+    y:     f32,
+    last:  (f32, f32),
+}
+
+impl Outline {
+    fn at(&self, x: f32, y: f32) -> (f32, f32) {
+        (self.x + x * self.scale, self.y + y * self.scale)
+    }
+
+    fn push(&mut self, points: &[(f32, f32)], op: &str) {
+        for &(x, y) in points {
+            self.path.push_str(&format!("{} {} ", num(x), num(y)));
+        }
+        self.path.push_str(op);
+        self.path.push(' ');
+        self.last = *points.last().unwrap_or(&self.last);
+    }
+}
+
+impl ttf_parser::OutlineBuilder for Outline {
+    fn move_to(&mut self, x: f32, y: f32) {
+        let p = self.at(x, y);
+        self.push(&[p], "m");
+    }
+
+    fn line_to(&mut self, x: f32, y: f32) {
+        let p = self.at(x, y);
+        self.push(&[p], "l");
+    }
+
+    fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
+        let (q, p, from) = (self.at(x1, y1), self.at(x, y), self.last);
+        let c1 = (from.0 + 2.0 / 3.0 * (q.0 - from.0), from.1 + 2.0 / 3.0 * (q.1 - from.1));
+        let c2 = (p.0 + 2.0 / 3.0 * (q.0 - p.0), p.1 + 2.0 / 3.0 * (q.1 - p.1));
+        self.push(&[c1, c2, p], "c");
+    }
+
+    fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
+        let points = [self.at(x1, y1), self.at(x2, y2), self.at(x, y)];
+        self.push(&points, "c");
+    }
+
+    fn close(&mut self) {
+        self.path.push_str("h ");
+    }
 }
 
 /// A page as a viewer shows it: its crop box, in the PDF's own space, and the turn `/Rotate` gives it.
@@ -434,6 +651,13 @@ impl Geometry {
             270 => (self.right - v, self.top - u),
             _   => (self.left + u,  self.top - v),
         }
+    }
+
+    /// The matrix of an attribution line at `[left, top]` of the page as a viewer shows it: its space starts at the
+    /// line's bottom-left corner, y up, upright, in pt.
+    fn line_matrix(&self, [left, top]: [f32; 2]) -> [f32; 6] {
+        let bottom = top + ATTRIBUTION_MARK_SIZE;
+        self.matrix([left, bottom - 1.0, 1.0, 1.0])
     }
 
     /// The matrix that draws an image, a unit square, in `[x, y, w, h]` of the page as a viewer shows it, upright.
@@ -507,6 +731,11 @@ mod tests {
         Png { width, height, colors: 3, pixels: Vec::new(), alpha: None, dpi: dpi.map(|d| (d, d)) }
     }
 
+    /// Where the image of `s` lands on a page of US Letter.
+    fn placed(s: &Stamp, png: &Png) -> [f32; 4] {
+        place_image(s, png, place_box(s, (612.0, 792.0)))
+    }
+
     fn close(a: [f32; 4], b: [f32; 4]) -> bool {
         a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.01)
     }
@@ -545,32 +774,32 @@ mod tests {
     #[test]
     fn fit_keeps_a_small_image_at_its_natural_size_and_shrinks_a_large_one() {
         // 50 by 25 px at a pixel to a point, in a box of 200 by 100: kept, in the box's middle.
-        assert!(close(place_image(&boxed(200.0, 100.0), &image(50, 25, None), (612.0, 792.0)), [75.0, 37.5, 50.0, 25.0]));
+        assert!(close(placed(&boxed(200.0, 100.0), &image(50, 25, None)), [75.0, 37.5, 50.0, 25.0]));
         // 400 by 100 px: halved to the box's width, and centered down it.
-        assert!(close(place_image(&boxed(200.0, 100.0), &image(400, 100, None), (612.0, 792.0)), [0.0, 25.0, 200.0, 50.0]));
+        assert!(close(placed(&boxed(200.0, 100.0), &image(400, 100, None)), [0.0, 25.0, 200.0, 50.0]));
     }
 
     #[test]
     fn the_natural_size_comes_from_the_dpi_the_png_records() {
         // 600 px at 300 dpi is 2 in, 144 pt.
-        let placed = place_image(&boxed(300.0, 300.0), &image(600, 300, Some(300.0)), (612.0, 792.0));
-        assert!(close(placed, [78.0, 114.0, 144.0, 72.0]), "{placed:?}");
+        let at = placed(&boxed(300.0, 300.0), &image(600, 300, Some(300.0)));
+        assert!(close(at, [78.0, 114.0, 144.0, 72.0]), "{at:?}");
     }
 
     #[test]
     fn max_grow_lets_fit_grow_a_small_image_up_to_it_but_never_past_the_box() {
         let mut s = boxed(200.0, 100.0);
         s.max_grow = 1.5;
-        assert!(close(place_image(&s, &image(50, 25, None), (612.0, 792.0)), [62.5, 31.25, 75.0, 37.5]));
+        assert!(close(placed(&s, &image(50, 25, None)), [62.5, 31.25, 75.0, 37.5]));
         s.max_grow = 10.0;
-        assert!(close(place_image(&s, &image(50, 25, None), (612.0, 792.0)), [0.0, 0.0, 200.0, 100.0]));
+        assert!(close(placed(&s, &image(50, 25, None)), [0.0, 0.0, 200.0, 100.0]));
     }
 
     #[test]
     fn fill_takes_the_largest_size_that_fits_the_box() {
         let mut s = boxed(200.0, 200.0);
         s.scale = Scale::Fill;
-        assert!(close(place_image(&s, &image(50, 25, None), (612.0, 792.0)), [0.0, 50.0, 200.0, 100.0]));
+        assert!(close(placed(&s, &image(50, 25, None)), [0.0, 50.0, 200.0, 100.0]));
     }
 
     #[test]
@@ -588,7 +817,7 @@ mod tests {
         ] {
             s.align = align;
             s.justify = justify;
-            assert!(close(place_image(&s, &png, (612.0, 792.0)), [at[0], at[1], 50.0, 25.0]), "{align:?} {justify:?}");
+            assert!(close(placed(&s, &png), [at[0], at[1], 50.0, 25.0]), "{align:?} {justify:?}");
         }
     }
 
@@ -599,16 +828,42 @@ mod tests {
         s.x = -36.0;
         s.y = -36.0;
         // The box's bottom-right corner 36 pt in from the page's, and the 100 by 50 image fills it.
-        assert!(close(place_image(&s, &image(100, 50, None), (612.0, 792.0)), [476.0, 706.0, 100.0, 50.0]));
+        assert!(close(placed(&s, &image(100, 50, None)), [476.0, 706.0, 100.0, 50.0]));
         s.anchor = Some(Anchor::Center);
         s.x = 0.0;
         s.y = 0.0;
-        assert!(close(place_image(&s, &image(100, 50, None), (612.0, 792.0)), [256.0, 371.0, 100.0, 50.0]));
+        assert!(close(placed(&s, &image(100, 50, None)), [256.0, 371.0, 100.0, 50.0]));
     }
 
     fn geometry(rotate: i64) -> Geometry {
         // A crop box of 400 by 600 at (100, 50).
         Geometry { left: 100.0, bottom: 50.0, right: 500.0, top: 650.0, rotate }
+    }
+
+    #[test]
+    fn the_line_goes_above_the_box_then_below_it_then_in_the_page_corner_and_never_in_the_box() {
+        let line = Attribution::new();
+        assert!(line.width > ATTRIBUTION_MARK_SIZE + ATTRIBUTION_GAP + ATTRIBUTION_NAME_SIZE);
+        let page = (612.0, 792.0);
+        // Room above: 2 pt over the box, its right edge on the box's.
+        let [left, top] = line.place([100.0, 100.0, 200.0, 50.0], page);
+        assert!((left + line.width - 300.0).abs() < 0.01 && (top - 89.0).abs() < 0.01, "{left} {top}");
+        // A box at the top of the page: 2 pt under it.
+        assert_eq!(line.place([100.0, 5.0, 200.0, 50.0], page)[1], 57.0);
+        // The height of the page, as a watermark's: in its top-right corner, 12 pt in, where a render's goes.
+        let [left, top] = line.place([0.0, 0.0, 612.0, 792.0], page);
+        assert!((left + line.width - 600.0).abs() < 0.01 && top == 12.0, "{left} {top}");
+        // A box narrower than the line at the page's left edge: neither above nor below fits on the page.
+        assert_eq!(line.place([0.0, 300.0, 10.0, 10.0], page)[1], 12.0);
+    }
+
+    #[test]
+    fn the_line_stands_upright_beside_its_box_on_a_turned_page() {
+        // The line's bottom-left corner, 9 pt under its top, in the PDF's space of a page turned clockwise.
+        let [a, b, c, d, e, f] = geometry(90).line_matrix([10.0, 20.0]);
+        assert_eq!((e, f), (129.0, 60.0));
+        // Its x runs up the PDF's page and its y to the left, which a viewer turns to right and up.
+        assert_eq!((a, b, c, d), (0.0, 1.0, -1.0, 0.0));
     }
 
     #[test]

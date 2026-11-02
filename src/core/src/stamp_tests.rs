@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use lopdf::{dictionary, Document, Object, SaveOptions, Stream};
 use serde_json::json;
 
+use crate::pdf::ImageRegistry;
 use crate::png::tests::{phys, png};
 use crate::snapshot_tests::check_snapshot;
 use crate::{LpdfEngine, RenderEncryption};
@@ -197,7 +198,17 @@ fn frame(w: u32, h: u32) -> Vec<u8> {
 
 // ── Stamping and reading back ─────────────────────────────────────────────────
 
+/// Stamp `pdf` as a licensed engine does, with no attribution line.
 fn stamp(pdf: &[u8], images: &[(&str, Vec<u8>)], stamps: serde_json::Value) -> Result<Vec<u8>, String> {
+    let mut registry = ImageRegistry::new();
+    for (name, bytes) in images {
+        registry.load(name, bytes.clone());
+    }
+    crate::stamp::stamp(pdf, &crate::stamp::parse_stamps(&stamps)?, &registry, true)
+}
+
+/// Stamp `pdf` through an engine with no license key, which gives each stamp the attribution line.
+fn stamp_unlicensed(pdf: &[u8], images: &[(&str, Vec<u8>)], stamps: serde_json::Value) -> Result<Vec<u8>, String> {
     let mut engine = LpdfEngine::new("");
     for (name, bytes) in images {
         engine.load_image(name, bytes);
@@ -205,11 +216,21 @@ fn stamp(pdf: &[u8], images: &[(&str, Vec<u8>)], stamps: serde_json::Value) -> R
     engine.stamp_pdf(pdf, &stamps.to_string())
 }
 
-/// `stamp`, which must succeed and leave the input's bytes as they were, at the start of the output.
-fn stamped(pdf: &[u8], images: &[(&str, Vec<u8>)], stamps: serde_json::Value) -> Vec<u8> {
-    let out = stamp(pdf, images, stamps).unwrap_or_else(|e| panic!("stamp failed: {e}"));
+/// The output of a stamp, which must have succeeded and left the input's bytes as they were, at its start.
+fn kept(pdf: &[u8], out: Result<Vec<u8>, String>) -> Vec<u8> {
+    let out = out.unwrap_or_else(|e| panic!("stamp failed: {e}"));
     assert!(out.len() > pdf.len() && out.starts_with(pdf), "the output is not the input with an update after it");
     out
+}
+
+/// `stamp`, licensed, which must succeed.
+fn stamped(pdf: &[u8], images: &[(&str, Vec<u8>)], stamps: serde_json::Value) -> Vec<u8> {
+    kept(pdf, stamp(pdf, images, stamps))
+}
+
+/// `stamp_unlicensed`, which must succeed.
+fn stamped_unlicensed(pdf: &[u8], images: &[(&str, Vec<u8>)], stamps: serde_json::Value) -> Vec<u8> {
+    kept(pdf, stamp_unlicensed(pdf, images, stamps))
 }
 
 fn reopen(pdf: &[u8]) -> Document {
@@ -374,6 +395,60 @@ fn a_file_with_an_owner_password_keeps_its_encryption_and_its_permissions() {
         assert_eq!(is.encrypt_object_id(), was.encrypt_object_id(), "{cipher}: the update refers to the file's own /Encrypt");
         assert!(drawn(&after, 1).contains("/LpdfStamp0 Do"), "{cipher}: the stamp is drawn once decrypted");
     }
+}
+
+// ── Without a license key ─────────────────────────────────────────────────────
+
+/// The text of what a stamp appended to `pdf`.
+fn update(pdf: &[u8], out: &[u8]) -> String {
+    String::from_utf8_lossy(&out[pdf.len()..]).into_owned()
+}
+
+#[test]
+fn an_unlicensed_stamp_draws_the_line_over_the_images_and_links_it_to_lpdf_io() {
+    let pdf = build(&[LETTER], Resources::OnPage, false, None);
+    let out = stamped_unlicensed(&pdf, &[("i", quarters(60, 30, &[]))], json!([{ "image": "i", "page": "1", "x": 72, "y": 72, "width": 60, "height": 30 }]));
+    let doc = reopen(&out);
+    let drawn = drawn(&doc, 1);
+    let image = drawn.find("/LpdfStamp0 Do").expect("the image");
+    // Over the box: its bottom 2 pt above the box's top, 72 pt down, which is 792 - 70 in the PDF's space.
+    let line = drawn.find(" 722 cm ").expect(&drawn);
+    assert!(image < line, "the line is drawn after the image");
+    assert!(drawn.contains("0.8431 0.4353 0.0157 rg") && drawn.contains(" B Q\n"), "{drawn}");
+    let annots = page(&doc, 1).get(b"Annots").and_then(Object::as_array).expect("a link");
+    let link = doc.get_dictionary(annots[0].as_reference().unwrap()).unwrap();
+    assert_eq!(link.get(b"Subtype").and_then(Object::as_name).unwrap(), b"Link");
+    let uri = link.get(b"A").and_then(Object::as_dict).and_then(|a| a.get(b"URI")).and_then(Object::as_str).unwrap();
+    assert_eq!(uri, b"https://lpdf.io");
+    assert!(!link.has(b"F"), "only PDF/A asks for the print flag");
+}
+
+#[test]
+fn a_licensed_stamp_draws_no_line() {
+    let pdf = build(&[LETTER], Resources::OnPage, false, None);
+    let out = stamped(&pdf, &[("i", quarters(60, 30, &[]))], json!([{ "image": "i", "page": "1", "x": 72, "y": 72, "width": 60, "height": 30 }]));
+    assert!(!update(&pdf, &out).contains("lpdf.io") && !drawn(&reopen(&out), 1).contains(" B Q"));
+}
+
+#[test]
+fn a_line_in_a_tagged_file_has_no_link() {
+    let pdf = crate::pdfua_render_tests::render_fixture();
+    let out = stamped_unlicensed(&pdf, &[("seal", seal(64))], json!([{ "image": "seal", "page": "1", "anchor": "bottom-right", "x": -36, "y": -36, "width": 64, "height": 64 }]));
+    let doc = reopen(&out);
+    assert!(drawn(&doc, 1).contains(" B Q\n"), "the line is drawn");
+    assert!(!update(&pdf, &out).contains("(https://lpdf.io)"), "no link was added");
+}
+
+#[test]
+fn a_line_on_a_pdfa_file_is_in_srgb_and_its_link_prints() {
+    let pdf = build(&[LETTER], Resources::OnPage, false, Some(PDFA_2B));
+    let out = stamped_unlicensed(&pdf, &[("i", quarters(60, 30, &[]))], json!([{ "image": "i", "page": "1", "x": 72, "y": 72, "width": 60, "height": 30 }]));
+    let doc = reopen(&out);
+    assert!(drawn(&doc, 1).contains("/LpdfColor0 cs 0.8431 0.4353 0.0157 sc"));
+    let spaces = page(&doc, 1).get(b"Resources").and_then(Object::as_dict).and_then(|r| r.get(b"ColorSpace")).and_then(Object::as_dict).unwrap();
+    assert!(spaces.has(b"LpdfColor0"));
+    let annots = page(&doc, 1).get(b"Annots").and_then(Object::as_array).unwrap();
+    assert_eq!(doc.get_dictionary(annots[0].as_reference().unwrap()).unwrap().get(b"F").and_then(Object::as_i64).unwrap(), 4);
 }
 
 // ── Errors ────────────────────────────────────────────────────────────────────
@@ -556,13 +631,29 @@ fn rc4() -> Vec<u8> {
     stamped(&owner_only("rc4-128"), &[("seal", seal(64))], json!([{ "image": "seal", "page": "1", "anchor": "bottom-right", "x": -36, "y": -36, "width": 64, "height": 64 }]))
 }
 
-/// A PDF/A file stamped with a transparent seal and a 16-bit PNG, or on PDF/A-1, where no soft mask may go, with
-/// an opaque PNG and a 16-bit one.
+/// A PDF/A file stamped without a license key, with a transparent seal and a 16-bit PNG, or on PDF/A-1, where no soft
+/// mask may go, with an opaque PNG and a 16-bit one.
 fn pdfa(pdf: &[u8], part_1: bool) -> Vec<u8> {
     let first = if part_1 { ("first", quarters(60, 30, &[])) } else { ("first", seal(64)) };
-    stamped(pdf, &[first, ("deep", deep(60, 30))], json!([
+    // Unlicensed, so that veraPDF checks the attribution line and its link too.
+    stamped_unlicensed(pdf, &[first, ("deep", deep(60, 30))], json!([
         { "image": "first", "page": "each", "anchor": "top-right", "x": -36, "y": 36, "width": 64, "height": 64 },
         { "image": "deep", "page": "last", "anchor": "bottom-right", "x": -36, "y": -36, "width": 60, "height": 30 },
+    ]))
+}
+
+/// Without a license key: a box in the middle of the page, with its line above it; one at the top of the page, with
+/// its line below it; one the size of the page, with its line in the page's top-right corner, over the stamps; and a
+/// page turned by 90 degrees, with its lines upright beside their boxes.
+fn unlicensed() -> Vec<u8> {
+    let pdf = build(&[LETTER, LETTER.rotate(90)], Resources::OnPage, false, None);
+    stamped_unlicensed(&pdf, &[small(), ("frame", frame(150, 90)), ("page", frame(612, 792))], json!([
+        { "image": "frame", "page": "1", "x": 72, "y": 300, "width": 150, "height": 90 },
+        { "image": "small", "page": "1", "x": 72, "y": 300, "width": 150, "height": 90 },
+        { "image": "frame", "page": "1", "anchor": "top-center", "y": 4, "width": 150, "height": 90 },
+        { "image": "page", "page": "1", "x": 0, "y": 0, "width": 612, "height": 792 },
+        { "image": "frame", "page": "2", "anchor": "center", "width": 150, "height": 90 },
+        { "image": "small", "page": "2", "anchor": "bottom-left", "x": 36, "y": -36, "width": 60, "height": 30 },
     ]))
 }
 
@@ -595,6 +686,7 @@ stamp_snapshot!(stamp_rotated, "stamp-rotated", rotated());
 stamp_snapshot!(stamp_page_forms, "stamp-page-forms", page_forms());
 stamp_snapshot!(stamp_object_streams, "stamp-object-streams", object_streams());
 stamp_snapshot!(stamp_rc4, "stamp-rc4", rc4());
+stamp_snapshot!(stamp_without_a_key, "stamp-unlicensed", unlicensed());
 stamp_snapshot!(stamp_pdfa_2b, "stamp-pdfa-2b", pdfa(&crate::pdfa_render_tests::render_fixture("2b"), false));
 stamp_snapshot!(stamp_pdfa_2u, "stamp-pdfa-2u", pdfa(&crate::pdfa_render_tests::render_fixture("2u"), false));
 
@@ -606,7 +698,8 @@ fn stamp_pdfa_1b_corpus() {
 }
 
 /// The stamped PDF/A files `scripts/check-pdfa.mjs` hands to veraPDF and qpdf, written into `dir`: the 2b and 2u
-/// fixtures of Lpdf's, and the PDF/A-1b files of veraPDF's corpus. Called from `writes_pdfa_samples_for_the_external_check`.
+/// fixtures of Lpdf's, and the PDF/A-1b files of veraPDF's corpus, each with the attribution line and its link.
+/// Called from `writes_pdfa_samples_for_the_external_check`.
 pub(crate) fn write_pdfa_samples(dir: &Path) {
     for level in ["2b", "2u"] {
         let pdf = pdfa(&crate::pdfa_render_tests::render_fixture(level), false);
@@ -615,4 +708,14 @@ pub(crate) fn write_pdfa_samples(dir: &Path) {
     for (name, pdf) in corpus() {
         std::fs::write(dir.join(format!("stamp-pdfa-1b-{name}.pdf")), pdfa(&pdf, true)).expect("a sample");
     }
+}
+
+/// The PDF/UA fixture, a tagged file, stamped without a license key: the line is an artifact and has no link, so the
+/// file stays PDF/UA. Called from `writes_pdfua_samples_for_the_external_check`.
+pub(crate) fn write_pdfua_sample(dir: &Path) {
+    let pdf = crate::pdfua_render_tests::render_fixture();
+    let out = stamped_unlicensed(&pdf, &[("seal", seal(64))], json!([
+        { "image": "seal", "page": "each", "anchor": "bottom-right", "x": -36, "y": -36, "width": 64, "height": 64 },
+    ]));
+    std::fs::write(dir.join("stamp-pdfua-1.pdf"), out).expect("a sample");
 }

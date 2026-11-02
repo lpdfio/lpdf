@@ -155,7 +155,8 @@ fn dispatch(request: String) -> String {
     }
 
     if method == "stamp" {
-        return stamp_request(&mut req, before);
+        let licensed = license::check(key, now_unix).is_licensed();
+        return stamp_request(&mut req, licensed, before);
     }
 
     // Taken out of the request rather than copied, so the render holds one copy of each.
@@ -206,9 +207,10 @@ fn dispatch(request: String) -> String {
     }
 }
 
-/// A `stamp` request: the PDF in `pdf`, as base64, and the `stamps`, each naming a PNG of the request's `images`.
+/// A `stamp` request: the PDF in `pdf`, as base64, and the `stamps`, each naming a PNG of the request's `images`;
+/// `licensed` when the request's key is, else each stamp gets the attribution line beside its box.
 /// Answers `{ "pdf": "<base64>" }`, the file with the stamps added as an incremental update, or `{ "error": "…" }`.
-fn stamp_request(req: &mut serde_json::Value, before: i64) -> String {
+fn stamp_request(req: &mut serde_json::Value, licensed: bool, before: i64) -> String {
     let error = |e: String| serde_json::json!({ "error": e }).to_string();
     let cap = match render_cap(req) {
         Ok(cap) => cap,
@@ -226,7 +228,7 @@ fn stamp_request(req: &mut serde_json::Value, before: i64) -> String {
         Ok(stamps) => stamps,
         Err(e)     => return error(e),
     };
-    match stamp::stamp(&pdf, &stamps, &build_image_registry(req)) {
+    match stamp::stamp(&pdf, &stamps, &build_image_registry(req), licensed) {
         Ok(bytes) => serde_json::json!({ "pdf": base64::engine::general_purpose::STANDARD.encode(bytes) }).to_string(),
         Err(e)    => error(e),
     }

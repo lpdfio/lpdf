@@ -692,7 +692,7 @@ impl PreparedFont {
 
 /// Parse `#rrggbb` or `#rgb` into three `0.0–1.0` floats.
 /// Returns `(0.0, 0.0, 0.0)` (black) for malformed input.
-fn parse_hex(hex: &str) -> (f32, f32, f32) {
+pub(crate) fn parse_hex(hex: &str) -> (f32, f32, f32) {
     let h = hex.trim_start_matches('#');
     let expanded: String = if h.len() == 3 {
         h.chars().flat_map(|c| [c, c]).collect()
@@ -2702,7 +2702,19 @@ fn draw_page_background(content: &mut Content, page: &RenderPage, bg: &str, grad
 pub(crate) const ATTRIBUTION_NAME: &str = "Lpdf";
 
 /// Target of the single link annotation covering the whole line.
-const ATTRIBUTION_URL: &str = "https://lpdf.io";
+pub(crate) const ATTRIBUTION_URL: &str = "https://lpdf.io";
+
+/// How far the line sits in from the page's top and right edges, in pt. Desktop printers cannot reach the outer
+/// 12–18 pt of a sheet; any closer and printed copies lose it.
+pub(crate) const ATTRIBUTION_PAD: f32 = 12.0;
+/// The size of the name, and the height of the mark, in pt.
+pub(crate) const ATTRIBUTION_NAME_SIZE: f32 = 9.0;
+pub(crate) const ATTRIBUTION_MARK_SIZE: f32 = 9.0;
+/// The room between the mark and the name, in pt.
+pub(crate) const ATTRIBUTION_GAP: f32 = 3.0;
+/// Radley ships no bold. Stroking the outline as well as filling it thickens the glyphs, the way browsers synthesise
+/// the 600 weight the lpdf.io wordmark asks for.
+pub(crate) const ATTRIBUTION_BOLD_STROKE: f32 = ATTRIBUTION_NAME_SIZE * 0.04;
 
 /// Font-map key for the wordmark face. Specific enough that no document's own font
 /// declarations are expected to collide with it.
@@ -2714,27 +2726,24 @@ pub(crate) const ATTRIBUTION_FONT: &[u8] = include_bytes!("../assets/fonts/radle
 
 /// Radley's cap height as a share of the em (1302 of 2048 units, OS/2 `sCapHeight`),
 /// used to centre the name's capitals on the mark.
-const ATTRIBUTION_CAP_HEIGHT: f32 = 1302.0 / 2048.0;
+pub(crate) const ATTRIBUTION_CAP_HEIGHT: f32 = 1302.0 / 2048.0;
 
 /// Neutral dark grey for the name: about 5.7:1 on white paper, legible without
 /// drawing the eye.
-const ATTRIBUTION_TEXT_COLOR: &str = "#666666";
+pub(crate) const ATTRIBUTION_TEXT_COLOR: &str = "#666666";
 
 /// lpdf brand orange, as in `lpdf-mark.svg`.
-const ATTRIBUTION_MARK_COLOR: &str = "#d76f04";
+pub(crate) const ATTRIBUTION_MARK_COLOR: &str = "#d76f04";
 
 /// The lpdf mark from `lpdf-mark.svg`: two parallelograms in a 100 × 100 box with y
 /// pointing down, drawn as vector paths so it needs no image object.
-const LPDF_MARK: [[(f32, f32); 4]; 2] = [
+pub(crate) const LPDF_MARK: [[(f32, f32); 4]; 2] = [
     [(0.0, 33.03), (33.03, 0.0), (33.03, 62.452), (0.0, 95.482)],
     [(4.518, 100.0), (37.548, 66.97), (100.0, 66.97), (66.97, 100.0)],
 ];
 
-/// Draw the lpdf mark and "Lpdf" right-aligned in the page's top-right corner, and
-/// cover the whole line with one link to lpdf.io.
-///
-/// The line sits 12 pt in from the edges because desktop printers cannot reach the
-/// outer 12–18 pt of a sheet; any closer and printed copies lose it.
+/// Draw the lpdf mark and "Lpdf" right-aligned in the page's top-right corner, `ATTRIBUTION_PAD` in from the edges,
+/// and cover the whole line with one link to lpdf.io.
 fn draw_attribution(
     content: &mut Content,
     annots:  &mut Vec<AnnotData>,
@@ -2744,13 +2753,11 @@ fn draw_attribution(
     page_h:  f32,
     link:    bool,
 ) {
-    const PAD:         f32 = 12.0;
-    const NAME_SIZE:   f32 = 9.0;
-    const MARK_SIZE:   f32 = 9.0;
-    const GAP:         f32 = 3.0;
-    // Radley ships no bold. Stroking the outline as well as filling it thickens the
-    // glyphs, the way browsers synthesise the 600 weight the lpdf.io wordmark asks for.
-    const BOLD_STROKE: f32 = NAME_SIZE * 0.04;
+    const PAD:         f32 = ATTRIBUTION_PAD;
+    const NAME_SIZE:   f32 = ATTRIBUTION_NAME_SIZE;
+    const MARK_SIZE:   f32 = ATTRIBUTION_MARK_SIZE;
+    const GAP:         f32 = ATTRIBUTION_GAP;
+    const BOLD_STROKE: f32 = ATTRIBUTION_BOLD_STROKE;
 
     let Some(name_font) = fonts.get(ATTRIBUTION_FONT_KEY) else {
         return;
