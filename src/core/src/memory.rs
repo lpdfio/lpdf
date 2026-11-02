@@ -28,6 +28,8 @@ const BYTES_PER_MB: i64 = 1_048_576;
 thread_local! {
     /// The bytes allocated and not yet freed on this thread.
     static LIVE: Cell<i64> = const { Cell::new(0) };
+    /// The most `LIVE` has been since the last `mark`.
+    static PEAK: Cell<i64> = const { Cell::new(0) };
     /// The `LIVE` past which the render is past its cap; `i64::MAX` outside a render.
     static LIMIT: Cell<i64> = const { Cell::new(i64::MAX) };
     /// Whether `LIVE` went past `LIMIT` since the render started.
@@ -82,6 +84,9 @@ unsafe impl GlobalAlloc for Counting {
 fn grow(bytes: i64) {
     let live = LIVE.get() + bytes;
     LIVE.set(live);
+    if live > PEAK.get() {
+        PEAK.set(live);
+    }
     if live > LIMIT.get() {
         PASSED.set(true);
     }
@@ -112,21 +117,24 @@ pub(crate) struct Cap(());
 
 /// Start the cap of a render: from here, the render may hold `cap_mb` megabytes more than this thread holds now.
 pub(crate) fn start(cap_mb: u32) -> Cap {
-    start_from(cap_mb, live())
+    start_from(cap_mb, mark())
 }
 
-/// Start the cap of a render that began when this thread held `live` bytes, as `live()` read them: what the render
-/// allocated since counts too.
-pub(crate) fn start_from(cap_mb: u32, live: i64) -> Cap {
+/// Start the cap of a render that began at `mark`, before its cap was known: what it held since, freed or not, counts
+/// too.
+pub(crate) fn start_from(cap_mb: u32, mark: i64) -> Cap {
     CAP_MB.set(cap_mb);
-    LIMIT.set(live + i64::from(cap_mb) * BYTES_PER_MB);
-    PASSED.set(LIVE.get() > LIMIT.get());
+    LIMIT.set(mark + i64::from(cap_mb) * BYTES_PER_MB);
+    PASSED.set(PEAK.get() > LIMIT.get());
     Cap(())
 }
 
-/// The bytes this thread holds now, for `start_from`.
-pub(crate) fn live() -> i64 {
-    LIVE.get()
+/// Mark the start of a render whose cap starts later, with `start_from`: the bytes this thread holds now, from which
+/// the most it holds is followed.
+pub(crate) fn mark() -> i64 {
+    let live = LIVE.get();
+    PEAK.set(live);
+    live
 }
 
 impl Drop for Cap {
@@ -178,12 +186,11 @@ mod tests {
     }
 
     #[test]
-    fn a_render_started_earlier_counts_what_it_allocated_before_its_cap_started() {
-        let before = live();
-        let request = vec![0u8; 2 * BYTES_PER_MB as usize];
+    fn a_render_started_earlier_counts_what_it_held_before_its_cap_started() {
+        let before = mark();
+        drop(vec![0u8; 2 * BYTES_PER_MB as usize]);
         let _cap = start_from(1, before);
-        assert!(check().is_err(), "the request it read counts");
-        drop(request);
+        assert!(check().is_err(), "what it held, though it was freed, counts");
     }
 
     #[test]

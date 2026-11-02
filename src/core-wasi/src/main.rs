@@ -126,7 +126,7 @@ fn main() {
 fn dispatch(request: String) -> String {
     // The render's cap counts from here, so the data the request carries counts toward it, as it does in the JS build,
     // which parses it in the render.
-    let before = memory::live();
+    let before = memory::mark();
     let mut req: serde_json::Value = match serde_json::from_str(&request) {
         Ok(v) => v,
         Err(e) => return serde_json::json!({ "error": format!("request parse error: {e}") }).to_string(),
@@ -642,7 +642,8 @@ mod tests {
     #[test]
     fn the_data_of_the_request_counts_toward_the_cap() {
         let xml = r#"<lpdf version="1"><document><section><layout><text data-value="title">x</text></layout></section></document></lpdf>"#;
-        let rows: Vec<serde_json::Value> = (0..50_000).map(|i| serde_json::json!({ "name": format!("Row {i}") })).collect();
+        // 2 MB of text: the request's text is dropped before the cap starts, which must not hide it.
+        let rows: Vec<String> = (0..10_000).map(|i| format!("{} {i}", "Some text that is bound.".repeat(8))).collect();
         let data = serde_json::json!({ "title": "Report", "rows": rows });
         let error = answer("render_pdf", xml, serde_json::json!({ "data": data, "max_memory_mb": 1 }));
         assert!(error["error"].as_str().unwrap_or_default().contains("its cap of 1 MB"), "{error}");
