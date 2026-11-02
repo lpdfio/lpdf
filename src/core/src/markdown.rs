@@ -2380,7 +2380,7 @@ mod tests {
         let xml = document("", "", &body);
         let pdf = crate::LpdfEngine::render_xml_to_pdf_bytes(&xml).unwrap();
         assert!(pdf.starts_with(b"%PDF"));
-        let pages = crate::layout::layout_document(&parse(&xml).unwrap().section_layouts());
+        let pages = crate::layout::layout_document(&parse(&xml).unwrap().section_layouts()).unwrap();
         assert!(pages.len() > 2, "{} pages", pages.len());
     }
 

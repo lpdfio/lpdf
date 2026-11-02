@@ -64,6 +64,7 @@ impl Document {
             let mut margin = [0.0_f32; 4];
             let mut gap = 0.0_f32;
             let mut seen_layout = false;
+            let mut insets: Vec<Inset> = Vec::new();
             for sc in section.children {
                 match sc {
                     SectionChild::Layout { margin: layout_margin, gap: layout_gap, children: layout_children } => {
@@ -77,10 +78,11 @@ impl Document {
                             match lc {
                                 LayoutChild::Content(node) => middle.push(node),
                                 // A header or a footer is drawn on every page, so a screen reader skips it. A region
-                                // that stays in the flow is read with it.
+                                // that stays in the flow is read with it, and so is an inset.
                                 LayoutChild::Region(reg) => match reg.pin {
                                     RegionPin::Top    => top.push(Node { role: Role::Artifact, ..region_to_compat_node(reg) }),
                                     RegionPin::Bottom => bottom.push(Node { role: Role::Artifact, ..region_to_compat_node(reg) }),
+                                    RegionPin::Inset  => insets.extend(region_to_inset(reg)),
                                     // Not implemented: stays where it is written.
                                     RegionPin::Left | RegionPin::Right => middle.push(region_to_compat_node(reg)),
                                 },
@@ -110,6 +112,12 @@ impl Document {
             // of contents section is bound after it is laid out, and gets its lists then (`toc.rs`).
             if section.options.toc.is_none() {
                 crate::lists::lower_all(&mut children);
+                for inset in &mut insets {
+                    crate::lists::lower_all(std::slice::from_mut(&mut inset.node));
+                }
+            }
+            if self.output.pdfa.is_some() || self.output.pdfua.is_some() {
+                insets.iter_mut().for_each(|inset| forget_ocg(&mut inset.node));
             }
             // The numbers of a section that counts across the document go on from the notes the earlier ones that
             // do hold, so they are counted here, once the data is in.
@@ -125,6 +133,8 @@ impl Document {
                 footnote_counter, footnote_start,
                 page_numbering: section.options.page_numbering,
                 tagged: crate::pdfa::Standards::of(&self.output).tagged(),
+                columns: section.options.columns,
+                insets,
             });
         }
         result
@@ -149,6 +159,17 @@ fn region_to_compat_node(reg: LayoutRegion) -> Node {
     }
 }
 
+/// The inset a region pinned `inset` is: its content as one column, which keeps out of the flow by its place rather
+/// than its page scope.
+fn region_to_inset(reg: LayoutRegion) -> Option<Inset> {
+    let at = reg.inset?;
+    Some(Inset {
+        page: reg.page.unwrap_or(PageScope::Each),
+        at,
+        node: Node { kind: NodeKind::Column, debug: reg.debug, children: reg.children, ..Node::layout_default() },
+    })
+}
+
 // ── Section types ─────────────────────────────────────────────────────────────
 
 /// A page-range within a `PageScope`.  `end = None` means "last".
@@ -169,21 +190,77 @@ pub enum PageScope {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum RegionPin { Top, Bottom, Left, Right }
+pub enum RegionPin { Top, Bottom, Left, Right, Inset }
 
 /// A pinned chrome slot inside a `<layout>`.
 /// Only valid as a direct child of `<layout>`, not inside containers.
 #[derive(Debug, Clone)]
 pub struct LayoutRegion {
-    /// Top and bottom decide where `section_layouts` puts the region; left and right are not implemented.
+    /// Top and bottom decide where `section_layouts` puts the region, and inset puts it in the columns; left and
+    /// right are not implemented.
     pub pin:      RegionPin,
     pub page:     Option<PageScope>,
     /// `w` is required for `Left`/`Right`; ignored for `Top`/`Bottom`.
     /// Not yet used by `region_to_compat_node`.
     #[allow(dead_code)]
     pub w:        Option<f32>,
+    /// Where an inset is in the columns; `None` for any other pin.
+    pub inset:    Option<InsetPlace>,
     pub children: Vec<Node>,
     pub debug:    bool,
+}
+
+/// Where a region pinned `inset` is in a section's columns: `top` below the top of the columns, `height` high,
+/// across `span` columns from the column `col`, counted from 0.
+#[derive(Debug, Clone, PartialEq)]
+pub struct InsetPlace {
+    pub col:    usize,
+    pub span:   usize,
+    pub top:    f32,
+    pub height: f32,
+    /// Where the region is written, for an error the layout finds.
+    pub place:  String,
+}
+
+/// A region pinned inside the columns, with the pages it is on: the flow keeps out of its rectangle there.
+#[derive(Debug, Clone)]
+pub struct Inset {
+    pub page:  PageScope,
+    pub at:    InsetPlace,
+    /// Its content, as one column.
+    pub node:  Node,
+}
+
+/// The most columns a section takes, as a grid's `cols`.
+pub const MAX_COLUMNS: usize = 12;
+
+/// How a section sets its flow: in `count` columns `gap` apart, with a `rule` in the middle of each gap, and how
+/// its last page fills (`columns`, `column-gap`, `column-rule` and `column-fill`). One column is a section as it
+/// always was.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Columns {
+    pub count: usize,
+    pub gap:   f32,
+    /// The thickness and color of the line between two columns that hold something; `None` for none.
+    pub rule:  Option<(f32, String)>,
+    pub fill:  ColumnFill,
+}
+
+impl Default for Columns {
+    /// One column: the section of a document that sets no `columns`.
+    fn default() -> Self {
+        Columns { count: 1, gap: 0.0, rule: None, fill: ColumnFill::Auto }
+    }
+}
+
+/// `column-fill`: how the columns of a section's last page fill.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum ColumnFill {
+    /// In order, as on every other page.
+    #[default]
+    Auto,
+    /// Levelled, as evenly as the content allows.
+    Balance,
 }
 
 #[derive(Debug, Clone)]
@@ -222,6 +299,8 @@ pub struct SectionOptions {
     pub footnote_counter: Option<FootnoteCounter>,
     /// `page-start`, `page-format` and `page-prefix`.
     pub page_numbering: PageNumbering,
+    /// `columns`, `column-gap`, `column-rule` and `column-fill`.
+    pub columns: Columns,
 }
 
 /// What a table of contents section needs once the other sections are laid out.
@@ -322,6 +401,10 @@ pub struct SectionLayout {
     /// Whether the layout says what each thing it draws is, for the structure of a tagged PDF: a document with
     /// `<output pdfua>`, or with a `pdfa` of level a. No other document pays for it.
     pub tagged: bool,
+    /// The columns the flow is set in: one for a section that sets none.
+    pub columns: Columns,
+    /// The regions pinned inside the columns, in the order they are written.
+    pub insets: Vec<Inset>,
 }
 
 #[derive(Debug, Clone)]
@@ -2113,11 +2196,13 @@ fn parse_region_elem(
         "bottom" => RegionPin::Bottom,
         "left"   => RegionPin::Left,
         "right"  => RegionPin::Right,
-        other => return Err(format!("<region>{}: invalid pin '{other}' — use top, bottom, left, or right", node_loc(elem))),
+        "inset"  => RegionPin::Inset,
+        other => return Err(format!("<region>{}: invalid pin '{other}' — use top, bottom, left, right or inset", node_loc(elem))),
     };
     let page = elem.attribute("page").map(parse_page_scope).transpose()?;
     let w    = elem.attribute("w").map(parse_measurement).transpose()?;
     let debug = elem.attribute("debug").map(|v| v == "true").unwrap_or(false);
+    let inset = parse_inset_place(elem, &pin, "region").map_err(|e| format!("<region>{}: {e}", node_loc(elem)))?;
 
     let mut children = Vec::new();
     let mut pending = PendingBookmarks::default();
@@ -2134,7 +2219,78 @@ fn parse_region_elem(
     if children.iter().any(|c| count_footnotes(c) > 0) {
         return Err(format!("<region>{}: {}", node_loc(elem), footnote_not_here("a region")));
     }
-    Ok(LayoutRegion { pin, page, w, children, debug })
+    Ok(LayoutRegion { pin, page, w, inset, children, debug })
+}
+
+/// Where a region pinned `inset` is: `col`, `colspan`, `top` and `height`, which only an inset takes, and of which
+/// it needs `top` and `height`. `None` for a region pinned anywhere else. `tag` names the element where an error the
+/// layout finds says where it is written.
+fn parse_inset_place(a: &impl Attrs, pin: &RegionPin, tag: &str) -> Result<Option<InsetPlace>, String> {
+    const PLACE: [&str; 4] = ["col", "colspan", "top", "height"];
+    if *pin != RegionPin::Inset {
+        return match PLACE.iter().find(|name| a.get(name).is_some()) {
+            Some(name) => Err(format!("{name} places a region pinned inset; a region pinned to an edge takes no {name}")),
+            None       => Ok(None),
+        };
+    }
+    let column = |name: &str| match a.get(name) {
+        None    => Ok(1),
+        Some(v) => match v.trim().parse::<usize>() {
+            Ok(n) if (1..=MAX_COLUMNS).contains(&n) => Ok(n),
+            _ => Err(format!("invalid {name} '{v}': expected a whole number from 1 to {MAX_COLUMNS}")),
+        },
+    };
+    let length = |name: &str| match a.get(name) {
+        Some(v) => parse_measurement(v).map_err(|e| format!("{name}: {e}")),
+        None    => Err(format!("an inset needs a top and a height, which place it in the columns; {name} is missing")),
+    };
+    Ok(Some(InsetPlace {
+        col:    column("col")? - 1,
+        span:   column("colspan")?,
+        top:    length("top")?,
+        height: length("height")?,
+        place:  a.place(tag),
+    }))
+}
+
+/// `columns`, `column-gap`, `column-rule` and `column-fill` on a section.
+fn parse_section_columns(a: &impl Attrs, tokens: &Tokens) -> Result<Columns, String> {
+    let count = match a.get("columns") {
+        None    => 1,
+        Some(v) => match v.trim().parse::<usize>() {
+            Ok(n) if (1..=MAX_COLUMNS).contains(&n) => n,
+            _ => return Err(format!("invalid columns '{v}': expected a whole number from 1 to {MAX_COLUMNS}")),
+        },
+    };
+    // `l` by default, since no gap would run the text of two columns together; a token, it follows the theme.
+    let gap = tokens.resolve_space(a.get("column-gap").unwrap_or("l")).map_err(|e| format!("column-gap: {e}"))?;
+    let rule = a.get("column-rule").map(|v| tokens.resolve_border(v)).transpose().map_err(|e| format!("column-rule: {e}"))?;
+    let fill = match a.get("column-fill") {
+        None | Some("auto") => ColumnFill::Auto,
+        Some("balance")     => ColumnFill::Balance,
+        Some(other)         => return Err(format!("invalid column-fill '{other}' — expected auto or balance")),
+    };
+    Ok(Columns { count, gap, rule, fill })
+}
+
+/// Whether the insets of a section's layout stay within its `columns`: each `col` and `colspan` ends at the last
+/// column or before it.
+fn check_inset_columns(children: &[SectionChild], columns: usize) -> Result<(), String> {
+    let insets = children.iter()
+        .filter_map(|c| match c { SectionChild::Layout { children, .. } => Some(children), _ => None })
+        .flatten()
+        .filter_map(|c| match c { LayoutChild::Region(r) => r.inset.as_ref(), _ => None });
+    for at in insets {
+        let last = at.col + at.span;
+        if last > columns {
+            let has = if columns == 1 { "1 column".to_string() } else { format!("{columns} columns") };
+            return Err(format!(
+                "{}: col {} and colspan {} reach column {last}, past the section's {has}; set columns on the section, or a smaller col or colspan",
+                at.place, at.col + 1, at.span,
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// What to write instead of `<canvas>`, which the format no longer has.
@@ -2177,6 +2333,7 @@ fn parse_section_elem(
         .transpose()
         .map_err(|e| format!("<section>{}: {e}", node_loc(elem)))?;
     let page_numbering = parse_page_numbering(elem).map_err(|e| format!("<section>{}: {e}", node_loc(elem)))?;
+    let columns = parse_section_columns(elem, tokens).map_err(|e| format!("<section>{}: {e}", node_loc(elem)))?;
 
     let text = TextDefaults::of_section(doc_font, tokens, asset_fonts);
 
@@ -2251,6 +2408,7 @@ fn parse_section_elem(
             node_loc(elem)
         ));
     }
+    check_inset_columns(&children, columns.count)?;
 
     Ok(Section {
         children,
@@ -2263,6 +2421,7 @@ fn parse_section_elem(
             toc,
             footnote_counter,
             page_numbering,
+            columns,
         },
         bookmark,
     })
@@ -4130,6 +4289,7 @@ fn parse_tree_section(
         .transpose()
         .map_err(|e| format!("section: {e}"))?;
     let page_numbering = parse_page_numbering(&a).map_err(|e| format!("section: {e}"))?;
+    let columns = parse_section_columns(&a, tokens).map_err(|e| format!("section: {e}"))?;
 
     let text = TextDefaults::of_section(doc_font, tokens, asset_fonts);
 
@@ -4201,6 +4361,7 @@ fn parse_tree_section(
     if children.is_empty() {
         return Err("section must have at least one layout or layer child".into());
     }
+    check_inset_columns(&children, columns.count)?;
 
     Ok(Section {
         children,
@@ -4213,6 +4374,7 @@ fn parse_tree_section(
             toc,
             footnote_counter,
             page_numbering,
+            columns,
         },
         bookmark,
     })
@@ -4240,11 +4402,13 @@ fn parse_tree_region(
         "bottom" => RegionPin::Bottom,
         "left"   => RegionPin::Left,
         "right"  => RegionPin::Right,
+        "inset"  => RegionPin::Inset,
         other => return Err(format!("region invalid pin '{other}'")),
     };
     let page  = jattr(json, "page").map(parse_page_scope).transpose()?;
     let w     = jattr(json, "w").map(parse_measurement).transpose()?;
     let debug = jattr(json, "debug").map(|v| v == "true").unwrap_or(false);
+    let inset = parse_inset_place(&JsonAttrs(json), &pin, "region").map_err(|e| format!("region: {e}"))?;
 
     let mut children = Vec::new();
     if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
@@ -4263,7 +4427,7 @@ fn parse_tree_region(
     if children.iter().any(|c| count_footnotes(c) > 0) {
         return Err(format!("region: {}", footnote_not_here("a region")));
     }
-    Ok(LayoutRegion { pin, page, w, children, debug })
+    Ok(LayoutRegion { pin, page, w, inset, children, debug })
 }
 
 fn parse_tree_node(

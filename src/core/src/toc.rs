@@ -24,8 +24,15 @@ const MAX_PASSES: usize = 4;
 
 /// Lay out `sections`, of which the one at `toc_index` is the table of contents.
 pub(crate) fn layout_with_toc(sections: &[SectionLayout], toc_index: usize, options: &TocOptions) -> LaidDocument {
+    // Each section is filled knowing the number of its first page, with the TOC one page long, as the guess below.
+    let mut next = 1u64;
     let filled: Vec<Option<FilledSection>> = sections.iter().enumerate()
-        .map(|(i, section)| (i != toc_index).then(|| fill_section(section)))
+        .map(|(i, section)| {
+            let first = section.page_numbering.start.map_or(next, u64::from);
+            let filled = (i != toc_index).then(|| fill_section(section, first));
+            next = first + filled.as_ref().map_or(1, FilledSection::page_count) as u64;
+            filled
+        })
         .collect();
     // A section lays out to one page at least, so one is the first guess.
     let mut counts: Vec<usize> = filled.iter().map(|f| f.as_ref().map_or(1, FilledSection::page_count)).collect();
@@ -69,7 +76,7 @@ fn toc_pass(
     let numbers = page_numbers::number_sections(sections, counts);
     let entries = toc_entries(laid, toc_index, &numbers, options.indent_step);
     let toc = bound_section(&sections[toc_index], options, entries);
-    let filled = fill_section(&toc);
+    let filled = fill_section(&toc, numbers[toc_index].first);
     (toc, filled)
 }
 
@@ -120,7 +127,7 @@ mod tests {
     }
 
     fn render(sections: &str) -> Vec<RenderPage> {
-        layout_document(&parse(&document(sections)).unwrap().section_layouts())
+        layout_document(&parse(&document(sections)).unwrap().section_layouts()).unwrap()
     }
 
     /// The lines of text on `pages`, in the order they are drawn.
@@ -322,7 +329,7 @@ mod tests {
                <section><layout><bookmark label="Alpha"/><text data-value="body">Body</text></layout></section>"#,
         )).unwrap();
         data::apply(&mut doc, &crate::data::parse(r#"{"title": "Report", "body": "Text", "$toc": ["ignored"]}"#).unwrap()).unwrap();
-        let pages = layout_document(&doc.section_layouts());
+        let pages = layout_document(&doc.section_layouts()).unwrap();
         assert_eq!(texts(&pages), ["Report", "Alpha", "Text"]);
     }
 }

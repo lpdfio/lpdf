@@ -39,7 +39,7 @@ fn document(flow: &str, layers: &str) -> String {
 /// The pages `xml` lays out.
 fn pages(xml: &str) -> Vec<RenderPage> {
     let mut doc = parse::parse(xml).unwrap_or_else(|e| panic!("parses: {e}"));
-    layout::layout_document(&doc.section_layouts())
+    layout::layout_document(&doc.section_layouts()).unwrap()
 }
 
 fn text(pdf: &[u8]) -> String {

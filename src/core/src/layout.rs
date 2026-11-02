@@ -1,8 +1,10 @@
-use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Capture, CaptureMode, Direction, FieldKind, Footnote, HeightMode, Justify, Node, NodeKind, Ocg, PageScope, Role, RowKeep, SectionLayout, Paginate, Reference, TextAlign, TextRun};
+use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Capture, CaptureMode, Direction, FieldKind, Footnote, HeightMode, Inset, Justify, Node, NodeKind, Ocg, PageScope, Role, RowKeep, SectionLayout, Paginate, Reference, TextAlign, TextRun};
 
 // The path is spelled out because the WASI build includes this file from another crate.
 #[path = "layout/footnotes.rs"]
 mod footnotes;
+#[path = "layout/columns.rs"]
+mod columns;
 #[path = "layout/table_grid.rs"]
 mod table_grid;
 #[cfg(test)]
@@ -14,6 +16,9 @@ mod footnote_clip_tests;
 #[cfg(test)]
 #[path = "layout/aligned_text_tests.rs"]
 mod aligned_text_tests;
+#[cfg(test)]
+#[path = "layout/columns_tests.rs"]
+mod columns_tests;
 pub(crate) use table_grid::{Held, Placed};
 use table_grid::TableGrid;
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
@@ -45,6 +50,16 @@ thread_local! {
     static TAGGING: Cell<bool> = const { Cell::new(false) };
     /// The last tag id given. Ids count on across the sections of a document, and the passes of a table of contents.
     static LAST_TAG_ID: Cell<u32> = const { Cell::new(0) };
+    /// The first error the layout found, which `layout_document` returns: one that only the filled pages show, such
+    /// as an inset that reaches below the room of a page it is on.
+    static LAYOUT_ERROR: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+/// Record `error` for `layout_document` to return, unless an earlier one is.
+fn refuse(error: String) {
+    LAYOUT_ERROR.with(|slot| {
+        slot.borrow_mut().get_or_insert(error);
+    });
 }
 
 /// Whether the section being laid out is tagged.
@@ -271,14 +286,14 @@ fn prefill_node(node: &mut Node, meta: &ImageMeta) {
 /// Lay out one section on its own, its pages numbered from its own `page-start`, or 1.
 #[cfg(test)]
 pub fn layout_page(page: &SectionLayout) -> Vec<RenderPage> {
-    let filled = fill_section(page);
+    let filled = fill_section(page, page.page_numbering.start.map_or(1, u64::from));
     let numbers = SectionNumbers::alone(&page.page_numbering, filled.page_count());
     finish_section(page, filled, &numbers)
 }
 
 /// Lay out a section whose pages have `numbers`.
 pub(crate) fn layout_numbered(page: &SectionLayout, numbers: &SectionNumbers) -> Vec<RenderPage> {
-    finish_section(page, fill_section(page), numbers)
+    finish_section(page, fill_section(page, numbers.first), numbers)
 }
 
 /// A section laid out but for what waits for the numbers of its pages, which depend on the sections around it:
@@ -308,19 +323,21 @@ pub(crate) struct ChromePages {
     budget_first: f32,
     budget_rest:  f32,
     pages:        Vec<FilledPage>,
+    /// The section's insets, as the pages were filled with them: numbered in a tagged section.
+    insets:       Vec<Inset>,
 }
 
-/// Fill the pages of `page`: all of it but what shows their numbers.
-pub(crate) fn fill_section(page: &SectionLayout) -> FilledSection {
+/// Fill the pages of `page`, whose first page has the number `first_number`: all of it but what shows their numbers.
+pub(crate) fn fill_section(page: &SectionLayout, first_number: u64) -> FilledSection {
     if !page.tagged {
-        return fill_pages(page);
+        return fill_pages(page, first_number);
     }
     // The section's nodes are numbered once its data is in, so a node that `data-source` repeats is one of its own.
     let mut tagged = page.clone();
-    for node in &mut tagged.children {
+    for node in tagged.children.iter_mut().chain(tagged.insets.iter_mut().map(|inset| &mut inset.node)) {
         number_for_tags(node, false);
     }
-    with_tagging(|| fill_pages(&tagged))
+    with_tagging(|| fill_pages(&tagged, first_number))
 }
 
 /// Finish the pages `fill_section` filled for `page`, which have `numbers`: the header and the footer, the layers,
@@ -387,12 +404,19 @@ fn finish_pages(page: &SectionLayout, filled: FilledSection, numbers: &SectionNu
 }
 
 /// Lay out every section in document order. A document with cross-references is laid out until each shows the
-/// page its bookmark is on (`references`).
-pub fn layout_document(sections: &[SectionLayout]) -> Vec<RenderPage> {
-    if references::any(sections) {
-        return references::layout_with_references(sections);
+/// page its bookmark is on (`references`). An error is what only the filled pages show, such as an inset that
+/// reaches below the room of a page it is on.
+pub fn layout_document(sections: &[SectionLayout]) -> Result<Vec<RenderPage>, String> {
+    LAYOUT_ERROR.with(|slot| slot.borrow_mut().take());
+    let pages = if references::any(sections) {
+        references::layout_with_references(sections)
+    } else {
+        lay_out_document(sections).pages
+    };
+    match LAYOUT_ERROR.with(|slot| slot.borrow_mut().take()) {
+        Some(error) => Err(error),
+        None        => Ok(pages),
     }
-    lay_out_document(sections).pages
 }
 
 /// The pages of a document, with the numbers of each section's pages and how many it has.
@@ -413,7 +437,16 @@ pub(crate) fn lay_out_document(sections: &[SectionLayout]) -> LaidDocument {
     if let Some((toc_index, options)) = toc {
         return toc::layout_with_toc(sections, toc_index, options);
     }
-    let filled: Vec<FilledSection> = sections.iter().map(fill_section).collect();
+    // Each section is filled knowing the number of its first page, which follows from the sections before it.
+    let mut next = 1u64;
+    let filled: Vec<FilledSection> = sections.iter()
+        .map(|section| {
+            let first = section.page_numbering.start.map_or(next, u64::from);
+            let filled = fill_section(section, first);
+            next = first + filled.page_count() as u64;
+            filled
+        })
+        .collect();
     let counts: Vec<usize> = filled.iter().map(FilledSection::page_count).collect();
     let numbers = page_numbers::number_sections(sections, &counts);
     let mut pages: Vec<RenderPage> = sections.iter().zip(filled).zip(&numbers)
@@ -429,17 +462,19 @@ pub(crate) fn renumbering_changes(page: &SectionLayout, before: &SectionNumbers,
     before != after && (shows_page_numbers(page) || (before.first % 2 != after.first % 2 && shows_by_side(page)))
 }
 
-/// Whether the header, the footer or a layer of `page` shows `{page}` or `{pages}`.
+/// Whether the header, the footer, a layer or an inset of `page` shows `{page}` or `{pages}`.
 fn shows_page_numbers(page: &SectionLayout) -> bool {
     page.children.iter().filter(|node| node.page_scope.is_some()).any(has_page_tokens)
         || page.underlays.iter().chain(&page.overlays).any(canvas::CanvasLayer::shows_page_numbers)
+        || page.insets.iter().any(|inset| has_page_tokens(&inset.node))
 }
 
-/// Whether a header, a footer or a layer of `page` shows on odd or on even pages only.
+/// Whether a header, a footer, a layer or an inset of `page` shows on odd or on even pages only.
 fn shows_by_side(page: &SectionLayout) -> bool {
     let by_side = |scope: &Option<PageScope>| matches!(scope, Some(PageScope::Odd | PageScope::Even));
     page.children.iter().any(|node| by_side(&node.page_scope))
         || page.underlays.iter().chain(&page.overlays).any(|layer| by_side(&layer.page))
+        || page.insets.iter().any(|inset| matches!(inset.page, PageScope::Odd | PageScope::Even))
 }
 
 /// Whether a text of `node` or below it shows `{page}` or `{pages}`.
@@ -447,16 +482,20 @@ pub(crate) fn has_page_tokens(node: &Node) -> bool {
     node.text_runs.iter().any(|run| run.text.contains("{page")) || node.children.iter().any(has_page_tokens)
 }
 
-fn fill_pages(page: &SectionLayout) -> FilledSection {
+fn fill_pages(page: &SectionLayout, first_number: u64) -> FilledSection {
     let [mt, mr, mb, ml] = page.margin;
     let avail_x = ml;
     let avail_y = mt;
     let avail_w = (page.width - ml - mr).max(0.0);
     let avail_h = (page.height - mt - mb).max(0.0);
+    // A section in columns, or with an inset, fills its pages column by column (`columns`). One without either is
+    // filled as it always was.
+    let in_columns = page.columns.count > 1 || !page.insets.is_empty();
 
     // Exemption: a single Full- or Fill-height child always occupies exactly
     // one page — skip pagination entirely.
-    if page.children.len() == 1
+    if !in_columns
+        && page.children.len() == 1
         && matches!(
             page.children[0].height_mode,
             HeightMode::Full | HeightMode::Fill
@@ -511,7 +550,7 @@ fn fill_pages(page: &SectionLayout) -> FilledSection {
     }
 
     // Fast path: no chrome — standard pagination.
-    if top_chrome.is_empty() && bot_chrome.is_empty() {
+    if !in_columns && top_chrome.is_empty() && bot_chrome.is_empty() {
         // Each page is laid out as soon as it is filled, so that its nodes and the trees kept for them don't wait
         // for the pages after it.
         let start = FlowStart { x: avail_x, first_y: avail_y, rest_y: avail_y };
@@ -554,6 +593,14 @@ fn fill_pages(page: &SectionLayout) -> FilledSection {
     // of pages, and so does the flow below a header that can be another height on some page.
     let start = header_height_fixed(&top_chrome)
         .then_some(FlowStart { x: avail_x, first_y: avail_y + top_first_h, rest_y: avail_y + top_always_h });
+    if in_columns {
+        let pages = columns::fill_pages(&columns::ColumnFlow {
+            section: page, nodes: &flow, w: avail_w, budget_first, budget_rest, start, has_notes, first_number,
+        });
+        return FilledSection::Chrome(ChromePages {
+            top: top_chrome, bottom: bot_chrome, budget_first, budget_rest, pages, insets: page.insets.clone(),
+        });
+    }
     let chunks: Vec<FilledPage> = footnotes::split_flow(&flow, start, avail_w, budget_first, budget_rest, page.gap, page.footnote_counter, has_notes)
         .enumerate()
         .map(|(idx, chunk)| {
@@ -571,10 +618,12 @@ fn fill_pages(page: &SectionLayout) -> FilledSection {
                 }
                 None => PageFlow::Nodes(chunk.nodes),
             };
-            FilledPage { flow, captured, notes: chunk.notes, room }
+            FilledPage { flow, captured, notes: chunk.notes, room, insets: Vec::new() }
         })
         .collect();
-    FilledSection::Chrome(ChromePages { top: top_chrome, bottom: bot_chrome, budget_first, budget_rest, pages: chunks })
+    FilledSection::Chrome(ChromePages {
+        top: top_chrome, bottom: bot_chrome, budget_first, budget_rest, pages: chunks, insets: Vec::new(),
+    })
 }
 
 /// Lay out the header and the footer of a section's filled pages, which have `numbers`, and a flow that waited for
@@ -585,7 +634,7 @@ fn finish_chrome(page: &SectionLayout, chrome: ChromePages, numbers: &SectionNum
     let avail_y = mt;
     let avail_w = (page.width - ml - mr).max(0.0);
     let avail_h = (page.height - mt - mb).max(0.0);
-    let ChromePages { top: top_chrome, bottom: bot_chrome, budget_first, budget_rest, pages: chunks } = chrome;
+    let ChromePages { top: top_chrome, bottom: bot_chrome, budget_first, budget_rest, pages: chunks, insets } = chrome;
     let total_pages = chunks.len();
 
     // ── Build each output page ───────────────────────────────────────────────
@@ -643,10 +692,15 @@ fn finish_chrome(page: &SectionLayout, chrome: ChromePages, numbers: &SectionNum
                 );
                 clip_overflow(flow_nodes, used, flow_y + room, room, page.width)
             }
+            PageFlow::Columns(parts) => columns::lay_out_parts(page, parts, &chunk.insets, avail_x, flow_y),
         };
 
         let mut all_nodes = top_nodes;
         all_nodes.extend(flow_nodes);
+        if !chunk.insets.is_empty() {
+            let tokens = PageTokens::new(numbers, idx);
+            all_nodes.extend(columns::draw_insets(page, &insets, &chunk.insets, avail_x, flow_y, tokens));
+        }
         all_nodes.extend(footnotes::draw_area(&chunk.notes, avail_x, bot_y, avail_w, flow_budget));
         all_nodes.extend(bot_nodes);
 
@@ -692,20 +746,22 @@ fn finish_chrome(page: &SectionLayout, chrome: ChromePages, numbers: &SectionNum
     pages_out
 }
 
-/// A page of a section with a header or a footer, filled: its flow, what its texts captured, its notes and the
-/// height its flow has.
+/// A page of a section with a header or a footer, or in columns, filled: its flow, what its texts captured, its notes,
+/// the height its flow has, and the insets on it, by their place among the section's.
 struct FilledPage {
     flow:     PageFlow,
     captured: PageCaptures,
     notes:    Vec<footnotes::Note>,
     room:     f32,
+    insets:   Vec<usize>,
 }
 
 /// The flow of a filled page: laid out at `y` when the page was filled, or its nodes, which wait for the header
-/// above them.
+/// above them, in one column or in columns.
 enum PageFlow {
     Laid { nodes: Vec<RenderNode>, y: f32 },
     Nodes(Vec<Node>),
+    Columns(columns::ColumnParts),
 }
 
 /// The flow of a page, laid out `used` high in a `room` that ends at `bottom`. A flow that runs past it holds a node
@@ -1004,8 +1060,81 @@ fn fill_page(
     next_budget: f32,
     gap: f32,
 ) -> (Vec<(Node, Option<Kept>)>, bool) {
+    let filled = fill_room(pending, at, avail_w, budget, next_budget, gap, FillRule::PAGE);
+    (filled.nodes, filled.runs_past)
+}
+
+/// What `fill_room` does with a node that doesn't fit its room while nothing is placed in it yet.
+#[derive(Clone, Copy, PartialEq)]
+enum Overflow {
+    /// Places it anyway, cut at the foot of the room: on a page, or a whole column, nothing gives it more room.
+    Place,
+    /// Places it only when it is taller than this, the room it would get on its own: a trial height of a balanced
+    /// page leaves the rest for a taller one.
+    PlaceOver(f32),
+    /// Leaves it for the room after, as a column's part above an inset does.
+    Leave,
+}
+
+/// How `fill_room` fills its room: what it does with a node that doesn't fit at its top (`Overflow`), whether
+/// the room goes on from content above it, as the part of a column below an inset does, so that a `break-before`
+/// at its top ends it, and the height of the page it is a part of, which a node too tall for any room is measured
+/// against when it splits.
+#[derive(Clone, Copy)]
+struct FillRule {
+    overflow: Overflow,
+    follows:  bool,
+    /// The height of the whole column when the room is a part of it, or a trial height of it; `None` for a room
+    /// that is a page or a whole column.
+    page_h:   Option<f32>,
+}
+
+impl FillRule {
+    /// A page, or a whole column.
+    const PAGE: FillRule = FillRule { overflow: Overflow::Place, follows: false, page_h: None };
+
+    /// Whether a node `h` high that doesn't fit the empty room is placed there anyway.
+    fn places(&self, h: f32) -> bool {
+        match self.overflow {
+            Overflow::Place          => true,
+            Overflow::PlaceOver(own) => h > own + 0.5,
+            Overflow::Leave          => false,
+        }
+    }
+}
+
+/// Why `fill_room` ended its room.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Stop {
+    /// A node didn't fit, or the flow ran out.
+    Full,
+    /// A `break-before`, a `break-after` or a `keep-next` that moves on: in columns it ends the column, not only
+    /// the part of it being filled.
+    Break,
+}
+
+/// What `fill_room` took off the flow: the nodes with their trees, whether the room may run past its foot, as
+/// `fill_page` says, and why it ended.
+struct Filled {
+    nodes:     Vec<(Node, Option<Kept>)>,
+    runs_past: bool,
+    stop:      Stop,
+}
+
+/// `fill_page` for a room that `rule` says how to fill: a page, a column, or the part of a column around an inset.
+#[allow(clippy::too_many_arguments)]
+fn fill_room(
+    pending: &mut Pending,
+    at: Option<(f32, f32)>,
+    avail_w: f32,
+    budget: f32,
+    next_budget: f32,
+    gap: f32,
+    rule: FillRule,
+) -> Filled {
     let mut page: Vec<(Node, Option<Kept>)> = Vec::new();
     let mut runs_past = false;
+    let mut stop = Stop::Full;
     let mut used_h: f32 = 0.0;
     let x = at.map_or(0.0, |(x, _)| x);
     let mut place_y = at.map(|(_, y)| y);
@@ -1013,8 +1142,9 @@ fn fill_page(
     while let Some(node) = pending.pop() {
         // break-before: end the page before this node. Requeue without the flag to avoid an infinite loop on
         // a fresh page.
-        if node.paginate == Paginate::BreakBefore && !page.is_empty() {
+        if node.paginate == Paginate::BreakBefore && (!page.is_empty() || rule.follows) {
             pending.push_front(Node { paginate: Paginate::None, ..node });
+            stop = Stop::Break;
             break;
         }
 
@@ -1062,6 +1192,7 @@ fn fill_page(
                 for (kept, _) in moved.into_iter().rev() {
                     pending.push_front(kept);
                 }
+                stop = Stop::Break;
                 break;
             }
             needs_break_after = node.paginate == Paginate::BreakAfter;
@@ -1087,7 +1218,17 @@ fn fill_page(
             // splits never is: its tree goes before its parts are measured.
             let tree = tree.filter(|_| page.is_empty() && !splittable(&node));
             let target = remaining.max(0.0);
-            match split_node_at(&node, avail_w, target, budget) {
+            match split_node_at(&node, avail_w, target, rule.page_h.unwrap_or(budget)) {
+                // A first part that runs past an empty room that may not hold it waits for the room after.
+                SplitOutcome::First(first, _)
+                    if page.is_empty() && rule.overflow != Overflow::Place && may_run_past(&first) && {
+                        let fh = measure_height(&first, avail_w, budget);
+                        fh > target + 0.5 && !rule.places(fh)
+                    } =>
+                {
+                    pending.push_front(node);
+                    break;
+                }
                 SplitOutcome::First(first, mut rest) => {
                     // Propagate break-after to the last continuation so the
                     // break fires after the final fragment, not the first.
@@ -1105,6 +1246,15 @@ fn fill_page(
                     }
                     if cut {
                         pending.push_front(make_clip_warning());
+                    }
+                    break;
+                }
+                SplitOutcome::NothingFits(rest)
+                    if page.is_empty() && rule.overflow != Overflow::Place
+                        && rest.first().is_some_and(|first| !rule.places(measure_height(first, avail_w, budget))) =>
+                {
+                    for item in rest.into_iter().rev() {
+                        pending.push_front(item);
                     }
                     break;
                 }
@@ -1130,6 +1280,10 @@ fn fill_page(
                         break;
                     }
                 }
+                SplitOutcome::Atomic if page.is_empty() && !rule.places(h) => {
+                    pending.push_front(node);
+                    break;
+                }
                 SplitOutcome::Atomic => {
                     if page.is_empty() {
                         needs_break_after = node.paginate == Paginate::BreakAfter;
@@ -1150,11 +1304,12 @@ fn fill_page(
 
         // break-after: end the page after this node (or its last fragment) is placed.
         if needs_break_after && !page.is_empty() {
+            stop = Stop::Break;
             break;
         }
     }
 
-    (page, runs_past)
+    Filled { nodes: page, runs_past, stop }
 }
 
 /// Construct a small red diagnostic text node injected into the layout stream
@@ -7047,7 +7202,7 @@ abcdef</code><text>after</text></row>"#,
     // ── Bookmarks ─────────────────────────────────────────────────────────────
 
     fn render_pages(xml: &str) -> Vec<RenderPage> {
-        layout_document(&parse(xml).unwrap().section_layouts())
+        layout_document(&parse(xml).unwrap().section_layouts()).unwrap()
     }
 
     // ── Layers ────────────────────────────────────────────────────────────────

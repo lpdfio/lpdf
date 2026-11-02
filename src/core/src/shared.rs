@@ -71,8 +71,10 @@ pub(crate) fn render_doc_shared(
 ) -> String {
     super::layout::set_font_widths(font_widths);
     let section_layouts = doc.section_layouts();
-    let pages: Vec<super::render::RenderPage> =
-        super::layout::layout_document(&section_layouts);
+    let pages: Vec<super::render::RenderPage> = match super::layout::layout_document(&section_layouts) {
+        Ok(pages) => pages,
+        Err(e)    => return serde_json::json!({ "error": e }).to_string(),
+    };
     if let Err(e) = super::memory::check() {
         return serde_json::json!({ "error": e }).to_string();
     }

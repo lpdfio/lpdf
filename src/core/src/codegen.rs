@@ -2377,7 +2377,7 @@ mod tests {
     /// The PDF the engine makes of a parsed document.
     fn pdf_of(mut doc: crate::parse::Document) -> Vec<u8> {
         let layouts = doc.section_layouts();
-        let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts);
+        let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts).unwrap();
         let fonts = crate::pdf::FontRegistry::new();
         let images = crate::pdf::ImageRegistry::new();
         crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[], None).unwrap()
