@@ -38,6 +38,9 @@ const EXPECTED = {
     ProfileAttr: attributes('profile'),
     RegionAttr: attributes('region', 'layout'),
     LayerAttr: attributes('layer'),
+    // A stamp on an existing PDF, which no document holds, so the schema has no element of it: its options, written by
+    // hand in each SDK, as the core reads them (`stamp.rs`).
+    StampAttr: ['image', 'page', 'x', 'y', 'anchor', 'width', 'height', 'align', 'justify', 'scale', 'max-grow'],
 };
 for (const element of ['column', 'row', 'grid', 'list', 'li', 'frame', 'link', 'divider', 'span', 'code-span', 'img',
     'shape', 'barcode', 'text', 'code', 'td', 'thead', 'tr', 'table', 'field', 'bookmark']) {
