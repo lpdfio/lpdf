@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+      <color name="alert"   value="#d0021b" />
+      <color name="box"     value="#eef2f8" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Spans in aligned text" subject="align=right and align=center: a line with spans ends at the right edge or is centered, its spans in order" />
+
+    <!-- A right-aligned or centered line with spans is placed as a whole: it starts its width back from the right
+         edge, or half of it from the middle, and its words and spans follow one another from there. The shaded box
+         behind each text is the box it aligns in. Expected, on page 1:
+           - every line ends at the right edge of its box in the left column, and is centered in its box in the
+             right column, its spans included
+           - each span follows the words before it, with no overlap, and stays inside its box
+           - the line under an underlined span, the line through a struck one, the tint behind a code span and the
+             link area of a linked one are under the span's own words
+           - the number of a footnote stays on the word it follows
+           - a text that wraps aligns each of its lines on its own
+           - a text with no span draws as it always has
+           - the header, right-aligned, holds a cross-reference in color, and the footer, centered, a link
+         On page 2, a Markdown table with a right-aligned and a centered column keeps the bold words, the italic
+         words, the code and the link of each cell in order, inside the cell.
+    -->
+    <section>
+      <layout margin="40pt">
+        <region pin="top">
+          <text font-size="s" color="muted" align="right">Harbor terms · <span bookmark-ref="cases" color="primary">{bookmark-label}, page {bookmark-page}</span></text>
+        </region>
+        <column gap="l">
+          <column gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Spans in aligned text</text>
+            <text font-size="m" color="muted">Right-aligned on the left, centered on the right, each in its shaded box.</text>
+          </column>
+
+          <bookmark id="cases" label="The cases"/>
+          <row gap="m" align="start">
+            <column gap="s" width="fill">
+              <text font-size="s" color="muted">Color</text>
+              <column background="box"><text align="right">Notice: <span color="alert">clause 4, page 3</span></text></column>
+              <text font-size="s" color="muted">Font</text>
+              <column background="box"><text align="right">Paid in <span font="Helvetica-Bold">full</span> on delivery</text></column>
+              <text font-size="s" color="muted">Link</text>
+              <column background="box"><text align="right">See <span href="https://lpdf.io" color="primary">the terms</span> now</text></column>
+              <text font-size="s" color="muted">Underline</text>
+              <column background="box"><text align="right">See <span underline="true">the terms</span> now</text></column>
+              <text font-size="s" color="muted">Strike</text>
+              <column background="box"><text align="right">Was <span strike="true">$40.00</span> now $35.00</text></column>
+              <text font-size="s" color="muted">Code span</text>
+              <column background="box"><text align="right">Run <code-span>make test</code-span> first</text></column>
+              <text font-size="s" color="muted">Footnote</text>
+              <column background="box"><text align="right">See the terms<fn>The terms are in the appendix.</fn> now</text></column>
+              <text font-size="s" color="muted">Wrapped</text>
+              <column background="box"><text align="right">The <span color="alert">first clause</span> covers every order placed after the start of the term, and <span href="https://lpdf.io" color="primary" underline="true">the terms</span> say what <span font="Helvetica-Bold">a notice</span> must hold.</text></column>
+              <text font-size="s" color="muted">No span</text>
+              <column background="box"><text align="right">Notice: clause 4, page 3</text></column>
+            </column>
+            <column gap="s" width="fill">
+              <text font-size="s" color="muted">Color</text>
+              <column background="box"><text align="center">Notice: <span color="alert">clause 4, page 3</span></text></column>
+              <text font-size="s" color="muted">Font</text>
+              <column background="box"><text align="center">Paid in <span font="Helvetica-Bold">full</span> on delivery</text></column>
+              <text font-size="s" color="muted">Link</text>
+              <column background="box"><text align="center">See <span href="https://lpdf.io" color="primary">the terms</span> now</text></column>
+              <text font-size="s" color="muted">Underline</text>
+              <column background="box"><text align="center">See <span underline="true">the terms</span> now</text></column>
+              <text font-size="s" color="muted">Strike</text>
+              <column background="box"><text align="center">Was <span strike="true">$40.00</span> now $35.00</text></column>
+              <text font-size="s" color="muted">Code span</text>
+              <column background="box"><text align="center">Run <code-span>make test</code-span> first</text></column>
+              <text font-size="s" color="muted">Footnote</text>
+              <column background="box"><text align="center">See the terms<fn>The terms are kept with the harbor master.</fn> now</text></column>
+              <text font-size="s" color="muted">Wrapped</text>
+              <column background="box"><text align="center">The <span color="alert">first clause</span> covers every order placed after the start of the term, and <span href="https://lpdf.io" color="primary" underline="true">the terms</span> say what <span font="Helvetica-Bold">a notice</span> must hold.</text></column>
+              <text font-size="s" color="muted">No span</text>
+              <column background="box"><text align="center">Notice: clause 4, page 3</text></column>
+            </column>
+          </row>
+        </column>
+        <region pin="bottom">
+          <text font-size="s" color="muted" align="center">Page {page} · <span href="https://lpdf.io" color="primary">lpdf.io</span></text>
+        </region>
+      </layout>
+    </section>
+    <section>
+      <markdown margin="40pt">
+        <markdown-content><![CDATA[
+          # Aligned columns of a Markdown table
+
+          The second column is right-aligned and the third centered. Each cell keeps its bold and italic words, its code and its link in order.
+
+          | Item | Right | Center |
+          |:-----|------:|:------:|
+          | Oil | Pay **now** or see [terms](https://lpdf.io) | Pay **now** or see [terms](https://lpdf.io) |
+          | Wick | *Due* in `30` days | *Due* in `30` days |
+          | Plain | 12.00 | 12.00 |
+        ]]></markdown-content>
+      </markdown>
+    </section>
+  </document>
+</lpdf>
