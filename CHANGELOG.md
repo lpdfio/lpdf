@@ -1,5 +1,52 @@
 # Changelog
 
+## v0.32.0 — 2026-11-02
+### Page numbers
+- **Breaking:** in a document with several sections, page numbers count on from one section to the next, where each section counted from 1. To keep a section counting from 1, set `page-start="1"` on it. `$toc`'s `page` is now the number as the page's footer prints it, a text such as `iv` or `A-1`, where it was the page's place in the file, so a cover section no longer puts the table of contents one page off
+- Three attributes on `<section>` start and style a run of pages: `page-start` starts the count again from a number, `page-format` writes it in `decimal`, `lower-alpha`, `upper-alpha`, `lower-roman` or `upper-roman`, and `page-prefix` puts text before it, such as `A-`. A section that sets none carries on the one before, so front matter can count i, ii and the chapters 1, 2 on through every section. `{page}` prints the page's number in its format and prefix, and `{pages}` counts the pages of its run
+- A document that sets any of them gets page labels, so a PDF viewer's page box shows the printed numbers and goes to a page by them
+
+### Cross-references
+- `bookmark-ref` on a `<span>` names a bookmark's `id`, links to it, and fills in its words: `{bookmark-page}` prints the page the bookmark is on, as that page's footer prints it, and `{bookmark-label}` prints its label. "Set out in clause 4, on page 12" stays right when an edit moves clause 4 to page 13. It works wherever a span does: a `<text>`, a footnote, a header or footer, a `<text-at>` and a `<code>`
+- A reference whose number moves its own bookmark, by wrapping a line and pushing the bookmark onto the next page, is laid out again until every reference shows the page its bookmark lands on. A document without references is laid out once, as before
+- `ref-only="true"` on a `<bookmark>` leaves it out of the viewer's outline and the table of contents, and keeps it as a target for references and for `href="#id"`: a table or a figure to point at
+- A `bookmark-ref` that names no bookmark, any other `{…}` token in its words, or an `href` beside it is an error with the span's line
+
+### PDF/UA
+- `pdfua="1"` on `<output>` writes a tagged PDF that meets PDF/UA-1 (ISO 14289-1), which screen readers read, now that accessibility law reaches generated statements, invoices and tickets. The structure comes from the document: headings, paragraphs, lists, tables with their header row, links, footnotes, the table of contents, and images with their alt text, while headers, footers, backgrounds and borders stay out of the reading order. veraPDF's PDF/UA-1 profile passes it, and it combines with `pdfa`
+- `lang` on `<meta>` says the document's language, `alt` on `img`, `barcode` and `layer` says what they show (`alt=""` marks decoration), and `role="h1"` to `"h6"` makes a `<text>` a heading. Markdown's headings and images carry theirs
+- What PDF/UA requires is an error that says what to change: a `title` and a `lang` on `<meta>`, an `alt` on every image and barcode, headings that start at h1 and skip no level going down, no form fields, text in embedded fonts that have every glyph it uses, `accessibility` among the `allow` of an encrypted file, and a creation date, `createdOn` in the render options
+
+### PDF/X
+- `<output pdfx="4" profile="press"/>` writes PDF/X-4, the PDF commercial printers ask for. `profile` names a `<profile>` of `<assets>`, the ICC profile of the printing press, which the printer gives out. The SDK reads its `src`, or takes the bytes from `loadProfile(name, bytes)` on the engine (`LoadProfile` in .NET, `load_profile` in Python)
+- The file has a TrimBox and a BleedBox on every page, the press profile as its output intent, RGB colors and images defined in sRGB for the press, and its PDF/X version in its metadata. Links print their content and aren't clickable, since PDF/X allows no link annotations. Bookmarks stay
+- `bleed` on `<document>` or `<section>`, such as `3mm`, grows each page past its trim, for content that runs off the edge, with or without PDF/X. The layout keeps to the trimmed page, and the page background fills the bleed
+- What PDF/X forbids is an error that says what to change: no `title`, no `createdOn`, text in a built-in font, a font whose license forbids embedding, a character its font has no glyph for, a barcode's printed digits, a form field, a CMYK color for a gray or RGB press, a profile that isn't a printer's, and `pdfx` with `encrypt`, `pdfa` or attachments
+
+### Print and screen content
+- `ocg="print"` on an element prints it and hides it on screen, and `ocg="screen"` shows it on screen and leaves it off paper: a "Pay online" link, a line to cut along, a stamp on the printed copy. It goes on every element that draws, and hidden content keeps its place, so nothing moves. A link in print-only content isn't clickable, and a form field in it is an error
+- A viewer lists the two in its layers panel, where a reader can switch them by hand. A PDF/X file is the print version, with the screen content off. PDF/A and PDF/UA files show everything, since neither standard lets content switch between screen and print
+
+### Fast web view
+- `linearize="true"` on `<output>` writes a linearized file: page 1 and everything it draws come first, with hints that say where every other page is, so a browser shows page 1 while the rest downloads and fetches any other page on its own. It combines with every other setting of `<output>`
+
+### Layout
+- Lists and rows nested inside each other split across pages without losing text. Where a page ended at the top of a nested row, the rest of the document could be cut off, with no error. Splitting them is much faster too: 47 levels of nested lists, each starting with a paragraph, took 31 seconds and take 35 ms
+
+### Forms
+- Each form field names its widget subtype once, where it named it twice, which qpdf and strict readers report as a damaged dictionary
+
+### SDKs
+- **Breaking:** in Python, the attribute classes, the document's and section's attribute classes and `RenderOptions` and `EngineOptions` take keyword arguments only: `ImgAttr(name="logo", height="40pt")`. A positional argument raises a `TypeError`. An attribute added in the middle of an element moved the arguments after it, so `ImgAttr("logo", "40pt")` set `alt` in place of the height, with no error. In PHP, pass the attribute classes named arguments, for the same reason
+- The PHP SDK runs on PHP 8.2, where it needed 8.3
+- The builders have the new attributes: `pdfua`, `pdfx`, `profile` and `linearize` on `output`, `lang` on `meta`, `bleed` on the document and its sections, `page-start`, `page-format` and `page-prefix` on sections, and `alt`, `role`, `ocg`, `bookmark-ref` and `ref-only` on the elements that take them, with `profiles` on the document's assets and `ProfileAttr`
+- `toXml` writes the text of a `code` that holds `<`, `>` or `&` in CDATA sections around its spans, where it escaped each one, so a listing of XML reads as it was written
+
+### VS Code extension
+- **Preview PDF** and **Export PDF** load the press profile of a PDF/X document from its `src`, beside the document or at the root of its workspace folder, and the preview follows an edit of it
+- The brochure template is a PDF/X-4 document with a 3mm bleed
+- Hover, autocomplete and validation follow the schema, so they cover every attribute above
+
 ## v0.31.0 — 2026-11-01
 ### Attributes
 - **Breaking:** every attribute is checked against the schema before the document is read, in XML and in a document built in code. A value that isn't of its type is an error that names the element, the attribute and the type: `<grid> at line 3, col 5: cols must be a whole number from 1 to 12, not "x"`. A boolean is `true` or `false`: `bold="1"` and `bold="yes"`, which read as false, are errors, and the VS Code extension flags them as you type. An attribute the element doesn't have, such as `agle` on a gradient, was ignored and is now an error that lists the attributes the element has
