@@ -25,6 +25,18 @@ fn escape_text(s: &str) -> String {
      .replace('>', "&gt;")
 }
 
+/// `text` in a CDATA section, which keeps it as it is written. `]]>` would end the section, so it is cut in two.
+fn cdata(text: &str) -> String {
+    format!("<![CDATA[{}]]>", text.replace("]]>", "]]]]><![CDATA[>"))
+}
+
+/// A piece of the text of a `code`. Code is full of `<`, `>` and `&`, and escaped they make a listing hard to read,
+/// so a piece with any of them is written in a CDATA section, as `markdown-content` is. A piece with none is written
+/// as it is.
+fn code_text(s: &str) -> String {
+    if s.contains(['<', '>', '&']) { cdata(s) } else { s.to_string() }
+}
+
 // ── Attribute helpers ─────────────────────────────────────────────────────────
 
 /// Serialise a JSON object's string-valued entries as XML attribute pairs,
@@ -283,7 +295,7 @@ fn render_text_node(node: &Value, depth: usize) -> String {
         .iter()
         .map(|c| {
             if let Some(s) = c.as_str() {
-                escape_text(s)
+                if tag == "code" { code_text(s) } else { escape_text(s) }
             } else if matches!(c.get("type").and_then(|v| v.as_str()), Some("span" | "code-span" | "fn")) {
                 render_inline(c)
             } else {
@@ -389,9 +401,7 @@ fn render_markdown(node: &Value, depth: usize) -> String {
             }
             "markdown-content" => {
                 let text: String = child.get("nodes").and_then(|v| v.as_array()).into_iter().flatten().filter_map(|v| v.as_str()).collect();
-                // `]]>` would end the section, so it is cut in two.
-                let text = text.replace("]]>", "]]]]><![CDATA[>");
-                parts.push(format!("{inner}<markdown-content{attrs}><![CDATA[{text}]]></markdown-content>"));
+                parts.push(format!("{inner}<markdown-content{attrs}>{}</markdown-content>", cdata(&text)));
             }
             // Any other child is written as it is, so that reading the XML reports it.
             _ => parts.push(render_node(child, depth + 1)),
@@ -979,10 +989,33 @@ mod tests {
                 {"type":"text","attrs":{},"nodes":["Run ",{"type":"code-span","attrs":{"background":"#ffff00"},"nodes":["cargo test"]}," now"]}]}"##,
         );
         let xml = kit_to_xml(&kit).unwrap();
-        assert!(xml.contains("<code font-size=\"s\" tab-size=\"2\">\nif a &lt; b &amp;&amp; c {\n\treturn <span color=\"#c0392b\">x</span>;\n}\n</code>"), "{xml}");
+        assert!(xml.contains("<code font-size=\"s\" tab-size=\"2\"><![CDATA[\nif a < b && c {\n\treturn ]]><span color=\"#c0392b\">x</span>;\n}\n</code>"), "{xml}");
         assert!(xml.contains("Run <code-span background=\"#ffff00\">cargo test</code-span> now"), "{xml}");
         let (from_tree, from_xml) = rendered_both_ways(&kit);
         assert_eq!(from_tree, from_xml);
+    }
+
+    #[test]
+    fn a_code_of_xml_is_written_in_cdata_sections_around_its_spans() {
+        // A listing of XML with a span between two of its pieces, an arrow, and the end of a CDATA section.
+        let kit = doc_with_layout_child(
+            r##"{"type":"code","attrs":{},"nodes":["\n<total currency=\"EUR\">",
+                {"type":"span","attrs":{"color":"#c0392b"},"nodes":["42"]},"</total>\n<!-- a ]]> b -->\nx -> y\n"]}"##,
+        );
+        let xml = kit_to_xml(&kit).unwrap();
+        assert!(xml.contains(concat!(
+            "<code><![CDATA[\n<total currency=\"EUR\">]]><span color=\"#c0392b\">42</span>",
+            "<![CDATA[</total>\n<!-- a ]]]]><![CDATA[> b -->\nx -> y\n]]></code>",
+        )), "{xml}");
+        let (from_tree, from_xml) = rendered_both_ways(&kit);
+        assert_eq!(from_tree, from_xml);
+    }
+
+    #[test]
+    fn a_code_with_nothing_to_escape_is_written_as_it_is() {
+        let kit = doc_with_layout_child(r#"{"type":"code","attrs":{},"nodes":["\nlet x = 1;\n"]}"#);
+        let xml = kit_to_xml(&kit).unwrap();
+        assert!(xml.contains("<code>\nlet x = 1;\n</code>"), "{xml}");
     }
 
     #[test]
