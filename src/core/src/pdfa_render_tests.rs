@@ -409,8 +409,9 @@ fn font_sample(file: &str) -> Vec<u8> {
 /// Writes the files `scripts/check-pdfa.mjs` hands to veraPDF and qpdf, when `LPDF_PDFA_OUT` names a folder: the three
 /// fixtures, rendered unlicensed, so that the attribution line is checked too, with their fonts and pictures, each
 /// at its level of part 2 and of part 3, a page in each font of `FONT_SAMPLES`, the Factur-X invoice of
-/// `showcase-facturx.xml`, a PDF/A-3b file that carries files, and the PDF/UA fixture at levels 2a and 3a. Without the variable the test does nothing, so a plain
-/// `cargo test` needs no other tool.
+/// `showcase-facturx.xml`, a PDF/A-3b file that carries files, the PDF/UA fixture at levels 2a and 3a, and stamped
+/// PDF/A files (`stamp_tests::write_pdfa_samples`). Without the variable the test does nothing, so a plain `cargo test`
+/// needs no other tool.
 #[test]
 fn writes_pdfa_samples_for_the_external_check() {
     let Some(dir) = std::env::var_os("LPDF_PDFA_OUT") else { return };
@@ -435,6 +436,8 @@ fn writes_pdfa_samples_for_the_external_check() {
         let pdf = crate::pdfua_render_tests::render_fixture_beside_pdfa(level);
         std::fs::write(dir.join(format!("pdfa-{level}-pdfua-1.pdf")), pdf).expect("a sample");
     }
+    // Stamped PDF/A files, which must stay PDF/A.
+    crate::stamp_tests::write_pdfa_samples(dir);
 }
 
 #[test]

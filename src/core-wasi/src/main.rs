@@ -2,12 +2,16 @@
 ///
 /// Protocol (stdin → stdout):
 /// ```json
-/// { "method": "render" | "render_tree" | "render_pdf" | "render_tree_pdf" | "check_license",
+/// { "method": "render" | "render_tree" | "render_pdf" | "render_tree_pdf" | "stamp" | "check_license",
 ///   "key": "…", "input": "…xml or json…", "now": 1790812800 }
 /// ```
 /// - `render` / `render_tree` return the RenderTree JSON string directly.
 /// - `render_pdf` / `render_tree_pdf` return `{ "pdf": "<base64>" }` on success
 ///   or `{ "error": "…" }` on failure.
+/// - `stamp` draws PNG images over the pages of an existing PDF and returns `{ "pdf": "<base64>" }`, the input with
+///   an incremental update, or `{ "error": "…" }`. It takes no `input`, but `pdf`, the file as base64, `images`, the
+///   PNGs by name as base64, and `stamps`, a list of stamps, each naming its PNG in `image`:
+///   `{ "method": "stamp", "pdf": "…", "images": { "seal": "…" }, "stamps": [{ "image": "seal", "page": "last", … }] }`.
 /// - `check_license` reports what `key` is — `{ "status": "licensed", … }` — and takes no
 ///   `input`. `now` is the host's clock in seconds; without it expiry is not checked.
 ///
@@ -111,6 +115,10 @@ mod schema_attrs;
 mod memory;
 #[path = "../../core/src/nesting.rs"]
 mod nesting;
+#[path = "../../core/src/png.rs"]
+mod png;
+#[path = "../../core/src/stamp.rs"]
+mod stamp;
 
 use std::io::Read;
 use base64::Engine as _;
@@ -144,6 +152,11 @@ fn dispatch(request: String) -> String {
     // no document to render.
     if method == "check_license" {
         return license::report_json(key, now_unix);
+    }
+
+    if method == "stamp" {
+        let licensed = license::check(key, now_unix).is_licensed();
+        return stamp_request(&mut req, licensed, before);
     }
 
     // Taken out of the request rather than copied, so the render holds one copy of each.
@@ -191,6 +204,33 @@ fn dispatch(request: String) -> String {
         }
         "render_tree_pdf" => render_pdf_doc(doc, &key, now_unix, &req),
         _ => render_doc(doc, &key, now_unix),
+    }
+}
+
+/// A `stamp` request: the PDF in `pdf`, as base64, and the `stamps`, each naming a PNG of the request's `images`;
+/// `licensed` when the request's key is, else each stamped page gets the attribution line.
+/// Answers `{ "pdf": "<base64>" }`, the file with the stamps added as an incremental update, or `{ "error": "…" }`.
+fn stamp_request(req: &mut serde_json::Value, licensed: bool, before: i64) -> String {
+    let error = |e: String| serde_json::json!({ "error": e }).to_string();
+    let cap = match render_cap(req) {
+        Ok(cap) => cap,
+        Err(e)  => return error(e),
+    };
+    let _cap = memory::start_from(cap, before);
+    let pdf = match req.get_mut("pdf").map(serde_json::Value::take) {
+        Some(serde_json::Value::String(b64)) => match base64::engine::general_purpose::STANDARD.decode(b64) {
+            Ok(bytes) => bytes,
+            Err(e)    => return error(format!("the request's 'pdf' is not base64: {e}")),
+        },
+        _ => return error("request missing 'pdf' field".to_string()),
+    };
+    let stamps = match stamp::parse_stamps(&req["stamps"]) {
+        Ok(stamps) => stamps,
+        Err(e)     => return error(e),
+    };
+    match stamp::stamp(&pdf, &stamps, &build_image_registry(req), licensed) {
+        Ok(bytes) => serde_json::json!({ "pdf": base64::engine::general_purpose::STANDARD.encode(bytes) }).to_string(),
+        Err(e)    => error(e),
     }
 }
 
@@ -753,5 +793,25 @@ mod tests {
         let req = serde_json::json!({ "method": "render_tree_pdf", "input": tree });
         let answer: serde_json::Value = serde_json::from_str(&dispatch(req.to_string())).unwrap();
         assert!(answer["error"].as_str().unwrap().contains("no owner password"), "{answer}");
+    }
+    #[test]
+    fn a_stamp_request_answers_the_pdf_with_an_update_after_its_bytes() {
+        let plain = render_request(&with_output(""), serde_json::json!({}));
+        let pdf = base64::engine::general_purpose::STANDARD.decode(plain["pdf"].as_str().expect(&plain.to_string())).unwrap();
+        let stamp = |page: &str| {
+            let req = serde_json::json!({
+                "method": "stamp", "pdf": base64::engine::general_purpose::STANDARD.encode(&pdf), "images": { "tall": TALL_PNG },
+                "stamps": [{ "image": "tall", "page": page, "x": "10pt", "y": "10pt", "width": "50pt", "height": "50pt", "max-grow": 25 }],
+            });
+            serde_json::from_str::<serde_json::Value>(&dispatch(req.to_string())).unwrap()
+        };
+        let answer = stamp("1");
+        let stamped = base64::engine::general_purpose::STANDARD.decode(answer["pdf"].as_str().expect(&answer.to_string())).unwrap();
+        assert!(stamped.starts_with(&pdf) && stamped.len() > pdf.len());
+        // 1 by 2 px grown 25 times, in the middle of the box: 25 by 50 pt, 22.5 pt in from its left.
+        assert!(pdf_text(&answer).contains("q 25 0 0 50 22.5 "), "{answer}");
+        assert_eq!(stamp("2")["error"], "stamp 1: the PDF has no page 2: it has 1 page");
+        let without = serde_json::json!({ "method": "stamp", "stamps": [] });
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&dispatch(without.to_string())).unwrap()["error"], "request missing 'pdf' field");
     }
 }

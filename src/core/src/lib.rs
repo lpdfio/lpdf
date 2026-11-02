@@ -31,6 +31,8 @@ mod render;
 mod rewrite;
 mod schema_attrs;
 mod shared;
+mod stamp;
+mod png;
 mod toc;
 mod tokens;
 
@@ -225,6 +227,18 @@ impl LpdfEngine {
         self.render_json(json, &encryption).map_err(|e| JsValue::from_str(&e))
     }
 
+    /// Draw PNG stamps over the pages of an existing PDF, and return the file with them added as an incremental
+    /// update: the input, byte for byte, then the images and the pages they change. The original bytes stay as they
+    /// were, so an owner password and its permissions stay, and so does a digital signature's revision.
+    ///
+    /// `stamps` is a JSON list of stamps, each with an `image`, the name of a PNG loaded with `load_image`, a `page`
+    /// scope, a box (`x`, `y`, `anchor`, `width`, `height`, placed as a layer element is) and how the image sits in it
+    /// (`align`, `justify`, `scale`, `max-grow`). Without a valid license key, each stamped page gets the attribution
+    /// line of a render in its top-right corner.
+    pub fn stamp(&self, pdf: &[u8], stamps: &str) -> Result<Vec<u8>, JsValue> {
+        self.stamp_pdf(pdf, stamps).map_err(|e| JsValue::from_str(&e))
+    }
+
     pub fn render(&self, xml: &str) -> String {
         let _cap = memory::start(self.max_memory_mb);
         let doc = match parse::parse_with(xml, &self.resources()) {
@@ -376,6 +390,16 @@ impl LpdfEngine {
         let file = shared::finish_file(bytes, config.as_ref(), doc.output.linearize)?;
         memory::check()?;
         Ok(file)
+    }
+
+    /// Stamp `pdf` with the images loaded on this engine: `stamp`, with an error that is not a JS value, which the
+    /// tests can read.
+    pub fn stamp_pdf(&self, pdf: &[u8], stamps: &str) -> Result<Vec<u8>, String> {
+        let _cap = memory::start(self.max_memory_mb);
+        let stamps: serde_json::Value = serde_json::from_str(stamps).map_err(|e| format!("the stamps could not be read: {e}"))?;
+        let stamps = stamp::parse_stamps(&stamps)?;
+        let licensed = license::check(&self.license_key, self.now_unix).is_licensed();
+        stamp::stamp(pdf, &stamps, &self.images, licensed)
     }
 
     /// What the caller loaded for the `src` attributes of the document, for the parser.
@@ -885,6 +909,9 @@ mod font_program_tests;
 
 #[cfg(test)]
 mod pdfa_render_tests;
+
+#[cfg(test)]
+mod stamp_tests;
 
 #[cfg(test)]
 mod pdfua_render_tests;

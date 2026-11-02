@@ -102,7 +102,7 @@ fn with_passwords() -> crate::RenderEncryption {
     }
 }
 
-fn check_snapshot(name: &str, pdf_bytes: &[u8]) {
+pub(crate) fn check_snapshot(name: &str, pdf_bytes: &[u8]) {
     if std::env::var("UPDATE_SNAPSHOTS").is_ok() {
         write_snapshot(name, pdf_bytes);
     } else {

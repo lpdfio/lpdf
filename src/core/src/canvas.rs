@@ -184,7 +184,7 @@ pub fn parse_anchor(s: &str) -> Result<Anchor, String> {
     }
 }
 
-fn resolve_anchor(anchor: &Anchor, page_w: f32, page_h: f32) -> (f32, f32) {
+pub(crate) fn resolve_anchor(anchor: &Anchor, page_w: f32, page_h: f32) -> (f32, f32) {
     match anchor {
         Anchor::TopLeft      => (0.0,          0.0),
         Anchor::TopCenter    => (page_w / 2.0, 0.0),

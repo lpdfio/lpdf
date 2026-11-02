@@ -7,11 +7,16 @@
 //    pdfa-2u-ocg.pdf, the fixture with content in optional content groups. pdfa-3a.pdf, pdfa-3b.pdf and pdfa-3u.pdf,
 //    the three fixtures at the levels of part 3, must declare PDF/A-3a, PDF/A-3b and PDF/A-3u, and
 //    pdfa-3b-facturx.pdf, a Factur-X invoice that carries its XML and six other files, PDF/A-3b. pdfa-2a-pdfua-1.pdf
-//    and pdfa-3a-pdfua-1.pdf, the PDF/UA fixture at level a, must declare PDF/A-2a or PDF/A-3a and PDF/UA-1. For
+//    and pdfa-3a-pdfua-1.pdf, the PDF/UA fixture at level a, must declare PDF/A-2a or PDF/A-3a and PDF/UA-1. The
+//    stamped files must stay what they were, with the attribution line of an unlicensed stamp and its link:
+//    stamp-pdfa-2b.pdf and stamp-pdfa-2u.pdf, Lpdf's fixtures stamped with a transparent PNG and a 16-bit one,
+//    PDF/A-2b and PDF/A-2u, and stamp-pdfa-1b-*.pdf, the PDF/A-1b files of veraPDF's corpus
+//    (test/stamp/verapdf-corpus) stamped with an opaque PNG and a 16-bit one, PDF/A-1b. For
 //    PDF/UA: pdfua-1.pdf must declare PDF/UA-1, and pdfua-1-pdfa-2u.pdf both PDF/A-2u and PDF/UA-1, and
 //    pdfua-1-toc-links.pdf, a table of contents of the links $toc repeats, pdfua-1-toc.pdf, the
 //    fixture with a table of contents on two pages, pdfua-1-ocg.pdf, the fixture with content in optional content
-//    groups, and pdfua-1-references.pdf, a report whose text refers to its pages, PDF/UA-1. None may break a rule;
+//    groups, pdfua-1-references.pdf, a report whose text refers to its pages, and stamp-pdfua-1.pdf, the fixture
+//    stamped without a license key, PDF/UA-1. None may break a rule;
 //  - qpdf --check finds no syntax or stream error.
 //
 // The samples come from the core's own tests:
@@ -43,6 +48,13 @@ const SAMPLE_SETS = {
         { file: 'pdfa-3b-facturx.pdf', profiles: ['PDF/A-3b validation profile'] },
         { file: 'pdfa-2a-pdfua-1.pdf', profiles: ['PDF/A-2a validation profile', 'PDF/UA-1 validation profile'] },
         { file: 'pdfa-3a-pdfua-1.pdf', profiles: ['PDF/A-3a validation profile', 'PDF/UA-1 validation profile'] },
+        // Stamped: Lpdf's own 2b and 2u files, and the PDF/A-1b files of veraPDF's corpus
+        { file: 'stamp-pdfa-2b.pdf', profiles: ['PDF/A-2b validation profile'] },
+        { file: 'stamp-pdfa-2u.pdf', profiles: ['PDF/A-2u validation profile'] },
+        { file: 'stamp-pdfa-1b-6-1-3-t01-pass-a.pdf', profiles: ['PDF/A-1b validation profile'] },
+        { file: 'stamp-pdfa-1b-6-1-4-t03-pass-a.pdf', profiles: ['PDF/A-1b validation profile'] },
+        { file: 'stamp-pdfa-1b-6-2-3-3-t01-pass-a.pdf', profiles: ['PDF/A-1b validation profile'] },
+        { file: 'stamp-pdfa-1b-6-4-t01-pass-a.pdf', profiles: ['PDF/A-1b validation profile'] },
     ],
     // writes_pdfua_samples_for_the_external_check
     pdfua: [
@@ -52,6 +64,8 @@ const SAMPLE_SETS = {
         { file: 'pdfua-1-toc.pdf', profiles: ['PDF/UA-1 validation profile'] },
         { file: 'pdfua-1-ocg.pdf', profiles: ['PDF/UA-1 validation profile'] },
         { file: 'pdfua-1-references.pdf', profiles: ['PDF/UA-1 validation profile'] },
+        // Stamped without a license key: the attribution line is an artifact, with no link
+        { file: 'stamp-pdfua-1.pdf', profiles: ['PDF/UA-1 validation profile'] },
     ],
 };
 const SAMPLES = SAMPLE_SETS[standard];
