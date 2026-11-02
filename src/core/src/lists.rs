@@ -225,7 +225,7 @@ fn number_marker(words: &str, width: f32, look: &Marks) -> Node {
         text: words.to_string(),
         leading_space: false,
         font: None, color: None, href: None,
-        underline: false, strike: false, bold: false, background: None, footnote: None,
+        underline: false, strike: false, bold: false, background: None, footnote: None, reference: None,
     }];
     text
 }

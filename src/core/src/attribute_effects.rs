@@ -150,6 +150,7 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
         ("barcode-at@data", &["Another payload"]),
         ("layer@clip", &["20pt 20pt 80pt 80pt"]),
         ("bookmark@id", &["chosen"]),
+        ("span@bookmark-ref", &["target"]),
         ("text@capture", &["k"]),
         ("text@capture-ref", &["k"]),
         ("text@capture-fallback", &["Soon"]),
@@ -763,6 +764,11 @@ fn subjects() -> Vec<Subject> {
         // Layout leaves.
         Subject::new("divider", |a, _| flow(&format!("<text>Before</text><divider {a}/><text>After</text>"))),
         Subject::new("span", |a, _| flow(&format!("<text>Before <span {a}>middle</span> after</text>"))),
+        // A reference shows the page of the bookmark it names, and links to it.
+        Subject::new("span", |a, _| {
+            flow(&format!(r#"<text>Before <span {a}>page {{bookmark-page}}</span> after</text><bookmark id="target" label="Target"/><text>After</text>"#))
+        })
+        .only(&["bookmark-ref"]),
         Subject::new("code-span", |a, _| flow(&format!("<text>Before <code-span {a}>middle</code-span> after</text>"))),
         Subject::new("img", |a, _| flow_with_images(&format!("<img {a}/><text>After</text>"))).base(&[("name", "logo")]),
         Subject::new("shape", |a, _| flow(&format!("<shape {a}/><text>After</text>")))

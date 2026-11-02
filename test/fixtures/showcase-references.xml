@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="muted" value="#737373" />
+      <color name="link" value="#1d4ed8" />
+    </colors>
+  </tokens>
+  <document size="a5">
+    <meta title="lpdf Showcase — Cross-References" subject="Spans that name a bookmark and print its page and its label, in the text, a footnote, a header and a text-at" />
+
+    <!-- A span with bookmark-ref links to the bookmark with that id, and its words print the page the bookmark is
+         on ({bookmark-page}), as the footer of that page prints it, and its label ({bookmark-label}).
+         Expected, page by page:
+           1  Contents: Terms 2, Clause 1 2, Clause 4 3, Appendix A-1. Table 3 is ref-only, so it is not listed.
+           2  "the notice period set in clause 4, on page 3", "the prices in Table 3 on page A-1", and a footnote
+              that refers to clause 4 on page 3.
+           3  Clause 4 at the top, which refers back to "Clause 1 on page 2", and a link to the prices, which
+              goes to the ref-only table.
+           4  The appendix, numbered A-1, with Table 3.
+         On pages 2 and 3, the header says "Notice: clause 4, page 3", and a text-at in the top margin says
+         "Prices: Table 3, page A-1". The page numbers in the contents, the text and the footers agree.
+         The viewer's outline has Contents, Terms, Clause 1, clause 4 and Appendix, and no Table 3. -->
+    <section type="toc">
+      <layout margin="48pt">
+        <bookmark label="Contents"/>
+        <text font-size="xl" font="Helvetica-Bold">Contents</text>
+        <column gap="xs" padding="12pt 0pt 0pt 0pt">
+          <column data-source="$toc">
+            <link href="#">
+              <row justify="between">
+                <text data-value="label">Entry</text>
+                <text data-value="page">0</text>
+              </row>
+            </link>
+          </column>
+        </column>
+      </layout>
+    </section>
+    <section>
+      <bookmark label="Terms"/>
+      <layout margin="48pt">
+        <region pin="top">
+          <text font-size="s" color="muted">Notice: <span bookmark-ref="notice" color="link">{bookmark-label}, page {bookmark-page}</span></text>
+        </region>
+        <column gap="m">
+          <text font-size="xl" font="Helvetica-Bold">Terms of Service</text>
+          <bookmark id="scope" label="Clause 1" level="2"/>
+          <text>1. Scope. These terms cover the lamps, the oil and the keepers' rounds. Either party may end them with the notice period set in <span bookmark-ref="notice" color="link" underline="true">{bookmark-label}, on page {bookmark-page}</span>.<fn>The period runs from the day the notice arrives, as <span bookmark-ref="notice">{bookmark-label} on page {bookmark-page}</span> says.</fn></text>
+          <text>2. Prices. The prices are in <span bookmark-ref="prices" color="link" underline="true">{bookmark-label} on page {bookmark-page}</span>, and they hold for a year.</text>
+          <text>3. Rounds. The keepers walk the harbor wall at dusk and at dawn, and they write down every lamp they light. The record stays with the harbor master, who reads it at the end of each month and answers for it to the town.</text>
+          <text>The keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one. When a storm came in from the east, the record filled a page a night, and the harbor master read it twice.</text>
+        </column>
+        <bookmark id="notice" label="clause 4" level="2"/>
+        <column gap="m" paginate="break-before">
+          <text>4. Notice. Either party may end these terms with thirty days' notice, in writing. The terms that set the scope, in <span bookmark-ref="scope" color="link">{bookmark-label} on page {bookmark-page}</span>, stay in force until the notice runs out.</text>
+          <text>The prices the notice ends are the ones <span href="#prices" color="link" underline="true">in the appendix</span>.</text>
+        </column>
+        <region pin="bottom">
+          <text font-size="s" color="muted" align="center">Page {page}</text>
+        </region>
+      </layout>
+      <layer>
+        <text-at x="48pt" y="24pt" font-size="s" color="muted">Prices: <span bookmark-ref="prices">{bookmark-label}, page {bookmark-page}</span></text-at>
+      </layer>
+    </section>
+    <section page-start="1" page-prefix="A-">
+      <bookmark label="Appendix"/>
+      <layout margin="48pt">
+        <column gap="m">
+          <text font-size="xl" font="Helvetica-Bold">Appendix</text>
+          <bookmark id="prices" label="Table 3" ref-only="true"/>
+          <table cols="2fr 1fr">
+            <thead>
+              <td><text font="Helvetica-Bold">Item</text></td>
+              <td><text font="Helvetica-Bold" align="right">Price</text></td>
+            </thead>
+            <tr><td><text>Lamp oil, a barrel</text></td><td><text align="right">40.00</text></td></tr>
+            <tr><td><text>Wick, a reel</text></td><td><text align="right">3.50</text></td></tr>
+            <tr><td><text>Keeper's round</text></td><td><text align="right">12.00</text></td></tr>
+          </table>
+        </column>
+        <region pin="bottom">
+          <text font-size="s" color="muted" align="center">Page {page}</text>
+        </region>
+      </layout>
+    </section>
+  </document>
+</lpdf>

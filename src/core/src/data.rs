@@ -417,6 +417,7 @@ fn apply_single_node(node: Node, stack: &[&Value], bind: &Bind, out: &mut Vec<No
                     bold:      false,
                     background: None,
                     footnote: None,
+                    reference: None,
                 }]
             };
         }
@@ -561,6 +562,7 @@ mod tests {
             bold: false,
             background: None,
             footnote: None,
+            reference: None,
         }];
         n
     }

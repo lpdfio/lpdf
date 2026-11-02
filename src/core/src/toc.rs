@@ -13,7 +13,7 @@
 use serde_json::{json, Map, Value};
 
 use crate::data;
-use crate::layout::{fill_section, finish_section, layout_numbered, shows_page_numbers, FilledSection};
+use crate::layout::{fill_section, finish_section, layout_numbered, shows_page_numbers, FilledSection, LaidDocument};
 use crate::page_numbers::{self, SectionNumbers};
 use crate::parse::{SectionLayout, TocOptions, TOC_DATA_KEY};
 use crate::render::{placed_anchors, RenderPage};
@@ -22,7 +22,7 @@ use crate::render::{placed_anchors, RenderPage};
 const MAX_PASSES: usize = 4;
 
 /// Lay out `sections`, of which the one at `toc_index` is the table of contents.
-pub(crate) fn layout_with_toc(sections: &[SectionLayout], toc_index: usize, options: &TocOptions) -> Vec<RenderPage> {
+pub(crate) fn layout_with_toc(sections: &[SectionLayout], toc_index: usize, options: &TocOptions) -> LaidDocument {
     let filled: Vec<Option<FilledSection>> = sections.iter().enumerate()
         .map(|(i, section)| (i != toc_index).then(|| fill_section(section)))
         .collect();
@@ -52,7 +52,7 @@ pub(crate) fn layout_with_toc(sections: &[SectionLayout], toc_index: usize, opti
     }
     let mut pages: Vec<RenderPage> = laid.into_iter().flatten().collect();
     page_numbers::mark_label_ranges(&mut pages, sections, &numbers, &counts);
-    pages
+    LaidDocument { pages, numbers, counts }
 }
 
 /// The TOC section bound to the entries of the other sections' pages `laid`, numbered as if the sections have
@@ -71,11 +71,13 @@ fn toc_pass(
     (toc, filled)
 }
 
-/// `$toc`: the bookmarks of the sections' pages `laid` but the TOC's, each with the number its page shows.
+/// `$toc`: the bookmarks of the sections' pages `laid` but the TOC's, each with the number its page shows. A
+/// `ref-only` bookmark is not listed.
 fn toc_entries(laid: &[Vec<RenderPage>], toc_index: usize, numbers: &[SectionNumbers], indent_step: f32) -> Value {
     let placed = laid.iter().zip(numbers).enumerate()
         .filter(|&(i, _)| i != toc_index)
-        .flat_map(|(_, (pages, numbers))| placed_anchors(pages).into_iter().map(move |p| (numbers.page(p.page), p.anchor)));
+        .flat_map(|(_, (pages, numbers))| placed_anchors(pages).into_iter().map(move |p| (numbers.page(p.page), p.anchor)))
+        .filter(|(_, anchor)| !anchor.ref_only);
     let entries = placed
         .enumerate()
         .map(|(i, (page, anchor))| json!({
@@ -266,6 +268,19 @@ mod tests {
         assert_eq!(texts(&pages[..1]), ["Contents", "Alpha"]);
         let ids: Vec<&str> = placed_anchors(&pages).iter().map(|p| p.anchor.id.as_str()).collect();
         assert_eq!(ids, ["contents", "listed-nowhere", "alpha"]);
+    }
+
+    #[test]
+    fn a_ref_only_bookmark_is_not_listed() {
+        let pages = render(&format!(
+            r#"{TOC}
+               <section><layout>
+                   <bookmark label="Alpha"/><text>Alpha</text>
+                   <bookmark label="Table 3" ref-only="true"/><text>Prices</text>
+                   <bookmark label="Beta"/><text>Beta</text>
+               </layout></section>"#
+        ));
+        assert_eq!(texts(&pages[..1]), ["Alpha", "2", "Beta", "2"]);
     }
 
     #[test]

@@ -262,6 +262,8 @@ pub struct Bookmark {
     pub level:       u8,
     /// `true` when the id came from `id=`, `false` when it was made from the label and may take a suffix.
     pub explicit_id: bool,
+    /// `ref-only`: a target for links and references that the outline and the table of contents leave out.
+    pub ref_only:    bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -336,7 +338,28 @@ pub struct TextRun {
     /// Set on the run an `<fn>` stands for: the anchor, a raised number, with the note it points at. The run has
     /// no text of its own.
     pub footnote:     Option<Box<Footnote>>,
+    /// Set on the run of a `<span bookmark-ref>`, whose `text` is its words with the bookmark's page and label in
+    /// them (`references`).
+    pub reference:    Option<Box<Reference>>,
 }
+
+/// What a `<span bookmark-ref>` refers to, and the words it shows the bookmark's page and label in.
+#[derive(Debug, Clone)]
+pub struct Reference {
+    /// The `id` of the bookmark.
+    pub id:     String,
+    /// The span's words as written, with `{bookmark-page}` and `{bookmark-label}` in them.
+    pub words:  String,
+    /// Where the span is written, for an error: `<span> at line 3, col 9` in XML, `span` in a kit tree.
+    pub place:  String,
+    /// The widest words it has shown: its line keeps room for them, so that a layout which moves its bookmark
+    /// back and forth settles (`references`).
+    pub widest: String,
+}
+
+/// The tokens a `<span bookmark-ref>` fills in.
+pub(crate) const BOOKMARK_PAGE: &str = "{bookmark-page}";
+pub(crate) const BOOKMARK_LABEL: &str = "{bookmark-label}";
 
 /// The note of an `<fn>`, which the page where its anchor lands shows at the bottom.
 #[derive(Debug, Clone)]
@@ -2422,7 +2445,7 @@ fn push_plain_run(runs: &mut Vec<TextRun>, raw: &str, prev_ended_space: &mut boo
             text: words.join(" "),
             leading_space: raw.starts_with(char::is_whitespace) || *prev_ended_space,
             font: None, color: None, href: None,
-            underline: false, strike: false, bold: false, background: None, footnote: None,
+            underline: false, strike: false, bold: false, background: None, footnote: None, reference: None,
         });
     }
     *prev_ended_space = raw.ends_with(char::is_whitespace);
@@ -2436,6 +2459,7 @@ fn footnote_run(words: Vec<TextRun>, leading_space: bool) -> TextRun {
         font: None, color: None, href: None,
         underline: false, strike: false, bold: false, background: None,
         footnote: Some(Box::new(Footnote { runs: words, number: 1, index: 0 })),
+        reference: None,
     }
 }
 
@@ -2465,6 +2489,8 @@ fn read_runs(runs: &mut Vec<TextRun>, elem: &roxmltree::Node, tokens: &Tokens, n
                 .collect();
             let span_text = raw_span.split_whitespace().collect::<Vec<_>>().join(" ");
             if !span_text.is_empty() {
+                let place = format!("<span>{}", node_loc(&child));
+                let reference = span_reference(&child, &span_text, &place).map_err(|e| format!("{place}: {e}"))?;
                 runs.push(TextRun {
                     text: span_text,
                     leading_space: raw_span.starts_with(char::is_whitespace) || prev_ended_space,
@@ -2474,12 +2500,13 @@ fn read_runs(runs: &mut Vec<TextRun>, elem: &roxmltree::Node, tokens: &Tokens, n
                     } else {
                         None
                     },
-                    href:      child.attribute("href").map(|s| s.to_string()),
+                    href:      span_href(&child, reference.as_deref()),
                     underline: child.attribute("underline").map(|v| v == "true").unwrap_or(false),
                     strike:    child.attribute("strike").map(|v| v == "true").unwrap_or(false),
                     bold:      child.attribute("bold").map(|v| v == "true").unwrap_or(false),
                     background: None,
                     footnote:  None,
+                    reference,
                 });
             }
             prev_ended_space = raw_span.ends_with(char::is_whitespace);
@@ -2509,6 +2536,41 @@ fn read_runs(runs: &mut Vec<TextRun>, elem: &roxmltree::Node, tokens: &Tokens, n
         }
     }
     Ok(())
+}
+
+/// The reference of a span with `bookmark-ref`, whose `words` show its bookmark's page and label, or `None` for
+/// any other span. The words may hold no other `{…}` token, since nothing would fill it in and the editor can't
+/// catch a typo there.
+fn span_reference(a: &impl Attrs, words: &str, place: &str) -> Result<Option<Box<Reference>>, String> {
+    let Some(id) = a.get("bookmark-ref") else { return Ok(None) };
+    if a.get("href").is_some() {
+        return Err("a span with bookmark-ref links to its bookmark already: leave out href".into());
+    }
+    if let Some(token) = tokens_in(words).find(|&token| token != BOOKMARK_PAGE && token != BOOKMARK_LABEL) {
+        return Err(format!(
+            "unknown token '{token}' in a span with bookmark-ref — expected {BOOKMARK_PAGE} or {BOOKMARK_LABEL}"
+        ));
+    }
+    Ok(Some(Box::new(Reference {
+        id: id.to_string(), words: words.to_string(), place: place.to_string(), widest: String::new(),
+    })))
+}
+
+/// The link of a span: its `href`, or the bookmark its `reference` names.
+fn span_href(a: &impl Attrs, reference: Option<&Reference>) -> Option<String> {
+    match reference {
+        Some(reference) => Some(format!("#{}", reference.id)),
+        None            => a.get("href").map(str::to_string),
+    }
+}
+
+/// The `{…}` tokens of `text`: a brace, a name with no space or brace in it, and a closing brace.
+fn tokens_in(text: &str) -> impl Iterator<Item = &str> {
+    text.match_indices('{').filter_map(move |(start, _)| {
+        let name = &text[start + 1..];
+        let end = name.find(|c: char| c == '{' || c == '}' || c.is_whitespace())?;
+        (end > 0 && name[end..].starts_with('}')).then(|| &text[start..start + end + 2])
+    })
 }
 
 /// The runs of a text node of a kit tree: its strings, a styled run for each `span` child, and an anchor for each
@@ -2569,17 +2631,20 @@ fn read_tree_runs(runs: &mut Vec<TextRun>, json: &serde_json::Value, tokens: &To
                 Some(v) => Some(tokens.resolve_color(v)?),
                 None    => None,
             };
+            let attrs = JsonAttrs(child);
+            let reference = span_reference(&attrs, &span_text, "span").map_err(|e| format!("span: {e}"))?;
             runs.push(TextRun {
                 text: span_text,
                 leading_space,
                 font:      jattr(child, "font").map(str::to_string),
                 color,
-                href:      jattr(child, "href").map(str::to_string),
+                href:      span_href(&attrs, reference.as_deref()),
                 underline: jattr(child, "underline").map(|v| v == "true").unwrap_or(false),
                 strike:    jattr(child, "strike")   .map(|v| v == "true").unwrap_or(false),
                 bold:      jattr(child, "bold")     .map(|v| v == "true").unwrap_or(false),
                 background: None,
                 footnote:  None,
+                reference,
             });
         }
         prev_ended_space = raw_span.ends_with(char::is_whitespace);
@@ -2625,7 +2690,7 @@ pub(crate) fn without_last_indent(text: &str) -> &str {
 fn plain_code_run(text: &str) -> TextRun {
     TextRun {
         text: text.to_string(), leading_space: false, font: None, color: None, href: None,
-        underline: false, strike: false, bold: false, background: None, footnote: None,
+        underline: false, strike: false, bold: false, background: None, footnote: None, reference: None,
     }
 }
 
@@ -2642,6 +2707,7 @@ fn code_span_in_code(a: &dyn Attrs, text: String, tokens: &Tokens) -> Result<Tex
         bold:       a.get("bold").map(|v| v == "true").unwrap_or(false),
         background: None,
         footnote:   None,
+        reference:  None,
     })
 }
 
@@ -2664,6 +2730,10 @@ fn code_runs(parts: Vec<CodePart>, tokens: &Tokens) -> Result<Vec<TextRun>, Stri
     }
     Ok(runs)
 }
+
+/// What a span of a `<code>` with `bookmark-ref` is told: a code's text is laid out by rules of its own, which keep no
+/// room for the words of a reference.
+const REFERENCE_IN_CODE: &str = "bookmark-ref is not allowed on a span in <code>: put the reference in a <text>";
 
 /// What a `<code>` holds besides text and spans is told.
 fn not_in_code(tag: &str, place: &str) -> String {
@@ -2707,6 +2777,9 @@ fn parse_code(elem: &roxmltree::Node, tokens: &Tokens) -> Result<ParsedNode, Str
         if child.is_text() {
             parts.push(CodePart::Text(child.text().unwrap_or("").to_string()));
         } else if child.tag_name().name() == "span" {
+            if child.attribute("bookmark-ref").is_some() {
+                return Err(format!("<span>{}: {REFERENCE_IN_CODE}", node_loc(&child)));
+            }
             let text: String = child.children().filter_map(|n| n.text().filter(|_| n.is_text())).collect();
             parts.push(CodePart::Span(Box::new(child), text));
         } else {
@@ -2753,6 +2826,9 @@ fn parse_tree_code(json: &serde_json::Value, tokens: &Tokens) -> Result<ParsedNo
         }
         match child.get("type").and_then(|v| v.as_str()) {
             Some("span") => {
+                if jattr(child, "bookmark-ref").is_some() {
+                    return Err(format!("span: {REFERENCE_IN_CODE}"));
+                }
                 let text: String = child.get("nodes").and_then(|v| v.as_array())
                     .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
                     .unwrap_or_default();
@@ -2778,6 +2854,7 @@ fn code_span_run(a: &impl Attrs, text: String, leading_space: bool, tokens: &Tok
         bold:       false,
         background: Some(tokens.resolve_color(a.get("background").unwrap_or(CODE_BACKGROUND))?),
         footnote:   None,
+        reference:  None,
     })
 }
 
@@ -2967,7 +3044,8 @@ fn parse_bookmark(a: &impl Attrs) -> Result<Bookmark, String> {
         Some(id) => (id.to_string(), true),
         None     => (slug(&label), false),
     };
-    Ok(Bookmark { id, label, level, explicit_id })
+    let ref_only = a.get("ref-only").is_some_and(|v| v == "true");
+    Ok(Bookmark { id, label, level, explicit_id, ref_only })
 }
 
 /// The id a bookmark gets from its label: lowercase, with every run of characters other than letters and
@@ -6687,7 +6765,7 @@ mod tests {
         assert!(children[0].bookmarks.is_empty());
         assert_eq!(
             children[1].bookmarks,
-            vec![Bookmark { id: "methods".into(), label: "Methods".into(), level: 2, explicit_id: false }]
+            vec![Bookmark { id: "methods".into(), label: "Methods".into(), level: 2, explicit_id: false, ref_only: false }]
         );
     }
 
