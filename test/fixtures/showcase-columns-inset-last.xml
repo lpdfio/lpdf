@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="rule"    value="#c5ccd6" />
+      <color name="band"    value="#eef3fb" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — An inset on the last page" subject="Where an inset on last goes, and when it stays put" />
+
+    <!-- An inset on last goes on the last page of the flow filled without it. That page is filled again with it, and
+         if text no longer fits, the text goes on to a new page with no inset, and the inset stays where it was, one
+         page before the end.
+         Expected, page by page:
+           Section 1
+             1  a short notice in the first column, and the subscription box across the three columns at the foot of
+                the page: the last page is the first, and the box fits under the text
+           Section 2
+             1  three full columns of a longer notice, with the subscription box across them near the foot: the page
+                the flow ended on without the box, filled again with it
+             2  the notice the box pushed on, at the top of the first column, and no box
+    -->
+    <section columns="3" column-gap="m" column-rule="0.5pt rule">
+      <layout margin="40pt">
+        <region pin="inset" colspan="3" top="610pt" height="150pt" page="last">
+          <column background="band" padding="l" gap="s" justify="center" height="fill">
+            <text font-size="l" font="Helvetica-Bold" color="primary" align="center">Take the Gazette every month</text>
+            <text align="center">Twelve numbers a year, by post or from the kiosk on the quay, for the price of a pint of oil.</text>
+          </column>
+        </region>
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">Notices</text>
+          <text align="justify">The harbour committee meets on the first Monday of the month in the long room of the customs house. The meeting is open to anyone who keeps a boat in the harbour, and the minutes are pinned to the board at the end of the quay.</text>
+          <text align="justify">The quay will be closed to carts on the mornings of the spring tides while the steps are repaired. Boats are asked to land their catch at the slipway on those mornings, and to keep clear of the masons' raft.</text>
+          <text align="justify">The museum asks anyone who has letters, photographs or log books from the light to bring them to the long room on a Sunday afternoon. Nothing will be kept without leave, and everything lent will be copied and returned.</text>
+          <text align="justify">The lifeboat crew will exercise in the bay on the second Saturday of the month, weather allowing. The bell at the end of the quay will be rung three times before the boat is launched.</text>
+          <text align="justify">The fish market opens at six in the summer and at seven in the winter. Buyers are reminded that the scales are checked by the harbour master on the first of every month.</text>
+          <text align="justify">The schoolmistress will give a reading from the record of the lamp-keepers in the long room on the night of the gale. The old lamp will be lit, and the reading ends when its oil runs out.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section columns="3" column-gap="m" column-rule="0.5pt rule">
+      <layout margin="40pt">
+        <region pin="inset" colspan="3" top="610pt" height="150pt" page="last">
+          <column background="band" padding="l" gap="s" justify="center" height="fill">
+            <text font-size="l" font="Helvetica-Bold" color="primary" align="center">Take the Gazette every month</text>
+            <text align="center">Twelve numbers a year, by post or from the kiosk on the quay, for the price of a pint of oil.</text>
+          </column>
+        </region>
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">More notices</text>
+          <text align="justify">The harbour committee meets on the first Monday of the month in the long room of the customs house. The meeting is open to anyone who keeps a boat in the harbour, and the minutes are pinned to the board at the end of the quay.</text>
+          <text align="justify">The quay will be closed to carts on the mornings of the spring tides while the steps are repaired. Boats are asked to land their catch at the slipway on those mornings, and to keep clear of the masons' raft.</text>
+          <text align="justify">The museum asks anyone who has letters, photographs or log books from the light to bring them to the long room on a Sunday afternoon. Nothing will be kept without leave, and everything lent will be copied and returned.</text>
+          <text align="justify">The lifeboat crew will exercise in the bay on the second Saturday of the month, weather allowing. The bell at the end of the quay will be rung three times before the boat is launched.</text>
+          <text align="justify">The fish market opens at six in the summer and at seven in the winter. Buyers are reminded that the scales are checked by the harbour master on the first of every month.</text>
+          <text align="justify">The schoolmistress will give a reading from the record of the lamp-keepers in the long room on the night of the gale. The old lamp will be lit, and the reading ends when its oil runs out.</text>
+          <text align="justify">Moorings in the inner harbour are let by the year from the first of April. A mooring not paid for by the end of April is let to the next boat on the list, which the harbour master keeps.</text>
+          <text align="justify">The new light is shown from sunset to sunrise, and in fog by day. Its character is two white flashes every ten seconds, seen for eighteen miles in clear weather. The old light at the point is no longer shown.</text>
+          <text align="justify">Boats coming in on the evening tide are asked to show their lights from the point at Ardmore, and to keep to the line of the leading marks until they are inside the harbour wall.</text>
+          <text align="justify">The chandlery on the quay has the spring list of prices, and orders for rope, paint and oilskins taken before the end of March are delivered by the first boat in April.</text>
+          <text align="justify">The coal boat is expected in the second week of the month. Coal ordered at the harbour office before it comes is delivered from the quay at the boat's price.</text>
+          <text align="justify">The committee thanks everyone who helped to carry the lifeboat up the slipway after the storm in January, and the women of the town who kept the crew in tea through the night.</text>
+          <text align="justify">The regatta will be held on the last Saturday of July. Entries for the rowing races close at the harbour office a week before, and the swimming race is open to anyone who can swim the width of the harbour.</text>
+          <text align="justify">The ferry to the islands sails on Tuesdays and Fridays from Easter, at nine from the end of the quay, and returns on the evening tide. Tickets are sold on board, and cattle travel at the owner's risk.</text>
+          <text align="justify">Fishermen are asked not to leave their nets to dry on the railings of the quay, which have been painted. The drying poles behind the fish market are free to use.</text>
+          <text align="justify">The postmistress asks that letters for the evening post be in the box at the harbour office by five, so that they go with the mail cart to the station.</text>
+          <text align="justify">The school will close for the herring season from the first of August, and open again when the boats come home. Children are asked to take care on the quay while the boats are landing.</text>
+          <text align="justify">The doctor holds a surgery in the long room every Thursday morning, and visits the islands on the first Friday of the month when the ferry sails.</text>
+          <text align="justify">The library in the customs house lends books for a fortnight, and has a shelf of the Gazette since its first number, which may be read in the room but not taken away.</text>
+          <text align="justify">The harbour master asks owners to look over their moorings before the autumn gales, and to report a worn chain or a dragging anchor at the harbour office before it parts.</text>
+          <text align="justify">The bell at the end of the quay is rung at noon every day, and three times when the harbour master calls the boats in. It is not to be rung for any other reason, by anyone.</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

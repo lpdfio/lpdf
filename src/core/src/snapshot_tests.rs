@@ -77,6 +77,20 @@ fn run_snapshot_with_image(name: &str) {
     check_snapshot(name, &pdf_bytes);
 }
 
+/// A fixture with data: `<name>.json` beside it binds the template's `data-*` attributes, as a render with data does.
+fn run_snapshot_with_data(name: &str) {
+    let xml_path = fixtures_dir().join(format!("{name}.xml"));
+    let xml = std::fs::read_to_string(&xml_path)
+        .unwrap_or_else(|_| panic!("fixture not found: {}", xml_path.display()));
+    let json_path = fixtures_dir().join(format!("{name}.json"));
+    let json = std::fs::read_to_string(&json_path)
+        .unwrap_or_else(|_| panic!("data not found: {}", json_path.display()));
+
+    let pdf_bytes = crate::LpdfEngine::render_xml_to_pdf(&xml, Some(&json), "", 0, false)
+        .unwrap_or_else(|e| panic!("render failed for {name}: {e}"));
+    check_snapshot(name, &pdf_bytes);
+}
+
 /// `showcase-encryption` rendered as the host would ask: the cipher and the permissions of its `<output>` (no
 /// copying or modifying), and what the render call says. Its `<output>` asks for AES-256, and `cipher` takes its
 /// place, so the RC4 snapshot is the same document in RC4-128. The plain one, with `skip_encryption`, is the
@@ -348,3 +362,15 @@ fn showcase_toc() { run_snapshot("showcase-toc"); }
 fn showcase_ocg() { check_snapshot("showcase-ocg", &crate::ocg_render_tests::render_fixture("showcase-ocg")); }
 #[test]
 fn showcase_ocg_split() { check_snapshot("showcase-ocg-split", &crate::ocg_render_tests::render_fixture("showcase-ocg-split")); }
+#[test]
+fn showcase_columns() { run_snapshot("showcase-columns"); }
+#[test]
+fn showcase_columns_flow() { run_snapshot("showcase-columns-flow"); }
+#[test]
+fn showcase_columns_markdown() { run_snapshot("showcase-columns-markdown"); }
+#[test]
+fn showcase_columns_data() { run_snapshot_with_data("showcase-columns-data"); }
+#[test]
+fn showcase_columns_insets() { run_snapshot_with_image("showcase-columns-insets"); }
+#[test]
+fn showcase_columns_inset_last() { run_snapshot("showcase-columns-inset-last"); }

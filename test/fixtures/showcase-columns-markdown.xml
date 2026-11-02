@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <document size="a4">
+    <meta title="lpdf Showcase — Markdown in columns" subject="Small print set in two columns" />
+
+    <!-- columns on a section with a markdown sets the Markdown in columns, as it sets a layout: the small print of
+         terms and conditions, in two columns to save pages. Headings keep with what follows them, lists split between
+         their items, and the layer that numbers the pages keeps the full width.
+         Expected: two pages in two columns, with a rule between them, the headings and numbered clauses in reading
+         order down the first column, then the second, then the next page; "Page 1 of 2" and "Page 2 of 2" centred
+         at the foot.
+    -->
+    <section columns="2" column-gap="xl" column-rule="0.5pt #c5ccd6">
+      <layer>
+        <text-at anchor="bottom-center" y="-24pt" font-size="xs" color="text-muted">Page {page} of {pages}</text-at>
+      </layer>
+      <markdown margin="54pt">
+        <markdown-content><![CDATA[
+          # Terms of hire
+
+          These terms apply to every boat the harbour company hires out, from the smallest rowing boat to the launch, and to every hirer, whether they hire for an hour or for a season. Read them before you sign the hire book: signing it means you have read them and agree to them.
+
+          ## 1. The hire
+
+          1. The hire starts when the hirer signs the hire book and takes the boat from the quay, and ends when the boat is back at the quay and the harbour master has signed the book again.
+          2. The hire is paid in advance, by the hour, the day or the season, at the rates on the board at the end of the quay. A part of an hour is charged as an hour.
+          3. A boat that is not back at the quay by the hour written in the book is charged at twice the rate for every hour it is late, unless the harbour master has agreed to a later hour.
+          4. The company may refuse to hire a boat to anyone, and need not give a reason.
+
+          ## 2. The boat
+
+          1. The hirer takes the boat as it is, and should look it over before leaving the quay: the hull, the oars or the engine, the bailer and the life jackets. Anything missing or broken is to be reported before leaving.
+          2. The boat is to be used on the waters of the harbour and the bay only, inside the line between the light and the point at Ardmore, and never beyond it.
+          3. No boat is to carry more people than the number painted on its transom, and every person on board is to wear a life jacket while the boat is under way.
+          4. The hirer is not to lend the boat to anyone else, nor let anyone else take the oars or the helm unless they are named in the hire book.
+
+          ## 3. Weather
+
+          1. The harbour master may stop all hire when the weather is bad, or is forecast to be bad, and may call boats back to the quay at any time by ringing the bell at the end of the quay three times.
+          2. A boat called back is to return at once, by the shortest safe way. The hire is charged to the hour the bell was rung.
+          3. When the weather keeps a boat from coming back, the hirer is to make for the nearest safe landing, make the boat fast and let the harbour master know where it is as soon as they can.
+
+          ## 4. Damage and loss
+
+          1. The hirer pays for any damage to the boat or its gear while it is on hire, except fair wear and tear, at the cost of the repair or, if it cannot be repaired, of a new one.
+          2. The hirer pays for anything lost overboard: oars, bailers, anchors and life jackets.
+          3. A hirer who runs a boat aground is to tell the harbour master when the boat is back, even when nothing seems to be damaged: the hull is looked over before the boat is hired again.
+          4. The company is not liable for anything the hirer brings on board and loses, nor for any loss or harm to the hirer or their passengers, except where the law says it must be.
+
+          ## 5. Fishing
+
+          1. Fishing from a hired boat is allowed with a rod and line, but not with nets, pots or long lines.
+          2. Fish are not to be cleaned in the boat. Hooks, line and bait are to be taken ashore with the catch.
+          3. The hirer is to keep clear of the moorings and the nets of the harbour's own boats, and to give way to them at all times.
+
+          ## 6. Children
+
+          1. A child under twelve may go out only with an adult who is named in the hire book and who stays in the boat with them.
+          2. A child of twelve to sixteen may take a rowing boat out alone inside the harbour wall, but not beyond it, and only with the written leave of a parent.
+
+          ## 7. The quay
+
+          1. Boats are to be brought alongside the quay slowly, bow first, and made fast to the rings, not to the ladders.
+          2. The steps at the end of the quay are for the harbour's own boats and the lifeboat, and are to be kept clear.
+          3. Rubbish is to be taken ashore and put in the bins at the head of the quay.
+
+          ## 8. Disputes
+
+          1. Any dispute about a hire is to be raised with the harbour master first, who will try to settle it on the quay.
+          2. A dispute the harbour master cannot settle goes to the harbour committee, which meets on the first Monday of the month in the long room of the customs house.
+          3. These terms may be changed by the committee at any time. The terms in force are the ones on the board at the end of the quay on the day of the hire.
+        ]]></markdown-content>
+      </markdown>
+    </section>
+  </document>
+</lpdf>

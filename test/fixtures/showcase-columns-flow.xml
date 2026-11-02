@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+      <color name="rule"    value="#c5ccd6" />
+      <color name="band"    value="#eef3fb" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Columns: breaks, tables, rules and notes" subject="What the flow does in columns" />
+
+    <!-- In columns, what ends a page in one column ends a column: break-before moves its element to the top of the
+         next column, and keep-next keeps a heading with what follows it in the same column. A table splits between
+         its rows from one column to the next. The rule is drawn only between columns that hold something, and the
+         notes of the footnotes stand at the foot of the page, at its full width, under all the columns.
+         Expected, page by page:
+           1  three columns, each starting with a chapter heading at its top: "One" holds two short paragraphs, "Two"
+              and "Three" each start a column of their own; two rules
+           2  a table of 90 catches in two columns: its header row and the first rows in the first column, the rest
+              in the second, cut between rows
+           3  a short list in three columns that fills the first and part of the second: one rule, between them
+           4  two columns of text; the number 1 in the second column, its note at the foot of the page across both
+    -->
+    <section columns="3" column-gap="m" column-rule="0.5pt rule">
+      <layout margin="40pt">
+        <text font-size="l" font="Helvetica-Bold" color="primary" paginate="keep-next">One: the harbour</text>
+        <text>The harbour was dug by hand in the year of the famine, and the stones of its quay came from the old church, which the storm had taken the roof off.</text>
+        <text>The boats were small, and the fish were many, and the town grew around the quay as a town grows around a well.</text>
+        <text font-size="l" font="Helvetica-Bold" color="primary" paginate="break-before">Two: the light</text>
+        <text>The first light was a fire on the headland, kept by whoever had the wood. The second was a lamp in a tower, kept by the keepers of the record.</text>
+        <text font-size="l" font="Helvetica-Bold" color="primary" paginate="break-before">Three: the museum</text>
+        <text>The museum keeps the record, the old lamp and the brass bell, and lights the lamp once a year, on the night of the gale.</text>
+      </layout>
+    </section>
+
+    <section columns="2" column-gap="l">
+      <layout margin="40pt">
+        <table cols="60pt 1fr 70pt" gap="xs">
+          <thead background="band">
+            <td><text font="Helvetica-Bold">Day</text></td><td><text font="Helvetica-Bold">Boat</text></td><td><text font="Helvetica-Bold" align="right">Catch</text></td>
+          </thead>
+          <tr><td><text>1 May</text></td><td><text>Morning Star</text></td><td><text align="right">18 crans</text></td></tr>
+          <tr><td><text>1 May</text></td><td><text>Brightwater</text></td><td><text align="right">35 crans</text></td></tr>
+          <tr><td><text>1 May</text></td><td><text>Three Sisters</text></td><td><text align="right">17 crans</text></td></tr>
+          <tr><td><text>2 May</text></td><td><text>Good Intent</text></td><td><text align="right">34 crans</text></td></tr>
+          <tr><td><text>2 May</text></td><td><text>Morning Star</text></td><td><text align="right">16 crans</text></td></tr>
+          <tr><td><text>2 May</text></td><td><text>Brightwater</text></td><td><text align="right">33 crans</text></td></tr>
+          <tr><td><text>3 May</text></td><td><text>Three Sisters</text></td><td><text align="right">15 crans</text></td></tr>
+          <tr><td><text>3 May</text></td><td><text>Good Intent</text></td><td><text align="right">32 crans</text></td></tr>
+          <tr><td><text>3 May</text></td><td><text>Morning Star</text></td><td><text align="right">14 crans</text></td></tr>
+          <tr><td><text>4 May</text></td><td><text>Brightwater</text></td><td><text align="right">31 crans</text></td></tr>
+          <tr><td><text>4 May</text></td><td><text>Three Sisters</text></td><td><text align="right">13 crans</text></td></tr>
+          <tr><td><text>4 May</text></td><td><text>Good Intent</text></td><td><text align="right">30 crans</text></td></tr>
+          <tr><td><text>5 May</text></td><td><text>Morning Star</text></td><td><text align="right">12 crans</text></td></tr>
+          <tr><td><text>5 May</text></td><td><text>Brightwater</text></td><td><text align="right">29 crans</text></td></tr>
+          <tr><td><text>5 May</text></td><td><text>Three Sisters</text></td><td><text align="right">11 crans</text></td></tr>
+          <tr><td><text>6 May</text></td><td><text>Good Intent</text></td><td><text align="right">28 crans</text></td></tr>
+          <tr><td><text>6 May</text></td><td><text>Morning Star</text></td><td><text align="right">45 crans</text></td></tr>
+          <tr><td><text>6 May</text></td><td><text>Brightwater</text></td><td><text align="right">27 crans</text></td></tr>
+          <tr><td><text>7 May</text></td><td><text>Three Sisters</text></td><td><text align="right">44 crans</text></td></tr>
+          <tr><td><text>7 May</text></td><td><text>Good Intent</text></td><td><text align="right">26 crans</text></td></tr>
+          <tr><td><text>7 May</text></td><td><text>Morning Star</text></td><td><text align="right">43 crans</text></td></tr>
+          <tr><td><text>8 May</text></td><td><text>Brightwater</text></td><td><text align="right">25 crans</text></td></tr>
+          <tr><td><text>8 May</text></td><td><text>Three Sisters</text></td><td><text align="right">42 crans</text></td></tr>
+          <tr><td><text>8 May</text></td><td><text>Good Intent</text></td><td><text align="right">24 crans</text></td></tr>
+          <tr><td><text>9 May</text></td><td><text>Morning Star</text></td><td><text align="right">41 crans</text></td></tr>
+          <tr><td><text>9 May</text></td><td><text>Brightwater</text></td><td><text align="right">23 crans</text></td></tr>
+          <tr><td><text>9 May</text></td><td><text>Three Sisters</text></td><td><text align="right">40 crans</text></td></tr>
+          <tr><td><text>10 May</text></td><td><text>Good Intent</text></td><td><text align="right">22 crans</text></td></tr>
+          <tr><td><text>10 May</text></td><td><text>Morning Star</text></td><td><text align="right">39 crans</text></td></tr>
+          <tr><td><text>10 May</text></td><td><text>Brightwater</text></td><td><text align="right">21 crans</text></td></tr>
+          <tr><td><text>11 May</text></td><td><text>Three Sisters</text></td><td><text align="right">38 crans</text></td></tr>
+          <tr><td><text>11 May</text></td><td><text>Good Intent</text></td><td><text align="right">20 crans</text></td></tr>
+          <tr><td><text>11 May</text></td><td><text>Morning Star</text></td><td><text align="right">37 crans</text></td></tr>
+          <tr><td><text>12 May</text></td><td><text>Brightwater</text></td><td><text align="right">19 crans</text></td></tr>
+          <tr><td><text>12 May</text></td><td><text>Three Sisters</text></td><td><text align="right">36 crans</text></td></tr>
+          <tr><td><text>12 May</text></td><td><text>Good Intent</text></td><td><text align="right">18 crans</text></td></tr>
+          <tr><td><text>13 May</text></td><td><text>Morning Star</text></td><td><text align="right">35 crans</text></td></tr>
+          <tr><td><text>13 May</text></td><td><text>Brightwater</text></td><td><text align="right">17 crans</text></td></tr>
+          <tr><td><text>13 May</text></td><td><text>Three Sisters</text></td><td><text align="right">34 crans</text></td></tr>
+          <tr><td><text>14 May</text></td><td><text>Good Intent</text></td><td><text align="right">16 crans</text></td></tr>
+          <tr><td><text>14 May</text></td><td><text>Morning Star</text></td><td><text align="right">33 crans</text></td></tr>
+          <tr><td><text>14 May</text></td><td><text>Brightwater</text></td><td><text align="right">15 crans</text></td></tr>
+          <tr><td><text>15 May</text></td><td><text>Three Sisters</text></td><td><text align="right">32 crans</text></td></tr>
+          <tr><td><text>15 May</text></td><td><text>Good Intent</text></td><td><text align="right">14 crans</text></td></tr>
+          <tr><td><text>15 May</text></td><td><text>Morning Star</text></td><td><text align="right">31 crans</text></td></tr>
+          <tr><td><text>16 May</text></td><td><text>Brightwater</text></td><td><text align="right">13 crans</text></td></tr>
+          <tr><td><text>16 May</text></td><td><text>Three Sisters</text></td><td><text align="right">30 crans</text></td></tr>
+          <tr><td><text>16 May</text></td><td><text>Good Intent</text></td><td><text align="right">12 crans</text></td></tr>
+          <tr><td><text>17 May</text></td><td><text>Morning Star</text></td><td><text align="right">29 crans</text></td></tr>
+          <tr><td><text>17 May</text></td><td><text>Brightwater</text></td><td><text align="right">11 crans</text></td></tr>
+          <tr><td><text>17 May</text></td><td><text>Three Sisters</text></td><td><text align="right">28 crans</text></td></tr>
+          <tr><td><text>18 May</text></td><td><text>Good Intent</text></td><td><text align="right">45 crans</text></td></tr>
+          <tr><td><text>18 May</text></td><td><text>Morning Star</text></td><td><text align="right">27 crans</text></td></tr>
+          <tr><td><text>18 May</text></td><td><text>Brightwater</text></td><td><text align="right">44 crans</text></td></tr>
+          <tr><td><text>19 May</text></td><td><text>Three Sisters</text></td><td><text align="right">26 crans</text></td></tr>
+          <tr><td><text>19 May</text></td><td><text>Good Intent</text></td><td><text align="right">43 crans</text></td></tr>
+          <tr><td><text>19 May</text></td><td><text>Morning Star</text></td><td><text align="right">25 crans</text></td></tr>
+          <tr><td><text>20 May</text></td><td><text>Brightwater</text></td><td><text align="right">42 crans</text></td></tr>
+          <tr><td><text>20 May</text></td><td><text>Three Sisters</text></td><td><text align="right">24 crans</text></td></tr>
+          <tr><td><text>20 May</text></td><td><text>Good Intent</text></td><td><text align="right">41 crans</text></td></tr>
+          <tr><td><text>21 May</text></td><td><text>Morning Star</text></td><td><text align="right">23 crans</text></td></tr>
+          <tr><td><text>21 May</text></td><td><text>Brightwater</text></td><td><text align="right">40 crans</text></td></tr>
+          <tr><td><text>21 May</text></td><td><text>Three Sisters</text></td><td><text align="right">22 crans</text></td></tr>
+          <tr><td><text>22 May</text></td><td><text>Good Intent</text></td><td><text align="right">39 crans</text></td></tr>
+          <tr><td><text>22 May</text></td><td><text>Morning Star</text></td><td><text align="right">21 crans</text></td></tr>
+          <tr><td><text>22 May</text></td><td><text>Brightwater</text></td><td><text align="right">38 crans</text></td></tr>
+          <tr><td><text>23 May</text></td><td><text>Three Sisters</text></td><td><text align="right">20 crans</text></td></tr>
+          <tr><td><text>23 May</text></td><td><text>Good Intent</text></td><td><text align="right">37 crans</text></td></tr>
+          <tr><td><text>23 May</text></td><td><text>Morning Star</text></td><td><text align="right">19 crans</text></td></tr>
+          <tr><td><text>24 May</text></td><td><text>Brightwater</text></td><td><text align="right">36 crans</text></td></tr>
+          <tr><td><text>24 May</text></td><td><text>Three Sisters</text></td><td><text align="right">18 crans</text></td></tr>
+          <tr><td><text>24 May</text></td><td><text>Good Intent</text></td><td><text align="right">35 crans</text></td></tr>
+          <tr><td><text>25 May</text></td><td><text>Morning Star</text></td><td><text align="right">17 crans</text></td></tr>
+          <tr><td><text>25 May</text></td><td><text>Brightwater</text></td><td><text align="right">34 crans</text></td></tr>
+          <tr><td><text>25 May</text></td><td><text>Three Sisters</text></td><td><text align="right">16 crans</text></td></tr>
+          <tr><td><text>26 May</text></td><td><text>Good Intent</text></td><td><text align="right">33 crans</text></td></tr>
+          <tr><td><text>26 May</text></td><td><text>Morning Star</text></td><td><text align="right">15 crans</text></td></tr>
+          <tr><td><text>26 May</text></td><td><text>Brightwater</text></td><td><text align="right">32 crans</text></td></tr>
+          <tr><td><text>27 May</text></td><td><text>Three Sisters</text></td><td><text align="right">14 crans</text></td></tr>
+          <tr><td><text>27 May</text></td><td><text>Good Intent</text></td><td><text align="right">31 crans</text></td></tr>
+          <tr><td><text>27 May</text></td><td><text>Morning Star</text></td><td><text align="right">13 crans</text></td></tr>
+          <tr><td><text>28 May</text></td><td><text>Brightwater</text></td><td><text align="right">30 crans</text></td></tr>
+          <tr><td><text>28 May</text></td><td><text>Three Sisters</text></td><td><text align="right">12 crans</text></td></tr>
+          <tr><td><text>28 May</text></td><td><text>Good Intent</text></td><td><text align="right">29 crans</text></td></tr>
+          <tr><td><text>29 May</text></td><td><text>Morning Star</text></td><td><text align="right">11 crans</text></td></tr>
+          <tr><td><text>29 May</text></td><td><text>Brightwater</text></td><td><text align="right">28 crans</text></td></tr>
+          <tr><td><text>29 May</text></td><td><text>Three Sisters</text></td><td><text align="right">45 crans</text></td></tr>
+          <tr><td><text>30 May</text></td><td><text>Good Intent</text></td><td><text align="right">27 crans</text></td></tr>
+          <tr><td><text>30 May</text></td><td><text>Morning Star</text></td><td><text align="right">44 crans</text></td></tr>
+          <tr><td><text>30 May</text></td><td><text>Brightwater</text></td><td><text align="right">26 crans</text></td></tr>
+        </table>
+      </layout>
+    </section>
+
+    <section columns="3" column-gap="m" column-rule="0.5pt rule">
+      <layout margin="40pt">
+        <text font-size="l" font="Helvetica-Bold" color="primary">Boats of the harbour</text>
+        <text>Morning Star, built 1911</text>
+        <text>Brightwater, built 1923</text>
+        <text>Three Sisters, built 1902</text>
+        <text>Good Intent, built 1935</text>
+        <text>Ann Mary, built 1898</text>
+        <text>Harvest Moon, built 1929</text>
+        <text>Silver Spray, built 1931</text>
+        <text>Endeavour, built 1907</text>
+        <text>Faithful, built 1919</text>
+        <text>Kittiwake, built 1926</text>
+        <text>Ocean Gem, built 1914</text>
+        <text>Providence, built 1899</text>
+        <text>Rosebud, built 1921</text>
+        <text>Sea Holly, built 1933</text>
+        <text>Westward, built 1909</text>
+        <text>Wild Rose, built 1917</text>
+        <text>Brothers, built 1904</text>
+        <text>Daystar, built 1927</text>
+        <text>Fair Morn, built 1913</text>
+        <text>Golden Hope, built 1930</text>
+        <text>Heather Bell, built 1922</text>
+        <text>Isabella, built 1901</text>
+        <text>Jeannie, built 1916</text>
+        <text>Lily of the Valley, built 1910</text>
+        <text>Mayflower, built 1924</text>
+        <text>Northern Light, built 1934</text>
+        <text>Olive Leaf, built 1906</text>
+        <text>Pride of the Bay, built 1928</text>
+        <text>Queen of the Isles, built 1912</text>
+        <text>Reliance, built 1920</text>
+        <text>Sunbeam, built 1903</text>
+        <text>Thistle, built 1932</text>
+        <text>Union, built 1900</text>
+        <text>Venture, built 1918</text>
+        <text>White Wings, built 1925</text>
+        <text>Ythan, built 1908</text>
+        <text>Zephyr, built 1936</text>
+        <text>Admiral, built 1915</text>
+        <text>Bonnie Lass, built 1905</text>
+        <text>Comrades, built 1937</text>
+        <text>Dawn, built 1911</text>
+        <text>Eliza, built 1923</text>
+        <text>Fisher Lassie, built 1902</text>
+        <text>Gleaner, built 1935</text>
+        <text>Hopeful, built 1898</text>
+        <text>Iona, built 1929</text>
+        <text>Jessie, built 1931</text>
+        <text>Kindly Light, built 1907</text>
+        <text>Lady Jane, built 1919</text>
+        <text>Margaret, built 1926</text>
+        <text>Nimrod, built 1914</text>
+        <text>Onward, built 1899</text>
+        <text>Plough, built 1921</text>
+        <text>Quest, built 1933</text>
+        <text>Ranger, built 1909</text>
+        <text>Star of Hope, built 1917</text>
+        <text>True Love, built 1904</text>
+        <text>Unity, built 1927</text>
+        <text>Vigilant, built 1913</text>
+        <text>Wanderer, built 1930</text>
+      </layout>
+    </section>
+
+    <section columns="2" column-gap="l">
+      <layout margin="40pt">
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold" color="primary">A note in the second column</text>
+          <text align="justify">The lamp-keepers of the northern coast kept a record of every evening they lit the harbour light, and the record grew longer than the harbour itself. Each entry gives the hour, the weather and the ships that passed before midnight. Most nights the third column stayed empty, and the keepers took pride in that. The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea.</text>
+          <text align="justify">Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. In the winter of the great storm the record runs to four pages for a single night. The oil came by boat in spring and autumn, and a late boat meant a careful winter.</text>
+          <text align="justify">A keeper's daughter wrote the entries for six years when her father's hands failed, and her hand is the clearest in the book. The tower was painted every third summer, white below and red at the gallery. Visitors were few, and the book of their names fills less than a single page. The ones who came by sea signed with the name of their boat; the ones who came by the coast road signed with the name of their village.</text>
+          <text align="justify">When the board sent the new lens, it came in eleven crates and a letter of instructions longer than the record of that year. The keepers set it up in a week and lit it on a calm night, and the entry for that night says only that the light could be seen from the church at Ardmore. The old lamp was kept in the cupboard under the lamp room, beside the brass bell.</text>
+          <text align="justify">It was lit once more, on the night the new light failed in a gale, and the entry for that night is the longest in the book: three pages in a hand that grows smaller as it goes. The record ends when the light was made automatic. The last entry gives the hour, the weather and the ships that passed, as the first one did, and below it a line in the daughter's hand: kept to the end.</text>
+          <text align="justify">The book is in the museum at the old customs house, in forty volumes, and the third column of the last page is empty. Readers who come to the museum ask most often about the night of the gale, and the keeper who wrote three pages in a shrinking hand.</text>
+          <text align="justify">The museum keeps the old lamp beside the book, and lights it once a year, on the night of the gale, for as long as the oil in it lasts. The museum also keeps the letter of instructions that came with the new lens, and the reply the keepers sent. The reply is one line: received, and lit<fn>The reply is framed in the long room, beside the letter it answers.</fn>.</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+      <color name="rule"    value="#c5ccd6" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — A list from data in columns" subject="A price list of short lines, three columns to a page" />
+
+    <!-- A long list of short items that comes from data (showcase-columns-data.json): a price list, which no author
+         can split into columns by hand. In three columns, each line takes a third of the width, and the list runs
+         down one column, on at the top of the next, and on to the next page. The last page is balanced.
+         Expected: two pages under the shop's name, each item a line with its name at the left and its price at the
+         right of its column; the 260 items in order down the first column, then the second, then the third; the
+         second page levelled: its columns as short as they can be and hold the rest, so the first two are as long
+         and the third a line or two shorter, with a rule between each two.
+    -->
+    <section columns="3" column-gap="l" column-rule="0.5pt rule" column-fill="balance">
+      <layout margin="40pt">
+        <region pin="top">
+          <row padding="0 0 m 0">
+            <text font-size="xl" font="Helvetica-Bold" color="primary" data-value="shop">The Chandlery</text>
+            <text width="fill" align="right" font-size="s" color="muted" data-value="season">Price list</text>
+          </row>
+        </region>
+        <column data-source="items" gap="xs">
+          <row gap="s">
+            <text font-size="s" data-value="name">Item</text>
+            <text width="fill" align="right" font-size="s" data-value="price">0.00</text>
+          </row>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

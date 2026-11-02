@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <assets>
+    <image name="photo"  src="../assets/images/image-sample.png" />
+    <image name="avatar" src="../assets/images/image-square.png" />
+  </assets>
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+      <color name="rule"    value="#c5ccd6" />
+      <color name="band"    value="#eef3fb" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Insets" subject="Blocks placed inside the columns, which the flow goes around" />
+
+    <!-- <region pin="inset"> is a block at a spot in the columns: top and height place it, col and colspan say which
+         columns it covers, and those columns fill above it and carry on below it. It holds what any region holds,
+         and content taller than it is clipped at its foot. The notes of the footnotes don't rise above its foot: a
+         line whose note would need them to goes on to the next page with its note.
+         Expected, page by page:
+           1  a newspaper page in four columns under its masthead: a photo with its caption across the second and the
+              third column, 110pt below the top of the columns; the text of those two columns stops above it and
+              carries on below it, and the first and the fourth run straight down; the rules between the columns, the
+              one between the second and the third broken where the photo is
+           2  one column with a band across it 200pt down: the text runs above the band and on below it
+           3  three columns with two insets: a square picture at the top of the first, and a box near the foot of the
+              third; the text starts below the picture, and in the third column runs down to the box and carries on
+              below it
+           4  the end of that text, at the top of the first column
+           5  two columns with a box of 80pt at the top of both, which holds more text than fits: its last lines are
+              cut at its foot, and the columns start below it
+           6  two columns over a box across both, near the foot of the page, which leaves the notes too little room:
+              the text of the first column stops at the line that calls the note, and the second column is empty
+           7  that line, its note at the foot, and the rest of the text, with no box on this page
+    -->
+    <section columns="4" column-gap="m" column-rule="0.5pt rule">
+      <layout margin="36pt">
+        <region pin="top">
+          <column gap="xs" padding="0 0 m 0">
+            <text font-size="xxl" font="Times-Bold" color="primary" align="center">The Harbour Gazette</text>
+            <text font-size="s" color="muted" align="center">Spring number · The light, the boats and the museum</text>
+          </column>
+        </region>
+        <region pin="inset" col="2" colspan="2" top="110pt" height="210pt">
+          <column gap="xs">
+            <img name="photo" width="fill" height="160pt" />
+            <text font-size="s" color="muted">The quay at the evening tide, from the gallery of the light. The museum is the long building at the head of the quay.</text>
+          </column>
+        </region>
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">The lamp-keepers' record</text>
+          <text align="justify">The lamp-keepers of the northern coast kept a record of every evening they lit the harbour light, and the record grew longer than the harbour itself. Each entry gives the hour, the weather and the ships that passed before midnight. Most nights the third column stayed empty, and the keepers took pride in that.</text>
+          <text align="justify">The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page.</text>
+          <text align="justify">Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did.</text>
+          <text font-size="l" font="Helvetica-Bold">The winter of the great storm</text>
+          <text align="justify">In the winter of the great storm the record runs to four pages for a single night. The oil came by boat in spring and autumn, and a late boat meant a careful winter. A keeper's daughter wrote the entries for six years when her father's hands failed, and her hand is the clearest in the book.</text>
+          <text align="justify">The tower was painted every third summer, white below and red at the gallery. Visitors were few, and the book of their names fills less than a single page. The ones who came by sea signed with the name of their boat; the ones who came by the coast road signed with the name of their village.</text>
+          <text font-size="l" font="Helvetica-Bold">The new light</text>
+          <text align="justify">When the board sent the new lens, it came in eleven crates and a letter of instructions longer than the record of that year. The keepers set it up in a week and lit it on a calm night, and the entry for that night says only that the light could be seen from the church at Ardmore.</text>
+          <text align="justify">The old lamp was kept in the cupboard under the lamp room, beside the brass bell. It was lit once more, on the night the new light failed in a gale, and the entry for that night is the longest in the book: three pages in a hand that grows smaller as it goes.</text>
+          <text align="justify">The record ends when the light was made automatic. The last entry gives the hour, the weather and the ships that passed, as the first one did, and below it a line in the daughter's hand: kept to the end. The book is in the museum at the old customs house, in forty volumes.</text>
+          <text font-size="l" font="Helvetica-Bold">The museum</text>
+          <text align="justify">The customs house stood empty for twenty years before the town bought it for a shilling and a promise to keep the roof sound. The promise was kept by a committee of four, who met in the long room on the first floor and argued about the gutters for most of every meeting.</text>
+          <text align="justify">The first things the museum showed were the ones nobody else wanted: a figurehead from a wreck, a chest of customs ledgers, a case of birds' eggs and the record of the lamp-keepers, which the board sent over in a cart when the light was made automatic.</text>
+          <text align="justify">Visitors come in the summer, mostly, by the coast road. They read the guide, look at the figurehead and the eggs, and stand longest at the case with the open volume. The museum keeps a book for their names, as the keepers did, and it has filled eleven volumes since the first.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section>
+      <layout margin="40pt">
+        <region pin="inset" top="200pt" height="90pt">
+          <column background="band" padding="m l" justify="center" height="fill">
+            <text font-size="l" font="Times-Italic" color="primary" align="center">"Kept to the end." — the last line of the record</text>
+          </column>
+        </region>
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">An inset in one column</text>
+          <text align="justify">An inset needs no columns: in a section of one, it is a block at a spot of the page that the text goes around, above it and on below it. The lamp-keepers of the northern coast kept a record of every evening they lit the harbour light, and the record grew longer than the harbour itself. Each entry gives the hour, the weather and the ships that passed before midnight. Most nights the third column stayed empty, and the keepers took pride in that.</text>
+          <text align="justify">The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page. Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying.</text>
+          <text align="justify">A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did. In the winter of the great storm the record runs to four pages for a single night.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section columns="3" column-gap="m">
+      <layout margin="40pt">
+        <region pin="inset" top="0pt" height="170pt">
+          <img name="avatar" width="fill" height="170pt" />
+        </region>
+        <region pin="inset" col="3" top="520pt" height="160pt">
+          <column background="band" padding="m" gap="s" height="fill">
+            <text font="Helvetica-Bold" color="primary">Opening hours</text>
+            <text font-size="s">The museum opens every day from Easter to the end of September, ten till five, and on Sundays in the winter, two till four.</text>
+            <text font-size="s">The old lamp is lit on the night of the gale.</text>
+          </column>
+        </region>
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">Two insets on a page</text>
+          <text align="justify">The lamp-keepers of the northern coast kept a record of every evening they lit the harbour light, and the record grew longer than the harbour itself. Each entry gives the hour, the weather and the ships that passed before midnight. Most nights the third column stayed empty, and the keepers took pride in that.</text>
+          <text align="justify">The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page.</text>
+          <text align="justify">Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did.</text>
+          <text align="justify">In the winter of the great storm the record runs to four pages for a single night. The oil came by boat in spring and autumn, and a late boat meant a careful winter. A keeper's daughter wrote the entries for six years when her father's hands failed, and her hand is the clearest in the book.</text>
+          <text align="justify">The tower was painted every third summer, white below and red at the gallery. Visitors were few, and the book of their names fills less than a single page. The ones who came by sea signed with the name of their boat; the ones who came by the coast road signed with the name of their village.</text>
+          <text align="justify">When the board sent the new lens, it came in eleven crates and a letter of instructions longer than the record of that year. The keepers set it up in a week and lit it on a calm night, and the entry for that night says only that the light could be seen from the church at Ardmore.</text>
+          <text align="justify">The old lamp was kept in the cupboard under the lamp room, beside the brass bell. It was lit once more, on the night the new light failed in a gale, and the entry for that night is the longest in the book: three pages in a hand that grows smaller as it goes.</text>
+          <text align="justify">The record ends when the light was made automatic. The last entry gives the hour, the weather and the ships that passed, as the first one did, and below it a line in the daughter's hand: kept to the end. The book is in the museum at the old customs house, in forty volumes, and the third column of the last page is empty.</text>
+          <text align="justify">Readers who come to the museum ask most often about the night of the gale, and the keeper who wrote three pages in a shrinking hand. The museum keeps the old lamp beside the book, and lights it once a year, on the night of the gale, for as long as the oil in it lasts.</text>
+          <text align="justify">The harbour itself has changed less than the light. The quay was lengthened twice, and the fish market moved from the quay to a shed on the road, but the boats still come in on the evening tide, and the people of the town still walk out to the end of the quay to watch them.</text>
+          <text align="justify">The customs house stood empty for twenty years before the town bought it for a shilling and a promise to keep the roof sound. The promise was kept by a committee of four, who met in the long room on the first floor and argued about the gutters for most of every meeting.</text>
+          <text align="justify">The first things the museum showed were the ones nobody else wanted: a figurehead from a wreck, a chest of customs ledgers, a case of birds' eggs and the record of the lamp-keepers, which the board sent over in a cart when the light was made automatic.</text>
+          <text align="justify">The schoolmistress opened the crates in the spring, and read the forty volumes in order over the summer. She wrote a short guide to them, which the museum still sells at the door, and she put the volume of the night of the gale in a case of its own.</text>
+          <text align="justify">Visitors come in the summer, mostly, by the coast road. They read the guide, look at the figurehead and the eggs, and stand longest at the case with the open volume. The museum keeps a book for their names, as the keepers did.</text>
+          <text align="justify">In the winter the museum opens on Sundays only, and the committee meets in the long room as before. The gutters were replaced the year the roof was mended, and the committee now argues about the windows, which let in the sound of the sea.</text>
+          <text align="justify">Once a year, on the night of the gale, the committee lights the old lamp in the long room and opens the volume at the first page of that night. Whoever is there reads the three pages aloud, one after another, until the oil runs out.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section columns="2" column-gap="l">
+      <layout margin="40pt">
+        <region pin="inset" colspan="2" top="0pt" height="80pt">
+          <column background="band" padding="m" gap="s">
+            <text font="Helvetica-Bold" color="primary">A box that holds more than fits</text>
+            <text font-size="s">The inset is 80pt high, and its content is taller: the lines that don't fit are cut at its foot, as the edge of a page cuts a node taller than the page. The lamp-keepers of the northern coast kept a record of every evening they lit the harbour light. Each entry gives the hour, the weather and the ships that passed before midnight.</text>
+            <text font-size="s">Most nights the third column stayed empty, and the keepers took pride in that. The oldest keeper claimed that she could tell the season from the smell of the oil alone.</text>
+          </column>
+        </region>
+        <column gap="m">
+          <text align="justify">The columns start below the box. The lamp-keepers of the northern coast kept a record of every evening they lit the harbour light, and the record grew longer than the harbour itself. Each entry gives the hour, the weather and the ships that passed before midnight. Most nights the third column stayed empty, and the keepers took pride in that.</text>
+          <text align="justify">The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section columns="2" column-gap="l">
+      <layout margin="40pt">
+        <region pin="inset" colspan="2" top="640pt" height="100pt" page="1">
+          <column background="band" padding="m" justify="center" height="fill">
+            <text font-size="l" font="Times-Italic" color="primary" align="center">The museum is open every day from Easter to September.</text>
+          </column>
+        </region>
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold">A note that gives way to an inset</text>
+          <text align="justify">The box at the foot of this page leaves the notes too little room under it. The lamp-keepers of the northern coast kept a record of every evening they lit the harbour light, and the record grew longer than the harbour itself. Each entry gives the hour, the weather and the ships that passed before midnight. Most nights the third column stayed empty, and the keepers took pride in that.</text>
+          <text align="justify">The oldest keeper claimed that she could tell the season from the smell of the oil alone, and she was seldom wrong<fn>Whale oil in winter, colza in spring, and later the paraffin the lighthouse board sent in barrels by the spring boat. The keepers kept the barrels in the cellar under the tower, and the smell of paraffin is in the pages of the record to this day.</fn>. Nobody could say when the first entry was made, only that the ink in it had faded to the color of weak tea. When a storm did come, the entries ran past the margin and onto the back of the page.</text>
+          <text align="justify">Under the lamp room stood a cupboard of spare wicks, glass chimneys and one brass bell that nobody remembered buying. A page of the record was ruled into three columns: the hour, the weather, and a line for anything worth remembering. Visitors who read the record in order noticed that the handwriting changed every few years, while the weather never did.</text>
+          <text align="justify">In the winter of the great storm the record runs to four pages for a single night. The oil came by boat in spring and autumn, and a late boat meant a careful winter. A keeper's daughter wrote the entries for six years when her father's hands failed, and her hand is the clearest in the book.</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>
