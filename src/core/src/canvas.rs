@@ -806,8 +806,8 @@ fn layer_to_render_node(layer: &CanvasLayer, tokens: PageTokens) -> RenderNode {
 ///
 /// When `prepend = false` (overlays) the layer is appended.
 ///
-/// `pages` must be the pages of a single section, which have `numbers`.  Page-scope indices are relative to this
-/// slice.
+/// `pages` must be the pages of a single section, which have `numbers`.  `first`, `last` and ranges count the pages
+/// of this slice, and `odd` and `even` follow their printed numbers (`page_scope_indices`).
 pub(crate) fn apply_canvas_layers(
     pages:   &mut [RenderPage],
     layers:  &[CanvasLayer],
@@ -819,14 +819,14 @@ pub(crate) fn apply_canvas_layers(
 
     if prepend {
         for layer in layers.iter().rev() {
-            for i in page_scope_indices(&layer.page, n) {
+            for i in page_scope_indices(&layer.page, n, numbers.first) {
                 let node = layer_to_render_node(layer, PageTokens::new(numbers, i));
                 pages[i].nodes.insert(0, node);
             }
         }
     } else {
         for layer in layers {
-            for i in page_scope_indices(&layer.page, n) {
+            for i in page_scope_indices(&layer.page, n, numbers.first) {
                 let node = layer_to_render_node(layer, PageTokens::new(numbers, i));
                 pages[i].nodes.push(node);
             }

@@ -420,6 +420,75 @@ mod rendered {
         assert_eq!(footers(&pages), ["I/III", "II/III", "III/III"]);
     }
 
+    /// A section with `attrs` whose flow is `pages` pages, with a header and a layer for odd pages and for even
+    /// ones, each printing the page's number.
+    fn sided(attrs: &str, pages: usize) -> String {
+        let flow: String = (1..=pages).map(|n| format!(r#"<text paginate="break-before">Page {n}</text>"#)).collect();
+        format!(
+            r#"<section {attrs}><layout>
+                <region pin="top" page="odd"><text>odd {{page}}</text></region>
+                <region pin="top" page="even"><text>even {{page}}</text></region>
+                {flow}
+            </layout>
+            <layer page="odd"><text-at x="40pt" y="800pt">layer odd {{page}}</text-at></layer>
+            <layer page="even"><text-at x="40pt" y="800pt">layer even {{page}}</text-at></layer></section>"#
+        )
+    }
+
+    /// What each page's odd and even headers and layers print, joined with ` | `.
+    fn sides(pages: &[RenderPage]) -> Vec<String> {
+        let side = |t: &String| ["odd ", "even ", "layer odd ", "layer even "].iter().any(|p| t.starts_with(p));
+        pages.iter().map(|page| texts(page).into_iter().filter(side).collect::<Vec<_>>().join(" | ")).collect()
+    }
+
+    #[test]
+    fn odd_and_even_headers_and_layers_follow_the_printed_number_in_every_format() {
+        let pages = render(&[
+            sided("", 3),
+            sided("", 3),
+            sided(r#"page-start="4" page-format="lower-roman""#, 2),
+            sided(r#"page-start="4" page-format="upper-alpha" page-prefix="B-""#, 2),
+        ].concat());
+        assert_eq!(sides(&pages), [
+            // From page 1, as before.
+            "odd 1 | layer odd 1", "even 2 | layer even 2", "odd 3 | layer odd 3",
+            // Counting on from 4.
+            "even 4 | layer even 4", "odd 5 | layer odd 5", "even 6 | layer even 6",
+            // Starting at iv, then at B-D.
+            "even iv | layer even iv", "odd v | layer odd v",
+            "even B-D | layer even B-D", "odd B-E | layer odd B-E",
+        ]);
+    }
+
+    #[test]
+    fn a_section_of_headers_alone_shows_the_side_of_its_printed_number() {
+        let headers_alone = r#"<section><layout>
+            <region pin="top" page="odd"><text>odd {page}</text></region>
+            <region pin="top" page="even"><text>even {page}</text></region>
+        </layout></section>"#;
+        let pages = render(&[sided("", 1), headers_alone.to_string()].concat());
+        assert_eq!(sides(&pages), ["odd 1 | layer odd 1", "even 2"]);
+    }
+
+    #[test]
+    fn first_last_and_ranges_count_the_sections_own_pages_whatever_its_numbers() {
+        let flow: String = (1..=3).map(|n| format!(r#"<text paginate="break-before">Page {n}</text>"#)).collect();
+        let pages = render(&format!(
+            r#"<section page-start="4"><layout>
+                <region pin="top" page="first"><text>first {{page}}</text></region>
+                <region pin="top" page="2-last"><text>rest {{page}}</text></region>
+                <region pin="bottom" page="last"><text>last {{page}}</text></region>
+                {flow}
+            </layout><layer page="2"><text-at x="40pt" y="800pt">second {{page}}</text-at></layer></section>"#
+        ));
+        let scoped = |page: &RenderPage| {
+            let scoped = |t: &String| ["first ", "rest ", "last ", "second "].iter().any(|p| t.starts_with(p));
+            texts(page).into_iter().filter(scoped).collect::<Vec<_>>().join(" | ")
+        };
+        let shown: Vec<String> = pages.iter().map(scoped).collect();
+        assert_eq!(shown, ["first 4", "rest 5 | second 5", "rest 6 | last 6"]);
+    }
+
     #[test]
     fn a_contents_longer_than_a_page_moves_the_numbers_of_the_sections_after_it() {
         // Seventy entries of two lines each list on three pages, which the guess of one gets wrong by two.

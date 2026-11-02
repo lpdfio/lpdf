@@ -326,6 +326,9 @@ fn showcase_canvas_opacity()  { run_snapshot("showcase-canvas-opacity"); }
 fn showcase_region_chrome()  { run_snapshot("showcase-region-chrome"); }
 #[test]
 fn showcase_region_page_scope() { run_snapshot("showcase-region-page-scope"); }
+/// `odd` and `even` by the printed number, in sections that count on from 4, start at iv and start at B-D.
+#[test]
+fn showcase_page_scope_printed() { run_snapshot("showcase-page-scope-printed"); }
 #[test]
 fn showcase_toc() { run_snapshot("showcase-toc"); }
 #[test]

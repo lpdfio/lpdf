@@ -582,7 +582,7 @@ fn finish_chrome(page: &SectionLayout, chrome: ChromePages, numbers: &SectionNum
         let captured = chunk.captured;
         let page_chrome = |chrome: &[Node]| -> Vec<Node> {
             chrome.iter()
-                .filter(|n| page_scope_indices(&n.page_scope, total_pages).contains(&idx))
+                .filter(|n| page_scope_indices(&n.page_scope, total_pages, numbers.first).contains(&idx))
                 .map(|n| {
                     let mut node = substitute_page_tokens(n, PageTokens::new(numbers, idx));
                     fill_sinks(&mut node, &captured, &latest);
@@ -648,7 +648,7 @@ fn finish_chrome(page: &SectionLayout, chrome: ChromePages, numbers: &SectionNum
     if pages_out.is_empty() {
         let page_chrome = |chrome: &[Node]| -> Vec<Node> {
             chrome.iter()
-                .filter(|n| page_scope_indices(&n.page_scope, 1).contains(&0))
+                .filter(|n| page_scope_indices(&n.page_scope, 1, numbers.first).contains(&0))
                 .map(|n| {
                     let mut node = substitute_page_tokens(n, PageTokens::new(numbers, 0));
                     fill_sinks(&mut node, &PageCaptures::new(), &HashMap::new());
