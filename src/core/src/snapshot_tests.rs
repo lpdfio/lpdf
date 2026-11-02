@@ -245,6 +245,8 @@ fn showcase_text_line_height() { run_snapshot("showcase-text-line-height"); }
 #[test]
 fn showcase_text_justify() { run_snapshot("showcase-text-justify"); }
 #[test]
+fn showcase_text_align_spans() { run_snapshot("showcase-text-align-spans"); }
+#[test]
 fn showcase_inherited_style() { run_snapshot("showcase-inherited-style"); }
 #[test]
 fn showcase_colors() { run_snapshot("showcase-colors"); }

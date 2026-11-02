@@ -11,6 +11,9 @@ mod row_split_tests;
 #[cfg(test)]
 #[path = "layout/footnote_clip_tests.rs"]
 mod footnote_clip_tests;
+#[cfg(test)]
+#[path = "layout/aligned_text_tests.rs"]
+mod aligned_text_tests;
 pub(crate) use table_grid::{Held, Placed};
 use table_grid::TableGrid;
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
@@ -4481,6 +4484,12 @@ impl<'a> Atom<'a> {
     fn strike(&self) -> bool {
         self.span.is_some_and(|run| run.strike)
     }
+
+    /// Whether it is drawn as text alone, with nothing under, over or around it, so it can share one text with the
+    /// atoms beside it in its font and color.
+    fn is_plain(&self) -> bool {
+        self.href().is_none() && !self.underline() && !self.strike() && !self.sup && self.background().is_none()
+    }
 }
 
 /// A line of a text: its atoms, each with the gap before it.
@@ -4520,6 +4529,12 @@ fn justify_gap(line: &TextLine, avail_w: f32, space_w: f32) -> f32 {
 
 fn text_line_width(line: &TextLine) -> f32 {
     line.iter().map(|(atom, gap)| gap + atom.width).sum()
+}
+
+/// Whether `line` is drawn as one text: every atom of it plain, in one font and one color.
+fn is_one_plain_group(line: &TextLine) -> bool {
+    let Some((first, _)) = line.first() else { return true };
+    line.iter().all(|(atom, _)| atom.is_plain() && atom.font == first.font && atom.color == first.color)
 }
 
 /// Shorten `line` until it and the dots after it fit in `limit`, and end it in them. The last characters go
@@ -4695,29 +4710,29 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     // ── Emit render nodes per line ────────────────────────────────────────────
     for (li, line) in lines.iter().enumerate() {
         let line_y = y + li as f32 * line_height;
-        // Anchor x: the renderer uses real font metrics to convert this to the
-        // actual draw origin, so we just pass the alignment edge here.
-        // "left"  → left edge of the content area (x)
-        // "center"→ horizontal centre of the content area (x + avail_w/2)
-        // "right" → right edge of the content area (x + avail_w)
-        // The approximate line_w is still needed for left-aligned group merging
-        // (so we keep it) but no longer drives alignment position.
-        let line_anchor_x = match node.text_align {
-            TextAlign::Left    => x,
-            TextAlign::Center  => x + avail_w / 2.0,
-            TextAlign::Right   => x + avail_w,
-            TextAlign::Justify => x,
+        // A centered or right-aligned line that is drawn as one text is aligned by the writer, which measures it
+        // by the font's exact advances where the layout measures to 1/1000 em: its anchor is the middle or the
+        // right edge of the box. Any other line starts where its measured width says, and its atoms are placed
+        // from there as a left-aligned line's are, since the writer would move each text of it by that text's
+        // own width, over the ones before it.
+        let one_text = is_one_plain_group(line);
+        let (line_start_x, line_align) = match node.text_align {
+            TextAlign::Left | TextAlign::Justify => (x, align_str),
+            TextAlign::Center if one_text        => (x + avail_w / 2.0, align_str),
+            TextAlign::Right if one_text         => (x + avail_w, align_str),
+            TextAlign::Center                    => (x + (avail_w - text_line_width(line)) / 2.0, "left"),
+            TextAlign::Right                     => (x + avail_w - text_line_width(line), "left"),
         };
 
-        let mut cur_x = line_anchor_x;
+        let mut cur_x = line_start_x;
 
         // For justify, the last line is left-aligned (not stretched).
         let is_last_line  = li + 1 == lines.len();
         // Every word of the line is placed here, so a span moves with its neighbours.
         let word_gap = if align_str == "justify" && !is_last_line { justify_gap(line, avail_w, space_w) } else { 0.0 };
-        let eff_align_str = match (align_str, word_gap > 0.0) {
+        let eff_align_str = match (line_align, word_gap > 0.0) {
             ("justify", false) => "left",
-            _                  => align_str,
+            _                  => line_align,
         };
 
         // Merge consecutive plain (no href/underline/strike) atoms that share the
@@ -4735,9 +4750,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
             let inner_gap = word_gap * atom_spaces(atom) as f32;
             let aw = atom.width + inner_gap;
 
-            let plain = atom.href().is_none() && !atom.underline() && !atom.strike() && !atom.sup && atom.background().is_none();
-
-            if plain {
+            if atom.is_plain() {
                 // If font or color changed, flush the current group first.
                 if !grp_text.is_empty() && (atom.font != grp_font || atom.color != grp_clr) {
                     all_nodes.push(RenderNode::Text(RenderText {
