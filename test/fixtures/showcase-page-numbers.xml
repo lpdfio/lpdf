@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="muted" value="#737373" />
+    </colors>
+  </tokens>
+  <document size="a5">
+    <meta title="lpdf Showcase — Page Numbers" subject="A book numbered across its sections: front matter in numerals, chapters from 1, an appendix from A-1" />
+
+    <!-- The pages count on through the document. A section changes that only with page-start, page-format or
+         page-prefix, and one that sets none carries on the count, the format and the prefix of the one before.
+         The footer, the table of contents and the viewer's page box show the same number on every page.
+         Expected, page by page (footer | viewer):
+           1  Page i of iv      | i       the cover: page-format="lower-roman" starts the numerals here
+           2  Page ii of iv     | ii      its back
+           3  Page iii of iv    | iii     the contents carry on
+           4  Page iv of iv     | iv      the preface carries on
+           5  Page 1 of 4       | 1       chapter 1: page-start="1" page-format="decimal"
+           6  Page 2 of 4       | 2
+           7  Page 3 of 4       | 3       chapter 2 carries on
+           8  Page 4 of 4       | 4
+           9  Page A-1 of 2     | A-1     the appendix: page-start="1" page-prefix="A-"
+          10  Page A-2 of 2     | A-2
+         {pages} counts the pages from one page-start to the next, in their format and without the prefix. -->
+    <section page-format="lower-roman">
+      <layout margin="56pt">
+        <column gap="m">
+          <bookmark label="Cover"/>
+          <text font-size="xl" font="Helvetica-Bold">The Lamplighter's Almanac</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+        <column gap="m" paginate="break-before">
+          <text font-size="xl" font="Helvetica-Bold">The Lamplighter's Almanac, continued</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+        <region pin="bottom">
+          <text font-size="s" color="muted" align="center">Page {page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+    <section type="toc">
+      <layout margin="56pt">
+        <bookmark label="Contents"/>
+        <text font-size="xl" font="Helvetica-Bold">Contents</text>
+        <column gap="xs" padding="12pt 0pt 0pt 0pt">
+          <column data-source="$toc">
+            <link href="#">
+              <row justify="between">
+                <text data-value="label">Entry</text>
+                <text data-value="page">0</text>
+              </row>
+            </link>
+          </column>
+        </column>
+        <region pin="bottom">
+          <text font-size="s" color="muted" align="center">Page {page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+    <section>
+      <layout margin="56pt">
+        <column gap="m">
+          <bookmark label="Preface"/>
+          <text font-size="xl" font="Helvetica-Bold">Preface</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+        <region pin="bottom">
+          <text font-size="s" color="muted" align="center">Page {page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+    <section page-start="1" page-format="decimal">
+      <layout margin="56pt">
+        <column gap="m">
+          <bookmark label="Chapter 1: The Lamp Room"/>
+          <text font-size="xl" font="Helvetica-Bold">Chapter 1: The Lamp Room</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+        <column gap="m" paginate="break-before">
+          <text font-size="xl" font="Helvetica-Bold">Chapter 1: The Lamp Room, continued</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+        <region pin="bottom">
+          <text font-size="s" color="muted" align="center">Page {page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+    <section>
+      <layout margin="56pt">
+        <column gap="m">
+          <bookmark label="Chapter 2: The Record"/>
+          <text font-size="xl" font="Helvetica-Bold">Chapter 2: The Record</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+        <column gap="m" paginate="break-before">
+          <text font-size="xl" font="Helvetica-Bold">Chapter 2: The Record, continued</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+        <region pin="bottom">
+          <text font-size="s" color="muted" align="center">Page {page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+    <section page-start="1" page-prefix="A-">
+      <layout margin="56pt">
+        <column gap="m">
+          <bookmark label="Appendix: Weather Notes"/>
+          <text font-size="xl" font="Helvetica-Bold">Appendix: Weather Notes</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+        <column gap="m" paginate="break-before">
+          <text font-size="xl" font="Helvetica-Bold">Appendix: Weather Notes, continued</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+        <region pin="bottom">
+          <text font-size="s" color="muted" align="center">Page {page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+  </document>
+</lpdf>

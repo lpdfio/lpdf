@@ -15,6 +15,7 @@ pub mod markdown;
 // typed result rather than parsing the JSON one back.
 pub mod license;
 mod objects;
+mod page_numbers;
 mod page_scope;
 mod parse;
 mod pdf;

@@ -195,7 +195,7 @@ fn alpha(number: i64) -> String {
 }
 
 /// A number from 1 to 3999 in lower-case roman numerals.
-fn roman(number: i64) -> String {
+pub(crate) fn roman(number: i64) -> String {
     const NUMERALS: [(i64, &str); 13] = [
         (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"),
         (50, "l"), (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"),

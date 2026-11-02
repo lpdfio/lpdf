@@ -13,6 +13,7 @@ use crate::parse::{
     parse_measurement, parse_shadow, parse_signed_measurement, parse_page_scope,
     elems, jattr, node_loc, at_element_for, parse_at_node, parse_tree_at_node,
 };
+use crate::page_numbers::{PageTokens, SectionNumbers};
 use crate::page_scope::page_scope_indices;
 use crate::render::{
     RenderCanvasClip, RenderCanvasEllipse, RenderCanvasLayer,
@@ -158,6 +159,11 @@ impl CanvasLayer {
                 CanvasPrimitive::Placed(p)  => crate::parse::forget_ocg(&mut p.node),
             }
         }
+    }
+
+    /// Whether a `text-at` of the layer shows `{page}` or `{pages}`.
+    pub(crate) fn shows_page_numbers(&self) -> bool {
+        self.children.iter().any(|child| matches!(child, CanvasPrimitive::Placed(p) if crate::layout::has_page_tokens(&p.node)))
     }
 }
 
@@ -638,7 +644,7 @@ fn line_cap_to_u8(s: &str) -> u8 {
 
 /// `page` is the number of the page the layer is drawn on, counted from 1 in its section, and `pages` how many
 /// pages the section has: what `{page}` and `{pages}` in a `text-at` stand for.
-fn primitive_to_render_node(prim: &CanvasPrimitive, page: usize, pages: usize) -> RenderNode {
+fn primitive_to_render_node(prim: &CanvasPrimitive, tokens: PageTokens) -> RenderNode {
     let ocg = match prim {
         CanvasPrimitive::Rect(r)    => r.ocg,
         CanvasPrimitive::Circle(c)  => c.ocg,
@@ -648,11 +654,11 @@ fn primitive_to_render_node(prim: &CanvasPrimitive, page: usize, pages: usize) -
         // Put in its group where it is laid out, which knows its box.
         CanvasPrimitive::Placed(_)  => None,
     };
-    crate::layout::in_group(primitive_drawing(prim, page, pages), ocg, 0.0, 0.0, 0.0, 0.0)
+    crate::layout::in_group(primitive_drawing(prim, tokens), ocg, 0.0, 0.0, 0.0, 0.0)
 }
 
 /// What a layer's element draws, out of any group.
-fn primitive_drawing(prim: &CanvasPrimitive, page: usize, pages: usize) -> RenderNode {
+fn primitive_drawing(prim: &CanvasPrimitive, tokens: PageTokens) -> RenderNode {
     match prim {
         CanvasPrimitive::Rect(r) => RenderNode::CanvasRect(RenderCanvasRect {
             x:             r.x,
@@ -709,7 +715,7 @@ fn primitive_drawing(prim: &CanvasPrimitive, page: usize, pages: usize) -> Rende
             line_cap:           p.line_cap.as_deref().map(line_cap_to_u8).unwrap_or(0),
             line_join:          0,
         }),
-        CanvasPrimitive::Placed(placed) => crate::layout::layout_placed(placed, page, pages),
+        CanvasPrimitive::Placed(placed) => crate::layout::layout_placed(placed, tokens),
     }
 }
 
@@ -730,7 +736,7 @@ pub(crate) fn draw_flow_shape(shape: &Shape, radius: f32, x: f32, y: f32, w: f32
         }),
         ShapeKind::Checkbox => return draw_checkbox(shape, radius, x, y, w, h),
     };
-    primitive_to_render_node(&primitive, 1, 1)
+    primitive_to_render_node(&primitive, PageTokens::FIRST)
 }
 
 /// The three points of a checkbox's tick, as fractions of its box: a short stroke down to the foot, and a long one up
@@ -751,7 +757,7 @@ fn draw_checkbox(shape: &Shape, radius: f32, x: f32, y: f32, w: f32, h: f32) -> 
         fill: shape.fill.clone(), stroke: shape.stroke.clone(), stroke_width: Some(stroke_width), stroke_dash: None,
         radius: Some((radius - inset).max(0.0)), shadow: None, ocg: None,
     });
-    let mut children = vec![primitive_to_render_node(&outline, 1, 1)];
+    let mut children = vec![primitive_to_render_node(&outline, PageTokens::FIRST)];
     if let Some(color) = &shape.tick {
         let [a, b, c] = TICK.map(|(fx, fy)| format!("{} {}", x + fx * w, y + fy * h));
         let tick = CanvasPrimitive::Path(CanvasPath {
@@ -759,7 +765,7 @@ fn draw_checkbox(shape: &Shape, radius: f32, x: f32, y: f32, w: f32, h: f32) -> 
             fill: None, stroke: Some(color.clone()), fill_rule: None,
             stroke_width: Some(TICK_STROKE * w), stroke_dash: None, line_cap: Some("round".to_string()), ocg: None,
         });
-        children.push(primitive_to_render_node(&tick, 1, 1));
+        children.push(primitive_to_render_node(&tick, PageTokens::FIRST));
     }
     RenderNode::Box(RenderBox { tag: None, ocg: None,
         x, y, width: w, height: h,
@@ -769,9 +775,9 @@ fn draw_checkbox(shape: &Shape, radius: f32, x: f32, y: f32, w: f32, h: f32) -> 
     })
 }
 
-fn layer_to_render_node(layer: &CanvasLayer, page: usize, pages: usize) -> RenderNode {
+fn layer_to_render_node(layer: &CanvasLayer, tokens: PageTokens) -> RenderNode {
     let children = layer.children.iter()
-        .map(|p| primitive_to_render_node(p, page, pages))
+        .map(|p| primitive_to_render_node(p, tokens))
         .collect();
     // In a tagged section a layer is decoration, as a header is, unless its `alt` says what it shows: then it is one
     // figure, read where the layer is written.
@@ -800,12 +806,13 @@ fn layer_to_render_node(layer: &CanvasLayer, page: usize, pages: usize) -> Rende
 ///
 /// When `prepend = false` (overlays) the layer is appended.
 ///
-/// `pages` must be the pages of a single section (the output of one
-/// `layout_page` call).  Page-scope indices are relative to this slice.
+/// `pages` must be the pages of a single section, which have `numbers`.  Page-scope indices are relative to this
+/// slice.
 pub(crate) fn apply_canvas_layers(
-    pages:   &mut Vec<RenderPage>,
+    pages:   &mut [RenderPage],
     layers:  &[CanvasLayer],
     prepend: bool,
+    numbers: &SectionNumbers,
 ) {
     let n = pages.len();
     if n == 0 || layers.is_empty() { return; }
@@ -813,14 +820,14 @@ pub(crate) fn apply_canvas_layers(
     if prepend {
         for layer in layers.iter().rev() {
             for i in page_scope_indices(&layer.page, n) {
-                let node = layer_to_render_node(layer, i + 1, n);
+                let node = layer_to_render_node(layer, PageTokens::new(numbers, i));
                 pages[i].nodes.insert(0, node);
             }
         }
     } else {
         for layer in layers {
             for i in page_scope_indices(&layer.page, n) {
-                let node = layer_to_render_node(layer, i + 1, n);
+                let node = layer_to_render_node(layer, PageTokens::new(numbers, i));
                 pages[i].nodes.push(node);
             }
         }

@@ -14,6 +14,25 @@ pub struct RenderPage {
     pub background: Option<String>,
     pub margin: [f32; 4],
     pub nodes: Vec<RenderNode>,
+    /// Set on the page where a range of the viewer's page labels starts (`page_numbers::mark_label_ranges`).
+    pub label: Option<PageLabel>,
+}
+
+/// The start of a range of page labels, `/PageLabels` in the catalog: the pages from here to the next range are
+/// numbered in `format` from `start`, after `prefix`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PageLabel {
+    pub format: crate::parse::ListFormat,
+    pub prefix: String,
+    pub start:  u64,
+}
+
+#[cfg(test)]
+impl RenderPage {
+    /// An empty A4 page.
+    pub(crate) fn blank() -> Self {
+        Self { width: 595.28, height: 841.89, bleed: 0.0, background: None, margin: [0.0; 4], nodes: Vec::new(), label: None }
+    }
 }
 
 pub enum RenderNode {

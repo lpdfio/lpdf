@@ -259,6 +259,12 @@ fn showcase_running_header() { run_snapshot("showcase-running-header"); }
 #[test]
 fn showcase_running_header_dictionary() { run_snapshot("showcase-running-header-dictionary"); }
 #[test]
+fn showcase_page_numbers() { run_snapshot("showcase-page-numbers"); }
+#[test]
+fn showcase_page_numbers_batch() { run_snapshot("showcase-page-numbers-batch"); }
+#[test]
+fn showcase_page_letters() { run_snapshot("showcase-page-letters"); }
+#[test]
 fn showcase_image_box() { run_snapshot_with_image("showcase-image-box"); }
 #[test]
 fn showcase_image_fill() { run_snapshot_with_image("showcase-image-fill"); }

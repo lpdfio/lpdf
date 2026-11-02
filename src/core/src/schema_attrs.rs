@@ -525,6 +525,9 @@ const SECTION: Attributes = &[
     ("type", Kind::Text),
     ("footnote-counter", Kind::Text),
     ("toc-indent-step", Kind::Text),
+    ("page-start", Kind::Integer { min: Some(1), max: Some(2147483647) }),
+    ("page-format", Kind::Text),
+    ("page-prefix", Kind::Text),
 ];
 
 const LPDF: Attributes = &[

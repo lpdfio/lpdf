@@ -3,6 +3,7 @@ use crate::tokens::{parse_factor, parse_opacity, parse_pt, FontDef, FontWidths, 
 use crate::canvas;
 use crate::markdown;
 use crate::layout::{Held, Placed};
+use crate::page_numbers::PageNumbering;
 
 // ── Resolved document model (layout / render operate on these) ────────────────
 
@@ -122,6 +123,7 @@ impl Document {
                 bookmark: section.bookmark,
                 toc: section.options.toc,
                 footnote_counter, footnote_start,
+                page_numbering: section.options.page_numbering,
                 tagged: self.output.pdfua.is_some(),
             });
         }
@@ -218,6 +220,8 @@ pub struct SectionOptions {
     /// Set on the one `<section type="toc">` of a document.
     pub toc:        Option<TocOptions>,
     pub footnote_counter: Option<FootnoteCounter>,
+    /// `page-start`, `page-format` and `page-prefix`.
+    pub page_numbering: PageNumbering,
 }
 
 /// What a table of contents section needs once the other sections are laid out.
@@ -308,6 +312,8 @@ pub struct SectionLayout {
     /// How many notes the sections before this one that count across the document hold: its own numbering
     /// goes on from there when it counts across the document too.
     pub footnote_start: u32,
+    /// What the section says about its page numbers, which `page_numbers` reads across the sections.
+    pub page_numbering: PageNumbering,
     /// Whether the layout says what each thing it draws is, for the structure of a tagged PDF: a document with
     /// `<output pdfua>`. No other document pays for it.
     pub tagged: bool,
@@ -526,7 +532,7 @@ pub struct Shape {
     pub tick:         Option<String>,
 }
 
-/// How a `<list>` numbers its items.
+/// How a `<list>` numbers its items, and a section its pages (`page-format`).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum ListFormat {
     #[default]
@@ -535,6 +541,22 @@ pub enum ListFormat {
     UpperAlpha,
     LowerRoman,
     UpperRoman,
+}
+
+impl ListFormat {
+    /// The format of `v`, for the attribute `name`.
+    fn parse(name: &str, v: &str) -> Result<Self, String> {
+        match v {
+            "decimal"     => Ok(Self::Decimal),
+            "lower-alpha" => Ok(Self::LowerAlpha),
+            "upper-alpha" => Ok(Self::UpperAlpha),
+            "lower-roman" => Ok(Self::LowerRoman),
+            "upper-roman" => Ok(Self::UpperRoman),
+            other => Err(format!(
+                "invalid {name} '{other}': expected decimal, lower-alpha, upper-alpha, lower-roman or upper-roman"
+            )),
+        }
+    }
 }
 
 /// The shape that marks the items of a bullet `<list>`.
@@ -2121,6 +2143,7 @@ fn parse_section_elem(
         .map(FootnoteCounter::parse)
         .transpose()
         .map_err(|e| format!("<section>{}: {e}", node_loc(elem)))?;
+    let page_numbering = parse_page_numbering(elem).map_err(|e| format!("<section>{}: {e}", node_loc(elem)))?;
 
     let text = TextDefaults::of_section(doc_font, tokens, asset_fonts);
 
@@ -2206,6 +2229,7 @@ fn parse_section_elem(
             title,
             toc,
             footnote_counter,
+            page_numbering,
         },
         bookmark,
     })
@@ -2998,6 +3022,23 @@ fn parse_section_toc(a: &impl Attrs, tokens: &Tokens) -> Result<Option<TocOption
     }
 }
 
+/// The highest `page-start`: the largest integer a PDF reader must take (ISO 32000-1, Annex C), which the
+/// viewer's page labels write it as.
+const MAX_PAGE_START: u32 = i32::MAX as u32;
+
+/// A section's `page-start`, `page-format` and `page-prefix`.
+fn parse_page_numbering(a: &impl Attrs) -> Result<PageNumbering, String> {
+    let start = a.get("page-start")
+        .map(|v| match v.trim().parse::<u32>() {
+            Ok(n) if (1..=MAX_PAGE_START).contains(&n) => Ok(n),
+            _ => Err(format!("invalid page-start '{v}': expected a whole number from 1 to {MAX_PAGE_START}")),
+        })
+        .transpose()?;
+    let format = a.get("page-format").map(|v| ListFormat::parse("page-format", v)).transpose()?;
+    let prefix = a.get("page-prefix").map(str::to_string);
+    Ok(PageNumbering { start, format, prefix })
+}
+
 /// Checks what spans sections once they are all read: one table of contents at most, and bookmark ids.
 fn check_sections(sections: &mut [Section]) -> Result<(), String> {
     if sections.iter().filter(|s| s.options.toc.is_some()).count() > 1 {
@@ -3421,16 +3462,7 @@ fn apply_list_attrs(node: &mut ParsedNode, a: &impl Attrs, tokens: &Tokens) -> R
     } else if a.get("bullet").is_some() {
         return Err("'bullet' is the shape of a list with type=\"bullet\"".to_string());
     }
-    let format = match a.get("format").unwrap_or("decimal") {
-        "decimal"     => ListFormat::Decimal,
-        "lower-alpha" => ListFormat::LowerAlpha,
-        "upper-alpha" => ListFormat::UpperAlpha,
-        "lower-roman" => ListFormat::LowerRoman,
-        "upper-roman" => ListFormat::UpperRoman,
-        other => return Err(format!(
-            "invalid format '{other}': expected decimal, lower-alpha, upper-alpha, lower-roman or upper-roman"
-        )),
-    };
+    let format = ListFormat::parse("format", a.get("format").unwrap_or("decimal"))?;
     let start = match a.get("start") {
         Some(v) => v.trim().parse::<i64>().map_err(|_| format!("invalid start '{v}': expected a whole number"))?,
         None    => 1,
@@ -4008,6 +4040,7 @@ fn parse_tree_section(
         .map(FootnoteCounter::parse)
         .transpose()
         .map_err(|e| format!("section: {e}"))?;
+    let page_numbering = parse_page_numbering(&a).map_err(|e| format!("section: {e}"))?;
 
     let text = TextDefaults::of_section(doc_font, tokens, asset_fonts);
 
@@ -4090,6 +4123,7 @@ fn parse_tree_section(
             title,
             toc,
             footnote_counter,
+            page_numbering,
         },
         bookmark,
     })

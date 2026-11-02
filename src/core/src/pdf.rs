@@ -43,7 +43,7 @@ use subsetter::GlyphRemapper;
 
 use crate::attachments::{self, EmbeddedFile};
 use crate::render::{placed_anchors, PlacedAnchor, RenderBox, RenderCanvasLayer, RenderField, RenderNode, RenderPage, RenderedBarcodeKind};
-use crate::parse::{FieldKind, Meta, Ocg, Output, Shadow};
+use crate::parse::{FieldKind, ListFormat, Meta, Ocg, Output, Shadow};
 use crate::pdfa::{self, FileDate, PdfA, Standards, XmpIds};
 use crate::pdfx::{PdfXVersion, PressProfile, ProfileSpace};
 use crate::pdfua::PdfUa;
@@ -3075,6 +3075,7 @@ fn assemble_pdf(
                 .dest_output_profile(ids.press);
         }
         attachments::write_catalog(&mut cat, files, &file_ids);
+        write_page_labels(&mut cat, pages);
         if !ocg_ids.is_empty() {
             write_oc_properties(&mut cat, &ocg_ids, pdfx.is_some());
         }
@@ -3820,6 +3821,36 @@ fn assemble_pdf(
 struct PressIds {
     press: Ref,
     srgb:  Ref,
+}
+
+/// `/PageLabels`, the numbers a viewer's page box shows, with a range at each page that starts one
+/// (`RenderPage::label`). None when no page does. Each range is a dictionary in the number tree, as the spec allows
+/// (ISO 32000-1, 7.9.7), so the labels add no object to the file.
+fn write_page_labels(cat: &mut pdf_writer::writers::Catalog, pages: &[RenderPage]) {
+    let mut ranges = pages.iter().enumerate().filter_map(|(i, page)| page.label.as_ref().map(|label| (i, label))).peekable();
+    if ranges.peek().is_none() {
+        return;
+    }
+    let mut labels = cat.insert(Name(b"PageLabels")).dict();
+    let mut nums = labels.insert(Name(b"Nums")).array();
+    for (index, label) in ranges {
+        nums.item(index as i32);
+        let mut range = nums.push().dict();
+        let style: &[u8] = match label.format {
+            ListFormat::Decimal    => b"D",
+            ListFormat::LowerRoman => b"r",
+            ListFormat::UpperRoman => b"R",
+            ListFormat::LowerAlpha => b"a",
+            ListFormat::UpperAlpha => b"A",
+        };
+        range.pair(Name(b"S"), Name(style));
+        if !label.prefix.is_empty() {
+            range.pair(Name(b"P"), TextStr(&label.prefix));
+        }
+        if label.start != 1 {
+            range.pair(Name(b"St"), label.start as i32);
+        }
+    }
 }
 
 /// The catalog's `/OCProperties`: the optional content groups, listed in `/Order` so a viewer's layers panel shows them

@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="muted" value="#737373" />
+    </colors>
+  </tokens>
+  <document size="a5">
+    <meta title="lpdf Showcase — Page Numbers of a Batch" subject="Invoices in one file, each numbered on its own" />
+
+    <!-- A batch of invoices in one file: page-start="1" on each section starts a run of its own, and {pages} counts
+         the pages of the run. Each invoice runs onto a second page.
+         Expected, page by page: Page 1 of 2, Page 2 of 2, three times, and the viewer shows 1, 2, 1, 2, 1, 2. -->
+    <section page-start="1">
+      <layout margin="48pt">
+        <region pin="top">
+          <column padding="0pt 0pt 12pt 0pt"><text font="Helvetica-Bold">Invoice 1001</text></column>
+        </region>
+        <column gap="s">
+          <row justify="between"><text>Item 1: lamp oil, wicks and glass</text><text>$ 3.00</text></row>
+          <row justify="between"><text>Item 2: lamp oil, wicks and glass</text><text>$ 6.00</text></row>
+          <row justify="between"><text>Item 3: lamp oil, wicks and glass</text><text>$ 9.00</text></row>
+          <row justify="between"><text>Item 4: lamp oil, wicks and glass</text><text>$ 12.00</text></row>
+          <row justify="between"><text>Item 5: lamp oil, wicks and glass</text><text>$ 15.00</text></row>
+          <row justify="between"><text>Item 6: lamp oil, wicks and glass</text><text>$ 18.00</text></row>
+          <row justify="between"><text>Item 7: lamp oil, wicks and glass</text><text>$ 21.00</text></row>
+          <row justify="between"><text>Item 8: lamp oil, wicks and glass</text><text>$ 24.00</text></row>
+          <row justify="between"><text>Item 9: lamp oil, wicks and glass</text><text>$ 27.00</text></row>
+          <row justify="between"><text>Item 10: lamp oil, wicks and glass</text><text>$ 30.00</text></row>
+          <row justify="between"><text>Item 11: lamp oil, wicks and glass</text><text>$ 33.00</text></row>
+          <row justify="between"><text>Item 12: lamp oil, wicks and glass</text><text>$ 36.00</text></row>
+          <row justify="between"><text>Item 13: lamp oil, wicks and glass</text><text>$ 39.00</text></row>
+          <row justify="between"><text>Item 14: lamp oil, wicks and glass</text><text>$ 42.00</text></row>
+          <row justify="between"><text>Item 15: lamp oil, wicks and glass</text><text>$ 45.00</text></row>
+          <row justify="between"><text>Item 16: lamp oil, wicks and glass</text><text>$ 48.00</text></row>
+          <row justify="between"><text>Item 17: lamp oil, wicks and glass</text><text>$ 51.00</text></row>
+          <row justify="between"><text>Item 18: lamp oil, wicks and glass</text><text>$ 54.00</text></row>
+          <row justify="between"><text>Item 19: lamp oil, wicks and glass</text><text>$ 57.00</text></row>
+          <row justify="between"><text>Item 20: lamp oil, wicks and glass</text><text>$ 60.00</text></row>
+          <row justify="between"><text>Item 21: lamp oil, wicks and glass</text><text>$ 63.00</text></row>
+          <row justify="between"><text>Item 22: lamp oil, wicks and glass</text><text>$ 66.00</text></row>
+          <row justify="between"><text>Item 23: lamp oil, wicks and glass</text><text>$ 69.00</text></row>
+          <row justify="between"><text>Item 24: lamp oil, wicks and glass</text><text>$ 72.00</text></row>
+          <row justify="between"><text>Item 25: lamp oil, wicks and glass</text><text>$ 75.00</text></row>
+          <row justify="between"><text>Item 26: lamp oil, wicks and glass</text><text>$ 78.00</text></row>
+          <row justify="between"><text>Item 27: lamp oil, wicks and glass</text><text>$ 81.00</text></row>
+          <row justify="between"><text>Item 28: lamp oil, wicks and glass</text><text>$ 84.00</text></row>
+          <row justify="between"><text>Item 29: lamp oil, wicks and glass</text><text>$ 87.00</text></row>
+          <row justify="between"><text>Item 30: lamp oil, wicks and glass</text><text>$ 90.00</text></row>
+        </column>
+        <region pin="bottom">
+          <text font-size="s" color="muted" align="right">Page {page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+    <section page-start="1">
+      <layout margin="48pt">
+        <region pin="top">
+          <column padding="0pt 0pt 12pt 0pt"><text font="Helvetica-Bold">Invoice 1002</text></column>
+        </region>
+        <column gap="s">
+          <row justify="between"><text>Item 1: lamp oil, wicks and glass</text><text>$ 3.00</text></row>
+          <row justify="between"><text>Item 2: lamp oil, wicks and glass</text><text>$ 6.00</text></row>
+          <row justify="between"><text>Item 3: lamp oil, wicks and glass</text><text>$ 9.00</text></row>
+          <row justify="between"><text>Item 4: lamp oil, wicks and glass</text><text>$ 12.00</text></row>
+          <row justify="between"><text>Item 5: lamp oil, wicks and glass</text><text>$ 15.00</text></row>
+          <row justify="between"><text>Item 6: lamp oil, wicks and glass</text><text>$ 18.00</text></row>
+          <row justify="between"><text>Item 7: lamp oil, wicks and glass</text><text>$ 21.00</text></row>
+          <row justify="between"><text>Item 8: lamp oil, wicks and glass</text><text>$ 24.00</text></row>
+          <row justify="between"><text>Item 9: lamp oil, wicks and glass</text><text>$ 27.00</text></row>
+          <row justify="between"><text>Item 10: lamp oil, wicks and glass</text><text>$ 30.00</text></row>
+          <row justify="between"><text>Item 11: lamp oil, wicks and glass</text><text>$ 33.00</text></row>
+          <row justify="between"><text>Item 12: lamp oil, wicks and glass</text><text>$ 36.00</text></row>
+          <row justify="between"><text>Item 13: lamp oil, wicks and glass</text><text>$ 39.00</text></row>
+          <row justify="between"><text>Item 14: lamp oil, wicks and glass</text><text>$ 42.00</text></row>
+          <row justify="between"><text>Item 15: lamp oil, wicks and glass</text><text>$ 45.00</text></row>
+          <row justify="between"><text>Item 16: lamp oil, wicks and glass</text><text>$ 48.00</text></row>
+          <row justify="between"><text>Item 17: lamp oil, wicks and glass</text><text>$ 51.00</text></row>
+          <row justify="between"><text>Item 18: lamp oil, wicks and glass</text><text>$ 54.00</text></row>
+          <row justify="between"><text>Item 19: lamp oil, wicks and glass</text><text>$ 57.00</text></row>
+          <row justify="between"><text>Item 20: lamp oil, wicks and glass</text><text>$ 60.00</text></row>
+          <row justify="between"><text>Item 21: lamp oil, wicks and glass</text><text>$ 63.00</text></row>
+          <row justify="between"><text>Item 22: lamp oil, wicks and glass</text><text>$ 66.00</text></row>
+          <row justify="between"><text>Item 23: lamp oil, wicks and glass</text><text>$ 69.00</text></row>
+          <row justify="between"><text>Item 24: lamp oil, wicks and glass</text><text>$ 72.00</text></row>
+          <row justify="between"><text>Item 25: lamp oil, wicks and glass</text><text>$ 75.00</text></row>
+          <row justify="between"><text>Item 26: lamp oil, wicks and glass</text><text>$ 78.00</text></row>
+          <row justify="between"><text>Item 27: lamp oil, wicks and glass</text><text>$ 81.00</text></row>
+          <row justify="between"><text>Item 28: lamp oil, wicks and glass</text><text>$ 84.00</text></row>
+          <row justify="between"><text>Item 29: lamp oil, wicks and glass</text><text>$ 87.00</text></row>
+          <row justify="between"><text>Item 30: lamp oil, wicks and glass</text><text>$ 90.00</text></row>
+          <row justify="between"><text>Item 31: lamp oil, wicks and glass</text><text>$ 93.00</text></row>
+          <row justify="between"><text>Item 32: lamp oil, wicks and glass</text><text>$ 96.00</text></row>
+          <row justify="between"><text>Item 33: lamp oil, wicks and glass</text><text>$ 99.00</text></row>
+          <row justify="between"><text>Item 34: lamp oil, wicks and glass</text><text>$ 102.00</text></row>
+        </column>
+        <region pin="bottom">
+          <text font-size="s" color="muted" align="right">Page {page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+    <section page-start="1">
+      <layout margin="48pt">
+        <region pin="top">
+          <column padding="0pt 0pt 12pt 0pt"><text font="Helvetica-Bold">Invoice 1003</text></column>
+        </region>
+        <column gap="s">
+          <row justify="between"><text>Item 1: lamp oil, wicks and glass</text><text>$ 3.00</text></row>
+          <row justify="between"><text>Item 2: lamp oil, wicks and glass</text><text>$ 6.00</text></row>
+          <row justify="between"><text>Item 3: lamp oil, wicks and glass</text><text>$ 9.00</text></row>
+          <row justify="between"><text>Item 4: lamp oil, wicks and glass</text><text>$ 12.00</text></row>
+          <row justify="between"><text>Item 5: lamp oil, wicks and glass</text><text>$ 15.00</text></row>
+          <row justify="between"><text>Item 6: lamp oil, wicks and glass</text><text>$ 18.00</text></row>
+          <row justify="between"><text>Item 7: lamp oil, wicks and glass</text><text>$ 21.00</text></row>
+          <row justify="between"><text>Item 8: lamp oil, wicks and glass</text><text>$ 24.00</text></row>
+          <row justify="between"><text>Item 9: lamp oil, wicks and glass</text><text>$ 27.00</text></row>
+          <row justify="between"><text>Item 10: lamp oil, wicks and glass</text><text>$ 30.00</text></row>
+          <row justify="between"><text>Item 11: lamp oil, wicks and glass</text><text>$ 33.00</text></row>
+          <row justify="between"><text>Item 12: lamp oil, wicks and glass</text><text>$ 36.00</text></row>
+          <row justify="between"><text>Item 13: lamp oil, wicks and glass</text><text>$ 39.00</text></row>
+          <row justify="between"><text>Item 14: lamp oil, wicks and glass</text><text>$ 42.00</text></row>
+          <row justify="between"><text>Item 15: lamp oil, wicks and glass</text><text>$ 45.00</text></row>
+          <row justify="between"><text>Item 16: lamp oil, wicks and glass</text><text>$ 48.00</text></row>
+          <row justify="between"><text>Item 17: lamp oil, wicks and glass</text><text>$ 51.00</text></row>
+          <row justify="between"><text>Item 18: lamp oil, wicks and glass</text><text>$ 54.00</text></row>
+          <row justify="between"><text>Item 19: lamp oil, wicks and glass</text><text>$ 57.00</text></row>
+          <row justify="between"><text>Item 20: lamp oil, wicks and glass</text><text>$ 60.00</text></row>
+          <row justify="between"><text>Item 21: lamp oil, wicks and glass</text><text>$ 63.00</text></row>
+          <row justify="between"><text>Item 22: lamp oil, wicks and glass</text><text>$ 66.00</text></row>
+          <row justify="between"><text>Item 23: lamp oil, wicks and glass</text><text>$ 69.00</text></row>
+          <row justify="between"><text>Item 24: lamp oil, wicks and glass</text><text>$ 72.00</text></row>
+          <row justify="between"><text>Item 25: lamp oil, wicks and glass</text><text>$ 75.00</text></row>
+          <row justify="between"><text>Item 26: lamp oil, wicks and glass</text><text>$ 78.00</text></row>
+          <row justify="between"><text>Item 27: lamp oil, wicks and glass</text><text>$ 81.00</text></row>
+          <row justify="between"><text>Item 28: lamp oil, wicks and glass</text><text>$ 84.00</text></row>
+        </column>
+        <region pin="bottom">
+          <text font-size="s" color="muted" align="right">Page {page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+  </document>
+</lpdf>

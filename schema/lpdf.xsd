@@ -227,6 +227,13 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <!-- the number of a section's first page: the largest integer a PDF reader must take is 2147483647 -->
+  <xs:simpleType name="PageStart">
+    <xs:restriction base="xs:positiveInteger">
+      <xs:maxInclusive value="2147483647"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="BookmarkLevel">
     <xs:restriction base="xs:positiveInteger">
       <xs:maxInclusive value="6"/>
@@ -897,7 +904,7 @@
 
   <xs:element name="text-at">
     <xs:annotation>
-      <xs:documentation>Text at a fixed place on the page. It is the text of the layout, with the same defaults: the document's font or Helvetica, 11pt and the text colour. It is one line unless told otherwise; give width to cut it off at a width or to wrap it with max-lines. x and y place its box: the top-left corner, or with anchor, an offset from that point of the page, where the box's matching point goes. {page} and {pages} in it count within the section, and a text that comes from data belongs in the layout, since a longer text loses its end here without a warning.</xs:documentation>
+      <xs:documentation>Text at a fixed place on the page. It is the text of the layout, with the same defaults: the document's font or Helvetica, 11pt and the text colour. It is one line unless told otherwise; give width to cut it off at a width or to wrap it with max-lines. x and y place its box: the top-left corner, or with anchor, an offset from that point of the page, where the box's matching point goes. {page} in it prints the page's number and {pages} how many pages its run has, as its section's page-start, page-format and page-prefix number them, and a text that comes from data belongs in the layout, since a longer text loses its end here without a warning.</xs:documentation>
     </xs:annotation>
     <xs:complexType mixed="true">
       <xs:choice minOccurs="0" maxOccurs="unbounded">
@@ -1650,7 +1657,7 @@
        matches only one particle (XSD 1.0's unique particle attribution). -->
   <xs:element name="section">
     <xs:annotation>
-      <xs:documentation>A run of pages with its own settings, which override the document's. Each section paginates on its own. A bookmark as its first child marks its first page. It holds layers and at most one layout or one markdown, painted in the order they are written: layers before the layout paint under it, and layers after it paint over it. A section with neither is one page. Its title is accepted but not used: the outline takes its entries from bookmarks.</xs:documentation>
+      <xs:documentation>A run of pages with its own settings, which override the document's. Each section paginates on its own, and its pages count on from the section before unless it sets page-start. A bookmark as its first child marks its first page. It holds layers and at most one layout or one markdown, painted in the order they are written: layers before the layout paint under it, and layers after it paint over it. A section with neither is one page. Its title is accepted but not used: the outline takes its entries from bookmarks.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
@@ -1676,7 +1683,7 @@
       <xs:attribute name="debug"       type="Boolean"/>
       <xs:attribute name="type"        type="SectionType">
         <xs:annotation>
-          <xs:documentation>toc makes the section the document's table of contents. It is laid out after the other sections, with the data $toc: one entry per bookmark outside it, with index, level, label, page, anchor and indent. Repeat an element over it with data-source="$toc". One section per document may be a table of contents.</xs:documentation>
+          <xs:documentation>toc makes the section the document's table of contents. It is laid out after the other sections, with the data $toc: one entry per bookmark outside it, with index, level, label, page (the number its page prints, as a text), anchor and indent. Repeat an element over it with data-source="$toc". One section per document may be a table of contents.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="footnote-counter" type="FootnoteCounter">
@@ -1687,6 +1694,21 @@
       <xs:attribute name="toc-indent-step" type="TokenScaleOrPt">
         <xs:annotation>
           <xs:documentation>In a table of contents, the left padding an entry gets for each level below the first. Defaults to 12pt.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="page-start" type="PageStart">
+        <xs:annotation>
+          <xs:documentation>The number of the section's first page, which starts a new run of pages: page-start="1" restarts the count, and a number above 1 continues one from outside the file, such as volume 2 from page 321. Without it the pages count on from the section before, and the first section counts from 1. {page} prints the page's number and {pages} how many pages the run has, up to the next section that sets page-start. The table of contents and the viewer's page box show the same numbers.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="page-format" type="ListFormat">
+        <xs:annotation>
+          <xs:documentation>How the section's page numbers are written: decimal (1, 2, 3), lower-alpha (a, b, c), upper-alpha (A, B, C), lower-roman (i, ii, iii) or upper-roman (I, II, III). Past z, letters repeat as a PDF viewer counts pages: aa, bb, cc, where a list's go aa, ab. A number past 3999 is written in decimal. Without it a section keeps the format of the section before; the first is decimal. {pages} is written in it too. Changing the format doesn't restart the count: page-start does.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="page-prefix" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>Text before the section's page numbers: page-prefix="A-" numbers them A-1, A-2. {page} prints it and {pages} does not. Without it a section keeps the prefix of the section before; page-prefix="" takes it away.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
     </xs:complexType>
