@@ -5,6 +5,7 @@ mod attr_types;
 mod canvas;
 mod data;
 mod encrypt;
+mod facturx;
 mod hints;
 mod kit_to_xml;
 mod layout;
@@ -263,7 +264,7 @@ impl LpdfEngine {
         pdfa::check_render(&doc.output, self.created_on.as_deref())?;
         let press = pdfx::resolve(doc.output.pdfx.as_ref(), &doc.profiles, &self.profiles, &doc.meta)?;
         let attached = std::mem::take(&mut doc.attachments);
-        let files = attachments::resolve(&attached, &self.files)?;
+        let files = attachments::resolve(&attached, &self.files, &doc.output)?;
 
         if let Some(json) = json_data {
             data::apply(&mut doc, &data::parse(json)?)?;
@@ -327,7 +328,7 @@ impl LpdfEngine {
         pdfa::check_render(&doc.output, self.created_on.as_deref())?;
         let press = pdfx::resolve(doc.output.pdfx.as_ref(), &doc.profiles, &self.profiles, &doc.meta)?;
         let attached = std::mem::take(&mut doc.attachments);
-        let files = attachments::resolve(&attached, &self.files)?;
+        let files = attachments::resolve(&attached, &self.files, &doc.output)?;
 
         // Confirm every image declared in the tree has bytes in the registry.
         for (_alias, name) in &doc.images {
@@ -410,7 +411,7 @@ impl LpdfEngine {
         // No profile is loaded here, so a PDF/X document is an error that says how to load its profile.
         pdfx::resolve(doc.output.pdfx.as_ref(), &doc.profiles, &pdfx::ProfileRegistry::new(), &doc.meta)?;
         // No file is loaded here, so a document that carries files is an error that says how to load them.
-        attachments::resolve(&doc.attachments, &attachments::FileRegistry::new())?;
+        attachments::resolve(&doc.attachments, &attachments::FileRegistry::new(), &doc.output)?;
         if let Some(json) = json_data {
             data::apply(&mut doc, &data::parse(json)?)?;
         }

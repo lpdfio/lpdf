@@ -73,6 +73,8 @@ mod pdfx;
 mod tagging;
 #[path = "../../core/src/attachments.rs"]
 mod attachments;
+#[path = "../../core/src/facturx.rs"]
+mod facturx;
 #[path = "../../core/src/license.rs"]
 mod license;
 #[path = "../../core/src/aes256.rs"]
@@ -314,7 +316,7 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
 
     let file_registry = build_file_registry(req);
     let attached = std::mem::take(&mut doc.attachments);
-    let files = match attachments::resolve(&attached, &file_registry) {
+    let files = match attachments::resolve(&attached, &file_registry, &doc.output) {
         Ok(files) => files,
         Err(e)    => return serde_json::json!({ "error": e }).to_string(),
     };
@@ -545,7 +547,7 @@ mod tests {
 
     #[test]
     fn the_files_of_the_request_are_carried_under_the_names_of_their_file() {
-        let xml = r#"<lpdf version="1"><document><attachments><file name="factur-x.xml" ref="invoice" mime="text/xml"/>
+        let xml = r#"<lpdf version="1"><document><attachments><file name="invoice.xml" ref="invoice" mime="text/xml"/>
             </attachments><section><layout><text>Hello</text></layout></section></document></lpdf>"#;
         // "<invoice/>" in base64.
         let answer = render_request(xml, serde_json::json!({ "files": { "invoice": "PGludm9pY2UvPg==" } }));
@@ -555,7 +557,7 @@ mod tests {
 
         let answer = render_request(xml, serde_json::json!({}));
         let error = answer["error"].as_str().expect("a file with no bytes is an error");
-        assert!(error.contains("file 'factur-x.xml'") && error.contains("loadFile('invoice', bytes)"), "{error}");
+        assert!(error.contains("file 'invoice.xml'") && error.contains("loadFile('invoice', bytes)"), "{error}");
     }
 
     #[test]

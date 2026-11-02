@@ -182,12 +182,12 @@ fn a_file_that_was_not_loaded_is_an_error_before_the_layout() {
 
 #[test]
 fn a_file_loaded_under_its_ref_is_carried_under_its_name() {
-    let xml = r#"<lpdf version="1"><document><attachments><file name="factur-x.xml" ref="invoice-42" mime="text/xml"/>
+    let xml = r#"<lpdf version="1"><document><attachments><file name="invoice.xml" ref="invoice-42" mime="text/xml"/>
         </attachments><section><layout><text>x</text></layout></section></document></lpdf>"#;
     let mut engine = LpdfEngine::new("");
     engine.load_file("invoice-42", b"<invoice/>");
     let pdf = text(&engine.render_xml(xml, None, &RenderEncryption::default()).unwrap());
-    assert!(pdf.contains(&format!("/UF {}", literal("factur-x.xml"))) && !pdf.contains("invoice-42"), "{pdf}");
+    assert!(pdf.contains(&format!("/UF {}", literal("invoice.xml"))) && !pdf.contains("invoice-42"), "{pdf}");
 }
 
 #[test]

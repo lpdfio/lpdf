@@ -292,6 +292,9 @@ pub struct Output {
     /// Whether the file is linearized, for fast web view (`linearize`): page 1 and the hints that find every other page
     /// at its start, after the encryption, if any.
     pub linearize: bool,
+    /// Whether a Factur-X invoice refuses the types and relationships its spec doesn't allow (`facturx-strict`,
+    /// `facturx::apply`). It does nothing in a document without the invoice file.
+    pub facturx_strict: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1489,6 +1492,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                             )
                                 .map_err(|e| format!("<output>{}: {e}", node_loc(&doc_child)))?;
                             output.linearize = doc_child.attribute("linearize") == Some("true");
+                            output.facturx_strict = doc_child.attribute("facturx-strict") == Some("true");
                         }
                         "attachments" => attachments = crate::attachments::from_xml(&doc_child)?,
                         "section" => {
@@ -1889,7 +1893,7 @@ fn parse_output(
             return Err("allow sets what a reader of an encrypted file may do, and the document is not encrypted: \
                 add encrypt (encrypt=\"aes-256\"), or remove allow".to_string());
         }
-        return Ok(Output { encryption: None, pdfa, pdfua, pdfx, linearize: false });
+        return Ok(Output { encryption: None, pdfa, pdfua, pdfx, ..Output::default() });
     };
     if let Some(x) = &pdfx {
         return Err(format!("pdfx=\"{}\" and encrypt don't go together: PDF/X forbids encryption, so that the printer \
@@ -1909,7 +1913,7 @@ fn parse_output(
         crate::pdfua::check_permissions(part, permissions)?;
     }
     Ok(Output {
-        encryption: Some(crate::encrypt::OutputEncryption { algorithm, permissions }), pdfa: None, pdfua, pdfx: None, linearize: false,
+        encryption: Some(crate::encrypt::OutputEncryption { algorithm, permissions }), pdfua, ..Output::default()
     })
 }
 
@@ -3926,6 +3930,7 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
                 parse_output(text("encrypt")?, text("allow")?, text("pdfa")?, text("pdfua")?, text("pdfx")?, text("profile")?)
                     .map_err(|e| format!("document output: {e}"))?;
             output.linearize = text("linearize")? == Some("true");
+            output.facturx_strict = text("facturx-strict")? == Some("true");
             output
         }
         None => Output::default(),

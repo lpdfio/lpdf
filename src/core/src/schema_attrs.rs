@@ -272,6 +272,7 @@ const OUTPUT: Attributes = &[
     ("pdfx", Kind::Text),
     ("profile", Kind::Text),
     ("linearize", Kind::Boolean),
+    ("facturx-strict", Kind::Boolean),
 ];
 
 const ATTACHMENTS: Attributes = &[

@@ -133,7 +133,7 @@ fn pdfa_is_read_from_the_json_of_an_sdk() {
 fn a_level_the_engine_does_not_write_is_an_error() {
     let xml = document("", "<text>A</text>").replace(r#"pdfa="2b""#, r#"pdfa="2a""#);
     let error = refused(&xml);
-    assert!(error.contains("<output>") && error.contains("'2a'") && error.contains("2b or 2u"), "{error}");
+    assert!(error.contains("<output>") && error.contains("'2a'") && error.contains("2b, 2u, 3b or 3u"), "{error}");
 }
 
 #[test]
