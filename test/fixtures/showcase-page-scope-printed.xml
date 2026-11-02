@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="accent"  value="#9db8e0" />
+      <color name="muted"   value="#737373" />
+    </colors>
+  </tokens>
+  <document size="a5">
+    <meta title="lpdf Showcase — Page Scope by Printed Number" subject="Odd and even regions and layers follow the number printed on the page; first, last and ranges count the section's own pages" />
+
+    <!-- page="odd" and page="even" follow the number printed on the page, whatever its format or prefix, so a
+         book's right-hand (odd) and left-hand (even) running heads stay on their side when a section starts on an
+         even number. page="first", "last" and ranges such as "2-last" count the section's own pages.
+         Each section has an odd head on the right with a dark tab on the right edge, an even head on the left with
+         a light tab on the left edge, "opens on {page}" at the foot of its first page and the number at the foot
+         of the rest. Expected, page by page (printed number: side):
+           1  1: odd     2  2: even    3  3: odd       Part One
+           4  4: even    5  5: odd     6  6: even      Part Two, counting on
+           7  iv: even   8  v: odd                     page-start="4" page-format="lower-roman"
+           9  B-D: even 10  B-E: odd                   page-start="4" page-format="upper-alpha" page-prefix="B-" -->
+    <!-- Pages 1-3, from 1, as before: odd heads and the right tab on 1 and 3, even on 2. -->
+    <section>
+      <layer page="odd">
+        <rect anchor="center-right" width="10pt" height="72pt" fill="primary"/>
+      </layer>
+      <layer page="even">
+        <rect anchor="center-left" width="10pt" height="72pt" fill="accent"/>
+      </layer>
+      <layout margin="48pt">
+        <region pin="top" page="odd">
+          <text font-size="s" color="muted" align="right">Part One · {page}</text>
+        </region>
+        <region pin="top" page="even">
+          <text font-size="s" color="muted">{page} · The Lamplighter's Almanac</text>
+        </region>
+        <region pin="bottom" page="first">
+          <text font-size="s" color="muted" align="center">opens on {page}</text>
+        </region>
+        <region pin="bottom" page="2-last">
+          <text font-size="s" color="muted" align="center">{page}</text>
+        </region>
+        <column gap="m">
+          <text font-size="xl" font="Helvetica-Bold">Part One</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+        <column gap="m" paginate="break-before">
+          <text font-size="xl" font="Helvetica-Bold">Part One, continued</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+        <column gap="m" paginate="break-before">
+          <text font-size="xl" font="Helvetica-Bold">Part One, continued</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+      </layout>
+    </section>
+    <!-- Counts on from 4: even heads and the left tab on 4 and 6, odd on 5. -->
+    <section>
+      <layer page="odd">
+        <rect anchor="center-right" width="10pt" height="72pt" fill="primary"/>
+      </layer>
+      <layer page="even">
+        <rect anchor="center-left" width="10pt" height="72pt" fill="accent"/>
+      </layer>
+      <layout margin="48pt">
+        <region pin="top" page="odd">
+          <text font-size="s" color="muted" align="right">Part Two · {page}</text>
+        </region>
+        <region pin="top" page="even">
+          <text font-size="s" color="muted">{page} · The Lamplighter's Almanac</text>
+        </region>
+        <region pin="bottom" page="first">
+          <text font-size="s" color="muted" align="center">opens on {page}</text>
+        </region>
+        <region pin="bottom" page="2-last">
+          <text font-size="s" color="muted" align="center">{page}</text>
+        </region>
+        <column gap="m">
+          <text font-size="xl" font="Helvetica-Bold">Part Two</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+        <column gap="m" paginate="break-before">
+          <text font-size="xl" font="Helvetica-Bold">Part Two, continued</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+        <column gap="m" paginate="break-before">
+          <text font-size="xl" font="Helvetica-Bold">Part Two, continued</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+      </layout>
+    </section>
+    <!-- Starts at iv: even on iv, odd on v. -->
+    <section page-start="4" page-format="lower-roman">
+      <layer page="odd">
+        <rect anchor="center-right" width="10pt" height="72pt" fill="primary"/>
+      </layer>
+      <layer page="even">
+        <rect anchor="center-left" width="10pt" height="72pt" fill="accent"/>
+      </layer>
+      <layout margin="48pt">
+        <region pin="top" page="odd">
+          <text font-size="s" color="muted" align="right">Preface to the Second Volume · {page}</text>
+        </region>
+        <region pin="top" page="even">
+          <text font-size="s" color="muted">{page} · The Lamplighter's Almanac</text>
+        </region>
+        <region pin="bottom" page="first">
+          <text font-size="s" color="muted" align="center">opens on {page}</text>
+        </region>
+        <region pin="bottom" page="2-last">
+          <text font-size="s" color="muted" align="center">{page}</text>
+        </region>
+        <column gap="m">
+          <text font-size="xl" font="Helvetica-Bold">Preface to the Second Volume</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+        <column gap="m" paginate="break-before">
+          <text font-size="xl" font="Helvetica-Bold">Preface to the Second Volume, continued</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+      </layout>
+    </section>
+    <!-- Starts at B-D, the fourth letter: even on B-D, odd on B-E. -->
+    <section page-start="4" page-format="upper-alpha" page-prefix="B-">
+      <layer page="odd">
+        <rect anchor="center-right" width="10pt" height="72pt" fill="primary"/>
+      </layer>
+      <layer page="even">
+        <rect anchor="center-left" width="10pt" height="72pt" fill="accent"/>
+      </layer>
+      <layout margin="48pt">
+        <region pin="top" page="odd">
+          <text font-size="s" color="muted" align="right">Appendix B · {page}</text>
+        </region>
+        <region pin="top" page="even">
+          <text font-size="s" color="muted">{page} · The Lamplighter's Almanac</text>
+        </region>
+        <region pin="bottom" page="first">
+          <text font-size="s" color="muted" align="center">opens on {page}</text>
+        </region>
+        <region pin="bottom" page="2-last">
+          <text font-size="s" color="muted" align="center">{page}</text>
+        </region>
+        <column gap="m">
+          <text font-size="xl" font="Helvetica-Bold">Appendix B</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+        <column gap="m" paginate="break-before">
+          <text font-size="xl" font="Helvetica-Bold">Appendix B, continued</text>
+          <text>The lamp-keepers of the northern coast kept a record of every evening they lit the harbor, and the record grew longer than the harbor itself. Most nights the third column stayed empty, and the keepers took pride in that, since a quiet night meant a safe one.</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

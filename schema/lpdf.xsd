@@ -435,7 +435,7 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- Keyword or numeric page range (section-relative) -->
+  <!-- Keyword or numeric page range: odd and even follow the printed page number, first, last and ranges count the section's own pages -->
   <xs:simpleType name="PageScope">
     <xs:union>
       <xs:simpleType>
@@ -967,7 +967,11 @@
       <xs:sequence>
         <xs:group ref="CanvasPrimitives" minOccurs="0" maxOccurs="unbounded"/>
       </xs:sequence>
-      <xs:attribute name="page"      type="PageScope"/>
+      <xs:attribute name="page"      type="PageScope">
+        <xs:annotation>
+          <xs:documentation>Which pages of the section show the layer: each, first, last, odd, even, or a range such as 2-last. odd and even follow the number printed on the page, so in a section that starts on page 4 even shows on its first page. first, last and ranges count the section's own pages, whatever their numbers. Defaults to each.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attribute name="opacity"   type="OpacityValue">
         <xs:annotation>
           <xs:documentation>How opaque everything in the layer is, from 0 to 1. To fade one element, put it in a layer of its own.</xs:documentation>
@@ -1374,7 +1378,7 @@
             </xs:attribute>
             <xs:attribute name="page"  type="PageScope">
               <xs:annotation>
-                <xs:documentation>Which pages show the region: each, first, last, odd, even, or a range such as 2-last. Defaults to each.</xs:documentation>
+                <xs:documentation>Which pages show the region: each, first, last, odd, even, or a range such as 2-last. odd and even follow the number printed on the page, so in a section that starts on page 4 even shows on its first page. first, last and ranges count the section's own pages, whatever their numbers. Defaults to each.</xs:documentation>
               </xs:annotation>
             </xs:attribute>
             <!-- w is for pin="left|right", which are not implemented; it is read and not used -->

@@ -8,12 +8,13 @@
 //
 // Each page number is the one its footer prints (`page_numbers`), which the TOC's length moves too. Where a
 // bookmark lands doesn't depend on the numbers, so the other sections are laid out once, numbered as if the TOC
-// is one page long, and laid out again only when its length moved the numbers one of them shows.
+// is one page long, and laid out again only when its length moved the numbers one of them shows, or moved its
+// first number to the other side, for a section with odd or even headers, footers or layers.
 
 use serde_json::{json, Map, Value};
 
 use crate::data;
-use crate::layout::{fill_section, finish_section, layout_numbered, shows_page_numbers, FilledSection, LaidDocument};
+use crate::layout::{fill_section, finish_section, layout_numbered, renumbering_changes, FilledSection, LaidDocument};
 use crate::page_numbers::{self, SectionNumbers};
 use crate::parse::{SectionLayout, TocOptions, TOC_DATA_KEY};
 use crate::render::{placed_anchors, RenderPage};
@@ -46,7 +47,7 @@ pub(crate) fn layout_with_toc(sections: &[SectionLayout], toc_index: usize, opti
     let numbers = page_numbers::number_sections(sections, &counts);
     laid[toc_index] = finish_section(&toc, toc_filled, &numbers[toc_index]);
     for (i, section) in sections.iter().enumerate() {
-        if i != toc_index && numbers[i] != guessed[i] && shows_page_numbers(section) {
+        if i != toc_index && renumbering_changes(section, &guessed[i], &numbers[i]) {
             laid[i] = layout_numbered(section, &numbers[i]);
         }
     }
@@ -126,9 +127,10 @@ mod tests {
         fn walk(nodes: &[RenderNode], out: &mut Vec<String>) {
             for node in nodes {
                 match node {
-                    RenderNode::Text(t) => out.push(t.content.clone()),
-                    RenderNode::Box(b)  => walk(&b.children, out),
-                    RenderNode::Link(l) => walk(&l.children, out),
+                    RenderNode::Text(t)        => out.push(t.content.clone()),
+                    RenderNode::Box(b)         => walk(&b.children, out),
+                    RenderNode::Link(l)        => walk(&l.children, out),
+                    RenderNode::CanvasLayer(l) => walk(&l.children, out),
                     _ => {}
                 }
             }
@@ -202,6 +204,32 @@ mod tests {
             assert_eq!(pair[0], placed.anchor.label);
             assert_eq!(pair[1], (placed.page + 1).to_string(), "{}", placed.anchor.label);
         }
+    }
+
+    #[test]
+    fn a_section_after_a_toc_longer_than_a_page_shows_its_odd_and_even_sides_by_its_real_numbers() {
+        // Seventy parts list on two TOC pages, so the parts start on page 3, not on 2 as the first pass guesses.
+        // Their headers and layers print no number, and still change side with it.
+        let parts: String = (1..=70)
+            .map(|n| format!(r#"<bookmark label="Part {n}"/><text paginate="break-before">Part {n}</text>"#))
+            .collect();
+        let pages = render(&format!(
+            r#"<section type="toc"><layout>
+                   <column data-source="$toc"><row><text data-value="label">Label</text><text width="fill" data-value="page">0</text></row></column>
+               </layout></section>
+               <section><layout>
+                   <region pin="top" page="odd"><text>odd head</text></region>
+                   <region pin="top" page="even"><text>even head</text></region>
+                   {parts}
+               </layout>
+               <layer page="odd"><text-at x="40pt" y="700pt">odd layer</text-at></layer>
+               <layer page="even"><text-at x="40pt" y="700pt">even layer</text-at></layer></section>"#
+        ));
+        assert_eq!(pages.len(), 72);
+        let sides: Vec<Vec<String>> = pages[2..5].iter()
+            .map(|page| texts(std::slice::from_ref(page)).into_iter().filter(|t| t.ends_with(" head") || t.ends_with(" layer")).collect())
+            .collect();
+        assert_eq!(sides, [["odd head", "odd layer"], ["even head", "even layer"], ["odd head", "odd layer"]]);
     }
 
     #[test]
