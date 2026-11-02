@@ -2,26 +2,32 @@
 //! names both, and the sRGB profile of the output intent. What a PDF/A file refuses is checked in `pdf.rs`, where
 //! the fonts, the colours and the fields are known.
 
+use crate::facturx::{self, Invoice};
 use crate::parse::{Meta, Output};
 use crate::pdfua::PdfUa;
 use crate::pdfx::PdfXVersion;
 
 /// A level of PDF/A, as `<output pdfa>` writes it. Part 2 is the first that allows the opacity, shadows and
-/// gradients the engine draws. Level b keeps the look of the pages; level u adds that every character maps to
-/// Unicode, which every embedded font of the engine does.
+/// gradients the engine draws. Part 3 is part 2 with files of any kind attached, such as the XML of a Factur-X
+/// invoice (`facturx.rs`). Level b keeps the look of the pages; level u adds that every character maps to Unicode,
+/// which every embedded font of the engine does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PdfA {
     Level2b,
     Level2u,
+    Level3b,
+    Level3u,
 }
 
 impl PdfA {
-    /// The level of a `pdfa` attribute: `2b` or `2u`.
+    /// The level of a `pdfa` attribute: `2b`, `2u`, `3b` or `3u`.
     pub fn parse(value: &str) -> Result<Self, String> {
         match value {
             "2b" => Ok(PdfA::Level2b),
             "2u" => Ok(PdfA::Level2u),
-            other => Err(format!("pdfa '{other}' is not a PDF/A level the engine writes: use 2b or 2u")),
+            "3b" => Ok(PdfA::Level3b),
+            "3u" => Ok(PdfA::Level3u),
+            other => Err(format!("pdfa '{other}' is not a PDF/A level the engine writes: use 2b, 2u, 3b or 3u")),
         }
     }
 
@@ -30,19 +36,24 @@ impl PdfA {
         match self {
             PdfA::Level2b => "2b",
             PdfA::Level2u => "2u",
+            PdfA::Level3b => "3b",
+            PdfA::Level3u => "3u",
         }
     }
 
     /// The part of ISO 19005, as `pdfaid:part` writes it.
-    fn part(self) -> u8 {
-        2
+    pub(crate) fn part(self) -> u8 {
+        match self {
+            PdfA::Level2b | PdfA::Level2u => 2,
+            PdfA::Level3b | PdfA::Level3u => 3,
+        }
     }
 
     /// The conformance level, as `pdfaid:conformance` writes it.
     fn conformance(self) -> &'static str {
         match self {
-            PdfA::Level2b => "B",
-            PdfA::Level2u => "U",
+            PdfA::Level2b | PdfA::Level3b => "B",
+            PdfA::Level2u | PdfA::Level3u => "U",
         }
     }
 }
@@ -261,10 +272,17 @@ pub(crate) fn check_render(output: &Output, created_on: Option<&str>) -> Result<
 
 /// The XMP packet of a PDF/A, PDF/UA or PDF/X file: the part and level of each standard, and the same title, author,
 /// subject, keywords, creator, producer and dates as the Info dictionary. UTF-8, with no `bytes` or `encoding` in its
-/// header, which PDF/A forbids. PDF/A-2 accepts only the properties of the schemas it predefines, so a file that is
+/// header, which PDF/A forbids. PDF/A accepts only the properties of the schemas it predefines, so a file that is
 /// PDF/A and PDF/UA describes the PDF/UA identification schema in an extension schema (ISO 19005-2, 6.6.2.3). A PDF/X
-/// file adds its version, that it is not trapped, as the Info dictionary says, and the media management `ids`.
-pub(crate) fn xmp_packet(standards: Standards, meta: &Meta, date: &FileDate, ids: Option<&XmpIds>) -> Vec<u8> {
+/// file adds its version, that it is not trapped, as the Info dictionary says, and the media management `ids`. The
+/// `invoice` of a Factur-X file adds its four properties and the extension schema that describes them (`facturx.rs`).
+pub(crate) fn xmp_packet(
+    standards: Standards,
+    meta:      &Meta,
+    date:      &FileDate,
+    ids:       Option<&XmpIds>,
+    invoice:   Option<Invoice<'_>>,
+) -> Vec<u8> {
     let mut properties = String::new();
     let mut add = |name: &str, value: String| properties.push_str(&format!("   <{name}>{value}</{name}>\n"));
     if let Some(pdfa) = standards.pdfa {
@@ -283,6 +301,11 @@ pub(crate) fn xmp_packet(standards: Standards, meta: &Meta, date: &FileDate, ids
         add("xmpMM:InstanceID", ids.instance.clone());
         add("xmpMM:VersionID", "1".to_string());
         add("xmpMM:RenditionClass", "default".to_string());
+    }
+    if let Some(invoice) = invoice {
+        for (name, value) in facturx::properties(invoice) {
+            add(name, xml_text(value));
+        }
     }
     add("dc:format", "application/pdf".to_string());
     let alt = |text: &str| format!("<rdf:Alt><rdf:li xml:lang=\"x-default\">{}</rdf:li></rdf:Alt>", xml_text(text));
@@ -320,7 +343,10 @@ pub(crate) fn xmp_packet(standards: Standards, meta: &Meta, date: &FileDate, ids
     if ids.is_some() {
         namespaces.push_str("    xmlns:xmpMM=\"http://ns.adobe.com/xap/1.0/mm/\"\n");
     }
-    let extension = if standards.pdfa.is_some() && standards.pdfua.is_some() { PDFUA_EXTENSION_SCHEMA } else { "" };
+    if invoice.is_some() {
+        namespaces.push_str(&format!("    xmlns:fx=\"{}\"\n", facturx::NAMESPACE));
+    }
+    let extension = extension_schemas(standards, invoice.is_some());
 
     format!(
         "<?xpacket begin=\"\u{FEFF}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n\
@@ -341,15 +367,40 @@ pub(crate) fn xmp_packet(standards: Standards, meta: &Meta, date: &FileDate, ids
     .into_bytes()
 }
 
-/// The PDF/UA identification schema described for PDF/A, which predefines only its own schemas and those of XMP:
-/// its namespace, its prefix and its one property, `part`.
-const PDFUA_EXTENSION_SCHEMA: &str = "  <rdf:Description rdf:about=\"\"\n\
+/// The description of the schemas a PDF/A file uses that PDF/A doesn't predefine, in one bag: PDF/UA's beside PDF/A,
+/// and Factur-X's in an invoice. Empty when there is none.
+fn extension_schemas(standards: Standards, invoice: bool) -> String {
+    let pdfua = standards.pdfa.is_some() && standards.pdfua.is_some();
+    if !pdfua && !invoice {
+        return String::new();
+    }
+    let mut schemas = String::from(EXTENSION_SCHEMAS_START);
+    if pdfua {
+        schemas.push_str(PDFUA_EXTENSION_SCHEMA);
+    }
+    if invoice {
+        schemas.push_str(facturx::EXTENSION_SCHEMA);
+    }
+    schemas.push_str(EXTENSION_SCHEMAS_END);
+    schemas
+}
+
+/// The start of the description of the extension schemas, up to their bag.
+const EXTENSION_SCHEMAS_START: &str = "  <rdf:Description rdf:about=\"\"\n\
     xmlns:pdfaExtension=\"http://www.aiim.org/pdfa/ns/extension/\"\n\
     xmlns:pdfaSchema=\"http://www.aiim.org/pdfa/ns/schema#\"\n\
     xmlns:pdfaProperty=\"http://www.aiim.org/pdfa/ns/property#\">\n\
    <pdfaExtension:schemas>\n\
-    <rdf:Bag>\n\
-     <rdf:li rdf:parseType=\"Resource\">\n\
+    <rdf:Bag>\n";
+
+/// The end of the description of the extension schemas, after their bag.
+const EXTENSION_SCHEMAS_END: &str = "</rdf:Bag>\n\
+   </pdfaExtension:schemas>\n\
+  </rdf:Description>\n";
+
+/// The PDF/UA identification schema described for PDF/A, which predefines only its own schemas and those of XMP:
+/// its namespace, its prefix and its one property, `part`. An entry of the bag of `extension_schemas`.
+const PDFUA_EXTENSION_SCHEMA: &str = "<rdf:li rdf:parseType=\"Resource\">\n\
       <pdfaSchema:schema>PDF/UA Universal Accessibility Schema</pdfaSchema:schema>\n\
       <pdfaSchema:namespaceURI>http://www.aiim.org/pdfua/ns/id/</pdfaSchema:namespaceURI>\n\
       <pdfaSchema:prefix>pdfuaid</pdfaSchema:prefix>\n\
@@ -363,10 +414,7 @@ const PDFUA_EXTENSION_SCHEMA: &str = "  <rdf:Description rdf:about=\"\"\n\
         </rdf:li>\n\
        </rdf:Seq>\n\
       </pdfaSchema:property>\n\
-     </rdf:li>\n\
-    </rdf:Bag>\n\
-   </pdfaExtension:schemas>\n\
-  </rdf:Description>\n";
+     </rdf:li>\n";
 
 /// `text` as XML character data: the markup characters escaped, and the characters XML 1.0 cannot hold at all,
 /// such as most control characters, left out.
@@ -395,11 +443,18 @@ mod tests {
 
     #[test]
     fn a_level_is_read_from_its_attribute_value() {
-        assert_eq!(PdfA::parse("2b"), Ok(PdfA::Level2b));
-        assert_eq!(PdfA::parse("2u"), Ok(PdfA::Level2u));
-        for other in ["2a", "1b", "3b", "2B", ""] {
+        for (value, level, part, conformance) in [
+            ("2b", PdfA::Level2b, 2, "B"),
+            ("2u", PdfA::Level2u, 2, "U"),
+            ("3b", PdfA::Level3b, 3, "B"),
+            ("3u", PdfA::Level3u, 3, "U"),
+        ] {
+            assert_eq!(PdfA::parse(value), Ok(level));
+            assert_eq!((level.attribute(), level.part(), level.conformance()), (value, part, conformance));
+        }
+        for other in ["2a", "3a", "1b", "4", "3B", ""] {
             let error = PdfA::parse(other).unwrap_err();
-            assert!(error.contains("use 2b or 2u"), "{error}");
+            assert!(error.contains("use 2b, 2u, 3b or 3u"), "{error}");
         }
     }
 
@@ -487,7 +542,7 @@ mod tests {
             title: "Q3 <report> & notes".into(), author: "Ann Lee".into(), subject: "Sales".into(),
             keywords: "sales, q3".into(), creator: "Billing".into(), lang: "en".into(),
         };
-        let xmp = String::from_utf8(xmp_packet(pdfa(PdfA::Level2u), &meta, &date("2026-10-31T09:30:00Z"), None)).unwrap();
+        let xmp = String::from_utf8(xmp_packet(pdfa(PdfA::Level2u), &meta, &date("2026-10-31T09:30:00Z"), None, None)).unwrap();
         for expected in [
             "<pdfaid:part>2</pdfaid:part>", "<pdfaid:conformance>U</pdfaid:conformance>",
             "<dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">Q3 &lt;report&gt; &amp; notes</rdf:li></rdf:Alt></dc:title>",
@@ -506,7 +561,7 @@ mod tests {
 
     #[test]
     fn the_xmp_packet_leaves_out_what_the_meta_does_not_set() {
-        let xmp = String::from_utf8(xmp_packet(pdfa(PdfA::Level2b), &Meta::default(), &date("2026-10-31"), None)).unwrap();
+        let xmp = String::from_utf8(xmp_packet(pdfa(PdfA::Level2b), &Meta::default(), &date("2026-10-31"), None, None)).unwrap();
         assert!(xmp.contains("<pdfaid:conformance>B</pdfaid:conformance>"), "{xmp}");
         for absent in ["dc:title", "dc:creator", "dc:description", "pdf:Keywords", "xmp:CreatorTool"] {
             assert!(!xmp.contains(absent), "{absent}\n{xmp}");
@@ -518,11 +573,11 @@ mod tests {
     fn a_pdfua_packet_names_its_part_and_describes_the_schema_only_beside_pdfa() {
         let meta = Meta { title: "Invoice".into(), ..Meta::default() };
         let ua = Standards { pdfua: Some(PdfUa::Part1), ..Standards::default() };
-        let xmp = String::from_utf8(xmp_packet(ua, &meta, &date("2026-10-31"), None)).unwrap();
+        let xmp = String::from_utf8(xmp_packet(ua, &meta, &date("2026-10-31"), None, None)).unwrap();
         assert!(xmp.contains("<pdfuaid:part>1</pdfuaid:part>") && xmp.contains("xmlns:pdfuaid="), "{xmp}");
         assert!(!xmp.contains("pdfaid:") && !xmp.contains("pdfaExtension"), "{xmp}");
         let both = Standards { pdfa: Some(PdfA::Level2u), pdfua: Some(PdfUa::Part1), pdfx: None };
-        let xmp = String::from_utf8(xmp_packet(both, &meta, &date("2026-10-31"), None)).unwrap();
+        let xmp = String::from_utf8(xmp_packet(both, &meta, &date("2026-10-31"), None, None)).unwrap();
         assert!(xmp.contains("<pdfaid:part>2</pdfaid:part>") && xmp.contains("<pdfuaid:part>1</pdfuaid:part>"), "{xmp}");
         assert!(xmp.contains("<pdfaSchema:prefix>pdfuaid</pdfaSchema:prefix>"), "{xmp}");
     }
@@ -532,7 +587,7 @@ mod tests {
         let meta = Meta { title: "Brochure".into(), ..Meta::default() };
         let x = Standards { pdfx: Some(PdfXVersion::X4), ..Standards::default() };
         let ids = XmpIds { document: "uuid:0-1".into(), instance: "uuid:2-3".into() };
-        let xmp = String::from_utf8(xmp_packet(x, &meta, &date("2026-10-31T09:30:00Z"), Some(&ids))).unwrap();
+        let xmp = String::from_utf8(xmp_packet(x, &meta, &date("2026-10-31T09:30:00Z"), Some(&ids), None)).unwrap();
         for expected in [
             "xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\"", "<pdfxid:GTS_PDFXVersion>PDF/X-4</pdfxid:GTS_PDFXVersion>",
             "<pdf:Trapped>False</pdf:Trapped>", "xmlns:xmpMM=\"http://ns.adobe.com/xap/1.0/mm/\"",

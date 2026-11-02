@@ -147,11 +147,13 @@
 
   <xs:simpleType name="PdfALevel">
     <xs:annotation>
-      <xs:documentation>A level of PDF/A, the ISO 19005 standard for files kept for the long term: 2b keeps the look of every page, and 2u adds that all text maps to Unicode, so it can be searched and copied.</xs:documentation>
+      <xs:documentation>A level of PDF/A, the ISO 19005 standard for files kept for the long term: 2b keeps the look of every page, and 2u adds that all text maps to Unicode, so it can be searched and copied. 3b and 3u are the same levels in part 3, which also carries files of any kind, as a Factur-X or ZUGFeRD e-invoice carries its XML.</xs:documentation>
     </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="2b"/>
       <xs:enumeration value="2u"/>
+      <xs:enumeration value="3b"/>
+      <xs:enumeration value="3u"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -1276,7 +1278,7 @@
       </xs:attribute>
       <xs:attribute name="pdfa" type="PdfALevel">
         <xs:annotation>
-          <xs:documentation>Writes the PDF as PDF/A, for archives, courts, public bodies and banks: 2b, or 2u when its text must also be searchable. The file carries its fonts, the sRGB color profile and its metadata, and the render needs created_on, the date the file carries. What PDF/A cannot hold is an error that says what to change: text in a built-in font such as the default Helvetica (declare a font in assets), a font whose license forbids embedding, a character the font has no glyph for, a CMYK color, a form field, the digits of a barcode, encrypt, and attachments.</xs:documentation>
+          <xs:documentation>Writes the PDF as PDF/A, for archives, courts, public bodies and banks: 2b, or 2u when its text must also be searchable, and 3b or 3u to carry attachments of any kind. The file carries its fonts, the sRGB color profile and its metadata, and the render needs created_on, the date the file carries. What PDF/A cannot hold is an error that says what to change: text in a built-in font such as the default Helvetica (declare a font in assets), a font whose license forbids embedding, a character the font has no glyph for, a CMYK color, a form field, the digits of a barcode, encrypt, and attachments in 2b or 2u. With 3b or 3u, an attachment named factur-x.xml, or xrechnung.xml for the XRECHNUNG profile, makes the file a Factur-X or ZUGFeRD e-invoice: the engine reads the profile from BT-24 of that XML and names the invoice in the file's metadata. The XML is attached as given, and its content is not checked: check it with the Factur-X package's XSD and Schematron or a checker such as the Mustang CLI. A file named so in a document without 3b or 3u is an error, and so are factur-x.xml and xrechnung.xml together.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="pdfua" type="PdfUaPart">
@@ -1299,12 +1301,17 @@
           <xs:documentation>Writes the PDF linearized, for fast web view: page 1 comes first in the file, with hints that say where every other page is, so a viewer that fetches the file from a server by byte ranges, as a browser does, shows page 1 while the rest downloads and fetches any other page on its own. It helps large documents read on the web, such as statements, catalogues and books, and changes nothing a viewer shows. Each page then names only the fonts and images it draws. With encrypt the file is encrypted first and linearized last. Any change to the file afterwards, such as a stamp or a signature added by another tool, ends the linearization. It combines with every other attribute of output. Without it, or with false, the file is not linearized.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
+      <xs:attribute name="facturx-strict" type="Boolean">
+        <xs:annotation>
+          <xs:documentation>Refuses, in a Factur-X or ZUGFeRD e-invoice, the attachments the Factur-X spec does not allow, each with an error that says what to change: an invoice file whose mime is not text/xml, an invoice file whose relationship its profile does not allow (data for MINIMUM and BASIC WL; alternative, source or data for BASIC, EN 16931 and EXTENDED; alternative for XRECHNUNG), and another file with no mime or with one that is not of a format the spec lists: PDF, TXT, GIF, TIFF, JPG, CSV, XML, JSON, XLS, XLSX and ODS. Without it, or with false, every file is written as the document gives it. It does nothing in a document without factur-x.xml or xrechnung.xml.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
     </xs:complexType>
   </xs:element>
 
   <xs:element name="attachments">
     <xs:annotation>
-      <xs:documentation>Files the PDF carries inside it, such as the data of an invoice, the source of a report or its terms: a reader lists them in its attachments panel and saves them from there. The engine does not draw them; it carries each as it is. In an encrypted PDF they are encrypted with the rest, under the same passwords. A PDF/A-2 file can carry only files that are PDF/A themselves, so attachments and pdfa are an error.</xs:documentation>
+      <xs:documentation>Files the PDF carries inside it, such as the data of an invoice, the source of a report or its terms: a reader lists them in its attachments panel and saves them from there. The engine does not draw them; it carries each as it is. In an encrypted PDF they are encrypted with the rest, under the same passwords. A PDF/A-2 file can carry only files that are PDF/A themselves, so attachments with pdfa 2b or 2u are an error; 3b and 3u carry files of any kind.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
@@ -1335,12 +1342,12 @@
       </xs:attribute>
       <xs:attribute name="mime" type="MimeType">
         <xs:annotation>
-          <xs:documentation>The type of the file, such as text/xml, application/pdf or text/csv. Defaults to application/octet-stream, which says only that it is a file.</xs:documentation>
+          <xs:documentation>The type of the file, such as text/xml, application/pdf or text/csv. Defaults to application/octet-stream, which says only that it is a file, and to text/xml for the invoice of a Factur-X e-invoice.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="relationship" type="FileRelationship">
         <xs:annotation>
-          <xs:documentation>How the file relates to the document: source, data, alternative, supplement or unspecified, the default. An e-invoice's XML is data.</xs:documentation>
+          <xs:documentation>How the file relates to the document: source, data, alternative, supplement or unspecified, the default. The invoice of a Factur-X e-invoice defaults to data for the MINIMUM and BASIC WL profiles, and to alternative for the others, as the Factur-X spec asks.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="description" type="xs:string">

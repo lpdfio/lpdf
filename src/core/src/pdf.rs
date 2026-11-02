@@ -42,6 +42,7 @@ use miniz_oxide::inflate::decompress_to_vec_zlib;
 use subsetter::GlyphRemapper;
 
 use crate::attachments::{self, EmbeddedFile};
+use crate::facturx;
 use crate::render::{placed_anchors, PlacedAnchor, RenderBox, RenderCanvasLayer, RenderField, RenderNode, RenderPage, RenderedBarcodeKind};
 use crate::parse::{FieldKind, ListFormat, Meta, Ocg, Output, Shadow};
 use crate::pdfa::{self, FileDate, PdfA, Standards, XmpIds};
@@ -3788,7 +3789,7 @@ fn assemble_pdf(
     if let (Some(file), Some(xmp_id)) = (file, xmp_id) {
         // Not compressed, so that a tool that knows nothing of PDF can still find the packet.
         let ids = pdfx.map(|_| xmp_ids(pdf.as_bytes()));
-        let xmp = pdfa::xmp_packet(file.standards, meta, &file.date, ids.as_ref());
+        let xmp = pdfa::xmp_packet(file.standards, meta, &file.date, ids.as_ref(), facturx::invoice(files));
         pdf.metadata(xmp_id, &xmp);
     }
     if let Some(profile_id) = profile_id {

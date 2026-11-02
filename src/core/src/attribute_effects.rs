@@ -403,6 +403,12 @@ const BLUE_PIXEL: &[u8] = &[
     0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ];
 
+/// The XML of a Factur-X invoice of the EN 16931 profile, as little of it as the engine reads: its BT-24.
+const FACTUR_X_INVOICE: &[u8] = br#"<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"
+    xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100"><rsm:ExchangedDocumentContext>
+    <ram:GuidelineSpecifiedDocumentContextParameter><ram:ID>urn:cen.eu:en16931:2017</ram:ID>
+    </ram:GuidelineSpecifiedDocumentContextParameter></rsm:ExchangedDocumentContext></rsm:CrossIndustryInvoice>"#;
+
 /// The press profile a PDF/X document renders with: the FOGRA39 printer profile of the test assets.
 const PRESS_PROFILE: &[u8] = include_bytes!("../../../test/assets/profiles/FOGRA39L_coated.icc");
 
@@ -428,8 +434,9 @@ fn render(xml: &str) -> Result<Vec<u8>, String> {
         registry.load("terms.txt", b"Terms".to_vec());
         registry.load("renamed.txt", b"Terms".to_vec());
         registry.load("other", b"Other terms".to_vec());
+        registry.load("factur-x.xml", FACTUR_X_INVOICE.to_vec());
         let attached = std::mem::take(&mut doc.attachments);
-        let files = crate::attachments::resolve(&attached, &registry)?;
+        let files = crate::attachments::resolve(&attached, &registry, &doc.output)?;
         let mut images = crate::pdf::ImageRegistry::new();
         images.load("logo", RED_PIXEL.to_vec());
         images.load("other", BLUE_PIXEL.to_vec());
@@ -656,6 +663,18 @@ fn subjects() -> Vec<Subject> {
             .only(&["profile"])
             .base(&[("pdfx", "4"), ("profile", "press")]),
         Subject::new("profile", |a, _| pdfx(&format!("<profile {a}/>"), r#"pdfx="4" profile="press""#)).base(&[("name", "press")]),
+        // Factur-X: a PDF/A-3 invoice whose XML is typed application/xml, which renders, and which the flag refuses.
+        Subject::new("output", |a, _| {
+            lpdf(
+                r#"<assets><font name="custom" src="custom.ttf"/></assets>"#,
+                &format!(
+                    r#"<document font="custom"><output {a}/><attachments><file name="factur-x.xml" mime="application/xml"/>
+                    </attachments><section><layout><text>Lpdf</text></layout></section></document>"#
+                ),
+            )
+        })
+        .only(&["facturx-strict"])
+        .base(&[("pdfa", "3b")]),
         // PDF/UA: the attributes a tagged PDF reads, which a document without pdfua ignores.
         Subject::new("output", |a, _| pdfua("", r#"title="T" lang="en""#, &format!("<output {a}/>"), "<text>Lpdf</text>", ""))
             .only(&["pdfua"]),
@@ -968,6 +987,8 @@ fn tweaks() -> HashMap<String, Tweak> {
 
     // The permissions are those of an encrypted file.
     add("output@allow", Tweak::default().set("encrypt", "aes-256"));
+    // The flag refuses what the spec doesn't allow, and writes what it allows as it is written without it.
+    add("output@facturx-strict", Tweak::default().error_counts());
 
     // A grid has either cols or col-width.
     add("grid@col-width", Tweak::default().remove("cols"));

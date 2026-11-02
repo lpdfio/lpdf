@@ -73,6 +73,8 @@ mod pdfx;
 mod tagging;
 #[path = "../../core/src/attachments.rs"]
 mod attachments;
+#[path = "../../core/src/facturx.rs"]
+mod facturx;
 #[path = "../../core/src/license.rs"]
 mod license;
 #[path = "../../core/src/aes256.rs"]
@@ -314,7 +316,7 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
 
     let file_registry = build_file_registry(req);
     let attached = std::mem::take(&mut doc.attachments);
-    let files = match attachments::resolve(&attached, &file_registry) {
+    let files = match attachments::resolve(&attached, &file_registry, &doc.output) {
         Ok(files) => files,
         Err(e)    => return serde_json::json!({ "error": e }).to_string(),
     };
@@ -545,7 +547,7 @@ mod tests {
 
     #[test]
     fn the_files_of_the_request_are_carried_under_the_names_of_their_file() {
-        let xml = r#"<lpdf version="1"><document><attachments><file name="factur-x.xml" ref="invoice" mime="text/xml"/>
+        let xml = r#"<lpdf version="1"><document><attachments><file name="invoice.xml" ref="invoice" mime="text/xml"/>
             </attachments><section><layout><text>Hello</text></layout></section></document></lpdf>"#;
         // "<invoice/>" in base64.
         let answer = render_request(xml, serde_json::json!({ "files": { "invoice": "PGludm9pY2UvPg==" } }));
@@ -555,7 +557,7 @@ mod tests {
 
         let answer = render_request(xml, serde_json::json!({}));
         let error = answer["error"].as_str().expect("a file with no bytes is an error");
-        assert!(error.contains("file 'factur-x.xml'") && error.contains("loadFile('invoice', bytes)"), "{error}");
+        assert!(error.contains("file 'invoice.xml'") && error.contains("loadFile('invoice', bytes)"), "{error}");
     }
 
     #[test]
@@ -574,6 +576,29 @@ mod tests {
         let answer = render_request(xml, fields);
         let error = answer["error"].as_str().expect("a profile with no bytes is an error");
         assert!(error.contains("profile 'press'") && error.contains("loadProfile('fogra39', bytes)"), "{error}");
+    }
+
+    #[test]
+    fn a_pdfa_3_request_with_factur_x_xml_is_a_factur_x_invoice() {
+        let xml = |level: &str| format!(
+            r#"<lpdf version="1"><assets><font name="body" src="body.ttf"/></assets><document font="body"><output pdfa="{level}"/>
+            <attachments><file name="factur-x.xml"/></attachments><section><layout><text>Lpdf</text></layout></section></document></lpdf>"#
+        );
+        let font = base64::engine::general_purpose::STANDARD.encode(pdf::ATTRIBUTION_FONT);
+        let invoice = base64::engine::general_purpose::STANDARD
+            .encode(include_bytes!("../../../test/assets/files/facturx/basic-wl.xml"));
+        let fields = serde_json::json!({
+            "fonts": { "body": font }, "files": { "factur-x.xml": invoice }, "created_on": "2026-10-31T09:30:00Z",
+        });
+        for (level, conformance) in [("3b", "B"), ("3u", "U")] {
+            let text = pdf_text(&render_request(&xml(level), fields.clone()));
+            assert!(text.contains("<pdfaid:part>3</pdfaid:part>"), "{level}: {text}");
+            assert!(text.contains(&format!("<pdfaid:conformance>{conformance}</pdfaid:conformance>")), "{level}");
+            assert!(text.contains("<fx:ConformanceLevel>BASIC WL</fx:ConformanceLevel>") && text.contains("/AFRelationship /Data"), "{level}");
+        }
+        let answer = render_request(&xml("2b"), fields);
+        let error = answer["error"].as_str().expect("an invoice in PDF/A-2 is an error");
+        assert!(error.contains("pdfa=\"3b\" or pdfa=\"3u\""), "{error}");
     }
 
     #[test]

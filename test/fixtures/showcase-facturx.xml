@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A Factur-X e-invoice: a PDF/A-3b file that carries the invoice's XML as factur-x.xml, of the EN 16931 profile, with
+     no mime and no relationship, which the engine fills in. Every text is in an embedded font of test/assets/fonts (SIL
+     Open Font License), and the files are in test/assets/files/facturx, both named relative to this file. The render
+     needs created_on. The tests of facturx_render_tests.rs render it as an SDK does, and each case there changes its
+     level or its attachments: keep its one output element and its one attachments element as they are written here. -->
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <assets>
+    <font name="body"    src="../assets/fonts/CrimsonText-Regular.ttf" />
+    <font name="heading" src="../assets/fonts/CrimsonText-SemiBold.ttf" />
+    <font name="sans"    src="../assets/fonts/Montserrat-Regular.ttf" />
+  </assets>
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="ink"     value="#1f2a44" />
+      <color name="muted"   value="#5b6475" />
+      <color name="rule"    value="#dde3ed" />
+    </colors>
+  </tokens>
+  <document size="a4" font="body">
+    <meta title="Invoice 2026-0412" author="Northwind Paper SAS" subject="Invoice 2026-0412 to Atelier Lakeside SARL"
+          creator="lpdf test suite" lang="en" />
+    <output pdfa="3b" />
+    <attachments>
+      <file name="factur-x.xml" src="../assets/files/facturx/en16931.xml" description="The invoice as data, for accounting software to read" />
+    </attachments>
+
+    <section>
+      <layout margin="48pt">
+        <column gap="l">
+          <row align="end">
+            <column width="fill" gap="xs">
+              <text font="heading" font-size="24pt" color="ink">Northwind Paper SAS</text>
+              <text font="sans" font-size="9pt" color="muted">12 rue de la Charité, 69002 Lyon, France · VAT FR32123456789</text>
+            </column>
+            <text font="sans" font-size="18pt" color="primary">Invoice 2026-0412</text>
+          </row>
+          <divider color="rule" thickness="0.5pt" />
+          <row gap="l">
+            <column width="fill" gap="xs">
+              <text font="sans" font-size="9pt" color="muted">Billed to</text>
+              <text font-size="12pt">Atelier Lakeside SARL</text>
+              <text font-size="12pt">8 passage Lakeside, 75011 Paris, France</text>
+            </column>
+            <column width="fill" gap="xs">
+              <text font="sans" font-size="9pt" color="muted">Issued · Due</text>
+              <text font-size="12pt">31 October 2026 · 30 November 2026</text>
+            </column>
+          </row>
+          <table cols="4fr 1fr 1fr 1fr">
+            <thead>
+              <td><text font="sans" font-size="9pt" color="muted">Item</text></td>
+              <td><text font="sans" font-size="9pt" color="muted" align="right">Qty</text></td>
+              <td><text font="sans" font-size="9pt" color="muted" align="right">Price</text></td>
+              <td><text font="sans" font-size="9pt" color="muted" align="right">Amount</text></td>
+            </thead>
+            <tr>
+              <td><text>A4 paper, 80 g/m², ream of 500 sheets</text></td>
+              <td><text align="right">5</text></td>
+              <td><text align="right">4.20</text></td>
+              <td><text align="right">21.00</text></td>
+            </tr>
+            <tr>
+              <td><text>Envelopes, C5, box of 500</text></td>
+              <td><text align="right">2</text></td>
+              <td><text align="right">18.50</text></td>
+              <td><text align="right">37.00</text></td>
+            </tr>
+          </table>
+          <divider color="rule" thickness="0.5pt" />
+          <column gap="xs" align="end">
+            <text>Net 58.00 EUR</text>
+            <text>VAT 20% 11.60 EUR</text>
+            <text font="heading" font-size="14pt" color="ink">Total 69.60 EUR</text>
+          </column>
+          <text font="sans" font-size="9pt" color="muted">This PDF is a Factur-X invoice: it carries the same invoice as data, factur-x.xml, which accounting software reads.</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

@@ -87,6 +87,17 @@ fn a_pdfa_file_carries_its_level_profile_id_and_dates() {
 }
 
 #[test]
+fn a_part_3_level_is_named_in_the_xmp_packet() {
+    for (fixture_level, level, conformance) in [("2b", "3b", "B"), ("2u", "3u", "U")] {
+        let xml = fixture(fixture_level).replace(&format!(r#"pdfa="{fixture_level}""#), &format!(r#"pdfa="{level}""#));
+        let pdf = text(&render(&xml).unwrap_or_else(|e| panic!("{level}: {e}")));
+        assert!(pdf.contains("<pdfaid:part>3</pdfaid:part>"), "{level}");
+        assert!(pdf.contains(&format!("<pdfaid:conformance>{conformance}</pdfaid:conformance>")), "{level}");
+        assert!(!pdf.contains("fx:"), "{level}: no invoice, no Factur-X metadata");
+    }
+}
+
+#[test]
 fn level_2u_is_named_in_the_xmp_packet() {
     let pdf = text(&render(&fixture("2u")).expect("renders"));
     assert!(pdf.contains("<pdfaid:conformance>U</pdfaid:conformance>"));
@@ -122,6 +133,10 @@ fn pdfa_is_read_from_the_json_of_an_sdk() {
     );
     let doc = crate::parse::parse_tree(&tree(r#"{"pdfa":"2u"}"#)).expect("parses");
     assert_eq!(doc.output.pdfa, Some(crate::pdfa::PdfA::Level2u));
+    let doc = crate::parse::parse_tree(&tree(r#"{"pdfa":"3b"}"#)).expect("parses");
+    assert_eq!(doc.output.pdfa, Some(crate::pdfa::PdfA::Level3b));
+    let error = crate::parse::parse_tree(&tree(r#"{"pdfa":"3a"}"#)).unwrap_err();
+    assert!(error.contains("'3a'") && error.contains("2b, 2u, 3b or 3u"), "{error}");
     assert_eq!(crate::parse::parse_tree(&tree(r#"{"pdfa":null}"#)).expect("parses").output.pdfa, None);
     let error = crate::parse::parse_tree(&tree(r#"{"pdfa":2}"#)).unwrap_err();
     assert!(error.contains("pdfa must be a string"), "{error}");
@@ -133,7 +148,7 @@ fn pdfa_is_read_from_the_json_of_an_sdk() {
 fn a_level_the_engine_does_not_write_is_an_error() {
     let xml = document("", "<text>A</text>").replace(r#"pdfa="2b""#, r#"pdfa="2a""#);
     let error = refused(&xml);
-    assert!(error.contains("<output>") && error.contains("'2a'") && error.contains("2b or 2u"), "{error}");
+    assert!(error.contains("<output>") && error.contains("'2a'") && error.contains("2b, 2u, 3b or 3u"), "{error}");
 }
 
 #[test]
@@ -275,9 +290,10 @@ fn font_sample(file: &str) -> Vec<u8> {
 }
 
 /// Writes the files `scripts/check-pdfa.mjs` hands to veraPDF and qpdf, when `LPDF_PDFA_OUT` names a folder: the two
-/// fixtures, rendered unlicensed, so that the attribution line is checked too, with their fonts and pictures, and a
-/// page in each font of `FONT_SAMPLES`. Without the variable the test does nothing, so a plain `cargo test` needs no
-/// other tool.
+/// fixtures, rendered unlicensed, so that the attribution line is checked too, with their fonts and pictures, each
+/// at its level of part 2 and of part 3, a page in each font of `FONT_SAMPLES`, and the Factur-X invoice of
+/// `showcase-facturx.xml`, a PDF/A-3b file that carries files. Without the variable the test does nothing, so a plain
+/// `cargo test` needs no other tool.
 #[test]
 fn writes_pdfa_samples_for_the_external_check() {
     let Some(dir) = std::env::var_os("LPDF_PDFA_OUT") else { return };
@@ -285,7 +301,12 @@ fn writes_pdfa_samples_for_the_external_check() {
     std::fs::create_dir_all(dir).expect("the samples' folder");
     for level in ["2b", "2u"] {
         std::fs::write(dir.join(format!("pdfa-{level}.pdf")), render_fixture(level)).expect("a sample");
+        let part_3 = level.replace('2', "3");
+        let xml = fixture(level).replace(&format!(r#"pdfa="{level}""#), &format!(r#"pdfa="{part_3}""#));
+        std::fs::write(dir.join(format!("pdfa-{part_3}.pdf")), render(&xml).expect("renders")).expect("a sample");
     }
+    let (_, invoice) = crate::facturx_render_tests::cases().into_iter().find(|(case, _)| *case == "other-files").expect("a case");
+    std::fs::write(dir.join("pdfa-3b-facturx.pdf"), crate::facturx_render_tests::render_case(&invoice)).expect("a sample");
     for (name, file) in FONT_SAMPLES {
         std::fs::write(dir.join(format!("pdfa-2u-{name}.pdf")), font_sample(file)).expect("a sample");
     }

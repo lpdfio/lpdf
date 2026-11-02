@@ -312,6 +312,14 @@ fn showcase_linearized_encrypted_rc4() { check_snapshot("showcase-linearized-enc
 /// Two files the PDF carries, loaded from their `src` as an SDK loads them.
 #[test]
 fn showcase_attachments() { check_snapshot("showcase-attachments", &crate::attachment_render_tests::render_fixture()); }
+/// Factur-X invoices, with the fonts and files loaded as an SDK loads them: `showcase-facturx` itself, and each case
+/// of `facturx_render_tests::cases`, a profile, a level or the files beside the invoice, with a hash of its own.
+#[test]
+fn showcase_facturx() {
+    for (case, xml) in crate::facturx_render_tests::cases() {
+        check_snapshot(&crate::facturx_render_tests::snapshot_name(case), &crate::facturx_render_tests::render_case(&xml));
+    }
+}
 #[test]
 fn showcase_canvas_overlay()  { run_snapshot("showcase-canvas-overlay"); }
 #[test]

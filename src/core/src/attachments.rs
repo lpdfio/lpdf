@@ -4,7 +4,8 @@
 //! bytes are loaded apart, as an image's are, under the file's `ref` or its name. Each file is written as an
 //! embedded file stream with a file specification, listed in the catalog's `EmbeddedFiles` name tree, which a reader
 //! shows in its attachments panel, and in its `/AF`, the associated files PDF/A-3 and PDF 2.0 read (PDF 1.7, 7.11.3,
-//! 7.11.4 and 7.7.4).
+//! 7.11.4 and 7.7.4). In a PDF/A-3 document, a file named `factur-x.xml` or `xrechnung.xml` is the XML of a Factur-X
+//! invoice (`facturx.rs`).
 
 use std::collections::{HashMap, HashSet};
 
@@ -47,6 +48,17 @@ impl Relationship {
         }
     }
 
+    /// The value of the `relationship` attribute, for messages: `data`.
+    pub(crate) fn attribute(self) -> &'static str {
+        match self {
+            Self::Source => "source",
+            Self::Data => "data",
+            Self::Alternative => "alternative",
+            Self::Supplement => "supplement",
+            Self::Unspecified => "unspecified",
+        }
+    }
+
     fn kind(self) -> AssociationKind {
         match self {
             Self::Source => AssociationKind::Source,
@@ -65,8 +77,10 @@ pub struct Attachment {
     pub name:         String,
     /// What the bytes were loaded under: the `ref`, or the name.
     pub key:          String,
-    pub mime:         String,
-    pub relationship: Relationship,
+    /// The type, when the document gives one: `resolve` gives a file without one its default.
+    pub mime:         Option<String>,
+    /// How it relates to the document, when the document says: `resolve` gives a file that doesn't its default.
+    pub relationship: Option<Relationship>,
     pub description:  Option<String>,
 }
 
@@ -77,21 +91,18 @@ fn read_file<'a>(attribute: impl Fn(&str) -> Result<Option<&'a str>, String>) ->
         return Err("a file's name is empty: give it the name a reader shows it under, such as invoice.xml".to_string());
     }
     let in_file = |e: String| format!("file '{name}': {e}");
-    let mime = match attribute("mime")? {
-        Some(mime) if is_mime_type(mime) => mime,
-        Some(mime) => {
-            return Err(in_file(format!(
-                "mime '{mime}' is not a type and a subtype such as text/xml or application/pdf: write one, or leave mime \
-                out for {DEFAULT_MIME}"
-            )));
-        }
-        None => DEFAULT_MIME,
-    };
-    let relationship = attribute("relationship")?.map(Relationship::parse).transpose().map_err(in_file)?.unwrap_or_default();
+    let mime = attribute("mime")?;
+    if let Some(mime) = mime.filter(|mime| !is_mime_type(mime)) {
+        return Err(in_file(format!(
+            "mime '{mime}' is not a type and a subtype such as text/xml or application/pdf: write one, or leave mime \
+            out for {DEFAULT_MIME}"
+        )));
+    }
+    let relationship = attribute("relationship")?.map(Relationship::parse).transpose().map_err(in_file)?;
     Ok(Attachment {
         name:         name.to_string(),
         key:          attribute("ref")?.unwrap_or(name).to_string(),
-        mime:         mime.to_string(),
+        mime:         mime.map(str::to_string),
         relationship,
         description:  attribute("description")?.map(str::to_string),
     })
@@ -149,13 +160,16 @@ pub(crate) fn from_tree(value: &serde_json::Value) -> Result<Vec<Attachment>, St
 
 /// Refuses attachments in a document whose `<output>` asks for a standard that can't carry them: PDF/A-2, which lets a
 /// file carry only files that are PDF/A themselves (veraPDF rule 6.8-5), which the engine can't check, and PDF/X,
-/// whose file carries nothing the press doesn't print.
+/// whose file carries nothing the press doesn't print. PDF/A-3 carries files of any kind. A Factur-X invoice file
+/// is checked first, so that its error says how to make the invoice (`facturx::check_document`).
 pub(crate) fn check_standards(files: &[Attachment], output: &Output) -> Result<(), String> {
     let Some(file) = files.first() else { return Ok(()) };
-    if let Some(level) = output.pdfa {
+    crate::facturx::check_document(files, output)?;
+    if let Some(level) = output.pdfa.filter(|level| level.part() == 2) {
         return Err(format!(
             "<output pdfa=\"{}\">: the file '{}' can't be in a PDF/A-2 file, which carries only files that are PDF/A \
-            themselves, and the engine can't check that: remove the attachments, or remove pdfa",
+            themselves, and the engine can't check that: remove the attachments, or remove pdfa, or write pdfa=\"3b\" \
+            or pdfa=\"3u\", which carries files of any kind",
             level.attribute(), file.name
         ));
     }
@@ -189,20 +203,39 @@ impl FileRegistry {
     }
 }
 
-/// A file of the document with the bytes loaded for it.
-#[derive(Debug, Clone, Copy)]
+/// A file of the document with the bytes loaded for it, and the type and relationship it is written with.
+#[derive(Debug, Clone)]
 pub struct EmbeddedFile<'a> {
-    pub attachment: &'a Attachment,
-    pub bytes:      &'a [u8],
+    pub attachment:   &'a Attachment,
+    pub bytes:        &'a [u8],
+    /// The type the document gives, or the default: `text/xml` for a Factur-X invoice, `application/octet-stream`
+    /// for any other file.
+    pub mime:         &'a str,
+    /// The relationship the document gives, or the default: the one the spec asks for a Factur-X invoice of the
+    /// profile, `unspecified` for any other file.
+    pub relationship: Relationship,
+    /// The profile, when the file is the invoice of a Factur-X document (`facturx::apply`).
+    pub invoice:      Option<crate::facturx::Profile>,
 }
 
 /// Each file of `files` with the bytes `registry` has for it, in document order, or an error that names the first
-/// file that has none and says how to give it some.
-pub fn resolve<'a>(files: &'a [Attachment], registry: &'a FileRegistry) -> Result<Vec<EmbeddedFile<'a>>, String> {
-    files
+/// file that has none and says how to give it some. In a document whose `output` is PDF/A-3, the invoice file of a
+/// Factur-X invoice gets its profile and its defaults, and what makes it an error is one (`facturx::apply`).
+pub fn resolve<'a>(
+    files:    &'a [Attachment],
+    registry: &'a FileRegistry,
+    output:   &Output,
+) -> Result<Vec<EmbeddedFile<'a>>, String> {
+    let mut resolved = files
         .iter()
         .map(|attachment| match registry.get(&attachment.key) {
-            Some(bytes) if i32::try_from(bytes.len()).is_ok() => Ok(EmbeddedFile { attachment, bytes }),
+            Some(bytes) if i32::try_from(bytes.len()).is_ok() => Ok(EmbeddedFile {
+                attachment,
+                bytes,
+                mime: attachment.mime.as_deref().unwrap_or(DEFAULT_MIME),
+                relationship: attachment.relationship.unwrap_or_default(),
+                invoice: None,
+            }),
             Some(bytes) => Err(format!(
                 "file '{}' of <attachments> is {} bytes, more than the 2 GB a PDF can say a file holds",
                 attachment.name, bytes.len()
@@ -213,7 +246,9 @@ pub fn resolve<'a>(files: &'a [Attachment], registry: &'a FileRegistry) -> Resul
                 attachment.name, attachment.key
             )),
         })
-        .collect()
+        .collect::<Result<Vec<_>, String>>()?;
+    crate::facturx::apply(&mut resolved, output)?;
+    Ok(resolved)
 }
 
 // ── Writing ───────────────────────────────────────────────────────────────────
@@ -271,7 +306,7 @@ pub(crate) fn write_objects(pdf: &mut Pdf, files: &[EmbeddedFile], ids: &[FileId
         {
             let mut stream = pdf.embedded_file(id.stream, &compressed);
             stream.filter(Filter::FlateDecode);
-            stream.subtype(Name(attachment.mime.as_bytes()));
+            stream.subtype(Name(file.mime.as_bytes()));
             let mut params = stream.params();
             // `resolve` refused a file whose size doesn't fit.
             params.size(i32::try_from(file.bytes.len()).unwrap_or(i32::MAX));
@@ -287,7 +322,7 @@ pub(crate) fn write_objects(pdf: &mut Pdf, files: &[EmbeddedFile], ids: &[FileId
             spec.description(TextStr(description));
         }
         spec.embedded_file_with_unicode(id.stream);
-        spec.association_kind(attachment.relationship.kind());
+        spec.association_kind(file.relationship.kind());
     }
 }
 
@@ -307,17 +342,21 @@ mod tests {
         assert_eq!(files, vec![Attachment {
             name:         "terms.txt".to_string(),
             key:          "terms.txt".to_string(),
-            mime:         "application/octet-stream".to_string(),
-            relationship: Relationship::Unspecified,
+            mime:         None,
+            relationship: None,
             description:  None,
         }]);
+        let mut registry = FileRegistry::new();
+        registry.load("terms.txt", b"Terms".to_vec());
+        let resolved = resolve(&files, &registry, &Output::default()).unwrap();
+        assert_eq!((resolved[0].mime, resolved[0].relationship), ("application/octet-stream", Relationship::Unspecified));
     }
 
     #[test]
     fn a_file_is_loaded_under_its_ref_when_it_has_one() {
         let files = xml_files(r#"<file name="factur-x.xml" ref="invoice-42" mime="text/xml" relationship="data"/>"#).unwrap();
         assert_eq!(files[0].key, "invoice-42");
-        assert_eq!(files[0].relationship, Relationship::Data);
+        assert_eq!(files[0].relationship, Some(Relationship::Data));
     }
 
     #[test]
@@ -361,20 +400,24 @@ mod tests {
     #[test]
     fn a_file_with_no_bytes_is_an_error_that_names_the_key_to_load() {
         let files = xml_files(r#"<file name="factur-x.xml" ref="invoice-42"/>"#).unwrap();
-        let error = resolve(&files, &FileRegistry::new()).unwrap_err();
+        let error = resolve(&files, &FileRegistry::new(), &Output::default()).unwrap_err();
         assert!(error.contains("file 'factur-x.xml'") && error.contains("loadFile('invoice-42', bytes)"), "{error}");
 
         let mut registry = FileRegistry::new();
         registry.load("invoice-42", b"<invoice/>".to_vec());
-        assert_eq!(resolve(&files, &registry).unwrap()[0].bytes, b"<invoice/>");
+        assert_eq!(resolve(&files, &registry, &Output::default()).unwrap()[0].bytes, b"<invoice/>");
+    }
+
+    fn pdfa(level: &str) -> Output {
+        Output { pdfa: Some(crate::pdfa::PdfA::parse(level).unwrap()), ..Output::default() }
     }
 
     #[test]
     fn attachments_in_a_pdfa_2_or_a_pdfx_document_are_an_error() {
         let files = xml_files(r#"<file name="a.xml"/>"#).unwrap();
-        let pdfa = Output { pdfa: Some(crate::pdfa::PdfA::parse("2b").unwrap()), ..Output::default() };
-        let error = check_standards(&files, &pdfa).unwrap_err();
+        let error = check_standards(&files, &pdfa("2b")).unwrap_err();
         assert!(error.contains("pdfa=\"2b\"") && error.contains("remove the attachments, or remove pdfa"), "{error}");
+        assert!(error.contains("pdfa=\"3b\" or pdfa=\"3u\", which carries files of any kind"), "{error}");
         let pdfx = Output {
             pdfx: Some(crate::pdfx::PdfX { version: crate::pdfx::PdfXVersion::X4, profile: "press".into() }),
             ..Output::default()
@@ -383,6 +426,14 @@ mod tests {
         assert!(error.contains("pdfx=\"4\"") && error.contains("'a.xml'") && error.contains("or remove pdfx"), "{error}");
         assert!(check_standards(&files, &Output::default()).is_ok());
         assert!(check_standards(&[], &pdfx).is_ok());
+    }
+
+    #[test]
+    fn a_pdfa_3_document_carries_files_of_any_kind() {
+        let files = xml_files(r#"<file name="a.png" mime="image/png"/><file name="b"/>"#).unwrap();
+        for level in ["3b", "3u"] {
+            assert!(check_standards(&files, &pdfa(level)).is_ok(), "{level}");
+        }
     }
 
     #[test]
