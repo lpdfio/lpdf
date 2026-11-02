@@ -2492,8 +2492,7 @@ fn read_runs(runs: &mut Vec<TextRun>, elem: &roxmltree::Node, tokens: &Tokens, n
                 .collect();
             let span_text = raw_span.split_whitespace().collect::<Vec<_>>().join(" ");
             if !span_text.is_empty() {
-                let place = format!("<span>{}", node_loc(&child));
-                let reference = span_reference(&child, &span_text, &place).map_err(|e| format!("{place}: {e}"))?;
+                let reference = span_reference(&child, &span_text)?;
                 runs.push(TextRun {
                     text: span_text,
                     leading_space: raw_span.starts_with(char::is_whitespace) || prev_ended_space,
@@ -2543,19 +2542,20 @@ fn read_runs(runs: &mut Vec<TextRun>, elem: &roxmltree::Node, tokens: &Tokens, n
 
 /// The reference of a span with `bookmark-ref`, whose `words` show its bookmark's page and label, or `None` for
 /// any other span. The words may hold no other `{…}` token, since nothing would fill it in and the editor can't
-/// catch a typo there.
-fn span_reference<A: Attrs + ?Sized>(a: &A, words: &str, place: &str) -> Result<Option<Box<Reference>>, String> {
+/// catch a typo there. Only a reference finds its place (`Attrs::place`), which reads the document up to it.
+fn span_reference<A: Attrs + ?Sized>(a: &A, words: &str) -> Result<Option<Box<Reference>>, String> {
     let Some(id) = a.get("bookmark-ref") else { return Ok(None) };
+    let place = a.place("span");
     if a.get("href").is_some() {
-        return Err("a span with bookmark-ref links to its bookmark already: leave out href".into());
+        return Err(format!("{place}: a span with bookmark-ref links to its bookmark already: leave out href"));
     }
     if let Some(token) = tokens_in(words).find(|&token| token != BOOKMARK_PAGE && token != BOOKMARK_LABEL) {
         return Err(format!(
-            "unknown token '{token}' in a span with bookmark-ref — expected {BOOKMARK_PAGE} or {BOOKMARK_LABEL}"
+            "{place}: unknown token '{token}' in a span with bookmark-ref — expected {BOOKMARK_PAGE} or {BOOKMARK_LABEL}"
         ));
     }
     Ok(Some(Box::new(Reference {
-        id: id.to_string(), words: words.to_string(), place: place.to_string(), shown: String::new(), widest: String::new(),
+        id: id.to_string(), words: words.to_string(), place, shown: String::new(), widest: String::new(),
     })))
 }
 
@@ -2635,7 +2635,7 @@ fn read_tree_runs(runs: &mut Vec<TextRun>, json: &serde_json::Value, tokens: &To
                 None    => None,
             };
             let attrs = JsonAttrs(child);
-            let reference = span_reference(&attrs, &span_text, "span").map_err(|e| format!("span: {e}"))?;
+            let reference = span_reference(&attrs, &span_text)?;
             runs.push(TextRun {
                 text: span_text,
                 leading_space,
@@ -2669,11 +2669,10 @@ const CODE_PADDING: &str = "m";
 /// How many columns a tab fills to in a `<code>` unless it has a `tab-size`.
 const DEFAULT_TAB_SIZE: u8 = 4;
 
-/// The part of a `<code>` that is not a box: its text, and the spans in it, each with its text and where it is
-/// written (`Reference::place`).
+/// The part of a `<code>` that is not a box: its text, and the spans in it.
 enum CodePart<'a> {
     Text(String),
-    Span(Box<dyn Attrs + 'a>, String, String),
+    Span(Box<dyn Attrs + 'a>, String),
 }
 
 /// A `<code>` starts on the line after its tag and ends on the line before its end tag, as a `<pre>` does, so
@@ -2698,9 +2697,9 @@ fn plain_code_run(text: &str) -> TextRun {
     }
 }
 
-/// The run of a `<span>` in a `<code>`, written at `place`: its text as it is written, with the span's style.
-fn code_span_in_code(a: &dyn Attrs, text: String, place: &str, tokens: &Tokens) -> Result<TextRun, String> {
-    let reference = span_reference(a, &text, place).map_err(|e| format!("{place}: {e}"))?;
+/// The run of a `<span>` in a `<code>`: its text as it is written, with the span's style.
+fn code_span_in_code(a: &dyn Attrs, text: String, tokens: &Tokens) -> Result<TextRun, String> {
+    let reference = span_reference(a, &text)?;
     Ok(TextRun {
         text,
         leading_space: false,
@@ -2728,8 +2727,8 @@ fn code_runs(parts: Vec<CodePart>, tokens: &Tokens) -> Result<Vec<TextRun>, Stri
                 if i == last { text = without_last_indent(text); }
                 if !text.is_empty() { runs.push(plain_code_run(text)); }
             }
-            CodePart::Span(attrs, text, place) => {
-                if !text.is_empty() { runs.push(code_span_in_code(attrs.as_ref(), text, &place, tokens)?); }
+            CodePart::Span(attrs, text) => {
+                if !text.is_empty() { runs.push(code_span_in_code(attrs.as_ref(), text, tokens)?); }
             }
         }
     }
@@ -2779,7 +2778,7 @@ fn parse_code(elem: &roxmltree::Node, tokens: &Tokens) -> Result<ParsedNode, Str
             parts.push(CodePart::Text(child.text().unwrap_or("").to_string()));
         } else if child.tag_name().name() == "span" {
             let text: String = child.children().filter_map(|n| n.text().filter(|_| n.is_text())).collect();
-            parts.push(CodePart::Span(Box::new(child), text, format!("<span>{}", node_loc(&child))));
+            parts.push(CodePart::Span(Box::new(child), text));
         } else {
             return Err(not_in_code(child.tag_name().name(), &node_loc(&child)));
         }
@@ -2827,7 +2826,7 @@ fn parse_tree_code(json: &serde_json::Value, tokens: &Tokens) -> Result<ParsedNo
                 let text: String = child.get("nodes").and_then(|v| v.as_array())
                     .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
                     .unwrap_or_default();
-                parts.push(CodePart::Span(Box::new(JsonAttrs(child)), text, "span".to_string()));
+                parts.push(CodePart::Span(Box::new(JsonAttrs(child)), text));
             }
             other => return Err(not_in_code(other.unwrap_or("?"), "")),
         }
@@ -3243,6 +3242,10 @@ pub(crate) trait Attrs {
     /// element sets one or two, matches on the names in one pass, where a `get` for each would scan the element
     /// once for every name it asks for.
     fn each(&self) -> impl Iterator<Item = (&str, &str)> where Self: Sized;
+    /// Where the element `tag` is written, for an error: `<span> at line 3, col 9` in XML, `span` in a kit tree.
+    /// The line and column are found by reading the document from its start, so ask only once an error, or a
+    /// value kept for one, needs them.
+    fn place(&self, tag: &str) -> String;
 }
 
 impl<'a, 'b> Attrs for roxmltree::Node<'a, 'b> {
@@ -3252,6 +3255,8 @@ impl<'a, 'b> Attrs for roxmltree::Node<'a, 'b> {
         // `get` finds only attributes with no namespace, so a namespaced one is skipped here too.
         self.attributes().filter(|at| at.namespace().is_none()).map(|at| (at.name(), at.value()))
     }
+
+    fn place(&self, tag: &str) -> String { format!("<{tag}>{}", node_loc(self)) }
 }
 
 pub(crate) struct JsonAttrs<'a>(pub &'a serde_json::Value);
@@ -3265,6 +3270,8 @@ impl<'a> Attrs for JsonAttrs<'a> {
         self.0.get("attrs").and_then(|v| v.as_object()).into_iter().flatten()
             .filter_map(|(name, v)| v.as_str().map(|v| (name.as_str(), v)))
     }
+
+    fn place(&self, tag: &str) -> String { tag.to_string() }
 }
 
 fn parse_height_mode(v: &str, tokens: &Tokens) -> Result<HeightMode, String> {
@@ -4636,6 +4643,30 @@ mod tests {
         let attached = [("the", false), ("x", true), ("'s and", false), ("y", true), ("'s", false)];
         assert_eq!(spaced_runs(&xml), attached, "XML");
         assert_eq!(spaced_runs(&tree), attached, "kit tree");
+    }
+
+    /// A span's attributes, whose place must not be asked for.
+    struct UnplacedSpan<'a>(&'a [(&'a str, &'a str)]);
+
+    impl Attrs for UnplacedSpan<'_> {
+        fn get(&self, key: &str) -> Option<&str> { self.0.iter().find(|(name, _)| *name == key).map(|(_, v)| *v) }
+
+        fn each(&self) -> impl Iterator<Item = (&str, &str)> where Self: Sized { self.0.iter().copied() }
+
+        fn place(&self, _: &str) -> String { panic!("the place of a span without bookmark-ref was asked for") }
+    }
+
+    #[test]
+    fn a_span_without_bookmark_ref_does_not_find_its_place() {
+        // Finding it reads the document up to the span, which for every span made parse grow with spans times size.
+        let span = UnplacedSpan(&[("bold", "true"), ("href", "#a")]);
+        assert!(span_reference(&span, "page {bookmark-page}").unwrap().is_none());
+    }
+
+    #[test]
+    fn a_reference_in_code_fails_with_its_line() {
+        let err = parse(&minimal("<code>\nlet x;\nsee <span bookmark-ref=\"a\">{page}</span>\n</code>")).unwrap_err();
+        assert!(err.starts_with("<span> at line 3, col 5: unknown token '{page}'"), "{err}");
     }
 
     #[test]
