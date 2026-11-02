@@ -914,6 +914,9 @@ mod linearize_render_tests;
 mod attachment_render_tests;
 
 #[cfg(test)]
+mod facturx_render_tests;
+
+#[cfg(test)]
 mod ocg_render_tests;
 
 #[cfg(test)]
