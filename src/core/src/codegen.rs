@@ -130,22 +130,22 @@ fn to_snake_case(s: &str) -> String {
     s.replace('-', "_")
 }
 
-/// Convert a kebab-case XML attribute name to PascalCase (C# style). The name of a PDF standard keeps its letters
-/// capitals, as the standard writes it: `pdfa` is `PdfA`, for PDF/A, `pdfua` is `PdfUa`, for PDF/UA, and `pdfx` is
-/// `PdfX`, for PDF/X.
+/// Convert a kebab-case XML attribute name to PascalCase (C# style). The name of a standard keeps its letters
+/// capitals, as the standard writes it: `pdfa` is `PdfA`, for PDF/A, `pdfua` is `PdfUa`, for PDF/UA, `pdfx` is
+/// `PdfX`, for PDF/X, and `facturx` is `FacturX`, for Factur-X, so `facturx-strict` is `FacturXStrict`.
 fn to_pascal_case(s: &str) -> String {
-    match s {
-        "pdfa" => return "PdfA".to_string(),
-        "pdfua" => return "PdfUa".to_string(),
-        "pdfx" => return "PdfX".to_string(),
-        _ => {}
-    }
     s.split('-')
-        .map(|part| {
-            let mut chars = part.chars();
-            match chars.next() {
-                None    => String::new(),
-                Some(c) => c.to_ascii_uppercase().to_string() + chars.as_str(),
+        .map(|part| match part {
+            "pdfa" => "PdfA".to_string(),
+            "pdfua" => "PdfUa".to_string(),
+            "pdfx" => "PdfX".to_string(),
+            "facturx" => "FacturX".to_string(),
+            _ => {
+                let mut chars = part.chars();
+                match chars.next() {
+                    None    => String::new(),
+                    Some(c) => c.to_ascii_uppercase().to_string() + chars.as_str(),
+                }
             }
         })
         .collect()
@@ -2041,6 +2041,20 @@ mod tests {
     }
 
     #[test]
+    fn facturx_strict_is_written_in_each_language_s_case() {
+        let xml = r#"<lpdf version="1"><document><output pdfa="3b" facturx-strict="true"/><section><layout><text>x</text></layout></section></document></lpdf>"#;
+        for (target, expected) in [
+            ("js", "output: { pdfa: '3b', facturxStrict: true }"),
+            ("dotnet", "Output = new() { PdfA = \"3b\", FacturXStrict = true }"),
+            ("php", "output: new DocumentOutput(pdfa: '3b', facturxStrict: true)"),
+            ("python", "output=DocumentOutput(pdfa='3b', facturx_strict=True)"),
+        ] {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            assert!(out.contains(expected), "{target}: {out}");
+        }
+    }
+
+    #[test]
     fn pdfa_is_written_in_each_language_s_case() {
         let xml = r#"<lpdf version="1"><document><output pdfa="2u"/><section><layout><text>x</text></layout></section></document></lpdf>"#;
         for (target, expected) in [
@@ -2803,6 +2817,7 @@ mod tests {
         assert_eq!(to_pascal_case("pdfa"),          "PdfA");
         assert_eq!(to_pascal_case("pdfua"),         "PdfUa");
         assert_eq!(to_pascal_case("pdfx"),          "PdfX");
+        assert_eq!(to_pascal_case("facturx-strict"), "FacturXStrict");
     }
 
     // ── PHP tests ─────────────────────────────────────────────────────────────
