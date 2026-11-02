@@ -51,6 +51,10 @@ pub(crate) fn layout_with_references(sections: &[SectionLayout]) -> Vec<RenderPa
     fill_references(&mut sections, &labels, &HashMap::new());
     let mut laid = layout::lay_out_document(&sections);
     for _ in 1..MAX_PASSES {
+        // A render past its memory cap stops at its next check, so another pass would only hold more.
+        if crate::memory::passed() {
+            break;
+        }
         let pages = bookmark_pages(&laid);
         if !fill_references(&mut sections, &labels, &pages) {
             break;

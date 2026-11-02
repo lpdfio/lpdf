@@ -38,6 +38,13 @@
 /// `"skip_encryption": true` and gets the file unencrypted. Without it, a document that asks for
 /// encryption and gets no owner password is an error, and so are passwords for a document that doesn't
 /// ask for it.
+///
+/// A render may allocate `max_memory_mb` megabytes, 1024 when the request leaves it out, from 1 to 4096; one
+/// that needs more is an error that names the cap (`memory.rs`). What the request parses into counts, its document,
+/// data and files, from when it is parsed:
+/// ```json
+/// { "max_memory_mb": 512 }
+/// ```
 
 // Include the pure-Rust core modules by path — no wasm-bindgen involved.
 #[path = "../../core/src/tokens.rs"]
@@ -98,21 +105,34 @@ mod references;
 mod attr_types;
 #[path = "../../core/src/schema_attrs.rs"]
 mod schema_attrs;
+#[path = "../../core/src/memory.rs"]
+mod memory;
+#[path = "../../core/src/nesting.rs"]
+mod nesting;
 
 use std::io::Read;
 use base64::Engine as _;
 
+/// Counts what each render allocates, for its memory cap.
+#[global_allocator]
+static ALLOCATOR: memory::Counting = memory::Counting;
+
 fn main() {
     let mut buf = String::new();
     std::io::stdin().read_to_string(&mut buf).unwrap_or(0);
-    print!("{}", dispatch(&buf));
+    print!("{}", dispatch(buf));
 }
 
-fn dispatch(input: &str) -> String {
-    let req: serde_json::Value = match serde_json::from_str(input) {
+fn dispatch(request: String) -> String {
+    // The render's cap counts from here, so the data the request carries counts toward it, as it does in the JS build,
+    // which parses it in the render.
+    let before = memory::mark();
+    let mut req: serde_json::Value = match serde_json::from_str(&request) {
         Ok(v) => v,
         Err(e) => return serde_json::json!({ "error": format!("request parse error: {e}") }).to_string(),
     };
+    // The text holds the input a second time, beside the parsed request, and is no longer needed.
+    drop(request);
 
     let method   = req["method"].as_str().unwrap_or("render");
     let key      = req["key"]   .as_str().unwrap_or("");
@@ -124,63 +144,62 @@ fn dispatch(input: &str) -> String {
         return license::report_json(key, now_unix);
     }
 
-    let body   = match req["input"].as_str() {
-        Some(s) => s,
-        None    => return r#"{"error":"request missing 'input' field"}"#.to_string(),
+    // Taken out of the request rather than copied, so the render holds one copy of each.
+    let method   = method.to_string();
+    let key      = key.to_string();
+    let body = match req.get_mut("input").map(serde_json::Value::take) {
+        Some(serde_json::Value::String(s)) => s,
+        _ => return r#"{"error":"request missing 'input' field"}"#.to_string(),
+    };
+    let data = req.get_mut("data").map(serde_json::Value::take).filter(|v| !v.is_null());
+
+    if method == "kit_to_xml" {
+        return match kit_to_xml::kit_to_xml(&body) {
+            Ok(xml) => serde_json::json!({ "xml": xml }).to_string(),
+            Err(e)  => serde_json::json!({ "error": e }).to_string(),
+        };
+    }
+
+    let cap = match render_cap(&req) {
+        Ok(cap) => cap,
+        Err(e)  => return serde_json::json!({ "error": e }).to_string(),
+    };
+    let _cap = memory::start_from(cap, before);
+    let resources = build_resources(&req);
+    let parsed = match method.as_str() {
+        "render_tree_pdf" | "render_tree" => parse::parse_tree_with(&body, &resources),
+        _ => parse::parse_with(&body, &resources),
+    };
+    // The document holds what it needs of the input.
+    drop(body);
+    let mut doc = match parsed {
+        Ok(d)  => d,
+        Err(e) => return serde_json::json!({ "error": e }).to_string(),
     };
 
-    match method {
+    match method.as_str() {
         "render_pdf" => {
-            if body.len() > 1_048_576 {
-                return r#"{"error":"input exceeds 1 MB limit"}"#.to_string();
-            }
-            let mut doc = match parse::parse_with(body, &build_resources(&req)) {
-                Ok(d)  => d,
-                Err(e) => return serde_json::json!({ "error": e }).to_string(),
-            };
-            // Optional data binding: the request may carry a "data" JSON object.
-            if let Some(data_val) = req.get("data").filter(|v| !v.is_null()) {
-                let json_str = data_val.to_string();
-                if let Err(e) = data::apply(&mut doc, &json_str) {
+            // Optional data binding: the request may carry a "data" JSON object, bound as it was parsed.
+            if let Some(data) = data {
+                if let Err(e) = data::apply(&mut doc, &data) {
                     return serde_json::json!({ "error": e }).to_string();
                 }
             }
-            render_pdf_doc(doc, key, now_unix, &req)
+            render_pdf_doc(doc, &key, now_unix, &req)
         }
-        "render_tree_pdf" => {
-            if body.len() > 4_194_304 {
-                return r#"{"error":"input exceeds 4 MB limit"}"#.to_string();
-            }
-            let doc = match parse::parse_tree_with(body, &build_resources(&req)) {
-                Ok(d)  => d,
-                Err(e) => return serde_json::json!({ "error": e }).to_string(),
-            };
-            render_pdf_doc(doc, key, now_unix, &req)
-        }
-        "render_tree" => {
-            if body.len() > 4_194_304 {
-                return r#"{"error":"input exceeds 4 MB limit"}"#.to_string();
-            }
-            match parse::parse_tree_with(body, &build_resources(&req)) {
-                Ok(d)  => render_doc(d, key, now_unix),
-                Err(e) => serde_json::json!({ "error": e }).to_string(),
-            }
-        }
-        "kit_to_xml" => {
-            match kit_to_xml::kit_to_xml(body) {
-                Ok(xml) => serde_json::json!({ "xml": xml }).to_string(),
-                Err(e)  => serde_json::json!({ "error": e }).to_string(),
-            }
-        }
-        _ => {
-            if body.len() > 1_048_576 {
-                return r#"{"error":"input exceeds 1 MB limit"}"#.to_string();
-            }
-            match parse::parse_with(body, &build_resources(&req)) {
-                Ok(d)  => render_doc(d, key, now_unix),
-                Err(e) => serde_json::json!({ "error": e }).to_string(),
-            }
-        }
+        "render_tree_pdf" => render_pdf_doc(doc, &key, now_unix, &req),
+        _ => render_doc(doc, &key, now_unix),
+    }
+}
+
+/// The memory cap of the request's render: its `max_memory_mb`, or the default.
+fn render_cap(req: &serde_json::Value) -> Result<u32, String> {
+    match req.get("max_memory_mb").filter(|v| !v.is_null()) {
+        None => memory::cap_mb(None),
+        Some(mb) => match mb.as_f64() {
+            Some(mb) => memory::cap_mb(Some(mb)),
+            None => Err(memory::cap_error(&mb.to_string())),
+        },
     }
 }
 
@@ -342,14 +361,20 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     }
 
     layout::set_font_widths(doc.font_widths.clone());
+    if let Err(e) = memory::check() {
+        return serde_json::json!({ "error": e }).to_string();
+    }
     let pages: Vec<render::RenderPage> = layout::layout_document(&lp);
+    if let Err(e) = memory::check() {
+        return serde_json::json!({ "error": e }).to_string();
+    }
 
     let status = license::check(license_key, now_unix);
 
     // An unlicensed status draws the attribution line on every page.
     match pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, &doc.gradients, created_on, status.is_licensed(), &doc.output, &files, press.as_ref()) {
         Ok(bytes) => {
-            let bytes = match shared::finish_file(bytes, encryption.as_ref(), doc.output.linearize) {
+            let bytes = match shared::finish_file(bytes, encryption.as_ref(), doc.output.linearize).and_then(|b| memory::check().map(|()| b)) {
                 Ok(b)  => b,
                 Err(e) => return serde_json::json!({ "error": e }).to_string(),
             };
@@ -459,7 +484,7 @@ mod tests {
         for (key, value) in fields.as_object().unwrap() {
             req[key] = value.clone();
         }
-        serde_json::from_str(&dispatch(&req.to_string())).unwrap()
+        serde_json::from_str(&dispatch(req.to_string())).unwrap()
     }
 
     fn pdf_text(answer: &serde_json::Value) -> String {
@@ -556,7 +581,7 @@ mod tests {
         let tree = r#"{"version":1,"type":"document","attrs":{"attachments":[{"name":"a.txt","relationship":"supplement"}]},
             "nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[{"type":"text","nodes":["x"]}]}]}]}"#;
         let req = serde_json::json!({ "method": "render_tree_pdf", "input": tree, "files": { "a.txt": "QQ==" } });
-        let answer: serde_json::Value = serde_json::from_str(&dispatch(&req.to_string())).unwrap();
+        let answer: serde_json::Value = serde_json::from_str(&dispatch(req.to_string())).unwrap();
         assert!(pdf_text(&answer).contains("/AFRelationship /Supplement"), "{answer}");
     }
 
@@ -581,9 +606,88 @@ mod tests {
             "nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[]}]}]}"#;
         for (method, input) in [("render_pdf", xml), ("render_tree_pdf", tree)] {
             let req = serde_json::json!({ "method": method, "input": input, "created_on": "31.10.2026" });
-            let answer: serde_json::Value = serde_json::from_str(&dispatch(&req.to_string())).unwrap();
+            let answer: serde_json::Value = serde_json::from_str(&dispatch(req.to_string())).unwrap();
             let error = answer["error"].as_str().unwrap_or_else(|| panic!("{method}: {answer}"));
             assert!(error.contains("created_on '31.10.2026'") && error.contains("2026-10-31T09:30:00Z"), "{method}: {error}");
+        }
+    }
+
+    /// What `method` answers for `input` with the rest of the request in `fields`.
+    fn answer(method: &str, input: &str, fields: serde_json::Value) -> serde_json::Value {
+        let mut req = serde_json::json!({ "method": method, "input": input });
+        for (key, value) in fields.as_object().unwrap() {
+            req[key] = value.clone();
+        }
+        serde_json::from_str(&dispatch(req.to_string())).unwrap()
+    }
+
+    /// A document of `pages` pages, each a column of texts.
+    fn pages_of_text(pages: usize) -> String {
+        let section = format!(r#"<section><layout><column>{}</column></layout></section>"#, "<text>Line of text</text>".repeat(40));
+        format!(r#"<lpdf version="1"><document>{}</document></lpdf>"#, section.repeat(pages))
+    }
+
+    #[test]
+    fn the_request_sets_the_memory_cap_of_its_render() {
+        let xml = pages_of_text(20);
+        for method in ["render_pdf", "render"] {
+            let error = answer(method, &xml, serde_json::json!({ "max_memory_mb": 1 }));
+            let error = error["error"].as_str().unwrap_or_else(|| panic!("{method}: {error}"));
+            assert!(error.starts_with("the render needs more memory than its cap of 1 MB"), "{method}: {error}");
+        }
+        assert!(answer("render_pdf", &xml, serde_json::json!({ "max_memory_mb": 64 }))["pdf"].is_string());
+        assert!(answer("render_pdf", &xml, serde_json::json!({}))["pdf"].is_string(), "1024 MB when left out");
+    }
+
+    #[test]
+    fn the_data_of_the_request_counts_toward_the_cap() {
+        let xml = r#"<lpdf version="1"><document><section><layout><text data-value="title">x</text></layout></section></document></lpdf>"#;
+        // 2 MB of text: the request's text is dropped before the cap starts, which must not hide it.
+        let rows: Vec<String> = (0..10_000).map(|i| format!("{} {i}", "Some text that is bound.".repeat(8))).collect();
+        let data = serde_json::json!({ "title": "Report", "rows": rows });
+        let error = answer("render_pdf", xml, serde_json::json!({ "data": data, "max_memory_mb": 1 }));
+        assert!(error["error"].as_str().unwrap_or_default().contains("its cap of 1 MB"), "{error}");
+        assert!(answer("render_pdf", xml, serde_json::json!({ "data": data, "max_memory_mb": 64 }))["pdf"].is_string());
+    }
+
+    #[test]
+    fn a_memory_cap_that_is_not_a_whole_number_of_megabytes_from_1_to_4096_is_an_error() {
+        for (mb, shown) in [(serde_json::json!(0), "0"), (serde_json::json!(1.5), "1.5"), (serde_json::json!(4097), "4097"), (serde_json::json!("512"), "\"512\"")] {
+            let answer = answer("render_pdf", &with_output(""), serde_json::json!({ "max_memory_mb": mb }));
+            let error = answer["error"].as_str().unwrap_or_else(|| panic!("{answer}"));
+            assert!(error.contains("from 1 to 4096") && error.contains(&format!("not {shown}:")), "{error}");
+        }
+    }
+
+    #[test]
+    fn inputs_past_the_sizes_once_refused_render() {
+        let padding = "x".repeat(5 * 1_048_576);
+        let xml = format!(r#"<lpdf version="1"><!-- {padding} --><document><section><layout><text>Big</text></layout></section></document></lpdf>"#);
+        let tree = format!(
+            r#"{{"version":1,"type":"document","attrs":{{"meta":{{"subject":"{padding}"}}}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[{{"type":"layout","attrs":{{}},"nodes":[{{"type":"text","attrs":{{}},"nodes":["Big"]}}]}}]}}]}}"#
+        );
+        assert!(answer("render_pdf", &xml, serde_json::json!({}))["pdf"].is_string());
+        assert!(answer("render_tree_pdf", &tree, serde_json::json!({}))["pdf"].is_string());
+    }
+
+    #[test]
+    fn the_data_of_the_request_is_bound_as_it_was_parsed() {
+        let bound = r#"<lpdf version="1"><document><section><layout><text data-value="name">x</text></layout></section></document></lpdf>"#;
+        let literal = r#"<lpdf version="1"><document><section><layout><text>Ada</text></layout></section></document></lpdf>"#;
+        let with_data = answer("render_pdf", bound, serde_json::json!({ "data": { "name": "Ada" } }));
+        assert_eq!(with_data["pdf"], answer("render_pdf", literal, serde_json::json!({}))["pdf"]);
+        let without = answer("render_pdf", bound, serde_json::json!({ "data": null }));
+        assert!(pdf_text(&without).starts_with("%PDF-"), "null data renders the inline content");
+    }
+
+    #[test]
+    fn a_document_nests_100_levels_at_most_on_both_methods() {
+        assert!(answer("render_pdf", &nesting::nested_xml(100), serde_json::json!({}))["pdf"].is_string());
+        assert!(answer("render_tree_pdf", &nesting::nested_tree(100), serde_json::json!({}))["pdf"].is_string());
+        for (method, input) in [("render_pdf", nesting::nested_xml(101)), ("render_tree_pdf", nesting::nested_tree(101))] {
+            let answer = answer(method, &input, serde_json::json!({}));
+            let error = answer["error"].as_str().unwrap_or_else(|| panic!("{method}: {answer}"));
+            assert!(error.contains("is nested 101 levels deep, past the limit of 100"), "{method}: {error}");
         }
     }
 
@@ -591,7 +695,7 @@ mod tests {
     fn the_tree_path_reads_output_too() {
         let tree = r#"{"version":1,"type":"document","attrs":{"output":{"encrypt":"rc4-128"}},"nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[]}]}]}"#;
         let req = serde_json::json!({ "method": "render_tree_pdf", "input": tree });
-        let answer: serde_json::Value = serde_json::from_str(&dispatch(&req.to_string())).unwrap();
+        let answer: serde_json::Value = serde_json::from_str(&dispatch(req.to_string())).unwrap();
         assert!(answer["error"].as_str().unwrap().contains("no owner password"), "{answer}");
     }
 }

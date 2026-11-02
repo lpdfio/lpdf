@@ -11,9 +11,11 @@ mod layout;
 mod linearize;
 mod lists;
 pub mod markdown;
+mod memory;
 // Public for native consumers — the CLI's `license` command reports a key's standing from the
 // typed result rather than parsing the JSON one back.
 pub mod license;
+mod nesting;
 mod objects;
 mod page_numbers;
 mod page_scope;
@@ -36,6 +38,12 @@ use wasm_bindgen::prelude::*;
 
 pub use encrypt::RenderEncryption;
 
+// The wasm builds count what each render allocates, for its memory cap; so do the tests, which check the cap. A
+// native build that links the core, such as the command line or the benchmarks, keeps its own allocator.
+#[cfg(any(target_arch = "wasm32", test))]
+#[global_allocator]
+static ALLOCATOR: memory::Counting = memory::Counting;
+
 #[wasm_bindgen]
 pub struct LpdfEngine {
     license_key: String,
@@ -57,6 +65,8 @@ pub struct LpdfEngine {
     now_unix:    i64,
     /// The text of the files that a `<markdown-styles src>` names, by `src`; populated via `load_markdown_styles`.
     markdown_styles: HashMap<String, String>,
+    /// The memory a render may allocate, in megabytes; set via `set_max_memory_mb`.
+    max_memory_mb: u32,
 }
 
 #[wasm_bindgen]
@@ -73,7 +83,18 @@ impl LpdfEngine {
             created_on:  None,
             now_unix:    0,
             markdown_styles: HashMap::new(),
+            max_memory_mb: memory::DEFAULT_CAP_MB,
         }
+    }
+
+    /// Set the memory a render may allocate, in megabytes: 1024 when it isn't set. A render that needs more stops
+    /// with an error that names the cap. What the engine holds before the render, such as its loaded fonts, doesn't
+    /// count.
+    ///
+    /// Returns an error when `mb` is 0 or above 4096, the most 32-bit WebAssembly addresses.
+    pub fn set_max_memory_mb(&mut self, mb: u32) -> Result<(), JsValue> {
+        self.max_memory_mb = memory::cap_mb(Some(f64::from(mb))).map_err(|e| JsValue::from_str(&e))?;
+        Ok(())
     }
 
     /// Register raw font bytes (TTF/OTF) for a custom font name.
@@ -204,10 +225,7 @@ impl LpdfEngine {
     }
 
     pub fn render(&self, xml: &str) -> String {
-        if xml.len() > 1_048_576 {
-            return r#"{"error":"input exceeds 1 MB limit"}"#.to_string();
-        }
-
+        let _cap = memory::start(self.max_memory_mb);
         let doc = match parse::parse_with(xml, &self.resources()) {
             Ok(d) => d,
             Err(e) => {
@@ -219,10 +237,7 @@ impl LpdfEngine {
     }
 
     pub fn render_tree(&self, json: &str) -> String {
-        if json.len() > 4_194_304 {
-            return r#"{"error":"input exceeds 4 MB limit"}"#.to_string();
-        }
-
+        let _cap = memory::start(self.max_memory_mb);
         let doc = match parse::parse_tree_with(json, &self.resources()) {
             Ok(d) => d,
             Err(e) => {
@@ -240,10 +255,7 @@ impl LpdfEngine {
     /// error that is not a JS value, which the command line and the tests can read. `encryption` is what the render
     /// call says about the encryption the document's `<output>` asks for.
     pub fn render_xml(&self, xml: &str, json_data: Option<&str>, encryption: &RenderEncryption) -> Result<Vec<u8>, String> {
-        if xml.len() > 1_048_576 {
-            return Err("input exceeds 1 MB limit".to_string());
-        }
-
+        let _cap = memory::start(self.max_memory_mb);
         let mut doc = parse::parse_with(xml, &self.resources())?;
         // Checked before the layout, so a missing or stray password, a missing date or one that is not a date, a press
         // profile that is missing or not one, or a file with no bytes fails without the work of a render.
@@ -254,7 +266,7 @@ impl LpdfEngine {
         let files = attachments::resolve(&attached, &self.files)?;
 
         if let Some(json) = json_data {
-            data::apply(&mut doc, json)?;
+            data::apply(&mut doc, &data::parse(json)?)?;
         }
 
         // Confirm every image declared in <assets> has bytes in the registry.
@@ -279,8 +291,10 @@ impl LpdfEngine {
 
         layout::set_font_widths(self.font_widths.clone());
 
+        memory::check()?;
         let pages: Vec<render::RenderPage> =
             layout::layout_document(&lp);
+        memory::check()?;
 
         let status = license::check(&self.license_key, self.now_unix);
         // An unlicensed status draws the attribution line on every page.
@@ -295,18 +309,16 @@ impl LpdfEngine {
             status.is_licensed(), &doc.output, &files, press.as_ref(),
         )?;
 
-        shared::finish_file(bytes, config.as_ref(), doc.output.linearize)
+        let file = shared::finish_file(bytes, config.as_ref(), doc.output.linearize)?;
+        memory::check()?;
+        Ok(file)
     }
 
     /// Render the JSON kit tree `json` to PDF bytes with what is loaded on this engine: `render_tree_pdf`, with an
     /// error that is not a JS value, which the tests can read. `encryption` is what the render call says about the
     /// encryption the document's `output` asks for.
     pub fn render_json(&self, json: &str, encryption: &RenderEncryption) -> Result<Vec<u8>, String> {
-        if json.len() > 4_194_304 {
-            return Err("input exceeds 4 MB limit".to_string());
-        }
-
-        // ── Kit mode ──────────────────────────────────────────────────────────
+        let _cap = memory::start(self.max_memory_mb);
         let mut doc = parse::parse_tree_with(json, &self.resources())?;
 
         // Checked before the layout, so a missing or stray password, a missing date or one that is not a date, a press
@@ -342,8 +354,10 @@ impl LpdfEngine {
         merged.extend(std::mem::take(&mut doc.font_widths));
         layout::set_font_widths(merged);
 
+        memory::check()?;
         let pages: Vec<render::RenderPage> =
             layout::layout_document(&lp);
+        memory::check()?;
 
         let status = license::check(&self.license_key, self.now_unix);
         // An unlicensed status draws the attribution line on every page.
@@ -358,7 +372,9 @@ impl LpdfEngine {
             status.is_licensed(), &doc.output, &files, press.as_ref(),
         )?;
 
-        shared::finish_file(bytes, config.as_ref(), doc.output.linearize)
+        let file = shared::finish_file(bytes, config.as_ref(), doc.output.linearize)?;
+        memory::check()?;
+        Ok(file)
     }
 
     /// What the caller loaded for the `src` attributes of the document, for the parser.
@@ -396,7 +412,7 @@ impl LpdfEngine {
         // No file is loaded here, so a document that carries files is an error that says how to load them.
         attachments::resolve(&doc.attachments, &attachments::FileRegistry::new())?;
         if let Some(json) = json_data {
-            data::apply(&mut doc, json)?;
+            data::apply(&mut doc, &data::parse(json)?)?;
         }
         let lp = doc.section_layouts();
         pdfua::check(doc.output.pdfua, &doc.meta, &lp)?;
@@ -796,7 +812,7 @@ pub fn bench_render_doc_with_images(mut doc: BenchDoc, images: &[(&str, &[u8])])
 /// Apply data binding to a pre-parsed doc. Used by staged `data/*` benchmarks.
 pub fn bench_data_apply(doc: BenchDoc, json: &str) -> Result<BenchDoc, String> {
     let mut inner = doc.0;
-    data::apply(&mut inner, json)?;
+    data::apply(&mut inner, &data::parse(json)?)?;
     Ok(BenchDoc(inner))
 }
 
@@ -1007,15 +1023,6 @@ mod tests {
     }
 
     #[test]
-    fn input_too_large_returns_error() {
-        let engine = LpdfEngine::new("key");
-        let big = "x".repeat(1_048_577);
-        let result: serde_json::Value =
-            serde_json::from_str(&engine.render(&big)).unwrap();
-        assert_eq!(result["error"], "input exceeds 1 MB limit");
-    }
-
-    #[test]
     fn invalid_xml_returns_error() {
         let engine = LpdfEngine::new("key");
         let result: serde_json::Value =
@@ -1083,14 +1090,78 @@ mod tests {
         assert!(result.is_err());
     }
 
+    // ── Size, memory and depth ────────────────────────────────────────────────
+
     #[test]
-    fn render_pdf_size_limit() {
-        // render_pdf's 1 MB guard is also enforced by render(); test via the
-        // JSON path which works on non-WASM targets (JsValue panics otherwise).
+    fn renders_xml_and_trees_past_the_sizes_once_refused() {
+        // A comment and a subject of 5 MB: past the 1 MB of XML and the 4 MB of a tree once refused, and cheap to lay out.
+        let padding = "x".repeat(5 * 1_048_576);
+        let xml = format!(
+            r#"<lpdf version="1"><!-- {padding} --><document><section><layout><text>Big</text></layout></section></document></lpdf>"#
+        );
+        let tree = format!(
+            r#"{{"version":1,"type":"document","attrs":{{"meta":{{"subject":"{padding}"}}}},"nodes":[{{"type":"section","attrs":{{}},"nodes":[{{"type":"layout","attrs":{{}},"nodes":[{{"type":"text","attrs":{{}},"nodes":["Big"]}}]}}]}}]}}"#
+        );
         let engine = LpdfEngine::new("");
-        let big = "x".repeat(1_048_577);
-        let result: serde_json::Value = serde_json::from_str(&engine.render(&big)).unwrap();
-        assert_eq!(result["error"], "input exceeds 1 MB limit");
+        let plain = RenderEncryption::skipping(false);
+        assert!(engine.render_xml(&xml, None, &plain).unwrap().starts_with(b"%PDF-"));
+        assert!(engine.render_json(&tree, &plain).unwrap().starts_with(b"%PDF-"));
+    }
+
+    /// A document of `pages` pages, each a column of texts.
+    fn pages_of_text(pages: usize) -> String {
+        let section = format!(r#"<section><layout><column>{}</column></layout></section>"#, "<text>Line of text</text>".repeat(40));
+        format!(r#"<lpdf version="1"><document>{}</document></lpdf>"#, section.repeat(pages))
+    }
+
+    #[test]
+    fn a_render_past_its_memory_cap_stops_with_the_caps_error() {
+        let mut engine = LpdfEngine::new("");
+        engine.set_max_memory_mb(1).unwrap();
+        let plain = RenderEncryption::skipping(false);
+        let xml = pages_of_text(20);
+        let error = engine.render_xml(&xml, None, &plain).unwrap_err();
+        assert!(error.starts_with("the render needs more memory than its cap of 1 MB"), "{error}");
+        let tree: serde_json::Value = serde_json::from_str(&engine.render(&xml)).unwrap();
+        assert!(tree["error"].as_str().unwrap().contains("its cap of 1 MB"), "{tree}");
+    }
+
+    #[test]
+    fn the_cap_is_counted_for_each_render_on_its_own() {
+        let mut engine = LpdfEngine::new("");
+        let plain = RenderEncryption::skipping(false);
+        let xml = pages_of_text(20);
+        engine.set_max_memory_mb(1).unwrap();
+        assert!(engine.render_xml(&xml, None, &plain).is_err());
+        engine.set_max_memory_mb(64).unwrap();
+        for _ in 0..3 {
+            assert!(engine.render_xml(&xml, None, &plain).unwrap().starts_with(b"%PDF-"));
+        }
+    }
+
+    #[test]
+    fn a_big_data_json_counts_toward_the_cap() {
+        let mut engine = LpdfEngine::new("");
+        engine.set_max_memory_mb(1).unwrap();
+        let xml = minimal(r#"<text data-source="rows" data-value="name">x</text>"#);
+        let rows: Vec<String> = (0..20_000).map(|i| format!(r#"{{"name":"row {i}"}}"#)).collect();
+        let data = format!(r#"{{"rows":[{}]}}"#, rows.join(","));
+        let error = engine.render_xml(&xml, Some(&data), &RenderEncryption::skipping(false)).unwrap_err();
+        assert!(error.contains("its cap of 1 MB"), "{error}");
+    }
+
+    #[test]
+    fn a_document_nested_as_deep_as_the_limit_renders_and_one_deeper_fails() {
+        let engine = LpdfEngine::new("");
+        let plain = RenderEncryption::skipping(false);
+        assert!(engine.render_xml(&nesting::nested_xml(100), None, &plain).unwrap().starts_with(b"%PDF-"));
+        assert!(engine.render_json(&nesting::nested_tree(100), &plain).unwrap().starts_with(b"%PDF-"));
+        for error in [
+            engine.render_xml(&nesting::nested_xml(101), None, &plain).unwrap_err(),
+            engine.render_json(&nesting::nested_tree(101), &plain).unwrap_err(),
+        ] {
+            assert!(error.contains("is nested 101 levels deep, past the limit of 100"), "{error}");
+        }
     }
 
     #[test]

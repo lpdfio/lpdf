@@ -10,7 +10,8 @@ license-file = "../core/LICENSE"
 name = "lpdf-wasi"
 
 [dependencies]
-serde_json = "1"
+# unbounded_depth: a document tree nests deeper than serde_json's own limit, and `nesting.rs` bounds it instead
+serde_json = { version = "1", features = ["unbounded_depth"] }
 serde     = { version = "1", features = ["derive"] }
 roxmltree = "0.20"
 # PDF rendering — same versions as core/Cargo.toml

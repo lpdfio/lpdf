@@ -36,7 +36,8 @@ pub(crate) fn layout_with_toc(sections: &[SectionLayout], toc_index: usize, opti
 
     let (mut toc, mut toc_filled) = toc_pass(sections, toc_index, options, &laid, &counts);
     for _ in 1..MAX_PASSES {
-        if toc_filled.page_count() == counts[toc_index] {
+        // A render past its memory cap stops at its next check, so another pass would only hold more.
+        if toc_filled.page_count() == counts[toc_index] || crate::memory::passed() {
             break;
         }
         counts[toc_index] = toc_filled.page_count();
@@ -320,7 +321,7 @@ mod tests {
                </layout></section>
                <section><layout><bookmark label="Alpha"/><text data-value="body">Body</text></layout></section>"#,
         )).unwrap();
-        data::apply(&mut doc, r#"{"title": "Report", "body": "Text", "$toc": ["ignored"]}"#).unwrap();
+        data::apply(&mut doc, &crate::data::parse(r#"{"title": "Report", "body": "Text", "$toc": ["ignored"]}"#).unwrap()).unwrap();
         let pages = layout_document(&doc.section_layouts());
         assert_eq!(texts(&pages), ["Report", "Alpha", "Text"]);
     }

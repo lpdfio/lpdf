@@ -2247,7 +2247,7 @@ mod tests {
         let xml = r#"<lpdf version="1"><document><section><markdown>
             <markdown-content data-value="body"><![CDATA[# Fallback]]></markdown-content></markdown></section></document></lpdf>"#;
         let mut doc = parse(xml).unwrap();
-        crate::data::apply(&mut doc, r##"{"body": "# From data\n\ntext"}"##).unwrap();
+        crate::data::apply(&mut doc, &crate::data::parse(r##"{"body": "# From data\n\ntext"}"##).unwrap()).unwrap();
         let nodes = doc.section_layouts().remove(0).children;
         assert_eq!(nodes.iter().map(words).collect::<Vec<_>>(), ["From data", "text"]);
         assert_eq!(nodes[0].bookmarks[0].id, "from-data");
@@ -2255,7 +2255,7 @@ mod tests {
         assert_eq!(parse(xml).unwrap().section_layouts()[0].children.iter().map(words).collect::<Vec<_>>(), ["Fallback"]);
 
         let mut doc = parse(xml).unwrap();
-        crate::data::apply(&mut doc, r#"{"other": 1}"#).unwrap();
+        crate::data::apply(&mut doc, &crate::data::parse(r#"{"other": 1}"#).unwrap()).unwrap();
         assert!(doc.section_layouts()[0].children.is_empty());
     }
 
@@ -2264,7 +2264,7 @@ mod tests {
         let xml = r#"<lpdf version="1"><document><section><markdown>
             <markdown-content data-value="body"/></markdown></section></document></lpdf>"#;
         let mut doc = parse(xml).unwrap();
-        let err = crate::data::apply(&mut doc, r#"{"body": 3}"#).unwrap_err();
+        let err = crate::data::apply(&mut doc, &crate::data::parse(r#"{"body": 3}"#).unwrap()).unwrap_err();
         assert!(err.contains("data-value=\"body\"") && err.contains("a number"), "{err}");
     }
 
@@ -2273,7 +2273,7 @@ mod tests {
         let xml = r#"<lpdf version="1"><document><section><markdown>
             <markdown-content data-value="body"/></markdown></section></document></lpdf>"#;
         let mut doc = parse(xml).unwrap();
-        let err = crate::data::apply(&mut doc, r#"{"body": "ok\n\n![x](missing.png)"}"#).unwrap_err();
+        let err = crate::data::apply(&mut doc, &crate::data::parse(r#"{"body": "ok\n\n![x](missing.png)"}"#).unwrap()).unwrap_err();
         assert!(err.contains("markdown line 3") && err.contains("neither"), "{err}");
     }
 
@@ -2368,7 +2368,7 @@ mod tests {
     #[test]
     fn the_default_template_renders_a_file_from_the_data_it_is_given() {
         let mut doc = parse(default_template()).unwrap();
-        crate::data::apply(&mut doc, r##"{"markdown": "# Hello\n\nworld"}"##).unwrap();
+        crate::data::apply(&mut doc, &crate::data::parse(r##"{"markdown": "# Hello\n\nworld"}"##).unwrap()).unwrap();
         let layout = doc.section_layouts().remove(0);
         assert_eq!(layout.children.iter().map(words).collect::<Vec<_>>(), ["Hello", "world"]);
         assert_eq!(layout.margin, [54.0; 4]);
@@ -2437,7 +2437,7 @@ mod tests {
         let file = "# T\n\n![a chart](img/chart.png)\n";
         let template = declare_images(default_template(), &file_images(file)).unwrap();
         let mut doc = parse(&template).unwrap();
-        crate::data::apply(&mut doc, &file_data(file)).unwrap();
+        crate::data::apply(&mut doc, &crate::data::parse(&file_data(file)).unwrap()).unwrap();
         let kinds: Vec<NodeKind> = doc.section_layouts().remove(0).children.iter().map(|n| n.kind.clone()).collect();
         assert_eq!(kinds, [NodeKind::Text, NodeKind::Img]);
     }

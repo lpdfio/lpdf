@@ -495,8 +495,7 @@ fn render_layout_node(node: &Value, depth: usize) -> String {
 /// lpdf XML string. The output is well-formed and passes through `render_pdf`
 /// without modification.
 pub fn kit_to_xml(json: &str) -> Result<String, String> {
-    let mut root: Value = serde_json::from_str(json)
-        .map_err(|e| format!("JSON parse error: {e}"))?;
+    let mut root = crate::nesting::parse_tree_json(json)?;
 
     if root.get("version").and_then(|v| v.as_u64()) != Some(1) {
         return Err("kit JSON must have version=1".into());
@@ -1939,5 +1938,15 @@ mod tests {
             {"type":"markdown","attrs":{},"nodes":[{"type":"markdown-styles","attrs":{"src":"s.xml"}},{"type":"markdown-content","attrs":{},"nodes":[]}]}]}]}"#;
         let xml = kit_to_xml(kit).unwrap();
         assert!(xml.contains(r#"<markdown-styles src="s.xml"/>"#) && xml.contains("<![CDATA[]]>"), "{xml}");
+    }
+
+    #[test]
+    fn a_tree_nested_as_deep_as_the_limit_is_written_and_one_deeper_is_refused() {
+        let xml = kit_to_xml(&crate::nesting::nested_tree(100)).unwrap();
+        assert_eq!(xml.matches("<column>").count(), 95, "{xml}");
+        crate::parse::parse(&xml).expect("the XML of a tree within the limit is within it too");
+
+        let error = kit_to_xml(&crate::nesting::nested_tree(101)).unwrap_err();
+        assert!(error.contains("is nested 101 levels deep, past the limit of 100"), "{error}");
     }
 }

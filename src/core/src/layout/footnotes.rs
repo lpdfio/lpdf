@@ -145,7 +145,9 @@ pub(super) fn split_flow<'a>(
     let mut pending = Pending::new(flow);
     let mut first = true;
     std::iter::from_fn(move || {
-        if pending.is_empty() && !first {
+        // A render past its memory cap stops at its next check, which comes after the layout: the pages after the
+        // one that passed it are left out, rather than laid out to be thrown away.
+        if !first && (pending.is_empty() || crate::memory::passed()) {
             return None;
         }
         let at = start.map(|start| start.on_page(first));
