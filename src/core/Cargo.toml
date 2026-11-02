@@ -37,6 +37,12 @@ cbc = { version = "0.1", features = ["alloc"] }
 sha2 = "0.10"
 # Markdown parser for <markdown> — pure Rust, no I/O, builds for WASM and WASI with default features off
 pulldown-cmark = { version = "0.13", default-features = false }
+# PDF reader for `stamp` — default features off drop rayon and chrono
+lopdf = { version = "0.46", default-features = false }
+
+# The JS build has no OS random source: lopdf's getrandom takes the browser's and Node's `crypto.getRandomValues`
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+lopdf = { version = "0.46", default-features = false, features = ["wasm_js"] }
 
 [build-dependencies]
 sha2 = "0.10"

@@ -168,7 +168,7 @@ fn png_dims(bytes: &[u8]) -> Option<(u32, u32)> {
 }
 
 /// Collect IDAT payload bytes from a PNG file (all chunks concatenated).
-fn png_idat_bytes(bytes: &[u8]) -> Vec<u8> {
+pub(crate) fn png_idat_bytes(bytes: &[u8]) -> Vec<u8> {
     let mut out = Vec::new();
     let mut pos = 8usize; // skip 8-byte PNG signature
     while pos + 12 <= bytes.len() {
@@ -204,14 +204,19 @@ fn paeth_predictor(a: u8, b: u8, c: u8) -> u8 {
 /// `channels` is bytes per pixel (e.g. 4 for RGBA, 3 for RGB).
 /// Returns the flat defiltered pixel buffer, or `None` on malformed input.
 fn unfilter_png(width: u32, height: u32, channels: usize, raw: &[u8]) -> Option<Vec<u8>> {
-    let stride  = width as usize * channels;
+    unfilter_png_rows(width as usize * channels, channels, height as usize, raw)
+}
+
+/// Reconstruct `rows` PNG scanlines of `stride` bytes each, `channels` bytes to a pixel (1 for a depth below 8
+/// bits, whose pixels share bytes). Returns the flat defiltered rows, or `None` on malformed input.
+pub(crate) fn unfilter_png_rows(stride: usize, channels: usize, rows: usize, raw: &[u8]) -> Option<Vec<u8>> {
     let row_len = stride + 1; // +1 for the leading filter byte
-    if raw.len() < row_len * height as usize {
+    if raw.len() < row_len.checked_mul(rows)? {
         return None;
     }
-    let mut out  = vec![0u8; stride * height as usize];
+    let mut out  = vec![0u8; stride * rows];
     let mut prev = vec![0u8; stride];
-    for y in 0..height as usize {
+    for y in 0..rows {
         let filter = raw[y * row_len];
         let src    = &raw[y * row_len + 1..y * row_len + 1 + stride];
         let dst    = &mut out[y * stride..(y + 1) * stride];
@@ -289,7 +294,7 @@ fn decode_rgba_png(bytes: &[u8]) -> Option<(u32, u32, Vec<u8>, Vec<u8>)> {
 
 /// Return the data bytes of the first PNG chunk with the given 4-byte tag,
 /// or `None` if the chunk is absent or the file is truncated.
-fn png_chunk<'a>(bytes: &'a [u8], tag: &[u8; 4]) -> Option<&'a [u8]> {
+pub(crate) fn png_chunk<'a>(bytes: &'a [u8], tag: &[u8; 4]) -> Option<&'a [u8]> {
     let mut pos = 8usize; // skip 8-byte PNG signature
     while pos + 12 <= bytes.len() {
         let len = u32::from_be_bytes([
