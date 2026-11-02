@@ -419,10 +419,23 @@ pub(crate) fn lay_out_document(sections: &[SectionLayout]) -> LaidDocument {
     LaidDocument { pages, numbers, counts }
 }
 
+/// Whether `page`, finished with the numbers `before`, draws anything else with `after`: a header, a footer or a
+/// layer that shows `{page}` or `{pages}`, or one on odd or even pages once its first number is on the other side.
+pub(crate) fn renumbering_changes(page: &SectionLayout, before: &SectionNumbers, after: &SectionNumbers) -> bool {
+    before != after && (shows_page_numbers(page) || (before.first % 2 != after.first % 2 && shows_by_side(page)))
+}
+
 /// Whether the header, the footer or a layer of `page` shows `{page}` or `{pages}`.
-pub(crate) fn shows_page_numbers(page: &SectionLayout) -> bool {
+fn shows_page_numbers(page: &SectionLayout) -> bool {
     page.children.iter().filter(|node| node.page_scope.is_some()).any(has_page_tokens)
         || page.underlays.iter().chain(&page.overlays).any(canvas::CanvasLayer::shows_page_numbers)
+}
+
+/// Whether a header, a footer or a layer of `page` shows on odd or on even pages only.
+fn shows_by_side(page: &SectionLayout) -> bool {
+    let by_side = |scope: &Option<PageScope>| matches!(scope, Some(PageScope::Odd | PageScope::Even));
+    page.children.iter().any(|node| by_side(&node.page_scope))
+        || page.underlays.iter().chain(&page.overlays).any(|layer| by_side(&layer.page))
 }
 
 /// Whether a text of `node` or below it shows `{page}` or `{pages}`.
