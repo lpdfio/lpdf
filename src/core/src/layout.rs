@@ -1266,7 +1266,18 @@ fn fill_room(
             // splits never is: its tree goes before its parts are measured.
             let tree = tree.filter(|_| page.is_empty() && !splittable(&node));
             let target = remaining.max(0.0);
-            match split_node_at(&node, avail_w, target, page_h) {
+            let mut outcome = split_node_at(&node, avail_w, target, page_h);
+            // A page that took a lead's window whole, cut nowhere, though the window leaves children behind, would
+            // take all of the lead's rest whole (`Reached::cuts_leads`): the rest is split whole.
+            let lead_taken_whole = match (&rest, &outcome) {
+                (Some((_, reached)), SplitOutcome::First(_, left)) => !reached.cuts_leads(left.first()),
+                _ => false,
+            };
+            if lead_taken_whole && let Some((whole, _)) = rest.take() {
+                node = whole.into_node();
+                outcome = split_node_at(&node, avail_w, target, page_h);
+            }
+            match outcome {
                 // A window is taller than any room it is split in, so the split never takes it whole. Should it,
                 // the rest is split whole.
                 SplitOutcome::Atomic if rest.is_some() => {
@@ -1659,15 +1670,7 @@ fn row_lines(node: &Node, inner_w: f32, avail_h: f32) -> Vec<RowLine> {
     bounds
         .into_iter()
         .map(|(start, end)| {
-            let line = &widths[start..end];
-            let fixed_w: f32 = line.iter().flatten().sum();
-            let n_fill = line.iter().filter(|w| w.is_none()).count();
-            let fill_w = if n_fill > 0 {
-                (inner_w - fixed_w - gap * (end - start - 1) as f32).max(0.0) / n_fill as f32
-            } else {
-                0.0
-            };
-            let widths: Vec<f32> = line.iter().map(|w| w.unwrap_or(fill_w)).collect();
+            let widths = line_widths(&widths[start..end], inner_w, gap);
             let height = node.children[start..end]
                 .iter()
                 .zip(&widths)
@@ -1676,6 +1679,19 @@ fn row_lines(node: &Node, inner_w: f32, avail_h: f32) -> Vec<RowLine> {
             RowLine { start, end, widths, height }
         })
         .collect()
+}
+
+/// The width a line `inner_w` wide gives each of its children, from the width the row gives each (`row_child_w`):
+/// its own, or a share of what the others leave for a fill child.
+fn line_widths(line: &[Option<f32>], inner_w: f32, gap: f32) -> Vec<f32> {
+    let fixed_w: f32 = line.iter().flatten().sum();
+    let n_fill = line.iter().filter(|w| w.is_none()).count();
+    let fill_w = if n_fill > 0 {
+        (inner_w - fixed_w - gap * (line.len() - 1) as f32).max(0.0) / n_fill as f32
+    } else {
+        0.0
+    };
+    line.iter().map(|w| w.unwrap_or(fill_w)).collect()
 }
 
 /// Splits a row between its lines, or through the line the page edge falls in. The lines above the edge stay on
