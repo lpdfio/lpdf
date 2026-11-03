@@ -1195,6 +1195,23 @@ mod tests {
     }
 
     #[test]
+    fn markdown_that_nests_too_deep_fails_with_an_error_in_the_engine() {
+        let engine = LpdfEngine::new("");
+        let plain = RenderEncryption::skipping(false);
+        let xml = |markdown: &str| {
+            format!(
+                r#"<lpdf version="1"><document><section><markdown><markdown-content><![CDATA[{markdown}]]></markdown-content></markdown></section></document></lpdf>"#
+            )
+        };
+        let lists: Vec<String> = (0..500).map(|i| format!("{}- item", "  ".repeat(i))).collect();
+        for markdown in ["> ".repeat(2000) + "deep", lists.join("\n"), "~~a ".repeat(2000) + "deep" + &" a~~".repeat(2000)] {
+            let error = engine.render_xml(&xml(&markdown), None, &plain).unwrap_err();
+            assert!(error.contains(" nested too deep: "), "{error}");
+        }
+        assert!(engine.render_xml(&xml("> a\n>\n> - b"), None, &plain).unwrap().starts_with(b"%PDF-"));
+    }
+
+    #[test]
     fn bench_layout_and_write_make_the_pdf_of_bench_render_doc() {
         let xml = include_str!("../../../test/fixtures/bench_xs.xml");
         let whole = bench_render_doc(bench_parse(xml).unwrap()).unwrap();

@@ -28,8 +28,12 @@ fn too_deep(kind: &str, depth: usize) -> String {
     )
 }
 
-/// Refuse a parsed XML document whose elements nest deeper than `MAX_DEPTH`, naming the first element past it.
-pub(crate) fn check_xml(doc: &roxmltree::Document) -> Result<(), String> {
+/// The first element of `doc`, in document order, that is more than `limit` levels deep, the root element being level
+/// 1. It is always at level `limit + 1`: an element is one level deeper than its parent.
+pub(crate) fn first_past<'a, 'input>(
+    doc: &'a roxmltree::Document<'input>,
+    limit: usize,
+) -> Option<roxmltree::Node<'a, 'input>> {
     // The elements open around the one being read, in document order: each one's parent is among them.
     let mut open: Vec<roxmltree::NodeId> = Vec::new();
     for node in doc.descendants().filter(roxmltree::Node::is_element) {
@@ -38,12 +42,22 @@ pub(crate) fn check_xml(doc: &roxmltree::Document) -> Result<(), String> {
             open.pop();
         }
         open.push(node.id());
-        if open.len() > MAX_DEPTH {
-            let element = format!("<{}>{}", node.tag_name().name(), crate::parse::node_loc(&node));
-            return Err(too_deep(&element, open.len()));
+        if open.len() > limit {
+            return Some(node);
         }
     }
-    Ok(())
+    None
+}
+
+/// Refuse a parsed XML document whose elements nest deeper than `MAX_DEPTH`, naming the first element past it.
+pub(crate) fn check_xml(doc: &roxmltree::Document) -> Result<(), String> {
+    match first_past(doc, MAX_DEPTH) {
+        Some(node) => {
+            let element = format!("<{}>{}", node.tag_name().name(), crate::parse::node_loc(&node));
+            Err(too_deep(&element, MAX_DEPTH + 1))
+        }
+        None => Ok(()),
+    }
 }
 
 /// Parse the JSON of a document tree, refusing one whose nodes nest deeper than `MAX_DEPTH`, named by the type of the

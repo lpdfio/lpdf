@@ -14,6 +14,7 @@ use std::ops::Range;
 use pulldown_cmark::{Event, HeadingLevel, MetadataBlockKind, Options, Parser, Tag, TagEnd};
 use serde_json::Value;
 
+use crate::nesting::MAX_DEPTH;
 use crate::parse::{
     elems, layout_margin, node_loc, parse_node, resolve_font_alias, resolve_parsed_node, Attrs, JsonAttrs, LayoutChild,
     Node, NodeKind, PendingBookmarks, Section, SectionChild, TextDefaults,
@@ -610,6 +611,46 @@ pub fn declare_images(template: &str, srcs: &[String]) -> Result<String, String>
 
 // ── Expansion ─────────────────────────────────────────────────────────────────
 
+/// The level of a `<markdown>` in a document, a child of `<section>` as a `<layout>` is: `<lpdf>`, `<document>`,
+/// `<section>`, itself. The elements of its blocks stand in it, one level deeper (`nesting::MAX_DEPTH`).
+const MARKDOWN_LEVEL: usize = 4;
+
+/// The levels a quote adds to what stands in it: the table, the row and the cell it is written as (`quote`).
+const QUOTE_LEVELS: usize = 3;
+
+/// The levels a list item adds to what stands in it: the list and the item it is written as (`list`).
+const ITEM_LEVELS: usize = 2;
+
+/// The most quotes that nest in one another around a text: the levels of a document that the `<markdown>` and the text
+/// leave, in quotes.
+const NESTED_QUOTES: usize = (MAX_DEPTH - MARKDOWN_LEVEL - 1) / QUOTE_LEVELS;
+
+/// The most list items that nest in one another around a text, counted the same way.
+const NESTED_ITEMS: usize = (MAX_DEPTH - MARKDOWN_LEVEL - 1) / ITEM_LEVELS;
+
+/// The most emphasis, strong text, strikethrough and links that nest in one another. They are written as flat spans,
+/// so they add no levels to the document, but the reader goes one call deeper for each, and a deep enough nesting runs
+/// it out of stack. A text nests a few.
+const MAX_NESTED_STYLES: usize = MAX_DEPTH;
+
+/// The error of `what`, a quote, a list item or a block, which the Markdown nests past the limit. It says what a
+/// Markdown may hold in the terms of the Markdown, since the elements it is written as are not ones the author sees.
+fn too_deep(what: &str) -> String {
+    format!(
+        "{what} is nested too deep: a Markdown nests {NESTED_QUOTES} quotes or {NESTED_ITEMS} list items in one \
+        another at most, and fewer of each in a mix, since a document nests {MAX_DEPTH} levels at most and a quote \
+        counts {QUOTE_LEVELS} of them and a list item {ITEM_LEVELS}"
+    )
+}
+
+/// The error of emphasis, strong text, strikethrough and links that the Markdown nests past the limit.
+fn too_deep_styles() -> String {
+    format!(
+        "emphasis, strong text, strikethrough and links are nested too deep: a Markdown nests {MAX_NESTED_STYLES} of \
+        them in one another at most"
+    )
+}
+
 /// The nodes of the layout for `markdown`, styled by the rules of `spec`.
 pub(crate) fn expand(spec: &MarkdownSpec, markdown: &str) -> Result<Vec<Node>, String> {
     let blocks = Writer::new(spec, markdown).blocks()?;
@@ -617,6 +658,12 @@ pub(crate) fn expand(spec: &MarkdownSpec, markdown: &str) -> Result<Vec<Node>, S
     for block in blocks {
         let xml = format!("<md>{}</md>", block.xml);
         let doc = roxmltree::Document::parse(&xml).map_err(|e| format!("markdown line {}: {e}", block.line))?;
+        // The quotes and lists were counted as they were read, which stops a Markdown that nests far too deep before
+        // it is written. What stands in the deepest of them, a text with its spans or a table, is counted here. The
+        // `<md>` stands for the `<markdown>`.
+        if crate::nesting::first_past(&doc, MAX_DEPTH + 1 - MARKDOWN_LEVEL).is_some() {
+            return Err(format!("markdown line {}: {}", block.line, too_deep("this block")));
+        }
         let mut pending = PendingBookmarks::default();
         for child in elems(&doc.root_element()) {
             if child.tag_name().name() == "bookmark" {
@@ -661,10 +708,13 @@ struct Block {
     line: usize,
 }
 
-/// What the rules of the quotes and the lists around a block say about its words.
-#[derive(Clone, Default)]
+/// What the quotes and the lists around a block say about it: the rules for its words, and how deep it stands.
+#[derive(Clone)]
 struct Around {
     text: Vec<Rule>,
+    /// The level of the element the block stands in: `MARKDOWN_LEVEL` at the top, then `QUOTE_LEVELS` more for each
+    /// quote around it and `ITEM_LEVELS` more for each list item.
+    level: usize,
 }
 
 /// The style of the words being read.
@@ -674,6 +724,15 @@ struct Style {
     em:     bool,
     del:    bool,
     link:   Option<String>,
+    /// How many emphasis, strong texts, strikethroughs and links the words are in.
+    nesting: usize,
+}
+
+impl Style {
+    /// The style of the words inside one more emphasis, strong text, strikethrough or link: the same, a level deeper.
+    fn within(&self) -> Style {
+        Style { nesting: self.nesting + 1, ..self.clone() }
+    }
 }
 
 /// A piece of the words of a block.
@@ -739,7 +798,7 @@ impl<'a> Writer<'a> {
 
     fn blocks(mut self) -> Result<Vec<Block>, String> {
         self.collect_notes();
-        self.read_blocks(None, &Around::default())
+        self.read_blocks(None, &Around { text: Vec::new(), level: MARKDOWN_LEVEL })
     }
 
     /// Read the text of every footnote definition first: a note is written where it is referred to.
@@ -794,7 +853,7 @@ impl<'a> Writer<'a> {
                 }
                 Event::Start(Tag::BlockQuote(_)) => {
                     self.at += 1;
-                    let inner_around = self.around_quote(around);
+                    let inner_around = self.around_quote(around, line)?;
                     let inner = self.read_blocks(Some(TagEnd::BlockQuote(None)), &inner_around)?;
                     blocks.push(self.quote(inner, line)?);
                 }
@@ -906,6 +965,9 @@ impl<'a> Writer<'a> {
     }
 
     fn read_words(&mut self, until: Option<TagEnd>, style: &Style, pieces: &mut Vec<Piece>) -> Result<(), String> {
+        if style.nesting > MAX_NESTED_STYLES {
+            return Err(self.fail(self.here(), &too_deep_styles()));
+        }
         while self.at < self.events.len() {
             let line = self.here();
             let (event, _) = self.events[self.at].clone();
@@ -942,19 +1004,19 @@ impl<'a> Writer<'a> {
                 }
                 Event::Start(Tag::Emphasis) => {
                     self.at += 1;
-                    self.read_words(Some(TagEnd::Emphasis), &Style { em: true, ..style.clone() }, pieces)?;
+                    self.read_words(Some(TagEnd::Emphasis), &Style { em: true, ..style.within() }, pieces)?;
                 }
                 Event::Start(Tag::Strong) => {
                     self.at += 1;
-                    self.read_words(Some(TagEnd::Strong), &Style { strong: true, ..style.clone() }, pieces)?;
+                    self.read_words(Some(TagEnd::Strong), &Style { strong: true, ..style.within() }, pieces)?;
                 }
                 Event::Start(Tag::Strikethrough) => {
                     self.at += 1;
-                    self.read_words(Some(TagEnd::Strikethrough), &Style { del: true, ..style.clone() }, pieces)?;
+                    self.read_words(Some(TagEnd::Strikethrough), &Style { del: true, ..style.within() }, pieces)?;
                 }
                 Event::Start(Tag::Link { dest_url, .. }) => {
                     self.at += 1;
-                    let link = Style { link: Some(dest_url.to_string()), ..style.clone() };
+                    let link = Style { link: Some(dest_url.to_string()), ..style.within() };
                     self.read_words(Some(TagEnd::Link), &link, pieces)?;
                 }
                 Event::Start(Tag::Image { dest_url, .. }) => {
@@ -1007,10 +1069,20 @@ impl<'a> Writer<'a> {
         rule
     }
 
-    fn around_quote(&self, around: &Around) -> Around {
-        let mut inner = around.clone();
+    fn around_quote(&self, around: &Around, line: usize) -> Result<Around, String> {
+        let mut inner = self.deeper(around, QUOTE_LEVELS, "a quote", line)?;
         inner.text.push(self.spec.rules.rule("quote"));
-        inner
+        Ok(inner)
+    }
+
+    /// What stands around the blocks of a quote or a list item `what` that begins on `line`, which go `levels` deeper
+    /// than the block it is in. One whose elements pass the limit is refused here, before its blocks are read.
+    fn deeper(&self, around: &Around, levels: usize, what: &str, line: usize) -> Result<Around, String> {
+        let level = around.level + levels;
+        if level > MAX_DEPTH {
+            return Err(self.fail(line, &too_deep(what)));
+        }
+        Ok(Around { text: around.text.clone(), level })
     }
 
     /// The font a rule sets the words in, or the one they are in without it.
@@ -1250,7 +1322,7 @@ impl<'a> Writer<'a> {
         for key in ["padding", "background", "border"] {
             if let Some(value) = rule.get(key) { push_attr(&mut item_attrs, key, value); }
         }
-        let mut inner_around = around.clone();
+        let mut inner_around = self.deeper(around, ITEM_LEVELS, "a list item", line)?;
         let mut words = Rule::new();
         for key in ["font", "font-size", "color"] {
             if let Some(value) = rule.get(key) { words.insert(key.into(), value.clone()); }
@@ -2440,5 +2512,154 @@ mod tests {
         crate::data::apply(&mut doc, &crate::data::parse(&file_data(file)).unwrap()).unwrap();
         let kinds: Vec<NodeKind> = doc.section_layouts().remove(0).children.iter().map(|n| n.kind.clone()).collect();
         assert_eq!(kinds, [NodeKind::Text, NodeKind::Img]);
+    }
+
+    // ── Depth ─────────────────────────────────────────────────────────────────
+
+    /// `n` quotes around `inner`, on one line.
+    fn quotes_around(n: usize, inner: &str) -> String {
+        format!("{}{inner}", "> ".repeat(n))
+    }
+
+    /// `n` bullet lists, each in the item of the one before, a line each, with `inner` as the words of the last item.
+    fn lists_around(n: usize, inner: &str) -> String {
+        (0..n)
+            .map(|i| format!("{}- {}", "  ".repeat(i), if i + 1 == n { inner } else { "item" }))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// `markdown` behind a paragraph, so that it begins on line 3.
+    fn behind_a_paragraph(markdown: &str) -> String {
+        format!("first\n\n{markdown}")
+    }
+
+    /// The depth error of a quote, a list item or a block of the Markdown, which names the Markdown's line and what a
+    /// Markdown may hold.
+    fn assert_too_deep(error: &str, line: usize, what: &str) {
+        let start = format!(
+            "markdown line {line}: {what} is nested too deep: a Markdown nests 31 quotes or 47 list items in one another \
+            at most, and fewer of each in a mix, since a document nests 100 levels at most and a quote counts 3 of them \
+            and a list item 2"
+        );
+        assert!(error.contains(&start), "{error}");
+    }
+
+    #[test]
+    fn a_markdown_whose_deepest_element_is_at_level_100_renders() {
+        // The <markdown> is level 4. A quote adds 3 levels, a table, a row and a cell, and a list item adds 2.
+        for (markdown, deepest) in [
+            // the cell of the 31st quote is level 97, then the list, its item, and the text
+            (quotes_around(31, "- deep"), "a text"),
+            // the item of the 47th list is level 98, then the text and its bold span
+            (lists_around(47, "**deep**"), "a span"),
+            // a quote and a list item, 19 times: level 99, then the text
+            ("> - ".repeat(19) + "deep", "a text"),
+        ] {
+            let found = nodes(&behind_a_paragraph(&markdown));
+            assert_eq!(found.len(), 2, "{deepest}: {markdown}");
+        }
+    }
+
+    #[test]
+    fn a_block_with_an_element_past_level_100_is_refused_with_the_line_it_begins_on() {
+        for markdown in [
+            quotes_around(31, "- **deep**"),
+            quotes_around(32, "deep"),
+            lists_around(48, "deep"),
+            "> - ".repeat(19) + "**deep**",
+        ] {
+            assert_too_deep(&error(&behind_a_paragraph(&markdown)), 3, "this block");
+        }
+    }
+
+    #[test]
+    fn a_quote_or_a_list_item_past_level_100_is_refused_on_the_line_it_begins_on() {
+        assert_too_deep(&error(&behind_a_paragraph(&quotes_around(33, "deep"))), 3, "a quote");
+        // each list begins a line, and the 49th is the 49th line after the paragraph's two
+        assert_too_deep(&error(&behind_a_paragraph(&lists_around(49, "deep"))), 51, "a list item");
+        assert_too_deep(&error(&behind_a_paragraph(&"> - ".repeat(20))), 3, "a quote");
+    }
+
+    #[test]
+    fn markdown_nested_thousands_deep_is_refused_before_it_is_written() {
+        assert_too_deep(&error(&quotes_around(2000, "deep")), 1, "a quote");
+        assert_too_deep(&error(&lists_around(500, "deep")), 49, "a list item");
+        assert_too_deep(&error(&"> - ".repeat(500)), 1, "a quote");
+    }
+
+    #[test]
+    fn markdown_from_the_data_is_refused_when_the_data_is_bound() {
+        let xml = r#"<lpdf version="1"><document><section><markdown>
+            <markdown-content data-value="body"/></markdown></section></document></lpdf>"#;
+        let bind = |body: &str| {
+            let mut doc = parse(xml).unwrap();
+            let data = serde_json::json!({ "body": body }).to_string();
+            crate::data::apply(&mut doc, &crate::data::parse(&data).unwrap())
+        };
+        bind(&behind_a_paragraph(&quotes_around(31, "- deep"))).unwrap();
+        assert_too_deep(&bind(&behind_a_paragraph(&quotes_around(31, "- **deep**"))).unwrap_err(), 3, "this block");
+        assert_too_deep(&bind(&behind_a_paragraph(&lists_around(500, "deep"))).unwrap_err(), 51, "a list item");
+    }
+
+    #[test]
+    fn the_text_that_stands_in_for_the_data_is_read_with_the_document() {
+        let xml = |text: &str| {
+            format!(
+                r#"<lpdf version="1"><document><section><markdown>
+                <markdown-content data-value="body"><![CDATA[{text}]]></markdown-content></markdown></section></document></lpdf>"#
+            )
+        };
+        parse(&xml(&quotes_around(31, "- deep"))).unwrap();
+        assert_too_deep(&parse(&xml(&quotes_around(2000, "deep"))).unwrap_err(), 1, "a quote");
+    }
+
+    #[test]
+    fn a_tree_refuses_a_markdown_that_nests_too_deep_as_xml_does() {
+        let tree = |text: &str| {
+            let content = serde_json::json!({ "type": "markdown-content", "attrs": {}, "nodes": [text] });
+            let markdown = serde_json::json!({ "type": "markdown", "attrs": {}, "nodes": [content] });
+            serde_json::json!({
+                "version": 1, "type": "document", "attrs": {},
+                "nodes": [{ "type": "section", "attrs": {}, "nodes": [markdown] }]
+            })
+            .to_string()
+        };
+        crate::parse::parse_tree(&tree(&quotes_around(31, "- deep"))).unwrap();
+        assert_too_deep(&crate::parse::parse_tree(&tree(&quotes_around(2000, "deep"))).unwrap_err(), 1, "a quote");
+    }
+
+    /// `n` emphasis and strong texts in one another, around `deep`.
+    fn emphasis_around(n: usize) -> String {
+        format!("{}deep{}", "*a **a ".repeat(n / 2), " a** a*".repeat(n / 2))
+    }
+
+    /// `n` strikethroughs in one another, around `deep`.
+    fn strikethrough_around(n: usize) -> String {
+        format!("{}deep{}", "~~a ".repeat(n), " a~~".repeat(n))
+    }
+
+    #[test]
+    fn emphasis_and_strikethrough_nest_100_deep_and_no_more() {
+        assert_eq!(nodes(&emphasis_around(100)).len(), 1);
+        assert_eq!(nodes(&strikethrough_around(100)).len(), 1);
+        let start = "markdown line 3: emphasis, strong text, strikethrough and links are nested too deep: a Markdown nests \
+            100 of them in one another at most";
+        for markdown in [emphasis_around(102), strikethrough_around(101), emphasis_around(20_000), strikethrough_around(20_000)] {
+            assert!(error(&behind_a_paragraph(&markdown)).contains(start), "{markdown:.40}");
+        }
+    }
+
+    #[test]
+    fn links_in_links_are_text_and_render_however_deep() {
+        let markdown = format!("{}deep{}", "[a ".repeat(2000), "](u)".repeat(2000));
+        assert_eq!(nodes(&markdown).len(), 1);
+    }
+
+    #[test]
+    fn a_table_in_a_quote_in_a_list_renders() {
+        let nodes = nodes("- > | a | b |\n  > |---|---|\n  > | 1 | 2 |\n");
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(texts(&nodes[0]).into_iter().map(words).collect::<Vec<_>>(), ["a", "b", "1", "2"]);
     }
 }
