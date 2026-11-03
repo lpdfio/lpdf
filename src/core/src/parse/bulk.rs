@@ -317,29 +317,29 @@ fn one_line_texts(node: &mut ParsedNode) {
 /// Check the rules a bulk container sets for the document around it: it is laid out once, untagged, and not in
 /// balanced columns.
 pub(super) fn check_document(sections: &[Section], output: &Output) -> Result<(), String> {
-    let mut found: Vec<(&Section, &NodeKind)> = Vec::new();
-    let mut references = false;
-    for section in sections {
-        for child in &section.children {
-            let SectionChild::Layout { children, .. } = child else { continue };
-            for layout_child in children {
-                match layout_child {
-                    LayoutChild::Content(node) => {
-                        if node.data_attrs.as_ref().is_some_and(|d| d.bulk) {
-                            found.push((section, &node.kind));
-                        }
-                        references |= has_reference(node);
-                    }
-                    LayoutChild::Region(region) => references |= region.children.iter().any(has_reference),
-                }
-            }
-        }
-    }
+    let layout = || sections.iter().flat_map(|section| {
+        section.children.iter().filter_map(move |child| match child {
+            SectionChild::Layout { children, .. } => Some((section, children)),
+            _ => None,
+        })
+    });
+    let found: Vec<(&Section, &NodeKind)> = layout()
+        .flat_map(|(section, children)| children.iter().map(move |child| (section, child)))
+        .filter_map(|(section, child)| match child {
+            LayoutChild::Content(node) if node.data_attrs.as_ref().is_some_and(|d| d.bulk) => Some((section, &node.kind)),
+            _ => None,
+        })
+        .collect();
     let Some(&(_, kind)) = found.first() else { return Ok(()) };
     let once = "is laid out once";
     if sections.iter().any(|s| s.options.toc.is_some()) {
         return Err(broken(kind, once, "a table of contents lays its document out again until the page count settles, so take out the section type=\"toc\" or bulk".to_string()));
     }
+    // Only a document with a bulk container is walked for references: every other one would pay for it.
+    let references = layout().flat_map(|(_, children)| children).any(|child| match child {
+        LayoutChild::Content(node) => has_reference(node),
+        LayoutChild::Region(region) => region.children.iter().any(has_reference),
+    });
     if references {
         return Err(broken(kind, once, "a reference to a bookmark lays its document out again until the page numbers settle, so take out the bookmark-ref or bulk".to_string()));
     }
