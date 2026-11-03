@@ -94,6 +94,10 @@ fn a_column_keeps_a_link_as_it_was_laid_out_again() {
         ("a link after a child of fill height", format!(r#"<column height="300pt"><frame height="fill"/>{link}<text>a</text>{end}</column>"#)),
         ("a link split across pages", format!("{link}{}{end}", (0..120).map(|i| format!("<text>line {i} {LONG}</text>")).collect::<String>())),
         ("links each holding a vertical divider", chain(12, |_| format!(r#"{link}<divider direction="vertical"/>"#), |_| end.into())),
+        (
+            "links each holding a child of full height beside a frame of a set height holding the next",
+            chain(12, |_| format!(r##"{link}<frame height="full" background="#cccccc"/><frame height="20pt">"##), |_| format!("</frame>{end}")),
+        ),
     ];
     for (name, body) in cases {
         assert_eq!(tree_of(&body, false), tree_of(&body, true), "{name}");
@@ -165,10 +169,16 @@ fn a_column_moves_a_child_it_could_not_place_to_where_it_was_laid_out_again() {
 }
 
 /// The kinds of chain a column used to lay out twice at each level, `depth` elements deep.
-fn column_chains(depth: usize) -> [(&'static str, String); 8] {
+fn column_chains(depth: usize) -> [(&'static str, String); 9] {
     let (link, end) = LINK;
     [
         ("links in links", chain(depth, |_| link.into(), |_| end.into())),
+        (
+            // Beside the next link, a child of full height would be as tall as it, and the chain would double in
+            // height at each level.
+            "links each holding a child of full height beside a frame of a set height holding the next",
+            chain(depth, |_| format!(r#"{link}<frame height="full"/><frame height="20pt">"#), |_| format!("</frame>{end}")),
+        ),
         ("links each holding a child of fill height", chain(depth, |_| format!(r#"{link}<frame height="fill"/>"#), |_| end.into())),
         ("links each holding a vertical divider", chain(depth, |_| format!(r#"{link}<divider direction="vertical"/>"#), |_| end.into())),
         ("links and columns in turn", in_turn(depth, LINK, COLUMN)),

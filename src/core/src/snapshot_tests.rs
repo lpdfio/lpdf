@@ -231,6 +231,8 @@ fn showcase_footnote_counter() { run_snapshot("showcase-footnote-counter"); }
 #[test]
 fn showcase_footnote_clip() { run_snapshot("showcase-footnote-clip"); }
 #[test]
+fn showcase_link_heights() { run_snapshot("showcase-link-heights"); }
+#[test]
 fn showcase_grid() { run_snapshot("showcase-grid"); }
 #[test]
 fn showcase_row() { run_snapshot("showcase-row"); }

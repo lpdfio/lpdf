@@ -28,6 +28,9 @@ mod nested_grid_tests;
 #[path = "layout/nested_column_tests.rs"]
 mod nested_column_tests;
 #[cfg(test)]
+#[path = "layout/link_height_tests.rs"]
+mod link_height_tests;
+#[cfg(test)]
 #[path = "layout/rest_window_tests.rs"]
 mod rest_window_tests;
 pub(crate) use table_grid::{Held, Placed};
@@ -1040,8 +1043,8 @@ pub(super) struct Kept {
 
 /// The height `fill_page` measures `node` at, and its tree when the node's place on the page is known: laid out
 /// there, as the page's `layout_column` lays out an auto-height child, it is the tree that column needs. The height
-/// is the same either way, since a node of auto height doesn't read the height it is given. A link, which passes
-/// it on to its children, and a vertical divider, which takes it, are the two that do, and are measured as before.
+/// is the same either way, since a node of auto height doesn't read the height it is given. A vertical divider,
+/// which takes it, is the one that does, and is measured as before.
 fn measure_on_page(node: &Node, x: f32, place_y: Option<f32>, avail_w: f32, budget: f32) -> (f32, Option<Kept>) {
     match place_y {
         Some(y) if sized_by_width(node) => {
@@ -1055,8 +1058,8 @@ fn measure_on_page(node: &Node, x: f32, place_y: Option<f32>, avail_w: f32, budg
 
 /// Where the page's `layout_column` places the node after one placed at `place_y`, `h` high: the same sum, while
 /// the column's height for the node is known. That is a node laid out at its place, or one of a fixed height. A
-/// `fill` or `full` node takes what the others leave, and a link or a vertical divider gets another height in the
-/// column than the one `fill_page` measured.
+/// `fill` or `full` node takes what the others leave, and a vertical divider gets another height in the column
+/// than the one `fill_page` measured.
 fn next_place(place_y: Option<f32>, node: &Node, laid_out: bool, h: f32, gap: f32) -> Option<f32> {
     let known = laid_out || matches!(node.height_mode, HeightMode::Fixed(_));
     place_y.filter(|_| known).map(|py| py + (h + gap + 0.0))
@@ -3002,41 +3005,31 @@ fn sized_by_width(node: &Node) -> bool {
     node.height_mode == HeightMode::Auto && !reads_given_height(node)
 }
 
-/// Whether `node` reads the height it is given, whatever its own height: a link passes it on to its children, and a
-/// vertical divider takes it.
+/// Whether `node` reads the height it is given, whatever its own height: a vertical divider takes it. A box, a link
+/// too, gives its children none at `auto` height and its own at a set height (`layout_container`, `layout_link`).
 fn reads_given_height(node: &Node) -> bool {
-    node.kind == NodeKind::Link || (node.kind == NodeKind::Divider && node.direction == Direction::Vertical)
+    node.kind == NodeKind::Divider && node.direction == Direction::Vertical
 }
 
 /// Whether a height `node` is given to fill reaches a node inside it that takes a share of it: a child of `full`
-/// or `fill` height, a vertical divider, or one in a link among its children. A grid and a table give their
-/// children no height to fill.
+/// or `fill` height, or a vertical divider. A grid and a table give their children no height to fill.
 fn shares_given_height(node: &Node) -> bool {
     !matches!(node.kind, NodeKind::Grid | NodeKind::Table)
         && node.children.iter().any(|child| {
             matches!(child.height_mode, HeightMode::Full | HeightMode::Fill)
                 || (child.kind == NodeKind::Divider && child.direction == Direction::Vertical)
-                || (child.kind == NodeKind::Link && shares_given_height(child))
         })
 }
 
 /// Whether `node`, of `auto` height, comes out the same laid out with the height its column gives it, the height it
-/// measured, as with none, so that the column can keep the tree it laid the node out in to measure it. A node of
-/// `auto` height gives its children no height to fill (`layout_container`), so it does unless it reads the height it
-/// is given: a vertical divider takes it, and a link passes it on to its own column. There a child of `full` height
-/// takes all of it, which is more than it took when the link was measured, while a child of `fill` height takes
-/// what the others leave, nothing either way, and a vertical divider of `auto` height, which its column measures with
-/// no height, is as long as it is thick either way. A link inside it is laid out at the height it measured, whatever
-/// its parent's.
+/// measured, as with none, so that the column can keep the tree it laid the node out in to measure it: one whose
+/// height comes from its width alone (`sized_by_width`).
 fn same_with_a_height(node: &Node) -> bool {
     #[cfg(test)]
     if LAY_OUT_AGAIN.with(Cell::get) {
         return false;
     }
-    match node.kind {
-        NodeKind::Link => !node.children.iter().any(|child| child.height_mode == HeightMode::Full),
-        _ => sized_by_width(node),
-    }
+    sized_by_width(node)
 }
 
 thread_local! {
@@ -3277,6 +3270,18 @@ fn without_inner_containers(node: &Node, width: f32) -> Option<Node> {
         .then(|| node.with_children(node.children.iter().filter(|child| !nests(child)).cloned().collect()))
 }
 
+/// The height a box, or a link, gives its children to fill, inside its padding: none at `auto` height, so that a child
+/// of `full` height is as tall as the others, its own at a set height, and the one it is given, `avail_h`, at `full`
+/// or `fill` height.
+fn inner_height(node: &Node, avail_h: Option<f32>) -> Option<f32> {
+    let [pt, _, pb, _] = node.padding;
+    match &node.height_mode {
+        HeightMode::Auto => None,
+        HeightMode::Fixed(h) => Some((*h - pt - pb).max(0.0)),
+        HeightMode::Full | HeightMode::Fill => avail_h.map(|h| (h - pt - pb).max(0.0)),
+    }
+}
+
 fn layout_container(
     node: &Node,
     x: f32,
@@ -3291,11 +3296,7 @@ fn layout_container(
     let inner_x = x + pl;
     let inner_y = y + pt;
     let inner_w = (avail_w - pl - pr).max(0.0);
-    let inner_h = match &node.height_mode {
-        HeightMode::Auto => None,
-        HeightMode::Fixed(h) => Some((*h - pt - pb).max(0.0)),
-        HeightMode::Full | HeightMode::Fill => avail_h.map(|h| (h - pt - pb).max(0.0)),
-    };
+    let inner_h = inner_height(node, avail_h);
 
     let (children, content_h) = dispatch_children(node, inner_x, inner_y, inner_w, inner_h);
 
@@ -3448,9 +3449,9 @@ fn layout_column_kept(
                 sized[i] = Some(*h);
                 sum_fixed += h;
             }
-            // A link passes its avail_h on to its own children: one with a
-            // child of `full` height is measured without a height and placed
-            // with one, as before (`same_with_a_height`).
+            // A link is kept as any other child. `same_with_a_height` is asked
+            // of it so that the tests can lay links out again, as a column did
+            // before it kept them.
             HeightMode::Auto
                 if starts_at_y && place_y.is_some() && (child.kind != NodeKind::Link || same_with_a_height(child)) =>
             {
@@ -3873,7 +3874,7 @@ fn layout_link(
     // A link has no padding attribute; the padding is the indent a table of contents gives its entries.
     let [pt, pr, pb, pl] = node.padding;
     let (children, content_h) = layout_column(
-        &node.children, x + pl, y + pt, (avail_w - pl - pr).max(0.0), avail_h.map(|h| (h - pt - pb).max(0.0)),
+        &node.children, x + pl, y + pt, (avail_w - pl - pr).max(0.0), inner_height(node, avail_h),
         node.gap, &node.align, &Justify::Start,
     );
     let height = match &node.height_mode {
