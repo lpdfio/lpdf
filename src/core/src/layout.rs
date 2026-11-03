@@ -3143,10 +3143,10 @@ fn with_anchors(rendered: RenderNode, bookmarks: &[Bookmark], x: f32, y: f32, wi
 // ── Container layout (box + inner children) ───────────────────────────────────
 
 /// The narrowest a container can be, and the lowest its set height, and still lay out containers inside it: 5 mm.
-/// A smaller one lays out its own box and its leaf content alone (`without_inner_containers`). A grid lays out a
-/// cell shorter than its row twice, the second time stretched to the row, so grids nested in such cells double the
-/// work at each level. Such a cell shares its row, so each level halves its width, and the doubling stops here
-/// after about six levels. Fixed, not an option, as the depth limit is.
+/// A smaller one lays out its own box, its leaf content and its empty boxes alone (`without_inner_containers`). A
+/// grid lays out a cell shorter than its row twice, the second time stretched to the row, so grids nested in such
+/// cells double the work at each level. Such a cell shares its row, so each level halves its width, and the
+/// doubling stops here after about six levels. Fixed, not an option, as the depth limit is.
 const MIN_NESTING_SIZE: f32 = 5.0 * 72.0 / 25.4;
 
 /// Whether `node` holds other nodes in the flow: a box, a link, or a table or a part of one.
@@ -3158,12 +3158,14 @@ fn is_container(node: &Node) -> bool {
     )
 }
 
-/// `node` laid out `width` wide without the containers among its children, when it is narrower than
-/// `MIN_NESTING_SIZE` or set lower, and holds one. Its own box and its leaf children stay.
+/// `node` laid out `width` wide without the containers among its children that hold something, when it is
+/// narrower than `MIN_NESTING_SIZE` or set lower, and holds one. Its own box, its leaf children and its empty boxes
+/// stay: an empty box, such as a swatch or a rule, has nothing inside to lay out.
 fn without_inner_containers(node: &Node, width: f32) -> Option<Node> {
     let small = width < MIN_NESTING_SIZE || matches!(node.height_mode, HeightMode::Fixed(h) if h < MIN_NESTING_SIZE);
-    (small && node.children.iter().any(is_container))
-        .then(|| node.with_children(node.children.iter().filter(|child| !is_container(child)).cloned().collect()))
+    let nests = |child: &Node| is_container(child) && !child.children.is_empty();
+    (small && node.children.iter().any(nests))
+        .then(|| node.with_children(node.children.iter().filter(|child| !nests(child)).cloned().collect()))
 }
 
 fn layout_container(

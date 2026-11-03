@@ -180,26 +180,38 @@ fn nested_grids_take_work_that_grows_with_their_depth() {
     }
 }
 
-#[test]
-fn a_container_narrower_than_5mm_draws_its_box_and_leaf_content_and_no_container_inside_it() {
-    let pages = pages_of(
-        r##"<column width="11.34pt" background="#ff0000" border="1pt #000000"><text>a</text><column><text>b</text></column><frame width="5.67pt" height="5.67pt" background="#00ff00"/></column>"##,
-    );
-    assert_eq!(words_of(&pages), ["a"]);
-    let fills: Vec<_> = drawn(&pages)
+/// The fill and the border width of each box drawn on `pages` with a fill, in the order they are drawn.
+fn fills_of(pages: &[RenderPage]) -> Vec<(&str, f32)> {
+    drawn(pages)
         .into_iter()
         .filter_map(|node| match node {
             RenderNode::Box(b) => b.fill.as_deref().map(|fill| (fill, b.border_width)),
             _ => None,
         })
-        .collect();
-    assert_eq!(fills, [("#ff0000", 1.0)], "the column's own box, and not the frame inside it");
+        .collect()
+}
+
+#[test]
+fn a_container_narrower_than_5mm_draws_its_box_its_leaf_content_and_its_empty_boxes_and_no_container_inside_it() {
+    let pages = pages_of(
+        r##"<column width="11.34pt" background="#ff0000" border="1pt #000000"><text>a</text><frame background="#0000ff"><text>b</text></frame><frame width="5.67pt" height="5.67pt" background="#00ff00"/></column>"##,
+    );
+    assert_eq!(words_of(&pages), ["a"]);
+    assert_eq!(fills_of(&pages), [("#ff0000", 1.0), ("#00ff00", 0.0)], "the column's box and the empty frame's");
 }
 
 #[test]
 fn a_container_set_lower_than_5mm_draws_its_leaf_content_and_no_container_inside_it() {
     let pages = pages_of(r##"<column height="11.34pt" background="#ff0000"><text>a</text><column><text>b</text></column></column>"##);
     assert_eq!(words_of(&pages), ["a"]);
+}
+
+#[test]
+fn a_row_set_lower_than_5mm_draws_the_empty_frames_in_it() {
+    let pages = pages_of(
+        r##"<row height="11.34pt" gap="4pt"><frame width="11.34pt" height="11.34pt" background="#ff0000"/><frame width="11.34pt" height="11.34pt" background="#00ff00"/></row>"##,
+    );
+    assert_eq!(fills_of(&pages), [("#ff0000", 0.0), ("#00ff00", 0.0)]);
 }
 
 #[test]
