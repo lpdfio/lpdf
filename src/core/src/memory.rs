@@ -47,8 +47,10 @@ pub(crate) struct Counting;
 // thread-local cells of plain numbers, which need no allocation and no destructor.
 unsafe impl GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let pages = pages();
         // SAFETY: the caller keeps the contract of `GlobalAlloc::alloc`, which is the system's.
         let ptr = unsafe { System.alloc(layout) };
+        reserve_past(pages);
         if !ptr.is_null() {
             grow(layout.size() as i64);
         }
@@ -56,8 +58,10 @@ unsafe impl GlobalAlloc for Counting {
     }
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        let pages = pages();
         // SAFETY: as for `alloc`.
         let ptr = unsafe { System.alloc_zeroed(layout) };
+        reserve_past(pages);
         if !ptr.is_null() {
             grow(layout.size() as i64);
         }
@@ -71,12 +75,50 @@ unsafe impl GlobalAlloc for Counting {
     }
 
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        let pages = pages();
         // SAFETY: as for `dealloc`, and the caller keeps the contract of `GlobalAlloc::realloc`.
         let new_ptr = unsafe { System.realloc(ptr, layout, new_size) };
+        reserve_past(pages);
         if !new_ptr.is_null() {
             grow(new_size as i64 - layout.size() as i64);
         }
         new_ptr
+    }
+}
+
+/// The pages of the WebAssembly memory, in the JS build: 0 in the others, which never reserve.
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+fn pages() -> usize {
+    core::arch::wasm32::memory_size(0)
+}
+
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+#[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
+fn pages() -> usize {
+    0
+}
+
+/// The bytes the JS build grows its memory by at the least.
+#[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
+const RESERVE: usize = 32 * 1_048_576;
+
+/// After an allocation that grew the memory from `pages`, in the JS build, grow it by `RESERVE` more and hand that
+/// to the system's allocator as free room. Each time the memory grows, V8 collects the JavaScript heap whole, and the
+/// system's allocator grows it only by what an allocation lacks: a render that grows to 400 MB in steps that small
+/// spends most of its time in the collector.
+#[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
+fn reserve_past(pages: usize) {
+    if self::pages() != pages {
+        // Never fails the allocation it follows: past what WebAssembly addresses, the block is null and left.
+        if let Ok(layout) = Layout::from_size_align(RESERVE, 16) {
+            // SAFETY: a block of the system's, given back to it at once with its own layout.
+            unsafe {
+                let block = System.alloc(layout);
+                if !block.is_null() {
+                    System.dealloc(block, layout);
+                }
+            }
+        }
     }
 }
 
