@@ -1,8 +1,8 @@
 //! Grids nested in grids, and containers too small to hold containers. A grid keeps the tree it laid a cell out in
 //! to find the tallest of its row when stretching the cell to the row changes nothing (`same_when_stretched`), so
-//! nested grids are laid out in work that grows with their depth. A container narrower than 5 mm, or set lower,
-//! lays out its own box and its leaf content alone (`without_inner_containers`), which ends the grids that do
-//! stretch at each level.
+//! nested grids are laid out in work that grows with their depth. A container narrower than 2.5 mm, or set lower,
+//! lays out its own box, its leaf content and its empty boxes alone (`without_inner_containers`), which ends the
+//! grids that do stretch at each level.
 
 use super::*;
 use crate::parse::parse;
@@ -191,32 +191,34 @@ fn fills_of(pages: &[RenderPage]) -> Vec<(&str, f32)> {
         .collect()
 }
 
+// The sizes under the limit are 2 mm, 5.67pt: a width and a height are written in points.
+
 #[test]
-fn a_container_narrower_than_5mm_draws_its_box_its_leaf_content_and_its_empty_boxes_and_no_container_inside_it() {
+fn a_container_narrower_than_2_5mm_draws_its_box_its_leaf_content_and_its_empty_boxes_and_no_container_inside_it() {
     let pages = pages_of(
-        r##"<column width="11.34pt" background="#ff0000" border="1pt #000000"><text>a</text><frame background="#0000ff"><text>b</text></frame><frame width="5.67pt" height="5.67pt" background="#00ff00"/></column>"##,
+        r##"<column width="5.67pt" background="#ff0000" border="1pt #000000"><text>a</text><frame background="#0000ff"><text>b</text></frame><frame width="4pt" height="4pt" background="#00ff00"/></column>"##,
     );
     assert_eq!(words_of(&pages), ["a"]);
     assert_eq!(fills_of(&pages), [("#ff0000", 1.0), ("#00ff00", 0.0)], "the column's box and the empty frame's");
 }
 
 #[test]
-fn a_container_set_lower_than_5mm_draws_its_leaf_content_and_no_container_inside_it() {
-    let pages = pages_of(r##"<column height="11.34pt" background="#ff0000"><text>a</text><column><text>b</text></column></column>"##);
+fn a_container_set_lower_than_2_5mm_draws_its_leaf_content_and_no_container_inside_it() {
+    let pages = pages_of(r##"<column height="5.67pt" background="#ff0000"><text>a</text><column><text>b</text></column></column>"##);
     assert_eq!(words_of(&pages), ["a"]);
 }
 
 #[test]
-fn a_row_set_lower_than_5mm_draws_the_empty_frames_in_it() {
+fn a_row_set_lower_than_2_5mm_draws_the_empty_frames_in_it() {
     let pages = pages_of(
-        r##"<row height="11.34pt" gap="4pt"><frame width="11.34pt" height="11.34pt" background="#ff0000"/><frame width="11.34pt" height="11.34pt" background="#00ff00"/></row>"##,
+        r##"<row height="5.67pt" gap="4pt"><frame width="5.67pt" height="5.67pt" background="#ff0000"/><frame width="5.67pt" height="5.67pt" background="#00ff00"/></row>"##,
     );
     assert_eq!(fills_of(&pages), [("#ff0000", 0.0), ("#00ff00", 0.0)]);
 }
 
 #[test]
-fn a_container_of_5mm_lays_out_the_containers_inside_it() {
-    // A width and a height are written in points: 5 mm as the engine works it out, to the last bit.
+fn a_container_of_2_5mm_lays_out_the_containers_inside_it() {
+    // 2.5 mm as the engine works it out, to the last bit.
     for size in [format!(r#"width="{MIN_NESTING_SIZE}pt""#), format!(r#"height="{MIN_NESTING_SIZE}pt""#)] {
         let pages = pages_of(&format!(r#"<column {size}><text>a</text><column><text>b</text></column></column>"#));
         assert_eq!(words_of(&pages), ["a", "b"], "{size}");
@@ -224,18 +226,18 @@ fn a_container_of_5mm_lays_out_the_containers_inside_it() {
 }
 
 #[test]
-fn a_small_icon_in_a_4mm_frame_still_draws() {
-    let pages = pages_of(r##"<frame width="11.34pt" height="11.34pt"><shape type="circle" r="4.25pt" fill="#000000"/></frame>"##);
+fn a_small_icon_in_a_2mm_frame_still_draws() {
+    let pages = pages_of(r##"<frame width="5.67pt" height="5.67pt"><shape type="circle" r="2pt" fill="#000000"/></frame>"##);
     assert!(drawn(&pages).iter().any(|node| matches!(node, RenderNode::CanvasEllipse(_))), "no circle drawn");
 }
 
 #[test]
 fn a_narrow_container_split_across_pages_leaves_no_room_for_the_containers_it_does_not_lay_out() {
-    // A column 4mm wide runs over two pages. The column inside it isn't laid out, so it takes no room on the first
+    // A column 2mm wide runs over two pages. The column inside it isn't laid out, so it takes no room on the first
     // page: that page holds as many texts as it does without it.
     let texts = |n: usize| "<text>a</text>".repeat(n);
     let first_page = |inside: &str| {
-        let pages = pages_of(&format!(r#"<column width="11.34pt">{}{inside}{}</column>"#, texts(10), texts(90)));
+        let pages = pages_of(&format!(r#"<column width="5.67pt">{}{inside}{}</column>"#, texts(10), texts(90)));
         assert!(pages.len() > 1, "{} pages", pages.len());
         words_of(&pages[..1]).len()
     };
