@@ -25,6 +25,9 @@ mod columns_tests;
 #[path = "layout/nested_grid_tests.rs"]
 mod nested_grid_tests;
 #[cfg(test)]
+#[path = "layout/nested_column_tests.rs"]
+mod nested_column_tests;
+#[cfg(test)]
 #[path = "layout/rest_window_tests.rs"]
 mod rest_window_tests;
 pub(crate) use table_grid::{Held, Placed};
@@ -3017,6 +3020,25 @@ fn shares_given_height(node: &Node) -> bool {
         })
 }
 
+/// Whether `node`, of `auto` height, comes out the same laid out with the height its column gives it, the height it
+/// measured, as with none, so that the column can keep the tree it laid the node out in to measure it. A node of
+/// `auto` height gives its children no height to fill (`layout_container`), so it does unless it reads the height it
+/// is given: a vertical divider takes it, and a link passes it on to its own column. There a child of `full` height
+/// takes all of it, which is more than it took when the link was measured, while a child of `fill` height takes
+/// what the others leave, nothing either way, and a vertical divider of `auto` height, which its column measures with
+/// no height, is as long as it is thick either way. A link inside it is laid out at the height it measured, whatever
+/// its parent's.
+fn same_with_a_height(node: &Node) -> bool {
+    #[cfg(test)]
+    if LAY_OUT_AGAIN.with(Cell::get) {
+        return false;
+    }
+    match node.kind {
+        NodeKind::Link => !node.children.iter().any(|child| child.height_mode == HeightMode::Full),
+        _ => sized_by_width(node),
+    }
+}
+
 thread_local! {
     /// What a split (`split_node_at`) found about the nodes of the tree it splits, while it lasts. A split asks for
     /// the height of the same nodes again at each level it goes down, and finding where a page's edge cuts a row asks
@@ -3036,6 +3058,9 @@ thread_local! {
     /// Whether a grid lays out every cell again to stretch it, none keeping its first tree
     /// (`same_when_stretched`): the tests lay a document out both ways and compare.
     static STRETCH_EVERY_CELL: Cell<bool> = const { Cell::new(false) };
+    /// Whether a column lays out again each child it could keep the tree of, as it did before it kept a link's or
+    /// moved a tree to its place (`same_with_a_height`): the tests lay a document out both ways and compare.
+    static LAY_OUT_AGAIN: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Count a step of the layout's work, in the tests (`LAYOUT_WORK`).
@@ -3397,8 +3422,15 @@ fn layout_column_kept(
     // an auto-height child is then laid out there once and its tree kept, so
     // pass 2 doesn't lay it out again (and each nesting level doesn't double
     // the work below it). With no avail_h, every justify starts at `y`.
+    // A column that justifies its children can't tell a child's place before
+    // it has measured them all, nor can any column tell the place of a child
+    // after one of `fill` or `full` height. A child that comes out the same
+    // laid out with a height (`same_with_a_height`) is then laid out once,
+    // where it would stand if the column started its children at `y`, or at
+    // `y` after a child of unknown height, and pass 2 moves its tree to its
+    // place. `placed` holds each tree with the y it was laid out at.
     let starts_at_y = matches!(justify, Justify::Start) || avail_h.is_none();
-    let mut placed: Vec<Option<RenderNode>> = Vec::new();
+    let mut placed: Vec<Option<(RenderNode, f32)>> = Vec::new();
     placed.resize_with(n, || None);
     let mut place_y = Some(y);
 
@@ -3416,9 +3448,12 @@ fn layout_column_kept(
                 sized[i] = Some(*h);
                 sum_fixed += h;
             }
-            // A link passes its avail_h on to its own children, so it is
-            // measured without one and placed with one, as before.
-            HeightMode::Auto if starts_at_y && place_y.is_some() && child.kind != NodeKind::Link => {
+            // A link passes its avail_h on to its own children: one with a
+            // child of `full` height is measured without a height and placed
+            // with one, as before (`same_with_a_height`).
+            HeightMode::Auto
+                if starts_at_y && place_y.is_some() && (child.kind != NodeKind::Link || same_with_a_height(child)) =>
+            {
                 let py = place_y.unwrap_or(y);
                 let (rn, h) = match kept.get_mut(i).and_then(Option::take) {
                     // The same place to the last bit, so the tree is the one laid out here.
@@ -3428,7 +3463,15 @@ fn layout_column_kept(
                         layout_column_child(child, cx, py, cw, None, align)
                     }
                 };
-                placed[i] = Some(rn);
+                placed[i] = Some((rn, py));
+                sized[i] = Some(h);
+                sum_fixed += h;
+            }
+            HeightMode::Auto if same_with_a_height(child) => {
+                let py = place_y.unwrap_or(y);
+                let (cw, cx) = column_child_place(child, x, avail_w, align);
+                let (rn, h) = layout_column_child(child, cx, py, cw, None, align);
+                placed[i] = Some((rn, py));
                 sized[i] = Some(h);
                 sum_fixed += h;
             }
@@ -3492,7 +3535,8 @@ fn layout_column_kept(
     for (i, (child, kept)) in children.iter().zip(placed).enumerate() {
         let h = heights[i];
         let rn = match kept {
-            Some(rn) => rn,
+            // A tree laid out at its place stays; one laid out higher moves down to it.
+            Some((rn, laid_y)) => shift_y(rn, cur_y - laid_y),
             None => {
                 let (cw, cx) = column_child_place(child, x, avail_w, align);
                 layout_column_child(child, cx, cur_y, cw, Some(h), align).0
