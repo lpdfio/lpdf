@@ -5,6 +5,10 @@ use crate::markdown;
 use crate::layout::{Held, Placed};
 use crate::page_numbers::PageNumbering;
 
+// The path is spelled out because the WASI build includes this file from another crate.
+#[path = "parse/bulk.rs"]
+mod bulk;
+
 // ── Resolved document model (layout / render operate on these) ────────────────
 
 #[derive(Debug, Clone)]
@@ -141,10 +145,13 @@ impl Document {
     }
 }
 
-/// Take `node` and every node below it out of their optional content groups.
+/// Take `node` and every node below it out of their optional content groups, the template of its records too.
 pub(crate) fn forget_ocg(node: &mut Node) {
     node.ocg = None;
     node.children.iter_mut().for_each(forget_ocg);
+    if let Some(records) = node.data_attrs.as_mut().and_then(|d| d.records.as_mut()) {
+        forget_ocg(std::rc::Rc::make_mut(records).template_mut());
+    }
 }
 
 /// Convert a `LayoutRegion` to a `Node` that the layout engine can handle.
@@ -493,6 +500,11 @@ pub struct DataAttrs {
     pub data_if_not: Option<String>,
     /// The attributes that take their value from the data, with the path each reads (`data-href="url"`).
     pub bound:       Vec<(BoundAttr, String)>,
+    /// `bulk="true"` on a table, a list, a grid or a column: the child it repeats with `data-source` is a template,
+    /// and its records stay in the data (`records`).
+    pub bulk:        bool,
+    /// The records of a bulk container once the data is in, which the layout binds as its pages reach them.
+    pub records:     Option<std::rc::Rc<crate::data::BulkRecords>>,
 }
 
 /// An attribute that can take its value from the data. Each is written as `data-` and its name, and sets the
@@ -583,7 +595,7 @@ fn read_data_attrs(a: &impl Attrs) -> DataAttrs {
 impl DataAttrs {
     fn is_empty(&self) -> bool {
         self.data_value.is_none() && self.data_source.is_none() && self.data_if.is_none()
-            && self.data_if_not.is_none() && self.bound.is_empty()
+            && self.data_if_not.is_none() && self.bound.is_empty() && !self.bulk
     }
 }
 
@@ -1339,6 +1351,12 @@ impl Node {
             _                      => None,
         }
     }
+
+    /// The records of a bulk container, once the data is in: `None` for any other node, and for a bulk container
+    /// rendered without data, which lays out the children it has.
+    pub(crate) fn bulk_records(&self) -> Option<&std::rc::Rc<crate::data::BulkRecords>> {
+        self.data_attrs.as_ref()?.records.as_ref()
+    }
 }
 
 /// The bold face of a built-in font. A font with no bold face, a custom font or one that is already
@@ -1606,6 +1624,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                 crate::attachments::check_standards(&attachments, &output)?;
                 markdown::expand_pending(&mut sections_xml, None, markdown::Pass::Read)?;
                 check_sections(&mut sections_xml)?;
+                bulk::check_document(&sections_xml, &output)?;
                 let mut resolved_fonts: HashMap<String, FontDef> = HashMap::new();
                 for (_alias, def) in &asset_fonts {
                     let key = match def {
@@ -2212,6 +2231,9 @@ fn parse_region_elem(
             continue;
         }
         let mut node = parse_node(&child, tokens, asset_images)?;
+        if node.is_bulk() {
+            return Err(format!("<{}>{}: {}", child.tag_name().name(), node_loc(&child), bulk::not_in(&node, "<region>")));
+        }
         pending.attach(&mut node);
         children.push(resolve_parsed_node(node, text, asset_fonts));
     }
@@ -2487,7 +2509,8 @@ pub(crate) fn parse_node(
 
     // data-binding attributes (valid on any element; boxed to keep Node lean)
     {
-        let data = read_data_attrs(elem);
+        let mut data = read_data_attrs(elem);
+        data.bulk = elem.attribute("bulk") == Some("true");
         check_bound_attrs(&kind, &data.bound).map_err(|e| format!("<{}>{}: {e}", tag, node_loc(elem)))?;
         if !data.is_empty() {
             node.data_attrs = Some(Box::new(data));
@@ -2547,6 +2570,9 @@ pub(crate) fn parse_node(
                 continue;
             }
             let mut child_node = parse_node(&child, tokens, asset_images)?;
+            if child_node.is_bulk() {
+                return Err(format!("<{}>{}: {}", child.tag_name().name(), node_loc(&child), bulk::not_in(&child_node, &format!("<{tag}>"))));
+            }
             pending.attach(&mut child_node);
             match kind {
                 NodeKind::Table => {
@@ -2601,6 +2627,9 @@ pub(crate) fn parse_node(
     }
     if let Some(reason) = field_in_print(&node) {
         return Err(format!("<{tag}>{}: {reason}", node_loc(elem)));
+    }
+    if node.is_bulk() {
+        bulk::check(&mut node).map_err(|e| format!("<{tag}>{}: {e}", node_loc(elem)))?;
     }
 
     Ok(node)
@@ -4150,6 +4179,7 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
     }
     markdown::expand_pending(&mut sections, None, markdown::Pass::Read)?;
     check_sections(&mut sections)?;
+    bulk::check_document(&sections, &output)?;
     let mut resolved_fonts: HashMap<String, FontDef> = HashMap::new();
     for (_alias, def) in &asset_fonts {
         let key = match def {
@@ -4419,6 +4449,9 @@ fn parse_tree_region(
                 continue;
             }
             let mut node = parse_tree_node(n, tokens, asset_images)?;
+            if node.is_bulk() {
+                return Err(format!("{}: {}", n.get("type").and_then(|v| v.as_str()).unwrap_or("?"), bulk::not_in(&node, "'region'")));
+            }
             pending.attach(&mut node);
             children.push(resolve_parsed_node(node, text, asset_fonts));
         }
@@ -4470,6 +4503,10 @@ fn parse_tree_node(
     let a = JsonAttrs(json);
     apply_box_attrs(&mut node, &a, tokens)?;
     apply_layout_kind_attrs(&mut node, &a, tokens)?;
+    // A kit tree binds no data, so it has no data attributes but this one, whose rules then say what is missing.
+    if a.get("bulk") == Some("true") {
+        node.data_attrs = Some(Box::new(DataAttrs { bulk: true, ..DataAttrs::default() }));
+    }
 
     match kind {
         NodeKind::Text => {
@@ -4520,6 +4557,13 @@ fn parse_tree_node(
                     continue;
                 }
                 let mut child_node = parse_tree_node(child, tokens, asset_images)?;
+                if child_node.is_bulk() {
+                    return Err(format!(
+                        "{}: {}",
+                        child.get("type").and_then(|v| v.as_str()).unwrap_or("?"),
+                        bulk::not_in(&child_node, &format!("'{type_str}'")),
+                    ));
+                }
                 pending.attach(&mut child_node);
                 match kind {
                     NodeKind::Table => {
@@ -4575,6 +4619,9 @@ fn parse_tree_node(
     }
     if let Some(reason) = field_in_print(&node) {
         return Err(format!("{type_str}: {reason}"));
+    }
+    if node.is_bulk() {
+        bulk::check(&mut node).map_err(|e| format!("{type_str}: {e}"))?;
     }
 
     Ok(node)

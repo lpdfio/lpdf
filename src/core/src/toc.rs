@@ -328,7 +328,7 @@ mod tests {
                </layout></section>
                <section><layout><bookmark label="Alpha"/><text data-value="body">Body</text></layout></section>"#,
         )).unwrap();
-        data::apply(&mut doc, &crate::data::parse(r#"{"title": "Report", "body": "Text", "$toc": ["ignored"]}"#).unwrap()).unwrap();
+        data::apply(&mut doc, crate::data::parse(r#"{"title": "Report", "body": "Text", "$toc": ["ignored"]}"#).unwrap()).unwrap();
         let pages = layout_document(&doc.section_layouts()).unwrap();
         assert_eq!(texts(&pages), ["Report", "Alpha", "Text"]);
     }

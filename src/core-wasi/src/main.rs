@@ -196,7 +196,7 @@ fn dispatch(request: String) -> String {
         "render_pdf" => {
             // Optional data binding: the request may carry a "data" JSON object, bound as it was parsed.
             if let Some(data) = data {
-                if let Err(e) = data::apply(&mut doc, &data) {
+                if let Err(e) = data::apply(&mut doc, data) {
                     return serde_json::json!({ "error": e }).to_string();
                 }
             }

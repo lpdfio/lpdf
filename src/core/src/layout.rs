@@ -9,6 +9,8 @@ mod columns;
 mod table_grid;
 #[path = "layout/rests.rs"]
 mod rests;
+#[path = "layout/bulk.rs"]
+mod bulk;
 #[cfg(test)]
 #[path = "layout/row_split_tests.rs"]
 mod row_split_tests;
@@ -33,9 +35,13 @@ mod link_height_tests;
 #[cfg(test)]
 #[path = "layout/rest_window_tests.rs"]
 mod rest_window_tests;
+#[cfg(test)]
+#[path = "layout/bulk_tests.rs"]
+mod bulk_tests;
 pub(crate) use table_grid::{Held, Placed};
 use table_grid::TableGrid;
 use rests::{Reached, Rest, Waiting};
+use bulk::{Bulk, Take};
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
 use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderCanvasClip, RenderCanvasLayer, RenderField, RenderFootnoteMark, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind, Tag, TagKind};
 use crate::tokens::FontWidths;
@@ -987,7 +993,7 @@ impl<'a> Pending<'a> {
         if let Some(waiting) = self.front.pop_front() { return Some(waiting); }
         let node = self.flow.get(self.next).cloned();
         if node.is_some() { self.next += 1; }
-        node.map(Waiting::Node)
+        node.map(Waiting::of)
     }
 
     fn push_front(&mut self, waiting: Waiting) {
@@ -995,12 +1001,17 @@ impl<'a> Pending<'a> {
     }
 
     /// The next node, as `fill_room` measures and splits it to see whether the node before it can keep with it: what
-    /// is left of a long container as a window of it, which says the same there (`Rest::peek`).
+    /// is left of a long container as a window of it, which says the same there (`Rest::peek`), and a bulk container
+    /// as the window of its records a page would split (`Bulk::peek`).
     fn peek(&self, avail_w: f32, reach: f32, page_h: f32) -> Option<Cow<'_, Node>> {
         match self.front.front() {
             Some(Waiting::Node(node)) => Some(Cow::Borrowed(node)),
             Some(Waiting::Rest(rest)) => Some(Cow::Owned(rest.peek(avail_w, reach, page_h))),
-            None => self.flow.get(self.next).map(Cow::Borrowed),
+            Some(Waiting::Bulk(bulk)) => Some(Cow::Owned(bulk.peek(avail_w, reach, page_h))),
+            None => self.flow.get(self.next).map(|node| match node.bulk_records() {
+                Some(records) => Cow::Owned(Bulk::new(node.clone(), records.clone()).peek(avail_w, reach, page_h)),
+                None => Cow::Borrowed(node),
+            }),
         }
     }
 }
@@ -1189,6 +1200,27 @@ fn fill_room(
                 (window, rest, tall) = whole.to_split(avail_w, reach, page_h);
                 window
             }
+            // A bulk container is cut where its split would cut it whole, as the window of a rest is, until what is
+            // left of it reaches no further than a page.
+            Waiting::Bulk(bulk) => match bulk.take(avail_w, remaining.max(0.0), page_h, reach) {
+                Take::Whole(node) => node,
+                Take::First(first, left) => {
+                    runs_past |= page.is_empty() && may_run_past(&first);
+                    page.push((first, None));
+                    pending.push_front(Waiting::Bulk(left));
+                    break;
+                }
+                // A first part that would be all of a container no page holds is placed whole on an empty page, cut
+                // at its foot, which would cut off all of a bulk container's records after it.
+                Take::Nothing(bulk) if page.is_empty() && rule.overflow == Overflow::Place => {
+                    refuse(bulk.too_tall());
+                    continue;
+                }
+                Take::Nothing(bulk) => {
+                    pending.push_front(Waiting::Bulk(bulk));
+                    break;
+                }
+            },
         };
         let (mut h, mut tree) = if tall {
             (f32::INFINITY, None)
@@ -9238,7 +9270,7 @@ abcdef</code><text>after</text></row>"#,
             r#"<table cols="1fr 1fr"><tr data-source="items"><td rowspan="2"><text data-value="name">n</text></td><td><text data-value="name">n</text></td></tr><tr><td><text>last</text></td></tr></table>"#,
         );
         let mut doc = parse(&xml).unwrap();
-        crate::data::apply(&mut doc, &crate::data::parse(r#"{"items":[{"name":"a"},{"name":"b"},{"name":"c"}]}"#).unwrap()).unwrap();
+        crate::data::apply(&mut doc, crate::data::parse(r#"{"items":[{"name":"a"},{"name":"b"},{"name":"c"}]}"#).unwrap()).unwrap();
         let layouts = doc.section_layouts();
         let pages: Vec<_> = layouts.iter().flat_map(layout_page).collect();
         assert!(!pages.is_empty());
@@ -9254,7 +9286,7 @@ abcdef</code><text>after</text></row>"#,
         let mut doc = parse(xml).unwrap();
         crate::data::apply(
             &mut doc,
-            &crate::data::parse(r##"{"items":[{"color":"#00ff00","tone":"late","label":"One"},{"label":"Two"}]}"##).unwrap(),
+            crate::data::parse(r##"{"items":[{"color":"#00ff00","tone":"late","label":"One"},{"label":"Two"}]}"##).unwrap(),
         )
         .unwrap();
         let lp = doc.section_layouts();

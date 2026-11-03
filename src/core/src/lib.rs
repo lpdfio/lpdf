@@ -281,7 +281,7 @@ impl LpdfEngine {
         let files = attachments::resolve(&attached, &self.files, &doc.output)?;
 
         if let Some(json) = json_data {
-            data::apply(&mut doc, &data::parse(json)?)?;
+            data::apply(&mut doc, data::parse(json)?)?;
         }
 
         // Confirm every image declared in <assets> has bytes in the registry.
@@ -437,7 +437,7 @@ impl LpdfEngine {
         // No file is loaded here, so a document that carries files is an error that says how to load them.
         attachments::resolve(&doc.attachments, &attachments::FileRegistry::new(), &doc.output)?;
         if let Some(json) = json_data {
-            data::apply(&mut doc, &data::parse(json)?)?;
+            data::apply(&mut doc, data::parse(json)?)?;
         }
         let lp = doc.section_layouts();
         pdfua::check(doc.output.pdfua, &doc.meta, &lp)?;
@@ -836,7 +836,7 @@ pub fn bench_render_doc_with_images(mut doc: BenchDoc, images: &[(&str, &[u8])])
 /// Apply data binding to a pre-parsed doc. Used by staged `data/*` benchmarks.
 pub fn bench_data_apply(doc: BenchDoc, json: &str) -> Result<BenchDoc, String> {
     let mut inner = doc.0;
-    data::apply(&mut inner, &data::parse(json)?)?;
+    data::apply(&mut inner, data::parse(json)?)?;
     Ok(BenchDoc(inner))
 }
 
