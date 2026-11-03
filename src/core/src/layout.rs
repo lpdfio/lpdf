@@ -19,6 +19,9 @@ mod aligned_text_tests;
 #[cfg(test)]
 #[path = "layout/columns_tests.rs"]
 mod columns_tests;
+#[cfg(test)]
+#[path = "layout/nested_grid_tests.rs"]
+mod nested_grid_tests;
 pub(crate) use table_grid::{Held, Placed};
 use table_grid::TableGrid;
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
@@ -1376,6 +1379,10 @@ enum SplitOutcome {
 fn split_node_at(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> SplitOutcome {
     if !splittable(node) {
         return SplitOutcome::Atomic;
+    }
+    // A container too small to hold containers splits as it is laid out: without them.
+    if let Some(node) = without_inner_containers(node, own_width(node).map_or(avail_w, |w| w.min(avail_w))) {
+        return split_node_at(&node, avail_w, target_h, full_page_h);
     }
     let _kept = SplitMemo::keep(node);
 
@@ -2902,12 +2909,28 @@ fn measure_height(node: &Node, avail_w: f32, avail_h: f32) -> f32 {
     }
 }
 
-/// Whether the height of `node` comes from the width it is laid out at alone: a node of `auto` height, but not a
-/// link, which passes the height it is given on to its children, nor a vertical divider, which takes it.
+/// Whether the height of `node` comes from the width it is laid out at alone: a node of `auto` height that doesn't
+/// read the height it is given (`reads_given_height`).
 fn sized_by_width(node: &Node) -> bool {
-    node.height_mode == HeightMode::Auto
-        && node.kind != NodeKind::Link
-        && !(node.kind == NodeKind::Divider && node.direction == Direction::Vertical)
+    node.height_mode == HeightMode::Auto && !reads_given_height(node)
+}
+
+/// Whether `node` reads the height it is given, whatever its own height: a link passes it on to its children, and a
+/// vertical divider takes it.
+fn reads_given_height(node: &Node) -> bool {
+    node.kind == NodeKind::Link || (node.kind == NodeKind::Divider && node.direction == Direction::Vertical)
+}
+
+/// Whether a height `node` is given to fill reaches a node inside it that takes a share of it: a child of `full`
+/// or `fill` height, a vertical divider, or one in a link among its children. A grid and a table give their
+/// children no height to fill.
+fn shares_given_height(node: &Node) -> bool {
+    !matches!(node.kind, NodeKind::Grid | NodeKind::Table)
+        && node.children.iter().any(|child| {
+            matches!(child.height_mode, HeightMode::Full | HeightMode::Fill)
+                || (child.kind == NodeKind::Divider && child.direction == Direction::Vertical)
+                || (child.kind == NodeKind::Link && shares_given_height(child))
+        })
 }
 
 thread_local! {
@@ -2926,6 +2949,9 @@ thread_local! {
     static LAYOUT_WORK: Cell<usize> = const { Cell::new(0) };
     /// How many times the whole document was laid out (`lay_out_document`), counted for the tests.
     pub(crate) static DOCUMENT_PASSES: Cell<usize> = const { Cell::new(0) };
+    /// Whether a grid lays out every cell again to stretch it, none keeping its first tree
+    /// (`same_when_stretched`): the tests lay a document out both ways and compare.
+    static STRETCH_EVERY_CELL: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Count a step of the layout's work, in the tests (`LAYOUT_WORK`).
@@ -3116,6 +3142,30 @@ fn with_anchors(rendered: RenderNode, bookmarks: &[Bookmark], x: f32, y: f32, wi
 
 // ── Container layout (box + inner children) ───────────────────────────────────
 
+/// The narrowest a container can be, and the lowest its set height, and still lay out containers inside it: 5 mm.
+/// A smaller one lays out its own box and its leaf content alone (`without_inner_containers`). A grid lays out a
+/// cell shorter than its row twice, the second time stretched to the row, so grids nested in such cells double the
+/// work at each level. Such a cell shares its row, so each level halves its width, and the doubling stops here
+/// after about six levels. Fixed, not an option, as the depth limit is.
+const MIN_NESTING_SIZE: f32 = 5.0 * 72.0 / 25.4;
+
+/// Whether `node` holds other nodes in the flow: a box, a link, or a table or a part of one.
+fn is_container(node: &Node) -> bool {
+    matches!(
+        node.kind,
+        NodeKind::Column | NodeKind::Row | NodeKind::Grid | NodeKind::Frame | NodeKind::Link
+            | NodeKind::Table | NodeKind::TableHead | NodeKind::TableRow | NodeKind::TableCell
+    )
+}
+
+/// `node` laid out `width` wide without the containers among its children, when it is narrower than
+/// `MIN_NESTING_SIZE` or set lower, and holds one. Its own box and its leaf children stay.
+fn without_inner_containers(node: &Node, width: f32) -> Option<Node> {
+    let small = width < MIN_NESTING_SIZE || matches!(node.height_mode, HeightMode::Fixed(h) if h < MIN_NESTING_SIZE);
+    (small && node.children.iter().any(is_container))
+        .then(|| node.with_children(node.children.iter().filter(|child| !is_container(child)).cloned().collect()))
+}
+
 fn layout_container(
     node: &Node,
     x: f32,
@@ -3123,6 +3173,9 @@ fn layout_container(
     avail_w: f32,
     avail_h: Option<f32>,
 ) -> (RenderNode, f32) {
+    if let Some(node) = without_inner_containers(node, avail_w) {
+        return layout_container(&node, x, y, avail_w, avail_h);
+    }
     let [pt, pr, pb, pl] = node.padding;
     let inner_x = x + pl;
     let inner_y = y + pt;
@@ -3620,17 +3673,23 @@ fn layout_grid(
     let mut row_y = y;
 
     for chunk in children.chunks(cols) {
-        // Pass 1: measure every item to find the tallest in this row
-        let mut row_h = 0.0_f32;
-        for (j, child) in chunk.iter().enumerate() {
-            let cx = x + j as f32 * (col_w + gap);
-            let (_, h) = layout_node(child, cx, row_y, col_w, None);
-            row_h = row_h.max(h);
-        }
+        // Pass 1: lay out every item at its place to find the tallest in this row
+        let laid: Vec<(RenderNode, f32)> = chunk
+            .iter()
+            .enumerate()
+            .map(|(j, child)| layout_node(child, x + j as f32 * (col_w + gap), row_y, col_w, None))
+            .collect();
+        let row_h = laid.iter().fold(0.0_f32, |acc, (_, h)| acc.max(*h));
 
         // Pass 2: re-layout with avail_h = row_h so every item stretches to row height
-        // (only Auto items are promoted — Fixed/Full/Fill keep their own height mode)
-        for (j, child) in chunk.iter().enumerate() {
+        // (only Auto items are promoted — Fixed/Full/Fill keep their own height mode).
+        // An item that comes out the same keeps its tree from pass 1, so a grid nested in a
+        // cell is laid out once and each level doesn't double the work below it.
+        for (j, (child, (tree, h))) in chunk.iter().zip(laid).enumerate() {
+            if same_when_stretched(child, h, row_h) {
+                nodes.push(tree);
+                continue;
+            }
             let cx = x + j as f32 * (col_w + gap);
             let stretched;
             let child_ref: &Node = if child.height_mode == HeightMode::Auto {
@@ -3654,6 +3713,20 @@ fn layout_grid(
     (nodes, total_h)
 }
 
+/// Whether a cell of a grid's row `row_h` high, laid out `h` high with no height to fill, comes out the same laid
+/// out again to fill the row: a cell of a set height that doesn't read the height it is given, or a cell as tall
+/// as the row, which has nothing to stretch to, when nothing inside it takes a share of the height.
+fn same_when_stretched(cell: &Node, h: f32, row_h: f32) -> bool {
+    #[cfg(test)]
+    if STRETCH_EVERY_CELL.with(Cell::get) {
+        return false;
+    }
+    match cell.height_mode {
+        HeightMode::Fixed(_) => !reads_given_height(cell),
+        _ => h == row_h && !shares_given_height(cell),
+    }
+}
+
 // ── Link ──────────────────────────────────────────────────────────────────────
 
 fn layout_link(
@@ -3663,6 +3736,9 @@ fn layout_link(
     avail_w: f32,
     avail_h: Option<f32>,
 ) -> (RenderNode, f32) {
+    if let Some(node) = without_inner_containers(node, avail_w) {
+        return layout_link(&node, x, y, avail_w, avail_h);
+    }
     let url = node.url.clone().unwrap_or_default();
     // A link has no padding attribute; the padding is the indent a table of contents gives its entries.
     let [pt, pr, pb, pl] = node.padding;
