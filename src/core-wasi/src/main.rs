@@ -791,6 +791,34 @@ mod tests {
     }
 
     #[test]
+    fn markdown_that_nests_too_deep_is_an_ordinary_error_on_both_methods() {
+        let xml = |markdown: &str| {
+            format!(
+                r#"<lpdf version="1"><document><section><markdown><markdown-content><![CDATA[{markdown}]]></markdown-content></markdown></section></document></lpdf>"#
+            )
+        };
+        let tree = |markdown: &str| {
+            let content = serde_json::json!({ "type": "markdown-content", "attrs": {}, "nodes": [markdown] });
+            serde_json::json!({
+                "version": 1, "type": "document", "attrs": {},
+                "nodes": [{ "type": "section", "attrs": {}, "nodes": [{ "type": "markdown", "attrs": {}, "nodes": [content] }] }]
+            })
+            .to_string()
+        };
+        let lists: Vec<String> = (0..500).map(|i| format!("{}- item", "  ".repeat(i))).collect();
+        let fits = "> ".repeat(3) + "deep";
+        assert!(answer("render_pdf", &xml(&fits), serde_json::json!({}))["pdf"].is_string());
+        assert!(answer("render_tree_pdf", &tree(&fits), serde_json::json!({}))["pdf"].is_string());
+        for markdown in ["> ".repeat(2000) + "deep", lists.join("\n")] {
+            for (method, input) in [("render_pdf", xml(&markdown)), ("render_tree_pdf", tree(&markdown))] {
+                let answer = answer(method, &input, serde_json::json!({}));
+                let error = answer["error"].as_str().unwrap_or_else(|| panic!("{method}: {answer}"));
+                assert!(error.contains("is nested too deep: a Markdown nests 31 quotes or 47 list items"), "{method}: {error}");
+            }
+        }
+    }
+
+    #[test]
     fn the_tree_path_reads_output_too() {
         let tree = r#"{"version":1,"type":"document","attrs":{"output":{"encrypt":"rc4-128"}},"nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[]}]}]}"#;
         let req = serde_json::json!({ "method": "render_tree_pdf", "input": tree });
