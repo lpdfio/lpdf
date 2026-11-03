@@ -373,6 +373,19 @@ fn showcase_columns_markdown() { run_snapshot("showcase-columns-markdown"); }
 #[test]
 fn showcase_columns_data() { run_snapshot_with_data("showcase-columns-data"); }
 #[test]
+fn showcase_bulk() { run_snapshot_with_data("showcase-bulk"); }
+
+/// `showcase-bulk` without `bulk`, its templates expanded by the binding, is the same PDF to the byte.
+#[test]
+fn showcase_bulk_renders_as_its_records_expanded() {
+    let xml = std::fs::read_to_string(fixtures_dir().join("showcase-bulk.xml")).expect("the fixture");
+    let json = std::fs::read_to_string(fixtures_dir().join("showcase-bulk.json")).expect("its data");
+    let render = |xml: &str| crate::LpdfEngine::render_xml_to_pdf(xml, Some(&json), "", 0, false).expect("a render");
+    let bulk = render(&xml);
+    let expanded = render(&xml.replace(r#" bulk="true""#, ""));
+    assert!(bulk == expanded, "the PDFs differ: {} bytes with bulk, {} without", bulk.len(), expanded.len());
+}
+#[test]
 fn showcase_columns_insets() { run_snapshot_with_image("showcase-columns-insets"); }
 #[test]
 fn showcase_columns_inset_last() { run_snapshot("showcase-columns-inset-last"); }
