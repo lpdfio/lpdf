@@ -7,6 +7,8 @@ mod footnotes;
 mod columns;
 #[path = "layout/table_grid.rs"]
 mod table_grid;
+#[path = "layout/rests.rs"]
+mod rests;
 #[cfg(test)]
 #[path = "layout/row_split_tests.rs"]
 mod row_split_tests;
@@ -22,8 +24,12 @@ mod columns_tests;
 #[cfg(test)]
 #[path = "layout/nested_grid_tests.rs"]
 mod nested_grid_tests;
+#[cfg(test)]
+#[path = "layout/rest_window_tests.rs"]
+mod rest_window_tests;
 pub(crate) use table_grid::{Held, Placed};
 use table_grid::TableGrid;
+use rests::{Reached, Rest, Waiting};
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
 use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderCanvasClip, RenderCanvasLayer, RenderField, RenderFootnoteMark, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind, Tag, TagKind};
 use crate::tokens::FontWidths;
@@ -953,12 +959,13 @@ fn reserve_sink_lines(mut node: Node) -> Node {
 // ── Source-level pagination ───────────────────────────────────────────────────
 
 /// The nodes still to be placed: the rest of the flow not yet touched, behind the pieces of nodes that were split
-/// or sent on to the next page. Cloning one is cheap, so a page can be filled to try it and the try thrown away.
+/// or sent on to the next page. Cloning one is cheap, so a page can be filled to try it and the try thrown away: what
+/// is left of a long container shares its children (`rests`).
 #[derive(Clone)]
 struct Pending<'a> {
     flow:  &'a [Node],
     next:  usize,
-    front: std::collections::VecDeque<Node>,
+    front: std::collections::VecDeque<Waiting>,
 }
 
 impl<'a> Pending<'a> {
@@ -970,19 +977,25 @@ impl<'a> Pending<'a> {
         self.front.is_empty() && self.next >= self.flow.len()
     }
 
-    fn pop(&mut self) -> Option<Node> {
-        if let Some(node) = self.front.pop_front() { return Some(node); }
+    fn pop(&mut self) -> Option<Waiting> {
+        if let Some(waiting) = self.front.pop_front() { return Some(waiting); }
         let node = self.flow.get(self.next).cloned();
         if node.is_some() { self.next += 1; }
-        node
+        node.map(Waiting::Node)
     }
 
-    fn push_front(&mut self, node: Node) {
-        self.front.push_front(node);
+    fn push_front(&mut self, waiting: Waiting) {
+        self.front.push_front(waiting);
     }
 
-    fn peek(&self) -> Option<&Node> {
-        self.front.front().or_else(|| self.flow.get(self.next))
+    /// The next node, as `fill_room` measures and splits it to see whether the node before it can keep with it: what
+    /// is left of a long container as a window of it, which says the same there (`Rest::peek`).
+    fn peek(&self, avail_w: f32, reach: f32, page_h: f32) -> Option<Cow<'_, Node>> {
+        match self.front.front() {
+            Some(Waiting::Node(node)) => Some(Cow::Borrowed(node)),
+            Some(Waiting::Rest(rest)) => Some(Cow::Owned(rest.peek(avail_w, reach, page_h))),
+            None => self.flow.get(self.next).map(Cow::Borrowed),
+        }
     }
 }
 
@@ -1141,19 +1154,51 @@ fn fill_room(
     let mut used_h: f32 = 0.0;
     let x = at.map_or(0.0, |(x, _)| x);
     let mut place_y = at.map(|(_, y)| y);
+    let page_h = rule.page_h.unwrap_or(budget);
+    // How far a window of what is left of a long container reaches (`rests`): past every height a split here or a
+    // node that keeps with it compares it with.
+    let reach = budget.max(next_budget).max(page_h) + 1.0;
 
-    while let Some(node) = pending.pop() {
+    while let Some(waiting) = pending.pop() {
         // break-before: end the page before this node. Requeue without the flag to avoid an infinite loop on
         // a fresh page.
-        if node.paginate == Paginate::BreakBefore && (!page.is_empty() || rule.follows) {
-            pending.push_front(Node { paginate: Paginate::None, ..node });
+        if waiting.node().paginate == Paginate::BreakBefore && (!page.is_empty() || rule.follows) {
+            pending.push_front(waiting.paginated(Paginate::None));
             stop = Stop::Break;
             break;
         }
 
         let gap_before = if page.is_empty() { 0.0 } else { gap };
-        let (h, tree) = measure_on_page(&node, x, place_y, avail_w, budget);
         let remaining = budget - used_h - gap_before;
+        // What is left of a long container is split in a window of it, which leaves children behind and doesn't
+        // fit, and goes on as what is left of the rest: `rest` holds them. A window known to be taller than any room
+        // here isn't laid out to learn that. One that fits would say so for the rest too, which may not: the rest is
+        // split whole then, as is one that a window would hold whole.
+        let mut rest = None;
+        let mut tall = false;
+        let mut node = match waiting {
+            Waiting::Node(node) => node,
+            Waiting::Rest(whole) => {
+                let window;
+                (window, rest, tall) = whole.to_split(avail_w, reach, page_h);
+                window
+            }
+        };
+        let (mut h, mut tree) = if tall {
+            (f32::INFINITY, None)
+        } else {
+            measure_on_page(&node, x, place_y, avail_w, budget)
+        };
+        if h <= remaining + 0.5 && let Some((whole, _)) = rest.take() {
+            node = whole.into_node();
+            (h, tree) = measure_on_page(&node, x, place_y, avail_w, budget);
+        }
+        // A container longer than two pages goes on as a rest from the first page it doesn't fit, which splits a
+        // window of it rather than all of it.
+        if rest.is_none() && h > 2.0 * reach && rests::goes_on_as_rest(&node) {
+            (node, rest, _) = Box::new(Rest::new(node)).to_split(avail_w, reach, page_h);
+            tree = None;
+        }
 
         let needs_break_after;
 
@@ -1165,12 +1210,12 @@ fn fill_room(
             // a few lines, is split there, so the node is not parted from it and the
             // page is not left half empty.
             let keep_next_h = if node.paginate == Paginate::KeepNext && !page.is_empty() {
-                pending.peek().and_then(|next| {
-                    let next_h = measure_height(next, avail_w, budget);
+                pending.peek(avail_w, reach, budget).and_then(|next| {
+                    let next_h = measure_height(&next, avail_w, budget);
                     let remaining_for_next = remaining - h - gap;
                     (next_h > remaining_for_next + 0.5
                         && h + gap + next_h <= next_budget + 0.5
-                        && !starts_within(next, avail_w, remaining_for_next, budget))
+                        && !starts_within(&next, avail_w, remaining_for_next, budget))
                     .then_some(next_h)
                 })
             } else {
@@ -1191,9 +1236,9 @@ fn fill_room(
                 // A page that would be left empty keeps them: they are already at the top of it.
                 if back == page.len() { back = 0; }
                 let moved = page.split_off(page.len() - back);
-                pending.push_front(node);
+                pending.push_front(Waiting::Node(node));
                 for (kept, _) in moved.into_iter().rev() {
-                    pending.push_front(kept);
+                    pending.push_front(Waiting::Node(kept));
                 }
                 stop = Stop::Break;
                 break;
@@ -1204,8 +1249,8 @@ fn fill_room(
             // exceed a full page, so the constraint cannot be honoured.
             let warn_keep_next = node.debug
                 && node.paginate == Paginate::KeepNext
-                && pending.peek().map_or(false, |next| {
-                    let next_h = measure_height(next, avail_w, next_budget);
+                && pending.peek(avail_w, reach, next_budget).map_or(false, |next| {
+                    let next_h = measure_height(&next, avail_w, next_budget);
                     let remaining_for_next = remaining - h - gap;
                     next_h > remaining_for_next + 0.5
                         && h + gap + next_h > next_budget + 0.5
@@ -1214,14 +1259,21 @@ fn fill_room(
             page.push((node, tree));
             used_h += gap_before + h;
             if warn_keep_next {
-                pending.push_front(make_keep_next_warning());
+                pending.push_front(Waiting::Node(make_keep_next_warning()));
             }
         } else {
             // A node that doesn't fit keeps its tree only to be placed whole on an empty page, which a node that
             // splits never is: its tree goes before its parts are measured.
             let tree = tree.filter(|_| page.is_empty() && !splittable(&node));
             let target = remaining.max(0.0);
-            match split_node_at(&node, avail_w, target, rule.page_h.unwrap_or(budget)) {
+            match split_node_at(&node, avail_w, target, page_h) {
+                // A window is taller than any room it is split in, so the split never takes it whole. Should it,
+                // the rest is split whole.
+                SplitOutcome::Atomic if rest.is_some() => {
+                    let whole = rest.take().map_or(node, |(rest, _)| rest.into_node());
+                    pending.push_front(Waiting::Node(whole));
+                    continue;
+                }
                 // A first part that runs past an empty room that may not hold it waits for the room after.
                 SplitOutcome::First(first, _)
                     if page.is_empty() && rule.overflow != Overflow::Place && may_run_past(&first) && {
@@ -1229,14 +1281,14 @@ fn fill_room(
                         fh > target + 0.5 && !rule.places(fh)
                     } =>
                 {
-                    pending.push_front(node);
+                    put_back(pending, rest, vec![node]);
                     break;
                 }
-                SplitOutcome::First(first, mut rest) => {
+                SplitOutcome::First(first, mut left) => {
                     // Propagate break-after to the last continuation so the
                     // break fires after the final fragment, not the first.
                     if node.paginate == Paginate::BreakAfter {
-                        if let Some(last) = rest.last_mut() {
+                        if let Some(last) = left.last_mut() {
                             last.paginate = Paginate::BreakAfter;
                         }
                     }
@@ -1244,47 +1296,50 @@ fn fill_room(
                     runs_past |= page.is_empty() && may_run_past(&first);
                     let cut = node.debug && measure_height(&first, avail_w, budget) > target + 0.5;
                     page.push((first, None));
-                    for item in rest.into_iter().rev() {
-                        pending.push_front(item);
+                    match rest {
+                        Some((rest, reached)) => {
+                            debug_assert!(left.len() <= 1, "a split leaves one node at most");
+                            pending.push_front(Waiting::Rest(Box::new(rest.advance(reached, left.pop()))));
+                        }
+                        None => put_back(pending, None, left),
                     }
                     if cut {
-                        pending.push_front(make_clip_warning());
+                        pending.push_front(Waiting::Node(make_clip_warning()));
                     }
                     break;
                 }
-                SplitOutcome::NothingFits(rest)
+                SplitOutcome::NothingFits(left)
                     if page.is_empty() && rule.overflow != Overflow::Place
-                        && rest.first().is_some_and(|first| !rule.places(measure_height(first, avail_w, budget))) =>
+                        && left.first().is_some_and(|first| !rule.places(measure_height(first, avail_w, budget))) =>
                 {
-                    for item in rest.into_iter().rev() {
-                        pending.push_front(item);
-                    }
+                    put_back(pending, rest, left);
                     break;
                 }
-                SplitOutcome::NothingFits(rest) => {
+                SplitOutcome::NothingFits(left) => {
                     if page.is_empty() {
                         // Already on a fresh page and still can't split — force-place
-                        // the first piece to prevent an infinite loop.
-                        let first = rest.into_iter().next().unwrap_or(node);
+                        // the first piece to prevent an infinite loop. A window is the rest whole then.
+                        let first = match rest {
+                            Some((rest, _)) => rest.into_node(),
+                            None => left.into_iter().next().unwrap_or(node),
+                        };
                         needs_break_after = first.paginate == Paginate::BreakAfter;
                         let fh = measure_height(&first, avail_w, budget);
                         runs_past |= fh > budget + 0.5;
                         if first.debug && fh > budget + 0.5 {
-                            pending.push_front(make_clip_warning());
+                            pending.push_front(Waiting::Node(make_clip_warning()));
                         }
                         page.push((first, None));
                         used_h = fh.min(budget);
                         place_y = None;
                     } else {
                         // paginate flags are preserved on rest items via clone
-                        for item in rest.into_iter().rev() {
-                            pending.push_front(item);
-                        }
+                        put_back(pending, rest, left);
                         break;
                     }
                 }
                 SplitOutcome::Atomic if page.is_empty() && !rule.places(h) => {
-                    pending.push_front(node);
+                    pending.push_front(Waiting::Node(node));
                     break;
                 }
                 SplitOutcome::Atomic => {
@@ -1292,13 +1347,13 @@ fn fill_room(
                         needs_break_after = node.paginate == Paginate::BreakAfter;
                         runs_past |= h > budget + 0.5;
                         if node.debug && h > budget + 0.5 {
-                            pending.push_front(make_clip_warning());
+                            pending.push_front(Waiting::Node(make_clip_warning()));
                         }
                         place_y = next_place(place_y, &node, tree.is_some(), h, gap);
                         page.push((node, tree));
                         used_h = budget;
                     } else {
-                        pending.push_front(node);
+                        pending.push_front(Waiting::Node(node));
                         break;
                     }
                 }
@@ -1313,6 +1368,19 @@ fn fill_room(
     }
 
     Filled { nodes: page, runs_past, stop }
+}
+
+/// Put back what a page didn't take: the rest a window was split in place of, or else `left`, what the split left of
+/// the node, a long container as a rest (`Waiting::left`).
+fn put_back(pending: &mut Pending, rest: Option<(Box<Rest>, Reached)>, left: Vec<Node>) {
+    match rest {
+        Some((rest, _)) => pending.push_front(Waiting::Rest(rest)),
+        None => {
+            for node in left.into_iter().rev() {
+                pending.push_front(Waiting::left(node));
+            }
+        }
+    }
 }
 
 /// Construct a small red diagnostic text node injected into the layout stream
