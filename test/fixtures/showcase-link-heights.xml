@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+      <color name="block"   value="#c9c9c9" />
+      <color name="room"    value="#e8f0fc" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Heights inside a link" subject="What a child of full or fill height takes inside a link" />
+
+    <!-- A link gives its children the height any box gives them: none at auto height, so a grey block of full height
+         is as tall as the link's other content; its own at a set height; and the one it is given at full or fill
+         height. Each grey block stays inside its link, and the text after a link starts below it. Everything is on
+         one page. -->
+    <section>
+      <layout margin="40pt">
+        <text font-size="l" font="Helvetica-Bold" color="primary">Heights inside a link</text>
+        <frame height="10pt" />
+
+        <!-- At the top of the page: the block is as tall as the line beside it, the next line follows the link, and
+             the link keeps to this page. -->
+        <text font="Helvetica-Bold">A link at the top of the page, holding a block of full height</text>
+        <link href="https://example.com/page">
+          <text>The link's line of text</text>
+          <frame height="full" background="block" />
+        </link>
+        <text color="muted">This line follows the link.</text>
+        <frame height="10pt" />
+
+        <!-- In a column: as at the top of the page. -->
+        <text font="Helvetica-Bold">A link in a column, holding a block of full height</text>
+        <column background="room" padding="6pt">
+          <link href="https://example.com/column">
+            <text>The link's line of text</text>
+            <frame height="full" background="block" />
+          </link>
+          <text color="muted">This line follows the link, inside the column.</text>
+        </column>
+        <frame height="10pt" />
+
+        <!-- In a row of a set height whose line spreads, beside a text of fill width: the block is as tall as the
+             link's line and stays inside the row. -->
+        <text font="Helvetica-Bold">A link in a row of 40pt, beside a text of fill width</text>
+        <row height="40pt" background="room">
+          <link href="https://example.com/row">
+            <text>The link's line</text>
+            <frame height="full" background="block" />
+          </link>
+          <text width="fill" align="right">Beside the link</text>
+        </row>
+        <text color="muted">This line follows the row.</text>
+        <frame height="10pt" />
+
+        <!-- A link of a set height as a grid cell beside a taller cell: its block of fill height takes what the line
+             leaves of the link's 40pt, not of the row, as in the column of 40pt beside it. -->
+        <text font="Helvetica-Bold">A link of 40pt as a grid cell, beside a column of 40pt and a taller cell</text>
+        <grid cols="3" gap="8pt" background="room">
+          <link href="https://example.com/cell" height="40pt">
+            <text>Link, 40pt</text>
+            <frame height="fill" background="block" />
+          </link>
+          <column height="40pt">
+            <text>Column, 40pt</text>
+            <frame height="fill" background="block" />
+          </column>
+          <text>The row is as tall as this cell, which holds a text long enough to take several lines in a third of the page. The two boxes beside it keep to their own 40pt.</text>
+        </grid>
+        <text color="muted">This line follows the grid.</text>
+        <frame height="10pt" />
+
+        <!-- Links that fill: a link of full height in a column of 70pt, its block of fill height taking what its line
+             leaves, and a link of fill height under a line, its block of full height taking all of the link. -->
+        <text font="Helvetica-Bold">Links that fill: of full height, and of fill height under a line</text>
+        <grid cols="2" gap="8pt">
+          <column height="70pt" background="room">
+            <link href="https://example.com/full" height="full">
+              <text>The link's line, the link of full height</text>
+              <frame height="fill" background="block" />
+            </link>
+          </column>
+          <column height="70pt" background="room">
+            <text>A line above the link of fill height</text>
+            <link href="https://example.com/fill" height="fill">
+              <frame height="full" background="block" />
+            </link>
+          </column>
+        </grid>
+        <text color="muted">This line follows the links that fill.</text>
+        <frame height="10pt" />
+
+        <!-- A link as a grid cell, which the grid stretches to its row: its block of fill height takes what its line
+             leaves of the row. -->
+        <text font="Helvetica-Bold">A link as a grid cell, stretched to its row</text>
+        <grid cols="2" gap="8pt" background="room">
+          <link href="https://example.com/stretched">
+            <text>The link's line</text>
+            <frame height="fill" background="block" />
+          </link>
+          <text>The row is as tall as this cell, which holds a text long enough to take several lines in half of the page. The grid stretches the link beside it to the row, and the link's block takes what its line leaves.</text>
+        </grid>
+        <text color="muted">This line follows the grid.</text>
+      </layout>
+    </section>
+  </document>
+</lpdf>
