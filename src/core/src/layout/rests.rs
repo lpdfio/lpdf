@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use super::{
     col_units, line_widths, measure_height, own_width, reads_given_height, row_child_w, splittable, table_col_widths,
-    Align, ColUnit, HeightMode, Node, NodeKind, Paginate, RowHeights, RowKeep, TableGrid, MIN_NESTING_SIZE,
+    Align, Bulk, ColUnit, HeightMode, Node, NodeKind, Paginate, RowHeights, RowKeep, TableGrid, MIN_NESTING_SIZE,
 };
 
 /// How many children a container has left at most for its rest to go on as a node, copied for each page: a rest
@@ -26,15 +26,24 @@ thread_local! {
     pub(super) static WINDOWS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// A node of the flow waiting for a page: a node, or what is left of a long container. The rest is boxed, so that a
-/// node, which every page takes many of, moves no more than it did.
+/// A node of the flow waiting for a page: a node, what is left of a long container, or what is left of a bulk
+/// container (`bulk`). The rests are boxed, so that a node, which every page takes many of, moves no more than it did.
 #[derive(Clone)]
 pub(super) enum Waiting {
     Node(Node),
     Rest(Box<Rest>),
+    Bulk(Box<Bulk>),
 }
 
 impl Waiting {
+    /// A node of the flow as it starts to wait: a bulk container whose records are in as a `Bulk`, any other as it is.
+    pub(super) fn of(node: Node) -> Waiting {
+        match node.bulk_records().cloned() {
+            Some(records) => Waiting::Bulk(Box::new(Bulk::new(node, records))),
+            None => Waiting::Node(node),
+        }
+    }
+
     /// What is left of a node a page split, as it waits for the next: a long container as a `Rest`, and anything
     /// else as it is.
     pub(super) fn left(node: Node) -> Waiting {
@@ -46,6 +55,7 @@ impl Waiting {
         match self {
             Waiting::Node(node) => node,
             Waiting::Rest(rest) => &rest.shell,
+            Waiting::Bulk(bulk) => bulk.shell(),
         }
     }
 
@@ -57,6 +67,10 @@ impl Waiting {
                 rest.shell.paginate = paginate;
                 Waiting::Rest(rest)
             }
+            Waiting::Bulk(mut bulk) => {
+                bulk.shell_mut().paginate = paginate;
+                Waiting::Bulk(bulk)
+            }
         }
     }
 
@@ -65,6 +79,7 @@ impl Waiting {
         match self {
             Waiting::Node(node) => node,
             Waiting::Rest(rest) => rest.into_node(),
+            Waiting::Bulk(bulk) => bulk.into_node(),
         }
     }
 }
@@ -210,6 +225,13 @@ fn lead_window(lead: &Waiting, width: f32, reach: f32, page_h: f32, tall: &mut b
         Waiting::Node(node) => {
             *tall &= sized_alike(node);
             (node.clone(), None, measure_height(node, width, page_h))
+        }
+        // A bulk container stands directly in the layout, so it leads nothing: should it, it is all of its children.
+        Waiting::Bulk(bulk) => {
+            let node = (**bulk).clone().into_node();
+            *tall &= sized_alike(&node);
+            let height = measure_height(&node, width, page_h);
+            (node, None, height)
         }
     }
 }

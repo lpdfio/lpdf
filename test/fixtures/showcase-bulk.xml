@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="primary" value="#1763cf" />
+      <color name="muted"   value="#737373" />
+      <color name="rule"    value="#c5ccd6" />
+      <color name="stripe"  value="#f2f5f9" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Bulk records from data" subject="A ledger, an event log, address labels and an audit trail, each laid out a page at a time" />
+
+    <!-- Records by the thousand from data (showcase-bulk.json), each container with bulk="true": its child with
+         data-source is a template, and the engine lays the records out a page at a time from the data, with no node
+         for a record no page has reached. The pages are the ones the same document has without bulk, which a test
+         checks to the byte, so every text in a template sets its max-lines, as one without it would hold one line.
+    -->
+
+    <!-- The ledger: 5,000 entries of a year in a table.
+         Expected: about 120 pages under the company's name and the year, page numbers "Page n of N" at the foot of
+         each, N the same on every page. The title and a line under it start the first page, then the table: a dark
+         header row on every page, every other row tinted, a line under each row. A row has the date, the account, the
+         description on up to two lines, every eleventh cut short with "…" at the end of the second, and the amount
+         at the right. The last page ends with a total row, and the total of the year under the table.
+    -->
+    <section>
+      <layout margin="40pt">
+        <region pin="top">
+          <row padding="0 0 s 0">
+            <text font-size="s" color="muted" data-value="company">Company</text>
+            <text width="fill" align="right" font-size="s" color="muted" data-value="year">Year</text>
+          </row>
+        </region>
+        <text font-size="xl" font="Helvetica-Bold" color="primary" paginate="keep-next">General ledger</text>
+        <text font-size="s" color="muted">Every entry of the year, from the ledger's export.</text>
+        <table cols="62pt 70pt 5fr 2fr" stripe="stripe" row-border="0.5pt rule" bulk="true">
+          <thead background="primary">
+            <td padding="xs s"><text font-size="s" bold="true" color="#ffffff" max-lines="1">Date</text></td>
+            <td padding="xs s"><text font-size="s" bold="true" color="#ffffff" max-lines="1">Account</text></td>
+            <td padding="xs s"><text font-size="s" bold="true" color="#ffffff" max-lines="1">Description</text></td>
+            <td padding="xs s"><text font-size="s" bold="true" color="#ffffff" align="right" max-lines="1">Amount</text></td>
+          </thead>
+          <tr data-source="entries">
+            <td padding="xs s"><text font-size="s" data-value="date" max-lines="1" ellipsis="true">2026-01-01</text></td>
+            <td padding="xs s"><text font-size="s" data-value="account" max-lines="1" ellipsis="true">Account</text></td>
+            <td padding="xs s"><text font-size="s" data-value="description" max-lines="2" ellipsis="true">Description</text></td>
+            <td padding="xs s"><text font-size="s" align="right" data-value="amount" max-lines="1" ellipsis="true">£0.00</text></td>
+          </tr>
+          <tr>
+            <td colspan="3" padding="xs s"><text font-size="s" bold="true" max-lines="1">Total of the year</text></td>
+            <td padding="xs s"><text font-size="s" bold="true" align="right" data-value="total" max-lines="1">£0.00</text></td>
+          </tr>
+        </table>
+        <text font-size="s" color="muted" align="right">Amounts in pounds, VAT included.</text>
+        <region pin="bottom">
+          <text font-size="xs" color="muted" align="right">Page {page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+
+    <!-- The event log: 2,000 events in a number list, numbered from 1 on through its pages.
+         Expected: about 45 pages, each a column of numbered lines in Courier, the numbers set at the right of their
+         column, every ninth event running on to a second line with who it was, and the numbers going on from one page
+         to the next. An event is one text: a bulk item never splits across pages, and the list without bulk would
+         split an item of two texts between them at the foot of a page.
+    -->
+    <section>
+      <layout margin="40pt">
+        <text font-size="l" font="Helvetica-Bold" color="primary" paginate="keep-next">Event log, March</text>
+        <list type="number" indent="36pt" gap="2pt" bulk="true">
+          <li data-source="events">
+            <text font="Courier" font-size="xs" data-value="line" max-lines="2" ellipsis="true">2026-03-01 08:00:00 sign-in</text>
+          </li>
+        </list>
+        <region pin="bottom">
+          <text font-size="xs" color="muted" align="right">Page {page} of {pages}</text>
+        </region>
+      </layout>
+    </section>
+
+    <!-- Address labels: 240 labels on sheets of three across, each label the same height.
+         Expected: 8 pages of 30 labels, ten rows of three, each label a box with a thin border, the name in bold, the
+         street and the town with its postcode, as many labels on every page.
+    -->
+    <section>
+      <layout margin="28pt">
+        <grid cols="3" gap="6pt" bulk="true">
+          <column data-source="addresses" height="72pt" padding="m" border="0.5pt rule" radius="4pt">
+            <text bold="true" data-value="name" max-lines="1" ellipsis="true">Name</text>
+            <text data-value="street" max-lines="1" ellipsis="true">Street</text>
+            <text data-value="city" max-lines="1" ellipsis="true">Town</text>
+          </column>
+        </grid>
+      </layout>
+    </section>
+
+    <!-- The audit trail: 1,000 lines of a column, in two columns of the page.
+         Expected: about 9 pages, each with two columns of short lines in Courier and a rule between them, the lines
+         running down the left column, then the right, then on to the next page.
+    -->
+    <section columns="2" column-rule="0.5pt rule">
+      <layout margin="40pt">
+        <column gap="1pt" bulk="true">
+          <text font-size="m" font="Helvetica-Bold" color="primary" max-lines="1">Audit trail</text>
+          <text data-source="trail" font="Courier" font-size="xs" data-value="line" max-lines="1" ellipsis="true">0001 entry</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

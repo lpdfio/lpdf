@@ -42,7 +42,9 @@ pub enum RenderNode {
     Link(RenderLink),
     Image(RenderImage),
     Barcode(RenderBarcode),
-    Field(RenderField),
+    /// Boxed, since a field is larger than any other node and few pages hold one: every node of a page is the size of
+    /// the largest kind, and pages keep their nodes until the PDF is written.
+    Field(Box<RenderField>),
     // What a layer draws — constructed by canvas.rs. Its text, images and barcodes are the
     // layout's own nodes (`Box`, `Text`, `Image`, `Barcode`), put in `CanvasLayer`.
     CanvasRect(RenderCanvasRect),

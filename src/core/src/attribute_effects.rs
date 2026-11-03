@@ -779,6 +779,15 @@ fn subjects() -> Vec<Subject> {
             .base(&[("type", "number")])
             .only(&["format", "start", "prefix", "suffix"])
             .content(ITEMS),
+        // A text that sets no max-lines holds one line in a bulk container, which a long one shows. Without data, the
+        // child the container repeats is laid out once, as it is written.
+        Subject::new("column", |a, c| boxed("column", a, c)).only(&["bulk"]).content(REPEATED_TEXT),
+        Subject::new("list", |a, c| boxed("list", a, c)).only(&["bulk"]).content(REPEATED_ITEM),
+        Subject::new("grid", |a, c| boxed("grid", a, c)).base(&[("cols", "2")]).only(&["bulk"]).content(REPEATED_TEXT),
+        Subject::new("table", |a, c| flow(&format!("<table {a}>{c}</table><text>After</text>")))
+            .base(&[("cols", "1fr 1fr")])
+            .only(&["bulk"])
+            .content(REPEATED_ROW),
         Subject::new("li", |a, c| {
             flow(&format!("<list><li {a}>{c}</li><li><text>Beta</text></li></list><text>After</text>"))
         })
@@ -916,6 +925,11 @@ fn markdown_document(styles: &str, markdown: &str) -> String {
 fn markdown_sample(sample: &str) -> String {
     sample.replace("{LONG}", LONG).replace("{CODE}", CODE)
 }
+
+/// What a bulk container repeats, written with a text long enough for a second line.
+const REPEATED_TEXT: &str = r#"<text data-source="items">The quick brown fox jumps over the lazy dog, and then it jumps back again, because a text this long runs onto a second line.</text>"#;
+const REPEATED_ITEM: &str = r#"<li data-source="items"><text>The quick brown fox jumps over the lazy dog, and then it jumps back again, because a text this long runs onto a second line.</text></li>"#;
+const REPEATED_ROW: &str = r#"<tr data-source="items"><td><text>The quick brown fox jumps over the lazy dog, and then it jumps back again.</text></td><td><text>B</text></td></tr>"#;
 
 const TABLE_ROWS: &str = "<thead><td><text>H1</text></td><td><text>H2</text></td></thead>\
     <tr><td><text>A1</text></td><td><text>A2</text></td></tr>\

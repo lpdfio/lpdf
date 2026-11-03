@@ -69,13 +69,42 @@ fn lower_list(list: &mut Node, bullet_depth: usize) {
     // A list inside an item sits in its content, so a bullet list one level down is one level deeper.
     let inner_depth = bullet_depth + usize::from(!spec.numbered);
 
+    // The records of a bulk list stand among its items, and take their numbers there, as they are bound.
+    let records = list.data_attrs.as_mut().and_then(|d| d.records.as_mut());
+    let (at, count) = records.as_ref().map_or((usize::MAX, 0), |records| (records.at, records.len()));
     let mut number = spec.start;
-    for item in &mut list.children {
+    for (i, item) in list.children.iter_mut().enumerate() {
+        if i == at {
+            number = number.saturating_add(count as i64);
+        }
         lower_item(item, &spec, &marks, list.gap, number, bullet_depth, inner_depth);
         number = number.saturating_add(1);
     }
+    if let Some(records) = records {
+        let first = spec.start.saturating_add(at as i64);
+        std::rc::Rc::make_mut(records).list =
+            Some(BulkItems { spec, marks, list_gap: list.gap, first, bullet_depth, inner_depth });
+    }
     list.kind = NodeKind::Column;
     list.role = Role::List;
+}
+
+/// How the items of a bulk list are marked: what `lower_item` takes for each, and the number of the first record.
+#[derive(Clone)]
+pub(crate) struct BulkItems {
+    spec:         ListSpec,
+    marks:        Marks,
+    list_gap:     f32,
+    first:        i64,
+    bullet_depth: usize,
+    inner_depth:  usize,
+}
+
+/// Make the record `index` of a bulk list, bound, the row of its marker and its content, as `lower_list` makes the
+/// items it holds.
+pub(crate) fn lower_bulk_item(item: &mut Node, items: &BulkItems, index: usize) {
+    let number = items.first.saturating_add(index as i64);
+    lower_item(item, &items.spec, &items.marks, items.list_gap, number, items.bullet_depth, items.inner_depth);
 }
 
 fn default_spec() -> ListSpec {
@@ -91,6 +120,7 @@ fn default_spec() -> ListSpec {
 }
 
 /// The font, size and color a marker takes when an item's first child is not a text.
+#[derive(Clone)]
 struct Marks {
     font:        String,
     font_size:   f32,
@@ -308,7 +338,7 @@ mod tests {
         );
         let mut doc = parse(&xml).unwrap();
         if let Some(data) = data {
-            crate::data::apply(&mut doc, &crate::data::parse(data).unwrap()).unwrap();
+            crate::data::apply(&mut doc, crate::data::parse(data).unwrap()).unwrap();
         }
         doc.section_layouts().remove(0).children.remove(0)
     }

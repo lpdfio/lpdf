@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use serde_json::Value;
 
@@ -128,10 +129,13 @@ impl Resolvers {
 /// Everything a walk over the tree reads besides the scope stack.
 struct Bind<'a> {
     root: &'a Value,
+    /// The data that `root` is, kept for the records of a bulk container (`BulkRecords`): `None` where none can stand,
+    /// in a table of contents section, and while a record is bound.
+    shared: Option<&'a Rc<Value>>,
     /// Set while binding a table of contents section; see `apply_toc`.
     toc_indent_step: Option<f32>,
     /// `None` in a table of contents section, which refuses bound attributes (`refuse_bound_attrs`).
-    resolvers: Option<&'a Resolvers>,
+    resolvers: Option<&'a Rc<Resolvers>>,
 }
 
 /// A bound attribute that can't be used, naming the attribute and the data path it reads.
@@ -237,12 +241,15 @@ pub fn parse(json_data: &str) -> Result<Value, String> {
 /// `data-name`, `data-color`, `data-background`, `data-fill`).  Layout and PDF
 /// emit receive a plain `Document` with no `data-*` attributes remaining,
 /// except in a table of contents section: it keeps the data and is bound by
-/// `apply_toc` once `$toc` exists.
+/// `apply_toc` once `$toc` exists, and a bulk container, which keeps its
+/// template and the data for the layout to bind its records (`BulkRecords`).
 ///
 /// Returns an error if a bound attribute reads a value it can't use.
-pub fn apply(doc: &mut Document, root: &Value) -> Result<(), String> {
-    let resolvers = Resolvers::of(doc);
-    let bind = Bind { root, toc_indent_step: None, resolvers: Some(&resolvers) };
+pub fn apply(doc: &mut Document, root: Value) -> Result<(), String> {
+    let resolvers = Rc::new(Resolvers::of(doc));
+    let shared = Rc::new(root);
+    let root = &*shared;
+    let bind = Bind { root, shared: Some(&shared), toc_indent_step: None, resolvers: Some(&resolvers) };
 
     for section in &mut doc.sections {
         if let Some(toc) = &mut section.options.toc {
@@ -334,7 +341,7 @@ fn bind_layer(layer: &mut CanvasLayer, bind: &Bind) -> Result<bool, String> {
 /// that `data-source="$toc"` expands gets `(level - 1) × indent_step` more left padding, and its `href="#"`
 /// links point at its entry's bookmark.
 pub(crate) fn apply_toc(nodes: Vec<Node>, root: &Value, indent_step: f32) -> Vec<Node> {
-    let bind = Bind { root, toc_indent_step: Some(indent_step), resolvers: None };
+    let bind = Bind { root, shared: None, toc_indent_step: Some(indent_step), resolvers: None };
     // Only a bound attribute can fail, and `apply` refused those in this section when the data came in, or the
     // memory cap, which stops the render at its next check.
     apply_nodes(nodes, &[], &bind).unwrap_or_default()
@@ -441,10 +448,100 @@ fn apply_single_node(node: Node, stack: &[&Value], bind: &Bind, out: &mut Vec<No
         bind_attributes(&mut node, &bound, stack, root, resolvers)?;
     }
 
-    // 6. Recurse into children with the current scope.
-    node.children = apply_nodes(std::mem::take(&mut node.children), stack, bind)?;
+    // 6. Recurse into children with the current scope. The child a bulk container repeats stays a template, with
+    //    its records in the data.
+    if let (Some(data), Some(resolvers)) = (node.data_attrs.as_mut().filter(|d| d.bulk), bind.shared.zip(bind.resolvers)) {
+        let (shared, resolvers) = resolvers;
+        let mut children = Vec::with_capacity(node.children.len());
+        for child in std::mem::take(&mut node.children) {
+            if child.data_attrs.as_ref().is_some_and(|d| d.data_source.is_some()) {
+                let records = BulkRecords::new(child, children.len(), stack, bind.root, shared, resolvers);
+                data.records = Some(Rc::new(records));
+            } else {
+                apply_single_node(child, stack, bind, &mut children)?;
+            }
+        }
+        node.children = children;
+    } else {
+        node.children = apply_nodes(std::mem::take(&mut node.children), stack, bind)?;
+    }
     out.push(node);
     Ok(())
+}
+
+// ── Bulk records ──────────────────────────────────────────────────────────────
+
+/// The records of a bulk container: the template its child with `data-source` is, and the data that holds them, which
+/// `bind` makes the node of one record from. The layout binds them as its pages reach them (`layout::bulk`), so a page
+/// of records is a page of nodes at a time, and the data is the only copy of the rest.
+#[derive(Clone)]
+pub(crate) struct BulkRecords {
+    template: Node,
+    data:     Rc<Value>,
+    path:     String,
+    count:    usize,
+    /// Where the records stand among the container's children once they are bound: after the children before them.
+    pub(crate) at: usize,
+    resolvers: Rc<Resolvers>,
+    /// How the items of a bulk list are marked, which `lists::lower` sets when it lowers the list.
+    pub(crate) list: Option<crate::lists::BulkItems>,
+}
+
+impl std::fmt::Debug for BulkRecords {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BulkRecords").field("path", &self.path).field("count", &self.count).field("at", &self.at).finish()
+    }
+}
+
+impl BulkRecords {
+    /// The records of `template`, which stands at `at` among the bound children of its container, with the scope
+    /// `stack` around the container. Its `data-if` and `data-if-not` are read once, there, as they are for a loop
+    /// that the binding expands; what does not hold an array gives no records.
+    fn new(mut template: Node, at: usize, stack: &[&Value], root: &Value, data: &Rc<Value>, resolvers: &Rc<Resolvers>) -> Self {
+        let attrs = template.data_attrs.as_mut().map(|d| {
+            (d.data_source.take().unwrap_or_default(), d.data_if.take(), d.data_if_not.take())
+        });
+        let (path, data_if, data_if_not) = attrs.unwrap_or_default();
+        let shown = data_if.is_none_or(|p| is_truthy(resolve_path(&p, stack, root)))
+            && !data_if_not.is_some_and(|p| is_truthy(resolve_path(&p, stack, root)));
+        let count = match resolve_path(&path, stack, root) {
+            Some(Value::Array(items)) if shown => items.len(),
+            _ => 0,
+        };
+        BulkRecords { template, data: Rc::clone(data), path, count, at, resolvers: Rc::clone(resolvers), list: None }
+    }
+
+    /// How many records there are.
+    pub(crate) fn len(&self) -> usize {
+        self.count
+    }
+
+    /// The template, for what the document does to every node before the layout, such as leaving out the optional
+    /// content groups of a PDF/A file.
+    pub(crate) fn template_mut(&mut self) -> &mut Node {
+        &mut self.template
+    }
+
+    /// The nodes of the records `range`, bound as the binding binds a loop's copies, and lowered when they are the
+    /// items of a list.
+    ///
+    /// Returns an error if a bound attribute reads a value it can't use, or the render is past its memory cap.
+    pub(crate) fn bind(&self, range: std::ops::Range<usize>) -> Result<Vec<Node>, String> {
+        // A bulk container stands directly in the layout, so its records are found from the root.
+        let Some(Value::Array(items)) = resolve_path(&self.path, &[], &self.data) else {
+            return Ok(Vec::new());
+        };
+        let bind = Bind { root: &self.data, shared: None, toc_indent_step: None, resolvers: Some(&self.resolvers) };
+        let mut out = Vec::with_capacity(range.len());
+        for index in range {
+            let Some(item) = items.get(index) else { break };
+            apply_single_node(self.template.clone(), &[item], &bind, &mut out)?;
+            if let (Some(list), Some(node)) = (&self.list, out.last_mut()) {
+                crate::lists::lower_bulk_item(node, list, index);
+            }
+        }
+        Ok(out)
+    }
 }
 
 /// Indent an item expanded from `$toc` by its entry's level, and point the item's `href="#"` links at the
@@ -625,7 +722,7 @@ mod tests {
             </layout></section></document></lpdf>"#,
         )
         .unwrap();
-        apply(&mut doc, &parse(r#"{"snippet":"a  b\n\tc","show":false}"#).unwrap()).unwrap();
+        apply(&mut doc, parse(r#"{"snippet":"a  b\n\tc","show":false}"#).unwrap()).unwrap();
         let nodes = layout_children(&doc);
         assert_eq!(nodes.len(), 1);
         assert_eq!(nodes[0].children[0].text_runs[0].text, "a  b\n\tc");
@@ -637,7 +734,7 @@ mod tests {
         let mut n = text_node("fallback");
         n.data_attrs = Some(Box::new(DataAttrs { data_value: Some("name".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
-        apply(&mut doc, &parse(r#"{"name":"Acme Inc"}"#).unwrap()).unwrap();
+        apply(&mut doc, parse(r#"{"name":"Acme Inc"}"#).unwrap()).unwrap();
         assert_eq!(layout_children(&doc)[0].text_runs[0].text, "Acme Inc");
     }
 
@@ -646,7 +743,7 @@ mod tests {
         let mut n = text_node("fallback");
         n.data_attrs = Some(Box::new(DataAttrs { data_value: Some("customer.name".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
-        apply(&mut doc, &parse(r#"{"customer":{"name":"Acme Inc"}}"#).unwrap()).unwrap();
+        apply(&mut doc, parse(r#"{"customer":{"name":"Acme Inc"}}"#).unwrap()).unwrap();
         assert_eq!(layout_children(&doc)[0].text_runs[0].text, "Acme Inc");
     }
 
@@ -655,7 +752,7 @@ mod tests {
         let mut n = text_node("fallback");
         n.data_attrs = Some(Box::new(DataAttrs { data_value: Some("nonexistent".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
-        apply(&mut doc, &parse(r#"{}"#).unwrap()).unwrap();
+        apply(&mut doc, parse(r#"{}"#).unwrap()).unwrap();
         assert!(layout_children(&doc)[0].text_runs.is_empty());
     }
 
@@ -669,7 +766,7 @@ mod tests {
         let mut doc = make_doc(vec![container]);
         apply(
             &mut doc,
-            &parse(r#"{"items":[{"label":"A"},{"label":"B"},{"label":"C"}]}"#).unwrap(),
+            parse(r#"{"items":[{"label":"A"},{"label":"B"},{"label":"C"}]}"#).unwrap(),
         )
         .unwrap();
         let ch = layout_children(&doc);
@@ -685,7 +782,7 @@ mod tests {
         container.data_attrs = Some(Box::new(DataAttrs { data_source: Some("items".to_owned()), ..DataAttrs::default() }));
         container.children = vec![text_node("item")];
         let mut doc = make_doc(vec![container]);
-        apply(&mut doc, &parse(r#"{"items":[]}"#).unwrap()).unwrap();
+        apply(&mut doc, parse(r#"{"items":[]}"#).unwrap()).unwrap();
         assert_eq!(layout_children(&doc).len(), 0);
     }
 
@@ -694,7 +791,7 @@ mod tests {
         let mut n = text_node("premium");
         n.data_attrs = Some(Box::new(DataAttrs { data_if: Some("isPremium".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
-        apply(&mut doc, &parse(r#"{"isPremium":true}"#).unwrap()).unwrap();
+        apply(&mut doc, parse(r#"{"isPremium":true}"#).unwrap()).unwrap();
         assert_eq!(layout_children(&doc).len(), 1);
     }
 
@@ -703,7 +800,7 @@ mod tests {
         let mut n = text_node("premium");
         n.data_attrs = Some(Box::new(DataAttrs { data_if: Some("isPremium".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
-        apply(&mut doc, &parse(r#"{"isPremium":false}"#).unwrap()).unwrap();
+        apply(&mut doc, parse(r#"{"isPremium":false}"#).unwrap()).unwrap();
         assert_eq!(layout_children(&doc).len(), 0);
     }
 
@@ -712,7 +809,7 @@ mod tests {
         let mut n = text_node("unpaid");
         n.data_attrs = Some(Box::new(DataAttrs { data_if_not: Some("isPaid".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
-        apply(&mut doc, &parse(r#"{"isPaid":false}"#).unwrap()).unwrap();
+        apply(&mut doc, parse(r#"{"isPaid":false}"#).unwrap()).unwrap();
         assert_eq!(layout_children(&doc).len(), 1);
     }
 
@@ -721,7 +818,7 @@ mod tests {
         let mut n = text_node("unpaid");
         n.data_attrs = Some(Box::new(DataAttrs { data_if_not: Some("isPaid".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
-        apply(&mut doc, &parse(r#"{"isPaid":true}"#).unwrap()).unwrap();
+        apply(&mut doc, parse(r#"{"isPaid":true}"#).unwrap()).unwrap();
         assert_eq!(layout_children(&doc).len(), 0);
     }
 
@@ -735,7 +832,7 @@ mod tests {
         let mut doc = make_doc(vec![container]);
         apply(
             &mut doc,
-            &parse(r#"{"items":[{"isHighlighted":true},{"isHighlighted":false}]}"#).unwrap(),
+            parse(r#"{"items":[{"isHighlighted":true},{"isHighlighted":false}]}"#).unwrap(),
         )
         .unwrap();
         let ch = layout_children(&doc);
@@ -754,7 +851,7 @@ mod tests {
         let mut doc = make_doc(vec![container]);
         apply(
             &mut doc,
-            &parse(r#"{"items":[{"description":"Consulting"},{"description":"Design"}]}"#).unwrap(),
+            parse(r#"{"items":[{"description":"Consulting"},{"description":"Design"}]}"#).unwrap(),
         )
         .unwrap();
         let ch = layout_children(&doc);
@@ -783,7 +880,7 @@ mod tests {
         let mut doc = make_doc(vec![outer_loop]);
         apply(
             &mut doc,
-            &parse(r#"{"items":[{"description":"Consulting","notes":[{"text":"Note A"}]}]}"#).unwrap(),
+            parse(r#"{"items":[{"description":"Consulting","notes":[{"text":"Note A"}]}]}"#).unwrap(),
         )
         .unwrap();
         // outer_loop → 1 item → outer_container → inner_loop → 1 note → inner_template → inner_child
@@ -806,7 +903,7 @@ mod tests {
         let mut doc = make_doc(vec![container]);
         apply(
             &mut doc,
-            &parse(r#"{"company":"Acme Inc","items":[{"id":1}]}"#).unwrap(),
+            parse(r#"{"company":"Acme Inc","items":[{"id":1}]}"#).unwrap(),
         )
         .unwrap();
         assert_eq!(
@@ -821,7 +918,7 @@ mod tests {
         let mut n = text_node("fallback");
         n.data_attrs = Some(Box::new(DataAttrs { data_value: Some("../../../name".to_owned()), ..DataAttrs::default() }));
         let mut doc = make_doc(vec![n]);
-        apply(&mut doc, &parse(r#"{"name":"Safe"}"#).unwrap()).unwrap();
+        apply(&mut doc, parse(r#"{"name":"Safe"}"#).unwrap()).unwrap();
         assert_eq!(layout_children(&doc)[0].text_runs[0].text, "Safe");
     }
 
@@ -829,7 +926,7 @@ mod tests {
     fn static_node_unchanged_with_data() {
         let n = text_node("Static text");
         let mut doc = make_doc(vec![n]);
-        apply(&mut doc, &parse(r#"{"name":"Acme"}"#).unwrap()).unwrap();
+        apply(&mut doc, parse(r#"{"name":"Acme"}"#).unwrap()).unwrap();
         assert_eq!(layout_children(&doc)[0].text_runs[0].text, "Static text");
     }
 
@@ -844,7 +941,7 @@ mod tests {
     fn bound_layers(layers: &str, data: &str) -> Vec<CanvasLayer> {
         let xml = format!(r#"<lpdf version="1"><document><section>{layers}</section></document></lpdf>"#);
         let mut doc = crate::parse::parse(&xml).unwrap();
-        apply(&mut doc, &parse(data).unwrap()).unwrap();
+        apply(&mut doc, parse(data).unwrap()).unwrap();
         doc.sections.remove(0).children.into_iter().filter_map(|child| match child {
             crate::parse::SectionChild::Layer(layer) => Some(layer),
             _ => None,
@@ -906,7 +1003,7 @@ mod tests {
         let xml = r#"<lpdf version="1"><document><section><layout>
             <barcode type="qr" data="placeholder" width="40pt" data-value="id"/></layout></section></document></lpdf>"#;
         let mut doc = crate::parse::parse(xml).unwrap();
-        apply(&mut doc, &parse(r#"{"id":"A-77"}"#).unwrap()).unwrap();
+        apply(&mut doc, parse(r#"{"id":"A-77"}"#).unwrap()).unwrap();
         assert_eq!(layout_children(&doc)[0].barcode_data.as_deref(), Some("A-77"));
     }
 
@@ -922,7 +1019,7 @@ mod tests {
     /// The layout of `layout` with `data` bound.
     fn bound_layout(layout: &str, data: &str) -> Result<Vec<Node>, String> {
         let mut doc = crate::parse::parse(&bound_xml(layout))?;
-        apply(&mut doc, &parse(data)?)?;
+        apply(&mut doc, parse(data)?)?;
         Ok(layout_children(&doc))
     }
 
@@ -964,7 +1061,7 @@ mod tests {
         let xml = bound_xml(r#"<layer><img-at x="0pt" y="0pt" width="40pt" name="logo" data-name="image"/></layer>"#)
             .replace("<layout>", "").replace("</layout>", "");
         let mut doc = crate::parse::parse(&xml).unwrap();
-        apply(&mut doc, &parse(r#"{"image":"photo"}"#).unwrap()).unwrap();
+        apply(&mut doc, parse(r#"{"image":"photo"}"#).unwrap()).unwrap();
         let layer = doc.sections.remove(0).children.into_iter().find_map(|child| match child {
             crate::parse::SectionChild::Layer(layer) => Some(layer),
             _ => None,
@@ -1067,7 +1164,7 @@ mod tests {
             <gradients><gradient name="fade" type="linear" from="a" to="b"/></gradients></tokens>
             <document><section><layout><column data-background="g"/><text data-color="g">x</text></layout></section></document></lpdf>"##;
         let mut doc = crate::parse::parse(xml).unwrap();
-        let error = apply(&mut doc, &parse(r#"{"g":"gradient:fade"}"#).unwrap()).unwrap_err();
+        let error = apply(&mut doc, parse(r#"{"g":"gradient:fade"}"#).unwrap()).unwrap_err();
         assert!(error.starts_with(r#"data-color="g": "#), "{error}");
     }
 
@@ -1082,7 +1179,7 @@ mod tests {
         let xml = r#"<lpdf version="1"><document><section type="toc"><layout>
             <column data-source="$toc"><text data-color="c" data-value="label">x</text></column></layout></section></document></lpdf>"#;
         let mut doc = crate::parse::parse(xml).unwrap();
-        let error = apply(&mut doc, &parse("{}").unwrap()).unwrap_err();
+        let error = apply(&mut doc, parse("{}").unwrap()).unwrap_err();
         assert_eq!(error, "'data-color' is not supported in a table of contents section");
     }
 }

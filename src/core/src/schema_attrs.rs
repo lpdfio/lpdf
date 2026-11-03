@@ -561,6 +561,7 @@ const COLUMN: Attributes = &[
     ("align", Kind::Text),
     ("justify", Kind::Text),
     ("width", Kind::Text),
+    ("bulk", Kind::Boolean),
 ];
 
 const ROW: Attributes = &[
@@ -606,6 +607,7 @@ const LIST: Attributes = &[
     ("bullet", Kind::Text),
     ("indent", Kind::Text),
     ("width", Kind::Text),
+    ("bulk", Kind::Boolean),
 ];
 
 const LI: Attributes = &[
@@ -644,6 +646,7 @@ const GRID: Attributes = &[
     ("width", Kind::Text),
     ("col-width", Kind::Text),
     ("cols", Kind::Integer { min: Some(1), max: Some(12) }),
+    ("bulk", Kind::Boolean),
 ];
 
 const FRAME: Attributes = &[
@@ -842,6 +845,7 @@ const TABLE: Attributes = &[
     ("height", Kind::Text),
     ("paginate", Kind::Text),
     ("debug", Kind::Boolean),
+    ("bulk", Kind::Boolean),
     ("ocg", Kind::Text),
 ];
 
