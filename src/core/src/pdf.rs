@@ -19,9 +19,10 @@
 //    points actually used in the document are collected so that the widths table
 //    and ToUnicode CMap are built from real glyph metrics.
 //
-// 3. **Content streams** – One per page.  Coordinates are flipped from the
-//    layout's top-down convention (y=0 at the top) to PDF's bottom-up
-//    convention (y=0 at the bottom): `pdf_y = page_height − layout_y − node_h`.
+// 3. **Content streams** – One per page, compressed as soon as the page is drawn.
+//    Coordinates are flipped from the layout's top-down convention (y=0 at the
+//    top) to PDF's bottom-up convention (y=0 at the bottom):
+//    `pdf_y = page_height − layout_y − node_h`.
 //
 // 4. **Annotations** – Collected during content building; written as separate
 //    indirect objects and referenced from each page's `/Annots` array.
@@ -2620,9 +2621,29 @@ fn prepare_images(
 /// is a form XObject written with the page, and the content invokes it by the name `group_resource_name` gives
 /// its position here.
 struct RenderedPage {
-    content: Vec<u8>,
+    content: Stream,
     annots:  Vec<AnnotData>,
-    groups:  Vec<PageGroup>,
+    groups:  Vec<GroupStream>,
+}
+
+/// A transparency group of a drawn page: its content stream, compressed, and which of the page's groups it draws.
+struct GroupStream {
+    content: Stream,
+    nested:  Range<usize>,
+}
+
+/// A content stream, compressed as soon as it is drawn, so that a document holds the compressed streams of its pages
+/// and not every page's whole stream at once, and for a linearized file the names it uses (`content_names`).
+struct Stream {
+    compressed: Vec<u8>,
+    names:      Option<HashSet<Vec<u8>>>,
+}
+
+impl Stream {
+    fn of(content: Vec<u8>, linearize: bool) -> Stream {
+        let names = linearize.then(|| content_names(&content).into_iter().map(<[u8]>::to_vec).collect());
+        Stream { compressed: compress_to_vec_zlib(&content, 6), names }
+    }
 }
 
 /// A transparency group of a page: its content stream, and which of the page's groups it draws. A group is
@@ -2632,7 +2653,7 @@ struct PageGroup {
     nested:  Range<usize>,
 }
 
-/// Render every page to a content-stream byte buffer and collect link
+/// Render every page to a content stream, compressed as soon as it is drawn (`Stream`), and collect link
 /// annotations and transparency groups.  Returns one `RenderedPage` per page.
 fn build_content_streams(
     pages:         &[RenderPage],
@@ -2641,6 +2662,7 @@ fn build_content_streams(
     gradients:     &HashMap<String, Gradient>,
     attribution:   bool,
     links:         bool,
+    linearize:     bool,
     marks:         &mut Marks,
 ) -> Result<Vec<RenderedPage>, String> {
     let mut rendered_pages: Vec<RenderedPage> = Vec::new();
@@ -2666,7 +2688,10 @@ fn build_content_streams(
             draw_attribution(&mut content, &mut annots, marks, fonts, page.width, page.height, links);
         }
 
-        rendered_pages.push(RenderedPage { content: content.finish(), annots, groups });
+        let groups = groups.into_iter()
+            .map(|group| GroupStream { content: Stream::of(group.content, linearize), nested: group.nested })
+            .collect();
+        rendered_pages.push(RenderedPage { content: Stream::of(content.finish(), linearize), annots, groups });
     }
 
     Ok(rendered_pages)
@@ -2841,7 +2866,7 @@ fn collect_render_fields(pages: &[RenderPage]) -> Vec<(usize, RenderField)> {
 fn collect_fields_in_nodes(nodes: &[RenderNode], page_idx: usize, out: &mut Vec<(usize, RenderField)>) {
     for node in nodes {
         match node {
-            RenderNode::Field(f)  => out.push((page_idx, f.clone())),
+            RenderNode::Field(f)  => out.push((page_idx, (**f).clone())),
             RenderNode::Box(b)    => collect_fields_in_nodes(&b.children, page_idx, out),
             RenderNode::Link(l)   => collect_fields_in_nodes(&l.children, page_idx, out),
             RenderNode::CanvasLayer(l) => collect_fields_in_nodes(&l.children, page_idx, out),
@@ -3005,7 +3030,6 @@ fn assemble_pdf(
     files:              &[EmbeddedFile],
     marks:              &Marks,
     press:              Option<&PressProfile>,
-    linearize:          bool,
     ocgs:               &[Ocg],
 ) -> Result<Vec<u8>, String> {
     // What PDF/A alone asks for: an output intent, a file ID, and links that print.
@@ -3169,7 +3193,7 @@ fn assemble_pdf(
     // groups it draws: the `drawn` positions in `groups`, the form XObjects of the page. A linearized file puts page 1
     // and everything it reaches first, so there each page and group names only the fonts, images, opacities and
     // shadings its content stream does (`used`): named on every page, they would all go before page 1 shows.
-    let write_resources = |resources: &mut Resources<'_>, groups: &[Ref], drawn: Range<usize>, used: Option<&HashSet<&[u8]>>| {
+    let write_resources = |resources: &mut Resources<'_>, groups: &[Ref], drawn: Range<usize>, used: Option<&HashSet<Vec<u8>>>| {
         let named = |name: &str| used.is_none_or(|used| used.contains(name.as_bytes()));
         // In a PDF/X file every RGB color and image, drawn as DeviceRGB, is sRGB: the device space a press can't print
         // as it is gets a meaning (ISO 32000-1, 8.6.5.6).
@@ -3253,7 +3277,7 @@ fn assemble_pdf(
             pw.media_box(trim);
         }
 
-        write_resources(&mut pw.resources(), &group_ids[i], 0..group_ids[i].len(), linearize.then(|| content_names(&rendered_pages[i].content)).as_ref());
+        write_resources(&mut pw.resources(), &group_ids[i], 0..group_ids[i].len(), rendered_pages[i].content.names.as_ref());
 
         // Add the content stream reference.
         pw.contents(content_id);
@@ -3284,8 +3308,7 @@ fn assemble_pdf(
     // -- Content streams -------------------------------------------------------
     for (i, page) in rendered_pages.iter().enumerate() {
         crate::memory::check()?;
-        let compressed = compress_to_vec_zlib(&page.content, 6);
-        pdf.stream(content_ids[i], &compressed)
+        pdf.stream(content_ids[i], &page.content.compressed)
            .filter(Filter::FlateDecode);
     }
 
@@ -3295,8 +3318,7 @@ fn assemble_pdf(
     // can hold faded boxes, so a group's resources name the groups drawn inside it.
     for (i, page) in rendered_pages.iter().enumerate() {
         for (j, group) in page.groups.iter().enumerate() {
-            let compressed = compress_to_vec_zlib(&group.content, 6);
-            let mut form = pdf.form_xobject(group_ids[i][j], &compressed);
+            let mut form = pdf.form_xobject(group_ids[i][j], &group.content.compressed);
             form.filter(Filter::FlateDecode);
             form.bbox(bled(&pages[i]));
             // A PDF/X file blends in sRGB, as its pages draw RGB.
@@ -3308,7 +3330,7 @@ fn assemble_pdf(
                     None => space.device_rgb(),
                 }
             }
-            write_resources(&mut form.resources(), &group_ids[i], group.nested.clone(), linearize.then(|| content_names(&group.content)).as_ref());
+            write_resources(&mut form.resources(), &group_ids[i], group.nested.clone(), group.content.names.as_ref());
             if let Some(key) = keys.group(i, j) {
                 form.struct_parents(key);
             }
@@ -4028,15 +4050,14 @@ pub fn render_pdf(
     let mut marks = if standards.tagged() { Marks::tagged() } else { Marks::off() };
     let links = standards.pdfx.is_none();
     let mut rendered_pages =
-        build_content_streams(pages, &fonts, &image_res_map, gradients, attribution, links, &mut marks)?;
+        build_content_streams(pages, &fonts, &image_res_map, gradients, attribution, links, output.linearize, &mut marks)?;
     drop_dangling_links(&mut rendered_pages, &anchors);
     let ids =
         allocate_ids(pages, &rendered_pages, &fonts, &sorted_font_names, &sorted_image_names, image_registry, &fields);
     assemble_pdf(
         pages, &fonts, &sorted_font_names, &sorted_image_names,
         image_registry, &image_res_map, rendered_pages, ids, &fields, &anchors,
-        &used_gradients, meta, date.as_deref(), file.as_ref(), files, &marks, press, output.linearize,
-        &used_groups(pages),
+        &used_gradients, meta, date.as_deref(), file.as_ref(), files, &marks, press, &used_groups(pages),
     )
 }
 

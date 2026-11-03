@@ -3950,7 +3950,7 @@ fn layout_field(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) 
         background: node.background.clone(),
         border:     node.border.clone(),
     };
-    (RenderNode::Field(field), h)
+    (RenderNode::Field(Box::new(field)), h)
 }
 
 // ── Barcode ───────────────────────────────────────────────────────────────────
@@ -5061,7 +5061,9 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
         && lines.iter().any(|line| text_line_width(line) > avail_w + 0.01);
 
     let total_h = lines.len().max(node.reserve_lines()) as f32 * line_height;
-    let mut all_nodes: Vec<RenderNode> = Vec::new();
+    // A line of plain words is one text, and a page keeps the nodes of every text until the PDF is written: grown
+    // from empty, the list would hold room for four nodes behind each line.
+    let mut all_nodes: Vec<RenderNode> = Vec::with_capacity(lines.len());
 
     let align_str = match node.text_align {
         TextAlign::Left    => "left",
