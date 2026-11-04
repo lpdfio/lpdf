@@ -16,7 +16,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python \
-        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-facturx check-ocg check-codegen-dotnet \
+        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-facturx check-ocg check-codegen-dotnet check-function-sizes \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
@@ -160,6 +160,17 @@ check-ocg:
 	rm -rf target/ocg-samples && mkdir -p target/ocg-samples
 	LPDF_OCG_OUT="$(CURDIR)/target/ocg-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_ocg_samples_for_the_external_check
 	node scripts/check-ocg.mjs target/ocg-samples target/pdfjs
+
+# check-function-sizes builds the WASI engine and fails when one of its functions is over 40 KB: the Java SDK compiles
+# each function to one JVM method, which holds at most 64 KB of bytecode, and its bytecode comes to as much as 1.6 times
+# the function's size in the WASM (`scripts/check-function-sizes.mjs`). It reads the WASM alone; needs Node.
+check-function-sizes: build-wasi
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking the size of the engine's functions..."
+	@echo ""
+	node --test scripts/check-function-sizes.test.mjs
+	node scripts/check-function-sizes.mjs dist/wasi/lpdf.wasm
 
 # check-codegen-dotnet compiles the C# the codegen writes for every fixture against the .NET SDK in repos/lpdf-dotnet,
 # with the engine built from this checkout (`scripts/check-codegen-dotnet.mjs`). Needs the .NET 8 SDK or later.

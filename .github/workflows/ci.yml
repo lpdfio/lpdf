@@ -14,7 +14,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # wasm32-wasip1 for the WASI build, whose function sizes are checked below.
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
 
       - uses: Swatinem/rust-cache@v2
 
@@ -37,6 +40,11 @@ jobs:
         env:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
         run: cargo test --manifest-path src/cli/Cargo.toml
+
+      # The Java SDK compiles each function of the WASI build to one JVM method, which holds at most 64 KB of bytecode:
+      # a function over 40 KB of WASM fails here, in the PR that grew it, rather than when an RC reaches the SDK.
+      - name: Check the size of the engine's functions
+        run: make check-function-sizes
 
       - name: Check encrypted PDFs with qpdf
         env:
