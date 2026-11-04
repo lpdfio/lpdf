@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::rc::Rc;
 
 use serde_json::{json, Value};
 use crate::parse::{FieldKind, Ocg, Shadow};
@@ -52,6 +53,9 @@ pub enum RenderNode {
     CanvasEllipse(RenderCanvasEllipse),
     CanvasPath(RenderCanvasPath),
     CanvasLayer(RenderCanvasLayer),
+    /// The lines of a section's ruling, shared by every page that draws them: the PDF writes the drawing once, as a
+    /// form XObject each of those pages invokes.
+    Ruling(Rc<crate::ruling::Drawing>),
     Anchor(RenderAnchor),
     FootnoteMark(RenderFootnoteMark),
 }
@@ -561,6 +565,17 @@ fn node_to_json(node: &RenderNode) -> Value {
             "clip":     l.clip.as_ref().map(|c| [r2(c.x), r2(c.y), r2(c.w), r2(c.h)]),
             "nodes": nodes_to_json(&l.children),
         }),
+        RenderNode::Ruling(r) => {
+            let run = |run: crate::ruling::Run| json!({ "first": r2(run.first), "step": r2(run.step), "count": run.count });
+            let sets: Vec<Value> = r.sets.iter().map(|set| json!({
+                "color":     set.color,
+                "thickness": r2(set.thickness),
+                "area":      set.area.map(r2),
+                "down":      run(set.down),
+                "across":    run(set.across),
+            })).collect();
+            json!({ "type": "ruling", "sets": sets })
+        }
         // Filtered out by `is_invisible`: the JSON pages are what is drawn.
         RenderNode::Anchor(_) | RenderNode::FootnoteMark(_) => Value::Null,
     }

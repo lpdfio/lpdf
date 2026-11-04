@@ -386,6 +386,10 @@ fn showcase_bulk_renders_as_its_records_expanded() {
     assert!(bulk == expanded, "the PDFs differ: {} bytes with bulk, {} without", bulk.len(), expanded.len());
 }
 #[test]
+fn showcase_ruling() { run_snapshot("showcase-ruling"); }
+#[test]
+fn showcase_ruling_sections() { run_snapshot("showcase-ruling-sections"); }
+#[test]
 fn showcase_columns_insets() { run_snapshot_with_image("showcase-columns-insets"); }
 #[test]
 fn showcase_columns_inset_last() { run_snapshot("showcase-columns-inset-last"); }

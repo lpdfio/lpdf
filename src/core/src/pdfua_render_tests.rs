@@ -41,10 +41,14 @@ pub(crate) fn render(xml: &str) -> Result<Vec<u8>, String> {
     engine(Some(CREATED_ON)).render_xml(xml, None, &RenderEncryption::default())
 }
 
+/// The fixture `showcase-pdfua.xml`.
+pub(crate) fn fixture() -> String {
+    String::from_utf8(read(&test_dir().join("fixtures/showcase-pdfua.xml"))).expect("UTF-8")
+}
+
 /// The fixture `showcase-pdfua.xml` rendered as an SDK renders it, unlicensed: for the snapshot test.
 pub(crate) fn render_fixture() -> Vec<u8> {
-    let xml = String::from_utf8(read(&test_dir().join("fixtures/showcase-pdfua.xml"))).expect("UTF-8");
-    render(&xml).unwrap_or_else(|e| panic!("showcase-pdfua: {e}"))
+    render(&fixture()).unwrap_or_else(|e| panic!("showcase-pdfua: {e}"))
 }
 
 /// The fixture `showcase-pdfua.xml` with `pdfa` at `level` beside its `pdfua`, rendered as an SDK renders it: for the
@@ -420,6 +424,8 @@ fn writes_pdfua_samples_for_the_external_check() {
     // With content in optional content groups, which a PDF/UA file leaves out of them.
     let grouped = crate::ocg_render_tests::with_groups(&String::from_utf8(read(&test_dir().join("fixtures/showcase-pdfua.xml"))).expect("UTF-8"));
     std::fs::write(dir.join("pdfua-1-ocg.pdf"), render(&grouped).expect("renders")).expect("a sample");
+    // With graph paper on each section, which is decoration.
+    std::fs::write(dir.join("pdfua-1-ruling.pdf"), crate::ruling_render_tests::pdfua_sample()).expect("a sample");
     // Stamped without a license key, which must stay PDF/UA.
     crate::stamp_tests::write_pdfua_sample(dir);
 }

@@ -17,6 +17,8 @@ pub struct Tokens {
     pub aliases: HashMap<String, usize>,
     pub colors: HashMap<String, String>,
     pub gradients: HashMap<String, Gradient>,
+    /// The rulings a section names with `ruling`, checked, by name.
+    pub rulings: HashMap<String, crate::ruling::Ruling>,
 }
 
 /// Names an alias cannot take, because an attribute that takes a scale value has them as a keyword of its own:
@@ -62,7 +64,7 @@ pub struct GradientSpec<'a> {
 
 /// The name of a gradient or an alias, the way the schema's `TokenName` type spells it: the `Fill` type spells a
 /// gradient's after `gradient:`.
-fn is_token_name(name: &str) -> bool {
+pub(crate) fn is_token_name(name: &str) -> bool {
     let mut chars = name.chars();
     chars.next().is_some_and(|c| c.is_ascii_lowercase())
         && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
@@ -581,6 +583,7 @@ impl Default for Tokens {
             aliases: HashMap::new(),
             colors,
             gradients: HashMap::new(),
+            rulings: HashMap::new(),
         }
     }
 }

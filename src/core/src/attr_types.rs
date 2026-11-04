@@ -297,8 +297,8 @@ fn check_document(attrs: &mut Map<String, Value>) -> Result<(), String> {
     Ok(())
 }
 
-/// The rows of the tokens, each an object of slots, and the attributes of each gradient and its stops. The names of
-/// aliases, colors and gradients are the document's own.
+/// The rows of the tokens, each an object of slots, the attributes of each gradient and its stops, and of each ruling
+/// and its lines. The names of aliases, colors, gradients and rulings are the document's own.
 fn check_tokens(tokens: &mut Map<String, Value>) -> Result<(), String> {
     for (key, value) in tokens.iter_mut() {
         if key == "aliases" {
@@ -317,6 +317,16 @@ fn check_tokens(tokens: &mut Map<String, Value>) -> Result<(), String> {
                 for stop in gradient.get_mut("stops").and_then(Value::as_array_mut).into_iter().flatten() {
                     if let Some(stop) = stop.as_object_mut() {
                         check_element("stop", "gradient", "stop", &[], stop)?;
+                    }
+                }
+            }
+        } else if key == "rulings" {
+            for ruling in value.as_object_mut().into_iter().flat_map(|r| r.values_mut()) {
+                let Some(ruling) = ruling.as_object_mut() else { continue };
+                check_element("ruling", "rulings", "ruling", &["lines"], ruling)?;
+                for lines in ruling.get_mut("lines").and_then(Value::as_array_mut).into_iter().flatten() {
+                    if let Some(lines) = lines.as_object_mut() {
+                        check_element("lines", "ruling", "lines", &[], lines)?;
                     }
                 }
             }

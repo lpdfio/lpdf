@@ -32,6 +32,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
+use std::rc::Rc;
 
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
 use pdf_writer::writers::Resources;
@@ -49,6 +50,7 @@ use crate::parse::{FieldKind, ListFormat, Meta, Ocg, Output, Shadow};
 use crate::pdfa::{self, FileDate, PdfA, Standards, XmpIds};
 use crate::pdfx::{PdfXVersion, PressProfile, ProfileSpace};
 use crate::pdfua::PdfUa;
+use crate::ruling::{Drawing, Run};
 use crate::tagging::{Kid, Kind, LinkMark, Marks};
 use crate::tokens::{FontDef, Gradient, GradientKind, GRADIENT_PREFIX, is_cmyk};
 
@@ -1179,6 +1181,9 @@ struct DrawResources<'a> {
     fonts:         &'a HashMap<String, PreparedFont>,
     image_res_map: &'a HashMap<String, String>,
     gradients:     &'a HashMap<String, Gradient>,
+    /// The drawings of the rulings, each a form XObject the pages invoke by the name `ruling_resource_name` gives its
+    /// position here (`used_rulings`).
+    rulings:       &'a [Rc<Drawing>],
     /// Whether a link is an annotation over its content. A PDF/X file allows nothing clickable on the printed page, so
     /// its links draw their content alone, as do the links in print content (`ocg="print"`), which is hidden on screen.
     links:         bool,
@@ -1215,7 +1220,7 @@ fn draw_node(
         match node {
             RenderNode::Text(t) => return marks.content(content, &t.content, draw),
             RenderNode::Line(_) | RenderNode::CanvasRect(_) | RenderNode::CanvasLine(_) | RenderNode::CanvasEllipse(_)
-                | RenderNode::CanvasPath(_) => return marks.artifact(content, draw),
+                | RenderNode::CanvasPath(_) | RenderNode::Ruling(_) => return marks.artifact(content, draw),
             RenderNode::Image(i) => return marks.whole(content, i.tag.as_deref(), draw),
             RenderNode::Barcode(bc) => return marks.whole(content, bc.tag.as_deref(), draw),
             RenderNode::CanvasLayer(l) if l.tag.is_some() => return marks.whole(content, l.tag.as_deref(), draw),
@@ -1360,6 +1365,14 @@ fn draw_drawn(
                 url: lk.url.clone(),
                 mark,
             });
+        }
+
+        // ── Ruling ───────────────────────────────────────────────────────────
+        // Written once, as a form XObject in the page's coordinates, which every page of its section invokes.
+        RenderNode::Ruling(drawing) => {
+            if let Some(index) = ruling_index(res.rulings, drawing) {
+                content.x_object(Name(ruling_resource_name(index).as_bytes()));
+            }
         }
 
         // ── Image ────────────────────────────────────────────────────────────
@@ -1853,6 +1866,81 @@ fn draw_layer(
 /// The name a page's resources give its `index`th transparency group.
 fn group_resource_name(index: usize) -> String {
     format!("G{index}")
+}
+
+// ── Rulings ───────────────────────────────────────────────────────────────────
+
+/// The drawings of the rulings `pages` draw, each once, in the order they are first drawn. The pages of a section
+/// share one drawing, and two sections whose rulings draw the same lines share one too.
+fn used_rulings(pages: &[RenderPage]) -> Vec<Rc<Drawing>> {
+    fn collect(nodes: &[RenderNode], out: &mut Vec<Rc<Drawing>>) {
+        for node in nodes {
+            match node {
+                RenderNode::Ruling(drawing) if ruling_index(out, drawing).is_none() => out.push(Rc::clone(drawing)),
+                RenderNode::Box(b)         => collect(&b.children, out),
+                RenderNode::CanvasLayer(l) => collect(&l.children, out),
+                _ => {}
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for page in pages {
+        collect(&page.nodes, &mut out);
+    }
+    out
+}
+
+/// Where `drawing` is in `rulings`: the same drawing, or one that draws the same lines.
+fn ruling_index(rulings: &[Rc<Drawing>], drawing: &Rc<Drawing>) -> Option<usize> {
+    rulings.iter().position(|known| Rc::ptr_eq(known, drawing) || **known == **drawing)
+}
+
+/// The name the resources of a page give the `index`th ruling's form XObject.
+fn ruling_resource_name(index: usize) -> String {
+    format!("R{index}")
+}
+
+/// The content stream of a ruling's form XObject: each set of lines in its color and thickness, in the page's
+/// coordinates. The lines of a set are at even distances, so each one is drawn at the same place with the CTM moved one
+/// step from the one before: the stream repeats one short run of bytes, which compresses to almost nothing, so the
+/// file is about the same size however dense the lines are.
+fn ruling_content(drawing: &Drawing) -> Vec<u8> {
+    let mut content = Content::new();
+    for set in &drawing.sets {
+        let [left, top, right, bottom] = set.area;
+        let (top, bottom) = (drawing.height - top, drawing.height - bottom);
+        content.save_state();
+        set_stroke_color(&mut content, &set.color);
+        content.set_line_width(set.thickness);
+        draw_run(&mut content, set.down, [1.0, 0.0, 0.0, 1.0, set.down.first, 0.0], [1.0, 0.0, 0.0, 1.0, set.down.step, 0.0], |content| {
+            content.move_to(0.0, bottom);
+            content.line_to(0.0, top);
+        });
+        let first = drawing.height - set.across.first;
+        draw_run(&mut content, set.across, [1.0, 0.0, 0.0, 1.0, 0.0, first], [1.0, 0.0, 0.0, 1.0, 0.0, -set.across.step], |content| {
+            content.move_to(left, 0.0);
+            content.line_to(right, 0.0);
+        });
+        content.restore_state();
+    }
+    content.finish()
+}
+
+/// The lines of `run`: `line` stroked where `start` moves the CTM, and again after each move by `step`.
+fn draw_run(content: &mut Content, run: Run, start: [f32; 6], step: [f32; 6], line: impl Fn(&mut Content)) {
+    if run.count == 0 {
+        return;
+    }
+    content.save_state();
+    content.transform(start);
+    for index in 0..run.count {
+        if index > 0 {
+            content.transform(step);
+        }
+        line(content);
+        content.stroke();
+    }
+    content.restore_state();
 }
 
 // ── Form appearance helpers ───────────────────────────────────────────────────
@@ -2660,13 +2748,14 @@ fn build_content_streams(
     fonts:         &HashMap<String, PreparedFont>,
     image_res_map: &HashMap<String, String>,
     gradients:     &HashMap<String, Gradient>,
+    rulings:       &[Rc<Drawing>],
     attribution:   bool,
     links:         bool,
     linearize:     bool,
     marks:         &mut Marks,
 ) -> Result<Vec<RenderedPage>, String> {
     let mut rendered_pages: Vec<RenderedPage> = Vec::new();
-    let res = DrawResources { fonts, image_res_map, gradients, links };
+    let res = DrawResources { fonts, image_res_map, gradients, rulings, links };
 
     for (index, page) in pages.iter().enumerate() {
         crate::memory::check()?;
@@ -3024,6 +3113,7 @@ fn assemble_pdf(
     fields:             &[(usize, RenderField)],
     anchors:            &[PlacedAnchor],
     used_gradients:     &[(&str, &Gradient)],
+    rulings:            &[Rc<Drawing>],
     meta:               &Meta,
     date:               Option<&str>,
     file:               Option<&StandardFile>,
@@ -3073,6 +3163,9 @@ fn assemble_pdf(
 
     // The optional content groups last: a document without them keeps its ids.
     let ocg_ids: Vec<(Ocg, Ref)> = ocgs.iter().map(|ocg| (*ocg, alloc.next())).collect();
+
+    // The rulings' form XObjects after them, for the same reason.
+    let ruling_ids: Vec<Ref> = rulings.iter().map(|_| alloc.next()).collect();
 
     let n = pages.len();
     let mut pdf = Pdf::new();
@@ -3211,8 +3304,8 @@ fn assemble_pdf(
                 font_res.pair(Name(font.resource_name.as_bytes()), fid);
             }
         }
-        // Add image and group XObjects to the resource dictionary.
-        if !sorted_image_names.is_empty() || !drawn.is_empty() {
+        // Add image, group and ruling XObjects to the resource dictionary.
+        if !sorted_image_names.is_empty() || !drawn.is_empty() || !ruling_ids.is_empty() {
             let mut xobj_res = resources.x_objects();
             for name in sorted_image_names {
                 let res_name = &image_res_map[name];
@@ -3224,6 +3317,12 @@ fn assemble_pdf(
             }
             for index in drawn {
                 xobj_res.pair(Name(group_resource_name(index).as_bytes()), groups[index]);
+            }
+            for (index, id) in ruling_ids.iter().enumerate() {
+                let name = ruling_resource_name(index);
+                if named(&name) {
+                    xobj_res.pair(Name(name.as_bytes()), *id);
+                }
             }
         }
         // Add ExtGState entries for opacity.
@@ -3340,6 +3439,21 @@ fn assemble_pdf(
     // -- Optional content groups -----------------------------------------------
     for (ocg, id) in &ocg_ids {
         write_ocg(&mut pdf, *ocg, *id, pdfx.is_none());
+    }
+
+    // -- Rulings ---------------------------------------------------------------
+    // The lines of a ruling, once, in the coordinates of the pages that invoke them. The bounding box is the trimmed
+    // page, so a line stops at the trim edge and none reaches into a bleed.
+    for (drawing, id) in rulings.iter().zip(&ruling_ids) {
+        let stream = compress_to_vec_zlib(&ruling_content(drawing), 6);
+        let mut form = pdf.form_xobject(*id, &stream);
+        form.filter(Filter::FlateDecode);
+        form.bbox(Rect::new(0.0, 0.0, drawing.width, drawing.height));
+        // Its colors are RGB as the page's are, which a PDF/X file ties to sRGB in each resource dictionary.
+        let mut resources = form.resources();
+        if let Some(ids) = &press_ids {
+            resources.color_spaces().insert(Name(b"DefaultRGB")).array().item(Name(b"ICCBased")).item(ids.srgb);
+        }
     }
 
     // -- Opacity ExtGState objects ---------------------------------------------
@@ -4049,15 +4163,17 @@ pub fn render_pdf(
     }
     let mut marks = if standards.tagged() { Marks::tagged() } else { Marks::off() };
     let links = standards.pdfx.is_none();
-    let mut rendered_pages =
-        build_content_streams(pages, &fonts, &image_res_map, gradients, attribution, links, output.linearize, &mut marks)?;
+    let rulings = used_rulings(pages);
+    let mut rendered_pages = build_content_streams(
+        pages, &fonts, &image_res_map, gradients, &rulings, attribution, links, output.linearize, &mut marks,
+    )?;
     drop_dangling_links(&mut rendered_pages, &anchors);
     let ids =
         allocate_ids(pages, &rendered_pages, &fonts, &sorted_font_names, &sorted_image_names, image_registry, &fields);
     assemble_pdf(
         pages, &fonts, &sorted_font_names, &sorted_image_names,
         image_registry, &image_res_map, rendered_pages, ids, &fields, &anchors,
-        &used_gradients, meta, date.as_deref(), file.as_ref(), files, &marks, press, &used_groups(pages),
+        &used_gradients, &rulings, meta, date.as_deref(), file.as_ref(), files, &marks, press, &used_groups(pages),
     )
 }
 
@@ -4360,6 +4476,7 @@ fn cmyk_color(node: &RenderNode) -> Option<String> {
         RenderNode::CanvasLine(l)    => vec![Some(&l.stroke)],
         RenderNode::CanvasEllipse(e) => vec![e.fill.as_deref(), e.stroke.as_deref(), shadow(&e.shadow)],
         RenderNode::CanvasPath(p)    => vec![p.fill.as_deref(), p.stroke.as_deref()],
+        RenderNode::Ruling(r)        => r.sets.iter().map(|set| Some(set.color.as_str())).collect(),
         RenderNode::Link(_) | RenderNode::Image(_) | RenderNode::CanvasLayer(_)
             | RenderNode::Anchor(_) | RenderNode::FootnoteMark(_) => vec![],
     };

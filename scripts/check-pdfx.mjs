@@ -10,7 +10,8 @@
 //
 // No free tool validates PDF/X itself: Acrobat Pro's Preflight does, by hand, on the release candidate.
 //
-// The samples, the fixture and the brochure example, come from the core's own tests:
+// The samples, the fixture, the brochure example and the fixture with graph paper on its sections, come from the
+// core's own tests:
 //   LPDF_PDFX_OUT=<folder> cargo test --manifest-path src/core/Cargo.toml --lib writes_the_pdfx_sample_for_the_external_check
 //
 // Usage: node scripts/check-pdfx.mjs <folder>     list the failures, exit 1 if any

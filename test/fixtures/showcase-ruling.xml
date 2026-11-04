@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <border xs="0.5pt" s="1pt" m="1.5pt" l="2pt" xl="3pt" xxl="4pt"/>
+    <colors>
+      <color name="paper-fine" value="#dde6f0"/>
+      <color name="paper-bold" value="#b5c4d6"/>
+      <color name="ink"        value="#1f2a44"/>
+      <color name="muted"      value="#737373"/>
+    </colors>
+    <rulings>
+      <!-- The smallest ruling: one set, a step in both directions, and the defaults for the rest. -->
+      <ruling name="squares">
+        <lines step="5mm"/>
+      </ruling>
+      <!-- Ruled paper: lines across the page only, and none on the top edge. -->
+      <ruling name="ruled" edges="false">
+        <lines step-y="8mm" color="#cccccc" thickness="0.4pt"/>
+      </ruling>
+      <!-- A step of its own in each direction, inside the margin. -->
+      <ruling name="form" origin="margin">
+        <lines step-x="10mm" step-y="6mm" color="#e3e3e3"/>
+      </ruling>
+      <!-- A count: the area inside the margin cut into 12 across and 16 down, whatever its size. -->
+      <ruling name="twelve" origin="margin">
+        <lines count-x="12" count-y="16" color="#f2b8b8" thickness="0.25pt"/>
+      </ruling>
+      <!-- Graph paper: two sets, the heavier drawn after the fine one, in colors and thicknesses of the tokens. -->
+      <ruling name="graph" origin="margin">
+        <lines step="5mm"  color="paper-fine" thickness="xs"/>
+        <lines step="25mm" color="paper-bold" thickness="s"/>
+      </ruling>
+    </rulings>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Ruling" subject="ruled and squared pages, counts, two sets, edges, origin and page sizes" />
+
+    <!-- A section names a ruling, and its lines are drawn on every page, under everything else. -->
+    <section ruling="squares">
+      <layout margin="40pt">
+        <column gap="m" width="300pt" padding="m" background="#ffffff">
+          <text font-size="xxl" font="Helvetica-Bold" color="ink">Ruling</text>
+          <text color="muted">squares: step="5mm" and nothing else. Lines every 5mm in both directions, from the top left corner of the page to its edges, in line-muted at 0.4pt.</text>
+        </column>
+      </layout>
+    </section>
+
+    <section ruling="ruled">
+      <layout margin="40pt">
+        <text font-size="l" font="Helvetica-Bold" color="ink">Ruled paper</text>
+        <text color="muted">ruled: step-y="8mm" with edges="false". Lines across the page only, the first 8mm down, none on the top edge.</text>
+      </layout>
+    </section>
+
+    <section ruling="form">
+      <layout margin="60pt">
+        <text font-size="l" font="Helvetica-Bold" color="ink">A step in each direction</text>
+        <text color="muted">form: step-x="10mm" step-y="6mm" with origin="margin". The lines start at the top left corner inside the margin, stop at its edges, and leave what is over at the right and the bottom.</text>
+      </layout>
+    </section>
+
+    <section ruling="twelve">
+      <layout margin="60pt">
+        <text font-size="l" font="Helvetica-Bold" color="ink">A count</text>
+        <text color="muted">twelve: count-x="12" count-y="16" with origin="margin". The area inside the margin cut into 12 columns and 16 rows, with lines on all four edges.</text>
+      </layout>
+    </section>
+
+    <section ruling="graph">
+      <layout margin="40pt">
+        <text font-size="l" font="Helvetica-Bold" color="ink">Graph paper</text>
+        <text color="muted">graph: a fine set every 5mm in paper-fine at xs, and a heavier one every 25mm in paper-bold at s, drawn after it, inside a margin of 40pt.</text>
+      </layout>
+    </section>
+
+    <!-- One ruling on pages of different sizes: a count keeps its number of parts, and a step its size. -->
+    <section size="a5" ruling="twelve">
+      <layout margin="40pt">
+        <text font-size="l" font="Helvetica-Bold" color="ink">twelve on A5</text>
+        <text color="muted">12 narrower columns across A5 than across A4.</text>
+      </layout>
+    </section>
+
+    <section size="a5" ruling="graph">
+      <layout margin="40pt">
+        <text font-size="l" font="Helvetica-Bold" color="ink">graph on A5</text>
+        <text color="muted">5mm cells on A5, as on A4.</text>
+      </layout>
+    </section>
+  </document>
+</lpdf>

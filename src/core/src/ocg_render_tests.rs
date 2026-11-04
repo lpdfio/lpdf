@@ -427,8 +427,9 @@ fn a_field_in_print_content_is_an_error_with_pdfa_too() {
 // ── Samples for the external check ───────────────────────────────────────────
 
 /// Write the samples `make check-ocg` renders with pdf.js, to the folder `LPDF_OCG_OUT` names: the two fixtures,
-/// which switch their groups, a PDF/A and a PDF/UA file with groups, which show everything, and a PDF/X file with
-/// groups, which is the print version. Without `LPDF_OCG_OUT` it writes nothing.
+/// which switch their groups, a PDF/A and a PDF/UA file with groups, which show everything, a PDF/X file with
+/// groups, which is the print version, and a page whose ruling is in the screen group, which switches too. Without
+/// `LPDF_OCG_OUT` it writes nothing.
 #[test]
 fn writes_ocg_samples_for_the_external_check() {
     let Some(dir) = std::env::var_os("LPDF_OCG_OUT") else { return };
@@ -440,4 +441,5 @@ fn writes_ocg_samples_for_the_external_check() {
     write("ocg-pdfa-2u.pdf", crate::pdfa_render_tests::render(&with_groups(&fixture("showcase-pdfa-2u"))).expect("renders"));
     write("ocg-pdfua-1.pdf", crate::pdfua_render_tests::render(&with_groups(&fixture("showcase-pdfua"))).expect("renders"));
     write("ocg-pdfx.pdf", crate::pdfx_render_tests::render(&with_groups(&fixture("showcase-pdfx"))).expect("renders"));
+    write("ocg-ruling.pdf", crate::ruling_render_tests::ocg_sample());
 }
