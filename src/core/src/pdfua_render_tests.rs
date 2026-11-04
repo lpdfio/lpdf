@@ -70,20 +70,7 @@ fn count(haystack: &str, needle: &str) -> usize {
 
 /// The content streams of `pdf`, inflated: where the marked content is.
 fn contents(pdf: &[u8]) -> String {
-    let mut out = String::new();
-    let mut at = 0;
-    while let Some(start) = find(&pdf[at..], b"stream\n").map(|i| at + i + 7) {
-        let Some(end) = find(&pdf[start..], b"\nendstream").map(|i| start + i) else { break };
-        if let Ok(inflated) = miniz_oxide::inflate::decompress_to_vec_zlib(&pdf[start..end]) {
-            out.push_str(&String::from_utf8_lossy(&inflated));
-        }
-        at = end;
-    }
-    out
-}
-
-fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    haystack.windows(needle.len()).position(|w| w == needle)
+    crate::ruling_render_tests::streams(pdf).concat()
 }
 
 /// A PDF/UA document in the font `body`, with the title and the language it needs, and `layout` as its one layout.

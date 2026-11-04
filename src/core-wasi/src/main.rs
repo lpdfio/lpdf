@@ -492,12 +492,13 @@ mod tests {
         let mut rest = pdf;
         while let Some(start) = rest.windows(7).position(|w| w == b"stream\n") {
             rest = &rest[start + 7..];
-            let end = rest.windows(10).position(|w| w == b"\nendstream").unwrap_or(rest.len());
+            let Some(end) = rest.windows(10).position(|w| w == b"\nendstream") else { break };
             if let Ok(content) = miniz_oxide::inflate::decompress_to_vec_zlib(&rest[..end]) {
                 let text = String::from_utf8_lossy(&content);
                 found.extend(text.lines().filter(|l| l.ends_with(" cm")).map(str::to_string));
             }
-            rest = &rest[end..];
+            // Past `endstream`, whose end is `stream` too.
+            rest = &rest[end + b"\nendstream".len()..];
         }
         found
     }
