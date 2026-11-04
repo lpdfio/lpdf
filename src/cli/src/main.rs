@@ -671,7 +671,7 @@ fn print_codegen_help() {
     eprintln!();
     eprintln!("Options:");
     eprintln!("  --input  <file.xml>   LPDF XML source (required)");
-    eprintln!("  --target <lang>       Output language: js, dotnet, php, python (required)");
+    eprintln!("  --target <lang>       Output language: js, dotnet, php, python, java (required)");
     eprintln!("  --output <file>       Write to file instead of stdout");
     eprintln!("  --indent <2|4>        Indentation width (default: 4)");
 }
