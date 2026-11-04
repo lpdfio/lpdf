@@ -558,15 +558,25 @@ impl Target {
     /// A map from names to values written in the language: `{ a: 'b' }`, `{'a': 'b'}`, `['a' => 'b']`,
     /// `new() { ["a"] = "b" }` or `Map.of("a", "b")`. Java's `Map.of` takes at most ten entries, so a longer map is
     /// `Map.ofEntries(Map.entry("a", "b"), …)`.
+    ///
+    /// A name given twice keeps only its last entry. The engine takes a `<color>`, a `<gradient>` or a `<ruling>`
+    /// named twice and keeps the last, and so do the maps of the other languages, but Java's `Map.of` and
+    /// `Map.ofEntries` throw on a repeated name when the program runs.
     fn map(self, entries: &[(String, String)]) -> String {
-        let items: Vec<String> = entries
+        let last: Vec<&(String, String)> = entries
+            .iter()
+            .enumerate()
+            .filter(|(i, (key, _))| !entries[i + 1..].iter().any(|(later, _)| later == key))
+            .map(|(_, entry)| entry)
+            .collect();
+        let items: Vec<String> = last
             .iter()
             .map(|(key, value)| match self {
                 Target::Js     => format!("{}: {value}", js_key(key)),
                 Target::Python => format!("{}: {value}", single_quoted(key)),
                 Target::Php    => format!("{} => {value}", single_quoted(key)),
                 Target::Dotnet => format!("[{}] = {value}", double_quoted(key)),
-                Target::Java if entries.len() > 10 => format!("Map.entry({}, {value})", double_quoted(key)),
+                Target::Java if last.len() > 10 => format!("Map.entry({}, {value})", double_quoted(key)),
                 Target::Java   => format!("{}, {value}", double_quoted(key)),
             })
             .collect();
@@ -576,7 +586,7 @@ impl Target {
             Target::Python => format!("{{{items}}}"),
             Target::Php    => format!("[{items}]"),
             Target::Dotnet => format!("new() {{ {items} }}"),
-            Target::Java if entries.len() > 10 => format!("Map.ofEntries({items})"),
+            Target::Java if last.len() > 10 => format!("Map.ofEntries({items})"),
             Target::Java   => format!("Map.of({items})"),
         }
     }
@@ -2445,6 +2455,29 @@ mod tests {
             ".rulings(Map.of(\"graph\", new Ruling().origin(\"margin\").edges(false).lines(List.of(new RulingLines().step(\"5mm\"), new RulingLines().countX(12).stepY(\"25mm\").color(\"#b5c4d6\").thickness(\"s\")))))"
         ), "{}", code("java"));
         assert!(code("java").contains("new SectionAttr().ruling(\"graph\")"), "{}", code("java"));
+    }
+
+    #[test]
+    fn test_a_token_named_twice_keeps_its_last_value_in_every_language() {
+        let xml = r##"<lpdf version="1">
+            <tokens>
+                <colors><color name="brand" value="#111111"/><color name="muted" value="#666666"/><color name="brand" value="#222222"/></colors>
+                <gradients><gradient name="fade" type="linear" from="brand" to="#ffffff"/><gradient name="fade" type="radial" from="brand" to="#000000"/></gradients>
+            </tokens>
+            <document><section><layout><text>x</text></layout></section></document>
+        </lpdf>"##;
+        for (target, colors, gradients) in [
+            ("js", "colors: { muted: '#666666', brand: '#222222' }", "gradients: { fade: { type: 'radial', from: 'brand', to: '#000000' } }"),
+            ("python", "colors={'muted': '#666666', 'brand': '#222222'}", "gradients={'fade': {'type': 'radial', 'from': 'brand', 'to': '#000000'}}"),
+            ("php", "colors: ['muted' => '#666666', 'brand' => '#222222']", "gradients: ['fade' => new Gradient(type: 'radial', from: 'brand', to: '#000000')]"),
+            ("dotnet", "Colors: new() { [\"muted\"] = \"#666666\", [\"brand\"] = \"#222222\" }", "Gradients: new() { [\"fade\"] = new Gradient { Type = \"radial\", From = \"brand\", To = \"#000000\" } }"),
+            ("java", ".colors(Map.of(\"muted\", \"#666666\", \"brand\", \"#222222\"))", ".gradients(Map.of(\"fade\", new Gradient().type(\"radial\").from(\"brand\").to(\"#000000\")))"),
+        ] {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            assert!(out.contains(colors), "{target}: the colors are not written as {colors}\n{out}");
+            assert!(out.contains(gradients), "{target}: the gradients are not written as {gradients}\n{out}");
+            assert!(!out.contains("#111111") && !out.contains("linear"), "{target}: an entry named again is written\n{out}");
+        }
     }
 
     const FULL_DOCUMENT: &str = r##"<lpdf version="1">
