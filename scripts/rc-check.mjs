@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // Shows where a core release candidate stands (Lpdf-devcycle.md §4.2): core's
 // release.yml run for the RC tag, then the rc.yml run it dispatched in each
-// of the five SDK and extension repos, and whether the RC is ready to release.
-// Each of those repos releases its main as it stands, so a repo whose main has
+// of the five SDK and extension repos, the engine-refresh.yml run in pages (the
+// PR with the docs' engine copy), and whether the RC is ready to release.
+// Each SDK and extension repo releases its main as it stands, so a repo whose main has
 // a commit its rc.yml run did not test is not ready: the release would stop there.
+// Pages is left out of that: nothing releases from it, and its main moves with every docs PR.
 //
 //   make rc-check                   the newest RC tag on GitHub
 //   make rc-check RC=v0.19.0-rc.2   a specific one
@@ -17,7 +19,17 @@ import { execFileSync } from 'node:child_process'
 
 const OWNER = 'lpdfio'
 const CORE = 'lpdf'
-const REPOS = ['lpdf-js', 'lpdf-dotnet', 'lpdf-php', 'lpdf-python', 'lpdf-vscode']
+// The repos that answer the dispatch, each with the workflow that does: rc.yml, except pages, which
+// opens a PR with the docs' engine copy. Pages' main moves with every docs PR, so a main past the commit
+// its run saw is no sign of an untested change there (`mainMoves`).
+const REPOS = [
+    { repo: 'lpdf-js', file: 'rc.yml' },
+    { repo: 'lpdf-dotnet', file: 'rc.yml' },
+    { repo: 'lpdf-php', file: 'rc.yml' },
+    { repo: 'lpdf-python', file: 'rc.yml' },
+    { repo: 'lpdf-vscode', file: 'rc.yml' },
+    { repo: 'pages', file: 'engine-refresh.yml', mainMoves: true },
+]
 const REMOTE = 'origin'
 const BRANCH = 'main'
 const API = process.env.LPDF_GITHUB_API || 'https://api.github.com' // overridable for tests
@@ -111,10 +123,10 @@ async function findCoreRun() {
     return runs?.workflow_runs.find(r => r.head_branch === tag || (r.display_title || '').startsWith(`RC ${tag}:`)) ?? null
 }
 
-// rc.yml names each run "RC <tag>: …" (its run-name), which is how a run is
+// Each of these workflows names a run "RC <tag>: …" (its run-name), which is how a run is
 // matched to this RC. The colon keeps rc.1 from matching rc.10.
-async function findRcRun(repo) {
-    const runs = await api(`/repos/${OWNER}/${repo}/actions/workflows/rc.yml/runs?event=repository_dispatch&per_page=30`)
+async function findRcRun(repo, file) {
+    const runs = await api(`/repos/${OWNER}/${repo}/actions/workflows/${file}/runs?event=repository_dispatch&per_page=30`)
     if (runs === null) return { noWorkflow: true }
     return { run: runs.workflow_runs.find(r => (r.display_title || '').startsWith(`RC ${tag}:`)) ?? null }
 }
@@ -179,18 +191,18 @@ async function collect() {
     rows.push(coreRow)
 
     const coreDoneAt = core?.status === 'completed' ? Date.parse(core.updated_at) : null
-    for (const repo of REPOS) {
-        const row = { repo, file: 'rc.yml', messages: [] }
-        const found = await findRcRun(repo)
+    for (const { repo, file, mainMoves } of REPOS) {
+        const row = { repo, file, messages: [] }
+        const found = await findRcRun(repo, file)
         if (found.noWorkflow) {
             row.state = 'MISSING'
-            row.messages.push(`no rc.yml on ${BRANCH}, so the dispatch started nothing`)
+            row.messages.push(`no ${file} on ${BRANCH}, so the dispatch started nothing`)
         } else if (found.run) {
             row.run = found.run
             row.state = stateOf(found.run)
             row.messages = await findMessages(repo, found.run)
             // A released version's main has moved on by design: its release commit, and later work.
-            if (row.state === 'ok' && !tagCommits.has(final)) {
+            if (row.state === 'ok' && !mainMoves && !tagCommits.has(final)) {
                 const untested = await findUntestedMain(repo, found.run)
                 if (untested.length) {
                     row.state = 'MAIN MOVED'
@@ -219,8 +231,8 @@ function show(rows) {
     if (newerRc) console.log(`  Note: ${newerRc} is newer. Check that one: make rc-check RC=${newerRc}\n`)
     for (const r of rows) {
         const link = r.run ? r.run.html_url : ''
-        console.log(`  ${r.repo.padEnd(12)} ${r.file.padEnd(12)} ${r.state.padEnd(12)} ${link}`)
-        for (const m of r.messages) console.log(`  ${''.padEnd(26)} ${m}`)
+        console.log(`  ${r.repo.padEnd(12)} ${r.file.padEnd(18)} ${r.state.padEnd(12)} ${link}`)
+        for (const m of r.messages) console.log(`  ${''.padEnd(32)} ${m}`)
     }
     console.log('')
 
