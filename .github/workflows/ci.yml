@@ -44,6 +44,8 @@ jobs:
       # The Java SDK compiles each function of the WASI build to one JVM method, which holds at most 64 KB of bytecode:
       # a function over 40 KB of WASM fails here, in the PR that grew it, rather than when an RC reaches the SDK.
       - name: Check the size of the engine's functions
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
         run: make check-function-sizes
 
       - name: Check encrypted PDFs with qpdf
