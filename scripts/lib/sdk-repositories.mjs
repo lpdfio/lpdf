@@ -1,16 +1,16 @@
-// Where the four SDKs are, for the scripts that read or write their source.
+// Where the five SDKs are, for the scripts that read or write their source.
 //
-// By default each SDK is the repository checked out under repos/, and all four are used. An SDK repository's
+// By default each SDK is the repository checked out under repos/, and all five are used. An SDK repository's
 // own CI has only itself, next to a clone of this repository for the schema and the scripts, so it says where
 // it is: `--sdk node=.` (repeatable). Then only the SDKs named are used.
 
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-export const LANGUAGES = ['dotnet', 'node', 'python', 'php'];
+export const LANGUAGES = ['dotnet', 'node', 'python', 'php', 'java'];
 
 // The folder under repos/ of each language's SDK: its GitHub repository's name.
-const FOLDERS = { dotnet: 'lpdf-dotnet', node: 'lpdf-js', python: 'lpdf-python', php: 'lpdf-php' };
+const FOLDERS = { dotnet: 'lpdf-dotnet', node: 'lpdf-js', python: 'lpdf-python', php: 'lpdf-php', java: 'lpdf-java' };
 
 function fail(message) {
     console.error(message);

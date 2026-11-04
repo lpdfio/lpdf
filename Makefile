@@ -307,7 +307,7 @@ test-sdk-python: build-sdk-python
 
 build-all: clean-all build-wasm build-wasi build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python build-vscode build-pages
 
-# The attribute classes and constants of the four SDKs follow from schema/lpdf.xsd. gen-sdk-api writes them;
+# The attribute classes and constants of the five SDKs follow from schema/lpdf.xsd. gen-sdk-api writes them;
 # check-sdk-api fails if a generated file differs from what the schema gives, or if any SDK class, written by
 # hand or generated, has other attributes than the schema's element.
 gen-sdk-api:
