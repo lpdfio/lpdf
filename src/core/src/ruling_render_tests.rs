@@ -30,7 +30,7 @@ fn text(pdf: &[u8]) -> String {
 }
 
 /// Each stream of `pdf` that inflates, as text: the pages' content and the rulings' drawings.
-fn streams(pdf: &[u8]) -> Vec<String> {
+pub(crate) fn streams(pdf: &[u8]) -> Vec<String> {
     let mut out = Vec::new();
     let mut at = 0;
     while let Some(start) = find(&pdf[at..], b"stream\n").map(|i| at + i + 7) {
