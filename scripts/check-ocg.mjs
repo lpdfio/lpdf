@@ -52,6 +52,8 @@ const SAMPLES = [
     { file: 'ocg-pdfa-2u.pdf', shows: 'everything' },
     { file: 'ocg-pdfua-1.pdf', shows: 'everything' },
     { file: 'ocg-pdfx.pdf', shows: 'print' },
+    // A grid in the screen group: shown on screen, not printed.
+    { file: 'ocg-ruling.pdf', shows: 'switches' },
 ];
 
 const pdfjsRoot = path.resolve(pdfjsFolder, 'node_modules/pdfjs-dist');

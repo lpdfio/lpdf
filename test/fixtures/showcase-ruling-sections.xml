@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="ink"   value="#1f2a44"/>
+      <color name="muted" value="#737373"/>
+      <color name="note"  value="#fff4c2"/>
+    </colors>
+    <rulings>
+      <ruling name="notes" origin="margin" edges="false">
+        <lines step-y="16pt" color="#c9d6e8"/>
+      </ruling>
+      <ruling name="squares">
+        <lines step="5mm" color="#d9dee6"/>
+      </ruling>
+      <ruling name="frame" origin="margin">
+        <lines count="8" color="#e8c9c9"/>
+      </ruling>
+    </rulings>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Ruling in sections" subject="a ruling on every page, under layers and a background, in columns, in a markdown, with a bleed, and alone" />
+
+    <!-- A ruling is drawn on every page of the section, over its background and under its layers and its layout.
+         Expected: two pages, each on a pale blue background with lines across the area inside the margin every 16pt,
+         none on its top and bottom edges; a yellow note pasted on by a layer before the layout covers the lines it
+         sits on, and the text of the flow is drawn over them; "Page 1 of 6" and "Page 2 of 6" at the foot. -->
+    <section ruling="notes" background="#f6f9fd">
+      <layer>
+        <rect x="380pt" y="90pt" width="160pt" height="90pt" fill="note" radius="4pt"/>
+        <text-at x="392pt" y="104pt" font-size="s" color="ink">A layer before the layout</text-at>
+        <text-at x="392pt" y="120pt" font-size="s" color="ink">covers the lines under it.</text-at>
+      </layer>
+      <layer>
+        <text-at anchor="bottom-center" y="-24pt" font-size="xs" color="muted">Page {page} of {pages}</text-at>
+      </layer>
+      <layout margin="72pt">
+        <text font-size="l" font="Helvetica-Bold" color="ink">On every page</text>
+        <column gap="m">
+          <text>Line 1 of the notes. The ruling's lines run across the area inside the margin, every 16pt, on each page the flow takes.</text>
+          <text>Line 2 of the notes.</text>
+          <text>Line 3 of the notes.</text>
+          <text>Line 4 of the notes.</text>
+          <text>Line 5 of the notes.</text>
+          <text>Line 6 of the notes.</text>
+          <text>Line 7 of the notes.</text>
+          <text>Line 8 of the notes.</text>
+          <text>Line 9 of the notes.</text>
+          <text>Line 10 of the notes.</text>
+          <text>Line 11 of the notes.</text>
+          <text>Line 12 of the notes.</text>
+          <text>Line 13 of the notes.</text>
+          <text>Line 14 of the notes.</text>
+          <text>Line 15 of the notes.</text>
+          <text>Line 16 of the notes.</text>
+          <text>Line 17 of the notes.</text>
+          <text>Line 18 of the notes.</text>
+          <text>Line 19 of the notes.</text>
+          <text>Line 20 of the notes.</text>
+          <text>Line 21 of the notes.</text>
+          <text>Line 22 of the notes.</text>
+          <text>Line 23 of the notes.</text>
+          <text>Line 24 of the notes.</text>
+          <text>Line 25 of the notes.</text>
+          <text>Line 26 of the notes.</text>
+          <text>Line 27 of the notes.</text>
+          <text>Line 28 of the notes.</text>
+          <text>Line 29 of the notes.</text>
+          <text>Line 30 of the notes.</text>
+          <text>Line 31 of the notes.</text>
+          <text>Line 32 of the notes.</text>
+          <text>Line 33 of the notes.</text>
+          <text>Line 34 of the notes.</text>
+          <text>Line 35 of the notes.</text>
+          <text>Line 36 of the notes.</text>
+          <text>Line 37 of the notes.</text>
+          <text>Line 38 of the notes.</text>
+          <text>Line 39 of the notes.</text>
+          <text>Line 40 of the notes.</text>
+          <text>Line 41 of the notes.</text>
+          <text>Line 42 of the notes.</text>
+          <text>Line 43 of the notes.</text>
+          <text>Line 44 of the notes.</text>
+          <text>Line 45 of the notes.</text>
+          <text>Line 46 of the notes.</text>
+          <text>Line 47 of the notes.</text>
+          <text>Line 48 of the notes.</text>
+          <text>Line 49 of the notes.</text>
+          <text>Line 50 of the notes.</text>
+          <text>Line 51 of the notes.</text>
+          <text>Line 52 of the notes.</text>
+          <text>Line 53 of the notes.</text>
+          <text>Line 54 of the notes.</text>
+          <text>Line 55 of the notes.</text>
+          <text>Line 56 of the notes.</text>
+          <text>Line 57 of the notes.</text>
+          <text>Line 58 of the notes.</text>
+          <text>Line 59 of the notes.</text>
+          <text>Line 60 of the notes.</text>
+        </column>
+      </layout>
+    </section>
+
+    <!-- A ruling ignores the section's columns: its lines run across the gap and the column rule.
+         Expected: one page of squares from edge to edge, with the text in two columns over it and a rule between. -->
+    <section ruling="squares" columns="2" column-gap="xl" column-rule="0.5pt #8a94a6">
+      <layout margin="54pt">
+        <column gap="m">
+          <text font-size="l" font="Helvetica-Bold" color="ink">Columns</text>
+          <text>The squares run from the left edge of the page to the right one, across both columns, the gap and the rule between them, as they would without columns.</text>
+          <text>The text of the first column fills it from the top, and what is left goes on in the second column, over the same squares.</text>
+          <text>A ruling belongs to the page, not to the columns of its flow. Its lines are where they would be on a page of one column, and a column starts wherever its margin and the gap put it, on a line or between two.</text>
+          <text>The squares are 5mm, and the page is A4, 210mm wide: 42 of them fit across it exactly, so there is a line on the right edge as there is on the left one.</text>
+          <text>Down the page they don't fit exactly: 297mm is 59 squares and 2mm over, and the last row at the foot of the page is the 2mm that is left.</text>
+          <text>The text keeps to its own lines. It does not snap to the squares: a ruling is drawn under the flow and changes nothing in how the flow is laid out.</text>
+          <text>To write on the lines, set the gap between the paragraphs and their line height so that one line of text is a whole number of squares.</text>
+          <text>The column rule is drawn over the squares, as everything in the flow is, and so is the text of both columns.</text>
+          <text>A ruling in a section of columns is drawn once for the page, not once for each column.</text>
+          <text>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</text>
+          <text>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</text>
+          <text>Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.</text>
+          <text>Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.</text>
+          <text>Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.</text>
+          <text>Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur.</text>
+          <text>Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur.</text>
+          <text>At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident.</text>
+          <text>Similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio.</text>
+          <text>Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus.</text>
+          <text>Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae.</text>
+          <text>Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat.</text>
+        </column>
+      </layout>
+    </section>
+
+    <!-- A markdown takes a ruling as a layout does, and its own margin is the one origin="margin" fills.
+         Expected: one page cut into 8 by 8 inside a margin of 54pt, with the Markdown's heading and paragraph over it. -->
+    <section ruling="frame">
+      <markdown margin="54pt">
+        <markdown-content><![CDATA[
+          # In a markdown
+
+          The area inside the markdown's margin is cut into eight columns and eight rows, with lines on all four edges, under the heading and this paragraph.
+        ]]></markdown-content>
+      </markdown>
+    </section>
+
+    <!-- With a bleed the page grows past its trim edge, and the background fills the bleed; the lines stop at the
+         trim edge. Expected: a grey background reaching 5mm past the page on every side, and squares that end at the
+         edge of the page, not in the bleed. -->
+    <section ruling="squares" bleed="5mm" background="#eef0f3">
+      <layout margin="54pt">
+        <text font-size="l" font="Helvetica-Bold" color="ink">Bleed</text>
+        <text>The background runs into the 5mm bleed, which the press cuts off. The squares stop at the trim edge.</text>
+      </layout>
+    </section>
+
+    <!-- A section with only a ruling is one page of paper. Expected: a page of 5mm squares and nothing else. -->
+    <section ruling="squares"/>
+  </document>
+</lpdf>

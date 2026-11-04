@@ -597,6 +597,26 @@ fn gradients_expression(target: Target, gradients: &Node) -> String {
     target.map(&entries)
 }
 
+/// The `<rulings>` of the tokens as the map the SDKs take: each ruling's name to its attributes, and its `<lines>` as
+/// `lines`, a list. PHP and C# have a `Ruling` and a `RulingLines` class, JS and Python plain objects.
+fn rulings_expression(target: Target, rulings: &Node) -> String {
+    let entries: Vec<(String, String)> = rulings
+        .children()
+        .filter(|n| n.is_element() && n.tag_name().name() == "ruling")
+        .map(|ruling| {
+            let mut members = written_attributes(target, &ruling, &["name"]);
+            let lines: Vec<String> = ruling
+                .children()
+                .filter(|n| n.is_element() && n.tag_name().name() == "lines")
+                .map(|lines| target.record("RulingLines", &written_attributes(target, &lines, &[])))
+                .collect();
+            members.push(("lines".to_string(), format!("[{}]", lines.join(", "))));
+            (ruling.attribute("name").unwrap_or("").to_string(), target.record("Ruling", &members))
+        })
+        .collect();
+    target.map(&entries)
+}
+
 /// A key of a JS object literal: bare when it is an identifier, such as `primary`, quoted when it is not,
 /// such as `'surface-alt'`.
 fn js_key(name: &str) -> String {
@@ -659,9 +679,10 @@ fn tokens_expression(target: Target, tokens: &Node) -> Option<String> {
     let mut members: Vec<(String, String)> = Vec::new();
     for child in tokens.children().filter(|n| n.is_element()) {
         let tag = child.tag_name().name();
-        if tag == "gradients" {
+        if tag == "gradients" || tag == "rulings" {
             if child.children().any(|n| n.is_element()) {
-                members.push((tag.to_string(), gradients_expression(target, &child)));
+                let expression = if tag == "gradients" { gradients_expression(target, &child) } else { rulings_expression(target, &child) };
+                members.push((tag.to_string(), expression));
             }
             continue;
         }
@@ -701,7 +722,11 @@ fn classes_used(code: &str) -> Vec<String> {
         let is_class = word.starts_with(|c: char| c.is_ascii_uppercase())
             && word != "NoAttr"
             && (word.ends_with("Attr")
-                || matches!(word, "DocumentMeta" | "DocumentOutput" | "DocumentAssets" | "DocumentTokens" | "Gradient" | "GradientStop"));
+                || matches!(
+                    word,
+                    "DocumentMeta" | "DocumentOutput" | "DocumentAssets" | "DocumentTokens" | "Gradient" | "GradientStop" | "Ruling"
+                        | "RulingLines"
+                ));
         if is_class && !used.iter().any(|u| u == word) {
             used.push(word.to_string());
         }
@@ -713,7 +738,7 @@ fn classes_used(code: &str) -> Vec<String> {
 fn php_namespace(class: &str) -> &'static str {
     match class {
         "DocumentAttr" | "DocumentMeta" | "DocumentOutput" | "DocumentAssets" | "DocumentTokens" | "SectionAttr" | "LayoutAttr"
-        | "FontAttr" | "ImageAttr" | "FileAttr" | "ProfileAttr" | "Gradient" | "GradientStop" => "Lpdf\\Kit",
+        | "FontAttr" | "ImageAttr" | "FileAttr" | "ProfileAttr" | "Gradient" | "GradientStop" | "Ruling" | "RulingLines" => "Lpdf\\Kit",
         "LayerAttr" | "RectAttr" | "CircleAttr" | "EllipseAttr" | "LineAttr" | "PathAttr" | "TextAtAttr"
         | "ImgAtAttr" | "BarcodeAtAttr" => "Lpdf\\Canvas",
         markdown if markdown.starts_with("Markdown") => "Lpdf\\Markdown",
@@ -1973,6 +1998,40 @@ mod tests {
         assert!(code("php").contains("use Lpdf\\Kit\\Gradient;") && code("php").contains("use Lpdf\\Kit\\GradientStop;"), "{}", code("php"));
         assert!(code("dotnet").contains(
             "Gradients: new() { [\"fade\"] = new Gradient { Type = \"linear\", From = \"brand\", To = \"#ffffff\", Angle = 90 }, [\"sunset\"] = new Gradient { Type = \"radial\", Stops = [new GradientStop { Offset = \"0%\", Color = \"#f97316\" }, new GradientStop { Offset = \"100%\", Color = \"#8b5cf6\" }] } }"
+        ), "{}", code("dotnet"));
+    }
+
+    #[test]
+    fn test_rulings_are_a_map_of_tokens_in_every_language() {
+        let xml = r##"<?xml version="1.0"?>
+<lpdf version="1">
+  <tokens>
+    <rulings>
+      <ruling name="graph" origin="margin" edges="false">
+        <lines step="5mm"/>
+        <lines count-x="12" step-y="25mm" color="#b5c4d6" thickness="s"/>
+      </ruling>
+    </rulings>
+  </tokens>
+  <document>
+    <section ruling="graph"><layout><text>x</text></layout></section>
+  </document>
+</lpdf>"##;
+        let code = |target: &str| codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+
+        assert!(code("js").contains(
+            "rulings: { graph: { origin: 'margin', edges: false, lines: [{ step: '5mm' }, { countX: 12, stepY: '25mm', color: '#b5c4d6', thickness: 's' }] } }"
+        ), "{}", code("js"));
+        assert!(code("js").contains("ruling: 'graph'"), "{}", code("js"));
+        assert!(code("python").contains(
+            "rulings={'graph': {'origin': 'margin', 'edges': False, 'lines': [{'step': '5mm'}, {'count-x': 12, 'step-y': '25mm', 'color': '#b5c4d6', 'thickness': 's'}]}}"
+        ), "{}", code("python"));
+        assert!(code("php").contains(
+            "rulings: ['graph' => new Ruling(origin: 'margin', edges: false, lines: [new RulingLines(step: '5mm'), new RulingLines(countX: 12, stepY: '25mm', color: '#b5c4d6', thickness: 's')])]"
+        ), "{}", code("php"));
+        assert!(code("php").contains("use Lpdf\\Kit\\Ruling;") && code("php").contains("use Lpdf\\Kit\\RulingLines;"), "{}", code("php"));
+        assert!(code("dotnet").contains(
+            "Rulings: new() { [\"graph\"] = new Ruling { Origin = \"margin\", Edges = false, Lines = [new RulingLines { Step = \"5mm\" }, new RulingLines { CountX = 12, StepY = \"25mm\", Color = \"#b5c4d6\", Thickness = \"s\" }] } }"
         ), "{}", code("dotnet"));
     }
 

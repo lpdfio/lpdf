@@ -17,7 +17,7 @@ fn read(path: &Path) -> Vec<u8> {
 }
 
 /// The fixture `showcase-pdfx.xml`.
-fn fixture() -> String {
+pub(crate) fn fixture() -> String {
     String::from_utf8(read(&test_dir().join("fixtures/showcase-pdfx.xml"))).expect("UTF-8")
 }
 
@@ -491,9 +491,9 @@ fn the_brochure_example_is_a_pdfx_file() {
 
 // ── The samples of the external check ─────────────────────────────────────────
 
-/// Writes the files `scripts/check-pdfx.mjs` hands to qpdf, when `LPDF_PDFX_OUT` names a folder: the fixture and the
-/// brochure example, rendered unlicensed, so that the attribution line is checked too. Without the variable the test
-/// does nothing, so a plain `cargo test` needs no other tool.
+/// Writes the files `scripts/check-pdfx.mjs` hands to qpdf, when `LPDF_PDFX_OUT` names a folder: the fixture, the
+/// brochure example and the fixture with graph paper on its sections, rendered unlicensed, so that the attribution
+/// line is checked too. Without the variable the test does nothing, so a plain `cargo test` needs no other tool.
 #[test]
 fn writes_the_pdfx_sample_for_the_external_check() {
     let Some(dir) = std::env::var_os("LPDF_PDFX_OUT") else { return };
@@ -501,4 +501,5 @@ fn writes_the_pdfx_sample_for_the_external_check() {
     std::fs::create_dir_all(dir).expect("the samples' folder");
     std::fs::write(dir.join("pdfx-4.pdf"), render_fixture()).expect("a sample");
     std::fs::write(dir.join("pdfx-4-brochure.pdf"), render_brochure()).expect("a sample");
+    std::fs::write(dir.join("pdfx-4-ruling.pdf"), crate::ruling_render_tests::pdfx_sample()).expect("a sample");
 }

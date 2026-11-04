@@ -130,6 +130,8 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
         ("image@name", &["renamed"]),
         ("color@name", &["renamed"]),
         ("gradient@name", &["renamed"]),
+        ("ruling@name", &["renamed"]),
+        ("section@ruling", &["paper"]),
         ("alias@name", &["renamed"]),
         ("font@ref", &["custom"]),
         ("image@ref", &["other"]),
@@ -548,6 +550,14 @@ fn gradient_document(gradients: &str) -> String {
     )
 }
 
+/// A document whose tokens hold `rulings`, and whose section, inside a margin, names the one called `paper`.
+fn ruling_document(rulings: &str) -> String {
+    lpdf(
+        &format!("<tokens><rulings>{rulings}</rulings></tokens>"),
+        &format!(r#"<document><section ruling="paper"><layout margin="40pt">{ONE}</layout></section></document>"#),
+    )
+}
+
 fn flow_with_images(inner: &str) -> String {
     lpdf(IMAGES, &format!("<document><section><layout>{inner}</layout></section></document>"))
 }
@@ -741,6 +751,17 @@ fn subjects() -> Vec<Subject> {
             ))
         })
         .base(&[("offset", "100%"), ("color", "#0000ff")]),
+        // A ruling shows on the section that names it, and a set of lines in the ruling it is in: ruled paper, to which
+        // a step or a count adds lines down the page.
+        Subject::new("ruling", |a, _| ruling_document(&format!(r#"<ruling {a}><lines step="20pt"/></ruling>"#))).base(&[("name", "paper")]),
+        Subject::new("lines", |a, _| ruling_document(&format!(r#"<ruling name="paper"><lines {a}/></ruling>"#))).base(&[("step-y", "20pt")]),
+        Subject::new("section", |a, _| {
+            lpdf(
+                r#"<tokens><rulings><ruling name="paper"><lines step="20pt"/></ruling></rulings></tokens>"#,
+                &format!("<document><section {a}><layout>{ONE}</layout></section></document>"),
+            )
+        })
+        .only(&["ruling"]),
         // The token scale: each row is used by the attribute it scales.
         Subject::new("tokens:space", |a, _| token_row("space", a, |s| format!(r#"<column gap="{s}">{TWO}</column>"#)))
             .base(&[("xs", "2pt"), ("s", "4pt"), ("m", "8pt"), ("l", "16pt"), ("xl", "24pt"), ("xxl", "32pt")]),
@@ -1030,6 +1051,7 @@ fn tweaks() -> HashMap<String, Tweak> {
     add("image@name", Tweak::default().error_counts());
     add("color@name", Tweak::default().error_counts());
     add("gradient@name", Tweak::default().error_counts());
+    add("ruling@name", Tweak::default().error_counts());
     add("alias@name", Tweak::default().error_counts());
     add("profile@name", Tweak::default().error_counts());
     // A font is a core font or a registry key, not both.
@@ -1047,6 +1069,11 @@ fn tweaks() -> HashMap<String, Tweak> {
     add("field@checked", Tweak::default().set("type", "checkbox"));
     add("field@action-url", Tweak::default().set("type", "button"));
     add("field@label", Tweak::default().set("type", "button"));
+
+    // A set of lines: a count across the page takes the place of the step the subject has, as the two can't both
+    // cut one direction.
+    add("lines@count", Tweak::default().without("step-y"));
+    add("lines@count-y", Tweak::default().without("step-y"));
 
     // Layer shapes: what is drawn only with a fill or a stroke.
     for element in ["rect", "circle", "ellipse"] {

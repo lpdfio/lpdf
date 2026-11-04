@@ -4,7 +4,8 @@
 //  - veraPDF reads the standards each file declares in its XMP packet and validates the file against each one's
 //    rules. For PDF/A: pdfa-2b.pdf must declare PDF/A-2b, pdfa-2a.pdf, the tagged fixture, PDF/A-2a, and pdfa-2u.pdf
 //    and the three pages in a font of each kind the fixtures lack (CFF, CFF2, variable TrueType) PDF/A-2u, and so must
-//    pdfa-2u-ocg.pdf, the fixture with content in optional content groups. pdfa-3a.pdf, pdfa-3b.pdf and pdfa-3u.pdf,
+//    pdfa-2u-ocg.pdf, the fixture with content in optional content groups, and pdfa-2u-ruling.pdf, the fixture with
+//    graph paper on its sections. pdfa-3a.pdf, pdfa-3b.pdf and pdfa-3u.pdf,
 //    the three fixtures at the levels of part 3, must declare PDF/A-3a, PDF/A-3b and PDF/A-3u, and
 //    pdfa-3b-facturx.pdf, a Factur-X invoice that carries its XML and six other files, PDF/A-3b. pdfa-2a-pdfua-1.pdf
 //    and pdfa-3a-pdfua-1.pdf, the PDF/UA fixture at level a, must declare PDF/A-2a or PDF/A-3a and PDF/UA-1. The
@@ -15,7 +16,8 @@
 //    PDF/UA: pdfua-1.pdf must declare PDF/UA-1, and pdfua-1-pdfa-2u.pdf both PDF/A-2u and PDF/UA-1, and
 //    pdfua-1-toc-links.pdf, a table of contents of the links $toc repeats, pdfua-1-toc.pdf, the
 //    fixture with a table of contents on two pages, pdfua-1-ocg.pdf, the fixture with content in optional content
-//    groups, pdfua-1-references.pdf, a report whose text refers to its pages, and stamp-pdfua-1.pdf, the fixture
+//    groups, pdfua-1-ruling.pdf, the fixture with graph paper on its sections, pdfua-1-references.pdf, a report whose
+//    text refers to its pages, and stamp-pdfua-1.pdf, the fixture
 //    stamped without a license key, PDF/UA-1. None may break a rule;
 //  - qpdf --check finds no syntax or stream error.
 //
@@ -42,6 +44,7 @@ const SAMPLE_SETS = {
         { file: 'pdfa-2u-cff2.pdf', profiles: ['PDF/A-2u validation profile'] },
         { file: 'pdfa-2u-variable-ttf.pdf', profiles: ['PDF/A-2u validation profile'] },
         { file: 'pdfa-2u-ocg.pdf', profiles: ['PDF/A-2u validation profile'] },
+        { file: 'pdfa-2u-ruling.pdf', profiles: ['PDF/A-2u validation profile'] },
         { file: 'pdfa-3a.pdf', profiles: ['PDF/A-3a validation profile'] },
         { file: 'pdfa-3b.pdf', profiles: ['PDF/A-3b validation profile'] },
         { file: 'pdfa-3u.pdf', profiles: ['PDF/A-3u validation profile'] },
@@ -63,6 +66,7 @@ const SAMPLE_SETS = {
         { file: 'pdfua-1-toc-links.pdf', profiles: ['PDF/UA-1 validation profile'] },
         { file: 'pdfua-1-toc.pdf', profiles: ['PDF/UA-1 validation profile'] },
         { file: 'pdfua-1-ocg.pdf', profiles: ['PDF/UA-1 validation profile'] },
+        { file: 'pdfua-1-ruling.pdf', profiles: ['PDF/UA-1 validation profile'] },
         { file: 'pdfua-1-references.pdf', profiles: ['PDF/UA-1 validation profile'] },
         // Stamped without a license key: the attribution line is an artifact, with no link
         { file: 'stamp-pdfua-1.pdf', profiles: ['PDF/UA-1 validation profile'] },

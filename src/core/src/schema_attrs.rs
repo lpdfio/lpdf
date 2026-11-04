@@ -168,6 +168,24 @@ const GRADIENT: Attributes = &[
     ("angle", Kind::Decimal { min: Bound::Open, max: Bound::Open }),
 ];
 
+const LINES: Attributes = &[
+    ("step", Kind::Text),
+    ("step-x", Kind::Text),
+    ("step-y", Kind::Text),
+    ("count", Kind::Integer { min: Some(1), max: Some(100) }),
+    ("count-x", Kind::Integer { min: Some(1), max: Some(100) }),
+    ("count-y", Kind::Integer { min: Some(1), max: Some(100) }),
+    ("color", Kind::Text),
+    ("thickness", Kind::Text),
+];
+
+const RULING: Attributes = &[
+    ("name", Kind::Text),
+    ("origin", Kind::Text),
+    ("edges", Kind::Boolean),
+    ("ocg", Kind::Text),
+];
+
 const TOKENS: Attributes = &[
 ];
 
@@ -250,6 +268,9 @@ const TOKENS_COLORS: Attributes = &[
 ];
 
 const TOKENS_GRADIENTS: Attributes = &[
+];
+
+const TOKENS_RULINGS: Attributes = &[
 ];
 
 const ASSETS: Attributes = &[
@@ -525,6 +546,7 @@ const SECTION: Attributes = &[
     ("orientation", Kind::Text),
     ("bleed", Kind::Text),
     ("background", Kind::Text),
+    ("ruling", Kind::Text),
     ("title", Kind::Text),
     ("debug", Kind::Boolean),
     ("type", Kind::Text),
@@ -884,6 +906,7 @@ pub(crate) fn attributes_of(parent: &str, name: &str) -> Option<Attributes> {
         ("tokens", "aliases") => Some(TOKENS_ALIASES),
         ("tokens", "colors") => Some(TOKENS_COLORS),
         ("tokens", "gradients") => Some(TOKENS_GRADIENTS),
+        ("tokens", "rulings") => Some(TOKENS_RULINGS),
         ("layout", "region") => Some(LAYOUT_REGION),
         ("markdown", "markdown-styles") => Some(MARKDOWN_MARKDOWN_STYLES),
         ("markdown-styles", "h1") => Some(MARKDOWN_STYLES_H1),
@@ -930,6 +953,8 @@ pub(crate) fn attributes_of(parent: &str, name: &str) -> Option<Attributes> {
         (_, "alias") => Some(ALIAS),
         (_, "stop") => Some(STOP),
         (_, "gradient") => Some(GRADIENT),
+        (_, "lines") => Some(LINES),
+        (_, "ruling") => Some(RULING),
         (_, "tokens") => Some(TOKENS),
         (_, "assets") => Some(ASSETS),
         (_, "meta") => Some(META),

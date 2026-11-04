@@ -103,6 +103,8 @@ mod page_numbers;
 mod page_scope;
 #[path = "../../core/src/canvas.rs"]
 mod canvas;
+#[path = "../../core/src/ruling.rs"]
+mod ruling;
 #[path = "../../core/src/toc.rs"]
 mod toc;
 #[path = "../../core/src/references.rs"]

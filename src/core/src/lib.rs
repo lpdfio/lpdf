@@ -29,6 +29,7 @@ mod references;
 mod tagging;
 mod render;
 mod rewrite;
+mod ruling;
 mod schema_attrs;
 mod shared;
 mod stamp;
@@ -944,6 +945,9 @@ mod facturx_render_tests;
 
 #[cfg(test)]
 mod ocg_render_tests;
+
+#[cfg(test)]
+mod ruling_render_tests;
 
 #[cfg(test)]
 mod tests {

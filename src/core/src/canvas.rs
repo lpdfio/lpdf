@@ -7,6 +7,7 @@
 /// (`pdf.rs`) flips to bottom-up when emitting content streams.
 
 use std::collections::HashMap;
+use std::rc::Rc;
 use crate::tokens::{FontDef, Tokens};
 use crate::parse::{
     Node, Ocg, PageScope, Shadow, Shape, ShapeKind, TextDefaults,
@@ -121,6 +122,9 @@ pub enum CanvasPrimitive {
     Line(CanvasLine),
     Path(CanvasPath),
     Placed(PlacedNode),
+    /// The lines of a section's ruling, which no document writes in a layer: the section adds the layer
+    /// (`ruling::layer`). Every page draws the same drawing, so the PDF writes it once.
+    Ruling(Rc<crate::ruling::Drawing>),
 }
 
 /// A `<layer>`: a graphics-state scope, a direct child of `<section>`.  Document
@@ -157,6 +161,8 @@ impl CanvasLayer {
                 CanvasPrimitive::Line(l)    => l.ocg = None,
                 CanvasPrimitive::Path(p)    => p.ocg = None,
                 CanvasPrimitive::Placed(p)  => crate::parse::forget_ocg(&mut p.node),
+                // Its group is the layer's.
+                CanvasPrimitive::Ruling(_)  => {}
             }
         }
     }
@@ -653,6 +659,7 @@ fn primitive_to_render_node(prim: &CanvasPrimitive, tokens: PageTokens) -> Rende
         CanvasPrimitive::Path(p)    => p.ocg,
         // Put in its group where it is laid out, which knows its box.
         CanvasPrimitive::Placed(_)  => None,
+        CanvasPrimitive::Ruling(_)  => None,
     };
     crate::layout::in_group(primitive_drawing(prim, tokens), ocg, 0.0, 0.0, 0.0, 0.0)
 }
@@ -716,6 +723,7 @@ fn primitive_drawing(prim: &CanvasPrimitive, tokens: PageTokens) -> RenderNode {
             line_join:          0,
         }),
         CanvasPrimitive::Placed(placed) => crate::layout::layout_placed(placed, tokens),
+        CanvasPrimitive::Ruling(drawing) => RenderNode::Ruling(Rc::clone(drawing)),
     }
 }
 

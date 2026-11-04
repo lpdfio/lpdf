@@ -127,8 +127,40 @@ fn render_tokens(tokens: &serde_json::Map<String, Value>, depth: usize) -> Strin
         lines.push(format!("{inner}</gradients>"));
     }
 
+    if let Some(rulings) = tokens.get("rulings").and_then(|v| v.as_object())
+        && !rulings.is_empty()
+    {
+        lines.push(format!("{inner}<rulings>"));
+        for (name, ruling) in rulings {
+            lines.extend(render_ruling(name, ruling, depth + 2));
+        }
+        lines.push(format!("{inner}</rulings>"));
+    }
+
     lines.push(format!("{pad}</tokens>"));
     lines.join("\n")
+}
+
+/// One `<ruling>` of the tokens, from its entry in the Kit tree: `{ origin, edges, ocg, lines }`. The attribute check
+/// has written `edges` and each count, which the tree may give as a boolean and numbers, as their text.
+fn render_ruling(name: &str, ruling: &Value, depth: usize) -> Vec<String> {
+    let pad = "  ".repeat(depth);
+    let Some(ruling) = ruling.as_object() else {
+        return Vec::new();
+    };
+    let mut tag = format!("{pad}<ruling name=\"{}\"", escape_attr(name));
+    for key in ["origin", "edges", "ocg"] {
+        if let Some(text) = ruling.get(key).and_then(Value::as_str) {
+            tag.push_str(&format!(" {key}=\"{}\"", escape_attr(text)));
+        }
+    }
+    let lines_pad = "  ".repeat(depth + 1);
+    let mut lines = vec![format!("{tag}>")];
+    for set in ruling.get("lines").and_then(|v| v.as_array()).into_iter().flatten() {
+        lines.push(format!("{lines_pad}<lines{}/>", attrs_str(set.as_object().unwrap_or(&serde_json::Map::new()), &[])));
+    }
+    lines.push(format!("{pad}</ruling>"));
+    lines
 }
 
 /// One `<gradient>` of the tokens, from its entry in the Kit tree: `{ type, from, to, angle, stops }`. The attribute
@@ -546,7 +578,12 @@ pub fn kit_to_xml(json: &str) -> Result<String, String> {
             .and_then(|v| v.as_object())
             .is_some_and(|m| !m.is_empty());
 
-        if has_scales || has_colors || has_gradients || has_aliases {
+        let has_rulings = tokens
+            .get("rulings")
+            .and_then(|v| v.as_object())
+            .is_some_and(|m| !m.is_empty());
+
+        if has_scales || has_colors || has_gradients || has_aliases || has_rulings {
             lines.push(render_tokens(tokens, 1));
         }
     }

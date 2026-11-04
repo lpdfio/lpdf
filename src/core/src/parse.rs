@@ -1825,8 +1825,10 @@ pub fn font_srcs(xml: &str) -> Result<Vec<(String, String)>, String> {
 // ── Tokens ────────────────────────────────────────────────────────────────────
 
 fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), String> {
-    // A gradient names colors of the `colors` row, which may come after it, so gradients are read last.
+    // A gradient names colors of the `colors` row, and a ruling colors and slots of the `border` row, which may come
+    // after them, so gradients and rulings are read last.
     let mut gradients_elem = None;
+    let mut rulings_elem = None;
     for child in elems(elem) {
         match child.tag_name().name() {
             "space"  => tokens.space    = parse_scale_row(&child)?,
@@ -1849,11 +1851,39 @@ fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), 
                 }
             }
             "gradients" => gradients_elem = Some(child),
+            "rulings" => rulings_elem = Some(child),
             other => return Err(format!("<{}>{}: unknown element in <tokens>", other, node_loc(&child))),
         }
     }
     if let Some(gradients) = gradients_elem {
         parse_gradients_elem(&gradients, tokens)?;
+    }
+    if let Some(rulings) = rulings_elem {
+        parse_rulings_elem(&rulings, tokens)?;
+    }
+    Ok(())
+}
+
+/// Read the `<ruling>` elements of `<rulings>`, each with its `<lines>` children.
+fn parse_rulings_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), String> {
+    for ruling in elems(elem) {
+        if ruling.tag_name().name() != "ruling" {
+            return Err(format!("<{}>{}: unknown element in <rulings>", ruling.tag_name().name(), node_loc(&ruling)));
+        }
+        let name = req_attr(&ruling, "name")?;
+        let mut sets = Vec::new();
+        for lines in elems(&ruling) {
+            if lines.tag_name().name() != "lines" {
+                return Err(format!("<{}>{}: unknown element in <ruling>", lines.tag_name().name(), node_loc(&lines)));
+            }
+            let spec = crate::ruling::LinesSpec::read(|key| lines.attribute(key));
+            let set = crate::ruling::read_lines(&spec, tokens)
+                .map_err(|e| format!("<lines>{}: ruling '{name}': {e}", node_loc(&lines)))?;
+            sets.push(set);
+        }
+        let read = crate::ruling::read_ruling(&name, ruling.attribute("origin"), ruling.attribute("edges"), ruling.attribute("ocg"), sets)
+            .map_err(|e| format!("<ruling>{}: {e}", node_loc(&ruling)))?;
+        tokens.rulings.insert(name, read);
     }
     Ok(())
 }
@@ -2295,6 +2325,19 @@ fn parse_section_columns(a: &impl Attrs, tokens: &Tokens) -> Result<Columns, Str
     Ok(Columns { count, gap, rule, fill })
 }
 
+/// The layer of the ruling a section names with `ruling`, which goes under everything else on its pages: the lines on
+/// pages of `size`, filling the page or the area inside the margin of the section's layout or markdown, which a section
+/// of layers alone doesn't have. `None` for a section that names no ruling.
+fn section_ruling(a: &impl Attrs, tokens: &Tokens, size: (f32, f32), children: &[SectionChild]) -> Result<Option<canvas::CanvasLayer>, String> {
+    let Some(name) = a.get("ruling") else { return Ok(None) };
+    let ruling = crate::ruling::named(&tokens.rulings, name)?;
+    let margin = children.iter()
+        .find_map(|c| match c { SectionChild::Layout { margin, .. } => Some(*margin), SectionChild::Layer(_) => None })
+        .unwrap_or([0.0; 4]);
+    let drawing = crate::ruling::draw(ruling, size.0, size.1, margin).map_err(|e| format!("ruling '{name}': {e}"))?;
+    Ok(Some(crate::ruling::layer(drawing, ruling.ocg)))
+}
+
 /// Whether the insets of a section's layout stay within its `columns`: each `col` and `colspan` ends at the last
 /// column or before it.
 fn check_inset_columns(children: &[SectionChild], columns: usize) -> Result<(), String> {
@@ -2424,6 +2467,10 @@ fn parse_section_elem(
         }
     }
 
+    // The ruling is the bottom layer, so a section with only a ruling is a page of paper.
+    if let Some(layer) = section_ruling(elem, tokens, size, &children).map_err(|e| format!("<section>{}: {e}", node_loc(elem)))? {
+        children.insert(0, SectionChild::Layer(layer));
+    }
     if children.is_empty() {
         return Err(format!(
             "<section>{}: must have at least one <layout> or <layer> child",
@@ -4260,7 +4307,28 @@ pub fn parse_tree_tokens_pub(
         }
     }
 
+    // Rulings name colors and slots of the border row, so they are read after both.
+    if let Some(rulings) = obj.get("rulings").and_then(|v| v.as_object()) {
+        for (name, def) in rulings {
+            let resolved = parse_tree_ruling(name, def, tokens)?;
+            tokens.rulings.insert(name.clone(), resolved);
+        }
+    }
+
     Ok(())
+}
+
+/// Read one ruling of a Kit tree's tokens: `{ origin, edges, ocg, lines: [{ step, step-x, … }] }`. The attribute
+/// check has written `edges`, a boolean in the tree, and each count, a number, as their text.
+fn parse_tree_ruling(name: &str, def: &serde_json::Value, tokens: &Tokens) -> Result<crate::ruling::Ruling, String> {
+    let text = |key: &str| def.get(key).and_then(|v| v.as_str());
+    let mut sets = Vec::new();
+    for (index, lines) in def.get("lines").and_then(|v| v.as_array()).into_iter().flatten().enumerate() {
+        let spec = crate::ruling::LinesSpec::read(|key| lines.get(key).and_then(|v| v.as_str()));
+        let set = crate::ruling::read_lines(&spec, tokens).map_err(|e| format!("ruling '{name}': lines[{index}]: {e}"))?;
+        sets.push(set);
+    }
+    crate::ruling::read_ruling(name, text("origin"), text("edges"), text("ocg"), sets)
 }
 
 /// Read one gradient of a Kit tree's tokens: `{ type, from, to, angle, stops: [{ offset, color }] }`. The attribute
@@ -4388,6 +4456,10 @@ fn parse_tree_section(
         }
     }
 
+    // The ruling is the bottom layer, so a section with only a ruling is a page of paper.
+    if let Some(layer) = section_ruling(&a, tokens, size, &children).map_err(|e| format!("section: {e}"))? {
+        children.insert(0, SectionChild::Layer(layer));
+    }
     if children.is_empty() {
         return Err("section must have at least one layout or layer child".into());
     }

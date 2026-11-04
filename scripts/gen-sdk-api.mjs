@@ -6,7 +6,8 @@
 // Each attribute has the type the schema gives it: a boolean is `boolean`, `bool` or `bool`, a whole number `number`,
 // `int` or `int`, a number `number`, `float` or `double`, and the rest a string. `line-height`, a name or a factor,
 // is `string | number` in TypeScript, `str | float` in Python, `string|float` in PHP and `LineHeight` in C#, a struct
-// that converts from either. The gradients of the tokens are generated from `<gradient>` and `<stop>` too.
+// that converts from either. The gradients of the tokens are generated from `<gradient>` and `<stop>` too, and the
+// rulings from `<ruling>` and `<lines>`.
 //
 // A schema attribute marked use="required" is required in every SDK, by each language's own means: a
 // required property in TypeScript, a required `init` property in C#, a field without a default in Python
@@ -214,42 +215,58 @@ function gradientParts() {
     };
 }
 
+/** A record of a token in Lpdf.Kit, in .NET: `members` as properties, then the lines of `extra`. */
+function kitRecord(name, summary, members, extra) {
+    const lines = [...HEADER.map((h) => `// ${h}`), 'namespace Lpdf.Kit;', '', '#pragma warning disable CS1591',
+        `/// <summary>${xmlDoc(summary)}</summary>`, `public sealed record ${name}`, '{'];
+    members.forEach((a, i) => {
+        if (a.doc) lines.push(...(i > 0 ? [''] : []), `    /// <summary>${xmlDoc(a.doc)}</summary>`);
+        lines.push(a.required
+            ? `    public required ${typeOf('dotnet', a)} ${pascal(a.name)} { get; init; }`
+            : `    public ${typeOf('dotnet', a)}? ${pascal(a.name)} { get; init; }`);
+    });
+    lines.push(...extra, '}', '');
+    return { file: path.join(SDK.dotnet, 'Kit', `${name}.cs`), text: lines.join('\n') };
+}
+
+/**
+ * A readonly class of a token in Lpdf\Kit, in PHP: `members` as constructor parameters, with `list`, a list of
+ * children (`{ name, type, doc, parameter }`), before them when it is required and after them when it is not.
+ */
+function kitPhpClass(name, summary, members, list) {
+    const lines = ['<?php', '', 'declare(strict_types=1);', '', 'namespace Lpdf\\Kit;', '', '/**',
+        ...wrap(summary, 100, ' * '), ' *', ...HEADER.map((h) => ` * ${h}`), ' */', `final readonly class ${name}`, '{'];
+    if (list) lines.push('    /**', ...wrap(`@param list<${list.type}> $${list.name} ${list.doc}`, 100, '     * '), '     */');
+    lines.push('    public function __construct(');
+    if (list?.required) lines.push(`        ${list.parameter}`);
+    for (const a of members) {
+        if (a.doc) lines.push(...(a.doc.length > 80 ? ['        /**', ...wrap(a.doc, 100, '         * '), '         */'] : [`        /** ${a.doc} */`]));
+        lines.push(`        ${phpParameter(a, camel(a.name))}`);
+    }
+    if (list && !list.required) lines.push(`        ${list.parameter}`);
+    lines.push('    ) {}', '}', '');
+    return { file: path.join(SDK.php, 'Kit', `${name}.php`), text: lines.join('\n') };
+}
+
+/** A member of a TypeScript interface, with its doc comment. */
+function tsMember(a, type) {
+    return [...(a.doc.length > 80 ? ['  /**', ...wrap(a.doc, 100, '   * '), '   */'] : [`  /** ${a.doc} */`]),
+        `  ${camel(a.name)}${a.required ? '' : '?'}: ${type};`];
+}
+
 function gradientFiles() {
     const { doc, attributes, stopDoc, stopAttributes } = gradientParts();
     const files = [];
 
     // .NET: records in Lpdf.Kit.
-    const record = (name, summary, members, extra) => {
-        const lines = [...HEADER.map((h) => `// ${h}`), 'namespace Lpdf.Kit;', '', '#pragma warning disable CS1591',
-            `/// <summary>${xmlDoc(summary)}</summary>`, `public sealed record ${name}`, '{'];
-        members.forEach((a, i) => {
-            if (a.doc) lines.push(...(i > 0 ? [''] : []), `    /// <summary>${xmlDoc(a.doc)}</summary>`);
-            lines.push(a.required
-                ? `    public required ${typeOf('dotnet', a)} ${pascal(a.name)} { get; init; }`
-                : `    public ${typeOf('dotnet', a)}? ${pascal(a.name)} { get; init; }`);
-        });
-        lines.push(...extra, '}', '');
-        return { file: path.join(SDK.dotnet, 'Kit', `${name}.cs`), text: lines.join('\n') };
-    };
-    files.push(record('Gradient', doc, attributes,
+    files.push(kitRecord('Gradient', doc, attributes,
         ['', `    /// <summary>${xmlDoc(STOPS_DOC)}</summary>`, '    public IReadOnlyList<GradientStop>? Stops { get; init; }']));
-    files.push(record('GradientStop', stopDoc, stopAttributes, []));
+    files.push(kitRecord('GradientStop', stopDoc, stopAttributes, []));
 
     // PHP: readonly classes in Lpdf\Kit.
-    const phpClass = (name, summary, members, extra) => {
-        const lines = ['<?php', '', 'declare(strict_types=1);', '', 'namespace Lpdf\\Kit;', '', '/**',
-            ...wrap(summary, 100, ' * '), ' *', ...HEADER.map((h) => ` * ${h}`), ' */', `final readonly class ${name}`, '{'];
-        if (extra.length) lines.push('    /**', ...wrap(`@param list<GradientStop> $stops ${STOPS_DOC}`, 100, '     * '), '     */');
-        lines.push('    public function __construct(');
-        for (const a of members) {
-            if (a.doc) lines.push(...(a.doc.length > 80 ? ['        /**', ...wrap(a.doc, 100, '         * '), '         */'] : [`        /** ${a.doc} */`]));
-            lines.push(`        ${phpParameter(a, camel(a.name))}`);
-        }
-        lines.push(...extra, '    ) {}', '}', '');
-        return { file: path.join(SDK.php, 'Kit', `${name}.php`), text: lines.join('\n') };
-    };
-    files.push(phpClass('Gradient', doc, attributes, ['        public array $stops = [],']));
-    files.push(phpClass('GradientStop', stopDoc, stopAttributes, []));
+    files.push(kitPhpClass('Gradient', doc, attributes,
+        { name: 'stops', type: 'GradientStop', doc: STOPS_DOC, required: false, parameter: 'public array $stops = [],' }));
+    files.push(kitPhpClass('GradientStop', stopDoc, stopAttributes, null));
 
     // Python: TypedDicts in lpdf.kit, the gradient in the functional form, because `from` is a keyword.
     const pyStop = [...HEADER.map((h) => `# ${h}`), 'from __future__ import annotations', '', 'from typing import TypedDict', '', '',
@@ -269,13 +286,70 @@ function gradientFiles() {
 
     // Node: interfaces in attrs.ts. The type of a gradient lists its values, as the hand-written one did.
     const kinds = schema.simpleTypeValues('GradientType').map((v) => `'${v}'`).join(' | ');
-    const tsMember = (a, type) => [...(a.doc.length > 80 ? ['  /**', ...wrap(a.doc, 100, '   * '), '   */'] : [`  /** ${a.doc} */`]),
-        `  ${camel(a.name)}${a.required ? '' : '?'}: ${type};`];
     const node = ['/**', ...wrap(stopDoc, 100, ' * '), ' */', 'export interface GradientStop {'];
     for (const a of stopAttributes) node.push(...tsMember(a, typeOf('node', a)));
     node.push('}', '', '/**', ...wrap(doc, 100, ' * '), ' */', 'export interface GradientToken {');
     for (const a of attributes) node.push(...tsMember(a, a.name === 'type' ? kinds : typeOf('node', a)));
     node.push(...['  /**', ...wrap(STOPS_DOC, 100, '   * '), '   */'], '  stops?: GradientStop[];', '}', '');
+    return { files, node: node.join('\n') };
+}
+
+// ── Rulings ───────────────────────────────────────────────────────────────────
+
+// A ruling of the tokens and its sets of lines: the attributes of `<ruling>` but `name`, which is its key in the map of
+// rulings, and its `<lines>` children as `lines`, of which it has at least one. PHP and C# have classes and JS
+// interfaces, whose members are in each language's case, which the SDK turns back into the schema's names. Python has
+// TypedDicts with the schema's names, the lines in the functional form, since `step-x` can't be a field.
+const LINES_DOC = 'The sets of lines, at least one, drawn in this order: a later set paints over an earlier one.';
+
+function rulingParts() {
+    const ruling = schema.element('ruling');
+    const lines = schema.element('lines');
+    return {
+        doc: ruling.doc,
+        attributes: ordered(ruling).filter((a) => a.name !== 'name'),
+        linesDoc: lines.doc,
+        linesAttributes: ordered(lines),
+    };
+}
+
+function rulingFiles() {
+    const { doc, attributes, linesDoc, linesAttributes } = rulingParts();
+    const files = [];
+
+    // .NET: records in Lpdf.Kit.
+    files.push(kitRecord('Ruling', doc, attributes,
+        ['', `    /// <summary>${xmlDoc(LINES_DOC)}</summary>`, '    public required IReadOnlyList<RulingLines> Lines { get; init; }']));
+    files.push(kitRecord('RulingLines', linesDoc, linesAttributes, []));
+
+    // PHP: readonly classes in Lpdf\Kit.
+    files.push(kitPhpClass('Ruling', doc, attributes,
+        { name: 'lines', type: 'RulingLines', doc: LINES_DOC, required: true, parameter: 'public array $lines,' }));
+    files.push(kitPhpClass('RulingLines', linesDoc, linesAttributes, null));
+
+    // Python: TypedDicts in lpdf.kit.
+    const pyLines = [...HEADER.map((h) => `# ${h}`), 'from __future__ import annotations', '', 'from typing import TypedDict', '',
+        ...wrap(linesDoc, 100, '# '), '# The functional form, because ``step-x`` is not a Python name.', 'RulingLines = TypedDict(',
+        '    "RulingLines",', '    {'];
+    for (const a of linesAttributes) pyLines.push(...wrap(a.doc, 92, '        # '), `        "${a.name}": ${typeOf('python', a)},`);
+    pyLines.push('    },', '    total=False,', ')', '');
+    files.push({ file: path.join(SDK.python, 'kit', 'ruling_lines.py'), text: pyLines.join('\n') });
+    const pyRuling = [...HEADER.map((h) => `# ${h}`), 'from __future__ import annotations', '',
+        'from typing import Required, TypedDict', '', 'from .ruling_lines import RulingLines', '', '',
+        'class Ruling(TypedDict, total=False):'];
+    pyRuling.push(...['    """', ...wrap(doc, 92, '    '), '    """'], '');
+    for (const a of attributes) pyRuling.push(...wrap(a.doc, 96, '    # '), `    ${snake(a.name)}: ${typeOf('python', a)}`);
+    pyRuling.push(...wrap(LINES_DOC, 96, '    # '), '    lines: Required[list[RulingLines]]', '');
+    files.push({ file: path.join(SDK.python, 'kit', 'ruling.py'), text: pyRuling.join('\n') });
+
+    // Node: interfaces in attrs.ts. The values of `origin` and `ocg` are listed, as a gradient's `type` is.
+    const values = (type) => schema.simpleTypeValues(type).map((v) => `'${v}'`).join(' | ');
+    const listed = { origin: values('RulingOrigin'), ocg: values('Ocg') };
+    const node = ['/**', ...wrap(linesDoc, 100, ' * '), ' */', 'export interface RulingLines {'];
+    for (const a of linesAttributes) node.push(...tsMember(a, typeOf('node', a)));
+    node.push('}', '', '/**', ...wrap(doc, 100, ' * '), ' */', 'export interface RulingToken {');
+    for (const a of attributes) node.push(...tsMember(a, listed[a.name] ?? typeOf('node', a)));
+    node.push(...['  /**', ...wrap(LINES_DOC, 100, '   * '), '   */'], '  lines: RulingLines[];', '}', '');
     return { files, node: node.join('\n') };
 }
 
@@ -447,9 +521,11 @@ generated.push({
 });
 const gradients = gradientFiles();
 generated.push(...gradients.files);
+const rulings = rulingFiles();
+generated.push(...rulings.files);
 generated.push({
     file: path.join(SDK.node, 'attrs.ts'),
-    text: [...HEADER.map((h) => `// ${h}`), '', ...nodeInterfaces, gradients.node].join('\n'),
+    text: [...HEADER.map((h) => `// ${h}`), '', ...nodeInterfaces, gradients.node, rulings.node].join('\n'),
 });
 
 // Only the SDKs asked for: the files of the others are not there to compare with. The core's table goes with all

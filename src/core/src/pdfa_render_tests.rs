@@ -17,7 +17,7 @@ fn read(path: &Path) -> Vec<u8> {
 }
 
 /// The fixture `showcase-pdfa-<level>.xml`.
-fn fixture(level: &str) -> String {
+pub(crate) fn fixture(level: &str) -> String {
     String::from_utf8(read(&test_dir().join(format!("fixtures/showcase-pdfa-{level}.xml")))).expect("UTF-8")
 }
 
@@ -431,6 +431,8 @@ fn writes_pdfa_samples_for_the_external_check() {
     // With content in optional content groups, which a PDF/A file leaves out of them.
     let grouped = crate::ocg_render_tests::with_groups(&fixture("2u"));
     std::fs::write(dir.join("pdfa-2u-ocg.pdf"), render(&grouped).expect("renders")).expect("a sample");
+    // With graph paper on each section, which the pages draw as one form XObject.
+    std::fs::write(dir.join("pdfa-2u-ruling.pdf"), crate::ruling_render_tests::pdfa_sample()).expect("a sample");
     // Level a with PDF/UA beside it: the PDF/UA fixture, which says what PDF/UA asks.
     for level in ["2a", "3a"] {
         let pdf = crate::pdfua_render_tests::render_fixture_beside_pdfa(level);

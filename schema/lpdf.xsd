@@ -299,6 +299,22 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <!-- the space a ruling's lines fill: the whole page, or the area inside the layout's margin -->
+  <xs:simpleType name="RulingOrigin">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="page"/>
+      <xs:enumeration value="margin"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- how many equal parts a ruling cuts its space into, in one direction -->
+  <xs:simpleType name="RulingCount">
+    <xs:restriction base="xs:positiveInteger">
+      <xs:minInclusive value="1"/>
+      <xs:maxInclusive value="100"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <!-- x offset, y offset, color and optionally an opacity, e.g. "2pt 3pt #000000" or "2pt 3pt text 0.2" -->
   <xs:simpleType name="ShadowValue">
     <xs:restriction base="xs:string">
@@ -1206,6 +1222,85 @@
     </xs:complexType>
   </xs:element>
 
+  <xs:element name="lines">
+    <xs:annotation>
+      <xs:documentation>One set of lines of a ruling, cut by a step or by a count in each direction: x for the lines that run down the page, y for the lines that run across it. A direction with neither has no lines, so step-y alone is ruled paper and step both is squared paper. A step and a count in the same direction is an error. Each set is drawn after the one before it, so a heavier set paints over a finer one.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="step" type="PtValue">
+        <xs:annotation>
+          <xs:documentation>The distance between two lines in both directions, a length such as 5mm. step-x and step-y take its place in their direction. A cell narrower than 2.5pt is an error.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="step-x" type="PtValue">
+        <xs:annotation>
+          <xs:documentation>The distance between two lines that run down the page, from left to right, a length such as 10mm.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="step-y" type="PtValue">
+        <xs:annotation>
+          <xs:documentation>The distance between two lines that run across the page, from top to bottom, a length such as 8mm: ruled paper.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="count" type="RulingCount">
+        <xs:annotation>
+          <xs:documentation>Cuts the space into this many equal parts in both directions, from 1 to 100, so the lines land on its edges whatever its size. count-x and count-y take its place in their direction. A part narrower than 2.5pt is an error.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="count-x" type="RulingCount">
+        <xs:annotation>
+          <xs:documentation>Cuts the space into this many equal columns, from 1 to 100.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="count-y" type="RulingCount">
+        <xs:annotation>
+          <xs:documentation>Cuts the space into this many equal rows, from 1 to 100.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="color" type="Color">
+        <xs:annotation>
+          <xs:documentation>The color of the lines: hex, cmyk(), rgb(), hsl() or a color token. Defaults to line-muted.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="thickness" type="TokenScaleOrPt">
+        <xs:annotation>
+          <xs:documentation>The thickness of the lines, a length or a name from the border row of the tokens. Defaults to 0.4pt.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="ruling">
+    <xs:annotation>
+      <xs:documentation>Lines on every page of a section, for paper to write or draw on, or a grid to place things by: ruled paper, squared paper, or a page cut into equal parts. A section names it with ruling="name", and the lines are drawn under everything else on its pages, over the background. They are decoration, which a screen reader skips.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="lines" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attribute name="name" type="TokenName" use="required">
+        <xs:annotation>
+          <xs:documentation>The name a section gives in ruling. Lowercase letters, digits and hyphens, starting with a letter.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="origin" type="RulingOrigin">
+        <xs:annotation>
+          <xs:documentation>The space the lines fill and a count divides. page, the default, is the whole page up to its trim edge. margin is the area inside the margin of the section's layout or markdown. A step starts at its top left corner, and the lines stop at its edges.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="edges" type="Boolean">
+        <xs:annotation>
+          <xs:documentation>Whether the lines on the edges of that space are drawn: the first one, and the last one where a step lands on the far edge. A count of 12 draws 13 lines with them and 11 without. Defaults to true.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="ocg" type="Ocg">
+        <xs:annotation>
+          <xs:documentation>Puts the lines in an optional content group, as ocg does on an element: print, printed and not shown on screen, or screen, shown on screen and not printed, such as a grid to place things by.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+
   <xs:element name="tokens">
     <xs:complexType>
       <xs:all>
@@ -1236,6 +1331,13 @@
           <xs:complexType>
             <xs:sequence>
               <xs:element ref="gradient" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="rulings" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element ref="ruling" minOccurs="0" maxOccurs="unbounded"/>
             </xs:sequence>
           </xs:complexType>
         </xs:element>
@@ -1736,6 +1838,11 @@
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="background"  type="Fill"/>
+      <xs:attribute name="ruling"      type="TokenName">
+        <xs:annotation>
+          <xs:documentation>Draws the lines of a ruling of the tokens on every page of the section, under its layers and its layout, and over its background: the name of a ruling in rulings. A name the tokens don't declare is an error that lists the ones they do. Without it the section has no lines.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
       <xs:attribute name="title"       type="xs:string"/>
       <xs:attribute name="debug"       type="Boolean"/>
       <xs:attribute name="type"        type="SectionType">
