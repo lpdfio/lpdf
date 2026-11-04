@@ -523,8 +523,9 @@ check-license:
 rc-next:
 	@$(SHELL) scripts/rc-next.sh "$(VERSION)"
 
-# Read-only status of a release candidate: core's run and the five rc.yml runs,
-# what failed and why, and, when all passed, the pre-filled release link.
+# Read-only status of a release candidate: core's run, the five rc.yml runs and the
+# pages run (the docs' engine copy), what failed and why, and, when all passed, the
+# pre-filled release link.
 #   make rc-check                   the newest RC on GitHub
 #   make rc-check RC=v0.19.0-rc.2   a specific one
 rc-check:

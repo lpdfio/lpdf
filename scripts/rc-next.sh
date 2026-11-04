@@ -5,7 +5,8 @@
 # and pushes the tag only after you confirm. The push starts core's
 # release.yml, job "rc": tests, build, a GitHub pre-release, then `core-rc`
 # to the five SDK and extension repos, whose rc.yml builds and tests against
-# it. Nothing reaches a package registry.
+# it, and to pages, whose engine-refresh.yml opens a PR with the engine copy of
+# the docs. Nothing reaches a package registry.
 #
 #   make rc-next                  next minor after the latest release
 #   make rc-next VERSION=v1.0.0   a specific version, e.g. a major bump
@@ -32,11 +33,15 @@ done
 REMOTE=origin
 BRANCH=main
 REPO_URL=https://github.com/lpdfio/lpdf
-REPOS="lpdf-js lpdf-dotnet lpdf-php lpdf-python lpdf-vscode"
+REPOS="lpdf-js lpdf-dotnet lpdf-php lpdf-python lpdf-vscode pages"
 # Dispatched the same core-rc event, but private, so the raw.githubusercontent
 # preflight below cannot see it. Listed for the links and the summary only.
 PRIVATE_REPOS="lpdf-api"
 ALL_REPOS="$REPOS $PRIVATE_REPOS"
+
+# The workflow a repo answers core-rc with: rc.yml, except for pages, which opens a PR with the
+# docs' engine copy instead of building a package.
+workflow_of() { if [ "$1" = pages ]; then echo engine-refresh.yml; else echo rc.yml; fi; }
 
 fail() { printf 'rc-next: %s\n' "$*" >&2; exit 1; }
 
@@ -50,22 +55,23 @@ TAGS=$(git ls-remote --tags --refs "$REMOTE" 'v*' | sed 's|.*refs/tags/||')
 # A tag push runs release.yml as it is AT the tagged commit. Without the RC job
 # there, the old workflow would treat vX.Y.0-rc.N as a full public release.
 git show "$SHA:.github/workflows/release.yml" 2>/dev/null | grep -q 'Publish release candidate' \
-  || fail "GitHub's $BRANCH has no RC job in .github/workflows/release.yml yet. Push that first, and rc.yml to the five SDK/extension repos."
+  || fail "GitHub's $BRANCH has no RC job in .github/workflows/release.yml yet. Push that first, and rc.yml to the five SDK/extension repos and engine-refresh.yml to pages."
 
 # A dispatch only starts a workflow that exists on the receiving repo's main.
-# A repo without rc.yml would silently run nothing, and the RC would look
+# A repo without its workflow would silently run nothing, and the RC would look
 # complete with one run missing. The repos are public, so the raw file answers.
 MISSING=""
 for r in $REPOS; do
+  file=$(workflow_of "$r")
   code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
-    "https://raw.githubusercontent.com/lpdfio/$r/$BRANCH/.github/workflows/rc.yml" || echo "000")
+    "https://raw.githubusercontent.com/lpdfio/$r/$BRANCH/.github/workflows/$file" || echo "000")
   case "$code" in
     200) ;;
-    404) MISSING="$MISSING $r" ;;
-    *)   echo "rc-next: could not check $r for rc.yml (HTTP $code). Check it by hand." >&2 ;;
+    404) MISSING="$MISSING $r ($file)," ;;
+    *)   echo "rc-next: could not check $r for $file (HTTP $code). Check it by hand." >&2 ;;
   esac
 done
-[ -z "$MISSING" ] || fail "no .github/workflows/rc.yml on $BRANCH in:$MISSING. Push it there first."
+[ -z "$MISSING" ] || fail "no workflow to answer core-rc on $BRANCH in:${MISSING%,}. Push it there first."
 
 LAST=$(printf '%s\n' "$TAGS" | grep -E '^v[0-9]+\.[0-9]+\.0$' | sort -V | tail -n 1 || true)
 
@@ -183,13 +189,13 @@ fi
 echo ""
 echo "Pushed $NEW."
 echo ""
-echo "  Check progress:  make rc-check   (core and the five public repos; lpdf-api is private, so check its run by hand)"
+echo "  Check progress:  make rc-check   (core and the six public repos; lpdf-api is private, so check its run by hand)"
 echo "  Follow the run:  $REPO_URL/actions/workflows/release.yml"
 echo "  RC runs:"
 for r in $ALL_REPOS; do
-  echo "    https://github.com/lpdfio/$r/actions/workflows/rc.yml"
+  echo "    https://github.com/lpdfio/$r/actions/workflows/$(workflow_of "$r")"
 done
 echo ""
-echo "When all six are green, draft the $TARGET release on this RC, or move a waiting"
+echo "When all seven are green, draft the $TARGET release on this RC, or move a waiting"
 echo "draft to it. Check the .vsix (make rc-vsix), review the draft, and publish it"
 echo "on GitHub."
