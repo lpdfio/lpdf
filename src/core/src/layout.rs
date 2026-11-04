@@ -30,6 +30,9 @@ mod nested_grid_tests;
 #[path = "layout/nested_column_tests.rs"]
 mod nested_column_tests;
 #[cfg(test)]
+#[path = "layout/nested_table_tests.rs"]
+mod nested_table_tests;
+#[cfg(test)]
 #[path = "layout/link_height_tests.rs"]
 mod link_height_tests;
 #[cfg(test)]
@@ -2184,6 +2187,23 @@ fn column_x(col_widths: &[f32], column: usize, gap: f32, x: f32) -> f32 {
     col_widths[..column].iter().fold(x, |left, width| left + (width + gap))
 }
 
+/// The left edge of each cell that starts in row `row` of a table at `x`, in the order `grid.starting` gives them:
+/// after the cell before it and the gap, or at its column when cells in the rows above hold the columns between.
+fn cell_lefts(grid: &TableGrid, row: usize, col_widths: &[f32], gap: f32, x: f32) -> Vec<f32> {
+    let mut lefts    = Vec::new();
+    let mut cell_x   = x;
+    let mut next_col = 0;
+    for placed in grid.starting(row) {
+        if placed.columns.start != next_col {
+            cell_x = column_x(col_widths, placed.columns.start, gap, x);
+        }
+        lefts.push(cell_x);
+        cell_x  += span_width(col_widths, &placed.columns, gap) + gap;
+        next_col = placed.columns.end;
+    }
+    lefts
+}
+
 /// The height of each row of a table, worked out one row after another. A cell that spans rows takes the room of
 /// the rows it spans, and when its content is taller than they are together, the last of them grows by the
 /// difference. The height of a row depends only on the rows up to it, so a table that breaks across pages measures
@@ -2194,11 +2214,31 @@ struct RowHeights<'a> {
     col_widths: &'a [f32],
     gap:        f32,
     heights:    Vec<f32>,
+    /// The trees of the cells, when the table lays its rows out from where it measures them (`kept_at`).
+    trees:      Option<CellTrees>,
+}
+
+/// The trees a table measures its cells in, each laid out where the cell stands, for the table to keep when it
+/// stretches the cell to its rows (`RowHeights::stretched`).
+struct CellTrees {
+    /// The left edge of the table.
+    x:    f32,
+    /// The top of each row measured, and of the row after them: the same sums as `layout_table`'s, so that a cell
+    /// is laid out at its place to the last bit.
+    tops: Vec<f32>,
+    /// The tree of each cell measured and its height, by its row and its place among that row's cells.
+    kept: HashMap<(usize, usize), (RenderNode, f32)>,
 }
 
 impl<'a> RowHeights<'a> {
     fn new(rows: &'a [Node], grid: &'a TableGrid, col_widths: &'a [f32], gap: f32) -> Self {
-        RowHeights { rows, grid, col_widths, gap, heights: Vec::with_capacity(rows.len()) }
+        RowHeights { rows, grid, col_widths, gap, heights: Vec::with_capacity(rows.len()), trees: None }
+    }
+
+    /// Measures each cell where it stands in a table at (`x`, `y`), and keeps its tree. `split_table` only measures
+    /// rows, at any place, and keeps none.
+    fn kept_at(self, x: f32, y: f32) -> Self {
+        RowHeights { trees: Some(CellTrees { x, tops: vec![y], kept: HashMap::new() }), ..self }
     }
 
     /// The height of row `i`, measuring the rows up to it that are not measured yet.
@@ -2206,27 +2246,85 @@ impl<'a> RowHeights<'a> {
         while self.heights.len() <= i {
             let height = self.next_height();
             self.heights.push(height);
+            if let Some(trees) = &mut self.trees {
+                let top = trees.tops[trees.tops.len() - 1];
+                trees.tops.push(top + (height + self.gap));
+            }
         }
         self.heights[i]
     }
 
-    fn next_height(&self) -> f32 {
-        let row = self.heights.len();
-        let mut height = self.grid.starting(row).iter()
-            .filter(|cell| cell.rows == 1)
-            .map(|cell| self.cell_height(cell))
-            .fold(0.0_f32, f32::max);
-        for cell in self.grid.spans_ending(row) {
-            let above = self.heights[cell.row..row].iter().sum::<f32>() + self.gap * (row - cell.row) as f32;
-            height = height.max(self.cell_height(cell) - above);
+    fn next_height(&mut self) -> f32 {
+        let row   = self.heights.len();
+        let grid  = self.grid;
+        let lefts = self.trees.as_ref().map(|trees| cell_lefts(grid, row, self.col_widths, self.gap, trees.x));
+        let mut height = 0.0_f32;
+        for (i, placed) in grid.starting(row).iter().enumerate() {
+            if placed.rows == 1 {
+                height = height.max(self.cell_height(placed, lefts.as_ref().map(|lefts| lefts[i])));
+            }
+        }
+        for placed in grid.spans_ending(row) {
+            let above = self.heights[placed.row..row].iter().sum::<f32>() + self.gap * (row - placed.row) as f32;
+            let left = self.trees.as_ref().map(|trees| column_x(self.col_widths, placed.columns.start, self.gap, trees.x));
+            height = height.max(self.cell_height(placed, left) - above);
         }
         height
     }
 
-    /// The height a cell's content takes at the width of its columns.
-    fn cell_height(&self, placed: &Placed) -> f32 {
+    /// The height a cell's content takes at the width of its columns. With the trees kept, the cell is laid out at
+    /// `left` and the top of its row, and its tree kept.
+    fn cell_height(&mut self, placed: &Placed, left: Option<f32>) -> f32 {
+        let cell  = &self.rows[placed.row].children[placed.cell];
+        let width = span_width(self.col_widths, &placed.columns, self.gap);
+        match (&mut self.trees, left) {
+            (Some(trees), Some(x)) => {
+                let (tree, h) = layout_node(cell, x, trees.tops[placed.row], width, None);
+                trees.kept.insert((placed.row, placed.cell), (tree, h));
+                h
+            }
+            _ => layout_node(cell, 0.0, 0.0, width, None).1,
+        }
+    }
+
+    /// The tree of the cell `placed`, at `x` and `top`, stretched to fill `height`: the tree it was measured in with
+    /// its box grown to `height`, when stretching it changes nothing else (`same_when_stretched_in_table`), or the
+    /// cell laid out again there to fill it.
+    fn stretched(&mut self, placed: &Placed, x: f32, top: f32, height: f32) -> RenderNode {
         let cell = &self.rows[placed.row].children[placed.cell];
-        layout_node(cell, 0.0, 0.0, span_width(self.col_widths, &placed.columns, self.gap), None).1
+        let kept = self.trees.as_mut().and_then(|trees| trees.kept.remove(&(placed.row, placed.cell)));
+        if let Some((tree, h)) = kept
+            && same_when_stretched_in_table(cell, h, height)
+        {
+            return grown_to(tree, height);
+        }
+        let stretched = Node { height_mode: HeightMode::Full, ..cell.clone() };
+        layout_node(&stretched, x, top, span_width(self.col_widths, &placed.columns, self.gap), Some(height)).0
+    }
+}
+
+/// Whether a table's cell, laid out `h` high with no height to fill, comes out the same laid out again to fill the
+/// `height` of the rows it covers, but for its box, which is that high: a cell that starts its children at its top,
+/// or one as tall as its rows, which has nothing to stretch to, when nothing inside it takes a share of the height.
+/// Not a cell of a set height, which is laid out in that height and stretched past it.
+fn same_when_stretched_in_table(cell: &Node, h: f32, height: f32) -> bool {
+    #[cfg(test)]
+    if STRETCH_EVERY_CELL.with(Cell::get) {
+        return false;
+    }
+    !matches!(cell.height_mode, HeightMode::Fixed(_))
+        && !shares_given_height(cell)
+        && (cell.justify == Justify::Start || h == height)
+}
+
+/// A cell's tree, its box, `height` high.
+fn grown_to(tree: RenderNode, height: f32) -> RenderNode {
+    match tree {
+        RenderNode::Box(mut b) => {
+            b.height = height;
+            RenderNode::Box(b)
+        }
+        other => other,
     }
 }
 
@@ -2284,8 +2382,9 @@ fn layout_table(
     let mut row_y        = y;
     let mut data_row_idx = 0usize;
 
-    // Pass 1: measure the height of each row (the tallest of its cells, and room for the cells that span into it).
-    let mut measured = RowHeights::new(rows, &grid, &col_widths, gap);
+    // Pass 1: measure the height of each row (the tallest of its cells, and room for the cells that span into it),
+    // each cell laid out where it stands, so that pass 2 can keep its tree.
+    let mut measured = RowHeights::new(rows, &grid, &col_widths, gap).kept_at(x, y);
     let row_heights: Vec<f32> = (0..rows.len()).map(|i| measured.get(i)).collect();
     // The top of each row, for the geometry of the border and of the cells that span rows.
     let mut row_ys: Vec<f32> = Vec::with_capacity(rows.len());
@@ -2319,30 +2418,22 @@ fn layout_table(
         }
 
         // Pass 2: lay out each cell at its column position, stretched to row_h. A cell that spans rows is laid out
-        // once the last of its rows has its background, so that no background drawn later covers it.
+        // once the last of its rows has its background, so that no background drawn later covers it. A cell that
+        // comes out the same keeps its tree from pass 1, so a table nested in a cell is laid out once and each level
+        // doesn't double the work below it.
         //
         // In a tagged section the cells of a row are drawn in a box tagged as the row, which the layout does not
         // draw otherwise, and a cell that spans rows in a box tagged as the row it starts in.
         let tags_rows = row.tag_id != 0;
         let mut row_cells = Vec::new();
-        let mut cell_x   = x;
-        let mut next_col = 0;
-        for placed in grid.starting(i) {
-            if placed.columns.start != next_col {
-                // Columns were skipped: cells in the rows above hold them.
-                cell_x = column_x(&col_widths, placed.columns.start, gap, x);
-            }
-            let cell_w = span_width(&col_widths, &placed.columns, gap);
+        for (placed, cell_x) in grid.starting(i).iter().zip(cell_lefts(&grid, i, &col_widths, gap, x)) {
             if placed.rows == 1 {
-                let stretched = Node { height_mode: crate::parse::HeightMode::Full, ..row.children[placed.cell].clone() };
-                let (mut rn, _) = layout_node(&stretched, cell_x, row_y, cell_w, Some(row_h));
+                let mut rn = measured.stretched(placed, cell_x, row_y, row_h);
                 if tags_rows {
                     set_cell_column(&mut rn, placed.columns.start);
                 }
                 row_cells.push(rn);
             }
-            cell_x  += cell_w + gap;
-            next_col = placed.columns.end;
         }
         if tags_rows {
             nodes.push(tagged_box(row_tag(row), x, row_y, avail_w, row_h, row_cells));
@@ -2352,11 +2443,10 @@ fn layout_table(
             nodes.extend(row_cells);
         }
         for placed in grid.spans_ending(i) {
-            let top       = row_ys[placed.row];
-            let stretched = Node { height_mode: crate::parse::HeightMode::Full, ..rows[placed.row].children[placed.cell].clone() };
-            let cell_x    = column_x(&col_widths, placed.columns.start, gap, x);
-            let cell_w    = span_width(&col_widths, &placed.columns, gap);
-            let (mut rn, _) = layout_node(&stretched, cell_x, top, cell_w, Some(row_y + row_h - top));
+            let top    = row_ys[placed.row];
+            let cell_x = column_x(&col_widths, placed.columns.start, gap, x);
+            let cell_w = span_width(&col_widths, &placed.columns, gap);
+            let mut rn = measured.stretched(placed, cell_x, top, row_y + row_h - top);
             if tags_rows {
                 set_cell_column(&mut rn, placed.columns.start);
                 rn = tagged_box(row_tag(&rows[placed.row]), cell_x, top, cell_w, row_y + row_h - top, vec![rn]);
@@ -3080,8 +3170,8 @@ thread_local! {
     static LAYOUT_WORK: Cell<usize> = const { Cell::new(0) };
     /// How many times the whole document was laid out (`lay_out_document`), counted for the tests.
     pub(crate) static DOCUMENT_PASSES: Cell<usize> = const { Cell::new(0) };
-    /// Whether a grid lays out every cell again to stretch it, none keeping its first tree
-    /// (`same_when_stretched`): the tests lay a document out both ways and compare.
+    /// Whether a grid or a table lays out every cell again to stretch it, none keeping its first tree
+    /// (`same_when_stretched`, `same_when_stretched_in_table`): the tests lay a document out both ways and compare.
     static STRETCH_EVERY_CELL: Cell<bool> = const { Cell::new(false) };
     /// Whether a column lays out again each child it could keep the tree of, as it did before it kept a link's or
     /// moved a tree to its place (`same_with_a_height`): the tests lay a document out both ways and compare.
