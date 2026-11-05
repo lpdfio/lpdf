@@ -8,7 +8,7 @@ You describe a document as code or XML. Lpdf renders a compact, pixel-perfect PD
 
 ## SDKs
 
-Lpdf runs on Node.js, browser, .NET, PHP, and Python. Under the hood, a single Rust core compiles to two targets: **WASM** (embedded in the JS SDK) and **WASI** (a portable binary for server runtimes via [Wasmtime](https://wasmtime.dev)).
+Lpdf runs on Node.js, browser, .NET, PHP, and Python. Under the hood, a single Rust core compiles to three targets: **WASM** (embedded in the JS SDK), **WASI** (a portable binary for server runtimes via [Wasmtime](https://wasmtime.dev)), and a **native library** for Linux, which the PHP SDK loads through FFI where it can, with the WASI binary as its fallback.
 
 ### Version Requirements
 

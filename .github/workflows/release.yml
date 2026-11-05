@@ -81,6 +81,10 @@ jobs:
         env:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
         run: cargo test --manifest-path src/core-wasi/Cargo.toml
+      - name: Test the native library
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
+        run: cargo test --manifest-path src/core-ffi/Cargo.toml
 
   # ── 2. Build artifacts ──────────────────────────────────────────────────────
   build:
@@ -90,9 +94,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # The two Linux targets are the native library's, which the PHP SDK loads through FFI.
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown,wasm32-wasip1
+          targets: wasm32-unknown-unknown,wasm32-wasip1,x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu
 
       - uses: Swatinem/rust-cache@v2
 
@@ -123,27 +128,23 @@ jobs:
           cp dist/node/lpdf_bg.wasm  artifacts/
           cp dist/web/lpdf.js        artifacts/lpdf-web.js
 
-      # TODO: add when src/core-ffi is implemented
-      # - name: Install cross (for aarch64 cross-compilation)
-      #   uses: taiki-e/install-action@v2
-      #   with:
-      #     tool: cross
-      # - name: Build FFI (x86_64-linux)
-      #   run: |
-      #     cargo build --manifest-path src/core-ffi/Cargo.toml --release \
-      #       --target x86_64-unknown-linux-gnu
-      #     cp target/x86_64-unknown-linux-gnu/release/liblpdf.so \
-      #        artifacts/liblpdf-linux-x86_64.so
-      # - name: Build FFI (aarch64-linux)
-      #   run: |
-      #     cross build --manifest-path src/core-ffi/Cargo.toml --release \
-      #       --target aarch64-unknown-linux-gnu
-      #     cp target/aarch64-unknown-linux-gnu/release/liblpdf.so \
-      #        artifacts/liblpdf-linux-aarch64.so
+      # zig cross-compiles both targets against the glibc 2.17 symbols; pinned, as in scripts/build-ffi.Dockerfile.
+      - name: Install cargo-zigbuild and zig
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zig"
+          "$RUNNER_TEMP/zig/bin/pip" install --quiet ziglang==0.17.0 cargo-zigbuild==0.24.0
+          echo "$RUNNER_TEMP/zig/bin" >> "$GITHUB_PATH"
+
+      # Fails when either library needs a newer glibc than 2.17, so no release ships one that won't load on a
+      # supported Ubuntu or Debian.
+      - name: Build the native libraries
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
+        run: sh scripts/build-ffi.sh artifacts
 
       - name: Generate SHA256SUMS
         working-directory: artifacts
-        run: sha256sum lpdf-wasi.wasm lpdf.js lpdf_bg.wasm lpdf-web.js > SHA256SUMS
+        run: sha256sum lpdf-wasi.wasm lpdf.js lpdf_bg.wasm lpdf-web.js liblpdf-linux-x86_64.so liblpdf-linux-aarch64.so > SHA256SUMS
 
       - uses: actions/upload-artifact@v6
         with:
@@ -209,6 +210,8 @@ jobs:
             artifacts/lpdf.js \
             artifacts/lpdf_bg.wasm \
             artifacts/lpdf-web.js \
+            artifacts/liblpdf-linux-x86_64.so \
+            artifacts/liblpdf-linux-aarch64.so \
             artifacts/SHA256SUMS \
             --clobber
 
@@ -277,6 +280,8 @@ jobs:
             artifacts/lpdf.js
             artifacts/lpdf_bg.wasm
             artifacts/lpdf-web.js
+            artifacts/liblpdf-linux-x86_64.so
+            artifacts/liblpdf-linux-aarch64.so
 
       # Only create a release when the tag doesn't already have one. GitHub does
       # NOT enforce one release per tag for DRAFTS — an unguarded
@@ -309,6 +314,8 @@ jobs:
             artifacts/lpdf.js \
             artifacts/lpdf_bg.wasm \
             artifacts/lpdf-web.js \
+            artifacts/liblpdf-linux-x86_64.so \
+            artifacts/liblpdf-linux-aarch64.so \
             artifacts/SHA256SUMS
 
       - name: Publish release (draft → live)

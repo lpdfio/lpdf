@@ -36,6 +36,11 @@ jobs:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
         run: cargo test --manifest-path src/core-wasi/Cargo.toml
 
+      - name: Test the native library
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
+        run: cargo test --manifest-path src/core-ffi/Cargo.toml
+
       - name: Test cli
         env:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
@@ -90,6 +95,37 @@ jobs:
         env:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
         run: make check-ocg
+
+  # The native library the PHP SDK loads through FFI, built as the release builds it: for glibc 2.17 on x86_64 and
+  # aarch64, and refused when either needs a newer glibc (scripts/build-ffi.sh). The release attaches the same files.
+  ffi:
+    name: Build the native library
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu
+
+      - uses: Swatinem/rust-cache@v2
+
+      # zig cross-compiles both targets against the glibc 2.17 symbols; pinned, as in scripts/build-ffi.Dockerfile.
+      - name: Install cargo-zigbuild and zig
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zig"
+          "$RUNNER_TEMP/zig/bin/pip" install --quiet ziglang==0.17.0 cargo-zigbuild==0.24.0
+          echo "$RUNNER_TEMP/zig/bin" >> "$GITHUB_PATH"
+
+      - name: Build for glibc 2.17 and check the glibc each needs
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
+        run: sh scripts/build-ffi.sh dist/ffi
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: native-libraries
+          path: dist/ffi/
 
   csharp:
     name: Compile the generated C#
