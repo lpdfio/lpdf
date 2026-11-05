@@ -509,7 +509,7 @@ example-java:
 	@echo "-------------------------------"
 	@echo ">>> Running Java example..."
 	@echo ""
-	cd repos/lpdf-java && mvn -B -q dependency:build-classpath -Dmdep.includeScope=runtime -Dmdep.outputFile=target/classpath.txt
+	cd repos/lpdf-java && mvn -B -q dependency:build-classpath -DincludeScope=runtime -Dmdep.outputFile=target/classpath.txt
 	java -cp "repos/lpdf-java/target/classes$(JAVA_PATH_SEP)$$(cat repos/lpdf-java/target/classpath.txt)" repos/lpdf-java/example/Example.java .
 
 build-vscode: build-wasm
@@ -577,7 +577,7 @@ check-license:
 rc-next:
 	@$(SHELL) scripts/rc-next.sh "$(VERSION)"
 
-# Read-only status of a release candidate: core's run, the five rc.yml runs and the
+# Read-only status of a release candidate: core's run, the six rc.yml runs and the
 # pages run (the docs' engine copy), what failed and why, and, when all passed, the
 # pre-filled release link.
 #   make rc-check                   the newest RC on GitHub

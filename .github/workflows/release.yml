@@ -153,7 +153,7 @@ jobs:
   # ── 3a. Release candidate: pre-release + dispatch core-rc ───────────────────
   # Runs for vX.Y.0-rc.N only. Nothing here reaches a package registry: the
   # pre-release is never GitHub's "latest" (which the SDKs' ci.yml fallbacks
-  # read), and the five repos answer `core-rc` with build + test only. pages answers it with a PR
+  # read), and the six repos answer `core-rc` with build + test only. pages answers it with a PR
   # for the engine copy of its docs, which the user merges.
   rc:
     name: Publish release candidate
