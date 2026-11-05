@@ -781,6 +781,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "lpdf-ffi"
+version = "0.0.0"
+dependencies = [
+ "aes 0.8.4",
+ "base64",
+ "cbc 0.1.2",
+ "ed25519-dalek",
+ "lopdf",
+ "md-5 0.10.6",
+ "miniz_oxide 0.7.4",
+ "pdf-writer",
+ "pulldown-cmark",
+ "qrcode",
+ "roxmltree",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "subsetter",
+ "ttf-parser",
+]
+
+[[package]]
 name = "lpdf-wasi"
 version = "0.0.0"
 dependencies = [

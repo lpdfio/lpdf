@@ -2765,6 +2765,7 @@ fn build_content_streams(
 
     for (index, page) in pages.iter().enumerate() {
         crate::memory::check()?;
+        crate::deadline::check_now();
         let mut content = Content::new();
         let mut annots: Vec<AnnotData> = Vec::new();
         let mut groups: Vec<PageGroup> = Vec::new();
@@ -3413,6 +3414,7 @@ fn assemble_pdf(
     // -- Content streams -------------------------------------------------------
     for (i, page) in rendered_pages.iter().enumerate() {
         crate::memory::check()?;
+        crate::deadline::check_now();
         pdf.stream(content_ids[i], &page.content.compressed)
            .filter(Filter::FlateDecode);
     }

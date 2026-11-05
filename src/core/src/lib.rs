@@ -4,6 +4,10 @@ mod attachments;
 mod attr_types;
 mod canvas;
 mod data;
+// The native library (`src/core-ffi`) starts a render's deadline from its request; this crate starts none and only
+// checks it, so what starts one goes unused here.
+#[cfg_attr(not(test), allow(dead_code))]
+mod deadline;
 mod encrypt;
 mod facturx;
 mod hints;
