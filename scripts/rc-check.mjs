@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Shows where a core release candidate stands (Lpdf-devcycle.md §4.2): core's
 // release.yml run for the RC tag, then the rc.yml run it dispatched in each
-// of the five SDK and extension repos, the engine-refresh.yml run in pages (the
+// of the six SDK and extension repos, the engine-refresh.yml run in pages (the
 // PR with the docs' engine copy), and whether the RC is ready to release.
 // Each SDK and extension repo releases its main as it stands, so a repo whose main has
 // a commit its rc.yml run did not test is not ready: the release would stop there.
@@ -27,6 +27,7 @@ const REPOS = [
     { repo: 'lpdf-dotnet', file: 'rc.yml' },
     { repo: 'lpdf-php', file: 'rc.yml' },
     { repo: 'lpdf-python', file: 'rc.yml' },
+    { repo: 'lpdf-java', file: 'rc.yml' },
     { repo: 'lpdf-vscode', file: 'rc.yml' },
     { repo: 'pages', file: 'engine-refresh.yml', mainMoves: true },
 ]
