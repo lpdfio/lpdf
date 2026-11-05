@@ -63,6 +63,7 @@ pub fn codegen(xml: &str, options: &CodegenOptions) -> Result<String, String> {
             Ok(emitter.emit_document(&doc))
         }
         "java" => {
+            check_java_strings(doc.root_element())?;
             let emitter = JavaEmitter::new(options.indent, true);
             Ok(emitter.emit_document(&doc))
         }
@@ -109,6 +110,7 @@ pub fn codegen_fragment(xml: &str, options: &CodegenOptions) -> Result<String, S
             elements.iter().map(|n| emitter.emit_node(n, 0)).collect()
         }
         "java" => {
+            check_java_strings(root)?;
             // A fragment has no class to hold a method, and the docs' fragments are small.
             let emitter = JavaEmitter::new(options.indent, false);
             elements.iter().map(|n| emitter.emit_node(n, 0)).collect()
@@ -1877,6 +1879,52 @@ fn python_method(tag: &str) -> &'static str {
 /// method to 64 KB of bytecode, and the bytecode of the fixtures' code came to at most a quarter of its source
 /// (2026-11-04), so this stays well under that. The code of a template, and of every docs example, fits in one.
 const JAVA_METHOD_SOURCE: usize = 100 * 1024;
+
+/// The most bytes one string of Java code holds. A class file stores a string with a length of two bytes, and javac
+/// refuses one of 65,535 characters or more ("constant string too long"), so a text or an attribute value over this
+/// can't be written as Java, where the other languages take it.
+const JAVA_STRING_BYTES: usize = 65_534;
+
+/// The bytes of `text` as a class file stores it, in modified UTF-8: a NUL takes two bytes, and a character outside
+/// the Basic Multilingual Plane six, three for each half of its UTF-16 pair.
+fn java_string_bytes(text: &str) -> usize {
+    text.chars()
+        .map(|c| match c as u32 {
+            0               => 2,
+            0x01..=0x7f     => 1,
+            0x80..=0x7ff    => 2,
+            0x800..=0xffff  => 3,
+            _               => 6,
+        })
+        .sum()
+}
+
+/// Refuses a document with a text, or an attribute value, of over `JAVA_STRING_BYTES`, whose Java wouldn't compile.
+/// The error names the element and the limit, where javac would only fail on the code.
+fn check_java_strings(root: Node) -> Result<(), String> {
+    for element in root.descendants().filter(Node::is_element) {
+        let tag = element.tag_name().name();
+        let texts = (is_text_tag(tag) || is_inline_tag(tag))
+            .then(|| text_pieces(&element))
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|piece| match piece {
+                TextPiece::Str(text) => Some(("its text".to_string(), java_string_bytes(&text))),
+                TextPiece::Span(_)   => None,
+            });
+        let values = element
+            .attributes()
+            .filter(|a| !is_data_binding(a.name()))
+            .map(|a| (format!("its {} attribute", a.name()), java_string_bytes(a.value())));
+        if let Some((what, bytes)) = texts.chain(values).find(|(_, bytes)| *bytes > JAVA_STRING_BYTES) {
+            return Err(format!(
+                "<{tag}>{}: {what} is {bytes} bytes, more than the {JAVA_STRING_BYTES} a string holds in Java code",
+                crate::parse::node_loc(&element)
+            ));
+        }
+    }
+    Ok(())
+}
 
 /// The type the Java builder of an element returns, which a method that builds one returns.
 fn java_node_type(family: &str) -> &'static str {
@@ -3789,6 +3837,54 @@ mod tests {
     fn test_java_a_document_that_fits_in_one_method_is_one_expression() {
         let out = java(&large_document(3, 1, 150));
         assert!(!out.contains("section1()") && out.matches("static").count() == 2, "{out}");
+    }
+
+    /// A document whose layout holds `content`.
+    fn document_of(content: &str) -> String {
+        format!(r#"<lpdf version="1"><document><section><layout>{content}</layout></section></document></lpdf>"#)
+    }
+
+    #[test]
+    fn test_java_takes_a_text_as_long_as_a_java_string_holds() {
+        let text = "a".repeat(JAVA_STRING_BYTES);
+        let out = java(&document_of(&format!("<text>{text}</text>")));
+        assert!(out.contains(&format!("List.of(\"{text}\")")));
+    }
+
+    #[test]
+    fn test_java_refuses_a_text_longer_than_a_java_string_holds() {
+        let xml = document_of(&format!("<text>{}</text>", "a".repeat(JAVA_STRING_BYTES + 1)));
+        let error = codegen(&xml, &CodegenOptions { target: "java".into(), indent: 4 }).unwrap_err();
+        assert_eq!(error, "<text> at line 1, col 46: its text is 65535 bytes, more than the 65534 a string holds in Java code");
+        for target in ["js", "dotnet", "php", "python"] {
+            assert!(codegen(&xml, &CodegenOptions { target: target.into(), indent: 4 }).is_ok(), "{target}");
+        }
+    }
+
+    #[test]
+    fn test_java_refuses_an_attribute_value_longer_than_a_java_string_holds() {
+        let d = format!("M 0 0 {}Z", "L 10 10 ".repeat(9000));
+        let xml = format!(r#"<lpdf version="1"><document><section><layer><path d="{d}"/></layer></section></document></lpdf>"#);
+        let error = codegen(&xml, &CodegenOptions { target: "java".into(), indent: 4 }).unwrap_err();
+        assert_eq!(error, "<path> at line 1, col 45: its d attribute is 72007 bytes, more than the 65534 a string holds in Java code");
+    }
+
+    #[test]
+    fn test_java_counts_a_string_in_the_bytes_a_class_file_stores() {
+        assert_eq!(java_string_bytes("aé中"), 1 + 2 + 3);
+        assert_eq!(java_string_bytes("\0"), 2);
+        assert_eq!(java_string_bytes("😀"), 6);
+        // 21,845 characters of three bytes each are 65,535 bytes.
+        let xml = document_of(&format!("<text>{}</text>", "中".repeat(21_845)));
+        let error = codegen(&xml, &CodegenOptions { target: "java".into(), indent: 4 }).unwrap_err();
+        assert!(error.ends_with("its text is 65535 bytes, more than the 65534 a string holds in Java code"), "{error}");
+    }
+
+    #[test]
+    fn test_java_fragment_refuses_a_text_longer_than_a_java_string_holds() {
+        let xml = format!("<text>{}</text>", "a".repeat(JAVA_STRING_BYTES + 1));
+        let error = codegen_fragment(&xml, &CodegenOptions { target: "java".into(), indent: 4 }).unwrap_err();
+        assert!(error.ends_with("its text is 65535 bytes, more than the 65534 a string holds in Java code"), "{error}");
     }
 
     // ── codegen_fragment ─────────────────────────────────────────────────────
