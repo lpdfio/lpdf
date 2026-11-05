@@ -11,6 +11,10 @@
 //! | `dotnet` | C#         | PascalCase |
 //! | `php`    | PHP        | camelCase  |
 //! | `python` | Python     | snake_case |
+//! | `java`   | Java       | camelCase  |
+
+use std::cell::RefCell;
+use std::collections::HashMap;
 
 use roxmltree::{Document, Node, NodeType};
 
@@ -21,7 +25,7 @@ use crate::attr_types::Kind;
 /// Options for the code generator.
 #[derive(Debug, Clone)]
 pub struct CodegenOptions {
-    /// Target language/SDK. Currently only `"js"` is supported.
+    /// Target language/SDK: `"js"`, `"dotnet"`, `"php"`, `"python"` or `"java"`.
     pub target: String,
     /// Indentation size in spaces (2 or 4). Default: 4.
     pub indent: u8,
@@ -58,7 +62,12 @@ pub fn codegen(xml: &str, options: &CodegenOptions) -> Result<String, String> {
             let emitter = PythonEmitter { indent: options.indent };
             Ok(emitter.emit_document(&doc))
         }
-        other => Err(format!("Unknown target: '{other}'. Supported: js, dotnet, php, python")),
+        "java" => {
+            check_java_strings(doc.root_element())?;
+            let emitter = JavaEmitter::new(options.indent, true);
+            Ok(emitter.emit_document(&doc))
+        }
+        other => Err(format!("Unknown target: '{other}'. Supported: js, dotnet, php, python, java")),
     }
 }
 
@@ -100,7 +109,13 @@ pub fn codegen_fragment(xml: &str, options: &CodegenOptions) -> Result<String, S
             let emitter = PythonEmitter { indent: options.indent };
             elements.iter().map(|n| emitter.emit_node(n, 0)).collect()
         }
-        other => return Err(format!("Unknown target: '{other}'. Supported: js, dotnet, php, python")),
+        "java" => {
+            check_java_strings(root)?;
+            // A fragment has no class to hold a method, and the docs' fragments are small.
+            let emitter = JavaEmitter::new(options.indent, false);
+            elements.iter().map(|n| emitter.emit_node(n, 0)).collect()
+        }
+        other => return Err(format!("Unknown target: '{other}'. Supported: js, dotnet, php, python, java")),
     };
 
     Ok(lines.join("\n"))
@@ -266,6 +281,25 @@ fn python_callee(tag: &str, family: &str) -> String {
     }
 }
 
+/// What a Java call for a node is called: the JS names, on `L` and `LMarkdown`.
+fn java_callee(tag: &str, family: &str) -> String {
+    match (tag, markdown_member(family)) {
+        ("markdown", _)   => "L.markdown".to_string(),
+        (_, Some(member)) => format!("LMarkdown.{member}"),
+        _                 => format!("L.{}", js_method(tag)),
+    }
+}
+
+/// Whether the Java builder of an element takes no list of children: the elements that hold none, and the rules of
+/// a `<markdown-styles>`. Every other builder takes one, empty for an element with no children.
+fn java_takes_no_children(family: &str) -> bool {
+    matches!(
+        family,
+        "divider" | "img" | "shape" | "barcode" | "field" | "bookmark" | "rect" | "line" | "ellipse" | "circle" | "path"
+            | "img-at" | "barcode-at"
+    ) || markdown_member(family).is_some_and(|member| member != "styles" && member != "content")
+}
+
 /// Return the canonical C# method name for an XML element tag.
 fn dotnet_method(tag: &str) -> &'static str {
     match tag {
@@ -316,7 +350,7 @@ fn single_quoted(val: &str) -> String {
     format!("'{}'", val.replace('\\', "\\\\").replace('\'', "\\'"))
 }
 
-/// A double-quoted string literal, as C# writes one. A line break or a tab in it is written as its escape.
+/// A double-quoted string literal, as C# and Java write one. A line break or a tab in it is written as its escape.
 fn double_quoted(val: &str) -> String {
     format!("\"{}\"", escape_controls(&val.replace('\\', "\\\\").replace('"', "\\\"")))
 }
@@ -331,7 +365,7 @@ fn escape_controls(val: &str) -> String {
 /// PHP double-quoted string reads them; so PHP gets the double-quoted one when the piece has any.
 fn piece_literal(target: Target, text: &str) -> String {
     match target {
-        Target::Dotnet => double_quoted(text),
+        Target::Dotnet | Target::Java => double_quoted(text),
         Target::Js | Target::Python => escape_controls(&single_quoted(text)),
         Target::Php if text.contains(['\n', '\r', '\t']) => {
             let escaped = text.replace('\\', "\\\\").replace('"', "\\\"").replace('$', "\\$");
@@ -465,32 +499,34 @@ enum Target {
     Dotnet,
     Php,
     Python,
+    Java,
 }
 
 impl Target {
     fn literal(self, value: &str) -> String {
         match self {
-            Target::Dotnet => double_quoted(value),
-            _              => single_quoted(value),
+            Target::Dotnet | Target::Java => double_quoted(value),
+            _                             => single_quoted(value),
         }
     }
 
     /// An XML attribute name as the language names the matching member of an attribute object.
     fn member_name(self, xml_name: &str) -> String {
         match self {
-            Target::Js | Target::Php => to_camel_case(xml_name),
-            Target::Python           => to_snake_case(xml_name),
-            Target::Dotnet           => to_pascal_case(xml_name),
+            Target::Js | Target::Php | Target::Java => to_camel_case(xml_name),
+            Target::Python                          => to_snake_case(xml_name),
+            Target::Dotnet                          => to_pascal_case(xml_name),
         }
     }
 
-    /// One member of an attribute object: `name: value`, `name=value` or `Name = value`.
+    /// One member of an attribute object: `name: value`, `name=value`, `Name = value`, or Java's setter `.name(value)`.
     fn member(self, xml_name: &str, value: &str) -> String {
         let name = self.member_name(xml_name);
         match self {
             Target::Js | Target::Php => format!("{name}: {value}"),
             Target::Python           => format!("{name}={value}"),
             Target::Dotnet           => format!("{name} = {value}"),
+            Target::Java             => format!(".{name}({value})"),
         }
     }
 
@@ -502,7 +538,8 @@ impl Target {
         self.typed(kind, value)
     }
 
-    /// `value` written as a literal of `kind`.
+    /// `value` written as a literal of `kind`. A decimal is a `double` in Java, `1.0` and not `1`, which Java would
+    /// read as an `int` in a map of the tokens.
     fn typed(self, kind: Kind, value: &str) -> String {
         if kind == Kind::Boolean {
             return match (self, value) {
@@ -511,19 +548,38 @@ impl Target {
                 _ => value.to_string(),
             };
         }
-        crate::attr_types::number_text(kind, value).unwrap_or_else(|| self.literal(value))
+        match crate::attr_types::number_text(kind, value) {
+            Some(number) if self == Target::Java && !matches!(kind, Kind::Integer { .. }) && !number.contains('.') => {
+                format!("{number}.0")
+            }
+            Some(number) => number,
+            None => self.literal(value),
+        }
     }
 
-    /// A map from names to values written in the language: `{ a: 'b' }`, `{'a': 'b'}`, `['a' => 'b']` or
-    /// `new() { ["a"] = "b" }`.
+    /// A map from names to values written in the language: `{ a: 'b' }`, `{'a': 'b'}`, `['a' => 'b']`,
+    /// `new() { ["a"] = "b" }` or `Map.of("a", "b")`. Java's `Map.of` takes at most ten entries, so a longer map is
+    /// `Map.ofEntries(Map.entry("a", "b"), …)`.
+    ///
+    /// A name given twice keeps only its last entry. The engine takes a `<color>`, a `<gradient>` or a `<ruling>`
+    /// named twice and keeps the last, and so do the maps of the other languages, but Java's `Map.of` and
+    /// `Map.ofEntries` throw on a repeated name when the program runs.
     fn map(self, entries: &[(String, String)]) -> String {
-        let items: Vec<String> = entries
+        let last: Vec<&(String, String)> = entries
+            .iter()
+            .enumerate()
+            .filter(|(i, (key, _))| !entries[i + 1..].iter().any(|(later, _)| later == key))
+            .map(|(_, entry)| entry)
+            .collect();
+        let items: Vec<String> = last
             .iter()
             .map(|(key, value)| match self {
                 Target::Js     => format!("{}: {value}", js_key(key)),
                 Target::Python => format!("{}: {value}", single_quoted(key)),
                 Target::Php    => format!("{} => {value}", single_quoted(key)),
                 Target::Dotnet => format!("[{}] = {value}", double_quoted(key)),
+                Target::Java if last.len() > 10 => format!("Map.entry({}, {value})", double_quoted(key)),
+                Target::Java   => format!("{}, {value}", double_quoted(key)),
             })
             .collect();
         let items = items.join(", ");
@@ -532,11 +588,21 @@ impl Target {
             Target::Python => format!("{{{items}}}"),
             Target::Php    => format!("[{items}]"),
             Target::Dotnet => format!("new() {{ {items} }}"),
+            Target::Java if last.len() > 10 => format!("Map.ofEntries({items})"),
+            Target::Java   => format!("Map.of({items})"),
+        }
+    }
+
+    /// A list written in the language: `[a, b]`, or `List.of(a, b)` in Java, which has no list literal.
+    fn list(self, items: &[String]) -> String {
+        match self {
+            Target::Java => format!("List.of({})", items.join(", ")),
+            _            => format!("[{}]", items.join(", ")),
         }
     }
 
     /// A gradient or one of its stops, with members written in the language: an object in JS, a dictionary in
-    /// Python, where a `from` can't be a field, and an object of `class` in PHP and C#.
+    /// Python, where a `from` can't be a field, and an object of `class` in PHP, C# and Java.
     fn record(self, class: &str, members: &[(String, String)]) -> String {
         match self {
             Target::Python => self.map(members),
@@ -546,7 +612,7 @@ impl Target {
 
     /// An object of `class` with the given members, each an XML attribute name and the value written for
     /// it. A JS object has no class. In C# a record such as `DocumentTokens` takes its members as arguments
-    /// (`constructor`), where an attribute class takes them in an initializer.
+    /// (`constructor`), where an attribute class takes them in an initializer. A Java object takes each in a setter.
     fn object(self, class: &str, members: &[(String, String)], constructor: bool) -> String {
         let written: Vec<String> = members
             .iter()
@@ -555,13 +621,13 @@ impl Target {
                 _                      => self.member(name, value),
             })
             .collect();
-        let written = written.join(", ");
         match (self, constructor) {
-            (Target::Js, _)           => format!("{{ {written} }}"),
-            (Target::Python, _)       => format!("{class}({written})"),
-            (Target::Php, _)          => format!("new {class}({written})"),
-            (Target::Dotnet, true)    => format!("new {class}({written})"),
-            (Target::Dotnet, false)   => format!("new {class} {{ {written} }}"),
+            (Target::Java, _)         => format!("new {class}(){}", written.concat()),
+            (Target::Js, _)           => format!("{{ {} }}", written.join(", ")),
+            (Target::Python, _)       => format!("{class}({})", written.join(", ")),
+            (Target::Php, _)          => format!("new {class}({})", written.join(", ")),
+            (Target::Dotnet, true)    => format!("new {class}({})", written.join(", ")),
+            (Target::Dotnet, false)   => format!("new {class} {{ {} }}", written.join(", ")),
         }
     }
 }
@@ -576,7 +642,7 @@ fn written_attributes(target: Target, element: &Node, skip: &[&str]) -> Vec<(Str
 }
 
 /// The `<gradients>` of the tokens as the map the SDKs take: each gradient's name to its attributes, and its
-/// `stops` as a list. PHP and C# have a `Gradient` and a `GradientStop` class, JS and Python plain objects.
+/// `stops` as a list. PHP, C# and Java have a `Gradient` and a `GradientStop` class, JS and Python plain objects.
 fn gradients_expression(target: Target, gradients: &Node) -> String {
     let entries: Vec<(String, String)> = gradients
         .children()
@@ -589,7 +655,7 @@ fn gradients_expression(target: Target, gradients: &Node) -> String {
                 .map(|stop| target.record("GradientStop", &written_attributes(target, &stop, &[])))
                 .collect();
             if !stops.is_empty() {
-                members.push(("stops".to_string(), format!("[{}]", stops.join(", "))));
+                members.push(("stops".to_string(), target.list(&stops)));
             }
             (gradient.attribute("name").unwrap_or("").to_string(), target.record("Gradient", &members))
         })
@@ -598,7 +664,7 @@ fn gradients_expression(target: Target, gradients: &Node) -> String {
 }
 
 /// The `<rulings>` of the tokens as the map the SDKs take: each ruling's name to its attributes, and its `<lines>` as
-/// `lines`, a list. PHP and C# have a `Ruling` and a `RulingLines` class, JS and Python plain objects.
+/// `lines`, a list. PHP, C# and Java have a `Ruling` and a `RulingLines` class, JS and Python plain objects.
 fn rulings_expression(target: Target, rulings: &Node) -> String {
     let entries: Vec<(String, String)> = rulings
         .children()
@@ -610,7 +676,7 @@ fn rulings_expression(target: Target, rulings: &Node) -> String {
                 .filter(|n| n.is_element() && n.tag_name().name() == "lines")
                 .map(|lines| target.record("RulingLines", &written_attributes(target, &lines, &[])))
                 .collect();
-            members.push(("lines".to_string(), format!("[{}]", lines.join(", "))));
+            members.push(("lines".to_string(), target.list(&lines)));
             (ruling.attribute("name").unwrap_or("").to_string(), target.record("Ruling", &members))
         })
         .collect();
@@ -640,7 +706,7 @@ fn assets_expression(target: Target, assets: &Node) -> Option<String> {
             })
             .collect();
         if !declared.is_empty() {
-            members.push((list.to_string(), format!("[{}]", declared.join(", "))));
+            members.push((list.to_string(), target.list(&declared)));
         }
     }
     (!members.is_empty()).then(|| target.object("DocumentAssets", &members, true))
@@ -670,7 +736,7 @@ fn attachments_expression(target: Target, document: &Node) -> Option<String> {
         .iter()
         .map(|file| target.object("FileAttr", &written_attributes(target, file, &[]), false))
         .collect();
-    (!files.is_empty()).then(|| format!("[{}]", files.join(", ")))
+    (!files.is_empty()).then(|| target.list(&files))
 }
 
 /// The `tokens` of a document as the object the SDK takes: the colours, the aliases and the scales of the
@@ -893,6 +959,23 @@ fn dotnet_attrs(node: &Node, extra_attrs: Option<&[(&str, String)]>) -> String {
         "NoAttr".into()
     } else {
         format!("new() {{ {} }}", parts.join(", "))
+    }
+}
+
+/// Java setters on a new object of the node's attribute class, `new TextAttr().fontSize("12pt")`.
+///
+/// Returns `"NoAttr"` when there are no attributes.
+fn java_attrs(node: &Node, family: &str) -> String {
+    let setters: Vec<String> = node
+        .attributes()
+        .filter(|a| !is_data_binding(a.name()))
+        .map(|a| Target::Java.member(a.name(), &Target::Java.attribute(node, a.name(), a.value())))
+        .collect();
+
+    if setters.is_empty() {
+        "NoAttr".into()
+    } else {
+        format!("new {}(){}", attr_class(family), setters.concat())
     }
 }
 
@@ -1790,6 +1873,381 @@ fn python_method(tag: &str) -> &'static str {
     }
 }
 
+// ── Java emitter ──────────────────────────────────────────────────────────────
+
+/// The most Java source the code of one method holds before its parts move into methods of their own. The JVM holds a
+/// method to 64 KB of bytecode, and the bytecode of the fixtures' code came to at most a quarter of its source
+/// (2026-11-04), so this stays well under that. The code of a template, and of every docs example, fits in one.
+const JAVA_METHOD_SOURCE: usize = 100 * 1024;
+
+/// The most bytes one string of Java code holds. A class file stores a string with a length of two bytes, and javac
+/// refuses one of 65,535 characters or more ("constant string too long"), so a text or an attribute value over this
+/// can't be written as Java, where the other languages take it.
+const JAVA_STRING_BYTES: usize = 65_534;
+
+/// The bytes of `text` as a class file stores it, in modified UTF-8: a NUL takes two bytes, and a character outside
+/// the Basic Multilingual Plane six, three for each half of its UTF-16 pair.
+fn java_string_bytes(text: &str) -> usize {
+    text.chars()
+        .map(|c| match c as u32 {
+            0               => 2,
+            0x01..=0x7f     => 1,
+            0x80..=0x7ff    => 2,
+            0x800..=0xffff  => 3,
+            _               => 6,
+        })
+        .sum()
+}
+
+/// Refuses a document with a text, or an attribute value, of over `JAVA_STRING_BYTES`, whose Java wouldn't compile.
+/// The error names the element and the limit, where javac would only fail on the code.
+fn check_java_strings(root: Node) -> Result<(), String> {
+    for element in root.descendants().filter(Node::is_element) {
+        let tag = element.tag_name().name();
+        let texts = (is_text_tag(tag) || is_inline_tag(tag))
+            .then(|| text_pieces(&element))
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|piece| match piece {
+                TextPiece::Str(text) => Some(("its text".to_string(), java_string_bytes(&text))),
+                TextPiece::Span(_)   => None,
+            });
+        let values = element
+            .attributes()
+            .filter(|a| !is_data_binding(a.name()))
+            .map(|a| (format!("its {} attribute", a.name()), java_string_bytes(a.value())));
+        if let Some((what, bytes)) = texts.chain(values).find(|(_, bytes)| *bytes > JAVA_STRING_BYTES) {
+            return Err(format!(
+                "<{tag}>{}: {what} is {bytes} bytes, more than the {JAVA_STRING_BYTES} a string holds in Java code",
+                crate::parse::node_loc(&element)
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The type the Java builder of an element returns, which a method that builds one returns.
+fn java_node_type(family: &str) -> &'static str {
+    match family {
+        "section"          => "SectionNode",
+        "layout"           => "SectionLayout",
+        "markdown"         => "SectionMarkdown",
+        "layer"            => "LayerNode",
+        "bookmark"         => "BookmarkNode",
+        "region"           => "RegionNode",
+        "text"             => "TextNode",
+        "code"             => "CodeNode",
+        "divider"          => "DividerNode",
+        "img"              => "ImgNode",
+        "shape"            => "ShapeNode",
+        "barcode"          => "BarcodeNode",
+        "field"            => "FieldNode",
+        "rect"             => "RectNode",
+        "line"             => "LineNode",
+        "ellipse"          => "EllipseNode",
+        "circle"           => "CircleNode",
+        "path"             => "PathNode",
+        "text-at"          => "TextAtNode",
+        "img-at"           => "ImgAtNode",
+        "barcode-at"       => "BarcodeAtNode",
+        "markdown-styles"  => "MarkdownStylesNode",
+        "markdown-content" => "MarkdownContentNode",
+        rule if rule.starts_with("markdown-") => "MarkdownRule",
+        _                  => "ContainerNode",
+    }
+}
+
+struct JavaEmitter {
+    indent: u8,
+    /// Whether a part too large for one method moves into a method of its own: in a program, and not in a fragment,
+    /// which has no class to hold one.
+    split: bool,
+    /// The methods written so far, each one's whole text.
+    methods: RefCell<Vec<String>>,
+    /// How many methods of each element there are, which names the next: `section1`, `table2`.
+    counts: RefCell<HashMap<String, usize>>,
+}
+
+impl JavaEmitter {
+    fn new(indent: u8, split: bool) -> Self {
+        JavaEmitter { indent, split, methods: RefCell::new(Vec::new()), counts: RefCell::new(HashMap::new()) }
+    }
+
+    fn ind(&self, level: usize) -> String {
+        " ".repeat(self.indent as usize * level)
+    }
+
+    /// A program: a class with a `main` method, as Java 17 has no statements outside a class, and after it the methods
+    /// that the parts of a large document moved into. The SDK's classes come from one import, and `NoAttr` is imported
+    /// statically, written bare as the other targets write it.
+    fn emit_document(&self, doc: &Document) -> String {
+        let root = doc.root_element(); // <lpdf>
+
+        let mut assets_node:   Option<Node> = None;
+        let mut tokens_node:   Option<Node> = None;
+        let mut document_node: Option<Node> = None;
+
+        for child in root.children().filter(|n| n.is_element()) {
+            match child.tag_name().name() {
+                "assets"   => assets_node   = Some(child),
+                "tokens"   => tokens_node   = Some(child),
+                "document" => document_node = Some(child),
+                _ => {}
+            }
+        }
+
+        let ind1 = self.ind(1);
+        let ind2 = self.ind(2);
+        let body = document_node
+            .map(|doc_node| {
+                let doc_expr = self.emit_document_node(&doc_node, 2, assets_node, tokens_node);
+                format!("{ind2}var doc = {};\n", doc_expr.trim_start())
+            })
+            .unwrap_or_default();
+
+        // Java reads the src of a font, an image or a file through the engine's srcFallback, as .NET does.
+        let files_have_src = document_node.is_some_and(|d| attached_files(&d).iter().any(|f| f.has_attribute("src")));
+        let reads_src = assets_node.is_some_and(|assets| assets_have_src(&assets)) || files_have_src;
+        // The tokens are the only maps.
+        let has_maps = tokens_node.is_some_and(|tokens| tokens_expression(Target::Java, &tokens).is_some());
+
+        let mut out = String::new();
+        out.push_str("import io.lpdf.*;\n");
+        if reads_src {
+            out.push_str("import java.nio.file.Files;\nimport java.nio.file.Path;\n");
+        }
+        out.push_str("import java.util.List;\n");
+        if has_maps {
+            out.push_str("import java.util.Map;\n");
+        }
+        out.push_str("import static io.lpdf.L.NoAttr;\n");
+        out.push('\n');
+
+        out.push_str("public class Main {\n");
+        out.push_str(&format!("{ind1}public static void main(String[] args) {{\n"));
+        if reads_src {
+            out.push_str(&format!("{ind2}var engine = L.engine(new EngineOptions().srcFallback(src -> Files.readAllBytes(Path.of(src))));\n"));
+        } else {
+            out.push_str(&format!("{ind2}var engine = L.engine();\n"));
+        }
+        out.push('\n');
+
+        out.push_str(&body);
+        out.push('\n');
+        out.push_str(&format!("{ind2}byte[] pdf = engine.render(doc);\n"));
+        out.push_str(&format!("{ind1}}}\n"));
+        for method in self.methods.borrow().iter() {
+            out.push('\n');
+            out.push_str(method);
+        }
+        out.push_str("}\n");
+
+        out
+    }
+
+    /// The document an `<lpdf>` element holds, with its assets and tokens as attributes of the document.
+    fn emit_lpdf(&self, lpdf: &Node, level: usize) -> String {
+        let child = |tag: &str| lpdf.children().find(|n| n.is_element() && n.tag_name().name() == tag);
+        match child("document") {
+            Some(document) => self.emit_document_node(&document, level, child("assets"), child("tokens")),
+            None => String::new(),
+        }
+    }
+
+    fn emit_node(&self, node: &Node, level: usize) -> String {
+        let tag = node.tag_name().name();
+
+        match tag {
+            "lpdf"     => return self.emit_lpdf(node, level),
+            "document" => return self.emit_document_node(node, level, None, None),
+            "meta" | "output" | "attachments" => return String::new(),
+            _ => {}
+        }
+        let family    = family_tag(node);
+        let method    = java_callee(tag, &family);
+        let ind0      = self.ind(level);
+        let ind1      = self.ind(level + 1);
+
+        let binding_comments = data_binding_comments(node, &ind0);
+        let data_value = node.attribute("data-value");
+        let attrs = java_attrs(node, &family);
+        let text_content_override: Option<String> = data_value.map(|p| format!("{{{p}}}"));
+
+        let children = if is_text_tag(tag) || is_inline_tag(tag) {
+            self.text_children(node, text_content_override.as_deref())
+        } else {
+            let mut children = self.block_children(node, level);
+            self.fit(&mut children, method.len() + attrs.len(), level);
+            children.into_iter().map(|(_, code)| code).collect()
+        };
+
+        if children.is_empty() && java_takes_no_children(&family) {
+            format!("{binding_comments}{ind0}{method}({attrs})")
+        } else if children.is_empty() {
+            format!("{binding_comments}{ind0}{method}({attrs}, List.of())")
+        } else if is_text_tag(tag) {
+            format!("{binding_comments}{}", self.emit_text_call(&ind0, &ind1, &method, &attrs, &children))
+        } else if is_inline_tag(tag) {
+            format!("{binding_comments}{ind0}{method}({attrs}, List.of({}))", children.join(", "))
+        } else {
+            format!("{binding_comments}{}", self.emit_block_call(&ind0, &method, &attrs, &children))
+        }
+    }
+
+    /// The document, and when its code is too large for one method, each section in a method of its own.
+    fn emit_document_node(&self, node: &Node, level: usize, assets: Option<Node>, tokens: Option<Node>) -> String {
+        let ind0   = self.ind(level);
+        let method = "L.document";
+
+        let folded = folded_elements(node, Target::Java, |element, setters| {
+            let class = if element == "meta" { "DocumentMeta" } else { "DocumentOutput" };
+            Target::Java.member(element, &format!("new {class}(){}", setters.concat()))
+        });
+
+        let mut setters: Vec<String> = node
+            .attributes()
+            .map(|a| Target::Java.member(a.name(), &Target::Java.attribute(node, a.name(), a.value())))
+            .collect();
+
+        if let Some(assets) = assets.and_then(|a| assets_expression(Target::Java, &a)) {
+            setters.push(Target::Java.member("assets", &assets));
+        }
+        if let Some(tokens) = tokens.and_then(|t| tokens_expression(Target::Java, &t)) {
+            setters.push(Target::Java.member("tokens", &tokens));
+        }
+        setters.extend(folded);
+        if let Some(files) = attachments_expression(Target::Java, node) {
+            setters.push(Target::Java.member("attachments", &files));
+        }
+
+        let attrs = if setters.is_empty() {
+            "NoAttr".into()
+        } else {
+            format!("new DocumentAttr(){}", setters.concat())
+        };
+
+        let mut children: Vec<(Node, String)> = node
+            .children()
+            .filter(|n| n.is_element() && !matches!(n.tag_name().name(), "meta" | "output" | "attachments"))
+            .map(|n| (n, self.emit_node(&n, level + 1)))
+            .filter(|(_, code)| !code.is_empty())
+            .collect();
+        if self.split && attrs.len() + children.iter().map(|(_, code)| code.len()).sum::<usize>() > JAVA_METHOD_SOURCE {
+            for (section, code) in children.iter_mut() {
+                *code = self.method(section, code, level + 1);
+            }
+        }
+        let children: Vec<String> = children.into_iter().map(|(_, code)| code).collect();
+
+        self.emit_block_call(&ind0, method, &attrs, &children)
+    }
+
+    /// The strings and inline pieces of a text, a code or an inline element.
+    fn text_children(&self, node: &Node, text_content_override: Option<&str>) -> Vec<String> {
+        let mut children: Vec<String> = Vec::new();
+        if let Some(placeholder) = text_content_override {
+            children.push(format!("\"{placeholder}\""));
+        } else {
+            for piece in text_pieces(node) {
+                match piece {
+                    TextPiece::Str(text) => children.push(double_quoted(&text)),
+                    // Emit span at level 0 — parent handles indentation
+                    TextPiece::Span(span) => children.push(self.emit_node(&span, 0)),
+                }
+            }
+        }
+        children
+    }
+
+    /// The child elements of a block, each with its code at `level + 1`.
+    fn block_children<'a, 'i>(&self, node: &Node<'a, 'i>, level: usize) -> Vec<(Node<'a, 'i>, String)> {
+        node.children()
+            .filter(|n| n.is_element())
+            .map(|child| (child, self.emit_node(&child, level + 1)))
+            .filter(|(_, code)| !code.is_empty())
+            .collect()
+    }
+
+    /// Moves the largest of `children` into methods of their own until the code of their element, `overhead` and
+    /// theirs, fits in one method: a part of a document too large for one method compiles as several. Their code is
+    /// at `level + 1`.
+    fn fit(&self, children: &mut [(Node, String)], overhead: usize, level: usize) {
+        let mut size = overhead + children.iter().map(|(_, code)| code.len()).sum::<usize>();
+        if !self.split || size <= JAVA_METHOD_SOURCE {
+            return;
+        }
+        let mut largest_first: Vec<usize> = (0..children.len()).collect();
+        largest_first.sort_by_key(|&i| std::cmp::Reverse(children[i].1.len()));
+        for i in largest_first {
+            if size <= JAVA_METHOD_SOURCE {
+                break;
+            }
+            let (child, code) = &children[i];
+            let call = self.method(child, code, level + 1);
+            size = size - code.len() + call.len();
+            children[i].1 = call;
+        }
+    }
+
+    /// Moves `code`, the code of `node` at `level`, into a method of its own named after the element, and returns
+    /// the call that takes its place: `section1()`.
+    fn method(&self, node: &Node, code: &str, level: usize) -> String {
+        let family = family_tag(node);
+        let name = {
+            let mut counts = self.counts.borrow_mut();
+            let count = counts.entry(family.clone()).or_insert(0);
+            *count += 1;
+            format!("{}{count}", to_camel_case(&family))
+        };
+        let (ind1, ind2, from) = (self.ind(1), self.ind(2), self.ind(level));
+        let lines: Vec<String> = code
+            .lines()
+            .map(|line| format!("{ind2}{}", line.strip_prefix(from.as_str()).unwrap_or(line)))
+            .collect();
+        // The TODO comments of its data-bound attributes stay above the code they are about.
+        let comments = lines.iter().take_while(|line| line.trim_start().starts_with("//")).count();
+
+        let mut method = format!("{ind1}static {} {name}() {{\n", java_node_type(&family));
+        for comment in &lines[..comments] {
+            method.push_str(comment);
+            method.push('\n');
+        }
+        method.push_str(&format!("{ind2}return {};\n{ind1}}}\n", lines[comments..].join("\n").trim_start()));
+        self.methods.borrow_mut().push(method);
+        format!("{from}{name}()")
+    }
+
+    /// `List.of` takes no comma after its last item.
+    fn emit_text_call(
+        &self,
+        ind0: &str,
+        ind1: &str,
+        method: &str,
+        attrs: &str,
+        children: &[String],
+    ) -> String {
+        if children.len() == 1 {
+            format!("{ind0}{method}({attrs}, List.of({}))", children[0])
+        } else {
+            let items: Vec<String> = children.iter().map(|c| format!("{ind1}{c}")).collect();
+            format!("{ind0}{method}({attrs}, List.of(\n{}\n{ind0}))", items.join(",\n"))
+        }
+    }
+
+    fn emit_block_call(
+        &self,
+        ind0: &str,
+        method: &str,
+        attrs: &str,
+        children: &[String],
+    ) -> String {
+        if children.is_empty() {
+            return format!("{ind0}{method}({attrs}, List.of())");
+        }
+        format!("{ind0}{method}({attrs}, List.of(\n{}\n{ind0}))", children.join(",\n"))
+    }
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -1827,6 +2285,10 @@ mod tests {
         let dotnet = code("dotnet");
         for written in ["Debug = false", "new() { Cols = 3, Opacity = 0.5 }", "new() { Bold = true, LineHeight = 1.5 }", "LineHeight = \"m\""] {
             assert!(dotnet.contains(written), "{written}: {dotnet}");
+        }
+        let java = code("java");
+        for written in ["new DocumentAttr().debug(false)", "new GridAttr().cols(3).opacity(0.5)", "new TextAttr().bold(true).lineHeight(1.5)", ".lineHeight(\"m\")"] {
+            assert!(java.contains(written), "{written}: {java}");
         }
     }
 
@@ -1922,6 +2384,7 @@ mod tests {
             ("dotnet", "//", "DataHref", "DataColor"),
             ("php", "//", "dataColor", "dataName"),
             ("python", "#", "data_href", "data_fill"),
+            ("java", "//", "dataHref", "dataColor"),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             for line in ["data-href: url", "data-name: photo", "data-fill: status.color", "data-color: tone"] {
@@ -1999,6 +2462,9 @@ mod tests {
         assert!(code("dotnet").contains(
             "Gradients: new() { [\"fade\"] = new Gradient { Type = \"linear\", From = \"brand\", To = \"#ffffff\", Angle = 90 }, [\"sunset\"] = new Gradient { Type = \"radial\", Stops = [new GradientStop { Offset = \"0%\", Color = \"#f97316\" }, new GradientStop { Offset = \"100%\", Color = \"#8b5cf6\" }] } }"
         ), "{}", code("dotnet"));
+        assert!(code("java").contains(
+            ".gradients(Map.of(\"fade\", new Gradient().type(\"linear\").from(\"brand\").to(\"#ffffff\").angle(90.0), \"sunset\", new Gradient().type(\"radial\").stops(List.of(new GradientStop().offset(\"0%\").color(\"#f97316\"), new GradientStop().offset(\"100%\").color(\"#8b5cf6\")))))"
+        ), "{}", code("java"));
     }
 
     #[test]
@@ -2033,6 +2499,33 @@ mod tests {
         assert!(code("dotnet").contains(
             "Rulings: new() { [\"graph\"] = new Ruling { Origin = \"margin\", Edges = false, Lines = [new RulingLines { Step = \"5mm\" }, new RulingLines { CountX = 12, StepY = \"25mm\", Color = \"#b5c4d6\", Thickness = \"s\" }] } }"
         ), "{}", code("dotnet"));
+        assert!(code("java").contains(
+            ".rulings(Map.of(\"graph\", new Ruling().origin(\"margin\").edges(false).lines(List.of(new RulingLines().step(\"5mm\"), new RulingLines().countX(12).stepY(\"25mm\").color(\"#b5c4d6\").thickness(\"s\")))))"
+        ), "{}", code("java"));
+        assert!(code("java").contains("new SectionAttr().ruling(\"graph\")"), "{}", code("java"));
+    }
+
+    #[test]
+    fn test_a_token_named_twice_keeps_its_last_value_in_every_language() {
+        let xml = r##"<lpdf version="1">
+            <tokens>
+                <colors><color name="brand" value="#111111"/><color name="muted" value="#666666"/><color name="brand" value="#222222"/></colors>
+                <gradients><gradient name="fade" type="linear" from="brand" to="#ffffff"/><gradient name="fade" type="radial" from="brand" to="#000000"/></gradients>
+            </tokens>
+            <document><section><layout><text>x</text></layout></section></document>
+        </lpdf>"##;
+        for (target, colors, gradients) in [
+            ("js", "colors: { muted: '#666666', brand: '#222222' }", "gradients: { fade: { type: 'radial', from: 'brand', to: '#000000' } }"),
+            ("python", "colors={'muted': '#666666', 'brand': '#222222'}", "gradients={'fade': {'type': 'radial', 'from': 'brand', 'to': '#000000'}}"),
+            ("php", "colors: ['muted' => '#666666', 'brand' => '#222222']", "gradients: ['fade' => new Gradient(type: 'radial', from: 'brand', to: '#000000')]"),
+            ("dotnet", "Colors: new() { [\"muted\"] = \"#666666\", [\"brand\"] = \"#222222\" }", "Gradients: new() { [\"fade\"] = new Gradient { Type = \"radial\", From = \"brand\", To = \"#000000\" } }"),
+            ("java", ".colors(Map.of(\"muted\", \"#666666\", \"brand\", \"#222222\"))", ".gradients(Map.of(\"fade\", new Gradient().type(\"radial\").from(\"brand\").to(\"#000000\")))"),
+        ] {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            assert!(out.contains(colors), "{target}: the colors are not written as {colors}\n{out}");
+            assert!(out.contains(gradients), "{target}: the gradients are not written as {gradients}\n{out}");
+            assert!(!out.contains("#111111") && !out.contains("linear"), "{target}: an entry named again is written\n{out}");
+        }
     }
 
     const FULL_DOCUMENT: &str = r##"<lpdf version="1">
@@ -2061,6 +2554,9 @@ mod tests {
 
         let dotnet = fragment("dotnet");
         assert!(dotnet.starts_with("L.Document(new() { Size = \"a4\", Assets = new DocumentAssets(Images: [new ImageAttr { Name = \"logo\", Src = \"logo.png\" }]), Tokens = new DocumentTokens(Colors: new() { [\"brand\"] = \"#336699\" }) }, ["), "{dotnet}");
+
+        let java = fragment("java");
+        assert!(java.starts_with("L.document(new DocumentAttr().size(\"a4\").assets(new DocumentAssets().images(List.of(new ImageAttr().name(\"logo\").src(\"logo.png\")))).tokens(new DocumentTokens().colors(Map.of(\"brand\", \"#336699\"))), List.of("), "{java}");
     }
 
     #[test]
@@ -2080,7 +2576,8 @@ mod tests {
     fn test_unknown_target() {
         let xml = "<lpdf version=\"1\"><document><section><layout></layout></section></document></lpdf>";
         let opts = CodegenOptions { target: "ruby".into(), indent: 4 };
-        assert!(codegen(xml, &opts).is_err());
+        let error = codegen(xml, &opts).unwrap_err();
+        assert!(error.contains("Supported: js, dotnet, php, python, java"), "{error}");
     }
 
     #[test]
@@ -2107,6 +2604,7 @@ mod tests {
             ("dotnet", "Output = new() { PdfA = \"3b\", FacturXStrict = true }"),
             ("php", "output: new DocumentOutput(pdfa: '3b', facturxStrict: true)"),
             ("python", "output=DocumentOutput(pdfa='3b', facturx_strict=True)"),
+            ("java", ".output(new DocumentOutput().pdfa(\"3b\").facturxStrict(true))"),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(expected), "{target}: {out}");
@@ -2121,6 +2619,7 @@ mod tests {
             ("dotnet", "Output = new() { PdfA = \"2u\" }"),
             ("php", "output: new DocumentOutput(pdfa: '2u')"),
             ("python", "output=DocumentOutput(pdfa='2u')"),
+            ("java", ".output(new DocumentOutput().pdfa(\"2u\"))"),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(expected), "{target}: {out}");
@@ -2137,6 +2636,7 @@ mod tests {
             ("dotnet", "Attachments = [new FileAttr { Name = \"invoice.xml\", Src = \"invoice.xml\", Mime = \"text/xml\", Relationship = \"data\" }, new FileAttr { Name = \"terms.txt\", Ref = \"terms\" }] }"),
             ("php", "attachments: [new FileAttr(name: 'invoice.xml', src: 'invoice.xml', mime: 'text/xml', relationship: 'data'), new FileAttr(name: 'terms.txt', ref: 'terms')])"),
             ("python", "attachments=[FileAttr(name='invoice.xml', src='invoice.xml', mime='text/xml', relationship='data'), FileAttr(name='terms.txt', ref='terms')])"),
+            ("java", ".attachments(List.of(new FileAttr().name(\"invoice.xml\").src(\"invoice.xml\").mime(\"text/xml\").relationship(\"data\"), new FileAttr().name(\"terms.txt\").ref(\"terms\")))"),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(expected), "{target}: {out}");
@@ -2148,6 +2648,8 @@ mod tests {
         assert!(php.contains("use Lpdf\\Kit\\FileAttr;"), "{php}");
         let python = codegen(xml, &CodegenOptions { target: "python".into(), indent: 4 }).unwrap();
         assert!(python.contains("FileAttr"), "{python}");
+        let java = codegen(xml, &CodegenOptions { target: "java".into(), indent: 4 }).unwrap();
+        assert!(java.contains("srcFallback(src -> Files.readAllBytes(Path.of(src)))"), "the file's src is read as an image's is: {java}");
     }
 
     #[test]
@@ -2158,6 +2660,7 @@ mod tests {
             ("dotnet", ["Assets = new DocumentAssets(Profiles: [new ProfileAttr { Name = \"press\", Src = \"press.icc\" }])", "PdfX = \"4\", Profile = \"press\"", "Bleed = \"3mm\"", "Bleed = \"5mm\""]),
             ("php", ["assets: new DocumentAssets(profiles: [new ProfileAttr(name: 'press', src: 'press.icc')])", "output: new DocumentOutput(pdfx: '4', profile: 'press')", "bleed: '3mm'", "bleed: '5mm'"]),
             ("python", ["assets=DocumentAssets(profiles=[ProfileAttr(name='press', src='press.icc')])", "output=DocumentOutput(pdfx='4', profile='press')", "bleed='3mm'", "bleed='5mm'"]),
+            ("java", [".assets(new DocumentAssets().profiles(List.of(new ProfileAttr().name(\"press\").src(\"press.icc\"))))", ".output(new DocumentOutput().pdfx(\"4\").profile(\"press\"))", ".bleed(\"3mm\")", ".bleed(\"5mm\")"]),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             for part in expected {
@@ -2178,6 +2681,7 @@ mod tests {
             ("dotnet", "Output = new() { Encrypt = \"aes-256\", Linearize = true }"),
             ("php", "output: new DocumentOutput(encrypt: 'aes-256', linearize: true)"),
             ("python", "output=DocumentOutput(encrypt='aes-256', linearize=True)"),
+            ("java", ".output(new DocumentOutput().encrypt(\"aes-256\").linearize(true))"),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(expected), "{target}: {expected}\n{out}");
@@ -2192,6 +2696,7 @@ mod tests {
             ("dotnet", ["PdfUa = \"1\"", "Lang = \"en\"", "Role = \"h1\"", "Alt = \"Logo\""]),
             ("php", ["pdfua: '1'", "lang: 'en'", "role: 'h1'", "alt: 'Logo'"]),
             ("python", ["pdfua='1'", "lang='en'", "role='h1'", "alt='Logo'"]),
+            ("java", [".pdfua(\"1\")", ".lang(\"en\")", ".role(\"h1\")", ".alt(\"Logo\")"]),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             for piece in expected {
@@ -2266,6 +2771,8 @@ mod tests {
         assert!(dotnet.contains(r#"L.Code("#) && dotnet.contains(r#""fn a() {\n\tb(\"x\", '$y');\n}\n""#), "{dotnet}");
         let php = code_code("php", content);
         assert!(php.contains("L::code(") && php.contains(r#""fn a() {\n\tb(\"x\", '\$y');\n}\n""#), "{php}");
+        let java = code_code("java", content);
+        assert!(java.contains(r#"L.code(new CodeAttr().tabSize(2), List.of("fn a() {\n\tb(\"x\", '$y');\n}\n"))"#), "{java}");
     }
 
     #[test]
@@ -2282,7 +2789,7 @@ mod tests {
         let js = codegen(xml, &CodegenOptions { target: "js".into(), indent: 4 }).unwrap();
         assert!(js.contains("L.codeSpan({ background: '#ffff00' }, ['cargo test'])"), "{js}");
         assert!(js.contains("'Run ',") && js.contains("' now'"), "{js}");
-        for (target, call) in [("dotnet", "L.CodeSpan("), ("php", "L::codeSpan("), ("python", "L.code_span(")] {
+        for (target, call) in [("dotnet", "L.CodeSpan("), ("php", "L::codeSpan("), ("python", "L.code_span("), ("java", "L.codeSpan(")] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(call), "{target}: {out}");
         }
@@ -2357,6 +2864,8 @@ mod tests {
         assert!(php.contains("L::fn(") && php.contains("'The '"), "{php}");
         let python = text_code("python", "text", content);
         assert!(python.contains("L.fn(") && python.contains("'The '"), "{python}");
+        let java = text_code("java", "text", content);
+        assert!(java.contains("L.fn(NoAttr, List.of(\"The \", L.span(new SpanAttr().bold(true), List.of(\"note\")), \".\"))"), "{java}");
     }
 
     #[test]
@@ -2426,6 +2935,9 @@ mod tests {
         let out = text_code("dotnet", "text", content);
         assert!(out.contains("\"See the \","), "{out}");
         assert!(out.contains("\" now\","), "{out}");
+        let out = text_code("java", "text", content);
+        assert!(out.contains("\"See the \","), "{out}");
+        assert!(out.contains("\" now\"\n"), "{out}");
         for target in ["php", "python"] {
             let out = text_code(target, "text", content);
             assert!(out.contains("'See the ',"), "{target}: {out}");
@@ -2514,7 +3026,7 @@ mod tests {
         let xml = "<lpdf version=\"1\"><document><section><layout>\
             <text>First line\n          second line</text>\
             </layout></section></document></lpdf>";
-        for (target, quote) in [("js", '\''), ("python", '\''), ("php", '\''), ("dotnet", '"')] {
+        for (target, quote) in [("js", '\''), ("python", '\''), ("php", '\''), ("dotnet", '"'), ("java", '"')] {
             let opts = CodegenOptions { target: target.into(), indent: 4 };
             let out  = codegen(xml, &opts).unwrap();
             let expected = format!("{quote}First line second line{quote}");
@@ -2534,6 +3046,7 @@ mod tests {
             ("python", "L.layer(", "L.layout(", "L.section(", "L.canvas("),
             ("php", "L::layer(", "L::layout(", "L::section(", "L::canvas("),
             ("dotnet", "L.Layer(", "L.Layout(", "L.Section(", "L.Canvas("),
+            ("java", "L.layer(", "L.layout(", "L.section(", "L.canvas("),
         ] {
             let opts = CodegenOptions { target: target.into(), indent: 4 };
             let out  = codegen(xml, &opts).unwrap();
@@ -2556,6 +3069,7 @@ mod tests {
             ("python", "L.layout(LayoutAttr(margin='48pt'), [", Some("from lpdf import L, NoAttr, DocumentAttr, LayoutAttr\n")),
             ("php", "L::layout(new LayoutAttr(margin: '48pt'), [", Some("use Lpdf\\Kit\\LayoutAttr;\n")),
             ("dotnet", "L.Layout(new() { Margin = \"48pt\" }, [", None),
+            ("java", "L.layout(new LayoutAttr().margin(\"48pt\"), List.of(", None),
         ] {
             let opts = CodegenOptions { target: target.into(), indent: 4 };
             let out  = codegen(xml, &opts).unwrap();
@@ -2578,6 +3092,7 @@ mod tests {
             ("python", ["L.text_at(", "L.img_at(", "L.barcode_at("], [Some("TextAtAttr("), Some("ImgAtAttr("), Some("BarcodeAtAttr(")]),
             ("php",    ["L::textAt(", "L::imgAt(", "L::barcodeAt("], [Some("TextAtAttr("), Some("ImgAtAttr("), Some("BarcodeAtAttr(")]),
             ("dotnet", ["L.TextAt(", "L.ImgAt(", "L.BarcodeAt("],   [None, None, None]),
+            ("java",   ["L.textAt(", "L.imgAt(", "L.barcodeAt("],   [Some("new TextAtAttr()"), Some("new ImgAtAttr()"), Some("new BarcodeAtAttr()")]),
         ] {
             let opts = CodegenOptions { target: target.into(), indent: 4 };
             let out  = codegen(xml, &opts).unwrap();
@@ -2587,7 +3102,7 @@ mod tests {
             for class in classes.into_iter().flatten() {
                 assert!(out.contains(class), "{target}: no {class} in {out}");
             }
-            assert!(out.contains("['Hi']") || out.contains("[\"Hi\"]"), "{target}: the text is lost in {out}");
+            assert!(out.contains("['Hi']") || out.contains("[\"Hi\"]") || out.contains("List.of(\"Hi\")"), "{target}: the text is lost in {out}");
             assert!(!out.contains("CanvasText") && !out.contains("CanvasImg"), "{target}: {out}");
         }
         // PHP imports the classes from the namespace of the layer's elements.
@@ -2607,6 +3122,7 @@ mod tests {
             ("python", "L.shape(",  Some("ShapeAttr(type='circle', r='5pt', fill='primary')")),
             ("php",    "L::shape(", Some("new ShapeAttr(type: 'circle', r: '5pt', fill: 'primary')")),
             ("dotnet", "L.Shape(",  Some("new() { Type = \"circle\", R = \"5pt\", Fill = \"primary\" }")),
+            ("java",   "L.shape(",  Some("L.shape(new ShapeAttr().type(\"circle\").r(\"5pt\").fill(\"primary\"))")),
         ] {
             let opts = CodegenOptions { target: target.into(), indent: 4 };
             let out  = codegen(xml, &opts).unwrap();
@@ -2635,6 +3151,7 @@ mod tests {
             ("python", "L.list(",  "L.li(",  "ListAttr(type='number', format='lower-alpha', suffix=')')"),
             ("php",    "L::list(", "L::li(", "new ListAttr(type: 'number', format: 'lower-alpha', suffix: ')')"),
             ("dotnet", "L.List(",  "L.Li(",  "new() { Type = \"number\", Format = \"lower-alpha\", Suffix = \")\" }"),
+            ("java",   "L.list(",  "L.li(",  "new ListAttr().type(\"number\").format(\"lower-alpha\").suffix(\")\")"),
         ] {
             let opts = CodegenOptions { target: target.into(), indent: 4 };
             let out  = codegen(xml, &opts).unwrap();
@@ -2810,6 +3327,7 @@ mod tests {
             ("dotnet", "LineHeight: new() { [\"xs\"] = 1, [\"m\"] = 1.2 }", "LineHeight = \"l\""),
             ("php",    "lineHeight: ['xs' => 1, 'm' => 1.2]",                  "lineHeight: 'l'"),
             ("python", "line_height={'xs': 1, 'm': 1.2}",                      "line_height='l'"),
+            ("java",   ".lineHeight(Map.of(\"xs\", 1.0, \"m\", 1.2))",          ".lineHeight(\"l\")"),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(row), "{target}: the row is not written as {row}\n{out}");
@@ -2836,6 +3354,7 @@ mod tests {
             ("dotnet", "Aliases: new() { [\"caption\"] = \"xs\", [\"sub-title\"] = \"l\" }",    "FontSize = \"caption\""),
             ("php",    "aliases: ['caption' => 'xs', 'sub-title' => 'l']",                      "fontSize: 'caption'"),
             ("python", "aliases={'caption': 'xs', 'sub-title': 'l'}",                           "font_size='caption'"),
+            ("java",   ".aliases(Map.of(\"caption\", \"xs\", \"sub-title\", \"l\"))",            ".fontSize(\"caption\")"),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(aliases), "{target}: the aliases are not written as {aliases}\n{out}");
@@ -2859,6 +3378,7 @@ mod tests {
             ("dotnet", "Height: new() { [\"xs\"] = \"10pt\"",       "Height = \"m\""),
             ("php",    "height: ['xs' => '10pt'",                    "height: 'm'"),
             ("python", "height={'xs': '10pt'",                       "height='m'"),
+            ("java",   ".height(Map.of(\"xs\", \"10pt\"",             "L.column(new ColumnAttr().height(\"m\"), List.of())"),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(row), "{target}: the row is not written as {row}\n{out}");
@@ -3185,6 +3705,188 @@ mod tests {
         assert_eq!(to_snake_case("data-if-not"),  "data_if_not");
     }
 
+    // ── Java tests ────────────────────────────────────────────────────────────
+
+    fn java(xml: &str) -> String {
+        codegen(xml, &CodegenOptions { target: "java".into(), indent: 4 }).unwrap()
+    }
+
+    #[test]
+    fn test_java_minimal_document_is_a_class_with_a_main_method() {
+        let out = java(r#"<lpdf version="1"><document size="a4"><section><layout margin="48pt">
+            <text font-size="12pt">Hello</text>
+        </layout></section></document></lpdf>"#);
+        assert!(out.starts_with("import io.lpdf.*;\nimport java.util.List;\nimport static io.lpdf.L.NoAttr;\n\npublic class Main {\n"), "{out}");
+        assert!(out.contains("    public static void main(String[] args) {\n        var engine = L.engine();\n"), "{out}");
+        assert!(out.contains("        var doc = L.document(new DocumentAttr().size(\"a4\"), List.of(\n            L.section(NoAttr, List.of("), "{out}");
+        assert!(out.contains("L.layout(new LayoutAttr().margin(\"48pt\"), List.of("), "{out}");
+        assert!(out.contains("L.text(new TextAttr().fontSize(\"12pt\"), List.of(\"Hello\"))"), "{out}");
+        assert!(out.ends_with("        byte[] pdf = engine.render(doc);\n    }\n}\n"), "{out}");
+        assert!(!out.contains("import java.util.Map;") && !out.contains("static SectionNode"), "{out}");
+    }
+
+    #[test]
+    fn test_java_a_builder_takes_a_list_even_of_no_children_and_none_after_the_last() {
+        let out = java(r#"<lpdf version="1"><document><section><layout>
+            <column><text>A</text><text>B</text></column><row/><divider/>
+        </layout></section></document></lpdf>"#);
+        assert!(out.contains("L.column(NoAttr, List.of(\n"), "{out}");
+        assert!(out.contains("L.text(NoAttr, List.of(\"A\")),\n") && out.contains("L.text(NoAttr, List.of(\"B\"))\n"), "{out}");
+        assert!(out.contains("L.row(NoAttr, List.of()),"), "{out}");
+        assert!(out.contains("L.divider(NoAttr)\n"), "{out}");
+    }
+
+    #[test]
+    fn test_java_meta_and_output_are_setters_of_the_document() {
+        let out = java(r#"<lpdf version="1"><document size="a4">
+            <meta title="My Doc" author="Alice"/><output encrypt="aes-256" allow="print fill-forms"/>
+            <section><layout><text>x</text></layout></section>
+        </document></lpdf>"#);
+        assert!(out.contains("new DocumentAttr().size(\"a4\").meta(new DocumentMeta().title(\"My Doc\").author(\"Alice\")).output(new DocumentOutput().encrypt(\"aes-256\").allow(\"print fill-forms\"))"), "{out}");
+        assert!(!out.contains("L.meta(") && !out.contains("L.output("), "{out}");
+    }
+
+    #[test]
+    fn test_java_assets_are_a_setter_of_the_document_and_their_src_is_read_from_a_file() {
+        let out = java(r#"<lpdf version="1">
+            <assets><font name="heading" core="Times-Bold"/><font name="body" ref="body-font" src="./fonts/Body.ttf"/><image name="logo" src="./assets/logo.png"/></assets>
+            <document><section><layout><text>x</text></layout></section></document>
+        </lpdf>"#);
+        assert!(out.contains(".assets(new DocumentAssets().fonts(List.of(new FontAttr().name(\"heading\").core(\"Times-Bold\"), new FontAttr().name(\"body\").ref(\"body-font\").src(\"./fonts/Body.ttf\"))).images(List.of(new ImageAttr().name(\"logo\").src(\"./assets/logo.png\"))))"), "{out}");
+        assert!(out.contains("import java.nio.file.Files;\nimport java.nio.file.Path;\n"), "{out}");
+        assert!(out.contains("var engine = L.engine(new EngineOptions().srcFallback(src -> Files.readAllBytes(Path.of(src))));"), "{out}");
+        assert!(!out.contains("loadFont") && !out.contains("loadImage"), "{out}");
+    }
+
+    #[test]
+    fn test_java_tokens_are_maps_and_more_than_ten_entries_are_map_entries() {
+        let out = java(r##"<lpdf version="1">
+            <tokens><text-size xs="7pt" m="11pt"/><colors><color name="primary" value="#1763cf"/></colors></tokens>
+            <document><section><layout><text>x</text></layout></section></document>
+        </lpdf>"##);
+        assert!(out.contains(".tokens(new DocumentTokens().textSize(Map.of(\"xs\", \"7pt\", \"m\", \"11pt\")).colors(Map.of(\"primary\", \"#1763cf\")))"), "{out}");
+        assert!(out.contains("import java.util.Map;\n"), "{out}");
+
+        // Map.of takes ten entries at most.
+        let colors: String = (1..=11).map(|i| format!(r##"<color name="c{i}" value="#00000{}"/>"##, i % 10)).collect();
+        let out = java(&format!(r#"<lpdf version="1"><tokens><colors>{colors}</colors></tokens>
+            <document><section><layout><text>x</text></layout></section></document></lpdf>"#));
+        assert!(out.contains(".colors(Map.ofEntries(Map.entry(\"c1\", \"#000001\"), Map.entry(\"c2\", \"#000002\"), "), "{out}");
+        assert!(out.contains("Map.entry(\"c11\", \"#000001\")))"), "{out}");
+    }
+
+    #[test]
+    fn test_java_data_binding_comment() {
+        let out = java(r#"<lpdf version="1"><document><section><layout>
+            <text data-value="invoice.number"/>
+        </layout></section></document></lpdf>"#);
+        assert!(out.contains("// TODO (Lpdf) data-value: invoice.number"), "{out}");
+        assert!(out.contains("L.text(NoAttr, List.of(\"{invoice.number}\"))"), "{out}");
+    }
+
+    /// A document of `sections` sections, each a layout of `columns` columns of `texts` texts: about 170 bytes of
+    /// Java for each text.
+    fn large_document(sections: usize, columns: usize, texts: usize) -> String {
+        let text: String = (0..texts)
+            .map(|i| format!(r#"<text font-size="m">Paragraph {i}, long enough that a hundred of them make a large document to write.</text>"#))
+            .collect();
+        let section = format!("<section><layout>{}</layout></section>", format!("<column>{text}</column>").repeat(columns));
+        format!(r#"<lpdf version="1"><document size="a4">{}</document></lpdf>"#, section.repeat(sections))
+    }
+
+    /// The text of each method of a generated program, `main` first.
+    fn java_methods(program: &str) -> Vec<&str> {
+        let class = &program[program.find("public class Main {\n").unwrap()..];
+        class.split("\n    }\n").filter(|method| method.contains("() {") || method.contains("main(")).collect()
+    }
+
+    #[test]
+    fn test_java_a_document_too_large_for_one_method_has_a_method_for_each_section() {
+        let xml = large_document(3, 1, 250);
+        let out = java(&xml);
+        assert!(out.contains("        var doc = L.document(new DocumentAttr().size(\"a4\"), List.of(\n            section1(),\n            section2(),\n            section3()\n        ));"), "{out}");
+        for n in 1..=3 {
+            assert!(out.contains(&format!("\n    static SectionNode section{n}() {{\n        return L.section(NoAttr, List.of(\n            L.layout(NoAttr, List.of(\n")), "section {n}: {out}");
+        }
+        assert_eq!(java_methods(&out).len(), 4, "main and a method for each section");
+        // The same calls as in one expression, which a fragment always is.
+        let whole = codegen_fragment(&xml, &CodegenOptions { target: "java".into(), indent: 4 }).unwrap();
+        assert_eq!(out.matches("L.text(").count(), 750);
+        assert_eq!(whole.matches("L.text(").count(), 750);
+        assert!(!whole.contains("section1()"), "a fragment has no class to hold a method");
+    }
+
+    #[test]
+    fn test_java_a_section_too_large_for_one_method_has_its_largest_parts_moved_out() {
+        let out = java(&large_document(1, 4, 250));
+        assert!(out.contains("\n    static ContainerNode column1() {\n        return L.column(NoAttr, List.of(\n"), "{out}");
+        for method in java_methods(&out) {
+            assert!(method.len() <= JAVA_METHOD_SOURCE, "a method of {} bytes", method.len());
+        }
+        assert_eq!(out.matches("L.text(").count(), 1000);
+    }
+
+    #[test]
+    fn test_java_a_method_keeps_the_todo_comment_of_its_element_above_its_code() {
+        let xml = large_document(2, 1, 400).replacen("<section>", r#"<section data-if="show">"#, 1);
+        let out = java(&xml);
+        assert!(out.contains("    static SectionNode section1() {\n        // TODO (Lpdf) data-if: show\n        return L.section(NoAttr, List.of("), "{out}");
+    }
+
+    #[test]
+    fn test_java_a_document_that_fits_in_one_method_is_one_expression() {
+        let out = java(&large_document(3, 1, 150));
+        assert!(!out.contains("section1()") && out.matches("static").count() == 2, "{out}");
+    }
+
+    /// A document whose layout holds `content`.
+    fn document_of(content: &str) -> String {
+        format!(r#"<lpdf version="1"><document><section><layout>{content}</layout></section></document></lpdf>"#)
+    }
+
+    #[test]
+    fn test_java_takes_a_text_as_long_as_a_java_string_holds() {
+        let text = "a".repeat(JAVA_STRING_BYTES);
+        let out = java(&document_of(&format!("<text>{text}</text>")));
+        assert!(out.contains(&format!("List.of(\"{text}\")")));
+    }
+
+    #[test]
+    fn test_java_refuses_a_text_longer_than_a_java_string_holds() {
+        let xml = document_of(&format!("<text>{}</text>", "a".repeat(JAVA_STRING_BYTES + 1)));
+        let error = codegen(&xml, &CodegenOptions { target: "java".into(), indent: 4 }).unwrap_err();
+        assert_eq!(error, "<text> at line 1, col 46: its text is 65535 bytes, more than the 65534 a string holds in Java code");
+        for target in ["js", "dotnet", "php", "python"] {
+            assert!(codegen(&xml, &CodegenOptions { target: target.into(), indent: 4 }).is_ok(), "{target}");
+        }
+    }
+
+    #[test]
+    fn test_java_refuses_an_attribute_value_longer_than_a_java_string_holds() {
+        let d = format!("M 0 0 {}Z", "L 10 10 ".repeat(9000));
+        let xml = format!(r#"<lpdf version="1"><document><section><layer><path d="{d}"/></layer></section></document></lpdf>"#);
+        let error = codegen(&xml, &CodegenOptions { target: "java".into(), indent: 4 }).unwrap_err();
+        assert_eq!(error, "<path> at line 1, col 45: its d attribute is 72007 bytes, more than the 65534 a string holds in Java code");
+    }
+
+    #[test]
+    fn test_java_counts_a_string_in_the_bytes_a_class_file_stores() {
+        assert_eq!(java_string_bytes("aé中"), 1 + 2 + 3);
+        assert_eq!(java_string_bytes("\0"), 2);
+        assert_eq!(java_string_bytes("😀"), 6);
+        // 21,845 characters of three bytes each are 65,535 bytes.
+        let xml = document_of(&format!("<text>{}</text>", "中".repeat(21_845)));
+        let error = codegen(&xml, &CodegenOptions { target: "java".into(), indent: 4 }).unwrap_err();
+        assert!(error.ends_with("its text is 65535 bytes, more than the 65534 a string holds in Java code"), "{error}");
+    }
+
+    #[test]
+    fn test_java_fragment_refuses_a_text_longer_than_a_java_string_holds() {
+        let xml = format!("<text>{}</text>", "a".repeat(JAVA_STRING_BYTES + 1));
+        let error = codegen_fragment(&xml, &CodegenOptions { target: "java".into(), indent: 4 }).unwrap_err();
+        assert!(error.ends_with("its text is 65535 bytes, more than the 65534 a string holds in Java code"), "{error}");
+    }
+
     // ── codegen_fragment ─────────────────────────────────────────────────────
 
     #[test]
@@ -3235,6 +3937,15 @@ mod tests {
     }
 
     #[test]
+    fn test_fragment_java_single_node() {
+        let xml = r#"<text font-size="12pt">Hello</text>"#;
+        let opts = CodegenOptions { target: "java".into(), indent: 4 };
+        let out  = codegen_fragment(xml, &opts).unwrap();
+        assert_eq!(out.trim(), r#"L.text(new TextAttr().fontSize("12pt"), List.of("Hello"))"#);
+        assert!(!out.contains("import") && !out.contains("class"), "{out}");
+    }
+
+    #[test]
     fn test_fragment_nested() {
         let xml = r#"<column><text>A</text><text>B</text></column>"#;
         let opts = CodegenOptions { target: "js".into(), indent: 4 };
@@ -3275,6 +3986,7 @@ mod tests {
             ("php", "L::bookmark(new BookmarkAttr(label: 'Methods', level: 2))", "L::section(new SectionAttr(type: 'toc')"),
             ("python", "L.bookmark(BookmarkAttr(label='Methods', level=2))", "L.section(SectionAttr(type='toc')"),
             ("dotnet", "L.Bookmark(new() { Label = \"Methods\", Level = 2 })", "L.Section(new() { Type = \"toc\" }"),
+            ("java", "L.bookmark(new BookmarkAttr().label(\"Methods\").level(2))", "L.section(new SectionAttr().type(\"toc\")"),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(bookmark), "{target}: {out}");
@@ -3314,6 +4026,11 @@ mod tests {
         let dotnet = codegen(MARKDOWN, &CodegenOptions { target: "dotnet".into(), indent: 4 }).unwrap();
         assert!(dotnet.contains("L.Markdown(new() { Margin = \"54pt\" }, [") && dotnet.contains("LMarkdown.Styles(new() { Src = \"styles.xml\" }, ["), "{dotnet}");
         assert!(dotnet.contains("LMarkdown.H1(new() { Color = \"muted\" })") && dotnet.contains("LMarkdown.Content(NoAttr, ["), "{dotnet}");
+
+        let java = codegen(MARKDOWN, &CodegenOptions { target: "java".into(), indent: 4 }).unwrap();
+        assert!(java.contains("L.markdown(new MarkdownAttr().margin(\"54pt\"), List.of(") && java.contains("LMarkdown.styles(new MarkdownStylesAttr().src(\"styles.xml\"), List.of("), "{java}");
+        assert!(java.contains("LMarkdown.h1(new MarkdownH1Attr().color(\"muted\"))") && java.contains("LMarkdown.code(new MarkdownCodeAttr().font(\"Courier\"))"), "{java}");
+        assert!(java.contains(r##"LMarkdown.content(NoAttr, List.of("# Title\n\nSome `code` and a <b> sign."))"##), "{java}");
     }
 
     #[test]

@@ -433,6 +433,9 @@ pub fn image_format_error(bytes: &[u8]) -> Option<String> {
 ///   - PNG grayscale/RGB 8 or 16-bit (ct 0, 2)  → IDAT passthrough with FlateDecode + PNG predictor
 ///   - PNG RGBA 8 or 16-bit (ct 6)               → decoded, split into RGB XObject + alpha SMask
 ///   - PNG indexed 8-bit (ct 3)                  → palette-expanded to RGB, or RGBA+SMask if tRNS present
+///
+/// Not inlined, for the reason `write_fields` is not.
+#[inline(never)]
 fn embed_image_xobject(pdf: &mut Pdf, id: Ref, smask_id: Option<Ref>, bytes: &[u8]) {
     if bytes.starts_with(b"\xFF\xD8\xFF") {
         // JPEG
@@ -2091,6 +2094,9 @@ fn gradient_function_count(gradient: &Gradient) -> usize {
 
 /// Write a gradient's functions and its shading. The shading is on the unit axis (0, 0) to (1, 0), or the unit
 /// circle, and extends past its ends, so whatever the matrix before `sh` puts over the clip is painted.
+///
+/// Not inlined, for the reason `write_fields` is not.
+#[inline(never)]
 fn write_gradient(pdf: &mut Pdf, gradient: &Gradient, ids: &GradientIds) {
     let components = |color: &str| parse_color(color).components();
     let stops = &gradient.stops;
@@ -3523,272 +3529,353 @@ fn assemble_pdf(
 
     // -- AcroForm and field annotations ----------------------------------------
     if !fields.is_empty() {
-        let helv_font_id = font_id_map.get("Helvetica").map(|f| f.font_dict_id);
+        write_fields(&mut pdf, pages, &page_ids, fonts, &font_id_map, fields, &field_alloc, &radio_parent_alloc);
+    }
 
-        // Write appearance XObjects for each field.
-        for ((page_idx, field), fa) in fields.iter().zip(field_alloc.iter()) {
-            let page_h = pages[*page_idx].height;
-            let w = field.width;
-            let h = field.height;
-            match &field.kind {
-                FieldKind::Text | FieldKind::Dropdown => {
-                    // Normal AP: draw field background and border.
+    // -- Font objects ----------------------------------------------------------
+    write_fonts(&mut pdf, fonts, &font_id_map, sorted_font_names, file)?;
+
+    // -- The files the document carries, dated as the document is --------------
+    attachments::write_objects(&mut pdf, files, &file_ids, date.as_deref());
+
+    // -- A tagged PDF's structure ----------------------------------------------------
+    if let Some(structure) = &structure {
+        write_structure(&mut pdf, marks, structure, &keys, &page_ids, &group_ids, &annot_ids, &rendered_pages);
+    }
+
+    // -- PDF/A, PDF/UA and PDF/X: the XMP packet; PDF/A and PDF/X: the output intent's profile and the file ID ----
+    if let (Some(file), Some(xmp_id)) = (file, xmp_id) {
+        // Not compressed, so that a tool that knows nothing of PDF can still find the packet.
+        let ids = pdfx.map(|_| xmp_ids(pdf.as_bytes()));
+        let xmp = pdfa::xmp_packet(file.standards, meta, &file.date, ids.as_ref(), facturx::invoice(files));
+        pdf.metadata(xmp_id, &xmp);
+    }
+    if let Some(profile_id) = profile_id {
+        pdf.icc_profile(profile_id, pdfa::SRGB_PROFILE)
+           .n(3)
+           .alternate()
+           .device_rgb();
+    }
+    if let (Some((_, press)), Some(ids)) = (pdfx, &press_ids) {
+        let compressed = compress_to_vec_zlib(press.bytes, 6);
+        let mut profile = pdf.icc_profile(ids.press, &compressed);
+        profile.filter(Filter::FlateDecode);
+        profile.n(press.space.components());
+        let alternate = profile.alternate();
+        match press.space {
+            ProfileSpace::Gray => alternate.device_gray(),
+            ProfileSpace::Rgb => alternate.device_rgb(),
+            ProfileSpace::Cmyk => alternate.device_cmyk(),
+        }
+        drop(profile);
+        pdf.icc_profile(ids.srgb, pdfa::SRGB_PROFILE)
+           .n(3)
+           .alternate()
+           .device_rgb();
+    }
+    if pdfa.is_some() || pdfx.is_some() {
+        // From the bytes written so far, so the same document gives the same file.
+        let id = Md5::digest(pdf.as_bytes()).to_vec();
+        pdf.set_file_id((id.clone(), id));
+    }
+
+    Ok(pdf.finish())
+}
+
+/// The form fields: the appearance streams of each field, its widget annotation, and a parent for each group of radio
+/// buttons.
+///
+/// Not inlined, so that `assemble_pdf` stays small enough for the Java SDK, whose runtime makes one JVM method of each
+/// WASM function: a method holds at most 64 KB of bytecode (`scripts/check-function-sizes.mjs`).
+#[allow(clippy::too_many_arguments)]
+#[inline(never)]
+fn write_fields(
+    pdf:                &mut Pdf,
+    pages:              &[RenderPage],
+    page_ids:           &[Ref],
+    fonts:              &HashMap<String, PreparedFont>,
+    font_id_map:        &HashMap<String, FontIds>,
+    fields:             &[(usize, RenderField)],
+    field_alloc:        &[FieldAllocIds],
+    radio_parent_alloc: &[(String, Ref)],
+) {
+    let helv_font_id = font_id_map.get("Helvetica").map(|f| f.font_dict_id);
+
+    // Write appearance XObjects for each field.
+    for ((page_idx, field), fa) in fields.iter().zip(field_alloc.iter()) {
+        let page_h = pages[*page_idx].height;
+        let w = field.width;
+        let h = field.height;
+        match &field.kind {
+            FieldKind::Text | FieldKind::Dropdown => {
+                // Normal AP: draw field background and border.
+                let ap_id = fa.ap_ids[0];
+                let mut ap_content = Content::new();
+                write_field_background_border(&mut ap_content, &field.background, &field.border, w, h);
+                let ap_bytes = ap_content.finish();
+                let mut xobj = pdf.form_xobject(ap_id, &ap_bytes);
+                xobj.bbox(Rect::new(0.0, 0.0, w, h));
+            }
+            FieldKind::Button => {
+                let ap_id = fa.ap_ids[0];
+                let mut ap_content = Content::new();
+                // Button: filled rectangle with label.
+                let bg = field.background.as_deref().unwrap_or("#1763cf");
+                ap_content.save_state();
+                set_fill_color(&mut ap_content, bg);
+                ap_content.rect(0.0, 0.0, w, h);
+                ap_content.fill_nonzero();
+                ap_content.restore_state();
+                if !field.label.is_empty() {
+                    let font = fonts.get("Helvetica").expect("a document with fields has Helvetica");
+                    let font_size = (h * 0.55).max(6.0);
+                    let text_w = font.text_width(&field.label, font_size);
+                    let text_x = (w - text_w) / 2.0;
+                    let text_y = (h - font_size) / 2.0;
+                    let encoded = font.encode_text(&field.label);
+                    ap_content.begin_text();
+                    ap_content.set_fill_rgb(1.0, 1.0, 1.0);
+                    ap_content.set_font(Name(b"Helv"), font_size);
+                    ap_content.set_text_matrix([1.0, 0.0, 0.0, 1.0, text_x, text_y]);
+                    ap_content.show(Str(&encoded));
+                    ap_content.end_text();
+                }
+                let ap_bytes = ap_content.finish();
+                let mut xobj = pdf.form_xobject(ap_id, &ap_bytes);
+                xobj.bbox(Rect::new(0.0, 0.0, w, h));
+                let mut res = xobj.resources();
+                let mut fr = res.fonts();
+                if let Some(helv_id) = helv_font_id {
+                    fr.pair(Name(b"Helv"), helv_id);
+                }
+            }
+            FieldKind::Checkbox => {
+                // /Yes appearance: border + checkmark.
+                {
                     let ap_id = fa.ap_ids[0];
+                    let mut ap_content = Content::new();
+                    write_field_background_border(&mut ap_content, &field.background, &field.border, w, h);
+                    // Draw a simple checkmark path.
+                    let p  = (h * 0.15).max(1.5);
+                    let x0 = p * 2.0;        let y0 = h * 0.45;
+                    let x1 = w * 0.4;        let y1 = p;
+                    let x2 = w - p * 2.0;    let y2 = h - p;
+                    ap_content.save_state();
+                    ap_content.set_stroke_rgb(0.0, 0.0, 0.0);
+                    ap_content.set_line_width(h * 0.1);
+                    ap_content.move_to(x0, y0);
+                    ap_content.line_to(x1, y1);
+                    ap_content.line_to(x2, y2);
+                    ap_content.stroke();
+                    ap_content.restore_state();
+                    let ap_bytes = ap_content.finish();
+                    let mut xobj = pdf.form_xobject(ap_id, &ap_bytes);
+                    xobj.bbox(Rect::new(0.0, 0.0, w, h));
+                }
+                // /Off appearance: border only.
+                {
+                    let ap_id = fa.ap_ids[1];
                     let mut ap_content = Content::new();
                     write_field_background_border(&mut ap_content, &field.background, &field.border, w, h);
                     let ap_bytes = ap_content.finish();
                     let mut xobj = pdf.form_xobject(ap_id, &ap_bytes);
                     xobj.bbox(Rect::new(0.0, 0.0, w, h));
                 }
-                FieldKind::Button => {
+            }
+            FieldKind::Radio => {
+                // /On appearance: filled circle.
+                {
                     let ap_id = fa.ap_ids[0];
+                    let r_outer = (h / 2.0).min(w / 2.0) - 1.0;
+                    let cx = w / 2.0;  let cy = h / 2.0;
                     let mut ap_content = Content::new();
-                    // Button: filled rectangle with label.
-                    let bg = field.background.as_deref().unwrap_or("#1763cf");
-                    ap_content.save_state();
-                    set_fill_color(&mut ap_content, bg);
-                    ap_content.rect(0.0, 0.0, w, h);
-                    ap_content.fill_nonzero();
-                    ap_content.restore_state();
-                    if !field.label.is_empty() {
-                        let font = fonts.get("Helvetica").expect("a document with fields has Helvetica");
-                        let font_size = (h * 0.55).max(6.0);
-                        let text_w = font.text_width(&field.label, font_size);
-                        let text_x = (w - text_w) / 2.0;
-                        let text_y = (h - font_size) / 2.0;
-                        let encoded = font.encode_text(&field.label);
-                        ap_content.begin_text();
-                        ap_content.set_fill_rgb(1.0, 1.0, 1.0);
-                        ap_content.set_font(Name(b"Helv"), font_size);
-                        ap_content.set_text_matrix([1.0, 0.0, 0.0, 1.0, text_x, text_y]);
-                        ap_content.show(Str(&encoded));
-                        ap_content.end_text();
-                    }
+                    write_circle(&mut ap_content, cx, cy, r_outer, false);
+                    let r_inner = r_outer * 0.45;
+                    write_circle(&mut ap_content, cx, cy, r_inner, true);
                     let ap_bytes = ap_content.finish();
                     let mut xobj = pdf.form_xobject(ap_id, &ap_bytes);
                     xobj.bbox(Rect::new(0.0, 0.0, w, h));
-                    let mut res = xobj.resources();
-                    let mut fr = res.fonts();
-                    if let Some(helv_id) = helv_font_id {
-                        fr.pair(Name(b"Helv"), helv_id);
-                    }
                 }
-                FieldKind::Checkbox => {
-                    // /Yes appearance: border + checkmark.
-                    {
-                        let ap_id = fa.ap_ids[0];
-                        let mut ap_content = Content::new();
-                        write_field_background_border(&mut ap_content, &field.background, &field.border, w, h);
-                        // Draw a simple checkmark path.
-                        let p  = (h * 0.15).max(1.5);
-                        let x0 = p * 2.0;        let y0 = h * 0.45;
-                        let x1 = w * 0.4;        let y1 = p;
-                        let x2 = w - p * 2.0;    let y2 = h - p;
-                        ap_content.save_state();
-                        ap_content.set_stroke_rgb(0.0, 0.0, 0.0);
-                        ap_content.set_line_width(h * 0.1);
-                        ap_content.move_to(x0, y0);
-                        ap_content.line_to(x1, y1);
-                        ap_content.line_to(x2, y2);
-                        ap_content.stroke();
-                        ap_content.restore_state();
-                        let ap_bytes = ap_content.finish();
-                        let mut xobj = pdf.form_xobject(ap_id, &ap_bytes);
-                        xobj.bbox(Rect::new(0.0, 0.0, w, h));
-                    }
-                    // /Off appearance: border only.
-                    {
-                        let ap_id = fa.ap_ids[1];
-                        let mut ap_content = Content::new();
-                        write_field_background_border(&mut ap_content, &field.background, &field.border, w, h);
-                        let ap_bytes = ap_content.finish();
-                        let mut xobj = pdf.form_xobject(ap_id, &ap_bytes);
-                        xobj.bbox(Rect::new(0.0, 0.0, w, h));
-                    }
+                // /Off appearance: circle border only.
+                {
+                    let ap_id = fa.ap_ids[1];
+                    let r_outer = (h / 2.0).min(w / 2.0) - 1.0;
+                    let cx = w / 2.0;  let cy = h / 2.0;
+                    let mut ap_content = Content::new();
+                    write_circle(&mut ap_content, cx, cy, r_outer, false);
+                    let ap_bytes = ap_content.finish();
+                    let mut xobj = pdf.form_xobject(ap_id, &ap_bytes);
+                    xobj.bbox(Rect::new(0.0, 0.0, w, h));
                 }
-                FieldKind::Radio => {
-                    // /On appearance: filled circle.
-                    {
-                        let ap_id = fa.ap_ids[0];
-                        let r_outer = (h / 2.0).min(w / 2.0) - 1.0;
-                        let cx = w / 2.0;  let cy = h / 2.0;
-                        let mut ap_content = Content::new();
-                        write_circle(&mut ap_content, cx, cy, r_outer, false);
-                        let r_inner = r_outer * 0.45;
-                        write_circle(&mut ap_content, cx, cy, r_inner, true);
-                        let ap_bytes = ap_content.finish();
-                        let mut xobj = pdf.form_xobject(ap_id, &ap_bytes);
-                        xobj.bbox(Rect::new(0.0, 0.0, w, h));
-                    }
-                    // /Off appearance: circle border only.
-                    {
-                        let ap_id = fa.ap_ids[1];
-                        let r_outer = (h / 2.0).min(w / 2.0) - 1.0;
-                        let cx = w / 2.0;  let cy = h / 2.0;
-                        let mut ap_content = Content::new();
-                        write_circle(&mut ap_content, cx, cy, r_outer, false);
-                        let ap_bytes = ap_content.finish();
-                        let mut xobj = pdf.form_xobject(ap_id, &ap_bytes);
-                        xobj.bbox(Rect::new(0.0, 0.0, w, h));
-                    }
-                    let _ = page_h; // suppress unused warning for radio
-                }
+                let _ = page_h; // suppress unused warning for radio
             }
         }
+    }
 
-        // Write field widget annotations.
-        for ((page_idx, field), fa) in fields.iter().zip(field_alloc.iter()) {
-            let page_h  = pages[*page_idx].height;
-            let pdf_y   = page_h - field.y - field.height;
-            let rect    = Rect::new(field.x, pdf_y, field.x + field.width, pdf_y + field.height);
-            let page_id = page_ids[*page_idx];
+    // Write field widget annotations.
+    for ((page_idx, field), fa) in fields.iter().zip(field_alloc.iter()) {
+        let page_h  = pages[*page_idx].height;
+        let pdf_y   = page_h - field.y - field.height;
+        let rect    = Rect::new(field.x, pdf_y, field.x + field.width, pdf_y + field.height);
+        let page_id = page_ids[*page_idx];
 
-            match &field.kind {
-                FieldKind::Text => {
-                    let mut fw = pdf.form_field(fa.widget_id);
-                    fw.field_type(FieldType::Text);
-                    let mut flags = FieldFlags::empty();
-                    if field.readonly  { flags |= FieldFlags::READ_ONLY; }
-                    if field.required  { flags |= FieldFlags::REQUIRED; }
-                    fw.field_flags(flags);
-                    if !field.name.is_empty() { fw.partial_name(TextStr(&field.name)); }
-                    if !field.value.is_empty() { fw.text_value(TextStr(&field.value)); }
-                    if let Some(ml) = field.max_len { fw.text_max_len(ml as i32); }
-                    fw.vartext_default_appearance(Str(b"/Helv 0 Tf 0 g"));
-                    let mut aw = fw.into_annotation();
-                    aw.rect(rect)
-                      .page(page_id)
-                      .highlight(HighlightEffect::None)
-                      .border(0.0, 0.0, 0.0, None);
-                    aw.appearance()
-                      .normal()
-                      .stream(fa.ap_ids[0]);
+        match &field.kind {
+            FieldKind::Text => {
+                let mut fw = pdf.form_field(fa.widget_id);
+                fw.field_type(FieldType::Text);
+                let mut flags = FieldFlags::empty();
+                if field.readonly  { flags |= FieldFlags::READ_ONLY; }
+                if field.required  { flags |= FieldFlags::REQUIRED; }
+                fw.field_flags(flags);
+                if !field.name.is_empty() { fw.partial_name(TextStr(&field.name)); }
+                if !field.value.is_empty() { fw.text_value(TextStr(&field.value)); }
+                if let Some(ml) = field.max_len { fw.text_max_len(ml as i32); }
+                fw.vartext_default_appearance(Str(b"/Helv 0 Tf 0 g"));
+                let mut aw = fw.into_annotation();
+                aw.rect(rect)
+                  .page(page_id)
+                  .highlight(HighlightEffect::None)
+                  .border(0.0, 0.0, 0.0, None);
+                aw.appearance()
+                  .normal()
+                  .stream(fa.ap_ids[0]);
+            }
+            FieldKind::Dropdown => {
+                let mut fw = pdf.form_field(fa.widget_id);
+                fw.field_type(FieldType::Choice);
+                let mut flags = FieldFlags::COMBO;
+                if field.readonly { flags |= FieldFlags::READ_ONLY; }
+                if field.required { flags |= FieldFlags::REQUIRED; }
+                fw.field_flags(flags);
+                if !field.name.is_empty() { fw.partial_name(TextStr(&field.name)); }
+                if !field.value.is_empty() { fw.choice_value(Some(TextStr(&field.value))); }
+                if !field.options.is_empty() {
+                    fw.choice_options().options(field.options.iter().map(|o| TextStr(o.as_str())));
                 }
-                FieldKind::Dropdown => {
-                    let mut fw = pdf.form_field(fa.widget_id);
-                    fw.field_type(FieldType::Choice);
-                    let mut flags = FieldFlags::COMBO;
-                    if field.readonly { flags |= FieldFlags::READ_ONLY; }
-                    if field.required { flags |= FieldFlags::REQUIRED; }
-                    fw.field_flags(flags);
-                    if !field.name.is_empty() { fw.partial_name(TextStr(&field.name)); }
-                    if !field.value.is_empty() { fw.choice_value(Some(TextStr(&field.value))); }
-                    if !field.options.is_empty() {
-                        fw.choice_options().options(field.options.iter().map(|o| TextStr(o.as_str())));
-                    }
-                    fw.vartext_default_appearance(Str(b"/Helv 0 Tf 0 g"));
-                    let mut aw = fw.into_annotation();
-                    aw.rect(rect)
-                      .page(page_id)
-                      .highlight(HighlightEffect::None)
-                      .border(0.0, 0.0, 0.0, None);
-                    aw.appearance()
-                      .normal()
-                      .stream(fa.ap_ids[0]);
+                fw.vartext_default_appearance(Str(b"/Helv 0 Tf 0 g"));
+                let mut aw = fw.into_annotation();
+                aw.rect(rect)
+                  .page(page_id)
+                  .highlight(HighlightEffect::None)
+                  .border(0.0, 0.0, 0.0, None);
+                aw.appearance()
+                  .normal()
+                  .stream(fa.ap_ids[0]);
+            }
+            FieldKind::Checkbox => {
+                let checked_state = if field.checked {
+                    CheckBoxState::Yes
+                } else {
+                    CheckBoxState::Off
+                };
+                let mut fw = pdf.form_field(fa.widget_id);
+                fw.field_type(FieldType::Button);
+                let mut flags = FieldFlags::empty();
+                if field.readonly { flags |= FieldFlags::READ_ONLY; }
+                if field.required { flags |= FieldFlags::REQUIRED; }
+                fw.field_flags(flags);
+                if !field.name.is_empty() { fw.partial_name(TextStr(&field.name)); }
+                fw.checkbox_value(checked_state);
+                let mut aw = fw.into_annotation();
+                aw.rect(rect)
+                  .page(page_id)
+                  .highlight(HighlightEffect::None)
+                  .border(0.0, 0.0, 0.0, None);
+                aw.appearance_state(Name(if field.checked { b"Yes" } else { b"Off" }));
+                {
+                    let mut ap = aw.appearance();
+                    ap.normal().streams().pairs([
+                        (Name(b"Yes"), fa.ap_ids[0]),
+                        (Name(b"Off"), fa.ap_ids[1]),
+                    ]);
                 }
-                FieldKind::Checkbox => {
-                    let checked_state = if field.checked {
-                        CheckBoxState::Yes
-                    } else {
-                        CheckBoxState::Off
-                    };
+            }
+            FieldKind::Radio => {
+                // Radio children: find the parent's ref
+                let group = field.group.as_deref().unwrap_or("");
+                let parent_id_opt = radio_parent_alloc.iter()
+                    .find(|(g, _)| g == group)
+                    .map(|(_, id)| *id);
+                if let Some(parent_id) = parent_id_opt {
+                    let on_name_bytes = field.value.as_bytes().to_vec();
                     let mut fw = pdf.form_field(fa.widget_id);
-                    fw.field_type(FieldType::Button);
-                    let mut flags = FieldFlags::empty();
-                    if field.readonly { flags |= FieldFlags::READ_ONLY; }
-                    if field.required { flags |= FieldFlags::REQUIRED; }
-                    fw.field_flags(flags);
-                    if !field.name.is_empty() { fw.partial_name(TextStr(&field.name)); }
-                    fw.checkbox_value(checked_state);
+                    fw.parent(parent_id);
                     let mut aw = fw.into_annotation();
                     aw.rect(rect)
                       .page(page_id)
                       .highlight(HighlightEffect::None)
                       .border(0.0, 0.0, 0.0, None);
-                    aw.appearance_state(Name(if field.checked { b"Yes" } else { b"Off" }));
+                    aw.appearance_state(Name(if field.checked { &on_name_bytes } else { b"Off" }));
                     {
                         let mut ap = aw.appearance();
                         ap.normal().streams().pairs([
-                            (Name(b"Yes"), fa.ap_ids[0]),
+                            (Name(&on_name_bytes), fa.ap_ids[0]),
                             (Name(b"Off"), fa.ap_ids[1]),
                         ]);
                     }
                 }
-                FieldKind::Radio => {
-                    // Radio children: find the parent's ref
-                    let group = field.group.as_deref().unwrap_or("");
-                    let parent_id_opt = radio_parent_alloc.iter()
-                        .find(|(g, _)| g == group)
-                        .map(|(_, id)| *id);
-                    if let Some(parent_id) = parent_id_opt {
-                        let on_name_bytes = field.value.as_bytes().to_vec();
-                        let mut fw = pdf.form_field(fa.widget_id);
-                        fw.parent(parent_id);
-                        let mut aw = fw.into_annotation();
-                        aw.rect(rect)
-                          .page(page_id)
-                          .highlight(HighlightEffect::None)
-                          .border(0.0, 0.0, 0.0, None);
-                        aw.appearance_state(Name(if field.checked { &on_name_bytes } else { b"Off" }));
-                        {
-                            let mut ap = aw.appearance();
-                            ap.normal().streams().pairs([
-                                (Name(&on_name_bytes), fa.ap_ids[0]),
-                                (Name(b"Off"), fa.ap_ids[1]),
-                            ]);
-                        }
-                    }
-                }
-                FieldKind::Button => {
-                    let mut fw = pdf.form_field(fa.widget_id);
-                    fw.field_type(FieldType::Button);
-                    fw.field_flags(FieldFlags::PUSHBUTTON);
-                    if !field.name.is_empty() { fw.partial_name(TextStr(&field.name)); }
-                    let mut aw = fw.into_annotation();
-                    aw.rect(rect)
-                      .page(page_id)
-                      .highlight(HighlightEffect::None)
-                      .border(0.0, 0.0, 0.0, None);
-                    aw.appearance()
-                      .normal()
-                      .stream(fa.ap_ids[0]);
-                    // Submit action: if action_url is set, add a submit-form action.
-                    if let Some(url) = &field.action_url {
-                        let url_bytes = url.as_bytes().to_vec();
-                        aw.action()
-                          .action_type(ActionType::SubmitForm)
-                          .uri(Str(&url_bytes));
-                    }
+            }
+            FieldKind::Button => {
+                let mut fw = pdf.form_field(fa.widget_id);
+                fw.field_type(FieldType::Button);
+                fw.field_flags(FieldFlags::PUSHBUTTON);
+                if !field.name.is_empty() { fw.partial_name(TextStr(&field.name)); }
+                let mut aw = fw.into_annotation();
+                aw.rect(rect)
+                  .page(page_id)
+                  .highlight(HighlightEffect::None)
+                  .border(0.0, 0.0, 0.0, None);
+                aw.appearance()
+                  .normal()
+                  .stream(fa.ap_ids[0]);
+                // Submit action: if action_url is set, add a submit-form action.
+                if let Some(url) = &field.action_url {
+                    let url_bytes = url.as_bytes().to_vec();
+                    aw.action()
+                      .action_type(ActionType::SubmitForm)
+                      .uri(Str(&url_bytes));
                 }
             }
-        }
-
-        // Write radio parent field dicts (one per group).
-        for (group_name, parent_id) in &radio_parent_alloc {
-            // Collect child widget IDs for this group.
-            let child_ids: Vec<Ref> = fields.iter().zip(field_alloc.iter())
-                .filter(|((_, f), _)| f.kind == FieldKind::Radio && f.group.as_deref() == Some(group_name.as_str()))
-                .map(|(_, fa)| fa.widget_id)
-                .collect();
-
-            // Determine the selected value: whichever radio child has checked=true.
-            let selected_val: String = fields.iter()
-                .find(|(_, f)| f.kind == FieldKind::Radio && f.group.as_deref() == Some(group_name.as_str()) && f.checked)
-                .map(|(_, f)| f.value.clone())
-                .unwrap_or_default();
-
-            let mut fw = pdf.form_field(*parent_id);
-            fw.field_type(FieldType::Button);
-            fw.field_flags(FieldFlags::RADIO);
-            fw.partial_name(TextStr(group_name.as_str()));
-            if !selected_val.is_empty() {
-                fw.radio_value(Name(selected_val.as_bytes()));
-            }
-            fw.children(child_ids.iter().copied());
         }
     }
 
-    // -- Font objects ----------------------------------------------------------
+    // Write radio parent field dicts (one per group).
+    for (group_name, parent_id) in radio_parent_alloc {
+        // Collect child widget IDs for this group.
+        let child_ids: Vec<Ref> = fields.iter().zip(field_alloc.iter())
+            .filter(|((_, f), _)| f.kind == FieldKind::Radio && f.group.as_deref() == Some(group_name.as_str()))
+            .map(|(_, fa)| fa.widget_id)
+            .collect();
+
+        // Determine the selected value: whichever radio child has checked=true.
+        let selected_val: String = fields.iter()
+            .find(|(_, f)| f.kind == FieldKind::Radio && f.group.as_deref() == Some(group_name.as_str()) && f.checked)
+            .map(|(_, f)| f.value.clone())
+            .unwrap_or_default();
+
+        let mut fw = pdf.form_field(*parent_id);
+        fw.field_type(FieldType::Button);
+        fw.field_flags(FieldFlags::RADIO);
+        fw.partial_name(TextStr(group_name.as_str()));
+        if !selected_val.is_empty() {
+            fw.radio_value(Name(selected_val.as_bytes()));
+        }
+        fw.children(child_ids.iter().copied());
+    }
+}
+
+/// The objects of each font: a Type 1 dictionary for a built-in font, and for an embedded one its subset, descriptor,
+/// CID font, ToUnicode CMap and Type 0 font.
+///
+/// Not inlined, for the reason `write_fields` is not.
+#[inline(never)]
+fn write_fonts(
+    pdf:               &mut Pdf,
+    fonts:             &HashMap<String, PreparedFont>,
+    font_id_map:       &HashMap<String, FontIds>,
+    sorted_font_names: &[String],
+    file:              Option<&StandardFile>,
+) -> Result<(), String> {
     for name in sorted_font_names {
         let font = &fonts[name];
         let fids = &font_id_map[name];
@@ -3924,52 +4011,7 @@ fn assemble_pdf(
             }
         }
     }
-
-    // -- The files the document carries, dated as the document is --------------
-    attachments::write_objects(&mut pdf, files, &file_ids, date.as_deref());
-
-    // -- A tagged PDF's structure ----------------------------------------------------
-    if let Some(structure) = &structure {
-        write_structure(&mut pdf, marks, structure, &keys, &page_ids, &group_ids, &annot_ids, &rendered_pages);
-    }
-
-    // -- PDF/A, PDF/UA and PDF/X: the XMP packet; PDF/A and PDF/X: the output intent's profile and the file ID ----
-    if let (Some(file), Some(xmp_id)) = (file, xmp_id) {
-        // Not compressed, so that a tool that knows nothing of PDF can still find the packet.
-        let ids = pdfx.map(|_| xmp_ids(pdf.as_bytes()));
-        let xmp = pdfa::xmp_packet(file.standards, meta, &file.date, ids.as_ref(), facturx::invoice(files));
-        pdf.metadata(xmp_id, &xmp);
-    }
-    if let Some(profile_id) = profile_id {
-        pdf.icc_profile(profile_id, pdfa::SRGB_PROFILE)
-           .n(3)
-           .alternate()
-           .device_rgb();
-    }
-    if let (Some((_, press)), Some(ids)) = (pdfx, &press_ids) {
-        let compressed = compress_to_vec_zlib(press.bytes, 6);
-        let mut profile = pdf.icc_profile(ids.press, &compressed);
-        profile.filter(Filter::FlateDecode);
-        profile.n(press.space.components());
-        let alternate = profile.alternate();
-        match press.space {
-            ProfileSpace::Gray => alternate.device_gray(),
-            ProfileSpace::Rgb => alternate.device_rgb(),
-            ProfileSpace::Cmyk => alternate.device_cmyk(),
-        }
-        drop(profile);
-        pdf.icc_profile(ids.srgb, pdfa::SRGB_PROFILE)
-           .n(3)
-           .alternate()
-           .device_rgb();
-    }
-    if pdfa.is_some() || pdfx.is_some() {
-        // From the bytes written so far, so the same document gives the same file.
-        let id = Md5::digest(pdf.as_bytes()).to_vec();
-        pdf.set_file_id((id.clone(), id));
-    }
-
-    Ok(pdf.finish())
+    Ok(())
 }
 
 /// The objects of a PDF/X file's colour: the press profile of its output intent, and the sRGB profile it maps RGB to.
@@ -4560,7 +4602,10 @@ fn note_id(n: usize) -> String {
 /// Write the structure of a tagged PDF: the root with its parent tree and the ids of its notes, and each element,
 /// with what it holds in reading order. A link annotation that was dropped (`drop_dangling_links`) is left out of its
 /// element.
+///
+/// Not inlined, for the reason `write_fields` is not.
 #[allow(clippy::too_many_arguments)]
+#[inline(never)]
 fn write_structure(
     pdf:            &mut Pdf,
     marks:          &Marks,
@@ -4677,6 +4722,9 @@ fn drop_dangling_links(rendered_pages: &mut [RenderedPage], anchors: &[PlacedAnc
 /// Write the `/Dests` dictionary, a named destination per anchor, and the outline of the anchors that are not
 /// `ref-only`. The outline nests them by level: an anchor's parent is the closest anchor before it with a lower
 /// level.
+///
+/// Not inlined, for the reason `write_fields` is not.
+#[inline(never)]
 fn write_outline(pdf: &mut Pdf, ids: &OutlineIds, anchors: &[PlacedAnchor], page_ids: &[Ref], pages: &[RenderPage]) {
     {
         let mut dests = pdf.destinations(ids.dests_id);

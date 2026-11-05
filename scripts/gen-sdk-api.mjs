@@ -1,29 +1,30 @@
-// Writes the API that follows from lpdf.xsd into the four SDKs: the attribute classes, and the constants for
+// Writes the API that follows from lpdf.xsd into the five SDKs: the attribute classes, and the constants for
 // the schema's enumerations. Every SDK gets the same classes and constants with the schema's names,
-// differing only in the case rule of its language: font-size is fontSize in Node and PHP, font_size in
+// differing only in the case rule of its language: font-size is fontSize in Node, PHP and Java, font_size in
 // Python and FontSize in .NET.
 //
 // Each attribute has the type the schema gives it: a boolean is `boolean`, `bool` or `bool`, a whole number `number`,
 // `int` or `int`, a number `number`, `float` or `double`, and the rest a string. `line-height`, a name or a factor,
-// is `string | number` in TypeScript, `str | float` in Python, `string|float` in PHP and `LineHeight` in C#, a struct
-// that converts from either. The gradients of the tokens are generated from `<gradient>` and `<stop>` too, and the
-// rulings from `<ruling>` and `<lines>`.
+// is `string | number` in TypeScript, `str | float` in Python, `string|float` in PHP, `LineHeight` in C#, a struct
+// that converts from either, and two setters in Java, one for each. The gradients of the tokens are generated from
+// `<gradient>` and `<stop>` too, and the rulings from `<ruling>` and `<lines>`.
 //
 // A schema attribute marked use="required" is required in every SDK, by each language's own means: a
-// required property in TypeScript, a required `init` property in C#, a field without a default in Python
-// and a constructor parameter without a default in PHP. Data-binding attributes (data-*) are for XML
+// required property in TypeScript, a required `init` property in C#, a field without a default in Python,
+// a constructor parameter without a default in PHP, and in Java, whose classes have fluent setters, a check
+// when the builder that takes the attributes is called. Data-binding attributes (data-*) are for XML
 // templates and are left out.
 //
 // Python's fields are keyword-only: they follow the schema's order, so a new attribute in the middle of an
 // element would move the positional arguments after it.
 //
 // The constants are strings, so a value goes straight into an attribute: type: FieldType.Text in Node,
-// FieldAttr(type=FieldType.TEXT) in Python.
+// FieldAttr(type=FieldType.TEXT) in Python, new FieldAttr().type(FieldType.TEXT) in Java.
 //
 // It also writes the core's table of the attributes of every element and their types, src/core/src/schema_attrs.rs,
 // which the engine checks a document against on both of its paths, XML and the kit tree.
 //
-// Usage: node scripts/gen-sdk-api.mjs                      write the core's table and the files of the four SDKs under repos/
+// Usage: node scripts/gen-sdk-api.mjs                      write the core's table and the files of the five SDKs under repos/
 //        node scripts/gen-sdk-api.mjs --check              list the files that differ, exit 1 if any do
 //        node scripts/gen-sdk-api.mjs --check --sdk node=.  only the SDK in the given folder (an SDK repository's CI)
 //        node scripts/gen-sdk-api.mjs --check --core       only the core's table (the core's CI, which has no SDKs)
@@ -47,6 +48,8 @@ const SDK = {
     node: path.join(repositories.node ?? 'repos/lpdf-js', 'src'),
     python: path.join(repositories.python ?? 'repos/lpdf-python', 'src/lpdf'),
     php: path.join(repositories.php ?? 'repos/lpdf-php', 'src'),
+    // One package, io.lpdf, for the whole API, so that `import io.lpdf.*;` brings every class a document names.
+    java: path.join(repositories.java ?? 'repos/lpdf-java', 'src/main/java/io/lpdf'),
 };
 
 // The rules a `<markdown-styles>` holds, each an element of its own in the schema.
@@ -124,6 +127,8 @@ const TYPES = {
     python: { boolean: 'bool', integer: 'int', decimal: 'float', 'name-or-number': 'str | float', string: 'str' },
     php: { boolean: 'bool', integer: 'int', decimal: 'float', 'name-or-number': 'string|float', string: 'string' },
     dotnet: { boolean: 'bool', integer: 'int', decimal: 'double', 'name-or-number': 'LineHeight', string: 'string' },
+    // A name or a number has a setter for each, which javaSetters makes of the two types.
+    java: { boolean: 'boolean', integer: 'int', decimal: 'double', 'name-or-number': 'String|double', string: 'String' },
 };
 
 function typeOf(language, attribute) {
@@ -195,6 +200,47 @@ function nodeInterface(spec, element) {
     }
     lines.push('}', '');
     return lines.join('\n');
+}
+
+// ── Java ──────────────────────────────────────────────────────────────────────
+
+// A class of attributes has a fluent setter for each, which returns the class, and its constructor names the element
+// and the attributes it needs, which `Attributes` checks when a builder takes them: `new TableAttr().cols("1fr auto")`.
+
+function javaText(text) {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/@/g, '&#64;')
+        .replace(/\*\//g, '*&#47;').replace(/`([^`]+)`/g, '<code>$1</code>');
+}
+
+/** A Javadoc comment of `text` at `indent`: one line when it fits in 120 columns, else wrapped. */
+function javadoc(text, indent) {
+    const one = `${indent}/** ${javaText(text)} */`;
+    return one.length <= 120 ? [one] : [`${indent}/**`, ...wrap(javaText(text), 120, `${indent} * `), `${indent} */`];
+}
+
+const JAVA_HEADER = [...HEADER.map((h) => `// ${h}`), 'package io.lpdf;', ''];
+
+/** The setters of an attribute: one, or one for each type of a name or a number. */
+function javaSetters(cls, a) {
+    const name = camel(a.name);
+    const doc = a.doc ? javadoc(a.doc, '    ') : [];
+    return typeOf('java', a).split('|').flatMap((type) => [
+        '', ...doc, `    public ${cls} ${name}(${type} ${name}) {`, `        set("${a.name}", ${name});`, '        return this;', '    }',
+    ]);
+}
+
+/** A class of attributes named `cls`, of the element `el`, with `extra` lines after the setters of `attributes`. */
+function javaClass(cls, el, doc, attributes, extra = [], required = attributes.filter((a) => a.required).map((a) => a.name)) {
+    const lines = [...JAVA_HEADER, ...javadoc(doc, ''), `public final class ${cls} extends Attributes {`,
+        '    /** Attributes with none set. */', `    public ${cls}() {`,
+        `        super(${[el, ...required].map((n) => `"${n}"`).join(', ')});`, '    }'];
+    for (const a of attributes) lines.push(...javaSetters(cls, a));
+    lines.push(...extra, '}', '');
+    return { file: path.join(SDK.java, `${cls}.java`), text: lines.join('\n') };
+}
+
+function java(spec, element) {
+    return javaClass(spec.cls, spec.el, summary(spec, element), ordered(element));
 }
 
 // ── Gradients ─────────────────────────────────────────────────────────────────
@@ -284,6 +330,13 @@ function gradientFiles() {
     pyGradient.push(...wrap(STOPS_DOC, 92, '        # '), '        "stops": "list[GradientStop]",', '    },', '    total=False,', ')', '');
     files.push({ file: path.join(SDK.python, 'kit', 'gradient.py'), text: pyGradient.join('\n') });
 
+    // Java: classes of attributes, the stops a list of their own.
+    files.push(javaClass('Gradient', 'gradient', doc, attributes, [
+        '', ...javadoc(STOPS_DOC, '    '), '    public Gradient stops(java.util.List<GradientStop> stops) {',
+        '        set("stops", stops == null ? null : java.util.List.copyOf(stops));', '        return this;', '    }',
+    ]));
+    files.push(javaClass('GradientStop', 'stop', stopDoc, stopAttributes));
+
     // Node: interfaces in attrs.ts. The type of a gradient lists its values, as the hand-written one did.
     const kinds = schema.simpleTypeValues('GradientType').map((v) => `'${v}'`).join(' | ');
     const node = ['/**', ...wrap(stopDoc, 100, ' * '), ' */', 'export interface GradientStop {'];
@@ -341,6 +394,13 @@ function rulingFiles() {
     for (const a of attributes) pyRuling.push(...wrap(a.doc, 96, '    # '), `    ${snake(a.name)}: ${typeOf('python', a)}`);
     pyRuling.push(...wrap(LINES_DOC, 96, '    # '), '    lines: Required[list[RulingLines]]', '');
     files.push({ file: path.join(SDK.python, 'kit', 'ruling.py'), text: pyRuling.join('\n') });
+
+    // Java: classes of attributes, the lines a list of their own, which a ruling needs.
+    files.push(javaClass('Ruling', 'ruling', doc, attributes, [
+        '', ...javadoc(LINES_DOC, '    '), '    public Ruling lines(java.util.List<RulingLines> lines) {',
+        '        set("lines", lines == null ? null : java.util.List.copyOf(lines));', '        return this;', '    }',
+    ], [...attributes.filter((a) => a.required).map((a) => a.name), 'lines']));
+    files.push(javaClass('RulingLines', 'lines', linesDoc, linesAttributes));
 
     // Node: interfaces in attrs.ts. The values of `origin` and `ocg` are listed, as a gradient's `type` is.
     const values = (type) => schema.simpleTypeValues(type).map((v) => `'${v}'`).join(' | ');
@@ -413,6 +473,12 @@ function constantsFor(spec) {
         ...values.map((v) => `    ${upperSnake(v)} = "${v}"`), '',
     ];
 
+    // Java's constants are in its own case, as Python's are.
+    const javaLines = [
+        ...JAVA_HEADER, ...javadoc(spec.doc, ''), `public final class ${spec.name} {`, `    private ${spec.name}() {`, '    }', '',
+        ...values.map((v) => `    public static final String ${upperSnake(v)} = "${v}";`), '}', '',
+    ];
+
     const nodeLines = [
         `/** ${spec.doc} */`, `export const ${spec.name} = {`, ...values.map((v) => `  ${pascal(v)}: '${v}',`), '} as const;', '',
         `export type ${spec.name} = (typeof ${spec.name})[keyof typeof ${spec.name}];`, '',
@@ -423,6 +489,7 @@ function constantsFor(spec) {
             { file: path.join(SDK.dotnet, area.folder, `${spec.name}.cs`), text: dotnetLines.join('\n') },
             { file: path.join(SDK.php, area.folder, `${spec.name}.php`), text: phpLines.join('\n') },
             { file: path.join(SDK.python, spec.area, `${spec.file}.py`), text: pythonLines.join('\n') },
+            { file: path.join(SDK.java, `${spec.name}.java`), text: javaLines.join('\n') },
         ],
         node: nodeLines.join('\n'),
     };
@@ -506,7 +573,7 @@ const generated = [];
 const nodeInterfaces = [];
 for (const spec of CLASSES) {
     const element = schema.element(spec.el, spec.where);
-    generated.push(dotnet(spec, element), php(spec, element), python(spec, element));
+    generated.push(dotnet(spec, element), php(spec, element), python(spec, element), java(spec, element));
     nodeInterfaces.push(nodeInterface(spec, element));
 }
 const nodeConstants = [];
@@ -529,7 +596,7 @@ generated.push({
 });
 
 // Only the SDKs asked for: the files of the others are not there to compare with. The core's table goes with all
-// four, or alone.
+// five, or alone.
 const inSelected = (file) => selected.some((language) => file.startsWith(SDK[language] + path.sep));
 const withCore = coreOnly || !process.argv.some((a) => a === '--sdk' || a.startsWith('--sdk='));
 const outputs = [...(withCore ? [coreTable()] : []), ...generated.filter(({ file }) => inSelected(file))];

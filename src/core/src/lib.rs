@@ -652,7 +652,7 @@ pub fn kit_to_xml(json: &str) -> Result<String, JsValue> {
 /// Generate SDK source code from an Lpdf XML string.
 ///
 /// `options_json` is a JSON object with:
-/// - `target`: `"js"` (required)
+/// - `target`: `"js"`, `"dotnet"`, `"php"`, `"python"` or `"java"` (required)
 /// - `indent`: `2` or `4` (optional, default `4`)
 ///
 /// Returns the generated source code as a string.
@@ -681,7 +681,7 @@ pub fn codegen_wasm(xml: &str, options_json: &str) -> Result<String, JsValue> {
 /// in multiple target languages.
 ///
 /// `options_json` accepts the same shape as `codegen_wasm`:
-/// - `target`: `"js"`, `"dotnet"`, `"php"`, or `"python"` (required)
+/// - `target`: `"js"`, `"dotnet"`, `"php"`, `"python"` or `"java"` (required)
 /// - `indent`: `2` or `4` (optional, default `4`)
 #[wasm_bindgen]
 pub fn codegen_fragment_wasm(xml: &str, options_json: &str) -> Result<String, JsValue> {

@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::process;
 
 fn usage() -> ! {
-    eprintln!("Usage: lpdf-codegen --input <file.xml> --target <js> [--output <out>] [--indent 2|4]");
+    eprintln!("Usage: lpdf-codegen --input <file.xml> --target <js|dotnet|php|python|java> [--output <out>] [--indent 2|4]");
     process::exit(1);
 }
 

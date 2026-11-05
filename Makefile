@@ -13,11 +13,11 @@ PAGES_DIR     ?= repos/lpdf-pages
 PORTAL_UI_DIR ?= ../codesense/portal/ui
 
 .PHONY: build-wasm build-wasi build-cli test-wasm test-wasi test-cli \
-        build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python \
+        build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python build-sdk-java \
         build-vscode package-vscode install-vscode \
-        test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python \
-        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-facturx check-ocg check-codegen-dotnet \
-        clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-all \
+        test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python test-sdk-java \
+        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-facturx check-ocg check-codegen-dotnet check-function-sizes \
+        clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-adapter-java clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python \
         clone-adapters sync-license check-license \
@@ -161,6 +161,17 @@ check-ocg:
 	LPDF_OCG_OUT="$(CURDIR)/target/ocg-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_ocg_samples_for_the_external_check
 	node scripts/check-ocg.mjs target/ocg-samples target/pdfjs
 
+# check-function-sizes builds the WASI engine and fails when one of its functions is over 40 KB: the Java SDK compiles
+# each function to one JVM method, which holds at most 64 KB of bytecode, and its bytecode comes to as much as 1.6 times
+# the function's size in the WASM (`scripts/check-function-sizes.mjs`). It reads the WASM alone; needs Node.
+check-function-sizes: build-wasi
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking the size of the engine's functions..."
+	@echo ""
+	node --test scripts/check-function-sizes.test.mjs
+	node scripts/check-function-sizes.mjs dist/wasi/lpdf.wasm
+
 # check-codegen-dotnet compiles the C# the codegen writes for every fixture against the .NET SDK in repos/lpdf-dotnet,
 # with the engine built from this checkout (`scripts/check-codegen-dotnet.mjs`). Needs the .NET 8 SDK or later.
 check-codegen-dotnet: build-cli build-sdk-dotnet
@@ -253,6 +264,23 @@ test-sdk-dotnet: build-sdk-dotnet
 # over the image's copy instead.
 PHP_WASM_MOUNT = -v "$(CURDIR)/dist/wasi/lpdf.wasm://app/resources/lpdf-wasi.wasm"
 
+# Endive's Maven plugin compiles the engine in wasm/lpdf.wasm to JVM classes as the jar is built. Needs a JDK 17 or
+# later and Maven.
+build-sdk-java: build-wasi
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Building Java adapter..."
+	@echo ""
+	mkdir -p repos/lpdf-java/wasm && cp dist/wasi/lpdf.wasm repos/lpdf-java/wasm/lpdf.wasm
+	cd repos/lpdf-java && mvn -B -q package -DskipTests
+
+test-sdk-java: build-sdk-java
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Testing Java adapter..."
+	@echo ""
+	cd repos/lpdf-java && mvn -B test
+
 build-sdk-php: build-wasi
 	@echo ""
 	@echo "-------------------------------"
@@ -294,9 +322,9 @@ test-sdk-python: build-sdk-python
 		-v "$(CURDIR)/repos/lpdf-python/resources://app/resources" \
 		-w //app lpdf-python python -m pytest tests -v
 
-build-all: clean-all build-wasm build-wasi build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python build-vscode build-pages
+build-all: clean-all build-wasm build-wasi build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python build-sdk-java build-vscode build-pages
 
-# The attribute classes and constants of the four SDKs follow from schema/lpdf.xsd. gen-sdk-api writes them;
+# The attribute classes and constants of the five SDKs follow from schema/lpdf.xsd. gen-sdk-api writes them;
 # check-sdk-api fails if a generated file differs from what the schema gives, or if any SDK class, written by
 # hand or generated, has other attributes than the schema's element.
 gen-sdk-api:
@@ -314,7 +342,7 @@ check-sdk-api:
 	node scripts/gen-sdk-api.mjs --check
 	node scripts/check-sdk-parity.mjs
 
-test-all: check-sdk-api test-wasm test-wasi test-cli test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python
+test-all: check-sdk-api test-wasm test-wasi test-cli test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python test-sdk-java
 
 example-all: example-node example-dotnet example-php example-python
 
@@ -327,6 +355,7 @@ clone-adapters:
 	git clone https://github.com/lpdfio/lpdf-dotnet repos/lpdf-dotnet
 	git clone https://github.com/lpdfio/lpdf-python repos/lpdf-python
 	git clone https://github.com/lpdfio/lpdf-php    repos/lpdf-php
+	git clone https://github.com/lpdfio/lpdf-java   repos/lpdf-java
 	git clone https://github.com/lpdfio/lpdf-vscode repos/lpdf-vscode
 
 clean-wasm:
@@ -373,7 +402,14 @@ clean-adapter-python:
 	@echo ""
 	docker rmi lpdf-python || true
 
-clean-all: clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python
+clean-adapter-java:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Cleaning Java adapter..."
+	@echo ""
+	cd repos/lpdf-java && mvn -B -q clean
+
+clean-all: clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-adapter-java
 
 example-node:
 	@echo ""
@@ -496,6 +532,7 @@ sync-license:
 	@$(SHELL) -c "test -d repos/lpdf-dotnet  && cp LICENSE repos/lpdf-dotnet/LICENSE  || true"
 	@$(SHELL) -c "test -d repos/lpdf-php     && cp LICENSE repos/lpdf-php/LICENSE     || true"
 	@$(SHELL) -c "test -d repos/lpdf-python  && cp LICENSE repos/lpdf-python/LICENSE  || true"
+	@$(SHELL) -c "test -d repos/lpdf-java    && cp LICENSE repos/lpdf-java/LICENSE    || true"
 # repos/lpdf-vscode is not synced: the extension has its own two-part LICENSE (MIT code + engine terms).
 	@echo "Done. Commit changes in the pages repo and each adapter repo separately."
 
@@ -510,6 +547,7 @@ check-license:
 	@$(SHELL) -c "test ! -d repos/lpdf-dotnet  || diff LICENSE repos/lpdf-dotnet/LICENSE  || (echo 'ERROR: repos/lpdf-dotnet/LICENSE differs from root LICENSE' && exit 1)"
 	@$(SHELL) -c "test ! -d repos/lpdf-php     || diff LICENSE repos/lpdf-php/LICENSE     || (echo 'ERROR: repos/lpdf-php/LICENSE differs from root LICENSE' && exit 1)"
 	@$(SHELL) -c "test ! -d repos/lpdf-python  || diff LICENSE repos/lpdf-python/LICENSE  || (echo 'ERROR: repos/lpdf-python/LICENSE differs from root LICENSE' && exit 1)"
+	@$(SHELL) -c "test ! -d repos/lpdf-java    || diff LICENSE repos/lpdf-java/LICENSE    || (echo 'ERROR: repos/lpdf-java/LICENSE differs from root LICENSE' && exit 1)"
 	@echo "OK"
 
 # ── Release candidate ─────────────────────────────────────────────────────────

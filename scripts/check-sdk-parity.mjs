@@ -1,4 +1,4 @@
-// Checks that the four SDKs name the attributes of every element as lpdf.xsd does. It reads the attribute
+// Checks that the five SDKs name the attributes of every element as lpdf.xsd does. It reads the attribute
 // classes of each SDK, generated and hand-written, turns each property back into the XML name its
 // language's case rule gives it (fontSize, font_size and FontSize are font-size) and compares the set with
 // the schema's. A class that has a property the schema lacks, or lacks one the schema has, is listed.
@@ -6,7 +6,7 @@
 // The generated classes cannot drift while `make check-sdk-api` passes; this check also covers the
 // classes that are written by hand: the document, its sections, meta, output, assets and tokens.
 //
-// Usage: node scripts/check-sdk-parity.mjs                      the four SDKs under repos/; list the differences, exit 1 if any
+// Usage: node scripts/check-sdk-parity.mjs                      the five SDKs under repos/; list the differences, exit 1 if any
 //        node scripts/check-sdk-parity.mjs --sdk node=.          only the SDK in the given folder (an SDK repository's CI)
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -92,7 +92,7 @@ function splitParameters(list) {
     return [...parts, current];
 }
 
-const found = { dotnet: {}, node: {}, python: {}, php: {} };
+const found = { dotnet: {}, node: {}, python: {}, php: {}, java: {} };
 
 const scans = {
     dotnet() {
@@ -128,6 +128,15 @@ const scans = {
             }
         }
     },
+    java() {
+        for (const file of files(path.join(repositories.java, 'src/main/java'), '.java')) {
+            for (const [, name, body] of read(file).matchAll(/public final class (\w+) extends Attributes \{([\s\S]*?)\n\}/g)) {
+                // Its setters, each returning the class: a name or a number has two, one for each type.
+                const setters = [...body.matchAll(new RegExp(`^    public ${name} (\\w+)\\(`, 'gm'))].map((m) => kebab.camel(m[1]));
+                if (wanted(name)) found.java[name] = [...new Set(setters)];
+            }
+        }
+    },
 };
 for (const sdk of selected) scans[sdk]();
 
@@ -151,6 +160,6 @@ for (const sdk of selected) {
         }
     }
 }
-const where = selected.length === LANGUAGES.length ? 'all four SDKs' : `the ${selected.join(' and ')} SDK`;
+const where = selected.length === LANGUAGES.length ? 'all five SDKs' : `the ${selected.join(' and ')} SDK`;
 console.log(problems ? `${problems} differences` : `all ${Object.keys(EXPECTED).length} classes match the schema in ${where}`);
 if (problems) process.exit(1);
