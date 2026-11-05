@@ -4,7 +4,7 @@
 # Works out vX.Y.0-rc.N from the tags on GitHub, shows what would be tagged,
 # and pushes the tag only after you confirm. The push starts core's
 # release.yml, job "rc": tests, build, a GitHub pre-release, then `core-rc`
-# to the five SDK and extension repos, whose rc.yml builds and tests against
+# to the six SDK and extension repos, whose rc.yml builds and tests against
 # it, and to pages, whose engine-refresh.yml opens a PR with the engine copy of
 # the docs. Nothing reaches a package registry.
 #
@@ -33,7 +33,7 @@ done
 REMOTE=origin
 BRANCH=main
 REPO_URL=https://github.com/lpdfio/lpdf
-REPOS="lpdf-js lpdf-dotnet lpdf-php lpdf-python lpdf-vscode pages"
+REPOS="lpdf-js lpdf-dotnet lpdf-php lpdf-python lpdf-java lpdf-vscode pages"
 # Dispatched the same core-rc event, but private, so the raw.githubusercontent
 # preflight below cannot see it. Listed for the links and the summary only.
 PRIVATE_REPOS="lpdf-api"
@@ -55,7 +55,7 @@ TAGS=$(git ls-remote --tags --refs "$REMOTE" 'v*' | sed 's|.*refs/tags/||')
 # A tag push runs release.yml as it is AT the tagged commit. Without the RC job
 # there, the old workflow would treat vX.Y.0-rc.N as a full public release.
 git show "$SHA:.github/workflows/release.yml" 2>/dev/null | grep -q 'Publish release candidate' \
-  || fail "GitHub's $BRANCH has no RC job in .github/workflows/release.yml yet. Push that first, and rc.yml to the five SDK/extension repos and engine-refresh.yml to pages."
+  || fail "GitHub's $BRANCH has no RC job in .github/workflows/release.yml yet. Push that first, and rc.yml to the six SDK/extension repos and engine-refresh.yml to pages."
 
 # A dispatch only starts a workflow that exists on the receiving repo's main.
 # A repo without its workflow would silently run nothing, and the RC would look
@@ -189,13 +189,13 @@ fi
 echo ""
 echo "Pushed $NEW."
 echo ""
-echo "  Check progress:  make rc-check   (core and the six public repos; lpdf-api is private, so check its run by hand)"
+echo "  Check progress:  make rc-check   (core and the seven public repos; lpdf-api is private, so check its run by hand)"
 echo "  Follow the run:  $REPO_URL/actions/workflows/release.yml"
 echo "  RC runs:"
 for r in $ALL_REPOS; do
   echo "    https://github.com/lpdfio/$r/actions/workflows/$(workflow_of "$r")"
 done
 echo ""
-echo "When all seven are green, draft the $TARGET release on this RC, or move a waiting"
+echo "When all eight are green, draft the $TARGET release on this RC, or move a waiting"
 echo "draft to it. Check the .vsix (make rc-vsix), review the draft, and publish it"
 echo "on GitHub."

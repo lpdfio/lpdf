@@ -19,7 +19,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-facturx check-ocg check-codegen-dotnet check-function-sizes \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-adapter-java clean-all \
         build-all test-all example-all \
-        example-node example-dotnet example-php example-python \
+        example-node example-dotnet example-php example-python example-java \
         clone-adapters sync-license check-license \
         build-portal-ui build-pages-demo build-pages build-pages-docs check-pages-docs stamp-pages-docs dev-pages meta-pages \
         sync-examples check-examples-sync build-demo-viewer \
@@ -344,7 +344,7 @@ check-sdk-api:
 
 test-all: check-sdk-api test-wasm test-wasi test-cli test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python test-sdk-java
 
-example-all: example-node example-dotnet example-php example-python
+example-all: example-node example-dotnet example-php example-python example-java
 
 clone-adapters:
 	@echo ""
@@ -496,6 +496,22 @@ example-python:
 		-v "$(CURDIR)/tmp/sdk-examples://app/tmp/sdk-examples" \
 		-w //app lpdf-python python example/example-data.py
 
+# Java's class path separator, which the JVM takes from the platform: ';' on Windows, ':' elsewhere.
+ifeq ($(OS),Windows_NT)
+    JAVA_PATH_SEP := ;
+else
+    JAVA_PATH_SEP := :
+endif
+
+# Runs on the SDK's classes and Endive's jars, in Java's source-file mode, after 'make build-sdk-java'.
+example-java:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Running Java example..."
+	@echo ""
+	cd repos/lpdf-java && mvn -B -q dependency:build-classpath -DincludeScope=runtime -Dmdep.outputFile=target/classpath.txt
+	java -cp "repos/lpdf-java/target/classes$(JAVA_PATH_SEP)$$(cat repos/lpdf-java/target/classpath.txt)" repos/lpdf-java/example/Example.java .
+
 build-vscode: build-wasm
 	@echo ""
 	@echo "-------------------------------"
@@ -561,7 +577,7 @@ check-license:
 rc-next:
 	@$(SHELL) scripts/rc-next.sh "$(VERSION)"
 
-# Read-only status of a release candidate: core's run, the five rc.yml runs and the
+# Read-only status of a release candidate: core's run, the six rc.yml runs and the
 # pages run (the docs' engine copy), what failed and why, and, when all passed, the
 # pre-filled release link.
 #   make rc-check                   the newest RC on GitHub
