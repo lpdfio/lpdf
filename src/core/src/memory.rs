@@ -158,6 +158,7 @@ pub(crate) fn cap_error(shown: &str) -> String {
 pub(crate) struct Cap(());
 
 /// Start the cap of a render: from here, the render may hold `cap_mb` megabytes more than this thread holds now.
+#[allow(dead_code, reason = "the WASI binary and the native library start their caps with `start_from`")]
 pub(crate) fn start(cap_mb: u32) -> Cap {
     start_from(cap_mb, mark())
 }
