@@ -276,6 +276,8 @@ fn php_callee(tag: &str, family: &str) -> String {
 fn python_callee(tag: &str, family: &str) -> String {
     match (tag, markdown_member(family)) {
         ("markdown", _)   => "L.markdown".to_string(),
+        // `del` is a keyword in Python, so the SDK names the rule of struck-through text `del_`.
+        (_, Some("del"))  => "LMarkdown.del_".to_string(),
         (_, Some(member)) => format!("LMarkdown.{member}"),
         _                 => format!("L.{}", python_method(tag)),
     }
@@ -2253,6 +2255,78 @@ impl JavaEmitter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_the_python_rule_for_struck_through_text_is_not_a_keyword() {
+        let xml = r#"<lpdf version="1"><document><section><markdown><markdown-styles><del strike="true"/></markdown-styles><markdown-content>x</markdown-content></markdown></section></document></lpdf>"#;
+        let python = codegen(xml, &CodegenOptions { target: "python".into(), indent: 4 }).unwrap();
+        assert!(python.contains("LMarkdown.del_(MarkdownDelAttr(strike=True))"), "{python}");
+        let js = codegen(xml, &CodegenOptions { target: "js".into(), indent: 4 }).unwrap();
+        assert!(js.contains("LMarkdown.del({ strike: true })"), "{js}");
+    }
+
+    /// The elements of the schema that have no entry in the method tables, and what writes each instead. Each has to
+    /// stay without one: when an element gets an entry, it goes off this list.
+    const WITHOUT_A_METHOD: &[(&str, &str)] = &[
+        ("lpdf", "the root: the program builds the `document` inside it"),
+        ("meta", "written with the attributes of the `document`"),
+        ("output", "written with the attributes of the `document`"),
+        ("assets", "`assets_expression`"),
+        ("font", "`assets_expression`"),
+        ("image", "`assets_expression`"),
+        ("profile", "`assets_expression`"),
+        ("attachments", "`attachments_expression`"),
+        ("file", "`attachments_expression`"),
+        ("colors", "`tokens_expression`"),
+        ("color", "`tokens_expression`"),
+        ("aliases", "`tokens_expression`"),
+        ("alias", "`tokens_expression`"),
+        ("space", "`tokens_expression`"),
+        ("border", "`tokens_expression`"),
+        ("radius", "`tokens_expression`"),
+        ("width", "`tokens_expression`"),
+        ("height", "`tokens_expression`"),
+        ("text-size", "`tokens_expression`"),
+        ("line-height", "`tokens_expression`"),
+        ("gradients", "`gradients_expression`"),
+        ("gradient", "`gradients_expression`"),
+        ("stop", "`gradients_expression`"),
+        ("rulings", "`rulings_expression`"),
+        ("ruling", "`rulings_expression`"),
+        ("lines", "`rulings_expression`"),
+        ("markdown", "`js_callee` and the callees of the other targets: `L.markdown`"),
+        ("markdown-content", "`markdown_member`: `LMarkdown.content`"),
+        ("hr", "the markdown rule for a thematic break: no SDK has a rule for it yet, so its code is an L.element call"),
+    ];
+
+    /// Every element the schema declares is a node with an entry in the method tables, a rule of a markdown, or
+    /// written by a function of its own (WITHOUT_A_METHOD). Without one, the code is `L.element(...)`, which no SDK has.
+    #[test]
+    fn every_element_of_the_schema_has_an_entry_in_the_method_tables() {
+        let text = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../schema/lpdf.xsd")).expect("schema/lpdf.xsd");
+        let schema = Document::parse(&text).expect("the schema is XML");
+        let elements: std::collections::BTreeSet<&str> =
+            schema.descendants().filter(|n| n.has_tag_name("element")).filter_map(|n| n.attribute("name")).collect();
+
+        let mut problems: Vec<String> = Vec::new();
+        for (name, _) in WITHOUT_A_METHOD {
+            if !elements.contains(name) {
+                problems.push(format!("{name} is listed in WITHOUT_A_METHOD and is not in the schema"));
+            }
+        }
+        for element in &elements {
+            let tabled = [js_method(element) != "element", dotnet_method(element) != "Element", python_method(element) != "element"];
+            let listed = WITHOUT_A_METHOD.iter().any(|(name, _)| name == element);
+            if tabled.iter().any(|&t| t) && !tabled.iter().all(|&t| t) {
+                problems.push(format!("{element}: the method tables disagree (js, dotnet, python: {tabled:?})"));
+            } else if listed && (tabled[0] || MARKDOWN_RULES.contains(element)) {
+                problems.push(format!("{element} has an entry now; remove it from WITHOUT_A_METHOD"));
+            } else if !listed && !tabled[0] && !MARKDOWN_RULES.contains(element) {
+                problems.push(format!("{element} has no entry in the method tables, so its code is L.element(...): add one, or list it in WITHOUT_A_METHOD"));
+            }
+        }
+        assert!(problems.is_empty(), "\n{}\n", problems.join("\n"));
+    }
 
     #[test]
     fn test_camel_case() {
