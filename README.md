@@ -169,7 +169,7 @@ pdf = engine.render(doc)
 
 ### Java (17+)
 
-[github.com/lpdfio/lpdf-java](https://github.com/lpdfio/lpdf-java)  -  [central.sonatype.com/artifact/io.lpdf/lpdf](https://central.sonatype.com/artifact/io.lpdf/lpdf)  -  [lpdf.io/docs](https://lpdf.io/docs/?utm_campaign=sdk-java&utm_medium=referral&utm_source=readme)
+[github.com/lpdfio/lpdf-java](https://github.com/lpdfio/lpdf-java)  -  [central.sonatype.com/artifact/io.lpdf/lpdf](https://central.sonatype.com/artifact/io.lpdf/lpdf)  -  [lpdf.io/docs](https://lpdf.io/docs/install/?sdk=java&utm_campaign=sdk-java&utm_medium=referral&utm_source=readme)
 
 ```xml
 <dependency>
