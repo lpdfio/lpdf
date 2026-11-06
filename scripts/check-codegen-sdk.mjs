@@ -166,7 +166,7 @@ async function checkLanguage(language, sdk, all) {
             failures.push(`${name}: ${REASONS[result.status] ?? result.status}${result.message ? `: ${result.message}` : ''}`);
         }
     }
-    for (const name of left) if (verbose) console.log(`left  ${name}`);
+    for (const name of left) console.log(`left  ${language}  ${name}: ${CANNOT_EXPRESS.get(name)}`);
 
     for (const message of failures) console.error(`FAIL  ${language}  ${message}`);
     const seconds = Math.round((Date.now() - started) / 1000);

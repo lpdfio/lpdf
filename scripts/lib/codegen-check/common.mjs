@@ -26,13 +26,16 @@ export function firstLine(message, limit = 300) {
     return line.length > limit ? `${line.slice(0, limit)}…` : line;
 }
 
+/** Ends the check with exit status 2, for a check that can't run: a program of the SDK's language is missing or the SDK is not built. */
+export function fail(message) {
+    console.error(message);
+    process.exit(2);
+}
+
 /** Runs a command and returns its exit status and output; one that can't start is the check's error. */
 export function run(command, args, options = {}) {
     const result = spawnSync(command, args, { encoding: 'utf8', maxBuffer: 1024 * 1024 * 1024, ...options });
-    if (result.error) {
-        console.error(`could not run ${command}: ${result.error.message}`);
-        process.exit(2);
-    }
+    if (result.error) fail(`could not run ${command}: ${result.error.message}`);
     return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 

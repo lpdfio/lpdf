@@ -12,7 +12,7 @@
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { firstLine, missingResults, readResults, run as exec, writeDocuments } from './common.mjs';
+import { fail, firstLine, missingResults, readResults, run as exec, writeDocuments } from './common.mjs';
 
 export const target = 'java';
 
@@ -93,7 +93,7 @@ public class Check {
 function sdkJar(sdk) {
     const target = path.join(sdk, 'target');
     const jar = readdirSync(target, { withFileTypes: true }).map((entry) => entry.name).find((name) => /^lpdf-.*\.jar$/.test(name) && !/-(sources|javadoc)\.jar$/.test(name));
-    if (!jar) throw new Error(`the SDK is not built: ${target} has no jar (run mvn package in ${sdk})`);
+    if (!jar) fail(`the SDK is not built: ${target} has no jar (run mvn package in ${sdk})`);
     return path.join(target, jar);
 }
 
@@ -106,7 +106,7 @@ export async function run({ sdk, work, base, placeholders, documents, createdOn 
 
     const dependencies = path.join(work, 'classpath.txt');
     const resolved = exec('mvn', ['-B', '-q', '-f', path.join(sdk, 'pom.xml'), 'dependency:build-classpath', `-Dmdep.outputFile=${dependencies}`, '-DincludeScope=runtime']);
-    if (resolved.status !== 0) throw new Error(`mvn could not resolve the SDK's dependencies: ${firstLine(resolved.stdout + resolved.stderr)}`);
+    if (resolved.status !== 0) fail(`mvn could not resolve the SDK's dependencies: ${firstLine(resolved.stdout + resolved.stderr)}`);
     const classpath = [sdkJar(sdk), ...readFileSync(dependencies, 'utf8').trim().split(path.delimiter)].join(path.delimiter);
 
     writeFileSync(path.join(source, 'Check.java'), CHECK(createdOn));

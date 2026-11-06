@@ -1,5 +1,5 @@
 // Runs the program of a language in a Docker image, for a machine that doesn't have the language, such as the Mac for PHP
-// and Python (`make check-codegen-php`). The image is the SDK's own, which has the SDK in /app.
+// and Python (`make check-codegen-sdk-php`). The image is the SDK's own, which has the SDK in /app.
 //
 // The program and the files it reads are at the same path in the container as on the machine: the scratch folder, and the
 // folder of the test fixtures and assets, read-only. `--mount <folder>:<path>` adds the rest, such as the engine the
