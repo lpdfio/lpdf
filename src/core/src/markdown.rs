@@ -1273,7 +1273,12 @@ impl<'a> Writer<'a> {
         let rule = self.spec.rules.rule("quote");
         let tokens = &self.spec.tokens;
         let invalid = |what: &str, e: String| self.fail(line, &format!("the quote rule: {what}: {e}"));
-        let width = rule.get("bar-width").map(String::as_str).unwrap_or("3pt");
+        // The bar is the first column of the table, which reads a length and not a slot: a slot or an alias is turned
+        // into its pt value from the tokens' space row here, as the gap and the padding are.
+        let width = match rule.get("bar-width") {
+            Some(value) => tokens.resolve_space(value).map_err(|e| invalid("bar-width", e))?,
+            None        => 3.0,
+        };
         let padding = match rule.get("padding") {
             Some(value) => tokens.resolve_spacing(value).map_err(|e| invalid("padding", e))?,
             None        => [0.0; 4],
@@ -1291,7 +1296,7 @@ impl<'a> Writer<'a> {
             rows.push_str(&format!("<tr><td{bar}></td><td{cell}>{}</td></tr>", block.xml));
         }
         let xml = if rows.is_empty() { String::new() } else {
-            format!("<table cols=\"{} 1fr\">{rows}</table>", escape_attr(width))
+            format!("<table cols=\"{width}pt 1fr\">{rows}</table>")
         };
         Ok(Block { xml, line })
     }
@@ -2148,6 +2153,47 @@ mod tests {
         assert_eq!(rows[0].children[0].background.as_deref(), Some("#737373"));
         assert_eq!(words(texts(&rows[1])[0]), "two");
         assert_eq!(texts(&rows[0])[0].text_color.as_deref(), Some("#737373"));
+    }
+
+    /// A document with `tokens` before its assets, a `<markdown-styles>` of `styles` and a one-line quote.
+    fn quote_in(tokens: &str, styles: &str) -> String {
+        document("", styles, "> one\n").replacen(r#"<lpdf version="1">"#, &format!(r#"<lpdf version="1">{tokens}"#), 1)
+    }
+
+    /// The columns of the table a one-line quote is written as: the bar, then the block.
+    fn quote_cols(tokens: &str, bar_width: &str) -> String {
+        let styles = format!(r#"<markdown-styles><quote bar-width="{bar_width}"/></markdown-styles>"#);
+        nodes_in(&quote_in(tokens, &styles))[0].table_cols.clone()
+    }
+
+    #[test]
+    fn a_quote_bar_takes_each_slot_of_the_space_row() {
+        for (slot, width) in [("xs", 2), ("s", 4), ("m", 8), ("l", 14), ("xl", 20), ("xxl", 32)] {
+            assert_eq!(quote_cols("", slot), format!("{width}pt 1fr"), "bar-width=\"{slot}\"");
+        }
+    }
+
+    #[test]
+    fn a_quote_bar_takes_an_alias_of_a_slot_and_follows_a_redefined_space_row() {
+        let alias = r#"<tokens><aliases><alias name="wide" value="xl"/></aliases></tokens>"#;
+        assert_eq!(quote_cols(alias, "wide"), "20pt 1fr");
+        let redefined = r#"<tokens><space xs="1pt" s="2pt" m="50pt" l="100pt" xl="200pt" xxl="400pt"/></tokens>"#;
+        assert_eq!(quote_cols(redefined, "m"), "50pt 1fr");
+        assert_eq!(quote_cols(redefined, "xxl"), "400pt 1fr");
+    }
+
+    #[test]
+    fn a_quote_bar_still_takes_a_length() {
+        assert_eq!(quote_cols("", "37pt"), "37pt 1fr");
+        assert_eq!(quote_cols("", "4.5pt"), "4.5pt 1fr");
+        assert_eq!(quote_cols("", "0"), "0pt 1fr");
+    }
+
+    #[test]
+    fn a_quote_bar_that_is_neither_a_slot_nor_a_length_is_an_error_that_names_it() {
+        let styles = r#"<markdown-styles><quote bar-width="wide"/></markdown-styles>"#;
+        let err = parse(&quote_in("", styles)).unwrap_err();
+        assert!(err.contains("the quote rule") && err.contains("bar-width") && err.contains("'wide'"), "{err}");
     }
 
     #[test]
