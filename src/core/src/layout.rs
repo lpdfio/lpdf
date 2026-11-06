@@ -47,7 +47,7 @@ use rests::{Reached, Rest, Waiting};
 use bulk::{Bulk, Take};
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
 use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderCanvasClip, RenderCanvasLayer, RenderField, RenderFootnoteMark, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind, Tag, TagKind};
-use crate::tokens::FontWidths;
+use crate::tokens::{split_unit, FontWidths, LENGTH_UNITS};
 use crate::canvas;
 use crate::page_numbers::{self, PageTokens, SectionNumbers};
 use crate::references;
@@ -1970,6 +1970,7 @@ fn keep_width(node: Node, width: f32) -> Node {
 enum ColUnit {
     /// A share of what the fixed and the percent columns leave.
     Fr(f32),
+    /// A length, in points whatever unit it was written in.
     Pt(f32),
     /// A percentage of the width of the table.
     Pct(f32),
@@ -1977,25 +1978,37 @@ enum ColUnit {
     Auto,
 }
 
-fn col_units(spec: &str) -> Vec<ColUnit> {
-    spec.split_whitespace().filter_map(|tok| {
-        if tok == "auto" {
-            Some(ColUnit::Auto)
-        } else if let Some(s) = tok.strip_suffix("fr") {
-            s.parse::<f32>().ok().map(ColUnit::Fr)
-        } else if let Some(s) = tok.strip_suffix("pt") {
-            s.parse::<f32>().ok().map(ColUnit::Pt)
-        } else if let Some(s) = tok.strip_suffix('%') {
-            s.parse::<f32>().ok().map(ColUnit::Pct)
-        } else {
-            tok.parse::<f32>().ok().map(ColUnit::Fr)
-        }
-    }).collect()
+/// One entry of `cols`: `auto`, a share in `fr`, a length in `pt`, `mm` or `in`, a percentage, or a bare number, which
+/// is a share. `None` for anything else.
+fn col_unit(tok: &str) -> Option<ColUnit> {
+    if tok == "auto" {
+        Some(ColUnit::Auto)
+    } else if let Some(s) = tok.strip_suffix("fr") {
+        s.parse::<f32>().ok().map(ColUnit::Fr)
+    } else if let Some((number, to_points)) = split_unit(tok) {
+        number.parse::<f32>().ok().map(|number| ColUnit::Pt(to_points(number)))
+    } else if let Some(s) = tok.strip_suffix('%') {
+        s.parse::<f32>().ok().map(ColUnit::Pct)
+    } else {
+        tok.parse::<f32>().ok().map(ColUnit::Fr)
+    }
 }
 
-/// What is wrong with the `cols` of a table, if anything: an `auto` column takes the width its cells need and the
-/// rest is shared among the `auto` columns, so there is no rest for an `fr` column to share.
+/// The entries of `cols`. `check_cols` has refused what is none of them before a table gets here.
+fn col_units(spec: &str) -> Vec<ColUnit> {
+    spec.split_whitespace().filter_map(col_unit).collect()
+}
+
+/// What is wrong with the `cols` of a table, if anything: an entry that is no width, or an `auto` column beside an
+/// `fr` one, since an `auto` column takes the width its cells need and the rest is shared among the `auto` columns,
+/// so there is no rest for an `fr` column to share.
 pub(crate) fn check_cols(spec: &str) -> Result<(), String> {
+    if let Some(tok) = spec.split_whitespace().find(|tok| col_unit(tok).is_none()) {
+        return Err(format!(
+            "cols=\"{spec}\" has '{tok}', which is not a column width: expected auto, a share like 1fr, a length in \
+             {LENGTH_UNITS} like 40mm, or a percentage like 25%"
+        ));
+    }
     let units = col_units(spec);
     if units.contains(&ColUnit::Auto) && units.iter().any(|u| matches!(u, ColUnit::Fr(_))) {
         return Err(format!(
@@ -2010,7 +2023,7 @@ pub(crate) fn check_cols(spec: &str) -> Result<(), String> {
 ///
 /// Units:
 /// - `Nfr`  — fractional share of remaining width after fixed/percent columns.
-/// - `Npt`  — absolute pt value.
+/// - `Npt`, `Nmm`, `Nin` — absolute length, in pt whatever the unit.
 /// - `N%`   — percentage of `avail_w`.
 /// - `auto` — as `1fr` here, where there are no cells to measure: see `table_col_widths`.
 ///
@@ -9396,5 +9409,35 @@ abcdef</code><text>after</text></row>"#,
         assert_eq!(fills, vec![Some("#00ff00".to_owned()), Some("#999999".to_owned())]);
         let colors: Vec<_> = nodes_of(&tree, "text").iter().map(|text| text["color"].as_str().map(str::to_owned)).collect();
         assert_eq!(colors, vec![Some("#cc0000".to_owned()), Some("#000000".to_owned())]);
+    }
+
+    #[test]
+    fn the_columns_of_a_table_take_widths_in_pt_mm_in_and_percent_and_share_the_rest() {
+        let widths = resolve_col_widths("1in 25.4mm 36pt 25% 1fr 3fr", 800.0);
+        let wanted = [72.0, 72.0, 36.0, 200.0, 105.0, 315.0];
+        assert_eq!(widths.len(), wanted.len());
+        for (width, wanted) in widths.iter().zip(wanted) {
+            assert!((width - wanted).abs() < 0.001, "{widths:?}");
+        }
+    }
+
+    #[test]
+    fn cols_reads_each_entry_as_a_share_a_length_a_percentage_or_auto() {
+        let units = col_units("2fr 1in 25.4mm 36pt 25% auto 3");
+        let mut wanted = vec![ColUnit::Fr(2.0), ColUnit::Pt(72.0)];
+        assert!(units[..2] == wanted[..], "a share, then an inch");
+        assert!(matches!(units[2], ColUnit::Pt(w) if (w - 72.0).abs() < 0.001), "a millimetre length is in points");
+        wanted = vec![ColUnit::Pt(36.0), ColUnit::Pct(25.0), ColUnit::Auto, ColUnit::Fr(3.0)];
+        assert!(units[3..] == wanted[..], "a bare number is a share");
+        assert_eq!(units.len(), 7);
+    }
+
+    #[test]
+    fn cols_that_has_an_entry_which_is_no_width_is_an_error_naming_it() {
+        assert!(check_cols("1fr 40mm 1.5in 25% 36pt 2").is_ok());
+        for bad in ["40cm", "10px", "wide", "1.5.5mm", "mm", "fr", "%"] {
+            let err = check_cols(&format!("1fr {bad}")).unwrap_err();
+            assert!(err.contains(&format!("'{bad}'")) && err.contains("a length in pt, mm or in"), "{bad}: {err}");
+        }
     }
 }

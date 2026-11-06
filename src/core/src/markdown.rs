@@ -2199,14 +2199,37 @@ mod tests {
 
     #[test]
     fn a_rule_value_that_does_not_read_names_its_rule_once() {
-        for (rule, attribute, value) in [("quote", "padding", "2mm"), ("quote", "bar-width", "wide"), ("h1", "font-size", "huge")] {
+        for (rule, attribute, value) in [("quote", "padding", "2cm"), ("quote", "bar-width", "wide"), ("h1", "font-size", "huge")] {
             let styles = format!(r#"<markdown-styles><{rule} {attribute}="{value}"/></markdown-styles>"#);
             let err = parse(&quote_in("", &styles)).unwrap_err();
             assert_eq!(err.matches(&format!("the {rule} rule")).count(), 1, "{err}");
             assert!(err.contains(&format!("the {rule} rule: ")) && err.contains(&format!("'{value}'")), "{err}");
         }
-        let err = parse(&quote_in("", r#"<markdown-styles><quote padding="2mm"/></markdown-styles>"#)).unwrap_err();
-        assert!(err.contains("the quote rule: padding: invalid space value: '2mm'"), "{err}");
+        let err = parse(&quote_in("", r#"<markdown-styles><quote padding="2cm"/></markdown-styles>"#)).unwrap_err();
+        assert!(err.contains("the quote rule: padding: invalid space value: '2cm'"), "{err}");
+        assert!(err.contains("or a length in pt, mm or in"), "{err}");
+    }
+
+    #[test]
+    fn a_quote_bar_takes_a_length_in_mm_and_in() {
+        assert_eq!(quote_cols("", "1in"), "72pt 1fr");
+        assert_eq!(quote_cols("", "0.5in"), "36pt 1fr");
+        let bar = quote_cols("", "2mm");
+        assert!(bar.starts_with("5.66") && bar.ends_with("pt 1fr"), "{bar}");
+    }
+
+    #[test]
+    fn the_rules_of_a_markdown_take_lengths_in_mm_and_in() {
+        for (rule, attribute) in [
+            ("h1", "padding"), ("h1", "font-size"), ("quote", "padding"), ("quote", "radius"), ("li", "gap"), ("li", "indent"),
+            ("code", "padding"), ("code", "radius"), ("hr", "thickness"), ("th", "padding"), ("td", "padding"),
+        ] {
+            for value in ["2mm", "0.1in"] {
+                let styles = format!(r#"<markdown-styles><{rule} {attribute}="{value}"/></markdown-styles>"#);
+                let read = parse(&quote_in("", &styles));
+                assert!(read.is_ok(), "{rule} {attribute}=\"{value}\": {:?}", read.err());
+            }
+        }
     }
 
     #[test]

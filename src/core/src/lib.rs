@@ -954,6 +954,9 @@ mod ocg_render_tests;
 mod ruling_render_tests;
 
 #[cfg(test)]
+mod length_unit_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

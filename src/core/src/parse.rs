@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
-use crate::tokens::{parse_factor, parse_opacity, parse_pt, FontDef, FontWidths, Gradient, GradientSpec, Tokens};
+use crate::tokens::{
+    parse_factor, parse_length, parse_opacity, split_unit, FontDef, FontWidths, Gradient, GradientSpec, Tokens, LENGTH_UNITS,
+};
 use crate::canvas;
 use crate::markdown;
 use crate::layout::{Held, Placed};
@@ -1009,7 +1011,7 @@ pub enum HeightMode {
     Full,
     /// Takes remaining space after siblings are sized (`height="fill"`).
     Fill,
-    /// Explicit pt value (`height="28pt"`).
+    /// Explicit length (`height="28pt"`).
     Fixed(f32),
 }
 
@@ -1945,14 +1947,14 @@ fn parse_gradients_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(
 }
 
 
-/// Parse xs/s/m/l/xl/xxl pt attributes from a token scale element.
+/// Parse xs/s/m/l/xl/xxl length attributes (pt, mm or in) from a token scale element.
 fn parse_scale_row(elem: &roxmltree::Node) -> Result<[f32; 6], String> {
-    parse_row(elem, parse_pt, "pt value")
+    parse_row(elem, parse_length, &format!("a length in {LENGTH_UNITS}"))
 }
 
 /// Parse xs/s/m/l/xl/xxl factors from a token row of factors, such as `line-height`.
 fn parse_factor_row(elem: &roxmltree::Node) -> Result<[f32; 6], String> {
-    parse_row(elem, parse_factor, "factor, a number above 0")
+    parse_row(elem, parse_factor, "a factor, a number above 0")
 }
 
 /// The six slots of a token row, each read with `parse`. `expected` says what a slot holds, for the error.
@@ -1962,7 +1964,7 @@ fn parse_row(elem: &roxmltree::Node, parse: fn(&str) -> Option<f32>, expected: &
         let v = elem
             .attribute(attr)
             .ok_or_else(|| format!("<{tag}> missing '{attr}' attribute"))?;
-        parse(v).ok_or_else(|| format!("<{tag}> '{attr}': invalid {expected} '{v}'"))
+        parse(v).ok_or_else(|| format!("<{tag}> '{attr}': invalid value '{v}': expected {expected}"))
     };
     Ok([get("xs")?, get("s")?, get("m")?, get("l")?, get("xl")?, get("xxl")?])
 }
@@ -2072,13 +2074,13 @@ pub fn parse_page_size(val: &str) -> Result<(f32, f32), String> {
         custom => {
             let parts: Vec<&str> = custom.split_whitespace().collect();
             if parts.len() == 2 {
-                let w = parse_pt(parts[0])
-                    .ok_or_else(|| format!("invalid page width: '{}'", parts[0]))?;
-                let h = parse_pt(parts[1])
-                    .ok_or_else(|| format!("invalid page height: '{}'", parts[1]))?;
+                let w = parse_length(parts[0])
+                    .ok_or_else(|| format!("invalid page width: '{}': expected a length in {LENGTH_UNITS}", parts[0]))?;
+                let h = parse_length(parts[1])
+                    .ok_or_else(|| format!("invalid page height: '{}': expected a length in {LENGTH_UNITS}", parts[1]))?;
                 Ok((w, h))
             } else {
-                Err(format!("invalid page size: '{val}'"))
+                Err(format!("invalid page size: '{val}': expected a4, a3, a5, letter, legal or a width and a height, like '210mm 297mm'"))
             }
         }
     }
@@ -2088,16 +2090,10 @@ pub fn parse_page_size(val: &str) -> Result<(f32, f32), String> {
 /// Supported: `pt`, `mm`, `in`.  Bare numbers are treated as `pt`.
 pub fn parse_measurement(s: &str) -> Result<f32, String> {
     let s = s.trim();
-    if let Some(v) = s.strip_suffix("mm") {
-        let n: f32 = v.trim().parse().map_err(|_| format!("invalid measurement: '{s}'"))?;
-        Ok(n * 72.0 / 25.4)
-    } else if let Some(v) = s.strip_suffix("in") {
-        let n: f32 = v.trim().parse().map_err(|_| format!("invalid measurement: '{s}'"))?;
-        Ok(n * 72.0)
-    } else if let Some(v) = s.strip_suffix("pt") {
-        v.trim().parse().map_err(|_| format!("invalid measurement: '{s}'"))
-    } else {
-        s.parse().map_err(|_| format!("invalid measurement: '{s}'"))
+    let invalid = |_| format!("invalid measurement: '{s}'");
+    match split_unit(s) {
+        Some((number, to_points)) => number.trim().parse().map(to_points).map_err(invalid),
+        None                      => s.parse().map_err(invalid),
     }
 }
 
@@ -3161,7 +3157,7 @@ pub(crate) fn at_element_for(tag: &str) -> Option<&'static str> {
 /// The `width` of a `text-at` or `img-at`: a length, since there is no line for it to take its width from.
 fn at_width(a: &impl Attrs) -> Result<Option<f32>, String> {
     a.get("width")
-        .map(|v| parse_pt(v).ok_or_else(|| format!("invalid width '{v}': expected a pt value like 80pt")))
+        .map(|v| parse_length(v).ok_or_else(|| format!("invalid width '{v}': expected a length in {LENGTH_UNITS}, like 80pt")))
         .transpose()
 }
 
@@ -3525,7 +3521,7 @@ fn parse_height_mode(v: &str, tokens: &Tokens) -> Result<HeightMode, String> {
         other  => tokens.resolve_height(other)
             .map(HeightMode::Fixed)
             .map_err(|_| format!(
-                "invalid height value: '{other}' — expected full, fill, {} or a pt value like 28pt",
+                "invalid height value: '{other}' — expected full, fill, {} or a length in {LENGTH_UNITS}, like 28pt",
                 tokens.slot_names()
             )),
     }
@@ -3941,7 +3937,8 @@ fn apply_img_attrs(
     if let Some(v) = a.get("height") {
         node.img_height_constraint = Some(match tokens {
             Some(tokens) => tokens.resolve_height(v).map_err(|e| format!("img height: {e}"))?,
-            None         => parse_pt(v).ok_or_else(|| format!("img height: invalid pt value '{v}'"))?,
+            None         => parse_length(v)
+                .ok_or_else(|| format!("img height: invalid length '{v}': expected a length in {LENGTH_UNITS}"))?,
         });
     }
     Ok(())
@@ -4003,10 +4000,10 @@ fn apply_barcode_attrs(
     // either one, and the smaller when it has both.  `width="fill"` sizes the slot of a QR code
     // in a row, not the code itself, so then only `height` sets its size.
     let width = a.get("width").filter(|w| *w != "fill")
-        .map(|w| tokens.resolve_width(w).map_err(|_| format!("<barcode> invalid width '{w}'")))
+        .map(|w| tokens.resolve_width(w).map_err(|_| format!("<barcode> invalid width '{w}': expected {} or a length in {LENGTH_UNITS}", tokens.slot_names())))
         .transpose()?;
     let height = a.get("height")
-        .map(|h| tokens.resolve_height(h).map_err(|_| format!("<barcode> invalid height '{h}'")))
+        .map(|h| tokens.resolve_height(h).map_err(|_| format!("<barcode> invalid height '{h}': expected {} or a length in {LENGTH_UNITS}", tokens.slot_names())))
         .transpose()?;
     match node.barcode_type.as_ref().unwrap() {
         BarcodeType::Qr => {
@@ -4262,26 +4259,27 @@ pub fn parse_tree_tokens_pub(
 ) -> Result<(), String> {
     use crate::tokens::scale_idx;
 
-    let apply_row = |json_key: &str, scale: &mut [f32; 6], parse: fn(&str) -> Option<f32>| -> Result<(), String> {
+    let lengths = format!("a length in {LENGTH_UNITS}");
+    let apply_row = |json_key: &str, scale: &mut [f32; 6], parse: fn(&str) -> Option<f32>, expected: &str| -> Result<(), String> {
         if let Some(map) = obj.get(json_key).and_then(|v| v.as_object()) {
             for (k, v) in map {
                 if let (Some(idx), Some(s)) = (scale_idx(k), v.as_str()) {
                     scale[idx] = parse(s)
-                        .ok_or_else(|| format!("invalid {json_key} token '{k}': '{s}'"))?;
+                        .ok_or_else(|| format!("invalid {json_key} token '{k}': '{s}': expected {expected}"))?;
                 }
             }
         }
         Ok(())
     };
 
-    apply_row("space",  &mut tokens.space, parse_pt)?;
-    apply_row("border", &mut tokens.border, parse_pt)?;
-    apply_row("radius", &mut tokens.radius, parse_pt)?;
-    apply_row("width",  &mut tokens.width, parse_pt)?;
-    apply_row("height", &mut tokens.height, parse_pt)?;
-    apply_row("grid",  &mut tokens.grid_col, parse_pt)?;
-    apply_row("text-size", &mut tokens.text_size, parse_pt)?;
-    apply_row("line-height", &mut tokens.line_height, parse_factor)?;
+    apply_row("space",  &mut tokens.space, parse_length, &lengths)?;
+    apply_row("border", &mut tokens.border, parse_length, &lengths)?;
+    apply_row("radius", &mut tokens.radius, parse_length, &lengths)?;
+    apply_row("width",  &mut tokens.width, parse_length, &lengths)?;
+    apply_row("height", &mut tokens.height, parse_length, &lengths)?;
+    apply_row("grid",  &mut tokens.grid_col, parse_length, &lengths)?;
+    apply_row("text-size", &mut tokens.text_size, parse_length, &lengths)?;
+    apply_row("line-height", &mut tokens.line_height, parse_factor, "a factor, a number above 0")?;
 
     if let Some(aliases) = obj.get("aliases").and_then(|v| v.as_object()) {
         for (name, value) in aliases {
@@ -5201,7 +5199,7 @@ mod tests {
     fn a_name_that_is_not_an_alias_is_an_error_that_lists_the_aliases() {
         let err = parse(&with_aliases(r#"<text font-size="medum">Hi</text>"#)).unwrap_err();
         assert!(
-            err.contains("invalid text size: 'medum': expected a slot from xs to xxl, an alias (body, caption, heading) or a pt value")
+            err.contains("invalid text size: 'medum': expected a slot from xs to xxl, an alias (body, caption, heading) or a length in pt, mm or in")
                 && err.contains("at line"),
             "{err}"
         );
@@ -5212,7 +5210,7 @@ mod tests {
     #[test]
     fn a_document_without_aliases_does_not_know_the_name() {
         let err = parse(&minimal(r#"<text font-size="caption">Hi</text>"#)).unwrap_err();
-        assert!(err.contains("invalid text size: 'caption': expected a slot from xs to xxl or a pt value"), "{err}");
+        assert!(err.contains("invalid text size: 'caption': expected a slot from xs to xxl or a length in pt, mm or in"), "{err}");
     }
 
     #[test]
@@ -5311,19 +5309,19 @@ mod tests {
         let err = tokens(r#"<height xs="16pt" s="24pt" m="32pt" l="48pt" xl="64pt"/>"#).unwrap_err();
         assert!(err.contains("<height> missing 'xxl' attribute"), "{err}");
         let err = tokens(r#"<height xs="tall" s="24pt" m="32pt" l="48pt" xl="64pt" xxl="96pt"/>"#).unwrap_err();
-        assert!(err.contains("<height> 'xs': invalid pt value 'tall'"), "{err}");
+        assert!(err.contains("<height> 'xs': invalid value 'tall': expected a length in pt, mm or in"), "{err}");
     }
 
     #[test]
     fn a_height_that_is_none_of_these_says_what_is_expected() {
         let err = parse(&minimal(r#"<column height="tall"/>"#)).unwrap_err();
         assert!(
-            err.contains("invalid height value: 'tall' — expected full, fill, a slot from xs to xxl or a pt value like 28pt")
+            err.contains("invalid height value: 'tall' — expected full, fill, a slot from xs to xxl or a length in pt, mm or in, like 28pt")
                 && err.contains("at line"),
             "{err}"
         );
         let err = parse(&with_aliases(r#"<frame height="medum"/>"#)).unwrap_err();
-        assert!(err.contains("expected full, fill, a slot from xs to xxl, an alias (body, caption, heading) or a pt value"), "{err}");
+        assert!(err.contains("expected full, fill, a slot from xs to xxl, an alias (body, caption, heading) or a length in pt, mm or in"), "{err}");
     }
 
     #[test]
@@ -5350,7 +5348,7 @@ mod tests {
         };
         assert!(layer("40pt").is_ok());
         let err = layer("m").unwrap_err();
-        assert!(err.contains("img height: invalid pt value 'm'"), "{err}");
+        assert!(err.contains("img height: invalid length 'm': expected a length in pt, mm or in"), "{err}");
     }
 
     #[test]
@@ -5364,7 +5362,7 @@ mod tests {
         assert_eq!(children[1].height_mode, HeightMode::Fixed(16.0), "a slot the tree leaves out keeps its default");
 
         let err = parse_tree(&tree.replace(r#""m":"50pt""#, r#""m":"tall""#)).unwrap_err();
-        assert!(err.contains("invalid height token 'm': 'tall'"), "{err}");
+        assert!(err.contains("invalid height token 'm': 'tall': expected a length in pt, mm or in"), "{err}");
     }
 
     #[test]
