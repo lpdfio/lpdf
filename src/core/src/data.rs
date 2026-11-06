@@ -362,8 +362,10 @@ fn apply_nodes(nodes: Vec<Node>, stack: &[&Value], bind: &Bind) -> Result<Vec<No
 /// - 1 output:  the normal case (data resolved and children recursed)
 /// - N outputs: the node has `data-source` and is expanded once per array item
 fn apply_single_node(node: Node, stack: &[&Value], bind: &Bind, out: &mut Vec<Node>) -> Result<(), String> {
-    // A loop over a big array can make many times the nodes of the template, so the cap is checked for each.
+    // A loop over a big array can make many times the nodes of the template, so the cap and the deadline are
+    // checked for each.
     crate::memory::check()?;
+    crate::deadline::check();
     let root = bind.root;
     let di  = node.data_attrs.as_ref().and_then(|d| d.data_if.as_deref()).map(str::to_owned);
     let din = node.data_attrs.as_ref().and_then(|d| d.data_if_not.as_deref()).map(str::to_owned);

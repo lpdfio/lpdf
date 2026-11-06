@@ -1,0 +1,37 @@
+[package]
+name = "lpdf-ffi"
+version = "0.0.0"
+edition = "2024"
+description = "lpdf — native library for hosts that call the engine through C, such as PHP's FFI (Linux)"
+repository = "https://github.com/lpdfio/lpdf"
+license-file = "../core/LICENSE"
+# The trusted license keys, as the WASI binary has them.
+build = "../core-wasi/build.rs"
+
+[lib]
+# liblpdf_ffi.so: `lpdf` would be the file name of the core's own library, in the same target folder.
+name = "lpdf_ffi"
+crate-type = ["cdylib"]
+
+# The same as core-wasi's, whose modules this crate shares: `dispatch.rs` and the core's, by path.
+[dependencies]
+# unbounded_depth: a document tree nests deeper than serde_json's own limit, and `nesting.rs` bounds it instead
+serde_json = { version = "1", features = ["unbounded_depth"] }
+serde     = { version = "1", features = ["derive"] }
+roxmltree = "0.20"
+pdf-writer = "0.12"
+ttf-parser = "0.25"
+subsetter   = "0.2"
+base64 = "0.22"
+ed25519-dalek = { version = "2", default-features = false, features = ["alloc"] }
+miniz_oxide = "0.7"
+qrcode = { version = "0.14", default-features = false }
+md-5 = "0.10"
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+sha2 = "0.10"
+pulldown-cmark = { version = "0.13", default-features = false }
+lopdf = { version = "0.46", default-features = false }
+
+[build-dependencies]
+sha2 = "0.10"

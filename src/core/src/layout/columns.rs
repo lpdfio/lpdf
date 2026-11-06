@@ -149,6 +149,7 @@ pub(super) fn fill_pages(flow: &ColumnFlow) -> Vec<FilledPage> {
     let mut pages: Vec<FilledPage> = Vec::new();
     // An empty flow is one empty page, as in one column.
     while pages.is_empty() || !(pending.is_empty() || crate::memory::passed()) {
+        crate::deadline::check_now();
         let index = pages.len();
         let budget = if index == 0 { flow.budget_first } else { flow.budget_rest };
         let at = flow.start.map(|start| start.on_page(index == 0));

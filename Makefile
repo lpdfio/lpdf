@@ -12,7 +12,7 @@ export LPDF_PUBLIC_KEY
 PAGES_DIR     ?= repos/lpdf-pages
 PORTAL_UI_DIR ?= ../codesense/portal/ui
 
-.PHONY: build-wasm build-wasi build-cli test-wasm test-wasi test-cli \
+.PHONY: build-wasm build-wasi build-ffi build-cli test-wasm test-wasi test-ffi test-cli \
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python build-sdk-java \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python test-sdk-java \
@@ -40,6 +40,20 @@ build-wasi:
 	@echo ""
 	cargo build --manifest-path src/core-wasi/Cargo.toml --release --target wasm32-wasip1
 	mkdir -p dist/wasi && cp target/wasm32-wasip1/release/lpdf-wasi.wasm dist/wasi/lpdf.wasm
+
+# The native library the PHP SDK loads through FFI, for Linux with glibc on x86_64 and aarch64: built in a container
+# with cargo-zigbuild for glibc 2.17 (scripts/build-ffi.sh), into dist/ffi/liblpdf-linux-<arch>.so. The container
+# keeps its own target folder, so its build scripts don't replace this machine's.
+build-ffi:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Building the native library (Linux, glibc 2.17)..."
+	@echo ""
+	docker build -q -t lpdf-ffi-build -f scripts/build-ffi.Dockerfile scripts
+	docker volume create lpdf-ffi-cargo >/dev/null
+	docker run --rm -e LPDF_PUBLIC_KEY -e CARGO_TARGET_DIR=//lpdf/target/ffi-linux \
+		-v "$(CURDIR)://lpdf" -v lpdf-ffi-cargo://usr/local/cargo/registry -w //lpdf \
+		lpdf-ffi-build sh scripts/build-ffi.sh dist/ffi
 
 build-cli:
 	@echo ""
@@ -188,6 +202,14 @@ test-wasi: test-wasm
 	@echo ""
 	cargo test --manifest-path src/core-wasi/Cargo.toml
 
+# The native library's tests, on this machine: the core's and the WASI binary's again, and its own (`lpdf_invoke`).
+test-ffi: test-wasm
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Running native library tests..."
+	@echo ""
+	cargo test --manifest-path src/core-ffi/Cargo.toml
+
 test-cli:
 	@echo ""
 	@echo "-------------------------------"
@@ -259,10 +281,10 @@ test-sdk-dotnet: build-sdk-dotnet
 	@echo ""
 	cd repos/lpdf-dotnet && dotnet test
 
-# The PHP repo commits resources/lpdf-wasi.wasm, the release build that Packagist serves.
-# A local build trusts only the dev key, so it must never land there: local runs mount it
+# The PHP repo commits resources/lpdf-wasi.wasm and the native libraries in resources/lib, the release builds that
+# Packagist serves. A local build trusts only the dev key, so it must never land there: local runs mount it
 # over the image's copy instead.
-PHP_WASM_MOUNT = -v "$(CURDIR)/dist/wasi/lpdf.wasm://app/resources/lpdf-wasi.wasm"
+PHP_WASM_MOUNT = -v "$(CURDIR)/dist/wasi/lpdf.wasm://app/resources/lpdf-wasi.wasm" -v "$(CURDIR)/dist/ffi://app/resources/lib"
 
 # Endive's Maven plugin compiles the engine in wasm/lpdf.wasm to JVM classes as the jar is built. Needs a JDK 17 or
 # later and Maven.
@@ -281,13 +303,15 @@ test-sdk-java: build-sdk-java
 	@echo ""
 	cd repos/lpdf-java && mvn -B test
 
-build-sdk-php: build-wasi
+build-sdk-php: build-wasi build-ffi
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Building PHP adapter..."
 	@echo ""
 	docker build -t lpdf-php repos/lpdf-php
 
+# Through both runners: the image has the FFI extension, so `auto` picks the native library, and the tests that name
+# a runner run through each (RunnerSupport in the PHP repo). The image is Linux on this machine's CPU.
 test-sdk-php: build-sdk-php
 	@echo ""
 	@echo "-------------------------------"
@@ -298,7 +322,9 @@ test-sdk-php: build-sdk-php
 		-v "$(CURDIR)/repos/lpdf-php/test://app/test" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-v "$(CURDIR)/test/snapshots://app/test/snapshots" \
+		-v "$(CURDIR)/test/assets://app/test/assets" \
 		$(PHP_WASM_MOUNT) \
+		-e LPDF_TEST_RUNNERS=ffi,wasm -e LPDF_TEST_AUTO=ffi \
 		-w //app lpdf-php php vendor/bin/phpunit test
 
 build-sdk-python: build-wasi
@@ -342,7 +368,7 @@ check-sdk-api:
 	node scripts/gen-sdk-api.mjs --check
 	node scripts/check-sdk-parity.mjs
 
-test-all: check-sdk-api test-wasm test-wasi test-cli test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python test-sdk-java
+test-all: check-sdk-api test-wasm test-wasi test-ffi test-cli test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python test-sdk-java
 
 example-all: example-node example-dotnet example-php example-python example-java
 

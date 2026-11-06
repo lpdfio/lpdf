@@ -376,10 +376,17 @@ pub(crate) fn finish_section(page: &SectionLayout, filled: FilledSection, number
 
 /// Run `lay_out` with the layout saying what each thing it draws is, for a tagged section.
 fn with_tagging<T>(lay_out: impl FnOnce() -> T) -> T {
+    /// Turns the tags off when the section ends, and when a render past its deadline unwinds out of it
+    /// (`deadline`), so the next render on the thread starts without them.
+    struct Tagging;
+    impl Drop for Tagging {
+        fn drop(&mut self) {
+            TAGGING.with(|on| on.set(false));
+        }
+    }
     TAGGING.with(|on| on.set(true));
-    let out = lay_out();
-    TAGGING.with(|on| on.set(false));
-    out
+    let _tagging = Tagging;
+    lay_out()
 }
 
 fn finish_pages(page: &SectionLayout, filled: FilledSection, numbers: &SectionNumbers) -> Vec<RenderPage> {
@@ -3302,6 +3309,7 @@ fn layout_node(
     avail_h: Option<f32>,
 ) -> (RenderNode, f32) {
     count_work();
+    crate::deadline::check();
     // Resolve actual width from constraint or available
     let (node_w, node_x) = match own_width(node) {
         Some(w) => (w.min(avail_w), x),

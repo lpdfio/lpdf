@@ -159,6 +159,7 @@ pub(super) fn split_flow<'a>(
         if !first && (pending.is_empty() || crate::memory::passed()) {
             return None;
         }
+        crate::deadline::check_now();
         let at = start.map(|start| start.on_page(first));
         let budget = if first { budget_first } else { budget_rest };
         first = false;
