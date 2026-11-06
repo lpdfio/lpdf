@@ -16,7 +16,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python build-sdk-java \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python test-sdk-java \
-        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-facturx check-ocg check-codegen-dotnet check-function-sizes \
+        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api gen-codegen-corpus check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-facturx check-ocg check-codegen-sdk-node check-codegen-sdk-dotnet check-codegen-sdk-php check-codegen-sdk-python check-codegen-sdk-java check-codegen-sdks check-function-sizes \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-adapter-java clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python example-java \
@@ -186,14 +186,51 @@ check-function-sizes: build-wasi
 	node --test scripts/check-function-sizes.test.mjs
 	node scripts/check-function-sizes.mjs dist/wasi/lpdf.wasm
 
-# check-codegen-dotnet compiles the C# the codegen writes for every fixture against the .NET SDK in repos/lpdf-dotnet,
-# with the engine built from this checkout (`scripts/check-codegen-dotnet.mjs`). Needs the .NET 8 SDK or later.
-check-codegen-dotnet: build-cli build-sdk-dotnet
+# The code `codegen` writes for each language is built with the SDK of that language, which renders it and the XML it was
+# written from through one engine, and the two PDFs have to be the same (`scripts/check-codegen-sdk.mjs`). The documents
+# are the fixtures and test/codegen-corpus.json; the engine files that hold codegen are dist/node. Each SDK's CI runs
+# the same script against the core tag it builds against. PHP and Python run in the SDK's image, as their tests do.
+check-codegen-sdk-node: build-sdk-node
 	@echo ""
 	@echo "-------------------------------"
-	@echo ">>> Compiling the generated C# against the .NET SDK..."
+	@echo ">>> Checking the code codegen writes for the Node SDK..."
 	@echo ""
-	node scripts/check-codegen-dotnet.mjs target/release/lpdf repos/lpdf-dotnet
+	node scripts/check-codegen-sdk.mjs --sdk node=repos/lpdf-js
+
+check-codegen-sdk-dotnet: build-sdk-dotnet build-wasm
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking the code codegen writes for the .NET SDK..."
+	@echo ""
+	node scripts/check-codegen-sdk.mjs --sdk dotnet=repos/lpdf-dotnet
+
+check-codegen-sdk-php: build-sdk-php build-wasm
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking the code codegen writes for the PHP SDK..."
+	@echo ""
+	node scripts/check-codegen-sdk.mjs --sdk php=repos/lpdf-php --docker lpdf-php \
+		--mount "$(CURDIR)/repos/lpdf-php/src://app/src" \
+		--mount "$(CURDIR)/dist/wasi/lpdf.wasm://app/resources/lpdf-wasi.wasm" \
+		--mount "$(CURDIR)/dist/ffi://app/resources/lib"
+
+check-codegen-sdk-python: build-sdk-python build-wasm
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking the code codegen writes for the Python SDK..."
+	@echo ""
+	node scripts/check-codegen-sdk.mjs --sdk python=repos/lpdf-python --docker lpdf-python \
+		--mount "$(CURDIR)/repos/lpdf-python/src/lpdf://app/lpdf" \
+		--mount "$(CURDIR)/repos/lpdf-python/resources://app/resources"
+
+check-codegen-sdk-java: build-sdk-java build-wasm
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking the code codegen writes for the Java SDK..."
+	@echo ""
+	node scripts/check-codegen-sdk.mjs --sdk java=repos/lpdf-java
+
+check-codegen-sdks: check-codegen-sdk-node check-codegen-sdk-dotnet check-codegen-sdk-php check-codegen-sdk-python check-codegen-sdk-java
 
 test-wasi: test-wasm
 	@echo ""
@@ -368,7 +405,16 @@ check-sdk-api:
 	node scripts/gen-sdk-api.mjs --check
 	node scripts/check-sdk-parity.mjs
 
-test-all: check-sdk-api test-wasm test-wasi test-ffi test-cli test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python test-sdk-java
+# The documents the SDKs' codegen check renders are those attribute_effects builds, written to
+# test/codegen-corpus.json. gen-codegen-corpus writes the file; `cargo test` fails when it differs from the test's.
+gen-codegen-corpus:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Writing the codegen corpus from attribute_effects..."
+	@echo ""
+	UPDATE_CODEGEN_CORPUS=1 cargo test --manifest-path src/core/Cargo.toml the_codegen_corpus_is_current -- --nocapture
+
+test-all: check-sdk-api test-wasm test-wasi test-ffi test-cli test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python test-sdk-java check-codegen-sdks
 
 example-all: example-node example-dotnet example-php example-python example-java
 

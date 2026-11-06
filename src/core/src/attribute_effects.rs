@@ -414,10 +414,10 @@ const FACTUR_X_INVOICE: &[u8] = br#"<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:
 /// The press profile a PDF/X document renders with: the FOGRA39 printer profile of the test assets.
 const PRESS_PROFILE: &[u8] = include_bytes!("../../../test/assets/profiles/FOGRA39L_coated.icc");
 
-/// Renders with the images `logo` (red) and `other` (blue), the font `custom`, the files `terms.txt`, `renamed.txt` and
-/// `other` and the press profiles `press` and `other` loaded on the engine, a date for a document that asks for a standard, and an
-/// owner password and fixed entropy for a document that asks for encryption, then encrypted and linearized as the engine
-/// finishes a file.
+/// Renders, as `LpdfEngine::render_xml` does, with the images `logo` (red), `other` (blue) and `renamed`, the font `custom`,
+/// the files `terms.txt`, `renamed.txt` and `other` and the press profiles `press`, `other` and `renamed` loaded on the
+/// engine, a date for a document that asks for a standard, and an owner password and fixed entropy for a document that
+/// asks for encryption, then encrypted and linearized as the engine finishes a file.
 /// A panic in the engine is an error like any other, so one bad value cannot hide the rest.
 fn render(xml: &str) -> Result<Vec<u8>, String> {
     catch_unwind(AssertUnwindSafe(|| {
@@ -442,9 +442,13 @@ fn render(xml: &str) -> Result<Vec<u8>, String> {
         let mut images = crate::pdf::ImageRegistry::new();
         images.load("logo", RED_PIXEL.to_vec());
         images.load("other", BLUE_PIXEL.to_vec());
+        images.load("renamed", RED_PIXEL.to_vec());
         // As the engine does before it lays out: the sizes of the images, and what is drawn around one.
         let meta = crate::pdf::build_image_meta(&images);
         let mut layouts = doc.section_layouts();
+        // As the engine does before it lays out: what PDF/UA asks of the document, and the references that name no bookmark.
+        crate::pdfua::check(doc.output.pdfua, &doc.meta, &layouts)?;
+        crate::references::check(&layouts)?;
         for section in &mut layouts {
             crate::layout::prefill_section_image_sizes(section, &meta);
         }
@@ -454,6 +458,7 @@ fn render(xml: &str) -> Result<Vec<u8>, String> {
         let mut profiles = crate::pdfx::ProfileRegistry::new();
         profiles.load("press", PRESS_PROFILE.to_vec());
         profiles.load("other", crate::pdfx::test_profile(b"prtr", b"CMYK", "Another press"));
+        profiles.load("renamed", PRESS_PROFILE.to_vec());
         let press = crate::pdfx::resolve(doc.output.pdfx.as_ref(), &doc.profiles, &profiles, &doc.meta)?;
         let created_on = crate::pdfa::Standards::of(&doc.output).any().then_some("2026-10-31T09:30:00Z");
         let bytes = crate::pdf::render_pdf(
@@ -1137,8 +1142,9 @@ enum Verdict {
     Broken(String),
 }
 
-fn judge(attribute: &Attribute, subject: &Subject, tweak: &Tweak) -> Verdict {
-    let id = attribute.id();
+/// The attributes every document of an attribute sets on the subject's element: the subject's own, less what the
+/// tweak removes, and what the tweak sets.
+fn base_pairs(subject: &Subject, tweak: &Tweak) -> Vec<(String, String)> {
     let mut base: Vec<(String, String)> = subject
         .base
         .iter()
@@ -1151,6 +1157,31 @@ fn judge(attribute: &Attribute, subject: &Subject, tweak: &Tweak) -> Verdict {
             None => base.push((n.to_string(), v.to_string())),
         }
     }
+    base
+}
+
+/// The attributes of the document that shows `attribute` with `value`: the base, less what the attribute excludes.
+fn pairs_with_value(base: &[(String, String)], tweak: &Tweak, attribute: &Attribute, value: &str) -> Vec<(String, String)> {
+    let mut pairs: Vec<(String, String)> =
+        base.iter().filter(|pair| !tweak.without.iter().any(|w| *w == pair.0)).cloned().collect();
+    match pairs.iter_mut().find(|pair| pair.0 == attribute.name) {
+        Some(existing) => existing.1 = value.to_string(),
+        None => pairs.push((attribute.name.clone(), value.to_string())),
+    }
+    pairs
+}
+
+/// The values to try for an attribute: the schema's, else the samples for free text. `None` when there are none.
+fn values_to_try(attribute: &Attribute) -> Option<Vec<String>> {
+    if !attribute.values.is_empty() {
+        Some(attribute.values.clone())
+    } else {
+        strings(&attribute.id(), &attribute.name).map(strs)
+    }
+}
+
+fn judge(attribute: &Attribute, subject: &Subject, tweak: &Tweak) -> Verdict {
+    let base = base_pairs(subject, tweak);
     let content = tweak.content.unwrap_or(subject.content);
     let base_value = base.iter().find(|pair| pair.0 == attribute.name).map(|pair| pair.1.clone());
     if attribute.required && base_value.is_none() {
@@ -1163,11 +1194,7 @@ fn judge(attribute: &Attribute, subject: &Subject, tweak: &Tweak) -> Verdict {
         Err(e) => return Verdict::Broken(format!("the document without it does not render: {e}\n    {baseline_xml}")),
     };
 
-    let values: Vec<String> = if !attribute.values.is_empty() {
-        attribute.values.clone()
-    } else if let Some(samples) = strings(&id, &attribute.name) {
-        strs(samples)
-    } else {
+    let Some(values) = values_to_try(attribute) else {
         return Verdict::Broken("no sample values: add them to `strings`".to_string());
     };
 
@@ -1175,12 +1202,7 @@ fn judge(attribute: &Attribute, subject: &Subject, tweak: &Tweak) -> Verdict {
     let mut same = Vec::new();
     let mut errors = Vec::new();
     for value in values.iter().filter(|v| Some(*v) != base_value.as_ref()) {
-        let mut pairs: Vec<(String, String)> =
-            base.iter().filter(|pair| !tweak.without.iter().any(|w| *w == pair.0)).cloned().collect();
-        match pairs.iter_mut().find(|pair| pair.0 == attribute.name) {
-            Some(existing) => existing.1 = value.clone(),
-            None => pairs.push((attribute.name.clone(), value.clone())),
-        }
+        let pairs = pairs_with_value(&base, tweak, attribute, value);
         match render(&(subject.build)(&attribute_string(&pairs), content)) {
             Ok(bytes) if bytes != baseline => changed = true,
             Ok(_) => same.push(value.clone()),
@@ -1210,6 +1232,152 @@ fn subject_for<'a>(subjects: &'a [Subject], attribute: &Attribute) -> Option<&'a
 
 fn reason<'a>(list: &'a [(&'a str, &'a str)], id: &str) -> Option<&'a str> {
     list.iter().find(|(key, _)| *key == id).map(|(_, why)| *why)
+}
+
+// ── The corpus of the SDKs' codegen check ─────────────────────────────────────
+
+/// Where the corpus is written, from the root of the repository.
+const CORPUS_FILE: &str = "test/codegen-corpus.json";
+
+/// What the corpus file says about itself, for whoever finds it in the checkout of an SDK's CI.
+const CORPUS_ABOUT: &str = "The documents attribute_effects renders, one for each attribute of the schema and, for an \
+    enumeration or a boolean, one for each value, for scripts/check-codegen-sdk.mjs: each SDK's CI writes the code that \
+    the code generator gives for a document, renders it and the XML, and requires the same PDF. Generated by `make \
+    gen-codegen-corpus` from src/core/src/attribute_effects.rs; cargo test fails when it differs. Left out are the \
+    data-binding attributes, which the code generator cannot write and data.rs tests; what attribute_effects excuses \
+    and a value the engine refuses in any document, listed under excused with the reason.";
+
+/// A document of the corpus: what it shows, as `element@attribute=value`, and its XML.
+struct CorpusDocument {
+    id: String,
+    xml: String,
+}
+
+/// An attribute or a value left out of the corpus, as `element@attribute` or with `=value`, and why.
+struct Excused {
+    id: String,
+    why: String,
+}
+
+/// The document for a value that the document of the test cannot show, because the engine refuses it there, or `None`
+/// when no document can. A name that something looks up (a color, a profile, an image) is renamed alone by the test,
+/// which leaves what uses it dangling, and the error is the effect it counts; the corpus renames the use as well.
+/// A few values need more than the subject gives: a heading below h2 needs the levels above it, a circle takes a radius, an
+/// inset a top and a height, and the strict Factur-X flag an invoice of the type the spec asks for.
+fn corrected(id: &str, xml: &str, lookup_of: Option<&str>, value: &str) -> Option<String> {
+    if let Some(level) = id.strip_prefix("text@role=h").and_then(|level| level.parse::<usize>().ok()) {
+        let levels: String = (1..level).map(|l| format!(r#"<text role="h{l}">Lpdf</text>"#)).collect();
+        return Some(xml.replace(r#"<text role="h1">Lpdf</text>"#, &levels));
+    }
+    let fixed = match id {
+        "output@facturx-strict=true" => xml.replace(r#"mime="application/xml""#, r#"mime="text/xml""#),
+        "region@pin=inset" => xml.replace(r#"pin="inset""#, r#"pin="inset" top="20pt" height="60pt""#),
+        "shape@type=circle" => xml.replace(r#" width="100pt" height="40pt""#, r#" r="30pt""#),
+        _ => {
+            // As an attribute's whole value (`color="brand"`), or after a prefix (`background="gradient:fade"`).
+            let old = lookup_of?;
+            xml.replace(&format!("\"{old}\""), &format!("\"{value}\"")).replace(&format!(":{old}\""), &format!(":{value}\""))
+        }
+    };
+    (fixed != xml).then_some(fixed)
+}
+
+/// The documents that show each value of each attribute attribute_effects tries, and what it leaves out: the
+/// attributes it cannot exercise or finds ignored, the values it finds ignored, and a document the engine refuses.
+/// An attribute that the engine ignores changes no PDF, so a codegen check cannot see it.
+fn corpus(
+    attributes: &[Attribute],
+    subjects: &[Subject],
+    tweaks: &HashMap<String, Tweak>,
+) -> (Vec<CorpusDocument>, Vec<Excused>) {
+    let mut documents = Vec::new();
+    let mut excused = Vec::new();
+    for attribute in attributes {
+        let id = attribute.id();
+        if attribute.name.starts_with("data-") {
+            continue;
+        }
+        if let Some(why) = reason(UNTESTED, &id).or_else(|| reason(IGNORED, &id)) {
+            excused.push(Excused { id, why: why.to_string() });
+            continue;
+        }
+        // The test above reports an attribute with no subject or no values.
+        let (Some(subject), Some(values)) = (subject_for(subjects, attribute), values_to_try(attribute)) else { continue };
+        let default = Tweak::default();
+        let tweak = tweaks.get(&id).unwrap_or(&default);
+        let base = base_pairs(subject, tweak);
+        let content = tweak.content.unwrap_or(subject.content);
+        for value in values {
+            let value_id = format!("{id}={value}");
+            if let Some(why) = reason(IGNORED_VALUES, &value_id) {
+                excused.push(Excused { id: value_id, why: why.to_string() });
+                continue;
+            }
+            let mut xml = (subject.build)(&attribute_string(&pairs_with_value(&base, tweak, attribute, &value)), content);
+            if render(&xml).is_err() {
+                let base_value = base.iter().find(|pair| pair.0 == attribute.name).map(|pair| pair.1.as_str());
+                let lookup_of = base_value.filter(|_| tweak.error_counts);
+                if let Some(fixed) = corrected(&value_id, &xml, lookup_of, &value) {
+                    xml = fixed;
+                }
+            }
+            let rendered = match render(&xml) {
+                Ok(_) => {
+                    documents.push(CorpusDocument { id: value_id, xml });
+                    true
+                }
+                Err(e) => {
+                    excused.push(Excused { id: value_id, why: format!("the engine refuses the document: {e}") });
+                    false
+                }
+            };
+            // Every value of an enumeration or a boolean is another word in the code; the samples of a measure, a
+            // number or a text are the same kind of literal, so the first the engine takes stands for them all.
+            if rendered && !attribute.one_of {
+                break;
+            }
+        }
+    }
+    (documents, excused)
+}
+
+/// The corpus file: one document or excuse to a line, so a change shows in a diff as the lines it touches.
+fn corpus_json(documents: &[CorpusDocument], excused: &[Excused]) -> String {
+    let documents: Vec<String> = documents
+        .iter()
+        .map(|d| format!("    {}", serde_json::json!({ "id": d.id, "xml": d.xml })))
+        .collect();
+    let excused: Vec<String> =
+        excused.iter().map(|e| format!("    {}", serde_json::json!({ "id": e.id, "why": e.why }))).collect();
+    format!(
+        "{{\n  \"about\": {},\n  \"documents\": [\n{}\n  ],\n  \"excused\": [\n{}\n  ]\n}}\n",
+        serde_json::Value::from(CORPUS_ABOUT),
+        documents.join(",\n"),
+        excused.join(",\n")
+    )
+}
+
+/// `UPDATE_CODEGEN_CORPUS=1 cargo test --manifest-path src/core/Cargo.toml codegen_corpus` writes the file.
+#[test]
+fn the_codegen_corpus_is_current() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let text = std::fs::read_to_string(root.join("schema/lpdf.xsd")).expect("schema/lpdf.xsd");
+    let doc = Document::parse(&text).expect("the schema is XML");
+    let (documents, excused) = corpus(&with_contexts(schema_attributes(&doc)), &subjects(), &tweaks());
+    let built = corpus_json(&documents, &excused);
+
+    let path = root.join(CORPUS_FILE);
+    if std::env::var("UPDATE_CODEGEN_CORPUS").is_ok() {
+        std::fs::write(&path, &built).expect("write the corpus");
+        println!("updated {CORPUS_FILE}: {} documents, {} left out", documents.len(), excused.len());
+        return;
+    }
+    let current = std::fs::read_to_string(&path)
+        .unwrap_or_else(|_| panic!("{CORPUS_FILE} is missing: run `make gen-codegen-corpus` to generate it"));
+    assert!(
+        current.replace("\r\n", "\n") == built,
+        "{CORPUS_FILE} differs from the documents attribute_effects builds: run `make gen-codegen-corpus` and commit it"
+    );
 }
 
 #[test]
