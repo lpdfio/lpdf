@@ -1807,6 +1807,7 @@ fn parse_assets_elem(
 
 /// The `name` and `src` of each font `xml` declares in `<assets>` with a `src`, in document order. The parser ignores
 /// a font's `src`, which an adapter reads, so this is for a caller that loads the files as an adapter does.
+#[allow(dead_code, reason = "only the bench asks, and the WASI binary and the native library have no bench")]
 pub fn font_srcs(xml: &str) -> Result<Vec<(String, String)>, String> {
     let doc = roxmltree::Document::parse(xml)
         .map_err(|e| format!("XML parse error: {e}"))?;

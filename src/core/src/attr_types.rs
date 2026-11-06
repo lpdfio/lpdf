@@ -141,6 +141,7 @@ fn json_text(kind: Kind, value: &Value) -> Option<String> {
 
 /// The kind of the attribute `name` of the element `element` written in `parent`: `Kind::Text` for an attribute or an
 /// element the table doesn't list.
+#[allow(dead_code, reason = "only codegen asks, and the WASI binary and the native library have no codegen")]
 pub(crate) fn kind_of(parent: &str, element: &str, name: &str) -> Kind {
     attributes_of(parent, element)
         .and_then(|attributes| attributes.iter().find(|(known, _)| *known == name))
@@ -149,6 +150,7 @@ pub(crate) fn kind_of(parent: &str, element: &str, name: &str) -> Kind {
 
 /// A value of `kind` as XML writes it, as a number, or `None` for one that is text: a name, or any value of a kind
 /// other than a number. `text` is a value the check has let through.
+#[allow(dead_code, reason = "only codegen asks, and the WASI binary and the native library have no codegen")]
 pub(crate) fn number_text(kind: Kind, text: &str) -> Option<String> {
     match kind {
         Kind::Integer { .. } => text.parse::<i64>().ok().map(|value| value.to_string()),
