@@ -1272,7 +1272,8 @@ impl<'a> Writer<'a> {
     fn quote(&self, inner: Vec<Block>, line: usize) -> Result<Block, String> {
         let rule = self.spec.rules.rule("quote");
         let tokens = &self.spec.tokens;
-        let invalid = |what: &str, e: String| self.fail(line, &format!("the quote rule: {what}: {e}"));
+        // The document read names the rule in front of the error (`expand` of each written rule), so it is not named here.
+        let invalid = |what: &str, e: String| self.fail(line, &format!("{what}: {e}"));
         // The bar is the first column of the table, which reads a length and not a slot: a slot or an alias is turned
         // into its pt value from the tokens' space row here, as the gap and the padding are.
         let width = match rule.get("bar-width") {
@@ -2193,7 +2194,19 @@ mod tests {
     fn a_quote_bar_that_is_neither_a_slot_nor_a_length_is_an_error_that_names_it() {
         let styles = r#"<markdown-styles><quote bar-width="wide"/></markdown-styles>"#;
         let err = parse(&quote_in("", styles)).unwrap_err();
-        assert!(err.contains("the quote rule") && err.contains("bar-width") && err.contains("'wide'"), "{err}");
+        assert!(err.contains("the quote rule: bar-width: invalid space value: 'wide'"), "{err}");
+    }
+
+    #[test]
+    fn a_rule_value_that_does_not_read_names_its_rule_once() {
+        for (rule, attribute, value) in [("quote", "padding", "2mm"), ("quote", "bar-width", "wide"), ("h1", "font-size", "huge")] {
+            let styles = format!(r#"<markdown-styles><{rule} {attribute}="{value}"/></markdown-styles>"#);
+            let err = parse(&quote_in("", &styles)).unwrap_err();
+            assert_eq!(err.matches(&format!("the {rule} rule")).count(), 1, "{err}");
+            assert!(err.contains(&format!("the {rule} rule: ")) && err.contains(&format!("'{value}'")), "{err}");
+        }
+        let err = parse(&quote_in("", r#"<markdown-styles><quote padding="2mm"/></markdown-styles>"#)).unwrap_err();
+        assert!(err.contains("the quote rule: padding: invalid space value: '2mm'"), "{err}");
     }
 
     #[test]
