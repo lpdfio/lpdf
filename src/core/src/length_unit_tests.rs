@@ -137,7 +137,7 @@ fn a_column_width_of_auto_beside_a_length_in_mm_still_shares_the_rest() {
 }
 
 #[test]
-fn a_bare_number_is_a_length_nowhere_but_zero() {
+fn a_bare_number_is_still_no_length_for_a_padding_a_width_and_a_page_size() {
     for (what, xml) in [
         ("padding", document("", r#"<layout><column padding="10"><text>x</text></column></layout>"#)),
         ("width", document("", r#"<layout><column width="10"><text>x</text></column></layout>"#)),
