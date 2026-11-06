@@ -8,18 +8,19 @@ You describe a document as code or XML. Lpdf renders a compact, pixel-perfect PD
 
 ## SDKs
 
-Lpdf runs on Node.js, browser, .NET, PHP, and Python. Under the hood, a single Rust core compiles to three targets: **WASM** (embedded in the JS SDK), **WASI** (a portable binary for server runtimes via [Wasmtime](https://wasmtime.dev)), and a **native library** for Linux with glibc 2.17 or newer, on x86_64 and arm64, which the PHP SDK loads through FFI where it can, with the WASI binary as its fallback.
+Lpdf runs on Node.js, browser, .NET, PHP, Python, and Java. Under the hood, a single Rust core compiles to three targets: **WASM** (embedded in the JS SDK), **WASI** (a portable binary for server runtimes via [Wasmtime](https://wasmtime.dev); the Java SDK carries it compiled to JVM classes and runs it on [Endive](https://github.com/bytecodealliance/endive) instead), and a **native library** for Linux with glibc 2.17 or newer, on x86_64 and arm64, which the PHP SDK loads through FFI where it can, with the WASI binary as its fallback.
 
 ### Version Requirements
 
-| Language | Minimum | Rationale |
-|----------|---------|-----------|
-| Node.js  | 20      | LTS release; EOL 2026-04-30 |
-| .NET     | 8.0     | LTS release; EOL 2026-11-10 |
-| PHP      | 8.3     | Current stable; EOL 2025-11-25 |
-| Python   | 3.11    | Security fixes only; EOL 2027-10 |
+| Language | Minimum |
+|----------|---------|
+| Node.js  | 20      |
+| .NET     | 8.0     |
+| PHP      | 8.2     |
+| Python   | 3.11    |
+| Java     | 17      |
 
-### Node.js (20.0+)
+### Node.js (20+)
 
 [github.com/lpdfio/lpdf-js](https://github.com/lpdfio/lpdf-js)  -  [npmjs.com/package/@lpdfio/lpdf](https://www.npmjs.com/package/@lpdfio/lpdf)  -  [lpdf.io/docs](https://lpdf.io/docs/install/?sdk=js&utm_campaign=sdk-node&utm_medium=referral&utm_source=readme)
 
@@ -90,7 +91,7 @@ var doc = L.Document(new() { Size = "letter", Margin = "48pt" }, [
 var pdf = engine.Render(doc);
 ```
 
-### PHP (8.3+)
+### PHP (8.2+)
 
 [github.com/lpdfio/lpdf-php](https://github.com/lpdfio/lpdf-php)  -  [packagist.org/packages/lpdfio/lpdf](https://packagist.org/packages/lpdfio/lpdf)  -  [lpdf.io/docs](https://lpdf.io/docs/install/?sdk=php&utm_campaign=sdk-php&utm_medium=referral&utm_source=readme)
 
@@ -164,6 +165,47 @@ doc = L.document(DocumentAttr(size='letter', margin='48pt'), [
 ])
 
 pdf = engine.render(doc)
+```
+
+### Java (17+)
+
+[github.com/lpdfio/lpdf-java](https://github.com/lpdfio/lpdf-java)  -  [central.sonatype.com/artifact/io.lpdf/lpdf](https://central.sonatype.com/artifact/io.lpdf/lpdf)  -  [lpdf.io/docs](https://lpdf.io/docs/?utm_campaign=sdk-java&utm_medium=referral&utm_source=readme)
+
+```xml
+<dependency>
+  <groupId>io.lpdf</groupId>
+  <artifactId>lpdf</artifactId>
+  <version>VERSION</version>
+</dependency>
+```
+
+```java
+import io.lpdf.*;
+import java.util.List;
+import static io.lpdf.L.NoAttr;
+
+var engine = L.engine();
+
+var doc = L.document(new DocumentAttr().size("letter"), List.of(
+    L.section(NoAttr, List.of(
+        L.layout(new LayoutAttr().margin("48pt"), List.of(
+            L.column(new ColumnAttr().gap("24pt"), List.of(
+                L.row(new RowAttr().justify("between"), List.of(
+                    L.text(new TextAttr().fontSize("8pt").color("#888888"), List.of("ACME CORP")),
+                    L.text(new TextAttr().fontSize("22pt").bold(true), List.of("Project Proposal"))
+                )),
+                L.divider(new DividerAttr().thickness("xs")),
+                L.text(new TextAttr().fontSize("13pt").bold(true), List.of("Scope of Work")),
+                L.row(new RowAttr().gap("12pt").align("start"), List.of(
+                    L.text(new TextAttr().color("#888888").width("24pt"), List.of("01")),
+                    L.text(new TextAttr().width("fill"), List.of("Discovery & Research"))
+                ))
+            ))
+        ))
+    ))
+));
+
+byte[] pdf = engine.render(doc);
 ```
 
 ## VS Code Extension
