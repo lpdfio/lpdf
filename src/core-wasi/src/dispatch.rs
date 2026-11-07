@@ -7,7 +7,8 @@
 //! ```
 //! - `render` / `render_tree` return the RenderTree JSON string directly.
 //! - `render_pdf` / `render_tree_pdf` return `{ "pdf": "<base64>" }` on success
-//!   or `{ "error": "…" }` on failure.
+//!   or `{ "error": "…" }` on failure. The WASI binary writes the PDF's answer to stdout as it encodes it, and the
+//!   native library returns it whole (`Answer`).
 //! - `stamp` draws PNG images over the pages of an existing PDF and returns `{ "pdf": "<base64>" }`, the input with
 //!   an incremental update, or `{ "error": "…" }`. It takes no `input`, but `pdf`, the file as base64, `images`, the
 //!   PNGs by name as base64, and `stamps`, a list of stamps, each naming its PNG in `image`:
@@ -61,6 +62,7 @@
 //! binary aborts on a panic, and its host reports the trap.
 
 use std::any::Any;
+use std::io::{self, Write};
 use std::panic::AssertUnwindSafe;
 
 use base64::Engine as _;
@@ -70,13 +72,75 @@ use crate::{
     render, shared, stamp, tokens,
 };
 
+/// The JSON before the base64 of a PDF's answer.
+const PDF_OPEN: &[u8] = br#"{"pdf":""#;
+
+/// The JSON after the base64 of a PDF's answer.
+const PDF_CLOSE: &[u8] = br#""}"#;
+
+/// What a request is answered: JSON text, or the PDF of a render or a stamp, whose answer is `{"pdf":"<base64>"}`.
+/// The PDF's answer is written as it is encoded (`write_to`), so the render never holds its base64 whole.
+pub(crate) enum Answer {
+    /// The answer's JSON: an error, a license report, a render tree, the XML of a kit.
+    Json(String),
+    /// The PDF of a `render_pdf`, a `render_tree_pdf` or a `stamp`.
+    Pdf(Vec<u8>),
+}
+
+impl Answer {
+    /// The answer `{ "error": "<message>" }`.
+    fn error(message: &str) -> Answer {
+        Answer::Json(serde_json::json!({ "error": message }).to_string())
+    }
+
+    /// The length of the answer's JSON, the bytes `write_to` writes: `usize::MAX` for a PDF whose base64 is longer than
+    /// a `usize` counts, which no build holds.
+    pub(crate) fn json_len(&self) -> usize {
+        match self {
+            Answer::Json(text) => text.len(),
+            Answer::Pdf(pdf) => base64::encoded_len(pdf.len(), true)
+                .and_then(|base64| base64.checked_add(PDF_OPEN.len() + PDF_CLOSE.len()))
+                .unwrap_or(usize::MAX),
+        }
+    }
+
+    /// Writes the answer's JSON to `out`. A PDF goes through the base64 encoder a block at a time, so `out` gets the
+    /// bytes serde_json writes for `{ "pdf": "<base64>" }`, since base64 has no character JSON escapes, while only a
+    /// block of the base64 is held.
+    pub(crate) fn write_to(&self, out: &mut impl Write) -> io::Result<()> {
+        match self {
+            Answer::Json(text) => out.write_all(text.as_bytes()),
+            Answer::Pdf(pdf) => {
+                out.write_all(PDF_OPEN)?;
+                {
+                    let mut base64 =
+                        base64::write::EncoderWriter::new(&mut *out, &base64::engine::general_purpose::STANDARD);
+                    base64.write_all(pdf)?;
+                    base64.finish()?;
+                }
+                out.write_all(PDF_CLOSE)
+            }
+        }
+    }
+}
+
+impl From<Result<Vec<u8>, String>> for Answer {
+    /// The answer of a render or a stamp: its PDF, or its error.
+    fn from(pdf: Result<Vec<u8>, String>) -> Answer {
+        match pdf {
+            Ok(pdf) => Answer::Pdf(pdf),
+            Err(e) => Answer::error(&e),
+        }
+    }
+}
+
 /// What `request` is answered: what `dispatch` answers, or the error of a render that ran past its timeout or panicked.
-pub(crate) fn answer(request: String) -> String {
+pub(crate) fn answer(request: String) -> Answer {
     answer_with(|| dispatch(request))
 }
 
 /// What `run` answers, or the error of a render that unwound out of it.
-fn answer_with(run: impl FnOnce() -> String) -> String {
+fn answer_with(run: impl FnOnce() -> Answer) -> Answer {
     // What a render holds is freed as it unwinds, and what it keeps for the thread is reset by its guards or when the
     // next render starts, so nothing of it is seen again.
     std::panic::catch_unwind(AssertUnwindSafe(run)).unwrap_or_else(unwound)
@@ -84,34 +148,35 @@ fn answer_with(run: impl FnOnce() -> String) -> String {
 
 /// The answer of a render that unwound with `payload`: past its deadline (`deadline::TimedOut`), or a panic.
 #[cfg(not(target_family = "wasm"))]
-fn unwound(payload: Box<dyn Any + Send>) -> String {
-    match payload.downcast::<deadline::TimedOut>() {
-        Ok(timed_out) => serde_json::json!({ "error": timed_out.error(), "timed_out": true }).to_string(),
+fn unwound(payload: Box<dyn Any + Send>) -> Answer {
+    let json = match payload.downcast::<deadline::TimedOut>() {
+        Ok(timed_out) => serde_json::json!({ "error": timed_out.error(), "timed_out": true }),
         Err(payload) => {
             let message = payload
                 .downcast_ref::<&str>()
                 .copied()
                 .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
                 .unwrap_or("no message");
-            serde_json::json!({ "error": format!("the engine panicked: {message}"), "crashed": true }).to_string()
+            serde_json::json!({ "error": format!("the engine panicked: {message}"), "crashed": true })
         }
-    }
+    };
+    Answer::Json(json.to_string())
 }
 
 /// The WebAssembly builds abort on a panic, so nothing unwinds to here.
 #[cfg(target_family = "wasm")]
-fn unwound(payload: Box<dyn Any + Send>) -> String {
+fn unwound(payload: Box<dyn Any + Send>) -> Answer {
     std::panic::resume_unwind(payload)
 }
 
 /// What `request` asks, answered.
-fn dispatch(request: String) -> String {
+fn dispatch(request: String) -> Answer {
     // The render's cap counts from here, so the data the request carries counts toward it, as it does in the JS build,
     // which parses it in the render.
     let before = memory::mark();
     let mut req: serde_json::Value = match serde_json::from_str(&request) {
         Ok(v) => v,
-        Err(e) => return serde_json::json!({ "error": format!("request parse error: {e}") }).to_string(),
+        Err(e) => return Answer::error(&format!("request parse error: {e}")),
     };
     // The text holds the input a second time, beside the parsed request, and is no longer needed.
     drop(request);
@@ -123,12 +188,12 @@ fn dispatch(request: String) -> String {
     // Answered before `input` is required: this method asks about the key itself, and there is
     // no document to render.
     if method == "check_license" {
-        return license::report_json(key, now_unix);
+        return Answer::Json(license::report_json(key, now_unix));
     }
 
     if method == "stamp" {
         let licensed = license::check(key, now_unix).is_licensed();
-        return stamp_request(&mut req, licensed, before);
+        return stamp_request(&mut req, licensed, before).into();
     }
 
     // Taken out of the request rather than copied, so the render holds one copy of each.
@@ -136,25 +201,25 @@ fn dispatch(request: String) -> String {
     let key      = key.to_string();
     let body = match req.get_mut("input").map(serde_json::Value::take) {
         Some(serde_json::Value::String(s)) => s,
-        _ => return r#"{"error":"request missing 'input' field"}"#.to_string(),
+        _ => return Answer::error("request missing 'input' field"),
     };
     let data = req.get_mut("data").map(serde_json::Value::take).filter(|v| !v.is_null());
 
     if method == "kit_to_xml" {
         return match kit_to_xml::kit_to_xml(&body) {
-            Ok(xml) => serde_json::json!({ "xml": xml }).to_string(),
-            Err(e)  => serde_json::json!({ "error": e }).to_string(),
+            Ok(xml) => Answer::Json(serde_json::json!({ "xml": xml }).to_string()),
+            Err(e)  => Answer::error(&e),
         };
     }
 
     let cap = match render_cap(&req) {
         Ok(cap) => cap,
-        Err(e)  => return serde_json::json!({ "error": e }).to_string(),
+        Err(e)  => return Answer::error(&e),
     };
     let _cap = memory::start_from(cap, before);
     let timeout = match render_timeout(&req) {
         Ok(timeout) => timeout,
-        Err(e)      => return serde_json::json!({ "error": e }).to_string(),
+        Err(e)      => return Answer::error(&e),
     };
     let _deadline = deadline::start(timeout);
     let resources = build_resources(&req);
@@ -166,7 +231,7 @@ fn dispatch(request: String) -> String {
     drop(body);
     let mut doc = match parsed {
         Ok(d)  => d,
-        Err(e) => return serde_json::json!({ "error": e }).to_string(),
+        Err(e) => return Answer::error(&e),
     };
 
     match method.as_str() {
@@ -174,41 +239,30 @@ fn dispatch(request: String) -> String {
             // Optional data binding: the request may carry a "data" JSON object, bound as it was parsed.
             if let Some(data) = data {
                 if let Err(e) = data::apply(&mut doc, data) {
-                    return serde_json::json!({ "error": e }).to_string();
+                    return Answer::error(&e);
                 }
             }
-            render_pdf_doc(doc, &key, now_unix, &req)
+            render_pdf_doc(doc, &key, now_unix, &req).into()
         }
-        "render_tree_pdf" => render_pdf_doc(doc, &key, now_unix, &req),
-        _ => render_doc(doc, &key, now_unix),
+        "render_tree_pdf" => render_pdf_doc(doc, &key, now_unix, &req).into(),
+        _ => Answer::Json(render_doc(doc, &key, now_unix)),
     }
 }
 
 /// A `stamp` request: the PDF in `pdf`, as base64, and the `stamps`, each naming a PNG of the request's `images`;
 /// `licensed` when the request's key is, else each stamped page gets the attribution line.
-/// Answers `{ "pdf": "<base64>" }`, the file with the stamps added as an incremental update, or `{ "error": "…" }`.
-fn stamp_request(req: &mut serde_json::Value, licensed: bool, before: i64) -> String {
-    let error = |e: String| serde_json::json!({ "error": e }).to_string();
-    let cap = match render_cap(req) {
-        Ok(cap) => cap,
-        Err(e)  => return error(e),
-    };
+/// Returns the file with the stamps added as an incremental update, or the error.
+fn stamp_request(req: &mut serde_json::Value, licensed: bool, before: i64) -> Result<Vec<u8>, String> {
+    let cap = render_cap(req)?;
     let _cap = memory::start_from(cap, before);
     let pdf = match req.get_mut("pdf").map(serde_json::Value::take) {
-        Some(serde_json::Value::String(b64)) => match base64::engine::general_purpose::STANDARD.decode(b64) {
-            Ok(bytes) => bytes,
-            Err(e)    => return error(format!("the request's 'pdf' is not base64: {e}")),
-        },
-        _ => return error("request missing 'pdf' field".to_string()),
+        Some(serde_json::Value::String(b64)) => base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .map_err(|e| format!("the request's 'pdf' is not base64: {e}"))?,
+        _ => return Err("request missing 'pdf' field".to_string()),
     };
-    let stamps = match stamp::parse_stamps(&req["stamps"]) {
-        Ok(stamps) => stamps,
-        Err(e)     => return error(e),
-    };
-    match stamp::stamp(&pdf, &stamps, &build_image_registry(req), licensed) {
-        Ok(bytes) => serde_json::json!({ "pdf": base64::engine::general_purpose::STANDARD.encode(bytes) }).to_string(),
-        Err(e)    => error(e),
-    }
+    let stamps = stamp::parse_stamps(&req["stamps"])?;
+    stamp::stamp(&pdf, &stamps, &build_image_registry(req), licensed)
 }
 
 /// The memory cap of the request's render: its `max_memory_mb`, or the default.
@@ -325,29 +379,21 @@ fn build_font_widths(req: &serde_json::Value) -> std::collections::HashMap<Strin
     map
 }
 
-fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, req: &serde_json::Value) -> String {
+/// The PDF of `doc`, rendered as the request asks, or the error that stops it.
+fn render_pdf_doc(
+    mut doc: parse::Document, license_key: &str, now_unix: i64, req: &serde_json::Value,
+) -> Result<Vec<u8>, String> {
     // Checked before the layout, so a missing or stray password fails without the work of a render.
-    let encryption = match render_encryption(req).and_then(|e| e.resolve(doc.output.encryption.as_ref())) {
-        Ok(config) => config,
-        Err(e)     => return serde_json::json!({ "error": e }).to_string(),
-    };
+    let encryption = render_encryption(req).and_then(|e| e.resolve(doc.output.encryption.as_ref()))?;
     let created_on = req["created_on"].as_str();
-    if let Err(e) = pdfa::check_render(&doc.output, created_on) {
-        return serde_json::json!({ "error": e }).to_string();
-    }
+    pdfa::check_render(&doc.output, created_on)?;
 
     let profile_registry = build_profile_registry(req);
-    let press = match pdfx::resolve(doc.output.pdfx.as_ref(), &doc.profiles, &profile_registry, &doc.meta) {
-        Ok(press) => press,
-        Err(e)    => return serde_json::json!({ "error": e }).to_string(),
-    };
+    let press = pdfx::resolve(doc.output.pdfx.as_ref(), &doc.profiles, &profile_registry, &doc.meta)?;
 
     let file_registry = build_file_registry(req);
     let attached = std::mem::take(&mut doc.attachments);
-    let files = match attachments::resolve(&attached, &file_registry, &doc.output) {
-        Ok(files) => files,
-        Err(e)    => return serde_json::json!({ "error": e }).to_string(),
-    };
+    let files = attachments::resolve(&attached, &file_registry, &doc.output)?;
 
     let registry       = build_registry(req);
     let image_registry = build_image_registry(req);
@@ -355,24 +401,18 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     // Confirm every image declared in <assets> has bytes in the registry.
     for (_alias, name) in &doc.images {
         if image_registry.get(name).is_none() {
-            return serde_json::json!({
-                "error": format!("image '{name}' declared in <assets> but not loaded via loadImage()")
-            }).to_string();
+            return Err(format!("image '{name}' declared in <assets> but not loaded via loadImage()"));
         }
         if let Some(bytes) = image_registry.get(name) {
             if let Some(reason) = pdf::image_format_error(bytes) {
-                return serde_json::json!({
-                    "error": format!("image '{name}': {reason}")
-                }).to_string();
+                return Err(format!("image '{name}': {reason}"));
             }
         }
     }
 
     let meta = pdf::build_image_meta(&image_registry);
     let mut lp = doc.section_layouts();
-    if let Err(e) = pdfua::check(doc.output.pdfua, &doc.meta, &lp).and_then(|()| references::check(&lp)) {
-        return serde_json::json!({ "error": e }).to_string();
-    }
+    pdfua::check(doc.output.pdfua, &doc.meta, &lp).and_then(|()| references::check(&lp))?;
     for page in &mut lp {
         layout::prefill_section_image_sizes(page, &meta);
     }
@@ -391,31 +431,17 @@ fn render_pdf_doc(mut doc: parse::Document, license_key: &str, now_unix: i64, re
     }
 
     layout::set_font_widths(doc.font_widths.clone());
-    if let Err(e) = memory::check() {
-        return serde_json::json!({ "error": e }).to_string();
-    }
-    let pages: Vec<render::RenderPage> = match layout::layout_document(&lp) {
-        Ok(pages) => pages,
-        Err(e)    => return serde_json::json!({ "error": e }).to_string(),
-    };
-    if let Err(e) = memory::check() {
-        return serde_json::json!({ "error": e }).to_string();
-    }
+    memory::check()?;
+    let pages: Vec<render::RenderPage> = layout::layout_document(&lp)?;
+    memory::check()?;
 
     let status = license::check(license_key, now_unix);
 
     // An unlicensed status draws the attribution line on every page.
-    match pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, &doc.gradients, created_on, status.is_licensed(), &doc.output, &files, press.as_ref()) {
-        Ok(bytes) => {
-            let bytes = match shared::finish_file(bytes, encryption.as_ref(), doc.output.linearize).and_then(|b| memory::check().map(|()| b)) {
-                Ok(b)  => b,
-                Err(e) => return serde_json::json!({ "error": e }).to_string(),
-            };
-            let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-            serde_json::json!({ "pdf": b64 }).to_string()
-        }
-        Err(e) => serde_json::json!({ "error": e }).to_string(),
-    }
+    let bytes = pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, &doc.gradients, created_on, status.is_licensed(), &doc.output, &files, press.as_ref())?;
+    let bytes = shared::finish_file(bytes, encryption.as_ref(), doc.output.linearize)?;
+    memory::check()?;
+    Ok(bytes)
 }
 
 /// Reads what the request says about encryption: the passwords, the entropy and `skip_encryption`. The
@@ -454,6 +480,18 @@ mod tests {
     const TALL_PNG: &str =
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAIAAAAW4yFwAAAADklEQVR4nGMwSJjAAMQACEgCQStAOpQAAAAASUVORK5CYII=";
 
+    /// What the WASI binary writes to stdout for `answer`.
+    fn stdout_of(answer: &Answer) -> Vec<u8> {
+        let mut stdout = Vec::new();
+        answer.write_to(&mut stdout).unwrap();
+        stdout
+    }
+
+    /// The JSON of `answer`, as the WASI binary writes it to stdout.
+    fn json(answer: Answer) -> serde_json::Value {
+        serde_json::from_slice(&stdout_of(&answer)).unwrap()
+    }
+
     /// The image matrices (`cm` lines) in the content streams of a PDF.
     fn image_matrices(pdf: &[u8]) -> Vec<String> {
         let mut found = Vec::new();
@@ -478,9 +516,7 @@ mod tests {
             <layer><img-at name="logo" anchor="top-right" width="100pt" height="100pt"/></layer>
         </section></document></lpdf>"#;
         let req = serde_json::json!({ "images": { "logo": TALL_PNG } });
-        let out = render_pdf_doc(parse::parse(xml).unwrap(), "", 0, &req);
-        let out: serde_json::Value = serde_json::from_str(&out).unwrap();
-        let pdf = base64::engine::general_purpose::STANDARD.decode(out["pdf"].as_str().expect(&out.to_string())).unwrap();
+        let pdf = render_pdf_doc(parse::parse(xml).unwrap(), "", 0, &req).unwrap();
 
         let matrices = image_matrices(&pdf);
         // One size given: the other follows the image, so 50pt wide is 100pt high. Both given: the image fits
@@ -500,7 +536,7 @@ mod tests {
         for (key, value) in fields.as_object().unwrap() {
             req[key] = value.clone();
         }
-        serde_json::from_str(&dispatch(req.to_string())).unwrap()
+        json(dispatch(req.to_string()))
     }
 
     fn pdf_text(answer: &serde_json::Value) -> String {
@@ -632,7 +668,7 @@ mod tests {
                 let mut req = fields.clone();
                 req["method"] = "render_tree_pdf".into();
                 req["input"] = tree(level).into();
-                serde_json::from_str::<serde_json::Value>(&dispatch(req.to_string())).unwrap()
+                json(dispatch(req.to_string()))
             };
             for answer in [render_request(&xml(level), fields.clone()), from_tree] {
                 let text = pdf_text(&answer);
@@ -651,7 +687,7 @@ mod tests {
         let tree = r#"{"version":1,"type":"document","attrs":{"attachments":[{"name":"a.txt","relationship":"supplement"}]},
             "nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[{"type":"text","nodes":["x"]}]}]}]}"#;
         let req = serde_json::json!({ "method": "render_tree_pdf", "input": tree, "files": { "a.txt": "QQ==" } });
-        let answer: serde_json::Value = serde_json::from_str(&dispatch(req.to_string())).unwrap();
+        let answer = json(dispatch(req.to_string()));
         assert!(pdf_text(&answer).contains("/AFRelationship /Supplement"), "{answer}");
     }
 
@@ -676,7 +712,7 @@ mod tests {
             "nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[]}]}]}"#;
         for (method, input) in [("render_pdf", xml), ("render_tree_pdf", tree)] {
             let req = serde_json::json!({ "method": method, "input": input, "created_on": "31.10.2026" });
-            let answer: serde_json::Value = serde_json::from_str(&dispatch(req.to_string())).unwrap();
+            let answer = json(dispatch(req.to_string()));
             let error = answer["error"].as_str().unwrap_or_else(|| panic!("{method}: {answer}"));
             assert!(error.contains("created_on '31.10.2026'") && error.contains("2026-10-31T09:30:00Z"), "{method}: {error}");
         }
@@ -688,7 +724,7 @@ mod tests {
         for (key, value) in fields.as_object().unwrap() {
             req[key] = value.clone();
         }
-        serde_json::from_str(&dispatch(req.to_string())).unwrap()
+        json(dispatch(req.to_string()))
     }
 
     /// A document of `pages` pages, each a column of texts.
@@ -793,7 +829,7 @@ mod tests {
     fn the_tree_path_reads_output_too() {
         let tree = r#"{"version":1,"type":"document","attrs":{"output":{"encrypt":"rc4-128"}},"nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[]}]}]}"#;
         let req = serde_json::json!({ "method": "render_tree_pdf", "input": tree });
-        let answer: serde_json::Value = serde_json::from_str(&dispatch(req.to_string())).unwrap();
+        let answer = json(dispatch(req.to_string()));
         assert!(answer["error"].as_str().unwrap().contains("no owner password"), "{answer}");
     }
     #[test]
@@ -805,7 +841,7 @@ mod tests {
                 "method": "stamp", "pdf": base64::engine::general_purpose::STANDARD.encode(&pdf), "images": { "tall": TALL_PNG },
                 "stamps": [{ "image": "tall", "page": page, "x": "10pt", "y": "10pt", "width": "50pt", "height": "50pt", "max-grow": 25 }],
             });
-            serde_json::from_str::<serde_json::Value>(&dispatch(req.to_string())).unwrap()
+            json(dispatch(req.to_string()))
         };
         let answer = stamp("1");
         let stamped = base64::engine::general_purpose::STANDARD.decode(answer["pdf"].as_str().expect(&answer.to_string())).unwrap();
@@ -814,7 +850,7 @@ mod tests {
         assert!(pdf_text(&answer).contains("q 25 0 0 50 22.5 "), "{answer}");
         assert_eq!(stamp("2")["error"], "stamp 1: the PDF has no page 2: it has 1 page");
         let without = serde_json::json!({ "method": "stamp", "stamps": [] });
-        assert_eq!(serde_json::from_str::<serde_json::Value>(&dispatch(without.to_string())).unwrap()["error"], "request missing 'pdf' field");
+        assert_eq!(json(dispatch(without.to_string()))["error"], "request missing 'pdf' field");
     }
 
     /// The SHA-256 of `bytes`, in hex, as the snapshots in `test/snapshots` store it.
@@ -832,7 +868,7 @@ mod tests {
         for (key, value) in fields.as_object().unwrap() {
             req[key] = value.clone();
         }
-        serde_json::from_str(&super::answer(req.to_string())).unwrap()
+        json(super::answer(req.to_string()))
     }
 
     #[test]
@@ -860,17 +896,145 @@ mod tests {
 
     #[test]
     fn a_panic_answers_an_error_that_says_the_engine_crashed_and_the_next_render_runs() {
-        let answer = answer_with(|| {
+        let answer = json(answer_with(|| {
             let _cap = memory::start(1);
             let _deadline = deadline::start(0.001);
             panic!("a bug");
-        });
-        let answer: serde_json::Value = serde_json::from_str(&answer).unwrap();
+        }));
         assert_eq!(answer, serde_json::json!({ "error": "the engine panicked: a bug", "crashed": true }));
 
         // Neither the cap nor the deadline of the render that panicked holds for the next.
         std::thread::sleep(std::time::Duration::from_millis(5));
         let xml = pages_of_text(20);
         assert!(answered("render_pdf", &xml, serde_json::json!({}))["pdf"].is_string());
+    }
+
+    /// The fixtures of the core's snapshot tests that render with no images and no data.
+    const PLAIN_FIXTURES: &[&str] = &[
+        "example1", "example2", "example3", "example4", "example5", "example6", "example7", "example8", "example9",
+        "example10", "example11", "bench_xs", "bench_s", "bench_m", "bench_l", "bench_xl", "showcase-column",
+        "showcase-row-fill", "showcase-frame", "showcase-code", "showcase-code-split", "showcase-markdown-styles",
+        "showcase-markdown-split", "showcase-markdown-wrap", "showcase-text-wide-words", "showcase-markdown-tables",
+        "showcase-markdown-breaks", "showcase-table-auto", "showcase-table-lines", "showcase-lists",
+        "showcase-lists-split", "showcase-lists-in-rows", "showcase-footnote", "showcase-footnote-counter",
+        "showcase-footnote-clip", "showcase-link-heights", "showcase-grid", "showcase-row", "showcase-row-between",
+        "showcase-row-split", "showcase-row-split-flags", "showcase-table", "showcase-table-keep",
+        "showcase-table-colspan", "showcase-table-rowspan", "showcase-text-max-lines", "showcase-text-line-height",
+        "showcase-text-justify", "showcase-text-align-spans", "showcase-inherited-style", "showcase-colors",
+        "showcase-shadow", "showcase-gradient", "showcase-shape", "showcase-running-header",
+        "showcase-running-header-dictionary", "showcase-page-numbers", "showcase-page-numbers-batch",
+        "showcase-page-letters", "showcase-references", "showcase-reference-flip", "showcase-barcode",
+        "showcase-barcode-fit", "showcase-forms", "showcase-canvas-overlay", "showcase-canvas-underlay",
+        "showcase-canvas-layer", "showcase-canvas-rect", "showcase-canvas-text", "showcase-canvas-opacity",
+        "showcase-region-chrome", "showcase-region-page-scope", "showcase-page-scope-printed", "showcase-toc",
+        "showcase-columns", "showcase-columns-flow", "showcase-columns-markdown", "showcase-ruling",
+        "showcase-ruling-sections", "showcase-columns-inset-last",
+    ];
+
+    /// The fixtures of the core's snapshot tests that show the images `photo`, `avatar` and `tall`.
+    const IMAGE_FIXTURES: &[&str] = &[
+        "showcase-markdown", "showcase-row-split-image", "showcase-page-clip", "showcase-image-box",
+        "showcase-image-fill", "showcase-columns-insets",
+    ];
+
+    /// The fixtures of the core's snapshot tests whose data is the `.json` file beside them.
+    const DATA_FIXTURES: &[&str] = &["showcase-columns-data", "showcase-bulk"];
+
+    /// The file at `path` under `test`.
+    fn test_file(path: &str) -> Vec<u8> {
+        std::fs::read(format!("{}/../../test/{path}", env!("CARGO_MANIFEST_DIR"))).unwrap_or_else(|e| panic!("{path}: {e}"))
+    }
+
+    /// The `render_pdf` request of each snapshot fixture above, by name, with its images or data as an SDK sends them.
+    fn fixture_requests() -> Vec<(&'static str, serde_json::Value)> {
+        let request = |name: &str| {
+            let xml = String::from_utf8(test_file(&format!("fixtures/{name}.xml"))).unwrap();
+            serde_json::json!({ "method": "render_pdf", "input": xml })
+        };
+        let image = |file: &str| base64::engine::general_purpose::STANDARD.encode(test_file(&format!("assets/images/{file}")));
+        let images = serde_json::json!({
+            "photo": image("image-sample.png"), "avatar": image("image-square.png"), "tall": image("image-tall.png"),
+        });
+        let mut requests: Vec<_> = PLAIN_FIXTURES.iter().map(|&name| (name, request(name))).collect();
+        for &name in IMAGE_FIXTURES {
+            let mut req = request(name);
+            req["images"] = images.clone();
+            requests.push((name, req));
+        }
+        for &name in DATA_FIXTURES {
+            let mut req = request(name);
+            req["data"] = serde_json::from_slice(&test_file(&format!("fixtures/{name}.json"))).unwrap();
+            requests.push((name, req));
+        }
+        requests
+    }
+
+    /// The PDF that `answer` carries, for the fixture `name`.
+    fn pdf_of(name: &str, answer: Answer) -> Vec<u8> {
+        match answer {
+            Answer::Pdf(pdf) => pdf,
+            Answer::Json(json) => panic!("{name}: {json}"),
+        }
+    }
+
+    /// What stdout carried for `pdf` on main, which wrote the answer with serde_json whole.
+    fn main_stdout(pdf: &[u8]) -> Vec<u8> {
+        serde_json::json!({ "pdf": base64::engine::general_purpose::STANDARD.encode(pdf) }).to_string().into_bytes()
+    }
+
+    /// That stdout carries `pdf`'s answer as main wrote it, for the fixture `name`, and that `json_len` is its length.
+    fn assert_stdout_is_mains(name: &str, pdf: Vec<u8>) {
+        let expected = main_stdout(&pdf);
+        let answer = Answer::Pdf(pdf);
+        // Compared whole, not with `assert_eq!`, which would print megabytes of base64.
+        assert!(stdout_of(&answer) == expected, "{name}: stdout differs from main's");
+        assert_eq!(answer.json_len(), expected.len(), "{name}");
+    }
+
+    #[test]
+    fn a_render_and_a_stamp_write_to_stdout_what_main_wrote_for_each_fixture() {
+        for (name, req) in fixture_requests() {
+            let pdf = pdf_of(name, dispatch(req.to_string()));
+            let stored = String::from_utf8(test_file(&format!("snapshots/{name}.pdf.sha256"))).unwrap();
+            assert_eq!(sha256_hex(&pdf), stored.trim(), "{name}: the PDF is the snapshot's");
+
+            let stamp = serde_json::json!({
+                "method": "stamp", "pdf": base64::engine::general_purpose::STANDARD.encode(&pdf), "images": { "tall": TALL_PNG },
+                "stamps": [{ "image": "tall", "page": "last", "x": "10pt", "y": "10pt", "width": "50pt", "height": "50pt" }],
+            });
+            let stamped = pdf_of(name, dispatch(stamp.to_string()));
+            assert!(stamped.starts_with(&pdf) && stamped.len() > pdf.len(), "{name}: the stamp is an update after the PDF");
+
+            assert_stdout_is_mains(name, pdf);
+            assert_stdout_is_mains(name, stamped);
+        }
+    }
+
+    #[test]
+    fn an_error_found_before_the_answer_starts_is_the_error_json_on_stdout() {
+        let logo = r#"<lpdf version="1"><assets><image name="logo"/></assets><document><section><layout><text>Hello</text>
+            </layout></section></document></lpdf>"#;
+        let plain = render_request(&with_output(""), serde_json::json!({}));
+        for (req, error) in [
+            (serde_json::json!({ "method": "render_pdf" }), "request missing 'input' field".to_string()),
+            (
+                serde_json::json!({ "method": "render_pdf", "input": logo }),
+                "image 'logo' declared in <assets> but not loaded via loadImage()".to_string(),
+            ),
+            (
+                serde_json::json!({ "method": "render_pdf", "input": pages_of_text(20), "max_memory_mb": 1 }),
+                "the render needs more memory than its cap of 1 MB: raise the cap in the engine's options, or render \
+                    the document in smaller parts".to_string(),
+            ),
+            (serde_json::json!({ "method": "stamp", "stamps": [] }), "request missing 'pdf' field".to_string()),
+            (
+                serde_json::json!({ "method": "stamp", "pdf": plain["pdf"], "images": { "tall": TALL_PNG },
+                    "stamps": [{ "image": "tall", "page": "2", "x": "0pt", "y": "0pt", "width": "9pt", "height": "9pt" }] }),
+                "stamp 1: the PDF has no page 2: it has 1 page".to_string(),
+            ),
+        ] {
+            let stdout = String::from_utf8(stdout_of(&dispatch(req.to_string()))).unwrap();
+            assert_eq!(stdout, serde_json::json!({ "error": error }).to_string());
+        }
     }
 }

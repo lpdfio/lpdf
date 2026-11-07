@@ -38,13 +38,24 @@ pub unsafe extern "C" fn lpdf_invoke(payload: *const u8, len: usize, out_len: *m
     // SAFETY: the caller passes `len` readable bytes at `payload`.
     let request = unsafe { std::slice::from_raw_parts(payload, len) };
     let answer = match std::str::from_utf8(request) {
-        Ok(request) => dispatch::answer(request.to_string()),
-        Err(e) => serde_json::json!({ "error": format!("the request is not UTF-8: {e}") }).to_string(),
+        Ok(request) => json_of(dispatch::answer(request.to_string())),
+        Err(e) => serde_json::json!({ "error": format!("the request is not UTF-8: {e}") }).to_string().into_bytes(),
     };
-    let answer = Box::into_raw(answer.into_bytes().into_boxed_slice());
+    let answer = Box::into_raw(answer.into_boxed_slice());
     // SAFETY: the caller passes a writable `size_t` at `out_len`.
     unsafe { *out_len = answer.len() };
     answer.cast()
+}
+
+/// The JSON of `answer`, whole, in a buffer of its length: the host gets the answer in one piece, where the WASI binary
+/// writes it to stdout as it encodes it.
+fn json_of(answer: dispatch::Answer) -> Vec<u8> {
+    let mut json = Vec::with_capacity(answer.json_len());
+    match answer.write_to(&mut json) {
+        Ok(()) => json,
+        // A `Vec` takes all that is written to it, so this is never answered.
+        Err(e) => serde_json::json!({ "error": format!("the answer could not be written: {e}") }).to_string().into_bytes(),
+    }
 }
 
 /// Frees an answer that `lpdf_invoke` returned, of `len` bytes at `ptr`.
@@ -66,8 +77,8 @@ mod invoke_tests {
 
     use super::*;
 
-    /// What `lpdf_invoke` answers `request`, freed with `lpdf_free` once read.
-    fn invoke(request: &[u8]) -> serde_json::Value {
+    /// The text `lpdf_invoke` answers `request`, freed with `lpdf_free` once read.
+    fn invoke_text(request: &[u8]) -> String {
         let mut len = 0usize;
         // SAFETY: the request's bytes, and a `usize` to write.
         let answer = unsafe { lpdf_invoke(request.as_ptr(), request.len(), &mut len) };
@@ -75,7 +86,12 @@ mod invoke_tests {
         let text = String::from_utf8(unsafe { std::slice::from_raw_parts(answer, len) }.to_vec()).unwrap();
         // SAFETY: the answer and its length, freed once.
         unsafe { lpdf_free(answer, len) };
-        serde_json::from_str(&text).unwrap()
+        text
+    }
+
+    /// What `lpdf_invoke` answers `request`.
+    fn invoke(request: &[u8]) -> serde_json::Value {
+        serde_json::from_str(&invoke_text(request)).unwrap()
     }
 
     /// The SHA-256 of the PDF in `answer`, in hex.
@@ -97,6 +113,17 @@ mod invoke_tests {
         let xml = include_str!("../../../test/fixtures/bench_xs.xml");
         let stored = include_str!("../../../test/snapshots/bench_xs.pdf.sha256");
         assert_eq!(pdf_hash(&render("bench_xs", xml, 5.0)), stored.trim());
+    }
+
+    #[test]
+    fn a_render_answers_the_json_text_that_serde_json_writes_for_its_pdf() {
+        let xml = include_str!("../../../test/fixtures/bench_xs.xml");
+        let request = serde_json::json!({ "method": "render_pdf", "input": xml });
+        let text = invoke_text(request.to_string().as_bytes());
+        let answer: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let pdf = base64::engine::general_purpose::STANDARD.decode(answer["pdf"].as_str().unwrap()).unwrap();
+        // The library answered with serde_json's text of the whole answer before it shared the WASI binary's writer.
+        assert!(text == serde_json::json!({ "pdf": base64::engine::general_purpose::STANDARD.encode(&pdf) }).to_string());
     }
 
     #[test]
