@@ -11,8 +11,8 @@ use std::io::{Read, Write};
 #[global_allocator]
 static ALLOCATOR: memory::Counting = memory::Counting;
 
-/// The most of the answer held for stdout at once, in bytes: the encoder hands it a few hundred bytes at a time, and
-/// each write to stdout is a call to the host.
+/// The most of the answer held for stdout at once, in bytes: the encoder hands it up to 1 KB at a time, and each write
+/// to stdout is a call to the host.
 const STDOUT_BUFFER: usize = 64 * 1024;
 
 fn main() {
