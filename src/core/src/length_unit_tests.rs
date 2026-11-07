@@ -359,13 +359,16 @@ fn a_ruling_step_of_a_bare_zero_is_refused_like_a_step_of_0pt() {
 #[test]
 fn the_schema_takes_a_bare_zero_in_every_type_that_holds_a_length() {
     let xsd = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../schema/lpdf.xsd")).expect("the schema");
-    for (name, zero) in [
-        ("PtValue", r"0|"), ("SignedPtValue", r"0|"), ("PageSizeCustom", r"(0|"), ("SpacingValue", r"(0|"),
-        ("SpacingMixed", r"(0|"), ("ShadowValue", r"(0|"), ("BorderValue", r"(0|"), ("LineValue", r"none|(0|"),
+    for name in [
+        "PtValue", "SignedPtValue", "PageSizeCustom", "SpacingValue", "SpacingMixed", "ShadowValue", "BorderValue", "LineValue",
     ] {
-        let at = xsd.find(&format!(r#"<xs:simpleType name="{name}">"#)).unwrap_or_else(|| panic!("no type {name}"));
-        let pattern = &xsd[at..][xsd[at..].find(r#"<xs:pattern value=""#).expect("a pattern") + r#"<xs:pattern value=""#.len()..];
-        assert!(pattern.starts_with(zero), "{name} takes a bare 0, so its pattern starts with {zero}: {}", &pattern[..pattern.find('"').unwrap()]);
+        let from = xsd.find(&format!(r#"<xs:simpleType name="{name}">"#)).unwrap_or_else(|| panic!("no type {name}"));
+        let end = xsd[from..].find("</xs:simpleType>").expect("the end of the type");
+        let pattern = &xsd[from..from + end];
+        // Each length in the pattern is written `(0|<number>(pt|mm|in))` or `0|<number>(pt|mm|in)`: as many zeros as units.
+        let lengths = pattern.matches("(pt|mm|in)").count();
+        assert!(lengths > 0, "{name} holds a length");
+        assert_eq!(pattern.matches("0|").count(), lengths, "{name} takes a bare 0 for each of its {lengths} lengths: {pattern}");
     }
 }
 
@@ -376,7 +379,14 @@ fn a_number_that_is_not_finite_in_a_stroke_dash_a_transform_or_a_path_is_no_numb
     let dash = |number: &str| document("", &format!(r##"<layer><path d="M 10 10 L 50 50" stroke="#000000" stroke-dash="{number} 2"/></layer>"##));
     let transform = |number: &str| document("", &format!(r##"<layer transform="translate({number} 5)"><rect x="1pt" y="1pt" width="9pt" height="9pt" fill="#cccccc"/></layer>"##));
     let path = |number: &str| document("", &format!(r##"<layer><path d="M {number} 0 L 50 50" stroke="#000000"/></layer>"##));
-    for (what, place) in [("a stroke dash", &dash as &dyn Fn(&str) -> String), ("a transform", &transform), ("a path", &path)] {
+    // The groups after the first of a command: a number goes on drawing, a word ends the path.
+    let repeated = |number: &str| document("", &format!(r##"<layer><path d="M 10 10 L 20 20 {number} 5 30 30" stroke="#000000"/></layer>"##));
+    for (what, place) in [
+        ("a stroke dash", &dash as &dyn Fn(&str) -> String),
+        ("a transform", &transform),
+        ("a path", &path),
+        ("a repeated group of a path", &repeated),
+    ] {
         let no_number = render_xml(&place("word")).unwrap_or_else(|e| panic!("{what}: {e}"));
         for number in ["inf", "-inf", "infinity", "NaN", "1e999"] {
             let read = render_xml(&place(number)).unwrap_or_else(|e| panic!("{what} with {number}: {e}"));
