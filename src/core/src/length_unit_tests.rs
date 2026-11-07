@@ -379,19 +379,32 @@ fn a_number_that_is_not_finite_in_a_stroke_dash_a_transform_or_a_path_is_no_numb
     let dash = |number: &str| document("", &format!(r##"<layer><path d="M 10 10 L 50 50" stroke="#000000" stroke-dash="{number} 2"/></layer>"##));
     let transform = |number: &str| document("", &format!(r##"<layer transform="translate({number} 5)"><rect x="1pt" y="1pt" width="9pt" height="9pt" fill="#cccccc"/></layer>"##));
     let path = |number: &str| document("", &format!(r##"<layer><path d="M {number} 0 L 50 50" stroke="#000000"/></layer>"##));
-    // The groups after the first of a command: a number goes on drawing, a word ends the path.
-    let repeated = |number: &str| document("", &format!(r##"<layer><path d="M 10 10 L 20 20 {number} 5 30 30" stroke="#000000"/></layer>"##));
-    for (what, place) in [
-        ("a stroke dash", &dash as &dyn Fn(&str) -> String),
-        ("a transform", &transform),
-        ("a path", &path),
-        ("a repeated group of a path", &repeated),
-    ] {
+    for (what, place) in [("a stroke dash", &dash as &dyn Fn(&str) -> String), ("a transform", &transform), ("a path", &path)] {
         let no_number = render_xml(&place("word")).unwrap_or_else(|e| panic!("{what}: {e}"));
         for number in ["inf", "-inf", "infinity", "NaN", "1e999"] {
             let read = render_xml(&place(number)).unwrap_or_else(|e| panic!("{what} with {number}: {e}"));
             assert!(read == no_number, "{what}: {number} is read as a word, not as a number");
         }
         assert!(render_xml(&place("3")).unwrap() != no_number, "{what}: a real number still counts");
+    }
+}
+
+/// The groups after the first of a path command: a number goes on drawing, a word ends the path. `inf` and `NaN` are
+/// words there, for each of the eight commands that repeat.
+#[test]
+fn a_repeated_group_of_every_path_command_reads_a_number_that_is_not_finite_as_a_word() {
+    for (command, size) in [("M", 2), ("m", 2), ("L", 2), ("l", 2), ("C", 6), ("c", 6), ("Q", 4), ("q", 4)] {
+        let numbers = |count: usize| (1..=count).map(|n| (n * 10).to_string()).collect::<Vec<_>>().join(" ");
+        // A first group, then a group that starts with `probe` and holds the rest of its numbers.
+        let path = |probe: &str| {
+            let d = format!("M 5 5 {command} {} {probe} {}", numbers(size), numbers(size - 1));
+            document("", &format!(r##"<layer><path d="{d}" stroke="#000000"/></layer>"##))
+        };
+        let word = render_xml(&path("word")).unwrap_or_else(|e| panic!("{command}: {e}"));
+        for probe in ["inf", "NaN", "infinity", "1e999"] {
+            let read = render_xml(&path(probe)).unwrap_or_else(|e| panic!("{command} with {probe}: {e}"));
+            assert!(read == word, "{command}: {probe} in a repeated group is read as a word, which ends the path");
+        }
+        assert!(render_xml(&path("3")).unwrap() != word, "{command}: a number in a repeated group still draws");
     }
 }
