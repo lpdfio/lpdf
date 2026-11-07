@@ -2013,7 +2013,7 @@ pub(crate) fn check_cols(spec: &str) -> Result<(), String> {
     if units.contains(&ColUnit::Auto) && units.iter().any(|u| matches!(u, ColUnit::Fr(_))) {
         return Err(format!(
             "cols=\"{spec}\" has auto and fr columns: an auto column takes the width its cells need and the auto columns \
-             share the rest, so use pt or % for the columns that are fixed"
+             share the rest, so use a length or % for the columns that are fixed"
         ));
     }
     Ok(())
@@ -6739,7 +6739,7 @@ mod tests {
     fn auto_beside_fr_is_an_error_that_says_what_to_use() {
         let xml = minimal(&table_of("auto 1fr", &[["a", "b", "c"]]));
         let err = match crate::parse::parse(&xml) { Err(e) => e, Ok(_) => panic!("auto beside fr was accepted") };
-        assert!(err.contains("auto and fr") && err.contains("pt or %"), "{err}");
+        assert!(err.contains("auto and fr") && err.contains("a length or %"), "{err}");
     }
 
     #[test]

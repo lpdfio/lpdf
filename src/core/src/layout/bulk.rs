@@ -93,7 +93,7 @@ impl Measure {
             }
         };
         let col_widths = if shell.kind == NodeKind::Table {
-            // A bulk table's columns are set in fr, pt and %, so they don't depend on its rows.
+            // A bulk table's columns are set in fr, pt, mm, in and %, so they don't depend on its rows.
             table_col_widths(&[], &shell.table_cols, inner_w, gap)
         } else {
             Vec::new()
