@@ -166,7 +166,13 @@ pub fn parse_length(val: &str) -> Option<f32> {
     let s = val.trim();
     if s == "0" { return Some(0.0); }
     let (number, to_points) = split_unit(s)?;
-    number.trim().parse::<f32>().ok().map(to_points)
+    parse_number(number).map(to_points).filter(|points| points.is_finite())
+}
+
+/// A number in a length or a share, as a finite `f32`. Rust's parse also reads "inf", "infinity" and "NaN" in any case,
+/// and a number too big for an `f32` as infinity: none of them is a length.
+pub fn parse_number(text: &str) -> Option<f32> {
+    text.trim().parse::<f32>().ok().filter(|number| number.is_finite())
 }
 
 /// Parse a factor above 0, like "1.5", the way the schema's FactorValue does: a bare number, no unit.
@@ -414,7 +420,7 @@ impl Tokens {
         if let Some(v) = parse_length(val) {
             return Ok(v);
         }
-        val.parse::<f32>().map_err(|_| {
+        parse_number(val).ok_or_else(|| {
             format!("invalid text size: '{val}': expected {} or a length in {LENGTH_UNITS}", self.slot_names())
         })
     }

@@ -47,7 +47,7 @@ use rests::{Reached, Rest, Waiting};
 use bulk::{Bulk, Take};
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
 use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderCanvasClip, RenderCanvasLayer, RenderField, RenderFootnoteMark, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind, Tag, TagKind};
-use crate::tokens::{split_unit, FontWidths, LENGTH_UNITS};
+use crate::tokens::{parse_number, split_unit, FontWidths, LENGTH_UNITS};
 use crate::canvas;
 use crate::page_numbers::{self, PageTokens, SectionNumbers};
 use crate::references;
@@ -1984,13 +1984,13 @@ fn col_unit(tok: &str) -> Option<ColUnit> {
     if tok == "auto" {
         Some(ColUnit::Auto)
     } else if let Some(s) = tok.strip_suffix("fr") {
-        s.parse::<f32>().ok().map(ColUnit::Fr)
+        parse_number(s).map(ColUnit::Fr)
     } else if let Some((number, to_points)) = split_unit(tok) {
-        number.parse::<f32>().ok().map(|number| ColUnit::Pt(to_points(number)))
+        parse_number(number).map(to_points).filter(|points| points.is_finite()).map(ColUnit::Pt)
     } else if let Some(s) = tok.strip_suffix('%') {
-        s.parse::<f32>().ok().map(ColUnit::Pct)
+        parse_number(s).map(ColUnit::Pct)
     } else {
-        tok.parse::<f32>().ok().map(ColUnit::Fr)
+        parse_number(tok).map(ColUnit::Fr)
     }
 }
 

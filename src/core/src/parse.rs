@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use crate::tokens::{
-    parse_factor, parse_length, parse_opacity, split_unit, FontDef, FontWidths, Gradient, GradientSpec, Tokens, LENGTH_UNITS,
+    parse_factor, parse_length, parse_number, parse_opacity, split_unit, FontDef, FontWidths, Gradient, GradientSpec, Tokens, LENGTH_UNITS,
 };
 use crate::canvas;
 use crate::markdown;
@@ -2090,16 +2090,17 @@ pub fn parse_page_size(val: &str) -> Result<(f32, f32), String> {
 /// Supported: `pt`, `mm`, `in`.  Bare numbers are treated as `pt`.
 pub fn parse_measurement(s: &str) -> Result<f32, String> {
     let s = s.trim();
-    let invalid = |_| format!("invalid measurement: '{s}': expected a length in {LENGTH_UNITS}");
-    match split_unit(s) {
-        Some((number, to_points)) => number.trim().parse().map(to_points).map_err(invalid),
-        None                      => s.parse().map_err(invalid),
-    }
+    let points = match split_unit(s) {
+        Some((number, to_points)) => parse_number(number).map(to_points),
+        None                      => parse_number(s),
+    };
+    points.filter(|points| points.is_finite())
+        .ok_or_else(|| format!("invalid measurement: '{s}': expected a length in {LENGTH_UNITS}"))
 }
 
 /// A `bleed`: how far a page reaches past its trim edge, a length of zero or more, such as `3mm`.
 fn parse_bleed(value: &str) -> Result<f32, String> {
-    parse_measurement(value).ok().filter(|b| b.is_finite() && *b >= 0.0)
+    parse_measurement(value).ok().filter(|b| *b >= 0.0)
         .ok_or_else(|| format!("bleed '{value}' is not a length in {LENGTH_UNITS}: give one such as 3mm"))
 }
 
