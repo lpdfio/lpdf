@@ -139,6 +139,18 @@ mod invoke_tests {
     }
 
     #[test]
+    fn the_answer_of_a_pdf_holds_its_base64_once() {
+        let pdf_len = 8 * 1_048_576;
+        let answer = dispatch::Answer::Pdf(vec![0x5a; pdf_len]);
+        // The answer is the base64, 4/3 of the PDF, in one buffer: 10.7 MB for 8 MB, where serde_json's answer held the
+        // base64 three times over, its last copy at twice its length.
+        let _cap = memory::start(11);
+        let json = json_of(answer);
+        assert!(!memory::passed(), "the answer of an 8 MB PDF held more than 11 MB besides the PDF");
+        assert_eq!(json.len(), r#"{"pdf":""}"#.len() + pdf_len.div_ceil(3) * 4);
+    }
+
+    #[test]
     fn a_request_that_is_not_utf_8_is_an_error() {
         let answer = invoke(b"{\"method\":\"render_pdf\",\"input\":\"\xff\"}");
         assert!(answer["error"].as_str().unwrap().starts_with("the request is not UTF-8: "), "{answer}");

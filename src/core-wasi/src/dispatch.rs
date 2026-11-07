@@ -884,6 +884,16 @@ mod tests {
     }
 
     #[test]
+    fn writing_the_answer_of_a_pdf_holds_no_copy_of_its_base64() {
+        let answer = Answer::Pdf(vec![0x5a; 8 * 1_048_576]);
+        // The base64 of 8 MB is 10.7 MB: the write may hold 1 MB besides the PDF, where serde_json's answer held the
+        // base64 three times over, its last copy at twice its length.
+        let _cap = memory::start(1);
+        answer.write_to(&mut io::sink()).unwrap();
+        assert!(!memory::passed(), "writing the answer of an 8 MB PDF held more than 1 MB besides the PDF");
+    }
+
+    #[test]
     fn a_panic_answers_an_error_that_says_the_engine_crashed_and_the_next_render_runs() {
         let answer = json(answer_with(|| {
             let _cap = memory::start(1);
