@@ -109,6 +109,19 @@ fn a_refused_length_names_the_units_that_would_do() {
     }
 }
 
+#[test]
+fn a_length_in_another_unit_names_the_units_wherever_a_layer_a_shape_a_bleed_or_a_shadow_reads_it() {
+    for (what, xml) in [
+        ("a layer's rect", document("", r#"<layer><rect x="0pt" y="0pt" width="2cm" height="10pt"/></layer>"#)),
+        ("a shape's radius", document("", r#"<layout><shape type="circle" r="2cm"/></layout>"#)),
+        ("a bleed", document(r#"bleed="1cm""#, "<layout><text>x</text></layout>")),
+        ("a shadow", document("", r##"<layout><column shadow="2cm 2cm #000000" background="#dddddd"><text>x</text></column></layout>"##)),
+    ] {
+        let err = render_xml(&xml).expect_err(what);
+        assert!(err.contains("pt, mm or in"), "{what}: {err}");
+    }
+}
+
 fn table(cols: &str) -> String {
     document("", &format!(r#"<layout><table cols="{cols}"><tr><td><text>a</text></td><td><text>b</text></td></tr></table></layout>"#))
 }

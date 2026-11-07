@@ -2090,7 +2090,7 @@ pub fn parse_page_size(val: &str) -> Result<(f32, f32), String> {
 /// Supported: `pt`, `mm`, `in`.  Bare numbers are treated as `pt`.
 pub fn parse_measurement(s: &str) -> Result<f32, String> {
     let s = s.trim();
-    let invalid = |_| format!("invalid measurement: '{s}'");
+    let invalid = |_| format!("invalid measurement: '{s}': expected a length in {LENGTH_UNITS}");
     match split_unit(s) {
         Some((number, to_points)) => number.trim().parse().map(to_points).map_err(invalid),
         None                      => s.parse().map_err(invalid),
@@ -2100,7 +2100,7 @@ pub fn parse_measurement(s: &str) -> Result<f32, String> {
 /// A `bleed`: how far a page reaches past its trim edge, a length of zero or more, such as `3mm`.
 fn parse_bleed(value: &str) -> Result<f32, String> {
     parse_measurement(value).ok().filter(|b| b.is_finite() && *b >= 0.0)
-        .ok_or_else(|| format!("bleed '{value}' is not a length: give one such as 3mm"))
+        .ok_or_else(|| format!("bleed '{value}' is not a length in {LENGTH_UNITS}: give one such as 3mm"))
 }
 
 /// Parse a `PageScope` from its string representation.
@@ -2178,7 +2178,7 @@ pub fn parse_shadow(val: &str, tokens: &Tokens) -> Result<Shadow, String> {
         parse_signed_measurement(part)
             .ok()
             .filter(|v| v.is_finite())
-            .ok_or_else(|| format!("invalid shadow '{val}': {axis} '{part}' is not a length, like 2pt or -3pt"))
+            .ok_or_else(|| format!("invalid shadow '{val}': {axis} '{part}' is not a length in {LENGTH_UNITS}, like 2pt or -3pt"))
     };
     let dx = offset(parts[0], "x")?;
     let dy = offset(parts[1], "y")?;
