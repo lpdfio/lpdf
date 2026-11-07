@@ -242,9 +242,9 @@ fn dispatch(request: String) -> Answer {
                     return Answer::error(&e);
                 }
             }
-            render_pdf_doc(doc, &key, now_unix, &req).into()
+            render_pdf_doc(doc, &key, now_unix, &mut req).into()
         }
-        "render_tree_pdf" => render_pdf_doc(doc, &key, now_unix, &req).into(),
+        "render_tree_pdf" => render_pdf_doc(doc, &key, now_unix, &mut req).into(),
         _ => Answer::Json(render_doc(doc, &key, now_unix)),
     }
 }
@@ -287,18 +287,25 @@ fn render_timeout(req: &serde_json::Value) -> Result<f64, String> {
     }
 }
 
-/// Decode the optional `fonts` field from the request envelope into a `FontRegistry`.
-fn build_registry(req: &serde_json::Value) -> pdf::FontRegistry {
-    let mut registry = pdf::FontRegistry::new();
-    if let Some(fonts_obj) = req.get("fonts").and_then(|v| v.as_object()) {
-        for (name, val) in fonts_obj {
-            if let Some(b64) = val.as_str() {
+/// Decodes each asset of the request's `field`, base64 by name, and hands it to `load`. The assets are taken out of the
+/// request, and each one's base64 is freed once it is decoded, so the render holds an asset once, as its bytes. One
+/// that is not base64 is left out.
+fn take_assets(req: &mut serde_json::Value, field: &str, mut load: impl FnMut(&str, Vec<u8>)) {
+    if let Some(serde_json::Value::Object(assets)) = req.get_mut(field).map(serde_json::Value::take) {
+        for (name, asset) in assets {
+            if let serde_json::Value::String(b64) = asset {
                 if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64) {
-                    registry.register(name, bytes);
+                    load(&name, bytes);
                 }
             }
         }
     }
+}
+
+/// Decode the optional `fonts` field from the request envelope into a `FontRegistry`, taking it out of the request.
+fn build_registry(req: &mut serde_json::Value) -> pdf::FontRegistry {
+    let mut registry = pdf::FontRegistry::new();
+    take_assets(req, "fonts", |name, bytes| registry.register(name, bytes));
     registry
 }
 
@@ -316,46 +323,26 @@ fn build_resources(req: &serde_json::Value) -> parse::Resources {
     resources
 }
 
-/// Decode the optional `images` field from the request envelope into an `ImageRegistry`.
-fn build_image_registry(req: &serde_json::Value) -> pdf::ImageRegistry {
+/// Decode the optional `images` field from the request envelope into an `ImageRegistry`, taking it out of the request.
+fn build_image_registry(req: &mut serde_json::Value) -> pdf::ImageRegistry {
     let mut registry = pdf::ImageRegistry::new();
-    if let Some(imgs_obj) = req.get("images").and_then(|v| v.as_object()) {
-        for (name, val) in imgs_obj {
-            if let Some(b64) = val.as_str() {
-                if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(b64) {
-                    registry.load(name, bytes);
-                }
-            }
-        }
-    }
+    take_assets(req, "images", |name, bytes| registry.load(name, bytes));
     registry
 }
 
 /// Decode the optional `files` field of the request: the bytes of the files the document carries, by the `ref` or
-/// name of each `<file>`.
-fn build_file_registry(req: &serde_json::Value) -> attachments::FileRegistry {
+/// name of each `<file>`, taken out of the request.
+fn build_file_registry(req: &mut serde_json::Value) -> attachments::FileRegistry {
     let mut registry = attachments::FileRegistry::new();
-    if let Some(files) = req.get("files").and_then(|v| v.as_object()) {
-        for (key, val) in files {
-            if let Some(bytes) = val.as_str().and_then(|b64| base64::engine::general_purpose::STANDARD.decode(b64).ok()) {
-                registry.load(key, bytes);
-            }
-        }
-    }
+    take_assets(req, "files", |key, bytes| registry.load(key, bytes));
     registry
 }
 
 /// Decode the optional `profiles` field of the request: the bytes of the ICC colour profiles of the document's
-/// `<assets>`, by the `ref` or name of each `<profile>`.
-fn build_profile_registry(req: &serde_json::Value) -> pdfx::ProfileRegistry {
+/// `<assets>`, by the `ref` or name of each `<profile>`, taken out of the request.
+fn build_profile_registry(req: &mut serde_json::Value) -> pdfx::ProfileRegistry {
     let mut registry = pdfx::ProfileRegistry::new();
-    if let Some(profiles) = req.get("profiles").and_then(|v| v.as_object()) {
-        for (key, val) in profiles {
-            if let Some(bytes) = val.as_str().and_then(|b64| base64::engine::general_purpose::STANDARD.decode(b64).ok()) {
-                registry.load(key, bytes);
-            }
-        }
-    }
+    take_assets(req, "profiles", |key, bytes| registry.load(key, bytes));
     registry
 }
 
@@ -379,13 +366,15 @@ fn build_font_widths(req: &serde_json::Value) -> std::collections::HashMap<Strin
     map
 }
 
-/// The PDF of `doc`, rendered as the request asks, or the error that stops it.
+/// The PDF of `doc`, rendered as the request asks, or the error that stops it. The request's fonts, images, files and
+/// profiles are taken out of it as their registries are built.
 fn render_pdf_doc(
-    mut doc: parse::Document, license_key: &str, now_unix: i64, req: &serde_json::Value,
+    mut doc: parse::Document, license_key: &str, now_unix: i64, req: &mut serde_json::Value,
 ) -> Result<Vec<u8>, String> {
     // Checked before the layout, so a missing or stray password fails without the work of a render.
     let encryption = render_encryption(req).and_then(|e| e.resolve(doc.output.encryption.as_ref()))?;
-    let created_on = req["created_on"].as_str();
+    let created_on = req["created_on"].as_str().map(str::to_owned);
+    let created_on = created_on.as_deref();
     pdfa::check_render(&doc.output, created_on)?;
 
     let profile_registry = build_profile_registry(req);
@@ -515,8 +504,8 @@ mod tests {
             <layer><img-at name="logo" x="10pt" y="10pt" width="50pt"/></layer>
             <layer><img-at name="logo" anchor="top-right" width="100pt" height="100pt"/></layer>
         </section></document></lpdf>"#;
-        let req = serde_json::json!({ "images": { "logo": TALL_PNG } });
-        let pdf = render_pdf_doc(parse::parse(xml).unwrap(), "", 0, &req).unwrap();
+        let mut req = serde_json::json!({ "images": { "logo": TALL_PNG } });
+        let pdf = render_pdf_doc(parse::parse(xml).unwrap(), "", 0, &mut req).unwrap();
 
         let matrices = image_matrices(&pdf);
         // One size given: the other follows the image, so 50pt wide is 100pt high. Both given: the image fits
@@ -1008,6 +997,35 @@ mod tests {
             assert_stdout_is_mains(name, pdf);
             assert_stdout_is_mains(name, stamped);
         }
+    }
+
+    #[test]
+    fn the_registries_take_their_assets_out_of_the_request_as_they_decode_them() {
+        let encode = |bytes: &[u8]| base64::engine::general_purpose::STANDARD.encode(bytes);
+        let profile = include_bytes!("../../../test/assets/profiles/FOGRA39L_coated.icc");
+        let invoice = b"<invoice/>";
+        let mut req = serde_json::json!({
+            "method": "render_pdf", "fonts": { "body": encode(pdf::ATTRIBUTION_FONT) }, "images": { "logo": TALL_PNG },
+            "files": { "invoice": encode(invoice) }, "profiles": { "press": encode(profile) },
+        });
+        let assets = req.clone();
+
+        let fonts = build_registry(&mut req);
+        let images = build_image_registry(&mut req);
+        let files = build_file_registry(&mut req);
+        let profiles = build_profile_registry(&mut req);
+
+        let tall = base64::engine::general_purpose::STANDARD.decode(TALL_PNG).unwrap();
+        assert_eq!(fonts.get("body"), Some(pdf::ATTRIBUTION_FONT));
+        assert_eq!(images.get("logo"), Some(&tall[..]));
+        assert_eq!(files.get("invoice"), Some(&invoice[..]));
+        assert_eq!(profiles.get("press"), Some(&profile[..]));
+        let held = req.to_string();
+        for (field, name) in [("fonts", "body"), ("images", "logo"), ("files", "invoice"), ("profiles", "press")] {
+            let base64 = assets[field][name].as_str().unwrap();
+            assert!(!held.contains(base64), "the request still holds the base64 of {field}.{name}");
+        }
+        assert_eq!(req["method"], "render_pdf", "the rest of the request stays");
     }
 
     #[test]
