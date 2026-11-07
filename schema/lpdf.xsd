@@ -32,21 +32,21 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- e.g. "10pt", "25.4mm", or "1in" (non-negative) -->
+  <!-- e.g. "10pt", "25.4mm", "1in", or a bare 0, which needs no unit (non-negative) -->
   <xs:simpleType name="PtValue">
     <xs:restriction base="xs:string">
-      <xs:pattern value="\d+(\.\d+)?(pt|mm|in)"/>
+      <xs:pattern value="0|\d+(\.\d+)?(pt|mm|in)"/>
     </xs:restriction>
   </xs:simpleType>
 
   <!-- Same as PtValue but allows a leading minus for coordinates and offsets -->
   <xs:simpleType name="SignedPtValue">
     <xs:restriction base="xs:string">
-      <xs:pattern value="-?\d+(\.\d+)?(pt|mm|in)"/>
+      <xs:pattern value="0|-?\d+(\.\d+)?(pt|mm|in)"/>
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- slot, alias of a slot, or explicit pt value, e.g. "m", "caption" or "14pt" -->
+  <!-- slot, alias of a slot, or explicit length, e.g. "m", "caption", "14pt" or "5mm" -->
   <xs:simpleType name="TokenScaleOrPt">
     <xs:union memberTypes="TokenScale PtValue TokenName"/>
   </xs:simpleType>
@@ -71,10 +71,10 @@
     <xs:union memberTypes="TokenScale FactorValue TokenName"/>
   </xs:simpleType>
 
-  <!-- e.g. "10pt" | "10pt 12pt" | "10pt 12pt 8pt" | "10pt 12pt 8pt 6pt". A bare 0 needs no unit. -->
+  <!-- e.g. "10pt" | "10mm 5mm" | "0.5in 12pt 8pt" | "10pt 12pt 8pt 6pt": one to four lengths. A bare 0 needs no unit. -->
   <xs:simpleType name="SpacingValue">
     <xs:restriction base="xs:string">
-      <xs:pattern value="(0|\d+(\.\d+)?pt)( (0|\d+(\.\d+)?pt)){0,3}"/>
+      <xs:pattern value="(0|\d+(\.\d+)?(pt|mm|in))( (0|\d+(\.\d+)?(pt|mm|in))){0,3}"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -100,10 +100,10 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- e.g. "100pt 200pt" -->
+  <!-- e.g. "100pt 200pt" or "210mm 297mm": the width, then the height -->
   <xs:simpleType name="PageSizeCustom">
     <xs:restriction base="xs:string">
-      <xs:pattern value="\d+(\.\d+)?pt \d+(\.\d+)?pt"/>
+      <xs:pattern value="(0|\d+(\.\d+)?(pt|mm|in)) (0|\d+(\.\d+)?(pt|mm|in))"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -318,21 +318,21 @@
   <!-- x offset, y offset, color and optionally an opacity, e.g. "2pt 3pt #000000" or "2pt 3pt text 0.2" -->
   <xs:simpleType name="ShadowValue">
     <xs:restriction base="xs:string">
-      <xs:pattern value="-?\d+(\.\d+)?(pt|mm|in) -?\d+(\.\d+)?(pt|mm|in) (#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|cmyk\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){3}|\d+(\.\d+)?(\s+\d+(\.\d+)?){3})\s*\)|rgb\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){2}|\d+(\.\d+)?(\s+\d+(\.\d+)?){2})\s*\)|hsl\(\s*(\d+(\.\d+)?\s*,\s*\d+(\.\d+)?%\s*,\s*\d+(\.\d+)?%|\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%)\s*\)|[a-z][a-z0-9-]*)( (0(\.\d+)?|1(\.0+)?|\.\d+))?"/>
+      <xs:pattern value="(0|-?\d+(\.\d+)?(pt|mm|in)) (0|-?\d+(\.\d+)?(pt|mm|in)) (#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|cmyk\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){3}|\d+(\.\d+)?(\s+\d+(\.\d+)?){3})\s*\)|rgb\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){2}|\d+(\.\d+)?(\s+\d+(\.\d+)?){2})\s*\)|hsl\(\s*(\d+(\.\d+)?\s*,\s*\d+(\.\d+)?%\s*,\s*\d+(\.\d+)?%|\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%)\s*\)|[a-z][a-z0-9-]*)( (0(\.\d+)?|1(\.0+)?|\.\d+))?"/>
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- e.g. "s #ccc", "m primary", "hairline primary" (an alias of a slot), or "1.5pt #ccc" -->
+  <!-- e.g. "s #ccc", "m primary", "hairline primary" (an alias of a slot), "1.5pt #ccc" or "0.4mm #ccc" -->
   <xs:simpleType name="BorderValue">
     <xs:restriction base="xs:string">
-      <xs:pattern value="(\d+(\.\d+)?pt|[a-z][a-z0-9-]*) .+"/>
+      <xs:pattern value="(0|\d+(\.\d+)?(pt|mm|in)|[a-z][a-z0-9-]*) .+"/>
     </xs:restriction>
   </xs:simpleType>
 
   <!-- a border as above, or none: e.g. "xs line-muted" or "none" -->
   <xs:simpleType name="LineValue">
     <xs:restriction base="xs:string">
-      <xs:pattern value="none|(\d+(\.\d+)?pt|[a-z][a-z0-9-]*) .+"/>
+      <xs:pattern value="none|(0|\d+(\.\d+)?(pt|mm|in)|[a-z][a-z0-9-]*) .+"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -427,7 +427,7 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- "full", "fill", a slot or an alias of one, or an explicit pt value e.g. "48pt" -->
+  <!-- "full", "fill", a slot or an alias of one, or an explicit length e.g. "48pt" or "15mm" -->
   <xs:simpleType name="HeightValue">
     <xs:union memberTypes="HeightMode TokenScale PtValue TokenName"/>
   </xs:simpleType>
@@ -439,7 +439,7 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- "fill", a slot or an alias of one, or an explicit pt value e.g. "120pt" -->
+  <!-- "fill", a slot or an alias of one, or an explicit length e.g. "120pt" or "40mm" -->
   <xs:simpleType name="WidthValue">
     <xs:union memberTypes="WidthMode TokenScale PtValue TokenName"/>
   </xs:simpleType>
@@ -537,7 +537,7 @@
        Reusable complex types
   ============================================================ -->
 
-  <!-- All six scale slots with pt values — used by every token row -->
+  <!-- All six scale slots with lengths — used by every token row -->
   <xs:complexType name="TokenScaleRow">
     <xs:attribute name="xs"  type="PtValue" use="required"/>
     <xs:attribute name="s"   type="PtValue" use="required"/>
@@ -2480,11 +2480,11 @@
         <xs:element ref="thead" minOccurs="0" maxOccurs="1"/>
         <xs:element ref="tr"    minOccurs="0" maxOccurs="unbounded"/>
       </xs:sequence>
-      <!-- cols: space-separated column widths — fr, pt, % units.
+      <!-- cols: space-separated column widths — fr, pt, mm, in, % units, or auto.
            Example: "2fr 1fr 120pt 20%" -->
       <xs:attribute name="cols"       type="xs:string" use="required">
         <xs:annotation>
-          <xs:documentation>Column widths, separated by spaces, in fr, pt or % units, or auto: for example 2fr 1fr 120pt 20%. An auto column takes the width its cells need on one line, and the auto columns share what the pt and % columns leave, in proportion to what they need. When they do not fit, each keeps at least its longest word, and when not even those fit, the longest are cut and a short column keeps its width. auto and fr cannot be in one table: use pt or % for the fixed columns. For example auto 90pt 60pt.</xs:documentation>
+          <xs:documentation>Column widths, separated by spaces, in fr, pt, mm, in or % units, or auto: for example 2fr 1fr 120pt 20%, or 1fr 40mm. A number with no unit is a share, so 2 1 is 2fr 1fr; any other width is an error. An auto column takes the width its cells need on one line, and the auto columns share what the fixed columns (pt, mm, in and %) leave, in proportion to what they need. When they do not fit, each keeps at least its longest word, and when not even those fit, the longest are cut and a short column keeps its width. auto and fr cannot be in one table: use a length or % for the fixed columns. For example auto 90pt 60pt.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="border"     type="BorderValue">
@@ -2516,7 +2516,7 @@
       <xs:attribute name="debug"      type="Boolean"/>
       <xs:attribute name="bulk"       type="Boolean">
         <xs:annotation>
-          <xs:documentation>true lays out the rows that the tr with data-source repeats one page at a time, straight from the data, for reports of tens of thousands of rows and more. The pages are the ones the same table would have without bulk. The rows follow rules, and so do the thead and the other rows: each td holds one text or none, a text holds plain words with no span, link, bookmark, footnote or reference, and sets no widows or orphans, a text without max-lines holds one line and ends in an ellipsis, a td has no rowspan, a row no keep, and nothing in a row has data-source. A row never splits across pages. The table sits directly in the layout, has no data-source of its own and one tr with it, sets its cols in fr, pt or %, has no height, and neither it nor anything in it has paginate. Its document has no table of contents, no reference to a bookmark, no pdfua and no pdfa of level a, and its section's columns are not balanced. Breaking a rule is an error that names it. Default false.</xs:documentation>
+          <xs:documentation>true lays out the rows that the tr with data-source repeats one page at a time, straight from the data, for reports of tens of thousands of rows and more. The pages are the ones the same table would have without bulk. The rows follow rules, and so do the thead and the other rows: each td holds one text or none, a text holds plain words with no span, link, bookmark, footnote or reference, and sets no widows or orphans, a text without max-lines holds one line and ends in an ellipsis, a td has no rowspan, a row no keep, and nothing in a row has data-source. A row never splits across pages. The table sits directly in the layout, has no data-source of its own and one tr with it, sets its cols in fr, pt, mm, in or %, has no height, and neither it nor anything in it has paginate. Its document has no table of contents, no reference to a bookmark, no pdfua and no pdfa of level a, and its section's columns are not balanced. Breaking a rule is an error that names it. Default false.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attributeGroup ref="DataBindingAttrs"/>

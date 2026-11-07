@@ -59,7 +59,7 @@ const NEVER_SPLITS: &str = "never splits a record across pages, so it sets no wi
 const NO_ROWSPAN: &str = "has no rowspan, which ties records together";
 const NO_PAGINATE: &str = "has no paginate, and neither does what is in it";
 const OWN_HEIGHT: &str = "takes its height from its records";
-const COLS: &str = "sets its cols in fr, pt or %";
+const COLS: &str = "sets its cols in fr, pt, mm, in or %";
 
 /// Check the rules on a bulk container that the parser has read, children and all, and give each text of it that
 /// sets no `max-lines` one line, ending in an ellipsis, so that a record stays as high as the template says.
@@ -402,7 +402,7 @@ mod tests {
     #[test]
     fn a_bulk_table_sets_its_columns_without_auto() {
         assert_says(&error(&format!(r#"<table cols="auto 60pt" bulk="true">{ROW}</table>"#)),
-            "a bulk table sets its cols in fr, pt or %: an auto column would need every record first");
+            "a bulk table sets its cols in fr, pt, mm, in or %: an auto column would need every record first");
     }
 
     #[test]

@@ -204,8 +204,10 @@ fn cut(axis: Axis, own_step: Option<&str>, step: Option<&str>, own_count: Option
 fn parse_step(name: &str, value: &str) -> Result<f32, String> {
     let step = crate::parse::parse_measurement(value)
         .ok()
-        .filter(|step| step.is_finite() && *step >= 0.0)
-        .ok_or_else(|| format!("{name} '{value}' is not a length: give one such as 5mm"))?;
+        .filter(|step| *step >= 0.0)
+        .ok_or_else(|| {
+            format!("{name} '{value}' is not a length in {}: give one such as 5mm", crate::tokens::LENGTH_UNITS)
+        })?;
     if step < MIN_CELL {
         return Err(format!(
             "{name} '{value}' makes cells narrower than {MIN_CELL}pt, the least a ruling allows: give {MIN_CELL}pt or more, such as 1mm"
@@ -424,7 +426,8 @@ mod tests {
 
     #[test]
     fn a_step_must_be_a_length_and_a_count_a_whole_number_up_to_a_hundred() {
-        assert!(lines(&[("step", "m")]).unwrap_err().starts_with("step 'm' is not a length"));
+        let err = lines(&[("step", "2cm")]).unwrap_err();
+        assert!(err.starts_with("step '2cm' is not a length in pt, mm or in"), "{err}");
         assert_eq!(
             lines(&[("count-x", "150")]).unwrap_err(),
             "count-x '150' is more than 100: cut the space into 100 parts or fewer, or give a step for finer lines, such \

@@ -4,7 +4,7 @@
     generated: build.py turns source/alice.txt into this file, so change the script or the text
     and not the XML. The text is public domain (Lewis Carroll, 1865). What this adds to the brochure:
 
-      size           two lengths, in points, for a size with no name: 306pt 495pt is a mass-market paperback
+      size           two lengths, in pt, mm or in, for a size with no name: 306pt 495pt is a mass-market paperback
       one section    the whole book is one, so the page numbers run on from the cover to the last page
       paginate       paginate="break-before" on a direct child of the layout starts a new page. Each
                      chapter, and the contents, is such a child, so each begins at the top of a page. On

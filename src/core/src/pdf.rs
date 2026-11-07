@@ -2321,7 +2321,7 @@ fn emit_svg_path(content: &mut impl PathSink, d: &str, page_h: f32) {
         // Helper closures to consume the next f32 token.
         let next_f = |i: &mut usize| -> f32 {
             if *i < tokens.len() {
-                let v = tokens[*i].parse::<f32>().unwrap_or(0.0);
+                let v = crate::tokens::parse_number(tokens[*i]).unwrap_or(0.0);
                 *i += 1;
                 v
             } else {
@@ -2335,7 +2335,7 @@ fn emit_svg_path(content: &mut impl PathSink, d: &str, page_h: f32) {
                 content.move_to(x, flip(y));
                 cur_x = x; cur_y = y;
                 // Implicit subsequent L commands.
-                while i < tokens.len() && tokens[i].parse::<f32>().is_ok() {
+                while i < tokens.len() && crate::tokens::parse_number(tokens[i]).is_some() {
                     let lx = next_f(&mut i); let ly = next_f(&mut i);
                     content.line_to(lx, flip(ly));
                     cur_x = lx; cur_y = ly;
@@ -2345,7 +2345,7 @@ fn emit_svg_path(content: &mut impl PathSink, d: &str, page_h: f32) {
                 let dx = next_f(&mut i); let dy = next_f(&mut i);
                 cur_x += dx; cur_y += dy;
                 content.move_to(cur_x, flip(cur_y));
-                while i < tokens.len() && tokens[i].parse::<f32>().is_ok() {
+                while i < tokens.len() && crate::tokens::parse_number(tokens[i]).is_some() {
                     let dx2 = next_f(&mut i); let dy2 = next_f(&mut i);
                     cur_x += dx2; cur_y += dy2;
                     content.line_to(cur_x, flip(cur_y));
@@ -2355,7 +2355,7 @@ fn emit_svg_path(content: &mut impl PathSink, d: &str, page_h: f32) {
                 let x = next_f(&mut i); let y = next_f(&mut i);
                 content.line_to(x, flip(y));
                 cur_x = x; cur_y = y;
-                while i < tokens.len() && tokens[i].parse::<f32>().is_ok() {
+                while i < tokens.len() && crate::tokens::parse_number(tokens[i]).is_some() {
                     let lx = next_f(&mut i); let ly = next_f(&mut i);
                     content.line_to(lx, flip(ly));
                     cur_x = lx; cur_y = ly;
@@ -2365,7 +2365,7 @@ fn emit_svg_path(content: &mut impl PathSink, d: &str, page_h: f32) {
                 let dx = next_f(&mut i); let dy = next_f(&mut i);
                 cur_x += dx; cur_y += dy;
                 content.line_to(cur_x, flip(cur_y));
-                while i < tokens.len() && tokens[i].parse::<f32>().is_ok() {
+                while i < tokens.len() && crate::tokens::parse_number(tokens[i]).is_some() {
                     let dx2 = next_f(&mut i); let dy2 = next_f(&mut i);
                     cur_x += dx2; cur_y += dy2;
                     content.line_to(cur_x, flip(cur_y));
@@ -2390,7 +2390,7 @@ fn emit_svg_path(content: &mut impl PathSink, d: &str, page_h: f32) {
                 content.line_to(cur_x, flip(cur_y));
             }
             "C" => {
-                while i < tokens.len() && (tokens[i].parse::<f32>().is_ok() || tokens[i].starts_with('-')) {
+                while i < tokens.len() && (crate::tokens::parse_number(tokens[i]).is_some() || tokens[i].starts_with('-')) {
                     let x1 = next_f(&mut i); let y1 = next_f(&mut i);
                     let x2 = next_f(&mut i); let y2 = next_f(&mut i);
                     let x  = next_f(&mut i); let y  = next_f(&mut i);
@@ -2399,7 +2399,7 @@ fn emit_svg_path(content: &mut impl PathSink, d: &str, page_h: f32) {
                 }
             }
             "c" => {
-                while i < tokens.len() && (tokens[i].parse::<f32>().is_ok() || tokens[i].starts_with('-')) {
+                while i < tokens.len() && (crate::tokens::parse_number(tokens[i]).is_some() || tokens[i].starts_with('-')) {
                     let dx1 = next_f(&mut i); let dy1 = next_f(&mut i);
                     let dx2 = next_f(&mut i); let dy2 = next_f(&mut i);
                     let dx  = next_f(&mut i); let dy  = next_f(&mut i);
@@ -2409,7 +2409,7 @@ fn emit_svg_path(content: &mut impl PathSink, d: &str, page_h: f32) {
             }
             "Q" => {
                 // Quadratic Bézier → convert to cubic.
-                while i < tokens.len() && (tokens[i].parse::<f32>().is_ok() || tokens[i].starts_with('-')) {
+                while i < tokens.len() && (crate::tokens::parse_number(tokens[i]).is_some() || tokens[i].starts_with('-')) {
                     let qx1 = next_f(&mut i); let qy1 = next_f(&mut i);
                     let x   = next_f(&mut i); let y   = next_f(&mut i);
                     // Cubic control points: cp1 = start + 2/3*(qp1-start), cp2 = end + 2/3*(qp1-end)
@@ -2422,7 +2422,7 @@ fn emit_svg_path(content: &mut impl PathSink, d: &str, page_h: f32) {
                 }
             }
             "q" => {
-                while i < tokens.len() && (tokens[i].parse::<f32>().is_ok() || tokens[i].starts_with('-')) {
+                while i < tokens.len() && (crate::tokens::parse_number(tokens[i]).is_some() || tokens[i].starts_with('-')) {
                     let dqx1 = next_f(&mut i); let dqy1 = next_f(&mut i);
                     let dx   = next_f(&mut i); let dy   = next_f(&mut i);
                     let qx1 = cur_x + dqx1; let qy1 = cur_y + dqy1;

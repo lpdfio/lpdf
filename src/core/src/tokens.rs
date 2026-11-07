@@ -150,11 +150,29 @@ pub fn scale_idx(name: &str) -> Option<usize> {
     SCALE_NAMES.iter().position(|&n| n == name)
 }
 
-/// Parse a pt value like "12pt", "0.5pt", or bare "0".
-pub fn parse_pt(val: &str) -> Option<f32> {
+/// The units a length is written in, as an error names them.
+pub const LENGTH_UNITS: &str = "pt, mm or in";
+
+/// A length such as "12pt", "2.5mm" or "1in" cut into its number and the conversion of that number to points (a PDF's
+/// unit, 1/72 of an inch), or `None` when it ends in none of the three units.
+pub fn split_unit(length: &str) -> Option<(&str, fn(f32) -> f32)> {
+    const UNITS: [(&str, fn(f32) -> f32); 3] = [("pt", |n| n), ("mm", |n| n * 72.0 / 25.4), ("in", |n| n * 72.0)];
+    UNITS.into_iter().find_map(|(unit, to_points)| length.strip_suffix(unit).map(|number| (number, to_points)))
+}
+
+/// Parse a length in `pt`, `mm` or `in` like "12pt", "0.5pt", "2.5mm" or "1in", or a bare "0", into points. Any other
+/// bare number is not a length here.
+pub fn parse_length(val: &str) -> Option<f32> {
     let s = val.trim();
     if s == "0" { return Some(0.0); }
-    s.strip_suffix("pt")?.trim().parse().ok()
+    let (number, to_points) = split_unit(s)?;
+    parse_number(number).map(to_points).filter(|points| points.is_finite())
+}
+
+/// A number in a length or a share, as a finite `f32`. Rust's parse also reads "inf", "infinity" and "NaN" in any case,
+/// and a number too big for an `f32` as infinity: none of them is a length.
+pub fn parse_number(text: &str) -> Option<f32> {
+    text.trim().parse::<f32>().ok().filter(|number| number.is_finite())
 }
 
 /// Parse a factor above 0, like "1.5", the way the schema's FactorValue does: a bare number, no unit.
@@ -356,15 +374,15 @@ impl Tokens {
         format!("a slot from xs to xxl, an alias ({})", aliases.join(", "))
     }
 
-    /// A slot of the scale, an alias of one, or a pt value: the `name` row's value for it.
+    /// A slot of the scale, an alias of one, or a length in pt, mm or in: the `name` row's value for it.
     fn resolve_scale(&self, val: &str, scale: &[f32; 6], name: &str) -> Result<f32, String> {
         if let Some(i) = self.slot(val) {
             return Ok(scale[i]);
         }
-        if let Some(v) = parse_pt(val) {
+        if let Some(v) = parse_length(val) {
             return Ok(v);
         }
-        Err(format!("invalid {name} value: '{val}': expected {} or a pt value", self.slot_names()))
+        Err(format!("invalid {name} value: '{val}': expected {} or a length in {LENGTH_UNITS}", self.slot_names()))
     }
 
     pub fn resolve_space(&self, val: &str) -> Result<f32, String> {
@@ -379,31 +397,32 @@ impl Tokens {
         self.resolve_scale(val, &self.radius, "radius")
     }
 
-    /// Width token OR explicit pt value
+    /// Width token OR explicit length
     pub fn resolve_width(&self, val: &str) -> Result<f32, String> {
         self.resolve_scale(val, &self.width, "width")
     }
 
-    /// Height token OR explicit pt value. `full` and `fill` are not read here: the boxes that have them read them first.
+    /// Height token OR explicit length. `full` and `fill` are not read here: the boxes that have them read them first.
     pub fn resolve_height(&self, val: &str) -> Result<f32, String> {
         self.resolve_scale(val, &self.height, "height")
     }
 
-    /// Grid column min-width: scale token or pt value
+    /// Grid column min-width: scale token or length
     pub fn resolve_grid_col(&self, val: &str) -> Result<f32, String> {
         self.resolve_scale(val, &self.grid_col, "grid")
     }
 
-    /// Text size: scale token, pt value, or plain number
+    /// Text size: scale token, length, or plain number (in pt)
     pub fn resolve_text_size(&self, val: &str) -> Result<f32, String> {
         if let Some(i) = self.slot(val) {
             return Ok(self.text_size[i]);
         }
-        if let Some(v) = parse_pt(val) {
+        if let Some(v) = parse_length(val) {
             return Ok(v);
         }
-        val.parse::<f32>()
-            .map_err(|_| format!("invalid text size: '{val}': expected {} or a pt value", self.slot_names()))
+        parse_number(val).ok_or_else(|| {
+            format!("invalid text size: '{val}': expected {} or a length in {LENGTH_UNITS}", self.slot_names())
+        })
     }
 
     /// Line height: a token of the line-height row, or a factor of the font size above 0.
@@ -521,7 +540,7 @@ impl Tokens {
         Ok((thickness, color))
     }
 
-    /// CSS shorthand spacing: 1–4 values, each a space token or pt value
+    /// CSS shorthand spacing: 1–4 values, each a space token or length
     pub fn resolve_spacing(&self, val: &str) -> Result<[f32; 4], String> {
         let parts: Vec<&str> = val.split_whitespace().collect();
         match parts.len() {
@@ -654,8 +673,72 @@ mod tests {
         let t = Tokens::default();
         assert_eq!(
             t.resolve_height("medum").unwrap_err(),
-            "invalid height value: 'medum': expected a slot from xs to xxl or a pt value"
+            "invalid height value: 'medum': expected a slot from xs to xxl or a length in pt, mm or in"
         );
+    }
+
+    // ── Lengths ───────────────────────────────────────────────────────────────
+
+    fn close(a: f32, b: f32) -> bool {
+        (a - b).abs() < 0.001
+    }
+
+    #[test]
+    fn a_length_is_read_in_pt_mm_and_in() {
+        assert_eq!(parse_length("12pt"), Some(12.0));
+        assert_eq!(parse_length("1in"), Some(72.0));
+        assert_eq!(parse_length("0.5in"), Some(36.0));
+        assert!(close(parse_length("25.4mm").unwrap(), 72.0));
+        assert!(close(parse_length("10mm").unwrap(), 28.3465));
+        assert_eq!(parse_length(" 2 mm "), parse_length("2mm"), "the number may be set off from its unit");
+    }
+
+    #[test]
+    fn a_bare_zero_is_a_length_and_no_other_bare_number_is() {
+        assert_eq!(parse_length("0"), Some(0.0));
+        assert_eq!(parse_length("10"), None);
+        assert_eq!(parse_length("0.5"), None);
+    }
+
+    #[test]
+    fn a_length_in_another_unit_or_with_no_number_is_not_one() {
+        for length in ["2cm", "12px", "1em", "50%", "mm", "pt", "in", "", "1 2mm"] {
+            assert_eq!(parse_length(length), None, "{length}");
+        }
+    }
+
+    #[test]
+    fn every_scale_takes_a_length_in_each_unit() {
+        let t = Tokens::default();
+        for (value, points) in [("1in", 72.0), ("25.4mm", 72.0), ("36pt", 36.0)] {
+            for read in [
+                Tokens::resolve_space, Tokens::resolve_border_thickness, Tokens::resolve_radius, Tokens::resolve_width,
+                Tokens::resolve_height, Tokens::resolve_grid_col, Tokens::resolve_text_size,
+            ] {
+                assert!(close(read(&t, value).unwrap(), points), "{value}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_spacing_and_a_border_take_lengths_in_mm_and_in() {
+        let t = Tokens::default();
+        let [top, right, bottom, left] = t.resolve_spacing("1in 25.4mm 36pt 0").unwrap();
+        assert_eq!((top, bottom, left), (72.0, 36.0, 0.0));
+        assert!(close(right, 72.0));
+        assert_eq!(t.resolve_spacing("0.5in").unwrap(), [36.0; 4]);
+        let (thickness, color) = t.resolve_border("0.5in #ccc").unwrap();
+        assert_eq!((thickness, color.as_str()), (36.0, "#cccccc"));
+    }
+
+    #[test]
+    fn a_length_in_another_unit_is_an_error_that_names_the_three() {
+        let t = Tokens::default();
+        assert_eq!(
+            t.resolve_space("2cm").unwrap_err(),
+            "invalid space value: '2cm': expected a slot from xs to xxl or a length in pt, mm or in"
+        );
+        assert!(t.resolve_text_size("2cm").unwrap_err().ends_with("or a length in pt, mm or in"));
     }
 
     // ── Aliases ───────────────────────────────────────────────────────────────
@@ -705,15 +788,15 @@ mod tests {
     fn a_name_that_is_neither_a_slot_nor_an_alias_says_what_is_expected() {
         let t = Tokens::default();
         let err = t.resolve_text_size("medum").unwrap_err();
-        assert_eq!(err, "invalid text size: 'medum': expected a slot from xs to xxl or a pt value");
+        assert_eq!(err, "invalid text size: 'medum': expected a slot from xs to xxl or a length in pt, mm or in");
         let err = t.resolve_space("medum").unwrap_err();
-        assert_eq!(err, "invalid space value: 'medum': expected a slot from xs to xxl or a pt value");
+        assert_eq!(err, "invalid space value: 'medum': expected a slot from xs to xxl or a length in pt, mm or in");
 
         let t = with_aliases(&[("caption", "xs"), ("body", "m")]);
         let err = t.resolve_space("medum").unwrap_err();
         assert_eq!(
             err,
-            "invalid space value: 'medum': expected a slot from xs to xxl, an alias (body, caption) or a pt value"
+            "invalid space value: 'medum': expected a slot from xs to xxl, an alias (body, caption) or a length in pt, mm or in"
         );
         let err = t.resolve_line_height("medum").unwrap_err();
         assert!(err.starts_with("invalid line-height 'medum': expected a slot from xs to xxl, an alias (body, caption)"), "{err}");
