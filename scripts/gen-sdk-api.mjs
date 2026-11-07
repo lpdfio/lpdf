@@ -53,7 +53,7 @@ const SDK = {
 };
 
 // The rules a `<markdown-styles>` holds, each an element of its own in the schema.
-const MARKDOWN_RULES = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'code', 'quote', 'li', 'a', 'strong', 'em', 'del', 'table', 'th', 'td'];
+const MARKDOWN_RULES = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'code', 'quote', 'li', 'hr', 'a', 'strong', 'em', 'del', 'table', 'th', 'td'];
 
 // `where` is how the schema declares the element (see loadSchema); `area` is the folder it lives in.
 const CLASSES = [

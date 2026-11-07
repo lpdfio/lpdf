@@ -16,9 +16,8 @@
 // its own for each, and run it. What each language needs is in lib/codegen-check/<language>.mjs.
 //
 // The generator can't write a document that binds data (`data-source`, `data-value`), whose code has a `TODO` in place
-// of the binding, nor the markdown rule `hr`, which no SDK has, whose code is a call of `L.element`. Such a document
-// fails the check unless it is in CANNOT_EXPRESS below with the reason, and an entry fails once the generator can write
-// the document.
+// of the binding. Such a document fails the check unless it is in CANNOT_EXPRESS below with the reason, and an entry
+// fails once the generator can write the document.
 //
 // An SDK's CI fetches this script and the documents at the core tag it builds against, as it does gen-sdk-api.mjs, and
 // the engine files that hold `codegen_wasm`, `lpdf.js` and `lpdf_bg.wasm`, which every release candidate and release
@@ -62,10 +61,6 @@ const CANNOT_EXPRESS = new Map([
         'section@type=toc', 'section@toc-indent-step=xs', 'column@bulk=true', 'column@bulk=false', 'list@bulk=true',
         'list@bulk=false', 'grid@bulk=true', 'grid@bulk=false', 'table@bulk=true', 'table@bulk=false',
     ].map((id) => [`corpus/${id}`, DATA_BINDING]),
-    ...['markdown:hr@color=#ff0000', 'markdown:hr@thickness=xs'].map((id) => [
-        `corpus/${id}`,
-        'the markdown rule hr has no builder in the SDKs yet, so the generator has nothing to write for it',
-    ]),
 ]);
 
 /** What the generator writes in place of code it can't write: a TODO comment, or a call of a builder no SDK has. */

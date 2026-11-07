@@ -50,7 +50,7 @@ for (const element of ['column', 'row', 'grid', 'list', 'li', 'frame', 'link', '
 // after the Markdown it styles and shares names with elements of the layout.
 EXPECTED.MarkdownAttr = attributes('markdown');
 EXPECTED.MarkdownStylesAttr = attributes('markdown-styles', 'markdown');
-for (const rule of ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'code', 'quote', 'li', 'a', 'strong', 'em', 'del', 'table', 'th', 'td']) {
+for (const rule of ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'code', 'quote', 'li', 'hr', 'a', 'strong', 'em', 'del', 'table', 'th', 'td']) {
     EXPECTED[`Markdown${rule[0].toUpperCase()}${rule.slice(1)}Attr`] = attributes(rule, 'markdown');
 }
 for (const element of ['rect', 'circle', 'ellipse', 'line', 'path', 'text-at', 'img-at', 'barcode-at']) {
