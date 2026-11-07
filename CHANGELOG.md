@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.34.0 — 2026-11-07
+### Lengths
+- **Breaking:** a table's `cols` with a width that is none of `fr`, `pt`, `mm`, `in`, `%` or `auto` is an error that names them, such as `cols="40cm 1fr"`. It was dropped, and the table read as one column. A bare number is `fr`, as before
+- Every attribute that takes a length reads `mm` and `in` as well as `pt`, as the schema and the docs always said. It was `pt` only for most of them, so `<quote padding="2mm"/>` failed with "invalid space value". The places are `padding`, `gap`, `width`, `height`, `radius` and `font-size` of a column, a row or a text, the rules of a Markdown (`padding`, `font-size`, `bar-width`, `radius`, `gap`, `indent` and `thickness`), the rows of the tokens, the `cols` of a table, and the `width` of `text-at` and `img-at`
+- A custom page `size`, a `margin`, a `padding` of one value, and the `border` and `column-rule` shorthands take `mm` and `in` too
+- An error about a length names `pt`, `mm` and `in`. A bare number is rejected except `0`, as before
+
+### Markdown
+- The rule `hr`, the thematic break (`---`) with its `color` and `thickness`, has a builder in every SDK: `LMarkdown.hr` (`Hr` in .NET) with `MarkdownHrAttr`. It could only be written as XML. Generate Code writes it in all five languages
+- `bar-width` of the `quote` rule takes a slot of the space row, `xs` to `xxl`, or an alias the tokens define for one, as the schema and the docs said, and draws a bar of that width. It failed with an error about the quote's table columns, and only a length worked
+- An error in a `quote` rule names the rule once, "the quote rule: padding: …", where it said "the quote rule: the quote rule: padding: …"
+
+### PHP
+- The PHP SDK renders through the engine as a native library, loaded with PHP's FFI, where it can: on Linux with glibc 2.17 or newer, on x86_64 or arm64, with `ffi.enable=true` under a web server. It needs no `wasmtime` program and starts no process per render. Everywhere else, such as macOS, Windows, Alpine and hosts that refuse FFI, it renders with `wasmtime` as before. `runner` on `EngineOptions` picks how (`'auto'`, the default, `'ffi'` or `'wasm'`), `libPath` loads the library from another path, and `$engine->runner()` says which one renders. `'ffi'` throws an `EngineException` that names what stands in the way
+- A render through the native library stops at the timeout with an `EngineException` that names the limit, as with `wasmtime`, and the next render in the process is unaffected
+- Under PHP-FPM, the `wasmtime` runner renders out of the box. It failed with "failed to create cache directory" wherever PHP's user can't write its home, as `www-data` can't, because `wasmtime` could not keep its compiled engine. The SDK now keeps it in a folder of its own. On Linux and macOS that needs PHP's POSIX extension (`ext-posix`)
+
+### Memory
+- The .NET, PHP (through `wasmtime`), Python and Java SDKs have a smaller memory footprint when they render a large PDF, because the engine writes its output as it encodes the PDF
+
+### VS Code extension
+- **Lpdf: Generate Code** offers Java beside TypeScript, C#, Python and PHP, and **Lpdf: Generate Java from XML** is a command of its own. A text or an attribute value over 65,534 bytes is refused with an error that names the element, since a Java string holds no more
+- Hover, autocomplete and validation follow the schema, so they accept `mm` and `in` wherever the schema now does
+
 ## v0.33.0 — 2026-11-06
 ### E-invoices and PDF/A
 - `pdfa` takes `3b` and `3u`: PDF/A-3, which carries attachments of any kind. It is the base of the hybrid e-invoices that France and Germany accept, a PDF people read carrying the EN 16931 XML that accounting software reads
