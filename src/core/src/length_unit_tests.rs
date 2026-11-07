@@ -239,3 +239,56 @@ fn a_kit_tree_refuses_a_length_in_another_unit_and_a_column_width_that_is_none()
     assert!(err.contains("'40cm'") && err.contains("not a column width"), "{err}");
     render_kit(&tree(r#"{"cols":"40mm"}"#)).unwrap();
 }
+
+/// The documents that use `length` in the places of a layer, a shape, a bleed and a shadow, as `(what, xml)`.
+fn layer_places(length: &str) -> Vec<(&'static str, String)> {
+    vec![
+        ("layer rect", document("", &format!(r#"<layer><rect x="{length}" y="{length}" width="10pt" height="10pt" radius="{length}" stroke-width="{length}"/></layer>"#))),
+        ("layer rect width and height", document("", &format!(r#"<layer><rect x="1pt" y="1pt" width="{length}" height="{length}"/></layer>"#))),
+        ("shape radius", document("", &format!(r#"<layout><shape type="circle" r="{length}"/></layout>"#))),
+        ("layer circle", document("", &format!(r#"<layer><circle x="{length}" y="{length}" r="{length}" stroke-width="{length}"/></layer>"#))),
+        ("layer ellipse", document("", &format!(r#"<layer><ellipse x="{length}" y="{length}" rx="{length}" ry="{length}"/></layer>"#))),
+        ("layer line", document("", &format!(r#"<layer><line x1="{length}" y1="{length}" x2="{length}" y2="{length}" stroke-width="{length}"/></layer>"#))),
+        ("bleed", document(&format!(r#"bleed="{length}""#), "<layout><text>x</text></layout>")),
+        ("shadow", document("", &format!(r##"<layout><column shadow="{length} {length} #000000" background="#dddddd"><text>x</text></column></layout>"##))),
+        ("text-at position", document("", &format!(r#"<layer><text-at x="{length}" y="{length}">x</text-at></layer>"#))),
+    ]
+}
+
+#[test]
+fn a_bare_zero_is_the_same_length_as_0pt_0mm_and_0in_wherever_a_length_is_written() {
+    let places_of = |length: &str| places(length).into_iter().chain(layer_places(length)).collect::<Vec<_>>();
+    for (((what, bare), (_, points)), ((_, millimetres), (_, inches))) in
+        places_of("0").into_iter().zip(places_of("0pt")).zip(places_of("0mm").into_iter().zip(places_of("0in")))
+    {
+        let bare = render_xml(&bare).unwrap_or_else(|e| panic!("{what} with a bare 0: {e}"));
+        for (unit, xml) in [("pt", points), ("mm", millimetres), ("in", inches)] {
+            let with_unit = render_xml(&xml).unwrap_or_else(|e| panic!("{what} in 0{unit}: {e}"));
+            assert!(bare == with_unit, "{what}: 0 renders as 0{unit}");
+        }
+    }
+}
+
+#[test]
+fn a_length_that_is_not_a_finite_number_is_refused_wherever_it_is_written() {
+    for length in ["infpt", "NaNmm", "infin", "InfinitYpt", "-infmm", "1e999pt", "1e38in"] {
+        for (what, xml) in places(length).into_iter().chain(layer_places(length)) {
+            render_xml(&xml).expect_err(&format!("{what} with {length} is no length"));
+        }
+        render_kit(&kit(length)).expect_err(&format!("a kit tree with {length} is no length"));
+    }
+}
+
+#[test]
+fn a_bare_inf_or_nan_is_no_text_size_no_share_and_no_position() {
+    for (what, xml) in [
+        ("a text size", document("", r#"<layout><text font-size="inf">x</text></layout>"#)),
+        ("a share in cols", document("", r#"<layout><table cols="NaN 1fr"><tr><td><text>a</text></td><td><text>b</text></td></tr></table></layout>"#)),
+        ("a share with fr", document("", r#"<layout><table cols="inffr 1fr"><tr><td><text>a</text></td><td><text>b</text></td></tr></table></layout>"#)),
+        ("a percentage", document("", r#"<layout><table cols="inf% 1fr"><tr><td><text>a</text></td><td><text>b</text></td></tr></table></layout>"#)),
+        ("a layer position", document("", r#"<layer><text-at x="inf" y="0pt">x</text-at></layer>"#)),
+        ("a bleed", document(r#"bleed="NaN""#, "<layout><text>x</text></layout>")),
+    ] {
+        render_xml(&xml).expect_err(what);
+    }
+}
