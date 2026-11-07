@@ -16,9 +16,8 @@
 // its own for each, and run it. What each language needs is in lib/codegen-check/<language>.mjs.
 //
 // The generator can't write a document that binds data (`data-source`, `data-value`), whose code has a `TODO` in place
-// of the binding, nor the markdown rule `hr`, which no SDK has, whose code is a call of `L.element`. Such a document
-// fails the check unless it is in CANNOT_EXPRESS below with the reason, and an entry fails once the generator can write
-// the document.
+// of the binding. Such a document fails the check unless it is in CANNOT_EXPRESS below with the reason, and an entry
+// fails once the generator can write the document.
 //
 // An SDK's CI fetches this script and the documents at the core tag it builds against, as it does gen-sdk-api.mjs, and
 // the engine files that hold `codegen_wasm`, `lpdf.js` and `lpdf_bg.wasm`, which every release candidate and release

@@ -2283,6 +2283,22 @@ mod tests {
         assert!(java.contains(r##"LMarkdown.hr(new MarkdownHrAttr().color("#ff0000").thickness("xs"))"##), "{java}");
     }
 
+    #[test]
+    fn test_the_rule_for_a_thematic_break_with_no_attributes_is_written_with_no_attributes() {
+        let xml = r#"<lpdf version="1"><document><section><markdown><markdown-styles><hr/></markdown-styles><markdown-content>x</markdown-content></markdown></section></document></lpdf>"#;
+        let code = |target: &str| codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+        for (target, call) in [
+            ("js", "LMarkdown.hr(NoAttr)"),
+            ("dotnet", "LMarkdown.Hr(NoAttr)"),
+            ("php", "LMarkdown::hr(NoAttr)"),
+            ("python", "LMarkdown.hr(NoAttr)"),
+            ("java", "LMarkdown.hr(NoAttr)"),
+        ] {
+            let written = code(target);
+            assert!(written.contains(call), "{target}: {written}");
+        }
+    }
+
     /// The elements of the schema that have no entry in the method tables, and what writes each instead. Each has to
     /// stay without one: when an element gets an entry, it goes off this list.
     const WITHOUT_A_METHOD: &[(&str, &str)] = &[
