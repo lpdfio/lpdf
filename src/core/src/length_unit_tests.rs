@@ -62,6 +62,11 @@ two]]></markdown-content></markdown>"#))),
     ]
 }
 
+/// The document of the place called `what`, with `length` in it.
+fn place(what: &str, length: &str) -> String {
+    places(length).into_iter().find(|(name, _)| *name == what).unwrap_or_else(|| panic!("no place called {what}")).1
+}
+
 #[test]
 fn a_document_in_inches_renders_as_the_same_one_in_points() {
     for ((what, inches), (_, points)) in places("1in").into_iter().zip(places("72pt")) {
@@ -80,9 +85,9 @@ fn every_place_that_takes_a_length_reads_it_in_millimetres() {
 
 #[test]
 fn a_length_in_millimetres_comes_out_as_the_same_length_in_points() {
-    let in_mm = render_xml(&places("25.4mm").remove(5).1).unwrap();
-    let in_pt = render_xml(&places("72pt").remove(5).1).unwrap();
-    let in_other = render_xml(&places("50pt").remove(5).1).unwrap();
+    let in_mm = render_xml(&place("column width", "25.4mm")).unwrap();
+    let in_pt = render_xml(&place("column width", "72pt")).unwrap();
+    let in_other = render_xml(&place("column width", "50pt")).unwrap();
     assert!(in_other != in_pt, "the width is drawn, so a different width is a different file");
     // 25.4mm is 72 points up to the rounding of an f32, which the file writes to fewer places than it keeps.
     assert!(in_mm == in_pt, "25.4mm is 72pt");
@@ -119,6 +124,26 @@ fn a_length_in_another_unit_names_the_units_wherever_a_layer_a_shape_a_bleed_or_
     ] {
         let err = render_xml(&xml).expect_err(what);
         assert!(err.contains("pt, mm or in"), "{what}: {err}");
+    }
+}
+
+/// A document whose layer draws the image `logo` with `attrs`.
+fn img_at(attrs: &str) -> String {
+    format!(
+        r#"<lpdf version="1"><assets><image name="logo"/></assets><document><section>
+        <layer><img-at name="logo" x="0pt" y="0pt" {attrs}/></layer></section></document></lpdf>"#
+    )
+}
+
+#[test]
+fn the_width_and_height_of_an_img_at_read_lengths_in_each_unit() {
+    for length in ["72pt", "1in", "25.4mm"] {
+        crate::parse::parse(&img_at(&format!(r#"width="{length}" height="{length}""#)))
+            .unwrap_or_else(|e| panic!("an img-at of {length}: {e}"));
+    }
+    for attrs in [r#"width="2cm""#, r#"height="2cm""#] {
+        let err = crate::parse::parse(&img_at(attrs)).err().unwrap_or_else(|| panic!("{attrs} was accepted"));
+        assert!(err.contains("2cm") && err.contains("pt, mm or in"), "{attrs}: {err}");
     }
 }
 
