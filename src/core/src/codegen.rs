@@ -178,8 +178,8 @@ fn is_inline_tag(tag: &str) -> bool {
 }
 
 /// The rules a `<markdown-styles>` holds.
-const MARKDOWN_RULES: [&str; 18] = [
-    "h1", "h2", "h3", "h4", "h5", "h6", "p", "code", "quote", "li", "a", "strong", "em", "del", "table", "th", "td",
+const MARKDOWN_RULES: [&str; 19] = [
+    "h1", "h2", "h3", "h4", "h5", "h6", "p", "code", "quote", "li", "hr", "a", "strong", "em", "del", "table", "th", "td",
     "markdown-styles",
 ];
 
@@ -2265,6 +2265,24 @@ mod tests {
         assert!(js.contains("LMarkdown.del({ strike: true })"), "{js}");
     }
 
+    #[test]
+    fn test_the_rule_for_a_thematic_break_is_written_in_every_language() {
+        let xml = r##"<lpdf version="1"><document><section><markdown><markdown-styles><hr color="#ff0000" thickness="xs"/></markdown-styles><markdown-content>x</markdown-content></markdown></section></document></lpdf>"##;
+        let code = |target: &str| codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+        let js = code("js");
+        assert!(js.contains("LMarkdown.hr({ color: '#ff0000', thickness: 'xs' })"), "{js}");
+        let dotnet = code("dotnet");
+        assert!(dotnet.contains(r##"LMarkdown.Hr(new() { Color = "#ff0000", Thickness = "xs" })"##), "{dotnet}");
+        let php = code("php");
+        assert!(php.contains("LMarkdown::hr(new MarkdownHrAttr(color: '#ff0000', thickness: 'xs'))"), "{php}");
+        assert!(php.contains("use Lpdf\\Markdown\\MarkdownHrAttr;"), "{php}");
+        let python = code("python");
+        assert!(python.contains("LMarkdown.hr(MarkdownHrAttr(color='#ff0000', thickness='xs'))"), "{python}");
+        assert!(python.contains("from lpdf import L, LMarkdown, NoAttr, MarkdownHrAttr"), "{python}");
+        let java = code("java");
+        assert!(java.contains(r##"LMarkdown.hr(new MarkdownHrAttr().color("#ff0000").thickness("xs"))"##), "{java}");
+    }
+
     /// The elements of the schema that have no entry in the method tables, and what writes each instead. Each has to
     /// stay without one: when an element gets an entry, it goes off this list.
     const WITHOUT_A_METHOD: &[(&str, &str)] = &[
@@ -2296,7 +2314,6 @@ mod tests {
         ("lines", "`rulings_expression`"),
         ("markdown", "`js_callee` and the callees of the other targets: `L.markdown`"),
         ("markdown-content", "`markdown_member`: `LMarkdown.content`"),
-        ("hr", "the markdown rule for a thematic break: no SDK has a rule for it yet, so its code is an L.element call"),
     ];
 
     /// Every element the schema declares is a node with an entry in the method tables, a rule of a markdown, or

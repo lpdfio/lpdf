@@ -62,10 +62,6 @@ const CANNOT_EXPRESS = new Map([
         'section@type=toc', 'section@toc-indent-step=xs', 'column@bulk=true', 'column@bulk=false', 'list@bulk=true',
         'list@bulk=false', 'grid@bulk=true', 'grid@bulk=false', 'table@bulk=true', 'table@bulk=false',
     ].map((id) => [`corpus/${id}`, DATA_BINDING]),
-    ...['markdown:hr@color=#ff0000', 'markdown:hr@thickness=xs'].map((id) => [
-        `corpus/${id}`,
-        'the markdown rule hr has no builder in the SDKs yet, so the generator has nothing to write for it',
-    ]),
 ]);
 
 /** What the generator writes in place of code it can't write: a TODO comment, or a call of a builder no SDK has. */
