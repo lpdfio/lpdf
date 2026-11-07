@@ -255,9 +255,59 @@ fn layer_places(length: &str) -> Vec<(&'static str, String)> {
     ]
 }
 
+/// A document whose section has `section_attrs`, holding `body`.
+fn section(section_attrs: &str, body: &str) -> String {
+    format!(r#"<lpdf version="1"><document><section {section_attrs}>{body}</section></document></lpdf>"#)
+}
+
+/// The documents that use `length` in the attributes of the changed schema types that `places` and `layer_places` leave
+/// out: a ruling, a region, a barcode, a section, the borders of a table, a link, a list, a shape and the markdown rules.
+fn other_places(length: &str) -> Vec<(&'static str, String)> {
+    let flow = |body: String| document("", &format!(r#"<layout>{body}</layout>"#));
+    let cell = r#"<tr><td><text>a</text></td><td><text>b</text></td></tr>"#;
+    let rules = |rules: String| document("", &format!(
+        r#"<markdown><markdown-styles>{rules}</markdown-styles><markdown-content><![CDATA[# T
+
+- a
+- b
+
+> q
+
+```
+c
+```
+
+---
+
+| A | B |
+|---|---|
+| 1 | 2 |
+]]></markdown-content></markdown>"#));
+    vec![
+        ("ruling thickness", format!(r#"<lpdf version="1"><tokens><rulings><ruling name="paper"><lines step="10pt" thickness="{length}"/></ruling></rulings></tokens><document><section ruling="paper"><layout><text>x</text></layout></section></document></lpdf>"#)),
+        ("region width", flow(format!(r#"<region pin="top" w="{length}"><text>h</text></region><text>x</text>"#))),
+        ("region inset", section(r#"columns="2""#, &format!(r#"<layout><region pin="inset" top="{length}" height="{length}"><text>i</text></region><text>x</text></layout>"#))),
+        ("barcode-at", document("", &format!(r#"<layer><barcode-at type="code128" data="LP-1" x="{length}" y="{length}" width="100pt" height="40pt"/></layer>"#))),
+        ("barcode height", flow(format!(r#"<barcode type="code128" data="LP-1" width="100pt" height="{length}"/>"#))),
+        ("section size", section(&format!(r#"size="{length} {length}""#), r#"<layout margin="0"><text>x</text></layout>"#)),
+        ("section bleed", section(&format!(r#"bleed="{length}""#), "<layout><text>x</text></layout>")),
+        ("section column gap and rule", section(&format!(r##"columns="2" column-gap="{length}" column-rule="{length} #cccccc""##), "<layout><text>x</text></layout>")),
+        ("section toc indent", section(&format!(r#"type="toc" toc-indent-step="{length}""#), "<layout><text>x</text></layout>")),
+        ("table borders", flow(format!(r##"<table cols="1fr 1fr" border="{length} #cccccc" head-border="{length} #cccccc" row-border="{length} #cccccc" gap="{length}" padding="{length}"><thead><td><text>h</text></td><td><text>i</text></td></thead>{cell}</table>"##))),
+        ("link gap", flow(format!(r#"<link href="https://example.com" gap="{length}"><text>x</text></link>"#))),
+        ("list indent", flow(format!(r#"<list indent="{length}"><li><text>x</text></li></list>"#))),
+        ("shape size", flow(format!(r##"<shape type="rect" width="{length}" height="{length}" radius="{length}" fill="#999999"/>"##))),
+        ("layer shadow", document("", &format!(r##"<layer><rect x="10pt" y="10pt" width="20pt" height="20pt" fill="#dddddd" shadow="{length} {length} #000000"/><circle x="50pt" y="50pt" r="5pt" fill="#dddddd" shadow="{length} {length} #000000"/></layer>"##))),
+        ("path stroke width", document("", &format!(r##"<layer><path d="M 10 10 L 50 50" stroke="#000000" stroke-width="{length}"/></layer>"##))),
+        ("markdown text rules", rules(format!(r##"<h1 padding="{length}" border="{length} #cccccc" radius="{length}" font-size="{length}"/><p padding="{length}"/><quote bar-width="{length}" padding="{length}"/>"##))),
+        ("markdown list and code rules", rules(format!(r##"<li indent="{length}" gap="{length}" padding="{length}"/><code padding="{length}" border="{length} #cccccc" radius="{length}" font-size="{length}"/><hr thickness="{length}"/>"##))),
+        ("markdown table rules", rules(format!(r##"<table border="{length} #cccccc" head-border="{length} #cccccc" row-border="{length} #cccccc" gap="{length}" padding="{length}"/><th padding="{length}"/><td padding="{length}"/>"##))),
+    ]
+}
+
 #[test]
 fn a_bare_zero_is_the_same_length_as_0pt_0mm_and_0in_wherever_a_length_is_written() {
-    let places_of = |length: &str| places(length).into_iter().chain(layer_places(length)).collect::<Vec<_>>();
+    let places_of = |length: &str| places(length).into_iter().chain(layer_places(length)).chain(other_places(length)).collect::<Vec<_>>();
     for (((what, bare), (_, points)), ((_, millimetres), (_, inches))) in
         places_of("0").into_iter().zip(places_of("0pt")).zip(places_of("0mm").into_iter().zip(places_of("0in")))
     {
@@ -290,5 +340,48 @@ fn a_bare_inf_or_nan_is_no_text_size_no_share_and_no_position() {
         ("a bleed", document(r#"bleed="NaN""#, "<layout><text>x</text></layout>")),
     ] {
         render_xml(&xml).expect_err(what);
+    }
+}
+
+#[test]
+fn a_ruling_step_of_a_bare_zero_is_refused_like_a_step_of_0pt() {
+    let ruling = |step: &str| format!(
+        r#"<lpdf version="1"><tokens><rulings><ruling name="paper"><lines step="{step}"/></ruling></rulings></tokens><document><section ruling="paper"><layout><text>x</text></layout></section></document></lpdf>"#
+    );
+    for step in ["0", "0pt", "0mm", "0in"] {
+        assert!(render_xml(&ruling(step)).is_err(), "a step of {step} makes cells narrower than 2.5pt");
+    }
+    render_xml(&ruling("5mm")).unwrap();
+}
+
+/// The patterns of the schema's length types, read from `schema/lpdf.xsd`, so that taking the bare `0` out of one again
+/// fails here and not only in an editor.
+#[test]
+fn the_schema_takes_a_bare_zero_in_every_type_that_holds_a_length() {
+    let xsd = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../schema/lpdf.xsd")).expect("the schema");
+    for (name, zero) in [
+        ("PtValue", r"0|"), ("SignedPtValue", r"0|"), ("PageSizeCustom", r"(0|"), ("SpacingValue", r"(0|"),
+        ("SpacingMixed", r"(0|"), ("ShadowValue", r"(0|"), ("BorderValue", r"(0|"), ("LineValue", r"none|(0|"),
+    ] {
+        let at = xsd.find(&format!(r#"<xs:simpleType name="{name}">"#)).unwrap_or_else(|| panic!("no type {name}"));
+        let pattern = &xsd[at..][xsd[at..].find(r#"<xs:pattern value=""#).expect("a pattern") + r#"<xs:pattern value=""#.len()..];
+        assert!(pattern.starts_with(zero), "{name} takes a bare 0, so its pattern starts with {zero}: {}", &pattern[..pattern.find('"').unwrap()]);
+    }
+}
+
+/// A stroke dash, a layer's transform and a path's `d` hold plain numbers, not lengths. A number that is not finite is
+/// read as any other word there is: no number. It used to be written into the page as `inf`.
+#[test]
+fn a_number_that_is_not_finite_in_a_stroke_dash_a_transform_or_a_path_is_no_number() {
+    let dash = |number: &str| document("", &format!(r##"<layer><path d="M 10 10 L 50 50" stroke="#000000" stroke-dash="{number} 2"/></layer>"##));
+    let transform = |number: &str| document("", &format!(r##"<layer transform="translate({number} 5)"><rect x="1pt" y="1pt" width="9pt" height="9pt" fill="#cccccc"/></layer>"##));
+    let path = |number: &str| document("", &format!(r##"<layer><path d="M {number} 0 L 50 50" stroke="#000000"/></layer>"##));
+    for (what, place) in [("a stroke dash", &dash as &dyn Fn(&str) -> String), ("a transform", &transform), ("a path", &path)] {
+        let no_number = render_xml(&place("word")).unwrap_or_else(|e| panic!("{what}: {e}"));
+        for number in ["inf", "-inf", "infinity", "NaN", "1e999"] {
+            let read = render_xml(&place(number)).unwrap_or_else(|e| panic!("{what} with {number}: {e}"));
+            assert!(read == no_number, "{what}: {number} is read as a word, not as a number");
+        }
+        assert!(render_xml(&place("3")).unwrap() != no_number, "{what}: a real number still counts");
     }
 }
