@@ -8,19 +8,19 @@ You describe a document as code or XML. Lpdf renders a compact, pixel-perfect PD
 
 ## SDKs
 
-Lpdf runs on Node.js, browser, .NET, PHP, Python, and Java. Under the hood, a single Rust core compiles to three targets: **WASM** (embedded in the JS SDK), **WASI** (a portable binary for server runtimes via [Wasmtime](https://wasmtime.dev); the Java SDK carries it compiled to JVM classes and runs it on [Endive](https://github.com/bytecodealliance/endive) instead), and a **native library** for Linux with glibc 2.17 or newer, on x86_64 and arm64, which the PHP SDK loads through FFI where it can, with the WASI binary as its fallback.
+Lpdf has SDKs for JavaScript, Python, Java, C#, and PHP. Under the hood, a single Rust core compiles to three targets: **WASM** (embedded in the JS SDK), **WASI** (a portable binary for server runtimes via [Wasmtime](https://wasmtime.dev); the Java SDK carries it compiled to JVM classes and runs it on [Endive](https://github.com/bytecodealliance/endive) instead), and a **native library** for Linux with glibc 2.17 or newer, on x86_64 and arm64, which the PHP SDK loads through FFI where it can, with the WASI binary as its fallback.
 
 ### Version Requirements
 
-| Language | Minimum |
-|----------|---------|
-| Node.js  | 20      |
-| .NET     | 8.0     |
-| PHP      | 8.2     |
-| Python   | 3.11    |
-| Java     | 17      |
+| Language   | Minimum    |
+|------------|------------|
+| JavaScript | Node.js 20 |
+| Python     | 3.11       |
+| Java       | 17         |
+| C#         | .NET 8.0   |
+| PHP        | 8.2        |
 
-### Node.js (20+)
+### JavaScript (Node.js 20+)
 
 [github.com/lpdfio/lpdf-js](https://github.com/lpdfio/lpdf-js)  -  [npmjs.com/package/@lpdfio/lpdf](https://www.npmjs.com/package/@lpdfio/lpdf)  -  [lpdf.io/docs](https://lpdf.io/docs/install/?sdk=js&utm_campaign=sdk-node&utm_medium=referral&utm_source=readme)
 
@@ -53,83 +53,6 @@ const doc = L.document({ size: 'letter', margin: '48pt' }, [
 ])
 
 engine.render(doc).then((pdf) => require('node:fs').writeFileSync('proposal.pdf', pdf))
-```
-
-### .NET (8.0+)
-
-[github.com/lpdfio/lpdf-dotnet](https://github.com/lpdfio/lpdf-dotnet)  -  [nuget.org/packages/Lpdfio.Lpdf](https://www.nuget.org/packages/Lpdfio.Lpdf)  -  [lpdf.io/docs](https://lpdf.io/docs/install/?sdk=dotnet&utm_campaign=sdk-dotnet&utm_medium=referral&utm_source=readme)
-
-```bash
-dotnet add package Lpdfio.Lpdf
-```
-
-```csharp
-using Lpdf;
-using static Lpdf.L;
-
-var engine = L.Engine();
-
-var doc = L.Document(new() { Size = "letter", Margin = "48pt" }, [
-    L.Section(NoAttr, [
-        L.Layout(NoAttr, [
-            L.Column(new() { Gap = "24pt" }, [
-                L.Row(new() { Justify = "between" }, [
-                    L.Text(new() { FontSize = "8pt", Color = "#888888" }, ["ACME CORP"]),
-                    L.Text(new() { FontSize = "22pt", Bold = true }, ["Project Proposal"]),
-                ]),
-                L.Divider(new() { Thickness = "xs" }),
-                L.Text(new() { FontSize = "13pt", Bold = true }, ["Scope of Work"]),
-                L.Row(new() { Gap = "12pt", Align = "start" }, [
-                    L.Text(new() { Color = "#888888", Width = "24pt" }, ["01"]),
-                    L.Text(new() { Width = "fill" }, ["Discovery & Research"]),
-                ]),
-            ]),
-        ]),
-    ]),
-]);
-
-var pdf = engine.Render(doc);
-```
-
-### PHP (8.2+)
-
-[github.com/lpdfio/lpdf-php](https://github.com/lpdfio/lpdf-php)  -  [packagist.org/packages/lpdfio/lpdf](https://packagist.org/packages/lpdfio/lpdf)  -  [lpdf.io/docs](https://lpdf.io/docs/install/?sdk=php&utm_campaign=sdk-php&utm_medium=referral&utm_source=readme)
-
-```bash
-composer require lpdfio/lpdf
-```
-
-```php
-use Lpdf\L;
-use Lpdf\Kit\DocumentAttr;
-use Lpdf\Layout\ColumnAttr;
-use Lpdf\Layout\DividerAttr;
-use Lpdf\Layout\RowAttr;
-use Lpdf\Layout\TextAttr;
-use const Lpdf\NoAttr;
-
-$engine = L::engine();
-
-$doc = L::document(new DocumentAttr(size: 'letter', margin: '48pt'), [
-    L::section(NoAttr, [
-        L::layout(NoAttr, [
-            L::column(new ColumnAttr(gap: '24pt'), [
-                L::row(new RowAttr(justify: 'between'), [
-                    L::text(new TextAttr(fontSize: '8pt', color: '#888888'), ['ACME CORP']),
-                    L::text(new TextAttr(fontSize: '22pt', bold: true), ['Project Proposal']),
-                ]),
-                L::divider(new DividerAttr(thickness: 'xs')),
-                L::text(new TextAttr(fontSize: '13pt', bold: true), ['Scope of Work']),
-                L::row(new RowAttr(gap: '12pt', align: 'start'), [
-                    L::text(new TextAttr(color: '#888888', width: '24pt'), ['01']),
-                    L::text(new TextAttr(width: 'fill'), ['Discovery & Research']),
-                ]),
-            ]),
-        ]),
-    ]),
-]);
-
-$pdf = $engine->render($doc);
 ```
 
 ### Python (3.11+)
@@ -208,9 +131,86 @@ var doc = L.document(new DocumentAttr().size("letter"), List.of(
 byte[] pdf = engine.render(doc);
 ```
 
+### C# (.NET 8.0+)
+
+[github.com/lpdfio/lpdf-dotnet](https://github.com/lpdfio/lpdf-dotnet)  -  [nuget.org/packages/Lpdfio.Lpdf](https://www.nuget.org/packages/Lpdfio.Lpdf)  -  [lpdf.io/docs](https://lpdf.io/docs/install/?sdk=dotnet&utm_campaign=sdk-dotnet&utm_medium=referral&utm_source=readme)
+
+```bash
+dotnet add package Lpdfio.Lpdf
+```
+
+```csharp
+using Lpdf;
+using static Lpdf.L;
+
+var engine = L.Engine();
+
+var doc = L.Document(new() { Size = "letter", Margin = "48pt" }, [
+    L.Section(NoAttr, [
+        L.Layout(NoAttr, [
+            L.Column(new() { Gap = "24pt" }, [
+                L.Row(new() { Justify = "between" }, [
+                    L.Text(new() { FontSize = "8pt", Color = "#888888" }, ["ACME CORP"]),
+                    L.Text(new() { FontSize = "22pt", Bold = true }, ["Project Proposal"]),
+                ]),
+                L.Divider(new() { Thickness = "xs" }),
+                L.Text(new() { FontSize = "13pt", Bold = true }, ["Scope of Work"]),
+                L.Row(new() { Gap = "12pt", Align = "start" }, [
+                    L.Text(new() { Color = "#888888", Width = "24pt" }, ["01"]),
+                    L.Text(new() { Width = "fill" }, ["Discovery & Research"]),
+                ]),
+            ]),
+        ]),
+    ]),
+]);
+
+var pdf = engine.Render(doc);
+```
+
+### PHP (8.2+)
+
+[github.com/lpdfio/lpdf-php](https://github.com/lpdfio/lpdf-php)  -  [packagist.org/packages/lpdfio/lpdf](https://packagist.org/packages/lpdfio/lpdf)  -  [lpdf.io/docs](https://lpdf.io/docs/install/?sdk=php&utm_campaign=sdk-php&utm_medium=referral&utm_source=readme)
+
+```bash
+composer require lpdfio/lpdf
+```
+
+```php
+use Lpdf\L;
+use Lpdf\Kit\DocumentAttr;
+use Lpdf\Layout\ColumnAttr;
+use Lpdf\Layout\DividerAttr;
+use Lpdf\Layout\RowAttr;
+use Lpdf\Layout\TextAttr;
+use const Lpdf\NoAttr;
+
+$engine = L::engine();
+
+$doc = L::document(new DocumentAttr(size: 'letter', margin: '48pt'), [
+    L::section(NoAttr, [
+        L::layout(NoAttr, [
+            L::column(new ColumnAttr(gap: '24pt'), [
+                L::row(new RowAttr(justify: 'between'), [
+                    L::text(new TextAttr(fontSize: '8pt', color: '#888888'), ['ACME CORP']),
+                    L::text(new TextAttr(fontSize: '22pt', bold: true), ['Project Proposal']),
+                ]),
+                L::divider(new DividerAttr(thickness: 'xs')),
+                L::text(new TextAttr(fontSize: '13pt', bold: true), ['Scope of Work']),
+                L::row(new RowAttr(gap: '12pt', align: 'start'), [
+                    L::text(new TextAttr(color: '#888888', width: '24pt'), ['01']),
+                    L::text(new TextAttr(width: 'fill'), ['Discovery & Research']),
+                ]),
+            ]),
+        ]),
+    ]),
+]);
+
+$pdf = $engine->render($doc);
+```
+
 ## VS Code Extension
 
-**[marketplace.visualstudio.com](https://marketplace.visualstudio.com/items?itemName=lpdfio.lpdf)**
+**[marketplace.visualstudio.com](https://marketplace.visualstudio.com/items?itemName=lpdfio.lpdf)**  -  **[open-vsx.org](https://open-vsx.org/extension/lpdfio/lpdf)**
 
 Preview, design, and export PDFs directly in VS Code — entirely offline. Supports live XML preview and PDF export via the command palette.
 

@@ -6,9 +6,8 @@
                and the whole page follows. Sizes work the same way: gap="m" and font-size="s"
                each read their own scale, so m is a different number for a gap and for a font
       assets   declare the fonts you use, then pick one with font="..."
-      layout   row puts two columns side by side, a label beside a value, or tags that wrap
-               onto new lines; width="fill" gives a child what the others leave; grid makes
-               equal columns
+      layout   a row also puts two columns side by side, a label beside a value, or tags that
+               wrap onto new lines; grid makes equal columns
   -->
   <assets>
     <!-- a serif for headings against a sans-serif for text; these two are built into every PDF.

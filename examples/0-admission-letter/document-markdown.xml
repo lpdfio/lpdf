@@ -1,0 +1,79 @@
+<lpdf version="1">
+  <!--
+    The admission letter again, written as Markdown: the same letter, from plain text.
+
+      markdown   takes the place of a layout, and sets the Markdown it holds as a styled page
+      img-at     a layer places the crest on the page, at the left, because an image can't be in a table cell
+      table      the letterhead is a table of one column, aligned right by the colon in the row under its header: the header
+                 is the name, and a row is a line under it. A cell is one line of the source, so the lines are rows
+      \          at the end of a line starts a new line in the same paragraph; a blank line starts a new paragraph
+  -->
+  <assets>
+    <image name="crest" src="assets/images/crest.png" />
+  </assets>
+
+  <document size="letter">
+    <meta title="Offer of admission" author="Linden Vale University" />
+    <section>
+      <layer>
+        <img-at name="crest" x="64pt" y="64pt" width="56pt" />
+      </layer>
+
+      <markdown margin="64pt" gap="m">
+        <markdown-styles>
+          <!-- the letterhead is a table with no lines: its header, the name, is larger, and its rows stand close -->
+          <table head-border="none" row-border="none" />
+          <th font-size="xl" padding="0" />
+          <td padding="1pt 0" />
+        </markdown-styles>
+        <markdown-content><![CDATA[
+          | Linden Vale University |
+          |--:|
+          | Office of Admissions |
+          | 1 College Walk, Linden Vale, NY 12999 |
+          | admissions@lindenvale.example |
+
+          March 14, 2027
+
+          Ms. Amara Okafor\
+          18 Cedar Road\
+          Hartley, NY 12998
+
+          ## Offer of admission: B.S. in Computer Science
+
+          Application reference LV-2027-04817
+
+          Dear Amara,
+
+          Congratulations. On behalf of the admissions committee, it is my pleasure to offer you
+          a place in the four-year B.S. in Computer Science program at Linden Vale University.
+          Your application was one of the strongest we read this year.
+
+          We are also delighted to tell you that you have been awarded the Founders
+          Scholarship, which covers your full tuition for all four years.
+
+          **Program:** B.S. in Computer Science (four years, full time)\
+          **Starts:** August 30, 2027\
+          **Tuition:** Covered in full by the Founders Scholarship\
+          **Reply by:** May 1, 2027
+
+          The offer is conditional on your final transcript: you must complete your senior
+          year with a B average or better, including Mathematics. The scholarship continues
+          each year that you remain in good academic standing.
+
+          To accept, sign in to the applicant portal at
+          [apply.lindenvale.example](https://apply.lindenvale.example)
+          and choose Accept offer. If you have questions, reply to this letter or write to
+          [admissions@lindenvale.example](mailto:admissions@lindenvale.example).
+
+          We hope to welcome you in August.
+
+          Sincerely,
+
+          **Dr. Helen Marsh**\
+          Director of Admissions
+        ]]></markdown-content>
+      </markdown>
+    </section>
+  </document>
+</lpdf>

@@ -1,5 +1,5 @@
 {
   "label": "Admission letter",
-  "description": "A one-page letter on a university letterhead, with a crest drawn in a layer.",
+  "description": "A one-page letter on a university letterhead, with the crest loaded as an image.",
   "fileName": "admission-letter"
 }

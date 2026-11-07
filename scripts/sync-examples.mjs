@@ -11,6 +11,8 @@
 //   example.json    { "label", "description", "fileName" }   what the lists show, and the name a new document is saved under
 //   document.xml    the document, with a comment at the top that says what it shows
 //   document.json   its data, if it has any
+//   document-markdown.xml   the same document with its body written as Markdown, if it has a version of it. Only the
+//                           demo shows it, as a tab beside XML
 //   assets/         the fonts and images it names; only those, and the licence and readme files beside them, are copied
 //
 // <n> orders the list. The other files of a folder, such as the script that generates the book, are not copied.
@@ -66,6 +68,9 @@ function readExamples() {
         const dataPath = path.join(folder, 'document.json');
         const data = fs.existsSync(dataPath) ? fs.readFileSync(dataPath) : undefined;
         if (data) JSON.parse(data.toString('utf8'));
+        // A version written as Markdown is a document of its own, which names the same files.
+        const markdownPath = path.join(folder, 'document-markdown.xml');
+        const markdown = fs.existsSync(markdownPath) ? fs.readFileSync(markdownPath) : undefined;
         examples.push({
             id: match[2],
             order: Number(match[1]),
@@ -76,7 +81,8 @@ function readExamples() {
             xml: Buffer.from(xml, 'utf8'),
             xmlText: xml,
             data,
-            assets: assetFiles(folder, xml),
+            markdown,
+            assets: mergeAssets(assetFiles(folder, xml), markdown ? assetFiles(folder, markdown.toString('utf8')) : []),
         });
     }
     examples.sort((a, b) => a.order - b.order);
@@ -102,6 +108,12 @@ function assetFiles(folder, xml) {
         }
     }
     return [...wanted].sort().map(rel => ({ rel, bytes: fs.readFileSync(path.join(folder, rel)) }));
+}
+
+/** The files of both lists, each once. */
+function mergeAssets(first, second) {
+    const rels = new Set(first.map(asset => asset.rel));
+    return [...first, ...second.filter(asset => !rels.has(asset.rel))].sort((a, b) => a.rel.localeCompare(b.rel));
 }
 
 function fail(message) {
@@ -151,6 +163,7 @@ function demoTarget(examples) {
     const files = new Map();
     for (const example of examples) {
         for (const [rel, bytes] of exampleFiles(example, `${example.id}/`)) files.set(rel, bytes);
+        if (example.markdown) files.set(`${example.id}/document-markdown.xml`, example.markdown);
     }
     files.set('index.json', json({
         examples: examples.map(example => ({
@@ -159,6 +172,7 @@ function demoTarget(examples) {
             description: example.description,
             xml: `${example.id}/document.xml`,
             data: example.data ? `${example.id}/document.json` : null,
+            markdown: example.markdown ? `${example.id}/document-markdown.xml` : null,
         })),
     }));
     return { name: 'the demo', root, files, owns: () => true };
