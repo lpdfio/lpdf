@@ -204,7 +204,7 @@ fn cut(axis: Axis, own_step: Option<&str>, step: Option<&str>, own_count: Option
 fn parse_step(name: &str, value: &str) -> Result<f32, String> {
     let step = crate::parse::parse_measurement(value)
         .ok()
-        .filter(|step| step.is_finite() && *step >= 0.0)
+        .filter(|step| *step >= 0.0)
         .ok_or_else(|| {
             format!("{name} '{value}' is not a length in {}: give one such as 5mm", crate::tokens::LENGTH_UNITS)
         })?;

@@ -2321,7 +2321,7 @@ fn emit_svg_path(content: &mut impl PathSink, d: &str, page_h: f32) {
         // Helper closures to consume the next f32 token.
         let next_f = |i: &mut usize| -> f32 {
             if *i < tokens.len() {
-                let v = tokens[*i].parse::<f32>().unwrap_or(0.0);
+                let v = crate::tokens::parse_number(tokens[*i]).unwrap_or(0.0);
                 *i += 1;
                 v
             } else {

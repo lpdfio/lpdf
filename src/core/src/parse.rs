@@ -2178,7 +2178,6 @@ pub fn parse_shadow(val: &str, tokens: &Tokens) -> Result<Shadow, String> {
     let offset = |part: &str, axis: &str| {
         parse_signed_measurement(part)
             .ok()
-            .filter(|v| v.is_finite())
             .ok_or_else(|| format!("invalid shadow '{val}': {axis} '{part}' is not a length in {LENGTH_UNITS}, like 2pt or -3pt"))
     };
     let dx = offset(parts[0], "x")?;

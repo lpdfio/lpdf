@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 use std::rc::Rc;
-use crate::tokens::{FontDef, Tokens};
+use crate::tokens::{parse_number, FontDef, Tokens};
 use crate::parse::{
     Node, Ocg, PageScope, Shadow, Shape, ShapeKind, TextDefaults,
     parse_measurement, parse_shadow, parse_signed_measurement, parse_page_scope,
@@ -263,7 +263,7 @@ fn parse_transform(s: &str) -> Option<[f32; 6]> {
         inner
             .split(|c: char| c == ',' || c.is_whitespace())
             .filter(|t| !t.is_empty())
-            .filter_map(|t| t.parse::<f32>().ok())
+            .filter_map(parse_number)
             .collect()
     }
     let s = s.trim();
@@ -640,7 +640,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
 // ── Render conversion ─────────────────────────────────────────────────────────
 
 fn stroke_dash_to_vec(s: &str) -> Option<Vec<f32>> {
-    let v: Vec<f32> = s.split_whitespace().filter_map(|t| t.parse().ok()).collect();
+    let v: Vec<f32> = s.split_whitespace().filter_map(parse_number).collect();
     if v.is_empty() { None } else { Some(v) }
 }
 
