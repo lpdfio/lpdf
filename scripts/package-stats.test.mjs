@@ -52,6 +52,11 @@ const fakeApi = url => {
         return { labels: ['2026-10-01', '2026-10-02'], values: { 'lpdfio/lpdf': [1, 2] } };
     }
     if (url.startsWith('https://azuresearch')) return { data: [{ id: 'Lpdfio.Lpdf', totalDownloads: 4177 }] };
+    if (url.startsWith('https://marketplace.visualstudio.com/')) {
+        const stats = [['install', 12], ['updateCount', 38], ['downloadCount', 334]].map(([statisticName, value]) => ({ statisticName, value }));
+        return { results: [{ extensions: [{ statistics: stats }] }] };
+    }
+    if (url === 'https://open-vsx.org/api/lpdfio/lpdf') return { downloadCount: 944 };
     throw new Error(`unexpected ${url}`);
 };
 
@@ -59,7 +64,9 @@ test('collect gives one row per registry, with counts by day where the registry 
     const rows = await collect(range, async url => fakeApi(url));
     assert.deepEqual(rows.map(r => [r.registry, r.downloads, r.allTime]), [
         ['npm', 11, 500], ['PyPI', 7, 107], ['Packagist', 3, 94], ['NuGet', undefined, 4177], ['Maven Central', undefined, undefined],
+        ['VS Marketplace', undefined, 334], ['Open VSX', undefined, 944],
     ], 'PyPI all time is the sum of its data');
+    assert.match(rows[5].note, /installs 12, updates 38/);
     assert.match(rows[1].note, /with mirrors 9/);
 });
 
@@ -72,7 +79,7 @@ test('a registry that fails shows its error and the others still report', async 
     assert.equal(rows[2].downloads, 3);
     const text = renderTable(rows, range);
     assert.match(text, /npm +@lpdfio\/lpdf +error +error +npm is down/);
-    assert.match(text, /Total +10 +4378 +1 of 5 registries failed/);
+    assert.match(text, /Total +10 +5656 +1 of 7 registries failed/);
 });
 
 test('an old npm package counts all time from the oldest day npm answers for', async () => {

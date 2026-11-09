@@ -11,9 +11,11 @@
 //   PyPI            downloads per day, counted without mirrors; its data is only the last ~180
 //                   days, so its all-time total is the sum of the data it still has
 //   NuGet           one all-time total, no range, so no number for the range
+//   VS Marketplace  one all-time total, no range; its installs and updates are in the note
+//   Open VSX        one all-time total, no range
 //   Maven Central   no public stats API: read it on the Central Portal dashboard
 // A registry that cannot be reached shows its error, and the exit code is 1.
-// No token and no login: the four APIs are public.
+// No token and no login: the APIs are public.
 
 import { pathToFileURL } from 'node:url';
 
@@ -27,6 +29,8 @@ const PACKAGES = {
     packagist: 'lpdfio/lpdf',
     nuget: 'Lpdfio.Lpdf',
     maven: 'io.lpdf:lpdf',
+    marketplace: 'lpdfio.lpdf',
+    openvsx: 'lpdfio.lpdf',
 };
 
 const isDay = text => DAY_RE.test(text) && !Number.isNaN(Date.parse(text));
@@ -68,9 +72,10 @@ export function sumInRange(entries, { from, to }) {
     return total;
 }
 
-async function fetchJson(url) {
+async function fetchJson(url, init = {}) {
     const res = await fetch(url, {
-        headers: { Accept: 'application/json', 'User-Agent': 'lpdf-package-stats' },
+        ...init,
+        headers: { Accept: 'application/json', 'User-Agent': 'lpdf-package-stats', ...init.headers },
         signal: AbortSignal.timeout(20_000),
     });
     if (!res.ok) throw new Error(`${url} answered ${res.status}`);
@@ -123,20 +128,42 @@ async function mavenStats() {
     return { downloads: undefined, allTime: undefined, note: 'no public stats API: see the Central Portal dashboard' };
 }
 
+// The VS Code Marketplace has no per-day counts either. 'downloadCount' is the figure Open VSX
+// reports too; the Marketplace's own installs and updates go in the note.
+async function marketplaceStats(range, getJson) {
+    const id = PACKAGES.marketplace;
+    const data = await getJson('https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json;api-version=3.0-preview.1' },
+        body: JSON.stringify({ filters: [{ criteria: [{ filterType: 7, value: id }] }], flags: 914 }),
+    });
+    const found = data.results[0].extensions[0];
+    if (!found) throw new Error(`${id} not found on the VS Code Marketplace`);
+    const stat = name => found.statistics.find(s => s.statisticName === name)?.value ?? 0;
+    return { downloads: undefined, allTime: stat('downloadCount'), note: `installs ${stat('install')}, updates ${stat('updateCount')}; no per-day counts` };
+}
+
+async function openVsxStats(range, getJson) {
+    const data = await getJson(`https://open-vsx.org/api/${PACKAGES.openvsx.replace('.', '/')}`);
+    if (typeof data.downloadCount !== 'number') throw new Error(`${PACKAGES.openvsx} not found on Open VSX`);
+    return { downloads: undefined, allTime: data.downloadCount, note: 'no per-day counts' };
+}
+
 const REGISTRIES = [
-    ['npm', npmStats],
-    ['PyPI', pypiStats],
-    ['Packagist', packagistStats],
-    ['NuGet', nugetStats],
-    ['Maven Central', mavenStats],
+    ['npm', 'npm', npmStats],
+    ['PyPI', 'pypi', pypiStats],
+    ['Packagist', 'packagist', packagistStats],
+    ['NuGet', 'nuget', nugetStats],
+    ['Maven Central', 'maven', mavenStats],
+    ['VS Marketplace', 'marketplace', marketplaceStats],
+    ['Open VSX', 'openvsx', openVsxStats],
 ];
-const PACKAGE_OF = { npm: 'npm', PyPI: 'pypi', Packagist: 'packagist', NuGet: 'nuget', 'Maven Central': 'maven' };
 
 // Asks every registry at once. A failed one becomes { error } instead of stopping the rest.
 export async function collect(range, getJson = fetchJson, now = Date.now()) {
-    const results = await Promise.allSettled(REGISTRIES.map(([, stats]) => stats(range, getJson, now)));
-    return REGISTRIES.map(([registry], i) => {
-        const base = { registry, package: PACKAGES[PACKAGE_OF[registry]] };
+    const results = await Promise.allSettled(REGISTRIES.map(([, , stats]) => stats(range, getJson, now)));
+    return REGISTRIES.map(([registry, key], i) => {
+        const base = { registry, package: PACKAGES[key] };
         const result = results[i];
         return result.status === 'fulfilled' ? { ...base, ...result.value } : { ...base, error: result.reason.message };
     });
