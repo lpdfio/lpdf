@@ -33,6 +33,8 @@ test('sumInRange counts both ends and skips days outside', () => {
 
 const range = { from: '2026-10-01', to: '2026-10-03' };
 const fakeApi = url => {
+    if (url.startsWith('https://api.npmjs.org/downloads/point/')) return { downloads: 500 };
+    if (url.startsWith('https://registry.npmjs.org/')) return { time: { created: '2026-04-26T05:59:41.714Z' } };
     if (url.startsWith('https://api.npmjs.org/')) {
         return { downloads: [{ day: '2026-10-01', downloads: 5 }, { day: '2026-10-02', downloads: 6 }] };
     }
@@ -45,6 +47,7 @@ const fakeApi = url => {
             ],
         };
     }
+    if (url === 'https://packagist.org/packages/lpdfio/lpdf.json') return { package: { downloads: { total: 94 } } };
     if (url.startsWith('https://packagist.org/')) {
         return { labels: ['2026-10-01', '2026-10-02'], values: { 'lpdfio/lpdf': [1, 2] } };
     }
@@ -54,21 +57,32 @@ const fakeApi = url => {
 
 test('collect gives one row per registry, with counts by day where the registry has them', async () => {
     const rows = await collect(range, async url => fakeApi(url));
-    assert.deepEqual(rows.map(r => [r.registry, r.downloads]), [
-        ['npm', 11], ['PyPI', 7], ['Packagist', 3], ['NuGet', undefined], ['Maven Central', undefined],
-    ]);
+    assert.deepEqual(rows.map(r => [r.registry, r.downloads, r.allTime]), [
+        ['npm', 11, 500], ['PyPI', 7, 107], ['Packagist', 3, 94], ['NuGet', undefined, 4177], ['Maven Central', undefined, undefined],
+    ], 'PyPI all time is the sum of its data');
     assert.match(rows[1].note, /with mirrors 9/);
-    assert.match(rows[3].note, /all-time 4177/);
 });
 
 test('a registry that fails shows its error and the others still report', async () => {
     const rows = await collect(range, async url => {
-        if (url.startsWith('https://api.npmjs.org/')) throw new Error('npm is down');
+        if (url.includes('npmjs.org')) throw new Error('npm is down');
         return fakeApi(url);
     });
     assert.equal(rows[0].error, 'npm is down');
     assert.equal(rows[2].downloads, 3);
     const text = renderTable(rows, range);
-    assert.match(text, /npm +@lpdfio\/lpdf +error +npm is down/);
-    assert.match(text, /Total +10 +2 of 5 registries with a count/);
+    assert.match(text, /npm +@lpdfio\/lpdf +error +error +npm is down/);
+    assert.match(text, /Total +10 +4378 +1 of 5 registries failed/);
+});
+
+test('an old npm package counts all time from the oldest day npm answers for', async () => {
+    const urls = [];
+    const getJson = async url => {
+        urls.push(url);
+        if (url.startsWith('https://registry.npmjs.org/')) return { time: { created: '2020-01-01T00:00:00Z' } };
+        return url.includes('/point/') ? { downloads: 1 } : { downloads: [] };
+    };
+    const rows = await collect(range, getJson, NOW);
+    assert.match(urls.find(u => u.includes('/point/')), /point\/2025-05-18:2026-11-09\//);
+    assert.match(rows.find(r => r.registry === 'npm').note, /counts from 2025-05-18/);
 });
