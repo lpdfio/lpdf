@@ -657,12 +657,9 @@ rc-next:
 rc-check:
 	@node scripts/rc-check.mjs "$(RC)"
 
-# Shows how often the packages were downloaded, from each registry's public stats API.
-#   make package-stats                              the last 30 days
-#   make package-stats DAYS=90                      the last 90 days
-#   make package-stats FROM=2026-10-01 TO=2026-10-31   a date range
+# Shows how often the packages were downloaded, all time, from each registry's public stats API.
 package-stats:
-	@node scripts/package-stats.mjs $(if $(DAYS),--days $(DAYS)) $(if $(FROM),--from $(FROM)) $(if $(TO),--to $(TO))
+	@node scripts/package-stats.mjs
 
 # Downloads the .vsix that lpdf-vscode's rc.yml built for a release candidate
 # into repos/lpdf-vscode/.rc/<tag>/, and prints how to install and check it. Needs gh.
