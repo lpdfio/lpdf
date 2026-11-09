@@ -13,7 +13,7 @@ const fakeApi = url => {
     if (url.startsWith('https://pypistats.org/')) {
         return {
             data: [
-                { category: 'with_mirrors', date: '2026-10-02', downloads: 9 },
+                { category: 'with_mirrors', date: '2026-10-02', downloads: 9000 },
                 { category: 'without_mirrors', date: '2026-10-02', downloads: 7 },
                 { category: 'without_mirrors', date: '2026-09-01', downloads: 100 },
             ],
@@ -35,7 +35,7 @@ test('collect gives one row per registry with its all-time total', async () => {
         ['npm', 500], ['PyPI', 107], ['Packagist', 94], ['NuGet', 4177],
         ['Maven Central', undefined], ['VS Marketplace', 334], ['Open VSX', 944],
     ]);
-    assert.match(rows[1].note, /with mirrors 9; data starts 2026-09-01/);
+    assert.match(rows[1].note, /with mirrors 9,000; data starts 2026-09-01/);
     assert.match(rows[5].note, /installs 12, updates 38/);
 });
 
@@ -48,13 +48,15 @@ test('a registry that fails shows its error and the others still report', async 
     assert.equal(rows[2].downloads, 94);
     const text = renderTable(rows);
     assert.match(text, /npm +@lpdfio\/lpdf +error +npm is down/);
-    assert.match(text, /Total +5656 +1 of 7 registries failed/);
+    assert.match(text, /Total +5,656 +1 of 7 registries failed/);
 });
 
 test('the table shows a dash for a registry with no count, and a total that skips it', async () => {
     const text = renderTable(await collect(async url => fakeApi(url), NOW));
     assert.match(text, /Maven Central +io\.lpdf:lpdf +- +no public stats API/);
-    assert.match(text, /Total +6156\s*$/);
+    assert.match(text, /Total +6,156\s*$/);
+    assert.match(text, /Open VSX +lpdfio\.lpdf +944/);
+    assert.match(text, /NuGet +Lpdfio\.Lpdf +4,177/);
 });
 
 test('an old npm package counts from the oldest day npm answers for', async () => {

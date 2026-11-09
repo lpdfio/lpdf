@@ -26,6 +26,7 @@ const PACKAGES = {
     openvsx: 'lpdfio.lpdf',
 };
 
+const grouped = count => count.toLocaleString('en-US');
 const dayOf = ms => new Date(ms).toISOString().slice(0, 10);
 
 async function fetchJson(url, init = {}) {
@@ -55,7 +56,7 @@ async function pypiStats(getJson) {
     const data = (await getJson(`https://pypistats.org/api/packages/${PACKAGES.pypi}/overall`)).data;
     const total = category => data.filter(d => d.category === category).reduce((sum, d) => sum + d.downloads, 0);
     const first = data.map(d => d.date).sort()[0];
-    return { downloads: total('without_mirrors'), note: `with mirrors ${total('with_mirrors')}; data starts ${first}` };
+    return { downloads: total('without_mirrors'), note: `with mirrors ${grouped(total('with_mirrors'))}; data starts ${first}` };
 }
 
 async function packagistStats(getJson) {
@@ -86,7 +87,7 @@ async function marketplaceStats(getJson) {
     const found = data.results[0].extensions[0];
     if (!found) throw new Error(`${id} not found on the VS Code Marketplace`);
     const stat = name => found.statistics.find(s => s.statisticName === name)?.value ?? 0;
-    return { downloads: stat('downloadCount'), note: `installs ${stat('install')}, updates ${stat('updateCount')}` };
+    return { downloads: stat('downloadCount'), note: `installs ${grouped(stat('install'))}, updates ${grouped(stat('updateCount'))}` };
 }
 
 async function openVsxStats(getJson) {
@@ -115,18 +116,18 @@ export async function collect(getJson = fetchJson, now = Date.now()) {
     });
 }
 
-// The table as text. Counts are right-aligned; a registry without a count shows '-'.
+// The table as text. Counts are right-aligned with thousands separators; a registry without a count shows '-'.
 export function renderTable(rows) {
     const head = ['Registry', 'Package', 'Downloads', 'Note'];
     const body = rows.map(r => [
         r.registry,
         r.package,
-        r.error ? 'error' : r.downloads === undefined ? '-' : String(r.downloads),
+        r.error ? 'error' : r.downloads === undefined ? '-' : grouped(r.downloads),
         r.error ?? r.note,
     ]);
     const sum = rows.reduce((total, r) => total + (r.error ? 0 : (r.downloads ?? 0)), 0);
     const failed = rows.filter(r => r.error).length;
-    const total = ['Total', '', String(sum), failed ? `${failed} of ${rows.length} registries failed` : ''];
+    const total = ['Total', '', grouped(sum), failed ? `${failed} of ${rows.length} registries failed` : ''];
     const widths = head.map((_, c) => Math.max(...[head, ...body, total].map(row => row[c].length)));
     const format = row => row.map((cell, c) => (c === 2 ? cell.padStart(widths[c]) : cell.padEnd(widths[c]))).join('  ').trimEnd();
     const rule = widths.map(w => '-'.repeat(w)).join('  ');
