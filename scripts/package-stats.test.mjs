@@ -36,6 +36,7 @@ test('collect gives one row per registry with its all-time total', async () => {
         ['Maven Central', undefined], ['VS Marketplace', 334], ['Open VSX', 944],
     ]);
     assert.match(rows[1].note, /with mirrors 9,000; data starts 2026-09-01/);
+    assert.deepEqual(rows[1].daily, { '2026-10-02': 7, '2026-09-01': 100 }, 'PyPI daily counts, without mirrors');
     assert.match(rows[5].note, /installs 12, updates 38/);
 });
 

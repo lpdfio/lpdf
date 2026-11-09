@@ -4,6 +4,7 @@
 //
 //   make package-stats
 //
+// collect() also gives PyPI's counts by day (`daily`, without mirrors), so a caller can keep its own history.
 // What each registry can tell:
 //   npm, Packagist, NuGet, VS Marketplace, Open VSX   the all-time total
 //   PyPI            the sum of the data pypistats still has, about the last 180 days, counted
@@ -56,7 +57,8 @@ async function pypiStats(getJson) {
     const data = (await getJson(`https://pypistats.org/api/packages/${PACKAGES.pypi}/overall`)).data;
     const total = category => data.filter(d => d.category === category).reduce((sum, d) => sum + d.downloads, 0);
     const first = data.map(d => d.date).sort()[0];
-    return { downloads: total('without_mirrors'), note: `with mirrors ${grouped(total('with_mirrors'))}; data starts ${first}` };
+    const daily = Object.fromEntries(data.filter(d => d.category === 'without_mirrors').map(d => [d.date, d.downloads]));
+    return { downloads: total('without_mirrors'), daily, note: `with mirrors ${grouped(total('with_mirrors'))}; data starts ${first}` };
 }
 
 async function packagistStats(getJson) {
