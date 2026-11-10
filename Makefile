@@ -23,7 +23,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         clone-adapters sync-license check-license \
         build-portal-ui build-pages-demo build-pages build-pages-docs check-pages-docs stamp-pages-docs dev-pages meta-pages \
         sync-examples check-examples-sync build-demo-viewer \
-        rc-next rc-check rc-vsix
+        rc-next rc-check rc-vsix package-stats
 
 build-wasm:
 	@echo ""
@@ -656,6 +656,10 @@ rc-next:
 #   make rc-check RC=v0.19.0-rc.2   a specific one
 rc-check:
 	@node scripts/rc-check.mjs "$(RC)"
+
+# Shows how often the packages were downloaded, all time, from each registry's public stats API.
+package-stats:
+	@node scripts/package-stats.mjs
 
 # Downloads the .vsix that lpdf-vscode's rc.yml built for a release candidate
 # into repos/lpdf-vscode/.rc/<tag>/, and prints how to install and check it. Needs gh.
