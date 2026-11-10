@@ -38,6 +38,7 @@ test('collect gives one row per registry with its all-time total', async () => {
     assert.match(rows[1].note, /with mirrors 9,000; data starts 2026-09-01/);
     assert.deepEqual(rows[1].daily, { '2026-10-02': 7, '2026-09-01': 100 }, 'PyPI daily counts, without mirrors');
     assert.match(rows[5].note, /downloads 334, updates 38/);
+    assert.equal(rows[5].downloadCount, 334);
 });
 
 test('a registry that fails shows its error and the others still report', async () => {

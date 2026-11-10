@@ -4,7 +4,8 @@
 //
 //   make package-stats
 //
-// collect() also gives PyPI's counts by day (`daily`, without mirrors), so a caller can keep its own history.
+// collect() also gives PyPI's counts by day (`daily`, without mirrors) and the VS Marketplace's download count
+// (`downloadCount`), so a caller can keep its own history and show both.
 // What each registry can tell:
 //   npm, Packagist, NuGet, Open VSX   the all-time total
 //   VS Marketplace  the all-time installs; its downloads and updates are in the note
@@ -90,7 +91,7 @@ async function marketplaceStats(getJson) {
     const found = data.results[0].extensions[0];
     if (!found) throw new Error(`${id} not found on the VS Code Marketplace`);
     const stat = name => found.statistics.find(s => s.statisticName === name)?.value ?? 0;
-    return { downloads: stat('install'), note: `downloads ${grouped(stat('downloadCount'))}, updates ${grouped(stat('updateCount'))}` };
+    return { downloads: stat('install'), downloadCount: stat('downloadCount'), note: `downloads ${grouped(stat('downloadCount'))}, updates ${grouped(stat('updateCount'))}` };
 }
 
 async function openVsxStats(getJson) {
