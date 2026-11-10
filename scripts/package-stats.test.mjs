@@ -33,11 +33,12 @@ test('collect gives one row per registry with its all-time total', async () => {
     const rows = await collect(async url => fakeApi(url), NOW);
     assert.deepEqual(rows.map(r => [r.registry, r.downloads]), [
         ['npm', 500], ['PyPI', 107], ['Packagist', 94], ['NuGet', 4177],
-        ['Maven Central', undefined], ['VS Marketplace', 334], ['Open VSX', 944],
+        ['Maven Central', undefined], ['VS Marketplace', 12], ['Open VSX', 944],
     ]);
     assert.match(rows[1].note, /with mirrors 9,000; data starts 2026-09-01/);
     assert.deepEqual(rows[1].daily, { '2026-10-02': 7, '2026-09-01': 100 }, 'PyPI daily counts, without mirrors');
-    assert.match(rows[5].note, /installs 12, updates 38/);
+    assert.match(rows[5].note, /downloads 334, updates 38/);
+    assert.equal(rows[5].downloadCount, 334);
 });
 
 test('a registry that fails shows its error and the others still report', async () => {
@@ -49,13 +50,13 @@ test('a registry that fails shows its error and the others still report', async 
     assert.equal(rows[2].downloads, 94);
     const text = renderTable(rows);
     assert.match(text, /npm +@lpdfio\/lpdf +error +npm is down/);
-    assert.match(text, /Total +5,656 +1 of 7 registries failed/);
+    assert.match(text, /Total +5,334 +1 of 7 registries failed/);
 });
 
 test('the table shows a dash for a registry with no count, and a total that skips it', async () => {
     const text = renderTable(await collect(async url => fakeApi(url), NOW));
     assert.match(text, /Maven Central +io\.lpdf:lpdf +- +no public stats API/);
-    assert.match(text, /Total +6,156\s*$/);
+    assert.match(text, /Total +5,834\s*$/);
     assert.match(text, /Open VSX +lpdfio\.lpdf +944/);
     assert.match(text, /NuGet +Lpdfio\.Lpdf +4,177/);
 });
