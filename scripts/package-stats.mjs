@@ -6,7 +6,8 @@
 //
 // collect() also gives PyPI's counts by day (`daily`, without mirrors), so a caller can keep its own history.
 // What each registry can tell:
-//   npm, Packagist, NuGet, VS Marketplace, Open VSX   the all-time total
+//   npm, Packagist, NuGet, Open VSX   the all-time total
+//   VS Marketplace  the all-time installs; its downloads and updates are in the note
 //   PyPI            the sum of the data pypistats still has, about the last 180 days, counted
 //                   without mirrors; the count with mirrors is in the note
 //   Maven Central   no public stats API: read it on the Central Portal dashboard
@@ -78,7 +79,7 @@ async function mavenStats() {
     return { downloads: undefined, note: 'no public stats API: see the Central Portal dashboard' };
 }
 
-// 'downloadCount' is the figure Open VSX reports too; the Marketplace's own installs and updates go in the note.
+// The number is the Marketplace's installs, the figure its page shows. Its downloads and updates go in the note.
 async function marketplaceStats(getJson) {
     const id = PACKAGES.marketplace;
     const data = await getJson('https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery', {
@@ -89,7 +90,7 @@ async function marketplaceStats(getJson) {
     const found = data.results[0].extensions[0];
     if (!found) throw new Error(`${id} not found on the VS Code Marketplace`);
     const stat = name => found.statistics.find(s => s.statisticName === name)?.value ?? 0;
-    return { downloads: stat('downloadCount'), note: `installs ${grouped(stat('install'))}, updates ${grouped(stat('updateCount'))}` };
+    return { downloads: stat('install'), note: `downloads ${grouped(stat('downloadCount'))}, updates ${grouped(stat('updateCount'))}` };
 }
 
 async function openVsxStats(getJson) {
