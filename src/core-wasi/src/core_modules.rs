@@ -72,6 +72,10 @@ mod memory;
 mod nesting;
 #[path = "../../core/src/png.rs"]
 mod png;
+#[path = "../../core/src/raster.rs"]
+mod raster;
+#[path = "../../core/src/bmp.rs"]
+mod bmp;
 #[path = "../../core/src/stamp.rs"]
 mod stamp;
 

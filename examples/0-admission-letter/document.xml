@@ -2,7 +2,7 @@
   <!--
     A one-page letter, the simplest example: text in a column, and a crest that is an image.
 
-      assets   declare an image once, with a name and the path of a PNG or JPEG file
+      assets   declare an image once, with a name and the path of its file
       img      place it by that name, and give it a width: the height follows its proportions
       layout   a column stacks the lines of the letter, and a row puts the crest beside the letterhead
   -->

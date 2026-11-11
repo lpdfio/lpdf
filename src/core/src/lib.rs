@@ -38,6 +38,8 @@ mod schema_attrs;
 mod shared;
 mod stamp;
 mod png;
+mod raster;
+mod bmp;
 mod toc;
 mod tokens;
 
@@ -117,7 +119,7 @@ impl LpdfEngine {
         }
     }
 
-    /// Register raw image bytes (JPEG or PNG) for an image name.
+    /// Register raw image bytes (JPEG, PNG, WebP, GIF, TIFF or BMP) for an image name.
     /// Call this for every image referenced by `<img name="…">` nodes.
     pub fn load_image(&mut self, name: &str, bytes: &[u8]) {
         self.images.load(name, bytes.to_vec());
@@ -916,6 +918,9 @@ mod pdfa_render_tests;
 
 #[cfg(test)]
 mod stamp_tests;
+
+#[cfg(test)]
+mod raster_render_tests;
 
 #[cfg(test)]
 mod pdfua_render_tests;

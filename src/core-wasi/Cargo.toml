@@ -35,6 +35,10 @@ sha2 = "0.10"
 pulldown-cmark = { version = "0.13", default-features = false }
 # PDF reader for `stamp` — same version as core/Cargo.toml
 lopdf = { version = "0.46", default-features = false }
+# Image decoders for WebP, GIF and TIFF — same versions and features as core/Cargo.toml
+image-webp = "0.2"
+gif = { version = "0.14", default-features = false, features = ["std"] }
+tiff = { version = "0.11", default-features = false, features = ["lzw", "deflate", "fax"] }
 
 [build-dependencies]
 sha2 = "0.10"

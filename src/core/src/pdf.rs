@@ -50,6 +50,7 @@ use crate::parse::{FieldKind, ListFormat, Meta, Ocg, Output, Shadow};
 use crate::pdfa::{self, FileDate, PdfA, Standards, XmpIds};
 use crate::pdfx::{PdfXVersion, PressProfile, ProfileSpace};
 use crate::pdfua::PdfUa;
+use crate::raster::{self, Raster};
 use crate::ruling::{Drawing, Run};
 use crate::tagging::{Kid, Kind, LinkMark, Marks};
 use crate::tokens::{FontDef, Gradient, GradientKind, GRADIENT_PREFIX, is_cmyk};
@@ -84,7 +85,7 @@ impl FontRegistry {
     }
 }
 
-/// Stores raw image bytes (JPEG/PNG) for images referenced by a document via
+/// Stores raw image bytes (JPEG, PNG, WebP, GIF, TIFF or BMP) for images referenced by a document via
 /// its `<assets><images>` declarations.  Populate before calling `render_pdf`.
 pub struct ImageRegistry {
     bytes: HashMap<String, Vec<u8>>,
@@ -112,15 +113,26 @@ impl ImageRegistry {
 
 // ── Image helpers ─────────────────────────────────────────────────────────────
 
-/// Read the pixel dimensions of a JPEG or PNG image.
+/// Read the pixel dimensions of an image the engine embeds, from its header.
 /// Returns `(width_px, height_px)` or `None` if unrecognised format.
 pub fn image_natural_size(bytes: &[u8]) -> Option<(u32, u32)> {
     if bytes.starts_with(b"\xFF\xD8\xFF") {
         jpeg_dims(bytes)
     } else if bytes.starts_with(b"\x89PNG\r\n\x1A\n") {
         png_dims(bytes)
+    } else if let Some(format) = raster::Format::of(bytes) {
+        raster::header(format, bytes).ok().map(|header| (header.width, header.height))
     } else {
         None
+    }
+}
+
+/// Whether an image gets a soft mask in the PDF: an RGBA PNG, or a WebP, GIF, TIFF or BMP whose header says it has
+/// alpha.
+fn image_has_alpha(bytes: &[u8]) -> bool {
+    match raster::Format::of(bytes) {
+        Some(format) => raster::header(format, bytes).is_ok_and(|header| header.alpha),
+        None => png_info(bytes).is_some_and(|(_, _, _, ct)| ct == 6),
     }
 }
 
@@ -409,22 +421,19 @@ pub fn image_format_error(bytes: &[u8]) -> Option<String> {
             },
         };
     }
+    if let Some(format) = raster::Format::of(bytes) {
+        return raster::header(format, bytes).err();
+    }
     // Detect common unsupported formats to give a better message.
-    let hint = if bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP") {
-        "WebP"
-    } else if bytes.starts_with(b"GIF8") {
-        "GIF"
-    } else if bytes.starts_with(b"\x00\x00\x00") && bytes.get(4..8) == Some(b"ftyp") {
+    let hint = if bytes.starts_with(b"\x00\x00\x00") && bytes.get(4..8) == Some(b"ftyp") {
         "AVIF/HEIC"
-    } else if bytes.starts_with(b"BM") {
-        "BMP"
-    } else if bytes.starts_with(b"II\x2A\x00") || bytes.starts_with(b"MM\x00\x2A") {
-        "TIFF"
+    } else if bytes.starts_with(b"\x00\x00\x00\x0CjP  \r\n\x87\n") || bytes.starts_with(b"\xFF\x4F\xFF\x51") {
+        "JPEG 2000"
     } else {
         "unknown"
     };
     Some(format!(
-        "{hint} images are not supported; use JPEG or PNG"
+        "{hint} images are not supported; use JPEG, PNG, WebP, GIF, TIFF or BMP"
     ))
 }
 
@@ -433,11 +442,17 @@ pub fn image_format_error(bytes: &[u8]) -> Option<String> {
 ///   - PNG grayscale/RGB 8 or 16-bit (ct 0, 2)  → IDAT passthrough with FlateDecode + PNG predictor
 ///   - PNG RGBA 8 or 16-bit (ct 6)               → decoded, split into RGB XObject + alpha SMask
 ///   - PNG indexed 8-bit (ct 3)                  → palette-expanded to RGB, or RGBA+SMask if tRNS present
+///   - WebP, GIF, TIFF and BMP (`raster.rs`)     → decoded to 8-bit gray or RGB, + alpha SMask (`embed_raster`)
+///
+/// Returns the error of a WebP, GIF, TIFF or BMP whose pixels can't be read: its header was checked before the layout,
+/// and its pixels are read only here.
 ///
 /// Not inlined, for the reason `write_fields` is not.
 #[inline(never)]
-fn embed_image_xobject(pdf: &mut Pdf, id: Ref, smask_id: Option<Ref>, bytes: &[u8]) {
-    if bytes.starts_with(b"\xFF\xD8\xFF") {
+fn embed_image_xobject(pdf: &mut Pdf, id: Ref, smask_id: Option<Ref>, bytes: &[u8]) -> Result<(), String> {
+    if let Some(format) = raster::Format::of(bytes) {
+        embed_raster(pdf, id, smask_id, &raster::decode(format, bytes)?);
+    } else if bytes.starts_with(b"\xFF\xD8\xFF") {
         // JPEG
         if let Some((w, h)) = jpeg_dims(bytes) {
             let mut img = pdf.image_xobject(id, bytes);
@@ -539,6 +554,59 @@ fn embed_image_xobject(pdf: &mut Pdf, id: Ref, smask_id: Option<Ref>, bytes: &[u
         }
     }
     // Unsupported format: no object written for this ID (PDF ref unused).
+    Ok(())
+}
+
+/// Write an image decoded to 8-bit pixels (`raster.rs`), and its alpha as the soft mask `smask_id`. Each row goes
+/// through PNG's Paeth filter first, which the reader undoes (`/Predictor 15`): the book's caterpillar plate, decoded
+/// from a WebP, compresses 7% smaller with it.
+///
+/// Not inlined, for the reason `write_fields` is not.
+#[inline(never)]
+fn embed_raster(pdf: &mut Pdf, id: Ref, smask_id: Option<Ref>, raster: &Raster) {
+    let (width, height) = (raster.width as i32, raster.height as i32);
+    let smask_id = smask_id.filter(|_| raster.alpha.is_some());
+    if let (Some(alpha), Some(smask_ref)) = (&raster.alpha, smask_id) {
+        let filtered = compress_to_vec_zlib(&paeth_rows(alpha, raster.width as usize, 1), 6);
+        let mut mask = pdf.image_xobject(smask_ref, &filtered);
+        mask.width(width).height(height).bits_per_component(8);
+        mask.color_space().device_gray();
+        mask.filter(Filter::FlateDecode);
+        mask.decode_parms().predictor(Predictor::PngOptimum).colors(1).bits_per_component(8).columns(width);
+    }
+    let colors = usize::from(raster.colors);
+    let filtered = compress_to_vec_zlib(&paeth_rows(&raster.pixels, raster.width as usize, colors), 6);
+    let mut img = pdf.image_xobject(id, &filtered);
+    img.width(width).height(height).bits_per_component(8);
+    if colors == 1 {
+        img.color_space().device_gray();
+    } else {
+        img.color_space().device_rgb();
+    }
+    img.filter(Filter::FlateDecode);
+    img.decode_parms().predictor(Predictor::PngOptimum).colors(colors as i32).bits_per_component(8).columns(width);
+    if let Some(smask_ref) = smask_id {
+        img.s_mask(smask_ref);
+    }
+}
+
+/// `pixels`, rows of `width` pixels of `colors` bytes, each row as PNG writes it with the Paeth filter: the filter's
+/// number, 4, then each byte less the Paeth predictor of the bytes to its left, above and above-left.
+fn paeth_rows(pixels: &[u8], width: usize, colors: usize) -> Vec<u8> {
+    let stride = width * colors;
+    let mut out = Vec::with_capacity(pixels.len() + pixels.len() / stride.max(1));
+    let mut above: &[u8] = &[];
+    for row in pixels.chunks_exact(stride.max(1)) {
+        out.push(4);
+        for (i, &byte) in row.iter().enumerate() {
+            let left = if i >= colors { row[i - colors] } else { 0 };
+            let up = above.get(i).copied().unwrap_or(0);
+            let up_left = if i >= colors { above.get(i - colors).copied().unwrap_or(0) } else { 0 };
+            out.push(byte.wrapping_sub(paeth_predictor(left, up, up_left)));
+        }
+        above = row;
+    }
+    out
 }
 
 // ── Built-in font table ───────────────────────────────────────────────────────
@@ -3020,12 +3088,10 @@ fn allocate_ids(
         .map(|(i, n)| (n.clone(), image_xobj_ids[i]))
         .collect();
 
-    // For RGBA PNGs, allocate an extra Ref for the alpha SMask XObject.
+    // For an image with alpha, allocate an extra Ref for the alpha SMask XObject.
     let image_smask_ids: Vec<Option<Ref>> = sorted_image_names.iter().map(|name| {
-        let is_rgba = image_registry.get(name)
-            .and_then(|b| png_info(b))
-            .map_or(false, |(_, _, _, ct)| ct == 6);
-        if is_rgba { Some(alloc.next()) } else { None }
+        let has_alpha = image_registry.get(name).is_some_and(image_has_alpha);
+        if has_alpha { Some(alloc.next()) } else { None }
     }).collect();
 
     // Per-field allocation.
@@ -3482,7 +3548,7 @@ fn assemble_pdf(
         let img_id   = image_id_map[name];
         let smask_id = image_smask_ids[i];
         if let Some(bytes) = image_registry.get(name) {
-            embed_image_xobject(&mut pdf, img_id, smask_id, bytes);
+            embed_image_xobject(&mut pdf, img_id, smask_id, bytes).map_err(|e| format!("image '{name}': {e}"))?;
         }
     }
 

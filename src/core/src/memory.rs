@@ -197,11 +197,26 @@ pub(crate) fn check() -> Result<(), String> {
     if !passed() {
         return Ok(());
     }
-    Err(format!(
+    Err(past_cap())
+}
+
+/// The cap's error when the render going on would pass its cap by holding `bytes` more, asked before an allocation
+/// whose size a file gives, such as the pixels of an image the file says are there. Past what WebAssembly can address,
+/// that allocation would trap before the next `check` could stop the render.
+pub(crate) fn reserve(bytes: u64) -> Result<(), String> {
+    let bytes = i64::try_from(bytes).unwrap_or(i64::MAX);
+    if LIVE.get().saturating_add(bytes) > LIMIT.get() {
+        return Err(past_cap());
+    }
+    Ok(())
+}
+
+fn past_cap() -> String {
+    format!(
         "the render needs more memory than its cap of {} MB: raise the cap in the engine's options, or render the \
         document in smaller parts",
         CAP_MB.get()
-    ))
+    )
 }
 
 #[cfg(test)]
@@ -217,6 +232,21 @@ mod tests {
         assert!(error.contains("its cap of 1 MB"), "{error}");
         drop(held);
         assert!(check().is_err(), "the render went past its cap once, which is enough");
+    }
+
+    #[test]
+    fn a_reservation_past_the_cap_is_refused_before_anything_is_allocated() {
+        let _cap = start(1);
+        assert_eq!(reserve(1000), Ok(()));
+        let error = reserve(2 * BYTES_PER_MB as u64).unwrap_err();
+        assert!(error.contains("its cap of 1 MB"), "{error}");
+        assert!(!passed(), "nothing was allocated, so the render is still under its cap");
+        assert!(reserve(u64::MAX).is_err());
+    }
+
+    #[test]
+    fn a_reservation_outside_a_render_is_never_refused() {
+        assert_eq!(reserve(u64::MAX / 2), Ok(()));
     }
 
     #[test]
