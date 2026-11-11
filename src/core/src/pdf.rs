@@ -407,7 +407,7 @@ pub fn image_format_error(bytes: &[u8]) -> Option<String> {
                 (6, 8 | 16)     => None, // RGBA — 8-bit and 16-bit
                 (3, 8)          => None, // indexed-color 8-bit
                 (0 | 2 | 6, bd) => Some(format!(
-                    "PNG with {bd}-bit depth is not supported"
+                    "PNG with {bd}-bit depth is not supported; save it at 8 bits"
                 )),
                 (3, bd) => Some(format!(
                     "PNG indexed-color with {bd}-bit depth is not supported; \

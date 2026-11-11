@@ -284,6 +284,18 @@ write('tiff-rgba-associated.tif', tiff([{
     data: pixels(WIDTH, HEIGHT, (x, y) => [...rgb(x, y).map((c) => Math.round((c * alpha(x)) / 255)), alpha(x)]),
     tags: { 338: [SHORT, [1]] },
 }]));
+// 8-bit gray: each pattern index as 17 times it.
+write('tiff-gray8.tif', tiff([{
+    width: WIDTH, height: HEIGHT, bits: [8], photometric: 1,
+    data: pixels(WIDTH, HEIGHT, (x, y) => [index(x, y) * 17]),
+}]));
+// 16-bit RGB, little-endian: each channel in the high byte.
+write('tiff-rgb16.tif', tiff([{
+    width: WIDTH, height: HEIGHT, bits: [16, 16, 16], photometric: 2,
+    data: pixels(WIDTH, HEIGHT, (x, y) => rgb(x, y).flatMap((c) => [0, c])),
+}]));
+// Each channel in a plane of its own, as Photoshop's "Per Channel" pixel order writes it.
+run('tiffcp', '-p', 'separate', at('tiff-rgb.tif'), at('tiff-planar.tif'));
 // 16-bit gray, big-endian: each pattern index as 17 times it in the high byte, so a file read in the wrong byte order
 // comes out black.
 write('tiff-gray16.tif', tiff([{

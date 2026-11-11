@@ -39,8 +39,9 @@ sha2 = "0.10"
 pulldown-cmark = { version = "0.13", default-features = false }
 # PDF reader for `stamp` — default features off drop rayon and chrono
 lopdf = { version = "0.46", default-features = false }
-# Image decoders for WebP, GIF and TIFF, from image-rs. GIF's and TIFF's LZW (weezl) and TIFF's Deflate (flate2) come
-# with lopdf already. TIFF's JPEG compression is left out: it would bring a JPEG decoder of its own
+# Image decoders for WebP, GIF and TIFF, from image-rs. TIFF's Deflate (flate2) comes with lopdf already; GIF and
+# TIFF bring their own LZW (weezl 0.1, beside lopdf's 0.2). TIFF's JPEG compression is left out: it would bring a JPEG
+# decoder of its own
 image-webp = "0.2"
 gif = { version = "0.14", default-features = false, features = ["std"] }
 tiff = { version = "0.11", default-features = false, features = ["lzw", "deflate", "fax"] }

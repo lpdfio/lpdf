@@ -63,8 +63,8 @@ fn refused(bytes: &[u8]) -> String {
 fn lossless_files_read_back_to_the_colors_they_were_made_of() {
     for name in [
         "webp-lossless-alpha.webp", "gif-opaque.gif", "gif-interlaced.gif", "tiff-rgb.tif", "tiff-rgb-lzw.tif",
-        "tiff-rgb-lzw-predictor.tif", "tiff-rgb-deflate.tif", "tiff-rgb-packbits.tif", "tiff-rgba.tif",
-        "tiff-thumbnail.tif", "tiff-sips-alpha.tif", "bmp-sips.bmp", "bmp-sips-alpha.bmp",
+        "tiff-rgb-lzw-predictor.tif", "tiff-rgb-deflate.tif", "tiff-rgb-packbits.tif", "tiff-rgb16.tif",
+        "tiff-rgba.tif", "tiff-thumbnail.tif", "tiff-sips-alpha.tif", "bmp-sips.bmp", "bmp-sips-alpha.bmp",
     ] {
         let raster = decoded(name);
         assert_eq!((raster.width, raster.height, raster.colors), (WIDTH as u32, HEIGHT as u32, 3), "{name}");
@@ -127,12 +127,14 @@ fn lossy_webp_reads_as_libwebp_reads_it() {
 }
 
 #[test]
-fn gray_tiffs_read_as_gray_from_16_bits_and_from_fax_scans() {
-    let raster = decoded("tiff-gray16.tif");
-    assert_eq!(raster.colors, 1);
-    for y in 0..HEIGHT {
-        for x in 0..WIDTH {
-            assert_eq!(raster.pixels[y * WIDTH + x], (index(x, y) * 17) as u8, "at ({x}, {y})");
+fn gray_tiffs_read_as_gray_from_8_and_16_bits_and_from_fax_scans() {
+    for name in ["tiff-gray8.tif", "tiff-gray16.tif"] {
+        let raster = decoded(name);
+        assert_eq!(raster.colors, 1, "{name}");
+        for y in 0..HEIGHT {
+            for x in 0..WIDTH {
+                assert_eq!(raster.pixels[y * WIDTH + x], (index(x, y) * 17) as u8, "{name} at ({x}, {y})");
+            }
         }
     }
     // White is zero in these, as in a fax: an odd index is black.
@@ -226,6 +228,28 @@ fn the_kinds_of_tiff_that_are_not_read_are_refused_with_what_to_do() {
     assert!(error.contains("the TIFF is a Group 3 fax") && error.contains("save it with Group 4"), "{error}");
     let error = refused(&read("tiff-palette4.tif"));
     assert!(error.contains("the TIFF has a color palette"), "{error}");
+    let error = refused(&read("tiff-planar.tif"));
+    assert!(error.contains("a plane of its own") && error.contains("save it with the pixels interleaved"), "{error}");
+}
+
+#[test]
+fn each_format_draws_as_a_markdown_image() {
+    for name in ["webp-lossy-alpha.webp", "gif-transparent.gif", "tiff-rgb-lzw.tif", "bmp-sips.bmp"] {
+        let mut engine = LpdfEngine::new("");
+        engine.load_image("pic", &read(name));
+        let pdf = engine
+            .render_xml(
+                r#"<lpdf version="1"><assets><image name="pic" src="pic.img"/></assets>
+                <document><section><markdown><markdown-content><![CDATA[![](pic)]]></markdown-content></markdown>
+                </section></document></lpdf>"#,
+                None,
+                &RenderEncryption::default(),
+            )
+            .unwrap_or_else(|e| panic!("{name}: {e}"));
+        let text = String::from_utf8_lossy(&pdf);
+        let image = text.find("/Subtype /Image").map(|at| &text[at..]).unwrap_or_else(|| panic!("{name}: no image"));
+        assert!(image.contains("/Width 40") && image.contains("/Height 30"), "{name}");
+    }
 }
 
 #[test]

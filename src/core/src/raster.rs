@@ -311,6 +311,15 @@ fn tiff_header(bytes: &[u8]) -> Result<Header, String> {
     if decoder.find_tag_unsigned::<u16>(Tag::PhotometricInterpretation).map_err(tiff_error)? == Some(3) {
         return Err("the TIFF has a color palette, which Lpdf doesn't read: save it in RGB".to_string());
     }
+    // Each channel in a plane of its own, which the decoder reads only the first of.
+    let samples = decoder.find_tag_unsigned::<u16>(Tag::SamplesPerPixel).map_err(tiff_error)?.unwrap_or(1);
+    if samples > 1 && decoder.find_tag_unsigned::<u16>(Tag::PlanarConfiguration).map_err(tiff_error)? == Some(2) {
+        return Err(
+            "the TIFF keeps each color in a plane of its own, which Lpdf doesn't read: save it with the pixels \
+            interleaved"
+                .to_string(),
+        );
+    }
     let (pixels, _) = TiffPixels::of(decoder.colortype().map_err(tiff_error)?)?;
     // A reduced-resolution copy of the image, such as a thumbnail, is not a page of its own.
     let mut pages = 1u64;

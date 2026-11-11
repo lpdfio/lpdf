@@ -134,8 +134,6 @@ pub(crate) fn decode(bytes: &[u8], header: Header) -> Result<Raster, String> {
     let data = bytes.get(bmp.pixels_at..).ok_or("the BMP could not be read: its pixels are missing")?;
     let (width, height) = (bmp.width as usize, bmp.height as usize);
     let count = width * height;
-    let mut rgb = Vec::with_capacity(count * 3);
-    let mut alpha = header.alpha.then(|| Vec::with_capacity(count));
 
     // The file's row of the image's row `y`, counted from the top.
     let file_row = |y: usize| if bmp.top_down { y } else { height - 1 - y };
@@ -143,6 +141,7 @@ pub(crate) fn decode(bytes: &[u8], header: Header) -> Result<Raster, String> {
 
     if matches!(bmp.compression, BI_RLE8 | BI_RLE4) {
         let indexes = run_lengths(data, width, height, bmp.compression == BI_RLE4);
+        let mut rgb = Vec::with_capacity(count * 3);
         for y in 0..height {
             let row = &indexes[file_row(y) * width..][..width];
             rgb.extend(row.iter().flat_map(|&index| color_of(index)));
@@ -150,12 +149,19 @@ pub(crate) fn decode(bytes: &[u8], header: Header) -> Result<Raster, String> {
         return Ok(Raster { width: bmp.width, height: bmp.height, colors: 3, pixels: rgb, alpha: None });
     }
 
-    let bits = usize::from(bmp.bits);
-    let row_bytes = (width * bits).div_ceil(8);
+    // In u64, since a row's bytes can pass what usize holds on wasm32, and before anything is allocated, so a small
+    // file that claims a large image stops here.
+    let row_bytes = (u64::from(bmp.width) * u64::from(bmp.bits)).div_ceil(8);
     let stride = row_bytes.div_ceil(4) * 4;
-    if data.len() < stride * (height - 1) + row_bytes {
+    let needed = stride.saturating_mul(u64::from(bmp.height) - 1).saturating_add(row_bytes);
+    if (data.len() as u64) < needed {
         return Err("the BMP could not be read: its pixels are cut short".to_string());
     }
+    // The pixels are in the file, so a row and the stride fit in usize.
+    let (row_bytes, stride) = (row_bytes as usize, stride as usize);
+    let bits = usize::from(bmp.bits);
+    let mut rgb = Vec::with_capacity(count * 3);
+    let mut alpha = header.alpha.then(|| Vec::with_capacity(count));
     for y in 0..height {
         let row = &data[file_row(y) * stride..][..row_bytes];
         match bits {
