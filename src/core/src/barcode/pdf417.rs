@@ -53,13 +53,21 @@ const PUNCTUATION: [u8; 30] = [
     b'$', b'/', b'"', b'|', b'*', b'(', b')', b'?', b'{', b'}', b'\'', 0,
 ];
 
-/// Check `rows` and `columns` against what a PDF417 has.
+/// Check `rows` and `columns` against what a PDF417 has: 3 to 90 rows, 1 to 30 columns, and 928 codewords at most.
 pub(super) fn check_shape(rows: Option<u8>, columns: Option<u8>) -> Result<(), String> {
     if let Some(r) = rows.filter(|r| !(MIN_ROWS..=MAX_ROWS).contains(&(*r as usize))) {
         return Err(format!("<barcode> a pdf417 has {MIN_ROWS} to {MAX_ROWS} rows, not {r}"));
     }
     if let Some(c) = columns.filter(|c| !(1..=MAX_COLUMNS).contains(&(*c as usize))) {
         return Err(format!("<barcode> a pdf417 has 1 to {MAX_COLUMNS} columns, not {c}"));
+    }
+    if let (Some(r), Some(c)) = (rows, columns) {
+        let codewords = r as usize * c as usize;
+        if codewords > MAX_CODEWORDS {
+            return Err(format!(
+                "<barcode> a pdf417 holds {MAX_CODEWORDS} codewords at most, and {r} rows of {c} columns are {codewords}"
+            ));
+        }
     }
     Ok(())
 }
@@ -78,7 +86,14 @@ pub(super) fn encode(data: &str, options: &BarcodeOptions, fit: Fit) -> Result<M
             .ok_or_else(|| "PDF417: the data is too long for a PDF417".to_string())?,
     };
     let needed = codewords.len() + 1 + ec_count(level);
-    let (cols, rows) = shape(needed, options, fit).ok_or_else(|| "PDF417: the data is too long for a PDF417".to_string())?;
+    // Any count up to 928 has a shape of its own, so only the rows and columns given can leave the data without one.
+    let (cols, rows) = shape(needed, options, fit).ok_or_else(|| {
+        let given: Vec<String> = [("rows", options.rows), ("columns", options.columns)]
+            .into_iter()
+            .filter_map(|(name, value)| value.map(|v| format!("{name}=\"{v}\"")))
+            .collect();
+        format!("PDF417: the data is too long for a PDF417 with {}", given.join(" and "))
+    })?;
 
     // The length codeword counts itself, the data and the padding.
     let padding = cols * rows - needed;
@@ -109,15 +124,16 @@ fn ec_count(level: u8) -> usize {
 }
 
 /// The columns and rows for `needed` codewords: what `rows` and `columns` fix, else the shape `fit` asks for. Data that
-/// needs more than the rows given gets more rows, and more than 90 rows at the columns given more columns.
+/// needs more than the rows given gets more rows, and more than 90 rows at the columns given more columns. A shape
+/// holds 928 codewords at most, its padding included.
 fn shape(needed: usize, options: &BarcodeOptions, fit: Fit) -> Option<(usize, usize)> {
     let min_rows = options.rows.map_or(MIN_ROWS, |r| r as usize);
     let rows_at = |cols: usize| needed.div_ceil(cols).max(min_rows);
+    let fits = |&(c, r): &(usize, usize)| r <= MAX_ROWS && c * r <= MAX_CODEWORDS;
     if let Some(columns) = options.columns {
-        return (columns as usize..=MAX_COLUMNS).map(|c| (c, rows_at(c))).find(|&(_, r)| r <= MAX_ROWS);
+        return (columns as usize..=MAX_COLUMNS).map(|c| (c, rows_at(c))).find(fits);
     }
-    let mut candidates: Vec<(usize, usize)> =
-        (1..=MAX_COLUMNS).map(|c| (c, rows_at(c))).filter(|&(_, r)| r <= MAX_ROWS).collect();
+    let mut candidates: Vec<(usize, usize)> = (1..=MAX_COLUMNS).map(|c| (c, rows_at(c))).filter(fits).collect();
     if options.rows.is_some() {
         // The rows given hold the data at these columns; at none, the most columns take more rows.
         let within: Vec<(usize, usize)> = candidates.iter().copied().filter(|&(_, r)| r == min_rows).collect();

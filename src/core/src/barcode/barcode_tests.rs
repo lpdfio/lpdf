@@ -3,7 +3,8 @@
 
 use rxing::{BarcodeFormat, DecodeHints, RXingResult, RXingResultMetadataType, RXingResultMetadataValue};
 
-use super::{code128, code39, datamatrix, ean, gs1, pdf417};
+use super::{code128, code39, datamatrix, ean, gs1, pdf417, Fit};
+use crate::parse::BarcodeOptions;
 use crate::render::{RenderBarcode, RenderNode, RenderedBarcodeKind};
 
 // ── Laying out, drawing and decoding ─────────────────────────────────────────
@@ -189,7 +190,23 @@ fn an_ean8_and_a_upca_are_the_standard_symbol_without_a_size() {
     assert!((upca.width - 95.0 * module).abs() < 0.01 && (upca.height - 22.85 * 72.0 / 25.4).abs() < 0.01);
 }
 
-// ── GS1-128 ──────────────────────────────────────────────────────────────────
+// ── Code 128 and GS1-128 ─────────────────────────────────────────────────────
+
+#[test]
+fn every_code128_symbol_is_eleven_modules_wide() {
+    for (value, symbol) in code128::symbols().iter().enumerate() {
+        assert_eq!(symbol.iter().map(|&m| m as u32).sum::<u32>(), 11, "symbol {value}: {symbol:?}");
+    }
+}
+
+#[test]
+fn a_code128_and_a_gs1_128_read_back_with_the_symbol_of_value_61() {
+    // Value 61 is ']' in code set B and the digit pair "61" in code set C.
+    assert_eq!(decoded(r#"<barcode type="code128" data="A]B"/>"#, BarcodeFormat::CODE_128), "A]B");
+    let barcode = barcode_of(r#"<barcode type="gs1-128" data="(00)106141411234567897"/>"#);
+    let hints = DecodeHints { AssumeGs1: Some(true), ..DecodeHints::default() };
+    assert_eq!(decode_with(&barcode, BarcodeFormat::CODE_128, hints).getText(), "]C100106141411234567897");
+}
 
 #[test]
 fn a_gs1_128_reads_back_as_gs1_with_its_fields() {
@@ -443,12 +460,48 @@ fn a_pdf417_refuses_rows_and_columns_it_hasnt() {
     assert!(refusal(r#"<barcode type="pdf417" data="x" rows="2" width="50pt"/>"#).contains("3 to 90 rows, not 2"));
     assert!(refusal(r#"<barcode type="pdf417" data="x" rows="91" width="50pt"/>"#).contains("3 to 90 rows, not 91"));
     assert!(refusal(r#"<barcode type="pdf417" data="x" columns="31" width="50pt"/>"#).contains("1 to 30 columns, not 31"));
+    assert!(refusal(r#"<barcode type="pdf417" data="x" rows="90" columns="30" width="50pt"/>"#)
+        .contains("928 codewords at most, and 90 rows of 30 columns are 2700"));
+    assert!(refusal(r#"<barcode type="pdf417" data="x" rows="60" columns="16" width="50pt"/>"#).contains("are 960"));
+    let most = barcode_of(r#"<barcode type="pdf417" data="x" rows="58" columns="16" width="300pt"/>"#);
+    assert_eq!((pdf417_columns(&most), matrix_shape(&most).1), (16, 58));
+}
+
+#[test]
+fn a_pdf417_holds_928_codewords_at_most_in_any_shape_it_takes() {
+    // Capital letters go two to a codeword, so 1850 are the most a PDF417 holds. No shape chosen for this much data
+    // goes past 928 codewords, whose padding would push the length codeword past the last codeword value.
+    for letters in 1700..=1850 {
+        let data = "A".repeat(letters);
+        for fit in [
+            Fit::Box { width: 300.0, height: 300.0 },
+            Fit::Box { width: 528.0, height: 105.0 },
+            Fit::OneSide,
+        ] {
+            let matrix = pdf417::encode(&data, &BarcodeOptions::default(), fit).unwrap();
+            let columns = (matrix.cols as usize - 69) / 17;
+            assert!(columns * matrix.rows as usize <= 928, "{letters} in {fit:?}: {columns} × {}", matrix.rows);
+        }
+    }
+    let data = "A".repeat(1845);
+    let element = format!(r#"<barcode type="pdf417" data="{data}" width="300pt" height="300pt"/>"#);
+    assert_eq!(decoded(&element, BarcodeFormat::PDF_417), data);
 }
 
 #[test]
 fn data_too_long_for_a_pdf417_draws_the_placeholder() {
     let data = "\u{3a9}".repeat(1200);
     assert!(is_placeholder(&format!(r#"<barcode type="pdf417" data="{data}" width="400pt"/>"#)));
+}
+
+#[test]
+fn data_too_long_for_the_rows_given_draws_the_placeholder_with_the_reason() {
+    // 90 rows hold 900 codewords at 10 columns, and 11 columns would be 990: too few for this data, and too many.
+    let data = "A".repeat(1845);
+    let options = BarcodeOptions { rows: Some(90), ..BarcodeOptions::default() };
+    let error = pdf417::encode(&data, &options, Fit::OneSide).err().expect("refused");
+    assert!(error.contains(r#"too long for a PDF417 with rows="90""#), "{error}");
+    assert!(is_placeholder(&format!(r#"<barcode type="pdf417" data="{data}" rows="90" width="300pt"/>"#)));
 }
 
 // ── What every type shares ───────────────────────────────────────────────────
