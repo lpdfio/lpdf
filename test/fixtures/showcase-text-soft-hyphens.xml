@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="bg"    value="#eef3fc" />
+      <color name="muted" value="#737373" />
+    </colors>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Soft hyphens" subject="A line breaks at a soft hyphen, and ends in a hyphen there" />
+
+    <!-- A soft hyphen (U+00AD, &#xAD;) marks where a word may break. A line that breaks there ends in a hyphen; a
+         soft hyphen no line breaks at is not drawn and takes no width. The SDKs' codegen check renders this fixture
+         from the code written for each language, which writes the mark as its escape.
+         Expected, top to bottom (the boxes are on a tint, 120pt wide but the second, 102pt):
+           1  "Die Donaudampf-", "schifffahrtsgesell-", "schaft fährt": each line ends at the last soft hyphen that
+              fits, and no hyphen is drawn inside a word
+           2  The same words justified: "Die Donaudampf-" is spread to the right edge, its hyphen included; a line of
+              one word, or one that would need more than two spaces a gap, stays as it is
+           3  "Die neue", then the red run "Donaudampf" whole on the next line, though "Donau-" would fit the first;
+              the green run, wider than a line, breaks at a soft hyphen, the hyphen in green
+           4  A code box: the word is cut at the edge, with no hyphen
+           5  A text cut to one line: "Die Donaudampf...", the dots in place of the hyphen
+           6  A table of two auto columns: the compound in the first breaks at its soft hyphens, and the column is
+              as narrow as its widest piece with a hyphen
+    -->
+    <section>
+      <layout margin="40pt">
+        <column gap="m">
+          <text font-size="xxl" font="Helvetica-Bold">Soft hyphens</text>
+
+          <text font-size="s" color="muted">A word breaks at its soft hyphens</text>
+          <column width="120pt" background="bg" padding="6pt">
+            <text>Die Donau&#xAD;dampf&#xAD;schiff&#xAD;fahrts&#xAD;gesell&#xAD;schaft fährt</text>
+          </column>
+
+          <text font-size="s" color="muted">Justified</text>
+          <column width="102pt" background="bg" padding="6pt">
+            <text align="justify">Die Donau&#xAD;dampf&#xAD;schiff&#xAD;fahrts&#xAD;gesell&#xAD;schaft fährt um neun Uhr von Wien nach Linz.</text>
+          </column>
+
+          <text font-size="s" color="muted">Styled runs</text>
+          <column width="120pt" background="bg" padding="6pt">
+            <text>Die neue <span color="#cc0000">Donau&#xAD;dampf</span> und <span color="#1e8449">Donau&#xAD;dampf&#xAD;schiff&#xAD;fahrts&#xAD;gesell&#xAD;schaft</span></text>
+          </column>
+
+          <text font-size="s" color="muted">A code never breaks at one</text>
+          <column width="120pt">
+            <code>Donau&#xAD;dampf&#xAD;schiff&#xAD;fahrts&#xAD;gesell&#xAD;schaft</code>
+          </column>
+
+          <text font-size="s" color="muted">Cut to one line</text>
+          <column width="120pt" background="bg" padding="6pt">
+            <text max-lines="1" ellipsis="true">Die Donau&#xAD;dampf&#xAD;schiff&#xAD;fahrts&#xAD;gesell&#xAD;schaft fährt</text>
+          </column>
+
+          <text font-size="s" color="muted">In the cells of a table</text>
+          <table cols="auto auto" width="220pt">
+            <thead background="#e8ecf0">
+              <td padding="5pt 8pt"><text font-size="s" font="Helvetica-Bold">Word</text></td>
+              <td padding="5pt 8pt"><text font-size="s" font="Helvetica-Bold">Meaning</text></td>
+            </thead>
+            <tr>
+              <td padding="5pt 8pt"><text font-size="s">Donau&#xAD;dampf&#xAD;schiff&#xAD;fahrts&#xAD;gesell&#xAD;schaft</text></td>
+              <td padding="5pt 8pt"><text font-size="s">The Danube steamship company, which ran boats on the river from Vienna</text></td>
+            </tr>
+          </table>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

@@ -202,6 +202,8 @@ fn showcase_markdown_presets() { run_snapshot_markdown_presets("showcase-markdow
 #[test]
 fn showcase_text_wide_words() { run_snapshot("showcase-text-wide-words"); }
 #[test]
+fn showcase_text_soft_hyphens() { run_snapshot("showcase-text-soft-hyphens"); }
+#[test]
 fn showcase_markdown_tables() { run_snapshot("showcase-markdown-tables"); }
 #[test]
 fn showcase_markdown_breaks() { run_snapshot("showcase-markdown-breaks"); }
