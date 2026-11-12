@@ -2,8 +2,8 @@
 <!-- PDF/UA-1: each thing the engine tags, in a file veraPDF's PDF/UA-1 profile accepts and a screen reader reads.
      Headings and paragraphs, a table with a header row and cells that span, a number list with a bullet list in it,
      links in a text and around one, a footnote, the table of contents, an image with alt and one that is decoration, a
-     barcode with alt, Markdown with a link that wraps onto the next line, a layer with alt, and a header, a footer and
-     a layer without alt, which are decoration.
+     barcode with alt, Markdown with a link that wraps onto the next line, a layer with alt, words that break at a soft
+     hyphen, and a header, a footer and a layer without alt, which are decoration.
      Every text is in an embedded font of test/assets/fonts (SIL Open Font License), named relative to this file. The
      render needs created_on, and the check of `make check-pdfua` renders it with the fonts and the pictures loaded, as
      an SDK does (`writes_pdfua_samples_for_the_external_check` in pdfua_render_tests.rs). On the RC it is read with
@@ -136,6 +136,10 @@
           <text role="h3" font="heading" font-size="13pt" color="ink">How the figures were counted</text>
           <text>Each region counts the units it shipped in the quarter, and the totals are checked against the
             invoices before they are filed. A region that has not filed shows no figure.</text>
+          <column width="150pt">
+            <text>Every count is cross&#xAD;checked against the ware&#xAD;house re&#xAD;ceipts and the cus&#xAD;tom&#xAD;er
+              in&#xAD;voices of the quar&#xAD;ter.</text>
+          </column>
         </column>
       </layout>
     </section>
