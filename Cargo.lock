@@ -175,6 +175,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "byteorder-lite"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
+
+[[package]]
 name = "cast"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -551,6 +557,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fax"
+version = "0.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "caf1079563223d5d59d83c85886a56e586cfd5c1a26292e971a0fa266531ac5a"
+
+[[package]]
 name = "fiat-crypto"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -601,6 +613,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "gif"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159"
+dependencies = [
+ "weezl 0.1.12",
+]
+
+[[package]]
 name = "half"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -630,6 +651,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3944cf8cf766b40e2a1a333ee5e9b563f854d5fa49d6a8ca2764e97c6eddb214"
 dependencies = [
  "typenum",
+]
+
+[[package]]
+name = "image-webp"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3"
+dependencies = [
+ "byteorder-lite",
+ "quick-error",
 ]
 
 [[package]]
@@ -745,7 +776,7 @@ dependencies = [
  "sha2 0.11.1",
  "stringprep",
  "thiserror",
- "weezl",
+ "weezl 0.2.1",
 ]
 
 [[package]]
@@ -757,6 +788,8 @@ dependencies = [
  "cbc 0.1.2",
  "criterion",
  "ed25519-dalek",
+ "gif",
+ "image-webp",
  "lopdf",
  "md-5 0.10.6",
  "miniz_oxide 0.7.4",
@@ -768,6 +801,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "subsetter",
+ "tiff",
  "ttf-parser",
  "wasm-bindgen",
 ]
@@ -788,6 +822,8 @@ dependencies = [
  "base64",
  "cbc 0.1.2",
  "ed25519-dalek",
+ "gif",
+ "image-webp",
  "lopdf",
  "md-5 0.10.6",
  "miniz_oxide 0.7.4",
@@ -799,6 +835,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "subsetter",
+ "tiff",
  "ttf-parser",
 ]
 
@@ -810,6 +847,8 @@ dependencies = [
  "base64",
  "cbc 0.1.2",
  "ed25519-dalek",
+ "gif",
+ "image-webp",
  "lopdf",
  "md-5 0.10.6",
  "miniz_oxide 0.7.4",
@@ -821,6 +860,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "subsetter",
+ "tiff",
  "ttf-parser",
 ]
 
@@ -980,6 +1020,12 @@ name = "qrcode"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
+
+[[package]]
+name = "quick-error"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
 
 [[package]]
 name = "quote"
@@ -1313,6 +1359,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tiff"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b63feaf3343d35b6ca4d50483f94843803b0f51634937cc2ec519fc32232bc52"
+dependencies = [
+ "fax",
+ "flate2",
+ "half",
+ "quick-error",
+ "weezl 0.1.12",
+]
+
+[[package]]
 name = "tinytemplate"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1443,6 +1502,12 @@ dependencies = [
  "js-sys",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "weezl"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
 
 [[package]]
 name = "weezl"
