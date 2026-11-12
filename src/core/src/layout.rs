@@ -2752,7 +2752,8 @@ fn split_text(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Spl
     // A page that ends in a word broken at a soft hyphen ends in the hyphen; the rest ends where the text did.
     let ends_in_hyphen = pre.is_none()
         && lines[split_at - 1].last().is_some_and(|atom| atom.text.ends_with(SOFT_HYPHEN))
-        && lines[split_at].first().is_some_and(|atom| atom.join == Join::Chars);
+        && lines[split_at].first()
+            .is_some_and(|atom| goes_on_in_word(atom.join, atom.leading_space, atom.footnote.is_some()));
     let first = Node { text_runs: first_runs, max_lines: None, ellipsis: false, ends_in_hyphen, ..node.clone() };
     // The text is captured on the page where it starts, whole: `captured` stays with the first part.
     let rest  = Node {
@@ -2927,17 +2928,26 @@ fn drawn_text(text: &str, hyphen: bool) -> Cow<'_, str> {
 }
 
 /// The least width a word takes on a line: its widest piece between soft hyphens, with the hyphen drawn after one
-/// that a line breaks at. The whole word when it has none, or its font has no hyphen.
-fn word_min_w(metrics: Metrics, word: &str, font_size: f32) -> f32 {
+/// that a line breaks at, which is one with more of the word after it, in the word or, when the word `goes_on` in the
+/// run after it, there. The whole word when it has none, or its font has no hyphen.
+fn word_min_w(metrics: Metrics, word: &str, font_size: f32, goes_on: bool) -> f32 {
     if !word.contains(SOFT_HYPHEN) || !metrics.has_hyphen() {
         return metrics.text_width(word, font_size);
     }
     let hyphen = metrics.hyphen_width(font_size);
-    let pieces = word.split(SOFT_HYPHEN).count();
-    word.split(SOFT_HYPHEN)
+    let pieces: Vec<&str> = word.split(SOFT_HYPHEN).collect();
+    let last_drawn = if goes_on { pieces.len() } else { pieces.iter().rposition(|piece| !piece.is_empty()).unwrap_or(0) };
+    pieces.iter()
         .enumerate()
-        .map(|(i, piece)| metrics.text_width(piece, font_size) + if i + 1 < pieces { hyphen } else { 0.0 })
+        .map(|(i, piece)| metrics.text_width(piece, font_size) + if i < last_drawn { hyphen } else { 0.0 })
         .fold(0.0, f32::max)
+}
+
+/// Whether an atom that starts a line goes on in the word that ends the line before it, from how it `join`s the atom
+/// before it, whether a space comes before it, and whether it is a footnote's `number`: the rest of a word broken to
+/// fit, or a run glued to that word with no space between them, but not a footnote's number.
+fn goes_on_in_word(join: Join, space_before: bool, number: bool) -> bool {
+    join == Join::Chars || (join == Join::No && !space_before && !number)
 }
 
 /// Break the words and the styled runs of `atoms` that are wider than a whole line into pieces that fit. A word with a
@@ -3092,8 +3102,9 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
         // word before it, or when it is wider than a line. The last word of a part of a text that ends in a word
         // broken at a soft hyphen keeps room for the hyphen.
         let soft = any_soft && atom.has_soft_breaks(parent_metrics);
-        let last_of_part = node.ends_in_hyphen && atoms.is_empty();
-        let hyphen = if soft && last_of_part { atom.hyphen_after(parent_metrics, font_size) } else { 0.0 };
+        let line_may_end_in_word = atoms.front()
+            .map_or(node.ends_in_hyphen, |next| goes_on_in_word(next.join, next.leading_space, next.footnote.is_some()));
+        let hyphen = if soft && line_may_end_in_word { atom.hyphen_after(parent_metrics, font_size) } else { 0.0 };
         let glued = atom.join == Join::No && !atom.leading_space && !cur_line.is_empty();
         let may_break = soft
             && (!atom.is_span || node.flow_runs || atom.join != Join::No || cur_line.is_empty() || glued);
@@ -3137,7 +3148,10 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
             // An atom with no space before it stays with the ones it is glued to, which go down to the next line
             // with it, as the lines of the text itself have it.
             let breakable = |a: &SplitAtom| a.join == Join::Space || (a.join == Join::No && a.leading_space);
-            let carried = if atom.join == Join::No && !atom.leading_space {
+            // A word that ends in a soft hyphen breaks there, and the run glued to it starts the next line.
+            let at_mark = cur_line.last()
+                .is_some_and(|prev| prev.text.ends_with(SOFT_HYPHEN) && prev.has_soft_breaks(parent_metrics));
+            let carried = if atom.join == Join::No && !atom.leading_space && !at_mark {
                 match cur_line.iter().rposition(|a| breakable(a)) {
                     Some(start) if start > 0 => cur_line.split_off(start),
                     _ => Vec::new(),
@@ -5031,7 +5045,7 @@ fn measure_natural_w(node: &Node) -> f32 {
 fn text_min_w(node: &Node) -> f32 {
     let size = node.font_size;
     let mut widest = 0.0_f32;
-    for run in &node.text_runs {
+    for (ri, run) in node.text_runs.iter().enumerate() {
         let metrics = Metrics::of(run.font.as_deref().unwrap_or(&node.font));
         if let Some(note) = &run.footnote {
             widest = widest.max(word_width(metrics, &note.number.to_string(), size, true));
@@ -5043,10 +5057,15 @@ fn text_min_w(node: &Node) -> f32 {
         if is_span && !node.flow_runs && node.pre_tab == 0 {
             widest = widest.max(metrics.text_width(&run.text, size) + room_after(run, metrics, size));
         } else {
-            // A word breaks at its soft hyphens, but not in a code or a `<code-span>`.
+            // A word breaks at its soft hyphens, but not in a code or a `<code-span>`. The last word of the run goes
+            // on in the next run when no space is between them.
             let soft = node.pre_tab == 0 && run.background.is_none();
-            for word in run.text.split_whitespace() {
-                let width = if soft { word_min_w(metrics, word, size) } else { metrics.text_width(word, size) };
+            let glued_next = !run.text.ends_with(char::is_whitespace)
+                && node.text_runs.get(ri + 1).is_some_and(|next| !next.leading_space && next.footnote.is_none());
+            let mut words = run.text.split_whitespace().peekable();
+            while let Some(word) = words.next() {
+                let goes_on = glued_next && words.peek().is_none();
+                let width = if soft { word_min_w(metrics, word, size, goes_on) } else { metrics.text_width(word, size) };
                 widest = widest.max(width);
             }
         }
@@ -5325,8 +5344,9 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
         // only where it would at its spaces, when it goes on in the word before it, or when it is wider than a line.
         // The last word of a part of a text that ends in a word broken at a soft hyphen keeps room for the hyphen.
         let soft = any_soft && atom.has_soft_breaks();
-        let last_of_part = node.ends_in_hyphen && atoms.is_empty();
-        let hyphen = if soft && last_of_part { atom.hyphen_after(font_size) } else { 0.0 };
+        let line_may_end_in_word = atoms.front()
+            .map_or(node.ends_in_hyphen, |next| goes_on_in_word(next.join, next.space_before, next.sup));
+        let hyphen = if soft && line_may_end_in_word { atom.hyphen_after(font_size) } else { 0.0 };
         let glued = atom.join == Join::No && !atom.space_before && !cur_line.is_empty();
         let may_break = soft
             && (atom.span.is_none() || node.flow_runs || atom.join != Join::No || cur_line.is_empty() || glued);
@@ -5367,7 +5387,10 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
         } else {
             // An atom with no space before it stays with the ones it is glued to, which go down to the next
             // line with it: the number of a footnote, or a bracket and the run of code after it.
-            let glued = atom.join == Join::No && !atom.space_before;
+            // A word that ends in a soft hyphen breaks there, and the run glued to it starts the next line.
+            let at_mark = cur_line.last()
+                .is_some_and(|(prev, _)| prev.text.ends_with(SOFT_HYPHEN) && prev.has_soft_breaks());
+            let glued = atom.join == Join::No && !atom.space_before && !at_mark;
             let carried = if glued {
                 match cur_line.iter().rposition(|(_, gap)| *gap > 0.0) {
                     Some(start) => cur_line.split_off(start),
@@ -5397,8 +5420,9 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     // space or at the end of the text, is no break, and is not drawn.
     if any_soft {
         for i in 0..lines.len() {
-            let broken = lines.get(i + 1)
-                .map_or(node.ends_in_hyphen, |next| next.first().is_some_and(|(atom, _)| atom.join == Join::Chars));
+            let broken = lines.get(i + 1).map_or(node.ends_in_hyphen, |next| {
+                next.first().is_some_and(|(atom, _)| goes_on_in_word(atom.join, atom.space_before, atom.sup))
+            });
             if let Some((last, _)) = lines[i].last_mut() {
                 if broken {
                     last.width += last.hyphen_after(font_size);
@@ -9737,6 +9761,37 @@ abcdef</code><text>after</text></row>"#,
     }
 
     #[test]
+    fn a_word_broken_at_a_soft_hyphen_where_its_style_changes_ends_in_the_hyphen() {
+        let width = helvetica("Donaudampf\u{AD}") + 1.0;
+        let span = |text: &str| format!(r##"<span color="#c0392b">{text}</span>"##);
+        for body in [
+            format!("<text>Donaudampf&#xAD;{}</text>", span("schifffahrt")),
+            format!("<text>{}schifffahrt</text>", span("Donaudampf&#xAD;")),
+        ] {
+            assert_eq!(lines_in(width, &body), ["Donaudampf\u{AD}", "schifffahrt"], "{body}");
+        }
+        // With a word before it, the line breaks at the mark rather than carry the word down whole.
+        let width = helvetica("Die Donau\u{AD}") + 1.0;
+        assert_eq!(lines_in(width, &format!("<text>Die Donau&#xAD;{}</text>", span("dampfschiff"))), ["Die Donau\u{AD}", "dampfschiff"]);
+    }
+
+    #[test]
+    fn a_text_split_across_pages_where_a_word_breaks_at_its_style_change_ends_the_page_in_the_hyphen() {
+        let width = helvetica("Donaudampf\u{AD}") + 1.0;
+        let words = r##"Donaudampf&#xAD;<span color="#c0392b">schifffahrt</span> "##.repeat(8);
+        let whole = lines_in(width, &format!("<text>{words}</text>"));
+        // Room for three lines at the foot of the first page: the third is the first half of a word.
+        let frame = 785.89 - 13.2 * 3.0 - 13.2 / 2.0;
+        let xml = format!(
+            r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt {:.3}pt 28pt 28pt"><frame height="{frame:.2}pt" /><text>{words}</text></layout></section></document></lpdf>"#,
+            595.28 - 28.0 - width
+        );
+        let pages: Vec<Vec<String>> = engine_render(&xml)["pages"].as_array().unwrap().iter().map(find_text_content).collect();
+        assert_eq!(pages[0], ["Donaudampf\u{AD}", "schifffahrt", "Donaudampf\u{AD}"]);
+        assert_eq!(pages.concat(), whole);
+    }
+
+    #[test]
     fn a_soft_hyphen_where_no_line_breaks_is_not_drawn_and_takes_no_width() {
         let span = r##"<span color="#c0392b">x</span>"##;
         let marked = texts_in(300.0, &format!("<text>Donau&#xAD;dampf {span}</text>"));
@@ -9850,6 +9905,11 @@ abcdef</code><text>after</text></row>"#,
         let pieces = ["Donau-", "dampf-", "schiff-", "fahrt"].map(helvetica).into_iter().fold(0.0, f32::max);
         assert_eq!(text_min_w(&text("Donau\u{AD}dampf\u{AD}schiff\u{AD}fahrt")), pieces);
         assert_eq!(text_min_w(&text("Donaudampfschifffahrt")), helvetica("Donaudampfschifffahrt"));
+        // A soft hyphen that ends a word draws no hyphen, unless a run glued to the word goes on in it.
+        assert_eq!(text_min_w(&text("Donau\u{AD}")), helvetica("Donau"));
+        let mut glued = text("Donaudampf\u{AD}");
+        glued.text_runs.push(TextRun { text: "x".to_string(), color: Some("#c0392b".to_string()), ..glued.text_runs[0].clone() });
+        assert_eq!(text_min_w(&glued), helvetica("Donaudampf-"));
     }
 
     #[test]
