@@ -317,8 +317,13 @@ fn compact_text(text: &[u8], mut submode: Submode, out: &mut Vec<u16>) -> Submod
         }
         i += 1;
     }
+    // An odd count is padded with 29: a shift to punctuation for a value that never comes, except in the punctuation
+    // submode, where 29 latches to upper case, which is where the next text then starts.
     if values.len() % 2 == 1 {
         values.push(SHIFT_PUNCTUATION);
+        if submode == Submode::Punctuation {
+            submode = Submode::Alpha;
+        }
     }
     out.extend(values.chunks(2).map(|pair| pair[0] as u16 * 30 + pair[1] as u16));
     submode

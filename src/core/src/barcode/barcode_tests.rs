@@ -359,6 +359,17 @@ fn a_pdf417_reads_back_text_numbers_and_bytes() {
 }
 
 #[test]
+fn a_pdf417_reads_back_text_after_a_byte_that_follows_punctuation() {
+    // Two punctuation characters after a digit latch to the punctuation submode, an odd count pads with 29, which
+    // there latches to upper case, and the text after the byte goes on from it.
+    for data in ["AB1<>\u{7f}ABCDE", "AB1<>\u{7f}abcde", "AB1<>?\u{7f}ABCDE", "9;<\u{7f}x;<\u{7f}YZabc"] {
+        let escaped = data.replace('<', "&lt;").replace('>', "&gt;");
+        let element = format!(r#"<barcode type="pdf417" data="{escaped}" width="300pt"/>"#);
+        assert_eq!(decoded(&element, BarcodeFormat::PDF_417), data);
+    }
+}
+
+#[test]
 fn a_pdf417_numeric_run_takes_fewer_codewords_than_text() {
     let digits = pdf417::codewords_of("1234567890123456789012345678901234567890");
     let text = pdf417::codewords_of("ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMN");
