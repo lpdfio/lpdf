@@ -308,7 +308,8 @@ fn tiff_header(bytes: &[u8]) -> Result<Header, String> {
     if let Some(error) = tiff_compression_error(compression) {
         return Err(error);
     }
-    if decoder.find_tag_unsigned::<u16>(Tag::PhotometricInterpretation).map_err(tiff_error)? == Some(3) {
+    let photometric = decoder.find_tag_unsigned::<u16>(Tag::PhotometricInterpretation).map_err(tiff_error)?;
+    if photometric == Some(3) {
         return Err("the TIFF has a color palette, which Lpdf doesn't read: save it in RGB".to_string());
     }
     // Each channel in a plane of its own, which the decoder reads only the first of.
@@ -317,6 +318,14 @@ fn tiff_header(bytes: &[u8]) -> Result<Header, String> {
         return Err(
             "the TIFF keeps each color in a plane of its own, which Lpdf doesn't read: save it with the pixels \
             interleaved"
+                .to_string(),
+        );
+    }
+    // Gray stored white as zero inverts only without alpha: with it, the decoder refuses the pixels.
+    if photometric == Some(0) && samples > 1 {
+        return Err(
+            "the TIFF is gray with alpha and stores white as zero, which Lpdf doesn't read: save it in gray with \
+            black as zero"
                 .to_string(),
         );
     }

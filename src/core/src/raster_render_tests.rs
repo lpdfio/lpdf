@@ -230,6 +230,8 @@ fn the_kinds_of_tiff_that_are_not_read_are_refused_with_what_to_do() {
     assert!(error.contains("the TIFF has a color palette"), "{error}");
     let error = refused(&read("tiff-planar.tif"));
     assert!(error.contains("a plane of its own") && error.contains("save it with the pixels interleaved"), "{error}");
+    let error = refused(&read("tiff-gray-white-alpha.tif"));
+    assert!(error.contains("stores white as zero") && error.contains("save it in gray with black as zero"), "{error}");
 }
 
 #[test]

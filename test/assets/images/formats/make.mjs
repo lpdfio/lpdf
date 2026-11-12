@@ -294,6 +294,12 @@ write('tiff-rgb16.tif', tiff([{
     width: WIDTH, height: HEIGHT, bits: [16, 16, 16], photometric: 2,
     data: pixels(WIDTH, HEIGHT, (x, y) => rgb(x, y).flatMap((c) => [0, c])),
 }]));
+// Gray with alpha, white as zero: a combination the decoder doesn't read.
+write('tiff-gray-white-alpha.tif', tiff([{
+    width: WIDTH, height: HEIGHT, bits: [8, 8], photometric: 0,
+    data: pixels(WIDTH, HEIGHT, (x, y) => [index(x, y) * 17, alpha(x)]),
+    tags: { 338: [SHORT, [2]] },
+}]));
 // Each channel in a plane of its own, as Photoshop's "Per Channel" pixel order writes it.
 run('tiffcp', '-p', 'separate', at('tiff-rgb.tif'), at('tiff-planar.tif'));
 // 16-bit gray, big-endian: each pattern index as 17 times it in the high byte, so a file read in the wrong byte order
