@@ -25,6 +25,7 @@ ed25519-dalek = { version = "2", default-features = false, features = ["alloc"] 
 # Deflate/inflate for PNG RGBA decoding (SMask support)
 miniz_oxide = "0.7"
 qrcode = { version = "0.14", default-features = false }
+datamatrix = { version = "0.3.3", default-features = false }
 # MD5 for RC4-128 PDF encryption key derivation — WASM-compatible, no_std
 md-5 = "0.10"
 # AES-256-CBC and SHA-2 for AES-256 PDF encryption (V=5 R=6) — WASM-compatible, no_std
@@ -42,3 +43,7 @@ tiff = { version = "0.11", default-features = false, features = ["lzw", "deflate
 
 [build-dependencies]
 sha2 = "0.10"
+
+[dev-dependencies]
+# The core's barcode tests, which this crate runs again, decode with it — same as core/Cargo.toml
+rxing = { version = "0.9.4", default-features = false, features = ["decoders", "oned", "datamatrix", "pdf417", "encoding_rs"] }

@@ -175,11 +175,12 @@ pub struct RenderBarcode {
 pub enum RenderedBarcodeKind {
     /// Flat row-major grid of dark (true) / light (false) modules.
     Qr { modules: Vec<bool>, size: u32 },
-    /// Alternating bar/space run-lengths (even index = bar), plus optional
-    /// human-readable text string.
-    Code128 { bars: Vec<u8>, hrt: Option<String> },
-    /// Same run-length encoding for EAN-13, plus the 13-digit string.
-    Ean13 { bars: Vec<u8>, digits: String, hrt: bool },
+    /// A linear barcode: alternating bar/space run-lengths (even index = bar), and the text `hrt` shows under them.
+    /// `symbology` is its type as the schema writes it.
+    Linear { symbology: &'static str, bars: Vec<u8>, hrt: Option<String> },
+    /// A Data Matrix or a PDF417: `cols` by `rows` modules, row by row, dark ones true, each row as high as the box
+    /// divided by `rows`.
+    Matrix { symbology: &'static str, modules: Vec<bool>, cols: u32, rows: u32 },
 }
 
 pub struct RenderImage {
@@ -477,9 +478,8 @@ fn node_to_json(node: &RenderNode) -> Value {
         }
         RenderNode::Barcode(bc) => {
             let kind_str = match &bc.kind {
-                RenderedBarcodeKind::Qr { .. }      => "qr",
-                RenderedBarcodeKind::Code128 { .. } => "code128",
-                RenderedBarcodeKind::Ean13 { .. }   => "ean13",
+                RenderedBarcodeKind::Qr { .. } => "qr",
+                RenderedBarcodeKind::Linear { symbology, .. } | RenderedBarcodeKind::Matrix { symbology, .. } => symbology,
             };
             json!({
                 "type":   "barcode",

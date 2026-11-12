@@ -977,6 +977,9 @@ struct Tweak {
     content: Option<&'static str>,
     /// An error from the engine is the attribute being read: a name that looks something up.
     error_counts: bool,
+    /// For these values of the attribute, this attribute set in its document and in the one it is compared with: a
+    /// value that shows on another kind of the element, such as a PDF417's level of `ec` on a barcode that is a QR code.
+    for_values: Vec<(&'static [&'static str], &'static str, &'static str)>,
 }
 
 impl Tweak {
@@ -994,6 +997,10 @@ impl Tweak {
     }
     fn content(mut self, content: &'static str) -> Tweak {
         self.content = Some(content);
+        self
+    }
+    fn for_values(mut self, values: &'static [&'static str], name: &'static str, value: &'static str) -> Tweak {
+        self.for_values.push((values, name, value));
         self
     }
     fn error_counts(mut self) -> Tweak {
@@ -1067,6 +1074,11 @@ fn tweaks() -> HashMap<String, Tweak> {
     add("barcode@hrt", Tweak::default().set("type", "code128"));
     add("barcode@width", Tweak::default().set("type", "code128"));
     add("barcode@height", Tweak::default().set("type", "code128").remove("width"));
+    add("barcode@rows", Tweak::default().set("type", "pdf417"));
+    add("barcode@columns", Tweak::default().set("type", "pdf417"));
+    add("barcode@check", Tweak::default().set("type", "code39"));
+    add("barcode@ec", barcode_ec());
+    add("barcode@type", barcode_types());
 
     // Form fields: an option of one type shows on that type.
     add("field@options", Tweak::default().set("type", "dropdown"));
@@ -1119,9 +1131,27 @@ fn tweaks() -> HashMap<String, Tweak> {
     // A barcode in a layer: the options of one type show on that type, and a QR code takes the smaller of its
     // width and height, so the other is left large for the one tried to show.
     add("barcode-at@hrt", Tweak::default().set("type", "code128"));
+    add("barcode-at@rows", Tweak::default().set("type", "pdf417"));
+    add("barcode-at@columns", Tweak::default().set("type", "pdf417"));
+    add("barcode-at@check", Tweak::default().set("type", "code39"));
+    add("barcode-at@ec", barcode_ec());
+    add("barcode-at@type", barcode_types());
     add("barcode-at@width", Tweak::default().set("height", "300pt"));
     add("barcode-at@height", Tweak::default().set("width", "300pt"));
     t
+}
+
+/// A number for `ec` is a PDF417's level, and a letter a QR code's: each is tried on its own type.
+fn barcode_ec() -> Tweak {
+    Tweak::default().for_values(&["0", "1", "2", "3", "4", "5", "6", "7", "8"], "type", "pdf417")
+}
+
+/// Each type with data it can hold: digits for an EAN-8 and a UPC-A, GS1 fields for the GS1 types.
+fn barcode_types() -> Tweak {
+    Tweak::default()
+        .for_values(&["ean8"], "data", "9638507")
+        .for_values(&["upca"], "data", "03600029145")
+        .for_values(&["gs1-128", "gs1-datamatrix"], "data", "(01)09501101530003(17)261231(10)AB12")
 }
 
 // ── Running it ────────────────────────────────────────────────────────────────
@@ -1158,6 +1188,19 @@ fn base_pairs(subject: &Subject, tweak: &Tweak) -> Vec<(String, String)> {
         }
     }
     base
+}
+
+/// The base of the documents that show `value`, and of the one each is compared with: the base, with what the tweak sets
+/// for that value.
+fn base_for_value(base: &[(String, String)], tweak: &Tweak, value: &str) -> Vec<(String, String)> {
+    let mut pairs = base.to_vec();
+    for &(_, n, v) in tweak.for_values.iter().filter(|(values, _, _)| values.contains(&value)) {
+        match pairs.iter_mut().find(|pair| pair.0 == n) {
+            Some(existing) => existing.1 = v.to_string(),
+            None => pairs.push((n.to_string(), v.to_string())),
+        }
+    }
+    pairs
 }
 
 /// The attributes of the document that shows `attribute` with `value`: the base, less what the attribute excludes.
@@ -1201,10 +1244,25 @@ fn judge(attribute: &Attribute, subject: &Subject, tweak: &Tweak) -> Verdict {
     let mut changed = false;
     let mut same = Vec::new();
     let mut errors = Vec::new();
+    // The document each value is compared with: the one without the attribute, or for a value the tweak sets more
+    // for, the one with that set.
+    let mut baselines: Vec<(Vec<(String, String)>, Vec<u8>)> = vec![(base.clone(), baseline)];
     for value in values.iter().filter(|v| Some(*v) != base_value.as_ref()) {
-        let pairs = pairs_with_value(&base, tweak, attribute, value);
+        let value_base = base_for_value(&base, tweak, value);
+        let index = match baselines.iter().position(|(b, _)| *b == value_base) {
+            Some(index) => index,
+            None => {
+                let xml = (subject.build)(&attribute_string(&value_base), content);
+                match render(&xml) {
+                    Ok(bytes) => baselines.push((value_base.clone(), bytes)),
+                    Err(e) => return Verdict::Broken(format!("the document without it for {value} does not render: {e}\n    {xml}")),
+                }
+                baselines.len() - 1
+            }
+        };
+        let pairs = pairs_with_value(&value_base, tweak, attribute, value);
         match render(&(subject.build)(&attribute_string(&pairs), content)) {
-            Ok(bytes) if bytes != baseline => changed = true,
+            Ok(bytes) if bytes != baselines[index].1 => changed = true,
             Ok(_) => same.push(value.clone()),
             Err(_) if tweak.error_counts => changed = true,
             Err(e) => errors.push(format!("{value}: {e}")),
@@ -1218,9 +1276,9 @@ fn judge(attribute: &Attribute, subject: &Subject, tweak: &Tweak) -> Verdict {
             Verdict::NoEffect { tried: same }
         };
     }
-    // Without the attribute the default applies, and one value may be the same as it. A value of a required
-    // attribute is compared with the one the document has, so none may be the same.
-    let allowed = if base_value.is_some() { 0 } else { 1 };
+    // Without the attribute the default applies, and one value may be the same as it, in each document compared with.
+    // A value of a required attribute is compared with the one the document has, so none may be the same.
+    let allowed = if base_value.is_some() { 0 } else { baselines.len() };
     Verdict::Effect { same: if attribute.one_of { same } else { Vec::new() }, allowed }
 }
 
@@ -1313,7 +1371,8 @@ fn corpus(
                 excused.push(Excused { id: value_id, why: why.to_string() });
                 continue;
             }
-            let mut xml = (subject.build)(&attribute_string(&pairs_with_value(&base, tweak, attribute, &value)), content);
+            let value_base = base_for_value(&base, tweak, &value);
+            let mut xml = (subject.build)(&attribute_string(&pairs_with_value(&value_base, tweak, attribute, &value)), content);
             if render(&xml).is_err() {
                 let base_value = base.iter().find(|pair| pair.0 == attribute.name).map(|pair| pair.1.as_str());
                 let lookup_of = base_value.filter(|_| tweak.error_counts);

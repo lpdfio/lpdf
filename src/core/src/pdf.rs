@@ -1071,7 +1071,7 @@ fn collect_used_fonts(nodes: &[RenderNode], out: &mut HashSet<String>) {
 
 /// Whether a barcode draws its human-readable text under the bars.
 fn has_caption(kind: &RenderedBarcodeKind) -> bool {
-    matches!(kind, RenderedBarcodeKind::Code128 { hrt: Some(_), .. } | RenderedBarcodeKind::Ean13 { hrt: true, .. })
+    matches!(kind, RenderedBarcodeKind::Linear { hrt: Some(_), .. })
 }
 
 // ── Font resolution ───────────────────────────────────────────────────────────
@@ -1498,10 +1498,11 @@ fn draw_drawn(
                     }
                 }
 
-                RenderedBarcodeKind::Code128 { bars, hrt } => {
+                RenderedBarcodeKind::Linear { bars, hrt, .. } => {
                     let total_units: u32 = bars.iter().map(|&w| w as u32).sum();
                     if total_units > 0 {
                         let unit_w = bc.width / total_units as f32;
+                        // The bars are all of one height; `hrt` takes the bottom 12pt for its text.
                         let bar_h  = if hrt.is_some() { bc.height - 12.0 } else { bc.height };
                         let pdf_y  = page_h - bc.y - bar_h;
                         let mut cur_x = bc.x;
@@ -1514,35 +1515,28 @@ fn draw_drawn(
                             }
                             cur_x += run_w;
                         }
-                        // HRT text is drawn as a simple centered annotation
-                        // using the draw_barcode_hrt helper.
                         if let Some(text) = hrt {
                             draw_barcode_hrt(content, fonts, text, bc.x, bc.y + bar_h, bc.width, page_h);
                         }
                     }
                 }
 
-                RenderedBarcodeKind::Ean13 { bars, digits, hrt } => {
-                    let total_units: u32 = bars.iter().map(|&w| w as u32).sum();
-                    if total_units > 0 {
-                        let unit_w = bc.width / total_units as f32;
-                        // EAN-13 standard: guard bars extend 5 units below digit bars.
-                        // For simplicity we use a uniform bar height here.
-                        let hrt_h  = if *hrt { 12.0_f32 } else { 0.0 };
-                        let bar_h  = bc.height - hrt_h;
-                        let pdf_y  = page_h - bc.y - bar_h;
-                        let mut cur_x = bc.x;
-                        for (i, &run) in bars.iter().enumerate() {
-                            let run_w = run as f32 * unit_w;
-                            if i % 2 == 0 {
-                                content.rect(cur_x, pdf_y, run_w, bar_h);
-                                content.fill_nonzero();
+                RenderedBarcodeKind::Matrix { modules, cols, rows, .. } => {
+                    if *cols > 0 && *rows > 0 {
+                        let (cell_w, cell_h) = (bc.width / *cols as f32, bc.height / *rows as f32);
+                        // Each run of dark modules in a row is one rectangle, all filled at once.
+                        for (row, line) in modules.chunks(*cols as usize).enumerate() {
+                            let pdf_y = page_h - bc.y - (row + 1) as f32 * cell_h;
+                            let mut col = 0;
+                            while col < line.len() {
+                                let run = line[col..].iter().take_while(|&&dark| dark == line[col]).count();
+                                if line[col] {
+                                    content.rect(bc.x + col as f32 * cell_w, pdf_y, run as f32 * cell_w, cell_h);
+                                }
+                                col += run;
                             }
-                            cur_x += run_w;
                         }
-                        if *hrt {
-                            draw_barcode_hrt(content, fonts, digits, bc.x, bc.y + bar_h, bc.width, page_h);
-                        }
+                        content.fill_nonzero();
                     }
                 }
             }

@@ -578,7 +578,7 @@ fn point_links_at(node: &mut Node, anchor: &str) {
 mod tests {
     use super::*;
     use crate::parse::{
-        Align, BarcodeEcLevel, DataAttrs, DEFAULT_LINE_HEIGHT, DEFAULT_ORPHANS, DEFAULT_WIDOWS, Direction, HeightMode, Justify, Meta, NodeKind,
+        Align, BarcodeOptions, DataAttrs, DEFAULT_LINE_HEIGHT, DEFAULT_ORPHANS, DEFAULT_WIDOWS, Direction, HeightMode, Justify, Meta, NodeKind,
         Paginate, RowKeep, TextAlign,
     };
     use std::collections::HashMap;
@@ -632,7 +632,7 @@ mod tests {
             detail: None,
             barcode_type: None,
             barcode_data: None,
-            barcode_ec: BarcodeEcLevel::M,
+            barcode_options: BarcodeOptions::default(),
             barcode_hrt: false,
             barcode_color: None,
             barcode_bg: None,
