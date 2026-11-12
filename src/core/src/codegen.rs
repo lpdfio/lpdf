@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use roxmltree::{Document, Node, NodeType};
 
 use crate::attr_types::Kind;
+use crate::tokens::SOFT_HYPHEN;
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -352,27 +353,38 @@ fn single_quoted(val: &str) -> String {
     format!("'{}'", val.replace('\\', "\\\\").replace('\'', "\\'"))
 }
 
-/// A double-quoted string literal, as C# and Java write one. A line break or a tab in it is written as its escape.
+/// A double-quoted string literal, as C# and Java write one. A line break, a tab or a soft hyphen in it is written as
+/// its escape.
 fn double_quoted(val: &str) -> String {
-    format!("\"{}\"", escape_controls(&val.replace('\\', "\\\\").replace('"', "\\\"")))
+    format!("\"{}\"", escape_controls(&val.replace('\\', "\\\\").replace('"', "\\\""), SOFT_HYPHEN_ESCAPE))
 }
 
-/// A line break, a carriage return or a tab as its escape, which JS, C# and Python read in a string.
-fn escape_controls(val: &str) -> String {
-    val.replace('\n', "\\n").replace('\r', "\\r").replace('\t', "\\t")
+/// A double-quoted string literal, as PHP writes one: a `$` in it would start a variable, and its escape of a soft
+/// hyphen is `\u{AD}`.
+fn php_double_quoted(val: &str) -> String {
+    let escaped = val.replace('\\', "\\\\").replace('"', "\\\"").replace('$', "\\$");
+    format!("\"{}\"", escape_controls(&escaped, "\\u{AD}"))
+}
+
+/// How JS, C#, Java and Python write a soft hyphen in a string. The mark is invisible, and written as it is it would
+/// hide where a word may break.
+const SOFT_HYPHEN_ESCAPE: &str = "\\u00AD";
+
+/// A line break, a carriage return, a tab or a soft hyphen as its escape, which JS, C#, Java and Python read in a
+/// string. `soft_hyphen` is the escape of the soft hyphen, which PHP writes its own way.
+fn escape_controls(val: &str, soft_hyphen: &str) -> String {
+    val.replace('\n', "\\n").replace('\r', "\\r").replace('\t', "\\t").replace(SOFT_HYPHEN, soft_hyphen)
 }
 
 /// A string literal for a piece of the content of a text or a code, in the language of `target`. The content of
 /// a code has lines and tabs, which a single-quoted string reads as they are only in PHP, and not in the way a
-/// PHP double-quoted string reads them; so PHP gets the double-quoted one when the piece has any.
+/// PHP double-quoted string reads them; so PHP gets the double-quoted one when the piece has any, or a soft hyphen,
+/// which a PHP single-quoted string has no escape for.
 fn piece_literal(target: Target, text: &str) -> String {
     match target {
         Target::Dotnet | Target::Java => double_quoted(text),
-        Target::Js | Target::Python => escape_controls(&single_quoted(text)),
-        Target::Php if text.contains(['\n', '\r', '\t']) => {
-            let escaped = text.replace('\\', "\\\\").replace('"', "\\\"").replace('$', "\\$");
-            format!("\"{}\"", escape_controls(&escaped))
-        }
+        Target::Js | Target::Python => escape_controls(&single_quoted(text), SOFT_HYPHEN_ESCAPE),
+        Target::Php if text.contains(['\n', '\r', '\t', SOFT_HYPHEN]) => php_double_quoted(text),
         Target::Php => single_quoted(text),
     }
 }
@@ -507,8 +519,10 @@ enum Target {
 impl Target {
     fn literal(self, value: &str) -> String {
         match self {
-            Target::Dotnet | Target::Java => double_quoted(value),
-            _                             => single_quoted(value),
+            Target::Dotnet | Target::Java              => double_quoted(value),
+            Target::Php if value.contains(SOFT_HYPHEN) => php_double_quoted(value),
+            Target::Php                                => single_quoted(value),
+            Target::Js | Target::Python                => single_quoted(value).replace(SOFT_HYPHEN, SOFT_HYPHEN_ESCAPE),
         }
     }
 
@@ -2880,6 +2894,27 @@ mod tests {
         assert!(php.contains("L::code(") && php.contains(r#""fn a() {\n\tb(\"x\", '\$y');\n}\n""#), "{php}");
         let java = code_code("java", content);
         assert!(java.contains(r#"L.code(new CodeAttr().tabSize(2), List.of("fn a() {\n\tb(\"x\", '$y');\n}\n"))"#), "{java}");
+    }
+
+    #[test]
+    fn test_a_soft_hyphen_in_a_text_is_written_as_its_escape_in_every_language() {
+        let xml = "<lpdf version=\"1\"><document><section><layout>\
+            <text>Donau&#xAD;dampf <span color=\"#c0392b\">Schiff&#xAD;fahrt</span></text>\
+            <text-at x=\"0pt\" y=\"0pt\">Kapit&#xAD;&#xE4;n $x</text-at>\
+            </layout></section></document></lpdf>";
+        for (target, texts) in [
+            ("js", [r"'Donau\u00ADdampf '", r"['Schiff\u00ADfahrt']", r"'Kapit\u00ADän $x'"]),
+            ("python", [r"'Donau\u00ADdampf '", r"['Schiff\u00ADfahrt']", r"'Kapit\u00ADän $x'"]),
+            ("dotnet", [r#""Donau\u00ADdampf ""#, r#""Schiff\u00ADfahrt""#, r#""Kapit\u00ADän $x""#]),
+            ("java", [r#""Donau\u00ADdampf ""#, r#""Schiff\u00ADfahrt""#, r#""Kapit\u00ADän $x""#]),
+            ("php", [r#""Donau\u{AD}dampf ""#, r#"["Schiff\u{AD}fahrt"]"#, r#""Kapit\u{AD}än \$x""#]),
+        ] {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            assert!(!out.contains(SOFT_HYPHEN), "{target} writes the mark itself: {out}");
+            for text in texts {
+                assert!(out.contains(text), "{target} has no {text}: {out}");
+            }
+        }
     }
 
     #[test]
