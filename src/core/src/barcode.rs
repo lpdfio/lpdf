@@ -86,8 +86,11 @@ pub(crate) fn encode_linear(kind: BarcodeType, data: &str, options: &BarcodeOpti
             let fields = gs1::parse(data)?;
             Ok(Linear { bars: code128::encode_gs1(&fields)?, text: data.trim().to_string() })
         }
-        // The digits as given, as the EAN-13 of earlier versions shows them.
-        BarcodeType::Ean13 => Ok(Linear { bars: ean::encode_ean13(data)?.0, text: data.to_string() }),
+        // The digits with their check digit, as EAN-8 and UPC-A show them.
+        BarcodeType::Ean13 => {
+            let (bars, digits) = ean::encode_ean13(data)?;
+            Ok(Linear { bars, text: digits })
+        }
         BarcodeType::Ean8 => {
             let (bars, digits) = ean::encode_ean8(data)?;
             Ok(Linear { bars, text: digits })

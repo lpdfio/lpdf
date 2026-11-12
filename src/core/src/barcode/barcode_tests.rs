@@ -169,11 +169,13 @@ fn a_upca_gets_its_check_digit_added_or_checked() {
 }
 
 #[test]
-fn hrt_shows_the_check_digit_of_an_ean8_and_a_upca() {
+fn hrt_shows_the_check_digit_of_an_ean13_an_ean8_and_a_upca() {
     let text = |element: &str| match barcode_of(element).kind {
         RenderedBarcodeKind::Linear { hrt, .. } => hrt,
         _ => None,
     };
+    assert_eq!(text(r#"<barcode type="ean13" data="590123412345" hrt="true"/>"#).as_deref(), Some("5901234123457"));
+    assert_eq!(text(r#"<barcode type="ean13" data="5901234123457" hrt="true"/>"#).as_deref(), Some("5901234123457"));
     assert_eq!(text(r#"<barcode type="ean8" data="9638507" hrt="true"/>"#).as_deref(), Some("96385074"));
     assert_eq!(text(r#"<barcode type="upca" data="03600029145" hrt="true"/>"#).as_deref(), Some("036000291452"));
 }
