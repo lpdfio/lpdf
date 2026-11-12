@@ -30,6 +30,7 @@
 // 5. **Assembly** – All objects are written into a `pdf_writer::Pdf` buffer and
 //    returned as `Vec<u8>`.
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::rc::Rc;
@@ -53,7 +54,7 @@ use crate::pdfua::PdfUa;
 use crate::raster::{self, Raster};
 use crate::ruling::{Drawing, Run};
 use crate::tagging::{Kid, Kind, LinkMark, Marks};
-use crate::tokens::{FontDef, Gradient, GradientKind, GRADIENT_PREFIX, is_cmyk};
+use crate::tokens::{FontDef, Gradient, GradientKind, GRADIENT_PREFIX, SOFT_HYPHEN, is_cmyk};
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -724,6 +725,9 @@ impl PreparedFont {
     /// we do not have AFM metrics at runtime.  TrueType fonts use real
     /// per-glyph advances from `ttf-parser`.
     fn text_width(&self, text: &str, size: f32) -> f32 {
+        // A soft hyphen is left in a text only where a line breaks at it, and is drawn there as the hyphen.
+        let text = if text.contains(SOFT_HYPHEN) { text.replace(SOFT_HYPHEN, "-").into() } else { Cow::Borrowed(text) };
+        let text = text.as_ref();
         match &self.kind {
             PreparedFontKind::Builtin { base_name, .. } => {
                 crate::layout::text_width(base_name, text, size)
@@ -746,7 +750,7 @@ impl PreparedFont {
             PreparedFontKind::Truetype { char_to_gid, .. } => {
                 let mut out = Vec::with_capacity(text.chars().count() * 2);
                 for c in text.chars() {
-                    let gid = char_to_gid.get(&c).copied().unwrap_or(0);
+                    let gid = char_to_gid.get(&drawn_char(c)).copied().unwrap_or(0);
                     out.push((gid >> 8) as u8);
                     out.push((gid & 0xFF) as u8);
                 }
@@ -914,6 +918,13 @@ fn sign_encoding_width(base_name: &str, code: u8) -> f32 {
     f32::from(advance.unwrap_or(0))
 }
 
+/// The character whose glyph an embedded font draws for `c`: the hyphen, `-`, for a soft hyphen, which layout leaves
+/// in a text only where a line breaks at it. A built-in font has a code of its own for the soft hyphen, which draws
+/// the same glyph (`win1252_byte`).
+fn drawn_char(c: char) -> char {
+    if c == SOFT_HYPHEN { '-' } else { c }
+}
+
 /// The ASCII character a built-in font draws for a character it has no glyph for, where one looks much like it: the
 /// lines and corners of a drawn box, arrows, primes, the minus sign and the wide spaces. An embedded font draws
 /// the characters as they are.
@@ -1043,7 +1054,7 @@ fn collect_chars_for_font(nodes: &[RenderNode], font_name: &str, out: &mut HashS
     for node in nodes {
         match node {
             RenderNode::Text(t) if t.font == font_name => {
-                out.extend(t.content.chars());
+                out.extend(t.content.chars().map(drawn_char));
             }
             RenderNode::Box(b)  => collect_chars_for_font(&b.children, font_name, out),
             RenderNode::Link(l) => collect_chars_for_font(&l.children, font_name, out),
@@ -1378,7 +1389,12 @@ fn draw_drawn(
 
             // Layout y = top of the text block; PDF baseline = top − font-size.
             let pdf_y   = page_h - t.y - t.size;
-            let encoded = font.encode_text(&t.content);
+            // A line broken at a soft hyphen ends in it: the words of the line are drawn, then the hyphen.
+            let (words, hyphen) = match t.content.strip_suffix(SOFT_HYPHEN) {
+                Some(words) => (words, true),
+                None        => (t.content.as_str(), false),
+            };
+            let encoded = font.encode_text(words);
             let rname   = font.resource_name.as_bytes().to_vec();
 
             content.begin_text();
@@ -1398,7 +1414,7 @@ fn draw_drawn(
                 // The gap goes in before each space instead, and a positive adjustment moves back, in thousandths
                 // of the font size.
                 let adjustment = -t.word_gap * 1000.0 / t.size;
-                let mut pieces = t.content.split(' ');
+                let mut pieces = words.split(' ');
                 let mut positioned = content.show_positioned();
                 let mut items = positioned.items();
                 items.show(Str(&font.encode_text(pieces.next().unwrap_or(""))));
@@ -1408,6 +1424,18 @@ fn draw_drawn(
                 }
             } else {
                 content.show(Str(&encoded));
+            }
+            if hyphen {
+                // The hyphen is marked as the soft hyphen it stands for, which a reader that copies or searches the
+                // text leaves out, so the word is whole again: Tagged PDF asks it of a hyphen the layout added, and
+                // a reader that reads a built-in font's code by its glyph's name would read a plain hyphen. A built-in
+                // font draws it with WinAnsi's code for the soft hyphen, which is the hyphen's glyph, and an embedded
+                // font with its glyph of `-`.
+                let mut mark = [0; 2];
+                let mark = SOFT_HYPHEN.encode_utf8(&mut mark);
+                content.begin_marked_content_with_properties(Name(b"Span")).properties().actual_text(TextStr(mark));
+                content.show(Str(&font.encode_text(mark)));
+                content.end_marked_content();
             }
             content.end_text();
         }
@@ -3569,7 +3597,7 @@ fn assemble_pdf(
             }
             // In a tagged PDF a link is described by its words, and found from its element (ISO 14289-1, 7.18.5).
             if let Some(mark) = ann.mark {
-                let words = marks.elements[mark.element].words.trim();
+                let words = marks.elements[mark.element].words.trim().trim_end_matches(SOFT_HYPHEN);
                 aw.contents(TextStr(if words.is_empty() { &ann.url } else { words }));
                 if let Some(key) = keys.annotation(mark.number) {
                     aw.struct_parent(key);
@@ -4543,7 +4571,7 @@ fn font_refusal(
                 t.font
             )),
             PreparedFontKind::Truetype { char_to_gid, .. } => {
-                let missing = t.content.chars().find(|c| !char_to_gid.contains_key(c))?;
+                let missing = t.content.chars().find(|&c| !char_to_gid.contains_key(&drawn_char(c)))?;
                 Some(format!(
                     "the text \"{}\" has '{missing}' (U+{:04X}), which the font '{}' has no glyph for, and a {standard} \
                     file may not draw the empty box a reader shows instead: use a font that has it, or leave it out",
@@ -5016,7 +5044,10 @@ mod tests {
         for font in BUILT_IN_FONTS {
             for &(c, code) in &drawn {
                 let metrics = crate::layout::afm_code_advance(font, code).map(f32::from);
-                assert_eq!(Some(crate::layout::text_width(font, &c.to_string(), 1000.0).round()), metrics, "{font}: {c:?}");
+                // A soft hyphen takes no width where no line breaks at it; where one does, the hyphen drawn with its
+                // code is measured as `-`, which is as wide.
+                let measured = if c == SOFT_HYPHEN { "-".to_string() } else { c.to_string() };
+                assert_eq!(Some(crate::layout::text_width(font, &measured, 1000.0).round()), metrics, "{font}: {c:?}");
             }
         }
     }

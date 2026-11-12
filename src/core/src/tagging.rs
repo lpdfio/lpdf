@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use pdf_writer::{Content, Name};
 
 use crate::render::{Tag, TagKind};
+use crate::tokens::SOFT_HYPHEN;
 
 /// A kind of structure element, by the standard structure types of ISO 32000-1, 14.8.4.
 #[derive(Debug, Clone, PartialEq)]
@@ -452,7 +453,10 @@ impl Marks {
         let mut at = self.parent;
         while at != 0 {
             let element = &mut self.elements[at];
-            if !element.words.is_empty() {
+            // A word broken at a soft hyphen goes on in the next words: it is one word again, without the hyphen.
+            if element.words.ends_with(SOFT_HYPHEN) {
+                element.words.pop();
+            } else if !element.words.is_empty() {
                 element.words.push(' ');
             }
             element.words.push_str(words.trim());

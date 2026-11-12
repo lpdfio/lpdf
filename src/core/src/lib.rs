@@ -911,6 +911,9 @@ mod attribute_effects;
 mod embedded_font_layout_tests;
 
 #[cfg(test)]
+mod soft_hyphen_render_tests;
+
+#[cfg(test)]
 mod font_program_tests;
 
 #[cfg(test)]

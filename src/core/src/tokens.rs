@@ -109,6 +109,10 @@ pub struct FontWidths {
 /// The end of the code points `FontWidths` keeps in a table: Basic Latin through Latin Extended-B.
 const LATIN_END: u32 = 0x250;
 
+/// The soft hyphen (U+00AD), a mark inside a word where a line may break. A line that breaks there ends in a hyphen,
+/// the font's `-`; anywhere else the mark is not drawn and takes no width.
+pub const SOFT_HYPHEN: char = '\u{AD}';
+
 impl FontWidths {
     pub fn new(default: u16, ascii: Vec<u16>, advances: HashMap<char, u16>) -> Self {
         let mut widths = FontWidths { default, ascii, advances: advances.into(), latin: Rc::from([]) };
@@ -116,7 +120,8 @@ impl FontWidths {
         widths
     }
 
-    /// Advance of `c` in 1/1000 em: its own, else the `ascii` entry, else `default`.
+    /// Advance of `c` in 1/1000 em: its own, else the `ascii` entry, else `default`. A soft hyphen has none: it is
+    /// drawn only where a line breaks at it, and the hyphen drawn there is measured as `-`.
     pub fn advance(&self, c: char) -> u16 {
         match self.latin.get(c as usize) {
             Some(&advance) => advance,
@@ -124,8 +129,17 @@ impl FontWidths {
         }
     }
 
+    /// Whether the font has a glyph for `c`. A table that was not read from a font, but supplied as JSON, doesn't
+    /// say which characters the font maps, and is taken to map every one.
+    pub fn maps(&self, c: char) -> bool {
+        self.advances.is_empty() || self.advances.contains_key(&c)
+    }
+
     /// `advance` without the table.
     fn lookup(&self, c: char) -> u16 {
+        if c == SOFT_HYPHEN {
+            return 0;
+        }
         if let Some(&advance) = self.advances.get(&c) {
             return advance;
         }
@@ -1208,5 +1222,24 @@ mod tests {
         assert_eq!(widths.advance('é'), 400);
         assert_eq!(widths.advance('Ж'), 400);
         assert_eq!(FontWidths::default().advance('A'), 0);
+    }
+
+    #[test]
+    fn a_soft_hyphen_has_no_advance_whether_the_font_maps_it_or_not() {
+        let mapped = FontWidths::new(300, Vec::new(), HashMap::from([(SOFT_HYPHEN, 330), ('-', 330)]));
+        let unmapped = FontWidths::new(300, Vec::new(), HashMap::from([('-', 330)]));
+        let given = FontWidths::new(400, (32..=126).map(|_| 500).collect(), HashMap::new());
+        for widths in [mapped, unmapped, given] {
+            assert_eq!(widths.advance(SOFT_HYPHEN), 0);
+            assert_eq!(widths.text_width("ab\u{AD}c", 10.0), widths.text_width("abc", 10.0));
+        }
+    }
+
+    #[test]
+    fn a_font_read_from_its_bytes_maps_what_it_lists_and_one_given_as_json_maps_everything() {
+        let read = FontWidths::new(300, Vec::new(), HashMap::from([('a', 500)]));
+        assert!(read.maps('a'));
+        assert!(!read.maps('-'));
+        assert!(FontWidths::new(400, Vec::new(), HashMap::new()).maps('-'));
     }
 }

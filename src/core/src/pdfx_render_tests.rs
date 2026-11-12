@@ -87,7 +87,7 @@ fn boxes(pdf: &str, name: &str) -> Vec<[f32; 4]> {
 }
 
 /// The decoded data of every Flate stream of `pdf`, read by the `/Length` of its dictionary.
-fn flate_streams(pdf: &[u8]) -> Vec<Vec<u8>> {
+pub(crate) fn flate_streams(pdf: &[u8]) -> Vec<Vec<u8>> {
     let mut out = Vec::new();
     let mut from = 0;
     while let Some(found) = pdf[from..].windows(7).position(|w| w == b"stream\n") {

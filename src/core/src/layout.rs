@@ -47,7 +47,7 @@ use rests::{Reached, Rest, Waiting};
 use bulk::{Bulk, Take};
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
 use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderCanvasClip, RenderCanvasLayer, RenderField, RenderFootnoteMark, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind, Tag, TagKind};
-use crate::tokens::{parse_number, split_unit, FontWidths, LENGTH_UNITS};
+use crate::tokens::{parse_number, split_unit, FontWidths, LENGTH_UNITS, SOFT_HYPHEN};
 use crate::canvas;
 use crate::page_numbers::{self, PageTokens, SectionNumbers};
 use crate::references;
@@ -2767,7 +2767,7 @@ fn split_text(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Spl
 enum Join {
     /// It is a word or a run of the text.
     No,
-    /// It is the rest of a word that was cut at the edge of the line.
+    /// It is the rest of a word that was broken to fit a line: at a soft hyphen, or cut at the edge of the line.
     Chars,
     /// It is the next word of a styled run that was broken at a space, so a space of the run's font leads it.
     Space,
@@ -2804,6 +2804,21 @@ impl SplitAtom {
     fn metrics<'a>(&'a self, parent: Metrics<'a>) -> Metrics<'a> {
         self.font_override.as_deref().map_or(parent, Metrics::of)
     }
+
+    /// `Atom::has_soft_breaks`, for an atom of a text that is split across pages.
+    fn has_soft_breaks(&self, parent: Metrics) -> bool {
+        self.footnote.is_none() && self.background.is_none() && self.text.contains(SOFT_HYPHEN)
+            && self.metrics(parent).has_hyphen()
+    }
+
+    /// `Atom::hyphen_after`, for an atom of a text that is split across pages.
+    fn hyphen_after(&self, parent: Metrics, font_size: f32) -> f32 {
+        if self.text.ends_with(SOFT_HYPHEN) && self.has_soft_breaks(parent) {
+            self.metrics(parent).hyphen_width(font_size)
+        } else {
+            0.0
+        }
+    }
 }
 
 /// A footnote's number is set at this share of the text's size, and its baseline raised by this share of it.
@@ -2833,14 +2848,16 @@ fn space_separated(text: &str) -> impl Iterator<Item = Range<usize>> + '_ {
 
 /// The pieces of a word, or of a run of words, that is wider than a whole line: its words, and each word that is
 /// still wider cut after the last character that fits, so nothing runs past the box. Each piece is where it is in
-/// `text`, with whether a space leads it.
-fn pieces_of_wide(metrics: Metrics, text: &str, font_size: f32, wrap_w: f32) -> Vec<(Range<usize>, bool)> {
+/// `text`, with whether a space leads it. When `soft`, a word with a soft hyphen is not cut here: the lines break it
+/// at its soft hyphens first, and cut it only where they can't (`word_break`).
+fn pieces_of_wide(metrics: Metrics, text: &str, font_size: f32, wrap_w: f32, soft: bool) -> Vec<(Range<usize>, bool)> {
     let fits = |s: &str| metrics.text_width(s, font_size) <= wrap_w + 0.01;
     let mut pieces = Vec::new();
     for (i, word) in space_separated(text).filter(|word| !word.is_empty()).enumerate() {
         let mut rest = word;
         let mut first = true;
-        while !fits(&text[rest.clone()]) {
+        let cut = !(soft && text[rest.clone()].contains(SOFT_HYPHEN));
+        while cut && !fits(&text[rest.clone()]) {
             // The longest start that fits, and at least one character, so the word always gets shorter.
             let mut end = rest.start;
             for (at, ch) in text[rest.clone()].char_indices() {
@@ -2857,7 +2874,70 @@ fn pieces_of_wide(metrics: Metrics, text: &str, font_size: f32, wrap_w: f32) -> 
     pieces
 }
 
-/// Break the words and the styled runs of `atoms` that are wider than a whole line into pieces that fit.
+/// Where a line may break inside `text`, a word or a run without spaces that doesn't fit the `room` left on its line:
+/// after its last soft hyphen that fits with the hyphen drawn after it, or, on a line of its own (`own_line`), after
+/// its last character that fits when no soft hyphen does, so that nothing runs past the box. None when the text goes
+/// to the next line whole, or can't be broken.
+fn word_break(metrics: Metrics, text: &str, font_size: f32, room: f32, own_line: bool) -> Option<usize> {
+    soft_break(metrics, text, font_size, room).or_else(|| own_line.then(|| char_break(metrics, text, font_size, room))?)
+}
+
+/// The end of the longest start of `text` that ends at a soft hyphen, the mark included, and fits `room` with the
+/// hyphen drawn after it. A mark that starts or ends the text has nothing to break from, and is passed over.
+fn soft_break(metrics: Metrics, text: &str, font_size: f32, room: f32) -> Option<usize> {
+    let hyphen = metrics.hyphen_width(font_size);
+    text.match_indices(SOFT_HYPHEN)
+        .map(|(at, mark)| (at, at + mark.len()))
+        .filter(|&(at, end)| at > 0 && end < text.len())
+        .take_while(|&(_, end)| metrics.text_width(&text[..end], font_size) + hyphen <= room + 0.01)
+        .last()
+        .map(|(_, end)| end)
+}
+
+/// The end of the longest start of `text` that fits `room`, and at least its first character that is drawn, without
+/// the soft hyphens it would end in: no hyphen is drawn where a word is cut. None when that is the whole text.
+fn char_break(metrics: Metrics, text: &str, font_size: f32, room: f32) -> Option<usize> {
+    let mut end = 0;
+    let mut drawn = false;
+    for (at, ch) in text.char_indices() {
+        let next = at + ch.len_utf8();
+        if drawn && metrics.text_width(&text[..next], font_size) > room + 0.01 { break; }
+        end = next;
+        drawn |= ch != SOFT_HYPHEN;
+    }
+    let end = text[..end].trim_end_matches(SOFT_HYPHEN).len();
+    (end > 0 && end < text.len()).then_some(end)
+}
+
+/// The text of an atom as it is drawn: without its soft hyphens, but for the one it ends in when it ends its line
+/// with the hyphen drawn there (`hyphen`).
+fn drawn_text(text: &str, hyphen: bool) -> Cow<'_, str> {
+    if !text.contains(SOFT_HYPHEN) {
+        return Cow::Borrowed(text);
+    }
+    let mut drawn: String = text.chars().filter(|&c| c != SOFT_HYPHEN).collect();
+    if hyphen && text.ends_with(SOFT_HYPHEN) {
+        drawn.push(SOFT_HYPHEN);
+    }
+    Cow::Owned(drawn)
+}
+
+/// The least width a word takes on a line: its widest piece between soft hyphens, with the hyphen drawn after one
+/// that a line breaks at. The whole word when it has none, or its font has no hyphen.
+fn word_min_w(metrics: Metrics, word: &str, font_size: f32) -> f32 {
+    if !word.contains(SOFT_HYPHEN) || !metrics.has_hyphen() {
+        return metrics.text_width(word, font_size);
+    }
+    let hyphen = metrics.hyphen_width(font_size);
+    let pieces = word.split(SOFT_HYPHEN).count();
+    word.split(SOFT_HYPHEN)
+        .enumerate()
+        .map(|(i, piece)| metrics.text_width(piece, font_size) + if i + 1 < pieces { hyphen } else { 0.0 })
+        .fold(0.0, f32::max)
+}
+
+/// Break the words and the styled runs of `atoms` that are wider than a whole line into pieces that fit. A word with a
+/// soft hyphen stays whole: the lines break it there (`word_break`).
 fn break_wide_atoms<'a>(atoms: Vec<Atom<'a>>, font_size: f32, wrap_w: f32) -> Vec<Atom<'a>> {
     let is_wide = |atom: &Atom| !atom.sup && atom.width > wrap_w + 0.01;
     if !atoms.iter().any(is_wide) {
@@ -2865,12 +2945,13 @@ fn break_wide_atoms<'a>(atoms: Vec<Atom<'a>>, font_size: f32, wrap_w: f32) -> Ve
     }
     let mut out = Vec::with_capacity(atoms.len());
     for atom in atoms {
-        if !is_wide(&atom) {
+        let soft = atom.has_soft_breaks();
+        if !is_wide(&atom) || (soft && !atom.text.contains(' ')) {
             out.push(atom);
             continue;
         }
         let metrics = Metrics::of(atom.font);
-        for (i, (range, space)) in pieces_of_wide(metrics, &atom.text, font_size, wrap_w).into_iter().enumerate() {
+        for (i, (range, space)) in pieces_of_wide(metrics, &atom.text, font_size, wrap_w, soft).into_iter().enumerate() {
             let text = atom.piece(range);
             let join = if i == 0 { Join::No } else if space { Join::Space } else { Join::Chars };
             let width = metrics.text_width(&text, font_size);
@@ -2885,11 +2966,13 @@ fn break_wide_split_atoms(atoms: Vec<SplitAtom>, parent: Metrics, font_size: f32
     let mut out = Vec::with_capacity(atoms.len());
     for atom in atoms {
         let metrics = atom.metrics(parent);
-        if atom.footnote.is_some() || metrics.text_width(&atom.text, font_size) + atom.room <= wrap_w + 0.01 {
+        let soft = atom.has_soft_breaks(parent);
+        if atom.footnote.is_some() || metrics.text_width(&atom.text, font_size) + atom.room <= wrap_w + 0.01
+            || (soft && !atom.text.contains(' ')) {
             out.push(atom);
             continue;
         }
-        for (i, (range, space)) in pieces_of_wide(metrics, &atom.text, font_size, wrap_w).into_iter().enumerate() {
+        for (i, (range, space)) in pieces_of_wide(metrics, &atom.text, font_size, wrap_w, soft).into_iter().enumerate() {
             let mut piece = atom.clone();
             piece.text = atom.text[range].to_string();
             piece.room = 0.0;
@@ -2980,6 +3063,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
 
     // The same pieces as the lines of the text itself are made of.
     let atoms = break_wide_split_atoms(atoms, parent_metrics, font_size, avail_w);
+    let any_soft = node.text_runs.iter().any(|run| run.text.contains(SOFT_HYPHEN));
 
     // Greedy wrap.
     let mut lines: Vec<Vec<SplitAtom>> = Vec::new();
@@ -2999,7 +3083,13 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
                 Join::No    => if atom.leading_space { space_w } else { 0.0 },
             }
         };
-        if cur_line.is_empty() || cur_w + gap + aw <= avail_w + 0.01 {
+        // The same as the lines of the text itself make: a word with a soft hyphen breaks there, and is cut only on
+        // a line of its own; a styled run breaks inside only where it would at its spaces, or when it is wider than
+        // a line.
+        let soft = any_soft && atom.has_soft_breaks(parent_metrics);
+        let hyphen = if soft { atom.hyphen_after(parent_metrics, font_size) } else { 0.0 };
+        let may_break = soft && (!atom.is_span || node.flow_runs || atom.join != Join::No || cur_line.is_empty());
+        if cur_w + gap + aw + hyphen <= avail_w + 0.01 || (cur_line.is_empty() && !soft) {
             cur_w += gap + aw;
             cur_line.push(atom);
         } else if node.flow_runs && atom.is_span && atom.footnote.is_none() && atom.text.contains(' ') {
@@ -3015,6 +3105,26 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
                 atoms.push_front(piece);
             }
             continue;
+        } else if let Some(end) = may_break
+            .then(|| word_break(metrics, &atom.text, font_size, avail_w - cur_w - gap, cur_line.is_empty()))
+            .flatten()
+        {
+            let mut head = atom.clone();
+            head.text.truncate(end);
+            head.room = 0.0;
+            cur_line.push(head);
+            lines.push(std::mem::take(&mut cur_line));
+            cur_w = 0.0;
+            let mut rest = atom;
+            rest.text.drain(..end);
+            rest.room = 0.0;
+            rest.leading_space = false;
+            rest.join = Join::Chars;
+            atoms.push_front(rest);
+        } else if cur_line.is_empty() {
+            // Nothing breaks it: one character wider than the line runs past it.
+            cur_w += aw;
+            cur_line.push(atom);
         } else {
             // An atom with no space before it stays with the ones it is glued to, which go down to the next line
             // with it, as the lines of the text itself have it.
@@ -3028,7 +3138,7 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
                 Vec::new()
             };
             lines.push(std::mem::take(&mut cur_line));
-            cur_w = aw;
+            cur_w = if soft { 0.0 } else { aw };
             for prev in carried {
                 cur_w += word_width(prev.metrics(parent_metrics), &prev.text, font_size, prev.footnote.is_some()) + prev.room;
                 cur_line.push(prev);
@@ -3039,7 +3149,12 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
             // atoms_to_runs to silently merge this atom with the previous plain
             // run without a space when reconstructing split-fragment TextRuns
             // (e.g. "tokens," + "this" → "tokens,this").
-            cur_line.push(atom);
+            if soft {
+                // It may break at a soft hyphen on the next line, or have to be cut there.
+                atoms.push_front(atom);
+            } else {
+                cur_line.push(atom);
+            }
         }
     }
     if !cur_line.is_empty() { lines.push(cur_line); }
@@ -4740,7 +4855,8 @@ fn afm_table(font: &str) -> Option<&'static [u16; 224]> {
 
 /// How far a character advances in the font of `table`, in thousandths of the size: the code of Windows-1252 it is
 /// drawn with, else a comparison sign's own width, else the width of the character it is drawn as. The width of `?`
-/// when none applies, since that is what `pdf::encode_latin1` draws then.
+/// when none applies, since that is what `pdf::encode_latin1` draws then. A soft hyphen advances by nothing: it is
+/// drawn only where a line breaks at it, and the hyphen there is measured as `-` (`Metrics::hyphen_width`).
 fn table_char_advance(table: &[u16; 224], c: char) -> u16 {
     if c.is_ascii() && c >= ' ' {
         return table[c as usize - 32];
@@ -4752,6 +4868,9 @@ fn table_char_advance(table: &[u16; 224], c: char) -> u16 {
 #[cold]
 #[inline(never)]
 fn table_char_fallback(table: &[u16; 224], c: char) -> u16 {
+    if c == SOFT_HYPHEN {
+        return 0;
+    }
     let in_table = |c: char| crate::pdf::win1252_byte(c)
         .and_then(|code| usize::from(code).checked_sub(32))
         .map(|index| table[index]);
@@ -4789,10 +4908,10 @@ impl<'a> Metrics<'a> {
         afm_table(font).map_or_else(|| Metrics::of("Helvetica"), Metrics::Afm)
     }
 
-    /// The advance width of `text` at `size`, in pt.
+    /// The advance width of `text` at `size`, in pt. A soft hyphen in it takes none.
     fn text_width(self, text: &str, size: f32) -> f32 {
         match self {
-            Metrics::Courier => text.chars().count() as f32 * size * 0.6,
+            Metrics::Courier => text.chars().filter(|&c| c != SOFT_HYPHEN).count() as f32 * size * 0.6,
             Metrics::Embedded(font) => FONT_WIDTHS
                 .with(|fw| fw.borrow().get(font).map(|widths| widths.text_width(text, size)))
                 // The tables were set again since the font was found: measure it as it is now.
@@ -4801,6 +4920,20 @@ impl<'a> Metrics<'a> {
                 .map(|c| table_char_advance(table, c) as f32 * size / 1000.0)
                 .sum(),
         }
+    }
+
+    /// Whether the font has a hyphen, `-`, to draw where a line breaks at a soft hyphen. A built-in font has one; a
+    /// font without one, such as a font of symbols, never breaks at its soft hyphens.
+    fn has_hyphen(self) -> bool {
+        match self {
+            Metrics::Courier | Metrics::Afm(_) => true,
+            Metrics::Embedded(font) => FONT_WIDTHS.with(|fw| fw.borrow().get(font).is_none_or(|widths| widths.maps('-'))),
+        }
+    }
+
+    /// The width of the hyphen a line that breaks at a soft hyphen ends in, at `size`, in pt.
+    fn hyphen_width(self, size: f32) -> f32 {
+        self.text_width("-", size)
     }
 }
 
@@ -4885,8 +5018,8 @@ fn measure_natural_w(node: &Node) -> f32 {
     }
 }
 
-/// The width of the longest word of a text, or the width of the widest run that stays whole: what the text can be
-/// narrowed to before something runs past it.
+/// The width of the longest word of a text, or of its widest piece between soft hyphens with the hyphen, or the width
+/// of the widest run that stays whole: what the text can be narrowed to before something runs past it.
 fn text_min_w(node: &Node) -> f32 {
     let size = node.font_size;
     let mut widest = 0.0_f32;
@@ -4902,8 +5035,11 @@ fn text_min_w(node: &Node) -> f32 {
         if is_span && !node.flow_runs && node.pre_tab == 0 {
             widest = widest.max(metrics.text_width(&run.text, size) + room_after(run, metrics, size));
         } else {
+            // A word breaks at its soft hyphens, but not in a code or a `<code-span>`.
+            let soft = node.pre_tab == 0 && run.background.is_none();
             for word in run.text.split_whitespace() {
-                widest = widest.max(metrics.text_width(word, size));
+                let width = if soft { word_min_w(metrics, word, size) } else { metrics.text_width(word, size) };
+                widest = widest.max(width);
             }
         }
     }
@@ -4991,6 +5127,22 @@ impl<'a> Atom<'a> {
         self.span.is_some_and(|run| run.strike)
     }
 
+    /// Whether a line may break at the soft hyphens of the atom: those of a word or of a styled run in a font with a
+    /// hyphen, but not of a footnote's number, nor of a `<code-span>`, which is not broken inside.
+    fn has_soft_breaks(&self) -> bool {
+        !self.sup && self.background().is_none() && self.text.contains(SOFT_HYPHEN) && Metrics::of(self.font).has_hyphen()
+    }
+
+    /// The width of the hyphen the atom draws after it when it ends its line, broken at a soft hyphen: that of its font
+    /// when its text ends in a soft hyphen it may break at, else 0.
+    fn hyphen_after(&self, font_size: f32) -> f32 {
+        if self.text.ends_with(SOFT_HYPHEN) && self.has_soft_breaks() {
+            Metrics::of(self.font).hyphen_width(font_size)
+        } else {
+            0.0
+        }
+    }
+
     /// Whether it is drawn as text alone, with nothing under, over or around it, so it can share one text with the
     /// atoms beside it in its font and color.
     fn is_plain(&self) -> bool {
@@ -5015,7 +5167,8 @@ struct TextFit {
 const ELLIPSIS: &str = "...";
 
 /// How far a gap of a justified line may be widened, in spaces. A line that would need more stays
-/// left-aligned: two long words are not spread across the width, since there is no hyphenation to help.
+/// left-aligned: two long words are not spread across the width, since only the soft hyphens a text has written in
+/// it break a word, and nothing hyphenates it.
 const MAX_JUSTIFY_STRETCH: f32 = 2.0;
 
 /// The spaces inside a word or a styled run of a line. They are gaps of the line like the ones between atoms.
@@ -5044,8 +5197,13 @@ fn is_one_plain_group(line: &TextLine) -> bool {
 }
 
 /// Shorten `line` until it and the dots after it fit in `limit`, and end it in them. The last characters go
-/// first, and a run with none left goes too.
+/// first, and a run with none left goes too. A line broken at a soft hyphen ends in the dots instead of the hyphen.
 fn end_in_ellipsis(line: &mut TextLine, limit: f32, font_size: f32) {
+    if let Some((last, _)) = line.last_mut().filter(|(last, _)| last.text.ends_with(SOFT_HYPHEN)) {
+        let kept = last.text.trim_end_matches(SOFT_HYPHEN).len();
+        last.text.to_mut().truncate(kept);
+        last.measure(font_size);
+    }
     while let Some((last, _)) = line.last() {
         let dots = text_width(last.font, ELLIPSIS, font_size);
         if text_line_width(line) + dots <= limit + 0.01 {
@@ -5140,6 +5298,9 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     let mut cur_line: TextLine   = Vec::new();
     let mut cur_line_w    = 0.0_f32;
 
+    // Whether a soft hyphen is anywhere in the text, so that a text without one, as most are, looks for none in its words.
+    let any_soft = node.text_runs.iter().any(|run| run.text.contains(SOFT_HYPHEN));
+
     let mut atoms: std::collections::VecDeque<Atom> = atoms.into();
     while let Some(atom) = atoms.pop_front() {
         let aw  = atom.width;
@@ -5152,7 +5313,13 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 Join::No    => if atom.space_before { space_w } else { 0.0 },
             }
         };
-        if cur_line.is_empty() || cur_line_w + gap + aw <= fit.wrap_w + 0.01 {
+        // A word with a soft hyphen breaks there, and is cut only on a line of its own; a styled run breaks inside
+        // only where it would at its spaces, or when it is wider than a line. One that ends in a soft hyphen keeps
+        // room for the hyphen drawn there when its line ends after it.
+        let soft = any_soft && atom.has_soft_breaks();
+        let hyphen = if soft { atom.hyphen_after(font_size) } else { 0.0 };
+        let may_break = soft && (atom.span.is_none() || node.flow_runs || atom.join != Join::No || cur_line.is_empty());
+        if cur_line_w + gap + aw + hyphen <= fit.wrap_w + 0.01 || (cur_line.is_empty() && !soft) {
             cur_line_w += gap + aw;
             cur_line.push((atom, gap));
         } else if node.flow_runs && !atom.sup && atom.text.contains(' ') {
@@ -5166,6 +5333,23 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 let (join, space_before) = if i == 0 { (atom.join, atom.space_before) } else { (Join::Space, false) };
                 atoms.push_front(Atom { text, join, width, space_before, ..atom.clone() });
             }
+        } else if let Some(end) = may_break
+            .then(|| word_break(Metrics::of(atom.font), &atom.text, font_size, fit.wrap_w - cur_line_w - gap, cur_line.is_empty()))
+            .flatten()
+        {
+            // The line ends in the start of the word, and the rest of it starts the next one.
+            let metrics = Metrics::of(atom.font);
+            let head = atom.piece(0..end);
+            let rest = atom.piece(end..atom.text.len());
+            let (head_w, rest_w) = (metrics.text_width(&head, font_size), metrics.text_width(&rest, font_size));
+            cur_line.push((Atom { text: head, width: head_w, ..atom.clone() }, gap));
+            lines.push(std::mem::take(&mut cur_line));
+            cur_line_w = 0.0;
+            atoms.push_front(Atom { text: rest, join: Join::Chars, space_before: false, width: rest_w, ..atom });
+        } else if cur_line.is_empty() {
+            // Nothing breaks it: one character wider than the line runs past it.
+            cur_line_w += aw;
+            cur_line.push((atom, 0.0));
         } else {
             // An atom with no space before it stays with the ones it is glued to, which go down to the next
             // line with it: the number of a footnote, or a bracket and the run of code after it.
@@ -5179,15 +5363,29 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 Vec::new()
             };
             lines.push(std::mem::take(&mut cur_line));
-            cur_line_w = aw;
+            cur_line_w = if soft { 0.0 } else { aw };
             for (prev, _) in carried {
                 cur_line_w += prev.width;
                 cur_line.push((prev, 0.0));
             }
-            cur_line.push((atom, 0.0));
+            if soft {
+                // It may break at a soft hyphen on the next line, or have to be cut there.
+                atoms.push_front(atom);
+            } else {
+                cur_line.push((atom, 0.0));
+            }
         }
     }
     if !cur_line.is_empty() { lines.push(cur_line); }
+
+    // A line that ends in a word broken at a soft hyphen draws the hyphen after it.
+    if any_soft {
+        for line in &mut lines {
+            if let Some((last, _)) = line.last_mut() {
+                last.width += last.hyphen_after(font_size);
+            }
+        }
+    }
 
     // Only whole lines are kept. A line that is still too wide, because it is cut short or is a word longer
     // than the box, ends in dots when the text asks for them.
@@ -5252,11 +5450,17 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
         let mut grp_clr  = "";
         let mut grp_text = String::new();
 
-        for (atom, gap) in line {
+        for (ai, (atom, gap)) in line.iter().enumerate() {
             cur_x += gap;
             if *gap > 0.0 { cur_x += word_gap; }
             let inner_gap = word_gap * atom_spaces(atom) as f32;
             let aw = atom.width + inner_gap;
+            // Its soft hyphens are not drawn, but for the one that ends the line, which is drawn as the hyphen there.
+            let text = if any_soft {
+                drawn_text(&atom.text, ai + 1 == line.len() && atom.hyphen_after(font_size) > 0.0)
+            } else {
+                Cow::Borrowed(&*atom.text)
+            };
 
             if atom.is_plain() {
                 // If font or color changed, flush the current group first.
@@ -5272,10 +5476,10 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                     grp_x    = cur_x;
                     grp_font = atom.font;
                     grp_clr  = atom.color;
-                    grp_text = atom.text.to_string();
+                    grp_text = text.into_owned();
                 } else {
                     grp_text.push(' ');
-                    grp_text.push_str(&atom.text);
+                    grp_text.push_str(&text);
                 }
             } else {
                 // Flush any pending plain group before emitting a decorated atom.
@@ -5305,7 +5509,7 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 }
                 seg.push(RenderNode::Text(RenderText {
                     x: cur_x, y: atom_y,
-                    content: atom.text.to_string(), font: atom.font.to_string(),
+                    content: text.into_owned(), font: atom.font.to_string(),
                     size: atom_size, color: atom.color.to_string(),
                     // Decorated atoms (spans) always use their computed cur_x as a
                     // left-edge anchor; alignment has already been applied at the line level.
@@ -5410,6 +5614,8 @@ fn pre_cells(node: &Node) -> Vec<Vec<PreCell>> {
                     let fill = tab - line.len() % tab;
                     line.extend(std::iter::repeat_n((' ', ri, metrics.text_width(" ", node.font_size)), fill));
                 }
+                // A code is drawn as it is written, and never breaks at a soft hyphen: the mark is left out.
+                SOFT_HYPHEN => {}
                 c => line.push((c, ri, metrics.text_width(c.encode_utf8(&mut [0; 4]), node.font_size))),
             }
         }
@@ -9439,5 +9645,163 @@ abcdef</code><text>after</text></row>"#,
             let err = check_cols(&format!("1fr {bad}")).unwrap_err();
             assert!(err.contains(&format!("'{bad}'")) && err.contains("a length in pt, mm or in"), "{bad}: {err}");
         }
+    }
+
+    // ── Soft hyphens ──────────────────────────────────────────────────────────
+
+    /// The width of `text` in Helvetica at the document's size, with a soft hyphen that ends a line drawn as `-`.
+    fn helvetica(text: &str) -> f32 {
+        text_width("Helvetica", &text.replace(SOFT_HYPHEN, "-"), 11.0)
+    }
+
+    /// The texts of the first page of a column `width` wide holding `body`, each where it is.
+    fn texts_in(width: f32, body: &str) -> Vec<(f64, f64, String)> {
+        placed_texts(&engine_render(&minimal(&format!(r#"<column width="{width}pt">{body}</column>"#)))["pages"][0])
+    }
+
+    /// The texts of `texts_in`, one string for each line.
+    fn lines_in(width: f32, body: &str) -> Vec<String> {
+        let mut lines: Vec<(f64, String)> = Vec::new();
+        for (_, y, content) in texts_in(width, body) {
+            match lines.last_mut() {
+                Some((line_y, line)) if (*line_y - y).abs() < 0.01 => line.push_str(&content),
+                _ => lines.push((y, content)),
+            }
+        }
+        lines.into_iter().map(|(_, line)| line).collect()
+    }
+
+    #[test]
+    fn a_word_that_does_not_fit_breaks_at_its_last_soft_hyphen_that_fits_and_its_line_ends_in_the_mark() {
+        let width = helvetica("Die Donaudampfschiff");
+        let lines = lines_in(width, "<text>Die Donau&#xAD;dampf&#xAD;schiff&#xAD;fahrt</text>");
+        assert_eq!(lines, ["Die Donaudampf\u{AD}", "schifffahrt"]);
+    }
+
+    #[test]
+    fn a_soft_hyphen_where_no_line_breaks_is_not_drawn_and_takes_no_width() {
+        let span = r##"<span color="#c0392b">x</span>"##;
+        let marked = texts_in(300.0, &format!("<text>Donau&#xAD;dampf {span}</text>"));
+        let plain = texts_in(300.0, &format!("<text>Donaudampf {span}</text>"));
+        assert_eq!(marked, plain);
+    }
+
+    #[test]
+    fn a_word_wider_than_a_line_breaks_at_its_soft_hyphens_and_is_cut_only_where_they_leave_a_piece_wider() {
+        let width = helvetica("Donaudampf-").max(helvetica("schifffahrt"));
+        assert_eq!(lines_in(width, "<text>Donau&#xAD;dampf&#xAD;schiff&#xAD;fahrt</text>"), ["Donaudampf\u{AD}", "schifffahrt"]);
+        // The first piece is wider than the line: it is cut at its edge, with no hyphen, and the rest breaks at the mark.
+        let width = helvetica("Donaudampf");
+        let lines = lines_in(width, "<text>Donaudampfschifffahrts&#xAD;gesellschaft</text>");
+        assert_eq!(lines, ["Donaudampf", "schifffahrts\u{AD}", "gesellschaft"]);
+    }
+
+    #[test]
+    fn a_styled_run_of_a_text_moves_to_the_next_line_whole_rather_than_break_at_a_soft_hyphen() {
+        // "Die Donau-" fits, "Die Donaudampf" doesn't, and the run fits a line of its own.
+        let width = helvetica("Donaudampf") + 1.0;
+        let texts = texts_in(width, r##"<text>Die <span color="#c0392b">Donau&#xAD;dampf</span></text>"##);
+        let contents: Vec<&str> = texts.iter().map(|t| t.2.as_str()).collect();
+        assert_eq!(contents, ["Die", "Donaudampf"]);
+        assert!(texts[1].1 > texts[0].1, "the run is on the next line: {texts:?}");
+        // Wider than a line, it breaks at its soft hyphen, and the hyphen is drawn in its style.
+        let width = helvetica("Donau-") + 1.0;
+        let texts = texts_in(width, r##"<text><span color="#c0392b">Donau&#xAD;dampf</span></text>"##);
+        let contents: Vec<&str> = texts.iter().map(|t| t.2.as_str()).collect();
+        assert_eq!(contents, ["Donau\u{AD}", "dampf"]);
+    }
+
+    #[test]
+    fn a_styled_run_of_markdown_breaks_at_its_soft_hyphens_as_it_does_at_its_spaces() {
+        // The width of a page of Markdown, from its margins.
+        let margins = |width: f32| format!("54pt {:.2}pt", (595.28 - width) / 2.0);
+        let width = helvetica("Donaudampf") + 1.0;
+        let xml = format!(
+            r#"<lpdf version="1"><document size="a4"><section><markdown margin="{}"><markdown-content><![CDATA[Die *Donau&shy;dampf*]]></markdown-content></markdown></section></document></lpdf>"#,
+            margins(width)
+        );
+        let texts = placed_texts(&engine_render(&xml)["pages"][0]);
+        let contents: Vec<&str> = texts.iter().map(|t| t.2.as_str()).collect();
+        assert_eq!(contents, ["Die", "Donau\u{AD}", "dampf"]);
+        assert_eq!(texts[0].1, texts[1].1, "the run starts on the line of the word before it: {texts:?}");
+    }
+
+    #[test]
+    fn a_code_and_a_code_span_never_break_at_a_soft_hyphen_and_draw_none() {
+        let width = helvetica("Donau-") + 1.0;
+        let texts = texts_in(width, "<code>Donau&#xAD;dampf</code><text>x <code-span>Donau&#xAD;dampf</code-span></text>");
+        assert!(texts.iter().all(|t| !t.2.contains(SOFT_HYPHEN)), "{texts:?}");
+        assert_eq!(texts.iter().map(|t| t.2.as_str()).collect::<String>().replace(' ', ""), "DonaudampfxDonaudampf");
+    }
+
+    #[test]
+    fn a_justified_line_broken_at_a_soft_hyphen_ends_at_the_right_edge_with_its_hyphen() {
+        // Little enough room to spare that the line is spread, not left as it is.
+        let width = helvetica("Die Donaudampf\u{AD}") + 3.0;
+        let page = &engine_render(&minimal(&format!(
+            r#"<column width="{width}pt"><text align="justify">Die Donau&#xAD;dampf&#xAD;schiff&#xAD;fahrt</text></column>"#
+        )))["pages"][0];
+        fn first_text(v: &serde_json::Value) -> Option<&serde_json::Value> {
+            if v["type"] == "text" { return Some(v); }
+            v["nodes"].as_array()?.iter().find_map(first_text)
+        }
+        let line = first_text(page).expect("a text");
+        let content = line["content"].as_str().unwrap();
+        assert_eq!(content, "Die Donaudampf\u{AD}");
+        let gap = line["word_gap"].as_f64().unwrap() as f32;
+        assert!(gap > 0.0, "the line is spread");
+        let right = line["x"].as_f64().unwrap() as f32 + helvetica(content) + gap;
+        assert!((right - (28.0 + width)).abs() < 0.05, "the line ends at {right}");
+    }
+
+    #[test]
+    fn a_line_cut_short_by_max_lines_ends_in_dots_and_not_in_the_hyphen() {
+        let width = helvetica("Die Donaudampfschiff");
+        let lines = lines_in(width, r#"<text max-lines="1" ellipsis="true">Die Donau&#xAD;dampf&#xAD;schiff&#xAD;fahrt</text>"#);
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].ends_with("...") && !lines[0].contains(SOFT_HYPHEN), "{lines:?}");
+    }
+
+    #[test]
+    fn a_text_split_across_pages_finds_the_lines_it_has_on_one_page() {
+        let width = helvetica("Donaudampfschiff");
+        let words = "Donau&#xAD;dampf&#xAD;schiff&#xAD;fahrts&#xAD;gesell&#xAD;schaft ".repeat(12);
+        let whole = lines_in(width, &format!("<text>{words}</text>"));
+        // A layout as wide as the column, with a frame that leaves room for four lines at the foot of the first page.
+        let frame = 785.89 - 13.2 * 4.0 - 13.2 / 2.0;
+        let xml = format!(
+            r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt {:.3}pt 28pt 28pt"><frame height="{frame:.2}pt" /><text>{words}</text></layout></section></document></lpdf>"#,
+            595.28 - 28.0 - width
+        );
+        let pages: Vec<Vec<String>> = engine_render(&xml)["pages"].as_array().unwrap().iter().map(find_text_content).collect();
+        assert!(pages.len() == 2 && pages[0].len() == 4, "four lines on the first page: {pages:?}");
+        assert!(pages[0][3].ends_with(SOFT_HYPHEN), "the first page ends in a word broken at a soft hyphen: {pages:?}");
+        assert_eq!(pages.concat(), whole);
+    }
+
+    #[test]
+    fn the_least_width_of_a_text_is_its_widest_piece_between_soft_hyphens_with_the_hyphen() {
+        let text = |words: &str| Node {
+            kind: NodeKind::Text,
+            text_runs: vec![TextRun {
+                text: words.to_string(), leading_space: false, font: None, color: None, href: None, underline: false,
+                strike: false, bold: false, background: None, footnote: None, reference: None,
+            }],
+            ..Node::layout_default()
+        };
+        let pieces = ["Donau-", "dampf-", "schiff-", "fahrt"].map(helvetica).into_iter().fold(0.0, f32::max);
+        assert_eq!(text_min_w(&text("Donau\u{AD}dampf\u{AD}schiff\u{AD}fahrt")), pieces);
+        assert_eq!(text_min_w(&text("Donaudampfschifffahrt")), helvetica("Donaudampfschifffahrt"));
+    }
+
+    #[test]
+    fn a_font_with_no_hyphen_never_breaks_at_its_soft_hyphens_and_draws_none() {
+        let advances: HashMap<char, u16> = ('a'..='z').chain('A'..='Z').map(|c| (c, 500)).collect();
+        set_font_widths(HashMap::from([("symbols".to_string(), FontWidths::new(500, Vec::new(), advances))]));
+        let xml = r#"<lpdf version="1"><assets><font name="symbols" src="symbols.ttf"/></assets><document size="a4" font="symbols"><section><layout margin="28pt"><column width="60pt"><text>ab cd&#xAD;efgh&#xAD;ij</text></column></layout></section></document></lpdf>"#;
+        let lines = find_text_content(&engine_render(xml)["pages"][0]);
+        set_font_widths(HashMap::new());
+        // 60pt holds ten letters at 11pt: the word goes to its own line whole, with no mark drawn.
+        assert_eq!(lines, ["ab", "cdefghij"]);
     }
 }
