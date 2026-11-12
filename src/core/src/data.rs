@@ -624,6 +624,7 @@ mod tests {
             ellipsis: false,
             pre_tab: 0,
             flow_runs: false,
+            ends_in_hyphen: false,
             capture: None,
             url: None,
             image_name: None,

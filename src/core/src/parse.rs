@@ -873,6 +873,9 @@ pub struct Node {
     /// run of any length. A word or a run wider than a whole line is broken at the last character that fits in every
     /// text, so nothing runs past the box.
     pub flow_runs: bool,
+    /// Whether the text ends in a word broken at a soft hyphen: it is the part on one page of a text split across
+    /// pages there, and its last line ends in the hyphen. A soft hyphen that ends any other text is not drawn.
+    pub ends_in_hyphen: bool,
     /// What the text records or shows for a running header, boxed: few texts have one.
     pub capture: Option<Box<Capture>>,
     // link
@@ -1272,7 +1275,7 @@ impl Node {
             font: "Helvetica".to_string(), font_size: 11.0, text_color: None,
             text_align: TextAlign::Left, widows: DEFAULT_WIDOWS, orphans: DEFAULT_ORPHANS,
             line_height: DEFAULT_LINE_HEIGHT, max_lines: None, ellipsis: false, pre_tab: 0,
-            flow_runs: false, capture: None,
+            flow_runs: false, ends_in_hyphen: false, capture: None,
             url: None, image_name: None,
             img_height_constraint: None, img_aspect: None, detail: None, barcode_type: None, barcode_data: None,
             barcode_ec: BarcodeEcLevel::M, barcode_hrt: false, barcode_color: None,
@@ -1292,7 +1295,8 @@ impl Node {
             kind, gap, padding, background, border, radius, opacity, shadow, height_mode, width_constraint,
             width_fill, page_scope, paginate, keep, role, tag_id, ocg, debug, align, justify, cols, col_width,
             direction, color, thickness, text_runs, font, font_size, text_color, text_align, widows, orphans,
-            line_height, max_lines, ellipsis, pre_tab, flow_runs, capture, url, image_name, img_height_constraint,
+            line_height, max_lines, ellipsis, pre_tab, flow_runs, ends_in_hyphen, capture, url, image_name,
+            img_height_constraint,
             img_aspect, detail, barcode_type, barcode_data, barcode_ec, barcode_hrt, barcode_color, barcode_bg,
             table_cols, table_style, col_span, row_span, field_kind, field_name, field_value, field_label,
             field_options, field_required, field_readonly, field_checked, field_max_len, field_group,
@@ -1307,7 +1311,8 @@ impl Node {
             direction: direction.clone(), color: color.clone(), thickness: *thickness, text_runs: text_runs.clone(),
             font: font.clone(), font_size: *font_size, text_color: text_color.clone(), text_align: text_align.clone(),
             widows: *widows, orphans: *orphans, line_height: *line_height, max_lines: *max_lines,
-            ellipsis: *ellipsis, pre_tab: *pre_tab, flow_runs: *flow_runs, capture: capture.clone(), url: url.clone(),
+            ellipsis: *ellipsis, pre_tab: *pre_tab, flow_runs: *flow_runs, ends_in_hyphen: *ends_in_hyphen,
+            capture: capture.clone(), url: url.clone(),
             image_name: image_name.clone(), img_height_constraint: *img_height_constraint, img_aspect: *img_aspect,
             detail: detail.clone(), barcode_type: barcode_type.clone(), barcode_data: barcode_data.clone(),
             barcode_ec: barcode_ec.clone(), barcode_hrt: *barcode_hrt, barcode_color: barcode_color.clone(),
@@ -1461,6 +1466,7 @@ fn resolve_node(
         ellipsis:              n.ellipsis,
         pre_tab:               n.pre_tab,
         flow_runs:             false,
+        ends_in_hyphen:        false,
         capture:               n.capture,
         url:                   n.url,
         image_name:            n.image_name,

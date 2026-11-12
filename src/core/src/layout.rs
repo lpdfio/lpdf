@@ -2749,7 +2749,11 @@ fn split_text(node: &Node, avail_w: f32, target_h: f32, full_page_h: f32) -> Spl
             (atoms_to_runs(&first_atoms), atoms_to_runs(&rest_atoms))
         }
     };
-    let first = Node { text_runs: first_runs, max_lines: None, ellipsis: false, ..node.clone() };
+    // A page that ends in a word broken at a soft hyphen ends in the hyphen; the rest ends where the text did.
+    let ends_in_hyphen = pre.is_none()
+        && lines[split_at - 1].last().is_some_and(|atom| atom.text.ends_with(SOFT_HYPHEN))
+        && lines[split_at].first().is_some_and(|atom| atom.join == Join::Chars);
+    let first = Node { text_runs: first_runs, max_lines: None, ellipsis: false, ends_in_hyphen, ..node.clone() };
     // The text is captured on the page where it starts, whole: `captured` stays with the first part.
     let rest  = Node {
         text_runs: rest_runs,
@@ -3084,11 +3088,15 @@ fn wrap_text_split(node: &Node, avail_w: f32) -> Vec<Vec<SplitAtom>> {
             }
         };
         // The same as the lines of the text itself make: a word with a soft hyphen breaks there, and is cut only on
-        // a line of its own; a styled run breaks inside only where it would at its spaces, or when it is wider than
-        // a line.
+        // a line of its own; a styled run breaks inside only where it would at its spaces, when it goes on in the
+        // word before it, or when it is wider than a line. The last word of a part of a text that ends in a word
+        // broken at a soft hyphen keeps room for the hyphen.
         let soft = any_soft && atom.has_soft_breaks(parent_metrics);
-        let hyphen = if soft { atom.hyphen_after(parent_metrics, font_size) } else { 0.0 };
-        let may_break = soft && (!atom.is_span || node.flow_runs || atom.join != Join::No || cur_line.is_empty());
+        let last_of_part = node.ends_in_hyphen && atoms.is_empty();
+        let hyphen = if soft && last_of_part { atom.hyphen_after(parent_metrics, font_size) } else { 0.0 };
+        let glued = atom.join == Join::No && !atom.leading_space && !cur_line.is_empty();
+        let may_break = soft
+            && (!atom.is_span || node.flow_runs || atom.join != Join::No || cur_line.is_empty() || glued);
         if cur_w + gap + aw + hyphen <= avail_w + 0.01 || (cur_line.is_empty() && !soft) {
             cur_w += gap + aw;
             cur_line.push(atom);
@@ -5314,11 +5322,14 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
             }
         };
         // A word with a soft hyphen breaks there, and is cut only on a line of its own; a styled run breaks inside
-        // only where it would at its spaces, or when it is wider than a line. One that ends in a soft hyphen keeps
-        // room for the hyphen drawn there when its line ends after it.
+        // only where it would at its spaces, when it goes on in the word before it, or when it is wider than a line.
+        // The last word of a part of a text that ends in a word broken at a soft hyphen keeps room for the hyphen.
         let soft = any_soft && atom.has_soft_breaks();
-        let hyphen = if soft { atom.hyphen_after(font_size) } else { 0.0 };
-        let may_break = soft && (atom.span.is_none() || node.flow_runs || atom.join != Join::No || cur_line.is_empty());
+        let last_of_part = node.ends_in_hyphen && atoms.is_empty();
+        let hyphen = if soft && last_of_part { atom.hyphen_after(font_size) } else { 0.0 };
+        let glued = atom.join == Join::No && !atom.space_before && !cur_line.is_empty();
+        let may_break = soft
+            && (atom.span.is_none() || node.flow_runs || atom.join != Join::No || cur_line.is_empty() || glued);
         if cur_line_w + gap + aw + hyphen <= fit.wrap_w + 0.01 || (cur_line.is_empty() && !soft) {
             cur_line_w += gap + aw;
             cur_line.push((atom, gap));
@@ -5334,7 +5345,10 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
                 atoms.push_front(Atom { text, join, width, space_before, ..atom.clone() });
             }
         } else if let Some(end) = may_break
-            .then(|| word_break(Metrics::of(atom.font), &atom.text, font_size, fit.wrap_w - cur_line_w - gap, cur_line.is_empty()))
+            .then(|| {
+                let room = fit.wrap_w - cur_line_w - gap;
+                word_break(Metrics::of(atom.font), &atom.text, font_size, room, cur_line.is_empty())
+            })
             .flatten()
         {
             // The line ends in the start of the word, and the rest of it starts the next one.
@@ -5378,11 +5392,20 @@ fn layout_text_fit(node: &Node, x: f32, y: f32, avail_w: f32, fit: &TextFit) -> 
     }
     if !cur_line.is_empty() { lines.push(cur_line); }
 
-    // A line that ends in a word broken at a soft hyphen draws the hyphen after it.
+    // A line broken at a soft hyphen, the next line going on in its word, ends in the hyphen, and so does the last
+    // line of a part of a text split across pages there. A soft hyphen that ends a line anywhere else, before a
+    // space or at the end of the text, is no break, and is not drawn.
     if any_soft {
-        for line in &mut lines {
-            if let Some((last, _)) = line.last_mut() {
-                last.width += last.hyphen_after(font_size);
+        for i in 0..lines.len() {
+            let broken = lines.get(i + 1)
+                .map_or(node.ends_in_hyphen, |next| next.first().is_some_and(|(atom, _)| atom.join == Join::Chars));
+            if let Some((last, _)) = lines[i].last_mut() {
+                if broken {
+                    last.width += last.hyphen_after(font_size);
+                } else if last.text.ends_with(SOFT_HYPHEN) {
+                    let kept = last.text.trim_end_matches(SOFT_HYPHEN).len();
+                    last.text.to_mut().truncate(kept);
+                }
             }
         }
     }
@@ -9676,6 +9699,41 @@ abcdef</code><text>after</text></row>"#,
         let width = helvetica("Die Donaudampfschiff");
         let lines = lines_in(width, "<text>Die Donau&#xAD;dampf&#xAD;schiff&#xAD;fahrt</text>");
         assert_eq!(lines, ["Die Donaudampf\u{AD}", "schifffahrt"]);
+    }
+
+    #[test]
+    fn a_soft_hyphen_that_ends_a_word_is_no_break_and_is_not_drawn() {
+        // At the end of the text.
+        assert_eq!(lines_in(300.0, "<text>Donau&#xAD;</text>"), ["Donau"]);
+        // Before a space the line breaks at: the line ends at the space, with no hyphen.
+        let width = helvetica("Donau dampf") - 1.0;
+        assert_eq!(lines_in(width, "<text>Donau&#xAD; dampf</text>"), ["Donau", "dampf"]);
+        // And it keeps no room for a hyphen in the middle of a line.
+        let width = helvetica("Donau dampf");
+        assert_eq!(lines_in(width, "<text>Donau&#xAD; dampf</text>"), ["Donau dampf"]);
+    }
+
+    #[test]
+    fn a_soft_hyphen_that_ends_a_word_is_no_break_in_a_text_split_across_pages_either() {
+        let width = helvetica("Donau dampf") - 1.0;
+        let words = "Donau&#xAD; dampf ".repeat(8);
+        let frame = 785.89 - 13.2 * 4.0 - 13.2 / 2.0;
+        let xml = format!(
+            r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt {:.3}pt 28pt 28pt"><frame height="{frame:.2}pt" /><text>{words}</text></layout></section></document></lpdf>"#,
+            595.28 - 28.0 - width
+        );
+        let pages: Vec<Vec<String>> = engine_render(&xml)["pages"].as_array().unwrap().iter().map(find_text_content).collect();
+        assert_eq!(pages.len(), 2, "{pages:?}");
+        assert!(pages.concat().iter().all(|line| line == "Donau" || line == "dampf"), "{pages:?}");
+    }
+
+    #[test]
+    fn a_styled_run_that_goes_on_in_the_word_before_it_breaks_at_its_soft_hyphen_as_the_word_would() {
+        let width = helvetica("Die Donaudampf\u{AD}") + 1.0;
+        let plain = lines_in(width, "<text>Die Donaudampf&#xAD;schiff</text>");
+        assert_eq!(plain, ["Die Donaudampf\u{AD}", "schiff"]);
+        let styled = lines_in(width, r##"<text>Die Donau<span color="#c0392b">dampf&#xAD;schiff</span></text>"##);
+        assert_eq!(styled, plain);
     }
 
     #[test]
