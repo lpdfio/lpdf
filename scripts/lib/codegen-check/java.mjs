@@ -48,7 +48,8 @@ public class Check {
     }
 
     static String[] run(Path work, String index) throws Exception {
-        var engine = L.engine();
+        // 10 seconds, not the SDK's 5: the large benchmark fixtures take longer than 5 on JDK 25 on CI's runners.
+        var engine = L.engine(new EngineOptions().timeout(10));
         for (String line : Files.readAllLines(work.resolve("docs/" + index + ".assets"))) {
             String[] parts = line.split("\\t");
             byte[] bytes = Files.readAllBytes(Path.of(parts[2]));
