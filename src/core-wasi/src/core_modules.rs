@@ -64,6 +64,8 @@ mod toc;
 mod references;
 #[path = "../../core/src/attr_types.rs"]
 mod attr_types;
+#[path = "../../core/src/barcode.rs"]
+mod barcode;
 #[path = "../../core/src/schema_attrs.rs"]
 mod schema_attrs;
 #[path = "../../core/src/memory.rs"]

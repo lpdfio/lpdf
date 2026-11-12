@@ -1,4 +1,4 @@
-use crate::parse::{Align, BarcodeEcLevel, BarcodeType, Bookmark, Capture, CaptureMode, Direction, FieldKind, Footnote, HeightMode, Inset, Justify, Node, NodeKind, Ocg, PageScope, Role, RowKeep, SectionLayout, Paginate, Reference, TextAlign, TextRun};
+use crate::parse::{Align, BarcodeEc, BarcodeType, Bookmark, Capture, CaptureMode, Direction, FieldKind, Footnote, HeightMode, Inset, Justify, Node, NodeKind, Ocg, PageScope, Role, RowKeep, SectionLayout, Paginate, Reference, TextAlign, TextRun};
 
 // The path is spelled out because the WASI build includes this file from another crate.
 #[path = "layout/footnotes.rs"]
@@ -48,6 +48,7 @@ use bulk::{Bulk, Take};
 use crate::page_scope::{chrome_in_budget, page_scope_indices};
 use crate::render::{RenderAnchor, RenderBarcode, RenderBox, RenderCanvasClip, RenderCanvasLayer, RenderField, RenderFootnoteMark, RenderImage, RenderLine, RenderLink, RenderNode, RenderPage, RenderText, RenderedBarcodeKind, Tag, TagKind};
 use crate::tokens::{parse_number, split_unit, FontWidths, LENGTH_UNITS};
+use crate::barcode;
 use crate::canvas;
 use crate::page_numbers::{self, PageTokens, SectionNumbers};
 use crate::references;
@@ -4114,11 +4115,12 @@ fn layout_barcode(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32
     match btype {
         BarcodeType::Qr => {
             let size_pt = node.width_constraint.unwrap_or(80.0).min(avail_w);
-            let ec = match node.barcode_ec {
-                BarcodeEcLevel::L => qrcode::EcLevel::L,
-                BarcodeEcLevel::M => qrcode::EcLevel::M,
-                BarcodeEcLevel::Q => qrcode::EcLevel::Q,
-                BarcodeEcLevel::H => qrcode::EcLevel::H,
+            // A number is a PDF417's level, which a QR code ignores, as it does no `ec` at all.
+            let ec = match node.barcode_options.ec {
+                BarcodeEc::L => qrcode::EcLevel::L,
+                BarcodeEc::Q => qrcode::EcLevel::Q,
+                BarcodeEc::H => qrcode::EcLevel::H,
+                BarcodeEc::M | BarcodeEc::Unset | BarcodeEc::Pdf417(_) => qrcode::EcLevel::M,
             };
             match qrcode::QrCode::with_error_correction_level(data.as_bytes(), ec) {
                 Ok(code) => {
@@ -4140,53 +4142,71 @@ fn layout_barcode(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32
             }
         }
 
-        BarcodeType::Code128 => {
-            let hrt_text = if node.barcode_hrt { Some(data.clone()) } else { None };
-
-            match encode_code128(&data) {
-                Ok(bars) => {
-                    let (w, h) = fit_linear_barcode(node, &bars, avail_w);
-                    let bc = RenderBarcode { tag: None,
-                        x, y, width: w, height: h,
-                        kind: RenderedBarcodeKind::Code128 { bars, hrt: hrt_text },
-                        color, bg, debug_self: node.debug,
-                    };
-                    (RenderNode::Barcode(bc), h)
-                }
-                Err(msg) => fallback_barcode(x, y, node.width_constraint.unwrap_or(avail_w).min(avail_w), &msg),
+        kind if barcode::is_linear(kind) => match barcode::encode_linear(kind, &data, &node.barcode_options) {
+            Ok(linear) => {
+                let (w, h) = fit_linear_barcode(node, &linear.bars, avail_w);
+                let hrt = node.barcode_hrt.then_some(linear.text);
+                let bc = RenderBarcode { tag: None,
+                    x, y, width: w, height: h,
+                    kind: RenderedBarcodeKind::Linear { symbology: symbology(kind), bars: linear.bars, hrt },
+                    color, bg, debug_self: node.debug,
+                };
+                (RenderNode::Barcode(bc), h)
             }
-        }
+            Err(msg) => fallback_barcode(x, y, node.width_constraint.unwrap_or(avail_w).min(avail_w), &msg),
+        },
 
-        BarcodeType::Ean13 => {
-            match encode_ean13(&data) {
-                Ok(bars) => {
-                    let (w, h) = fit_linear_barcode(node, &bars, avail_w);
+        kind => {
+            let width = if node.width_fill { Some(avail_w) } else { node.width_constraint };
+            let height = node.img_height_constraint;
+            match barcode::encode_matrix(kind, &data, &node.barcode_options, matrix_fit(width, height)) {
+                Ok(matrix) => {
+                    let (w, h) = fit_within(matrix.size_in_modules(), width, height);
+                    let (w, h) = if w > avail_w && w > 0.0 { (avail_w, h * avail_w / w) } else { (w, h) };
                     let bc = RenderBarcode { tag: None,
                         x, y, width: w, height: h,
-                        kind: RenderedBarcodeKind::Ean13 { bars, digits: data, hrt: node.barcode_hrt },
+                        kind: RenderedBarcodeKind::Matrix {
+                            symbology: symbology(kind), modules: matrix.modules, cols: matrix.cols, rows: matrix.rows,
+                        },
                         color, bg, debug_self: node.debug,
                     };
                     (RenderNode::Barcode(bc), h)
                 }
-                Err(msg) => fallback_barcode(x, y, node.width_constraint.unwrap_or(avail_w).min(avail_w), &msg),
+                Err(msg) => fallback_barcode(x, y, width.unwrap_or(avail_w).min(avail_w), &msg),
             }
         }
     }
 }
 
-/// A Code 128 bar at its default width, in points. A Code 128 with no size of its own is as wide as its
-/// bars, and the bars of one with a height only follow that height.
-const CODE128_MODULE: f32 = 1.0;
-/// The height of the bars of a Code 128 at its default size.
-const CODE128_BAR_H: f32 = 40.0;
-/// The size of an EAN-13 at the standard magnification of 1: bars 0.33mm wide and 22.85mm high.
-const EAN13_MODULE: f32 = 0.33 * 72.0 / 25.4;
-const EAN13_BAR_H: f32 = 22.85 * 72.0 / 25.4;
+/// The name of a barcode type in the render tree, as the schema writes it.
+fn symbology(kind: BarcodeType) -> &'static str {
+    match kind {
+        BarcodeType::Qr            => "qr",
+        BarcodeType::Code128       => "code128",
+        BarcodeType::Ean13         => "ean13",
+        BarcodeType::Code39        => "code39",
+        BarcodeType::Ean8          => "ean8",
+        BarcodeType::UpcA          => "upca",
+        BarcodeType::DataMatrix    => "datamatrix",
+        BarcodeType::Pdf417        => "pdf417",
+        BarcodeType::Gs1128        => "gs1-128",
+        BarcodeType::Gs1DataMatrix => "gs1-datamatrix",
+    }
+}
+
+/// What a Data Matrix or a PDF417 chooses its shape for: a box when it has both sizes, else one side.
+fn matrix_fit(width: Option<f32>, height: Option<f32>) -> barcode::Fit {
+    match (width, height) {
+        (Some(width), Some(height)) => barcode::Fit::Box { width, height },
+        _ => barcode::Fit::OneSide,
+    }
+}
+
 /// The digits of `hrt` are inside the barcode's height and take this much of it.
 const HRT_H: f32 = 12.0;
 
-/// The size of a Code 128 or an EAN-13 inside the `width` and `height` it is given, or its natural size at
-/// the default bar width. Both given: they are a maximum, and the barcode keeps its proportions.
+/// The size of a linear barcode inside the `width` and `height` it is given, or its natural size at the default
+/// bar width. Both given: they are a maximum, and the barcode keeps its proportions.
 /// `bars` is the encoded barcode, its run lengths adding up to the number of modules across.
 fn linear_barcode_size(
     node: &Node,
@@ -4194,16 +4214,13 @@ fn linear_barcode_size(
     width: Option<f32>,
     height: Option<f32>,
 ) -> (f32, f32) {
-    let (module, bar_h) = match node.barcode_type {
-        Some(BarcodeType::Ean13) => (EAN13_MODULE, EAN13_BAR_H),
-        _                        => (CODE128_MODULE, CODE128_BAR_H),
-    };
+    let (module, bar_h) = barcode::linear_module(node.barcode_type.unwrap_or(BarcodeType::Code128));
     let modules: u32 = bars.iter().map(|&run| run as u32).sum();
     let hrt_h = if node.barcode_hrt { HRT_H } else { 0.0 };
     fit_within((modules as f32 * module, bar_h + hrt_h), width, height)
 }
 
-/// The box a Code 128 or an EAN-13 takes in a slot `avail_w` wide: inside its `width` and `height`, which
+/// The box a linear barcode takes in a slot `avail_w` wide: inside its `width` and `height`, which
 /// `width="fill"` makes the slot, and not wider than the slot.
 fn fit_linear_barcode(node: &Node, bars: &[u8], avail_w: f32) -> (f32, f32) {
     let width = if node.width_fill { Some(avail_w) } else { node.width_constraint };
@@ -4211,21 +4228,27 @@ fn fit_linear_barcode(node: &Node, bars: &[u8], avail_w: f32) -> (f32, f32) {
     if w > avail_w && w > 0.0 { (avail_w, h * avail_w / w) } else { (w, h) }
 }
 
-/// The width a node takes in the flow when it sets one itself: its `width`, and for a Code 128 or an EAN-13 the
-/// width of the box it fits inside its sizes, which can be narrower than the `width`.
+/// The width a node takes in the flow when it sets one itself: its `width`, and for a barcode other than a QR code
+/// the width of the box it fits inside its sizes, which can be narrower than the `width`.
 fn own_width(node: &Node) -> Option<f32> {
     barcode_flow_width(node).or(node.width_constraint)
 }
 
-/// The width a Code 128 or an EAN-13 takes in the flow when it isn't `width="fill"`: the box it keeps inside
+/// The width a barcode other than a QR code takes in the flow when it isn't `width="fill"`: the box it keeps inside
 /// its sizes, so that the parent's `align` places that box. `None` for any other node, or data that can't be encoded.
 fn barcode_flow_width(node: &Node) -> Option<f32> {
-    let bars = match (&node.barcode_type, &node.barcode_data) {
-        (Some(BarcodeType::Code128), Some(data)) => encode_code128(data).ok()?,
-        (Some(BarcodeType::Ean13),   Some(data)) => encode_ean13(data).ok()?,
-        _                                        => return None,
-    };
-    Some(linear_barcode_size(node, &bars, node.width_constraint, node.img_height_constraint).0)
+    let (kind, data) = (node.barcode_type?, node.barcode_data.as_deref()?);
+    let (width, height) = (node.width_constraint, node.img_height_constraint);
+    if barcode::is_linear(kind) {
+        let linear = barcode::encode_linear(kind, data, &node.barcode_options).ok()?;
+        Some(linear_barcode_size(node, &linear.bars, width, height).0)
+    } else if kind == BarcodeType::Qr || node.width_fill {
+        // A 2D code with `width="fill"` takes the slot's width, as a column gives it, and fits inside it.
+        None
+    } else {
+        let matrix = barcode::encode_matrix(kind, data, &node.barcode_options, matrix_fit(width, height)).ok()?;
+        Some(fit_within(matrix.size_in_modules(), width, height).0)
+    }
 }
 
 /// Return an empty box placeholder for an invalid/unencodable barcode.
@@ -4243,227 +4266,6 @@ fn fallback_barcode(x: f32, y: f32, w: f32, _reason: &str) -> (RenderNode, f32) 
         children: vec![],
     };
     (RenderNode::Box(b), h)
-}
-
-// ── Code 128 encoder ─────────────────────────────────────────────────────────
-//
-// Encodes a string using subset B (printable ASCII 32–126) into a flat
-// alternating bar/space run-length array starting with a bar.
-// Layout: START_B | data symbols | checksum | STOP
-
-/// Code 128 symbol patterns indexed 0–105 (each 6 elements, 11 units total).
-/// Elements alternate: bar, space, bar, space, bar, space.
-static CODE128: [[u8; 6]; 106] = [
-    [2,1,2,2,2,2], [2,2,2,1,2,2], [2,2,2,2,2,1], [1,2,1,2,2,3],
-    [1,2,1,3,2,2], [1,3,1,2,2,2], [1,2,2,2,1,3], [1,2,2,3,1,2],
-    [1,3,2,2,1,2], [2,2,1,2,1,3], [2,2,1,3,1,2], [2,3,1,2,1,2],
-    [1,1,2,2,3,2], [1,2,2,1,3,2], [1,2,2,2,3,1], [1,1,3,2,2,2],
-    [1,2,3,1,2,2], [1,2,3,2,2,1], [2,2,3,2,1,1], [2,2,1,1,3,2],
-    [2,2,1,2,3,1], [2,1,3,2,1,2], [2,2,3,1,1,2], [3,1,2,1,3,1],
-    [3,1,1,2,2,2], [3,2,1,1,2,2], [3,2,1,2,2,1], [3,1,2,2,1,2],
-    [3,2,2,1,1,2], [3,2,2,2,1,1], [2,1,2,1,2,3], [2,1,2,3,2,1],
-    [2,3,2,1,2,1], [1,1,1,3,2,3], [1,3,1,1,2,3], [1,3,1,3,2,1],
-    [1,1,2,3,1,3], [1,3,2,1,1,3], [1,3,2,3,1,1], [2,1,1,3,1,3],
-    [2,3,1,1,1,3], [2,3,1,3,1,1], [1,1,2,1,3,3], [1,1,2,3,3,1],
-    [1,3,2,1,3,1], [1,1,3,1,2,3], [1,1,3,3,2,1], [1,3,3,1,2,1],
-    [3,1,3,1,2,1], [2,1,1,3,3,1], [2,3,1,1,3,1], [2,1,3,1,1,3],
-    [2,1,3,3,1,1], [2,1,3,1,3,1], [3,1,1,1,2,3], [3,1,1,3,2,1],
-    [3,3,1,1,2,1], [3,1,2,1,1,3], [3,1,2,3,1,1], [3,3,2,1,1,1],
-    [3,1,4,1,1,1], [2,2,4,2,1,1], [4,3,1,1,1,1], [1,1,1,2,2,4],
-    [1,1,1,4,2,2], [1,2,1,1,2,4], [1,2,1,4,2,1], [1,4,1,1,2,2],
-    [1,4,1,2,2,1], [1,1,2,2,1,4], [1,1,2,4,1,2], [1,2,2,1,1,4],
-    [1,2,2,4,1,1], [1,4,2,1,1,2], [1,4,2,2,1,1], [2,4,1,2,1,1],
-    [2,2,1,1,1,4], [4,1,3,1,1,1], [2,4,1,1,1,2], [1,3,4,1,1,1],
-    [1,1,1,2,4,2], [1,2,1,1,4,2], [1,2,1,2,4,1], [1,1,4,2,1,2],
-    [1,2,4,1,1,2], [1,2,4,2,1,1], [4,1,1,2,1,2], [4,2,1,1,1,2],
-    [4,2,1,2,1,1], [2,1,2,1,4,1], [2,1,4,1,2,1], [4,1,2,1,2,1],
-    [1,1,1,1,4,3], [1,1,1,3,4,1], [1,3,1,1,4,1], [1,1,4,1,1,3],
-    [1,1,4,3,1,1], [4,1,1,1,1,3], [4,1,1,3,1,1], [1,1,3,1,4,1],
-    [1,1,4,1,3,1], [3,1,1,1,4,1], [4,1,1,1,3,1],                 // 100-102
-    [2,1,1,4,1,2], [2,1,1,2,1,4], [2,1,1,2,3,2],                 // 103=START A, 104=START B, 105=START C
-];
-
-/// Code 128 STOP symbol (7 elements, 13 units total).
-static CODE128_STOP: [u8; 7] = [2,3,3,1,1,1,2];
-
-fn encode_code128(data: &str) -> Result<Vec<u8>, String> {
-    // Validate: only subset B (printable ASCII 32–126).
-    for c in data.chars() {
-        if !(32u8..=126u8).contains(&(c as u8)) {
-            return Err(format!(
-                "Code 128: character '{}' (U+{:04X}) is not in subset B (ASCII 32\u{2013}126)",
-                c, c as u32
-            ));
-        }
-    }
-
-    // Build symbol list: START B + data symbols + checksum.
-    let start_b_value: u32 = 104;
-
-    let mut bars: Vec<u8> = Vec::new();
-    // START B (symbol 104)
-    bars.extend_from_slice(&CODE128[104]);
-
-    // Checksum: start_value + Σ(i+1 × symbol_value) mod 103
-    let check_sum: u32 = {
-        let data_sum: u32 = data.chars().enumerate()
-            .map(|(i, c)| (i + 1) as u32 * (c as u32 - 32))
-            .sum();
-        (start_b_value + data_sum) % 103
-    };
-
-    for c in data.chars() {
-        let sym = c as u8 - 32;
-        bars.extend_from_slice(&CODE128[sym as usize]);
-    }
-
-    // Checksum symbol
-    bars.extend_from_slice(&CODE128[check_sum as usize]);
-
-    // STOP symbol
-    bars.extend_from_slice(&CODE128_STOP);
-
-    Ok(bars)
-}
-
-// ── EAN-13 encoder ────────────────────────────────────────────────────────────
-//
-// Produces 95 modules as a flat alternating bar/space run-length array
-// starting with a bar (left guard starts with a bar module).
-
-/// EAN-13 parity pattern for the first digit (0–9).
-/// Bit i (from MSB=bit5) = 1 → G-code, 0 → L-code for left-group digit i.
-/// Left-group digits are positions 1–6 (second through seventh digit).
-static EAN13_PARITY: [u8; 10] = [
-    0b000000, // 0 → LLLLLL
-    0b001011, // 1 → LLGLGG
-    0b001101, // 2 → LLGGLG
-    0b001110, // 3 → LLGGGL
-    0b010011, // 4 → LGLLGG
-    0b011001, // 5 → LGGLLG
-    0b011100, // 6 → LGGGLL
-    0b010101, // 7 → LGLGLG
-    0b010110, // 8 → LGLGGL
-    0b011010, // 9 → LGGLGL
-];
-
-/// L-code bit patterns for digits 0–9 (7 bits, MSB first, 0=space 1=bar).
-static EAN13_L_PAT: [u8; 10] = [
-    0b0001101, // 0: s3 b2 s1 b1
-    0b0011001, // 1: s2 b2 s2 b1
-    0b0010011, // 2: s2 b1 s2 b2
-    0b0111101, // 3: s1 b4 s1 b1
-    0b0100011, // 4: s1 b1 s3 b2
-    0b0110001, // 5: s1 b2 s3 b1
-    0b0101111, // 6: s1 b1 s1 b4
-    0b0111011, // 7: s1 b3 s1 b2
-    0b0110111, // 8: s1 b2 s1 b3
-    0b0001011, // 9: s3 b1 s1 b2
-];
-
-fn ean_modules(pat: u8) -> [bool; 7] {
-    let mut out = [false; 7];
-    for i in 0..7usize {
-        out[i] = (pat >> (6 - i)) & 1 == 1;
-    }
-    out
-}
-
-fn ean13_check(d: &[u8]) -> u8 {
-    let sum: u32 = d[..12].iter().enumerate()
-        .map(|(i, &v)| if i % 2 == 0 { v as u32 } else { v as u32 * 3 })
-        .sum();
-    ((10 - (sum % 10)) % 10) as u8
-}
-
-fn encode_ean13(data: &str) -> Result<Vec<u8>, String> {
-    let digits_raw: Vec<u8> = data.trim().chars().map(|c| {
-        if c.is_ascii_digit() { c as u8 - b'0' } else { 255 }
-    }).collect();
-
-    if digits_raw.len() != 12 && digits_raw.len() != 13 {
-        return Err(format!(
-            "EAN-13: data must be 12 or 13 digits, got {}",
-            digits_raw.len()
-        ));
-    }
-    for (i, &d) in digits_raw.iter().enumerate() {
-        if d > 9 {
-            return Err(format!("EAN-13: non-digit at position {i}"));
-        }
-    }
-
-    let mut digits = digits_raw.clone();
-    let check = ean13_check(&digits);
-    if digits.len() == 13 {
-        if digits[12] != check {
-            return Err(format!(
-                "EAN-13: invalid check digit (got {}, expected {check})",
-                digits[12]
-            ));
-        }
-    } else {
-        digits.push(check);
-    }
-
-    // Build 95-module sequence.
-    let mut modules: Vec<bool> = Vec::with_capacity(95);
-
-    // Left guard: bar space bar
-    modules.extend_from_slice(&[true, false, true]);
-
-    // Left 6 digits (digits[1] through digits[6])
-    let parity = EAN13_PARITY[digits[0] as usize];
-    for i in 0..6usize {
-        let d   = digits[i + 1] as usize;
-        let use_g = (parity >> (5 - i)) & 1 == 1;
-        let l_mods = ean_modules(EAN13_L_PAT[d]);
-        if use_g {
-            // G-code = bit-reversal of L-code
-            let mut rev = l_mods;
-            rev.reverse();
-            modules.extend_from_slice(&rev);
-        } else {
-            modules.extend_from_slice(&l_mods);
-        }
-    }
-
-    // Center guard: space bar space bar space
-    modules.extend_from_slice(&[false, true, false, true, false]);
-
-    // Right 6 digits (digits[7] through digits[12]), R-code = complement of L-code
-    for i in 0..6usize {
-        let d      = digits[i + 7] as usize;
-        let l_mods = ean_modules(EAN13_L_PAT[d]);
-        let r_mods: [bool; 7] = std::array::from_fn(|j| !l_mods[j]);
-        modules.extend_from_slice(&r_mods);
-    }
-
-    // Right guard: bar space bar
-    modules.extend_from_slice(&[true, false, true]);
-
-    // Sequence starts with true (bar from left guard) — safe to RLE directly.
-    Ok(rle_modules(&modules))
-}
-
-/// Run-length encode a module sequence into alternating bar/space widths.
-/// The input must start with a bar (true); even-indexed elements are bars.
-fn rle_modules(modules: &[bool]) -> Vec<u8> {
-    let mut out = Vec::new();
-    if modules.is_empty() { return out; }
-    let mut cur = modules[0];
-    let mut run = 0u8;
-    for &m in modules {
-        if m == cur {
-            run += 1;
-        } else {
-            out.push(run);
-            cur = m;
-            run = 1;
-        }
-    }
-    out.push(run);
-    out
 }
 
 // ── Divider ───────────────────────────────────────────────────────────────────

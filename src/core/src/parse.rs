@@ -889,7 +889,8 @@ pub struct Node {
     // barcode (NodeKind::Barcode only)
     pub barcode_type: Option<BarcodeType>,
     pub barcode_data: Option<String>,
-    pub barcode_ec: BarcodeEcLevel,
+    /// What a barcode's type uses of `ec`, `rows`, `columns` and `check`, which the other types ignore.
+    pub barcode_options: BarcodeOptions,
     pub barcode_hrt: bool,
     pub barcode_color: Option<String>,
     pub barcode_bg: Option<String>,
@@ -987,19 +988,46 @@ pub enum FieldKind {
     Button,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BarcodeType {
     Qr,
     Code128,
     Ean13,
+    Code39,
+    Ean8,
+    UpcA,
+    DataMatrix,
+    Pdf417,
+    /// A Code 128 of GS1 fields, marked by FNC1 first.
+    Gs1128,
+    /// A Data Matrix of GS1 fields, marked by FNC1 first.
+    Gs1DataMatrix,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum BarcodeEcLevel {
+/// The `ec` of a barcode: a QR code's level as a letter, or a PDF417's as a number. Each type ignores the other kind.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum BarcodeEc {
+    /// No `ec`: a QR code takes M, and a PDF417 the level the standard recommends for its data.
+    #[default]
+    Unset,
     L,
     M,
     Q,
     H,
+    /// A PDF417's level, 0 to 8.
+    Pdf417(u8),
+}
+
+/// What a barcode's type takes of `ec`, `rows`, `columns` and `check`. Each is ignored by the types that don't use it.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct BarcodeOptions {
+    pub ec: BarcodeEc,
+    /// The rows of a PDF417 or the module rows of a Data Matrix, checked against the type when the barcode is read.
+    pub rows: Option<u8>,
+    /// The columns of a PDF417 in codewords, or the module columns of a Data Matrix.
+    pub columns: Option<u8>,
+    /// A Code 39 with its mod 43 check character.
+    pub check: bool,
 }
 
 /// How a node determines its height.
@@ -1095,7 +1123,7 @@ pub(crate) struct ParsedNode {
     detail: Option<Box<Detail>>,
     barcode_type: Option<BarcodeType>,
     barcode_data: Option<String>,
-    barcode_ec: BarcodeEcLevel,
+    barcode_options: BarcodeOptions,
     barcode_hrt: bool,
     barcode_color: Option<String>,
     barcode_bg: Option<String>,
@@ -1166,7 +1194,7 @@ impl ParsedNode {
             detail: None,
             barcode_type: None,
             barcode_data: None,
-            barcode_ec: BarcodeEcLevel::M,
+            barcode_options: BarcodeOptions::default(),
             barcode_hrt: false,
             barcode_color: None,
             barcode_bg: None,
@@ -1275,7 +1303,7 @@ impl Node {
             flow_runs: false, capture: None,
             url: None, image_name: None,
             img_height_constraint: None, img_aspect: None, detail: None, barcode_type: None, barcode_data: None,
-            barcode_ec: BarcodeEcLevel::M, barcode_hrt: false, barcode_color: None,
+            barcode_options: BarcodeOptions::default(), barcode_hrt: false, barcode_color: None,
             barcode_bg: None, table_cols: String::new(), table_style: None, col_span: 1, row_span: 1,
             field_kind: None, field_name: None, field_value: None, field_label: None,
             field_options: Vec::new(), field_required: false, field_readonly: false,
@@ -1293,7 +1321,7 @@ impl Node {
             width_fill, page_scope, paginate, keep, role, tag_id, ocg, debug, align, justify, cols, col_width,
             direction, color, thickness, text_runs, font, font_size, text_color, text_align, widows, orphans,
             line_height, max_lines, ellipsis, pre_tab, flow_runs, capture, url, image_name, img_height_constraint,
-            img_aspect, detail, barcode_type, barcode_data, barcode_ec, barcode_hrt, barcode_color, barcode_bg,
+            img_aspect, detail, barcode_type, barcode_data, barcode_options, barcode_hrt, barcode_color, barcode_bg,
             table_cols, table_style, col_span, row_span, field_kind, field_name, field_value, field_label,
             field_options, field_required, field_readonly, field_checked, field_max_len, field_group,
             field_action_url, data_attrs, bookmarks, children: _,
@@ -1310,7 +1338,7 @@ impl Node {
             ellipsis: *ellipsis, pre_tab: *pre_tab, flow_runs: *flow_runs, capture: capture.clone(), url: url.clone(),
             image_name: image_name.clone(), img_height_constraint: *img_height_constraint, img_aspect: *img_aspect,
             detail: detail.clone(), barcode_type: barcode_type.clone(), barcode_data: barcode_data.clone(),
-            barcode_ec: barcode_ec.clone(), barcode_hrt: *barcode_hrt, barcode_color: barcode_color.clone(),
+            barcode_options: *barcode_options, barcode_hrt: *barcode_hrt, barcode_color: barcode_color.clone(),
             barcode_bg: barcode_bg.clone(), table_cols: table_cols.clone(), table_style: table_style.clone(),
             col_span: *col_span, row_span: *row_span, field_kind: field_kind.clone(), field_name: field_name.clone(),
             field_value: field_value.clone(), field_label: field_label.clone(), field_options: field_options.clone(),
@@ -1469,7 +1497,7 @@ fn resolve_node(
         detail:                n.detail,
         barcode_type:          n.barcode_type,
         barcode_data:          n.barcode_data,
-        barcode_ec:            n.barcode_ec,
+        barcode_options:       n.barcode_options,
         barcode_hrt:           n.barcode_hrt,
         barcode_color:         n.barcode_color,
         barcode_bg:            n.barcode_bg,
@@ -3953,12 +3981,23 @@ fn apply_barcode_attrs(
 ) -> Result<(), String> {
     let type_str = a.get("type")
         .ok_or_else(|| "<barcode> missing required attribute 'type'".to_string())?;
-    node.barcode_type = Some(match type_str {
-        "qr"      => BarcodeType::Qr,
-        "code128" => BarcodeType::Code128,
-        "ean13"   => BarcodeType::Ean13,
-        other     => return Err(format!("<barcode> unknown type '{other}'; use 'qr', 'code128', or 'ean13'")),
-    });
+    let barcode_type = match type_str {
+        "qr"             => BarcodeType::Qr,
+        "code128"        => BarcodeType::Code128,
+        "ean13"          => BarcodeType::Ean13,
+        "code39"         => BarcodeType::Code39,
+        "ean8"           => BarcodeType::Ean8,
+        "upca"           => BarcodeType::UpcA,
+        "datamatrix"     => BarcodeType::DataMatrix,
+        "pdf417"         => BarcodeType::Pdf417,
+        "gs1-128"        => BarcodeType::Gs1128,
+        "gs1-datamatrix" => BarcodeType::Gs1DataMatrix,
+        other => return Err(format!(
+            "<barcode> unknown type '{other}'; use qr, datamatrix, pdf417, code128, code39, ean13, ean8, upca, gs1-128 \
+             or gs1-datamatrix"
+        )),
+    };
+    node.barcode_type = Some(barcode_type);
 
     node.barcode_data = Some(
         a.get("data")
@@ -3966,14 +4005,29 @@ fn apply_barcode_attrs(
          .to_string(),
     );
 
-    // Error correction level (QR only, ignored for 1D barcodes)
-    node.barcode_ec = match a.get("ec").unwrap_or("M") {
-        "L" => BarcodeEcLevel::L,
-        "M" => BarcodeEcLevel::M,
-        "Q" => BarcodeEcLevel::Q,
-        "H" => BarcodeEcLevel::H,
-        other => return Err(format!("<barcode> invalid ec '{other}'; use L, M, Q, or H")),
+    // Error correction: a letter for a QR code, a number for a PDF417. Each type ignores the other kind.
+    let ec = match a.get("ec") {
+        None      => BarcodeEc::Unset,
+        Some("L") => BarcodeEc::L,
+        Some("M") => BarcodeEc::M,
+        Some("Q") => BarcodeEc::Q,
+        Some("H") => BarcodeEc::H,
+        Some(level) if level.len() == 1 && ('0'..='8').contains(&level.chars().next().unwrap_or(' ')) => {
+            BarcodeEc::Pdf417(level.as_bytes()[0] - b'0')
+        }
+        Some(other) => return Err(format!(
+            "<barcode> invalid ec '{other}'; use L, M, Q or H for a qr, or a level from 0 to 8 for a pdf417"
+        )),
     };
+    let count = |name: &str| -> Result<Option<u8>, String> {
+        a.get(name)
+            .map(|v| v.trim().parse::<u8>().ok().filter(|n| (1..=144).contains(n))
+                .ok_or_else(|| format!("<barcode> invalid {name} '{v}': expected a whole number from 1 to 144")))
+            .transpose()
+    };
+    let (rows, columns) = (count("rows")?, count("columns")?);
+    crate::barcode::check_shape(barcode_type, rows, columns)?;
+    node.barcode_options = BarcodeOptions { ec, rows, columns, check: a.get("check") == Some("true") };
 
     // Human-readable text below 1D barcodes
     node.barcode_hrt = a.get("hrt").map(|v| v == "true").unwrap_or(false);
@@ -4017,7 +4071,15 @@ fn apply_barcode_attrs(
             node.width_constraint      = Some(pt);
             node.img_height_constraint = Some(pt);
         }
-        BarcodeType::Code128 | BarcodeType::Ean13 => {
+        BarcodeType::DataMatrix | BarcodeType::Gs1DataMatrix | BarcodeType::Pdf417 => {
+            // A Data Matrix or a PDF417 takes its shape from its box, so it has no size of its own.
+            if width.is_none() && height.is_none() && a.get("width") != Some("fill") {
+                return Err(format!("<barcode type=\"{type_str}\"> needs a 'width' or a 'height'"));
+            }
+            if width.is_some() { node.width_constraint = width; }
+            node.img_height_constraint = height;
+        }
+        _ => {
             if width.is_some() { node.width_constraint = width; }
             node.img_height_constraint = height;
         }
@@ -6891,11 +6953,11 @@ mod tests {
 
     #[test]
     fn err_barcode_invalid_type() {
-        let err = parse(&minimal(r#"<barcode type="pdf417" data="x" />"#)).unwrap_err();
+        let err = parse(&minimal(r#"<barcode type="aztec" data="x" />"#)).unwrap_err();
         assert!(err.contains("<barcode>"), "{err}");
         assert!(err.contains("at line"),  "{err}");
-        assert!(err.contains("pdf417"),    "{err}");
-        assert!(err.contains("qr"),        "{err}"); // allowed values present
+        assert!(err.contains("aztec"),     "{err}");
+        assert!(err.contains("gs1-datamatrix"), "{err}"); // allowed values present
     }
 
     #[test]

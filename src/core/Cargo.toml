@@ -29,6 +29,8 @@ base64 = "0.22"
 miniz_oxide = "0.7"
 # QR code generation (vector, no image crate dependency)
 qrcode = { version = "0.14", default-features = false }
+# Data Matrix (ECC 200) encoding — pure Rust, no_std
+datamatrix = { version = "0.3.3", default-features = false }
 # MD5 for RC4-128 PDF encryption key derivation — WASM-compatible, no_std
 md-5 = "0.10"
 # AES-256-CBC and SHA-2 for AES-256 PDF encryption (V=5 R=6) — WASM-compatible, no_std
@@ -55,6 +57,8 @@ sha2 = "0.10"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
+# ZXing's Rust port, to decode the barcodes the tests draw
+rxing = { version = "0.9.4", default-features = false, features = ["decoders", "oned", "datamatrix", "pdf417", "encoding_rs"] }
 
 [[bench]]
 name    = "pipeline"

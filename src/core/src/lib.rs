@@ -2,6 +2,7 @@ pub mod codegen;
 mod aes256;
 mod attachments;
 mod attr_types;
+mod barcode;
 mod canvas;
 mod data;
 // The native library (`src/core-ffi`) starts a render's deadline from its request; this crate starts none and only

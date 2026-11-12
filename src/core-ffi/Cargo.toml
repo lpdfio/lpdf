@@ -26,6 +26,7 @@ base64 = "0.22"
 ed25519-dalek = { version = "2", default-features = false, features = ["alloc"] }
 miniz_oxide = "0.7"
 qrcode = { version = "0.14", default-features = false }
+datamatrix = { version = "0.3.3", default-features = false }
 md-5 = "0.10"
 aes = "0.8"
 cbc = { version = "0.1", features = ["alloc"] }
@@ -38,3 +39,7 @@ tiff = { version = "0.11", default-features = false, features = ["lzw", "deflate
 
 [build-dependencies]
 sha2 = "0.10"
+
+[dev-dependencies]
+# The core's barcode tests, which this crate runs again, decode with it — same as core/Cargo.toml
+rxing = { version = "0.9.4", default-features = false, features = ["decoders", "oned", "datamatrix", "pdf417", "encoding_rs"] }
