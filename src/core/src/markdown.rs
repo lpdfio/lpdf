@@ -19,7 +19,7 @@ use crate::parse::{
     elems, layout_margin, node_loc, parse_node, resolve_font_alias, resolve_parsed_node, Attrs, JsonAttrs, LayoutChild,
     Node, NodeKind, PendingBookmarks, Section, SectionChild, TextDefaults,
 };
-use crate::tokens::{FontDef, Tokens};
+use crate::tokens::{FontDef, Tokens, SOFT_HYPHEN};
 
 /// The default rules: what a `<markdown>` with no styles looks like.
 const DEFAULT_STYLES: &str = include_str!("../assets/markdown-styles.xml");
@@ -1617,8 +1617,8 @@ fn html_length(value: &str) -> Option<String> {
     (pixels.is_finite() && pixels > 0.0).then(|| format!("{}pt", pixels * 0.75))
 }
 
-/// The text with the character references of HTML turned into their characters: the five named ones, `&nbsp;` and
-/// those in numbers. What is not one is left as it is.
+/// The text with the character references of HTML turned into their characters: the five named ones, `&nbsp;`,
+/// `&shy;` and those in numbers. What is not one is left as it is.
 fn decode_entities(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
@@ -1634,6 +1634,7 @@ fn decode_entities(text: &str) -> String {
                 "quot" => '"',
                 "apos" => '\'',
                 "nbsp" => ' ',
+                "shy" => SOFT_HYPHEN,
                 _ => {
                     let digits = name.strip_prefix('#')?;
                     let code = match digits.strip_prefix(['x', 'X']) {
@@ -1959,6 +1960,13 @@ mod tests {
     fn character_references_in_raw_html_are_the_characters() {
         let nodes = nodes("<p>1 &lt; 2 &amp;&amp; 3&nbsp;&gt; 2, &#65;&#x42; &quot;q&quot; &apos;s&apos; &unknown; &amp</p>\n");
         assert_eq!(words(&nodes[0]), "1 < 2 && 3 > 2, AB \"q\" 's' &unknown; &amp");
+    }
+
+    #[test]
+    fn a_soft_hyphen_is_read_from_its_named_and_numbered_references_in_text_and_in_raw_html() {
+        for markdown in ["Donau&shy;dampf\n", "Donau&#173;dampf\n", "<p>Donau&shy;dampf</p>\n", "<p>Donau&#xAD;dampf</p>\n"] {
+            assert_eq!(words(&nodes(markdown)[0]), "Donau\u{AD}dampf", "{markdown}");
+        }
     }
 
     #[test]
