@@ -4,14 +4,17 @@
 //  - the file passes `qpdf --check`, and its header says PDF 1.6, which PDF/X-4 is a profile of;
 //  - every page has a TrimBox inside its BleedBox, inside its MediaBox, and no annotation;
 //  - RGB is mapped to an ICC profile on every page (`/DefaultRGB`);
+//  - each spot color is a Separation space: the ink's name, the alternate device space of its stand-in, and a tint
+//    transform that runs from white to the stand-in, with a component for each of the alternate's; a sample whose file
+//    name has "spot" in it has at least one;
 //  - the catalog holds one output intent, `GTS_PDFX`, with the press profile as an ICC stream of 4 components, and an
 //    XMP metadata stream that names PDF/X-4;
 //  - the Info dictionary names PDF/X-4 and that the file is not trapped, and the trailer has the file ID.
 //
 // No free tool validates PDF/X itself: Acrobat Pro's Preflight does, by hand, on the release candidate.
 //
-// The samples, the fixture, the brochure example and the fixture with graph paper on its sections, come from the
-// core's own tests:
+// The samples, the fixture, the brochure example, and the fixture with graph paper on its sections and with spot colors,
+// come from the core's own tests:
 //   LPDF_PDFX_OUT=<folder> cargo test --manifest-path src/core/Cargo.toml --lib writes_the_pdfx_sample_for_the_external_check
 //
 // Usage: node scripts/check-pdfx.mjs <folder>     list the failures, exit 1 if any
@@ -43,6 +46,32 @@ function expect(ok, message) {
     if (!ok) failures.push(message);
 }
 
+/**
+ * Checks that `space` is a spot color's Separation space, `[/Separation /ink /DeviceCMYK|/DeviceRGB function]`, with a
+ * type 2 function from white to the stand-in, and calls `fail` with what is wrong.
+ */
+function checkSeparation(space, fail) {
+    if (!Array.isArray(space) || space[0] !== '/Separation') {
+        fail(`is ${JSON.stringify(space)}, not a Separation space`);
+        return;
+    }
+    const [, ink, alternate, transform] = space;
+    if (typeof ink !== 'string' || ink.length < 2 || ['/All', '/None', '/Cyan', '/Magenta', '/Yellow', '/Black'].includes(ink)) {
+        fail(`names the ink ${ink}, which is not the name of a plate of its own`);
+    }
+    const white = { '/DeviceCMYK': [0, 0, 0, 0], '/DeviceRGB': [1, 1, 1] }[alternate];
+    if (!white) {
+        fail(`has the alternate ${alternate}, not /DeviceCMYK or /DeviceRGB`);
+        return;
+    }
+    const components = (array) => Array.isArray(array) && array.length === white.length && array.every((c) => c >= 0 && c <= 1);
+    if (transform?.['/FunctionType'] !== 2 || transform['/N'] !== 1) {
+        fail(`has the tint transform ${JSON.stringify(transform)}, not a type 2 function of exponent 1`);
+    } else if (JSON.stringify(transform['/C0']) !== JSON.stringify(white) || !components(transform['/C1'])) {
+        fail(`runs from ${JSON.stringify(transform['/C0'])} to ${JSON.stringify(transform['/C1'])}, not from white to a color of ${alternate}`);
+    }
+}
+
 /** Checks the PDF/X file `pdf`, and returns how many pages it has. */
 function checkFile(pdf) {
     const check = (ok, message) => expect(ok, `${path.basename(pdf)}: ${message}`);
@@ -67,6 +96,7 @@ function checkFile(pdf) {
         inner[0] >= outer[0] - 0.01 && inner[1] >= outer[1] - 0.01 && inner[2] <= outer[2] + 0.01 && inner[3] <= outer[3] + 0.01;
 
     check(pages.length > 0, 'the file has no page');
+    let separations = 0;
     for (const page of pages) {
         const dict = object(page.object);
         const label = `page ${page.pageposfrom1}`;
@@ -81,6 +111,13 @@ function checkFile(pdf) {
         const spaces = resolve(resources?.['/ColorSpace']);
         const defaultRgb = resolve(spaces?.['/DefaultRGB']);
         check(Array.isArray(defaultRgb) && defaultRgb[0] === '/ICCBased', `${label}: RGB is not mapped to an ICC profile with /DefaultRGB`);
+        for (const [name, value] of Object.entries(spaces ?? {}).filter(([name]) => name !== '/DefaultRGB')) {
+            separations += 1;
+            checkSeparation(resolve(value), (message) => check(false, `${label}: the color space ${name} ${message}`));
+        }
+    }
+    if (path.basename(pdf).includes('spot')) {
+        check(separations > 0, 'no page names a Separation space, which the sample of spot colors draws with');
     }
 
     const catalog = object(objects.trailer.value['/Root']);

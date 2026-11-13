@@ -4,8 +4,8 @@
 //  - veraPDF reads the standards each file declares in its XMP packet and validates the file against each one's
 //    rules. For PDF/A: pdfa-2b.pdf must declare PDF/A-2b, pdfa-2a.pdf, the tagged fixture, PDF/A-2a, and pdfa-2u.pdf
 //    and the three pages in a font of each kind the fixtures lack (CFF, CFF2, variable TrueType) PDF/A-2u, and so must
-//    pdfa-2u-ocg.pdf, the fixture with content in optional content groups, and pdfa-2u-ruling.pdf, the fixture with
-//    graph paper on its sections. pdfa-3a.pdf, pdfa-3b.pdf and pdfa-3u.pdf,
+//    pdfa-2u-ocg.pdf, the fixture with content in optional content groups, pdfa-2u-ruling.pdf, the fixture with
+//    graph paper on its sections, and pdfa-2u-spot.pdf, the fixture with spot colors, overprint included. pdfa-3a.pdf, pdfa-3b.pdf and pdfa-3u.pdf,
 //    the three fixtures at the levels of part 3, must declare PDF/A-3a, PDF/A-3b and PDF/A-3u, and
 //    pdfa-3b-facturx.pdf, a Factur-X invoice that carries its XML and six other files, PDF/A-3b. pdfa-2a-pdfua-1.pdf
 //    and pdfa-3a-pdfua-1.pdf, the PDF/UA fixture at level a, must declare PDF/A-2a or PDF/A-3a and PDF/UA-1. The
@@ -45,6 +45,7 @@ const SAMPLE_SETS = {
         { file: 'pdfa-2u-variable-ttf.pdf', profiles: ['PDF/A-2u validation profile'] },
         { file: 'pdfa-2u-ocg.pdf', profiles: ['PDF/A-2u validation profile'] },
         { file: 'pdfa-2u-ruling.pdf', profiles: ['PDF/A-2u validation profile'] },
+        { file: 'pdfa-2u-spot.pdf', profiles: ['PDF/A-2u validation profile'] },
         { file: 'pdfa-3a.pdf', profiles: ['PDF/A-3a validation profile'] },
         { file: 'pdfa-3b.pdf', profiles: ['PDF/A-3b validation profile'] },
         { file: 'pdfa-3u.pdf', profiles: ['PDF/A-3u validation profile'] },

@@ -90,6 +90,11 @@ jobs:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
         run: make check-pdfx
 
+      - name: Check the plates of spot colors with Ghostscript
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
+        run: make check-spot
+
       # Java 17, the runner's default, runs the Mustang CLI, which needs 11 or later.
       - name: Check Factur-X invoices with the Mustang CLI
         env:

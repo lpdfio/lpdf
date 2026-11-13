@@ -433,6 +433,8 @@ fn writes_pdfa_samples_for_the_external_check() {
     std::fs::write(dir.join("pdfa-2u-ocg.pdf"), render(&grouped).expect("renders")).expect("a sample");
     // With graph paper on each section, which the pages draw as one form XObject.
     std::fs::write(dir.join("pdfa-2u-ruling.pdf"), crate::ruling_render_tests::pdfa_sample()).expect("a sample");
+    // With spot colors of RGB stand-ins, a tint, a gradient of tints and a die line that overprints.
+    std::fs::write(dir.join("pdfa-2u-spot.pdf"), crate::spot_render_tests::pdfa_sample()).expect("a sample");
     // Level a with PDF/UA beside it: the PDF/UA fixture, which says what PDF/UA asks.
     for level in ["2a", "3a"] {
         let pdf = crate::pdfua_render_tests::render_fixture_beside_pdfa(level);
