@@ -6,8 +6,8 @@
 // Each attribute has the type the schema gives it: a boolean is `boolean`, `bool` or `bool`, a whole number `number`,
 // `int` or `int`, a number `number`, `float` or `double`, and the rest a string. `line-height`, a name or a factor,
 // is `string | number` in TypeScript, `str | float` in Python, `string|float` in PHP, `LineHeight` in C#, a struct
-// that converts from either, and two setters in Java, one for each. The gradients of the tokens are generated from
-// `<gradient>` and `<stop>` too, and the rulings from `<ruling>` and `<lines>`.
+// that converts from either, and two setters in Java, one for each. The spot colors of the tokens are generated from
+// `<spot>` too, the gradients from `<gradient>` and `<stop>`, and the rulings from `<ruling>` and `<lines>`.
 //
 // A schema attribute marked use="required" is required in every SDK, by each language's own means: a
 // required property in TypeScript, a required `init` property in C#, a field without a default in Python,
@@ -241,6 +241,33 @@ function javaClass(cls, el, doc, attributes, extra = [], required = attributes.f
 
 function java(spec, element) {
     return javaClass(spec.cls, spec.el, summary(spec, element), ordered(element));
+}
+
+// ── Spot colors ───────────────────────────────────────────────────────────────
+
+// A spot color of the tokens: the attributes of `<spot>` but `name`, which is its key in the map of spot colors. PHP,
+// C# and Java have classes, Python a TypedDict, and JS an interface, `SpotToken`, as for a gradient.
+function spotFiles() {
+    const spot = schema.element('spot');
+    const attributes = ordered(spot).filter((a) => a.name !== 'name');
+    const files = [kitRecord('Spot', spot.doc, attributes, []), kitPhpClass('Spot', spot.doc, attributes, null)];
+
+    const python = [...HEADER.map((h) => `# ${h}`), 'from __future__ import annotations', '',
+        'from typing import Required, TypedDict', '', '', 'class Spot(TypedDict, total=False):'];
+    python.push(...['    """', ...wrap(spot.doc, 92, '    '), '    """'], '');
+    for (const a of attributes) {
+        const type = typeOf('python', a);
+        python.push(...wrap(a.doc, 96, '    # '), `    ${snake(a.name)}: ${a.required ? `Required[${type}]` : type}`);
+    }
+    python.push('');
+    files.push({ file: path.join(SDK.python, 'kit', 'spot.py'), text: python.join('\n') });
+
+    files.push(javaClass('Spot', 'spot', spot.doc, attributes));
+
+    const node = ['/**', ...wrap(spot.doc, 100, ' * '), ' */', 'export interface SpotToken {'];
+    for (const a of attributes) node.push(...tsMember(a, typeOf('node', a)));
+    node.push('}', '');
+    return { files, node: node.join('\n') };
 }
 
 // ── Gradients ─────────────────────────────────────────────────────────────────
@@ -586,13 +613,15 @@ generated.push({
     file: path.join(SDK.node, 'constants.ts'),
     text: [...HEADER.map((h) => `// ${h}`), '', ...nodeConstants].join('\n'),
 });
+const spots = spotFiles();
+generated.push(...spots.files);
 const gradients = gradientFiles();
 generated.push(...gradients.files);
 const rulings = rulingFiles();
 generated.push(...rulings.files);
 generated.push({
     file: path.join(SDK.node, 'attrs.ts'),
-    text: [...HEADER.map((h) => `// ${h}`), '', ...nodeInterfaces, gradients.node, rulings.node].join('\n'),
+    text: [...HEADER.map((h) => `// ${h}`), '', ...nodeInterfaces, spots.node, gradients.node, rulings.node].join('\n'),
 });
 
 // Only the SDKs asked for: the files of the others are not there to compare with. The core's table goes with all

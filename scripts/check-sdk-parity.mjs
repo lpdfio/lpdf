@@ -31,7 +31,7 @@ const EXPECTED = {
     DocumentMeta: attributes('meta'),
     DocumentOutput: attributes('output'),
     DocumentAssets: ['fonts', 'images', 'profiles'],
-    DocumentTokens: ['colors', 'gradients', 'rulings', 'aliases', 'space', 'grid', 'border', 'radius', 'width', 'height', 'text-size', 'line-height'],
+    DocumentTokens: ['colors', 'spots', 'gradients', 'rulings', 'aliases', 'space', 'grid', 'border', 'radius', 'width', 'height', 'text-size', 'line-height'],
     FontAttr: attributes('font'),
     ImageAttr: attributes('image'),
     FileAttr: attributes('file'),
