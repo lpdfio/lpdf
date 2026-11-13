@@ -271,6 +271,8 @@ fn showcase_shadow() { run_snapshot("showcase-shadow"); }
 #[test]
 fn showcase_gradient() { run_snapshot("showcase-gradient"); }
 #[test]
+fn showcase_spot() { run_snapshot("showcase-spot"); }
+#[test]
 fn showcase_shape() { run_snapshot("showcase-shape"); }
 #[test]
 fn showcase_running_header() { run_snapshot("showcase-running-header"); }
