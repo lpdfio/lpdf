@@ -1708,10 +1708,12 @@ fn draw_drawn(
             }
 
             set_fill_color(content, &bc.color);
-            set_overprint(content, Some(&bc.color), None);
 
+            // The bars overprint where their color does, and the digits of a linear barcode, drawn after them in the
+            // same `q`, don't: those bars have a `q` of their own.
             match &bc.kind {
                 RenderedBarcodeKind::Qr { modules, size } => {
+                    set_overprint(content, Some(&bc.color), None);
                     let sz = *size as f32;
                     let module_pt = bc.width / sz;
                     for row in 0..*size {
@@ -1735,16 +1737,18 @@ fn draw_drawn(
                         // The bars are all of one height; `hrt` takes the bottom 12pt for its text.
                         let bar_h  = if hrt.is_some() { bc.height - 12.0 } else { bc.height };
                         let pdf_y  = page_h - bc.y - bar_h;
-                        let mut cur_x = bc.x;
-                        for (i, &run) in bars.iter().enumerate() {
-                            let run_w = run as f32 * unit_w;
-                            if i % 2 == 0 {
-                                // Even indices are bars.
-                                content.rect(cur_x, pdf_y, run_w, bar_h);
-                                content.fill_nonzero();
+                        with_overprint(content, Some(&bc.color), None, |content| {
+                            let mut cur_x = bc.x;
+                            for (i, &run) in bars.iter().enumerate() {
+                                let run_w = run as f32 * unit_w;
+                                if i % 2 == 0 {
+                                    // Even indices are bars.
+                                    content.rect(cur_x, pdf_y, run_w, bar_h);
+                                    content.fill_nonzero();
+                                }
+                                cur_x += run_w;
                             }
-                            cur_x += run_w;
-                        }
+                        });
                         if let Some(text) = hrt {
                             draw_barcode_hrt(content, fonts, text, bc.x, bc.y + bar_h, bc.width, page_h);
                         }
@@ -1752,6 +1756,7 @@ fn draw_drawn(
                 }
 
                 RenderedBarcodeKind::Matrix { modules, cols, rows, .. } => {
+                    set_overprint(content, Some(&bc.color), None);
                     if *cols > 0 && *rows > 0 {
                         let (cell_w, cell_h) = (bc.width / *cols as f32, bc.height / *rows as f32);
                         // Each run of dark modules in a row is one rectangle, all filled at once.

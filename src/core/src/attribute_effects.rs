@@ -1344,9 +1344,12 @@ fn corrected(id: &str, xml: &str, lookup_of: Option<&str>, value: &str) -> Optio
         "region@pin=inset" => xml.replace(r#"pin="inset""#, r#"pin="inset" top="20pt" height="60pt""#),
         "shape@type=circle" => xml.replace(r#" width="100pt" height="40pt""#, r#" r="30pt""#),
         _ => {
-            // As an attribute's whole value (`color="brand"`), or after a prefix (`background="gradient:fade"`).
+            // As an attribute's whole value (`color="brand"`), after a prefix (`background="gradient:fade"`), or before
+            // a tint (`background="brand 40%"`).
             let old = lookup_of?;
-            xml.replace(&format!("\"{old}\""), &format!("\"{value}\"")).replace(&format!(":{old}\""), &format!(":{value}\""))
+            xml.replace(&format!("\"{old}\""), &format!("\"{value}\""))
+                .replace(&format!(":{old}\""), &format!(":{value}\""))
+                .replace(&format!("\"{old} "), &format!("\"{value} "))
         }
     };
     (fixed != xml).then_some(fixed)

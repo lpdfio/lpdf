@@ -151,6 +151,15 @@ fn overprinting_text_has_a_q_of_its_own_around_its_text_object() {
 }
 
 #[test]
+fn the_digits_of_a_barcode_in_an_overprinting_ink_do_not_overprint() {
+    let page = &streams(&render(&document("", r#"<barcode type="code128" data="LPDF-537" hrt="true" color="varnish" width="160pt" height="50pt"/>"#)))[0];
+    let bars = page.find("/OP-fill gs").expect("the bars overprint");
+    let digits = page.find("BT").expect("the digits");
+    assert!(bars < digits, "{page}");
+    assert!(page[bars..digits].contains("\nQ\n"), "the bars' state ends before the digits: {page}");
+}
+
+#[test]
 fn a_document_without_an_overprinting_spot_color_writes_no_overprint_state() {
     let pdf = text(&render(&document("", r#"<text color="brand">A</text>"#)));
     assert!(!pdf.contains("/OPM"), "{pdf}");
