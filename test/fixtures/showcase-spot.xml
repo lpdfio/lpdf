@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <tokens>
+    <colors>
+      <color name="ink"   value="cmyk(0, 0, 0, 100)" />
+      <color name="muted" value="cmyk(0, 0, 0, 55)" />
+      <color name="sky"   value="cmyk(60, 10, 0, 0)" />
+    </colors>
+    <!-- Each spot color is an ink of its own, printed from a plate of its own. The value stands in for it on a screen
+         or a proof. A varnish and a die line overprint: they print on top of the inks under them. -->
+    <spots>
+      <spot name="brand"   ink="PANTONE 1665 C" value="cmyk(0, 85, 100, 0)" />
+      <spot name="gold"    ink="PANTONE 871 C"  value="cmyk(20, 30, 70, 15)" />
+      <spot name="varnish" ink="Spot varnish"   value="cmyk(0, 0, 0, 10)" overprint="true" />
+      <spot name="die"     ink="Dieline"        value="#ff00ff" overprint="true" />
+    </spots>
+    <gradients>
+      <!-- A gradient of a spot color runs between tints of that one ink. -->
+      <gradient name="brand-fade" type="linear" from="brand" to="brand 10%" angle="90" />
+      <gradient name="gold-glow"  type="radial" from="gold 20%" to="gold" />
+    </gradients>
+  </tokens>
+  <document size="a4">
+    <meta title="lpdf Showcase — Spot colors" subject="spot colors, tints, gradients of tints and overprint" />
+
+    <section>
+      <layout margin="40pt">
+        <column gap="xl">
+
+          <column gap="xs">
+            <text font-size="xxl" font="Helvetica-Bold" color="brand">Spot colors</text>
+            <text font-size="m" color="muted">Named inks, each on a plate of its own, used by name or as a tint.</text>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold" color="ink">Tints</text>
+            <row gap="s">
+              <column width="80pt" height="60pt" padding="s" background="brand"><text font-size="s" color="#ffffff">brand</text></column>
+              <column width="80pt" height="60pt" padding="s" background="brand 75%"><text font-size="s" color="#ffffff">75%</text></column>
+              <column width="80pt" height="60pt" padding="s" background="brand 50%"><text font-size="s" color="ink">50%</text></column>
+              <column width="80pt" height="60pt" padding="s" background="brand 25%"><text font-size="s" color="ink">25%</text></column>
+              <column width="80pt" height="60pt" padding="s" background="brand 10%"><text font-size="s" color="ink">10%</text></column>
+            </row>
+            <row gap="s">
+              <column width="80pt" height="60pt" padding="s" background="gold"><text font-size="s" color="#ffffff">gold</text></column>
+              <column width="80pt" height="60pt" padding="s" background="gold 40%" border="m gold"><text font-size="s" color="ink">40%, a solid border</text></column>
+              <column width="80pt" height="60pt" padding="s" background="sky" shadow="3pt 3pt brand 60%"><text font-size="s" color="ink">a tinted shadow</text></column>
+            </row>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold" color="ink">Gradients of tints</text>
+            <row gap="s">
+              <column width="200pt" height="70pt" padding="m" background="gradient:brand-fade">
+                <text font-size="s" font="Helvetica-Bold" color="#ffffff">brand, 100% to 10%</text>
+              </column>
+              <column width="200pt" height="70pt" padding="m" background="gradient:gold-glow">
+                <text font-size="s" font="Helvetica-Bold" color="ink">gold, from 20% at the center</text>
+              </column>
+            </row>
+          </column>
+
+          <column gap="m">
+            <text font-size="l" font="Helvetica-Bold" color="ink">Overprint</text>
+            <text font-size="s" color="muted">A screen shows the stand-ins; a press and an overprint preview print the varnish and the die line over the inks under them.</text>
+            <row gap="m">
+              <column width="160pt" height="90pt" padding="m" background="sky">
+                <column width="fill" height="50pt" background="varnish 80%" />
+              </column>
+              <column width="160pt" height="90pt" padding="m" background="brand 30%" border="s die" radius="8pt">
+                <text font-size="s" color="ink">cut along the die line</text>
+              </column>
+            </row>
+          </column>
+
+        </column>
+      </layout>
+      <layer>
+        <!-- A die line around the page's content, on a canvas: a stroke that overprints. -->
+        <rect x="30pt" y="30pt" width="535.28pt" height="781.89pt" stroke="die" stroke-width="0.5pt" radius="12pt" />
+        <line x1="30pt" y1="600pt" x2="565.28pt" y2="600pt" stroke="die 50%" stroke-width="0.5pt" stroke-dash="4 2" />
+      </layer>
+    </section>
+  </document>
+</lpdf>

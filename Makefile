@@ -16,7 +16,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python build-sdk-java \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python test-sdk-java \
-        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api gen-codegen-corpus check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-facturx check-ocg check-codegen-sdk-node check-codegen-sdk-dotnet check-codegen-sdk-php check-codegen-sdk-python check-codegen-sdk-java check-codegen-sdks check-function-sizes \
+        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api gen-codegen-corpus check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-spot check-facturx check-ocg check-codegen-sdk-node check-codegen-sdk-dotnet check-codegen-sdk-php check-codegen-sdk-python check-codegen-sdk-java check-codegen-sdks check-function-sizes \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-adapter-java clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python example-java \
@@ -145,6 +145,20 @@ check-pdfx:
 	rm -rf target/pdfx-samples && mkdir -p target/pdfx-samples
 	LPDF_PDFX_OUT="$(CURDIR)/target/pdfx-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_the_pdfx_sample_for_the_external_check
 	node scripts/check-pdfx.mjs target/pdfx-samples
+
+# check-spot has the core write a page of spot colors and renders its plates with Ghostscript's tiffsep device, one file a
+# plate, in Docker (`scripts/check-spot.Dockerfile`): each ink on its own plate, a tint at its percentage, a gradient of
+# tints, and the process plates printed under an ink that overprints and empty under one that doesn't
+# (`scripts/check-spot.mjs`). Needs Docker.
+check-spot:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking the plates of spot colors with Ghostscript..."
+	@echo ""
+	rm -rf target/spot-samples && mkdir -p target/spot-samples
+	LPDF_SPOT_OUT="$(CURDIR)/target/spot-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_the_spot_sample_for_the_external_check
+	docker build -q -t lpdf-check-spot -f scripts/check-spot.Dockerfile scripts
+	node scripts/check-spot.mjs target/spot-samples
 
 # check-facturx has the core write the Factur-X samples and validates them with the Mustang CLI, the open checker of
 # Factur-X and ZUGFeRD, which runs veraPDF inside it and reads the invoice's metadata and XML: a PDF it calls invalid

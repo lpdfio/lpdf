@@ -16,6 +16,8 @@ pub struct Tokens {
     /// An alias is shared by every row, so it names the same slot wherever a scale value is accepted.
     pub aliases: HashMap<String, usize>,
     pub colors: HashMap<String, String>,
+    /// The spot colors, by the name a color attribute gives.
+    pub spots: HashMap<String, Spot>,
     pub gradients: HashMap<String, Gradient>,
     /// The rulings a section names with `ruling`, checked, by name.
     pub rulings: HashMap<String, crate::ruling::Ruling>,
@@ -27,6 +29,70 @@ const RESERVED_ALIASES: [&str; 2] = ["fill", "full"];
 
 /// What a fill starts with when it names a gradient of the tokens: `gradient:brand-fade`.
 pub const GRADIENT_PREFIX: &str = "gradient:";
+
+/// A spot color of the tokens: an ink of its own, printed from a plate of its own, such as a brand color, a varnish
+/// or a die-cut line.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Spot {
+    /// The name of the ink as the printer knows it, which names its plate: the colorant of the Separation space.
+    pub ink: String,
+    /// The color that stands in for the ink on a screen or a proof, normalised (`normalize_color`).
+    pub value: String,
+    /// Whether the ink prints on top of the inks under it instead of leaving them out where it sits.
+    pub overprint: bool,
+}
+
+/// What the PDF writer paints with beyond the colors a node carries: the gradients a fill names and the spot colors
+/// a color names, both of the tokens.
+#[derive(Debug, Clone, Copy)]
+pub struct Paints<'a> {
+    pub gradients: &'a HashMap<String, Gradient>,
+    pub spots:     &'a HashMap<String, Spot>,
+}
+
+/// The ink names a spot color can't take: PDF keeps `All` and `None` for every plate and no plate, and the process
+/// plates are the ones `cmyk()` prints with (ISO 32000-1, 8.6.6.4).
+const RESERVED_INKS: [&str; 6] = ["All", "None", "Cyan", "Magenta", "Yellow", "Black"];
+
+/// A spot color resolved where it is used, as the PDF writer reads it: `spot(brand, 30)` is the spot color `brand` at
+/// 30% of its ink, and `spot(brand, 30, overprint)` the same for one whose ink overprints. A document can't write it,
+/// as `resolve_color` reads `spot(` as an unknown color function.
+const SPOT_FUNCTION: &str = "spot(";
+
+/// A spot color as painted: the name of its spot color, its tint in percent, and whether it overprints.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SpotPaint<'a> {
+    pub name: &'a str,
+    /// From 0 to 100.
+    pub tint: f32,
+    pub overprint: bool,
+}
+
+/// The spot color a resolved color paints with, or `None` for a color of the process inks (hex or CMYK).
+pub fn spot_paint(color: &str) -> Option<SpotPaint<'_>> {
+    let args = color.strip_prefix(SPOT_FUNCTION)?.strip_suffix(')')?;
+    let mut parts = args.split(", ");
+    let name = parts.next()?;
+    let tint = parts.next()?.parse::<f32>().ok()?;
+    let overprint = parts.next() == Some("overprint");
+    Some(SpotPaint { name, tint, overprint })
+}
+
+/// The color a spot color is resolved to, as `spot_paint` reads it.
+fn spot_color(name: &str, tint: f64, overprint: bool) -> String {
+    match overprint {
+        true  => format!("{SPOT_FUNCTION}{name}, {tint}, overprint)"),
+        false => format!("{SPOT_FUNCTION}{name}, {tint})"),
+    }
+}
+
+/// A tint written after a spot color's name, such as `30%`, in percent: a number from 0 to 100 with a `%`.
+fn parse_tint(text: &str) -> Result<f64, String> {
+    let number = text
+        .strip_suffix('%')
+        .ok_or_else(|| format!("the tint '{text}' needs a %, as in 30%"))?;
+    color_channel(number, "the tint", 100.0).map_err(|_| format!("the tint '{text}' is not a percentage from 0% to 100%"))
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GradientKind {
@@ -435,7 +501,8 @@ impl Tokens {
         })
     }
 
-    /// A color as written (`normalize_color`) or a name from the `colors` row.
+    /// A color as written (`normalize_color`), a name from the `colors` row, or a spot color, alone or with a tint
+    /// after a space (`brand 30%`), which `spot_paint` reads.
     pub fn resolve_color(&self, val: &str) -> Result<String, String> {
         if val.starts_with('#') || val.contains('(') {
             return normalize_color(val);
@@ -445,10 +512,73 @@ impl Tokens {
                 "'{val}' is a gradient, which can fill a background or a shape but not color a text, a stroke or a border"
             ));
         }
+        let (name, tint) = match val.split_once(' ') {
+            Some((name, tint)) => (name, Some(tint)),
+            None               => (val, None),
+        };
+        if let Some(spot) = self.spots.get(name) {
+            let tint = match tint {
+                Some(tint) => parse_tint(tint).map_err(|e| format!("'{val}': {e}"))?,
+                None       => 100.0,
+            };
+            return Ok(spot_color(name, tint, spot.overprint));
+        }
+        if tint.is_some() {
+            return Err(match self.colors.contains_key(name) {
+                true => format!(
+                    "'{val}': only a spot color takes a tint, and '{name}' is a color of the colors row: write the \
+                    lighter color itself, such as a hex one"
+                ),
+                false => format!("'{val}': unknown spot color '{name}': a tint takes a spot color of the spots row"),
+            });
+        }
         self.colors
             .get(val)
             .cloned()
             .ok_or_else(|| format!("unknown color token: '{val}'"))
+    }
+
+    /// Declare a spot color, as the document's `<spot name ink value overprint/>` does. `declared` are the names of
+    /// the `colors` row the document writes, which a spot color can't take; one of the defaults it may.
+    pub fn add_spot(&mut self, name: &str, ink: &str, value: &str, overprint: Option<&str>, declared: &[&str]) -> Result<(), String> {
+        let fail = |reason: String| format!("spot color '{name}': {reason}");
+        if !is_token_name(name) {
+            return Err(fail("the name must be lowercase letters, digits and hyphens, starting with a letter".into()));
+        }
+        if declared.contains(&name) {
+            return Err(fail("the colors row has a color of the same name: give one of them another name".into()));
+        }
+        if self.spots.contains_key(name) {
+            return Err(fail("the spots row has it twice: give each spot color a name of its own".into()));
+        }
+        if ink.trim().is_empty() {
+            return Err(fail("the ink has no name: give the name of the ink as the printer knows it".into()));
+        }
+        if RESERVED_INKS.contains(&ink) {
+            return Err(fail(format!(
+                "the ink can't be named '{ink}': PDF keeps All and None for every plate and no plate, and Cyan, \
+                Magenta, Yellow and Black are the process inks cmyk() prints with"
+            )));
+        }
+        if let Some((other, _)) = self.spots.iter().find(|(_, spot)| spot.ink == ink) {
+            return Err(fail(format!(
+                "the spot color '{other}' has the ink '{ink}' too: an ink is printed from one plate, so declare it once"
+            )));
+        }
+        if !(value.starts_with('#') || value.contains('(')) {
+            return Err(fail(format!(
+                "the value '{value}' is not a color as written: give the color that stands in for the ink as hex, \
+                cmyk(), rgb() or hsl()"
+            )));
+        }
+        let value = normalize_color(value).map_err(fail)?;
+        let overprint = match overprint {
+            None | Some("false") => false,
+            Some("true")         => true,
+            Some(other)          => return Err(fail(format!("invalid overprint '{other}': expected true or false"))),
+        };
+        self.spots.insert(name.to_string(), Spot { ink: ink.to_string(), value, overprint });
+        Ok(())
     }
 
     /// A background or the fill of a shape: a color, or `gradient:name` for a gradient of the tokens, which is
@@ -512,7 +642,22 @@ impl Tokens {
             }
             stops.push(GradientStop { offset, color });
         }
-        // A PDF shading has one color space, and lpdf doesn't convert between the two models.
+        // A PDF shading has one color space, and lpdf doesn't convert between the two models. A spot color's space
+        // is its ink's, so its gradient runs between tints of that ink.
+        if let Some(spot) = stops.iter().find_map(|stop| spot_paint(&stop.color)) {
+            let other = stops.iter().find(|stop| spot_paint(&stop.color).is_none_or(|paint| paint.name != spot.name));
+            if let Some(other) = other {
+                let other = match spot_paint(&other.color) {
+                    Some(paint) => format!("the spot color '{}'", paint.name),
+                    None        => format!("the color {}", other.color),
+                };
+                return Err(fail(format!(
+                    "its stops mix the spot color '{}' with {other}: a gradient of a spot color runs between tints of \
+                    that one spot color, such as {} 100% and {} 20%",
+                    spot.name, spot.name, spot.name
+                )));
+            }
+        }
         if stops.iter().any(|stop| is_cmyk(&stop.color)) && !stops.iter().all(|stop| is_cmyk(&stop.color)) {
             return Err(fail("its stops mix CMYK and RGB colors: a gradient is all one or the other".into()));
         }
@@ -601,6 +746,7 @@ impl Default for Tokens {
             line_height: [1.0, 1.1, 1.2, 1.4, 1.6, 2.0],
             aliases: HashMap::new(),
             colors,
+            spots: HashMap::new(),
             gradients: HashMap::new(),
             rulings: HashMap::new(),
         }

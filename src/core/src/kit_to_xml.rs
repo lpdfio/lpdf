@@ -117,6 +117,24 @@ fn render_tokens(tokens: &serde_json::Map<String, Value>, depth: usize) -> Strin
         }
     }
 
+    // Each spot color's ink, stand-in and overprint, which the attribute check has written as text.
+    if let Some(spots) = tokens.get("spots").and_then(|v| v.as_object())
+        && !spots.is_empty()
+    {
+        let spot_pad = "  ".repeat(depth + 2);
+        lines.push(format!("{inner}<spots>"));
+        for (name, spot) in spots {
+            let mut tag = format!("{spot_pad}<spot name=\"{}\"", escape_attr(name));
+            for key in ["ink", "value", "overprint"] {
+                if let Some(text) = spot.get(key).and_then(Value::as_str) {
+                    tag.push_str(&format!(" {key}=\"{}\"", escape_attr(text)));
+                }
+            }
+            lines.push(format!("{tag}/>"));
+        }
+        lines.push(format!("{inner}</spots>"));
+    }
+
     if let Some(gradients) = tokens.get("gradients").and_then(|v| v.as_object())
         && !gradients.is_empty()
     {
@@ -568,6 +586,11 @@ pub fn kit_to_xml(json: &str) -> Result<String, String> {
             .and_then(|v| v.as_object())
             .map_or(false, |m| !m.is_empty());
 
+        let has_spots = tokens
+            .get("spots")
+            .and_then(|v| v.as_object())
+            .is_some_and(|m| !m.is_empty());
+
         let has_gradients = tokens
             .get("gradients")
             .and_then(|v| v.as_object())
@@ -583,7 +606,7 @@ pub fn kit_to_xml(json: &str) -> Result<String, String> {
             .and_then(|v| v.as_object())
             .is_some_and(|m| !m.is_empty());
 
-        if has_scales || has_colors || has_gradients || has_aliases || has_rulings {
+        if has_scales || has_colors || has_spots || has_gradients || has_aliases || has_rulings {
             lines.push(render_tokens(tokens, 1));
         }
     }
@@ -967,7 +990,7 @@ mod tests {
         crate::pdf::render_pdf(
             &pages, &doc.fonts,
             &crate::pdf::FontRegistry::new(), &crate::pdf::ImageRegistry::new(),
-            &doc.meta, &doc.gradients, None, false, &doc.output, &[], None,
+            &doc.meta, doc.paints(), None, false, &doc.output, &[], None,
         )
         .unwrap()
     }

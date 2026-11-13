@@ -299,8 +299,9 @@ fn check_document(attrs: &mut Map<String, Value>) -> Result<(), String> {
     Ok(())
 }
 
-/// The rows of the tokens, each an object of slots, the attributes of each gradient and its stops, and of each ruling
-/// and its lines. The names of aliases, colors, gradients and rulings are the document's own.
+/// The rows of the tokens, each an object of slots, the attributes of each spot color, of each gradient and its stops,
+/// and of each ruling and its lines. The names of aliases, colors, spot colors, gradients and rulings are the
+/// document's own.
 fn check_tokens(tokens: &mut Map<String, Value>) -> Result<(), String> {
     for (key, value) in tokens.iter_mut() {
         if key == "aliases" {
@@ -310,6 +311,12 @@ fn check_tokens(tokens: &mut Map<String, Value>) -> Result<(), String> {
             for (name, color) in value.as_object_mut().into_iter().flatten() {
                 if !color.is_string() && !color.is_null() {
                     return Err(format!("colors: {name} must be a string, not {color}"));
+                }
+            }
+        } else if key == "spots" {
+            for spot in value.as_object_mut().into_iter().flat_map(|s| s.values_mut()) {
+                if let Some(spot) = spot.as_object_mut() {
+                    check_element("spot", "spots", "spot", &[], spot)?;
                 }
             }
         } else if key == "gradients" {

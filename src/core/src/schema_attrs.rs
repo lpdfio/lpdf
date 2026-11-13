@@ -153,6 +153,13 @@ const COLOR: Attributes = &[
     ("value", Kind::Text),
 ];
 
+const SPOT: Attributes = &[
+    ("name", Kind::Text),
+    ("ink", Kind::Text),
+    ("value", Kind::Text),
+    ("overprint", Kind::Boolean),
+];
+
 const ALIAS: Attributes = &[
     ("name", Kind::Text),
     ("value", Kind::Text),
@@ -268,6 +275,9 @@ const TOKENS_ALIASES: Attributes = &[
 ];
 
 const TOKENS_COLORS: Attributes = &[
+];
+
+const TOKENS_SPOTS: Attributes = &[
 ];
 
 const TOKENS_GRADIENTS: Attributes = &[
@@ -911,6 +921,7 @@ pub(crate) fn attributes_of(parent: &str, name: &str) -> Option<Attributes> {
         ("tokens", "grid") => Some(TOKENS_GRID),
         ("tokens", "aliases") => Some(TOKENS_ALIASES),
         ("tokens", "colors") => Some(TOKENS_COLORS),
+        ("tokens", "spots") => Some(TOKENS_SPOTS),
         ("tokens", "gradients") => Some(TOKENS_GRADIENTS),
         ("tokens", "rulings") => Some(TOKENS_RULINGS),
         ("layout", "region") => Some(LAYOUT_REGION),
@@ -956,6 +967,7 @@ pub(crate) fn attributes_of(parent: &str, name: &str) -> Option<Attributes> {
         (_, "image") => Some(IMAGE),
         (_, "profile") => Some(PROFILE),
         (_, "color") => Some(COLOR),
+        (_, "spot") => Some(SPOT),
         (_, "alias") => Some(ALIAS),
         (_, "stop") => Some(STOP),
         (_, "gradient") => Some(GRADIENT),

@@ -665,6 +665,20 @@ fn gradients_expression(target: Target, gradients: &Node) -> String {
     target.map(&entries)
 }
 
+/// The `<spots>` of the tokens as the map the SDKs take: each spot color's name to its ink, its stand-in and whether
+/// it overprints. PHP, C# and Java have a `Spot` class, JS and Python plain objects.
+fn spots_expression(target: Target, spots: &Node) -> String {
+    let entries: Vec<(String, String)> = spots
+        .children()
+        .filter(|n| n.is_element() && n.tag_name().name() == "spot")
+        .map(|spot| {
+            let members = written_attributes(target, &spot, &["name"]);
+            (spot.attribute("name").unwrap_or("").to_string(), target.record("Spot", &members))
+        })
+        .collect();
+    target.map(&entries)
+}
+
 /// The `<rulings>` of the tokens as the map the SDKs take: each ruling's name to its attributes, and its `<lines>` as
 /// `lines`, a list. PHP, C# and Java have a `Ruling` and a `RulingLines` class, JS and Python plain objects.
 fn rulings_expression(target: Target, rulings: &Node) -> String {
@@ -747,9 +761,13 @@ fn tokens_expression(target: Target, tokens: &Node) -> Option<String> {
     let mut members: Vec<(String, String)> = Vec::new();
     for child in tokens.children().filter(|n| n.is_element()) {
         let tag = child.tag_name().name();
-        if tag == "gradients" || tag == "rulings" {
+        if tag == "spots" || tag == "gradients" || tag == "rulings" {
             if child.children().any(|n| n.is_element()) {
-                let expression = if tag == "gradients" { gradients_expression(target, &child) } else { rulings_expression(target, &child) };
+                let expression = match tag {
+                    "spots"     => spots_expression(target, &child),
+                    "gradients" => gradients_expression(target, &child),
+                    _           => rulings_expression(target, &child),
+                };
                 members.push((tag.to_string(), expression));
             }
             continue;
@@ -792,8 +810,8 @@ fn classes_used(code: &str) -> Vec<String> {
             && (word.ends_with("Attr")
                 || matches!(
                     word,
-                    "DocumentMeta" | "DocumentOutput" | "DocumentAssets" | "DocumentTokens" | "Gradient" | "GradientStop" | "Ruling"
-                        | "RulingLines"
+                    "DocumentMeta" | "DocumentOutput" | "DocumentAssets" | "DocumentTokens" | "Spot" | "Gradient" | "GradientStop"
+                        | "Ruling" | "RulingLines"
                 ));
         if is_class && !used.iter().any(|u| u == word) {
             used.push(word.to_string());
@@ -806,7 +824,8 @@ fn classes_used(code: &str) -> Vec<String> {
 fn php_namespace(class: &str) -> &'static str {
     match class {
         "DocumentAttr" | "DocumentMeta" | "DocumentOutput" | "DocumentAssets" | "DocumentTokens" | "SectionAttr" | "LayoutAttr"
-        | "FontAttr" | "ImageAttr" | "FileAttr" | "ProfileAttr" | "Gradient" | "GradientStop" | "Ruling" | "RulingLines" => "Lpdf\\Kit",
+        | "FontAttr" | "ImageAttr" | "FileAttr" | "ProfileAttr" | "Spot" | "Gradient" | "GradientStop" | "Ruling" | "RulingLines"
+            => "Lpdf\\Kit",
         "LayerAttr" | "RectAttr" | "CircleAttr" | "EllipseAttr" | "LineAttr" | "PathAttr" | "TextAtAttr"
         | "ImgAtAttr" | "BarcodeAtAttr" => "Lpdf\\Canvas",
         markdown if markdown.starts_with("Markdown") => "Lpdf\\Markdown",
@@ -2322,6 +2341,8 @@ mod tests {
         ("height", "`tokens_expression`"),
         ("text-size", "`tokens_expression`"),
         ("line-height", "`tokens_expression`"),
+        ("spots", "`spots_expression`"),
+        ("spot", "`spots_expression`"),
         ("gradients", "`gradients_expression`"),
         ("gradient", "`gradients_expression`"),
         ("stop", "`gradients_expression`"),
@@ -3058,7 +3079,7 @@ mod tests {
         let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts).unwrap();
         let fonts = crate::pdf::FontRegistry::new();
         let images = crate::pdf::ImageRegistry::new();
-        crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[], None).unwrap()
+        crate::pdf::render_pdf(&pages, &doc.fonts, &fonts, &images, &doc.meta, doc.paints(), None, false, &doc.output, &[], None).unwrap()
     }
 
     /// The text's XML, and the tree the SDKs would build from the strings and spans the generator writes for it.

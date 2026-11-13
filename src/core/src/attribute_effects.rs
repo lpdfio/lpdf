@@ -129,6 +129,8 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
         ("font@name", &["renamed"]),
         ("image@name", &["renamed"]),
         ("color@name", &["renamed"]),
+        ("spot@name", &["renamed"]),
+        ("spot@ink", &["Other ink"]),
         ("gradient@name", &["renamed"]),
         ("ruling@name", &["renamed"]),
         ("section@ruling", &["paper"]),
@@ -462,7 +464,7 @@ fn render(xml: &str) -> Result<Vec<u8>, String> {
         let press = crate::pdfx::resolve(doc.output.pdfx.as_ref(), &doc.profiles, &profiles, &doc.meta)?;
         let created_on = crate::pdfa::Standards::of(&doc.output).any().then_some("2026-10-31T09:30:00Z");
         let bytes = crate::pdf::render_pdf(
-            &pages, &doc.fonts, &fonts, &images, &doc.meta, &doc.gradients, created_on, false, &doc.output, &files,
+            &pages, &doc.fonts, &fonts, &images, &doc.meta, doc.paints(), created_on, false, &doc.output, &files,
             press.as_ref(),
         )?;
         crate::shared::finish_file(bytes, config.as_ref(), doc.output.linearize)
@@ -739,6 +741,15 @@ fn subjects() -> Vec<Subject> {
             )
         })
         .base(&[("name", "brand"), ("value", "#336699")]),
+        // A spot color shows on the column it fills as a tint and on the text in it, solid: its ink names the plate,
+        // its value is the stand-in, and an ink that overprints sets the state that does.
+        Subject::new("spot", |a, _| {
+            lpdf(
+                &format!("<tokens><spots><spot {a}/></spots></tokens>"),
+                r#"<document><section><layout><column background="brand 40%"><text color="brand">Alpha</text></column></layout></section></document>"#,
+            )
+        })
+        .base(&[("name", "brand"), ("ink", "Brand"), ("value", "#336699")]),
         // An alias shows on the text size that uses it, and the slot it names decides which size.
         Subject::new("alias", |a, _| {
             lpdf(
@@ -1062,6 +1073,7 @@ fn tweaks() -> HashMap<String, Tweak> {
     add("font@name", Tweak::default().error_counts());
     add("image@name", Tweak::default().error_counts());
     add("color@name", Tweak::default().error_counts());
+    add("spot@name", Tweak::default().error_counts());
     add("gradient@name", Tweak::default().error_counts());
     add("ruling@name", Tweak::default().error_counts());
     add("alias@name", Tweak::default().error_counts());
@@ -1332,9 +1344,12 @@ fn corrected(id: &str, xml: &str, lookup_of: Option<&str>, value: &str) -> Optio
         "region@pin=inset" => xml.replace(r#"pin="inset""#, r#"pin="inset" top="20pt" height="60pt""#),
         "shape@type=circle" => xml.replace(r#" width="100pt" height="40pt""#, r#" r="30pt""#),
         _ => {
-            // As an attribute's whole value (`color="brand"`), or after a prefix (`background="gradient:fade"`).
+            // As an attribute's whole value (`color="brand"`), after a prefix (`background="gradient:fade"`), or before
+            // a tint (`background="brand 40%"`).
             let old = lookup_of?;
-            xml.replace(&format!("\"{old}\""), &format!("\"{value}\"")).replace(&format!(":{old}\""), &format!(":{value}\""))
+            xml.replace(&format!("\"{old}\""), &format!("\"{value}\""))
+                .replace(&format!(":{old}\""), &format!(":{value}\""))
+                .replace(&format!("\"{old} "), &format!("\"{value} "))
         }
     };
     (fixed != xml).then_some(fixed)
