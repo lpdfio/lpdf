@@ -120,7 +120,7 @@ struct Resolvers {
 impl Resolvers {
     fn of(doc: &Document) -> Self {
         Self {
-            tokens: Tokens { colors: doc.colors.clone(), gradients: doc.gradients.clone(), ..Tokens::default() },
+            tokens: Tokens { colors: doc.colors.clone(), spots: doc.spots.clone(), gradients: doc.gradients.clone(), ..Tokens::default() },
             images: doc.images.clone(),
         }
     }
@@ -691,6 +691,7 @@ mod tests {
             background: None,
             gradients: HashMap::new(),
             colors: HashMap::new(),
+            spots: HashMap::new(),
             debug: false,
             footnote_counter: None,
             sections: vec![Section {

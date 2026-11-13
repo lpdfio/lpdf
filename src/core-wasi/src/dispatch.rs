@@ -427,7 +427,7 @@ fn render_pdf_doc(
     let status = license::check(license_key, now_unix);
 
     // An unlicensed status draws the attribution line on every page.
-    let bytes = pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, &doc.gradients, created_on, status.is_licensed(), &doc.output, &files, press.as_ref())?;
+    let bytes = pdf::render_pdf(&pages, &doc.fonts, &registry, &image_registry, &doc.meta, doc.paints(), created_on, status.is_licensed(), &doc.output, &files, press.as_ref())?;
     let bytes = shared::finish_file(bytes, encryption.as_ref(), doc.output.linearize)?;
     memory::check()?;
     Ok(bytes)

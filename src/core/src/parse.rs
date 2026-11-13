@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use crate::tokens::{
-    parse_factor, parse_length, parse_number, parse_opacity, split_unit, FontDef, FontWidths, Gradient, GradientSpec, Tokens, LENGTH_UNITS,
+    parse_factor, parse_length, parse_number, parse_opacity, split_unit, FontDef, FontWidths, Gradient, GradientSpec, Paints, Spot, Tokens, LENGTH_UNITS,
 };
 use crate::canvas;
 use crate::markdown;
@@ -36,6 +36,8 @@ pub struct Document {
     pub gradients:   HashMap<String, Gradient>,
     /// The color tokens, which a bound color (`data-color`) is checked against after binding.
     pub colors:      HashMap<String, String>,
+    /// The spot colors of the tokens, which a color names alone or with a tint.
+    pub spots:       HashMap<String, Spot>,
     pub debug:       bool,
     /// Where footnote numbers start over, for the sections that don't say (`footnote-counter`).
     pub footnote_counter: Option<FootnoteCounter>,
@@ -44,6 +46,11 @@ pub struct Document {
 }
 
 impl Document {
+    /// What the PDF writer paints with besides the colors of the nodes: the gradients and the spot colors.
+    pub fn paints(&self) -> Paints<'_> {
+        Paints { gradients: &self.gradients, spots: &self.spots }
+    }
+
     /// Derive a flat `Vec<SectionLayout>` from sections for use with the layout engine.
     /// Each section's layout child is converted to one `SectionLayout`.  Its layers are
     /// collected into `underlays` (before the layout) or `overlays` (after) per document order.
@@ -1677,6 +1684,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                     background:  doc_background,
                     gradients:   std::mem::take(&mut tokens.gradients),
                     colors:      std::mem::take(&mut tokens.colors),
+                    spots:       std::mem::take(&mut tokens.spots),
                     debug:       doc_debug,
                     footnote_counter: doc_footnote_counter,
                     sections:    sections_xml,
@@ -1856,10 +1864,13 @@ pub fn font_srcs(xml: &str) -> Result<Vec<(String, String)>, String> {
 // ── Tokens ────────────────────────────────────────────────────────────────────
 
 fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), String> {
-    // A gradient names colors of the `colors` row, and a ruling colors and slots of the `border` row, which may come
-    // after them, so gradients and rulings are read last.
+    // A gradient names colors of the `colors` and `spots` rows, and a ruling colors and slots of the `border` row,
+    // which may come after them, so gradients and rulings are read last. A spot color can't take a name the `colors`
+    // row writes, so the spots are read after that row.
+    let mut spots_elem = None;
     let mut gradients_elem = None;
     let mut rulings_elem = None;
+    let mut declared_colors: Vec<String> = Vec::new();
     for child in elems(elem) {
         match child.tag_name().name() {
             "space"  => tokens.space    = parse_scale_row(&child)?,
@@ -1877,13 +1888,27 @@ fn parse_tokens_elem(elem: &roxmltree::Node, tokens: &mut Tokens) -> Result<(), 
                         let name  = req_attr(&color_elem, "name")?;
                         let value = req_attr(&color_elem, "value")?;
                         let color = crate::tokens::normalize_color(&value)?;
+                        declared_colors.push(name.clone());
                         tokens.colors.insert(name, color);
                     }
                 }
             }
+            "spots" => spots_elem = Some(child),
             "gradients" => gradients_elem = Some(child),
             "rulings" => rulings_elem = Some(child),
             other => return Err(format!("<{}>{}: unknown element in <tokens>", other, node_loc(&child))),
+        }
+    }
+    if let Some(spots) = spots_elem {
+        let declared: Vec<&str> = declared_colors.iter().map(String::as_str).collect();
+        for spot in elems(&spots) {
+            if spot.tag_name().name() != "spot" {
+                return Err(format!("<{}>{}: unknown element in <spots>", spot.tag_name().name(), node_loc(&spot)));
+            }
+            let (name, ink, value) = (req_attr(&spot, "name")?, req_attr(&spot, "ink")?, req_attr(&spot, "value")?);
+            tokens
+                .add_spot(&name, &ink, &value, spot.attribute("overprint"), &declared)
+                .map_err(|e| format!("<spot>{}: {e}", node_loc(&spot)))?;
         }
     }
     if let Some(gradients) = gradients_elem {
@@ -2195,9 +2220,14 @@ pub struct Shadow {
 }
 
 /// Parse a `shadow`: "x y color", and after the color an opacity that fades the shadow alone, as in
-/// "2pt 3pt #000000 0.2".
+/// "2pt 3pt #000000 0.2". The color can be a tint of a spot color, two words: "2pt 3pt brand 30% 0.2".
 pub fn parse_shadow(val: &str, tokens: &Tokens) -> Result<Shadow, String> {
-    let parts = split_outside_parentheses(val);
+    let mut parts = split_outside_parentheses(val);
+    let tint = format!("{} {}", parts.get(2).copied().unwrap_or(""), parts.get(3).copied().unwrap_or(""));
+    if parts.get(3).is_some_and(|part| part.ends_with('%')) {
+        parts.drain(2..4);
+        parts.insert(2, &tint);
+    }
     if !(3..=4).contains(&parts.len()) {
         return Err(format!(
             "invalid shadow '{val}': expected 'x y color' and optionally an opacity, like '2pt 3pt #000000 0.2'"
@@ -4309,6 +4339,7 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
         background:  doc_background,
         gradients:   std::mem::take(&mut tokens.gradients),
         colors:      std::mem::take(&mut tokens.colors),
+        spots:       std::mem::take(&mut tokens.spots),
         debug:       doc_debug,
         footnote_counter: doc_footnote_counter,
         sections,
@@ -4360,7 +4391,21 @@ pub fn parse_tree_tokens_pub(
         }
     }
 
-    // Gradients name colors of the row above, so they are read after it.
+    // A spot color can't take a name of the row above, so the spots are read after it.
+    if let Some(spots) = obj.get("spots").and_then(|v| v.as_object()) {
+        let declared: Vec<&str> = obj
+            .get("colors")
+            .and_then(|v| v.as_object())
+            .map(|colors| colors.keys().map(String::as_str).collect())
+            .unwrap_or_default();
+        for (name, def) in spots {
+            let text = |key: &str| def.get(key).and_then(|v| v.as_str());
+            let field = |key: &str| text(key).ok_or_else(|| format!("spot color '{name}': missing {key}"));
+            tokens.add_spot(name, field("ink")?, field("value")?, text("overprint"), &declared)?;
+        }
+    }
+
+    // Gradients name colors and spot colors of the rows above, so they are read after them.
     if let Some(gradients) = obj.get("gradients").and_then(|v| v.as_object()) {
         for (name, def) in gradients {
             let resolved = parse_tree_gradient(name, def, tokens)?;

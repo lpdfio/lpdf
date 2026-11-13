@@ -63,7 +63,7 @@ fn text(pdf: &[u8]) -> String {
 
 /// A titled document in the font `body` that asks for PDF/X-4 with the profile `press`, `assets` beside the font and
 /// the profile, `attrs` on the document, and `layout` as its one layout.
-fn document(assets: &str, attrs: &str, layout: &str) -> String {
+pub(crate) fn document(assets: &str, attrs: &str, layout: &str) -> String {
     format!(
         r##"<lpdf version="1"><assets><font name="body" src="body.ttf"/><profile name="press" src="press.icc"/>{assets}</assets>
         <document font="body"{attrs}><meta title="Flyer"/><output pdfx="4" profile="press"/><section><layout>{layout}</layout></section></document></lpdf>"##
@@ -411,6 +411,11 @@ fn rgb_press_engine() -> LpdfEngine {
     engine
 }
 
+/// Render `xml` as `render` does, with a press profile `press` that prints in RGB.
+pub(crate) fn render_with_rgb_press(xml: &str) -> Result<Vec<u8>, String> {
+    rgb_press_engine().render_xml(xml, None, &RenderEncryption::default())
+}
+
 #[test]
 fn a_cmyk_page_background_with_a_profile_that_is_not_cmyk_is_an_error() {
     let xml = document("", "", "<text>A</text>").replace("<section>", r#"<section background="cmyk(0, 0, 10, 0)">"#);
@@ -492,8 +497,8 @@ fn the_brochure_example_is_a_pdfx_file() {
 // ── The samples of the external check ─────────────────────────────────────────
 
 /// Writes the files `scripts/check-pdfx.mjs` hands to qpdf, when `LPDF_PDFX_OUT` names a folder: the fixture, the
-/// brochure example and the fixture with graph paper on its sections, rendered unlicensed, so that the attribution
-/// line is checked too. Without the variable the test does nothing, so a plain `cargo test` needs no other tool.
+/// brochure example, and the fixture with graph paper on its sections and with spot colors, rendered unlicensed, so
+/// that the attribution line is checked too. Without the variable the test does nothing, so a plain `cargo test` needs no other tool.
 #[test]
 fn writes_the_pdfx_sample_for_the_external_check() {
     let Some(dir) = std::env::var_os("LPDF_PDFX_OUT") else { return };
@@ -502,4 +507,5 @@ fn writes_the_pdfx_sample_for_the_external_check() {
     std::fs::write(dir.join("pdfx-4.pdf"), render_fixture()).expect("a sample");
     std::fs::write(dir.join("pdfx-4-brochure.pdf"), render_brochure()).expect("a sample");
     std::fs::write(dir.join("pdfx-4-ruling.pdf"), crate::ruling_render_tests::pdfx_sample()).expect("a sample");
+    std::fs::write(dir.join("pdfx-4-spot.pdf"), crate::spot_render_tests::pdfx_sample()).expect("a sample");
 }

@@ -95,6 +95,6 @@ impl LpdfEngine {
         let pages: Vec<render::RenderPage> =
             layout::layout_document(&lp)?;
         // Unlicensed, as in the core stub, so both crates hash the same attributed bytes.
-        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, &doc.output, &[], None)
+        pdf::render_pdf(&pages, &doc.fonts, &pdf::FontRegistry::new(), &pdf::ImageRegistry::new(), &doc.meta, doc.paints(), None, false, &doc.output, &[], None)
     }
 }

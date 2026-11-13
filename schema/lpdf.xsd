@@ -271,17 +271,18 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- a color as written, or a named color token e.g. "primary", "surface-alt" -->
+  <!-- a color as written, a named color token, or a spot color of the tokens alone or as a tint, a percentage of its
+       ink after a space: e.g. "primary", "surface-alt", "brand", "brand 30%" -->
   <xs:simpleType name="Color">
     <xs:restriction base="xs:string">
-      <xs:pattern value="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|cmyk\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){3}|\d+(\.\d+)?(\s+\d+(\.\d+)?){3})\s*\)|rgb\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){2}|\d+(\.\d+)?(\s+\d+(\.\d+)?){2})\s*\)|hsl\(\s*(\d+(\.\d+)?\s*,\s*\d+(\.\d+)?%\s*,\s*\d+(\.\d+)?%|\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%)\s*\)|[a-z][a-z0-9-]*"/>
+      <xs:pattern value="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|cmyk\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){3}|\d+(\.\d+)?(\s+\d+(\.\d+)?){3})\s*\)|rgb\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){2}|\d+(\.\d+)?(\s+\d+(\.\d+)?){2})\s*\)|hsl\(\s*(\d+(\.\d+)?\s*,\s*\d+(\.\d+)?%\s*,\s*\d+(\.\d+)?%|\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%)\s*\)|[a-z][a-z0-9-]*|[a-z][a-z0-9-]* \d+(\.\d+)?%"/>
     </xs:restriction>
   </xs:simpleType>
 
   <!-- a color, or a gradient of the tokens e.g. "gradient:brand-fade" -->
   <xs:simpleType name="Fill">
     <xs:restriction base="xs:string">
-      <xs:pattern value="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|cmyk\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){3}|\d+(\.\d+)?(\s+\d+(\.\d+)?){3})\s*\)|rgb\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){2}|\d+(\.\d+)?(\s+\d+(\.\d+)?){2})\s*\)|hsl\(\s*(\d+(\.\d+)?\s*,\s*\d+(\.\d+)?%\s*,\s*\d+(\.\d+)?%|\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%)\s*\)|gradient:[a-z][a-z0-9-]*|[a-z][a-z0-9-]*"/>
+      <xs:pattern value="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|cmyk\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){3}|\d+(\.\d+)?(\s+\d+(\.\d+)?){3})\s*\)|rgb\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){2}|\d+(\.\d+)?(\s+\d+(\.\d+)?){2})\s*\)|hsl\(\s*(\d+(\.\d+)?\s*,\s*\d+(\.\d+)?%\s*,\s*\d+(\.\d+)?%|\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%)\s*\)|gradient:[a-z][a-z0-9-]*|[a-z][a-z0-9-]*|[a-z][a-z0-9-]* \d+(\.\d+)?%"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -318,7 +319,7 @@
   <!-- x offset, y offset, color and optionally an opacity, e.g. "2pt 3pt #000000" or "2pt 3pt text 0.2" -->
   <xs:simpleType name="ShadowValue">
     <xs:restriction base="xs:string">
-      <xs:pattern value="(0|-?\d+(\.\d+)?(pt|mm|in)) (0|-?\d+(\.\d+)?(pt|mm|in)) (#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|cmyk\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){3}|\d+(\.\d+)?(\s+\d+(\.\d+)?){3})\s*\)|rgb\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){2}|\d+(\.\d+)?(\s+\d+(\.\d+)?){2})\s*\)|hsl\(\s*(\d+(\.\d+)?\s*,\s*\d+(\.\d+)?%\s*,\s*\d+(\.\d+)?%|\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%)\s*\)|[a-z][a-z0-9-]*)( (0(\.\d+)?|1(\.0+)?|\.\d+))?"/>
+      <xs:pattern value="(0|-?\d+(\.\d+)?(pt|mm|in)) (0|-?\d+(\.\d+)?(pt|mm|in)) (#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?|cmyk\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){3}|\d+(\.\d+)?(\s+\d+(\.\d+)?){3})\s*\)|rgb\(\s*(\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?){2}|\d+(\.\d+)?(\s+\d+(\.\d+)?){2})\s*\)|hsl\(\s*(\d+(\.\d+)?\s*,\s*\d+(\.\d+)?%\s*,\s*\d+(\.\d+)?%|\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%)\s*\)|[a-z][a-z0-9-]*|[a-z][a-z0-9-]* \d+(\.\d+)?%)( (0(\.\d+)?|1(\.0+)?|\.\d+))?"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -1204,6 +1205,34 @@
     </xs:complexType>
   </xs:element>
 
+  <xs:element name="spot">
+    <xs:annotation>
+      <xs:documentation>A spot color: an ink of its own, such as a brand color, a varnish or a die-cut line, printed from a plate of its own. Anything that takes a color takes its name, solid, or as a tint, a percentage of the ink after a space: brand 30%.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:attribute name="name" type="TokenName" use="required">
+        <xs:annotation>
+          <xs:documentation>The name a color attribute gives: lowercase letters, digits and -, starting with a letter. Not a name of the colors row.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="ink" type="xs:string" use="required">
+        <xs:annotation>
+          <xs:documentation>The name of the ink as the printer knows it, which names its plate, such as PANTONE 1665 C. Each spot color has an ink of its own. Not All or None, which PDF keeps for every plate and no plate, and not Cyan, Magenta, Yellow or Black, the process inks that cmyk() prints with.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="value" type="ColorHex" use="required">
+        <xs:annotation>
+          <xs:documentation>The color that stands in for the ink where it is not printed as a plate of its own, on a screen or a proof: hex, cmyk(), rgb() or hsl(), not a color token.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="overprint" type="Boolean">
+        <xs:annotation>
+          <xs:documentation>Whether the ink prints on top of the inks under it, as a varnish or a die-cut line does, instead of leaving them out where it sits. A screen doesn't show it, a press and an overprint preview do. Defaults to false.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+
   <xs:element name="alias">
     <xs:annotation>
       <xs:documentation>A name for a slot of the scale. An attribute that takes a slot (xs to xxl) takes the name instead, and gets that slot of its own row: with caption for xs, font-size="caption" is the text size xs, and gap="caption" the space xs. A name that is neither a slot nor an alias is an error.</xs:documentation>
@@ -1231,7 +1260,7 @@
       </xs:attribute>
       <xs:attribute name="color" type="Color" use="required">
         <xs:annotation>
-          <xs:documentation>The color at the stop: hex, cmyk(), rgb(), hsl() or a color token. The stops of a gradient are all CMYK or all RGB.</xs:documentation>
+          <xs:documentation>The color at the stop: hex, cmyk(), rgb(), hsl(), a color token, or a spot color or a tint of it. The stops of a gradient are all CMYK, all RGB, or all tints of one spot color.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
     </xs:complexType>
@@ -1257,12 +1286,12 @@
       </xs:attribute>
       <xs:attribute name="from" type="Color">
         <xs:annotation>
-          <xs:documentation>The first color: hex, cmyk(), rgb(), hsl() or a color token, CMYK if to is and RGB if it is not. Used with to, when there are no stop children. For a radial gradient it is the center.</xs:documentation>
+          <xs:documentation>The first color: hex, cmyk(), rgb(), hsl(), a color token, or a spot color or a tint of it: CMYK if to is and RGB if it is not, or the same spot color as to. Used with to, when there are no stop children. For a radial gradient it is the center.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="to" type="Color">
         <xs:annotation>
-          <xs:documentation>The last color: hex, cmyk(), rgb(), hsl() or a color token. Used with from, when there are no stop children. For a radial gradient it is the edge.</xs:documentation>
+          <xs:documentation>The last color: hex, cmyk(), rgb(), hsl(), a color token, or a spot color or a tint of it. Used with from, when there are no stop children. For a radial gradient it is the edge.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="angle" type="xs:decimal">
@@ -1310,7 +1339,7 @@
       </xs:attribute>
       <xs:attribute name="color" type="Color">
         <xs:annotation>
-          <xs:documentation>The color of the lines: hex, cmyk(), rgb(), hsl() or a color token. Defaults to line-muted.</xs:documentation>
+          <xs:documentation>The color of the lines: hex, cmyk(), rgb(), hsl(), a color token, or a spot color or a tint of it. Defaults to line-muted.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="thickness" type="TokenScaleOrPt">
@@ -1375,6 +1404,13 @@
           <xs:complexType>
             <xs:sequence>
               <xs:element ref="color" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="spots" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element ref="spot" minOccurs="0" maxOccurs="unbounded"/>
             </xs:sequence>
           </xs:complexType>
         </xs:element>

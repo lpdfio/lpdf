@@ -36,7 +36,7 @@ use std::rc::Rc;
 
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
 use pdf_writer::writers::Resources;
-use pdf_writer::types::{ActionType, AnnotationFlags, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, FunctionShadingType, HighlightEffect, LineCapStyle, LineJoinStyle, OutputIntentSubtype, PageMode, Predictor, TabOrder, TableHeaderScope, TextRenderingMode, TrappingStatus};
+use pdf_writer::types::{ActionType, AnnotationFlags, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, FunctionShadingType, HighlightEffect, LineCapStyle, LineJoinStyle, OutputIntentSubtype, OverprintMode, PageMode, Predictor, TabOrder, TableHeaderScope, TextRenderingMode, TrappingStatus};
 use md5::{Digest, Md5};
 use ttf_parser::{Face, Permissions};
 use miniz_oxide::deflate::compress_to_vec_zlib;
@@ -53,7 +53,7 @@ use crate::pdfua::PdfUa;
 use crate::raster::{self, Raster};
 use crate::ruling::{Drawing, Run};
 use crate::tagging::{Kid, Kind, LinkMark, Marks};
-use crate::tokens::{FontDef, Gradient, GradientKind, GRADIENT_PREFIX, is_cmyk};
+use crate::tokens::{spot_paint, FontDef, Gradient, GradientKind, Paints, Spot, GRADIENT_PREFIX, is_cmyk};
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -783,26 +783,34 @@ pub(crate) fn parse_hex(hex: &str) -> (f32, f32, f32) {
 }
 
 /// A color as the PDF paints it, each component from 0 to 1. The operator names the color space: `rg` and `RG`
-/// DeviceRGB, `k` and `K` DeviceCMYK, so the two mix on a page with nothing else to set.
+/// DeviceRGB, `k` and `K` DeviceCMYK, so the two mix on a page with nothing else to set. A spot color is a tint in
+/// the Separation space of its ink, which `cs` and `CS` select by the name the resources give it.
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum Color {
+enum Color<'a> {
     Rgb(f32, f32, f32),
     Cmyk(f32, f32, f32, f32),
+    /// The spot color of the tokens named `name`, at `tint` of its ink.
+    Spot { name: &'a str, tint: f32 },
 }
 
-impl Color {
+impl Color<'_> {
     /// The components, in the order of the color space: what a shading's functions take.
     fn components(self) -> Vec<f32> {
         match self {
             Color::Rgb(r, g, b)     => vec![r, g, b],
             Color::Cmyk(c, m, y, k) => vec![c, m, y, k],
+            Color::Spot { tint, .. } => vec![tint],
         }
     }
 }
 
 /// Parse a normalised color (`tokens::normalize_color`): `#rrggbb` or `#rgb`, or `cmyk(C, M, Y, K)` with values from
-/// 0 to 100. Colors are checked when the document is read, so a malformed one here is black, as in `parse_hex`.
-fn parse_color(color: &str) -> Color {
+/// 0 to 100, or a spot color as `Tokens::resolve_color` writes it (`spot_paint`). Colors are checked when the
+/// document is read, so a malformed one here is black, as in `parse_hex`.
+fn parse_color(color: &str) -> Color<'_> {
+    if let Some(paint) = spot_paint(color) {
+        return Color::Spot { name: paint.name, tint: paint.tint / 100.0 };
+    }
     let Some(values) = color.strip_prefix("cmyk(").and_then(|rest| rest.strip_suffix(')')) else {
         let (r, g, b) = parse_hex(color);
         return Color::Rgb(r, g, b);
@@ -814,20 +822,229 @@ fn parse_color(color: &str) -> Color {
     }
 }
 
-/// Set the color that fills paint with, in its own color space.
+/// Set the color that fills paint with, in its own color space. A spot color's overprint is set apart
+/// (`set_overprint`).
 fn set_fill_color(content: &mut Content, color: &str) {
     match parse_color(color) {
         Color::Rgb(r, g, b)     => content.set_fill_rgb(r, g, b),
         Color::Cmyk(c, m, y, k) => content.set_fill_cmyk(c, m, y, k),
+        Color::Spot { name, tint } => {
+            content.set_fill_color_space(Name(spot_resource_name(name).as_bytes()));
+            content.set_fill_color([tint])
+        }
     };
 }
 
-/// Set the color that strokes paint with, in its own color space.
+/// Set the color that strokes paint with, in its own color space. A spot color's overprint is set apart
+/// (`set_overprint`).
 fn set_stroke_color(content: &mut Content, color: &str) {
     match parse_color(color) {
         Color::Rgb(r, g, b)     => content.set_stroke_rgb(r, g, b),
         Color::Cmyk(c, m, y, k) => content.set_stroke_cmyk(c, m, y, k),
+        Color::Spot { name, tint } => {
+            content.set_stroke_color_space(Name(spot_resource_name(name).as_bytes()));
+            content.set_stroke_color([tint])
+        }
     };
+}
+
+// ── Spot colors ───────────────────────────────────────────────────────────────
+
+/// The name the resources give the Separation space of a spot color: the spot color's name in the tokens, which a
+/// token name keeps to characters a PDF name writes as they are.
+fn spot_resource_name(spot: &str) -> String {
+    format!("CS-{spot}")
+}
+
+/// The graphics states that overprint, by the name the resources give them, each with whether it overprints a fill
+/// and a stroke. Each sets both, so it doesn't depend on the state before it (ISO 32000-1, 8.4.5: `OP` alone would
+/// set the fill's too). OPM 1 keeps the process plates under a CMYK color whose value on them is 0.
+const OVERPRINT_STATES: [(&str, bool, bool); 3] = [("OP-fill", true, false), ("OP-stroke", false, true), ("OP-both", true, true)];
+
+/// Whether a color is a spot color whose ink overprints.
+fn overprints(color: Option<&str>) -> bool {
+    color.and_then(spot_paint).is_some_and(|paint| paint.overprint)
+}
+
+/// Set the overprint of what is painted next with the fill `fill` and the stroke `stroke`: the state of
+/// `OVERPRINT_STATES` for a spot color whose ink overprints. Nothing when neither does, which is the state of a page,
+/// so call this inside the `q` the paint's colors are set in, and the `Q` after the paint ends it.
+fn set_overprint(content: &mut Content, fill: Option<&str>, stroke: Option<&str>) {
+    let wanted = (overprints(fill), overprints(stroke));
+    if let Some((name, ..)) = OVERPRINT_STATES.iter().find(|(_, fill, stroke)| (*fill, *stroke) == wanted) {
+        content.set_parameters(Name(name.as_bytes()));
+    }
+}
+
+/// The spot colors a document paints with: each page's, by name in the order the page first paints with them, and the
+/// document's, in the order the pages first do, so that the same document numbers its objects the same way.
+struct SpotUse<'a> {
+    pages: Vec<Vec<&'a str>>,
+    used:  Vec<(&'a str, &'a Spot)>,
+}
+
+impl<'a> SpotUse<'a> {
+    /// Find the spot colors of `pages`. A document without spot colors walks no page.
+    fn of(pages: &'a [RenderPage], paints: Paints<'a>) -> SpotUse<'a> {
+        if paints.spots.is_empty() {
+            return SpotUse { pages: pages.iter().map(|_| Vec::new()).collect(), used: Vec::new() };
+        }
+        let pages: Vec<Vec<&str>> = pages.iter().map(|page| page_spots(page, paints)).collect();
+        let mut used: Vec<(&str, &Spot)> = Vec::new();
+        for name in pages.iter().flatten() {
+            if !used.iter().any(|(known, _)| known == name)
+                && let Some((name, spot)) = paints.spots.get_key_value(*name)
+            {
+                used.push((name.as_str(), spot));
+            }
+        }
+        SpotUse { pages, used }
+    }
+
+    /// Whether any of `spots` overprints, so that the resources that name them name the overprint states too.
+    fn overprint(&self, spots: &[&str]) -> bool {
+        self.used.iter().any(|(name, spot)| spot.overprint && spots.contains(name))
+    }
+}
+
+/// The spot colors a page paints with, by name, in the order it first does: its background, then each node before its
+/// children, a gradient's by its stops.
+fn page_spots<'a>(page: &'a RenderPage, paints: Paints<'a>) -> Vec<&'a str> {
+    fn note<'a>(color: &'a str, paints: Paints<'a>, found: &mut Vec<&'a str>) {
+        let stops: Vec<&str> = match gradient_of(color, paints.gradients) {
+            Some((_, gradient)) => gradient.stops.iter().map(|stop| stop.color.as_str()).collect(),
+            None => vec![color],
+        };
+        for paint in stops.into_iter().filter_map(spot_paint) {
+            if !found.contains(&paint.name) {
+                found.push(paint.name);
+            }
+        }
+    }
+    fn walk<'a>(nodes: &'a [RenderNode], paints: Paints<'a>, found: &mut Vec<&'a str>) {
+        for node in nodes {
+            for color in node_colors(node) {
+                note(color, paints, found);
+            }
+            match node {
+                RenderNode::Box(b)         => walk(&b.children, paints, found),
+                RenderNode::Link(l)        => walk(&l.children, paints, found),
+                RenderNode::CanvasLayer(l) => walk(&l.children, paints, found),
+                _                          => {}
+            }
+        }
+    }
+    let mut found = Vec::new();
+    if let Some(background) = &page.background {
+        note(background, paints, &mut found);
+    }
+    walk(&page.nodes, paints, &mut found);
+    found
+}
+
+/// The spot colors the lines of a ruling paint with, by name.
+fn ruling_spots(drawing: &Drawing) -> Vec<&str> {
+    let mut found: Vec<&str> = Vec::new();
+    for paint in drawing.sets.iter().filter_map(|set| spot_paint(&set.color)) {
+        if !found.contains(&paint.name) {
+            found.push(paint.name);
+        }
+    }
+    found
+}
+
+/// Write the Separation space of a spot color: its ink, the device space of its stand-in, and a tint transform from
+/// white at 0 to the stand-in at 1, which a viewer and a proof show where the ink is not printed as a plate of its
+/// own (ISO 32000-1, 8.6.6.4).
+#[inline(never)]
+fn write_separation(pdf: &mut Pdf, id: Ref, spot: &Spot) {
+    let stand_in = parse_color(&spot.value);
+    let white = match stand_in {
+        Color::Cmyk(..) => vec![0.0; 4],
+        _               => vec![1.0; 3],
+    };
+    let mut separation = pdf.color_space(id).separation(Name(spot.ink.as_bytes()));
+    // pdf-writer 0.12 doesn't export the type `alternate_device` takes, so the space is written as a color space.
+    match stand_in {
+        Color::Cmyk(..) => separation.alternate_color_space().device_cmyk(),
+        _               => separation.alternate_color_space().device_rgb(),
+    }
+    separation.tint_exponential().domain([0.0, 1.0]).c0(white).c1(stand_in.components()).n(1.0);
+}
+
+/// Write the graphics states of `OVERPRINT_STATES`, each to its id.
+#[inline(never)]
+fn write_overprint_states(pdf: &mut Pdf, ids: &[Ref]) {
+    for ((_, fill, stroke), id) in OVERPRINT_STATES.iter().zip(ids) {
+        pdf.ext_graphics(*id)
+            .overprint(*stroke)
+            .overprint_fill(*fill)
+            .overprint_mode(OverprintMode::IgnoreZeroChannel);
+    }
+}
+
+/// Name in `resources` the Separation spaces of `spots`, beside a PDF/X file's `DefaultRGB` (`default_rgb`), as one
+/// color space dictionary. `named` says whether the content stream names one, which a linearized file asks.
+///
+/// Not inlined, for the reason `write_fields` is not.
+#[inline(never)]
+fn write_color_spaces(
+    resources:   &mut Resources<'_>,
+    default_rgb: Option<Ref>,
+    spots:       &[&str],
+    spot_ids:    &[(&str, Ref)],
+    named:       &dyn Fn(&str) -> bool,
+) {
+    if default_rgb.is_none() && spots.is_empty() {
+        return;
+    }
+    let mut spaces = resources.color_spaces();
+    if let Some(srgb) = default_rgb {
+        spaces.insert(Name(b"DefaultRGB")).array().item(Name(b"ICCBased")).item(srgb);
+    }
+    for (spot, id) in spot_ids.iter().filter(|(spot, _)| spots.contains(spot)) {
+        let name = spot_resource_name(spot);
+        if named(&name) {
+            spaces.pair(Name(name.as_bytes()), *id);
+        }
+    }
+}
+
+/// Name in `resources` the graphics states of the opacities, `opacities`, and the ones that overprint, `overprint`, the
+/// ids of `OVERPRINT_STATES` or none, as one dictionary. `named` says whether the content stream names one, which a
+/// linearized file asks.
+///
+/// Not inlined, for the reason `write_fields` is not.
+#[inline(never)]
+fn write_graphics_states(resources: &mut Resources<'_>, opacities: &[(u32, Ref)], overprint: &[Ref], named: &dyn Fn(&str) -> bool) {
+    if opacities.is_empty() && overprint.is_empty() {
+        return;
+    }
+    let mut states = resources.ext_g_states();
+    for (percent, id) in opacities {
+        let name = opacity_gs_name(*percent);
+        if named(&name) {
+            states.pair(Name(name.as_bytes()), *id);
+        }
+    }
+    for ((name, ..), id) in OVERPRINT_STATES.iter().zip(overprint) {
+        if named(name) {
+            states.pair(Name(name.as_bytes()), *id);
+        }
+    }
+}
+
+/// Draw what `draw` paints with `fill` and `stroke` with their overprint (`set_overprint`), in a `q` of its own when
+/// either overprints, so that what is drawn after it doesn't.
+fn with_overprint(content: &mut Content, fill: Option<&str>, stroke: Option<&str>, draw: impl FnOnce(&mut Content)) {
+    if overprints(fill) || overprints(stroke) {
+        content.save_state();
+        set_overprint(content, fill, stroke);
+        draw(content);
+        content.restore_state();
+    } else {
+        draw(content);
+    }
 }
 
 // ── Text encoding ─────────────────────────────────────────────────────────────
@@ -1349,6 +1566,7 @@ fn draw_drawn(
         RenderNode::Line(l) => {
             content.save_state();
             set_stroke_color(content, &l.color);
+            set_overprint(content, None, Some(&l.color));
             content.set_line_width(l.thickness);
 
             // Optional dash pattern for dashed/dotted lines.
@@ -1381,6 +1599,12 @@ fn draw_drawn(
             let encoded = font.encode_text(&t.content);
             let rname   = font.resource_name.as_bytes().to_vec();
 
+            // A `q` can't go inside the text object, so an overprinting color has its own around it.
+            let overprint = overprints(Some(&t.color));
+            if overprint {
+                content.save_state();
+                set_overprint(content, Some(&t.color), None);
+            }
             content.begin_text();
             set_fill_color(content, &t.color);
             content.set_font(Name(&rname), t.size);
@@ -1410,6 +1634,9 @@ fn draw_drawn(
                 content.show(Str(&encoded));
             }
             content.end_text();
+            if overprint {
+                content.restore_state();
+            }
         }
 
         // ── Link ─────────────────────────────────────────────────────────────
@@ -1473,12 +1700,15 @@ fn draw_drawn(
             // Optional background fill.
             if let Some(bg) = &bc.bg {
                 let pdf_y = page_h - bc.y - bc.height;
-                set_fill_color(content, bg);
-                content.rect(bc.x, pdf_y, bc.width, bc.height);
-                content.fill_nonzero();
+                with_overprint(content, Some(bg), None, |content| {
+                    set_fill_color(content, bg);
+                    content.rect(bc.x, pdf_y, bc.width, bc.height);
+                    content.fill_nonzero();
+                });
             }
 
             set_fill_color(content, &bc.color);
+            set_overprint(content, Some(&bc.color), None);
 
             match &bc.kind {
                 RenderedBarcodeKind::Qr { modules, size } => {
@@ -1584,6 +1814,7 @@ fn draw_drawn(
                         content.set_dash_pattern(dash.iter().copied(), 0.0);
                     }
                 }
+                set_overprint(content, r.fill.as_deref().filter(|_| solid_fill), r.stroke.as_deref().filter(|_| has_stroke));
                 if r.border_radius > 0.0 {
                     rounded_rect(content, r.x, pdf_y, r.w, r.h, r.border_radius);
                 } else {
@@ -1603,6 +1834,7 @@ fn draw_drawn(
         RenderNode::CanvasLine(l) => {
             content.save_state();
             set_stroke_color(content, &l.stroke);
+            set_overprint(content, None, Some(&l.stroke));
             content.set_line_width(l.stroke_width);
             if l.line_cap > 0 { content.set_line_cap(u8_to_line_cap(l.line_cap)); }
             if l.line_join > 0 { content.set_line_join(u8_to_line_join(l.line_join)); }
@@ -1642,6 +1874,7 @@ fn draw_drawn(
                         content.set_dash_pattern(dash.iter().copied(), 0.0);
                     }
                 }
+                set_overprint(content, e.fill.as_deref().filter(|_| solid_fill), e.stroke.as_deref().filter(|_| has_stroke));
                 // Emit ellipse via 4 cubic-Bézier arcs (Kappa approximation).
                 // PDF y is flipped.
                 let cx = e.cx;
@@ -1685,6 +1918,7 @@ fn draw_drawn(
                         content.set_dash_pattern(dash.iter().copied(), 0.0);
                     }
                 }
+                set_overprint(content, p.fill.as_deref().filter(|_| solid_fill), p.stroke.as_deref().filter(|_| has_stroke));
                 emit_svg_path(content, &p.d, page_h);
                 match (solid_fill, has_stroke, p.fill_rule_evenodd) {
                     (true,  true,  false) => { content.fill_nonzero_and_stroke(); }
@@ -1769,6 +2003,7 @@ fn draw_box_paint(content: &mut Content, b: &RenderBox, pdf_y: f32, solid_fill: 
         set_stroke_color(content, b.border_color.as_deref().unwrap_or("#000000"));
         content.set_line_width(b.border_width);
     }
+    set_overprint(content, b.fill.as_deref().filter(|_| solid_fill), b.border_color.as_deref().filter(|_| has_border));
 
     if b.radius > 0.0 {
         rounded_rect(content, b.x, pdf_y, b.width, b.height, b.radius);
@@ -1878,6 +2113,7 @@ fn draw_shadow(
             content.end_path();
         }
         set_fill_color(content, &shadow.color);
+        set_overprint(content, Some(&shadow.color), None);
         outline.path(content, dx, dy);
         content.fill_nonzero();
         content.restore_state();
@@ -1976,6 +2212,7 @@ fn ruling_content(drawing: &Drawing) -> Vec<u8> {
         let (top, bottom) = (drawing.height - top, drawing.height - bottom);
         content.save_state();
         set_stroke_color(&mut content, &set.color);
+        set_overprint(&mut content, None, Some(&set.color));
         content.set_line_width(set.thickness);
         draw_run(&mut content, set.down, [1.0, 0.0, 0.0, 1.0, set.down.first, 0.0], [1.0, 0.0, 0.0, 1.0, set.down.step, 0.0], |content| {
             content.move_to(0.0, bottom);
@@ -2159,7 +2396,7 @@ fn gradient_function_count(gradient: &Gradient) -> usize {
 ///
 /// Not inlined, for the reason `write_fields` is not.
 #[inline(never)]
-fn write_gradient(pdf: &mut Pdf, gradient: &Gradient, ids: &GradientIds) {
+fn write_gradient(pdf: &mut Pdf, gradient: &Gradient, ids: &GradientIds, spot_ids: &[(&str, Ref)]) {
     let components = |color: &str| parse_color(color).components();
     let stops = &gradient.stops;
     let pieces = stops.len() - 1;
@@ -2186,8 +2423,12 @@ fn write_gradient(pdf: &mut Pdf, gradient: &Gradient, ids: &GradientIds) {
 
     let function_id = ids.function_ids[ids.function_ids.len() - 1];
     let mut shading = pdf.function_shading(ids.shading_id);
-    // The stops are all CMYK or all RGB (`Tokens::resolve_gradient`).
-    if stops.iter().all(|stop| is_cmyk(&stop.color)) {
+    // The stops are all CMYK, all RGB, or all tints of one spot color, whose Separation space the shading is in
+    // (`Tokens::resolve_gradient`).
+    let spot = stops.first().and_then(|stop| spot_paint(&stop.color));
+    if let Some((_, id)) = spot.and_then(|paint| spot_ids.iter().find(|(name, _)| *name == paint.name)) {
+        shading.pair(Name(b"ColorSpace"), *id);
+    } else if stops.iter().all(|stop| is_cmyk(&stop.color)) {
         shading.color_space().device_cmyk();
     } else {
         shading.color_space().device_rgb();
@@ -2291,6 +2532,8 @@ fn fill_with_gradient(
         content.clip_nonzero();
     }
     content.end_path();
+    // A gradient of a spot color is tints of that one color, which all overprint or none do.
+    set_overprint(content, gradient.stops.first().map(|stop| stop.color.as_str()), None);
     content.transform(gradient_matrix(gradient, x, y, w, h));
     content.shading(Name(shading_resource_name(name).as_bytes()));
     content.restore_state();
@@ -2505,6 +2748,24 @@ fn emit_svg_path(content: &mut impl PathSink, d: &str, page_h: f32) {
     }
 }
 
+/// The colors of a field's background and border, which its appearances paint with.
+fn field_colors(field: &RenderField) -> [Option<&str>; 2] {
+    [field.background.as_deref(), field.border.as_ref().map(|(_, color)| color.as_str())]
+}
+
+/// The spot colors of a field's background and border, by name.
+fn field_spots(field: &RenderField) -> Vec<&str> {
+    field_colors(field).into_iter().flatten().filter_map(|color| spot_paint(color).map(|paint| paint.name)).collect()
+}
+
+/// Name in the resources of a field's appearance the Separation spaces of its spot colors, and the states that
+/// overprint where one of them does. Only for a field with spot colors: the appearance of one without has no resources.
+fn write_field_spots(resources: &mut Resources<'_>, field: &RenderField, spot_ids: &[(&str, Ref)], overprint_ids: &[Ref]) {
+    write_color_spaces(resources, None, &field_spots(field), spot_ids, &|_| true);
+    let overprint = if field_colors(field).into_iter().any(overprints) { overprint_ids } else { &[] };
+    write_graphics_states(resources, &[], overprint, &|_| true);
+}
+
 /// Draw background fill and/or border for a form field appearance XObject.
 /// Coordinates are local (0,0 → w,h).
 fn write_field_background_border(
@@ -2526,6 +2787,7 @@ fn write_field_background_border(
             set_stroke_color(content, bc);
             content.set_line_width(*bw);
         }
+        set_overprint(content, background.as_deref(), border.as_ref().filter(|_| has_border).map(|(_, color)| color.as_str()));
         content.rect(0.0, 0.0, w, h);
         match (has_bg, has_border) {
             (true,  true)  => { content.fill_nonzero_and_stroke(); }
@@ -2868,9 +3130,11 @@ fn draw_page_background(content: &mut Content, page: &RenderPage, bg: &str, grad
             });
         }
     } else {
-        set_fill_color(content, bg);
-        content.rect(x, y, w, h);
-        content.fill_nonzero();
+        with_overprint(content, Some(bg), None, |content| {
+            set_fill_color(content, bg);
+            content.rect(x, y, w, h);
+            content.fill_nonzero();
+        });
     }
 }
 
@@ -3180,6 +3444,7 @@ fn assemble_pdf(
     fields:             &[(usize, RenderField)],
     anchors:            &[PlacedAnchor],
     used_gradients:     &[(&str, &Gradient)],
+    spot_use:           &SpotUse,
     rulings:            &[Rc<Drawing>],
     meta:               &Meta,
     date:               Option<&str>,
@@ -3233,6 +3498,13 @@ fn assemble_pdf(
 
     // The rulings' form XObjects after them, for the same reason.
     let ruling_ids: Vec<Ref> = rulings.iter().map(|_| alloc.next()).collect();
+
+    // The Separation spaces of the spot colors, and the graphics states that overprint, last, for the same reason.
+    let spot_ids: Vec<(&str, Ref)> = spot_use.used.iter().map(|(name, _)| (*name, alloc.next())).collect();
+    let overprint_ids: Vec<Ref> = match spot_use.used.iter().any(|(_, spot)| spot.overprint) {
+        true  => OVERPRINT_STATES.iter().map(|_| alloc.next()).collect(),
+        false => Vec::new(),
+    };
 
     let n = pages.len();
     let mut pdf = Pdf::new();
@@ -3353,13 +3625,11 @@ fn assemble_pdf(
     // groups it draws: the `drawn` positions in `groups`, the form XObjects of the page. A linearized file puts page 1
     // and everything it reaches first, so there each page and group names only the fonts, images, opacities and
     // shadings its content stream does (`used`): named on every page, they would all go before page 1 shows.
-    let write_resources = |resources: &mut Resources<'_>, groups: &[Ref], drawn: Range<usize>, used: Option<&HashSet<Vec<u8>>>| {
+    let write_resources = |resources: &mut Resources<'_>, groups: &[Ref], drawn: Range<usize>, used: Option<&HashSet<Vec<u8>>>, spots: &[&str]| {
         let named = |name: &str| used.is_none_or(|used| used.contains(name.as_bytes()));
         // In a PDF/X file every RGB color and image, drawn as DeviceRGB, is sRGB: the device space a press can't print
-        // as it is gets a meaning (ISO 32000-1, 8.6.5.6).
-        if let Some(ids) = &press_ids {
-            resources.color_spaces().insert(Name(b"DefaultRGB")).array().item(Name(b"ICCBased")).item(ids.srgb);
-        }
+        // as it is gets a meaning (ISO 32000-1, 8.6.5.6). The spot colors of the page are in the same dictionary.
+        write_color_spaces(resources, press_ids.as_ref().map(|ids| ids.srgb), spots, &spot_ids, &named);
         {
             let mut font_res = resources.fonts();
             for name in sorted_font_names {
@@ -3392,16 +3662,9 @@ fn assemble_pdf(
                 }
             }
         }
-        // Add ExtGState entries for opacity.
-        if !opacity_gs_ids.is_empty() {
-            let mut gs_res = resources.ext_g_states();
-            for (pct, gs_id) in &opacity_gs_ids {
-                let gs_name = opacity_gs_name(*pct);
-                if named(&gs_name) {
-                    gs_res.pair(Name(gs_name.as_bytes()), *gs_id);
-                }
-            }
-        }
+        // Add ExtGState entries for opacity, and the states that overprint where a spot color of the page does.
+        let overprint = if spot_use.overprint(spots) { overprint_ids.as_slice() } else { &[] };
+        write_graphics_states(resources, &opacity_gs_ids, overprint, &named);
         // The optional content groups, which the marked content of any page or group may name.
         if !ocg_ids.is_empty() {
             let mut properties = resources.insert(Name(b"Properties")).dict();
@@ -3443,7 +3706,7 @@ fn assemble_pdf(
             pw.media_box(trim);
         }
 
-        write_resources(&mut pw.resources(), &group_ids[i], 0..group_ids[i].len(), rendered_pages[i].content.names.as_ref());
+        write_resources(&mut pw.resources(), &group_ids[i], 0..group_ids[i].len(), rendered_pages[i].content.names.as_ref(), &spot_use.pages[i]);
 
         // Add the content stream reference.
         pw.contents(content_id);
@@ -3497,7 +3760,7 @@ fn assemble_pdf(
                     None => space.device_rgb(),
                 }
             }
-            write_resources(&mut form.resources(), &group_ids[i], group.nested.clone(), group.content.names.as_ref());
+            write_resources(&mut form.resources(), &group_ids[i], group.nested.clone(), group.content.names.as_ref(), &spot_use.pages[i]);
             if let Some(key) = keys.group(i, j) {
                 form.struct_parents(key);
             }
@@ -3517,11 +3780,13 @@ fn assemble_pdf(
         let mut form = pdf.form_xobject(*id, &stream);
         form.filter(Filter::FlateDecode);
         form.bbox(Rect::new(0.0, 0.0, drawing.width, drawing.height));
-        // Its colors are RGB as the page's are, which a PDF/X file ties to sRGB in each resource dictionary.
+        // Its colors are RGB as the page's are, which a PDF/X file ties to sRGB in each resource dictionary, or spot
+        // colors, whose spaces it names.
         let mut resources = form.resources();
-        if let Some(ids) = &press_ids {
-            resources.color_spaces().insert(Name(b"DefaultRGB")).array().item(Name(b"ICCBased")).item(ids.srgb);
-        }
+        let spots = ruling_spots(drawing);
+        write_color_spaces(&mut resources, press_ids.as_ref().map(|ids| ids.srgb), &spots, &spot_ids, &|_| true);
+        let overprint = if spot_use.overprint(&spots) { overprint_ids.as_slice() } else { &[] };
+        write_graphics_states(&mut resources, &[], overprint, &|_| true);
     }
 
     // -- Opacity ExtGState objects ---------------------------------------------
@@ -3534,8 +3799,14 @@ fn assemble_pdf(
 
     // -- Gradient functions and shadings ---------------------------------------
     for ((_, gradient), ids) in used_gradients.iter().zip(&gradient_ids) {
-        write_gradient(&mut pdf, gradient, ids);
+        write_gradient(&mut pdf, gradient, ids, &spot_ids);
     }
+
+    // -- Spot colors ------------------------------------------------------------
+    for ((_, spot), (_, id)) in spot_use.used.iter().zip(&spot_ids) {
+        write_separation(&mut pdf, *id, spot);
+    }
+    write_overprint_states(&mut pdf, &overprint_ids);
 
     // -- Image XObject streams -------------------------------------------------
     for (i, name) in sorted_image_names.iter().enumerate() {
@@ -3591,7 +3862,7 @@ fn assemble_pdf(
 
     // -- AcroForm and field annotations ----------------------------------------
     if !fields.is_empty() {
-        write_fields(&mut pdf, pages, &page_ids, fonts, &font_id_map, fields, &field_alloc, &radio_parent_alloc);
+        write_fields(&mut pdf, pages, &page_ids, fonts, &font_id_map, fields, &field_alloc, &radio_parent_alloc, &spot_ids, &overprint_ids);
     }
 
     // -- Font objects ----------------------------------------------------------
@@ -3660,8 +3931,12 @@ fn write_fields(
     fields:             &[(usize, RenderField)],
     field_alloc:        &[FieldAllocIds],
     radio_parent_alloc: &[(String, Ref)],
+    spot_ids:           &[(&str, Ref)],
+    overprint_ids:      &[Ref],
 ) {
     let helv_font_id = font_id_map.get("Helvetica").map(|f| f.font_dict_id);
+    let spots_of = field_spots;
+    let write_spots = |resources: &mut Resources<'_>, field: &RenderField| write_field_spots(resources, field, spot_ids, overprint_ids);
 
     // Write appearance XObjects for each field.
     for ((page_idx, field), fa) in fields.iter().zip(field_alloc.iter()) {
@@ -3677,6 +3952,9 @@ fn write_fields(
                 let ap_bytes = ap_content.finish();
                 let mut xobj = pdf.form_xobject(ap_id, &ap_bytes);
                 xobj.bbox(Rect::new(0.0, 0.0, w, h));
+                if !spots_of(field).is_empty() {
+                    write_spots(&mut xobj.resources(), field);
+                }
             }
             FieldKind::Button => {
                 let ap_id = fa.ap_ids[0];
@@ -3685,6 +3963,7 @@ fn write_fields(
                 let bg = field.background.as_deref().unwrap_or("#1763cf");
                 ap_content.save_state();
                 set_fill_color(&mut ap_content, bg);
+                set_overprint(&mut ap_content, Some(bg), None);
                 ap_content.rect(0.0, 0.0, w, h);
                 ap_content.fill_nonzero();
                 ap_content.restore_state();
@@ -3706,9 +3985,14 @@ fn write_fields(
                 let mut xobj = pdf.form_xobject(ap_id, &ap_bytes);
                 xobj.bbox(Rect::new(0.0, 0.0, w, h));
                 let mut res = xobj.resources();
-                let mut fr = res.fonts();
-                if let Some(helv_id) = helv_font_id {
-                    fr.pair(Name(b"Helv"), helv_id);
+                {
+                    let mut fr = res.fonts();
+                    if let Some(helv_id) = helv_font_id {
+                        fr.pair(Name(b"Helv"), helv_id);
+                    }
+                }
+                if !spots_of(field).is_empty() {
+                    write_spots(&mut res, field);
                 }
             }
             FieldKind::Checkbox => {
@@ -3733,6 +4017,9 @@ fn write_fields(
                     let ap_bytes = ap_content.finish();
                     let mut xobj = pdf.form_xobject(ap_id, &ap_bytes);
                     xobj.bbox(Rect::new(0.0, 0.0, w, h));
+                    if !spots_of(field).is_empty() {
+                        write_spots(&mut xobj.resources(), field);
+                    }
                 }
                 // /Off appearance: border only.
                 {
@@ -3742,6 +4029,9 @@ fn write_fields(
                     let ap_bytes = ap_content.finish();
                     let mut xobj = pdf.form_xobject(ap_id, &ap_bytes);
                     xobj.bbox(Rect::new(0.0, 0.0, w, h));
+                    if !spots_of(field).is_empty() {
+                        write_spots(&mut xobj.resources(), field);
+                    }
                 }
             }
             FieldKind::Radio => {
@@ -4221,13 +4511,14 @@ pub fn render_pdf(
     registry:       &FontRegistry,
     image_registry: &ImageRegistry,
     meta:           &Meta,
-    gradients:      &HashMap<String, Gradient>,
+    paints:         Paints<'_>,
     created_on:     Option<&str>,
     licensed:       bool,
     output:         &Output,
     files:          &[EmbeddedFile],
     press:          Option<&PressProfile>,
 ) -> Result<Vec<u8>, String> {
+    let gradients = paints.gradients;
     let standards = Standards::of(output);
     // The press profile of a PDF/X file, which the caller read from the document's `<profile>` (`pdfx::resolve`).
     let press = match (&output.pdfx, press) {
@@ -4252,9 +4543,10 @@ pub fn render_pdf(
         prepare_images(pages, image_registry);
     let anchors = placed_anchors(pages);
     let used_gradients = used_gradients(pages, gradients);
+    let spot_use = SpotUse::of(pages, paints);
     let fields = collect_render_fields(pages);
     if let Some(level) = standards.pdfa {
-        refuse_for_pdfa(level, pages, &fonts, &sorted_font_names, font_defs, &used_gradients, &fields)?;
+        refuse_for_pdfa(level, pages, &fonts, &sorted_font_names, font_defs, &used_gradients, &spot_use, &fields)?;
         if level.tagged() {
             refuse_for_level_a(level, meta, pages)?;
         }
@@ -4263,7 +4555,7 @@ pub fn render_pdf(
         refuse_for_pdfua(part, pages, &fonts, &sorted_font_names, font_defs)?;
     }
     if let (Some(version), Some(press)) = (standards.pdfx, press) {
-        refuse_for_pdfx(version, press, pages, &fonts, &sorted_font_names, font_defs, &used_gradients, &fields)?;
+        refuse_for_pdfx(version, press, pages, &fonts, &sorted_font_names, font_defs, &used_gradients, &spot_use, &fields)?;
     }
     let mut marks = if standards.tagged() { Marks::tagged() } else { Marks::off() };
     let links = standards.pdfx.is_none();
@@ -4277,7 +4569,7 @@ pub fn render_pdf(
     assemble_pdf(
         pages, &fonts, &sorted_font_names, &sorted_image_names,
         image_registry, &image_res_map, rendered_pages, ids, &fields, &anchors,
-        &used_gradients, &rulings, meta, date.as_deref(), file.as_ref(), files, &marks, press, &used_groups(pages),
+        &used_gradients, &spot_use, &rulings, meta, date.as_deref(), file.as_ref(), files, &marks, press, &used_groups(pages),
     )
 }
 
@@ -4300,8 +4592,10 @@ struct StandardFile {
 
 /// Refuse what a PDF/A file cannot hold where only the author can change it, with an error that says what to
 /// change: a form field, text in a font that is not embedded, a font whose licence forbids embedding, a character
-/// the font has no glyph for, which a reader would draw as an empty box, and a CMYK color, which the sRGB output
-/// intent doesn't cover. The engine repairs none of these; it writes the rest of what PDF/A needs itself.
+/// the font has no glyph for, which a reader would draw as an empty box, and a CMYK color, or a spot color with a CMYK
+/// stand-in, which the sRGB output intent doesn't cover. The engine repairs none of these; it writes the rest of what
+/// PDF/A needs itself.
+#[allow(clippy::too_many_arguments)]
 fn refuse_for_pdfa(
     level:             PdfA,
     pages:             &[RenderPage],
@@ -4309,6 +4603,7 @@ fn refuse_for_pdfa(
     sorted_font_names: &[String],
     font_defs:         &HashMap<String, FontDef>,
     used_gradients:    &[(&str, &Gradient)],
+    spot_use:          &SpotUse,
     fields:            &[(usize, RenderField)],
 ) -> Result<(), String> {
     let refuse = |reason: String| Err(format!("<output pdfa=\"{}\">: {reason}", level.attribute()));
@@ -4350,6 +4645,13 @@ fn refuse_for_pdfa(
         return refuse(format!(
             "the gradient '{name}' has CMYK colors, and the sRGB output intent of a PDF/A file covers RGB colors \
             only: give its colors as RGB ones, such as hex ones, or remove pdfa"
+        ));
+    }
+    if let Some((name, spot)) = spot_use.used.iter().find(|(_, spot)| is_cmyk(&spot.value)) {
+        return refuse(format!(
+            "the spot color '{name}' stands in for its ink with the CMYK color {}, and the sRGB output intent of a \
+            PDF/A file covers RGB colors only: give its value as an RGB color, such as a hex one, or remove pdfa",
+            spot.value
         ));
     }
     Ok(())
@@ -4431,8 +4733,9 @@ fn refuse_for_pdfua(
 
 /// Refuse what a PDF/X file cannot hold where only the author can change it, with an error that says what to change:
 /// a form field, which is an annotation on the printed page, text in a font that is not embedded, a font whose licence
-/// forbids embedding, a character the font has no glyph for, and a CMYK color when the press profile is not a CMYK one,
-/// so that nothing on the page is in a device space the output intent doesn't describe. RGB colors are mapped to sRGB,
+/// forbids embedding, a character the font has no glyph for, and a CMYK color, or a spot color with a CMYK stand-in,
+/// when the press profile is not a CMYK one, so that nothing on the page is in a device space the output intent doesn't
+/// describe. RGB colors are mapped to sRGB,
 /// and links are left out; the engine writes the rest of what PDF/X needs itself.
 #[allow(clippy::too_many_arguments)]
 fn refuse_for_pdfx(
@@ -4443,6 +4746,7 @@ fn refuse_for_pdfx(
     sorted_font_names: &[String],
     font_defs:         &HashMap<String, FontDef>,
     used_gradients:    &[(&str, &Gradient)],
+    spot_use:          &SpotUse,
     fields:            &[(usize, RenderField)],
 ) -> Result<(), String> {
     let refuse = |reason: String| Err(format!("<output pdfx=\"{}\">: {reason}", version.attribute()));
@@ -4489,6 +4793,13 @@ fn refuse_for_pdfx(
             return refuse(format!(
                 "the gradient '{name}' has CMYK colors, {because}: give its colors as RGB ones, such as hex ones, or \
                 use a CMYK profile of the press"
+            ));
+        }
+        if let Some((name, spot)) = spot_use.used.iter().find(|(_, spot)| is_cmyk(&spot.value)) {
+            return refuse(format!(
+                "the spot color '{name}' stands in for its ink with the CMYK color {}, {because}: give its value as \
+                an RGB color, such as a hex one, or use a CMYK profile of the press",
+                spot.value
             ));
         }
     }
@@ -4567,6 +4878,12 @@ fn embedding_refused(bytes: &[u8]) -> Option<&'static str> {
 
 /// The first CMYK color `node` itself paints with, not its children's.
 fn cmyk_color(node: &RenderNode) -> Option<String> {
+    node_colors(node).into_iter().find(|color| is_cmyk(color)).map(str::to_string)
+}
+
+/// The colors `node` itself paints with, not its children's: a fill, which may name a gradient, a stroke or a border,
+/// a shadow, a barcode's bars and background, a field's background and border, and the lines of a ruling.
+fn node_colors(node: &RenderNode) -> Vec<&str> {
     fn shadow(shadow: &Option<Shadow>) -> Option<&str> {
         shadow.as_ref().map(|s| s.color.as_str())
     }
@@ -4584,7 +4901,7 @@ fn cmyk_color(node: &RenderNode) -> Option<String> {
         RenderNode::Link(_) | RenderNode::Image(_) | RenderNode::CanvasLayer(_)
             | RenderNode::Anchor(_) | RenderNode::FootnoteMark(_) => vec![],
     };
-    colors.into_iter().flatten().find(|color| is_cmyk(color)).map(str::to_string)
+    colors.into_iter().flatten().collect()
 }
 
 /// The start of a text, for an error that names it.
@@ -5109,7 +5426,7 @@ mod tests {
         let xml = format!(r#"<lpdf version="1"><document><section><layout>{layout}</layout></section></document></lpdf>"#);
         let mut doc = crate::parse::parse(&xml).expect("parses");
         let pages = crate::layout::layout_document(&doc.section_layouts()).unwrap();
-        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &ImageRegistry::new(), &doc.meta, &doc.gradients, None, licensed, &doc.output, &[], None)
+        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &ImageRegistry::new(), &doc.meta, doc.paints(), None, licensed, &doc.output, &[], None)
             .expect("renders")
     }
 
@@ -5384,7 +5701,7 @@ mod tests {
             crate::layout::prefill_section_image_sizes(section, &meta);
         }
         let pages = crate::layout::layout_document(&layouts).unwrap();
-        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[], None).expect("renders")
+        render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, doc.paints(), None, false, &doc.output, &[], None).expect("renders")
     }
 
     #[test]
@@ -5416,7 +5733,7 @@ mod tests {
         let pages = crate::layout::layout_document(&doc.section_layouts()).unwrap();
         let mut images = ImageRegistry::new();
         images.load("photo", RED_PIXEL.to_vec());
-        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[], None).expect("renders");
+        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, doc.paints(), None, false, &doc.output, &[], None).expect("renders");
         let (page, groups) = page_and_groups(&pdf);
         assert_eq!(groups.len(), 1);
         let (dict, group) = &groups[0];
@@ -5527,7 +5844,7 @@ mod tests {
         let pages = crate::layout::layout_document(&doc.section_layouts()).unwrap();
         let mut registry = FontRegistry::new();
         registry.register("brand", bytes.to_vec());
-        let pdf = render_pdf(&pages, &doc.fonts, &registry, &ImageRegistry::new(), &doc.meta, &doc.gradients, None, false, &doc.output, &[], None).expect("renders");
+        let pdf = render_pdf(&pages, &doc.fonts, &registry, &ImageRegistry::new(), &doc.meta, doc.paints(), None, false, &doc.output, &[], None).expect("renders");
         let page = page_and_groups(&pdf).0;
         let operators = operators(&page);
         assert!(arrays(&operators) > 1, "the justified lines are arrays: {page}");
@@ -5648,7 +5965,7 @@ mod tests {
         let pages = crate::layout::layout_document(&doc.section_layouts()).unwrap();
         let mut images = ImageRegistry::new();
         images.load("photo", RED_PIXEL.to_vec());
-        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, &doc.gradients, None, false, &doc.output, &[], None).expect("renders");
+        let pdf = render_pdf(&pages, &doc.fonts, &FontRegistry::new(), &images, &doc.meta, doc.paints(), None, false, &doc.output, &[], None).expect("renders");
         let (page, groups) = page_and_groups(&pdf);
         assert_eq!(groups.len(), 1);
         assert!(groups[0].1.contains("/I0 Do"), "the image is drawn in the group: {}", groups[0].1);
