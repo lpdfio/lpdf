@@ -33,7 +33,7 @@ fn engine(created_on: Option<&str>) -> LpdfEngine {
         engine.load_font(name, &read(&fonts.join(file)));
     }
     let images = test_dir().join("assets/images");
-    for (name, file) in [("photo", "chapter-05-caterpillar.jpg"), ("chart", "image-sample.png"), ("badge", "image-square.png")] {
+    for (name, file) in [("photo", "chapter-05-caterpillar.jpg"), ("chart", "image-sample.png"), ("badge", "image-square.png"), ("mark", "svg/structure.svg")] {
         engine.load_image(name, &read(&images.join(file)));
     }
     if let Some(date) = created_on {
@@ -435,6 +435,8 @@ fn writes_pdfa_samples_for_the_external_check() {
     std::fs::write(dir.join("pdfa-2u-ruling.pdf"), crate::ruling_render_tests::pdfa_sample()).expect("a sample");
     // With spot colors of RGB stand-ins, a tint, a gradient of tints and a die line that overprints.
     std::fs::write(dir.join("pdfa-2u-spot.pdf"), crate::spot_render_tests::pdfa_sample()).expect("a sample");
+    // With an SVG picture, which is vector, in transparency groups of its own.
+    std::fs::write(dir.join("pdfa-2u-svg.pdf"), crate::svg_render_tests::pdfa_sample()).expect("a sample");
     // Level a with PDF/UA beside it: the PDF/UA fixture, which says what PDF/UA asks.
     for level in ["2a", "3a"] {
         let pdf = crate::pdfua_render_tests::render_fixture_beside_pdfa(level);

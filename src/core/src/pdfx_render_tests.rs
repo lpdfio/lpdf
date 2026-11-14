@@ -38,7 +38,7 @@ fn engine(created_on: Option<&str>) -> LpdfEngine {
         engine.load_font(name, &read(&fonts.join(file)));
     }
     let images = test_dir().join("assets/images");
-    for (name, file) in [("photo", "chapter-05-caterpillar.jpg"), ("chart", "image-sample.png"), ("badge", "image-square.png")] {
+    for (name, file) in [("photo", "chapter-05-caterpillar.jpg"), ("chart", "image-sample.png"), ("badge", "image-square.png"), ("mark", "svg/structure.svg")] {
         engine.load_image(name, &read(&images.join(file)));
     }
     engine.load_profile("press", &press_profile());
@@ -508,4 +508,5 @@ fn writes_the_pdfx_sample_for_the_external_check() {
     std::fs::write(dir.join("pdfx-4-brochure.pdf"), render_brochure()).expect("a sample");
     std::fs::write(dir.join("pdfx-4-ruling.pdf"), crate::ruling_render_tests::pdfx_sample()).expect("a sample");
     std::fs::write(dir.join("pdfx-4-spot.pdf"), crate::spot_render_tests::pdfx_sample()).expect("a sample");
+    std::fs::write(dir.join("pdfx-4-svg.pdf"), crate::svg_render_tests::pdfx_sample()).expect("a sample");
 }

@@ -267,3 +267,54 @@ fn draws_the_repos_own_mark() {
     let pdf = rendered(&[("logo", mark)], &format!("<section>{LOGO}</section>"));
     assert!(text(&pdf).contains("/BBox [0 0 1 1]"));
 }
+
+// ── Samples for the external checks ──────────────────────────────────────────
+
+/// The standards' fixture `xml` with an SVG picture, `svg/structure.svg` loaded as `mark`, at the top of the first
+/// layout of the document, with the alternative text PDF/UA asks of every picture.
+fn with_svg(xml: &str) -> String {
+    let assets = xml.find("</assets>").expect("assets");
+    let xml = format!(r#"{}<image name="mark" src="../assets/images/svg/structure.svg"/>{}"#, &xml[..assets], &xml[assets..]);
+    let layout = xml.find("<layout").expect("a layout");
+    let end = layout + xml[layout..].find('>').expect("the end of the layout's tag") + 1;
+    let alt = "Tiles, a clipped circle and squares faded as groups";
+    format!(r#"{}<img name="mark" width="240pt" alt="{alt}"/>{}"#, &xml[..end], &xml[end..])
+}
+
+/// The PDF/A-2u fixture with an SVG picture, for `make check-pdfa`.
+pub(crate) fn pdfa_sample() -> Vec<u8> {
+    crate::pdfa_render_tests::render(&with_svg(&crate::pdfa_render_tests::fixture("2u"))).expect("renders")
+}
+
+/// The PDF/UA fixture with an SVG picture, for `make check-pdfua`.
+pub(crate) fn pdfua_sample() -> Vec<u8> {
+    crate::pdfua_render_tests::render(&with_svg(&crate::pdfua_render_tests::fixture())).expect("renders")
+}
+
+/// The PDF/X fixture with an SVG picture, for `make check-pdfx`.
+pub(crate) fn pdfx_sample() -> Vec<u8> {
+    crate::pdfx_render_tests::render(&with_svg(&crate::pdfx_render_tests::fixture())).expect("renders")
+}
+
+#[test]
+fn ties_the_rgb_of_an_svg_picture_to_srgb_in_a_pdfx_file_as_it_does_for_every_page() {
+    let pdf = text(&pdfx_sample());
+    // Each form of the picture, the faded groups too, names `DefaultRGB`, and the groups blend in the ICC profile.
+    let forms: Vec<&str> = pdf.split("endobj").filter(|object| object.contains("/Subtype /Form") && object.contains("/S0 ")).collect();
+    assert_eq!(forms.len(), 4, "the picture and its three faded groups");
+    for form in forms {
+        assert!(form.contains("/DefaultRGB"), "{form}");
+    }
+    assert!(!pdf.contains("/CS /DeviceRGB") || pdf.contains("/ICCBased"), "the groups blend in sRGB, as the page's");
+}
+
+#[test]
+fn draws_an_svg_in_a_pdfa_document_and_in_a_pdfua_document_as_a_figure_with_its_alternative_text() {
+    for pdf in [pdfa_sample(), pdfua_sample()] {
+        let text = text(&pdf);
+        assert!(text.contains("/BBox [0 0 1 1]") && !text.contains("/Subtype /Image /"), "vector");
+    }
+    // PDF/A-2u is not tagged; PDF/UA says what each thing is.
+    let tagged = text(&pdfua_sample());
+    assert!(tagged.contains("/S /Figure") && tagged.contains("/Alt "), "a figure with an alternative text");
+}
