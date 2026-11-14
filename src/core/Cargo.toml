@@ -52,8 +52,10 @@ tiff = { version = "0.11", default-features = false, features = ["lzw", "deflate
 # (+1.2 to +2.2 MB), no raster images, no filters
 usvg = { version = "=0.49.0", default-features = false }
 # The XML reader `usvg` builds on, at the version it names, so the build holds no second copy: the engine reads an SVG
-# once, checks its XML (`svg_scan.rs`) and hands that tree to `usvg` (`Tree::from_xmltree`)
-roxmltree21 = { package = "roxmltree", version = "0.21.1" }
+# once, checks its XML (`svg_scan.rs`) and hands that tree to `usvg` (`Tree::from_xmltree`). Pinned exactly: the check of
+# the entities (`svg_entities.rs`) reads a DOCTYPE as this version's tokenizer does, so a new version is read again
+# against it first
+roxmltree21 = { package = "roxmltree", version = "=0.21.2" }
 
 # The JS build has no OS random source: lopdf's getrandom takes the browser's and Node's `crypto.getRandomValues`
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
