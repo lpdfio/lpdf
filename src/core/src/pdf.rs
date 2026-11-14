@@ -52,6 +52,7 @@ use crate::pdfx::{PdfXVersion, PressProfile, ProfileSpace};
 use crate::pdfua::PdfUa;
 use crate::raster::{self, Raster};
 use crate::ruling::{Drawing, Run};
+use crate::svg;
 use crate::tagging::{Kid, Kind, LinkMark, Marks};
 use crate::tokens::{spot_paint, FontDef, Gradient, GradientKind, Paints, Spot, GRADIENT_PREFIX, is_cmyk};
 
@@ -116,7 +117,9 @@ impl ImageRegistry {
 /// Read the pixel dimensions of an image the engine embeds, from its header.
 /// Returns `(width_px, height_px)` or `None` if unrecognised format.
 pub fn image_natural_size(bytes: &[u8]) -> Option<(u32, u32)> {
-    if bytes.starts_with(b"\xFF\xD8\xFF") {
+    if svg::is_svg(bytes) {
+        svg::natural_size(bytes)
+    } else if bytes.starts_with(b"\xFF\xD8\xFF") {
         jpeg_dims(bytes)
     } else if bytes.starts_with(b"\x89PNG\r\n\x1A\n") {
         png_dims(bytes)
@@ -130,6 +133,9 @@ pub fn image_natural_size(bytes: &[u8]) -> Option<(u32, u32)> {
 /// Whether an image gets a soft mask in the PDF: an RGBA PNG, or a WebP, GIF, TIFF or BMP whose header says it has
 /// alpha.
 fn image_has_alpha(bytes: &[u8]) -> bool {
+    if svg::is_svg(bytes) {
+        return false;
+    }
     match raster::Format::of(bytes) {
         Some(format) => raster::header(format, bytes).is_ok_and(|header| header.alpha),
         None => png_info(bytes).is_some_and(|(_, _, _, ct)| ct == 6),
@@ -392,6 +398,9 @@ pub fn is_image_embeddable(bytes: &[u8]) -> bool {
 /// Returns a human-readable error string if `bytes` cannot be embedded,
 /// or `None` if the format is supported.
 pub fn image_format_error(bytes: &[u8]) -> Option<String> {
+    if svg::is_svg(bytes) {
+        return svg::error(bytes);
+    }
     if bytes.starts_with(b"\xFF\xD8\xFF") {
         return if jpeg_dims(bytes).is_some() {
             None
@@ -450,7 +459,9 @@ pub fn image_format_error(bytes: &[u8]) -> Option<String> {
 /// Not inlined, for the reason `write_fields` is not.
 #[inline(never)]
 fn embed_image_xobject(pdf: &mut Pdf, id: Ref, smask_id: Option<Ref>, bytes: &[u8]) -> Result<(), String> {
-    if let Some(format) = raster::Format::of(bytes) {
+    if svg::is_svg(bytes) {
+        svg::embed(pdf, id, bytes)?;
+    } else if let Some(format) = raster::Format::of(bytes) {
         embed_raster(pdf, id, smask_id, &raster::decode(format, bytes)?);
     } else if bytes.starts_with(b"\xFF\xD8\xFF") {
         // JPEG

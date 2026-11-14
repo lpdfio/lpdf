@@ -47,6 +47,10 @@ lopdf = { version = "0.46", default-features = false }
 image-webp = "0.2"
 gif = { version = "0.14", default-features = false, features = ["std"] }
 tiff = { version = "0.11", default-features = false, features = ["lzw", "deflate", "fax"] }
+# SVG parser for the vector drawing of an SVG image: resolves `use`, `<style>`, units and markers into a tree of groups
+# and paths. Pinned exactly: its minor version has moved three times in ten months. Default features off, so no text
+# (+1.2 to +2.2 MB), no raster images, no filters
+usvg = { version = "=0.49.0", default-features = false }
 
 # The JS build has no OS random source: lopdf's getrandom takes the browser's and Node's `crypto.getRandomValues`
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]

@@ -41,6 +41,7 @@ mod stamp;
 mod png;
 mod raster;
 mod bmp;
+mod svg;
 mod toc;
 mod tokens;
 
@@ -922,6 +923,9 @@ mod stamp_tests;
 
 #[cfg(test)]
 mod raster_render_tests;
+
+#[cfg(test)]
+mod svg_render_tests;
 
 #[cfg(test)]
 mod pdfua_render_tests;

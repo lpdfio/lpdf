@@ -78,6 +78,8 @@ mod png;
 mod raster;
 #[path = "../../core/src/bmp.rs"]
 mod bmp;
+#[path = "../../core/src/svg.rs"]
+mod svg;
 #[path = "../../core/src/stamp.rs"]
 mod stamp;
 

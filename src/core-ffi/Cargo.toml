@@ -36,6 +36,7 @@ lopdf = { version = "0.46", default-features = false }
 image-webp = "0.2"
 gif = { version = "0.14", default-features = false, features = ["std"] }
 tiff = { version = "0.11", default-features = false, features = ["lzw", "deflate", "fax"] }
+usvg = { version = "=0.49.0", default-features = false }
 
 [build-dependencies]
 sha2 = "0.10"
