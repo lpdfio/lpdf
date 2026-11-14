@@ -83,6 +83,10 @@ composer require lpdfio/lpdf
 
 A PDF viewer, a PDF preview and export for Markdown files, a visual diff for PDFs, and an editor for Lpdf's XML with a live preview.
 
+## Features
+
+[FEATURES.md](FEATURES.md) lists the PDF standards, image formats, colors, fonts, layout elements, barcodes and output options of Lpdf, each with the version it is in since and its limits, and says which of them combine.
+
 ## Docs
 
 [lpdf.io/docs](https://lpdf.io/docs/?utm_campaign=core&utm_medium=referral&utm_source=readme)
