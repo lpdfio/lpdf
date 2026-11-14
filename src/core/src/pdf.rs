@@ -451,9 +451,8 @@ pub fn image_format_error(bytes: &[u8]) -> Option<String> {
         return match png_info(bytes) {
             None => Some("PNG file could not be parsed (IHDR chunk missing or truncated)".to_string()),
             Some((_, _, bd, ct)) => match (ct, bd) {
-                (0 | 2, 8 | 16) => png_interlace_error(bytes), // grayscale / RGB — 8-bit and 16-bit
-                (6, 8 | 16)     => png_interlace_error(bytes), // RGBA — 8-bit and 16-bit
-                (3, 8)          => png_interlace_error(bytes), // indexed-color 8-bit
+                // grayscale / RGB / RGBA at 8 and 16 bits, and indexed-color at 8
+                (0 | 2 | 6, 8 | 16) | (3, 8) => png_interlace_error(bytes),
                 (0 | 2 | 6, bd) => Some(format!(
                     "PNG with {bd}-bit depth is not supported; save it at 8 bits"
                 )),
@@ -483,6 +482,22 @@ pub fn image_format_error(bytes: &[u8]) -> Option<String> {
     Some(format!(
         "{hint} images are not supported; use JPEG, PNG, WebP, GIF, TIFF or BMP"
     ))
+}
+
+/// The color a gray or RGB PNG's `tRNS` chunk makes transparent, as a PDF color key mask: a minimum and a maximum,
+/// the same, for each component. `None` when the PNG has no such chunk, or its chunk does not say one color of the
+/// PNG's depth. The reader checks each decoded sample against it, so the PNG's rows go in as they are.
+fn png_color_key(bytes: &[u8], color_type: u8, bit_depth: u8) -> Option<Vec<i32>> {
+    let trns = png_chunk(bytes, b"tRNS")?;
+    // Each sample is 2 bytes whatever the depth, and at 8 bits only the low byte counts.
+    let samples: Vec<i32> = match (color_type, trns.len()) {
+        (0, 2) | (2, 6) => trns.chunks_exact(2).map(|sample| i32::from(u16::from_be_bytes([sample[0], sample[1]]))).collect(),
+        _ => return None,
+    };
+    if bit_depth == 8 && samples.iter().any(|&sample| sample > 255) {
+        return None;
+    }
+    Some(samples.into_iter().flat_map(|sample| [sample, sample]).collect())
 }
 
 /// The error of an interlaced PNG, whose rows the engine would embed in the order the file stores them, which is not
@@ -570,7 +585,8 @@ fn embed_svg(pdf: &mut Pdf, id: Ref, group_ids: &[Ref], drawing: &svg::Drawing, 
 
 /// Write one image XObject into the PDF.  Supports:
 ///   - JPEG, gray or color       → `/Filter /DCTDecode`, in `DeviceGray` or `DeviceRGB` by its components
-///   - PNG grayscale/RGB 8 or 16-bit (ct 0, 2)  → IDAT passthrough with FlateDecode + PNG predictor
+///   - PNG grayscale/RGB 8 or 16-bit (ct 0, 2)  → IDAT passthrough with FlateDecode + PNG predictor, and a color key
+///                                                 mask when a tRNS chunk makes one color transparent
 ///   - PNG RGBA 8 or 16-bit (ct 6)               → decoded, split into RGB XObject + alpha SMask
 ///   - PNG indexed 8-bit (ct 3)                  → palette-expanded to RGB, or RGBA+SMask if tRNS present
 ///   - WebP, GIF, TIFF and BMP (`raster.rs`)     → decoded to 8-bit gray or RGB, + alpha SMask (`embed_raster`)
@@ -614,6 +630,9 @@ fn embed_image_xobject(pdf: &mut Pdf, id: Ref, smask_id: Option<Ref>, bytes: &[u
                         img.width(w as i32)
                            .height(h as i32)
                            .bits_per_component(bd as i32);
+                        if let Some(key) = png_color_key(bytes, ct, bd) {
+                            img.color_mask(key);
+                        }
                         match ct {
                             0 => { img.color_space().device_gray(); }
                             _ => { img.color_space().device_rgb(); }

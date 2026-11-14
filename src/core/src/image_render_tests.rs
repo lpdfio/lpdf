@@ -145,20 +145,51 @@ fn a_palette_png_keeps_the_transparency_its_trns_chunk_gives() {
     }
 }
 
+#[test]
+fn a_jpeg_of_two_components_is_refused_with_what_to_save_instead() {
+    // The header of a JPEG whose frame says 2 components, which is neither gray nor color.
+    let error = refused(b"\xFF\xD8\xFF\xC0\x00\x0B\x08\x00\x1E\x00\x28\x02\x01\x11\x00");
+    assert!(error.contains("the JPEG has 2 color components") && error.contains("save it in RGB"), "{error}");
+}
+
+#[test]
+fn a_gray_or_rgb_png_keeps_the_color_its_trns_chunk_makes_transparent() {
+    for (name, color_space, bits, mask) in [
+        ("rgb-key.png", "/DeviceRGB", 8, "[255 255 0 0 0 0]"),
+        ("gray-key.png", "/DeviceGray", 8, "[34 34]"),
+        ("gray16-key.png", "/DeviceGray", 16, "[8738 8738]"),
+    ] {
+        let pdf = render(&read(name)).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let dictionaries = image_dictionaries(&pdf);
+        assert_eq!(dictionaries.len(), 1, "{name}: one image, with no soft mask");
+        let image = &dictionaries[0];
+        assert!(image.contains(&format!("/ColorSpace {color_space}")), "{name}: {image}");
+        assert!(image.contains(&format!("/BitsPerComponent {bits}")), "{name}: {image}");
+        assert!(image.contains(&format!("/Mask {mask}")), "{name}: the color key, as samples of the image: {image}");
+    }
+}
+
+#[test]
+fn a_gray_or_rgb_png_without_trns_has_no_color_key() {
+    let pdf = render(&read("rgb.png")).expect("an RGB PNG renders");
+    assert!(find(&pdf, b"/Mask", 0).is_none() && find(&pdf, b"/SMask", 0).is_none());
+}
+
 // ── Samples for the external checks ──────────────────────────────────────────
 
-/// The PDF/A-2u fixture with a gray JPEG, `jpeg-png/gray.jpg` loaded as `gray`, and a palette PNG with transparency,
-/// `jpeg-png/palette-trns.png` as `keyed`, at the top of its first layout, for `make check-pdfa`.
+/// The PDF/A-2u fixture with a gray JPEG, `jpeg-png/gray.jpg` loaded as `gray`, a palette PNG with transparency,
+/// `jpeg-png/palette-trns.png` as `keyed`, and a 16-bit gray and an RGB PNG with a transparent color, `gray16-key.png`
+/// as `graykey` and `rgb-key.png` as `rgbkey`, at the top of its first layout, for `make check-pdfa`.
 pub(crate) fn pdfa_sample() -> Vec<u8> {
     let xml = crate::pdfa_render_tests::fixture("2u");
     let assets = xml.find("</assets>").expect("assets");
     let xml = format!(
-        r#"{}<image name="gray" src="../assets/images/jpeg-png/gray.jpg"/><image name="keyed" src="../assets/images/jpeg-png/palette-trns.png"/>{}"#,
+        r#"{}<image name="gray" src="../assets/images/jpeg-png/gray.jpg"/><image name="keyed" src="../assets/images/jpeg-png/palette-trns.png"/><image name="graykey" src="../assets/images/jpeg-png/gray16-key.png"/><image name="rgbkey" src="../assets/images/jpeg-png/rgb-key.png"/>{}"#,
         &xml[..assets], &xml[assets..]
     );
     let layout = xml.find("<layout").expect("a layout");
     let end = layout + xml[layout..].find('>').expect("the end of the layout's tag") + 1;
-    let pictures = r#"<img name="gray" width="160pt" alt="A pattern of 16 grays"/><img name="keyed" width="160pt" alt="A pattern of 16 colors, two of them see-through"/>"#;
+    let pictures = r#"<img name="gray" width="160pt" alt="A pattern of 16 grays"/><img name="keyed" width="160pt" alt="A pattern of 16 colors, two of them see-through"/><img name="graykey" width="160pt" alt="A pattern of 16 grays, one of them see-through"/><img name="rgbkey" width="160pt" alt="A pattern of 16 colors, one of them see-through"/>"#;
     let xml = format!("{}{pictures}{}", &xml[..end], &xml[end..]);
     crate::pdfa_render_tests::render(&xml).expect("renders")
 }

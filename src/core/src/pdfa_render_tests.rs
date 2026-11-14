@@ -34,7 +34,8 @@ fn engine(created_on: Option<&str>) -> LpdfEngine {
     }
     let images = test_dir().join("assets/images");
     for (name, file) in [("photo", "chapter-05-caterpillar.jpg"), ("chart", "image-sample.png"), ("badge", "image-square.png"), ("mark", "svg/structure.svg"),
-        ("gray", "jpeg-png/gray.jpg"), ("keyed", "jpeg-png/palette-trns.png")] {
+        ("gray", "jpeg-png/gray.jpg"), ("keyed", "jpeg-png/palette-trns.png"),
+        ("rgbkey", "jpeg-png/rgb-key.png"), ("graykey", "jpeg-png/gray16-key.png")] {
         engine.load_image(name, &read(&images.join(file)));
     }
     if let Some(date) = created_on {
@@ -438,7 +439,8 @@ fn writes_pdfa_samples_for_the_external_check() {
     std::fs::write(dir.join("pdfa-2u-spot.pdf"), crate::spot_render_tests::pdfa_sample()).expect("a sample");
     // With an SVG picture, which is vector, in transparency groups of its own.
     std::fs::write(dir.join("pdfa-2u-svg.pdf"), crate::svg_render_tests::pdfa_sample()).expect("a sample");
-    // With a gray JPEG, written as DeviceGray, and a palette PNG whose transparency is a soft mask.
+    // With a gray JPEG, written as DeviceGray, a palette PNG whose transparency is a soft mask, and gray and RGB PNGs with a
+    // transparent color.
     std::fs::write(dir.join("pdfa-2u-jpeg-png.pdf"), crate::image_render_tests::pdfa_sample()).expect("a sample");
     // Level a with PDF/UA beside it: the PDF/UA fixture, which says what PDF/UA asks.
     for level in ["2a", "3a"] {

@@ -54,13 +54,14 @@ function chunk(type, body) {
     return Buffer.concat([length, typed, crc]);
 }
 
-// A PNG of the pattern: `colorType` 2 is RGB and 3 a palette of the 16 colors, `interlace` 1 is Adam7, `trns` the
-// palette's alpha entries. `pixel(x, y)` is the bytes of one pixel.
-function png({ colorType, interlace = 0, trns = null, pixel }) {
+// A PNG of the pattern: `colorType` 0 is gray, 2 RGB and 3 a palette of the 16 colors, `bitDepth` 8 or 16, `interlace`
+// 1 is Adam7, `trns` the bytes of the tRNS chunk: a palette's alpha entries, or the one color a gray or RGB PNG
+// makes transparent, each sample in 2 bytes. `pixel(x, y)` is the bytes of one pixel.
+function png({ colorType, bitDepth = 8, interlace = 0, trns = null, pixel }) {
     const header = Buffer.alloc(13);
     header.writeUInt32BE(WIDTH, 0);
     header.writeUInt32BE(HEIGHT, 4);
-    header[8] = 8;
+    header[8] = bitDepth;
     header[9] = colorType;
     header[12] = interlace;
     // Adam7: seven passes, each a smaller image of every dx-th pixel of every dy-th row from (x0, y0).
@@ -87,8 +88,17 @@ function png({ colorType, interlace = 0, trns = null, pixel }) {
 
 const rgb = (x, y) => PALETTE[index(x, y)];
 const entry = (x, y) => [index(x, y)];
+const gray8 = (x, y) => [index(x, y) * 17];
+// 16 bits: each gray 8-bit value as the same byte twice, which is 257 times it.
+const gray16 = (x, y) => [index(x, y) * 17, index(x, y) * 17];
 
 writeFileSync(at('interlaced.png'), png({ colorType: 2, interlace: 1, pixel: rgb }));
 writeFileSync(at('palette.png'), png({ colorType: 3, pixel: entry }));
 // Entry 0, black, is transparent, and entry 1, white, half so: the other 14 are opaque.
 writeFileSync(at('palette-trns.png'), png({ colorType: 3, trns: [0, 128], pixel: entry }));
+
+writeFileSync(at('rgb.png'), png({ colorType: 2, pixel: rgb }));
+// Pattern index 2 is the transparent color: red in RGB, 34 in gray at 8 bits and 34 times 257, 8738, at 16.
+writeFileSync(at('rgb-key.png'), png({ colorType: 2, trns: [0, 255, 0, 0, 0, 0], pixel: rgb }));
+writeFileSync(at('gray-key.png'), png({ colorType: 0, trns: [0, 34], pixel: gray8 }));
+writeFileSync(at('gray16-key.png'), png({ colorType: 0, bitDepth: 16, trns: [34, 34], pixel: gray16 }));
