@@ -24,8 +24,9 @@ pub(crate) struct Form {
 /// An SVG read and written as PDF content, ready to go into the file.
 #[derive(Debug)]
 pub(crate) struct Drawing {
-    /// The size in pixels, which the layout takes the proportions of the image from, as the file gives it: not
-    /// rounded, which would distort a small picture.
+    /// The size the picture is when its `<img>` gives none, in the pixels the engine takes as points, which the layout
+    /// takes the proportions of the image from, as the file gives it: not rounded, which would distort a small picture.
+    /// A size in pixels, or with no unit, is a pixel to the point; one in `pt`, `pc`, `in`, `mm` or `cm` is its true size.
     pub(crate) width: f32,
     pub(crate) height: f32,
     /// Some shape is painted in `currentColor`, the color of the text where the image sits, which the page sets
@@ -106,8 +107,8 @@ pub(crate) fn prepare(bytes: &[u8]) -> Result<Drawing, String> {
     let drawn = svg_draw::draw(&tree, &doc, stand_in)?;
     crate::memory::check()?;
     Ok(Drawing {
-        width: size.width(),
-        height: size.height(),
+        width: size.width() * scan.points_per_pixel,
+        height: size.height() * scan.points_per_pixel,
         current_color: drawn.current_color,
         forms: drawn.forms.into_iter().map(compressed).collect(),
         states: drawn.states,
@@ -123,6 +124,7 @@ fn compressed(form: DrawnForm) -> Form {
 /// data URL, neither of which the scan's limits would see.
 fn options(stand_in: Option<(u8, u8, u8)>) -> usvg::Options<'static> {
     usvg::Options {
+        dpi: svg_scan::USVG_DPI,
         style_sheet: stand_in.map(|(r, g, b)| format!("svg {{ color: rgb({r}, {g}, {b}) }}")),
         image_href_resolver: usvg::ImageHrefResolver {
             resolve_data: Box::new(|_, _, _| None),

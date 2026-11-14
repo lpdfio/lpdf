@@ -106,6 +106,22 @@ fn sizes_an_svg_with_no_size_to_what_it_draws() {
 }
 
 #[test]
+fn sizes_an_svg_in_points_and_millimetres_as_it_says_when_the_img_has_no_width() {
+    // 72 by 36 points, written in points and in millimetres: drawn 72pt wide, not 96.
+    for (unit_width, unit_height) in [("72pt", "36pt"), ("25.4mm", "12.7mm"), ("1in", "0.5in")] {
+        let svg = format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="{unit_width}" height="{unit_height}"><rect width="10" height="10"/></svg>"#
+        );
+        let pdf = rendered(
+            &[("logo", svg.into_bytes())],
+            r#"<section><layout margin="40pt"><img name="logo"/></layout></section>"#,
+        );
+        let scale = &operands(&page_content(&pdf), "cm")[0];
+        assert!((scale[0] - 72.0).abs() < 0.01 && (scale[3] - 36.0).abs() < 0.01, "{unit_width}: {scale:?}");
+    }
+}
+
+#[test]
 fn draws_an_svg_in_a_header_a_layer_and_a_markdown_file_too() {
     let logo = fixture("current-color.svg");
     for (place, section) in [

@@ -35,7 +35,20 @@ pub(crate) struct Scan {
     /// The root element sets `color` itself, so `currentColor` is that color and not the one of the text around the
     /// image.
     pub(crate) root_sets_color: bool,
+    /// How many points one of the pixels `usvg` sizes the picture in comes to: 3/4 when the root's size is in `pt`, `pc`,
+    /// `in`, `mm` or `cm`, which `usvg` reads at `USVG_DPI` pixels to the inch, so that such a size is the size it says,
+    /// and 1 otherwise, since the engine takes a pixel as a point.
+    pub(crate) points_per_pixel: f32,
 }
+
+/// The pixels to the inch `usvg` converts a length in an absolute unit at, which `svg.rs` gives it as its `dpi`.
+pub(crate) const USVG_DPI: f32 = 96.0;
+
+/// The units of a length that are true sizes, which a picture takes as they are.
+const ABSOLUTE_UNITS: [&str; 5] = ["pt", "pc", "in", "cm", "mm"];
+
+/// The other units a length of the root may have.
+const RELATIVE_UNITS: [&str; 4] = ["px", "em", "ex", "%"];
 
 /// Read the XML of an SVG, DTD and entities included, which `usvg` reads too.
 pub(crate) fn parse_xml(text: &str) -> Result<Document<'_>, String> {
@@ -58,7 +71,38 @@ pub(crate) fn scan(doc: &Document) -> Result<Scan, String> {
     Ok(Scan {
         current_color: found.current_color,
         root_sets_color: root.attribute("color").is_some() || style_declares(root.attribute("style"), "color"),
+        points_per_pixel: points_per_pixel(root),
     })
+}
+
+/// How many points a pixel of the root's size is: 3/4 when the size is in an absolute unit. The `width` decides for both
+/// axes, so the picture keeps its proportions; the `height` does when the `width` is no length.
+fn points_per_pixel(root: Node) -> f32 {
+    let absolute = |name: &str| root.attribute(name).and_then(is_absolute_length);
+    match (absolute("width"), absolute("height")) {
+        (Some(true), _) | (None, Some(true)) => 72.0 / USVG_DPI,
+        _ => 1.0,
+    }
+}
+
+/// Whether `value` is a length in an absolute unit, or `None` when it is no length. A length is read as `usvg` reads it
+/// (`svgtypes`): white space may come before it and none after, then a number with an optional sign, fraction and
+/// exponent, then a unit in lowercase, or none.
+fn is_absolute_length(value: &str) -> Option<bool> {
+    let value = value.trim_start_matches([' ', '\t', '\r', '\n']);
+    let number_before = |unit: &&str| value.strip_suffix(*unit).is_some_and(is_number);
+    if ABSOLUTE_UNITS.iter().any(number_before) {
+        Some(true)
+    } else if RELATIVE_UNITS.iter().any(number_before) || is_number(value) {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// Whether `text` is a number as an SVG writes one. Rust's own reading also takes `inf` and `nan`, which no length is.
+fn is_number(text: &str) -> bool {
+    text.ends_with(|c: char| c.is_ascii_digit() || c == '.') && text.parse::<f32>().is_ok()
 }
 
 /// A refusal: `what` is the tag or the feature, `loc` where it is, `why` what can't be done.
