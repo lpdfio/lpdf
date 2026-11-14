@@ -1513,7 +1513,7 @@
 
   <xs:element name="attachments">
     <xs:annotation>
-      <xs:documentation>Files the PDF carries inside it, such as the data of an invoice, the source of a report or its terms: a reader lists them in its attachments panel and saves them from there. The engine does not draw them; it carries each as it is. In an encrypted PDF they are encrypted with the rest, under the same passwords. A PDF/A-2 file can carry only files that are PDF/A themselves, so attachments with pdfa 2b or 2u are an error; 3b and 3u carry files of any kind.</xs:documentation>
+      <xs:documentation>Files the PDF carries inside it, such as the data of an invoice, the source of a report or its terms: a reader lists them in its attachments panel and saves them from there. The engine does not draw them; it carries each as it is. In an encrypted PDF they are encrypted with the rest, under the same passwords. A PDF/A-2 file can carry only files that are PDF/A themselves, so attachments with pdfa 2a, 2b or 2u are an error; 3a, 3b and 3u carry files of any kind.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
       <xs:sequence>
