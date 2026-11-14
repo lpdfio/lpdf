@@ -9,7 +9,8 @@
 # run is measured by the same benchmarks and fixtures, and gives it <checkout>'s Cargo.lock, so that each
 # build keeps the dependency versions it was released with. Turns on the split-stages feature when
 # <checkout>'s lib.rs has bench_layout_doc and bench_write_pdf, the embedded-fonts feature, with the
-# fonts benchmarks (benches/fonts.rs), when it has bench_font_srcs, and the markdown and
+# fonts benchmarks (benches/fonts.rs), when it has bench_font_srcs, the svg feature, with the svg
+# benchmarks (benches/svg.rs), when it has bench_images, and the markdown and
 # code features when its schema has a <markdown> and a <code>. Writes to <out folder>:
 #
 #   summary.jsonl       gungraun's JSON line for each benchmark: instructions and estimated cycles
@@ -61,6 +62,11 @@ if grep -q 'pub fn bench_font_srcs' "$LIB"; then
 elif grep -q 'pub fn bench_layout_doc' "$LIB" && grep -q 'pub fn bench_write_pdf' "$LIB"; then
   FEATURES="split-stages"
   WITH=", with layout and the PDF write apart"
+fi
+if grep -q 'pub fn bench_images' "$LIB"; then
+  FEATURES="${FEATURES:+$FEATURES,}svg"
+  BENCHES="$BENCHES --bench svg"
+  WITH="$WITH, with SVG pictures"
 fi
 for element in markdown code; do
   if grep -q "<xs:element name=\"$element\">" "$SCHEMA"; then

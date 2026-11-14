@@ -25,6 +25,9 @@ embedded-fonts = ["split-stages"]
 # made of. scripts/bench-counts.sh turns each on where the checkout's schema has the element.
 markdown = []
 code     = []
+# The checkout's lib.rs has bench_images and bench_render_doc_with_loaded_images, which the `svg` fixture's stages call: it
+# draws SVG pictures, which an earlier release can't read. scripts/bench-counts.sh turns it on where they are.
+svg = []
 
 [dev-dependencies]
 lpdf     = { path = "../../src/core" }
@@ -43,6 +46,11 @@ required-features = ["embedded-fonts"]
 [[bench]]
 name    = "data"
 harness = false
+
+[[bench]]
+name              = "svg"
+harness           = false
+required-features = ["svg"]
 
 [[bench]]
 name    = "allocations"

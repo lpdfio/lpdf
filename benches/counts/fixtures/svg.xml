@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SVG pictures for benches/counts: three SVGs (a plot, a diagram, an icon that paints in its text's color) drawn four
+     times each over three pages, with text between. Needs a build that reads SVG, so an earlier release has no rows for it. Never edit it:
+     a change moves every count of the fixture. -->
+<lpdf version="1">
+  <assets>
+    <image name="plot" src="svg-plot.svg" />
+    <image name="diagram" src="svg-diagram.svg" />
+    <image name="icon" src="svg-icon.svg" />
+  </assets>
+  <document size="a4">
+    <meta title="Bench counts: SVG pictures" />
+    <section>
+      <layout margin="40pt">
+        <text font="Helvetica-Bold" font-size="l">Part 1</text>
+        <text font-size="m" align="justify">Spacing tables pages straight straight invoices layout quickly pages width layout measures straight quickly measures measures straight spacing invoices invoices width statements pages invoices edges spacing layout quickly footers breaks spacing spacing measures pages breaks addresses contracts layout spacing straight straight layout breaks breaks addresses footers invoices footers invoices layout spacing pages straight measures spacing invoices layout straight tables layout.</text>
+        <text font-size="m" align="justify">Invoices invoices invoices quickly pages edges tables measures layout pages edges invoices footers layout invoices pages width tables invoices layout statements measures edges edges measures pages breaks pages addresses straight tables layout contracts addresses breaks width spacing tables layout edges pages straight contracts measures invoices edges edges invoices statements footers addresses footers invoices spacing invoices statements layout straight addresses statements.</text>
+        <text font-size="m" align="justify">Contracts statements contracts pages width contracts footers contracts quickly contracts width statements pages edges measures straight footers edges straight layout layout contracts pages statements statements width breaks pages contracts edges statements quickly layout width footers layout pages footers width spacing layout spacing edges addresses measures layout statements tables contracts measures quickly contracts quickly statements edges footers quickly quickly spacing statements.</text>
+        <img name="plot" width="380pt" alt="A line plot" />
+        <text font-size="m" align="justify">Edges edges tables tables measures straight pages footers edges straight statements invoices breaks quickly addresses spacing width layout invoices footers edges edges tables addresses addresses invoices statements contracts layout layout layout straight straight spacing layout statements spacing measures layout invoices tables spacing statements pages addresses spacing addresses pages measures tables.</text>
+        <img name="diagram" width="400pt" alt="A flow diagram" />
+        <row gap="m">
+          <column color="#1763cf"><img name="icon" width="28pt" alt="An icon" /></column>
+          <column color="#b71c1c"><img name="icon" width="28pt" alt="An icon" /></column>
+          <column color="#2e7d32"><img name="icon" width="28pt" alt="An icon" /></column>
+          <column color="#6a1b9a"><img name="icon" width="28pt" alt="An icon" /></column>
+        </row>
+        <text font-size="m" align="justify">Edges quickly invoices tables measures invoices edges contracts quickly invoices statements addresses tables measures measures pages addresses contracts tables pages contracts measures contracts layout quickly breaks measures edges footers straight width statements statements statements straight tables measures statements layout contracts quickly footers invoices layout breaks contracts addresses spacing tables tables.</text>
+        <divider/>
+        <text font="Helvetica-Bold" font-size="l">Part 2</text>
+        <text font-size="m" align="justify">Spacing quickly width width measures pages layout edges measures statements statements spacing invoices statements layout width width width footers addresses footers statements straight quickly edges quickly invoices breaks invoices footers pages statements edges edges edges width tables width invoices invoices measures quickly pages measures addresses addresses tables spacing pages width straight straight spacing width quickly edges invoices pages tables quickly.</text>
+        <text font-size="m" align="justify">Footers footers quickly addresses measures breaks edges footers spacing straight layout addresses spacing layout tables spacing statements straight quickly pages pages pages layout tables breaks measures statements layout measures quickly breaks footers footers tables layout invoices layout contracts spacing width edges measures invoices tables measures tables measures footers statements straight spacing layout footers footers measures invoices edges spacing spacing statements.</text>
+        <text font-size="m" align="justify">Pages layout measures spacing statements edges contracts measures invoices footers straight contracts straight statements contracts spacing statements measures footers quickly layout straight width tables pages measures invoices measures layout quickly width measures measures invoices measures layout quickly edges layout pages breaks invoices breaks addresses edges measures invoices statements edges spacing footers breaks addresses edges statements footers measures footers breaks addresses.</text>
+        <img name="plot" width="380pt" alt="A line plot" />
+        <text font-size="m" align="justify">Statements footers straight footers addresses statements invoices edges straight edges contracts straight pages pages edges addresses contracts measures addresses spacing edges tables straight invoices footers layout spacing straight statements width contracts contracts invoices addresses pages footers pages layout pages contracts statements edges pages tables quickly measures statements contracts quickly width.</text>
+        <img name="diagram" width="400pt" alt="A flow diagram" />
+        <row gap="m">
+          <column color="#1763cf"><img name="icon" width="28pt" alt="An icon" /></column>
+          <column color="#b71c1c"><img name="icon" width="28pt" alt="An icon" /></column>
+          <column color="#2e7d32"><img name="icon" width="28pt" alt="An icon" /></column>
+          <column color="#6a1b9a"><img name="icon" width="28pt" alt="An icon" /></column>
+        </row>
+        <text font-size="m" align="justify">Layout width quickly statements pages footers straight invoices measures contracts tables edges invoices measures contracts contracts straight edges invoices footers spacing statements measures quickly spacing quickly statements footers statements footers invoices pages quickly edges footers layout measures straight pages edges breaks contracts contracts layout contracts breaks footers layout straight straight.</text>
+        <divider/>
+        <text font="Helvetica-Bold" font-size="l">Part 3</text>
+        <text font-size="m" align="justify">Straight contracts edges layout layout footers straight quickly breaks edges quickly spacing pages footers width measures pages invoices straight invoices quickly statements quickly layout edges statements width invoices addresses edges invoices addresses footers quickly edges straight layout width straight quickly addresses breaks measures contracts width contracts invoices contracts quickly quickly breaks pages tables measures statements quickly addresses measures statements pages.</text>
+        <text font-size="m" align="justify">Spacing footers invoices tables tables contracts addresses statements edges pages pages layout breaks pages measures pages statements invoices straight invoices addresses measures addresses statements invoices breaks edges spacing measures straight tables width quickly spacing quickly pages quickly width layout layout layout breaks layout contracts layout straight layout measures invoices measures addresses measures measures addresses layout edges edges breaks measures contracts.</text>
+        <text font-size="m" align="justify">Pages statements layout measures tables tables measures spacing quickly pages spacing invoices footers pages footers invoices edges width measures width invoices edges contracts footers edges layout measures pages footers measures breaks width breaks measures edges pages contracts tables width addresses invoices breaks layout quickly quickly spacing footers pages spacing breaks straight breaks contracts measures footers contracts contracts addresses footers measures.</text>
+        <img name="plot" width="380pt" alt="A line plot" />
+        <text font-size="m" align="justify">Layout footers breaks straight spacing edges measures width footers width contracts statements spacing contracts addresses breaks layout pages measures footers quickly invoices tables invoices pages statements pages quickly statements spacing tables addresses spacing tables pages spacing addresses statements straight layout statements layout spacing layout statements footers layout straight breaks edges.</text>
+        <img name="diagram" width="400pt" alt="A flow diagram" />
+        <row gap="m">
+          <column color="#1763cf"><img name="icon" width="28pt" alt="An icon" /></column>
+          <column color="#b71c1c"><img name="icon" width="28pt" alt="An icon" /></column>
+          <column color="#2e7d32"><img name="icon" width="28pt" alt="An icon" /></column>
+          <column color="#6a1b9a"><img name="icon" width="28pt" alt="An icon" /></column>
+        </row>
+        <text font-size="m" align="justify">Contracts statements statements footers width quickly quickly contracts spacing measures statements straight statements measures footers statements edges addresses statements pages width pages statements breaks edges contracts invoices quickly addresses addresses footers footers tables addresses spacing quickly edges statements pages breaks breaks edges contracts straight tables addresses addresses contracts layout addresses.</text>
+      </layout>
+    </section>
+  </document>
+</lpdf>

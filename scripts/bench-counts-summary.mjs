@@ -10,8 +10,9 @@ import { fileURLToPath } from 'node:url';
 
 import { FIXTURES, STAGES as ALL_STAGES } from './bench-counts-report.mjs';
 
-/** The stages of the sizes `bench_xs` to `bench_xl`, which the tables follow: data binding is the fixture `data`'s. */
-const STAGES = ALL_STAGES.filter(stage => stage.id !== 'data');
+/** The stages of the sizes `bench_xs` to `bench_xl`, which the tables follow: data binding is the fixture `data`'s, and
+ * the image load the fixture `svg`'s. */
+const STAGES = ALL_STAGES.filter(stage => stage.id !== 'data' && stage.id !== 'load');
 
 /** The fixtures whose quantities the table shows, a small one and the largest. */
 export const SHOWN_FIXTURES = ['m', 'xl'];

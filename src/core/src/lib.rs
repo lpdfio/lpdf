@@ -840,6 +840,37 @@ pub fn bench_render_doc_with_images(mut doc: BenchDoc, images: &[(&str, &[u8])])
     )
 }
 
+/// Images loaded into a registry as `LpdfEngine::load_image` loads them: an SVG is read and written as PDF content
+/// when it is loaded.
+pub struct BenchImages(pdf::ImageRegistry);
+
+/// Load each image of `images`, a name and the bytes of a file. This is the `load` stage of the `svg` benchmarks: an
+/// engine loads its images once, before it renders, and reads each SVG then.
+pub fn bench_images(images: &[(&str, &[u8])]) -> BenchImages {
+    let mut registry = pdf::ImageRegistry::new();
+    for (name, bytes) in images {
+        registry.load(name, bytes.to_vec());
+    }
+    BenchImages(registry)
+}
+
+/// Layout + PDF write on a pre-parsed doc, with `images` already loaded and sized as `render_pdf` sizes them. Used by
+/// the `svg` benchmarks, whose document holds pictures.
+pub fn bench_render_doc_with_loaded_images(mut doc: BenchDoc, images: &BenchImages) -> Result<Vec<u8>, String> {
+    let meta = pdf::build_image_meta(&images.0);
+    let mut lp = doc.0.section_layouts();
+    for page in &mut lp {
+        layout::prefill_section_image_sizes(page, &meta);
+    }
+    let pages: Vec<render::RenderPage> = layout::layout_document(&lp)?;
+    // Unlicensed, so benchmarks include the cost of the attribution line.
+    pdf::render_pdf(
+        &pages, &doc.0.fonts,
+        &pdf::FontRegistry::new(), &images.0,
+        &doc.0.meta, doc.0.paints(), None, false, &doc.0.output, &[], None,
+    )
+}
+
 /// Apply data binding to a pre-parsed doc. Used by staged `data/*` benchmarks.
 pub fn bench_data_apply(doc: BenchDoc, json: &str) -> Result<BenchDoc, String> {
     let mut inner = doc.0;
