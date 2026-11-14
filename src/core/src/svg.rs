@@ -124,6 +124,7 @@ fn compressed(form: DrawnForm) -> Form {
 /// data URL, neither of which the scan's limits would see.
 fn options(stand_in: Option<(u8, u8, u8)>) -> usvg::Options<'static> {
     usvg::Options {
+        dpi: svg_scan::USVG_DPI,
         style_sheet: stand_in.map(|(r, g, b)| format!("svg {{ color: rgb({r}, {g}, {b}) }}")),
         image_href_resolver: usvg::ImageHrefResolver {
             resolve_data: Box::new(|_, _, _| None),

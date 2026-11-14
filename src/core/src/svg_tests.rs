@@ -121,6 +121,9 @@ fn takes_a_size_in_points_inches_and_millimetres_as_the_size_it_says() {
     assert_size(r#"width="6pc" height="1.5pc""#, 72.0, 18.0);
     // An A4 page, as Inkscape writes it.
     assert_size(r#"width="210mm" height="297mm""#, 595.2756, 841.8898);
+    // A length is read as `usvg` reads it: white space may come before it, and a number may have an exponent.
+    assert_size(r#"width=" 72pt" height=" 36pt""#, 72.0, 36.0);
+    assert_size(r#"width="1e2pt" height="0.5e2pt""#, 100.0, 50.0);
 }
 
 #[test]
@@ -139,6 +142,72 @@ fn takes_the_units_of_the_width_for_both_axes_so_the_picture_keeps_its_proportio
     assert_size(r#"height="72pt" viewBox="0 0 100 50""#, 144.0, 72.0);
     assert_size(r#"width="wide" height="72pt" viewBox="0 0 100 50""#, 144.0, 72.0);
     assert_size(r#"height="48" viewBox="0 0 100 50""#, 96.0, 48.0);
+    // A width that is a length decides even when it is relative to something.
+    assert_size(r#"width="100%" height="72pt" viewBox="0 0 100 50""#, 100.0, 96.0);
+    // At the font size of 12 that `usvg` takes for the root: 2em is 24 pixels and 2ex is 12.
+    assert_size(r#"width="2em" height="72pt" viewBox="0 0 100 50""#, 24.0, 96.0);
+    assert_size(r#"width="2ex" height="72pt" viewBox="0 0 100 50""#, 12.0, 96.0);
+}
+
+/// The size `usvg` makes of a root whose `attribute` is `value`, a view box of 100 by 50 beside it, at `dpi` pixels to
+/// the inch; `None` when it refuses the file.
+fn usvg_size(attribute: &str, value: &str, dpi: f32) -> Option<(f32, f32)> {
+    let text = format!(r#"<svg xmlns="http://www.w3.org/2000/svg" {attribute}="{value}" viewBox="0 0 100 50"/>"#);
+    let options = usvg::Options { dpi, ..usvg::Options::default() };
+    let size = usvg::Tree::from_str(&text, &options).ok()?.size();
+    Some((size.width(), size.height()))
+}
+
+/// Many spellings of a length: white space before and after, numbers with signs, fractions and exponents, and what is no
+/// number, with units that are absolute, relative, in the wrong case and none at all.
+fn spellings_of_a_length() -> Vec<String> {
+    let prefixes = ["", " ", "\t", "\n", "\u{a0}"];
+    let numbers = [
+        "72", "1e2", "1E2", "1e+2", "0.5e2", ".5", "5.", "+3", "-1", "12.5e-1", "1e", "e2", "", ".", "1.5.5", "0x10",
+        "inf", "nan",
+    ];
+    let units = ["", "pt", "pc", "in", "cm", "mm", "px", "em", "ex", "%", "PT", "q", "vw", "ft"];
+    let suffixes = ["", " ", "\t"];
+    let mut spellings = Vec::new();
+    for prefix in prefixes {
+        for number in numbers {
+            for unit in units {
+                for suffix in suffixes {
+                    spellings.push(format!("{prefix}{number}{unit}{suffix}"));
+                }
+            }
+        }
+    }
+    spellings
+}
+
+#[test]
+fn takes_a_root_size_for_one_in_an_absolute_unit_exactly_when_usvg_does_whatever_its_spelling() {
+    // `usvg` is the oracle: a length in an absolute unit comes to another count of pixels at 72 to the inch than at 96,
+    // and any other length, or none that it can read, to the same.
+    let (mut absolute, mut relative) = (0, 0);
+    for attribute in ["width", "height"] {
+        for value in spellings_of_a_length() {
+            let (Some(at_96), Some(at_72)) = (usvg_size(attribute, &value, 96.0), usvg_size(attribute, &value, 72.0))
+            else {
+                continue;
+            };
+            let is_absolute = (at_96.0 - at_72.0).abs() > 1e-3 || (at_96.1 - at_72.1).abs() > 1e-3;
+            let factor = if is_absolute { 0.75 } else { 1.0 };
+            if is_absolute {
+                absolute += 1;
+            } else {
+                relative += 1;
+            }
+            let (width, height) = size_of(&format!(r#"{attribute}="{value}" viewBox="0 0 100 50""#));
+            assert!(
+                (width - at_96.0 * factor).abs() < 1e-3 && (height - at_96.1 * factor).abs() < 1e-3,
+                "{attribute}={value:?}: {width} by {height}, and usvg reads {at_96:?} at 96 and {at_72:?} at 72"
+            );
+        }
+    }
+    // The spellings reach both kinds of length, and not by a few.
+    assert!(absolute > 300 && relative > 300, "{absolute} absolute and {relative} other lengths usvg read");
 }
 
 // ── What is drawn ─────────────────────────────────────────────────────────────
