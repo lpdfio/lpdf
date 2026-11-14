@@ -41,6 +41,10 @@ mod stamp;
 mod png;
 mod raster;
 mod bmp;
+mod svg;
+mod svg_draw;
+mod svg_entities;
+mod svg_scan;
 mod toc;
 mod tokens;
 
@@ -120,7 +124,8 @@ impl LpdfEngine {
         }
     }
 
-    /// Register raw image bytes (JPEG, PNG, WebP, GIF, TIFF or BMP) for an image name.
+    /// Register raw image bytes (JPEG, PNG, WebP, GIF, TIFF, BMP or SVG) for an image name. An SVG is read here, so a
+    /// file the engine can't draw is an error of the render that uses it.
     /// Call this for every image referenced by `<img name="…">` nodes.
     pub fn load_image(&mut self, name: &str, bytes: &[u8]) {
         self.images.load(name, bytes.to_vec());
@@ -297,10 +302,8 @@ impl LpdfEngine {
             if self.images.get(name).is_none() {
                 return Err(format!("image '{name}' declared in <assets> but not loaded via loadImage()"));
             }
-            if let Some(bytes) = self.images.get(name) {
-                if let Some(reason) = pdf::image_format_error(bytes) {
-                    return Err(format!("image '{name}': {reason}"));
-                }
+            if let Some(reason) = self.images.error(name) {
+                return Err(format!("image '{name}': {reason}"));
             }
         }
 
@@ -357,10 +360,8 @@ impl LpdfEngine {
             if self.images.get(name).is_none() {
                 return Err(format!("image '{name}' declared in assets but not loaded via loadImage()"));
             }
-            if let Some(bytes) = self.images.get(name) {
-                if let Some(reason) = pdf::image_format_error(bytes) {
-                    return Err(format!("image '{name}': {reason}"));
-                }
+            if let Some(reason) = self.images.error(name) {
+                return Err(format!("image '{name}': {reason}"));
             }
         }
 
@@ -841,6 +842,37 @@ pub fn bench_render_doc_with_images(mut doc: BenchDoc, images: &[(&str, &[u8])])
     )
 }
 
+/// Images loaded into a registry as `LpdfEngine::load_image` loads them: an SVG is read and written as PDF content
+/// when it is loaded.
+pub struct BenchImages(pdf::ImageRegistry);
+
+/// Load each image of `images`, a name and the bytes of a file. This is the `load` stage of the `svg` benchmarks: an
+/// engine loads its images once, before it renders, and reads each SVG then.
+pub fn bench_images(images: &[(&str, &[u8])]) -> BenchImages {
+    let mut registry = pdf::ImageRegistry::new();
+    for (name, bytes) in images {
+        registry.load(name, bytes.to_vec());
+    }
+    BenchImages(registry)
+}
+
+/// Layout + PDF write on a pre-parsed doc, with `images` already loaded and sized as `render_pdf` sizes them. Used by
+/// the `svg` benchmarks, whose document holds pictures.
+pub fn bench_render_doc_with_loaded_images(mut doc: BenchDoc, images: &BenchImages) -> Result<Vec<u8>, String> {
+    let meta = pdf::build_image_meta(&images.0);
+    let mut lp = doc.0.section_layouts();
+    for page in &mut lp {
+        layout::prefill_section_image_sizes(page, &meta);
+    }
+    let pages: Vec<render::RenderPage> = layout::layout_document(&lp)?;
+    // Unlicensed, so benchmarks include the cost of the attribution line.
+    pdf::render_pdf(
+        &pages, &doc.0.fonts,
+        &pdf::FontRegistry::new(), &images.0,
+        &doc.0.meta, doc.0.paints(), None, false, &doc.0.output, &[], None,
+    )
+}
+
 /// Apply data binding to a pre-parsed doc. Used by staged `data/*` benchmarks.
 pub fn bench_data_apply(doc: BenchDoc, json: &str) -> Result<BenchDoc, String> {
     let mut inner = doc.0;
@@ -922,6 +954,12 @@ mod stamp_tests;
 
 #[cfg(test)]
 mod raster_render_tests;
+
+#[cfg(test)]
+mod svg_render_tests;
+
+#[cfg(test)]
+mod svg_tests;
 
 #[cfg(test)]
 mod pdfua_render_tests;

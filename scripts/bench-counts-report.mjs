@@ -24,6 +24,8 @@ import { fileURLToPath } from 'node:url';
 
 /** The stages of benches/counts, in pipeline order, by the name of their benchmark function. */
 export const STAGES = [
+    // The fixture `svg` only: its pictures loaded, each SVG read and written as PDF content.
+    { id: 'load', name: 'image load' },
     { id: 'parse', name: 'parse' },
     // The fixture `data` only: its data bound to the parsed document.
     { id: 'data', name: 'data binding' },
@@ -37,7 +39,7 @@ export const STAGES = [
 export const FIXTURES = ['xs', 's', 'm', 'l', 'xl'];
 
 /** The fixtures of one feature each, in the order of the table, after the sizes. */
-export const FEATURE_FIXTURES = ['justified', 'data', 'markdown', 'code', 'fonts'];
+export const FEATURE_FIXTURES = ['justified', 'data', 'markdown', 'code', 'fonts', 'svg'];
 
 /**
  * What the table shows. The work is Callgrind's, under the metric of gungraun's summary; the memory is the

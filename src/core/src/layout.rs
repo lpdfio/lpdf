@@ -198,8 +198,29 @@ pub fn set_font_widths(widths: HashMap<String, FontWidths>) {
     FONT_WIDTHS.with(|fw| *fw.borrow_mut() = widths);
 }
 
-/// Natural pixel dimensions for declared images: name → (width_px, height_px).
-pub type ImageMeta = HashMap<String, (u32, u32)>;
+/// What the layout needs of a loaded image: its natural size in pixels, and whether it paints with the color of the
+/// text around it (an SVG that says `currentColor`).
+#[derive(Clone, Copy)]
+pub struct ImageInfo {
+    /// The size in pixels. Whole for a raster image; as the file gives it for an SVG, which may be a fraction.
+    pub size: (f32, f32),
+    pub current_color: bool,
+}
+
+/// What is known of each declared image, by name.
+pub type ImageMeta = HashMap<String, ImageInfo>;
+
+thread_local! {
+    /// The pictures of the render going on that paint with the color of the text around them, by name, which
+    /// `layout_img` gives that color to. Set by the pass that fills in the sizes, which every render makes first.
+    static CURRENT_COLOR_IMAGES: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
+}
+
+fn note_current_color_images(meta: &ImageMeta) {
+    CURRENT_COLOR_IMAGES.with(|names| {
+        *names.borrow_mut() = meta.iter().filter(|(_, info)| info.current_color).map(|(name, _)| name.clone()).collect();
+    });
+}
 
 /// Fill in concrete `width_constraint` and `img_height_constraint` for every
 /// `NodeKind::Img` node in a page tree, using `meta` for aspect-ratio derivation.
@@ -208,6 +229,7 @@ pub type ImageMeta = HashMap<String, (u32, u32)>;
 /// `layout_img` can read `.width_constraint.unwrap_or(avail_w)` and
 /// `.img_height_constraint.unwrap_or(w)` safely.
 pub fn prefill_image_sizes(nodes: &mut Vec<Node>, meta: &ImageMeta) {
+    note_current_color_images(meta);
     for node in nodes.iter_mut() {
         prefill_node(node, meta);
     }
@@ -281,14 +303,14 @@ fn prefill_node(node: &mut Node, meta: &ImageMeta) {
         // The slot gives a picture with `width="fill"` its width, which is not known yet: keep the proportions
         // and the `height` it may not pass, for `layout_img`.
         let name = node.image_name.as_deref().unwrap_or("");
-        let (nat_w, nat_h) = meta.get(name).map_or((100.0, 100.0), |&(w, h)| (w as f32, h as f32));
+        let (nat_w, nat_h) = meta.get(name).map_or((100.0, 100.0), |info| info.size);
         node.img_aspect = Some(if nat_w > 0.0 && nat_h > 0.0 { nat_w / nat_h } else { 1.0 });
         if sets_box(node) {
             *node = box_around_picture(std::mem::replace(node, Node::layout_default()));
         }
     } else if node.kind == NodeKind::Img {
         let name = node.image_name.as_deref().unwrap_or("");
-        let known = meta.get(name).map(|&(w, h)| (w as f32, h as f32));
+        let known = meta.get(name).map(|info| info.size);
         let (w, h) = match (node.width_constraint, node.img_height_constraint, known) {
             // An image that is not loaded has no proportions to keep, so a box stays as it was given.
             (Some(w), Some(h), None) => (w, h),
@@ -4049,7 +4071,9 @@ fn layout_img(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
         }
     };
     let name = node.image_name.clone().unwrap_or_default();
-    (RenderNode::Image(RenderImage { tag: None, x, y, width: w, height: h, name, radius: node.radius }), h)
+    // The color of the text around it, for a picture that paints with it.
+    let color = CURRENT_COLOR_IMAGES.with(|names| names.borrow().contains(&name)).then(|| node.text_color.clone()).flatten();
+    (RenderNode::Image(RenderImage { tag: None, x, y, width: w, height: h, name, radius: node.radius, color }), h)
 }
 
 // ── Shape ─────────────────────────────────────────────────────────────────────
@@ -7742,7 +7766,7 @@ abcdef</code><text>after</text></row>"#,
         );
         let mut doc = parse(&xml).unwrap();
         let mut lp = doc.section_layouts();
-        let meta: ImageMeta = px.into_iter().map(|px| ("logo".to_string(), px)).collect();
+        let meta: ImageMeta = px.into_iter().map(|(w, h)| ("logo".to_string(), ImageInfo { size: (w as f32, h as f32), current_color: false })).collect();
         for section in &mut lp {
             prefill_section_image_sizes(section, &meta);
         }

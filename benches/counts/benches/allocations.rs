@@ -9,8 +9,8 @@
 //! PDF write apart with the `split-stages` feature. Each benchmark runs in a process of its own, as under
 //! Gungraun, so that what one leaves behind, such as a buffer made on first use, doesn't change the count
 //! of the next. Reading the fixture, and parsing or laying it out for a later stage, is setup, which
-//! isn't counted. With the `markdown`, `code` and `embedded-fonts` features, it counts those fixtures too,
-//! as `counts.rs` and `fonts.rs` do, the fonts of `fonts` loaded in the setup. `data` has a stage of its
+//! isn't counted. With the `markdown`, `code`, `embedded-fonts` and `svg` features, it counts those fixtures too,
+//! as `counts.rs`, `fonts.rs` and `svg.rs` do, the fonts of `fonts` loaded in the setup. `data` has a stage of its
 //! own, `data`, which binds its data, as in `data.rs`.
 //!
 //! `cargo bench --bench allocations` prints a JSON line for each benchmark, which
@@ -24,6 +24,8 @@ mod common;
 mod data_binding;
 #[cfg(feature = "embedded-fonts")]
 mod embedded_fonts;
+#[cfg(feature = "svg")]
+mod svg_images;
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -39,6 +41,8 @@ use lpdf::{
     bench_layout_doc_with_fonts, bench_render_doc_with_fonts, bench_render_xml_with_fonts,
     bench_write_pdf_with_fonts,
 };
+#[cfg(feature = "svg")]
+use lpdf::bench_render_doc_with_loaded_images;
 
 #[cfg(feature = "split-stages")]
 use common::laid_out;
@@ -48,6 +52,8 @@ use data_binding::bound_laid_out;
 use data_binding::{bound, fixture_with_data, parsed_with_data};
 #[cfg(feature = "embedded-fonts")]
 use embedded_fonts::{fixture_with_fonts, laid_out_with_fonts, parsed_with_fonts};
+#[cfg(feature = "svg")]
+use svg_images::{files, load, parsed_with_images};
 
 /// The stages, by the names of their benchmark functions in `counts.rs`.
 #[cfg(not(feature = "split-stages"))]
@@ -69,11 +75,17 @@ fn fixtures() -> Vec<&'static str> {
     fixtures.push("code");
     #[cfg(feature = "embedded-fonts")]
     fixtures.push("fonts");
+    #[cfg(feature = "svg")]
+    fixtures.push("svg");
     fixtures
 }
 
-/// The stages of a fixture: those of `STAGES`, and for `data` the binding of its data after parse.
+/// The stages of a fixture: those of `STAGES`, and for `data` the binding of its data after parse. `svg` has the two its
+/// pictures make: their load, and layout with the PDF write.
 fn stages(fixture_id: &str) -> Vec<&'static str> {
+    if fixture_id == "svg" {
+        return vec!["load", "render_doc"];
+    }
     let mut stages = STAGES.to_vec();
     if fixture_id == "data" {
         stages.insert(1, "data");
@@ -170,6 +182,10 @@ fn measure(stage: &str, fixture_id: &str) -> Option<Counts> {
     if fixture_id == "fonts" {
         return measure_with_fonts(stage);
     }
+    #[cfg(feature = "svg")]
+    if fixture_id == "svg" {
+        return measure_with_svg(stage);
+    }
     if fixture_id == "data" {
         return measure_with_data(stage);
     }
@@ -235,6 +251,27 @@ fn measure_with_fonts(stage: &str) -> Option<Counts> {
             let (xml, fonts) = fixture_with_fonts(NAME);
             counted(|| {
                 bench_render_xml_with_fonts(black_box(&xml), &fonts).expect("the fixture renders")
+            })
+        }
+        _ => return None,
+    };
+    Some(counts)
+}
+
+/// The counts of one stage of `svg`, or `None` for a stage that isn't one: the load of its pictures from their files'
+/// bytes, and layout with the PDF write, the pictures loaded in the setup.
+#[cfg(feature = "svg")]
+fn measure_with_svg(stage: &str) -> Option<Counts> {
+    const NAME: &str = "svg";
+    let counts = match stage {
+        "load" => {
+            let files = files(NAME);
+            counted(|| load(black_box(&files)))
+        }
+        "render_doc" => {
+            let (doc, images) = parsed_with_images(NAME);
+            counted(|| {
+                bench_render_doc_with_loaded_images(black_box(doc), &images).expect("the document renders")
             })
         }
         _ => return None,

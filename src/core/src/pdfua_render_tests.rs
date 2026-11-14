@@ -27,7 +27,7 @@ fn engine(created_on: Option<&str>) -> LpdfEngine {
         engine.load_font(name, &read(&fonts.join(file)));
     }
     let images = test_dir().join("assets/images");
-    for (name, file) in [("chart", "image-sample.png"), ("badge", "image-square.png")] {
+    for (name, file) in [("chart", "image-sample.png"), ("badge", "image-square.png"), ("mark", "svg/structure.svg")] {
         engine.load_image(name, &read(&images.join(file)));
     }
     if let Some(date) = created_on {
@@ -413,6 +413,8 @@ fn writes_pdfua_samples_for_the_external_check() {
     std::fs::write(dir.join("pdfua-1-ocg.pdf"), render(&grouped).expect("renders")).expect("a sample");
     // With graph paper on each section, which is decoration.
     std::fs::write(dir.join("pdfua-1-ruling.pdf"), crate::ruling_render_tests::pdfua_sample()).expect("a sample");
+    // With an SVG picture, a figure with its alternative text.
+    std::fs::write(dir.join("pdfua-1-svg.pdf"), crate::svg_render_tests::pdfua_sample()).expect("a sample");
     // Stamped without a license key, which must stay PDF/UA.
     crate::stamp_tests::write_pdfua_sample(dir);
 }

@@ -3,7 +3,8 @@
 //
 //  - the file passes `qpdf --check`, and its header says PDF 1.6, which PDF/X-4 is a profile of;
 //  - every page has a TrimBox inside its BleedBox, inside its MediaBox, and no annotation;
-//  - RGB is mapped to an ICC profile on every page (`/DefaultRGB`);
+//  - RGB is mapped to an ICC profile on every page (`/DefaultRGB`), and in every form XObject the page draws: the
+//    pictures of an SVG, a ruling, a faded group;
 //  - each spot color is a Separation space: the ink's name, the alternate device space of its stand-in, and a tint
 //    transform that runs from white to the stand-in, with a component for each of the alternate's; a sample whose file
 //    name has "spot" in it has at least one;
@@ -13,8 +14,8 @@
 //
 // No free tool validates PDF/X itself: Acrobat Pro's Preflight does, by hand, on the release candidate.
 //
-// The samples, the fixture, the brochure example, and the fixture with graph paper on its sections and with spot colors,
-// come from the core's own tests:
+// The samples, the fixture, the brochure example, and the fixture with graph paper on its sections, with spot colors and
+// with an SVG picture, come from the core's own tests:
 //   LPDF_PDFX_OUT=<folder> cargo test --manifest-path src/core/Cargo.toml --lib writes_the_pdfx_sample_for_the_external_check
 //
 // Usage: node scripts/check-pdfx.mjs <folder>     list the failures, exit 1 if any
@@ -111,6 +112,13 @@ function checkFile(pdf) {
         const spaces = resolve(resources?.['/ColorSpace']);
         const defaultRgb = resolve(spaces?.['/DefaultRGB']);
         check(Array.isArray(defaultRgb) && defaultRgb[0] === '/ICCBased', `${label}: RGB is not mapped to an ICC profile with /DefaultRGB`);
+        for (const [name, ref] of Object.entries(resolve(resources?.['/XObject']) ?? {})) {
+            const form = resolve(ref);
+            if (form?.['/Subtype'] !== '/Form') continue;
+            const formSpaces = resolve(resolve(form['/Resources'])?.['/ColorSpace']);
+            const formRgb = resolve(formSpaces?.['/DefaultRGB']);
+            check(Array.isArray(formRgb) && formRgb[0] === '/ICCBased', `${label}: the form ${name} does not map RGB to an ICC profile with /DefaultRGB`);
+        }
         for (const [name, value] of Object.entries(spaces ?? {}).filter(([name]) => name !== '/DefaultRGB')) {
             separations += 1;
             checkSeparation(resolve(value), (message) => check(false, `${label}: the color space ${name} ${message}`));

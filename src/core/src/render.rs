@@ -192,6 +192,9 @@ pub struct RenderImage {
     /// The corner radius the picture is clipped to; 0 draws it as a rectangle.
     pub radius: f32,
     pub tag: Option<Box<Tag>>,
+    /// The color of the text around the picture, set before it is drawn, for a picture that paints with it: an SVG
+    /// that says `currentColor`. Any other picture has none.
+    pub color: Option<String>,
 }
 
 #[derive(Clone)]
