@@ -35,7 +35,17 @@ pub(crate) struct Scan {
     /// The root element sets `color` itself, so `currentColor` is that color and not the one of the text around the
     /// image.
     pub(crate) root_sets_color: bool,
+    /// How many points one of the pixels `usvg` sizes the picture in comes to: 3/4 when the root's size is in `pt`, `pc`,
+    /// `in`, `mm` or `cm`, which `usvg` reads at 96 pixels to the inch, so that such a size is the size it says, and 1
+    /// otherwise, since the engine takes a pixel as a point.
+    pub(crate) points_per_pixel: f32,
 }
+
+/// The units of a length that are true sizes, which a picture takes as they are.
+const ABSOLUTE_UNITS: [&str; 5] = ["pt", "pc", "in", "cm", "mm"];
+
+/// The other units a length of the root may have.
+const RELATIVE_UNITS: [&str; 4] = ["px", "em", "ex", "%"];
 
 /// Read the XML of an SVG, DTD and entities included, which `usvg` reads too.
 pub(crate) fn parse_xml(text: &str) -> Result<Document<'_>, String> {
@@ -58,7 +68,34 @@ pub(crate) fn scan(doc: &Document) -> Result<Scan, String> {
     Ok(Scan {
         current_color: found.current_color,
         root_sets_color: root.attribute("color").is_some() || style_declares(root.attribute("style"), "color"),
+        points_per_pixel: points_per_pixel(root),
     })
+}
+
+/// How many points a pixel of the root's size is: 3/4 when the size is in an absolute unit. The `width` decides for both
+/// axes, so the picture keeps its proportions; the `height` does when the `width` is no length.
+fn points_per_pixel(root: Node) -> f32 {
+    let absolute = |name: &str| root.attribute(name).and_then(is_absolute_length);
+    match (absolute("width"), absolute("height")) {
+        (Some(true), _) | (None, Some(true)) => 0.75,
+        _ => 1.0,
+    }
+}
+
+/// Whether `value` is a length in an absolute unit, or `None` when it is no length.
+fn is_absolute_length(value: &str) -> Option<bool> {
+    if value.parse::<f32>().is_ok() {
+        return Some(false);
+    }
+    let (number, unit) = value.split_at(value.find(|c: char| c.is_ascii_alphabetic() || c == '%')?);
+    number.parse::<f32>().ok()?;
+    if ABSOLUTE_UNITS.contains(&unit) {
+        Some(true)
+    } else if RELATIVE_UNITS.contains(&unit) {
+        Some(false)
+    } else {
+        None
+    }
 }
 
 /// A refusal: `what` is the tag or the feature, `loc` where it is, `why` what can't be done.

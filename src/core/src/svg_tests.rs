@@ -101,10 +101,44 @@ fn keeps_a_fractional_size_as_it_is_so_a_small_picture_keeps_its_proportions() {
     assert_eq!((drawing.width, drawing.height), (1.5, 1.0));
 }
 
+/// The size of an SVG whose root is `<svg` and `attributes`.
+fn size_of(attributes: &str) -> (f32, f32) {
+    let drawing = drawing(&format!(r#"<svg xmlns="http://www.w3.org/2000/svg" {attributes}/>"#));
+    (drawing.width, drawing.height)
+}
+
+fn assert_size(attributes: &str, width: f32, height: f32) {
+    let (w, h) = size_of(attributes);
+    assert!((w - width).abs() < 0.01 && (h - height).abs() < 0.01, "{attributes}: {w} by {h}, not {width} by {height}");
+}
+
 #[test]
-fn converts_a_length_in_another_unit_at_96_pixels_to_the_inch() {
-    let drawing = drawing(r#"<svg xmlns="http://www.w3.org/2000/svg" width="72pt" height="1in"/>"#);
-    assert!((drawing.width - 96.0).abs() < 1e-3 && (drawing.height - 96.0).abs() < 1e-3, "{} by {}", drawing.width, drawing.height);
+fn takes_a_size_in_points_inches_and_millimetres_as_the_size_it_says() {
+    // 72 points are an inch, and a point is what the engine draws in: 72pt is 72pt.
+    assert_size(r#"width="72pt" height="1in""#, 72.0, 72.0);
+    assert_size(r#"width="460.8pt" height="345.6pt""#, 460.8, 345.6);
+    assert_size(r#"width="25.4mm" height="2.54cm""#, 72.0, 72.0);
+    assert_size(r#"width="6pc" height="1.5pc""#, 72.0, 18.0);
+    // An A4 page, as Inkscape writes it.
+    assert_size(r#"width="210mm" height="297mm""#, 595.2756, 841.8898);
+}
+
+#[test]
+fn takes_a_size_in_pixels_or_with_no_unit_as_a_pixel_to_the_point() {
+    assert_size(r#"width="96" height="48""#, 96.0, 48.0);
+    assert_size(r#"width="96px" height="48px""#, 96.0, 48.0);
+    assert_size(r#"viewBox="0 0 96 48""#, 96.0, 48.0);
+}
+
+#[test]
+fn takes_the_units_of_the_width_for_both_axes_so_the_picture_keeps_its_proportions() {
+    // The picture is drawn at the size `usvg` read, and a natural size of another shape would distort it.
+    assert_size(r#"width="72pt" height="96px""#, 72.0, 72.0);
+    assert_size(r#"width="96px" height="72pt""#, 96.0, 96.0);
+    // With no width, or none that is a length, the height gives the units, and the view box the proportions.
+    assert_size(r#"height="72pt" viewBox="0 0 100 50""#, 144.0, 72.0);
+    assert_size(r#"width="wide" height="72pt" viewBox="0 0 100 50""#, 144.0, 72.0);
+    assert_size(r#"height="48" viewBox="0 0 100 50""#, 96.0, 48.0);
 }
 
 // ── What is drawn ─────────────────────────────────────────────────────────────
