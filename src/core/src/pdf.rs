@@ -35,7 +35,7 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
-use pdf_writer::writers::Resources;
+use pdf_writer::writers::{ExtGraphicsState, Resources};
 use pdf_writer::types::{ActionType, AnnotationFlags, AnnotationType, CheckBoxState, CidFontType, FieldFlags, FieldType, FontFlags, FunctionShadingType, HighlightEffect, LineCapStyle, LineJoinStyle, OutputIntentSubtype, OverprintMode, PageMode, Predictor, TabOrder, TableHeaderScope, TextRenderingMode, TrappingStatus};
 use md5::{Digest, Md5};
 use ttf_parser::{Face, Permissions};
@@ -86,24 +86,50 @@ impl FontRegistry {
     }
 }
 
-/// Stores raw image bytes (JPEG, PNG, WebP, GIF, TIFF or BMP) for images referenced by a document via
+/// Stores raw image bytes (JPEG, PNG, WebP, GIF, TIFF, BMP or SVG) for images referenced by a document via
 /// its `<assets><images>` declarations.  Populate before calling `render_pdf`.
 pub struct ImageRegistry {
     bytes: HashMap<String, Vec<u8>>,
+    /// An SVG is read once, when it is loaded: its drawing, or why it can't be drawn.
+    drawings: HashMap<String, Result<svg::Drawing, String>>,
 }
 
 impl ImageRegistry {
     pub fn new() -> Self {
-        Self { bytes: HashMap::new() }
+        Self { bytes: HashMap::new(), drawings: HashMap::new() }
     }
 
     /// Associate `name` with raw image file bytes.
     pub fn load(&mut self, name: &str, data: Vec<u8>) {
+        if svg::is_svg(&data) {
+            self.drawings.insert(name.to_string(), svg::prepare(&data));
+        } else {
+            self.drawings.remove(name);
+        }
         self.bytes.insert(name.to_string(), data);
     }
 
     pub fn get(&self, name: &str) -> Option<&[u8]> {
         self.bytes.get(name).map(|b| b.as_slice())
+    }
+
+    /// The drawing of the SVG loaded under `name`, when it can be drawn.
+    pub(crate) fn drawing(&self, name: &str) -> Option<&svg::Drawing> {
+        self.drawings.get(name).and_then(|drawing| drawing.as_ref().ok())
+    }
+
+    /// Why the image loaded under `name` can't be embedded, or `None` when it can, or is not loaded.
+    pub fn error(&self, name: &str) -> Option<String> {
+        match self.drawings.get(name) {
+            Some(drawing) => drawing.as_ref().err().cloned(),
+            None => self.get(name).and_then(image_format_error),
+        }
+    }
+
+    /// Whether the image loaded under `name` can be embedded. Images that fail this check are left out of the PDF's
+    /// resource dictionary, so that no XObject reference dangles.
+    fn embeddable(&self, name: &str) -> bool {
+        self.get(name).is_some() && self.error(name).is_none()
     }
 
     #[allow(dead_code)]
@@ -117,9 +143,7 @@ impl ImageRegistry {
 /// Read the pixel dimensions of an image the engine embeds, from its header.
 /// Returns `(width_px, height_px)` or `None` if unrecognised format.
 pub fn image_natural_size(bytes: &[u8]) -> Option<(u32, u32)> {
-    if svg::is_svg(bytes) {
-        svg::natural_size(bytes)
-    } else if bytes.starts_with(b"\xFF\xD8\xFF") {
+    if bytes.starts_with(b"\xFF\xD8\xFF") {
         jpeg_dims(bytes)
     } else if bytes.starts_with(b"\x89PNG\r\n\x1A\n") {
         png_dims(bytes)
@@ -142,12 +166,21 @@ fn image_has_alpha(bytes: &[u8]) -> bool {
     }
 }
 
-/// Build an `ImageMeta` map (name → (w_px, h_px)) from a registry.
+/// Build an `ImageMeta` map (name → size in pixels, and whether it paints with the text color) from a registry.
 pub fn build_image_meta(registry: &ImageRegistry) -> crate::layout::ImageMeta {
+    use crate::layout::ImageInfo;
     let mut meta = crate::layout::ImageMeta::new();
     for (name, bytes) in &registry.bytes {
-        if let Some(dims) = image_natural_size(bytes) {
-            meta.insert(name.clone(), dims);
+        match registry.drawings.get(name) {
+            Some(Ok(drawing)) => {
+                meta.insert(name.clone(), ImageInfo { size: (drawing.width, drawing.height), current_color: drawing.current_color });
+            }
+            Some(Err(_)) => {}
+            None => {
+                if let Some(size) = image_natural_size(bytes) {
+                    meta.insert(name.clone(), ImageInfo { size, current_color: false });
+                }
+            }
         }
     }
     meta
@@ -388,18 +421,11 @@ fn collect_used_images(nodes: &[RenderNode], out: &mut HashSet<String>) {
     }
 }
 
-/// Returns `true` if the image format and subtype can be embedded by
-/// `embed_image_xobject`.  Images that fail this check are silently excluded
-/// from the PDF resource dictionary so no dangling XObject references occur.
-pub fn is_image_embeddable(bytes: &[u8]) -> bool {
-    image_format_error(bytes).is_none()
-}
-
 /// Returns a human-readable error string if `bytes` cannot be embedded,
 /// or `None` if the format is supported.
 pub fn image_format_error(bytes: &[u8]) -> Option<String> {
     if svg::is_svg(bytes) {
-        return svg::error(bytes);
+        return svg::prepare(bytes).err();
     }
     if bytes.starts_with(b"\xFF\xD8\xFF") {
         return if jpeg_dims(bytes).is_some() {
@@ -446,6 +472,47 @@ pub fn image_format_error(bytes: &[u8]) -> Option<String> {
     ))
 }
 
+/// Write an SVG's picture as the form XObject `id`, and each group it fades as a whole as one of `group_ids`.
+///
+/// Every form names the same resources: the graphics states of the alphas, the groups, and in a PDF/X file `DefaultRGB`
+/// tied to sRGB (`srgb`), as the file's other forms do. The picture's box is the unit square.
+///
+/// Not inlined, for the reason `write_fields` is not.
+#[inline(never)]
+fn embed_svg(pdf: &mut Pdf, id: Ref, group_ids: &[Ref], drawing: &svg::Drawing, srgb: Option<Ref>) {
+    for (index, form) in drawing.forms.iter().enumerate() {
+        let form_id = if index == 0 { id } else { group_ids[index - 1] };
+        let mut xobject = pdf.form_xobject(form_id, &form.stream);
+        xobject.filter(Filter::FlateDecode);
+        xobject.bbox(Rect::new(form.bbox[0], form.bbox[1], form.bbox[2], form.bbox[3]));
+        if index > 0 {
+            // A faded group is composited alone, and then faded.
+            let mut group = xobject.group();
+            let space = group.transparency().isolated(true).color_space();
+            match srgb {
+                Some(profile) => space.icc_based(profile),
+                None => space.device_rgb(),
+            }
+        }
+        let mut resources = xobject.resources();
+        write_color_spaces(&mut resources, srgb, &[], &[], &|_| true);
+        if !drawing.states.is_empty() {
+            let mut states = resources.ext_g_states();
+            for (number, (fill, stroke)) in drawing.states.iter().enumerate() {
+                let mut state = states.insert(Name(svg::state_name(number).as_bytes())).start::<ExtGraphicsState>();
+                state.non_stroking_alpha(*fill);
+                state.stroking_alpha(*stroke);
+            }
+        }
+        if !group_ids.is_empty() {
+            let mut groups = resources.x_objects();
+            for (number, group_id) in group_ids.iter().enumerate() {
+                groups.pair(Name(svg::form_name(number + 1).as_bytes()), *group_id);
+            }
+        }
+    }
+}
+
 /// Write one image XObject into the PDF.  Supports:
 ///   - JPEG                      → `/Filter /DCTDecode`
 ///   - PNG grayscale/RGB 8 or 16-bit (ct 0, 2)  → IDAT passthrough with FlateDecode + PNG predictor
@@ -459,9 +526,7 @@ pub fn image_format_error(bytes: &[u8]) -> Option<String> {
 /// Not inlined, for the reason `write_fields` is not.
 #[inline(never)]
 fn embed_image_xobject(pdf: &mut Pdf, id: Ref, smask_id: Option<Ref>, bytes: &[u8]) -> Result<(), String> {
-    if svg::is_svg(bytes) {
-        svg::embed(pdf, id, bytes)?;
-    } else if let Some(format) = raster::Format::of(bytes) {
+    if let Some(format) = raster::Format::of(bytes) {
         embed_raster(pdf, id, smask_id, &raster::decode(format, bytes)?);
     } else if bytes.starts_with(b"\xFF\xD8\xFF") {
         // JPEG
@@ -1696,6 +1761,11 @@ fn draw_drawn(
                     rounded_rect(content, img.x, pdf_y, img.width, img.height, img.radius);
                     content.clip_nonzero();
                     content.end_path();
+                }
+                // An SVG that says `currentColor` paints with the color the page has set: the text's.
+                if let Some(color) = &img.color {
+                    set_fill_color(content, color);
+                    set_stroke_color(content, color);
                 }
                 content.transform([img.width, 0.0, 0.0, img.height, img.x, pdf_y]);
                 let rname: Vec<u8> = res_name.bytes().collect();
@@ -2934,6 +3004,8 @@ struct AllocatedIds {
     font_id_map:       HashMap<String, FontIds>,
     image_id_map:      HashMap<String, Ref>,
     image_smask_ids:   Vec<Option<Ref>>,
+    /// The forms an SVG image's transparency groups are, apart from its picture, per image in `sorted_image_names`.
+    svg_form_ids:      Vec<Vec<Ref>>,
     field_alloc:       Vec<FieldAllocIds>,        // one per field in collect order
     radio_parent_alloc: Vec<(String, Ref)>,        // (group_name, parent_dict_id)
     /// ExtGState objects for canvas layer opacity: (opacity_pct 1..99) → Ref.
@@ -3040,7 +3112,7 @@ fn prepare_images(
     // Filter to only formats that can actually be embedded to avoid dangling
     // XObject references in the resource dictionary.
     let mut sorted_image_names: Vec<String> = used_image_names.into_iter()
-        .filter(|name| image_registry.get(name).map_or(false, is_image_embeddable))
+        .filter(|name| image_registry.embeddable(name))
         .collect();
     sorted_image_names.sort();
     let image_res_map: HashMap<String, String> = sorted_image_names.iter().enumerate()
@@ -3368,6 +3440,12 @@ fn allocate_ids(
         if has_alpha { Some(alloc.next()) } else { None }
     }).collect();
 
+    // An SVG's picture is a form XObject, and each group it fades as a whole is one more.
+    let svg_form_ids: Vec<Vec<Ref>> = sorted_image_names.iter().map(|name| {
+        let extra = image_registry.drawing(name).map_or(0, svg::Drawing::extra_forms);
+        (0..extra).map(|_| alloc.next()).collect()
+    }).collect();
+
     // Per-field allocation.
     // For each field we allocate:
     //   - widget_id (merged field+annotation, or radio child widget)
@@ -3435,6 +3513,7 @@ fn allocate_ids(
         font_id_map,
         image_id_map,
         image_smask_ids,
+        svg_form_ids,
         field_alloc,
         radio_parent_alloc,
         opacity_gs_ids,
@@ -3478,7 +3557,7 @@ fn assemble_pdf(
     let AllocatedIds {
         catalog_id, info_id, pages_id,
         page_ids, content_ids, annot_ids,
-        font_id_map, image_id_map, image_smask_ids,
+        font_id_map, image_id_map, image_smask_ids, svg_form_ids,
         field_alloc, radio_parent_alloc, opacity_gs_ids, group_ids,
         outline, mut alloc,
     } = ids;
@@ -3828,7 +3907,9 @@ fn assemble_pdf(
     for (i, name) in sorted_image_names.iter().enumerate() {
         let img_id   = image_id_map[name];
         let smask_id = image_smask_ids[i];
-        if let Some(bytes) = image_registry.get(name) {
+        if let Some(drawing) = image_registry.drawing(name) {
+            embed_svg(&mut pdf, img_id, &svg_form_ids[i], drawing, press_ids.as_ref().map(|ids| ids.srgb));
+        } else if let Some(bytes) = image_registry.get(name) {
             embed_image_xobject(&mut pdf, img_id, smask_id, bytes).map_err(|e| format!("image '{name}': {e}"))?;
         }
     }
@@ -4914,8 +4995,8 @@ fn node_colors(node: &RenderNode) -> Vec<&str> {
         RenderNode::CanvasEllipse(e) => vec![e.fill.as_deref(), e.stroke.as_deref(), shadow(&e.shadow)],
         RenderNode::CanvasPath(p)    => vec![p.fill.as_deref(), p.stroke.as_deref()],
         RenderNode::Ruling(r)        => r.sets.iter().map(|set| Some(set.color.as_str())).collect(),
-        RenderNode::Link(_) | RenderNode::Image(_) | RenderNode::CanvasLayer(_)
-            | RenderNode::Anchor(_) | RenderNode::FootnoteMark(_) => vec![],
+        RenderNode::Image(i)         => vec![i.color.as_deref()],
+        RenderNode::Link(_) | RenderNode::CanvasLayer(_) | RenderNode::Anchor(_) | RenderNode::FootnoteMark(_) => vec![],
     };
     colors.into_iter().flatten().collect()
 }

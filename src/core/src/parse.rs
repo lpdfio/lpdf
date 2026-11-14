@@ -1456,7 +1456,8 @@ fn resolve_node(
     // keeps that room for as long as it lives: up to twice the bytes of its nodes.
     let mut children = Vec::with_capacity(n.children.len());
     children.extend(n.children.into_iter().map(|c| resolve_node(c, &font, font_size, color, fonts)));
-    let text_color = (is_text || n.kind == NodeKind::List).then(|| color.to_string());
+    // A picture takes it too, for `currentColor` in an SVG; the layout drops it from a picture that has no use for it.
+    let text_color = (is_text || matches!(n.kind, NodeKind::List | NodeKind::Img)).then(|| color.to_string());
 
     Node {
         kind:                  n.kind,

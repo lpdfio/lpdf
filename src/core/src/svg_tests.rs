@@ -1,0 +1,460 @@
+//! SVG images (`svg.rs`, `svg_scan.rs`, `svg_draw.rs`): what is drawn, what is refused with an error that names the tag,
+//! and the limits that stop a file before `usvg` builds anything from it. The documents that draw them are in
+//! `svg_render_tests.rs`.
+
+use std::path::PathBuf;
+
+use crate::svg::{self, Drawing};
+
+fn fixture(name: &str) -> Vec<u8> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test/assets/images/svg").join(name);
+    std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+}
+
+fn drawing(svg_text: &str) -> Drawing {
+    svg::prepare(svg_text.as_bytes()).unwrap_or_else(|e| panic!("{svg_text}: {e}"))
+}
+
+fn refused(svg_text: &str) -> String {
+    match svg::prepare(svg_text.as_bytes()) {
+        Ok(_) => panic!("{svg_text} should be refused"),
+        Err(error) => error,
+    }
+}
+
+/// The content of the picture's form, inflated.
+fn content(drawing: &Drawing, form: usize) -> String {
+    let inflated = miniz_oxide::inflate::decompress_to_vec_zlib(&drawing.forms[form].stream).expect("a zlib stream");
+    String::from_utf8(inflated).expect("content is text")
+}
+
+/// How many times the operator `op` is in `content`: the last word of a line.
+fn count(content: &str, op: &str) -> usize {
+    content.lines().filter(|line| line.split_whitespace().last() == Some(op)).count()
+}
+
+/// The operands of each use of the operator `op` in `content`.
+fn operands(content: &str, op: &str) -> Vec<Vec<f32>> {
+    content
+        .lines()
+        .filter(|line| line.split_whitespace().last() == Some(op))
+        .map(|line| line.split_whitespace().filter_map(|word| word.parse().ok()).collect())
+        .collect()
+}
+
+/// Whether `found` is `wanted`, to the precision a color is written in.
+fn is_color(found: &[f32], wanted: [f32; 3]) -> bool {
+    found.len() == 3 && found.iter().zip(wanted).all(|(found, wanted)| (found - wanted).abs() < 0.005)
+}
+
+/// An SVG document around `body`.
+fn svg(body: &str) -> String {
+    format!(r#"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100" height="100">{body}</svg>"#)
+}
+
+// ── Which bytes are an SVG ────────────────────────────────────────────────────
+
+#[test]
+fn recognizes_an_svg_by_its_root_element() {
+    assert!(svg::is_svg(b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>"));
+    assert!(svg::is_svg(b"  \n<svg>"));
+    assert!(svg::is_svg(b"\xEF\xBB\xBF<svg>"), "a byte order mark");
+    assert!(svg::is_svg(b"<?xml version=\"1.0\"?>\n<!-- made by hand -->\n<svg>"));
+    assert!(svg::is_svg(b"<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"x.dtd\" [ <!ENTITY a \"b\"> ]>\n<svg>"));
+}
+
+#[test]
+fn does_not_take_other_bytes_for_an_svg() {
+    assert!(!svg::is_svg(b"<svgfoo>"), "a root that only starts with svg");
+    assert!(!svg::is_svg(b"<html><svg>"));
+    assert!(!svg::is_svg(b"\x89PNG\r\n\x1A\n"));
+    assert!(!svg::is_svg(b"<!-- never closed <svg>"));
+    assert!(!svg::is_svg(b""));
+}
+
+// ── The size ──────────────────────────────────────────────────────────────────
+
+#[test]
+fn takes_the_size_from_width_and_height() {
+    let drawing = drawing(&svg(""));
+    assert_eq!((drawing.width, drawing.height), (100, 100));
+}
+
+#[test]
+fn takes_the_size_from_the_view_box_when_there_is_no_width_or_height() {
+    let drawing = drawing(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 30"/>"#);
+    assert_eq!((drawing.width, drawing.height), (80, 30));
+}
+
+#[test]
+fn sizes_an_svg_with_no_size_at_all_to_what_it_draws() {
+    let drawing = drawing(std::str::from_utf8(&fixture("no-size.svg")).unwrap());
+    assert_eq!((drawing.width, drawing.height), (60, 30));
+}
+
+#[test]
+fn rounds_a_fractional_size_up_to_whole_pixels() {
+    let drawing = drawing(r#"<svg xmlns="http://www.w3.org/2000/svg" width="10.2" height="0.4"/>"#);
+    assert_eq!((drawing.width, drawing.height), (11, 1));
+}
+
+// ── What is drawn ─────────────────────────────────────────────────────────────
+
+#[test]
+fn draws_every_basic_shape_with_its_strokes_dashes_and_fill_rules() {
+    let drawing = drawing(std::str::from_utf8(&fixture("shapes.svg")).unwrap());
+    assert_eq!(drawing.forms.len(), 1, "no group is faded as a whole");
+    let content = content(&drawing, 0);
+    for operator in ["c", "l", "m", "h", "S", "f", "B*", "d", "J", "j", "w", "M"] {
+        assert!(count(&content, operator) > 0, "{operator:?} in\n{content}");
+    }
+    // The picture's unit square: the SVG's 200 by 120, flipped.
+    let flip = &operands(&content, "cm")[0];
+    assert_eq!(flip.len(), 6);
+    assert!((flip[0] - 1.0 / 200.0).abs() < 1e-6 && (flip[3] + 1.0 / 120.0).abs() < 1e-6 && flip[5] == 1.0, "{flip:?}");
+}
+
+#[test]
+fn draws_use_style_clips_and_opacity() {
+    let drawing = drawing(std::str::from_utf8(&fixture("structure.svg")).unwrap());
+    let content = content(&drawing, 0);
+    assert!(count(&content, "W") >= 1, "the clip of the window: {content}");
+    // The two tiles are the one rect of `defs`, drawn twice with the class's fill.
+    let fills = operands(&content, "rg");
+    assert_eq!(fills.iter().filter(|fill| is_color(fill, [23.0 / 255.0, 99.0 / 255.0, 207.0 / 255.0])).count(), 2, "{content}");
+    // The warm rect takes its fill from the id rule, which beats the class and `*` rules.
+    assert!(fills.iter().any(|fill| is_color(fill, [215.0 / 255.0, 111.0 / 255.0, 4.0 / 255.0])), "{content}");
+    // `*` gives every shape round joins.
+    assert!(operands(&content, "j").iter().all(|join| join == &[1.0]), "{content}");
+}
+
+#[test]
+fn fades_a_group_of_several_shapes_as_one() {
+    let drawing = drawing(std::str::from_utf8(&fixture("structure.svg")).unwrap());
+    // The pair of shapes at half opacity, the same pair at 0.4 through its `use`, and the square with a fill and a
+    // stroke at half opacity: each is a form of its own, beside the picture.
+    assert_eq!(drawing.forms.len(), 4);
+    assert!(drawing.states.contains(&(0.5, 0.5)) && drawing.states.contains(&(0.4, 0.4)), "{:?}", drawing.states);
+    assert_eq!(count(&content(&drawing, 0), "Do"), 3, "the picture invokes the three groups");
+    for form in &drawing.forms[1..] {
+        assert!(form.bbox[2] > form.bbox[0] && form.bbox[3] > form.bbox[1], "{:?}", form.bbox);
+    }
+}
+
+#[test]
+fn fades_a_shape_with_only_a_fill_by_its_own_alpha() {
+    let drawing = drawing(&svg(r##"<rect width="10" height="10" fill="#ff0000" opacity="0.25"/>"##));
+    assert_eq!(drawing.forms.len(), 1);
+    assert_eq!(drawing.states, vec![(0.25, 1.0)]);
+}
+
+#[test]
+fn fades_a_shape_with_a_fill_and_a_stroke_as_a_group_since_its_stroke_covers_its_fill() {
+    let drawing = drawing(&svg(r##"<rect width="10" height="10" fill="#ff0000" stroke="#0000ff" stroke-width="4" opacity="0.5"/>"##));
+    assert_eq!(drawing.forms.len(), 2, "the stroke and the fill are faded together");
+}
+
+#[test]
+fn paints_a_fill_opacity_and_a_stroke_opacity_each_by_its_own_alpha() {
+    let drawing = drawing(&svg(
+        r##"<rect width="10" height="10" fill="#ff0000" fill-opacity="0.5" stroke="#0000ff" stroke-opacity="0.25"/>"##,
+    ));
+    assert_eq!(drawing.forms.len(), 1);
+    assert_eq!(drawing.states, vec![(0.5, 0.25)]);
+}
+
+#[test]
+fn draws_a_marker_at_each_vertex() {
+    let drawing = drawing(std::str::from_utf8(&fixture("marker.svg")).unwrap());
+    // Four vertices, four dots, each a circle of four curves, and the polyline itself.
+    assert!(count(&content(&drawing, 0), "c") >= 16);
+}
+
+#[test]
+fn skips_what_does_not_show_in_a_still_picture() {
+    let drawing = drawing(&svg(
+        r##"<title>t</title><desc>d</desc><metadata><x:y xmlns:x="urn:x"/></metadata><script>alert(1)</script>
+        <rect width="5" height="5" fill="none"/><circle r="3" opacity="0"/><set attributeName="x"/>"##,
+    ));
+    assert_eq!(count(&content(&drawing, 0), "f"), 0);
+}
+
+// ── currentColor ──────────────────────────────────────────────────────────────
+
+#[test]
+fn leaves_current_color_to_the_page_and_keeps_the_colors_the_file_writes() {
+    let drawing = drawing(std::str::from_utf8(&fixture("current-color.svg")).unwrap());
+    assert!(drawing.current_color);
+    let content = content(&drawing, 0);
+    // Only the red stroke of the square is a color of its own.
+    let strokes = operands(&content, "RG");
+    assert_eq!(strokes.len(), 1, "{content}");
+    assert!(is_color(&strokes[0], [183.0 / 255.0, 28.0 / 255.0, 28.0 / 255.0]), "{content}");
+    assert_eq!(count(&content, "rg"), 0, "no fill sets a color: {content}");
+}
+
+#[test]
+fn says_a_file_that_never_writes_current_color_does_not_use_it() {
+    assert!(!drawing(std::str::from_utf8(&fixture("shapes.svg")).unwrap()).current_color);
+}
+
+#[test]
+fn keeps_the_color_the_root_sets_for_current_color() {
+    let drawing = drawing(std::str::from_utf8(&fixture("current-color-root.svg")).unwrap());
+    assert!(!drawing.current_color, "the root's color is the file's own");
+    let strokes = operands(&content(&drawing, 0), "RG");
+    assert!(strokes.len() == 1 && is_color(&strokes[0], [0.0, 131.0 / 255.0, 143.0 / 255.0]), "{strokes:?}");
+}
+
+#[test]
+fn takes_current_color_from_a_color_a_shape_sets_itself() {
+    let drawing = drawing(&svg(r##"<rect width="9" height="9" fill="currentColor" color="#112233"/>"##));
+    assert!(!drawing.current_color);
+    let fills = operands(&content(&drawing, 0), "rg");
+    assert!(fills.len() == 1 && is_color(&fills[0], [17.0 / 255.0, 34.0 / 255.0, 51.0 / 255.0]), "{fills:?}");
+}
+
+#[test]
+fn keeps_a_color_the_file_writes_that_is_the_first_the_engine_would_stand_in_with() {
+    // The engine reads `currentColor` as `#010203` unless the file holds that color, which this one does.
+    let drawing = drawing(&svg(r##"<rect width="9" height="9" fill="currentColor"/><rect width="9" height="9" fill="#010203"/>"##));
+    assert!(drawing.current_color);
+    let fills = operands(&content(&drawing, 0), "rg");
+    assert!(fills.len() == 1 && is_color(&fills[0], [1.0 / 255.0, 2.0 / 255.0, 3.0 / 255.0]), "{fills:?}");
+}
+
+// ── What is refused ───────────────────────────────────────────────────────────
+
+#[test]
+fn refuses_text_and_names_the_tag_and_the_line() {
+    let error = refused("<svg xmlns=\"http://www.w3.org/2000/svg\">\n  <text x=\"1\" y=\"2\">Hi</text>\n</svg>");
+    assert!(error.contains("<text> at line 2, col 3"), "{error}");
+    assert!(error.contains("convert the text to outlines"), "{error}");
+}
+
+#[test]
+fn refuses_an_image_inside_an_svg() {
+    let error = refused(&svg(r#"<image href="data:image/png;base64,AAAA" width="10" height="10"/>"#));
+    assert!(error.contains("<image> at line 1"), "{error}");
+}
+
+#[test]
+fn refuses_a_foreign_object() {
+    assert!(refused(&svg("<foreignObject width=\"5\" height=\"5\"/>")).contains("<foreignObject>"));
+}
+
+#[test]
+fn refuses_a_use_of_another_file_and_an_import_and_a_url_outside_the_file() {
+    assert!(refused(&svg(r#"<use href="other.svg#a"/>"#)).contains("another file or a URL"));
+    assert!(refused(&svg(r#"<use xlink:href="https://example.com/a.svg#a"/>"#)).contains("<use>"));
+    assert!(refused(&svg("<style>@import url(https://example.com/a.css);</style>")).contains("@import"));
+    assert!(refused(&svg(r#"<rect width="5" height="5" fill="url(https://example.com/a.svg#g)"/>"#)).contains("`url(`"));
+    assert!(refused(&svg(r#"<style>rect { fill: url( 'other.svg#g' ) }</style>"#)).contains("<style>"));
+}
+
+#[test]
+fn does_not_refuse_what_is_only_named_in_a_title_or_a_vocabulary_of_another_tool() {
+    drawing(&svg(
+        r#"<title><text>Not a text</text></title><metadata><text xmlns="urn:other"/></metadata><rect width="5" height="5"/>"#,
+    ));
+}
+
+#[test]
+fn refuses_a_mask_a_filter_and_a_pattern_that_are_used_and_names_them() {
+    let mask = refused(&svg(
+        r##"<mask id="m"><rect width="5" height="5" fill="#fff"/></mask><rect id="r" width="9" height="9" mask="url(#m)"/>"##,
+    ));
+    assert!(mask.contains("<mask> at line 1"), "{mask}");
+    let filter = refused(&svg(
+        r##"<filter id="blur"><feGaussianBlur stdDeviation="2"/></filter><rect width="9" height="9" filter="url(#blur)"/>"##,
+    ));
+    assert!(filter.contains("<filter>"), "{filter}");
+    let pattern = refused(&svg(
+        r##"<pattern id="p" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="2" height="2"/></pattern><rect width="9" height="9" fill="url(#p)"/>"##,
+    ));
+    assert!(pattern.contains("<pattern>"), "{pattern}");
+}
+
+#[test]
+fn refuses_a_gradient_that_is_used_until_gradients_are_drawn() {
+    let linear = refused(&svg(
+        r##"<defs><linearGradient id="g"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient></defs><rect width="9" height="9" fill="url(#g)"/>"##,
+    ));
+    assert!(linear.contains("<linearGradient>") && linear.contains("yet"), "{linear}");
+    let radial = refused(&svg(
+        r##"<defs><radialGradient id="g"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#000"/></radialGradient></defs><circle r="9" stroke="url(#g)" fill="none"/>"##,
+    ));
+    assert!(radial.contains("<radialGradient>"), "{radial}");
+}
+
+#[test]
+fn draws_a_file_that_defines_a_mask_a_filter_a_pattern_and_a_gradient_it_never_uses() {
+    drawing(&svg(
+        r##"<defs><mask id="m"><rect width="5" height="5"/></mask><filter id="f"><feOffset dx="1"/></filter>
+        <pattern id="p" width="2" height="2"><rect width="1" height="1"/></pattern>
+        <linearGradient id="g"><stop offset="0" stop-color="#000"/></linearGradient></defs><rect width="5" height="5"/>"##,
+    ));
+}
+
+#[test]
+fn refuses_a_blend_mode() {
+    let error = refused(&svg(r##"<rect width="9" height="9" fill="#f00" style="mix-blend-mode: multiply"/>"##));
+    assert!(error.contains("mix-blend-mode"), "{error}");
+}
+
+#[test]
+fn refuses_a_clip_path_whose_shapes_mix_fill_rules() {
+    let error = refused(&svg(
+        r##"<clipPath id="c"><rect width="5" height="5" clip-rule="evenodd"/><rect x="9" width="5" height="5"/></clipPath><rect width="30" height="30" clip-path="url(#c)"/>"##,
+    ));
+    assert!(error.contains("clip-rule") && error.contains("<clipPath>"), "{error}");
+}
+
+#[test]
+fn refuses_a_clip_path_on_a_child_of_a_clip_path() {
+    let error = refused(&svg(
+        r##"<clipPath id="inner"><rect width="3" height="3"/></clipPath>
+        <clipPath id="c"><rect width="5" height="5" clip-path="url(#inner)"/></clipPath><rect width="30" height="30" clip-path="url(#c)"/>"##,
+    ));
+    assert!(error.contains("clip-path on a child of a <clipPath>"), "{error}");
+}
+
+#[test]
+fn draws_a_clip_path_whose_shapes_share_a_fill_rule_and_a_clip_path_with_a_clip_path_of_its_own() {
+    let drawing = drawing(&svg(
+        r##"<clipPath id="outer"><rect width="20" height="20"/></clipPath>
+        <clipPath id="c" clip-path="url(#outer)" clip-rule="evenodd"><rect width="5" height="5" clip-rule="evenodd"/><rect x="9" width="5" height="5" clip-rule="evenodd"/></clipPath>
+        <rect width="30" height="30" clip-path="url(#c)"/>"##,
+    ));
+    let content = content(&drawing, 0);
+    assert_eq!(count(&content, "W") + count(&content, "W*"), 2, "{content}");
+}
+
+#[test]
+fn says_malformed_xml_and_bytes_that_are_no_text() {
+    assert!(refused("<svg xmlns=\"http://www.w3.org/2000/svg\"><g></svg>").starts_with("the SVG could not be read: "));
+    let error = svg::prepare(b"<svg xmlns=\"http://www.w3.org/2000/svg\"><!-- \xFF\xFE -->").unwrap_err();
+    assert_eq!(error, "the SVG is not UTF-8 text");
+}
+
+#[test]
+fn reads_an_svg_with_a_doctype_and_entities() {
+    let text = r##"<?xml version="1.0"?><!DOCTYPE svg [ <!ENTITY red "#ff0000"> ]>
+        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="5" height="5" fill="&red;"/></svg>"##;
+    assert!(content(&drawing(text), 0).contains("1 0 0 rg\n"));
+}
+
+// ── The limits ────────────────────────────────────────────────────────────────
+
+/// An SVG of `levels` groups, each holding `fan` uses of the one before, over a single rect: `fan` to the power of
+/// `levels` rects once the uses are followed.
+fn use_tower(levels: usize, fan: usize) -> String {
+    let mut defs = String::from(r#"<rect id="l0" width="1" height="1"/>"#);
+    for level in 1..=levels {
+        let uses = format!(r##"<use href="#l{}"/>"##, level - 1).repeat(fan);
+        defs.push_str(&format!(r#"<g id="l{level}">{uses}</g>"#));
+    }
+    svg(&format!(r##"<defs>{defs}</defs><use href="#l{levels}"/>"##))
+}
+
+#[test]
+fn refuses_a_use_bomb_before_usvg_builds_it() {
+    // A kilobyte of `use` that stands for 10 to the sixth rects.
+    let bomb = use_tower(6, 10);
+    assert!(bomb.len() < 1_500, "the file is small: {} bytes", bomb.len());
+    let error = refused(&bomb);
+    assert!(error.contains("more than 100000 elements") && error.contains("the limit is 100000"), "{error}");
+}
+
+#[test]
+fn draws_a_tower_of_use_under_the_limit() {
+    let drawing = drawing(&use_tower(3, 10));
+    assert_eq!(count(&content(&drawing, 0), "f"), 1_000);
+}
+
+#[test]
+fn refuses_a_use_that_refers_to_itself() {
+    let error = refused(&svg(r##"<g id="a"><use href="#a"/></g>"##));
+    assert!(error.contains("refers to itself"), "{error}");
+}
+
+#[test]
+fn refuses_a_chain_of_use_deeper_than_the_limit_and_a_document_nested_deeper_than_it() {
+    let chain: String =
+        (0..150).map(|i| format!(r##"<g id="c{i}"><use href="#c{}"/></g>"##, i + 1)).collect::<String>() + r#"<rect id="c150" width="1" height="1"/>"#;
+    let error = refused(&svg(&format!(r##"{chain}<use href="#c0"/>"##)));
+    assert!(error.contains("levels deep, past the limit of 100"), "{error}");
+    let nested = format!("{}{}", "<g>".repeat(101), "</g>".repeat(101));
+    let error = refused(&svg(&nested));
+    assert!(error.contains("<g> at line 1") && error.contains("past the limit of 100"), "{error}");
+}
+
+#[test]
+fn draws_a_document_nested_as_deep_as_the_limit_allows() {
+    // The root is the first level.
+    drawing(&svg(&format!("{}<rect width=\"1\" height=\"1\"/>{}", "<g>".repeat(98), "</g>".repeat(98))));
+}
+
+#[test]
+fn refuses_more_path_commands_than_the_limit() {
+    let path = format!("M0 0{}", " l1 1".repeat(1_000_001));
+    let error = refused(&svg(&format!(r#"<path d="{path}"/>"#)));
+    assert!(error.contains("more than 1000000 path commands"), "{error}");
+}
+
+#[test]
+fn counts_the_segments_a_command_repeats_on_as_commands() {
+    // One `M` and a million pairs of numbers after it, each pair a line.
+    let path = format!("M0 0 {}", "1 1 ".repeat(1_000_001));
+    let error = refused(&svg(&format!(r#"<path d="{path}"/>"#)));
+    assert!(error.contains("path commands"), "{error}");
+}
+
+#[test]
+fn counts_the_path_commands_of_each_use_copy() {
+    // 1,000 lines, used 1,001 times.
+    let path = format!("M0 0{}", " l1 1".repeat(1_000));
+    let uses = r##"<use href="#p"/>"##.repeat(1_001);
+    let error = refused(&svg(&format!(r##"<defs><path id="p" d="{path}"/></defs>{uses}"##)));
+    assert!(error.contains("path commands"), "{error}");
+}
+
+#[test]
+fn counts_a_marker_at_each_vertex_of_its_path() {
+    // 1,000 vertices and a marker of 200 shapes: 200,000 shapes.
+    let marker = r#"<circle r="1"/>"#.repeat(200);
+    let path = format!("M0 0{}", " l1 1".repeat(999));
+    let error = refused(&svg(&format!(
+        r##"<defs><marker id="m">{marker}</marker></defs><path d="{path}" marker-mid="url(#m)"/>"##
+    )));
+    assert!(error.contains("more than 100000 elements"), "{error}");
+}
+
+#[test]
+fn counts_a_clip_path_for_each_shape_that_refers_to_it() {
+    // 40,000 shapes, each clipped by a clip path of 3 shapes.
+    let clip = r#"<clipPath id="c"><rect width="5" height="5"/><rect width="5" height="5"/><rect width="5" height="5"/></clipPath>"#;
+    let shapes = r##"<rect width="2" height="2" clip-path="url(#c)"/>"##.repeat(40_000);
+    let error = refused(&svg(&format!("{clip}{shapes}")));
+    assert!(error.contains("more than 100000 elements"), "{error}");
+}
+
+#[test]
+fn counts_what_a_style_sheet_refers_to_for_every_shape() {
+    let clip = r#"<clipPath id="c"><rect width="5" height="5"/><rect width="5" height="5"/><rect width="5" height="5"/></clipPath>"#;
+    let shapes = r#"<rect width="2" height="2"/>"#.repeat(40_000);
+    let error = refused(&svg(&format!("<style>rect {{ clip-path: url(#c) }}</style>{clip}{shapes}")));
+    assert!(error.contains("more than 100000 elements"), "{error}");
+}
+
+#[test]
+fn refuses_more_xml_nodes_than_the_limit_as_the_file_is_read() {
+    let error = refused(&svg(&"<g/>".repeat(400_001)));
+    assert!(error.contains("more than 400000 XML nodes"), "{error}");
+}
+
+#[test]
+fn draws_a_map_of_many_shapes_under_the_limits() {
+    let drawing = drawing(&svg(&r##"<path d="M0 0 L5 5 L9 0 Z" fill="#336699"/>"##.repeat(30_000)));
+    assert_eq!(count(&content(&drawing, 0), "f"), 30_000);
+}

@@ -42,6 +42,8 @@ mod png;
 mod raster;
 mod bmp;
 mod svg;
+mod svg_draw;
+mod svg_scan;
 mod toc;
 mod tokens;
 
@@ -298,10 +300,8 @@ impl LpdfEngine {
             if self.images.get(name).is_none() {
                 return Err(format!("image '{name}' declared in <assets> but not loaded via loadImage()"));
             }
-            if let Some(bytes) = self.images.get(name) {
-                if let Some(reason) = pdf::image_format_error(bytes) {
-                    return Err(format!("image '{name}': {reason}"));
-                }
+            if let Some(reason) = self.images.error(name) {
+                return Err(format!("image '{name}': {reason}"));
             }
         }
 
@@ -358,10 +358,8 @@ impl LpdfEngine {
             if self.images.get(name).is_none() {
                 return Err(format!("image '{name}' declared in assets but not loaded via loadImage()"));
             }
-            if let Some(bytes) = self.images.get(name) {
-                if let Some(reason) = pdf::image_format_error(bytes) {
-                    return Err(format!("image '{name}': {reason}"));
-                }
+            if let Some(reason) = self.images.error(name) {
+                return Err(format!("image '{name}': {reason}"));
             }
         }
 
@@ -926,6 +924,9 @@ mod raster_render_tests;
 
 #[cfg(test)]
 mod svg_render_tests;
+
+#[cfg(test)]
+mod svg_tests;
 
 #[cfg(test)]
 mod pdfua_render_tests;

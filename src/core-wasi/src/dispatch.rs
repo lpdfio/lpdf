@@ -392,10 +392,8 @@ fn render_pdf_doc(
         if image_registry.get(name).is_none() {
             return Err(format!("image '{name}' declared in <assets> but not loaded via loadImage()"));
         }
-        if let Some(bytes) = image_registry.get(name) {
-            if let Some(reason) = pdf::image_format_error(bytes) {
-                return Err(format!("image '{name}': {reason}"));
-            }
+        if let Some(reason) = image_registry.error(name) {
+            return Err(format!("image '{name}': {reason}"));
         }
     }
 

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="160" height="100" viewBox="0 0 160 100">
+    <style>
+        .box { fill: #1763cf; stroke: #0d3b82; stroke-width: 2 }
+        #warm { fill: #d76f04 }
+        * { stroke-linejoin: round }
+    </style>
+    <defs>
+        <rect id="tile" width="20" height="20" class="box"/>
+        <clipPath id="window"><circle cx="130" cy="30" r="20"/></clipPath>
+        <g id="pair"><rect width="30" height="30" fill="#2e7d32"/><circle cx="30" cy="30" r="15" fill="#b71c1c"/></g>
+    </defs>
+    <g transform="translate(10 10)">
+        <use href="#tile"/>
+        <use xlink:href="#tile" x="25" y="5" transform="rotate(10)"/>
+        <rect id="warm" x="60" y="0" width="20" height="20"/>
+    </g>
+    <g clip-path="url(#window)"><rect x="100" y="0" width="60" height="60" fill="#6a1b9a"/></g>
+    <g opacity="0.5" transform="translate(10 50)"><use href="#pair"/></g>
+    <g transform="translate(70 50)"><use href="#pair" opacity="0.4"/></g>
+    <rect x="125" y="60" width="30" height="30" fill="#f9a825" stroke="#333333" stroke-width="6" opacity="0.5"/>
+</svg>

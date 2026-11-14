@@ -80,6 +80,10 @@ mod raster;
 mod bmp;
 #[path = "../../core/src/svg.rs"]
 mod svg;
+#[path = "../../core/src/svg_draw.rs"]
+mod svg_draw;
+#[path = "../../core/src/svg_scan.rs"]
+mod svg_scan;
 #[path = "../../core/src/stamp.rs"]
 mod stamp;
 

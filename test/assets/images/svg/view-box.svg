@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A viewBox that doesn't start at the origin, in a picture twice its size. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="50 20 100 50">
+    <rect x="50" y="20" width="100" height="50" fill="#e0e0e0"/>
+    <circle cx="100" cy="45" r="20" fill="#1763cf"/>
+</svg>
