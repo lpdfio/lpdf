@@ -43,6 +43,7 @@ mod raster;
 mod bmp;
 mod svg;
 mod svg_draw;
+mod svg_entities;
 mod svg_scan;
 mod toc;
 mod tokens;

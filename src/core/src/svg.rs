@@ -10,7 +10,7 @@ use miniz_oxide::deflate::compress_to_vec_zlib;
 use usvg::Tree;
 
 use crate::svg_draw::{self, DrawnForm};
-use crate::svg_scan;
+use crate::{svg_entities, svg_scan};
 
 /// A form XObject of the picture, its content compressed.
 #[derive(Debug)]
@@ -94,7 +94,7 @@ fn skip_doctype(bytes: &[u8]) -> Option<&[u8]> {
 /// Read an SVG and write its picture, or say why it can't be drawn.
 pub(crate) fn prepare(bytes: &[u8]) -> Result<Drawing, String> {
     let text = std::str::from_utf8(strip_bom(bytes)).map_err(|_| "the SVG is not UTF-8 text".to_string())?;
-    svg_scan::check_entities(text)?;
+    svg_entities::check_entities(text)?;
     let doc = svg_scan::parse_xml(text)?;
     let scan = svg_scan::scan(&doc)?;
     // `currentColor` reads as black unless the root sets `color`, so the SVG is read with a color of its own for the

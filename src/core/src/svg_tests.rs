@@ -1,10 +1,11 @@
-//! SVG images (`svg.rs`, `svg_scan.rs`, `svg_draw.rs`): what is drawn, what is refused with an error that names the tag,
+//! SVG images (`svg.rs`, `svg_scan.rs`, `svg_entities.rs`, `svg_draw.rs`): what is drawn, what is refused with an error that names the tag,
 //! and the limits that stop a file before `usvg` builds anything from it. The documents that draw them are in
 //! `svg_render_tests.rs`.
 
 use std::path::PathBuf;
 
 use crate::svg::{self, Drawing};
+use crate::{svg_entities, svg_scan};
 
 fn fixture(name: &str) -> Vec<u8> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../test/assets/images/svg").join(name);
@@ -646,11 +647,11 @@ fn refuses_a_clip_path_whose_shapes_overlap_since_one_path_would_leave_a_hole_wh
     drawing(&clip("M0 0H10V10H0Z", "M10 0H20V10H10Z", ""));
 }
 
-/// The file of two kilobytes whose entities expand to 25 MB, with `before` ahead of its DOCTYPE and `inside` ahead of
-/// its declarations.
-fn entity_bomb(before: &str, inside: &str) -> String {
+/// The file of two kilobytes whose entities expand to 25 MB, with `declaration` for its XML declaration, `before` ahead
+/// of its DOCTYPE and `inside` ahead of its declarations.
+fn entity_bomb(declaration: &str, before: &str, inside: &str) -> String {
     format!(
-        r#"<?xml version="1.0"?>{before}<!DOCTYPE svg [ {inside} <!ENTITY a "{}"> <!ENTITY b "{}"> ]>
+        r#"{declaration}{before}<!DOCTYPE svg [ {inside} <!ENTITY a "{}"> <!ENTITY b "{}"> ]>
         <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><g id="{}"/></svg>"#,
         "x".repeat(1_000),
         "&a;".repeat(255),
@@ -660,20 +661,157 @@ fn entity_bomb(before: &str, inside: &str) -> String {
 
 #[test]
 fn bounds_the_entities_however_the_file_hides_its_doctype_or_its_declarations() {
-    let wrong = "the bomb must be refused";
-    for (before, inside) in [
-        ("", ""),
+    let plain = r#"<?xml version="1.0"?>"#;
+    for (declaration, before, inside) in [
+        (plain, "", ""),
         // A DOCTYPE in a comment is none, and the real one is the next.
-        ("<!-- <!DOCTYPE x> -->", ""),
-        ("<!-- <!DOCTYPE x [ <!ENTITY a \"y\"> ]> -->\n<?pi <!DOCTYPE z> ?>", ""),
+        (plain, "<!-- <!DOCTYPE x> -->", ""),
+        (plain, "<!-- <!DOCTYPE x [ <!ENTITY a \"y\"> ]> -->\n<?pi <!DOCTYPE z> ?>", ""),
+        // A comment `<!-->` goes on to the next `-->`, and holds a DOCTYPE of its own.
+        (plain, "<!--> <!DOCTYPE x [ <!ENTITY a \"y\"> ]> -->", ""),
+        // The values of the XML declaration are quoted, and may hold a `?>`.
+        (r#"<?xml version="1.0" encoding="?>"?>"#, "", ""),
         // An entity declared in a comment, or a processing instruction, is none, and the real one comes after it.
-        ("", "<!-- <!ENTITY a \"x\"> -->"),
-        ("", "<?pi <!ENTITY a \"x\"> ?>"),
-        ("", "<!ELEMENT svg ANY> <!ATTLIST svg x CDATA \"<!ENTITY a 'x'>\">"),
+        (plain, "", "<!-- <!ENTITY a \"x\"> -->"),
+        (plain, "", "<?pi <!ENTITY a \"x\"> ?>"),
+        // A declaration of an element, an attribute list or a notation ends at its first `>`, whatever quotes it holds,
+        // and its quote is not one the entities after it can be read from.
+        (plain, "", "<!ELEMENT e '>"),
+        (plain, "", "<!ELEMENT e \">"),
+        (plain, "", "<!ATTLIST svg x CDATA \">"),
+        (plain, "", "<!NOTATION n \"[]]>"),
     ] {
-        let error = svg::prepare(entity_bomb(before, inside).as_bytes()).expect_err(wrong);
+        let text = entity_bomb(declaration, before, inside);
+        assert!(svg_scan::parse_xml(&text).is_ok(), "the XML reader should read {before} {inside}");
+        let error = svg::prepare(text.as_bytes()).expect_err("the bomb must be refused");
         assert!(error.contains("entities expand to more than 1000000 bytes"), "{before} {inside}: {error}");
     }
+}
+
+#[test]
+fn does_not_take_a_prolog_the_xml_reader_refuses_for_one_it_reads() {
+    let plain = r#"<?xml version="1.0"?>"#;
+    // What our reader can't read is refused by it, with its own error, and not left to the XML reader that comes next.
+    let ours = "its prolog is not well formed";
+    for (before, inside) in [
+        // A declaration the tokenizer has no name for, and a stray quote that ends the one before it.
+        ("", "<!BOGUS>"),
+        ("", "<!ATTLIST svg x CDATA \"<!ENTITY a 'x'>\">"),
+        // A comment that doesn't end, and an entity with no `>`.
+        ("<!-- ", ""),
+        ("", "<!ENTITY c \"x\""),
+    ] {
+        let text = entity_bomb(plain, before, inside);
+        assert!(svg_scan::parse_xml(&text).is_err(), "the XML reader should refuse {before} {inside}");
+        let error = svg::prepare(text.as_bytes()).expect_err("the file must be refused");
+        assert!(error.contains(ours), "{before} {inside}: {error}");
+    }
+    // White space of another kind is none: U+00A0 before the DOCTYPE is no gap that lets a DOCTYPE be read.
+    let text = entity_bomb(plain, "\u{a0}", "");
+    assert!(svg_scan::parse_xml(&text).is_err());
+    let error = svg::prepare(text.as_bytes()).expect_err("the file must be refused");
+    assert!(error.contains("could not be read") && !error.contains("entities expand"), "{error}");
+}
+
+/// Numbers from a fixed seed, so a run of the test is the same each time.
+struct Dice(u64);
+
+impl Dice {
+    fn below(&mut self, count: usize) -> usize {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        (self.0 >> 11) as usize % count
+    }
+
+    fn pick<'a>(&mut self, from: &[&'a str]) -> &'a str {
+        from[self.below(from.len())]
+    }
+}
+
+/// What a prolog may hold where our reader and the XML reader could part: quotes and `>` inside declarations, comments
+/// that end early or never, instructions, white space of other kinds, declarations of the same name twice, and
+/// entities that name each other, a file or a parameter.
+const PROLOG_PIECES: &[&str] = &[
+    " ",
+    "\n",
+    "\u{a0}",
+    "'",
+    "\"",
+    ">",
+    "<",
+    "]",
+    "%",
+    "-->",
+    "<!ELEMENT e ANY>",
+    "<!ELEMENT e '>",
+    "<!ELEMENT e \">",
+    "<!ATTLIST e a CDATA \">",
+    "<!ATTLIST e a CDATA 'x'>",
+    "<!NOTATION n \"[]]>",
+    "<!NOTATION n SYSTEM 'a'>",
+    "<!-- c -->",
+    "<!-->",
+    "<!--->",
+    "<!-- <!ENTITY z 'v'> -->",
+    "<!--<!DOCTYPE d [ <!ENTITY z 'v'>]>-->",
+    "<? p ?>",
+    "<?p <!ENTITY z 'v'> ?>",
+    "<?>",
+    "<!ENTITY q 'v'>",
+    "<!ENTITY q \"<!ENTITY z 'v'>\">",
+    "<!ENTITY z 'small'>",
+    "<!ENTITY y '&z;'>",
+    "<!ENTITY s SYSTEM 'f'>",
+    "<!ENTITY % p 'x'>",
+    "<!ENTITY",
+    "<!ENTITY z",
+];
+
+/// The declarations of the entity every file of the next test refers to, whose value is `PAYLOAD`.
+const PAYLOAD_DECLARATIONS: &[&str] = &[
+    "<!ENTITY z \"PAYLOAD\">",
+    "<!ENTITY z 'PAYLOAD'>",
+    "<!ENTITY  z\t\"PAYLOAD\"\n>",
+    "<!ENTITY z\u{1680} \"PAYLOAD\">",
+];
+
+#[test]
+fn reads_a_prolog_as_the_xml_reader_does_whatever_its_declarations_hold() {
+    const LIMIT: u64 = 100;
+    let payload = "x".repeat(2 * LIMIT as usize);
+    let mut dice = Dice(0x2545_f491_4f6c_dd1d);
+    let mut read_and_grown = 0;
+    for _ in 0..100_000 {
+        let declaration = dice.pick(&["", r#"<?xml version="1.0"?>"#, r#"<?xml version="1.0" encoding="?>"?>"#]);
+        let before: String = (0..dice.below(3)).map(|_| dice.pick(PROLOG_PIECES)).collect();
+        let head = dice.pick(&["<!DOCTYPE svg [", "<!DOCTYPE svg PUBLIC \"p\" \"a[>.dtd\" [", "<!DOCTYPE\tsvg\n["]);
+        let mut inside: Vec<&str> = (0..1 + dice.below(6)).map(|_| dice.pick(PROLOG_PIECES)).collect();
+        inside.insert(dice.below(inside.len() + 1), dice.pick(PAYLOAD_DECLARATIONS));
+        let close = dice.pick(&["]>", "] >", "]\n>"]);
+        let reference = dice.pick(&["&z;", "&y;", "&z\u{1680};"]);
+        let text = format!(
+            r#"{declaration}{before}{head}{}{close}<svg xmlns="http://www.w3.org/2000/svg" id="{reference}"/>"#,
+            inside.concat()
+        )
+        .replace("PAYLOAD", &payload);
+
+        // A file the XML reader refuses is refused whatever we say. One it reads, we read to the same entities.
+        let Ok(doc) = svg_scan::parse_xml(&text) else { continue };
+        let grown = doc.root_element().attribute("id").map_or(0, str::len) as u64;
+        let verdict = svg_entities::check_within(&text, LIMIT);
+        // We may refuse a file the XML reader reads, for its entities or for one that names a file or a parameter, but
+        // not for being unreadable.
+        if let Err(error) = &verdict {
+            assert!(!error.contains("could not be read"), "the XML reader reads {text}: {error}");
+        }
+        if grown > LIMIT {
+            read_and_grown += 1;
+            assert!(verdict.is_err(), "the XML reader built {grown} bytes from {text}");
+        }
+    }
+    // The generator reaches the case under test, and not by a rare chance.
+    assert!(read_and_grown > 1_000, "{read_and_grown} files the XML reader grew a payload from");
 }
 
 #[test]
