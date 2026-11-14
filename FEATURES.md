@@ -11,7 +11,7 @@ What Lpdf officially supports, area by area: the version each feature is in sinc
 
 ## PDF standards and output
 
-A document asks for a standard, for encryption and for linearization in its `<output>` element, and without one of the standards the file is a plain PDF. The column *Written with* says where each of the others is set.
+A document asks for a standard, for encryption and for linearization in its `<output>` element, and without one of the standards the file is a plain PDF. The column *Written with* says where each of the others is set. Which standard fits which job: [Standards and print](https://lpdf.io/docs/standards/).
 
 | Supported | Written with | Since | Docs |
 |---|---|---|---|
@@ -114,7 +114,7 @@ Two settings of `<output>` on one document:
 | **Linearization** | Yes | Yes | Yes | Yes | | Yes |
 | **Attachments** | PDF/A-3: yes. PDF/A-2: refused | Yes | Refused | Yes | Yes | |
 
-A Factur-X invoice is a PDF/A-3 file, so it combines as PDF/A-3 does: with PDF/UA and with linearization, and with neither PDF/X nor encryption.
+A Factur-X invoice is a PDF/A-3 file, so it combines as PDF/A-3 does: with PDF/UA and with linearization, and with neither PDF/X nor encryption. Docs: [What combines with what](https://lpdf.io/docs/combinations/), with the error of each refusal.
 
 What a document holds, in each kind of file. A file of two standards keeps to both columns: what either refuses is refused. The two rows where PDF/UA and PDF/X differ say which one a file of both follows.
 
@@ -164,6 +164,8 @@ An image is declared in `<assets>`, and its bytes come from its `src`, which the
 - Docs: [Image, SVG](https://lpdf.io/docs/doc/layout/img/#svg).
 
 ## Color
+
+Which form of color is for what, and the press profile, bleed and print-only content of a job for a printer: [Color and print](https://lpdf.io/docs/color-and-print/).
 
 | Supported | Since | Docs |
 |---|---|---|
