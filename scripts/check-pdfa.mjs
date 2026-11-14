@@ -47,6 +47,7 @@ const SAMPLE_SETS = {
         { file: 'pdfa-2u-ruling.pdf', profiles: ['PDF/A-2u validation profile'] },
         { file: 'pdfa-2u-spot.pdf', profiles: ['PDF/A-2u validation profile'] },
         { file: 'pdfa-2u-svg.pdf', profiles: ['PDF/A-2u validation profile'] },
+        { file: 'pdfa-2u-jpeg-png.pdf', profiles: ['PDF/A-2u validation profile'] },
         { file: 'pdfa-3a.pdf', profiles: ['PDF/A-3a validation profile'] },
         { file: 'pdfa-3b.pdf', profiles: ['PDF/A-3b validation profile'] },
         { file: 'pdfa-3u.pdf', profiles: ['PDF/A-3u validation profile'] },

@@ -140,8 +140,8 @@ An image is declared in `<assets>`, and its bytes come from its `src`, which the
 
 | Format | Since | Read | Refused |
 |---|---|---|---|
-| JPEG | 0.24.0 | An RGB JPEG, which goes into the PDF as it is | |
-| PNG | 0.24.0 | Gray, RGB and RGBA at 8 or 16 bits, and a palette at 8 bits. The alpha channel of an RGBA PNG is kept | Gray with alpha, and fewer than 8 bits |
+| JPEG | 0.24.0 | A gray or an RGB JPEG, which goes into the PDF as it is. A gray one is written as gray since 0.35.0 | A CMYK JPEG, and one of 2 components, since 0.35.0 (`the JPEG is in CMYK, which Lpdf doesn't read: save it in RGB`) |
+| PNG | 0.24.0 | Gray, RGB and RGBA at 8 or 16 bits, and a palette at 8 bits. The alpha channel of an RGBA PNG is kept, and, since 0.35.0, the transparent color of a gray or RGB PNG and the transparent entries of a palette | Gray with alpha, fewer than 8 bits, and, since 0.35.0, an interlaced PNG (`the PNG is interlaced, which an image does not read: save it without interlacing`) |
 | WebP | 0.35.0 | A still image, with its alpha channel | An animated one |
 | GIF | 0.35.0 | A still image, with its transparent color | An animated one |
 | TIFF | 0.35.0 | Gray or RGB at 8 or 16 bits a sample, with alpha or without, and gray without alpha at 1, 2 or 4 bits; uncompressed, LZW, Deflate, PackBits or Group 4 fax | Samples of 32 bits, signed or floating-point samples, CMYK, JPEG compression, Group 3 fax, a color palette, gray with alpha that stores white as zero, a plane for each color, and several pages |

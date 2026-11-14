@@ -154,16 +154,22 @@ pub fn image_natural_size(bytes: &[u8]) -> Option<(u32, u32)> {
     }
 }
 
-/// Whether an image gets a soft mask in the PDF: an RGBA PNG, or a WebP, GIF, TIFF or BMP whose header says it has
-/// alpha.
+/// Whether an image gets a soft mask in the PDF: an RGBA PNG, a palette PNG whose `tRNS` makes an entry less than
+/// opaque, or a WebP, GIF, TIFF or BMP whose header says it has alpha.
 fn image_has_alpha(bytes: &[u8]) -> bool {
     if svg::is_svg(bytes) {
         return false;
     }
     match raster::Format::of(bytes) {
         Some(format) => raster::header(format, bytes).is_ok_and(|header| header.alpha),
-        None => png_info(bytes).is_some_and(|(_, _, _, ct)| ct == 6),
+        None => png_info(bytes).is_some_and(|(_, _, _, ct)| ct == 6 || (ct == 3 && palette_alpha(bytes).is_some())),
     }
+}
+
+/// The alpha of each palette entry of an indexed PNG, from its `tRNS` chunk, when one of them is less than opaque.
+/// An entry past the end of the chunk is opaque.
+fn palette_alpha(bytes: &[u8]) -> Option<&[u8]> {
+    png_chunk(bytes, b"tRNS").filter(|trns| trns.iter().any(|&alpha| alpha != 255))
 }
 
 /// Build an `ImageMeta` map (name → size in pixels, and whether it paints with the text color) from a registry.
@@ -187,6 +193,12 @@ pub fn build_image_meta(registry: &ImageRegistry) -> crate::layout::ImageMeta {
 }
 
 fn jpeg_dims(bytes: &[u8]) -> Option<(u32, u32)> {
+    jpeg_frame(bytes).map(|(w, h, _)| (w, h))
+}
+
+/// The frame header of a JPEG: its width and height in pixels, and the number of components each pixel has, which
+/// is 1 for gray, 3 for color and 4 for CMYK.
+fn jpeg_frame(bytes: &[u8]) -> Option<(u32, u32, u8)> {
     let mut i = 2usize;
     while i + 3 < bytes.len() {
         if bytes[i] != 0xFF { break; }
@@ -194,10 +206,10 @@ fn jpeg_dims(bytes: &[u8]) -> Option<(u32, u32)> {
         if i + 3 >= bytes.len() { break; }
         let seg_len = u16::from_be_bytes([bytes[i + 2], bytes[i + 3]]) as usize;
         // SOF0=0xC0, SOF1=0xC1, SOF2=0xC2
-        if matches!(marker, 0xC0 | 0xC1 | 0xC2) && i + 8 < bytes.len() {
+        if matches!(marker, 0xC0 | 0xC1 | 0xC2) && i + 9 < bytes.len() {
             let h = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]) as u32;
             let w = u16::from_be_bytes([bytes[i + 7], bytes[i + 8]]) as u32;
-            return Some((w, h));
+            return Some((w, h, bytes[i + 9]));
         }
         i += 2 + seg_len;
     }
@@ -382,8 +394,9 @@ fn decode_indexed_png(bytes: &[u8]) -> Option<(u32, u32, Vec<u8>, Option<Vec<u8>
         .collect();
 
     // Optional per-index alpha values (tRNS chunk)
-    let trns: &[u8] = png_chunk(bytes, b"tRNS").unwrap_or(&[]);
-    let has_alpha   = trns.iter().any(|&a| a != 255);
+    let entry_alpha = palette_alpha(bytes);
+    let trns: &[u8] = entry_alpha.unwrap_or(&[]);
+    let has_alpha   = entry_alpha.is_some();
 
     // Decode and unfilter the IDAT stream (1 byte per pixel for 8-bit indexed)
     let idat    = png_idat_bytes(bytes);
@@ -425,19 +438,21 @@ fn collect_used_images(nodes: &[RenderNode], out: &mut HashSet<String>) {
 /// or `None` if the format is supported.
 pub fn image_format_error(bytes: &[u8]) -> Option<String> {
     if bytes.starts_with(b"\xFF\xD8\xFF") {
-        return if jpeg_dims(bytes).is_some() {
-            None
-        } else {
-            Some("JPEG file could not be parsed (no valid SOF marker found)".to_string())
+        return match jpeg_frame(bytes) {
+            None => Some("JPEG file could not be parsed (no valid SOF marker found)".to_string()),
+            Some((_, _, 1 | 3)) => None, // gray, or color (YCbCr or RGB)
+            Some((_, _, 4)) => Some("the JPEG is in CMYK, which Lpdf doesn't read: save it in RGB".to_string()),
+            Some((_, _, components)) => Some(format!(
+                "the JPEG has {components} color components, and an image takes 1 (gray) or 3 (color): save it in RGB"
+            )),
         };
     }
     if bytes.starts_with(b"\x89PNG\r\n\x1A\n") {
         return match png_info(bytes) {
             None => Some("PNG file could not be parsed (IHDR chunk missing or truncated)".to_string()),
             Some((_, _, bd, ct)) => match (ct, bd) {
-                (0 | 2, 8 | 16) => None, // grayscale / RGB — 8-bit and 16-bit
-                (6, 8 | 16)     => None, // RGBA — 8-bit and 16-bit
-                (3, 8)          => None, // indexed-color 8-bit
+                // grayscale / RGB / RGBA at 8 and 16 bits, and indexed-color at 8
+                (0 | 2 | 6, 8 | 16) | (3, 8) => png_interlace_error(bytes),
                 (0 | 2 | 6, bd) => Some(format!(
                     "PNG with {bd}-bit depth is not supported; save it at 8 bits"
                 )),
@@ -467,6 +482,32 @@ pub fn image_format_error(bytes: &[u8]) -> Option<String> {
     Some(format!(
         "{hint} images are not supported; use JPEG, PNG, WebP, GIF, TIFF or BMP"
     ))
+}
+
+/// The color a gray or RGB PNG's `tRNS` chunk makes transparent, as a PDF color key mask: a minimum and a maximum,
+/// the same, for each component. `None` when the PNG has no such chunk, or its chunk does not say one color of the
+/// PNG's depth. The reader checks each decoded sample against it, so the PNG's rows go in as they are.
+fn png_color_key(bytes: &[u8], color_type: u8, bit_depth: u8) -> Option<Vec<i32>> {
+    let trns = png_chunk(bytes, b"tRNS")?;
+    // Each sample is 2 bytes whatever the depth, and at 8 bits only the low byte counts.
+    let samples: Vec<i32> = match (color_type, trns.len()) {
+        (0, 2) | (2, 6) => trns.chunks_exact(2).map(|sample| i32::from(u16::from_be_bytes([sample[0], sample[1]]))).collect(),
+        _ => return None,
+    };
+    if bit_depth == 8 && samples.iter().any(|&sample| sample > 255) {
+        return None;
+    }
+    Some(samples.into_iter().flat_map(|sample| [sample, sample]).collect())
+}
+
+/// The error of an interlaced PNG, whose rows the engine would embed in the order the file stores them, which is not
+/// the order of the picture, or `None` when the PNG is not interlaced. The interlace method is the last byte of the
+/// IHDR chunk, at 28.
+fn png_interlace_error(bytes: &[u8]) -> Option<String> {
+    match bytes.get(28) {
+        Some(0) | None => None,
+        Some(_) => Some("the PNG is interlaced, which an image does not read: save it without interlacing".to_string()),
+    }
 }
 
 /// The objects the images are written to: the XObject of each by name, the soft mask of each with alpha, and the forms
@@ -543,8 +584,9 @@ fn embed_svg(pdf: &mut Pdf, id: Ref, group_ids: &[Ref], drawing: &svg::Drawing, 
 }
 
 /// Write one image XObject into the PDF.  Supports:
-///   - JPEG                      → `/Filter /DCTDecode`
-///   - PNG grayscale/RGB 8 or 16-bit (ct 0, 2)  → IDAT passthrough with FlateDecode + PNG predictor
+///   - JPEG, gray or color       → `/Filter /DCTDecode`, in `DeviceGray` or `DeviceRGB` by its components
+///   - PNG grayscale/RGB 8 or 16-bit (ct 0, 2)  → IDAT passthrough with FlateDecode + PNG predictor, and a color key
+///                                                 mask when a tRNS chunk makes one color transparent
 ///   - PNG RGBA 8 or 16-bit (ct 6)               → decoded, split into RGB XObject + alpha SMask
 ///   - PNG indexed 8-bit (ct 3)                  → palette-expanded to RGB, or RGBA+SMask if tRNS present
 ///   - WebP, GIF, TIFF and BMP (`raster.rs`)     → decoded to 8-bit gray or RGB, + alpha SMask (`embed_raster`)
@@ -558,13 +600,17 @@ fn embed_image_xobject(pdf: &mut Pdf, id: Ref, smask_id: Option<Ref>, bytes: &[u
     if let Some(format) = raster::Format::of(bytes) {
         embed_raster(pdf, id, smask_id, &raster::decode(format, bytes)?);
     } else if bytes.starts_with(b"\xFF\xD8\xFF") {
-        // JPEG
-        if let Some((w, h)) = jpeg_dims(bytes) {
+        // JPEG: one component is gray, and three are color. The reader undoes the color transform itself.
+        if let Some((w, h, components)) = jpeg_frame(bytes) {
             let mut img = pdf.image_xobject(id, bytes);
             img.width(w as i32)
                .height(h as i32)
                .bits_per_component(8);
-            img.color_space().device_rgb();
+            if components == 1 {
+                img.color_space().device_gray();
+            } else {
+                img.color_space().device_rgb();
+            }
             img.filter(Filter::DctDecode);
         }
     } else if bytes.starts_with(b"\x89PNG\r\n\x1A\n") {
@@ -584,6 +630,9 @@ fn embed_image_xobject(pdf: &mut Pdf, id: Ref, smask_id: Option<Ref>, bytes: &[u
                         img.width(w as i32)
                            .height(h as i32)
                            .bits_per_component(bd as i32);
+                        if let Some(key) = png_color_key(bytes, ct, bd) {
+                            img.color_mask(key);
+                        }
                         match ct {
                             0 => { img.color_space().device_gray(); }
                             _ => { img.color_space().device_rgb(); }

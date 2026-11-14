@@ -956,6 +956,9 @@ mod stamp_tests;
 mod raster_render_tests;
 
 #[cfg(test)]
+mod image_render_tests;
+
+#[cfg(test)]
 mod svg_render_tests;
 
 #[cfg(test)]
