@@ -37,6 +37,108 @@ pub(crate) struct Scan {
     pub(crate) root_sets_color: bool,
 }
 
+/// The most bytes the entities a file refers to may expand to in all, each reference counted.
+pub(crate) const MAX_ENTITY_BYTES: u64 = 1_000_000;
+
+/// How deep one entity may name another.
+const MAX_ENTITY_DEPTH: usize = 10;
+
+/// Refuse a DOCTYPE whose entities expand past `MAX_ENTITY_BYTES` once the file refers to them, an entity that names
+/// a file, and a parameter entity. `roxmltree` stops an entity that nests past 10 levels or names more than 255 others,
+/// but not what a file builds from many references, such as 100 uses of an entity of 255 uses of one of 1,000
+/// characters, which is 25 MB in an attribute from a file of two kilobytes.
+pub(crate) fn check_entities(text: &str) -> Result<(), String> {
+    let Some(start) = text.find("<!DOCTYPE") else { return Ok(()) };
+    let Some((subset, rest)) = doctype_parts(&text[start..]) else { return Ok(()) };
+    let mut entities: HashMap<&str, &str> = HashMap::new();
+    for (at, _) in subset.match_indices("<!ENTITY") {
+        let declaration = subset[at + "<!ENTITY".len()..].trim_start();
+        if declaration.starts_with('%') {
+            return Err("the SVG declares a parameter entity, which can't be read".to_string());
+        }
+        let name_end = declaration.find(char::is_whitespace).unwrap_or(declaration.len());
+        let (name, after) = declaration.split_at(name_end);
+        let after = after.trim_start();
+        let Some(quote) = after.chars().next().filter(|c| matches!(c, '"' | '\'')) else {
+            return Err(format!("the SVG's entity {name} refers to another file, which an SVG may not"));
+        };
+        let value = &after[1..];
+        let value = &value[..value.find(quote).unwrap_or(value.len())];
+        entities.entry(name).or_insert(value);
+    }
+    if entities.is_empty() {
+        return Ok(());
+    }
+    let mut known: HashMap<&str, u64> = HashMap::new();
+    let mut total = 0u64;
+    for name in entity_names(rest) {
+        if entities.contains_key(name) {
+            total = total.saturating_add(expansion(name, &entities, &mut known, 1)?);
+            if total > MAX_ENTITY_BYTES {
+                return Err(too_many_entity_bytes());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn too_many_entity_bytes() -> String {
+    format!("the SVG's entities expand to more than {MAX_ENTITY_BYTES} bytes: the limit is {MAX_ENTITY_BYTES}")
+}
+
+/// The internal subset of a DOCTYPE that starts `doctype`, and the text after the DOCTYPE, or `None` when it has no
+/// subset.
+fn doctype_parts(doctype: &str) -> Option<(&str, &str)> {
+    let mut depth = 0usize;
+    let mut subset_start = None;
+    for (at, character) in doctype.char_indices() {
+        match character {
+            '[' => {
+                depth += 1;
+                subset_start.get_or_insert(at + 1);
+            }
+            ']' => depth = depth.saturating_sub(1),
+            '>' if depth == 0 => {
+                return subset_start.map(|from| (&doctype[from..at.max(from)], &doctype[at + 1..]));
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// The names between `&` and `;` in `text`.
+fn entity_names(text: &str) -> impl Iterator<Item = &str> {
+    text.split('&').skip(1).filter_map(|part| part.split_once(';').map(|(name, _)| name))
+}
+
+/// The bytes the entity `name` is once the entities it names are expanded.
+fn expansion<'a>(
+    name: &'a str,
+    entities: &HashMap<&'a str, &'a str>,
+    known: &mut HashMap<&'a str, u64>,
+    depth: usize,
+) -> Result<u64, String> {
+    if let Some(bytes) = known.get(name) {
+        return Ok(*bytes);
+    }
+    if depth > MAX_ENTITY_DEPTH {
+        return Err(format!("the SVG's entities name one another more than {MAX_ENTITY_DEPTH} levels deep"));
+    }
+    let value = entities[name];
+    let mut bytes = value.len() as u64;
+    for inner in entity_names(value) {
+        if entities.contains_key(inner) {
+            bytes = bytes.saturating_add(expansion(inner, entities, known, depth + 1)?);
+            if bytes > MAX_ENTITY_BYTES {
+                return Err(too_many_entity_bytes());
+            }
+        }
+    }
+    known.insert(name, bytes);
+    Ok(bytes)
+}
+
 /// Read the XML of an SVG, DTD and entities included, which `usvg` reads too.
 pub(crate) fn parse_xml(text: &str) -> Result<Document<'_>, String> {
     let options = ParsingOptions { allow_dtd: true, nodes_limit: MAX_XML_NODES, ..ParsingOptions::default() };
@@ -135,6 +237,16 @@ fn visit<'a, 'input>(
         }
         "image" => return Err(refusal("an <image>", &loc(node), "can't be drawn: an SVG can't hold a picture")),
         "foreignObject" => return Err(refusal("a <foreignObject>", &loc(node), "can't be drawn")),
+        "feImage" => {
+            // A filter is refused where it is used, but `usvg` would read what an `feImage` names before then.
+            if href(node).is_none_or(|href| !href.starts_with('#')) {
+                return Err(refusal(
+                    "an <feImage>",
+                    &loc(node),
+                    "refers to another file or holds a picture, which an SVG may not: only #id references are followed",
+                ));
+            }
+        }
         "style" => note_style(node, found)?,
         "use" => {
             if let Some(href) = href(node)
@@ -239,15 +351,26 @@ fn url_ids(value: &str) -> impl Iterator<Item = &str> {
 struct Cost {
     elements: u64,
     commands: u64,
+    /// The levels from the element down to the deepest thing it draws, itself one.
+    depth: usize,
 }
 
 impl Cost {
     fn plus(self, other: Cost) -> Cost {
-        Cost { elements: self.elements.saturating_add(other.elements), commands: self.commands.saturating_add(other.commands) }
+        Cost {
+            elements: self.elements.saturating_add(other.elements),
+            commands: self.commands.saturating_add(other.commands),
+            depth: self.depth.max(other.depth),
+        }
     }
 
     fn times(self, factor: u64) -> Cost {
-        Cost { elements: self.elements.saturating_mul(factor), commands: self.commands.saturating_mul(factor) }
+        Cost { elements: self.elements.saturating_mul(factor), commands: self.commands.saturating_mul(factor), ..self }
+    }
+
+    /// What an element that draws this holds: one level deeper.
+    fn below(self) -> Cost {
+        Cost { depth: self.depth + 1, ..self }
     }
 
     fn check(self) -> Result<(), String> {
@@ -281,6 +404,11 @@ impl<'a, 'input> Counter<'_, 'a, 'input> {
     /// to a marker draws it again at each vertex.
     fn cost(&mut self, node: Node<'a, 'input>, depth: usize) -> Result<Cost, String> {
         if let Some(known) = self.memo.get(&node.id()) {
+            // Counted before, at another level: it nests as deep below this one.
+            let deepest = depth + known.depth - 1;
+            if deepest > MAX_DEPTH {
+                return Err(too_deep(node, deepest));
+            }
             return Ok(*known);
         }
         if depth > MAX_DEPTH {
@@ -297,15 +425,15 @@ impl<'a, 'input> Counter<'_, 'a, 'input> {
         crate::memory::check()?;
         let (ids, css_refs) = (self.ids, self.css_refs);
         let own = own_commands(node);
-        let mut total = Cost { elements: 1, commands: own };
+        let mut total = Cost { elements: 1, commands: own, depth: 1 };
         for child in node.children().filter(|child| is_svg_element(*child) && !is_definition(child.tag_name().name())) {
-            total = total.plus(self.cost(child, depth + 1)?);
+            total = total.plus(self.cost(child, depth + 1)?.below());
             total.check()?;
         }
         if node.tag_name().name() == "use"
             && let Some(target) = href(node).and_then(|href| href.strip_prefix('#')).and_then(|id| ids.get(id).copied())
         {
-            total = total.plus(self.cost(target, depth + 1)?);
+            total = total.plus(self.cost(target, depth + 1)?.below());
         }
         for id in references(node, own > 0, css_refs) {
             if let Some(target) = ids.get(id).copied() {
@@ -316,7 +444,7 @@ impl<'a, 'input> Counter<'_, 'a, 'input> {
                 }
                 let drawn = self.cost(target, depth + 1)?;
                 let copies = if target.tag_name().name() == "marker" { own.max(1) } else { 1 };
-                total = total.plus(drawn.times(copies));
+                total = total.plus(drawn.times(copies).below());
             }
         }
         total.check()?;

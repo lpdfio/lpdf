@@ -133,6 +133,15 @@ test('puts the fixtures of one feature after the sizes, and data binding after p
     ]);
 });
 
+test('puts the svg fixture after the others, and its picture load before its layout and PDF write', () => {
+    const lines = [
+        benchmark('render_doc', 'svg', { ir: 1 }), benchmark('load', 'svg', { ir: 1 }),
+        benchmark('parse', 'fonts', { ir: 1 }), benchmark('parse', 'xl', { ir: 1 }),
+    ];
+    const rows = compare([build('a', lines), build('b', lines)]).filter(r => r.measure === 'instructions');
+    assert.deepEqual(rows.map(r => `${r.fixture} ${r.stage}`), ['xl parse', 'fonts parse', 'svg load', 'svg render_doc']);
+});
+
 test('shows a fixture the release lacks with no change, and says it has no baseline', () => {
     const release = build('v0.29.0', [benchmark('parse', 'm', { ir: 1000 })]);
     const branch = build('branch', [

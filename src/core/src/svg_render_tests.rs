@@ -86,6 +86,15 @@ fn keeps_the_proportions_of_the_view_box_inside_a_box_it_does_not_fill() {
 }
 
 #[test]
+fn keeps_the_proportions_of_a_small_fractional_size() {
+    // 10.2 by 0.4: whole pixels would make it 11 by 1, a picture almost three times too high.
+    let svg = br#"<svg xmlns="http://www.w3.org/2000/svg" width="10.2" height="0.4"><rect width="10.2" height="0.4"/></svg>"#.to_vec();
+    let pdf = rendered(&[("logo", svg)], r#"<section><layout margin="40pt"><img name="logo" width="102pt"/></layout></section>"#);
+    let scale = &operands(&page_content(&pdf), "cm")[0];
+    assert!((scale[0] - 102.0).abs() < 0.01 && (scale[3] - 4.0).abs() < 0.01, "{scale:?}");
+}
+
+#[test]
 fn sizes_an_svg_with_no_size_to_what_it_draws() {
     // 60 by 30 pixels: its natural size, which an `<img>` with no width takes as it takes any picture's: a pixel a point.
     let pdf = rendered(

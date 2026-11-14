@@ -202,7 +202,8 @@ pub fn set_font_widths(widths: HashMap<String, FontWidths>) {
 /// text around it (an SVG that says `currentColor`).
 #[derive(Clone, Copy)]
 pub struct ImageInfo {
-    pub size: (u32, u32),
+    /// The size in pixels. Whole for a raster image; as the file gives it for an SVG, which may be a fraction.
+    pub size: (f32, f32),
     pub current_color: bool,
 }
 
@@ -302,14 +303,14 @@ fn prefill_node(node: &mut Node, meta: &ImageMeta) {
         // The slot gives a picture with `width="fill"` its width, which is not known yet: keep the proportions
         // and the `height` it may not pass, for `layout_img`.
         let name = node.image_name.as_deref().unwrap_or("");
-        let (nat_w, nat_h) = meta.get(name).map_or((100.0, 100.0), |info| (info.size.0 as f32, info.size.1 as f32));
+        let (nat_w, nat_h) = meta.get(name).map_or((100.0, 100.0), |info| info.size);
         node.img_aspect = Some(if nat_w > 0.0 && nat_h > 0.0 { nat_w / nat_h } else { 1.0 });
         if sets_box(node) {
             *node = box_around_picture(std::mem::replace(node, Node::layout_default()));
         }
     } else if node.kind == NodeKind::Img {
         let name = node.image_name.as_deref().unwrap_or("");
-        let known = meta.get(name).map(|info| (info.size.0 as f32, info.size.1 as f32));
+        let known = meta.get(name).map(|info| info.size);
         let (w, h) = match (node.width_constraint, node.img_height_constraint, known) {
             // An image that is not loaded has no proportions to keep, so a box stays as it was given.
             (Some(w), Some(h), None) => (w, h),
@@ -7765,7 +7766,7 @@ abcdef</code><text>after</text></row>"#,
         );
         let mut doc = parse(&xml).unwrap();
         let mut lp = doc.section_layouts();
-        let meta: ImageMeta = px.into_iter().map(|size| ("logo".to_string(), ImageInfo { size, current_color: false })).collect();
+        let meta: ImageMeta = px.into_iter().map(|(w, h)| ("logo".to_string(), ImageInfo { size: (w as f32, h as f32), current_color: false })).collect();
         for section in &mut lp {
             prefill_section_image_sizes(section, &meta);
         }

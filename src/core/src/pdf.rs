@@ -177,8 +177,8 @@ pub fn build_image_meta(registry: &ImageRegistry) -> crate::layout::ImageMeta {
             }
             Some(Err(_)) => {}
             None => {
-                if let Some(size) = image_natural_size(bytes) {
-                    meta.insert(name.clone(), ImageInfo { size, current_color: false });
+                if let Some((w, h)) = image_natural_size(bytes) {
+                    meta.insert(name.clone(), ImageInfo { size: (w as f32, h as f32), current_color: false });
                 }
             }
         }
@@ -424,9 +424,6 @@ fn collect_used_images(nodes: &[RenderNode], out: &mut HashSet<String>) {
 /// Returns a human-readable error string if `bytes` cannot be embedded,
 /// or `None` if the format is supported.
 pub fn image_format_error(bytes: &[u8]) -> Option<String> {
-    if svg::is_svg(bytes) {
-        return svg::prepare(bytes).err();
-    }
     if bytes.starts_with(b"\xFF\xD8\xFF") {
         return if jpeg_dims(bytes).is_some() {
             None
@@ -472,9 +469,41 @@ pub fn image_format_error(bytes: &[u8]) -> Option<String> {
     ))
 }
 
+/// The objects the images are written to: the XObject of each by name, the soft mask of each with alpha, and the forms
+/// an SVG's faded groups are, each by the place of its image in `sorted_image_names`.
+struct ImageIds<'a> {
+    by_name:   &'a HashMap<String, Ref>,
+    smasks:    &'a [Option<Ref>],
+    svg_forms: &'a [Vec<Ref>],
+}
+
+/// Write each image of `sorted_image_names` as its XObject: a picture of pixels, or the forms of an SVG, whose RGB a
+/// PDF/X file ties to sRGB (`srgb`).
+///
+/// Not inlined, for the reason `write_fields` is not: in `assemble_pdf` it would take that function toward the 40 KB the
+/// Java SDK allows one (`make check-function-sizes`).
+#[inline(never)]
+fn write_images(
+    pdf:                &mut Pdf,
+    sorted_image_names: &[String],
+    ids:                &ImageIds,
+    image_registry:     &ImageRegistry,
+    srgb:               Option<Ref>,
+) -> Result<(), String> {
+    for (i, name) in sorted_image_names.iter().enumerate() {
+        let img_id = ids.by_name[name];
+        if let Some(drawing) = image_registry.drawing(name) {
+            embed_svg(pdf, img_id, &ids.svg_forms[i], drawing, srgb);
+        } else if let Some(bytes) = image_registry.get(name) {
+            embed_image_xobject(pdf, img_id, ids.smasks[i], bytes).map_err(|e| format!("image '{name}': {e}"))?;
+        }
+    }
+    Ok(())
+}
+
 /// Write an SVG's picture as the form XObject `id`, and each group it fades as a whole as one of `group_ids`.
 ///
-/// Every form names the same resources: the graphics states of the alphas, the groups, and in a PDF/X file `DefaultRGB`
+/// Every form names the graphics states of the alphas, the groups it invokes, and in a PDF/X file `DefaultRGB`
 /// tied to sRGB (`srgb`), as the file's other forms do. The picture's box is the unit square.
 ///
 /// Not inlined, for the reason `write_fields` is not.
@@ -504,10 +533,10 @@ fn embed_svg(pdf: &mut Pdf, id: Ref, group_ids: &[Ref], drawing: &svg::Drawing, 
                 state.stroking_alpha(*stroke);
             }
         }
-        if !group_ids.is_empty() {
+        if !form.groups.is_empty() {
             let mut groups = resources.x_objects();
-            for (number, group_id) in group_ids.iter().enumerate() {
-                groups.pair(Name(svg::form_name(number + 1).as_bytes()), *group_id);
+            for number in &form.groups {
+                groups.pair(Name(svg::form_name(*number).as_bytes()), group_ids[number - 1]);
             }
         }
     }
@@ -3904,15 +3933,8 @@ fn assemble_pdf(
     write_overprint_states(&mut pdf, &overprint_ids);
 
     // -- Image XObject streams -------------------------------------------------
-    for (i, name) in sorted_image_names.iter().enumerate() {
-        let img_id   = image_id_map[name];
-        let smask_id = image_smask_ids[i];
-        if let Some(drawing) = image_registry.drawing(name) {
-            embed_svg(&mut pdf, img_id, &svg_form_ids[i], drawing, press_ids.as_ref().map(|ids| ids.srgb));
-        } else if let Some(bytes) = image_registry.get(name) {
-            embed_image_xobject(&mut pdf, img_id, smask_id, bytes).map_err(|e| format!("image '{name}': {e}"))?;
-        }
-    }
+    let image_ids = ImageIds { by_name: &image_id_map, smasks: &image_smask_ids, svg_forms: &svg_form_ids };
+    write_images(&mut pdf, sorted_image_names, &image_ids, image_registry, press_ids.as_ref().map(|ids| ids.srgb))?;
 
     // -- Link annotation objects -----------------------------------------------
     // Each link annotation is a separate indirect object.  Invisible border

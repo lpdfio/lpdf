@@ -77,25 +77,33 @@ fn does_not_take_other_bytes_for_an_svg() {
 #[test]
 fn takes_the_size_from_width_and_height() {
     let drawing = drawing(&svg(""));
-    assert_eq!((drawing.width, drawing.height), (100, 100));
+    assert_eq!((drawing.width, drawing.height), (100.0, 100.0));
 }
 
 #[test]
 fn takes_the_size_from_the_view_box_when_there_is_no_width_or_height() {
     let drawing = drawing(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 30"/>"#);
-    assert_eq!((drawing.width, drawing.height), (80, 30));
+    assert_eq!((drawing.width, drawing.height), (80.0, 30.0));
 }
 
 #[test]
 fn sizes_an_svg_with_no_size_at_all_to_what_it_draws() {
     let drawing = drawing(std::str::from_utf8(&fixture("no-size.svg")).unwrap());
-    assert_eq!((drawing.width, drawing.height), (60, 30));
+    assert_eq!((drawing.width, drawing.height), (60.0, 30.0));
 }
 
 #[test]
-fn rounds_a_fractional_size_up_to_whole_pixels() {
+fn keeps_a_fractional_size_as_it_is_so_a_small_picture_keeps_its_proportions() {
     let drawing = drawing(r#"<svg xmlns="http://www.w3.org/2000/svg" width="10.2" height="0.4"/>"#);
-    assert_eq!((drawing.width, drawing.height), (11, 1));
+    assert!((drawing.width - 10.2).abs() < 1e-4 && (drawing.height - 0.4).abs() < 1e-4, "{} by {}", drawing.width, drawing.height);
+    let drawing = self::drawing(r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1.5 1"/>"#);
+    assert_eq!((drawing.width, drawing.height), (1.5, 1.0));
+}
+
+#[test]
+fn converts_a_length_in_another_unit_at_96_pixels_to_the_inch() {
+    let drawing = drawing(r#"<svg xmlns="http://www.w3.org/2000/svg" width="72pt" height="1in"/>"#);
+    assert!((drawing.width - 96.0).abs() < 1e-3 && (drawing.height - 96.0).abs() < 1e-3, "{} by {}", drawing.width, drawing.height);
 }
 
 // ── What is drawn ─────────────────────────────────────────────────────────────
@@ -221,6 +229,97 @@ fn keeps_a_color_the_file_writes_that_is_the_first_the_engine_would_stand_in_wit
     assert!(drawing.current_color);
     let fills = operands(&content(&drawing, 0), "rg");
     assert!(fills.len() == 1 && is_color(&fills[0], [1.0 / 255.0, 2.0 / 255.0, 3.0 / 255.0]), "{fills:?}");
+}
+
+#[test]
+fn draws_each_kind_of_transform() {
+    let cases = [
+        ("translate(3 4)", [1.0, 0.0, 0.0, 1.0, 3.0, 4.0]),
+        ("scale(2 3)", [2.0, 0.0, 0.0, 3.0, 0.0, 0.0]),
+        ("rotate(90)", [0.0, 1.0, -1.0, 0.0, 0.0, 0.0]),
+        ("skewX(45)", [1.0, 0.0, 1.0, 1.0, 0.0, 0.0]),
+        ("skewY(45)", [1.0, 1.0, 0.0, 1.0, 0.0, 0.0]),
+        ("matrix(2 0 0 3 5 7)", [2.0, 0.0, 0.0, 3.0, 5.0, 7.0]),
+    ];
+    for (transform, wanted) in cases {
+        let drawing = drawing(&svg(&format!(r#"<g transform="{transform}"><rect width="10" height="10"/></g>"#)));
+        // The first matrix is the picture's own, which puts the SVG's space on the unit square.
+        let moves = operands(&content(&drawing, 0), "cm");
+        let found = &moves[1];
+        assert!(found.iter().zip(wanted).all(|(found, wanted)| (found - wanted).abs() < 1e-3), "{transform}: {found:?}");
+    }
+}
+
+#[test]
+fn draws_a_transform_on_a_shape_and_a_use() {
+    let drawing = drawing(&svg(
+        r##"<defs><rect id="r" width="4" height="4"/></defs><rect width="4" height="4" transform="scale(2)"/><use href="#r" transform="translate(9 9)"/>"##,
+    ));
+    let moves = operands(&content(&drawing, 0), "cm");
+    assert!(moves.iter().any(|m| m == &vec![2.0, 0.0, 0.0, 2.0, 0.0, 0.0]) && moves.iter().any(|m| m == &vec![1.0, 0.0, 0.0, 1.0, 9.0, 9.0]), "{moves:?}");
+}
+
+#[test]
+fn draws_the_stroke_joins_caps_and_miter_limit() {
+    let line = |attributes: &str| format!(r##"<path d="M0 0 L9 9 L0 18" fill="none" stroke="#000" {attributes}/>"##);
+    for (attributes, operator, wanted) in [
+        (r#"stroke-linejoin="miter""#, "j", 0.0),
+        (r#"stroke-linejoin="round""#, "j", 1.0),
+        (r#"stroke-linejoin="bevel""#, "j", 2.0),
+        (r#"stroke-linecap="butt""#, "J", 0.0),
+        (r#"stroke-linecap="round""#, "J", 1.0),
+        (r#"stroke-linecap="square""#, "J", 2.0),
+        (r#"stroke-miterlimit="2""#, "M", 2.0),
+        (r#"stroke-miterlimit="7.5""#, "M", 7.5),
+        (r#"stroke-width="3""#, "w", 3.0),
+    ] {
+        let drawing = drawing(&svg(&line(attributes)));
+        assert_eq!(operands(&content(&drawing, 0), operator), vec![vec![wanted]], "{attributes}");
+    }
+}
+
+#[test]
+fn draws_dashes_with_their_offset() {
+    let drawing = drawing(&svg(r##"<path d="M0 0 L50 0" fill="none" stroke="#000" stroke-dasharray="6 3" stroke-dashoffset="2"/>"##));
+    assert!(content(&drawing, 0).contains("[6 3] 2 d"), "{}", content(&drawing, 0));
+}
+
+#[test]
+fn reads_each_way_to_write_a_color() {
+    let fill = |paint: &str| {
+        let drawing = drawing(&svg(&format!(r#"<rect width="5" height="5" fill="{paint}"/>"#)));
+        operands(&content(&drawing, 0), "rg").pop().unwrap_or_default()
+    };
+    assert!(is_color(&fill("#f00"), [1.0, 0.0, 0.0]));
+    assert!(is_color(&fill("#336699"), [0.2, 0.4, 0.6]));
+    assert!(is_color(&fill("rgb(0, 128, 255)"), [0.0, 128.0 / 255.0, 1.0]));
+    assert!(is_color(&fill("rgb(100%, 0%, 50%)"), [1.0, 0.0, 0.5]));
+    assert!(is_color(&fill("teal"), [0.0, 128.0 / 255.0, 128.0 / 255.0]));
+    assert!(is_color(&fill("RED"), [1.0, 0.0, 0.0]));
+    // `none` paints nothing, and a shape with neither a fill nor a stroke draws nothing.
+    let none = drawing(&svg(r#"<rect width="5" height="5" fill="none"/>"#));
+    assert_eq!(count(&content(&none, 0), "f") + count(&content(&none, 0), "S"), 0);
+}
+
+#[test]
+fn reads_the_properties_a_style_attribute_sets() {
+    let drawing = drawing(&svg(
+        r##"<rect width="9" height="9" style="fill:#00ff00; stroke:#ff0000; stroke-width:3; stroke-linejoin:bevel; stroke-miterlimit:2; stroke-linecap:round; fill-opacity:0.5"/>"##,
+    ));
+    let content = content(&drawing, 0);
+    assert!(is_color(&operands(&content, "rg")[0], [0.0, 1.0, 0.0]) && is_color(&operands(&content, "RG")[0], [1.0, 0.0, 0.0]), "{content}");
+    assert_eq!(operands(&content, "w"), vec![vec![3.0]]);
+    assert_eq!((operands(&content, "j"), operands(&content, "J"), operands(&content, "M")), (vec![vec![2.0]], vec![vec![1.0]], vec![vec![2.0]]));
+    assert_eq!(drawing.states, vec![(0.5, 1.0)]);
+}
+
+#[test]
+fn lets_a_style_attribute_beat_a_presentation_attribute_and_a_style_block_beat_both() {
+    let drawing = drawing(&svg(
+        r##"<style>.c { fill: #0000ff }</style><rect class="c" width="5" height="5" fill="#ff0000" style="stroke:#00ff00"/><rect width="5" height="5" fill="#ff0000" style="fill:#00ff00"/>"##,
+    ));
+    let fills = operands(&content(&drawing, 0), "rg");
+    assert!(is_color(&fills[0], [0.0, 0.0, 1.0]) && is_color(&fills[1], [0.0, 1.0, 0.0]), "{fills:?}");
 }
 
 // ── What is refused ───────────────────────────────────────────────────────────
@@ -457,4 +556,92 @@ fn refuses_more_xml_nodes_than_the_limit_as_the_file_is_read() {
 fn draws_a_map_of_many_shapes_under_the_limits() {
     let drawing = drawing(&svg(&r##"<path d="M0 0 L5 5 L9 0 Z" fill="#336699"/>"##.repeat(30_000)));
     assert_eq!(count(&content(&drawing, 0), "f"), 30_000);
+}
+
+#[test]
+fn counts_a_chain_of_use_whose_lower_elements_come_first_in_the_file() {
+    // Each element is counted once, so a chain written bottom-up is met through counts already made: its depth must
+    // be kept with them, or a chain of any length is read, and `usvg` nests as deep.
+    let chain: String = (1..=150).map(|i| format!(r##"<use id="c{i}" href="#c{}"/>"##, i - 1)).collect();
+    let error = refused(&svg(&format!(r#"<rect id="c0" width="1" height="1"/>{chain}"#)));
+    assert!(error.contains("levels deep, past the limit of 100"), "{error}");
+    let chain: String = (1..=90).map(|i| format!(r##"<use id="c{i}" href="#c{}"/>"##, i - 1)).collect();
+    drawing(&svg(&format!(r#"<rect id="c0" width="1" height="1"/>{chain}"#)));
+}
+
+#[test]
+fn refuses_an_fe_image_that_names_a_file_or_holds_a_picture() {
+    for href in ["/etc/hosts", "other.svg", "data:image/svg+xml;base64,PHN2Zy8+"] {
+        let error = refused(&svg(&format!(
+            r##"<filter id="f"><feImage href="{href}"/></filter><rect width="9" height="9" filter="url(#f)"/>"##
+        )));
+        assert!(error.contains("<feImage>") && error.contains("another file"), "{href}: {error}");
+    }
+}
+
+#[test]
+fn gives_usvg_no_way_to_read_a_file_or_a_data_url() {
+    assert!(svg::resolves_no_picture());
+}
+
+#[test]
+fn refuses_entities_that_expand_past_the_limit_from_a_file_of_two_kilobytes() {
+    // 100 uses of an entity of 255 uses of one of 1,000 characters: 25 MB in one attribute.
+    let text = format!(
+        r#"<?xml version="1.0"?><!DOCTYPE svg [ <!ENTITY a "{}"> <!ENTITY b "{}"> ]>
+        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><g id="{}"/></svg>"#,
+        "x".repeat(1_000),
+        "&a;".repeat(255),
+        "&b;".repeat(100)
+    );
+    assert!(text.len() < 3_000, "{} bytes", text.len());
+    let error = refused(&text);
+    assert!(error.contains("entities expand to more than 1000000 bytes"), "{error}");
+}
+
+#[test]
+fn refuses_an_entity_that_names_a_file_and_a_parameter_entity() {
+    let external = r#"<!DOCTYPE svg [ <!ENTITY x SYSTEM "file:///etc/hosts"> ]><svg xmlns="http://www.w3.org/2000/svg"/>"#;
+    assert!(refused(external).contains("refers to another file"));
+    let parameter = r#"<!DOCTYPE svg [ <!ENTITY % p "x"> ]><svg xmlns="http://www.w3.org/2000/svg"/>"#;
+    assert!(refused(parameter).contains("parameter entity"));
+}
+
+#[test]
+fn reads_the_entities_a_drawing_program_writes() {
+    // Illustrator's old exports name their namespaces with entities.
+    let text = r##"<?xml version="1.0"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd" [
+    <!ENTITY ns_svg "http://www.w3.org/2000/svg">
+    <!ENTITY ns_xlink "http://www.w3.org/1999/xlink">
+    <!ENTITY red "#ff0000">
+]>
+<svg xmlns="&ns_svg;" xmlns:xlink="&ns_xlink;" width="10" height="10"><rect width="5" height="5" fill="&red;"/></svg>"##;
+    assert_eq!(operands(&content(&drawing(text), 0), "rg"), vec![vec![1.0, 0.0, 0.0]]);
+}
+
+#[test]
+fn reads_a_doctype_with_no_entities_and_one_with_nested_entities_inside_the_limit() {
+    drawing(r#"<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "svg11.dtd"><svg xmlns="http://www.w3.org/2000/svg"/>"#);
+    let nested = r##"<!DOCTYPE svg [ <!ENTITY a "0123456789"> <!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;"> ]>
+        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><g id="&b;&b;&b;&b;"/></svg>"##;
+    drawing(nested);
+}
+
+#[test]
+fn refuses_a_clip_path_whose_shapes_overlap_since_one_path_would_leave_a_hole_where_they_meet() {
+    let clip = |a: &str, b: &str, rule: &str| {
+        svg(&format!(
+            r##"<clipPath id="c"><path d="{a}"{rule}/><path d="{b}"{rule}/></clipPath><rect width="30" height="30" clip-path="url(#c)"/>"##
+        ))
+    };
+    // The second square winds the other way: under the nonzero rule their overlap would wind to 0.
+    let error = refused(&clip("M0 0H10V10H0Z", "M5 5V15H15V5Z", ""));
+    assert!(error.contains("<clipPath> whose shapes overlap"), "{error}");
+    // The same under the even-odd rule, where any overlap is a hole.
+    let error = refused(&clip("M0 0H10V10H0Z", "M5 5H15V15H5Z", r#" clip-rule="evenodd""#));
+    assert!(error.contains("overlap"), "{error}");
+    // Shapes that don't overlap, or only touch, are one clip.
+    drawing(&clip("M0 0H10V10H0Z", "M12 0H20V10H12Z", ""));
+    drawing(&clip("M0 0H10V10H0Z", "M10 0H20V10H10Z", ""));
 }

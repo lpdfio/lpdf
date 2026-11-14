@@ -19,13 +19,14 @@ use gungraun::{library_benchmark, library_benchmark_group, main};
 use lpdf::{BenchDoc, BenchImages, bench_render_doc_with_loaded_images};
 
 use callgrind::config;
-use svg_images::{files, load, parsed_with_images};
+use svg_images::{files, load as load_images, parsed_with_images};
 
-// The bytes of the SVG files to the pictures an engine holds.
+// The bytes of the SVG files to the pictures an engine holds. The name is the stage's, `load`, which `allocations.rs`
+// and the report know it by.
 #[library_benchmark]
 #[bench::svg(args = ("svg"), setup = files)]
-fn image_load(files: Vec<(&'static str, Vec<u8>)>) -> BenchImages {
-    black_box(load(black_box(&files)))
+fn load(files: Vec<(&'static str, Vec<u8>)>) -> BenchImages {
+    black_box(load_images(black_box(&files)))
 }
 
 // A parsed document to the bytes of the PDF: layout and the PDF write together, with the pictures loaded.
@@ -38,6 +39,6 @@ fn render_doc((doc, images): (BenchDoc, BenchImages)) -> Vec<u8> {
     )
 }
 
-library_benchmark_group!(name = stages, benchmarks = [image_load, render_doc]);
+library_benchmark_group!(name = stages, benchmarks = [load, render_doc]);
 
 main!(config = config(), library_benchmark_groups = stages);

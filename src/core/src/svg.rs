@@ -5,8 +5,6 @@
 //! and what expands past a limit; `usvg` then resolves `use`, `<style>`, units and markers into a tree of groups and
 //! paths, which `svg_draw.rs` writes as PDF content. The form's box is the unit square, so the image draws where a
 //! JPEG or a PNG would: the layout scales the unit square with the CTM, as it does for every image.
-//!
-//! The plan is `Lpdf-svg-limited.md` in the internal repo.
 
 use miniz_oxide::deflate::compress_to_vec_zlib;
 use usvg::Tree;
@@ -19,14 +17,17 @@ use crate::svg_scan;
 pub(crate) struct Form {
     pub(crate) stream: Vec<u8>,
     pub(crate) bbox: [f32; 4],
+    /// The transparency groups the form invokes, by the index of their form.
+    pub(crate) groups: Vec<usize>,
 }
 
 /// An SVG read and written as PDF content, ready to go into the file.
 #[derive(Debug)]
 pub(crate) struct Drawing {
-    /// The size in pixels, which the layout takes the proportions of the image from.
-    pub(crate) width: u32,
-    pub(crate) height: u32,
+    /// The size in pixels, which the layout takes the proportions of the image from, as the file gives it: not
+    /// rounded, which would distort a small picture.
+    pub(crate) width: f32,
+    pub(crate) height: f32,
     /// Some shape is painted in `currentColor`, the color of the text where the image sits, which the page sets
     /// before it draws the picture.
     pub(crate) current_color: bool,
@@ -93,22 +94,20 @@ fn skip_doctype(bytes: &[u8]) -> Option<&[u8]> {
 /// Read an SVG and write its picture, or say why it can't be drawn.
 pub(crate) fn prepare(bytes: &[u8]) -> Result<Drawing, String> {
     let text = std::str::from_utf8(strip_bom(bytes)).map_err(|_| "the SVG is not UTF-8 text".to_string())?;
+    svg_scan::check_entities(text)?;
     let doc = svg_scan::parse_xml(text)?;
     let scan = svg_scan::scan(&doc)?;
     // `currentColor` reads as black unless the root sets `color`, so the SVG is read with a color of its own for the
     // root, and each paint that comes back as that color is the page's.
     let stand_in = (scan.current_color && !scan.root_sets_color).then(|| svg_scan::stand_in_color(text));
-    let options = usvg::Options {
-        style_sheet: stand_in.map(|(r, g, b)| format!("svg {{ color: rgb({r}, {g}, {b}) }}")),
-        ..usvg::Options::default()
-    };
+    let options = options(stand_in);
     let tree = Tree::from_xmltree(&doc, &options).map_err(|error| format!("the SVG could not be read: {error}"))?;
     let size = tree.size();
     let drawn = svg_draw::draw(&tree, &doc, stand_in)?;
     crate::memory::check()?;
     Ok(Drawing {
-        width: whole_pixels(size.width()),
-        height: whole_pixels(size.height()),
+        width: size.width(),
+        height: size.height(),
         current_color: drawn.current_color,
         forms: drawn.forms.into_iter().map(compressed).collect(),
         states: drawn.states,
@@ -116,10 +115,27 @@ pub(crate) fn prepare(bytes: &[u8]) -> Result<Drawing, String> {
 }
 
 fn compressed(form: DrawnForm) -> Form {
-    Form { stream: compress_to_vec_zlib(&form.content, 6), bbox: form.bbox }
+    Form { stream: compress_to_vec_zlib(&form.content, 6), bbox: form.bbox, groups: form.groups }
 }
 
-/// A size in pixels: whole, and at least one.
-fn whole_pixels(size: f32) -> u32 {
-    (size.ceil() as u32).max(1)
+/// What `usvg` reads the SVG with. It reads no file and no data URL: the scan refuses what names one, and this is the
+/// second lock on that door, since the default resolvers read a local file by its path and parse an SVG held in a
+/// data URL, neither of which the scan's limits would see.
+fn options(stand_in: Option<(u8, u8, u8)>) -> usvg::Options<'static> {
+    usvg::Options {
+        style_sheet: stand_in.map(|(r, g, b)| format!("svg {{ color: rgb({r}, {g}, {b}) }}")),
+        image_href_resolver: usvg::ImageHrefResolver {
+            resolve_data: Box::new(|_, _, _| None),
+            resolve_string: Box::new(|_, _| None),
+        },
+        ..usvg::Options::default()
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn resolves_no_picture() -> bool {
+    let options = options(None);
+    (options.image_href_resolver.resolve_string)("/etc/hosts", &options).is_none()
+        && (options.image_href_resolver.resolve_data)("image/svg+xml", std::sync::Arc::new(b"<svg/>".to_vec()), &options)
+            .is_none()
 }

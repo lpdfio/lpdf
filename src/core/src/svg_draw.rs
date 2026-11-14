@@ -5,13 +5,13 @@
 //! together and no shape's own, is a transparency group of its own, one more form the first invokes.
 //!
 //! What the writer can't draw it refuses, with an error that names the tag and, where the file has it, the line:
-//! a mask, a filter, a pattern, a gradient (card 563), a blend mode, a clip path that clips a clip path's child,
-//! and a clip path whose shapes mix fill rules.
+//! a mask, a filter, a pattern, a gradient (until gradients are drawn), a blend mode, a clip path that clips a clip
+//! path's child, and a clip path whose shapes mix fill rules or overlap.
 
 use pdf_writer::types::{LineCapStyle, LineJoinStyle};
 use pdf_writer::{Content, Name};
 use roxmltree21::Document;
-use usvg::tiny_skia_path::{PathSegment, Point, Transform};
+use usvg::tiny_skia_path::{PathSegment, Point, Rect, Transform};
 use usvg::{BlendMode, ClipPath, FillRule, Group, LineCap, LineJoin, Node, Paint, PaintOrder, Path, Tree};
 
 use crate::svg_scan::{line_of, refusal};
@@ -20,6 +20,8 @@ use crate::svg_scan::{line_of, refusal};
 pub(crate) struct DrawnForm {
     pub(crate) content: Vec<u8>,
     pub(crate) bbox: [f32; 4],
+    /// The transparency groups the content invokes, by the index of their form: the resources name no other.
+    pub(crate) groups: Vec<usize>,
 }
 
 /// What the writer made of a tree.
@@ -47,7 +49,8 @@ pub(crate) fn draw(tree: &Tree, doc: &Document, stand_in: Option<(u8, u8, u8)>) 
     let mut pen = Pen {
         doc,
         stand_in,
-        forms: vec![DrawnForm { content: Vec::new(), bbox: [0.0, 0.0, 1.0, 1.0] }],
+        forms: vec![DrawnForm { content: Vec::new(), bbox: [0.0, 0.0, 1.0, 1.0], groups: Vec::new() }],
+        writing: 0,
         states: Vec::new(),
         current_color: false,
     };
@@ -69,6 +72,8 @@ struct Pen<'a, 'input> {
     doc: &'a Document<'input>,
     stand_in: Option<(u8, u8, u8)>,
     forms: Vec<DrawnForm>,
+    /// The form whose content is being written.
+    writing: usize,
     states: Vec<(f32, f32)>,
     current_color: bool,
 }
@@ -131,15 +136,16 @@ impl Pen<'_, '_> {
     /// Draw `group` as a transparency group of its own, which the page composites first and fades as one.
     fn faded(&mut self, group: &Group, opacity: f32, content: &mut Content) -> Result<(), String> {
         let index = self.forms.len();
-        self.forms.push(DrawnForm { content: Vec::new(), bbox: [0.0; 4] });
+        self.forms.push(DrawnForm { content: Vec::new(), bbox: [0.0; 4], groups: Vec::new() });
+        self.forms[self.writing].groups.push(index);
+        let outer = std::mem::replace(&mut self.writing, index);
         let mut inner = Content::new();
         self.children(group, 1.0, &mut inner)?;
+        self.writing = outer;
         let area = group.layer_bounding_box();
         // A pixel more on each side, so that the edge's antialiasing is not cut off.
-        self.forms[index] = DrawnForm {
-            content: inner.finish().to_vec(),
-            bbox: [area.left() - 1.0, area.top() - 1.0, area.right() + 1.0, area.bottom() + 1.0],
-        };
+        self.forms[index].content = inner.finish().to_vec();
+        self.forms[index].bbox = [area.left() - 1.0, area.top() - 1.0, area.right() + 1.0, area.bottom() + 1.0];
         let state = self.state(opacity, opacity);
         content.set_parameters(Name(state_name(state).as_bytes()));
         content.x_object(Name(form_name(index).as_bytes()));
@@ -147,13 +153,16 @@ impl Pen<'_, '_> {
     }
 
     /// Intersect the clip with the shapes of `clip`, which are in the space the group is drawn in moved by the
-    /// clip's own transform. The shapes are united, which one fill rule can do.
+    /// clip's own transform. The shapes are united by writing them as the subpaths of one path, which holds only where
+    /// no two overlap: one that winds the other way, or any under the even-odd rule, would leave a hole where they
+    /// meet. A clip whose shapes' boxes overlap is refused.
     fn clip(&mut self, clip: &ClipPath, content: &mut Content) -> Result<(), String> {
         if let Some(outer) = clip.clip_path() {
             self.clip(outer, content)?;
         }
         let mut rule = None;
-        self.clip_shapes(clip, clip.root(), &clip.transform(), &mut rule, content)?;
+        let mut areas = Vec::new();
+        self.clip_shapes(clip, clip.root(), &clip.transform(), (&mut rule, &mut areas), content)?;
         match rule {
             Some(FillRule::EvenOdd) => content.clip_even_odd(),
             Some(FillRule::NonZero) => content.clip_nonzero(),
@@ -172,7 +181,7 @@ impl Pen<'_, '_> {
         clip: &ClipPath,
         group: &Group,
         transform: &Transform,
-        rule: &mut Option<FillRule>,
+        (rule, areas): (&mut Option<FillRule>, &mut Vec<Rect>),
         content: &mut Content,
     ) -> Result<(), String> {
         let transform = transform.pre_concat(group.transform());
@@ -182,11 +191,17 @@ impl Pen<'_, '_> {
         for child in group.children() {
             crate::deadline::check();
             match child {
-                Node::Group(inner) => self.clip_shapes(clip, inner, &transform, rule, content)?,
+                Node::Group(inner) => self.clip_shapes(clip, inner, &transform, (&mut *rule, &mut *areas), content)?,
                 Node::Path(path) => {
                     let this = path.fill().map_or(FillRule::NonZero, |fill| fill.rule());
                     if *rule.get_or_insert(this) != this {
                         return Err(self.cannot("a <clipPath> whose shapes mix clip-rule values", clip.id(), "can't be drawn"));
+                    }
+                    if let Some(area) = path.data().bounds().transform(transform) {
+                        if areas.iter().any(|other| overlap(other, &area)) {
+                            return Err(self.cannot("a <clipPath> whose shapes overlap", clip.id(), "can't be drawn"));
+                        }
+                        areas.push(area);
                     }
                     outline(content, path, &transform);
                 }
@@ -267,6 +282,11 @@ impl Pen<'_, '_> {
             }
         }
     }
+}
+
+/// Whether two boxes share more than an edge.
+fn overlap(a: &Rect, b: &Rect) -> bool {
+    a.left() < b.right() && b.left() < a.right() && a.top() < b.bottom() && b.top() < a.bottom()
 }
 
 /// Set the width, caps, joins and dashes a stroke draws with.

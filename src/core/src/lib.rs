@@ -123,7 +123,8 @@ impl LpdfEngine {
         }
     }
 
-    /// Register raw image bytes (JPEG, PNG, WebP, GIF, TIFF or BMP) for an image name.
+    /// Register raw image bytes (JPEG, PNG, WebP, GIF, TIFF, BMP or SVG) for an image name. An SVG is read here, so a
+    /// file the engine can't draw is an error of the render that uses it.
     /// Call this for every image referenced by `<img name="…">` nodes.
     pub fn load_image(&mut self, name: &str, bytes: &[u8]) {
         self.images.load(name, bytes.to_vec());
