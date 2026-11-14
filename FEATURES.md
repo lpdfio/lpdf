@@ -5,13 +5,13 @@ What Lpdf officially supports, area by area: the version each feature is in sinc
 - **Since** is the first version that has the feature as this file describes it.
 - **Refused** means the render stops with an error that says what to change. Lpdf repairs nothing in a document by itself.
 - What this file doesn't list is not supported.
-- The same document gives the same PDF in every SDK: JavaScript, Python, Java, C# and PHP.
+- The same document gives the same PDF in every SDK: JavaScript, Python, Java, C# and PHP. Options and methods, such as `createdOn` and `loadImage`, are named here as JavaScript names them, and each SDK has them in its own case.
 
 **Areas:** [PDF standards and output](#pdf-standards-and-output) · [What combines with what](#what-combines-with-what) · [Images](#images) · [Color](#color) · [Fonts and text](#fonts-and-text) · [Layout](#layout) · [Barcodes](#barcodes) · [Forms](#forms) · [Graphics](#graphics) · [Attachments](#attachments) · [Stamping existing PDFs](#stamping-existing-pdfs) · [Data binding](#data-binding) · [Render limits](#render-limits)
 
 ## PDF standards and output
 
-A document asks for each of these in its `<output>` element. Without one, the file is a plain PDF.
+A document asks for a standard, for encryption and for linearization in its `<output>` element, and without one of the standards the file is a plain PDF. The column *Written with* says where each of the others is set.
 
 | Supported | Written with | Since | Docs |
 |---|---|---|---|
@@ -74,8 +74,8 @@ Each error is listed under [PDF/UA, errors](https://lpdf.io/docs/pdfua/#errors).
 - `pdfx` takes `4`, and no other value. PDF/X-1a is not written.
 - `pdfx` and `profile` need each other. The profile is an ICC printer profile, in gray, RGB or CMYK, which the printer gives out: Lpdf bundles none. A display profile, such as sRGB, is refused.
 - RGB colors and images are tied to sRGB, CMYK colors stay CMYK, and spot colors stay inks of their own. Opacity, shadows and gradients are kept.
-- Links print their content and are not clickable, since PDF/X allows no link annotations. Bookmarks stay.
-- The file is the print version of print and screen content: screen content stays in the file, off.
+- Links print their content and are not clickable, since PDF/X allows no link annotations, with `pdfua` too. Bookmarks stay.
+- The file is the print version of print and screen content: screen content stays in the file, off. With `pdfua` as well, everything shows.
 - Refused: no `title` on `<meta>`, a render without `createdOn`, text in a built-in font, a font whose file was not loaded or whose license forbids embedding, a character its font has no glyph for, a barcode's printed digits, and a form field.
 - Refused: a CMYK color or gradient, or a spot color whose `value` is `cmyk()`, when the press profile is a gray or an RGB one.
 - Refused: `encrypt`, `pdfa` and attachments on the same document.
@@ -116,7 +116,7 @@ Two settings of `<output>` on one document:
 
 A Factur-X invoice is a PDF/A-3 file, so it combines as PDF/A-3 does: with PDF/UA and with linearization, and with neither PDF/X nor encryption.
 
-What a document holds, in each kind of file. A file of two standards keeps to both columns.
+What a document holds, in each kind of file. A file of two standards keeps to both columns: what either refuses is refused. The two rows where PDF/UA and PDF/X differ say which one a file of both follows.
 
 | Content | Plain PDF | PDF/A | PDF/UA | PDF/X |
 |---|---|---|---|---|
@@ -129,25 +129,25 @@ What a document holds, in each kind of file. A file of two standards keeps to bo
 | Spot colors with an RGB value | Yes | Yes | Yes | Yes |
 | Opacity, shadows and gradients | Yes | Yes | Yes | Yes |
 | Images of every format, SVG included | Yes | Yes | Yes, each with an `alt` | Yes |
-| Links | Clickable | Clickable | Clickable, and tagged | Printed, not clickable |
+| Links | Clickable | Clickable | Clickable, and tagged | Printed, not clickable, with PDF/UA too: a screen reader reads the link's text as text |
 | Bookmarks | Yes | Yes | Yes | Yes |
-| Print and screen content (`ocg`) | The viewer switches it | Everything shows | Everything shows | The print version: screen content is off |
+| Print and screen content (`ocg`) | The viewer switches it | Everything shows | Everything shows, with PDF/X too | The print version: screen content is off |
 | Bulk records (`bulk`) | Yes | Levels b and u: yes. Level a: refused | Refused | Yes |
 
 ## Images
 
-An image is declared in `<assets>`, and its bytes come from its `src`, which the SDK reads, or from `loadImage` on the engine. The engine tells the format from the file's bytes. An image is never stretched. Docs: [Image](https://lpdf.io/docs/doc/layout/img/).
+An image is declared in `<assets>`, and its bytes come from its `src`, which the SDK reads, in Java and C# through the engine's `srcFallback`, or from `loadImage` on the engine. The engine tells the format from the file's bytes. An image is never stretched. Docs: [Image](https://lpdf.io/docs/doc/layout/img/).
 
 | Format | Since | Read | Refused |
 |---|---|---|---|
-| JPEG | 0.24.0 | Goes into the PDF as it is | |
-| PNG | 0.24.0 | Gray, RGB and RGBA at 8 or 16 bits, and a palette at 8 bits. An alpha channel is kept | Gray with alpha, and fewer than 8 bits |
+| JPEG | 0.24.0 | An RGB JPEG, which goes into the PDF as it is | |
+| PNG | 0.24.0 | Gray, RGB and RGBA at 8 or 16 bits, and a palette at 8 bits. The alpha channel of an RGBA PNG is kept | Gray with alpha, and fewer than 8 bits |
 | WebP | 0.35.0 | A still image, with its alpha channel | An animated one |
 | GIF | 0.35.0 | A still image, with its transparent color | An animated one |
 | TIFF | 0.35.0 | Gray or RGB at 8 or 16 bits a sample, with alpha or without, and gray without alpha at 1, 2 or 4 bits; uncompressed, LZW, Deflate, PackBits or Group 4 fax | Samples of 32 bits, signed or floating-point samples, CMYK, JPEG compression, Group 3 fax, a color palette, gray with alpha that stores white as zero, a plane for each color, and several pages |
 | BMP | 0.35.0 | Palettes of 1, 4 and 8 bits, run-length encoded or not, and 16, 24 and 32 bits to a pixel, with alpha when the file has an alpha mask | A BMP that holds a JPEG or a PNG |
 | SVG | 0.35.0 | Drawn as vector: see below | See below |
-| AVIF, HEIC, JPEG 2000 | | | Refused (`AVIF/HEIC images are not supported; use JPEG, PNG, WebP, GIF, TIFF or BMP`) |
+| AVIF, HEIC, JPEG 2000 | | | Refused, with an error that names the format and the ones to use: `AVIF/HEIC images are not supported; use JPEG, PNG, WebP, GIF, TIFF or BMP` |
 
 - The raster formats other than JPEG go into the PDF as their pixels, compressed without loss, and their pixels count toward the render's [memory cap](#render-limits).
 - The engine does not fetch URLs or read data URIs.
@@ -230,7 +230,7 @@ An image is declared in `<assets>`, and its bytes come from its `src`, which the
 | A `height` row in the tokens, and aliases | 0.29.0 | [XML schema, aliases](https://lpdf.io/docs/xml/schema/#aliases) |
 | Lengths in `pt`, `mm` and `in` on every attribute that takes a length | 0.34.0 | [XML schema, units](https://lpdf.io/docs/xml/schema/#units) |
 
-- A length in another unit, such as `cm`, `px` or `em`, is refused, and so is a number without a unit, except `0`.
+- A length is written with its unit. One in another unit, such as `cm`, `px` or `em`, is refused.
 - A document nests 100 levels at most, `<lpdf>` included. A deeper one is refused: `is nested 101 levels deep, past the limit of 100`. Lists nest 47 deep. See [XML schema, document structure](https://lpdf.io/docs/xml/schema/#document-structure).
 - A container narrower than 2.5 mm, or with a `height` set lower, holds no other containers.
 - Every attribute is checked against the schema. Refused: a value that is not of its type, and an attribute the element doesn't have.
@@ -239,7 +239,7 @@ An image is declared in `<assets>`, and its bytes come from its `src`, which the
 - `break-before`, `break-after` and `keep-next` take effect on elements directly inside `<layout>`.
 - In a table, `auto` columns with `fr` columns are refused, and so are a row that spans more columns than the table has, a `rowspan` that runs past the last row, and a `rowspan` on a `<thead>`.
 - A document has one table of contents at most. A second one is refused.
-- A `<bookmark>` needs an element after it in the same container, and a layer cannot hold one.
+- A `<bookmark>` in a layout needs an element after it in the same container. A section takes one as its first child, for its first page, and a layer cannot hold one.
 - An inset that reaches below the room the page leaves, and a `col` and `colspan` past the section's `columns`, are refused.
 
 ## Barcodes
@@ -259,11 +259,11 @@ A barcode is never stretched. Docs: [Barcode](https://lpdf.io/docs/doc/layout/ba
 | GS1-128 | `gs1-128` | 0.35.0 | GS1 fields, 48 characters at most |
 | GS1 Data Matrix | `gs1-datamatrix` | 0.35.0 | GS1 fields |
 
-- A QR code, a Data Matrix and a PDF417 need a `width` or a `height`. Without one they are refused.
+- A QR code needs a `height`, or a `width` that is a length, and a Data Matrix and a PDF417 need a `width` or a `height`. Without it they are refused.
 - An EAN-13, EAN-8 or UPC-A without its check digit gets it added, and one with it has it checked.
 - Data a type can't hold, such as a lowercase letter in a Code 39 or a wrong check digit, draws a gray box with a red border in place of the barcode.
-- A PDF417 has 1 to 30 columns and 3 to 90 rows, and holds 928 codewords at most. A Data Matrix has one of the standard's sizes: the squares from 10×10 to 144×144, and the rectangles 8×18, 8×32, 12×26, 12×36, 16×36 and 16×48. A `rows` or `columns` a type doesn't have is refused, and so is a PDF417 whose `rows` times `columns` is over 928.
-- GS1 data is checked: the application identifiers, the length of each field of a fixed length, and the check digit of a GTIN, an SSCC and a GLN. See [Barcode, GS1](https://lpdf.io/docs/doc/layout/barcode/#gs1).
+- A PDF417 has 1 to 30 columns and 3 to 90 rows, and holds 928 codewords at most. A Data Matrix has one of the standard's sizes: the squares from 10×10 to 144×144, and the rectangles 8×18, 8×32, 12×26, 12×36, 16×36 and 16×48. A number of `rows` or `columns` its type doesn't have, such as 2 rows of a PDF417 or 11 of a Data Matrix, is refused, and so is a PDF417 whose `rows` times `columns` is over 928.
+- GS1 data is checked: an application identifier of 2 to 4 digits before each value, GS1's characters, the length of each field whose identifier has a fixed one, and the check digit of a GTIN, an SSCC and a GLN. See [Barcode, GS1](https://lpdf.io/docs/doc/layout/barcode/#gs1).
 - `hrt` prints the data under a linear barcode, in Helvetica, so PDF/A, PDF/UA and PDF/X refuse it.
 
 ## Forms
@@ -302,8 +302,8 @@ A barcode is never stretched. Docs: [Barcode](https://lpdf.io/docs/doc/layout/ba
 |---|---|---|
 | Files embedded in the PDF, for the whole document, each with a name, a MIME type, a relationship and a description | 0.31.0 | [Attachments](https://lpdf.io/docs/attachments/) |
 
-- A file's bytes come from its `src`, which the SDK reads, or from `loadFile` on the engine. A file with no bytes is refused.
-- A file holds 2 GB at most: a larger one is refused (`more than the 2 GB a PDF can say a file holds`). Its bytes count toward the render's [memory cap](#render-limits).
+- A file's bytes come from its `src`, which the SDK reads, in Java and C# through the engine's `srcFallback`, or from `loadFile` on the engine. A file with no bytes is refused.
+- A file holds 2 GB at most: a larger one is refused (`more than the 2 GB a PDF can say a file holds`). What its bytes cost of the render's [memory cap](#render-limits) differs by SDK: see [Attachments, size and memory](https://lpdf.io/docs/attachments/#size-and-memory).
 - Refused: two files with one name, a file without a name, a `relationship` that is not one of the five, and a `mime` that is not a type and a subtype.
 - Refused: attachments in a PDF/A-2 document (`can't be in a PDF/A-2 file`) and in a PDF/X document (`can't be in a PDF/X file`).
 - A file pinned to a spot on a page, or tied to one element, is not written.
@@ -314,7 +314,7 @@ A barcode is never stretched. Docs: [Barcode](https://lpdf.io/docs/doc/layout/ba
 |---|---|---|
 | `stamp`: PNG images drawn over the pages of a PDF that Lpdf did not make, each in a box on the pages it names | 0.33.0 | [Stamping existing PDFs](https://lpdf.io/docs/stamp/) |
 
-- The image is a PNG, of every color type and bit depth, with its transparency. It is fitted in its box without distortion. Other formats are refused, and so is an interlaced PNG.
+- The image is a PNG, of every color type and bit depth, with the transparency of its alpha channel or of its palette. It is fitted in its box without distortion. Other formats are refused, and so is an interlaced PNG.
 - The PDF comes back with an incremental update after its original bytes. A file with an owner password keeps its encryption and permissions, a digital signature stays valid for the revision it signed, a PDF/A file of part 1, 2 or 3 stays PDF/A, and a tagged file stays valid.
 - Refused: an input that is not a PDF, a PDF that needs a password to open, a page the PDF doesn't have, a stamp with no `page`, a box with no `x` and `y` and no `anchor`, a `width` or a `height` of 0, and a PNG with transparency on a PDF/A-1 file.
 - A stamp covers what is under it and removes nothing: it is not a redaction, and it is not a digital signature.
@@ -347,4 +347,4 @@ Data is JSON bound to an XML document, as an option of the render call. Docs: [D
 | Nesting: 100 levels, `<lpdf>` included | 100 | Fixed | 0.33.0 | [XML schema, document structure](https://lpdf.io/docs/xml/schema/#document-structure) |
 
 - There is no limit on the size of the XML, or of a document built in code.
-- The engine runs inside the caller's process and makes no network calls.
+- The engine makes no network calls.
