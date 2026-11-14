@@ -47,25 +47,13 @@ const MAX_ENTITY_DEPTH: usize = 10;
 /// a file, and a parameter entity. `roxmltree` stops an entity that nests past 10 levels or names more than 255 others,
 /// but not what a file builds from many references, such as 100 uses of an entity of 255 uses of one of 1,000
 /// characters, which is 25 MB in an attribute from a file of two kilobytes.
+///
+/// The DOCTYPE is read as `roxmltree` reads it, since a check that disagrees with the reader can be walked round: the
+/// prolog's comments and processing instructions are skipped to find it, and so are those of its subset and the quoted
+/// text of its declarations, so that a `<!DOCTYPE` or an `<!ENTITY` in a comment is none.
 pub(crate) fn check_entities(text: &str) -> Result<(), String> {
-    let Some(start) = text.find("<!DOCTYPE") else { return Ok(()) };
-    let Some((subset, rest)) = doctype_parts(&text[start..]) else { return Ok(()) };
-    let mut entities: HashMap<&str, &str> = HashMap::new();
-    for (at, _) in subset.match_indices("<!ENTITY") {
-        let declaration = subset[at + "<!ENTITY".len()..].trim_start();
-        if declaration.starts_with('%') {
-            return Err("the SVG declares a parameter entity, which can't be read".to_string());
-        }
-        let name_end = declaration.find(char::is_whitespace).unwrap_or(declaration.len());
-        let (name, after) = declaration.split_at(name_end);
-        let after = after.trim_start();
-        let Some(quote) = after.chars().next().filter(|c| matches!(c, '"' | '\'')) else {
-            return Err(format!("the SVG's entity {name} refers to another file, which an SVG may not"));
-        };
-        let value = &after[1..];
-        let value = &value[..value.find(quote).unwrap_or(value.len())];
-        entities.entry(name).or_insert(value);
-    }
+    let Some(doctype) = doctype_of(text) else { return Ok(()) };
+    let Some((entities, rest)) = read_subset(doctype)? else { return Ok(()) };
     if entities.is_empty() {
         return Ok(());
     }
@@ -86,25 +74,123 @@ fn too_many_entity_bytes() -> String {
     format!("the SVG's entities expand to more than {MAX_ENTITY_BYTES} bytes: the limit is {MAX_ENTITY_BYTES}")
 }
 
-/// The internal subset of a DOCTYPE that starts `doctype`, and the text after the DOCTYPE, or `None` when it has no
-/// subset.
-fn doctype_parts(doctype: &str) -> Option<(&str, &str)> {
-    let mut depth = 0usize;
-    let mut subset_start = None;
-    for (at, character) in doctype.char_indices() {
+/// The DOCTYPE the prolog has, from `<!DOCTYPE` on: after the XML declaration, comments and processing instructions.
+fn doctype_of(text: &str) -> Option<&str> {
+    let mut rest = text.trim_start();
+    loop {
+        if rest.starts_with("<?") {
+            rest = after(rest, "?>")?.trim_start();
+        } else if rest.starts_with("<!--") {
+            rest = after(rest, "-->")?.trim_start();
+        } else {
+            return rest.starts_with("<!DOCTYPE").then_some(rest);
+        }
+    }
+}
+
+/// What follows the first `end` in `text`.
+fn after<'a>(text: &'a str, end: &str) -> Option<&'a str> {
+    text.find(end).map(|at| &text[at + end.len()..])
+}
+
+/// Where the text of `text` that is quoted from `at`, a quote, ends: just past the closing quote.
+fn past_quoted(text: &str, at: usize) -> Option<usize> {
+    let quote = text[at..].chars().next()?;
+    text[at + 1..].find(quote).map(|close| at + 1 + close + 1)
+}
+
+/// Where the declaration that starts at `at` ends: just past its `>`, which quoted text may hold.
+fn past_declaration(text: &str, mut at: usize) -> Option<usize> {
+    while let Some(character) = text[at..].chars().next() {
         match character {
-            '[' => {
-                depth += 1;
-                subset_start.get_or_insert(at + 1);
-            }
-            ']' => depth = depth.saturating_sub(1),
-            '>' if depth == 0 => {
-                return subset_start.map(|from| (&doctype[from..at.max(from)], &doctype[at + 1..]));
-            }
-            _ => {}
+            '"' | '\'' => at = past_quoted(text, at)?,
+            '>' => return Some(at + 1),
+            _ => at += character.len_utf8(),
         }
     }
     None
+}
+
+/// The entities of the internal subset of `doctype`, by name with their values, and the text after the DOCTYPE. `None`
+/// when it has no subset, or isn't well formed, which the XML reader will say.
+fn read_subset(doctype: &str) -> Result<Option<(HashMap<&str, &str>, &str)>, String> {
+    let mut at = "<!DOCTYPE".len();
+    // The name and the external id, up to the subset or the end.
+    loop {
+        let Some(character) = doctype[at..].chars().next() else { return Ok(None) };
+        match character {
+            '"' | '\'' => match past_quoted(doctype, at) {
+                Some(next) => at = next,
+                None => return Ok(None),
+            },
+            '[' => {
+                at += 1;
+                break;
+            }
+            '>' => return Ok(None),
+            _ => at += character.len_utf8(),
+        }
+    }
+    let mut entities: HashMap<&str, &str> = HashMap::new();
+    loop {
+        at += doctype[at..].len() - doctype[at..].trim_start().len();
+        let here = &doctype[at..];
+        if here.is_empty() {
+            return Ok(None);
+        } else if here.starts_with("<!--") {
+            match after(here, "-->") {
+                Some(rest) => at = doctype.len() - rest.len(),
+                None => return Ok(None),
+            }
+        } else if here.starts_with("<?") {
+            match after(here, "?>") {
+                Some(rest) => at = doctype.len() - rest.len(),
+                None => return Ok(None),
+            }
+        } else if here.starts_with("<!ENTITY") {
+            let (name, value, next) = read_entity(doctype, at + "<!ENTITY".len())?;
+            if let Some(value) = value {
+                entities.entry(name).or_insert(value);
+            }
+            match next {
+                Some(next) => at = next,
+                None => return Ok(None),
+            }
+        } else if here.starts_with("<!") {
+            match past_declaration(doctype, at) {
+                Some(next) => at = next,
+                None => return Ok(None),
+            }
+        } else if here.starts_with('%') {
+            return Err("the SVG refers to a parameter entity, which can't be read".to_string());
+        } else if here.starts_with(']') {
+            at += 1;
+            break;
+        } else {
+            at += here.chars().next().map_or(1, char::len_utf8);
+        }
+    }
+    let rest = doctype[at..].trim_start();
+    Ok(rest.strip_prefix('>').map(|rest| (entities, rest)))
+}
+
+/// The name and value of the entity declared from `at`, just past `<!ENTITY`, and where the declaration ends.
+fn read_entity(doctype: &str, at: usize) -> Result<(&str, Option<&str>, Option<usize>), String> {
+    let declaration = &doctype[at..];
+    let trimmed = declaration.trim_start();
+    if trimmed.starts_with('%') {
+        return Err("the SVG declares a parameter entity, which can't be read".to_string());
+    }
+    let name_end = trimmed.find(char::is_whitespace).unwrap_or(trimmed.len());
+    let (name, after_name) = trimmed.split_at(name_end);
+    let value_at = doctype.len() - after_name.len() + (after_name.len() - after_name.trim_start().len());
+    let starts_quoted = doctype[value_at..].starts_with(['"', '\'']);
+    if !starts_quoted {
+        return Err(format!("the SVG's entity {name} refers to another file, which an SVG may not"));
+    }
+    let Some(value_end) = past_quoted(doctype, value_at) else { return Ok((name, None, None)) };
+    let value = &doctype[value_at + 1..value_end - 1];
+    Ok((name, Some(value), past_declaration(doctype, value_end)))
 }
 
 /// The names between `&` and `;` in `text`.

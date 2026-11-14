@@ -645,3 +645,51 @@ fn refuses_a_clip_path_whose_shapes_overlap_since_one_path_would_leave_a_hole_wh
     drawing(&clip("M0 0H10V10H0Z", "M12 0H20V10H12Z", ""));
     drawing(&clip("M0 0H10V10H0Z", "M10 0H20V10H10Z", ""));
 }
+
+/// The file of two kilobytes whose entities expand to 25 MB, with `before` ahead of its DOCTYPE and `inside` ahead of
+/// its declarations.
+fn entity_bomb(before: &str, inside: &str) -> String {
+    format!(
+        r#"<?xml version="1.0"?>{before}<!DOCTYPE svg [ {inside} <!ENTITY a "{}"> <!ENTITY b "{}"> ]>
+        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><g id="{}"/></svg>"#,
+        "x".repeat(1_000),
+        "&a;".repeat(255),
+        "&b;".repeat(100)
+    )
+}
+
+#[test]
+fn bounds_the_entities_however_the_file_hides_its_doctype_or_its_declarations() {
+    let wrong = "the bomb must be refused";
+    for (before, inside) in [
+        ("", ""),
+        // A DOCTYPE in a comment is none, and the real one is the next.
+        ("<!-- <!DOCTYPE x> -->", ""),
+        ("<!-- <!DOCTYPE x [ <!ENTITY a \"y\"> ]> -->\n<?pi <!DOCTYPE z> ?>", ""),
+        // An entity declared in a comment, or a processing instruction, is none, and the real one comes after it.
+        ("", "<!-- <!ENTITY a \"x\"> -->"),
+        ("", "<?pi <!ENTITY a \"x\"> ?>"),
+        ("", "<!ELEMENT svg ANY> <!ATTLIST svg x CDATA \"<!ENTITY a 'x'>\">"),
+    ] {
+        let error = svg::prepare(entity_bomb(before, inside).as_bytes()).expect_err(wrong);
+        assert!(error.contains("entities expand to more than 1000000 bytes"), "{before} {inside}: {error}");
+    }
+}
+
+#[test]
+fn reads_an_entity_whose_value_holds_a_bracket_a_greater_than_and_a_comment_mark() {
+    let text = r##"<!-- made by hand -->
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://example.com/[x].dtd" [
+    <!-- an entity of the namespace -->
+    <!ENTITY ns "http://www.w3.org/2000/svg">
+    <!ENTITY odd "a]>b<!-- c">
+]>
+<svg xmlns="&ns;" width="10" height="10"><rect width="5" height="5" id="&odd;"/></svg>"##;
+    drawing(text);
+}
+
+#[test]
+fn refuses_a_parameter_entity_wherever_the_subset_uses_one() {
+    let used = r#"<!DOCTYPE svg [ <!ENTITY a "x"> %a; ]><svg xmlns="http://www.w3.org/2000/svg"/>"#;
+    assert!(refused(used).contains("parameter entity"));
+}
