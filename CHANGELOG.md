@@ -1,5 +1,51 @@
 # Changelog
 
+## v0.35.0 — 2026-11-15
+### Images
+- **Breaking:** a document with a CMYK JPEG, a JPEG of two components or an interlaced PNG used to render, wrongly, and now stops with an error that says what to save instead: `image 'photo': the JPEG is in CMYK, which Lpdf doesn't read: save it in RGB`. Save the file in RGB, or without interlacing
+- SVG images are drawn as vector, wherever an image goes: `<img>`, `<img-at>`, a header, a footer and a Markdown `![](logo.svg)`. Shapes, paths, groups, `use`, markers, clip paths, `<style>`, colors, strokes, dashes and opacity are drawn. The picture is written once however often it is drawn, and `currentColor` is the color of the text where the image sits, so one icon takes the color of each place it is used
+- An SVG the engine can't draw is refused with an error that names the image, the tag and its line: text, embedded images, `foreignObject`, references to other files, masks, filters, patterns, gradients and blend modes. A file that expands past 100,000 elements, 1,000,000 path commands or 100 levels of nesting is refused with an error that names the limit
+- An SVG sized in `pt`, `pc`, `in`, `mm` or `cm` is drawn at the size it says: `72pt` is 72pt and `210mm` is 595.3pt. A size in `px`, or with none, is a pixel to the point, as for any image
+- WebP, GIF, TIFF and BMP images embed beside JPEG and PNG. `loadImage(name, bytes)` takes them as it takes the others, the engine tells the format from the bytes, and no element or attribute changes. The alpha of each goes in as a soft mask
+- An animated GIF or WebP, a TIFF of several pages, and a TIFF in CMYK, YCbCr or Lab or compressed as JPEG are refused with an error that names the image and says how to save it. JPEG 2000 is refused by name, beside AVIF and HEIC
+- A gray JPEG is written as `DeviceGray`. It was labelled RGB, so its colors came out wrong or it did not show
+- A palette PNG with a `tRNS` chunk keeps its transparency, and a gray or RGB PNG with one keeps the color it makes transparent. Both were dropped
+
+### Barcodes
+- Seven new values of `type` on `<barcode>` and `<barcode-at>`: `code39`, `ean8`, `upca`, `datamatrix`, `pdf417`, `gs1-128` and `gs1-datamatrix`. They are drawn as vector and never stretched, and `width` and `height` are a maximum, as for QR, Code 128 and EAN-13
+- `code39`, `ean8`, `upca` and `gs1-128` take `hrt`, the text under the bars. EAN-8 and UPC-A add the check digit to 7 or 11 digits and check it on 8 or 12, as EAN-13 does
+- Code 39 draws the standard's 43 characters. Any other character, a lowercase letter too, gets the placeholder box with the reason. `check="true"` adds the standard's mod 43 check character, which HIBC health care labels ask for
+- `gs1-128` and `gs1-datamatrix` read their fields as written, `(01)09501101530003(17)261231(10)AB12`, and put the FNC1 marker first, so scanners read the data as GS1 fields
+- `rows` and `columns` set the shape of a PDF417 or a Data Matrix. Unset, with both `width` and `height`, the code takes the shape that comes out largest in them. With one of them, a Data Matrix takes the smallest square that holds the data and a PDF417 the column count closest to three times wider than high. With neither, the document is refused, as a QR code without a size is. Data that needs more than the shape gives gets more rows, or the next Data Matrix size up
+- A PDF417 takes `ec` as its own level, `0` to `8`. Unset, the level follows the length of the data. QR keeps `L`, `M`, `Q` and `H`
+- An EAN-13 whose first digit is 1 to 9 did not scan, because the engine drew some of its digits in the wrong code. They are drawn as the standard says. With `hrt`, an EAN-13 given as 12 digits now shows all 13, its check digit included
+- A Code 128 holding the symbol of value 61, such as a `]`, a check symbol of 61 or the digit pair 61 in a GS1-128, drew that symbol one module too wide and did not scan. It is drawn as the standard says
+- Every SDK takes the new types and the attributes `rows`, `columns` and `check`, and Generate Code writes them in all five languages
+
+### Color
+- `<spots>` in `<tokens>` declares spot colors, the named inks of a print job, such as a brand color, a varnish or a die line. Each `<spot>` has a `name`, the `ink` as the printer knows it, a `value` in CMYK or RGB that stands in for the ink on a screen or a proof, and `overprint`
+- A spot color goes wherever a color goes, by its name, with a tint after a space: `background="brand 30%"`. A tint of any other color, a tint out of range, or one without `%` is an error that says what to change
+- The PDF draws each ink in a Separation color space named after it, so the printer gets it on a plate of its own. An ink with `overprint="true"` overprints, and what is drawn after it does not
+- A gradient whose colors are all tints of one spot color is a shading in that ink. Mixing a spot color with another color in a gradient is an error that names both
+- PDF/A refuses a spot color whose stand-in is `cmyk()`, as it refuses CMYK. PDF/X keeps each ink, and refuses a `cmyk()` stand-in when the press profile is not CMYK
+- A document with no spot colors writes the same bytes as before
+- Every SDK takes `spots` among its tokens, with a `Spot` class (`SpotToken` in the JavaScript SDK). Generate Code writes them
+
+### Attachments
+- The schema's text for `<attachments>` names PDF/A `2a`, `2b` and `2u` as refused, `3a`, `3b` and `3u` as carrying files, and attachments in a PDF/X file as an error. It left out `2a`, `3a` and PDF/X, which the engine refuses and takes
+
+### Documentation
+- `FEATURES.md`, beside the README, lists what Lpdf supports area by area: since which version, where each feature stops and its docs page. It also says what combines with what: each pair of `<output>` settings, and what a plain PDF, a PDF/A, a PDF/UA and a PDF/X file may hold. It links the docs on standards, on what combines with what, and on color and print
+- The READMEs of Lpdf and of each SDK are shorter. The Lpdf README shows one XML example, which every SDK renders, and one entry per SDK with its package, minimum runtime and install command. The detail is in the docs
+- The doc comments of `loadImage` list the image formats it takes
+
+### VS Code extension
+- The hover on `type` and `ec` of a barcode shows their first values and `…`, where it showed `type=""` and `ec=""` once the schema held more values than a hover lists. Hover, autocomplete and validation take the new barcode types, their attributes and the PDF417 levels from the schema
+- The README keeps a short section per feature
+
+### Java
+- The Java package is described as the Java SDK for Lpdf
+
 ## v0.34.0 — 2026-11-07
 ### Lengths
 - **Breaking:** a table's `cols` with a width that is none of `fr`, `pt`, `mm`, `in`, `%` or `auto` is an error that names them, such as `cols="40cm 1fr"`. It was dropped, and the table read as one column. A bare number is `fr`, as before
