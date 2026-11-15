@@ -280,6 +280,7 @@ fn stamp_request(req: &mut serde_json::Value, licensed: bool, before: i64) -> Re
 fn merge_request(req: &mut serde_json::Value, licensed: bool, before: i64) -> Result<Vec<u8>, String> {
     let cap = render_cap(req)?;
     let _cap = memory::start_from(cap, before);
+    let _deadline = deadline::start(render_timeout(req)?);
     let options = merge::parse_options(&req["options"])?;
     let sources = merge::sources_from_request(&mut req["sources"])?;
     merge::merge(&sources, &options, licensed)
@@ -924,6 +925,25 @@ mod tests {
             let pdf = answered("render_pdf", BENCH_XL, fields.clone());
             let bytes = base64::engine::general_purpose::STANDARD.decode(pdf["pdf"].as_str().expect(&pdf.to_string())).unwrap();
             assert_eq!(sha256_hex(&bytes), BENCH_XL_HASH.trim(), "{fields}");
+        }
+    }
+
+    #[test]
+    fn a_merge_past_its_timeout_answers_the_timeout_error_and_the_next_merge_is_whole() {
+        let b64 = |bytes: &[u8]| base64::engine::general_purpose::STANDARD.encode(bytes);
+        let plain = render_request(&pages_of_text(8), serde_json::json!({}));
+        let pdf = base64::engine::general_purpose::STANDARD.decode(plain["pdf"].as_str().expect(&plain.to_string())).unwrap();
+        let merge = |timeout: serde_json::Value| {
+            let req = serde_json::json!({ "method": "merge", "timeout": timeout, "sources": [{ "name": "a.pdf", "pdf": b64(&pdf) }] });
+            json(super::answer(req.to_string()))
+        };
+        let answer = merge(serde_json::json!(0.000001));
+        let error = answer["error"].as_str().unwrap_or_else(|| panic!("{answer}"));
+        assert!(error.starts_with("the render ran past its timeout of 0.000001 seconds: "), "{error}");
+        assert_eq!(answer["timed_out"], true);
+        for timeout in [serde_json::json!(null), serde_json::json!(0), serde_json::json!(600)] {
+            let answer = merge(timeout.clone());
+            assert!(answer["pdf"].is_string(), "{timeout}: {answer}");
         }
     }
 

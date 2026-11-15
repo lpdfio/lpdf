@@ -467,6 +467,41 @@ fn a_button_that_is_on_with_no_appearance_for_its_state_is_the_same_error() {
 }
 
 #[test]
+fn a_radio_group_with_one_choice_made_is_no_error_when_the_buttons_not_chosen_store_no_off_appearance() {
+    let mut builder = Builder::new("1.7");
+    let id = builder.page(LETTER, "radio");
+    let chosen = builder.appearance([0.0, 0.0, 12.0, 12.0], "0 g 3 3 6 6 re f");
+    let other = builder.appearance([0.0, 0.0, 12.0, 12.0], "0 G 0 0 12 12 re S");
+    // The group's value, the choice made, is on its parent, and the button not chosen has no appearance for `Off`.
+    let group = builder.doc.add_object(dictionary! { "FT" => "Btn", "Ff" => 32768, "T" => Object::string_literal("choice"), "V" => "A" });
+    for (state, at, drawn) in [("A", 0.0, chosen), ("B", 30.0, other)] {
+        let on = if state == "A" { "A" } else { "Off" };
+        builder.annotate(id, dictionary! {
+            "Type" => "Annot", "Subtype" => "Widget", "Parent" => group, "F" => 4, "Rect" => rect([at, 0.0, at + 12.0, 12.0]),
+            "AS" => on, "AP" => dictionary! { "N" => dictionary! { state => drawn } },
+        });
+    }
+    let doc = reopen(&merged(&[("radio.pdf", &builder.save())], Options::default()));
+    // Only the button chosen is drawn.
+    assert!(content(&doc, 1).contains("/LpdfAnnot0 Do") && !content(&doc, 1).contains("LpdfAnnot1"));
+    assert_eq!(text(xobject(&doc, 1, "LpdfAnnot0")), "0 g 3 3 6 6 re f");
+}
+
+#[test]
+fn a_button_that_is_on_by_its_own_state_but_has_no_appearance_for_it_is_the_error_whatever_its_parent_says() {
+    let mut builder = Builder::new("1.7");
+    let id = builder.page(LETTER, "radio");
+    let other = builder.appearance([0.0, 0.0, 12.0, 12.0], "0 G 0 0 12 12 re S");
+    let group = builder.doc.add_object(dictionary! { "FT" => "Btn", "Ff" => 32768, "T" => Object::string_literal("choice") });
+    builder.annotate(id, dictionary! {
+        "Type" => "Annot", "Subtype" => "Widget", "Parent" => group, "F" => 4, "Rect" => rect([0.0, 0.0, 12.0, 12.0]),
+        "AS" => "A", "AP" => dictionary! { "N" => dictionary! { "B" => other } },
+    });
+    let e = error(&[("radio.pdf", &builder.save())], Options::default());
+    assert!(e.starts_with("radio.pdf: page 1: the form field 'choice' has a value but no stored appearance"), "{e}");
+}
+
+#[test]
 fn an_appearance_with_no_resources_takes_the_forms_default_resources() {
     let mut builder = Builder::new("1.7");
     let id = builder.page(LETTER, "form");
@@ -656,7 +691,7 @@ fn an_owner_restriction_is_refused_unless_allowed_and_a_file_that_allows_it_all_
     let doc = reopen(&out);
     assert!(!doc.is_encrypted() && !String::from_utf8_lossy(&out).contains("/Encrypt"));
     assert_eq!(doc.get_pages().len(), 1);
-    assert!(text(form(&doc, 1)).contains("Tj") || !text(form(&doc, 1)).is_empty());
+    assert!(text(form(&doc, 1)).contains("BT"), "the page's text is drawn: {}", text(form(&doc, 1)));
     // Printing and copying allowed: the owner password restricts nothing that matters here.
     merged(&[("open.pdf", &locked("print copy", None))], Options::default());
     assert_eq!(reopen(&merged(&[("open.pdf", &locked("all", None))], Options::default())).get_pages().len(), 1);
@@ -732,6 +767,18 @@ fn double_sided_adds_a_blank_side_after_a_document_with_an_odd_number_of_pages_a
     assert_eq!(size(&doc, 5), (300.0, 200.0));
     assert_eq!(size(&doc, 7), (300.0, 200.0), "c's page is the last: no blank side after it");
     assert!(page(&doc, 7).get(b"Contents").is_ok());
+}
+
+#[test]
+fn a_blank_side_has_the_user_unit_of_the_page_before_it() {
+    let mut builder = Builder::new("1.7");
+    let id = builder.page(LETTER, "big units");
+    builder.page_dict(id).set("UserUnit", 2);
+    let other = file("b", &[SMALL]);
+    let doc = reopen(&merged(&[("u.pdf", &builder.save()), ("b.pdf", &other)], Options { double_sided: true, ..Options::default() }));
+    assert_eq!(doc.get_pages().len(), 3);
+    assert_eq!(page(&doc, 2).get(b"UserUnit").and_then(Object::as_float).unwrap(), 2.0);
+    assert!(page(&doc, 3).get(b"UserUnit").is_err(), "a page with no unit has none");
 }
 
 #[test]

@@ -142,7 +142,7 @@ pub(crate) fn merge(sources: &[Source], options: &Options, licensed: bool) -> Re
             .map_err(|e| format!("{}: {e}", source.name))?;
         // A blank side after a document that ends on a front side, so the next starts on one.
         if options.double_sided && i + 1 < sources.len() && imported.pages % 2 == 1 {
-            out.blank_page(imported.last);
+            out.blank_page(imported.last.0, imported.last.1);
         }
         crate::memory::check()?;
     }
@@ -154,8 +154,17 @@ pub(crate) fn merge(sources: &[Source], options: &Options, licensed: bool) -> Re
 /// What a source gave the output.
 struct Imported {
     pages: usize,
-    /// The size of its last page as a viewer shows it.
-    last:  (f32, f32),
+    /// The size of its last page as a viewer shows it, and its user unit, which a blank side after it keeps.
+    last:  ((f32, f32), Option<f32>),
+}
+
+/// A page of the output made from a source page.
+struct PageOut {
+    id:   ObjectId,
+    /// Its size as a viewer shows it.
+    size: (f32, f32),
+    /// The source page's `/UserUnit`, which the page keeps so that it prints at its size.
+    unit: Option<f32>,
 }
 
 /// Open a source, refusing what a merge must not carry over silently.
@@ -446,13 +455,15 @@ fn import(source: &Source, options: &Options, attribution: Option<&Attribution>,
     }
     crate::memory::check()?;
     let mut copier = Copier::new(&src, &mut out.doc);
-    let mut last = (0.0, 0.0);
+    let mut last = ((0.0, 0.0), None);
     for (&number, &page_id) in &pages {
-        let (id, size) = import_page(&mut copier, page_id, out.pages_id, attribution)
+        let imported = import_page(&mut copier, page_id, out.pages_id, attribution)
             .map_err(|e| format!("page {number}: {e}"))?;
-        out.kids.push(Object::Reference(id));
-        last = size;
+        out.kids.push(Object::Reference(imported.id));
+        last = (imported.size, imported.unit);
         crate::memory::check()?;
+        // The native library stops a merge past its request's timeout here, once a page.
+        crate::deadline::check_now();
     }
     for (group, prints) in copier.finish() {
         out.groups.push(group);
@@ -464,7 +475,7 @@ fn import(source: &Source, options: &Options, attribution: Option<&Attribution>,
 /// Import one page: a page of the output that draws it. Returns its object and its size as a viewer shows it.
 fn import_page(
     copier: &mut Copier, page_id: ObjectId, pages_id: ObjectId, attribution: Option<&Attribution>,
-) -> Result<(ObjectId, (f32, f32)), String> {
+) -> Result<PageOut, String> {
     let src = copier.src;
     let page = src.get_dictionary(page_id).map_err(|e| e.to_string())?;
     let geometry = Geometry::of(src, page);
@@ -515,14 +526,15 @@ fn import_page(
     dict.set("Parent", Object::Reference(pages_id));
     dict.set("MediaBox", media_box(width, height));
     dict.set("Resources", resources);
-    if let Some(unit) = page.get(b"UserUnit").ok().and_then(|u| src.dereference(u).ok()?.1.as_float().ok()).filter(|u| *u > 0.0) {
+    let unit = page.get(b"UserUnit").ok().and_then(|u| src.dereference(u).ok()?.1.as_float().ok()).filter(|u| *u > 0.0);
+    if let Some(unit) = unit {
         dict.set("UserUnit", Object::Real(unit));
     }
     let mut stream = Dictionary::new();
     stream.set("Filter", Object::Name(b"FlateDecode".to_vec()));
     let contents = copier.dst.add_object(Stream::new(stream, compress_to_vec_zlib(content.as_bytes(), 6)));
     dict.set("Contents", Object::Reference(contents));
-    Ok((copier.dst.add_object(dict), (width, height)))
+    Ok(PageOut { id: copier.dst.add_object(dict), size: (width, height), unit })
 }
 
 /// The page's drawing as a form XObject: its content and resources, clipped to its crop box.
@@ -567,10 +579,12 @@ fn page_content(copier: &mut Copier, page: &Dictionary) -> Result<(Dictionary, V
         _ => {
             let mut joined = Vec::new();
             for stream in streams {
-                let part = stream.decompressed_content_with_limit(MAX_CONTENT_BYTES)
-                    .map_err(|e| format!("the page's content could not be read: {e}"))?;
+                let part = stream.decompressed_content_with_limit(MAX_CONTENT_BYTES).map_err(|e| match e {
+                    lopdf::Error::Decompress(lopdf::DecompressError::MemoryLimitExceeded { .. }) => content_limit_error(),
+                    e => format!("the page's content could not be read: {e}"),
+                })?;
                 if joined.len() + part.len() > MAX_CONTENT_BYTES {
-                    return Err(format!("the page's content is more than {MAX_CONTENT_BYTES} bytes"));
+                    return Err(content_limit_error());
                 }
                 // The streams of a page are split between tokens, so whitespace joins them without changing any.
                 joined.extend_from_slice(&part);
@@ -581,6 +595,11 @@ fn page_content(copier: &mut Copier, page: &Dictionary) -> Result<(Dictionary, V
             Ok((dict, compress_to_vec_zlib(&joined, 6)))
         }
     }
+}
+
+/// The error of a page whose content, decoded, is past `MAX_CONTENT_BYTES`.
+fn content_limit_error() -> String {
+    format!("the page's content is more than the {MAX_CONTENT_BYTES} bytes a page may hold once decoded")
 }
 
 /// The matrix that takes a source page's space, its crop box turned by its `/Rotate`, onto the output page that has
@@ -718,15 +737,20 @@ fn field_of<'a>(src: &'a Document, widget: &'a Dictionary) -> Field<'a> {
 /// a choice with text in it, a check box or radio button that is on.
 fn field_with_value(src: &Document, widget: &Dictionary) -> Option<String> {
     let field = field_of(src, widget);
-    let value = field.value?;
     let has_value = match field.kind? {
-        b"Tx" | b"Ch" => match value {
+        b"Tx" | b"Ch" => match field.value? {
             Object::String(text, _) => !text.is_empty(),
             Object::Array(items)    => !items.is_empty(),
             Object::Stream(_)       => true,
             _ => false,
         },
-        b"Btn" if field.flags & FIELD_PUSH_BUTTON == 0 => matches!(value, Object::Name(state) if state != b"Off"),
+        // A button is on or off by the state of its own widget: the value of a group of radio buttons is the choice
+        // made, on the parent, and the buttons not chosen are off, which they may store no appearance for. Only a
+        // widget with no state of its own takes the field's value.
+        b"Btn" if field.flags & FIELD_PUSH_BUTTON == 0 => match widget.get(b"AS").ok().and_then(|state| state.as_name().ok()) {
+            Some(state) => state != b"Off",
+            None => matches!(field.value, Some(Object::Name(state)) if state != b"Off"),
+        },
         _ => false,
     };
     has_value.then(|| if field.name.is_empty() { "a form field".to_string() } else { format!("the form field '{}'", field.name) })
@@ -760,13 +784,16 @@ impl Output {
         self.version = self.version.max(version_of(source));
     }
 
-    /// A page with nothing on it, of the size given.
-    fn blank_page(&mut self, (width, height): (f32, f32)) {
+    /// A page with nothing on it, of the size given and the user unit of the page before it.
+    fn blank_page(&mut self, (width, height): (f32, f32), unit: Option<f32>) {
         let mut dict = Dictionary::new();
         dict.set("Type", Object::Name(b"Page".to_vec()));
         dict.set("Parent", Object::Reference(self.pages_id));
         dict.set("MediaBox", media_box(width, height));
         dict.set("Resources", Dictionary::new());
+        if let Some(unit) = unit {
+            dict.set("UserUnit", Object::Real(unit));
+        }
         let id = self.doc.add_object(dict);
         self.kids.push(Object::Reference(id));
     }
@@ -817,6 +844,11 @@ mod tests {
         let all = parse_options(&json!({ "allow-signed": true, "allow-restricted": true, "double-sided": true })).unwrap();
         assert_eq!(all, Options { allow_signed: true, allow_restricted: true, double_sided: true });
         assert_eq!(parse_options(&json!({ "double-sided": true })).unwrap(), Options { double_sided: true, ..Options::default() });
+    }
+
+    #[test]
+    fn the_error_of_the_content_limit_names_the_limit() {
+        assert_eq!(content_limit_error(), "the page's content is more than the 268435456 bytes a page may hold once decoded");
     }
 
     #[test]
