@@ -94,6 +94,10 @@ export const TOOLCHAIN = [
         repository: 'https://github.com/rust-lang/compiler-builtins', files: ['compiler-builtins-LICENSE.txt'],
     },
     {
+        name: 'backtrace', origin: STD, license: 'Apache-2.0 OR MIT', repository: 'https://github.com/rust-lang/backtrace-rs',
+        files: ['rust-backtrace-LICENSE-MIT.txt', 'rust-backtrace-LICENSE-APACHE.txt'],
+    },
+    {
         name: 'hashbrown', version: '0.17.1', origin: STD, license: 'MIT OR Apache-2.0',
         repository: 'https://crates.io/crates/hashbrown/0.17.1', files: both('hashbrown-0.17.1'),
     },
@@ -331,8 +335,7 @@ export function collectToolchain(parts, { accepted = ACCEPTED, directory = TOOLC
 {
     const problems = [];
     const used = new Set();
-    const collected = parts.map((part) =>
-    {
+    const collected = parts.map((part) => {
         const label = toolchainLabel(part);
         if (!acceptsLicense(part.license, accepted))
         {
@@ -372,8 +375,7 @@ export function render(crates, toolchain = [])
     const sorted = [...crates].sort(compareCrates);
     const parts = [...toolchain].sort((a, b) => compare(toolchainLabel(a), toolchainLabel(b)));
     const texts = new Map();
-    const collect = (label, files) =>
-    {
+    const collect = (label, files) => {
         for (const file of files)
         {
             const key = `${file.kind}\n${file.text}`;

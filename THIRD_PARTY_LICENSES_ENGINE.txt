@@ -142,11 +142,12 @@ zeroize 1.8.2 | Apache-2.0 OR MIT | https://github.com/RustCrypto/utils
 zmij 1.0.21 | MIT | https://github.com/dtolnay/zmij
 
 
-RUST TOOLCHAIN (16)
+RUST TOOLCHAIN (17)
 ===============================================================================
 
 Rust standard library | Apache-2.0 OR MIT | https://github.com/rust-lang/rust
 Unicode tables of the Rust standard library | Unicode-3.0 | https://github.com/rust-lang/rust
+backtrace (Rust standard library) | Apache-2.0 OR MIT | https://github.com/rust-lang/backtrace-rs
 cfg-if 1.0.4 (Rust standard library) | MIT OR Apache-2.0 | https://crates.io/crates/cfg-if/1.0.4
 cloudlibc (wasi-libc) | BSD-2-Clause | https://github.com/WebAssembly/wasi-libc | in the WASI build
 compiler_builtins (Rust standard library) | MIT AND Apache-2.0 WITH LLVM-exception | https://github.com/rust-lang/compiler-builtins
@@ -749,7 +750,8 @@ License text of:
     smallvec 1.15.1, svgtypes 0.16.2, ttf-parser 0.25.1, unicase 2.10.0,
     unicode-bidi 0.3.18, unicode-normalization 0.1.26, unicode-properties 0.1.5,
     wasm-bindgen 0.2.118, wasm-bindgen-shared 0.2.118, weezl 0.1.12,
-    weezl 0.2.1, cfg-if 1.0.4 (Rust standard library),
+    weezl 0.2.1, backtrace (Rust standard library),
+    cfg-if 1.0.4 (Rust standard library),
     dlmalloc 0.2.14 (Rust standard library),
     gimli 0.34.0 (Rust standard library),
     hashbrown 0.17.1 (Rust standard library),
@@ -1289,7 +1291,7 @@ DEALINGS IN THE SOFTWARE.
 
 License text of:
     cfg-if 1.0.4, wasm-bindgen 0.2.118, wasm-bindgen-shared 0.2.118,
-    cfg-if 1.0.4 (Rust standard library),
+    backtrace (Rust standard library), cfg-if 1.0.4 (Rust standard library),
     dlmalloc 0.2.14 (Rust standard library),
     rustc-demangle 0.1.28 (Rust standard library)
 -------------------------------------------------------------------------------
