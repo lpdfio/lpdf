@@ -16,7 +16,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python build-sdk-java \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python test-sdk-java \
-        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api gen-codegen-corpus check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-spot check-facturx check-ocg check-codegen-sdk-node check-codegen-sdk-dotnet check-codegen-sdk-php check-codegen-sdk-python check-codegen-sdk-java check-codegen-sdks check-function-sizes \
+        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api gen-third-party-licenses check-third-party-licenses gen-codegen-corpus check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-spot check-facturx check-ocg check-codegen-sdk-node check-codegen-sdk-dotnet check-codegen-sdk-php check-codegen-sdk-python check-codegen-sdk-java check-codegen-sdks check-function-sizes \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-adapter-java clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python example-java \
@@ -199,6 +199,26 @@ check-function-sizes: build-wasi
 	@echo ""
 	node --test scripts/check-function-sizes.test.mjs
 	node scripts/check-function-sizes.mjs dist/wasi/lpdf.wasm
+
+# The license and copyright notices of the Rust crates the engine links, which every package that ships the engine
+# carries (`scripts/third-party-licenses.mjs`): one file at the root, with each crate's license and license text.
+# gen-third-party-licenses writes it; check-third-party-licenses fails if the file isn't what the engine's dependencies
+# give, or a crate has a license the script doesn't accept. Both need Node and cargo, and read the crates' sources
+# from the Cargo cache. Core's CI runs the check on every change; the release attaches the file.
+gen-third-party-licenses:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Generating THIRD_PARTY_LICENSES_ENGINE.txt from the engine's dependencies..."
+	@echo ""
+	node scripts/third-party-licenses.mjs
+
+check-third-party-licenses:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking THIRD_PARTY_LICENSES_ENGINE.txt against the engine's dependencies..."
+	@echo ""
+	node --test scripts/third-party-licenses.test.mjs
+	node scripts/third-party-licenses.mjs --check
 
 # The code `codegen` writes for each language is built with the SDK of that language, which renders it and the XML it was
 # written from through one engine, and the two PDFs have to be the same (`scripts/check-codegen-sdk.mjs`). The documents

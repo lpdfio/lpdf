@@ -26,6 +26,12 @@ jobs:
       - name: Check the attribute table against the schema
         run: node scripts/gen-sdk-api.mjs --check --core
 
+      # The license and copyright notices of the crates the engine links, which every package that ships the engine
+      # carries: a dependency change whose file isn't regenerated, or a crate under a license that isn't accepted yet,
+      # fails here, in the PR that made it, rather than when a release reaches the packages.
+      - name: Check the third-party licenses of the engine
+        run: make check-third-party-licenses
+
       # The check each SDK's CI runs on the code codegen writes (scripts/check-codegen-sdk.mjs) lives here, with the
       # corpus it renders (test/codegen-corpus.json, which `cargo test` below keeps current). Core runs no SDK.
       - name: Test the codegen check's scripts
