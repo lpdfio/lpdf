@@ -7,6 +7,12 @@
 // in no build either. The texts are the license and NOTICE files of each crate's package, read from the Cargo cache,
 // each text written once with the crates that carry it.
 //
+// The builds also hold code that comes with the Rust toolchain and is in no crate of the lock file: the standard
+// library with the crates it bundles, and in the WASI build wasi-libc. TOOLCHAIN lists those parts, each with the texts
+// the Rust and wasi-libc projects publish for it, kept in third-party-licenses/toolchain/. They are written by hand,
+// since the toolchain isn't pinned: read the notices of a new toolchain (`COPYRIGHT-library.html` in its `rust-docs`
+// component) when a release moves to one.
+//
 // A license that isn't in ACCEPTED fails the run, so a new dependency under another license is a decision someone
 // makes. A crate whose package has no license file needs an entry in OVERRIDES.
 //
@@ -39,6 +45,7 @@ export const ACCEPTED = [
     'BSD-2-Clause',
     'BSD-3-Clause',
     'BSL-1.0',
+    'CC0-1.0',
     'MIT',
     'Unicode-3.0',
     'Unlicense',
@@ -54,6 +61,92 @@ export const OVERRIDES = {
 };
 
 const OVERRIDES_DIR = path.join(import.meta.dirname, 'third-party-licenses');
+const TOOLCHAIN_DIR = path.join(OVERRIDES_DIR, 'toolchain');
+
+const RUST = 'https://github.com/rust-lang/rust';
+const STD = 'Rust standard library';
+const WASI_LIBC = 'https://github.com/WebAssembly/wasi-libc';
+const WASI_TEXTS = [
+    'wasi-libc-LICENSE-APACHE-LLVM.txt',
+    'wasi-libc-LICENSE-APACHE.txt',
+    'wasi-libc-LICENSE-MIT.txt',
+];
+const both = (crate) => [`${crate}--LICENSE-MIT.txt`, `${crate}--LICENSE-APACHE.txt`];
+
+/**
+ * The code of the Rust toolchain that the builds link, in no crate of the lock file. `files` are in
+ * `third-party-licenses/toolchain/`. The crates bundled with the standard library are those that Rust's notices for
+ * it name and its targets use (hashbrown and dlmalloc were seen in the builds); a build that doesn't link one has
+ * a notice more than it needs. `usedIn` is set where the build's own symbols show the part: the WASI binary has
+ * dlmalloc, musl's math routines and the `__wasi_*` system calls of wasi-libc.
+ */
+export const TOOLCHAIN = [
+    {
+        name: STD, license: 'Apache-2.0 OR MIT', repository: RUST,
+        files: ['rust-LICENSE-MIT.txt', 'rust-LICENSE-APACHE.txt'],
+    },
+    {
+        name: 'Unicode tables of the Rust standard library', license: 'Unicode-3.0', repository: RUST,
+        files: ['rust-Unicode-3.0.txt'],
+    },
+    {
+        name: 'compiler_builtins', origin: STD, license: 'MIT AND Apache-2.0 WITH LLVM-exception',
+        repository: 'https://github.com/rust-lang/compiler-builtins', files: ['compiler-builtins-LICENSE.txt'],
+    },
+    {
+        name: 'hashbrown', version: '0.17.1', origin: STD, license: 'MIT OR Apache-2.0',
+        repository: 'https://crates.io/crates/hashbrown/0.17.1', files: both('hashbrown-0.17.1'),
+    },
+    {
+        name: 'dlmalloc', version: '0.2.14', origin: STD, license: 'MIT OR Apache-2.0',
+        repository: 'https://crates.io/crates/dlmalloc/0.2.14', files: both('dlmalloc-0.2.14'),
+    },
+    {
+        name: 'cfg-if', version: '1.0.4', origin: STD, license: 'MIT OR Apache-2.0',
+        repository: 'https://crates.io/crates/cfg-if/1.0.4', files: both('cfg-if-1.0.4'),
+    },
+    {
+        name: 'memchr', version: '2.8.0', origin: STD, license: 'Unlicense OR MIT',
+        repository: 'https://crates.io/crates/memchr/2.8.0',
+        files: ['memchr-2.8.0--LICENSE-MIT.txt', 'memchr-2.8.0--UNLICENSE.txt'],
+    },
+    {
+        name: 'libc', version: '0.2.184', origin: STD, license: 'MIT OR Apache-2.0',
+        repository: 'https://crates.io/crates/libc/0.2.184', files: both('libc-0.2.184'),
+    },
+    {
+        name: 'libc', version: '0.2.189', origin: STD, license: 'MIT OR Apache-2.0',
+        repository: 'https://crates.io/crates/libc/0.2.189', files: both('libc-0.2.189'),
+    },
+    {
+        name: 'rustc-demangle', version: '0.1.28', origin: STD, license: 'MIT OR Apache-2.0',
+        repository: 'https://crates.io/crates/rustc-demangle/0.1.28', files: both('rustc-demangle-0.1.28'),
+    },
+    {
+        name: 'gimli', version: '0.34.0', origin: STD, license: 'MIT OR Apache-2.0',
+        repository: 'https://crates.io/crates/gimli/0.34.0', files: both('gimli-0.34.0'),
+    },
+    {
+        name: 'wasip1', version: '1.0.0', origin: STD, license: 'Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT',
+        repository: 'https://crates.io/crates/wasip1/1.0.0', usedIn: 'the WASI build', files: WASI_TEXTS,
+    },
+    {
+        name: 'wasi-libc', license: 'Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT', repository: WASI_LIBC,
+        usedIn: 'the WASI build', files: ['wasi-libc-LICENSE.txt', ...WASI_TEXTS],
+    },
+    {
+        name: 'dlmalloc', origin: 'wasi-libc', license: 'CC0-1.0', repository: WASI_LIBC,
+        usedIn: 'the WASI build', files: ['wasi-libc-dlmalloc-NOTICE.txt'],
+    },
+    {
+        name: 'cloudlibc', origin: 'wasi-libc', license: 'BSD-2-Clause', repository: WASI_LIBC,
+        usedIn: 'the WASI build', files: ['wasi-libc-cloudlibc-LICENSE.txt'],
+    },
+    {
+        name: 'musl', origin: 'wasi-libc', license: 'MIT', repository: WASI_LIBC,
+        usedIn: 'the WASI build', files: ['wasi-libc-musl-COPYRIGHT.txt'],
+    },
+];
 const LICENSE_FILE = /^(licen[cs]e|copying|unlicense|notice)([-._].*)?$/i;
 const WIDTH = 80;
 
@@ -223,22 +316,74 @@ export function collectCrates(packages, { accepted = ACCEPTED, overrides = OVERR
     return { crates, problems };
 }
 
-/** The text of the file: the crates, then each distinct text once, with the crates that carry it. */
-export function render(crates)
+/** How a toolchain part is named in the file: `hashbrown 0.17.1 (Rust standard library)`. */
+export function toolchainLabel(part)
+{
+    const named = [part.name, part.version].filter(Boolean).join(' ');
+    return part.origin ? `${named} (${part.origin})` : named;
+}
+
+/**
+ * Reads the texts of the toolchain's parts. A license that isn't accepted, a text that is missing and a text in the
+ * folder that no part names come back as problems.
+ */
+export function collectToolchain(parts, { accepted = ACCEPTED, directory = TOOLCHAIN_DIR } = {})
+{
+    const problems = [];
+    const used = new Set();
+    const collected = parts.map((part) =>
+    {
+        const label = toolchainLabel(part);
+        if (!acceptsLicense(part.license, accepted))
+        {
+            problems.push(`${label} is licensed "${part.license}", which none of the accepted licenses meets: read it, `
+                + 'and add its identifier to ACCEPTED in scripts/third-party-licenses.mjs if it may ship');
+        }
+        const files = [];
+        for (const name of part.files)
+        {
+            used.add(name);
+            try
+            {
+                files.push({ name, kind: 'license', text: normalizeText(readFileSync(path.join(directory, name), 'utf8')) });
+            }
+            catch (error)
+            {
+                if (error.code !== 'ENOENT') throw error;
+                problems.push(`${label} names ${name}, which third-party-licenses/toolchain/ doesn't have`);
+            }
+        }
+        return { ...part, files };
+    });
+
+    for (const name of readdirSync(directory).filter((entry) => !used.has(entry)).sort(compare))
+    {
+        problems.push(`third-party-licenses/toolchain/${name} is named by no part of TOOLCHAIN: remove it`);
+    }
+    return { parts: collected, problems };
+}
+
+/**
+ * The text of the file: the crates, the parts of the toolchain, then each distinct text once, with the crates and
+ * parts that carry it.
+ */
+export function render(crates, toolchain = [])
 {
     const sorted = [...crates].sort(compareCrates);
+    const parts = [...toolchain].sort((a, b) => compare(toolchainLabel(a), toolchainLabel(b)));
     const texts = new Map();
-    for (const crate of sorted)
+    const collect = (label, files) =>
     {
-        for (const file of crate.files)
+        for (const file of files)
         {
             const key = `${file.kind}\n${file.text}`;
             if (!texts.has(key)) texts.set(key, { kind: file.kind, text: file.text, users: [] });
-            const label = `${crate.name} ${crate.version}`;
             const users = texts.get(key).users;
             if (users.at(-1) !== label) users.push(label);
         }
-    }
+    };
+    for (const crate of sorted) collect(`${crate.name} ${crate.version}`, crate.files);
+    for (const part of parts) collect(toolchainLabel(part), part.files);
 
     const rule = (character) => character.repeat(WIDTH - 1);
     const lines = [
@@ -251,6 +396,10 @@ export function render(crates)
         'used under the license named beside it. The license texts, with the',
         'copyright notices of the authors, follow the list.',
         '',
+        'The builds also hold code that comes with the Rust toolchain: the standard',
+        'library and the crates it bundles, and in the WASI build, wasi-libc. It is',
+        'listed after the crates, and its texts are among the others.',
+        '',
         'This file is generated from the dependencies of the engine by',
         'scripts/third-party-licenses.mjs. Do not edit it by hand.',
         '',
@@ -262,6 +411,15 @@ export function render(crates)
     for (const crate of sorted)
     {
         lines.push([`${crate.name} ${crate.version}`, crate.license, crate.repository].filter(Boolean).join(' | '));
+    }
+    if (parts.length)
+    {
+        lines.push('', '', `RUST TOOLCHAIN (${parts.length})`, rule('='), '');
+        for (const part of parts)
+        {
+            const where = part.usedIn ? `in ${part.usedIn}` : '';
+            lines.push([toolchainLabel(part), part.license, part.repository, where].filter(Boolean).join(' | '));
+        }
     }
     lines.push('', '', `LICENSE TEXTS (${texts.size})`, rule('='));
     for (const { kind, text, users } of texts.values())
@@ -330,13 +488,15 @@ function main()
     const collected = collectCrates([...linked.values()]);
     const { crates } = collected;
     problems.push(...collected.problems);
+    const toolchain = collectToolchain(TOOLCHAIN);
+    problems.push(...toolchain.problems);
     if (problems.length)
     {
         for (const problem of problems) console.error(problem);
         process.exit(1);
     }
 
-    const text = render(crates);
+    const text = render(crates, toolchain.parts);
     const file = path.join(ROOT, OUTPUT_NAME);
     if (process.argv.includes('--check'))
     {
@@ -355,11 +515,11 @@ function main()
                 + 'and commit the file');
             process.exit(1);
         }
-        console.log(`${OUTPUT_NAME} holds the ${crates.length} crates the engine links`);
+        console.log(`${OUTPUT_NAME} holds the ${crates.length} crates the engine links and ${toolchain.parts.length} parts of the Rust toolchain`);
         return;
     }
     writeFileSync(file, text);
-    console.log(`Wrote ${OUTPUT_NAME}: ${crates.length} crates`);
+    console.log(`Wrote ${OUTPUT_NAME}: ${crates.length} crates and ${toolchain.parts.length} parts of the Rust toolchain`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) main();

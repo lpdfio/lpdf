@@ -9,11 +9,14 @@ import { test } from 'node:test';
 import {
     acceptsLicense,
     collectCrates,
+    collectToolchain,
     LicenseError,
     licenseFiles,
     linkedCrates,
     normalizeText,
     render,
+    TOOLCHAIN,
+    toolchainLabel,
 } from './third-party-licenses.mjs';
 
 const ACCEPTED = ['MIT', 'Apache-2.0', 'BSD-3-Clause', 'Unicode-3.0'];
@@ -278,4 +281,74 @@ test('a long list of crates is broken into lines of at most 80 characters', () =
         assert.ok(line.length <= 80, `"${line}" is ${line.length} characters`);
     }
     assert.ok(output.endsWith('x\n'));
+});
+
+/** A part of the toolchain, with the names of its text files. */
+const part = (name, license, files, extra = {}) => ({ name, license, repository: `https://example.com/${name}`, files, ...extra });
+
+test('a part of the toolchain is named with its version and where it comes from', () => {
+    assert.equal(toolchainLabel({ name: 'wasi-libc' }), 'wasi-libc');
+    assert.equal(toolchainLabel({ name: 'hashbrown', version: '0.17.1', origin: 'Rust standard library' }),
+        'hashbrown 0.17.1 (Rust standard library)');
+    assert.equal(toolchainLabel({ name: 'musl', origin: 'wasi-libc' }), 'musl (wasi-libc)');
+});
+
+test('the texts of a part of the toolchain are read from its folder', () => {
+    withFolder({ 'std-MIT.txt': 'mit text\r\n', 'std-APACHE.txt': 'apache text' }, (folder) => {
+        const { parts, problems } = collectToolchain([part('std', 'MIT OR Apache-2.0', ['std-MIT.txt', 'std-APACHE.txt'])], {
+            accepted: ACCEPTED, directory: folder,
+        });
+        assert.deepEqual(problems, []);
+        assert.deepEqual(parts[0].files.map((file) => file.text), ['mit text', 'apache text']);
+    });
+});
+
+test('a part of the toolchain under a license that none of the accepted licenses meets is a problem', () => {
+    withFolder({ 'std.txt': 'text' }, (folder) => {
+        const { problems } = collectToolchain([part('std', 'GPL-3.0-only', ['std.txt'])], { accepted: ACCEPTED, directory: folder });
+        assert.equal(problems.length, 1);
+        assert.match(problems[0], /^std is licensed "GPL-3\.0-only"/);
+    });
+});
+
+test('a text that a part names and the folder lacks is a problem naming both', () => {
+    withFolder({ 'std.txt': 'text' }, (folder) => {
+        const { problems } = collectToolchain([part('std', 'MIT', ['std.txt', 'gone.txt'])], { accepted: ACCEPTED, directory: folder });
+        assert.deepEqual(problems, ['std names gone.txt, which third-party-licenses/toolchain/ doesn\'t have']);
+    });
+});
+
+test('a text in the folder that no part names is a problem', () => {
+    withFolder({ 'std.txt': 'text', 'left-over.txt': 'text' }, (folder) => {
+        const { problems } = collectToolchain([part('std', 'MIT', ['std.txt'])], { accepted: ACCEPTED, directory: folder });
+        assert.deepEqual(problems, ['third-party-licenses/toolchain/left-over.txt is named by no part of TOOLCHAIN: remove it']);
+    });
+});
+
+test('the real list of toolchain parts reads with no problem', () => {
+    const { parts, problems } = collectToolchain(TOOLCHAIN);
+    assert.deepEqual(problems, []);
+    for (const each of parts) assert.ok(each.files.length > 0, `${toolchainLabel(each)} has a text`);
+});
+
+test('the parts of the toolchain are listed after the crates, with where a build uses them', () => {
+    const output = render(
+        [crate('a', '1.0.0', 'MIT', ['license', 'one'])],
+        [{ ...part('wasi-libc', 'MIT', []), usedIn: 'the WASI build', files: [{ name: 'x', kind: 'license', text: 'two' }] }],
+    );
+    assert.match(output, /\nCRATES \(1\)\n/);
+    assert.match(output, /\nRUST TOOLCHAIN \(1\)\n=+\n\nwasi-libc \| MIT \| https:\/\/example\.com\/wasi-libc \| in the WASI build\n/);
+    assert.ok(output.indexOf('CRATES (') < output.indexOf('RUST TOOLCHAIN ('));
+    assert.ok(output.indexOf('RUST TOOLCHAIN (') < output.indexOf('LICENSE TEXTS ('));
+});
+
+test('a text that a crate and a part of the toolchain share is written once, with both', () => {
+    const shared = { name: 'x', kind: 'license', text: 'shared text' };
+    const output = render([crate('a', '1.0.0', 'MIT', ['license', 'shared text'])], [{ ...part('std', 'MIT', []), files: [shared] }]);
+    assert.equal(output.split('shared text').length - 1, 1);
+    assert.match(output, /License text of:\n {4}a 1\.0\.0, std\n-+\nshared text\n/);
+});
+
+test('a file with no parts of the toolchain has no section for them', () => {
+    assert.doesNotMatch(render([crate('a', '1.0.0', 'MIT', ['license', 'one'])]), /RUST TOOLCHAIN/);
 });
