@@ -121,7 +121,7 @@ test('a crate that a proc-macro crate shares with a linked crate stays', () => {
 });
 
 test('a text is read the same on every system', () => {
-    assert.equal(normalizeText('﻿MIT License  \r\n\r\nCopyright (c) 2016 A\t\r\n\r\n'), 'MIT License\n\nCopyright (c) 2016 A');
+    assert.equal(normalizeText('\uFEFFMIT License  \r\n\r\nCopyright (c) 2016 A\t\r\n\r\n'), 'MIT License\n\nCopyright (c) 2016 A');
     assert.equal(normalizeText('a\rb'), 'a\nb');
 });
 

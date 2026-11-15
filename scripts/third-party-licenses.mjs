@@ -78,8 +78,7 @@ export function acceptsLicense(expression, accepted)
     let at = 0;
     const isOperator = (word) => tokens[at]?.toUpperCase() === word;
 
-    const parseOr = () =>
-    {
+    const parseOr = () => {
         let result = parseAnd();
         while (isOperator('OR'))
         {
@@ -89,8 +88,7 @@ export function acceptsLicense(expression, accepted)
         }
         return result;
     };
-    const parseAnd = () =>
-    {
+    const parseAnd = () => {
         let result = parseTerm();
         while (isOperator('AND'))
         {
@@ -100,8 +98,7 @@ export function acceptsLicense(expression, accepted)
         }
         return result;
     };
-    const parseTerm = () =>
-    {
+    const parseTerm = () => {
         const token = tokens[at++];
         if (token === undefined || token === ')')
         {
@@ -161,7 +158,7 @@ export function linkedCrates(treeOutput)
 export function normalizeText(raw)
 {
     return raw
-        .replace(/^﻿/, '')
+        .replace(/^\uFEFF/, '')
         .replace(/\r\n?/g, '\n')
         .replace(/[ \t]+$/gm, '')
         .trim();
@@ -279,8 +276,7 @@ function wrapList(items, indent)
 {
     const lines = [];
     let line = indent;
-    items.forEach((item, index) =>
-    {
+    items.forEach((item, index) => {
         const piece = index < items.length - 1 ? `${item},` : item;
         if (line !== indent && line.length + 1 + piece.length > WIDTH)
         {
