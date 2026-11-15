@@ -127,6 +127,9 @@ jobs:
           cp dist/node/lpdf.js       artifacts/
           cp dist/node/lpdf_bg.wasm  artifacts/
           cp dist/web/lpdf.js        artifacts/lpdf-web.js
+          # The notices of the crates the engine links (make check-third-party-licenses keeps the file current): the
+          # packages, the release and the docs site carry it beside the engine files.
+          cp THIRD_PARTY_LICENSES_ENGINE.txt artifacts/
 
       # zig cross-compiles both targets against the glibc 2.17 symbols; pinned, as in scripts/build-ffi.Dockerfile.
       - name: Install cargo-zigbuild and zig
@@ -144,7 +147,7 @@ jobs:
 
       - name: Generate SHA256SUMS
         working-directory: artifacts
-        run: sha256sum lpdf-wasi.wasm lpdf.js lpdf_bg.wasm lpdf-web.js liblpdf-linux-x86_64.so liblpdf-linux-aarch64.so > SHA256SUMS
+        run: sha256sum lpdf-wasi.wasm lpdf.js lpdf_bg.wasm lpdf-web.js liblpdf-linux-x86_64.so liblpdf-linux-aarch64.so THIRD_PARTY_LICENSES_ENGINE.txt > SHA256SUMS
 
       - uses: actions/upload-artifact@v6
         with:
@@ -212,6 +215,7 @@ jobs:
             artifacts/lpdf-web.js \
             artifacts/liblpdf-linux-x86_64.so \
             artifacts/liblpdf-linux-aarch64.so \
+            artifacts/THIRD_PARTY_LICENSES_ENGINE.txt \
             artifacts/SHA256SUMS \
             --clobber
 
@@ -316,6 +320,7 @@ jobs:
             artifacts/lpdf-web.js \
             artifacts/liblpdf-linux-x86_64.so \
             artifacts/liblpdf-linux-aarch64.so \
+            artifacts/THIRD_PARTY_LICENSES_ENGINE.txt \
             artifacts/SHA256SUMS
 
       - name: Publish release (draft → live)

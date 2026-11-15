@@ -16,7 +16,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python build-sdk-java \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python test-sdk-java \
-        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api gen-codegen-corpus check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-spot check-facturx check-ocg check-codegen-sdk-node check-codegen-sdk-dotnet check-codegen-sdk-php check-codegen-sdk-python check-codegen-sdk-java check-codegen-sdks check-function-sizes \
+        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api gen-third-party-licenses check-third-party-licenses gen-codegen-corpus check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-spot check-facturx check-ocg check-codegen-sdk-node check-codegen-sdk-dotnet check-codegen-sdk-php check-codegen-sdk-python check-codegen-sdk-java check-codegen-sdks check-function-sizes \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-adapter-java clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python example-java \
@@ -200,6 +200,26 @@ check-function-sizes: build-wasi
 	node --test scripts/check-function-sizes.test.mjs
 	node scripts/check-function-sizes.mjs dist/wasi/lpdf.wasm
 
+# The license and copyright notices of the Rust crates the engine links, which every package that ships the engine
+# carries (`scripts/third-party-licenses.mjs`): one file at the root, with each crate's license and license text.
+# gen-third-party-licenses writes it; check-third-party-licenses fails if the file isn't what the engine's dependencies
+# give, or a crate has a license the script doesn't accept. Both need Node and cargo, and read the crates' sources
+# from the Cargo cache. Core's CI runs the check on every change; the release attaches the file.
+gen-third-party-licenses:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Generating THIRD_PARTY_LICENSES_ENGINE.txt from the engine's dependencies..."
+	@echo ""
+	node scripts/third-party-licenses.mjs
+
+check-third-party-licenses:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking THIRD_PARTY_LICENSES_ENGINE.txt against the engine's dependencies..."
+	@echo ""
+	node --test scripts/third-party-licenses.test.mjs
+	node scripts/third-party-licenses.mjs --check
+
 # The code `codegen` writes for each language is built with the SDK of that language, which renders it and the XML it was
 # written from through one engine, and the two PDFs have to be the same (`scripts/check-codegen-sdk.mjs`). The documents
 # are the fixtures and test/codegen-corpus.json; the engine files that hold codegen are dist/node. Each SDK's CI runs
@@ -307,7 +327,7 @@ build-sdk-node: build-wasm
 	@echo "-------------------------------"
 	@echo ">>> Building Node adapter..."
 	@echo ""
-	mkdir -p repos/lpdf-js/wasm && cp dist/node/lpdf.js dist/node/lpdf.d.ts dist/node/lpdf_bg.wasm repos/lpdf-js/wasm/ && cp dist/web/lpdf.js repos/lpdf-js/wasm/lpdf-web.js
+	mkdir -p repos/lpdf-js/wasm && cp dist/node/lpdf.js dist/node/lpdf.d.ts dist/node/lpdf_bg.wasm repos/lpdf-js/wasm/ && cp dist/web/lpdf.js repos/lpdf-js/wasm/lpdf-web.js && cp THIRD_PARTY_LICENSES_ENGINE.txt repos/lpdf-js/wasm/
 	cd repos/lpdf-js && npm install && npm run build
 
 test-sdk-node: build-sdk-node
@@ -322,7 +342,7 @@ build-sdk-dotnet: build-wasi
 	@echo "-------------------------------"
 	@echo ">>> Building .NET adapter..."
 	@echo ""
-	mkdir -p repos/lpdf-dotnet/wasm && cp dist/wasi/lpdf.wasm repos/lpdf-dotnet/wasm/lpdf.wasm
+	mkdir -p repos/lpdf-dotnet/wasm && cp dist/wasi/lpdf.wasm repos/lpdf-dotnet/wasm/lpdf.wasm && cp THIRD_PARTY_LICENSES_ENGINE.txt repos/lpdf-dotnet/wasm/
 	cd repos/lpdf-dotnet && dotnet build Lpdf.csproj -c Release
 
 test-sdk-dotnet: build-sdk-dotnet
@@ -344,7 +364,7 @@ build-sdk-java: build-wasi
 	@echo "-------------------------------"
 	@echo ">>> Building Java adapter..."
 	@echo ""
-	mkdir -p repos/lpdf-java/wasm && cp dist/wasi/lpdf.wasm repos/lpdf-java/wasm/lpdf.wasm
+	mkdir -p repos/lpdf-java/wasm && cp dist/wasi/lpdf.wasm repos/lpdf-java/wasm/lpdf.wasm && cp THIRD_PARTY_LICENSES_ENGINE.txt repos/lpdf-java/wasm/
 	cd repos/lpdf-java && mvn -B -q package -DskipTests
 
 test-sdk-java: build-sdk-java
@@ -359,6 +379,7 @@ build-sdk-php: build-wasi build-ffi
 	@echo "-------------------------------"
 	@echo ">>> Building PHP adapter..."
 	@echo ""
+	cp THIRD_PARTY_LICENSES_ENGINE.txt repos/lpdf-php/resources/
 	docker build -t lpdf-php repos/lpdf-php
 
 # Through both runners: the image has the FFI extension, so `auto` picks the native library, and the tests that name
@@ -383,7 +404,7 @@ build-sdk-python: build-wasi
 	@echo "-------------------------------"
 	@echo ">>> Building Python adapter..."
 	@echo ""
-	mkdir -p repos/lpdf-python/resources && cp dist/wasi/lpdf.wasm repos/lpdf-python/resources/lpdf-wasi.wasm
+	mkdir -p repos/lpdf-python/resources && cp dist/wasi/lpdf.wasm repos/lpdf-python/resources/lpdf-wasi.wasm && cp THIRD_PARTY_LICENSES_ENGINE.txt repos/lpdf-python/resources/
 	docker build -t lpdf-python repos/lpdf-python
 
 test-sdk-python: build-sdk-python
@@ -604,7 +625,7 @@ build-vscode: build-wasm
 	@echo ">>> Building VS Code adapter..."
 	@echo ""
 	mkdir -p repos/lpdf-vscode/wasm && mkdir -p repos/lpdf-vscode/schema
-	cp dist/node/lpdf.js      repos/lpdf-vscode/wasm/ && cp dist/node/lpdf_bg.wasm repos/lpdf-vscode/wasm/ && cp dist/node/lpdf.d.ts repos/lpdf-vscode/wasm/ && cp schema/lpdf.xsd repos/lpdf-vscode/schema/
+	cp dist/node/lpdf.js      repos/lpdf-vscode/wasm/ && cp dist/node/lpdf_bg.wasm repos/lpdf-vscode/wasm/ && cp dist/node/lpdf.d.ts repos/lpdf-vscode/wasm/ && cp THIRD_PARTY_LICENSES_ENGINE.txt repos/lpdf-vscode/wasm/ && cp schema/lpdf.xsd repos/lpdf-vscode/schema/
 	cd repos/lpdf-vscode && npm install && npm run build
 
 package-vscode: build-vscode
