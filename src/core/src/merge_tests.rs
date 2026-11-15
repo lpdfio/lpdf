@@ -301,6 +301,36 @@ fn what_ties_a_drawing_to_the_pages_it_came_from_is_left_behind() {
     assert!(copy.is_none(), "the copy of the form has no parent and no structure parents");
 }
 
+#[test]
+fn the_same_files_merge_to_the_same_bytes() {
+    let files: Vec<(String, Vec<u8>)> = synthetic();
+    let all: Vec<(&str, &[u8])> = files.iter().map(|(name, bytes)| (name.as_str(), bytes.as_slice())).collect();
+    let options = Options { allow_signed: true, allow_restricted: true, double_sided: true };
+    assert_eq!(merged(&all, options), merged(&all, options));
+}
+
+#[test]
+fn resources_that_refer_back_to_themselves_are_copied_once() {
+    let mut builder = Builder::new("1.7");
+    let id = builder.page(LETTER, "loop");
+    let resources = builder.doc.new_object_id();
+    // A font that names the resources that name it, and an XObject that is its own resource.
+    let font = builder.font;
+    builder.doc.get_dictionary_mut(font).unwrap().set("Back", resources);
+    let form = builder.doc.new_object_id();
+    builder.doc.objects.insert(form, Object::Stream(Stream::new(
+        dictionary! { "Type" => "XObject", "Subtype" => "Form", "BBox" => rect(SMALL), "Resources" => resources },
+        b"0 0 m".to_vec(),
+    )));
+    builder.doc.objects.insert(resources, Object::Dictionary(dictionary! {
+        "Font" => dictionary! { "F1" => font }, "XObject" => dictionary! { "Fm0" => form },
+    }));
+    builder.page_dict(id).set("Resources", resources);
+    let doc = reopen(&merged(&[("loop.pdf", &builder.save())], Options::default()));
+    assert_eq!(doc.get_pages().len(), 1);
+    assert_eq!(count_of(&doc, b"Font"), 1);
+}
+
 // ── Annotations ───────────────────────────────────────────────────────────────
 
 /// A page with the annotations given, each with a square appearance of 10 by 10 that draws `label`.
