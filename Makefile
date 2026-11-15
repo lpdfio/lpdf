@@ -327,7 +327,7 @@ build-sdk-node: build-wasm
 	@echo "-------------------------------"
 	@echo ">>> Building Node adapter..."
 	@echo ""
-	mkdir -p repos/lpdf-js/wasm && cp dist/node/lpdf.js dist/node/lpdf.d.ts dist/node/lpdf_bg.wasm repos/lpdf-js/wasm/ && cp dist/web/lpdf.js repos/lpdf-js/wasm/lpdf-web.js
+	mkdir -p repos/lpdf-js/wasm && cp dist/node/lpdf.js dist/node/lpdf.d.ts dist/node/lpdf_bg.wasm repos/lpdf-js/wasm/ && cp dist/web/lpdf.js repos/lpdf-js/wasm/lpdf-web.js && cp THIRD_PARTY_LICENSES_ENGINE.txt repos/lpdf-js/wasm/
 	cd repos/lpdf-js && npm install && npm run build
 
 test-sdk-node: build-sdk-node
@@ -342,7 +342,7 @@ build-sdk-dotnet: build-wasi
 	@echo "-------------------------------"
 	@echo ">>> Building .NET adapter..."
 	@echo ""
-	mkdir -p repos/lpdf-dotnet/wasm && cp dist/wasi/lpdf.wasm repos/lpdf-dotnet/wasm/lpdf.wasm
+	mkdir -p repos/lpdf-dotnet/wasm && cp dist/wasi/lpdf.wasm repos/lpdf-dotnet/wasm/lpdf.wasm && cp THIRD_PARTY_LICENSES_ENGINE.txt repos/lpdf-dotnet/wasm/
 	cd repos/lpdf-dotnet && dotnet build Lpdf.csproj -c Release
 
 test-sdk-dotnet: build-sdk-dotnet
@@ -364,7 +364,7 @@ build-sdk-java: build-wasi
 	@echo "-------------------------------"
 	@echo ">>> Building Java adapter..."
 	@echo ""
-	mkdir -p repos/lpdf-java/wasm && cp dist/wasi/lpdf.wasm repos/lpdf-java/wasm/lpdf.wasm
+	mkdir -p repos/lpdf-java/wasm && cp dist/wasi/lpdf.wasm repos/lpdf-java/wasm/lpdf.wasm && cp THIRD_PARTY_LICENSES_ENGINE.txt repos/lpdf-java/wasm/
 	cd repos/lpdf-java && mvn -B -q package -DskipTests
 
 test-sdk-java: build-sdk-java
@@ -379,6 +379,7 @@ build-sdk-php: build-wasi build-ffi
 	@echo "-------------------------------"
 	@echo ">>> Building PHP adapter..."
 	@echo ""
+	cp THIRD_PARTY_LICENSES_ENGINE.txt repos/lpdf-php/resources/
 	docker build -t lpdf-php repos/lpdf-php
 
 # Through both runners: the image has the FFI extension, so `auto` picks the native library, and the tests that name
@@ -403,7 +404,7 @@ build-sdk-python: build-wasi
 	@echo "-------------------------------"
 	@echo ">>> Building Python adapter..."
 	@echo ""
-	mkdir -p repos/lpdf-python/resources && cp dist/wasi/lpdf.wasm repos/lpdf-python/resources/lpdf-wasi.wasm
+	mkdir -p repos/lpdf-python/resources && cp dist/wasi/lpdf.wasm repos/lpdf-python/resources/lpdf-wasi.wasm && cp THIRD_PARTY_LICENSES_ENGINE.txt repos/lpdf-python/resources/
 	docker build -t lpdf-python repos/lpdf-python
 
 test-sdk-python: build-sdk-python
@@ -624,7 +625,7 @@ build-vscode: build-wasm
 	@echo ">>> Building VS Code adapter..."
 	@echo ""
 	mkdir -p repos/lpdf-vscode/wasm && mkdir -p repos/lpdf-vscode/schema
-	cp dist/node/lpdf.js      repos/lpdf-vscode/wasm/ && cp dist/node/lpdf_bg.wasm repos/lpdf-vscode/wasm/ && cp dist/node/lpdf.d.ts repos/lpdf-vscode/wasm/ && cp schema/lpdf.xsd repos/lpdf-vscode/schema/
+	cp dist/node/lpdf.js      repos/lpdf-vscode/wasm/ && cp dist/node/lpdf_bg.wasm repos/lpdf-vscode/wasm/ && cp dist/node/lpdf.d.ts repos/lpdf-vscode/wasm/ && cp THIRD_PARTY_LICENSES_ENGINE.txt repos/lpdf-vscode/wasm/ && cp schema/lpdf.xsd repos/lpdf-vscode/schema/
 	cd repos/lpdf-vscode && npm install && npm run build
 
 package-vscode: build-vscode
