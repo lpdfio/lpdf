@@ -7,7 +7,7 @@ What Lpdf officially supports, area by area: the version each feature is in sinc
 - What this file doesn't list is not supported.
 - The same document gives the same PDF in every SDK: JavaScript, Python, Java, C# and PHP. Options and methods, such as `createdOn` and `loadImage`, are named here as JavaScript names them, and each SDK has them in its own case.
 
-**Areas:** [PDF standards and output](#pdf-standards-and-output) · [What combines with what](#what-combines-with-what) · [Images](#images) · [Color](#color) · [Fonts and text](#fonts-and-text) · [Layout](#layout) · [Barcodes](#barcodes) · [Forms](#forms) · [Graphics](#graphics) · [Attachments](#attachments) · [Stamping existing PDFs](#stamping-existing-pdfs) · [Data binding](#data-binding) · [Render limits](#render-limits)
+**Areas:** [PDF standards and output](#pdf-standards-and-output) · [What combines with what](#what-combines-with-what) · [Images](#images) · [Color](#color) · [Fonts and text](#fonts-and-text) · [Layout](#layout) · [Barcodes](#barcodes) · [Forms](#forms) · [Graphics](#graphics) · [Attachments](#attachments) · [Stamping existing PDFs](#stamping-existing-pdfs) · [Merging PDFs for print](#merging-pdfs-for-print) · [Data binding](#data-binding) · [Render limits](#render-limits)
 
 ## PDF standards and output
 
@@ -321,6 +321,21 @@ A barcode is never stretched. Docs: [Barcode](https://lpdf.io/docs/doc/layout/ba
 - Refused: an input that is not a PDF, a PDF that needs a password to open, a page the PDF doesn't have, a stamp with no `page`, a box with no `x` and `y` and no `anchor`, a `width` or a `height` of 0, and a PNG with transparency on a PDF/A-1 file.
 - A stamp covers what is under it and removes nothing: it is not a redaction, and it is not a digital signature.
 - A stamped file is no longer linearized.
+
+## Merging PDFs for print
+
+| Supported | Since | Docs |
+|---|---|---|
+| `merge`: PDFs that Lpdf did not make, from different sources, merged into one PDF made for printing, each page at the size it shows at | 0.36.0 | [Merging PDFs for print](https://lpdf.io/docs/merge/) |
+
+- Each page is drawn as it looked, on a page of the size a viewer shows: its crop box, turned by its `/Rotate`. Pages of mixed sizes keep their sizes. The merged file's version is the highest among the files'.
+- An annotation that prints is drawn from its stored appearance: its Print flag is set and its Hidden flag is not, and a check box or a radio button draws the state it is in. Links and pop-ups draw nothing, and the merged file holds no annotation.
+- Layers cross over, each on or off as it prints in its file.
+- Left behind: forms and their fields, links, bookmarks, named destinations, the structure of a tagged file, the document's properties and embedded files. The merged file claims no PDF/A, PDF/UA or PDF/X and is not encrypted or linearized.
+- `doubleSided` adds a blank page the size of a document's last page after each document with an odd number of pages, and none after the last.
+- Refused, each with an error that names the file: a PDF that needs a password to open, a file that can't be read, a file whose owner password restricts printing or copying (unless `allowRestricted`), a signed file (unless `allowSigned`, which drops its signature), and a form field that has a value and no stored appearance. A merge of no files, or of more than 1,000, is refused too.
+- Read in files from Microsoft Word 2013, Adobe Acrobat Distiller 23, Adobe LiveCycle Designer ES 9.0 and Designer 6.5, Antenna House PDF Output Library 6.6, iText 7, Skia/PDF, macOS Quartz and Lpdf, in PDF 1.3, 1.4, 1.6 and 1.7.
+- Without a license key each merged page gets the attribution line, with no link; the blank sides stay empty.
 
 ## Data binding
 
