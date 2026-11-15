@@ -88,6 +88,8 @@ mod svg_entities;
 mod svg_scan;
 #[path = "../../core/src/stamp.rs"]
 mod stamp;
+#[path = "../../core/src/merge.rs"]
+mod merge;
 
 /// Test-only stub that mirrors `LpdfEngine::render_xml_to_pdf_bytes` from the
 /// core library crate so that `encrypt.rs` tests can reference `crate::LpdfEngine`
