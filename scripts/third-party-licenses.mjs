@@ -127,7 +127,7 @@ export function acceptsLicense(expression, accepted)
 
 /**
  * The crates a build links, `name version` each, from the output of
- * `cargo tree -p <crate> --target <target> -e normal --prefix depth --no-dedupe --format '{p}'`. That is the tree of
+ * `cargo tree -p <crate> --target <target> -e normal --prefix depth --no-dedupe --format '|{p}'`. That is the tree of
  * the build's own features, which `cargo metadata` can't give: it unifies the features of every crate of the
  * workspace, the test and benchmark tools' too, and so names crates that no build links. A proc-macro crate and what
  * only it needs are left out, since they run when the engine is compiled and are in no build. `--no-dedupe` writes a
@@ -139,7 +139,7 @@ export function linkedCrates(treeOutput)
     let skipBelow = Infinity;
     for (const line of treeOutput.split('\n'))
     {
-        const match = /^(\d+)(\S+) v(\S+)(.*)$/.exec(line);
+        const match = /^(\d+)\|(\S+) v(\S+)(.*)$/.exec(line);
         if (!match) continue;
         const depth = Number(match[1]);
         if (depth > skipBelow) continue;
@@ -312,18 +312,24 @@ function main()
     const metadata = JSON.parse(cargo(['metadata', '--format-version', '1', '--locked']));
     const external = new Map(metadata.packages.filter((pkg) => pkg.source).map((pkg) => [`${pkg.name} ${pkg.version}`, pkg]));
 
+    const workspace = new Set(metadata.packages.filter((pkg) => !pkg.source).map((pkg) => `${pkg.name} ${pkg.version}`));
+
+    const problems = [];
     const linked = new Map();
     for (const { crate, target } of BUILDS)
     {
         const tree = cargo(['tree', '--locked', '-p', crate, '--target', target, '-e', 'normal', '--prefix', 'depth',
-            '--no-dedupe', '--format', '{p}']);
+            '--no-dedupe', '--format', '|{p}']);
         for (const label of linkedCrates(tree))
         {
             if (external.has(label)) linked.set(label, external.get(label));
+            else if (!workspace.has(label)) problems.push(`${label} is in the tree of ${crate} for ${target} and in no package of the lock file`);
         }
     }
 
-    const { crates, problems } = collectCrates([...linked.values()]);
+    const collected = collectCrates([...linked.values()]);
+    const { crates } = collected;
+    problems.push(...collected.problems);
     if (problems.length)
     {
         for (const problem of problems) console.error(problem);

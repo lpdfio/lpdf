@@ -81,20 +81,20 @@ test('an expression that does not parse is an error naming it', () => {
 });
 
 const TREE = [
-    '0lpdf v0.0.0 (/work/src/core)',
-    '1base64 v0.22.1',
-    '1serde v1.0.228',
-    '2serde_derive v1.0.228 (proc-macro)',
-    '3proc-macro2 v1.0.106',
-    '4unicode-ident v1.0.18',
-    '3quote v1.0.45',
-    '4proc-macro2 v1.0.106',
-    '3syn v2.0.117',
-    '1pdf-writer v0.12.1',
-    '2itoa v1.0.15',
-    '1unicode-ident v1.0.18',
-    '1tiff v0.11.0',
-    '2proc-macro2 v1.0.106',
+    '0|lpdf v0.0.0 (/work/src/core)',
+    '1|base64 v0.22.1',
+    '1|serde v1.0.228',
+    '2|serde_derive v1.0.228 (proc-macro)',
+    '3|proc-macro2 v1.0.106',
+    '4|unicode-ident v1.0.18',
+    '3|quote v1.0.45',
+    '4|proc-macro2 v1.0.106',
+    '3|syn v2.0.117',
+    '1|pdf-writer v0.12.1',
+    '2|itoa v1.0.15',
+    '1|unicode-ident v1.0.18',
+    '1|tiff v0.11.0',
+    '2|proc-macro2 v1.0.106',
     '',
 ].join('\n');
 
@@ -104,6 +104,11 @@ test('a build links the crates of its tree', () => {
     {
         assert.ok(linked.includes(crateName), `${crateName} is linked`);
     }
+});
+
+test('a crate whose name starts with a digit is read whole', () => {
+    const linked = linkedCrates(['0|lpdf v0.0.0 (/work/src/core)', '1|27z v0.1.0', '2|7zip-sys v1.2.3', ''].join('\n'));
+    assert.deepEqual(linked, ['lpdf 0.0.0', '27z 0.1.0', '7zip-sys 1.2.3']);
 });
 
 test('a proc-macro crate and what only it needs are not linked', () => {
