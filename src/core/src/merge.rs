@@ -352,9 +352,9 @@ impl<'a, 'd> Copier<'a, 'd> {
             Object::Array(items) => Object::Array(
                 items.iter().map(|item| self.object(item, depth + 1)).collect::<Result<_, _>>()?,
             ),
-            Object::Dictionary(dict) => Object::Dictionary(self.dictionary(dict, depth)?),
+            Object::Dictionary(dict) => Object::Dictionary(self.dictionary(dict, depth, false)?),
             Object::Stream(stream) => {
-                let mut dict = self.dictionary(&stream.dict, depth)?;
+                let mut dict = self.dictionary(&stream.dict, depth, true)?;
                 dict.remove(b"Length");
                 Object::Stream(Stream::new(dict, stream.content.clone()))
             }
@@ -362,11 +362,14 @@ impl<'a, 'd> Copier<'a, 'd> {
         })
     }
 
-    fn dictionary(&mut self, dict: &Dictionary, depth: usize) -> Result<Dictionary, String> {
+    /// A copy of `dict`, which is the dictionary of a stream when `stream` is set. The keys that tie a drawing to the
+    /// structure or the application that wrote it (a form's `/Parent` and `/P`, its `/StructParent`s, its `/PieceInfo`)
+    /// are left out of a stream's, where they are back-references. In any other dictionary the same names are data: a
+    /// resource may be named `/P`, and a layer membership dictionary's `/P` is its visibility policy.
+    fn dictionary(&mut self, dict: &Dictionary, depth: usize, stream: bool) -> Result<Dictionary, String> {
         let mut copy = Dictionary::new();
         for (key, value) in dict.iter() {
-            // What ties a drawing to the structure or the application that wrote it, not to what it looks like.
-            if matches!(key.as_slice(), b"Parent" | b"P" | b"StructParent" | b"StructParents" | b"PieceInfo") {
+            if stream && matches!(key.as_slice(), b"Parent" | b"P" | b"StructParent" | b"StructParents" | b"PieceInfo") {
                 continue;
             }
             copy.set(key.clone(), self.object(value, depth + 1)?);

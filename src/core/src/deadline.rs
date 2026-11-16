@@ -31,6 +31,8 @@ thread_local! {
     static DEADLINE: Cell<Option<Instant>> = const { Cell::new(None) };
     /// The timeout of the render going on, in seconds, for its error.
     static SECONDS: Cell<f64> = const { Cell::new(0.0) };
+    /// Whether the work going on is a merge, for its error.
+    static MERGE: Cell<bool> = const { Cell::new(false) };
     /// The calls of `check` since the clock was last read.
     static CHECKS: Cell<u32> = const { Cell::new(0) };
 }
@@ -40,16 +42,18 @@ thread_local! {
 pub(crate) struct TimedOut {
     /// The timeout, in seconds.
     pub seconds: f64,
+    /// Whether it was a merge that ran past it, not a render.
+    pub merge: bool,
 }
 
 #[cfg(not(target_family = "wasm"))]
 impl TimedOut {
-    /// The error of a render that ran past its timeout, which names the timeout.
+    /// The error of a render, or a merge, that ran past its timeout, which names the timeout.
     pub(crate) fn error(&self) -> String {
         let unit = if self.seconds == 1.0 { "second" } else { "seconds" };
+        let (what, parts) = if self.merge { ("merge", "merge the files in smaller groups") } else { ("render", "render the document in smaller parts") };
         format!(
-            "the render ran past its timeout of {} {unit}: raise the timeout in the engine's options, or render the \
-            document in smaller parts",
+            "the {what} ran past its timeout of {} {unit}: raise the timeout in the engine's options, or {parts}",
             self.seconds
         )
     }
@@ -78,12 +82,24 @@ pub(crate) struct Deadline(());
 /// Start the deadline of a render that may run `seconds` from now; with 0 it runs with no limit.
 #[cfg(not(target_family = "wasm"))]
 pub(crate) fn start(seconds: f64) -> Deadline {
+    begin(seconds, false)
+}
+
+/// Start the deadline of a merge that may run `seconds` from now, whose error names a merge, not a render.
+#[cfg(not(target_family = "wasm"))]
+pub(crate) fn start_merge(seconds: f64) -> Deadline {
+    begin(seconds, true)
+}
+
+#[cfg(not(target_family = "wasm"))]
+fn begin(seconds: f64, merge: bool) -> Deadline {
     let deadline = (seconds > 0.0)
         .then(|| Duration::try_from_secs_f64(seconds).ok())
         .flatten()
         .and_then(|timeout| Instant::now().checked_add(timeout));
     DEADLINE.set(deadline);
     SECONDS.set(seconds);
+    MERGE.set(merge);
     CHECKS.set(0);
     Deadline(())
 }
@@ -91,6 +107,12 @@ pub(crate) fn start(seconds: f64) -> Deadline {
 /// The WebAssembly builds keep no deadline: their hosts stop a render themselves.
 #[cfg(target_family = "wasm")]
 pub(crate) fn start(_seconds: f64) -> Deadline {
+    Deadline(())
+}
+
+/// The WebAssembly builds keep no deadline: their hosts stop a merge themselves.
+#[cfg(target_family = "wasm")]
+pub(crate) fn start_merge(_seconds: f64) -> Deadline {
     Deadline(())
 }
 
@@ -122,7 +144,7 @@ pub(crate) fn check_now() {
         if Instant::now() >= deadline {
             // Cleared here, so a check in a frame that is dropped on the way out doesn't unwind a second time.
             DEADLINE.set(None);
-            std::panic::resume_unwind(Box::new(TimedOut { seconds: SECONDS.get() }));
+            std::panic::resume_unwind(Box::new(TimedOut { seconds: SECONDS.get(), merge: MERGE.get() }));
         }
     }
 }
@@ -187,9 +209,12 @@ mod tests {
 
     #[test]
     fn the_error_names_the_timeout() {
-        assert!(TimedOut { seconds: 5.0 }.error().starts_with("the render ran past its timeout of 5 seconds: "));
-        assert!(TimedOut { seconds: 1.0 }.error().starts_with("the render ran past its timeout of 1 second: "));
-        assert!(TimedOut { seconds: 0.25 }.error().starts_with("the render ran past its timeout of 0.25 seconds: "));
+        assert!(TimedOut { seconds: 5.0, merge: false }.error().starts_with("the render ran past its timeout of 5 seconds: "));
+        assert!(TimedOut { seconds: 1.0, merge: false }.error().starts_with("the render ran past its timeout of 1 second: "));
+        assert!(TimedOut { seconds: 0.25, merge: false }.error().starts_with("the render ran past its timeout of 0.25 seconds: "));
+        let merge = TimedOut { seconds: 5.0, merge: true }.error();
+        assert!(merge.starts_with("the merge ran past its timeout of 5 seconds: "), "{merge}");
+        assert!(merge.ends_with("merge the files in smaller groups"), "{merge}");
     }
 
     #[test]

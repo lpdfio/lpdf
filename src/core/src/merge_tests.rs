@@ -302,6 +302,44 @@ fn what_ties_a_drawing_to_the_pages_it_came_from_is_left_behind() {
 }
 
 #[test]
+fn names_a_dictionary_keeps_are_data_and_only_a_streams_ties_are_left_behind() {
+    let mut builder = Builder::new("1.7");
+    let id = builder.page(LETTER, "data");
+    let tree = builder.pages_id;
+    let layer = builder.doc.add_object(dictionary! { "Type" => "OCG", "Name" => Object::string_literal("shown never") });
+    // A layer membership whose visibility policy is `/P`, and a form with a parent that a resource named `/P` also draws.
+    let membership = builder.doc.add_object(dictionary! {
+        "Type" => "OCMD", "OCGs" => vec![Object::from(layer)], "P" => "AllOff",
+    });
+    let xobject = builder.doc.add_object(Stream::new(
+        dictionary! { "Type" => "XObject", "Subtype" => "Form", "BBox" => rect(SMALL), "Parent" => tree, "P" => id },
+        b"0 0 m".to_vec(),
+    ));
+    let font = builder.font;
+    builder.page_dict(id).set("Resources", dictionary! {
+        "Font" => dictionary! { "F1" => font },
+        "XObject" => dictionary! { "P" => xobject, "Parent" => xobject },
+        "Properties" => dictionary! { "MC0" => membership },
+    });
+    builder.catalog.set("OCProperties", dictionary! {
+        "OCGs" => vec![Object::from(layer)], "D" => dictionary! { "BaseState" => "ON" },
+    });
+    let doc = reopen(&merged(&[("data.pdf", &builder.save())], Options::default()));
+    let resources = form(&doc, 1).dict.get(b"Resources").and_then(Object::as_dict).expect("resources").clone();
+    // The membership keeps its policy, which is how a viewer decides whether its content shows.
+    let copy = resources.get(b"Properties").and_then(Object::as_dict).and_then(|p| p.get(b"MC0")).and_then(Object::as_reference).unwrap();
+    let membership = doc.get_dictionary(copy).expect("the membership");
+    assert_eq!(membership.get(b"P").and_then(Object::as_name).unwrap(), b"AllOff");
+    // The resources named `/P` and `/Parent` are still there, and draw the copy of the form.
+    let table = resources.get(b"XObject").and_then(Object::as_dict).expect("the XObject table");
+    let (p, parent) = (table.get(b"P").and_then(Object::as_reference).ok(), table.get(b"Parent").and_then(Object::as_reference).ok());
+    assert!(p.is_some() && p == parent, "both names draw the one copy of the form");
+    // The form itself has lost its back-references.
+    let copy = doc.get_object(p.unwrap()).and_then(Object::as_stream).expect("the form");
+    assert!(!copy.dict.has(b"Parent") && !copy.dict.has(b"P"), "the copy of the form has no parent");
+}
+
+#[test]
 fn the_same_files_merge_to_the_same_bytes() {
     let files: Vec<(String, Vec<u8>)> = synthetic();
     let all: Vec<(&str, &[u8])> = files.iter().map(|(name, bytes)| (name.as_str(), bytes.as_slice())).collect();
