@@ -16,7 +16,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python build-sdk-java \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python test-sdk-java \
-        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api gen-third-party-licenses check-third-party-licenses gen-codegen-corpus check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-spot check-facturx check-ocg check-codegen-sdk-node check-codegen-sdk-dotnet check-codegen-sdk-php check-codegen-sdk-python check-codegen-sdk-java check-codegen-sdks check-function-sizes \
+        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api gen-third-party-licenses check-third-party-licenses gen-codegen-corpus check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-spot check-facturx check-ocg check-merge check-codegen-sdk-node check-codegen-sdk-dotnet check-codegen-sdk-php check-codegen-sdk-python check-codegen-sdk-java check-codegen-sdks check-function-sizes \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-adapter-java clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python example-java \
@@ -188,6 +188,22 @@ check-ocg:
 	rm -rf target/ocg-samples && mkdir -p target/ocg-samples
 	LPDF_OCG_OUT="$(CURDIR)/target/ocg-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_ocg_samples_for_the_external_check
 	node scripts/check-ocg.mjs target/ocg-samples target/pdfjs
+
+# check-merge has the core merge every file of the corpus (`test/merge-corpus`) and a set of files built for the
+# structures it lacks, each alone and all in one PDF with a blank side after each document of odd length, and checks
+# the output with two readers that share no code with the core: qpdf (`qpdf --check`, no warning) and pdf.js, which renders
+# each page of a source and the page that stands for it as it prints one, and compares them (`scripts/check-merge.mjs`).
+# Installs pdf.js in target/pdfjs on first use; needs Node, npm and qpdf. `MERGE_PNG=<folder>` keeps the pairs that differ.
+check-merge:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking merged PDFs with qpdf and pdf.js..."
+	@echo ""
+	test -f target/pdfjs/node_modules/pdfjs-dist/package.json && grep -q '"version": "$(PDFJS_VERSION)"' target/pdfjs/node_modules/pdfjs-dist/package.json \
+		|| npm install --prefix target/pdfjs --no-audit --no-fund --no-save pdfjs-dist@$(PDFJS_VERSION)
+	rm -rf target/merge-samples && mkdir -p target/merge-samples
+	LPDF_MERGE_OUT="$(CURDIR)/target/merge-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_merge_samples_for_the_external_check
+	node scripts/check-merge.mjs target/merge-samples target/pdfjs $(if $(MERGE_PNG),--png $(MERGE_PNG))
 
 # check-function-sizes builds the WASI engine and fails when one of its functions is over 40 KB: the Java SDK compiles
 # each function to one JVM method, which holds at most 64 KB of bytecode, and its bytecode comes to as much as 1.6 times

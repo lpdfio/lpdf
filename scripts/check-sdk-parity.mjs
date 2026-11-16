@@ -41,6 +41,10 @@ const EXPECTED = {
     // A stamp on an existing PDF, which no document holds, so the schema has no element of it: its options, written by
     // hand in each SDK, as the core reads them (`stamp.rs`).
     StampAttr: ['image', 'page', 'x', 'y', 'anchor', 'width', 'height', 'align', 'justify', 'scale', 'max-grow'],
+    // A merge of existing PDFs: a file to merge, and the options of the call, written by hand in each SDK, as the core
+    // reads them (`merge.rs`).
+    MergeSource: ['name', 'pdf'],
+    MergeOptions: ['allow-signed', 'allow-restricted', 'double-sided'],
 };
 for (const element of ['column', 'row', 'grid', 'list', 'li', 'frame', 'link', 'divider', 'span', 'code-span', 'img',
     'shape', 'barcode', 'text', 'code', 'td', 'thead', 'tr', 'table', 'field', 'bookmark']) {

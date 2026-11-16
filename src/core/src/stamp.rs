@@ -436,7 +436,7 @@ fn place_image(stamp: &Stamp, png: &Png, [x, y, _, _]: [f32; 4]) -> [f32; 4] {
 /// The attribution line of an unlicensed stamp's page: a render's (`draw_attribution` in `pdf.rs`), the mark and the
 /// name, at its sizes and in its colours. The name is drawn as the outlines of its glyphs in the face the engine
 /// carries for it, so the update holds no font, of which a PDF/A file would ask more.
-struct Attribution {
+pub(crate) struct Attribution {
     width: f32,
     /// The mark and the name as paths, from the line's bottom-left corner, y up.
     mark:  String,
@@ -444,7 +444,7 @@ struct Attribution {
 }
 
 impl Attribution {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let scale = ATTRIBUTION_MARK_SIZE / 100.0;
         let mut mark = String::new();
         for shape in &LPDF_MARK {
@@ -479,13 +479,13 @@ impl Attribution {
 
     /// Where the line goes on a page of the given size as shown, `[left, top]`: in its top-right corner, where a
     /// render's goes.
-    fn place(&self, (page_w, _): (f32, f32)) -> [f32; 2] {
+    pub(crate) fn place(&self, (page_w, _): (f32, f32)) -> [f32; 2] {
         [page_w - ATTRIBUTION_PAD - self.width, ATTRIBUTION_PAD]
     }
 
     /// The line drawn with `matrix`, which takes its space to the page's, in the color space named `space`, the page's
     /// sRGB on a PDF/A file, or else in the device's RGB.
-    fn draw(&self, [a, b, c, d, e, f]: [f32; 6], space: Option<&str>) -> String {
+    pub(crate) fn draw(&self, [a, b, c, d, e, f]: [f32; 6], space: Option<&str>) -> String {
         let color = |hex: &str, fill: bool| {
             let (r, g, b) = parse_hex(hex);
             let rgb = format!("{} {} {}", num(r), num(g), num(b));
@@ -580,17 +580,17 @@ impl ttf_parser::OutlineBuilder for Outline {
 }
 
 /// A page as a viewer shows it: its crop box, in the PDF's own space, and the turn `/Rotate` gives it.
-struct Geometry {
-    left:   f32,
-    bottom: f32,
-    right:  f32,
-    top:    f32,
+pub(crate) struct Geometry {
+    pub(crate) left:   f32,
+    pub(crate) bottom: f32,
+    pub(crate) right:  f32,
+    pub(crate) top:    f32,
     /// Clockwise: 0, 90, 180 or 270.
-    rotate: i64,
+    pub(crate) rotate: i64,
 }
 
 impl Geometry {
-    fn of(doc: &Document, page: &Dictionary) -> Self {
+    pub(crate) fn of(doc: &Document, page: &Dictionary) -> Self {
         // US Letter when a page has no media box, as viewers take it.
         let media = inherited(doc, page, b"MediaBox").and_then(|o| rect(doc, o)).unwrap_or([0.0, 0.0, 612.0, 792.0]);
         // The crop box, cut to the media box.
@@ -610,14 +610,14 @@ impl Geometry {
     }
 
     /// The page's width and height as a viewer shows it.
-    fn size(&self) -> (f32, f32) {
+    pub(crate) fn size(&self) -> (f32, f32) {
         let (w, h) = (self.right - self.left, self.top - self.bottom);
         if self.rotate % 180 == 90 { (h, w) } else { (w, h) }
     }
 
     /// The point of the PDF's space under the point `(u, v)` of the page as a viewer shows it, from its top-left
     /// corner, y down.
-    fn point(&self, u: f32, v: f32) -> (f32, f32) {
+    pub(crate) fn point(&self, u: f32, v: f32) -> (f32, f32) {
         match self.rotate {
             90  => (self.left + v,  self.bottom + u),
             180 => (self.right - u, self.bottom + v),
@@ -628,7 +628,7 @@ impl Geometry {
 
     /// The matrix of an attribution line at `[left, top]` of the page as a viewer shows it: its space starts at the
     /// line's bottom-left corner, y up, upright, in pt.
-    fn line_matrix(&self, [left, top]: [f32; 2]) -> [f32; 6] {
+    pub(crate) fn line_matrix(&self, [left, top]: [f32; 2]) -> [f32; 6] {
         let bottom = top + ATTRIBUTION_MARK_SIZE;
         self.matrix([left, bottom - 1.0, 1.0, 1.0])
     }
@@ -643,7 +643,7 @@ impl Geometry {
 }
 
 /// The value of an attribute a page may inherit from its parents (PDF 1.7, 7.7.3.4), resolved.
-fn inherited<'a>(doc: &'a Document, page: &'a Dictionary, key: &[u8]) -> Option<&'a Object> {
+pub(crate) fn inherited<'a>(doc: &'a Document, page: &'a Dictionary, key: &[u8]) -> Option<&'a Object> {
     let mut node = page;
     // A cycle in the page tree stops here rather than looping.
     for _ in 0..64 {
@@ -656,7 +656,7 @@ fn inherited<'a>(doc: &'a Document, page: &'a Dictionary, key: &[u8]) -> Option<
 }
 
 /// A rectangle, `[llx lly urx ury]` with its corners in either order, as left, bottom, right, top.
-fn rect(doc: &Document, value: &Object) -> Option<[f32; 4]> {
+pub(crate) fn rect(doc: &Document, value: &Object) -> Option<[f32; 4]> {
     let items = value.as_array().ok()?;
     let n: Vec<f32> = items.iter().filter_map(|o| doc.dereference(o).ok()?.1.as_float().ok()).collect();
     let [x1, y1, x2, y2] = n[..] else { return None };
@@ -664,7 +664,7 @@ fn rect(doc: &Document, value: &Object) -> Option<[f32; 4]> {
 }
 
 /// The references to a page's content streams, from a stream, an array or a reference to an array, flattened.
-fn contents_of(doc: &Document, page: &Dictionary) -> Vec<Object> {
+pub(crate) fn contents_of(doc: &Document, page: &Dictionary) -> Vec<Object> {
     match page.get(b"Contents") {
         Ok(Object::Reference(id)) => match doc.get_object(*id) {
             Ok(Object::Stream(_)) => vec![Object::Reference(*id)],
@@ -677,7 +677,7 @@ fn contents_of(doc: &Document, page: &Dictionary) -> Vec<Object> {
 }
 
 /// A number for a content stream: four decimals at most, no trailing zeros.
-fn num(value: f32) -> String {
+pub(crate) fn num(value: f32) -> String {
     let text = format!("{:.4}", value);
     let text = text.trim_end_matches('0').trim_end_matches('.');
     if text == "-0" { "0".to_string() } else { text.to_string() }

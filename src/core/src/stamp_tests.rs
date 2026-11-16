@@ -18,31 +18,31 @@ use crate::{LpdfEngine, RenderEncryption};
 
 /// How a page holds its content: one stream, an array of two, a reference to such an array, or none.
 #[derive(Clone, Copy, PartialEq)]
-enum Contents { Stream, Array, ArrayRef, Blank }
+pub(crate) enum Contents { Stream, Array, ArrayRef, Blank }
 
 /// Where a page's resources are: its own, one dictionary every page refers to, or its parent's.
 #[derive(Clone, Copy, PartialEq)]
-enum Resources { OnPage, Shared, Inherited }
+pub(crate) enum Resources { OnPage, Shared, Inherited }
 
 #[derive(Clone, Copy)]
-struct Page {
-    media:    [f32; 4],
-    crop:     Option<[f32; 4]>,
-    rotate:   i64,
-    contents: Contents,
+pub(crate) struct Page {
+    pub(crate) media:    [f32; 4],
+    pub(crate) crop:     Option<[f32; 4]>,
+    pub(crate) rotate:   i64,
+    pub(crate) contents: Contents,
 }
 
-const LETTER: Page = Page { media: [0.0, 0.0, 612.0, 792.0], crop: None, rotate: 0, contents: Contents::Stream };
+pub(crate) const LETTER: Page = Page { media: [0.0, 0.0, 612.0, 792.0], crop: None, rotate: 0, contents: Contents::Stream };
 
 impl Page {
-    fn crop(self, crop: [f32; 4]) -> Self { Page { crop: Some(crop), ..self } }
-    fn rotate(self, rotate: i64) -> Self { Page { rotate, ..self } }
-    fn contents(self, contents: Contents) -> Self { Page { contents, ..self } }
+    pub(crate) fn crop(self, crop: [f32; 4]) -> Self { Page { crop: Some(crop), ..self } }
+    pub(crate) fn rotate(self, rotate: i64) -> Self { Page { rotate, ..self } }
+    pub(crate) fn contents(self, contents: Contents) -> Self { Page { contents, ..self } }
 }
 
 /// A PDF of `pages`, each ruled every inch from its top-left corner as a viewer shows it, framed 10 pt in, and with
 /// its number and corners named, upright to the reader whatever its `/Rotate`.
-fn build(pages: &[Page], resources: Resources, object_streams: bool, metadata: Option<&str>) -> Vec<u8> {
+pub(crate) fn build(pages: &[Page], resources: Resources, object_streams: bool, metadata: Option<&str>) -> Vec<u8> {
     let mut doc = Document::with_version("1.7");
     let pages_id = doc.new_object_id();
     let font = doc.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica" });

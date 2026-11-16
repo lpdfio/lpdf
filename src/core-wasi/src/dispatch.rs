@@ -2,7 +2,7 @@
 //! the native library (`src/core-ffi`) takes one in `lpdf_invoke` and returns its answer. Both answer through `answer`.
 //!
 //! ```json
-//! { "method": "render" | "render_tree" | "render_pdf" | "render_tree_pdf" | "stamp" | "check_license",
+//! { "method": "render" | "render_tree" | "render_pdf" | "render_tree_pdf" | "stamp" | "merge" | "check_license",
 //!   "key": "…", "input": "…xml or json…", "now": 1790812800 }
 //! ```
 //! - `render` / `render_tree` return the RenderTree JSON string directly.
@@ -13,6 +13,10 @@
 //!   an incremental update, or `{ "error": "…" }`. It takes no `input`, but `pdf`, the file as base64, `images`, the
 //!   PNGs by name as base64, and `stamps`, a list of stamps, each naming its PNG in `image`:
 //!   `{ "method": "stamp", "pdf": "…", "images": { "seal": "…" }, "stamps": [{ "image": "seal", "page": "last", … }] }`.
+//! - `merge` merges existing PDFs into one made for printing and returns `{ "pdf": "<base64>" }`, or `{ "error": "…" }`.
+//!   It takes no `input`, but `sources`, a list of files, each with its `name` and its `pdf` as base64, and
+//!   `options`, an object of `allow-signed`, `allow-restricted` and `double-sided`, each off by default:
+//!   `{ "method": "merge", "sources": [{ "name": "a.pdf", "pdf": "…" }], "options": { "double-sided": true } }`.
 //! - `check_license` reports what `key` is — `{ "status": "licensed", … }` — and takes no
 //!   `input`. `now` is the host's clock in seconds; without it expiry is not checked.
 //!
@@ -69,7 +73,7 @@ use base64::Engine as _;
 
 use crate::{
     attachments, data, deadline, encrypt, kit_to_xml, layout, license, memory, parse, pdf, pdfa, pdfua, pdfx, references,
-    render, shared, stamp, tokens,
+    merge, render, shared, stamp, tokens,
 };
 
 /// The JSON before the base64 of a PDF's answer.
@@ -78,12 +82,12 @@ const PDF_OPEN: &[u8] = br#"{"pdf":""#;
 /// The JSON after the base64 of a PDF's answer.
 const PDF_CLOSE: &[u8] = br#""}"#;
 
-/// What a request is answered: JSON text, or the PDF of a render or a stamp, whose answer is `{"pdf":"<base64>"}`.
+/// What a request is answered: JSON text, or the PDF of a render, a stamp or a merge, whose answer is `{"pdf":"<base64>"}`.
 /// The PDF's answer is written as it is encoded (`write_to`), so the render never holds its base64 whole.
 pub(crate) enum Answer {
     /// The answer's JSON: an error, a license report, a render tree, the XML of a kit.
     Json(String),
-    /// The PDF of a `render_pdf`, a `render_tree_pdf` or a `stamp`.
+    /// The PDF of a `render_pdf`, a `render_tree_pdf`, a `stamp` or a `merge`.
     Pdf(Vec<u8>),
 }
 
@@ -125,7 +129,7 @@ impl Answer {
 }
 
 impl From<Result<Vec<u8>, String>> for Answer {
-    /// The answer of a render or a stamp: its PDF, or its error.
+    /// The answer of a render, a stamp or a merge: its PDF, or its error.
     fn from(pdf: Result<Vec<u8>, String>) -> Answer {
         match pdf {
             Ok(pdf) => Answer::Pdf(pdf),
@@ -196,6 +200,11 @@ fn dispatch(request: String) -> Answer {
         return stamp_request(&mut req, licensed, before).into();
     }
 
+    if method == "merge" {
+        let licensed = license::check(key, now_unix).is_licensed();
+        return merge_request(&mut req, licensed, before).into();
+    }
+
     // Taken out of the request rather than copied, so the render holds one copy of each.
     let method   = method.to_string();
     let key      = key.to_string();
@@ -263,6 +272,18 @@ fn stamp_request(req: &mut serde_json::Value, licensed: bool, before: i64) -> Re
     };
     let stamps = stamp::parse_stamps(&req["stamps"])?;
     stamp::stamp(&pdf, &stamps, &build_image_registry(req), licensed)
+}
+
+/// A `merge` request: the files in `sources`, each with its `name` and its `pdf` as base64, and the `options`;
+/// `licensed` when the request's key is, else each merged page gets the attribution line. Returns the merged PDF, or
+/// the error.
+fn merge_request(req: &mut serde_json::Value, licensed: bool, before: i64) -> Result<Vec<u8>, String> {
+    let cap = render_cap(req)?;
+    let _cap = memory::start_from(cap, before);
+    let _deadline = deadline::start_merge(render_timeout(req)?);
+    let options = merge::parse_options(&req["options"])?;
+    let sources = merge::sources_from_request(&mut req["sources"])?;
+    merge::merge(&sources, &options, licensed)
 }
 
 /// The memory cap of the request's render: its `max_memory_mb`, or the default.
@@ -840,6 +861,41 @@ mod tests {
         assert_eq!(json(dispatch(without.to_string()))["error"], "request missing 'pdf' field");
     }
 
+    #[test]
+    fn a_merge_request_answers_one_pdf_of_the_pages_of_its_files() {
+        let b64 = |bytes: &[u8]| base64::engine::general_purpose::STANDARD.encode(bytes);
+        let plain = render_request(&with_output(""), serde_json::json!({}));
+        let pdf = base64::engine::general_purpose::STANDARD.decode(plain["pdf"].as_str().expect(&plain.to_string())).unwrap();
+        let merge = |options: serde_json::Value| {
+            let req = serde_json::json!({
+                "method": "merge", "options": options,
+                "sources": [{ "name": "a.pdf", "pdf": b64(&pdf) }, { "name": "b.pdf", "pdf": b64(&pdf) }],
+            });
+            json(dispatch(req.to_string()))
+        };
+        let answer = merge(serde_json::json!({}));
+        let merged = base64::engine::general_purpose::STANDARD.decode(answer["pdf"].as_str().expect(&answer.to_string())).unwrap();
+        let doc = lopdf::Document::load_mem(&merged).expect("a PDF");
+        assert_eq!(doc.get_pages().len(), 2);
+        // Each page draws its source page's form, and a request with no key draws the attribution line after it.
+        let first = doc.get_pages()[&1];
+        let contents = doc.get_dictionary(first).unwrap().get(b"Contents").and_then(lopdf::Object::as_reference).unwrap();
+        let drawing = doc.get_object(contents).and_then(lopdf::Object::as_stream).unwrap().decompressed_content().unwrap();
+        let drawing = String::from_utf8_lossy(&drawing);
+        assert!(drawing.starts_with("q 1 0 0 1 0 0 cm /LpdfPage Do\nQ\nq "), "{drawing}");
+        // One page a file is odd, so a blank side follows the first.
+        let sided = merge(serde_json::json!({ "double-sided": true }));
+        let sided = base64::engine::general_purpose::STANDARD.decode(sided["pdf"].as_str().expect(&sided.to_string())).unwrap();
+        assert_eq!(lopdf::Document::load_mem(&sided).expect("a PDF").get_pages().len(), 3);
+        assert_eq!(merge(serde_json::json!({ "doubleSided": true }))["error"], "the merge has no option 'doubleSided'");
+        let named = serde_json::json!({ "method": "merge", "sources": [{ "name": "notes.txt", "pdf": b64(b"hello") }] });
+        assert_eq!(json(dispatch(named.to_string()))["error"], "notes.txt: the file is not a PDF: it doesn't start with %PDF-");
+        let without = serde_json::json!({ "method": "merge" });
+        assert_eq!(json(dispatch(without.to_string()))["error"], "request missing 'sources' list");
+        let nameless = serde_json::json!({ "method": "merge", "sources": [{ "pdf": b64(&pdf) }] });
+        assert!(json(dispatch(nameless.to_string()))["error"].as_str().unwrap().starts_with("file 1 has no name"));
+    }
+
     /// The SHA-256 of `bytes`, in hex, as the snapshots in `test/snapshots` store it.
     fn sha256_hex(bytes: &[u8]) -> String {
         use sha2::Digest as _;
@@ -869,6 +925,25 @@ mod tests {
             let pdf = answered("render_pdf", BENCH_XL, fields.clone());
             let bytes = base64::engine::general_purpose::STANDARD.decode(pdf["pdf"].as_str().expect(&pdf.to_string())).unwrap();
             assert_eq!(sha256_hex(&bytes), BENCH_XL_HASH.trim(), "{fields}");
+        }
+    }
+
+    #[test]
+    fn a_merge_past_its_timeout_answers_the_timeout_error_and_the_next_merge_is_whole() {
+        let b64 = |bytes: &[u8]| base64::engine::general_purpose::STANDARD.encode(bytes);
+        let plain = render_request(&pages_of_text(8), serde_json::json!({}));
+        let pdf = base64::engine::general_purpose::STANDARD.decode(plain["pdf"].as_str().expect(&plain.to_string())).unwrap();
+        let merge = |timeout: serde_json::Value| {
+            let req = serde_json::json!({ "method": "merge", "timeout": timeout, "sources": [{ "name": "a.pdf", "pdf": b64(&pdf) }] });
+            json(super::answer(req.to_string()))
+        };
+        let answer = merge(serde_json::json!(0.000001));
+        let error = answer["error"].as_str().unwrap_or_else(|| panic!("{answer}"));
+        assert!(error.starts_with("the merge ran past its timeout of 0.000001 seconds: "), "{error}");
+        assert_eq!(answer["timed_out"], true);
+        for timeout in [serde_json::json!(null), serde_json::json!(0), serde_json::json!(600)] {
+            let answer = merge(timeout.clone());
+            assert!(answer["pdf"].is_string(), "{timeout}: {answer}");
         }
     }
 

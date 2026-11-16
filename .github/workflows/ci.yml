@@ -112,6 +112,11 @@ jobs:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
         run: make check-ocg
 
+      - name: Check merged PDFs with qpdf and pdf.js
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
+        run: make check-merge
+
   # The native library the PHP SDK loads through FFI, built as the release builds it: for glibc 2.17 on x86_64 and
   # aarch64, and refused when either needs a newer glibc (scripts/build-ffi.sh). The release attaches the same files.
   ffi:

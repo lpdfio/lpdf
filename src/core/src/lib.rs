@@ -38,6 +38,7 @@ mod ruling;
 mod schema_attrs;
 mod shared;
 mod stamp;
+mod merge;
 mod png;
 mod raster;
 mod bmp;
@@ -252,6 +253,17 @@ impl LpdfEngine {
         self.stamp_pdf(pdf, stamps).map_err(|e| JsValue::from_str(&e))
     }
 
+    /// Merge existing PDFs into one PDF made for printing. Each source page is drawn on a page of its own size, its
+    /// annotations that print are flattened from their stored appearances, and its layers cross over as they print.
+    ///
+    /// `pdfs` holds the files' bytes one after the other, and `sources` is a JSON list that cuts them up: each entry
+    /// has the file's `name`, which every error about it names, and its `length`. `options` is a JSON object of
+    /// `allow-signed`, `allow-restricted` and `double-sided`, each off by default, or empty. Without a valid license
+    /// key, each merged page gets the attribution line of a render in its top-right corner.
+    pub fn merge(&self, pdfs: &[u8], sources: &str, options: &str) -> Result<Vec<u8>, JsValue> {
+        self.merge_pdf(pdfs, sources, options).map_err(|e| JsValue::from_str(&e))
+    }
+
     pub fn render(&self, xml: &str) -> String {
         let _cap = memory::start(self.max_memory_mb);
         let doc = match parse::parse_with(xml, &self.resources()) {
@@ -409,6 +421,20 @@ impl LpdfEngine {
         let stamps = stamp::parse_stamps(&stamps)?;
         let licensed = license::check(&self.license_key, self.now_unix).is_licensed();
         stamp::stamp(pdf, &stamps, &self.images, licensed)
+    }
+
+    /// Merge `pdfs` as `merge` does, with an error that is not a JS value, which the tests can read.
+    pub fn merge_pdf(&self, pdfs: &[u8], sources: &str, options: &str) -> Result<Vec<u8>, String> {
+        let _cap = memory::start(self.max_memory_mb);
+        let options: serde_json::Value = if options.trim().is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::from_str(options).map_err(|e| format!("the merge options could not be read: {e}"))?
+        };
+        let options = merge::parse_options(&options)?;
+        let sources = merge::sources_from_parts(pdfs, sources)?;
+        let licensed = license::check(&self.license_key, self.now_unix).is_licensed();
+        merge::merge(&sources, &options, licensed)
     }
 
     /// What the caller loaded for the `src` attributes of the document, for the parser.
@@ -951,6 +977,9 @@ mod pdfa_render_tests;
 
 #[cfg(test)]
 mod stamp_tests;
+
+#[cfg(test)]
+mod merge_tests;
 
 #[cfg(test)]
 mod raster_render_tests;
