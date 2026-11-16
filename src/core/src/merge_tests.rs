@@ -492,6 +492,37 @@ fn a_field_with_a_value_and_no_stored_appearance_is_an_error_that_names_the_file
 }
 
 #[test]
+fn a_field_with_a_value_in_a_form_that_asks_for_its_fields_to_be_redrawn_is_an_error_that_names_the_file_and_the_field() {
+    let build = |value: &str, need: Option<bool>| {
+        let mut builder = Builder::new("1.7");
+        let id = builder.page(LETTER, "form");
+        let appearance = builder.appearance([0.0, 0.0, 100.0, 20.0], "stored");
+        builder.annotate(id, dictionary! {
+            "Type" => "Annot", "Subtype" => "Widget", "FT" => "Tx", "F" => 4, "Rect" => rect([0.0, 0.0, 100.0, 20.0]),
+            "T" => Object::string_literal("name"), "V" => Object::string_literal(value), "AP" => dictionary! { "N" => appearance },
+        });
+        let mut form = dictionary! { "Fields" => Vec::<Object>::new() };
+        if let Some(need) = need {
+            form.set("NeedAppearances", need);
+        }
+        builder.catalog.set("AcroForm", form);
+        builder.save()
+    };
+    let e = error(&[("contract.pdf", &build("Ada", Some(true)))], Options::default());
+    assert_eq!(
+        e,
+        "contract.pdf: page 1: the form field 'name' has a value, and the form asks a viewer to redraw its fields \
+         (NeedAppearances), so the stored appearance may be out of date and would print wrong: open the file in a PDF \
+         viewer and save it, which stores the appearance",
+    );
+    // The flag off or absent, or a field with nothing in it, leaves the stored appearance to print.
+    for (value, need) in [("Ada", Some(false)), ("Ada", None), ("", Some(true))] {
+        let doc = reopen(&merged(&[("f.pdf", &build(value, need))], Options::default()));
+        assert_eq!(text(xobject(&doc, 1, "LpdfAnnot0")), "stored", "{value:?} {need:?}");
+    }
+}
+
+#[test]
 fn a_button_that_is_on_with_no_appearance_for_its_state_is_the_same_error() {
     let mut builder = Builder::new("1.7");
     let id = builder.page(LETTER, "form");

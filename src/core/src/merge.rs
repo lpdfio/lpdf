@@ -308,13 +308,18 @@ struct Copier<'a, 'd> {
     appearances: HashSet<ObjectId>,
     /// The form's default resources (`/DR` of the `/AcroForm`), as the source has them.
     defaults:    Option<Object>,
+    /// Whether the form asks a viewer to redraw its fields (`/NeedAppearances`), which says the stored appearances may
+    /// be out of date.
+    redraws:     bool,
 }
 
 impl<'a, 'd> Copier<'a, 'd> {
     fn new(src: &'a Document, dst: &'d mut Document) -> Self {
-        let defaults = src.catalog().ok().and_then(|c| c.get(b"AcroForm").ok())
-            .and_then(|f| src.dereference(f).ok()?.1.as_dict().ok())
-            .and_then(|form| form.get(b"DR").ok()).cloned();
+        let form = src.catalog().ok().and_then(|c| c.get(b"AcroForm").ok())
+            .and_then(|f| src.dereference(f).ok()?.1.as_dict().ok());
+        let defaults = form.and_then(|form| form.get(b"DR").ok()).cloned();
+        let redraws = form.and_then(|form| form.get(b"NeedAppearances").ok())
+            .and_then(|flag| src.dereference(flag).ok()?.1.as_bool().ok()).unwrap_or(false);
         Copier {
             src, dst,
             map: HashMap::new(),
@@ -323,6 +328,7 @@ impl<'a, 'd> Copier<'a, 'd> {
             used: Vec::new(),
             appearances: HashSet::new(),
             defaults,
+            redraws,
         }
     }
 
@@ -624,7 +630,8 @@ fn media_box(width: f32, height: f32) -> Object {
 // ── Flattening annotations ────────────────────────────────────────────────────
 
 /// Each annotation of a page that prints, with its stored appearance placed by its rectangle. Links and pop-ups draw
-/// nothing. A form field that has a value and no stored appearance is an error: it would print blank.
+/// nothing. A form field that has a value and no stored appearance is an error: it would print blank. So is one that has
+/// a value in a form that asks a viewer to redraw its fields: what is stored may be out of date.
 fn flatten(copier: &mut Copier, page: &Dictionary) -> Result<Vec<Drawn>, String> {
     let src = copier.src;
     let Some(list) = page.get(b"Annots").ok().and_then(|a| src.dereference(a).ok()?.1.as_array().ok()) else {
@@ -641,17 +648,23 @@ fn flatten(copier: &mut Copier, page: &Dictionary) -> Result<Vec<Drawn>, String>
         if flags & FLAG_PRINT == 0 || flags & FLAG_HIDDEN != 0 {
             continue;
         }
-        let Some(appearance) = normal_appearance(src, annotation) else {
-            if subtype == b"Widget" {
-                if let Some(field) = field_with_value(src, annotation) {
-                    return Err(format!(
+        let appearance = normal_appearance(src, annotation);
+        if subtype == b"Widget" && (appearance.is_none() || copier.redraws) {
+            if let Some(field) = field_with_value(src, annotation) {
+                return Err(match appearance {
+                    None => format!(
                         "{field} has a value but no stored appearance, so it would print blank: open the file in a PDF \
                          viewer and save it, which stores the appearance",
-                    ));
-                }
+                    ),
+                    Some(_) => format!(
+                        "{field} has a value, and the form asks a viewer to redraw its fields (NeedAppearances), so the \
+                         stored appearance may be out of date and would print wrong: open the file in a PDF viewer and \
+                         save it, which stores the appearance",
+                    ),
+                });
             }
-            continue;
-        };
+        }
+        let Some(appearance) = appearance else { continue };
         let Some(matrix) = place_appearance(src, appearance.1, annotation) else { continue };
         copier.appearances.insert(appearance.0);
         let layer = match annotation.get(b"OC") {
