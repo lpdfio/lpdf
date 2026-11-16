@@ -182,6 +182,22 @@ mod tests {
     }
 
     #[test]
+    fn a_merge_past_its_deadline_unwinds_as_a_merge_and_the_next_render_does_not() {
+        let unwound = |merge: bool| {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let _deadline = if merge { start_merge(0.001) } else { start(0.001) };
+                std::thread::sleep(Duration::from_millis(5));
+                check_now();
+            }))
+            .err()
+            .and_then(|payload| payload.downcast::<TimedOut>().ok())
+            .map(|timed_out| timed_out.merge)
+        };
+        assert_eq!(unwound(true), Some(true));
+        assert_eq!(unwound(false), Some(false));
+    }
+
+    #[test]
     fn a_counted_check_reads_the_clock_every_so_many_calls() {
         let seconds = timed_out(|| {
             let _deadline = start(0.001);

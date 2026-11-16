@@ -329,7 +329,7 @@ A barcode is never stretched. Docs: [Barcode](https://lpdf.io/docs/doc/layout/ba
 | `merge`: existing PDFs, from different sources, merged into one PDF made for printing, each page at the size it shows at | 0.36.0 | [Merging PDFs for print](https://lpdf.io/docs/merge/) |
 
 - Each page is drawn as it looked, on a page of the size a viewer shows: its crop box, turned by its `/Rotate`. Pages of mixed sizes keep their sizes. The merged file's version is the highest among the files'.
-- An annotation that prints is drawn from its stored appearance: its Print flag is set and its Hidden flag is not, and a check box or a radio button draws the state it is in. Links and pop-ups draw nothing, and so does an annotation with no stored appearance, which a viewer may draw from its properties alone. The merged file holds no annotation.
+- An annotation that prints is drawn from its stored appearance: its Print flag is set and its Hidden flag is not, and a check box or a radio button draws the state it is in. Links and pop-ups draw nothing, and so does an annotation with no stored appearance, which a viewer may draw from its properties alone, and one whose rectangle or appearance box has no area. The merged file holds no annotation.
 - Layers cross over, each on or off as it prints in its file.
 - Left behind: forms and their fields, links, bookmarks, named destinations, the structure of a tagged file, the document's properties and embedded files. The merged file claims no PDF/A, PDF/UA or PDF/X and is not encrypted or linearized.
 - `doubleSided` adds a blank page the size of a document's last page after each document with an odd number of pages, and none after the last.

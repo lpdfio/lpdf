@@ -659,7 +659,7 @@ fn flatten(copier: &mut Copier, page: &Dictionary) -> Result<Vec<Drawn>, String>
                     Some(_) => format!(
                         "{field} has a value, and the form asks a viewer to redraw its fields (NeedAppearances), so the \
                          stored appearance may be out of date and would print wrong: open the file in a PDF viewer and \
-                         save it, which stores the appearance",
+                         print it to a new PDF, which draws each field as the viewer shows it",
                     ),
                 });
             }

@@ -513,13 +513,36 @@ fn a_field_with_a_value_in_a_form_that_asks_for_its_fields_to_be_redrawn_is_an_e
         e,
         "contract.pdf: page 1: the form field 'name' has a value, and the form asks a viewer to redraw its fields \
          (NeedAppearances), so the stored appearance may be out of date and would print wrong: open the file in a PDF \
-         viewer and save it, which stores the appearance",
+         viewer and print it to a new PDF, which draws each field as the viewer shows it",
     );
     // The flag off or absent, or a field with nothing in it, leaves the stored appearance to print.
     for (value, need) in [("Ada", Some(false)), ("Ada", None), ("", Some(true))] {
         let doc = reopen(&merged(&[("f.pdf", &build(value, need))], Options::default()));
         assert_eq!(text(xobject(&doc, 1, "LpdfAnnot0")), "stored", "{value:?} {need:?}");
     }
+}
+
+#[test]
+fn a_check_box_that_is_on_in_a_form_that_asks_for_a_redraw_is_refused_and_the_flag_may_be_an_indirect_object() {
+    let build = |state: &str| {
+        let mut builder = Builder::new("1.7");
+        let id = builder.page(LETTER, "form");
+        let ticked = builder.appearance([0.0, 0.0, 10.0, 10.0], "ticked");
+        let empty = builder.appearance([0.0, 0.0, 10.0, 10.0], "empty");
+        builder.annotate(id, dictionary! {
+            "Type" => "Annot", "Subtype" => "Widget", "FT" => "Btn", "F" => 4, "Rect" => rect([0.0, 0.0, 10.0, 10.0]),
+            "T" => Object::string_literal("agree"), "AS" => state,
+            "AP" => dictionary! { "N" => dictionary! { "Yes" => ticked, "Off" => empty } },
+        });
+        let flag = builder.doc.add_object(true);
+        builder.catalog.set("AcroForm", dictionary! { "Fields" => Vec::<Object>::new(), "NeedAppearances" => flag });
+        builder.save()
+    };
+    let e = error(&[("c.pdf", &build("Yes"))], Options::default());
+    assert!(e.starts_with("c.pdf: page 1: the form field 'agree' has a value, and the form asks a viewer to redraw its fields"), "{e}");
+    // A box that is off has nothing to redraw wrong.
+    let doc = reopen(&merged(&[("c.pdf", &build("Off"))], Options::default()));
+    assert_eq!(text(xobject(&doc, 1, "LpdfAnnot0")), "empty");
 }
 
 #[test]
