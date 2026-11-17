@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <document size="a4">
+    <meta title="lpdf Showcase — Grow receipt" subject="A till receipt one page as long as the order" />
+
+    <!-- A section that grows in height: a till receipt on an 80mm roll, from a starting size of 80mm by 40mm. The
+         flow is one page as tall as the content and the margin, and the printer cuts the paper where it ends.
+         Expected, top to bottom, on one page 80mm wide and far taller than 40mm:
+           1  The shop's name and address, centred
+           2  Thirty lines of the order: the quantity, the item, which wraps when it is long, and the amount on the
+              right
+           3  The subtotal, the tax and the total
+           4  The card slip, which asks for a page break before it and starts none: it follows the total
+           5  The footer, pinned to the bottom, right under the slip, not at the foot of the starting size
+    -->
+    <section size="80mm 40mm" grow="height">
+      <layout margin="4mm">
+        <text font-size="l" bold="true" align="center">The Harbour Café</text>
+        <text font-size="s" align="center">12 Quay Street, Port Erin</text>
+        <text font-size="s" align="center">Till 2 · 17 Nov 2026, 10:42 · Receipt 004817</text>
+        <divider/>
+        <table cols="15pt auto 35pt" gap="xs">
+          <tr><td><text font-size="s">2</text></td><td><text font-size="s">Flat white</text></td><td><text font-size="s" align="right">7.00</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Almond croissant</text></td><td><text font-size="s" align="right">4.20</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Smoked salmon on rye, with capers and dill</text></td><td><text font-size="s" align="right">11.50</text></td></tr>
+          <tr><td><text font-size="s">3</text></td><td><text font-size="s">Sparkling water</text></td><td><text font-size="s" align="right">4.80</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Porridge with berries</text></td><td><text font-size="s" align="right">6.40</text></td></tr>
+          <tr><td><text font-size="s">2</text></td><td><text font-size="s">Cappuccino, oat milk</text></td><td><text font-size="s" align="right">7.60</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Full harbour breakfast: eggs, bacon, black pudding, beans, mushrooms and toast</text></td><td><text font-size="s" align="right">14.90</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Extra toast</text></td><td><text font-size="s" align="right">1.50</text></td></tr>
+          <tr><td><text font-size="s">2</text></td><td><text font-size="s">Orange juice, fresh</text></td><td><text font-size="s" align="right">6.00</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Kipper and poached egg</text></td><td><text font-size="s" align="right">10.80</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Pot of tea for two</text></td><td><text font-size="s" align="right">5.20</text></td></tr>
+          <tr><td><text font-size="s">4</text></td><td><text font-size="s">Scone with clotted cream and jam</text></td><td><text font-size="s" align="right">14.00</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Hot chocolate</text></td><td><text font-size="s" align="right">3.90</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Crab sandwich on granary</text></td><td><text font-size="s" align="right">9.80</text></td></tr>
+          <tr><td><text font-size="s">2</text></td><td><text font-size="s">Soup of the day: leek and potato, with bread</text></td><td><text font-size="s" align="right">13.00</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Children's pancakes</text></td><td><text font-size="s" align="right">5.50</text></td></tr>
+          <tr><td><text font-size="s">2</text></td><td><text font-size="s">Apple juice</text></td><td><text font-size="s" align="right">5.00</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Espresso, double</text></td><td><text font-size="s" align="right">3.10</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Lemon drizzle cake</text></td><td><text font-size="s" align="right">3.80</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Bakewell tart</text></td><td><text font-size="s" align="right">3.80</text></td></tr>
+          <tr><td><text font-size="s">3</text></td><td><text font-size="s">Still water</text></td><td><text font-size="s" align="right">4.20</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Queenie scallops in garlic butter, with a green salad and new potatoes</text></td><td><text font-size="s" align="right">16.50</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Side of chips</text></td><td><text font-size="s" align="right">3.50</text></td></tr>
+          <tr><td><text font-size="s">2</text></td><td><text font-size="s">Latte</text></td><td><text font-size="s" align="right">7.20</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Brownie, warm, with ice cream</text></td><td><text font-size="s" align="right">5.90</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Cheese toastie</text></td><td><text font-size="s" align="right">6.80</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Tomato soup</text></td><td><text font-size="s" align="right">5.80</text></td></tr>
+          <tr><td><text font-size="s">2</text></td><td><text font-size="s">Ginger beer</text></td><td><text font-size="s" align="right">5.60</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Flapjack</text></td><td><text font-size="s" align="right">2.90</text></td></tr>
+          <tr><td><text font-size="s">1</text></td><td><text font-size="s">Bag of fudge to take away</text></td><td><text font-size="s" align="right">4.50</text></td></tr>
+        </table>
+        <divider/>
+        <row justify="between">
+          <text font-size="s">Subtotal</text>
+          <text font-size="s">204.70</text>
+        </row>
+        <row justify="between">
+          <text font-size="s">of which VAT at 20%</text>
+          <text font-size="s">34.12</text>
+        </row>
+        <row justify="between">
+          <text bold="true">Total</text>
+          <text bold="true">204.70</text>
+        </row>
+        <column paginate="break-before" gap="xs">
+          <divider/>
+          <text font-size="s" bold="true" align="center">Card payment</text>
+          <row justify="between">
+            <text font-size="s">Visa debit ···· 4417</text>
+            <text font-size="s">204.70</text>
+          </row>
+          <text font-size="s">Contactless · Approved · Auth 381926</text>
+          <text font-size="s">Please keep this receipt for your records.</text>
+        </column>
+        <region pin="bottom">
+          <divider/>
+          <text font-size="s" align="center">Thank you, and see you soon</text>
+        </region>
+      </layout>
+    </section>
+  </document>
+</lpdf>
