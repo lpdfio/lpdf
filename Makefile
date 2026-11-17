@@ -16,7 +16,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         build-sdk-node build-sdk-dotnet build-sdk-php build-sdk-python build-sdk-java \
         build-vscode package-vscode install-vscode \
         test-sdk-node test-sdk-dotnet test-sdk-php test-sdk-python test-sdk-java \
-        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api gen-third-party-licenses check-third-party-licenses gen-codegen-corpus check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-spot check-facturx check-ocg check-merge check-codegen-sdk-node check-codegen-sdk-dotnet check-codegen-sdk-php check-codegen-sdk-python check-codegen-sdk-java check-codegen-sdks check-function-sizes \
+        benchmark benchmark-x gen-fixtures codegen gen-sdk-api check-sdk-api gen-third-party-licenses check-third-party-licenses gen-codegen-corpus check-encryption check-linearization check-attachments check-pdfa check-pdfua check-pdfx check-spot check-facturx check-ocg check-merge check-js-build check-codegen-sdk-node check-codegen-sdk-dotnet check-codegen-sdk-php check-codegen-sdk-python check-codegen-sdk-java check-codegen-sdks check-function-sizes \
         clean-wasm clean-wasi clean-adapter-node clean-adapter-dotnet clean-adapter-php clean-adapter-python clean-adapter-java clean-all \
         build-all test-all example-all \
         example-node example-dotnet example-php example-python example-java \
@@ -204,6 +204,18 @@ check-merge:
 	rm -rf target/merge-samples && mkdir -p target/merge-samples
 	LPDF_MERGE_OUT="$(CURDIR)/target/merge-samples" cargo test --manifest-path src/core/Cargo.toml --lib writes_merge_samples_for_the_external_check
 	node scripts/check-merge.mjs target/merge-samples target/pdfjs $(if $(MERGE_PNG),--png $(MERGE_PNG))
+
+# check-js-build builds the engine for Node as the release does, with wasm-pack and its wasm-opt, and runs it through a
+# render, renders encrypted with AES-256 and RC4-128, and merges (`scripts/check-js-build.mjs`): the core's tests run
+# natively, so they can't see a fault that only the JS build's code has. Needs wasm-pack, the wasm32-unknown-unknown
+# target and Node.
+check-js-build:
+	@echo ""
+	@echo "-------------------------------"
+	@echo ">>> Checking the JS build of the engine..."
+	@echo ""
+	wasm-pack build src/core --target nodejs --out-dir ../../dist/node
+	node scripts/check-js-build.mjs dist/node
 
 # check-function-sizes builds the WASI engine and fails when one of its functions is over 40 KB: the Java SDK compiles
 # each function to one JVM method, which holds at most 64 KB of bytecode, and its bytecode comes to as much as 1.6 times
