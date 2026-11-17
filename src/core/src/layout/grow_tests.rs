@@ -224,6 +224,23 @@ fn auto_and_fr_columns_beside_fixed_and_percent_ones_keep_their_longest_word() {
 }
 
 #[test]
+fn percents_that_add_up_to_the_whole_table_grow_no_page() {
+    // Added up one by one as fractions, some of these come out a rounding step under the whole.
+    for (cols, attrs) in [
+        ("60% 40% auto", ""),
+        ("2% 78% 20% auto", ""),
+        ("78% 2% 20% auto", ""),
+        ("2.8% 97.2% auto", ""),
+        ("35% 45% 20%", r#" gap="6pt""#),
+        ("100pt 35% 45% 20%", r#" gap="6pt""#),
+    ] {
+        let cells: String = cols.split(' ').map(|_| "<td><text>Cell</text></td>").collect();
+        let page = one_page(&document(r#"grow="width""#, &format!(r#"<table cols="{cols}"{attrs}><tr>{cells}</tr></table>"#)));
+        assert!(close(size(&page).0, A5_WIDTH), "{cols}{attrs}: {:?}", size(&page));
+    }
+}
+
+#[test]
 fn auto_columns_given_just_their_longest_words_keep_them() {
     // The page is as wide as gives the four auto columns the sum of their longest words, which they add up to a
     // rounding step under in another order.

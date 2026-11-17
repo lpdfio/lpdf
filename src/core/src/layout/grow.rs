@@ -125,7 +125,8 @@ fn grow_width(node: &Node) -> f32 {
 /// is at least as wide as the columns with a width of their own, the gaps and the longest word of each `auto` and
 /// `fr` column need to fit beside its `%` columns: those share what the `%` ones leave, and can wrap but not be
 /// squeezed to nothing. When the `%` columns add up to the whole table, no width fits them, and the table is measured
-/// as without them.
+/// as without them. Their shares are added up as written, in percent, and a total within a rounding step of 100 is the
+/// whole table: as fractions, 2%, 78% and 20% add up to a little under 1, which would grow the page without end.
 fn table_width(node: &Node) -> f32 {
     let units = col_units(&node.table_cols);
     if units.is_empty() {
@@ -143,14 +144,15 @@ fn table_width(node: &Node) -> f32 {
         _ => extent.max,
     }).sum();
     let gaps = node.gap * (units.len() - 1) as f32;
-    let (least, percent) = units.iter().zip(&extents).fold((gaps, 0.0_f32), |(least, percent), (unit, extent)| {
+    let (least, shares) = units.iter().zip(&extents).fold((gaps, 0.0_f32), |(least, shares), (unit, extent)| {
         match unit {
-            ColUnit::Pt(width) => (least + width, percent),
-            ColUnit::Pct(share) => (least, percent + share / 100.0),
-            _ => (least + extent.min, percent),
+            ColUnit::Pt(width) => (least + width, shares),
+            ColUnit::Pct(share) => (least, shares + share),
+            _ => (least + extent.min, shares),
         }
     });
-    let beside_percents = if percent < 1.0 { least / (1.0 - percent) } else { 0.0 };
+    let left = 100.0 - shares;
+    let beside_percents = if left > 1e-3 { least * 100.0 / left } else { 0.0 };
     let [_, pr, _, pl] = node.padding;
     (columns + gaps).max(beside_percents) + pl + pr
 }
