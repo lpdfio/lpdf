@@ -181,6 +181,34 @@ fn fr_and_percent_columns_grow_the_page_as_auto_columns_do() {
 }
 
 #[test]
+fn a_fixed_column_keeps_its_width_beside_percent_columns() {
+    // A % column is a share of the whole table, so 400pt beside 50% needs a table of 800pt, gaps and padding added.
+    for (cols, attrs, table) in [
+        ("400pt 50%", "", 800.0),
+        ("400pt 25% 25%", "", 800.0),
+        ("400pt 50%", r#" gap="10pt" padding="5pt""#, 820.0 + 10.0),
+    ] {
+        let page = one_page(&document(r#"grow="width""#, &format!(
+            r#"<table cols="{cols}"{attrs}><tr><td><text>Fixed</text></td><td><text align="right">Short</text></td>{}</tr></table>"#,
+            if cols.matches('%').count() == 2 { "<td><text>Third</text></td>" } else { "" },
+        )));
+        let width = size(&page).0;
+        assert!(close(width, table + 2.0 * MARGIN), "{cols}{attrs}: {width}");
+        // A text aligned right is placed by its right edge, the right of the % cell.
+        let short = nodes(&page).into_iter().find(|v| v["type"] == "text" && v["content"] == "Short").unwrap();
+        let right = short["x"].as_f64().unwrap();
+        assert!(right <= width - MARGIN + 0.02, "{cols}{attrs}: the % cell ends inside the page: {right}, {width}");
+    }
+    // An fr column shares only what the fixed ones leave, and percents that take the whole table fit no width.
+    for cols in ["400pt 1fr", "100pt 100%"] {
+        let page = one_page(&document(r#"grow="width""#, &format!(
+            r#"<table cols="{cols}"><tr><td><text>Fixed</text></td><td><text>Short</text></td></tr></table>"#
+        )));
+        assert!(size(&page).0 < 500.0, "{cols}: measured by its cells: {:?}", size(&page));
+    }
+}
+
+#[test]
 fn a_box_or_an_image_of_a_fixed_width_grows_the_page() {
     let boxed = one_page(&document(r#"grow="width""#, r##"<column width="700pt" background="#eeeeee"><text>Wide</text></column>"##));
     assert!(close(size(&boxed).0, 700.0 + 2.0 * MARGIN), "{:?}", size(&boxed));

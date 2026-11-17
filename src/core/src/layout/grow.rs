@@ -121,24 +121,34 @@ fn grow_width(node: &Node) -> f32 {
 /// The width a table needs not to be squeezed: each column with a width of its own at it, and each other one, a share
 /// of the page (`fr`, `%`) as an `auto` one, as wide as its cells on one line. A cell that spans columns gives what it
 /// lacks to the ones without a width of their own, as the table lays them out (`table_col_widths`), so a long cell
-/// over a fixed and an `auto` column widens the `auto` one.
+/// over a fixed and an `auto` column widens the `auto` one. A `%` column is a share of the whole table, so the table
+/// is at least as wide as the columns with a width of their own and the gaps need to fit beside its `%` columns. When
+/// those add up to the whole table, no width fits them, and the table is measured as without them.
 fn table_width(node: &Node) -> f32 {
-    let units: Vec<ColUnit> = col_units(&node.table_cols).into_iter()
-        .map(|unit| match unit {
-            ColUnit::Pt(width) => ColUnit::Pt(width),
-            _ => ColUnit::Auto,
-        })
-        .collect();
+    let units = col_units(&node.table_cols);
     if units.is_empty() {
         return 0.0;
     }
-    let extents = column_extents(&node.children, &units, 0.0, node.gap, false);
-    let columns: f32 = units.iter().zip(&extents).map(|(unit, extent)| match unit {
+    let measured: Vec<ColUnit> = units.iter()
+        .map(|unit| match unit {
+            ColUnit::Pt(width) => ColUnit::Pt(*width),
+            _ => ColUnit::Auto,
+        })
+        .collect();
+    let extents = column_extents(&node.children, &measured, 0.0, node.gap, false);
+    let columns: f32 = measured.iter().zip(&extents).map(|(unit, extent)| match unit {
         ColUnit::Pt(width) => *width,
         _ => extent.max,
     }).sum();
+    let gaps = node.gap * (units.len() - 1) as f32;
+    let (fixed, percent) = units.iter().fold((0.0_f32, 0.0_f32), |(fixed, percent), unit| match unit {
+        ColUnit::Pt(width) => (fixed + width, percent),
+        ColUnit::Pct(share) => (fixed, percent + share / 100.0),
+        _ => (fixed, percent),
+    });
+    let beside_percents = if percent < 1.0 { (fixed + gaps) / (1.0 - percent) } else { 0.0 };
     let [_, pr, _, pl] = node.padding;
-    columns + node.gap * (units.len() - 1) as f32 + pl + pr
+    (columns + gaps).max(beside_percents) + pl + pr
 }
 
 /// The height the page of `page` needs at its width for its content, `parts`, to be one page, as `fill_pages` fills it:
