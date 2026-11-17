@@ -122,8 +122,10 @@ fn grow_width(node: &Node) -> f32 {
 /// of the page (`fr`, `%`) as an `auto` one, as wide as its cells on one line. A cell that spans columns gives what it
 /// lacks to the ones without a width of their own, as the table lays them out (`table_col_widths`), so a long cell
 /// over a fixed and an `auto` column widens the `auto` one. A `%` column is a share of the whole table, so the table
-/// is at least as wide as the columns with a width of their own and the gaps need to fit beside its `%` columns. When
-/// those add up to the whole table, no width fits them, and the table is measured as without them.
+/// is at least as wide as the columns with a width of their own, the gaps and the longest word of each `auto` and
+/// `fr` column need to fit beside its `%` columns: those share what the `%` ones leave, and can wrap but not be
+/// squeezed to nothing. When the `%` columns add up to the whole table, no width fits them, and the table is measured
+/// as without them.
 fn table_width(node: &Node) -> f32 {
     let units = col_units(&node.table_cols);
     if units.is_empty() {
@@ -141,12 +143,14 @@ fn table_width(node: &Node) -> f32 {
         _ => extent.max,
     }).sum();
     let gaps = node.gap * (units.len() - 1) as f32;
-    let (fixed, percent) = units.iter().fold((0.0_f32, 0.0_f32), |(fixed, percent), unit| match unit {
-        ColUnit::Pt(width) => (fixed + width, percent),
-        ColUnit::Pct(share) => (fixed, percent + share / 100.0),
-        _ => (fixed, percent),
+    let (least, percent) = units.iter().zip(&extents).fold((gaps, 0.0_f32), |(least, percent), (unit, extent)| {
+        match unit {
+            ColUnit::Pt(width) => (least + width, percent),
+            ColUnit::Pct(share) => (least, percent + share / 100.0),
+            _ => (least + extent.min, percent),
+        }
     });
-    let beside_percents = if percent < 1.0 { (fixed + gaps) / (1.0 - percent) } else { 0.0 };
+    let beside_percents = if percent < 1.0 { least / (1.0 - percent) } else { 0.0 };
     let [_, pr, _, pl] = node.padding;
     (columns + gaps).max(beside_percents) + pl + pr
 }

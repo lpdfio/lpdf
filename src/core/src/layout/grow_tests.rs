@@ -209,6 +209,21 @@ fn a_fixed_column_keeps_its_width_beside_percent_columns() {
 }
 
 #[test]
+fn auto_and_fr_columns_beside_fixed_and_percent_ones_keep_their_longest_word() {
+    let words = ["Grand", "total", "due", "this", "month"];
+    for cols in ["300pt 30% auto", "300pt 30% 1fr"] {
+        let page = one_page(&document(r#"grow="width""#, &format!(
+            r#"<table cols="{cols}"><tr><td><text>Fixed</text></td><td><text>Short</text></td><td><text>{}</text></td></tr></table>"#,
+            words.join(" "),
+        )));
+        // The third column shares what the 30% leaves, so its cell can wrap, but only between words.
+        let lines: Vec<&str> = texts(&page).into_iter().filter(|t| !["Fixed", "Short"].contains(t)).collect();
+        assert_eq!(lines.join(" "), words.join(" "), "{cols}: {lines:?}");
+        assert!(lines.iter().all(|line| line.split(' ').all(|word| words.contains(&word))), "{cols}: {lines:?}");
+    }
+}
+
+#[test]
 fn a_box_or_an_image_of_a_fixed_width_grows_the_page() {
     let boxed = one_page(&document(r#"grow="width""#, r##"<column width="700pt" background="#eeeeee"><text>Wide</text></column>"##));
     assert!(close(size(&boxed).0, 700.0 + 2.0 * MARGIN), "{:?}", size(&boxed));
