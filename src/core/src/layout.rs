@@ -11,6 +11,8 @@ mod table_grid;
 mod rests;
 #[path = "layout/bulk.rs"]
 mod bulk;
+#[path = "layout/grow.rs"]
+mod grow;
 #[cfg(test)]
 #[path = "layout/row_split_tests.rs"]
 mod row_split_tests;
@@ -41,6 +43,9 @@ mod rest_window_tests;
 #[cfg(test)]
 #[path = "layout/bulk_tests.rs"]
 mod bulk_tests;
+#[cfg(test)]
+#[path = "layout/grow_tests.rs"]
+mod grow_tests;
 pub(crate) use table_grid::{Held, Placed};
 use table_grid::TableGrid;
 use rests::{Reached, Rest, Waiting};
@@ -350,6 +355,9 @@ pub(crate) enum FilledSection {
     Laid(Vec<RenderPage>),
     /// A section with a header or a footer.
     Chrome(ChromePages),
+    /// A section whose page grows to fit its content (`grow`): the section at the size it grew to, which is finished
+    /// as it was filled, and its pages.
+    Grown(Box<SectionLayout>, Box<FilledSection>),
 }
 
 impl FilledSection {
@@ -358,6 +366,7 @@ impl FilledSection {
             Self::Laid(pages)   => pages.len(),
             // A section whose flow is empty is one page, with its header and footer.
             Self::Chrome(chrome) => chrome.pages.len().max(1),
+            Self::Grown(_, filled) => filled.page_count(),
         }
     }
 }
@@ -375,7 +384,18 @@ pub(crate) struct ChromePages {
 }
 
 /// Fill the pages of `page`, whose first page has the number `first_number`: all of it but what shows their numbers.
+/// A section that grows is filled at the size its page grows to.
 pub(crate) fn fill_section(page: &SectionLayout, first_number: u64) -> FilledSection {
+    if page.grow.any() {
+        let grown = grow::grown(page);
+        let filled = fill_at_size(&grown, first_number);
+        return FilledSection::Grown(Box::new(grown), Box::new(filled));
+    }
+    fill_at_size(page, first_number)
+}
+
+/// `fill_section` for a section at the size of its pages.
+fn fill_at_size(page: &SectionLayout, first_number: u64) -> FilledSection {
     if !page.tagged {
         return fill_pages(page, first_number);
     }
@@ -390,6 +410,9 @@ pub(crate) fn fill_section(page: &SectionLayout, first_number: u64) -> FilledSec
 /// Finish the pages `fill_section` filled for `page`, which have `numbers`: the header and the footer, the layers,
 /// the outlines of `debug` and the section's own bookmark.
 pub(crate) fn finish_section(page: &SectionLayout, filled: FilledSection, numbers: &SectionNumbers) -> Vec<RenderPage> {
+    if let FilledSection::Grown(grown, filled) = filled {
+        return finish_section(&grown, *filled, numbers);
+    }
     if page.tagged {
         with_tagging(|| finish_pages(page, filled, numbers))
     } else {
@@ -416,6 +439,7 @@ fn finish_pages(page: &SectionLayout, filled: FilledSection, numbers: &SectionNu
     let mut pages = match filled {
         FilledSection::Laid(pages)    => pages,
         FilledSection::Chrome(chrome) => finish_chrome(page, chrome, numbers),
+        FilledSection::Grown(grown, filled) => return finish_pages(&grown, *filled, numbers),
     };
     for rp in &mut pages {
         apply_debug_overlay(&mut rp.nodes);
@@ -536,6 +560,81 @@ pub(crate) fn has_page_tokens(node: &Node) -> bool {
     node.text_runs.iter().any(|run| run.text.contains("{page")) || node.children.iter().any(has_page_tokens)
 }
 
+/// The children of a section, ready to fill its pages: the header in front of the flow, the flow and the footer behind
+/// it, and whether the flow holds footnotes.
+struct SectionFlow {
+    top:       Vec<Node>,
+    flow:      Vec<Node>,
+    bottom:    Vec<Node>,
+    has_notes: bool,
+}
+
+/// Where the flow is among a section's children: between the regions written in front of it and behind it, which
+/// are its header and footer.
+fn flow_range(children: &[Node]) -> Range<usize> {
+    let mut lead = 0usize;
+    while lead < children.len() && children[lead].page_scope.is_some() {
+        lead += 1;
+    }
+    let mut trail_start = children.len();
+    while trail_start > lead && children[trail_start - 1].page_scope.is_some() {
+        trail_start -= 1;
+    }
+    lead..trail_start
+}
+
+/// Part the children of `page` into its header, its flow and its footer, and make them ready to fill its pages: the
+/// pages of a section that grows (`grow`) and the size it grows to are worked out from the same nodes.
+fn section_flow(page: &SectionLayout) -> SectionFlow {
+    let range = flow_range(&page.children);
+    // A text with `capture-ref` takes its lines whatever it shows, so the chrome is measured before it is filled.
+    let top: Vec<Node> = page.children[..range.start].iter().cloned().map(reserve_sink_lines).collect();
+    // Defensive: a repeat child stuck in the middle is treated as flow (acts like an atomic node that appears once,
+    // not chrome).
+    let mut flow: Vec<Node> = page.children[range.clone()].to_vec();
+    let bottom: Vec<Node> = page.children[range.end..].iter().cloned().map(reserve_sink_lines).collect();
+    // A section that grows measures all of a bulk container's records for its width, and a page that grows in height
+    // holds them all, so the records are bound at once.
+    if page.grow.any() {
+        for node in flow.iter_mut() {
+            if let Some(records) = node.bulk_records().cloned() {
+                let whole = std::mem::replace(node, Node::layout_default());
+                *node = Bulk::new(whole, records).into_node();
+            }
+        }
+    }
+    // Texts that capture say their words whole before the flow is split; one in the flow that shows a capture
+    // shows its fallback.
+    for node in flow.iter_mut() {
+        record_captures(node);
+        fill_sinks(node, &PageCaptures::new(), &HashMap::new());
+    }
+
+    // The notes of the footnotes take room at the bottom of their page, and are numbered once the counter is known.
+    let has_notes = footnotes::has_footnotes(&flow);
+    if has_notes {
+        footnotes::number_flow(&mut flow, page.footnote_counter, page.footnote_start);
+    }
+    SectionFlow { top, flow, bottom, has_notes }
+}
+
+/// The pages of a section's `flow`, filled one at a time (`footnotes::split_flow`), or for a section whose page grows
+/// in height (`grow`) one page that holds all of it and every note: no page breaks there, as a `break-before` would.
+fn flow_pages<'a>(
+    page:         &SectionLayout,
+    flow:         &'a [Node],
+    start:        Option<FlowStart>,
+    avail_w:      f32,
+    budget_first: f32,
+    budget_rest:  f32,
+    has_notes:    bool,
+) -> Box<dyn Iterator<Item = footnotes::FlowPage> + 'a> {
+    if page.grow.height {
+        return Box::new(std::iter::once(footnotes::one_page(flow, avail_w, budget_first, page.footnote_counter, has_notes)));
+    }
+    Box::new(footnotes::split_flow(flow, start, avail_w, budget_first, budget_rest, page.gap, page.footnote_counter, has_notes))
+}
+
 fn fill_pages(page: &SectionLayout, first_number: u64) -> FilledSection {
     let [mt, mr, mb, ml] = page.margin;
     let avail_x = ml;
@@ -572,43 +671,14 @@ fn fill_pages(page: &SectionLayout, first_number: u64) -> FilledSection {
         }]);
     }
 
-    // ── Partition direct children into chrome (top/bottom) and flow ──────────
-    let mut lead = 0usize;
-    while lead < page.children.len() && page.children[lead].page_scope.is_some() {
-        lead += 1;
-    }
-    let mut trail_start = page.children.len();
-    while trail_start > lead && page.children[trail_start - 1].page_scope.is_some() {
-        trail_start -= 1;
-    }
-    // A text with `capture-ref` takes its lines whatever it shows, so the chrome is measured before it is filled.
-    let top_chrome: Vec<Node> = page.children[..lead].iter().cloned().map(reserve_sink_lines).collect();
-    let mut flow: Vec<Node> = page.children[lead..trail_start]
-        .iter()
-        // Defensive: a repeat child stuck in the middle is treated as flow
-        // (acts like an atomic node that appears once, not chrome).
-        .cloned()
-        .collect();
-    let bot_chrome: Vec<Node> = page.children[trail_start..].iter().cloned().map(reserve_sink_lines).collect();
-    // Texts that capture say their words whole before the flow is split; one in the flow that shows a capture
-    // shows its fallback.
-    for node in flow.iter_mut() {
-        record_captures(node);
-        fill_sinks(node, &PageCaptures::new(), &HashMap::new());
-    }
-
-    // The notes of the footnotes take room at the bottom of their page, and are numbered once the counter is known.
-    let has_notes = footnotes::has_footnotes(&flow);
-    if has_notes {
-        footnotes::number_flow(&mut flow, page.footnote_counter, page.footnote_start);
-    }
+    let SectionFlow { top: top_chrome, flow, bottom: bot_chrome, has_notes } = section_flow(page);
 
     // Fast path: no chrome — standard pagination.
     if !in_columns && top_chrome.is_empty() && bot_chrome.is_empty() {
         // Each page is laid out as soon as it is filled, so that its nodes and the trees kept for them don't wait
         // for the pages after it.
         let start = FlowStart { x: avail_x, first_y: avail_y, rest_y: avail_y };
-        return FilledSection::Laid(footnotes::split_flow(&flow, Some(start), avail_w, avail_h, avail_h, page.gap, page.footnote_counter, has_notes)
+        return FilledSection::Laid(flow_pages(page, &flow, Some(start), avail_w, avail_h, avail_h, has_notes)
             .map(|chunk| {
                 let room = avail_h - chunk.reserve;
                 let (nodes, used) = layout_column_kept(
@@ -655,7 +725,7 @@ fn fill_pages(page: &SectionLayout, first_number: u64) -> FilledSection {
             top: top_chrome, bottom: bot_chrome, budget_first, budget_rest, pages, insets: page.insets.clone(),
         });
     }
-    let chunks: Vec<FilledPage> = footnotes::split_flow(&flow, start, avail_w, budget_first, budget_rest, page.gap, page.footnote_counter, has_notes)
+    let chunks: Vec<FilledPage> = flow_pages(page, &flow, start, avail_w, budget_first, budget_rest, has_notes)
         .enumerate()
         .map(|(idx, chunk)| {
             let flow_budget = if idx == 0 { budget_first } else { budget_rest };

@@ -44,6 +44,8 @@ pub struct CanvasRect {
     pub radius:       Option<f32>,
     pub shadow:       Option<Shadow>,
     pub ocg:          Option<Ocg>,
+    /// The point of the page `x` and `y` are measured from (`anchor`); `None` for the top left corner.
+    pub anchor:       Option<Anchor>,
 }
 
 /// Circle: `cx`/`cy` is the centre point, worked out from the box `x` and `y` place.
@@ -58,6 +60,8 @@ pub struct CanvasCircle {
     pub stroke_dash:  Option<String>,
     pub shadow:       Option<Shadow>,
     pub ocg:          Option<Ocg>,
+    /// The point of the page the box's `x` and `y` are measured from (`anchor`); `None` for the top left corner.
+    pub anchor:       Option<Anchor>,
 }
 
 /// Ellipse: `cx`/`cy` is the centre point, worked out from the box `x` and `y` place.
@@ -73,6 +77,8 @@ pub struct CanvasEllipse {
     pub stroke_dash:  Option<String>,
     pub shadow:       Option<Shadow>,
     pub ocg:          Option<Ocg>,
+    /// The point of the page the box's `x` and `y` are measured from (`anchor`); `None` for the top left corner.
+    pub anchor:       Option<Anchor>,
 }
 
 /// Line: no anchor — absolute coordinates always required.
@@ -164,6 +170,24 @@ impl CanvasLayer {
                 // Its group is the layer's.
                 CanvasPrimitive::Ruling(_)  => {}
             }
+        }
+    }
+
+    /// Move what the layer places from a point of the page other than its top left corner (`anchor`) to that point
+    /// of a page that grew by `dw` and `dh` (`grow`). A plain `x` and `y` count from the top left, and stay.
+    pub(crate) fn follow_grown_page(&mut self, dw: f32, dh: f32) {
+        let moved = |anchor: Option<&Anchor>| anchor.map_or((0.0, 0.0), |anchor| resolve_anchor(anchor, dw, dh));
+        for child in &mut self.children {
+            let (x, y, (dx, dy)) = match child {
+                CanvasPrimitive::Rect(r)    => (&mut r.x, &mut r.y, moved(r.anchor.as_ref())),
+                CanvasPrimitive::Circle(c)  => (&mut c.cx, &mut c.cy, moved(c.anchor.as_ref())),
+                CanvasPrimitive::Ellipse(e) => (&mut e.cx, &mut e.cy, moved(e.anchor.as_ref())),
+                CanvasPrimitive::Placed(p)  => (&mut p.x, &mut p.y, moved(Some(&p.anchor))),
+                // A line and a path have no anchor, and the section draws its ruling again.
+                CanvasPrimitive::Line(_) | CanvasPrimitive::Path(_) | CanvasPrimitive::Ruling(_) => continue,
+            };
+            *x += dx;
+            *y += dy;
         }
     }
 
@@ -336,7 +360,8 @@ fn parse_canvas_rect(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_
     let radius       = elem.attribute("radius").map(parse_measurement).transpose()?;
     let shadow       = opt_canvas_shadow(elem, tokens)?;
     let ocg          = opt_ocg(elem)?;
-    Ok(CanvasPrimitive::Rect(CanvasRect { x, y, w, h, fill, stroke, stroke_width, stroke_dash, radius, shadow, ocg }))
+    let anchor       = elem.attribute("anchor").map(parse_anchor).transpose()?;
+    Ok(CanvasPrimitive::Rect(CanvasRect { x, y, w, h, fill, stroke, stroke_width, stroke_dash, radius, shadow, ocg, anchor }))
 }
 
 fn parse_canvas_circle(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_h: f32) -> Result<CanvasPrimitive, String> {
@@ -349,7 +374,8 @@ fn parse_canvas_circle(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, pag
     let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
     let shadow       = opt_canvas_shadow(elem, tokens)?;
     let ocg          = opt_ocg(elem)?;
-    Ok(CanvasPrimitive::Circle(CanvasCircle { cx, cy, r, fill, stroke, stroke_width, stroke_dash, shadow, ocg }))
+    let anchor       = elem.attribute("anchor").map(parse_anchor).transpose()?;
+    Ok(CanvasPrimitive::Circle(CanvasCircle { cx, cy, r, fill, stroke, stroke_width, stroke_dash, shadow, ocg, anchor }))
 }
 
 fn parse_canvas_ellipse(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, page_h: f32) -> Result<CanvasPrimitive, String> {
@@ -363,7 +389,8 @@ fn parse_canvas_ellipse(elem: &roxmltree::Node, tokens: &Tokens, page_w: f32, pa
     let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
     let shadow       = opt_canvas_shadow(elem, tokens)?;
     let ocg          = opt_ocg(elem)?;
-    Ok(CanvasPrimitive::Ellipse(CanvasEllipse { cx, cy, rx, ry, fill, stroke, stroke_width, stroke_dash, shadow, ocg }))
+    let anchor       = elem.attribute("anchor").map(parse_anchor).transpose()?;
+    Ok(CanvasPrimitive::Ellipse(CanvasEllipse { cx, cy, rx, ry, fill, stroke, stroke_width, stroke_dash, shadow, ocg, anchor }))
 }
 
 fn parse_canvas_line(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPrimitive, String> {
@@ -530,6 +557,9 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
     let get_ocg = || -> Result<Option<Ocg>, String> {
         get_attr("ocg").map(Ocg::of).transpose()
     };
+    let get_anchor = || -> Result<Option<Anchor>, String> {
+        get_attr("anchor").map(parse_anchor).transpose()
+    };
     let get_f32 = |k: &str| -> Result<Option<f32>, String> {
         get_attr(k).map(parse_measurement).transpose()
     };
@@ -572,6 +602,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
                 radius:       get_f32("radius")?,
                 shadow:       get_shadow()?,
                 ocg:          get_ocg()?,
+                anchor:       get_anchor()?,
             }))
         }
         "circle" => {
@@ -585,6 +616,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
                 stroke_dash:  get_attr("stroke-dash").map(str::to_string),
                 shadow:       get_shadow()?,
                 ocg:          get_ocg()?,
+                anchor:       get_anchor()?,
             }))
         }
         "ellipse" => {
@@ -599,6 +631,7 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
                 stroke_dash:  get_attr("stroke-dash").map(str::to_string),
                 shadow:       get_shadow()?,
                 ocg:          get_ocg()?,
+                anchor:       get_anchor()?,
             }))
         }
         "line" => Ok(CanvasPrimitive::Line(CanvasLine {
@@ -734,13 +767,13 @@ pub(crate) fn draw_flow_shape(shape: &Shape, radius: f32, x: f32, y: f32, w: f32
     let (cx, cy) = (x + w / 2.0, y + h / 2.0);
     let primitive = match shape.kind {
         ShapeKind::Rect => CanvasPrimitive::Rect(CanvasRect {
-            x, y, w, h, fill, stroke, stroke_width, stroke_dash, radius: Some(radius), shadow: None, ocg: None,
+            x, y, w, h, fill, stroke, stroke_width, stroke_dash, radius: Some(radius), shadow: None, ocg: None, anchor: None,
         }),
         ShapeKind::Circle => CanvasPrimitive::Circle(CanvasCircle {
-            cx, cy, r: w / 2.0, fill, stroke, stroke_width, stroke_dash, shadow: None, ocg: None,
+            cx, cy, r: w / 2.0, fill, stroke, stroke_width, stroke_dash, shadow: None, ocg: None, anchor: None,
         }),
         ShapeKind::Ellipse => CanvasPrimitive::Ellipse(CanvasEllipse {
-            cx, cy, rx: w / 2.0, ry: h / 2.0, fill, stroke, stroke_width, stroke_dash, shadow: None, ocg: None,
+            cx, cy, rx: w / 2.0, ry: h / 2.0, fill, stroke, stroke_width, stroke_dash, shadow: None, ocg: None, anchor: None,
         }),
         ShapeKind::Checkbox => return draw_checkbox(shape, radius, x, y, w, h),
     };
@@ -763,7 +796,7 @@ fn draw_checkbox(shape: &Shape, radius: f32, x: f32, y: f32, w: f32, h: f32) -> 
     let outline = CanvasPrimitive::Rect(CanvasRect {
         x: x + inset, y: y + inset, w: (w - stroke_width).max(0.0), h: (h - stroke_width).max(0.0),
         fill: shape.fill.clone(), stroke: shape.stroke.clone(), stroke_width: Some(stroke_width), stroke_dash: None,
-        radius: Some((radius - inset).max(0.0)), shadow: None, ocg: None,
+        radius: Some((radius - inset).max(0.0)), shadow: None, ocg: None, anchor: None,
     });
     let mut children = vec![primitive_to_render_node(&outline, PageTokens::FIRST)];
     if let Some(color) = &shape.tick {

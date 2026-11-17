@@ -171,6 +171,16 @@ pub(super) fn split_flow<'a>(
     })
 }
 
+/// All of `flow` on one page, with the note of every anchor in it: the page of a section that grows in height to hold
+/// its flow (`grow`). Its notes keep back the room they need of the page's `budget`, and nothing is cut.
+pub(super) fn one_page(flow: &[Node], avail_w: f32, budget: f32, counter: FootnoteCounter, has_notes: bool) -> FlowPage {
+    let mut nodes = flow.to_vec();
+    let notes = if has_notes { take_notes(&mut nodes, counter, &[]) } else { Vec::new() };
+    let reserve = area_height(&notes, avail_w, budget);
+    let kept = std::iter::repeat_with(|| None).take(nodes.len()).collect();
+    FlowPage { nodes, kept, notes, reserve }
+}
+
 /// One try at a page: what is left of the flow, what the page holds, its notes and the height they need. A page
 /// in one column holds its nodes with their trees; a page in columns, those of each of its parts.
 pub(super) struct Fill<'a, P> {

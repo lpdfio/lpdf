@@ -60,7 +60,7 @@ impl Document {
         let _ = markdown::expand_pending(&mut self.sections, None, markdown::Pass::Rest);
         let mut result = Vec::new();
         let mut document_notes = 0u32;
-        for section in std::mem::take(&mut self.sections) {
+        for (index, section) in std::mem::take(&mut self.sections).into_iter().enumerate() {
             let width  = section.options.size.map(|(w, _)| w).unwrap_or(self.page_width);
             let height = section.options.size.map(|(_, h)| h).unwrap_or(self.page_height);
             let bleed  = section.options.bleed.unwrap_or(self.bleed);
@@ -148,6 +148,9 @@ impl Document {
                 tagged: crate::pdfa::Standards::of(&self.output).tagged(),
                 columns: section.options.columns,
                 insets,
+                grow: section.options.grow,
+                number: index + 1,
+                ruling: section.options.ruling,
             });
         }
         result
@@ -279,6 +282,39 @@ pub enum ColumnFill {
     Balance,
 }
 
+/// The smallest page PDF 1.7 recommends, in each size, in points: "the minimum page size should be 3 by 3 units in
+/// default user space" (ISO 32000-1, Annex C). A `size` under it is an error.
+pub const MIN_PAGE: f32 = 3.0;
+
+/// The largest page PDF 1.7 recommends, in each size, in points: 14,400 by 14,400, 200 inches (ISO 32000-1, Annex C).
+/// A page that grows to fit its content (`grow`) grows to it at most.
+pub const MAX_PAGE: f32 = 14_400.0;
+
+/// The sizes a section's page grows in to fit its content (`grow`), where its `size` is the starting size, the
+/// smallest the page can be. Neither for a section without it, which paginates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Grow {
+    pub width:  bool,
+    pub height: bool,
+}
+
+impl Grow {
+    /// Reads `grow`: `width`, `height` or `width height`.
+    fn parse(value: &str) -> Result<Self, String> {
+        match value.split_whitespace().collect::<Vec<_>>().as_slice() {
+            ["width"]           => Ok(Grow { width: true, height: false }),
+            ["height"]          => Ok(Grow { width: false, height: true }),
+            ["width", "height"] => Ok(Grow { width: true, height: true }),
+            _ => Err(format!("invalid grow '{value}': expected width, height or width height")),
+        }
+    }
+
+    /// Whether the page grows in either size.
+    pub fn any(self) -> bool {
+        self.width || self.height
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum LayoutChild {
     Content(Node),
@@ -317,6 +353,11 @@ pub struct SectionOptions {
     pub page_numbering: PageNumbering,
     /// `columns`, `column-gap`, `column-rule` and `column-fill`.
     pub columns: Columns,
+    /// `grow`: the sizes the section's page grows in.
+    pub grow: Grow,
+    /// The ruling a section that grows names, whose lines are drawn again at the size its page grows to. `None` for
+    /// any other section.
+    pub ruling: Option<crate::ruling::Ruling>,
 }
 
 /// What a table of contents section needs once the other sections are laid out.
@@ -421,6 +462,12 @@ pub struct SectionLayout {
     pub columns: Columns,
     /// The regions pinned inside the columns, in the order they are written.
     pub insets: Vec<Inset>,
+    /// The sizes the page grows in to fit the content, from `width` and `height` as the starting size (`grow`).
+    pub grow: Grow,
+    /// The section's place in the document, counted from 1, which the error of a page that grows too large names.
+    pub number: usize,
+    /// The ruling of a section that grows, drawn again at the size its page grows to.
+    pub ruling: Option<crate::ruling::Ruling>,
 }
 
 #[derive(Debug, Clone)]
@@ -1663,6 +1710,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                 markdown::expand_pending(&mut sections_xml, None, markdown::Pass::Read)?;
                 check_sections(&mut sections_xml)?;
                 bulk::check_document(&sections_xml, &output)?;
+                check_grow(&sections_xml)?;
                 let mut resolved_fonts: HashMap<String, FontDef> = HashMap::new();
                 for (_alias, def) in &asset_fonts {
                     let key = match def {
@@ -2118,26 +2166,33 @@ fn parse_meta(elem: &roxmltree::Node) -> Meta {
 }
 
 
+/// A page `size`: a name, or a width and a height, each at least `MIN_PAGE`.
 pub fn parse_page_size(val: &str) -> Result<(f32, f32), String> {
-    match val {
-        "a4" => Ok((595.28, 841.89)),
-        "a3" => Ok((841.89, 1190.55)),
-        "a5" => Ok((419.53, 595.28)),
-        "letter" => Ok((612.0, 792.0)),
-        "legal" => Ok((612.0, 1008.0)),
+    let (w, h) = match val {
+        "a4" => (595.28, 841.89),
+        "a3" => (841.89, 1190.55),
+        "a5" => (419.53, 595.28),
+        "letter" => (612.0, 792.0),
+        "legal" => (612.0, 1008.0),
         custom => {
             let parts: Vec<&str> = custom.split_whitespace().collect();
-            if parts.len() == 2 {
-                let w = parse_length(parts[0])
-                    .ok_or_else(|| format!("invalid page width: '{}': expected a length in {LENGTH_UNITS}", parts[0]))?;
-                let h = parse_length(parts[1])
-                    .ok_or_else(|| format!("invalid page height: '{}': expected a length in {LENGTH_UNITS}", parts[1]))?;
-                Ok((w, h))
-            } else {
-                Err(format!("invalid page size: '{val}': expected a4, a3, a5, letter, legal or a width and a height, like '210mm 297mm'"))
-            }
+            let [width, height] = parts.as_slice() else {
+                return Err(format!("invalid page size: '{val}': expected a4, a3, a5, letter, legal or a width and a height, like '210mm 297mm'"));
+            };
+            let w = parse_length(width)
+                .ok_or_else(|| format!("invalid page width: '{width}': expected a length in {LENGTH_UNITS}"))?;
+            let h = parse_length(height)
+                .ok_or_else(|| format!("invalid page height: '{height}': expected a length in {LENGTH_UNITS}"))?;
+            (w, h)
         }
+    };
+    if w < MIN_PAGE {
+        return Err(format!("page size '{val}' is under {MIN_PAGE}pt wide, the smallest page PDF 1.7 recommends"));
     }
+    if h < MIN_PAGE {
+        return Err(format!("page size '{val}' is under {MIN_PAGE}pt high, the smallest page PDF 1.7 recommends"));
+    }
+    Ok((w, h))
 }
 
 /// Convert a measurement string with a unit suffix to points.
@@ -2383,15 +2438,32 @@ fn parse_section_columns(a: &impl Attrs, tokens: &Tokens) -> Result<Columns, Str
 
 /// The layer of the ruling a section names with `ruling`, which goes under everything else on its pages: the lines on
 /// pages of `size`, filling the page or the area inside the margin of the section's layout or markdown, which a section
-/// of layers alone doesn't have. `None` for a section that names no ruling.
-fn section_ruling(a: &impl Attrs, tokens: &Tokens, size: (f32, f32), children: &[SectionChild]) -> Result<Option<canvas::CanvasLayer>, String> {
+/// of layers alone doesn't have. With it the ruling, for a section that grows to draw again at the size its page grows
+/// to. `None` for a section that names no ruling.
+fn section_ruling(a: &impl Attrs, tokens: &Tokens, size: (f32, f32), children: &[SectionChild]) -> Result<Option<(canvas::CanvasLayer, crate::ruling::Ruling)>, String> {
     let Some(name) = a.get("ruling") else { return Ok(None) };
     let ruling = crate::ruling::named(&tokens.rulings, name)?;
     let margin = children.iter()
         .find_map(|c| match c { SectionChild::Layout { margin, .. } => Some(*margin), SectionChild::Layer(_) => None })
         .unwrap_or([0.0; 4]);
     let drawing = crate::ruling::draw(ruling, size.0, size.1, margin).map_err(|e| format!("ruling '{name}': {e}"))?;
-    Ok(Some(crate::ruling::layer(drawing, ruling.ocg)))
+    Ok(Some((crate::ruling::layer(drawing, ruling.ocg), ruling.clone())))
+}
+
+/// Whether each section that grows (`grow`) is set in one column with no inset, the one way its page grows yet: the
+/// columns of a page that grows would have to be levelled to its content.
+fn check_grow(sections: &[Section]) -> Result<(), String> {
+    let has_inset = |section: &Section| section.children.iter().any(|child| matches!(
+        child,
+        SectionChild::Layout { children, .. } if children.iter().any(|c| matches!(c, LayoutChild::Region(r) if r.pin == RegionPin::Inset))
+    ));
+    match sections.iter().position(|s| s.options.grow.any() && (s.options.columns.count > 1 || has_inset(s))) {
+        Some(index) => Err(format!(
+            "grow doesn't work with columns or an inset, in section {}: take out grow, or set the section in one column with no region pinned inset",
+            index + 1,
+        )),
+        None => Ok(()),
+    }
 }
 
 /// Whether the insets of a section's layout stay within its `columns`: each `col` and `colspan` ends at the last
@@ -2455,6 +2527,11 @@ fn parse_section_elem(
         .map_err(|e| format!("<section>{}: {e}", node_loc(elem)))?;
     let page_numbering = parse_page_numbering(elem).map_err(|e| format!("<section>{}: {e}", node_loc(elem)))?;
     let columns = parse_section_columns(elem, tokens).map_err(|e| format!("<section>{}: {e}", node_loc(elem)))?;
+    let grow = elem.attribute("grow")
+        .map(Grow::parse)
+        .transpose()
+        .map_err(|e| format!("<section>{}: {e}", node_loc(elem)))?
+        .unwrap_or_default();
 
     let text = TextDefaults::of_section(doc_font, tokens, asset_fonts);
 
@@ -2524,8 +2601,10 @@ fn parse_section_elem(
     }
 
     // The ruling is the bottom layer, so a section with only a ruling is a page of paper.
-    if let Some(layer) = section_ruling(elem, tokens, size, &children).map_err(|e| format!("<section>{}: {e}", node_loc(elem)))? {
+    let mut ruling = None;
+    if let Some((layer, named)) = section_ruling(elem, tokens, size, &children).map_err(|e| format!("<section>{}: {e}", node_loc(elem)))? {
         children.insert(0, SectionChild::Layer(layer));
+        ruling = grow.any().then_some(named);
     }
     if children.is_empty() {
         return Err(format!(
@@ -2547,6 +2626,8 @@ fn parse_section_elem(
             footnote_counter,
             page_numbering,
             columns,
+            grow,
+            ruling,
         },
         bookmark,
     })
@@ -4318,6 +4399,7 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
     markdown::expand_pending(&mut sections, None, markdown::Pass::Read)?;
     check_sections(&mut sections)?;
     bulk::check_document(&sections, &output)?;
+    check_grow(&sections)?;
     let mut resolved_fonts: HashMap<String, FontDef> = HashMap::new();
     for (_alias, def) in &asset_fonts {
         let key = match def {
@@ -4495,6 +4577,11 @@ fn parse_tree_section(
         .map_err(|e| format!("section: {e}"))?;
     let page_numbering = parse_page_numbering(&a).map_err(|e| format!("section: {e}"))?;
     let columns = parse_section_columns(&a, tokens).map_err(|e| format!("section: {e}"))?;
+    let grow = a.get("grow")
+        .map(Grow::parse)
+        .transpose()
+        .map_err(|e| format!("section: {e}"))?
+        .unwrap_or_default();
 
     let text = TextDefaults::of_section(doc_font, tokens, asset_fonts);
 
@@ -4564,8 +4651,10 @@ fn parse_tree_section(
     }
 
     // The ruling is the bottom layer, so a section with only a ruling is a page of paper.
-    if let Some(layer) = section_ruling(&a, tokens, size, &children).map_err(|e| format!("section: {e}"))? {
+    let mut ruling = None;
+    if let Some((layer, named)) = section_ruling(&a, tokens, size, &children).map_err(|e| format!("section: {e}"))? {
         children.insert(0, SectionChild::Layer(layer));
+        ruling = grow.any().then_some(named);
     }
     if children.is_empty() {
         return Err("section must have at least one layout or layer child".into());
@@ -4584,6 +4673,8 @@ fn parse_tree_section(
             footnote_counter,
             page_numbering,
             columns,
+            grow,
+            ruling,
         },
         bookmark,
     })

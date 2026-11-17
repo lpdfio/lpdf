@@ -1036,6 +1036,9 @@ mod spot_render_tests;
 mod length_unit_tests;
 
 #[cfg(test)]
+mod grow_render_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
