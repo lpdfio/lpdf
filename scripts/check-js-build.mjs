@@ -4,7 +4,7 @@
 //
 //  - A render, a render encrypted with AES-256 and one with RC4-128, each with a user and an owner password: the file
 //    is a PDF, and an encrypted one has the cipher's /V in its /Encrypt dictionary.
-//  - A merge of two files, and a merge of a file whose owner restricts printing, refused without allow-restricted and
+//  - A merge of two files, and a merge of a file whose owner restricts copying, refused without allow-restricted and
 //    merged with it, which reads AES-256 in the JS build.
 //
 // Each check runs on an engine of its own, loaded afresh, so a trap in one doesn't fail the next.
