@@ -227,6 +227,7 @@ Which form of color is for what, and the press profile, bleed and print-only con
 | Links within the document, and a table of contents | 0.25.0 | [Table of contents](https://lpdf.io/docs/doc/toc/) |
 | Cross-references that print a bookmark's page and label | 0.32.0 | [Bookmark, referring to a bookmark](https://lpdf.io/docs/doc/layout/bookmark/#referring-to-a-bookmark) |
 | A section's flow in 1 to 12 columns, with a gap, a rule, balancing, and inset blocks the text goes around | 0.33.0 | [Section, columns](https://lpdf.io/docs/doc/section/#columns) |
+| A section's page that grows to fit its content, in width, in height or both, from `size` as the starting size (`grow`) | 0.36.0 | [Section, a page that grows](https://lpdf.io/docs/doc/section/#a-page-that-grows) |
 | Design tokens: scales for space, text size, border, radius, width and grid, and named colors | 0.24.0 | [XML schema, tokens](https://lpdf.io/docs/xml/schema/#tokens) |
 | A `line-height` row in the tokens | 0.28.0 | [XML schema, tokens](https://lpdf.io/docs/xml/schema/#tokens) |
 | A `height` row in the tokens, and aliases | 0.29.0 | [XML schema, aliases](https://lpdf.io/docs/xml/schema/#aliases) |
@@ -243,6 +244,8 @@ Which form of color is for what, and the press profile, bleed and print-only con
 - A document has one table of contents at most. A second one is refused.
 - A `<bookmark>` in a layout needs an element after it in the same container. A section takes one as its first child, for its first page, and a layer cannot hold one.
 - An inset that reaches below the room the page leaves, and a `col` and `colspan` past the section's `columns`, are refused.
+- A page is 3pt at least in each size, the smallest PDF 1.7 recommends: a smaller `size` on a document or a section is refused (`page size '80mm 0' is under 3pt high, the smallest page PDF 1.7 recommends`). See [XML schema, page sizes](https://lpdf.io/docs/xml/schema/#page-sizes).
+- A page that grows in height holds its flow on one page, where `break-before`, `break-after` and `keep-next` start no new page. It grows to 14,400pt (200in) at most in each size: content that needs more is refused (`the page of section 1 would grow past 14,400 pt (200 in) in height, the largest page PDF 1.7 recommends`). `grow` with `columns` above 1 or an inset is refused.
 
 ## Barcodes
 
@@ -362,6 +365,7 @@ Data is JSON bound to an XML document, as an option of the render call. Docs: [D
 | Time: a render that runs longer stops with `The render timed out after 5 seconds.` | 5 seconds | `timeout` on the engine's options, in seconds, `0` for none | 0.33.0 | [Installation, time limit](https://lpdf.io/docs/install/#time-limit) |
 | Memory: a render that allocates more stops with `the render needs more memory than its cap of 1024 MB` | 1024 MB | `maxMemoryMb` on the engine's options, from 1 to 4096 | 0.33.0 | [Installation, memory limit](https://lpdf.io/docs/install/#memory-limit) |
 | Nesting: 100 levels, `<lpdf>` included | 100 | Fixed | 0.33.0 | [XML schema, document structure](https://lpdf.io/docs/xml/schema/#document-structure) |
+| Page size: 3pt at least in each size, and 14,400pt (200in) at most for a page that grows | 3pt to 14,400pt | Fixed | 0.36.0 | [Section, a page that grows](https://lpdf.io/docs/doc/section/#a-page-that-grows) |
 
 - There is no limit on the size of the XML, or of a document built in code.
 - The engine makes no network calls.

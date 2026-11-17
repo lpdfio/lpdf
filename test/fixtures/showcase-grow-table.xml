@@ -1,0 +1,1787 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <document size="a4">
+    <meta title="lpdf Showcase — Grow table" subject="A feature matrix on one page as wide and as tall as it needs" />
+
+    <!-- A section that grows in width and in height: a feature matrix of twelve columns and 33 rows in eight
+         groups, on a page that starts as A4. The feature column is 130pt and wraps; the eleven library columns are
+         auto, each as wide as its notes on one line, and the page grows until they fit, then until every row is on it.
+         Expected, on one page much wider and taller than A4:
+           1  The title, and an introduction that wraps at the grown page's width, not at A4's
+           2  A band of languages over the library names, each language cell across its libraries (colspan)
+           3  A grey band for each group, across all twelve columns, then its rows: the feature on the left, and a
+              cell for each library, green for yes, yellow for part, red for no and grey for n/d, its word over its
+              note, every note on one line
+           4  A last row that counts the rows marked yes for each library, and the footnote under the table
+    -->
+    <section grow="width height">
+      <layout margin="24pt">
+        <text font-size="xl" bold="true" color="#0f3d91">Lpdf Against the Field</text>
+        <text font-size="s" color="#566274">What each library documents about itself, checked on 2026-11-07. Lpdf is v0.34.0. The ten others are one or two on-premises options per language, chosen for their track record and for how close they are to Lpdf's model, so a niche one such as Apache FOP sits beside the widely used. No hosted services and nothing that takes HTML as input.</text>
+        <frame height="6pt"/>
+        <table cols="130pt auto auto auto auto auto auto auto auto auto auto auto" border="0.5pt #d3d9e3">
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="xs" bold="true" color="#17202e">Compared</text>
+          </td>
+          <td padding="5pt 6pt" background="#0f3d91">
+            <text font-size="xs" bold="true" color="#ffffff">LPDF</text>
+          </td>
+          <td padding="5pt 6pt" colspan="2" background="#9a5b0a">
+            <text font-size="xs" bold="true" color="#ffffff">JAVASCRIPT</text>
+          </td>
+          <td padding="5pt 6pt" colspan="2" background="#1f7a4d">
+            <text font-size="xs" bold="true" color="#ffffff">PYTHON</text>
+          </td>
+          <td padding="5pt 6pt" colspan="2" background="#b0361f">
+            <text font-size="xs" bold="true" color="#ffffff">JAVA</text>
+          </td>
+          <td padding="5pt 6pt" colspan="2" background="#6d3fb5">
+            <text font-size="xs" bold="true" color="#ffffff">C#</text>
+          </td>
+          <td padding="5pt 6pt" colspan="2" background="#475569">
+            <text font-size="xs" bold="true" color="#ffffff">PHP</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Feature</text>
+          </td>
+          <td padding="5pt 6pt" background="#0f3d91">
+            <text font-size="s" bold="true" color="#ffffff">Lpdf</text>
+            <text font-size="xs" color="#ffffff">v0.34.0</text>
+          </td>
+          <td padding="5pt 6pt" background="#9a5b0a">
+            <text font-size="s" bold="true" color="#ffffff">pdfmake</text>
+            <text font-size="xs" color="#ffffff">0.3.13</text>
+          </td>
+          <td padding="5pt 6pt" background="#9a5b0a">
+            <text font-size="s" bold="true" color="#ffffff">PDFKit</text>
+            <text font-size="xs" color="#ffffff">0.20.2</text>
+          </td>
+          <td padding="5pt 6pt" background="#1f7a4d">
+            <text font-size="s" bold="true" color="#ffffff">ReportLab</text>
+            <text font-size="xs" color="#ffffff">5.1.0 + PLUS</text>
+          </td>
+          <td padding="5pt 6pt" background="#1f7a4d">
+            <text font-size="s" bold="true" color="#ffffff">fpdf2</text>
+            <text font-size="xs" color="#ffffff">2.9.0</text>
+          </td>
+          <td padding="5pt 6pt" background="#b0361f">
+            <text font-size="s" bold="true" color="#ffffff">iText Core</text>
+            <text font-size="xs" color="#ffffff">9.8.0</text>
+          </td>
+          <td padding="5pt 6pt" background="#b0361f">
+            <text font-size="s" bold="true" color="#ffffff">Apache FOP</text>
+            <text font-size="xs" color="#ffffff">2.12</text>
+          </td>
+          <td padding="5pt 6pt" background="#6d3fb5">
+            <text font-size="s" bold="true" color="#ffffff">QuestPDF</text>
+            <text font-size="xs" color="#ffffff">2026.9.1</text>
+          </td>
+          <td padding="5pt 6pt" background="#6d3fb5">
+            <text font-size="s" bold="true" color="#ffffff">iText for .NET</text>
+            <text font-size="xs" color="#ffffff">9.8.0</text>
+          </td>
+          <td padding="5pt 6pt" background="#475569">
+            <text font-size="s" bold="true" color="#ffffff">TCPDF 7</text>
+            <text font-size="xs" color="#ffffff">tc-lib-pdf 8.84</text>
+          </td>
+          <td padding="5pt 6pt" background="#475569">
+            <text font-size="s" bold="true" color="#ffffff">PDFlib</text>
+            <text font-size="xs" color="#ffffff">11.0.0</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" colspan="12" background="#eceff4">
+            <text font-size="xs" bold="true" color="#566274">MODEL</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Authoring model</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">XML or L builder, same in 5 languages</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">JSON definition, flow layout</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">Canvas with a text cursor</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">Canvas, Platypus flowables; PLUS: RML XML</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">Cursor API; fixed-position Template</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">Flowables over a coordinate canvas</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">XSL-FO XML, binding via XSLT</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">Fluent C# tree</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">Flowables over a coordinate canvas</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">Cursor API plus an HTML subset</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">Option-list API on a coordinate page</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Data binding built in</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">data-value, data-source, data-if, data-href</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">build the JSON in JS</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">RML with preppy (paid PLUS)</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">Template, binds by name</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">XSLT step before FO</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">bind in C# code</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">PPS blocks, filled from code (paid)</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" colspan="12" background="#eceff4">
+            <text font-size="xs" bold="true" color="#566274">LAYOUT</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Automatic pagination</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">text only</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">Platypus</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">you loop fit calls, open pages</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Headers and footers</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">pinned regions, page scopes</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">functions per page</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">added after, bufferPages</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">onPage callbacks</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">header() and footer()</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">event handlers</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">region-before and after</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">Header and Footer slots</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">event handlers</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">a template your code places</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Keep together, widows, orphans</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">keep-next, widows, orphans</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">unbreakable; widows by hand</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">KeepTogether, widows, orphans</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">unbreakable(); widows not documented</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">keep, widows, orphans</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">keep: integers only</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">ShowEntire; widows not documented</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">keep, widows, orphans</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">only as CSS in HTML</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">orphans option; widows by code</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Columns</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">1 to 12, rule, balance, inset</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">columns, snakingColumns</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">columns on text()</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">frames, BalancedColumns</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">text_columns, balanced</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">MulticolContainer</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">column-count</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">MultiColumn</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">ColumnDocumentRenderer</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">page regions</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">several fit boxes</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Lists</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">nested, bullets, numbers</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">ul and ol, nested</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">bullets only documented</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">ListFlowable</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">HTML subset, Markdown bullets</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">12 numbering types</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">list-block</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">no list element</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">12 numbering types</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">HTML only</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">indents and macros, by hand</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Footnotes</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">open since 2020</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#e7e9ee">
+            <text font-size="xs" bold="true" color="#475066">N/D</text>
+            <text font-size="s" color="#475066">not found</text>
+          </td>
+          <td padding="5pt 6pt" background="#e7e9ee">
+            <text font-size="xs" bold="true" color="#475066">N/D</text>
+            <text font-size="s" color="#475066">not found</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">since 9.7 (Jul 2026)</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">overlap in columns</text>
+          </td>
+          <td padding="5pt 6pt" background="#e7e9ee">
+            <text font-size="xs" bold="true" color="#475066">N/D</text>
+            <text font-size="s" color="#475066">not documented</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">since 9.7 (Jul 2026)</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">Cookbook recipe, in code</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">TOC and cross-references</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">TOC, bookmark-ref, bookmark-page</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">toc; pageReference undocumented</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">destinations only</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">TOC marked experimental</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">TOC; page links only</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">by hand, two passes</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">page-number-citation</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">SectionLink; no TOC element</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">by hand, two passes</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">addTOC; no cross-refs</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">TOC recipe; cross-refs by code</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Page labels (i, ii, iii)</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">page-start, page-format, page-prefix</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">addPageLabel</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">since 2.8.2</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">setPageLabel</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">written automatically</text>
+          </td>
+          <td padding="5pt 6pt" background="#e7e9ee">
+            <text font-size="xs" bold="true" color="#475066">N/D</text>
+            <text font-size="s" color="#475066">not documented</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">setPageLabel</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">commented out in source</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">labels option</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" colspan="12" background="#eceff4">
+            <text font-size="xs" bold="true" color="#566274">TABLES</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Colspan and rowspan</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">SPAN</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">HTML tables only</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Repeated header, rows split across pages</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">thead repeats; bulk for huge tables</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">headerRows; rows split</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">header repeat unreleased</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">repeatRows, splitInRow</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">tall row breaks table, issue open</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">header cells repeat</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">header repeats; fixed widths only</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">header repeats; row split not documented</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">header cells repeat</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">thead; rows split (HTML)</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">header rows; minrowheight splits</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" colspan="12" background="#eceff4">
+            <text font-size="xs" bold="true" color="#566274">TEXT AND FONTS</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Embedded fonts, subsetting</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">TrueType, OpenType; 14 standard</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">TrueType, TTC</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">TTF, OTF, WOFF, WOFF2</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">no OTF-CFF; 256-glyph subsets</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">TTF, OTF, WOFF</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">plus fallback, CJK module</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">TTF, OTF; auto-detects</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">TTF; fallback list</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">plus fallback, CJK module</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">TTF, OTF, Type1</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">TTF, OTF, WOFF2, colour; CJK</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Shaping, kerning, right-to-left</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">no kerning, ligatures or bidi</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">features yes; RTL open since 2015</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">ligatures yes; bidi open since 2014</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">experimental since 4.4</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">uharfbuzz; bidi since 2.7.8</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">complex scripts: paid pdfCalligraph</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">Arabic, Hebrew; no OpenType features</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">shaping and RTL</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">complex scripts: paid pdfCalligraph</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">bidi, Arabic shaping</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">Arabic, Thai, Devanagari; bidi</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Hyphenation</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">soft hyphen only</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">pyphen, off by default</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">declined</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">hyph module</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">patterns downloaded apart</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">soft hyphens only</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">hyph module</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">TeX patterns</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">soft hyphens you supply</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" colspan="12" background="#eceff4">
+            <text font-size="xs" bold="true" color="#566274">IMAGES AND GRAPHICS</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Image formats</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">JPEG, PNG only</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">JPEG, PNG</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">JPEG, PNG</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">anything Pillow opens</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">JPEG, PNG, TIFF, Pillow</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">JPEG, J2K, PNG, GIF, TIFF, WebP</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">JPEG, PNG, GIF, TIFF, WebP</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">JPEG, PNG, BMP, WebP</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">JPEG, J2K, PNG, GIF, TIFF, WebP</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">JPEG, PNG, GD formats</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">JPEG, PNG, TIFF, J2K, JBIG2; no WebP</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">SVG</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">an idea, not built</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">as vector</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">path strings only</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">third-party svglib</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">vector; no text or filters</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">svg module, vector</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">Batik, vector</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">through Skia</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">svg module, vector</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">SVG 1.1 as vector</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Opacity, gradients, shadows</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">opacity, shadow, gradients</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">no shadow</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">no shadow</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">no shadow</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">no shadow</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">no shadow</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">through SVG; no shadow</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">Shadow with blur (raster)</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">no shadow</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">no shadow</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">no general drop shadow</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">CMYK, spot, ICC</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">CMYK, press profile; no spot</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">CMYK arrays only</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">CMYK, spot; no ICC</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">CMYK, spot; ICC not found</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">CMYK, ICC intent; no spot</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">all</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">CMYK, ICC; spot undocumented</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">RGB only</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">all</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">Gray, RGB, CMYK, spot, Lab, ICC</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">CMYK, Lab, Pantone, ICC</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" colspan="12" background="#eceff4">
+            <text font-size="xs" bold="true" color="#566274">CONTENT</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Barcodes</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">QR, Code 128, EAN-13</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">QR only</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">another package</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">Code 39, 128, EAN, QR, DataMatrix</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">Code 39, I2of5 only</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">Code 128, EAN, PDF417, QR</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">Barcode4J, stale</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">ZXing.Net to SVG</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">Code 128, EAN, PDF417, QR</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">1D and 2D</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none built in</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Forms (AcroForm)</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">text, check, dropdown, radio, button</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">fields</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">no push button</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">pull request open</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">fill and flatten</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">request open</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">roadmap</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">fill and flatten</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">incl. JavaScript</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">create; fill needs PDI</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" colspan="12" background="#eceff4">
+            <text font-size="xs" bold="true" color="#566274">SECURITY</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Encryption</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">AES-256, RC4-128</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">RC4, AES-128, AES-256</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">RC4, AES-128, AES-256</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">RC4, AES-256; no AES-128</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">RC4, AES-128, AES-256</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">plus AES-GCM</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">RC4, AES-256; no AES-128</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">40, 128, 256-bit via qpdf</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">plus AES-GCM</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">plus certificates</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">AES-128, AES-256; no RC4</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Digital signatures</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">parked</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">issue open since 2017</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">issue open</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">PLUS only; no timestamp</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">through endesive</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">PAdES B-B to B-LTA</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">basic; no timestamp or LTV</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">roadmap</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">PAdES, LTV</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">PAdES B-B to B-LTA</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">empty fields; PLOP DS retired</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" colspan="12" background="#eceff4">
+            <text font-size="xs" bold="true" color="#566274">STANDARDS</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">PDF/A</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">2a to 3u, with refusals</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">1a to 3b; no validator named</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">1a to 3b; no validator named</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none found</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">1B to 4F; no level A</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">1a to 4f</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">1a to 3u; no part 4</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">2a to 3u; veraPDF in CI</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">1a to 4f</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">1a to 3u claimed; unvalidated</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">1a to 3u; part 4 in development</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">PDF/UA</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">UA-1; veraPDF in CI</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">flag only; no validator</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">UA-1, tagging API; no validator</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">PLUS only, PAC3</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">future work</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">UA-1 and UA-2</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">UA-1; no conformance claim</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">UA-1, opt-in tags; veraPDF</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">UA-1 and UA-2</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">UA-1, 2 claimed; manual tags</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">UA-1 only</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">PDF/X (print)</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">X-4 only</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#e7e9ee">
+            <text font-size="xs" bold="true" color="#475066">N/D</text>
+            <text font-size="s" color="#475066">not found</text>
+          </td>
+          <td padding="5pt 6pt" background="#e7e9ee">
+            <text font-size="xs" bold="true" color="#475066">N/D</text>
+            <text font-size="s" color="#475066">not found</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none in Core 9</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">X-3 and X-4</text>
+          </td>
+          <td padding="5pt 6pt" background="#e7e9ee">
+            <text font-size="xs" bold="true" color="#475066">N/D</text>
+            <text font-size="s" color="#475066">not documented</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">X-1a to X-5g claimed</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">X-3, X-4, X-5n; PDF/VT</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Attachments, Factur-X, ZUGFeRD</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">six profiles, XRechnung; Mustang in CI</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">attach; no e-invoice help</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">attach; no e-invoice help</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none found</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">embed_file; no Factur-X</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">AFRelationship, ZUGFeRD sample</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">bug blocks Factur-X</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">ZUGFeRD example; XMP is yours</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">AFRelationship, ZUGFeRD guide</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">setFacturX()</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">recipes; the XML is yours</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Linearization (fast web view)</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">linearize=true</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#e7e9ee">
+            <text font-size="xs" bold="true" color="#475066">N/D</text>
+            <text font-size="s" color="#475066">not found</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">in code, undocumented</text>
+          </td>
+          <td padding="5pt 6pt" background="#e7e9ee">
+            <text font-size="xs" bold="true" color="#475066">N/D</text>
+            <text font-size="s" color="#475066">reads only</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">through qpdf</text>
+          </td>
+          <td padding="5pt 6pt" background="#e7e9ee">
+            <text font-size="xs" bold="true" color="#475066">N/D</text>
+            <text font-size="s" color="#475066">reads only</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">linearize, in the base product</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Optional content (layers)</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">print and screen only</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">none</text>
+          </td>
+          <td padding="5pt 6pt" background="#e7e9ee">
+            <text font-size="xs" bold="true" color="#475066">N/D</text>
+            <text font-size="s" color="#475066">not found</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">view and print</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">nested, view, print</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">undocumented</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">stacking only</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">nested, view, print</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">view and print</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">define_layer</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" colspan="12" background="#eceff4">
+            <text font-size="xs" bold="true" color="#566274">SCALE AND RUNTIME</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Existing PDFs</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">stamps PNG only</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">out of scope</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">out of scope</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">PLUS PageCatcher</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">overlay through pypdf</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">stamp, merge, split, fill</text>
+          </td>
+          <td padding="5pt 6pt" background="#f8d9d6">
+            <text font-size="xs" bold="true" color="#7a1d14">NO</text>
+            <text font-size="s" color="#7a1d14">not a manipulator</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">merge, split, overlay (qpdf)</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">stamp, merge, split, fill</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">imports pages</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">PDI: stamp, merge, split, fill</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Large documents</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">bulk, memory cap, timeout</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">all in memory</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">streams pages</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">all in memory</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">all in memory</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">immediate flush</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">forward refs held</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">Lazy element; two passes</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">immediate flush</text>
+          </td>
+          <td padding="5pt 6pt" background="#fdf0c7">
+            <text font-size="xs" bold="true" color="#5c4300">PART</text>
+            <text font-size="s" color="#5c4300">all in memory</text>
+          </td>
+          <td padding="5pt 6pt" background="#dff3e6">
+            <text font-size="xs" bold="true" color="#14532d">YES</text>
+            <text font-size="s" color="#14532d">get_buffer streams output</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Runtime</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">Rust core: WASM, WASI, FFI, JVM</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">pure JS, Node 20+</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">pure JS, Node 20+</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">pure Python, C optional</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">pure Python 3.11+</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">pure Java, JDK 8</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">pure Java, JDK 8</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">native Skia and qpdf, 47 MB</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">managed, 5 MB</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">pure PHP 8.2+</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">C extension, PHP 8.2 to 8.5; Alpine x64</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Licence and price</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">free under $1M; $299 or $999 per system</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">MIT, free</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">MIT, free</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">BSD; PLUS from GBP 1,728</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">LGPL, free</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">AGPL or quote only</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">Apache 2.0, free</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">free under $1M; $1,999 per entity</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">AGPL or quote only</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">LGPL, free</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">EUR 2,250 per machine; PDI 4,500</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="s" bold="true" color="#17202e">Age and release rate</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">Oct 2026; weekly</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">2014; 14 releases a year</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">2011; 6 releases a year</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">2000; 10 releases a year</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">2017; 5 releases a year</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">2000; quarterly</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">1999; 1 release a year</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">2020; 19 releases in 9 months</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">2000; quarterly</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">2002; weekly, one author</text>
+          </td>
+          <td padding="5pt 6pt" background="#ffffff">
+            <text font-size="s" color="#17202e">1997; 1 release a year</text>
+          </td>
+        </tr>
+        <tr>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="xs" bold="true" color="#17202e">Rows marked yes</text>
+          </td>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="xs" color="#566274">21 of 30</text>
+          </td>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="xs" color="#566274">10 of 30</text>
+          </td>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="xs" color="#566274">6 of 30</text>
+          </td>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="xs" color="#566274">12 of 30</text>
+          </td>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="xs" color="#566274">13 of 30</text>
+          </td>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="xs" color="#566274">24 of 30</text>
+          </td>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="xs" color="#566274">15 of 30</text>
+          </td>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="xs" color="#566274">14 of 30</text>
+          </td>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="xs" color="#566274">24 of 30</text>
+          </td>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="xs" color="#566274">17 of 30</text>
+          </td>
+          <td padding="5pt 6pt" background="#eceff4">
+            <text font-size="xs" color="#566274">18 of 30</text>
+          </td>
+        </tr>
+        </table>
+        <frame height="6pt"/>
+        <text font-size="xs" color="#566274">Competitor cells say what the library documents, not what a test showed. n/d is not proof that a feature is absent. The rows are not weighted, so the counts at the foot are not a ranking. Lpdf's own cells come from its changelog and docs at v0.34.0, and it is the youngest column by years: its first release notes are from October 2026.</text>
+      </layout>
+    </section>
+  </document>
+</lpdf>

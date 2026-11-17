@@ -289,7 +289,6 @@ c
         ("region inset", section(r#"columns="2""#, &format!(r#"<layout><region pin="inset" top="{length}" height="{length}"><text>i</text></region><text>x</text></layout>"#))),
         ("barcode-at", document("", &format!(r#"<layer><barcode-at type="code128" data="LP-1" x="{length}" y="{length}" width="100pt" height="40pt"/></layer>"#))),
         ("barcode height", flow(format!(r#"<barcode type="code128" data="LP-1" width="100pt" height="{length}"/>"#))),
-        ("section size", section(&format!(r#"size="{length} {length}""#), r#"<layout margin="0"><text>x</text></layout>"#)),
         ("section bleed", section(&format!(r#"bleed="{length}""#), "<layout><text>x</text></layout>")),
         ("section column gap and rule", section(&format!(r##"columns="2" column-gap="{length}" column-rule="{length} #cccccc""##), "<layout><text>x</text></layout>")),
         ("section toc indent", section(&format!(r#"type="toc" toc-indent-step="{length}""#), "<layout><text>x</text></layout>")),
@@ -307,7 +306,10 @@ c
 
 #[test]
 fn a_bare_zero_is_the_same_length_as_0pt_0mm_and_0in_wherever_a_length_is_written() {
-    let places_of = |length: &str| places(length).into_iter().chain(layer_places(length)).chain(other_places(length)).collect::<Vec<_>>();
+    // A page is 3pt at least, so its size takes no 0 in any unit (`a_page_size_of_a_bare_zero_is_refused_like_one_of_0pt`).
+    let places_of = |length: &str| places(length).into_iter().chain(layer_places(length)).chain(other_places(length))
+        .filter(|(what, _)| *what != "document size")
+        .collect::<Vec<_>>();
     for (((what, bare), (_, points)), ((_, millimetres), (_, inches))) in
         places_of("0").into_iter().zip(places_of("0pt")).zip(places_of("0mm").into_iter().zip(places_of("0in")))
     {
@@ -343,6 +345,17 @@ fn a_bare_inf_or_nan_is_no_text_size_no_share_and_no_position() {
     }
 }
 
+/// A page is 3pt at least in each size, the smallest PDF 1.7 recommends, so a page size of 0 is refused in any unit.
+#[test]
+fn a_page_size_of_a_bare_zero_is_refused_like_one_of_0pt() {
+    for length in ["0", "0pt", "0mm", "0in"] {
+        let xml = section(&format!(r#"size="100pt {length}""#), "<layout><text>x</text></layout>");
+        let error = render_xml(&xml).expect_err(&format!("a page {length} high"));
+        assert!(error.contains("is under 3pt high, the smallest page PDF 1.7 recommends"), "{error}");
+    }
+    render_xml(&section(r#"size="100pt 3pt""#, "<layout><text>x</text></layout>")).unwrap();
+}
+
 #[test]
 fn a_ruling_step_of_a_bare_zero_is_refused_like_a_step_of_0pt() {
     let ruling = |step: &str| format!(
@@ -355,12 +368,12 @@ fn a_ruling_step_of_a_bare_zero_is_refused_like_a_step_of_0pt() {
 }
 
 /// The patterns of the schema's length types, read from `schema/lpdf.xsd`, so that taking the bare `0` out of one again
-/// fails here and not only in an editor.
+/// fails here and not only in an editor. A page size takes none: a page is 3pt at least.
 #[test]
 fn the_schema_takes_a_bare_zero_in_every_type_that_holds_a_length() {
     let xsd = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../schema/lpdf.xsd")).expect("the schema");
     for name in [
-        "PtValue", "SignedPtValue", "PageSizeCustom", "SpacingValue", "SpacingMixed", "ShadowValue", "BorderValue", "LineValue",
+        "PtValue", "SignedPtValue", "SpacingValue", "SpacingMixed", "ShadowValue", "BorderValue", "LineValue",
     ] {
         let from = xsd.find(&format!(r#"<xs:simpleType name="{name}">"#)).unwrap_or_else(|| panic!("no type {name}"));
         let end = xsd[from..].find("</xs:simpleType>").expect("the end of the type");

@@ -572,6 +572,7 @@ const SECTION: Attributes = &[
     ("column-gap", Kind::Text),
     ("column-rule", Kind::Text),
     ("column-fill", Kind::Text),
+    ("grow", Kind::Text),
 ];
 
 const LPDF: Attributes = &[

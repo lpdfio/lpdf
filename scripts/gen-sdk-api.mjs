@@ -83,7 +83,8 @@ const PLACES = {
     markdown: { dotnet: 'Lpdf.Markdown', php: 'Lpdf\\Markdown', folder: 'Markdown', python: 'markdown' },
 };
 
-function words(name) { return name.split('-'); }
+/** The words of an attribute's name, or of a value such as `width height`, which holds a space. */
+function words(name) { return name.split(/[-\s]/); }
 function pascal(name) { return words(name).map((w) => w[0].toUpperCase() + w.slice(1)).join(''); }
 function camel(name) { const p = pascal(name); return p[0].toLowerCase() + p.slice(1); }
 function snake(name) { return words(name).join('_'); }
@@ -457,6 +458,8 @@ const CONSTANTS = [
       doc: 'The values of the `footnote-counter` attribute of a document or a section.' },
     { name: 'ColumnFill', area: 'kit', file: 'column_fill', values: () => schema.simpleTypeValues('ColumnFill'),
       doc: 'The values of the `column-fill` attribute of a section: how the columns of its last page fill.' },
+    { name: 'Grow', area: 'kit', file: 'grow', values: () => schema.simpleTypeValues('Grow'),
+      doc: 'The values of the `grow` attribute of a section: the sizes its page grows in to fit its content.' },
     { name: 'Cipher', area: 'kit', file: 'cipher', values: () => schema.simpleTypeValues('Cipher'),
       doc: 'The values of the `encrypt` attribute of the output: the cipher the PDF is encrypted with.' },
     { name: 'Permission', area: 'kit', file: 'permission', values: () => schema.simpleTypeValues('Permission'),
@@ -475,7 +478,7 @@ const AREAS = {
     shared: { folder: 'Shared', dotnet: 'Lpdf.Shared', php: 'Lpdf\\Shared' },
 };
 
-function upperSnake(value) { return value.replace(/-/g, '_').toUpperCase(); }
+function upperSnake(value) { return words(value).join('_').toUpperCase(); }
 
 function constantsFor(spec) {
     const values = spec.values();

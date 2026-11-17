@@ -100,14 +100,17 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <!-- e.g. "100pt 200pt" or "210mm 297mm": the width, then the height -->
+  <!-- e.g. "100pt 200pt" or "210mm 297mm": the width, then the height, each 3pt at least, which the engine checks -->
   <xs:simpleType name="PageSizeCustom">
     <xs:restriction base="xs:string">
-      <xs:pattern value="(0|\d+(\.\d+)?(pt|mm|in)) (0|\d+(\.\d+)?(pt|mm|in))"/>
+      <xs:pattern value="\d+(\.\d+)?(pt|mm|in) \d+(\.\d+)?(pt|mm|in)"/>
     </xs:restriction>
   </xs:simpleType>
 
   <xs:simpleType name="PageSize">
+    <xs:annotation>
+      <xs:documentation>The size of the pages: a4, a3, a5, letter or legal, or a width and a height, such as 80mm 200mm. Each is 3pt at least, the smallest page PDF 1.7 recommends; a smaller one is an error.</xs:documentation>
+    </xs:annotation>
     <xs:union memberTypes="PageSizeNamed PageSizeCustom"/>
   </xs:simpleType>
 
@@ -131,6 +134,17 @@
     <xs:restriction base="xs:string">
       <xs:enumeration value="auto"/>
       <xs:enumeration value="balance"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="Grow">
+    <xs:annotation>
+      <xs:documentation>The sizes a section's page grows in to fit its content: width, height, or both.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="width"/>
+      <xs:enumeration value="height"/>
+      <xs:enumeration value="width height"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -1986,6 +2000,11 @@
       <xs:attribute name="column-fill" type="ColumnFill">
         <xs:annotation>
           <xs:documentation>How the columns of the last page fill. auto, the default, fills them in order as on every other page, so the last can be short or empty; balance levels them as evenly as the content allows. CSS's default is balance. Ignored when columns is missing or 1.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="grow" type="Grow">
+        <xs:annotation>
+          <xs:documentation>Lets the page grow to fit the content, in width, in height, or both (width height), where it would start a new page or squeeze the content. size is then the starting size, the smallest the page can be. With height the flow is one page, as tall as the content and the margin, and a break in it starts no new page: a till receipt is a section of size="80mm 40mm" grow="height". With width the page grows until each auto column of a table is as wide as its cells on one line, and a box or an image of a fixed width fits; a column of a table that sets a width keeps it and wraps its cells, fr and % columns are measured as the cells need and then take their share of the grown table, and paragraphs and code wrap at the page's width. A % column is a share of the whole table and comes first, so the cells of the auto and fr columns beside it can wrap, and the page grows until the columns that set a width fit beside it, with room for the longest words of the auto and fr columns: an auto column keeps its longest word, and fr columns split the room by their shares, so a word longer than one's share can break. % columns that add up to the whole table leave the other columns no room, on any page. On a page that grew, the footer and the footnotes sit right under the content, an element of fill height is as tall as its content and one of full height as the room of the starting size, the layers place their anchors against the grown page, and the background and the ruling cover it. A page grows to 14,400pt (200in) at most in each size, the largest page PDF 1.7 recommends: content that needs more is an error. It doesn't work with columns or an inset. Without it the section paginates.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
     </xs:complexType>

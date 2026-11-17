@@ -581,6 +581,10 @@ fn pages() -> String {
 
 const NOTE: &str = "<text>Last<fn>The last note.</fn></text>";
 
+/// A table whose two columns of long cells, each on one line, are wider than an A4 page.
+const WIDE_TABLE: &str = "<table cols=\"auto auto\"><tr><td><text>The quick brown fox jumps over the lazy dog, and then it \
+    jumps back again.</text></td><td><text>A second cell as long as the first, so that the two together pass the page.</text></td></tr></table>";
+
 /// Code with a tab, an indent and a line that wraps in a narrow box.
 const CODE: &str = "if ready {\n\treturn compute(first_argument, second_argument, third_argument, fourth_argument);\n}";
 
@@ -650,6 +654,12 @@ fn subjects() -> Vec<Subject> {
         Subject::new("section", |a, _| lpdf("", &format!("<document><section {a}><layout>{}</layout></section></document>", pages())))
             .only(&["column-gap", "column-rule", "column-fill"])
             .base(&[("columns", "3")]),
+        // A flow of several pages and a table wider than the page, which a page that grows holds on one page and
+        // without squeezing.
+        Subject::new("section", |a, _| {
+            lpdf("", &format!("<document><section {a}><layout>{}{WIDE_TABLE}</layout></section></document>", pages()))
+        })
+        .only(&["grow"]),
         Subject::new("layout", |a, c| lpdf("", &format!("<document><section><layout {a}>{c}</layout></section></document>"))).content(ONE),
         // A markdown: its own attributes, over headings and paragraphs of several lines.
         Subject::new("markdown", |a, c| {
