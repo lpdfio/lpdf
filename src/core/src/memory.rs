@@ -45,7 +45,15 @@ pub(crate) struct Counting;
 
 // SAFETY: every call goes to the system allocator with the caller's arguments; the counting around it touches only
 // thread-local cells of plain numbers, which need no allocation and no destructor.
+//
+// In the JS build each method stays a function of its own. The system allocator there is dlmalloc, written in Rust,
+// which reads a block's size from the bytes before the block. Inlined into a function that also allocates the block
+// through `__rust_alloc`, that read lies outside the only block the optimizer knows of, which it may then take as
+// uninitialized: rustc 1.100 turned the check of a free's size into a certain panic that way, and the engine trapped on
+// every AES-256 render. Out of line, the allocator's code never shares a function with the allocation. The WASI build
+// and the native ones allocate through C, which the optimizer can't see into.
 unsafe impl GlobalAlloc for Counting {
+    #[cfg_attr(all(target_arch = "wasm32", target_os = "unknown"), inline(never))]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         let pages = pages();
         // SAFETY: the caller keeps the contract of `GlobalAlloc::alloc`, which is the system's.
@@ -57,6 +65,7 @@ unsafe impl GlobalAlloc for Counting {
         ptr
     }
 
+    #[cfg_attr(all(target_arch = "wasm32", target_os = "unknown"), inline(never))]
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         let pages = pages();
         // SAFETY: as for `alloc`.
@@ -68,12 +77,14 @@ unsafe impl GlobalAlloc for Counting {
         ptr
     }
 
+    #[cfg_attr(all(target_arch = "wasm32", target_os = "unknown"), inline(never))]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         // SAFETY: `ptr` was allocated by this allocator, so by the system's, with `layout`.
         unsafe { System.dealloc(ptr, layout) };
         grow(-(layout.size() as i64));
     }
 
+    #[cfg_attr(all(target_arch = "wasm32", target_os = "unknown"), inline(never))]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         let pages = pages();
         // SAFETY: as for `dealloc`, and the caller keeps the contract of `GlobalAlloc::realloc`.
