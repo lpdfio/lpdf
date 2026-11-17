@@ -14,10 +14,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # wasm32-wasip1 for the WASI build, whose function sizes are checked below.
+      # wasm32-wasip1 for the WASI build, whose function sizes are checked below, and wasm32-unknown-unknown for the JS
+      # build, which is run below.
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-wasip1
+          targets: wasm32-wasip1,wasm32-unknown-unknown
 
       - uses: Swatinem/rust-cache@v2
 
@@ -116,6 +117,16 @@ jobs:
         env:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
         run: make check-merge
+
+      # The JS build, built as the release builds it, run through renders, encryption and merges: the tests above run
+      # natively, and the SDKs would otherwise be the first to run the JS build of a change.
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Check the JS build of the engine
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
+        run: make check-js-build
 
   # The native library the PHP SDK loads through FFI, built as the release builds it: for glibc 2.17 on x86_64 and
   # aarch64, and refused when either needs a newer glibc (scripts/build-ffi.sh). The release attaches the same files.
