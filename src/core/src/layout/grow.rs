@@ -15,15 +15,18 @@ use crate::parse::MAX_PAGE;
 /// it, and the layout fails with an error that names the section.
 pub(super) fn grown(page: &SectionLayout) -> SectionLayout {
     let mut grown = page.clone();
+    bind_bulk_records(&mut grown);
+    // The nodes the page is filled from, whatever its size.
+    let parts = section_flow(&grown);
     if page.grow.width {
-        let wanted = content_width(page);
+        let wanted = content_width(&grown, &parts);
         if wanted > page.width {
             grown.width = within_limit(page, wanted, "in width");
         }
     }
     if page.grow.height {
         // At the final width, which the flow wraps at.
-        let (wanted, start_room) = needed_height(&grown);
+        let (wanted, start_room) = needed_height(&grown, parts);
         if wanted > page.height {
             grown.height = within_limit(page, wanted, "in height");
             let range = flow_range(&grown.children);
@@ -40,6 +43,18 @@ pub(super) fn grown(page: &SectionLayout) -> SectionLayout {
         redraw_ruling(&mut grown);
     }
     grown
+}
+
+/// Bind every record of each bulk container in the flow of `page`, once: the width of a page that grows is measured
+/// over all of them, and a page that grows in height holds them all.
+fn bind_bulk_records(page: &mut SectionLayout) {
+    let range = flow_range(&page.children);
+    for node in &mut page.children[range] {
+        if let Some(records) = node.bulk_records().cloned() {
+            let whole = std::mem::replace(node, Node::layout_default());
+            *node = Bulk::new(whole, records).into_node();
+        }
+    }
 }
 
 /// `wanted`, the size the page of `page` grows to, or `MAX_PAGE` when it is larger, which fails the layout.
@@ -65,12 +80,12 @@ fn as_grown(node: &mut Node, start_room: f32) {
     }
 }
 
-/// The width the page of `page` needs for its content to fit without being squeezed: its widest node, in the flow or
-/// in the header or the footer, and the margins.
-fn content_width(page: &SectionLayout) -> f32 {
+/// The width the page of `page` needs for its content, `parts`, to fit without being squeezed: its widest node, in the
+/// flow or in the header or the footer, and the margins.
+fn content_width(page: &SectionLayout, parts: &SectionFlow) -> f32 {
     let [_, mr, _, ml] = page.margin;
-    let SectionFlow { top, flow, bottom, .. } = section_flow(page);
-    let widest = top.iter().chain(&flow).chain(&bottom).map(grow_width).fold(0.0_f32, f32::max);
+    let SectionFlow { top, flow, bottom, .. } = parts;
+    let widest = top.iter().chain(flow).chain(bottom).map(grow_width).fold(0.0_f32, f32::max);
     ml + widest + mr
 }
 
@@ -86,7 +101,7 @@ fn grow_width(node: &Node) -> f32 {
     let gaps = |count: usize| node.gap * count.saturating_sub(1) as f32;
     match node.kind {
         NodeKind::Text | NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field | NodeKind::Divider => 0.0,
-        NodeKind::Table => measure_table_w(node, false),
+        NodeKind::Table => table_width(node),
         NodeKind::Row => pl + pr + node.children.iter().map(grow_width).sum::<f32>() + gaps(node.children.len()),
         NodeKind::Grid => {
             let widest = node.children.iter().map(grow_width).fold(0.0_f32, f32::max);
@@ -103,13 +118,36 @@ fn grow_width(node: &Node) -> f32 {
     }
 }
 
-/// The height the page of `page` needs at its width for its flow to be one page, as `fill_pages` fills it: the margins,
-/// the header and the footer, the flow and the notes of all its footnotes. With it, the room for the flow on a page of
-/// the starting size, which a node of `full` height keeps on a page that grows (`as_grown`).
-fn needed_height(page: &SectionLayout) -> (f32, f32) {
+/// The width a table needs not to be squeezed: each column with a width of its own at it, and each other one, a share
+/// of the page (`fr`, `%`) as an `auto` one, as wide as its cells on one line. A cell that spans columns gives what it
+/// lacks to the ones without a width of their own, as the table lays them out (`table_col_widths`), so a long cell
+/// over a fixed and an `auto` column widens the `auto` one.
+fn table_width(node: &Node) -> f32 {
+    let units: Vec<ColUnit> = col_units(&node.table_cols).into_iter()
+        .map(|unit| match unit {
+            ColUnit::Pt(width) => ColUnit::Pt(width),
+            _ => ColUnit::Auto,
+        })
+        .collect();
+    if units.is_empty() {
+        return 0.0;
+    }
+    let extents = column_extents(&node.children, &units, 0.0, node.gap, false);
+    let columns: f32 = units.iter().zip(&extents).map(|(unit, extent)| match unit {
+        ColUnit::Pt(width) => *width,
+        _ => extent.max,
+    }).sum();
+    let [_, pr, _, pl] = node.padding;
+    columns + node.gap * (units.len() - 1) as f32 + pl + pr
+}
+
+/// The height the page of `page` needs at its width for its content, `parts`, to be one page, as `fill_pages` fills it:
+/// the margins, the header and the footer, the flow and the notes of all its footnotes. With it, the room for the flow
+/// on a page of the starting size, which a node of `full` height keeps on a page that grows (`as_grown`).
+fn needed_height(page: &SectionLayout, parts: SectionFlow) -> (f32, f32) {
     let [mt, mr, mb, ml] = page.margin;
     let avail_w = (page.width - ml - mr).max(0.0);
-    let SectionFlow { top, mut flow, bottom, has_notes } = section_flow(page);
+    let SectionFlow { top, mut flow, bottom, has_notes } = parts;
     // The header and the footer as `fill_pages` measures them for the room of the flow on the first page.
     let chrome = measure_chrome_height(&top, avail_w, true) + measure_chrome_height(&bottom, avail_w, true);
     let start_room = (page.height - mt - mb - chrome).max(0.0);

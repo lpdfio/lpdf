@@ -584,7 +584,8 @@ fn flow_range(children: &[Node]) -> Range<usize> {
 }
 
 /// Part the children of `page` into its header, its flow and its footer, and make them ready to fill its pages: the
-/// pages of a section that grows (`grow`) and the size it grows to are worked out from the same nodes.
+/// pages of a section that grows (`grow`) and the size it grows to are worked out from the same nodes. The size of the
+/// page changes nothing here.
 fn section_flow(page: &SectionLayout) -> SectionFlow {
     let range = flow_range(&page.children);
     // A text with `capture-ref` takes its lines whatever it shows, so the chrome is measured before it is filled.
@@ -593,16 +594,6 @@ fn section_flow(page: &SectionLayout) -> SectionFlow {
     // not chrome).
     let mut flow: Vec<Node> = page.children[range.clone()].to_vec();
     let bottom: Vec<Node> = page.children[range.end..].iter().cloned().map(reserve_sink_lines).collect();
-    // A section that grows measures all of a bulk container's records for its width, and a page that grows in height
-    // holds them all, so the records are bound at once.
-    if page.grow.any() {
-        for node in flow.iter_mut() {
-            if let Some(records) = node.bulk_records().cloned() {
-                let whole = std::mem::replace(node, Node::layout_default());
-                *node = Bulk::new(whole, records).into_node();
-            }
-        }
-    }
     // Texts that capture say their words whole before the flow is split; one in the flow that shows a capture
     // shows its fallback.
     for node in flow.iter_mut() {

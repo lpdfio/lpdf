@@ -160,6 +160,18 @@ fn a_column_of_a_fixed_width_keeps_it_and_wraps_its_cells() {
 }
 
 #[test]
+fn a_cell_that_spans_a_fixed_and_an_auto_column_widens_the_auto_one() {
+    let spanning = "A spanning cell that is much longer than both of the columns under it, long enough to pass the page on one line";
+    for cols in ["100pt auto", "auto 100pt"] {
+        let page = one_page(&document(r#"grow="width""#, &format!(
+            r#"<table cols="{cols}"><tr><td colspan="2"><text>{spanning}</text></td></tr><tr><td><text>a</text></td><td><text>b</text></td></tr></table>"#
+        )));
+        assert!(size(&page).0 > A5_WIDTH, "{cols}: the page grew: {:?}", size(&page));
+        assert_eq!(texts(&page)[0], spanning, "{cols}: the spanning cell on one line");
+    }
+}
+
+#[test]
 fn fr_and_percent_columns_grow_the_page_as_auto_columns_do() {
     let auto = size(&one_page(&document(r#"grow="width""#, &wide_table("auto auto")))).0;
     for cols in ["1fr 1fr", "1fr 2fr", "50% 50%"] {
