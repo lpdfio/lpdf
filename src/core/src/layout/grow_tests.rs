@@ -224,6 +224,25 @@ fn auto_and_fr_columns_beside_fixed_and_percent_ones_keep_their_longest_word() {
 }
 
 #[test]
+fn auto_columns_given_just_their_longest_words_keep_them() {
+    // The page is as wide as gives the four auto columns the sum of their longest words, which they add up to a
+    // rounding step under in another order.
+    let cells = [
+        "Grand total due this month Antidisestablishment",
+        "this month Antidisestablishment x Quarterly summary",
+        "x Quarterly summary of the accounts",
+        "of the accounts receivable Grand total",
+    ];
+    let autos: String = cells.iter().map(|cell| format!(r#"<td><text font-size="11.3pt">{cell}</text></td>"#)).collect();
+    let page = one_page(&document(r#"grow="width""#, &format!(
+        r#"<table cols="100pt 60% auto auto auto auto"><tr><td><text>Fixed</text></td><td><text>Short</text></td>{autos}</tr></table>"#
+    )));
+    let words: Vec<&str> = cells.iter().flat_map(|cell| cell.split(' ')).collect();
+    let lines: Vec<&str> = texts(&page).into_iter().filter(|t| !["Fixed", "Short"].contains(t)).collect();
+    assert!(lines.iter().all(|line| line.split(' ').all(|word| words.contains(&word))), "words stay whole: {lines:?}");
+}
+
+#[test]
 fn a_box_or_an_image_of_a_fixed_width_grows_the_page() {
     let boxed = one_page(&document(r#"grow="width""#, r##"<column width="700pt" background="#eeeeee"><text>Wide</text></column>"##));
     assert!(close(size(&boxed).0, 700.0 + 2.0 * MARGIN), "{:?}", size(&boxed));

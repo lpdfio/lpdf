@@ -2194,12 +2194,13 @@ fn column_extents(rows: &[Node], units: &[ColUnit], avail_w: f32, gap: f32, all:
 }
 
 /// `mins` cut down to the level at which they add up to `total`: the longest are cut, and a shorter one keeps its
-/// width. `total` is less than their sum.
+/// width. `total` is at most their sum. When it is their sum, which adds up a rounding step higher in another order,
+/// each keeps its width.
 fn cut_to_level(mins: &[f32], total: f32) -> Vec<f32> {
     let mut sorted = mins.to_vec();
     sorted.sort_by(|a, b| a.total_cmp(b));
     let mut taken = 0.0_f32;
-    let mut level = 0.0_f32;
+    let mut level = f32::INFINITY;
     for (i, min) in sorted.iter().enumerate() {
         let left = (sorted.len() - i) as f32;
         if taken + min * left >= total {
