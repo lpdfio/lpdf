@@ -46,6 +46,8 @@ pub(crate) enum Work {
     Render,
     Merge,
     Stamp,
+    /// The reading of an invoice's values, `extractInvoiceData`.
+    Extract,
 }
 
 /// What a render past its deadline unwinds with, to the library's entry point: the timeout it had.
@@ -53,19 +55,26 @@ pub(crate) enum Work {
 pub(crate) struct TimedOut {
     /// The timeout, in seconds.
     pub seconds: f64,
-    /// What ran past it: a render, a merge or a stamp.
+    /// What ran past it: a render, a merge, a stamp or the reading of an invoice.
     pub work: Work,
 }
 
 #[cfg(not(target_family = "wasm"))]
 impl TimedOut {
-    /// The error of a render, a merge or a stamp that ran past its timeout, which names the timeout.
+    /// The error of a render, a merge, a stamp or the reading of an invoice that ran past its timeout, which names the
+    /// timeout.
     pub(crate) fn error(&self) -> String {
         let unit = if self.seconds == 1.0 { "second" } else { "seconds" };
         let (what, parts) = match self.work {
             Work::Render => ("render", "render the document in smaller parts"),
             Work::Merge => ("merge", "merge the files in smaller groups"),
             Work::Stamp => ("stamp", "stamp the pages in smaller groups"),
+            Work::Extract => {
+                return format!(
+                    "the reading of the invoice ran past its timeout of {} {unit}, which a call without an engine has",
+                    self.seconds
+                );
+            }
         };
         format!(
             "the {what} ran past its timeout of {} {unit}: raise the timeout in the engine's options, or {parts}",
@@ -112,6 +121,12 @@ pub(crate) fn start_stamp(seconds: f64) -> Deadline {
     begin(seconds, Work::Stamp)
 }
 
+/// Start the deadline of the reading of an invoice that may run `seconds` from now, whose error names it.
+#[cfg(not(target_family = "wasm"))]
+pub(crate) fn start_extract(seconds: f64) -> Deadline {
+    begin(seconds, Work::Extract)
+}
+
 #[cfg(not(target_family = "wasm"))]
 fn begin(seconds: f64, work: Work) -> Deadline {
     let deadline = (seconds > 0.0)
@@ -140,6 +155,12 @@ pub(crate) fn start_merge(_seconds: f64) -> Deadline {
 /// The WebAssembly builds keep no deadline: their hosts stop a stamp themselves.
 #[cfg(target_family = "wasm")]
 pub(crate) fn start_stamp(_seconds: f64) -> Deadline {
+    Deadline(())
+}
+
+/// The WebAssembly builds keep no deadline: their hosts stop the reading of an invoice themselves.
+#[cfg(target_family = "wasm")]
+pub(crate) fn start_extract(_seconds: f64) -> Deadline {
     Deadline(())
 }
 
@@ -222,7 +243,14 @@ mod tests {
         };
         assert_eq!(unwound(start_merge), Some(Work::Merge));
         assert_eq!(unwound(start_stamp), Some(Work::Stamp));
+        assert_eq!(unwound(start_extract), Some(Work::Extract));
         assert_eq!(unwound(start), Some(Work::Render));
+    }
+
+    #[test]
+    fn the_reading_of_an_invoice_past_its_timeout_names_the_reading() {
+        let error = TimedOut { seconds: 5.0, work: Work::Extract }.error();
+        assert_eq!(error, "the reading of the invoice ran past its timeout of 5 seconds, which a call without an engine has");
     }
 
     #[test]

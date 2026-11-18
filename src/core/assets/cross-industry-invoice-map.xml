@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Lpdf's default invoice map for LCrossIndustryInvoice, written from Factur-X 1.09.2 / ZUGFeRD 2.5.2: where each value
+  of an EN 16931 invoice sits in its Cross Industry Invoice XML.
+
+  It applies when a call is given no map. A template binds its values under the prefix, as invoice:seller.name, and
+  repeats an element over a list with data-source="invoice:lines". The comment beside each entry gives the number
+  EN 16931 has for it: BT for a value, BG for a group of them, and BT-X for a value only EXTENDED has.
+
+  The most common entries come first: the invoice, the seller, the buyer, the lines, the VAT breakdown and the totals,
+  then payment, references, delivery, and allowances and charges. Inside each group, a comment "less common" marks
+  where the rarer entries start. To start a map of your own, copy this file and delete what your templates don't use.
+
+  Not in this map:
+  - what a line may hold several of: its notes (BT-127), object identifiers (BT-128), accounting references (BT-133),
+    price discounts (BT-147), allowances and charges (BG-27, BG-28), attributes (BG-32), classifications (BT-158, but
+    the customs code) and serial numbers (BT-X-307), since a list holds values only;
+  - the identifiers of the seller, the buyer, the payee and the place of delivery (BT-29, BT-46, BT-60, BT-71), which
+    a party may hold several of;
+  - the content of an attached file (BT-125), which is base64: its name and type are here.
+-->
+<cross-industry-invoice-map prefix="invoice">
+
+  <!-- The invoice -->
+  <value name="number"         path="rsm:ExchangedDocument/ram:ID" required="true"/>                                      <!-- BT-1 Invoice number -->
+  <value name="typeCode"       path="rsm:ExchangedDocument/ram:TypeCode" type="code" required="true"/>                    <!-- BT-3 Invoice type code -->
+  <value name="issued"         path="rsm:ExchangedDocument/ram:IssueDateTime/udt:DateTimeString" type="date" required="true"/> <!-- BT-2 Invoice issue date -->
+  <value name="buyerReference" path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeAgreement/ram:BuyerReference"/> <!-- BT-10 Buyer reference -->
+  <value name="orderReference"
+         path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeAgreement/ram:BuyerOrderReferencedDocument/ram:IssuerAssignedID"/> <!-- BT-13 Purchase order reference -->
+  <list name="notes" path="rsm:ExchangedDocument/ram:IncludedNote">                                                      <!-- BG-1 Invoice note -->
+    <value name="content"     path="ram:Content"/>                                                                     <!-- BT-22 Invoice note -->
+    <value name="subjectCode" path="ram:SubjectCode" type="code"/>                                                     <!-- BT-21 Invoice note subject code -->
+  </list>
+  <!-- less common -->
+  <value name="salesOrderReference"
+         path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeAgreement/ram:SellerOrderReferencedDocument/ram:IssuerAssignedID"/> <!-- BT-14 Sales order reference -->
+  <value name="contractReference"
+         path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeAgreement/ram:ContractReferencedDocument/ram:IssuerAssignedID"/> <!-- BT-12 Contract reference -->
+  <value name="projectReference"
+         path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeAgreement/ram:SpecifiedProcuringProject/ram:ID"/> <!-- BT-11 Project reference -->
+  <value name="projectName"
+         path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeAgreement/ram:SpecifiedProcuringProject/ram:Name"/> <!-- BT-11-0 Project name -->
+  <list name="tenderReferences"
+        path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeAgreement/ram:AdditionalReferencedDocument[ram:TypeCode='50']"> <!-- Tender or lot references, which EXTENDED lets repeat -->
+    <value name="id" path="ram:IssuerAssignedID"/>                                                                     <!-- BT-17 Tender or lot reference -->
+  </list>
+  <list name="invoicedObjects"
+        path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeAgreement/ram:AdditionalReferencedDocument[ram:TypeCode='130']"> <!-- Invoiced objects, which EXTENDED lets repeat -->
+    <value name="id"     path="ram:IssuerAssignedID"/>                                                                 <!-- BT-18 Invoiced object identifier -->
+    <value name="scheme" path="ram:ReferenceTypeCode" type="code"/>                                                    <!-- BT-18-1 Invoiced object identifier scheme -->
+  </list>
+  <value name="businessProcess"
+         path="rsm:ExchangedDocumentContext/ram:BusinessProcessSpecifiedDocumentContextParameter/ram:ID"/>             <!-- BT-23 Business process type -->
+  <value name="specification"
+         path="rsm:ExchangedDocumentContext/ram:GuidelineSpecifiedDocumentContextParameter/ram:ID"/>                   <!-- BT-24 Specification identifier -->
+
+  <!-- The seller -->
+  <group name="seller" path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeAgreement/ram:SellerTradeParty" required="true"> <!-- BG-4 Seller -->
+    <value name="name"     path="ram:Name" required="true"/>                                                           <!-- BT-27 Seller name -->
+    <value name="street"   path="ram:PostalTradeAddress/ram:LineOne"/>                                                 <!-- BT-35 Seller address line 1 -->
+    <value name="postcode" path="ram:PostalTradeAddress/ram:PostcodeCode"/>                                            <!-- BT-38 Seller post code -->
+    <value name="city"     path="ram:PostalTradeAddress/ram:CityName"/>                                                <!-- BT-37 Seller city -->
+    <value name="country"  path="ram:PostalTradeAddress/ram:CountryID" type="code" required="true"/>                   <!-- BT-40 Seller country code -->
+    <value name="vatId"    path="ram:SpecifiedTaxRegistration/ram:ID[@schemeID='VA']"/>                                <!-- BT-31 Seller VAT identifier -->
+    <value name="taxId"    path="ram:SpecifiedTaxRegistration/ram:ID[@schemeID='FC']"/>                                <!-- BT-32 Seller tax registration identifier -->
+    <list name="contacts" path="ram:DefinedTradeContact">                                                              <!-- BG-6 Seller contact -->
+      <value name="name"       path="ram:PersonName"/>                                                                 <!-- BT-41 Seller contact point -->
+      <value name="department" path="ram:DepartmentName"/>                                                             <!-- BT-41-0 Seller contact department -->
+      <value name="phone"      path="ram:TelephoneUniversalCommunication/ram:CompleteNumber"/>                         <!-- BT-42 Seller contact telephone number -->
+      <value name="email"      path="ram:EmailURIUniversalCommunication/ram:URIID"/>                                   <!-- BT-43 Seller contact email address -->
+    </list>
+    <!-- less common -->
+    <value name="tradingName"             path="ram:SpecifiedLegalOrganization/ram:TradingBusinessName"/>              <!-- BT-28 Seller trading name -->
+    <value name="legalId"                 path="ram:SpecifiedLegalOrganization/ram:ID"/>                               <!-- BT-30 Seller legal registration identifier -->
+    <value name="legalIdScheme"           path="ram:SpecifiedLegalOrganization/ram:ID/@schemeID" type="code"/>         <!-- BT-30-1 Seller legal registration identifier scheme -->
+    <value name="street2"                 path="ram:PostalTradeAddress/ram:LineTwo"/>                                  <!-- BT-36 Seller address line 2 -->
+    <value name="street3"                 path="ram:PostalTradeAddress/ram:LineThree"/>                                <!-- BT-162 Seller address line 3 -->
+    <value name="region"                  path="ram:PostalTradeAddress/ram:CountrySubDivisionName"/>                   <!-- BT-39 Seller country subdivision -->
+    <value name="legalInformation"        path="ram:Description"/>                                                     <!-- BT-33 Seller additional legal information -->
+    <value name="electronicAddress"       path="ram:URIUniversalCommunication/ram:URIID"/>                             <!-- BT-34 Seller electronic address -->
+    <value name="electronicAddressScheme" path="ram:URIUniversalCommunication/ram:URIID/@schemeID" type="code"/>       <!-- BT-34-1 Seller electronic address scheme -->
+  </group>
+
+  <!-- The buyer -->
+  <group name="buyer" path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeAgreement/ram:BuyerTradeParty" required="true"> <!-- BG-7 Buyer -->
+    <value name="name"     path="ram:Name" required="true"/>                                                           <!-- BT-44 Buyer name -->
+    <value name="street"   path="ram:PostalTradeAddress/ram:LineOne"/>                                                 <!-- BT-50 Buyer address line 1 -->
+    <value name="postcode" path="ram:PostalTradeAddress/ram:PostcodeCode"/>                                            <!-- BT-53 Buyer post code -->
+    <value name="city"     path="ram:PostalTradeAddress/ram:CityName"/>                                                <!-- BT-52 Buyer city -->
+    <value name="country"  path="ram:PostalTradeAddress/ram:CountryID" type="code"/>                                   <!-- BT-55 Buyer country code -->
+    <value name="vatId"    path="ram:SpecifiedTaxRegistration/ram:ID[@schemeID='VA']"/>                                <!-- BT-48 Buyer VAT identifier -->
+    <list name="contacts" path="ram:DefinedTradeContact">                                                              <!-- BG-9 Buyer contact -->
+      <value name="name"       path="ram:PersonName"/>                                                                 <!-- BT-56 Buyer contact point -->
+      <value name="department" path="ram:DepartmentName"/>                                                             <!-- BT-56-0 Buyer contact department -->
+      <value name="phone"      path="ram:TelephoneUniversalCommunication/ram:CompleteNumber"/>                         <!-- BT-57 Buyer contact telephone number -->
+      <value name="email"      path="ram:EmailURIUniversalCommunication/ram:URIID"/>                                   <!-- BT-58 Buyer contact email address -->
+    </list>
+    <!-- less common -->
+    <value name="tradingName"             path="ram:SpecifiedLegalOrganization/ram:TradingBusinessName"/>              <!-- BT-45 Buyer trading name -->
+    <value name="legalId"                 path="ram:SpecifiedLegalOrganization/ram:ID"/>                               <!-- BT-47 Buyer legal registration identifier -->
+    <value name="legalIdScheme"           path="ram:SpecifiedLegalOrganization/ram:ID/@schemeID" type="code"/>         <!-- BT-47-1 Buyer legal registration identifier scheme -->
+    <value name="street2"                 path="ram:PostalTradeAddress/ram:LineTwo"/>                                  <!-- BT-51 Buyer address line 2 -->
+    <value name="street3"                 path="ram:PostalTradeAddress/ram:LineThree"/>                                <!-- BT-163 Buyer address line 3 -->
+    <value name="region"                  path="ram:PostalTradeAddress/ram:CountrySubDivisionName"/>                   <!-- BT-54 Buyer country subdivision -->
+    <value name="electronicAddress"       path="ram:URIUniversalCommunication/ram:URIID"/>                             <!-- BT-49 Buyer electronic address -->
+    <value name="electronicAddressScheme" path="ram:URIUniversalCommunication/ram:URIID/@schemeID" type="code"/>       <!-- BT-49-1 Buyer electronic address scheme -->
+  </group>
+
+  <!-- The lines -->
+  <list name="lines" path="rsm:SupplyChainTradeTransaction/ram:IncludedSupplyChainTradeLineItem" required="true">    <!-- BG-25 Invoice line -->
+    <value name="id"          path="ram:AssociatedDocumentLineDocument/ram:LineID"/>                                   <!-- BT-126 Invoice line identifier -->
+    <value name="name"        path="ram:SpecifiedTradeProduct/ram:Name"/>                                              <!-- BT-153 Item name -->
+    <value name="description" path="ram:SpecifiedTradeProduct/ram:Description"/>                                      <!-- BT-154 Item description -->
+    <value name="quantity"    path="ram:SpecifiedLineTradeDelivery/ram:BilledQuantity"/>                               <!-- BT-129 Invoiced quantity -->
+    <value name="unit"        path="ram:SpecifiedLineTradeDelivery/ram:BilledQuantity/@unitCode" type="code"/>         <!-- BT-130 Invoiced quantity unit of measure -->
+    <value name="unitPrice"   path="ram:SpecifiedLineTradeAgreement/ram:NetPriceProductTradePrice/ram:ChargeAmount" type="amount"/> <!-- BT-146 Item net price -->
+    <value name="vatRate"
+           path="ram:SpecifiedLineTradeSettlement/ram:ApplicableTradeTax[ram:TypeCode='VAT']/ram:RateApplicablePercent"/> <!-- BT-152 Invoiced item VAT rate -->
+    <value name="vatCategory"
+           path="ram:SpecifiedLineTradeSettlement/ram:ApplicableTradeTax[ram:TypeCode='VAT']/ram:CategoryCode" type="code"/> <!-- BT-151 Invoiced item VAT category code -->
+    <value name="net"
+           path="ram:SpecifiedLineTradeSettlement/ram:SpecifiedTradeSettlementLineMonetarySummation/ram:LineTotalAmount"
+           type="amount"/>                                                                                             <!-- BT-131 Invoice line net amount -->
+    <!-- less common -->
+    <value name="sellerItemId"         path="ram:SpecifiedTradeProduct/ram:SellerAssignedID"/>                         <!-- BT-155 Item Seller's identifier -->
+    <value name="buyerItemId"          path="ram:SpecifiedTradeProduct/ram:BuyerAssignedID"/>                          <!-- BT-156 Item Buyer's identifier -->
+    <value name="standardItemId"       path="ram:SpecifiedTradeProduct/ram:GlobalID"/>                                 <!-- BT-157 Item standard identifier -->
+    <value name="standardItemIdScheme" path="ram:SpecifiedTradeProduct/ram:GlobalID/@schemeID" type="code"/>           <!-- BT-157-1 Item standard identifier scheme -->
+    <value name="originCountry"        path="ram:SpecifiedTradeProduct/ram:OriginTradeCountry/ram:ID" type="code"/>    <!-- BT-159 Item country of origin -->
+    <value name="customsCode"
+           path="ram:SpecifiedTradeProduct/ram:DesignatedProductClassification/ram:ClassCode[@listID='HS']"/>          <!-- BT-158 Item classification identifier, scheme HS -->
+    <value name="grossPrice"
+           path="ram:SpecifiedLineTradeAgreement/ram:GrossPriceProductTradePrice/ram:ChargeAmount" type="amount"/>     <!-- BT-148 Item gross price -->
+    <value name="grossPriceBaseQuantity"
+           path="ram:SpecifiedLineTradeAgreement/ram:GrossPriceProductTradePrice/ram:BasisQuantity"/>                  <!-- BT-149-1 Item gross price base quantity -->
+    <value name="grossPriceBaseUnit"
+           path="ram:SpecifiedLineTradeAgreement/ram:GrossPriceProductTradePrice/ram:BasisQuantity/@unitCode" type="code"/> <!-- BT-150-1 Item gross price base quantity unit of measure code -->
+    <value name="priceBaseQuantity"
+           path="ram:SpecifiedLineTradeAgreement/ram:NetPriceProductTradePrice/ram:BasisQuantity"/>                    <!-- BT-149 Item price base quantity -->
+    <value name="priceBaseUnit"
+           path="ram:SpecifiedLineTradeAgreement/ram:NetPriceProductTradePrice/ram:BasisQuantity/@unitCode" type="code"/> <!-- BT-150 Item price base quantity unit of measure code -->
+    <value name="orderReference"
+           path="ram:SpecifiedLineTradeAgreement/ram:BuyerOrderReferencedDocument/ram:IssuerAssignedID"/>              <!-- BT-X-21 Purchase order reference of the line -->
+    <value name="orderLine"
+           path="ram:SpecifiedLineTradeAgreement/ram:BuyerOrderReferencedDocument/ram:LineID"/>                        <!-- BT-132 Referenced purchase order line reference -->
+    <value name="periodStart"
+           path="ram:SpecifiedLineTradeSettlement/ram:BillingSpecifiedPeriod/ram:StartDateTime/udt:DateTimeString"
+           type="date"/>                                                                                               <!-- BT-134 Invoice line period start date -->
+    <value name="periodEnd"
+           path="ram:SpecifiedLineTradeSettlement/ram:BillingSpecifiedPeriod/ram:EndDateTime/udt:DateTimeString"
+           type="date"/>                                                                                               <!-- BT-135 Invoice line period end date -->
+    <value name="parentId"    path="ram:AssociatedDocumentLineDocument/ram:ParentLineID"/>                             <!-- BT-X-304 Parent line identifier -->
+    <value name="status"      path="ram:AssociatedDocumentLineDocument/ram:LineStatusReasonCode" type="code"/>         <!-- BT-X-8 Line status reason code -->
+  </list>
+
+  <!-- The VAT breakdown -->
+  <list name="taxes" path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeSettlement/ram:ApplicableTradeTax"> <!-- BG-23 VAT breakdown -->
+    <value name="rate"     path="ram:RateApplicablePercent"/>                                                          <!-- BT-119 VAT category rate -->
+    <value name="basis"    path="ram:BasisAmount" type="amount"/>                                                      <!-- BT-116 VAT category taxable amount -->
+    <value name="amount"   path="ram:CalculatedAmount" type="amount"/>                                                 <!-- BT-117 VAT category tax amount -->
+    <value name="category" path="ram:CategoryCode" type="code"/>                                                       <!-- BT-118 VAT category code -->
+    <!-- less common -->
+    <value name="exemptionReason"     path="ram:ExemptionReason"/>                                                     <!-- BT-120 VAT exemption reason text -->
+    <value name="exemptionReasonCode" path="ram:ExemptionReasonCode" type="code"/>                                     <!-- BT-121 VAT exemption reason code -->
+    <value name="pointDate"           path="ram:TaxPointDate/udt:DateString" type="date"/>                             <!-- BT-7 Value added tax point date -->
+    <value name="pointDateCode"       path="ram:DueDateTypeCode" type="code"/>                                         <!-- BT-8 Value added tax point date code -->
+  </list>
+
+  <!-- The totals -->
+  <group name="totals" path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeSettlement" required="true">  <!-- BG-22 Document totals -->
+    <value name="currency"  path="ram:InvoiceCurrencyCode" type="code" required="true"/>                               <!-- BT-5 Invoice currency code -->
+    <value name="lineTotal" path="ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:LineTotalAmount" type="amount" required="true"/> <!-- BT-106 Sum of Invoice line net amount -->
+    <value name="net"       path="ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:TaxBasisTotalAmount" type="amount" required="true"/> <!-- BT-109 Invoice total amount without VAT -->
+    <value name="vat"
+           path="ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:TaxTotalAmount[@currencyID=ram:InvoiceCurrencyCode]"
+           type="amount"/>                                                                                             <!-- BT-110 Invoice total VAT amount -->
+    <value name="gross"     path="ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:GrandTotalAmount" type="amount" required="true"/> <!-- BT-112 Invoice total amount with VAT -->
+    <value name="due"       path="ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:DuePayableAmount" type="amount" required="true"/> <!-- BT-115 Amount due for payment -->
+    <!-- less common -->
+    <value name="allowances" path="ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:AllowanceTotalAmount" type="amount"/> <!-- BT-107 Sum of allowances on document level -->
+    <value name="charges"    path="ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:ChargeTotalAmount" type="amount"/>    <!-- BT-108 Sum of charges on document level -->
+    <value name="prepaid"    path="ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:TotalPrepaidAmount" type="amount"/>   <!-- BT-113 Paid amount -->
+    <value name="rounding"   path="ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:RoundingAmount" type="amount"/>       <!-- BT-114 Rounding amount -->
+    <value name="taxCurrency" path="ram:TaxCurrencyCode" type="code"/>                                                 <!-- BT-6 VAT accounting currency code -->
+    <value name="vatInTaxCurrency"
+           path="ram:SpecifiedTradeSettlementHeaderMonetarySummation/ram:TaxTotalAmount[@currencyID=ram:TaxCurrencyCode]"
+           type="amount"/>                                                                                             <!-- BT-111 Invoice total VAT amount in accounting currency -->
+  </group>
+
+  <!-- Payment -->
+  <list name="paymentTerms" path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeSettlement/ram:SpecifiedTradePaymentTerms"> <!-- Payment terms, which EXTENDED lets repeat -->
+    <value name="description" path="ram:Description"/>                                                                 <!-- BT-20 Payment terms -->
+    <value name="due"         path="ram:DueDateDateTime/udt:DateTimeString" type="date"/>                              <!-- BT-9 Payment due date -->
+    <value name="mandateId"   path="ram:DirectDebitMandateID"/>                                                        <!-- BT-89 Mandate reference identifier -->
+  </list>
+  <group name="payment" path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeSettlement">                    <!-- How to pay -->
+    <value name="reference" path="ram:PaymentReference"/>                                                              <!-- BT-83 Remittance information -->
+    <list name="means" path="ram:SpecifiedTradeSettlementPaymentMeans">                                                <!-- BG-16 Payment instructions -->
+      <value name="typeCode"    path="ram:TypeCode" type="code"/>                                                      <!-- BT-81 Payment means type code -->
+      <value name="information" path="ram:Information"/>                                                               <!-- BT-82 Payment means text -->
+      <value name="iban"        path="ram:PayeePartyCreditorFinancialAccount/ram:IBANID"/>                             <!-- BT-84 Payment account identifier, BG-17 Credit transfer -->
+      <value name="accountId"   path="ram:PayeePartyCreditorFinancialAccount/ram:ProprietaryID"/>                      <!-- BT-84 Payment account identifier, when it is no IBAN -->
+      <value name="accountName" path="ram:PayeePartyCreditorFinancialAccount/ram:AccountName"/>                        <!-- BT-85 Payment account name -->
+      <value name="bic"         path="ram:PayeeSpecifiedCreditorFinancialInstitution/ram:BICID"/>                      <!-- BT-86 Payment service provider identifier -->
+      <value name="cardNumber"  path="ram:ApplicableTradeSettlementFinancialCard/ram:ID"/>                             <!-- BT-87 Payment card primary account number, BG-18 Payment card information -->
+      <value name="cardHolder"  path="ram:ApplicableTradeSettlementFinancialCard/ram:CardholderName"/>                 <!-- BT-88 Payment card holder name -->
+      <value name="debitedIban" path="ram:PayerPartyDebtorFinancialAccount/ram:IBANID"/>                               <!-- BT-91 Debited account identifier, BG-19 Direct debit -->
+    </list>
+    <!-- less common -->
+    <value name="creditorId" path="ram:CreditorReferenceID"/>                                                          <!-- BT-90 Bank assigned creditor identifier -->
+    <list name="accountingReferences" path="ram:ReceivableSpecifiedTradeAccountingAccount">                         <!-- Buyer accounting references, which EXTENDED lets repeat -->
+      <value name="id" path="ram:ID"/>                                                                                 <!-- BT-19 Buyer accounting reference -->
+    </list>
+  </group>
+  <group name="payee" path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeSettlement/ram:PayeeTradeParty"> <!-- BG-10 Payee -->
+    <value name="name"          path="ram:Name"/>                                                                      <!-- BT-59 Payee name -->
+    <value name="legalId"       path="ram:SpecifiedLegalOrganization/ram:ID"/>                                         <!-- BT-61 Payee legal registration identifier -->
+    <value name="legalIdScheme" path="ram:SpecifiedLegalOrganization/ram:ID/@schemeID" type="code"/>                   <!-- BT-61-1 Payee legal registration identifier scheme -->
+  </group>
+
+  <!-- References -->
+  <list name="precedingInvoices" path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeSettlement/ram:InvoiceReferencedDocument"> <!-- BG-3 Preceding invoice reference -->
+    <value name="number" path="ram:IssuerAssignedID"/>                                                                 <!-- BT-25 Preceding Invoice reference -->
+    <value name="issued" path="ram:FormattedIssueDateTime/qdt:DateTimeString" type="date"/>                            <!-- BT-26 Preceding Invoice issue date -->
+  </list>
+  <list name="documents" path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeAgreement/ram:AdditionalReferencedDocument"> <!-- BG-24 Additional supporting documents -->
+    <value name="id"          path="ram:IssuerAssignedID"/>                                                            <!-- BT-122 Supporting document reference -->
+    <value name="typeCode"    path="ram:TypeCode" type="code"/>                                                      <!-- 916 a supporting document, 50 a tender, 130 an invoiced object -->
+    <value name="description" path="ram:Name"/>                                                                        <!-- BT-123 Supporting document description -->
+    <value name="url"         path="ram:URIID"/>                                                                       <!-- BT-124 External document location -->
+    <value name="file"        path="ram:AttachmentBinaryObject/@filename"/>                                            <!-- BT-125-2 Attached document Filename -->
+    <value name="fileType"    path="ram:AttachmentBinaryObject/@mimeCode"/>                                            <!-- BT-125-1 Attached document Mime code -->
+  </list>
+  <group name="period" path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeSettlement/ram:BillingSpecifiedPeriod"> <!-- BG-14 Invoicing period -->
+    <value name="start" path="ram:StartDateTime/udt:DateTimeString" type="date"/>                                      <!-- BT-73 Invoicing period start date -->
+    <value name="end"   path="ram:EndDateTime/udt:DateTimeString" type="date"/>                                        <!-- BT-74 Invoicing period end date -->
+  </group>
+
+  <!-- Delivery -->
+  <group name="delivery" path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeDelivery">                     <!-- BG-13 Delivery information -->
+    <value name="date"     path="ram:ActualDeliverySupplyChainEvent/ram:OccurrenceDateTime/udt:DateTimeString" type="date"/> <!-- BT-72 Actual delivery date -->
+    <value name="name"     path="ram:ShipToTradeParty/ram:Name"/>                                                      <!-- BT-70 Deliver to party name -->
+    <value name="street"   path="ram:ShipToTradeParty/ram:PostalTradeAddress/ram:LineOne"/>                            <!-- BT-75 Deliver to address line 1 -->
+    <value name="postcode" path="ram:ShipToTradeParty/ram:PostalTradeAddress/ram:PostcodeCode"/>                       <!-- BT-78 Deliver to post code -->
+    <value name="city"     path="ram:ShipToTradeParty/ram:PostalTradeAddress/ram:CityName"/>                           <!-- BT-77 Deliver to city -->
+    <value name="country"  path="ram:ShipToTradeParty/ram:PostalTradeAddress/ram:CountryID" type="code"/>              <!-- BT-80 Deliver to country code -->
+    <!-- less common -->
+    <value name="street2"  path="ram:ShipToTradeParty/ram:PostalTradeAddress/ram:LineTwo"/>                            <!-- BT-76 Deliver to address line 2 -->
+    <value name="street3"  path="ram:ShipToTradeParty/ram:PostalTradeAddress/ram:LineThree"/>                          <!-- BT-165 Deliver to address line 3 -->
+    <value name="region"   path="ram:ShipToTradeParty/ram:PostalTradeAddress/ram:CountrySubDivisionName"/>             <!-- BT-79 Deliver to country subdivision -->
+    <value name="despatchAdviceReference"  path="ram:DespatchAdviceReferencedDocument/ram:IssuerAssignedID"/>          <!-- BT-16 Despatch advice reference -->
+    <value name="receivingAdviceReference" path="ram:ReceivingAdviceReferencedDocument/ram:IssuerAssignedID"/>         <!-- BT-15 Receiving advice reference -->
+  </group>
+
+  <!-- Allowances and charges on the invoice -->
+  <list name="allowanceCharges" path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeSettlement/ram:SpecifiedTradeAllowanceCharge"> <!-- BG-20 Document level allowances, BG-21 Document level charges -->
+    <value name="charge"      path="ram:ChargeIndicator/udt:Indicator" type="code"/>                                   <!-- true for a charge, false for an allowance -->
+    <value name="amount"      path="ram:ActualAmount" type="amount"/>                                                  <!-- BT-92 Document level allowance amount, BT-99 charge amount -->
+    <value name="reason"      path="ram:Reason"/>                                                                      <!-- BT-97 Document level allowance reason, BT-104 charge reason -->
+    <value name="vatRate"     path="ram:CategoryTradeTax/ram:RateApplicablePercent"/>                                  <!-- BT-96 Document level allowance VAT rate, BT-103 charge VAT rate -->
+    <!-- less common -->
+    <value name="basis"       path="ram:BasisAmount" type="amount"/>                                                   <!-- BT-93 Document level allowance base amount, BT-100 charge base amount -->
+    <value name="percent"     path="ram:CalculationPercent"/>                                                          <!-- BT-94 Document level allowance percentage, BT-101 charge percentage -->
+    <value name="reasonCode"  path="ram:ReasonCode" type="code"/>                                                      <!-- BT-98 Document level allowance reason code, BT-105 charge reason code -->
+    <value name="vatCategory" path="ram:CategoryTradeTax/ram:CategoryCode" type="code"/>                               <!-- BT-95 Document level allowance VAT category code, BT-102 charge VAT category code -->
+  </list>
+
+  <!-- The seller's tax representative -->
+  <group name="taxRepresentative" path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeAgreement/ram:SellerTaxRepresentativeTradeParty"> <!-- BG-11 Seller tax representative party -->
+    <value name="name"     path="ram:Name"/>                                                                           <!-- BT-62 Seller tax representative name -->
+    <value name="street"   path="ram:PostalTradeAddress/ram:LineOne"/>                                                 <!-- BT-64 Tax representative address line 1 -->
+    <value name="postcode" path="ram:PostalTradeAddress/ram:PostcodeCode"/>                                            <!-- BT-67 Tax representative post code -->
+    <value name="city"     path="ram:PostalTradeAddress/ram:CityName"/>                                                <!-- BT-66 Tax representative city -->
+    <value name="country"  path="ram:PostalTradeAddress/ram:CountryID" type="code"/>                                   <!-- BT-69 Tax representative country code -->
+    <value name="vatId"    path="ram:SpecifiedTaxRegistration/ram:ID[@schemeID='VA']"/>                                <!-- BT-63 Seller tax representative VAT identifier -->
+    <!-- less common -->
+    <value name="street2"  path="ram:PostalTradeAddress/ram:LineTwo"/>                                                 <!-- BT-65 Tax representative address line 2 -->
+    <value name="street3"  path="ram:PostalTradeAddress/ram:LineThree"/>                                               <!-- BT-164 Tax representative address line 3 -->
+    <value name="region"   path="ram:PostalTradeAddress/ram:CountrySubDivisionName"/>                                  <!-- BT-68 Tax representative country subdivision -->
+  </group>
+
+</cross-industry-invoice-map>

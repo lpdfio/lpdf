@@ -1,0 +1,92 @@
+{
+  "allowanceCharges": [],
+  "buyer": {
+    "city": "Paris",
+    "contacts": [],
+    "country": "FR",
+    "name": "Atelier Lakeside SARL",
+    "postcode": "75011",
+    "street": "8 passage Lakeside"
+  },
+  "delivery": {},
+  "documents": [],
+  "invoicedObjects": [],
+  "issued": "2026-11-11",
+  "lines": [
+    {
+      "id": "01",
+      "name": "Studio starter set",
+      "net": "96.00",
+      "quantity": "1",
+      "status": "GROUP",
+      "unit": "C62",
+      "unitPrice": "96.00",
+      "vatCategory": "S",
+      "vatRate": "20"
+    },
+    {
+      "id": "0101",
+      "name": "Sketchbook, A4, 60 sheets",
+      "net": "24.00",
+      "parentId": "01",
+      "quantity": "2",
+      "status": "DETAIL",
+      "unit": "H87",
+      "unitPrice": "12.00",
+      "vatCategory": "S",
+      "vatRate": "20"
+    },
+    {
+      "id": "0102",
+      "name": "Fineliners, set of 10",
+      "net": "72.00",
+      "parentId": "01",
+      "quantity": "3",
+      "status": "DETAIL",
+      "unit": "H87",
+      "unitPrice": "24.00",
+      "vatCategory": "S",
+      "vatRate": "20"
+    }
+  ],
+  "notes": [],
+  "number": "2026-0488",
+  "payment": {
+    "accountingReferences": [],
+    "means": []
+  },
+  "paymentTerms": [
+    {
+      "due": "2026-12-11"
+    }
+  ],
+  "precedingInvoices": [],
+  "seller": {
+    "city": "Lyon",
+    "contacts": [],
+    "country": "FR",
+    "name": "Northwind Paper SAS",
+    "postcode": "69002",
+    "street": "12 rue de la Charité",
+    "vatId": "FR32123456789"
+  },
+  "specification": "urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:extended",
+  "taxes": [
+    {
+      "amount": "19.20",
+      "basis": "96.00",
+      "category": "S",
+      "rate": "20"
+    }
+  ],
+  "tenderReferences": [],
+  "totals": {
+    "currency": "EUR",
+    "due": "115.20",
+    "gross": "115.20",
+    "lineTotal": "96.00",
+    "net": "96.00",
+    "vat": "19.20"
+  },
+  "typeCode": "380"
+}

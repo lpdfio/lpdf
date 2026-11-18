@@ -1,0 +1,87 @@
+{
+  "allowanceCharges": [],
+  "businessProcess": "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0",
+  "buyer": {
+    "city": "Seestadt",
+    "contacts": [],
+    "country": "DE",
+    "electronicAddress": "eingang@seestadt.example",
+    "electronicAddressScheme": "EM",
+    "name": "Stadtverwaltung Seestadt",
+    "postcode": "12345",
+    "street": "Rathausplatz 1"
+  },
+  "buyerReference": "04011000-12345-67",
+  "delivery": {
+    "date": "2026-10-30"
+  },
+  "documents": [],
+  "invoicedObjects": [],
+  "issued": "2026-10-31",
+  "lines": [
+    {
+      "id": "1",
+      "name": "Kopierpapier A4, 80 g/m², 500 Blatt",
+      "net": "42.00",
+      "quantity": "10",
+      "unit": "H87",
+      "unitPrice": "4.20",
+      "vatCategory": "S",
+      "vatRate": "19"
+    }
+  ],
+  "notes": [],
+  "number": "2026-0412",
+  "payment": {
+    "accountingReferences": [],
+    "means": [
+      {
+        "iban": "DE02120300000000202051",
+        "typeCode": "58"
+      }
+    ]
+  },
+  "paymentTerms": [
+    {
+      "description": "Zahlbar innerhalb von 30 Tagen ohne Abzug.",
+      "due": "2026-11-30"
+    }
+  ],
+  "precedingInvoices": [],
+  "seller": {
+    "city": "Berlin",
+    "contacts": [
+      {
+        "email": "rechnung@nordwind-papier.example",
+        "name": "Ines Wagner",
+        "phone": "+49 30 1234567"
+      }
+    ],
+    "country": "DE",
+    "electronicAddress": "rechnung@nordwind-papier.example",
+    "electronicAddressScheme": "EM",
+    "name": "Nordwind Papier GmbH",
+    "postcode": "10115",
+    "street": "Papierstraße 4",
+    "vatId": "DE123456789"
+  },
+  "specification": "urn:cen.eu:en16931:2017#compliant#urn:xoev-de:kosit:standard:xrechnung_2.1",
+  "taxes": [
+    {
+      "amount": "7.98",
+      "basis": "42.00",
+      "category": "S",
+      "rate": "19"
+    }
+  ],
+  "tenderReferences": [],
+  "totals": {
+    "currency": "EUR",
+    "due": "49.98",
+    "gross": "49.98",
+    "lineTotal": "42.00",
+    "net": "42.00",
+    "vat": "7.98"
+  },
+  "typeCode": "380"
+}

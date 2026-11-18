@@ -19,6 +19,19 @@
 //!   `{ "method": "merge", "sources": [{ "name": "a.pdf", "pdf": "…" }], "options": { "double-sided": true } }`.
 //! - `check_license` reports what `key` is — `{ "status": "licensed", … }` — and takes no
 //!   `input`. `now` is the host's clock in seconds; without it expiry is not checked.
+//! - `extract_invoice_data` reads the values of an invoice, `LCrossIndustryInvoice.extractInvoiceData`, and returns
+//!   `{ "data": …, "typed": [{ "at": ["lines", 0, "unit"], "type": "code", "name": "lines.unit" }, …] }`, or
+//!   `{ "error": "…" }`. It takes no `input`, but `invoice_xml`, the invoice as base64, and `invoice_map`, the text of
+//!   the map, or none for the default: `{ "method": "extract_invoice_data", "invoice_xml": "…", "invoice_map": "…" }`.
+//! - `default_invoice_map` returns `{ "map": "…" }`, the text of Lpdf's default invoice map, and takes nothing else.
+//!
+//! `LCrossIndustryInvoice.generatePdf` is a `render_pdf` or a `render_tree_pdf` with an `invoice`: the invoice's XML
+//! as base64, and for a template the map, or none for the default, and the values `extract_invoice_data` read and the
+//! SDK formatted, which the template binds under the map's prefix beside `data`. The engine makes the file PDF/A-3 and
+//! attaches the XML under the name its profile asks for:
+//! ```json
+//! { "invoice": { "xml": "<base64>", "map": "<cross-industry-invoice-map …>", "data": { … } } }
+//! ```
 //!
 //! For `render_pdf` / `render_tree_pdf`, custom font bytes can be supplied:
 //! ```json
@@ -72,8 +85,8 @@ use std::panic::AssertUnwindSafe;
 use base64::Engine as _;
 
 use crate::{
-    attachments, data, deadline, encrypt, kit_to_xml, layout, license, memory, parse, pdf, pdfa, pdfua, pdfx, references,
-    merge, render, shared, stamp, tokens,
+    attachments, cross_industry_invoice, data, deadline, encrypt, kit_to_xml, layout, license, memory, parse, pdf, pdfa,
+    pdfua, pdfx, references, merge, render, shared, stamp, tokens,
 };
 
 /// The JSON before the base64 of a PDF's answer.
@@ -205,6 +218,17 @@ fn dispatch(request: String) -> Answer {
         return merge_request(&mut req, licensed, before).into();
     }
 
+    if method == "default_invoice_map" {
+        return Answer::Json(serde_json::json!({ "map": cross_industry_invoice::DEFAULT_MAP }).to_string());
+    }
+
+    if method == "extract_invoice_data" {
+        return match extract_request(&mut req, before) {
+            Ok(extracted) => Answer::Json(extracted.to_string()),
+            Err(e) => Answer::error(&e),
+        };
+    }
+
     // Taken out of the request rather than copied, so the render holds one copy of each.
     let method   = method.to_string();
     let key      = key.to_string();
@@ -243,19 +267,82 @@ fn dispatch(request: String) -> Answer {
         Err(e) => return Answer::error(&e),
     };
 
+    // `generatePdf`: the invoice becomes the document's Factur-X file, and for a template its values are bound.
+    let invoice = match take_invoice(&mut req, &method) {
+        Ok(invoice) => invoice,
+        Err(e) => return Answer::error(&e),
+    };
+    let invoice_file = match invoice.as_ref().map(|i| cross_industry_invoice::prepare(&mut doc, &i.xml)).transpose() {
+        Ok(name) => name.zip(invoice.as_ref().map(|i| i.xml.clone())),
+        Err(e) => return Answer::error(&e),
+    };
+
     match method.as_str() {
         "render_pdf" => {
             // Optional data binding: the request may carry a "data" JSON object, bound as it was parsed.
-            if let Some(data) = data {
-                if let Err(e) = data::apply(&mut doc, data) {
-                    return Answer::error(&e);
+            let bound = match invoice {
+                Some(invoice) => {
+                    let values = invoice.data.unwrap_or(serde_json::Value::Null);
+                    cross_industry_invoice::bind_template(&mut doc, data, invoice.map.as_deref(), values)
                 }
+                None => data.map_or(Ok(()), |data| data::apply(&mut doc, data)),
+            };
+            if let Err(e) = bound {
+                return Answer::error(&e);
             }
-            render_pdf_doc(doc, &key, now_unix, &mut req).into()
+            render_pdf_doc(doc, &key, now_unix, &mut req, invoice_file).into()
         }
-        "render_tree_pdf" => render_pdf_doc(doc, &key, now_unix, &mut req).into(),
+        "render_tree_pdf" => render_pdf_doc(doc, &key, now_unix, &mut req, invoice_file).into(),
         _ => Answer::Json(render_doc(doc, &key, now_unix)),
     }
+}
+
+/// The invoice of a `generatePdf` render: its XML, and for a template the map, or none for the default, and the values
+/// the SDK read and formatted.
+struct InvoiceRequest {
+    xml:  Vec<u8>,
+    map:  Option<String>,
+    data: Option<serde_json::Value>,
+}
+
+/// The request's `invoice`, taken out of it: none when it has none. An invoice is for `render_pdf` and
+/// `render_tree_pdf`, and a template's needs its values in `data`.
+fn take_invoice(req: &mut serde_json::Value, method: &str) -> Result<Option<InvoiceRequest>, String> {
+    let Some(mut invoice) = req.get_mut("invoice").map(serde_json::Value::take).filter(|v| !v.is_null()) else {
+        return Ok(None);
+    };
+    if method != "render_pdf" && method != "render_tree_pdf" {
+        return Err(format!("the request's invoice is for render_pdf and render_tree_pdf, not {method}"));
+    }
+    let xml = match invoice.get_mut("xml").map(serde_json::Value::take) {
+        Some(serde_json::Value::String(b64)) => base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .map_err(|e| format!("the request's invoice xml is not base64: {e}"))?,
+        _ => return Err("the request's invoice has no 'xml', the invoice's XML as base64".to_string()),
+    };
+    let map = invoice["map"].as_str().map(str::to_string);
+    let data = invoice.get_mut("data").map(serde_json::Value::take).filter(|v| !v.is_null());
+    if method == "render_pdf" && data.is_none() {
+        return Err("the request's invoice has no 'data', the values extract_invoice_data read, which the template \
+            binds"
+            .to_string());
+    }
+    Ok(Some(InvoiceRequest { xml, map, data }))
+}
+
+/// An `extract_invoice_data` request: the invoice's XML in `invoice_xml`, as base64, and the map in `invoice_map`, or
+/// none for the default. Returns the values read, or the error.
+fn extract_request(req: &mut serde_json::Value, before: i64) -> Result<serde_json::Value, String> {
+    let cap = render_cap(req)?;
+    let _cap = memory::start_from(cap, before);
+    let _deadline = deadline::start_extract(render_timeout(req)?);
+    let xml = match req.get_mut("invoice_xml").map(serde_json::Value::take) {
+        Some(serde_json::Value::String(b64)) => base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .map_err(|e| format!("the request's 'invoice_xml' is not base64: {e}"))?,
+        _ => return Err("request missing 'invoice_xml' field".to_string()),
+    };
+    cross_industry_invoice::extract(&xml, req["invoice_map"].as_str())
 }
 
 /// A `stamp` request: the PDF in `pdf`, as base64, and the `stamps`, each naming a PNG of the request's `images`;
@@ -335,6 +422,7 @@ fn build_registry(req: &mut serde_json::Value) -> pdf::FontRegistry {
 /// `<markdown-styles src>` names, by `src`.
 fn build_resources(req: &serde_json::Value) -> parse::Resources {
     let mut resources = parse::Resources::default();
+    resources.invoice = req.get("invoice").is_some_and(|invoice| !invoice.is_null());
     if let Some(files) = req.get("markdown_styles").and_then(|v| v.as_object()) {
         for (src, text) in files {
             if let Some(text) = text.as_str() {
@@ -392,6 +480,7 @@ fn build_font_widths(req: &serde_json::Value) -> std::collections::HashMap<Strin
 /// profiles are taken out of it as their registries are built.
 fn render_pdf_doc(
     mut doc: parse::Document, license_key: &str, now_unix: i64, req: &mut serde_json::Value,
+    invoice_file: Option<(&str, Vec<u8>)>,
 ) -> Result<Vec<u8>, String> {
     // Checked before the layout, so a missing or stray password fails without the work of a render.
     let encryption = render_encryption(req).and_then(|e| e.resolve(doc.output.encryption.as_ref()))?;
@@ -402,7 +491,10 @@ fn render_pdf_doc(
     let profile_registry = build_profile_registry(req);
     let press = pdfx::resolve(doc.output.pdfx.as_ref(), &doc.profiles, &profile_registry, &doc.meta)?;
 
-    let file_registry = build_file_registry(req);
+    let mut file_registry = build_file_registry(req);
+    if let Some((name, bytes)) = invoice_file {
+        file_registry.load(name, bytes);
+    }
     let attached = std::mem::take(&mut doc.attachments);
     let files = attachments::resolve(&attached, &file_registry, &doc.output)?;
 
@@ -525,7 +617,7 @@ mod tests {
             <layer><img-at name="logo" anchor="top-right" width="100pt" height="100pt"/></layer>
         </section></document></lpdf>"#;
         let mut req = serde_json::json!({ "images": { "logo": TALL_PNG } });
-        let pdf = render_pdf_doc(parse::parse(xml).unwrap(), "", 0, &mut req).unwrap();
+        let pdf = render_pdf_doc(parse::parse(xml).unwrap(), "", 0, &mut req, None).unwrap();
 
         let matrices = image_matrices(&pdf);
         // One size given: the other follows the image, so 50pt wide is 100pt high. Both given: the image fits
@@ -734,6 +826,83 @@ mod tests {
             req[key] = value.clone();
         }
         json(dispatch(req.to_string()))
+    }
+
+    /// The committed invoice `name`, as base64.
+    fn invoice_base64(name: &str) -> String {
+        let path = format!("{}/../../test/assets/files/facturx/{name}", env!("CARGO_MANIFEST_DIR"));
+        base64::engine::general_purpose::STANDARD.encode(std::fs::read(path).unwrap())
+    }
+
+    /// The answer to a request of `method` with `fields` and no `input`.
+    fn answer_without_input(method: &str, fields: serde_json::Value) -> serde_json::Value {
+        let mut req = fields;
+        req["method"] = method.into();
+        json(dispatch(req.to_string()))
+    }
+
+    #[test]
+    fn default_invoice_map_answers_the_map() {
+        let answer = answer_without_input("default_invoice_map", serde_json::json!({}));
+        let map = answer["map"].as_str().unwrap();
+        assert!(map.contains("<cross-industry-invoice-map prefix=\"invoice\">"), "{map}");
+    }
+
+    #[test]
+    fn extract_invoice_data_answers_the_values_and_where_the_typed_ones_are() {
+        let answer = answer_without_input("extract_invoice_data", serde_json::json!({ "invoice_xml": invoice_base64("en16931.xml") }));
+        assert_eq!(answer["data"]["seller"]["name"], "Northwind Paper SAS");
+        assert_eq!(answer["data"]["totals"]["gross"], "69.60");
+        let typed = answer["typed"].as_array().unwrap();
+        assert!(typed.contains(&serde_json::json!({ "at": ["lines", 1, "unit"], "type": "code", "name": "lines.unit" })), "{typed:?}");
+        let map = r#"<cross-industry-invoice-map prefix="rechnung"><value name="nummer" path="rsm:ExchangedDocument/ram:ID"/></cross-industry-invoice-map>"#;
+        let answer = answer_without_input(
+            "extract_invoice_data",
+            serde_json::json!({ "invoice_xml": invoice_base64("en16931.xml"), "invoice_map": map }),
+        );
+        assert_eq!(answer, serde_json::json!({ "data": { "nummer": "2026-0412" }, "typed": [] }));
+        let answer = answer_without_input("extract_invoice_data", serde_json::json!({ "invoice_xml": invoice_base64("minimum.xml") }));
+        assert!(answer["error"].as_str().unwrap().starts_with("the invoice's profile is MINIMUM"), "{answer}");
+        let answer = answer_without_input("extract_invoice_data", serde_json::json!({}));
+        assert_eq!(answer["error"], "request missing 'invoice_xml' field");
+    }
+
+    #[test]
+    fn a_render_with_an_invoice_is_a_factur_x_file_and_binds_a_template_under_the_prefix() {
+        // A PDF/A file embeds every font.
+        let font = base64::engine::general_purpose::STANDARD.encode(include_bytes!("../../../test/assets/fonts/SourceSans3-Regular.otf"));
+        let template = r#"<lpdf version="1"><assets><font name="body" src="body.otf"/></assets><document font="body"><section><layout><text data-value="invoice:seller.name">Seller</text></layout></section></document></lpdf>"#;
+        let values = serde_json::json!({ "seller": { "name": "Northwind Paper SAS" } });
+        let invoice = serde_json::json!({ "xml": invoice_base64("en16931.xml"), "data": values });
+        let fields = |invoice: serde_json::Value| {
+            serde_json::json!({ "invoice": invoice, "fonts": { "body": font }, "created_on": "2026-11-18T10:00:00Z" })
+        };
+        let answered = answer("render_pdf", template, fields(invoice));
+        let pdf = base64::engine::general_purpose::STANDARD.decode(answered["pdf"].as_str().unwrap_or_else(|| panic!("{answered}"))).unwrap();
+        let text = String::from_utf8_lossy(&pdf);
+        assert!(text.contains("<pdfaid:part>3</pdfaid:part>") && text.contains("<fx:DocumentFileName>factur-x.xml</fx:DocumentFileName>"));
+
+        let tree = r#"{"version":1,"type":"document","attrs":{"font":"body","assets":{"fonts":[{"name":"body","src":"body.otf"}]}},"nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[{"type":"text","nodes":["Invoice"]}]}]}]}"#;
+        let invoice = serde_json::json!({ "xml": invoice_base64("xrechnung-3.0.xml") });
+        let answered = answer("render_tree_pdf", tree, fields(invoice));
+        let pdf = base64::engine::general_purpose::STANDARD.decode(answered["pdf"].as_str().unwrap_or_else(|| panic!("{answered}"))).unwrap();
+        assert!(String::from_utf8_lossy(&pdf).contains("<fx:DocumentFileName>xrechnung.xml</fx:DocumentFileName>"));
+
+        let typo = template.replace("invoice:seller.name", "invoice:sellr.name");
+        let invoice = serde_json::json!({ "xml": invoice_base64("en16931.xml"), "data": values });
+        let answered = answer("render_pdf", &typo, fields(invoice));
+        assert!(answered["error"].as_str().unwrap().starts_with("data-value=\"invoice:sellr.name\": 'sellr' is not in the map"), "{answered}");
+    }
+
+    #[test]
+    fn an_invoice_without_its_xml_or_a_templates_without_its_values_is_an_error() {
+        let template = r#"<lpdf version="1"><document><section><layout><text>x</text></layout></section></document></lpdf>"#;
+        let answered = answer("render_pdf", template, serde_json::json!({ "invoice": { "data": {} } }));
+        assert!(answered["error"].as_str().unwrap().starts_with("the request's invoice has no 'xml'"), "{answered}");
+        let answered = answer("render_pdf", template, serde_json::json!({ "invoice": { "xml": invoice_base64("en16931.xml") } }));
+        assert!(answered["error"].as_str().unwrap().starts_with("the request's invoice has no 'data'"), "{answered}");
+        let answered = answer("render", template, serde_json::json!({ "invoice": { "xml": invoice_base64("en16931.xml") } }));
+        assert!(answered["error"].as_str().unwrap().starts_with("the request's invoice is for render_pdf and render_tree_pdf"), "{answered}");
     }
 
     /// A document of `pages` pages, each a column of texts.

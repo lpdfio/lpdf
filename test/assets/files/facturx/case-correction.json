@@ -1,0 +1,100 @@
+{
+  "allowanceCharges": [],
+  "buyer": {
+    "city": "Regensburg",
+    "contacts": [],
+    "country": "DE",
+    "name": "Café am Markt GmbH",
+    "postcode": "93047",
+    "street": "Marktplatz 3"
+  },
+  "delivery": {},
+  "documents": [
+    {
+      "id": "REKL-2026-17",
+      "typeCode": "130"
+    },
+    {
+      "id": "KD-4471",
+      "typeCode": "130"
+    }
+  ],
+  "invoicedObjects": [
+    {
+      "id": "REKL-2026-17"
+    },
+    {
+      "id": "KD-4471",
+      "scheme": "AFL"
+    }
+  ],
+  "issued": "2026-11-12",
+  "lines": [
+    {
+      "id": "1",
+      "name": "Menu cards, A4, 300 g/m², laminated",
+      "net": "270.00",
+      "quantity": "200",
+      "unit": "H87",
+      "unitPrice": "1.35",
+      "vatCategory": "S",
+      "vatRate": "19"
+    }
+  ],
+  "notes": [
+    {
+      "content": "Corrects the unit price of invoices R-2026-1102 and R-2026-1134.",
+      "subjectCode": "AAI"
+    }
+  ],
+  "number": "R-2026-1180",
+  "payment": {
+    "accountingReferences": [],
+    "means": []
+  },
+  "paymentTerms": [
+    {
+      "description": "Zahlbar innerhalb von 14 Tagen ohne Abzug",
+      "due": "2026-11-26"
+    }
+  ],
+  "precedingInvoices": [
+    {
+      "issued": "2026-10-03",
+      "number": "R-2026-1102"
+    },
+    {
+      "issued": "2026-10-17",
+      "number": "R-2026-1134"
+    }
+  ],
+  "seller": {
+    "city": "München",
+    "contacts": [],
+    "country": "DE",
+    "name": "Lindenhof Druck GmbH",
+    "postcode": "80331",
+    "street": "Lindenstraße 14",
+    "taxId": "201/113/40209",
+    "vatId": "DE287654321"
+  },
+  "specification": "urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:extended",
+  "taxes": [
+    {
+      "amount": "51.30",
+      "basis": "270.00",
+      "category": "S",
+      "rate": "19"
+    }
+  ],
+  "tenderReferences": [],
+  "totals": {
+    "currency": "EUR",
+    "due": "321.30",
+    "gross": "321.30",
+    "lineTotal": "270.00",
+    "net": "270.00",
+    "vat": "51.30"
+  },
+  "typeCode": "384"
+}

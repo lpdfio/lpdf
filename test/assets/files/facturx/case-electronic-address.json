@@ -1,0 +1,81 @@
+{
+  "allowanceCharges": [],
+  "buyer": {
+    "city": "Lindau",
+    "contacts": [],
+    "country": "DE",
+    "electronicAddress": "04011000-12345-34",
+    "electronicAddressScheme": "0204",
+    "name": "Stadtverwaltung Lindau",
+    "postcode": "88131",
+    "street": "Bregenzer Straße 6"
+  },
+  "buyerReference": "04011000-12345-34",
+  "delivery": {},
+  "documents": [
+    {
+      "description": "Hours worked, November",
+      "file": "zeitnachweis.csv",
+      "fileType": "text/csv",
+      "id": "Zeitnachweis-2026-11",
+      "typeCode": "916"
+    }
+  ],
+  "invoicedObjects": [],
+  "issued": "2026-11-16",
+  "lines": [
+    {
+      "id": "1",
+      "name": "Brochures for the town museum, 16 pages, 1000 copies",
+      "net": "1240.00",
+      "quantity": "1",
+      "unit": "C62",
+      "unitPrice": "1240.00",
+      "vatCategory": "S",
+      "vatRate": "19"
+    }
+  ],
+  "notes": [],
+  "number": "2026-0503",
+  "payment": {
+    "accountingReferences": [],
+    "means": []
+  },
+  "paymentTerms": [
+    {
+      "due": "2026-12-16"
+    }
+  ],
+  "precedingInvoices": [],
+  "seller": {
+    "city": "München",
+    "contacts": [],
+    "country": "DE",
+    "electronicAddress": "rechnung@lindenhof-druck.example",
+    "electronicAddressScheme": "EM",
+    "name": "Lindenhof Druck GmbH",
+    "postcode": "80331",
+    "street": "Lindenstraße 14",
+    "taxId": "201/113/40209",
+    "vatId": "DE287654321"
+  },
+  "specification": "urn:cen.eu:en16931:2017",
+  "taxes": [
+    {
+      "amount": "235.60",
+      "basis": "1240.00",
+      "category": "S",
+      "rate": "19"
+    }
+  ],
+  "tenderReferences": [],
+  "totals": {
+    "currency": "EUR",
+    "due": "1475.60",
+    "gross": "1475.60",
+    "lineTotal": "1240.00",
+    "net": "1240.00",
+    "vat": "235.60"
+  },
+  "typeCode": "380"
+}

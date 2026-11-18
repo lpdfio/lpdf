@@ -1,0 +1,72 @@
+{
+  "allowanceCharges": [],
+  "buyer": {
+    "city": "Paris",
+    "contacts": [],
+    "country": "FR",
+    "name": "Atelier Lakeside SARL",
+    "postcode": "75011",
+    "street": "8 passage Lakeside"
+  },
+  "delivery": {},
+  "documents": [],
+  "invoicedObjects": [],
+  "issued": "2026-11-05",
+  "lines": [
+    {
+      "id": "1",
+      "name": "A4 paper, 80 g/m², ream of 500 sheets",
+      "net": "8.40",
+      "quantity": "2",
+      "unit": "H87",
+      "unitPrice": "4.20",
+      "vatCategory": "S",
+      "vatRate": "20"
+    }
+  ],
+  "notes": [],
+  "number": "CN-2026-0031",
+  "payment": {
+    "accountingReferences": [],
+    "means": []
+  },
+  "paymentTerms": [
+    {
+      "description": "Credited to your account with the next invoice"
+    }
+  ],
+  "precedingInvoices": [
+    {
+      "issued": "2026-10-31",
+      "number": "2026-0412"
+    }
+  ],
+  "seller": {
+    "city": "Lyon",
+    "contacts": [],
+    "country": "FR",
+    "name": "Northwind Paper SAS",
+    "postcode": "69002",
+    "street": "12 rue de la Charité",
+    "vatId": "FR32123456789"
+  },
+  "specification": "urn:cen.eu:en16931:2017",
+  "taxes": [
+    {
+      "amount": "1.68",
+      "basis": "8.40",
+      "category": "S",
+      "rate": "20"
+    }
+  ],
+  "tenderReferences": [],
+  "totals": {
+    "currency": "EUR",
+    "due": "10.08",
+    "gross": "10.08",
+    "lineTotal": "8.40",
+    "net": "8.40",
+    "vat": "1.68"
+  },
+  "typeCode": "381"
+}

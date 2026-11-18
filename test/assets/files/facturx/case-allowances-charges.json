@@ -1,0 +1,96 @@
+{
+  "allowanceCharges": [
+    {
+      "amount": "10.00",
+      "charge": "false",
+      "reason": "Loyalty discount",
+      "reasonCode": "100",
+      "vatCategory": "S",
+      "vatRate": "20"
+    },
+    {
+      "amount": "7.50",
+      "charge": "true",
+      "reason": "Freight",
+      "reasonCode": "FC",
+      "vatCategory": "S",
+      "vatRate": "20"
+    }
+  ],
+  "buyer": {
+    "city": "Paris",
+    "contacts": [],
+    "country": "FR",
+    "name": "Atelier Lakeside SARL",
+    "postcode": "75011",
+    "street": "8 passage Lakeside"
+  },
+  "delivery": {},
+  "documents": [],
+  "invoicedObjects": [],
+  "issued": "2026-11-09",
+  "lines": [
+    {
+      "id": "1",
+      "name": "Sketchbooks, A3, 40 sheets",
+      "net": "135.00",
+      "quantity": "20",
+      "unit": "H87",
+      "unitPrice": "7.50",
+      "vatCategory": "S",
+      "vatRate": "20"
+    },
+    {
+      "id": "2",
+      "name": "Drawing pencils, set of 12",
+      "net": "60.00",
+      "quantity": "10",
+      "unit": "H87",
+      "unitPrice": "6.00",
+      "vatCategory": "S",
+      "vatRate": "20"
+    }
+  ],
+  "notes": [],
+  "number": "2026-0466",
+  "payment": {
+    "accountingReferences": [],
+    "means": []
+  },
+  "paymentTerms": [
+    {
+      "due": "2026-12-09"
+    }
+  ],
+  "precedingInvoices": [],
+  "seller": {
+    "city": "Lyon",
+    "contacts": [],
+    "country": "FR",
+    "name": "Northwind Paper SAS",
+    "postcode": "69002",
+    "street": "12 rue de la Charité",
+    "vatId": "FR32123456789"
+  },
+  "specification": "urn:cen.eu:en16931:2017",
+  "taxes": [
+    {
+      "amount": "38.50",
+      "basis": "192.50",
+      "category": "S",
+      "rate": "20"
+    }
+  ],
+  "tenderReferences": [],
+  "totals": {
+    "allowances": "10.00",
+    "charges": "7.50",
+    "currency": "EUR",
+    "due": "231.00",
+    "gross": "231.00",
+    "lineTotal": "195.00",
+    "net": "192.50",
+    "vat": "38.50"
+  },
+  "typeCode": "380"
+}

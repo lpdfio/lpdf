@@ -1,0 +1,83 @@
+{
+  "allowanceCharges": [],
+  "buyer": {
+    "city": "Regensburg",
+    "contacts": [],
+    "country": "DE",
+    "name": "Café am Markt GmbH",
+    "postcode": "93047",
+    "street": "Marktplatz 3"
+  },
+  "delivery": {},
+  "documents": [],
+  "invoicedObjects": [],
+  "issued": "2026-11-02",
+  "lines": [
+    {
+      "id": "1",
+      "name": "Espresso beans, house blend, 1 kg",
+      "net": "226.80",
+      "quantity": "12",
+      "unit": "KGM",
+      "unitPrice": "18.90",
+      "vatCategory": "S",
+      "vatRate": "7"
+    },
+    {
+      "id": "2",
+      "name": "Descaler for espresso machines, 1 l",
+      "net": "38.00",
+      "quantity": "4",
+      "unit": "H87",
+      "unitPrice": "9.50",
+      "vatCategory": "S",
+      "vatRate": "19"
+    }
+  ],
+  "notes": [],
+  "number": "2026-30215",
+  "payment": {
+    "accountingReferences": [],
+    "means": []
+  },
+  "paymentTerms": [
+    {
+      "due": "2026-12-02"
+    }
+  ],
+  "precedingInvoices": [],
+  "seller": {
+    "city": "Hamburg",
+    "contacts": [],
+    "country": "DE",
+    "name": "Rösterei Hafenbrand KG",
+    "postcode": "20457",
+    "street": "Speicherstraße 2",
+    "vatId": "DE298765432"
+  },
+  "specification": "urn:cen.eu:en16931:2017",
+  "taxes": [
+    {
+      "amount": "15.88",
+      "basis": "226.80",
+      "category": "S",
+      "rate": "7"
+    },
+    {
+      "amount": "7.22",
+      "basis": "38.00",
+      "category": "S",
+      "rate": "19"
+    }
+  ],
+  "tenderReferences": [],
+  "totals": {
+    "currency": "EUR",
+    "due": "287.90",
+    "gross": "287.90",
+    "lineTotal": "264.80",
+    "net": "264.80",
+    "vat": "23.10"
+  },
+  "typeCode": "380"
+}

@@ -1,0 +1,75 @@
+{
+  "allowanceCharges": [],
+  "buyer": {
+    "city": "Regensburg",
+    "contacts": [],
+    "country": "DE",
+    "name": "Café am Markt GmbH",
+    "postcode": "93047",
+    "street": "Marktplatz 3"
+  },
+  "delivery": {},
+  "documents": [],
+  "invoicedObjects": [],
+  "issued": "2026-11-01",
+  "lines": [
+    {
+      "id": "1",
+      "name": "Electricity, October",
+      "net": "570.40",
+      "quantity": "1840",
+      "unit": "KWH",
+      "unitPrice": "0.31",
+      "vatCategory": "S",
+      "vatRate": "19"
+    }
+  ],
+  "notes": [],
+  "number": "2026-71200",
+  "payment": {
+    "accountingReferences": [],
+    "creditorId": "DE98ZZZ09999999999",
+    "means": [
+      {
+        "debitedIban": "DE02120300000000202051",
+        "typeCode": "59"
+      }
+    ]
+  },
+  "paymentTerms": [
+    {
+      "description": "Debited from your account on 15 November 2026",
+      "due": "2026-11-15",
+      "mandateId": "SW-2024-00817"
+    }
+  ],
+  "precedingInvoices": [],
+  "seller": {
+    "city": "Talheim",
+    "contacts": [],
+    "country": "DE",
+    "name": "Stadtwerke Talheim GmbH",
+    "postcode": "74388",
+    "street": "Uferweg 1",
+    "vatId": "DE265432198"
+  },
+  "specification": "urn:cen.eu:en16931:2017",
+  "taxes": [
+    {
+      "amount": "108.38",
+      "basis": "570.40",
+      "category": "S",
+      "rate": "19"
+    }
+  ],
+  "tenderReferences": [],
+  "totals": {
+    "currency": "EUR",
+    "due": "678.78",
+    "gross": "678.78",
+    "lineTotal": "570.40",
+    "net": "570.40",
+    "vat": "108.38"
+  },
+  "typeCode": "380"
+}

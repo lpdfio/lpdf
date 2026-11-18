@@ -1591,6 +1591,9 @@ pub fn parse(xml: &str) -> Result<Document, String> {
 #[derive(Debug, Clone, Default)]
 pub struct Resources {
     pub markdown_styles: HashMap<String, String>,
+    /// A render of `LCrossIndustryInvoice.generatePdf`, which makes the document a Factur-X invoice once it is read
+    /// and checks its files then (`cross_industry_invoice::prepare`), so that a file it refuses gets that call's error.
+    pub invoice: bool,
 }
 
 /// Parse `xml` with the files its `src` attributes name loaded in `resources`.
@@ -1706,7 +1709,9 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                         node_loc(&child)
                     ));
                 }
-                crate::attachments::check_standards(&attachments, &output)?;
+                if !resources.invoice {
+                    crate::attachments::check_standards(&attachments, &output)?;
+                }
                 markdown::expand_pending(&mut sections_xml, None, markdown::Pass::Read)?;
                 check_sections(&mut sections_xml)?;
                 bulk::check_document(&sections_xml, &output)?;
@@ -4348,7 +4353,9 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
         None | Some(serde_json::Value::Null) => Vec::new(),
         Some(files) => crate::attachments::from_tree(files)?,
     };
-    crate::attachments::check_standards(&attachments, &output)?;
+    if !resources.invoice {
+        crate::attachments::check_standards(&attachments, &output)?;
+    }
 
     // ── Document-level page defaults ──────────────────────────────────────────
     let doc_size_str  = attrs.get("size")       .and_then(|v| v.as_str());

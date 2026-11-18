@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The template of an invoice that LCrossIndustryInvoice.generatePdf fills from the invoice's XML: it binds the
+     invoice's values under the prefix of Lpdf's default map, invoice:, and a note from the caller's data without one.
+     It says only how the invoice looks: generatePdf makes the file PDF/A-3 and attaches the XML, so it has no output
+     and no attachments. Rendered with no invoice, it shows its own text. The font is in test/assets/fonts (SIL Open
+     Font License), named relative to this file. cross_industry_invoice_render_tests.rs renders it. -->
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <assets>
+    <font name="body" src="../assets/fonts/SourceSans3-Regular.otf"/>
+  </assets>
+  <document size="a4" font="body">
+    <meta title="Invoice" author="Northwind Paper SAS" lang="en"/>
+    <section>
+      <layout margin="48pt">
+        <column gap="l">
+          <row align="end">
+            <column width="fill" gap="xs">
+              <text font-size="20pt" data-value="invoice:seller.name">Seller</text>
+              <text font-size="9pt" color="#5b6475" data-value="invoice:seller.street">Street</text>
+              <row gap="xs">
+                <text font-size="9pt" color="#5b6475" data-value="invoice:seller.postcode">00000</text>
+                <text font-size="9pt" color="#5b6475" data-value="invoice:seller.city">City</text>
+              </row>
+              <row gap="xs">
+                <text font-size="9pt" color="#5b6475">VAT</text>
+                <text font-size="9pt" color="#5b6475" data-value="invoice:seller.vatId">Number</text>
+              </row>
+            </column>
+            <row gap="xs">
+              <text font-size="16pt" color="#1763cf" data-value="invoice:typeCode">Invoice</text>
+              <text font-size="16pt" color="#1763cf" data-value="invoice:number">0000</text>
+            </row>
+          </row>
+          <divider color="#dde3ed" thickness="0.5pt"/>
+          <row gap="l">
+            <column width="fill" gap="xs">
+              <text font-size="9pt" color="#5b6475">Billed to</text>
+              <text data-value="invoice:buyer.name">Buyer</text>
+              <text data-value="invoice:buyer.street">Street</text>
+              <row gap="xs">
+                <text data-value="invoice:buyer.postcode">00000</text>
+                <text data-value="invoice:buyer.city">City</text>
+              </row>
+            </column>
+            <column width="fill" gap="xs">
+              <text font-size="9pt" color="#5b6475">Issued · Due</text>
+              <text data-value="invoice:issued">1 January 2026</text>
+              <row data-source="invoice:paymentTerms">
+                <text data-value="due">31 January 2026</text>
+              </row>
+            </column>
+          </row>
+          <table cols="4fr 1fr 1fr 1fr 1fr 1fr">
+            <thead>
+              <td><text font-size="9pt" color="#5b6475">Item</text></td>
+              <td><text font-size="9pt" color="#5b6475" align="right">Qty</text></td>
+              <td><text font-size="9pt" color="#5b6475" align="right">Unit</text></td>
+              <td><text font-size="9pt" color="#5b6475" align="right">Price</text></td>
+              <td><text font-size="9pt" color="#5b6475" align="right">VAT %</text></td>
+              <td><text font-size="9pt" color="#5b6475" align="right">Amount</text></td>
+            </thead>
+            <tr data-source="invoice:lines">
+              <td><text data-value="name">Item</text></td>
+              <td><text align="right" data-value="quantity">1</text></td>
+              <td><text align="right" data-value="unit">pcs</text></td>
+              <td><text align="right" data-value="unitPrice">0.00</text></td>
+              <td><text align="right" data-value="vatRate">0</text></td>
+              <td><text align="right" data-value="net">0.00</text></td>
+            </tr>
+          </table>
+          <divider color="#dde3ed" thickness="0.5pt"/>
+          <table cols="1fr 1fr 1fr">
+            <thead>
+              <td><text font-size="9pt" color="#5b6475">VAT rate (%)</text></td>
+              <td><text font-size="9pt" color="#5b6475" align="right">Basis</text></td>
+              <td><text font-size="9pt" color="#5b6475" align="right">VAT</text></td>
+            </thead>
+            <tr data-source="invoice:taxes">
+              <td><text data-value="rate">0</text></td>
+              <td><text align="right" data-value="basis">0.00</text></td>
+              <td><text align="right" data-value="amount">0.00</text></td>
+            </tr>
+          </table>
+          <column gap="xs" align="end">
+            <row gap="xs">
+              <text>VAT</text>
+              <text data-value="invoice:totals.vat">0.00</text>
+              <text data-value="invoice:totals.currency">EUR</text>
+            </row>
+            <row gap="xs" data-if="invoice:totals.vatInTaxCurrency">
+              <text font-size="9pt" color="#5b6475">VAT in</text>
+              <text font-size="9pt" color="#5b6475" data-value="invoice:totals.taxCurrency">EUR</text>
+              <text font-size="9pt" color="#5b6475" data-value="invoice:totals.vatInTaxCurrency">0.00</text>
+            </row>
+            <row gap="xs">
+              <text font-size="14pt">Total</text>
+              <text font-size="14pt" data-value="invoice:totals.gross">0.00</text>
+              <text font-size="14pt" data-value="invoice:totals.currency">EUR</text>
+            </row>
+          </column>
+          <text data-if="note" data-value="note" font-size="9pt" color="#5b6475">A note</text>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

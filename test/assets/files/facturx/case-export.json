@@ -1,0 +1,77 @@
+{
+  "allowanceCharges": [],
+  "buyer": {
+    "city": "Innsbruck",
+    "contacts": [],
+    "country": "AT",
+    "name": "Alpenland Bau GmbH",
+    "postcode": "6020",
+    "street": "Hauptstraße 7",
+    "vatId": "ATU12345678"
+  },
+  "delivery": {
+    "city": "Hall in Tirol",
+    "country": "AT",
+    "date": "2026-11-03",
+    "name": "Alpenland Bau GmbH, Baustelle Hall",
+    "postcode": "6060",
+    "street": "Salvatorgasse 12"
+  },
+  "documents": [],
+  "invoicedObjects": [],
+  "issued": "2026-11-06",
+  "lines": [
+    {
+      "id": "1",
+      "name": "Concrete mixer KM 350, 350 l",
+      "net": "5780.00",
+      "quantity": "2",
+      "unit": "H87",
+      "unitPrice": "2890.00",
+      "vatCategory": "K",
+      "vatRate": "0"
+    }
+  ],
+  "notes": [],
+  "number": "2026-5512",
+  "payment": {
+    "accountingReferences": [],
+    "means": []
+  },
+  "paymentTerms": [
+    {
+      "due": "2026-12-06"
+    }
+  ],
+  "precedingInvoices": [],
+  "seller": {
+    "city": "Stuttgart",
+    "contacts": [],
+    "country": "DE",
+    "name": "Kessler Maschinenbau GmbH",
+    "postcode": "70565",
+    "street": "Werkstraße 41",
+    "vatId": "DE312456789"
+  },
+  "specification": "urn:cen.eu:en16931:2017",
+  "taxes": [
+    {
+      "amount": "0.00",
+      "basis": "5780.00",
+      "category": "K",
+      "exemptionReason": "Intra-community supply",
+      "exemptionReasonCode": "VATEX-EU-IC",
+      "rate": "0"
+    }
+  ],
+  "tenderReferences": [],
+  "totals": {
+    "currency": "EUR",
+    "due": "5780.00",
+    "gross": "5780.00",
+    "lineTotal": "5780.00",
+    "net": "5780.00",
+    "vat": "0.00"
+  },
+  "typeCode": "380"
+}

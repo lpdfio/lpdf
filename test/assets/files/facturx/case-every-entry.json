@@ -1,0 +1,287 @@
+{
+  "allowanceCharges": [
+    {
+      "amount": "5.00",
+      "basis": "50.00",
+      "charge": "false",
+      "percent": "10",
+      "reason": "Early order",
+      "reasonCode": "95",
+      "vatCategory": "S",
+      "vatRate": "20"
+    },
+    {
+      "amount": "5.00",
+      "charge": "true",
+      "reason": "Packing",
+      "reasonCode": "ABL",
+      "vatCategory": "S",
+      "vatRate": "20"
+    }
+  ],
+  "businessProcess": "urn:fdc:peppol.eu:2017:poacc:billing:01:1.0",
+  "buyer": {
+    "city": "Paris",
+    "contacts": [
+      {
+        "department": "Purchasing",
+        "email": "achats@lakeside.example",
+        "name": "Inès Laurent",
+        "phone": "+33 1 40 00 00 03"
+      }
+    ],
+    "country": "FR",
+    "electronicAddress": "factures@lakeside.example",
+    "electronicAddressScheme": "EM",
+    "legalId": "987654321",
+    "legalIdScheme": "0002",
+    "name": "Atelier Lakeside SARL",
+    "postcode": "75011",
+    "region": "Île-de-France",
+    "street": "8 passage Lakeside",
+    "street2": "Cour intérieure",
+    "street3": "Atelier 3",
+    "tradingName": "Lakeside",
+    "vatId": "FR45987654321"
+  },
+  "buyerReference": "BR-4411",
+  "contractReference": "CT-2025-07",
+  "delivery": {
+    "city": "Paris",
+    "country": "FR",
+    "date": "2026-11-16",
+    "despatchAdviceReference": "DA-2026-310",
+    "name": "Atelier Lakeside SARL, shop",
+    "postcode": "75011",
+    "receivingAdviceReference": "RA-2026-055",
+    "region": "Île-de-France",
+    "street": "15 rue Oberkampf",
+    "street2": "Rez-de-chaussée",
+    "street3": "Porte 2"
+  },
+  "documents": [
+    {
+      "id": "Lot 3",
+      "typeCode": "50"
+    },
+    {
+      "id": "Shop Lakeside, Paris",
+      "typeCode": "130"
+    },
+    {
+      "description": "Delivery note",
+      "file": "delivery-note.csv",
+      "fileType": "text/csv",
+      "id": "Delivery-2026-11",
+      "typeCode": "916",
+      "url": "https://northwind.example/notes/2026-11"
+    }
+  ],
+  "invoicedObjects": [
+    {
+      "id": "Shop Lakeside, Paris",
+      "scheme": "AVV"
+    }
+  ],
+  "issued": "2026-11-18",
+  "lines": [
+    {
+      "id": "1",
+      "name": "Shop supplies",
+      "net": "152.00",
+      "quantity": "1",
+      "status": "GROUP",
+      "unit": "C62",
+      "unitPrice": "152.00",
+      "vatCategory": "S",
+      "vatRate": "20"
+    },
+    {
+      "buyerItemId": "LS-0193",
+      "customsCode": "48043100",
+      "description": "Brown, 80 g/m²",
+      "grossPrice": "40.00",
+      "grossPriceBaseQuantity": "1",
+      "grossPriceBaseUnit": "H87",
+      "id": "1.1",
+      "name": "Kraft paper roll, 1 m × 50 m",
+      "net": "152.00",
+      "orderLine": "2",
+      "orderReference": "PO-7832",
+      "originCountry": "FR",
+      "parentId": "1",
+      "periodEnd": "2026-11-30",
+      "periodStart": "2026-11-01",
+      "priceBaseQuantity": "1",
+      "priceBaseUnit": "H87",
+      "quantity": "4",
+      "sellerItemId": "KR-1050",
+      "standardItemId": "3012345000019",
+      "standardItemIdScheme": "0160",
+      "status": "DETAIL",
+      "unit": "H87",
+      "unitPrice": "38.00",
+      "vatCategory": "S",
+      "vatRate": "20"
+    },
+    {
+      "id": "2",
+      "name": "Cutting service",
+      "net": "90.00",
+      "quantity": "2",
+      "unit": "HUR",
+      "unitPrice": "45.00",
+      "vatCategory": "S",
+      "vatRate": "10"
+    }
+  ],
+  "notes": [
+    {
+      "content": "Thank you for your order.",
+      "subjectCode": "AAI"
+    },
+    {
+      "content": "Goods remain our property until paid in full.",
+      "subjectCode": "REG"
+    }
+  ],
+  "number": "2026-0999",
+  "orderReference": "PO-7832",
+  "payee": {
+    "legalId": "123456789",
+    "legalIdScheme": "0002",
+    "name": "Northwind Paper SAS, collections"
+  },
+  "payment": {
+    "accountingReferences": [
+      {
+        "id": "606100"
+      }
+    ],
+    "creditorId": "FR12ZZZ123456",
+    "means": [
+      {
+        "accountId": "NW-001",
+        "accountName": "Northwind Paper SAS",
+        "bic": "AGRIFRPP",
+        "iban": "FR7630006000011234567890189",
+        "information": "SEPA credit transfer",
+        "typeCode": "58"
+      },
+      {
+        "cardHolder": "Inès Laurent",
+        "cardNumber": "**** **** **** 4242",
+        "information": "Card",
+        "typeCode": "48"
+      },
+      {
+        "debitedIban": "FR7612345000019876543210987",
+        "information": "SEPA direct debit",
+        "typeCode": "59"
+      }
+    ],
+    "reference": "2026-0999"
+  },
+  "paymentTerms": [
+    {
+      "description": "2% discount if paid by 26 November",
+      "due": "2026-11-28",
+      "mandateId": "NW-MANDATE-7"
+    }
+  ],
+  "period": {
+    "end": "2026-11-30",
+    "start": "2026-11-01"
+  },
+  "precedingInvoices": [
+    {
+      "issued": "2026-10-31",
+      "number": "2026-0412"
+    }
+  ],
+  "projectName": "Shop fitting Lakeside",
+  "projectReference": "PRJ-14",
+  "salesOrderReference": "SO-2026-881",
+  "seller": {
+    "city": "Lyon",
+    "contacts": [
+      {
+        "department": "Billing",
+        "email": "billing@northwind.example",
+        "name": "Claire Martin",
+        "phone": "+33 4 72 00 00 01"
+      },
+      {
+        "department": "Sales",
+        "email": "sales@northwind.example",
+        "name": "Hugo Bernard",
+        "phone": "+33 4 72 00 00 02"
+      }
+    ],
+    "country": "FR",
+    "electronicAddress": "invoices@northwind.example",
+    "electronicAddressScheme": "EM",
+    "legalId": "123456789",
+    "legalIdScheme": "0002",
+    "legalInformation": "SAS au capital de 50 000 EUR",
+    "name": "Northwind Paper SAS",
+    "postcode": "69002",
+    "region": "Auvergne-Rhône-Alpes",
+    "street": "12 rue de la Charité",
+    "street2": "Bâtiment B",
+    "street3": "2e étage",
+    "taxId": "123 456 789 00012",
+    "tradingName": "Northwind Paper",
+    "vatId": "FR32123456789"
+  },
+  "specification": "urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:extended",
+  "taxRepresentative": {
+    "city": "Lyon",
+    "country": "FR",
+    "name": "Rhône Fiscal Services",
+    "postcode": "69002",
+    "region": "Auvergne-Rhône-Alpes",
+    "street": "3 quai Saint-Antoine",
+    "street2": "Bureau 12",
+    "street3": "Entrée A",
+    "vatId": "FR77555444333"
+  },
+  "taxes": [
+    {
+      "amount": "30.40",
+      "basis": "152.00",
+      "category": "S",
+      "exemptionReason": "None, the rate applies",
+      "exemptionReasonCode": "VATEX-EU-79-C",
+      "pointDate": "2026-11-16",
+      "rate": "20"
+    },
+    {
+      "amount": "9.00",
+      "basis": "90.00",
+      "category": "S",
+      "pointDateCode": "5",
+      "rate": "10"
+    }
+  ],
+  "tenderReferences": [
+    {
+      "id": "Lot 3"
+    }
+  ],
+  "totals": {
+    "allowances": "5.00",
+    "charges": "5.00",
+    "currency": "USD",
+    "due": "231.40",
+    "gross": "281.40",
+    "lineTotal": "242.00",
+    "net": "242.00",
+    "prepaid": "50.00",
+    "rounding": "0.00",
+    "taxCurrency": "EUR",
+    "vat": "39.40",
+    "vatInTaxCurrency": "36.25"
+  },
+  "typeCode": "380"
+}
