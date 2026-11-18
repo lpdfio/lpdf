@@ -11,6 +11,9 @@ The builds also hold code that comes with the Rust toolchain: the standard
 library and the crates it bundles, and in the WASI build, wasi-libc. It is
 listed after the crates, and its texts are among the others.
 
+And they hold what the build makes from the schemas of other projects,
+listed last: which element of an e-invoice may sit inside which.
+
 This file is generated from the dependencies of the engine by
 scripts/third-party-licenses.mjs. Do not edit it by hand.
 
@@ -164,7 +167,13 @@ wasi-libc | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://github
 wasip1 1.0.0 (Rust standard library) | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://crates.io/crates/wasip1/1.0.0 | in the WASI build
 
 
-LICENSE TEXTS (123)
+SCHEMAS (1)
+===============================================================================
+
+Factur-X / ZUGFeRD EXTENDED schema 1.09.2 / 2.5.2 | Apache-2.0 | https://www.ferd-net.de/en/ueber-uns/ressourcen-1/veroeffentlichungen/disclaimer-and-rights-of-use-zugferd
+
+
+LICENSE TEXTS (124)
 ===============================================================================
 
 License text of:
@@ -756,7 +765,8 @@ License text of:
     gimli 0.34.0 (Rust standard library),
     hashbrown 0.17.1 (Rust standard library),
     rustc-demangle 0.1.28 (Rust standard library), wasi-libc,
-    wasip1 1.0.0 (Rust standard library)
+    wasip1 1.0.0 (Rust standard library),
+    Factur-X / ZUGFeRD EXTENDED schema 1.09.2 / 2.5.2
 -------------------------------------------------------------------------------
 Apache License
                         Version 2.0, January 2004
@@ -7165,3 +7175,23 @@ conflicts with the conditions of the GPLv2, you may retroactively and
 prospectively choose to deem waived or otherwise exclude such Section(s) of
 the License, but only in their entirety and only with respect to the Combined
 Software.
+
+
+NOTICE of:
+    Factur-X / ZUGFeRD EXTENDED schema 1.09.2 / 2.5.2
+-------------------------------------------------------------------------------
+Factur-X / ZUGFeRD EXTENDED schema
+
+The four .xsd files in this folder are the XML schema of the EXTENDED profile
+of Factur-X 1.09.2 / ZUGFeRD 2.5.2, one specification that FeRD (Forum
+elektronische Rechnung Deutschland) and FNFE-MPE publish together. They come
+from FeRD's ZUGFeRD 2.5.2 package, folder Schema/4_Factur-X_1.09.2_EXTENDED/,
+unmodified, under FeRD's own file names.
+
+FeRD's disclaimer and rights of use put the technical artifacts of the
+specification, its schemas and Schematron, under the Apache License,
+Version 2.0, whose text is in LICENSE beside this file:
+https://www.ferd-net.de/en/ueber-uns/ressourcen-1/veroeffentlichungen/disclaimer-and-rights-of-use-zugferd
+
+The Lpdf engine's build reads them to learn which element of a Cross Industry
+Invoice may sit inside which, and which attributes it has.

@@ -63,6 +63,8 @@ lopdf = { version = "0.46", default-features = false, features = ["wasm_js"] }
 
 [build-dependencies]
 sha2 = "0.10"
+# Reads FeRD's schema of a Cross Industry Invoice into the table of its elements (`build_cii_schema.rs`)
+roxmltree = "0.20"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
