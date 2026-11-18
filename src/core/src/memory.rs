@@ -242,8 +242,8 @@ pub(crate) fn reserve(bytes: u64) -> Result<(), String> {
 fn past_cap() -> String {
     if READING.get() {
         return format!(
-            "the reading of the invoice needs more memory than its cap of {} MB: generatePdf reads it under the \
-            engine's cap, which its options can raise, and extractInvoiceData under the default one",
+            "the reading of the invoice needs more memory than its cap of {} MB: a larger cap in the engine's options \
+            reads it, where the call takes them",
             CAP_MB.get()
         );
     }
