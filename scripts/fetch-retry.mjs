@@ -44,7 +44,8 @@ async function tryOnce(url, fetchFn) {
 /**
  * The bytes at `url`. `fetchFn` and `sleep` are `fetch` and a wait in seconds, and `waits` the seconds to wait before
  * each try after the first: they are given by the tests, which run no server and wait for nothing. Throws, when the
- * file can't be had, `could not download <url>: <status and its text>` or the error of the last try.
+ * file can't be had, `could not download <url>: <status and its text>`, or after the url the message of the last error
+ * and its cause, such as `fetch failed (ECONNREFUSED)`.
  */
 export async function fetchBytes(url, { fetchFn = fetch, sleep = sleepFor, waits = RETRY_WAITS } = {}) {
     for (let attempt = 0; ; attempt++) {
