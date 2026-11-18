@@ -209,6 +209,14 @@ fn what_pdfa_refuses_names_generate_pdf_when_the_call_set_the_level() {
     let error = generate(&own, &invoice("en16931.xml"), None).unwrap_err();
     assert!(error.starts_with("<output pdfa=\"3b\">: the color cmyk(0, 0, 0, 70) is CMYK"), "{error}");
     assert!(error.ends_with("such as a hex one, or remove pdfa"), "{error}");
+    // The date PDF/A needs, too.
+    let values = values(&invoice("en16931.xml"));
+    let invoice_xml = invoice("en16931.xml");
+    let mut undated = engine();
+    undated.set_created_on("the 31st");
+    let invoice = InvoiceTemplate { xml: &invoice_xml, map: None, data: &values };
+    let error = undated.render_xml_with(&template(), None, &RenderEncryption::default(), Some(invoice)).unwrap_err();
+    assert!(error.starts_with("generatePdf makes the invoice a PDF/A-3b file: created_on 'the 31st' is not a date"), "{error}");
 }
 
 #[test]
