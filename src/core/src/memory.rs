@@ -193,7 +193,6 @@ pub(crate) fn start_read(cap_mb: u32) -> Cap {
 }
 
 /// Start the cap of the reading of an invoice that began at `mark`, `start_from` whose error names the reading.
-#[allow(dead_code, reason = "the engine starts its cap with `start_read`")]
 pub(crate) fn start_read_from(cap_mb: u32, mark: i64) -> Cap {
     let cap = start_from(cap_mb, mark);
     READING.set(true);

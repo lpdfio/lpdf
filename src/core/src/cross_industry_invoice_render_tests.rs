@@ -217,6 +217,11 @@ fn what_pdfa_refuses_names_generate_pdf_when_the_call_set_the_level() {
     let invoice = InvoiceTemplate { xml: &invoice_xml, map: None, data: &values };
     let error = undated.render_xml_with(&template(), None, &RenderEncryption::default(), Some(invoice)).unwrap_err();
     assert!(error.starts_with("generatePdf makes the invoice a PDF/A-3b file: created_on 'the 31st' is not a date"), "{error}");
+    let invoice = InvoiceTemplate { xml: &invoice_xml, map: None, data: &values };
+    let mut no_date = LpdfEngine::new("");
+    no_date.load_font("body", &read(&test_dir().join("assets/fonts/SourceSans3-Regular.otf")));
+    let error = no_date.render_xml_with(&template(), None, &RenderEncryption::default(), Some(invoice)).unwrap_err();
+    assert!(error.starts_with("generatePdf makes the invoice a PDF/A-3b file, which carries the date it is made"), "{error}");
 }
 
 #[test]
