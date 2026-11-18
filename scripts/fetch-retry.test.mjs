@@ -85,3 +85,11 @@ test('every try used fails with the error of the last when none gets an answer',
     const fetchFn = fetching(new TypeError('fetch failed'), new TypeError('fetch failed'), new TypeError('fetch failed'), new TypeError('socket hang up'));
     await assert.rejects(fetchBytes(FILE, { fetchFn, sleep: sleeping(), waits: WAITS }), { message: `could not download ${FILE}: socket hang up` });
 });
+
+test('a network error that was not answered says why, from its cause', async () => {
+    const refused = new TypeError('fetch failed', { cause: Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:1'), { code: 'ECONNREFUSED' }) });
+    await assert.rejects(fetchBytes(FILE, { fetchFn: fetching(refused), sleep: sleeping(), waits: [] }), { message: `could not download ${FILE}: fetch failed (ECONNREFUSED)` });
+    // A cause with no code gives its message.
+    const reset = new TypeError('fetch failed', { cause: new Error('other side closed') });
+    await assert.rejects(fetchBytes(FILE, { fetchFn: fetching(reset), sleep: sleeping(), waits: [] }), { message: `could not download ${FILE}: fetch failed (other side closed)` });
+});

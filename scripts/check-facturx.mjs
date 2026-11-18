@@ -51,12 +51,14 @@ const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 async function mustang() {
     if (!existsSync(JAR)) {
         mkdirSync(path.dirname(JAR), { recursive: true });
+        let bytes;
         try {
-            writeFileSync(JAR, await fetchBytes(MUSTANG_URL));
+            bytes = await fetchBytes(MUSTANG_URL);
         } catch (error) {
             console.error(error.message);
             process.exit(2);
         }
+        writeFileSync(JAR, bytes);
     }
     const actual = sha256(readFileSync(JAR));
     if (actual !== MUSTANG_SHA256) {

@@ -21,6 +21,12 @@ function retryAfter(response) {
     return value !== undefined && /^\d+$/.test(value) ? Math.min(Number(value), MAX_RETRY_AFTER) : undefined;
 }
 
+/** What a fetch that failed says: its message and, from its `cause`, why (ECONNREFUSED, ENOTFOUND, ETIMEDOUT...). */
+function describe(error) {
+    const reason = error.cause?.code ?? error.cause?.message;
+    return reason ? `${error.message} (${reason})` : error.message;
+}
+
 /**
  * One try at `url`: its bytes, or why there are none, whether another try may get them, and the seconds the server
  * asked to wait. A body that breaks off is a network error, as no answer at all is.
@@ -31,7 +37,7 @@ async function tryOnce(url, fetchFn) {
         if (response.ok) return { bytes: Buffer.from(await response.arrayBuffer()) };
         return { failure: `${response.status} ${response.statusText}`, again: worthTrying(response.status), wait: retryAfter(response) };
     } catch (error) {
-        return { failure: error.message, again: true };
+        return { failure: describe(error), again: true };
     }
 }
 
