@@ -71,7 +71,8 @@ impl TimedOut {
             Work::Stamp => ("stamp", "stamp the pages in smaller groups"),
             Work::Extract => {
                 return format!(
-                    "the reading of the invoice ran past its timeout of {} {unit}, which a call without an engine has",
+                    "the reading of the invoice ran past its timeout of {} {unit}: generatePdf reads it under the \
+                    engine's timeout, which its options can raise, and extractInvoiceData under the default one",
                     self.seconds
                 );
             }
@@ -250,7 +251,7 @@ mod tests {
     #[test]
     fn the_reading_of_an_invoice_past_its_timeout_names_the_reading() {
         let error = TimedOut { seconds: 5.0, work: Work::Extract }.error();
-        assert_eq!(error, "the reading of the invoice ran past its timeout of 5 seconds, which a call without an engine has");
+        assert!(error.starts_with("the reading of the invoice ran past its timeout of 5 seconds: generatePdf reads it"), "{error}");
     }
 
     #[test]

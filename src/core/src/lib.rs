@@ -245,7 +245,7 @@ impl LpdfEngine {
     /// The read of `LCrossIndustryInvoice.generatePdf`: `extract_invoice_data`, under this engine's memory cap
     /// instead of the default, as the SDK reads the invoice on the engine's worker before it formats the values.
     pub fn extract_invoice_data(&self, invoice_xml: &[u8], invoice_map: Option<String>) -> Result<String, JsValue> {
-        let _cap = memory::start(self.max_memory_mb);
+        let _cap = memory::start_read(self.max_memory_mb);
         cross_industry_invoice::extract(invoice_xml, invoice_map.as_deref())
             .map(|extracted| extracted.to_string())
             .map_err(|e| JsValue::from_str(&e))
@@ -629,7 +629,7 @@ struct InvoiceTemplate<'a> {
 /// WL, and a required value the invoice lacks.
 #[wasm_bindgen]
 pub fn extract_invoice_data(invoice_xml: &[u8], invoice_map: Option<String>) -> Result<String, JsValue> {
-    let _cap = memory::start(memory::DEFAULT_CAP_MB);
+    let _cap = memory::start_read(memory::DEFAULT_CAP_MB);
     cross_industry_invoice::extract(invoice_xml, invoice_map.as_deref())
         .map(|extracted| extracted.to_string())
         .map_err(|e| JsValue::from_str(&e))

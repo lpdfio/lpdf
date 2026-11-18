@@ -36,6 +36,8 @@ thread_local! {
     static PASSED: Cell<bool> = const { Cell::new(false) };
     /// The cap of the render going on, in megabytes, for its error.
     static CAP_MB: Cell<u32> = const { Cell::new(DEFAULT_CAP_MB) };
+    /// Whether what goes on under the cap is the reading of an invoice, for its error.
+    static READING: Cell<bool> = const { Cell::new(false) };
 }
 
 /// The system's allocator, counting the bytes it holds for this thread.
@@ -178,9 +180,24 @@ pub(crate) fn start(cap_mb: u32) -> Cap {
 /// too.
 pub(crate) fn start_from(cap_mb: u32, mark: i64) -> Cap {
     CAP_MB.set(cap_mb);
+    READING.set(false);
     LIMIT.set(mark + i64::from(cap_mb) * BYTES_PER_MB);
     PASSED.set(PEAK.get() > LIMIT.get());
     Cap(())
+}
+
+/// Start the cap of the reading of an invoice, `start` whose error names the reading instead of a render.
+#[allow(dead_code, reason = "the WASI binary starts its cap with `start_read_from`")]
+pub(crate) fn start_read(cap_mb: u32) -> Cap {
+    start_read_from(cap_mb, mark())
+}
+
+/// Start the cap of the reading of an invoice that began at `mark`, `start_from` whose error names the reading.
+#[allow(dead_code, reason = "the engine starts its cap with `start_read`")]
+pub(crate) fn start_read_from(cap_mb: u32, mark: i64) -> Cap {
+    let cap = start_from(cap_mb, mark);
+    READING.set(true);
+    cap
 }
 
 /// Mark the start of a render whose cap starts later, with `start_from`: the bytes this thread holds now, from which
@@ -195,6 +212,7 @@ impl Drop for Cap {
     fn drop(&mut self) {
         LIMIT.set(i64::MAX);
         PASSED.set(false);
+        READING.set(false);
     }
 }
 
@@ -223,6 +241,13 @@ pub(crate) fn reserve(bytes: u64) -> Result<(), String> {
 }
 
 fn past_cap() -> String {
+    if READING.get() {
+        return format!(
+            "the reading of the invoice needs more memory than its cap of {} MB: generatePdf reads it under the \
+            engine's cap, which its options can raise, and extractInvoiceData under the default one",
+            CAP_MB.get()
+        );
+    }
     format!(
         "the render needs more memory than its cap of {} MB: raise the cap in the engine's options, or render the \
         document in smaller parts",
@@ -288,6 +313,19 @@ mod tests {
         assert!(!passed());
         let _held = vec![0u8; 2 * BYTES_PER_MB as usize];
         assert_eq!(check(), Ok(()));
+    }
+
+    #[test]
+    fn the_cap_of_a_reading_names_the_reading_until_its_guard_drops() {
+        {
+            let _cap = start_read(1);
+            let _held = vec![0u8; 2 * BYTES_PER_MB as usize];
+            let error = check().unwrap_err();
+            assert!(error.starts_with("the reading of the invoice needs more memory than its cap of 1 MB"), "{error}");
+        }
+        let _cap = start(1);
+        let _held = vec![0u8; 2 * BYTES_PER_MB as usize];
+        assert!(check().unwrap_err().starts_with("the render needs more memory"));
     }
 
     #[test]

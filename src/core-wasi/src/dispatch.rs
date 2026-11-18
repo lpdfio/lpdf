@@ -334,7 +334,7 @@ fn take_invoice(req: &mut serde_json::Value, method: &str) -> Result<Option<Invo
 /// none for the default. Returns the values read, or the error.
 fn extract_request(req: &mut serde_json::Value, before: i64) -> Result<serde_json::Value, String> {
     let cap = render_cap(req)?;
-    let _cap = memory::start_from(cap, before);
+    let _cap = memory::start_read_from(cap, before);
     let _deadline = deadline::start_extract(render_timeout(req)?);
     let xml = match req.get_mut("invoice_xml").map(serde_json::Value::take) {
         Some(serde_json::Value::String(b64)) => base64::engine::general_purpose::STANDARD
