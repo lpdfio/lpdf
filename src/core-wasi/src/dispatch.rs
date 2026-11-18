@@ -268,12 +268,16 @@ fn dispatch(request: String) -> Answer {
     };
 
     // `generatePdf`: the invoice becomes the document's Factur-X file, and for a template its values are bound.
-    let invoice = match take_invoice(&mut req, &method) {
+    let mut invoice = match take_invoice(&mut req, &method) {
         Ok(invoice) => invoice,
         Err(e) => return Answer::error(&e),
     };
-    let invoice_file = match invoice.as_ref().map(|i| cross_industry_invoice::prepare(&mut doc, &i.xml)).transpose() {
-        Ok(name) => name.zip(invoice.as_ref().map(|i| i.xml.clone())),
+    // The XML moves to the file the document attaches, so the render holds one copy of it too.
+    let prepared = invoice.as_mut().map(|i| {
+        cross_industry_invoice::prepare(&mut doc, &i.xml).map(|name| (name, std::mem::take(&mut i.xml)))
+    });
+    let invoice_file = match prepared.transpose() {
+        Ok(file) => file,
         Err(e) => return Answer::error(&e),
     };
 
