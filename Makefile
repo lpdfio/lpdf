@@ -445,6 +445,7 @@ test-sdk-python: build-sdk-python
 		-v "$(CURDIR)/repos/lpdf-python/tests://app/tests" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-v "$(CURDIR)/test/snapshots://app/test/snapshots" \
+		-v "$(CURDIR)/test/assets://app/test/assets" \
 		-v "$(CURDIR)/repos/lpdf-python/resources://app/resources" \
 		-w //app lpdf-python python -m pytest tests -v
 
