@@ -70,6 +70,71 @@ fn resolve_path<'a>(path: &str, stack: &[&'a Value], root: &'a Value) -> Option<
     resolve_dotpath(remaining, scope)
 }
 
+// ── Prefixed data ─────────────────────────────────────────────────────────────
+
+/// Data a render binds under a prefix, beside the caller's: `invoice:seller.name` reads `seller.name` in the data
+/// bound under `invoice`, the values of an invoice read through its map (`cross_industry_invoice.rs`). The caller's
+/// data keeps all its keys. A path whose prefix has nothing bound under it leaves its element as the document wrote
+/// it, as a render with no data does, so a template that binds an invoice's values shows its own text without one.
+#[derive(Debug, Default)]
+pub(crate) struct Prefixed(Vec<(String, Value)>);
+
+impl Prefixed {
+    /// `data` bound under `prefix`.
+    pub(crate) fn one(prefix: &str, data: Value) -> Self {
+        Prefixed(vec![(prefix.to_string(), data)])
+    }
+
+    fn get(&self, prefix: &str) -> Option<&Value> {
+        self.0.iter().find(|(name, _)| name == prefix).map(|(_, data)| data)
+    }
+}
+
+/// The prefix and the rest of a path that starts with one, a name and a colon: `invoice:seller.name`.
+pub(crate) fn split_prefix(path: &str) -> Option<(&str, &str)> {
+    let (prefix, rest) = path.split_once(':')?;
+    let mut characters = prefix.chars();
+    let is_name = characters.next().is_some_and(|first| first.is_ascii_alphabetic())
+        && characters.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'));
+    is_name.then_some((prefix, rest))
+}
+
+/// What a path finds in the data of a render.
+enum Lookup<'a> {
+    /// The value at the path, or nothing.
+    Found(Option<&'a Value>),
+    /// The path's prefix has nothing bound under it: the element stays as the document wrote it.
+    Unbound,
+}
+
+/// Looks `path` up: a path with a prefix in the data bound under it, from its root, and any other from the scope
+/// `stack` and `root`, as `resolve_path` does.
+fn lookup<'a>(path: &str, stack: &[&'a Value], root: &'a Value, prefixed: &'a Prefixed) -> Lookup<'a> {
+    match split_prefix(path) {
+        Some((prefix, rest)) => match prefixed.get(prefix) {
+            Some(data) => Lookup::Found(resolve_dotpath(rest, data)),
+            None => Lookup::Unbound,
+        },
+        None => Lookup::Found(resolve_path(path, stack, root)),
+    }
+}
+
+/// Whether an element with this `data-if` stays: what the path finds is truthy, or its prefix has nothing bound.
+fn passes_if(lookup: Lookup) -> bool {
+    match lookup {
+        Lookup::Found(value) => is_truthy(value),
+        Lookup::Unbound => true,
+    }
+}
+
+/// Whether an element with this `data-if-not` stays: what the path finds is falsy, or its prefix has nothing bound.
+fn passes_if_not(lookup: Lookup) -> bool {
+    match lookup {
+        Lookup::Found(value) => !is_truthy(value),
+        Lookup::Unbound => true,
+    }
+}
+
 // ── Truthiness ───────────────────────────────────────────────────────────────
 
 fn is_truthy(value: Option<&Value>) -> bool {
@@ -96,11 +161,16 @@ fn value_to_string(value: Option<&Value>) -> String {
 }
 
 /// The Markdown at `path` in the data, for a `<markdown-content data-value>`: a path the data lacks gives none,
-/// and a value that is not a string is an error that names the path.
-pub(crate) fn text_at(path: &str, root: &Value) -> Result<String, String> {
-    match resolve_path(path, &[], root) {
-        None | Some(Value::Null) => Ok(String::new()),
-        Some(Value::String(text)) => Ok(text.clone()),
+/// and a value that is not a string is an error that names the path. `None` when the path's prefix has nothing bound
+/// under it, so the Markdown written inline stays.
+pub(crate) fn text_at(path: &str, root: &Value, prefixed: &Prefixed) -> Result<Option<String>, String> {
+    let found = match lookup(path, &[], root, prefixed) {
+        Lookup::Found(found) => found,
+        Lookup::Unbound => return Ok(None),
+    };
+    match found {
+        None | Some(Value::Null) => Ok(Some(String::new())),
+        Some(Value::String(text)) => Ok(Some(text.clone())),
         Some(other) => Err(format!(
             "<markdown-content data-value=\"{path}\">: the Markdown must be a string, but the data has {}",
             json_type(other)
@@ -129,9 +199,11 @@ impl Resolvers {
 /// Everything a walk over the tree reads besides the scope stack.
 struct Bind<'a> {
     root: &'a Value,
-    /// The data that `root` is, kept for the records of a bulk container (`BulkRecords`): `None` where none can stand,
-    /// in a table of contents section, and while a record is bound.
-    shared: Option<&'a Rc<Value>>,
+    /// The data bound under a prefix, beside `root`.
+    prefixed: &'a Prefixed,
+    /// The data that `root` and `prefixed` are, kept for the records of a bulk container (`BulkRecords`): `None` where
+    /// none can stand, in a table of contents section, and while a record is bound.
+    shared: Option<(&'a Rc<Value>, &'a Rc<Prefixed>)>,
     /// Set while binding a table of contents section; see `apply_toc`.
     toc_indent_step: Option<f32>,
     /// `None` in a table of contents section, which refuses bound attributes (`refuse_bound_attrs`).
@@ -161,11 +233,15 @@ fn bind_attributes(
     node: &mut Node,
     bound: &[(BoundAttr, String)],
     stack: &[&Value],
-    root: &Value,
+    bind: &Bind,
     resolvers: &Resolvers,
 ) -> Result<(), String> {
     for (attr, path) in bound {
-        let value = match resolve_path(path, stack, root) {
+        let found = match lookup(path, stack, bind.root, bind.prefixed) {
+            Lookup::Found(found) => found,
+            Lookup::Unbound => continue,
+        };
+        let value = match found {
             None | Some(Value::Null) => continue,
             Some(Value::String(text)) if text.is_empty() => continue,
             Some(Value::String(text)) => text,
@@ -246,10 +322,20 @@ pub fn parse(json_data: &str) -> Result<Value, String> {
 ///
 /// Returns an error if a bound attribute reads a value it can't use.
 pub fn apply(doc: &mut Document, root: Value) -> Result<(), String> {
+    apply_with(doc, root, Prefixed::default())
+}
+
+/// Apply data binding as `apply` does, with `prefixed` bound under its prefixes beside `root`.
+///
+/// Returns an error if a bound attribute reads a value it can't use.
+pub(crate) fn apply_with(doc: &mut Document, root: Value, prefixed: Prefixed) -> Result<(), String> {
     let resolvers = Rc::new(Resolvers::of(doc));
     let shared = Rc::new(root);
+    let prefixed = Rc::new(prefixed);
     let root = &*shared;
-    let bind = Bind { root, shared: Some(&shared), toc_indent_step: None, resolvers: Some(&resolvers) };
+    let bind = Bind {
+        root, prefixed: &prefixed, shared: Some((&shared, &prefixed)), toc_indent_step: None, resolvers: Some(&resolvers),
+    };
 
     for section in &mut doc.sections {
         if let Some(toc) = &mut section.options.toc {
@@ -302,7 +388,7 @@ pub fn apply(doc: &mut Document, root: Value) -> Result<(), String> {
         }
     }
 
-    crate::markdown::expand_pending(&mut doc.sections, Some(root), crate::markdown::Pass::Data)?;
+    crate::markdown::expand_pending(&mut doc.sections, Some((root, &*prefixed)), crate::markdown::Pass::Data)?;
     Ok(())
 }
 
@@ -311,12 +397,11 @@ pub fn apply(doc: &mut Document, root: Value) -> Result<(), String> {
 /// A layer reads single values: an array is read by index (`signers[0].name`), and there is no `data-source`
 /// on what is in it.
 fn bind_layer(layer: &mut CanvasLayer, bind: &Bind) -> Result<bool, String> {
-    let root = bind.root;
     if let Some(path) = &layer.data_if {
-        if !is_truthy(resolve_path(path, &[], root)) { return Ok(false); }
+        if !passes_if(lookup(path, &[], bind.root, bind.prefixed)) { return Ok(false); }
     }
     if let Some(path) = &layer.data_if_not {
-        if is_truthy(resolve_path(path, &[], root)) { return Ok(false); }
+        if !passes_if_not(lookup(path, &[], bind.root, bind.prefixed)) { return Ok(false); }
     }
     let mut bound = Vec::with_capacity(layer.children.len());
     for child in std::mem::take(&mut layer.children) {
@@ -341,7 +426,9 @@ fn bind_layer(layer: &mut CanvasLayer, bind: &Bind) -> Result<bool, String> {
 /// that `data-source="$toc"` expands gets `(level - 1) × indent_step` more left padding, and its `href="#"`
 /// links point at its entry's bookmark.
 pub(crate) fn apply_toc(nodes: Vec<Node>, root: &Value, indent_step: f32) -> Vec<Node> {
-    let bind = Bind { root, shared: None, toc_indent_step: Some(indent_step), resolvers: None };
+    // A table of contents lists the bookmarks, from `$toc`: nothing is bound under a prefix there.
+    let prefixed = Prefixed::default();
+    let bind = Bind { root, prefixed: &prefixed, shared: None, toc_indent_step: Some(indent_step), resolvers: None };
     // Only a bound attribute can fail, and `apply` refused those in this section when the data came in, or the
     // memory cap, which stops the render at its next check.
     apply_nodes(nodes, &[], &bind).unwrap_or_default()
@@ -366,7 +453,7 @@ fn apply_single_node(node: Node, stack: &[&Value], bind: &Bind, out: &mut Vec<No
     // checked for each.
     crate::memory::check()?;
     crate::deadline::check();
-    let root = bind.root;
+    let (root, prefixed) = (bind.root, bind.prefixed);
     let di  = node.data_attrs.as_ref().and_then(|d| d.data_if.as_deref()).map(str::to_owned);
     let din = node.data_attrs.as_ref().and_then(|d| d.data_if_not.as_deref()).map(str::to_owned);
     let ds  = node.data_attrs.as_ref().and_then(|d| d.data_source.as_deref()).map(str::to_owned);
@@ -374,21 +461,29 @@ fn apply_single_node(node: Node, stack: &[&Value], bind: &Bind, out: &mut Vec<No
 
     // 1. data-if: skip when the path evaluates to a falsy value.
     if let Some(ref path) = di {
-        if !is_truthy(resolve_path(path, stack, root)) {
+        if !passes_if(lookup(path, stack, root, prefixed)) {
             return Ok(());
         }
     }
 
     // 2. data-if-not: skip when the path evaluates to a truthy value.
     if let Some(ref path) = din {
-        if is_truthy(resolve_path(path, stack, root)) {
+        if !passes_if_not(lookup(path, stack, root, prefixed)) {
             return Ok(());
         }
     }
 
-    // 3. data-source: expand into one copy per array element.
+    // 3. data-source: expand into one copy per array element. A prefix with nothing bound under it leaves the element
+    //    and what is in it as the document wrote them, once.
     if let Some(ref path) = ds {
-        if let Some(Value::Array(items)) = resolve_path(path, stack, root) {
+        let found = match lookup(path, stack, root, prefixed) {
+            Lookup::Found(found) => found,
+            Lookup::Unbound => {
+                out.push(node);
+                return Ok(());
+            }
+        };
+        if let Some(Value::Array(items)) = found {
             let toc_entries = bind.toc_indent_step.filter(|_| path == TOC_DATA_KEY);
             for item in items {
                 let mut new_stack = stack.to_vec();
@@ -416,8 +511,9 @@ fn apply_single_node(node: Node, stack: &[&Value], bind: &Bind, out: &mut Vec<No
 
     // 4. data-value: substitute the text content, or the data a barcode encodes.
     let mut node = node;
-    if let Some(ref path) = dv {
-        let text = value_to_string(resolve_path(path, stack, root));
+    let found = dv.as_deref().map(|path| lookup(path, stack, root, prefixed));
+    if let Some(Lookup::Found(found)) = found {
+        let text = value_to_string(found);
         if node.kind == NodeKind::Barcode {
             node.barcode_data = Some(text);
         } else {
@@ -439,6 +535,8 @@ fn apply_single_node(node: Node, stack: &[&Value], bind: &Bind, out: &mut Vec<No
                 }]
             };
         }
+    }
+    if dv.is_some() {
         if let Some(d) = &mut node.data_attrs {
             d.data_value = None;
         }
@@ -447,17 +545,21 @@ fn apply_single_node(node: Node, stack: &[&Value], bind: &Bind, out: &mut Vec<No
     // 5. data-href, data-name, data-color, data-background, data-fill: set the attribute from the data.
     if let Some(resolvers) = bind.resolvers {
         let bound = node.data_attrs.as_mut().map(|d| std::mem::take(&mut d.bound)).unwrap_or_default();
-        bind_attributes(&mut node, &bound, stack, root, resolvers)?;
+        bind_attributes(&mut node, &bound, stack, bind, resolvers)?;
     }
 
     // 6. Recurse into children with the current scope. The child a bulk container repeats stays a template, with
     //    its records in the data.
     if let (Some(data), Some(resolvers)) = (node.data_attrs.as_mut().filter(|d| d.bulk), bind.shared.zip(bind.resolvers)) {
-        let (shared, resolvers) = resolvers;
+        let ((shared, shared_prefixed), resolvers) = resolvers;
         let mut children = Vec::with_capacity(node.children.len());
         for child in std::mem::take(&mut node.children) {
-            if child.data_attrs.as_ref().is_some_and(|d| d.data_source.is_some()) {
-                let records = BulkRecords::new(child, children.len(), stack, bind.root, shared, resolvers);
+            // A record under a prefix with nothing bound under it is laid out as the document wrote it, once, as a
+            // bulk container rendered without data lays out its children.
+            let source = child.data_attrs.as_ref().and_then(|d| d.data_source.as_deref());
+            let unbound = source.is_some_and(|path| matches!(lookup(path, stack, shared, shared_prefixed), Lookup::Unbound));
+            if source.is_some() && !unbound {
+                let records = BulkRecords::new(child, children.len(), stack, shared, shared_prefixed, resolvers);
                 data.records = Some(Rc::new(records));
             } else {
                 apply_single_node(child, stack, bind, &mut children)?;
@@ -480,6 +582,7 @@ fn apply_single_node(node: Node, stack: &[&Value], bind: &Bind, out: &mut Vec<No
 pub(crate) struct BulkRecords {
     template: Node,
     data:     Rc<Value>,
+    prefixed: Rc<Prefixed>,
     path:     String,
     count:    usize,
     /// Where the records stand among the container's children once they are bound: after the children before them.
@@ -499,18 +602,23 @@ impl BulkRecords {
     /// The records of `template`, which stands at `at` among the bound children of its container, with the scope
     /// `stack` around the container. Its `data-if` and `data-if-not` are read once, there, as they are for a loop
     /// that the binding expands; what does not hold an array gives no records.
-    fn new(mut template: Node, at: usize, stack: &[&Value], root: &Value, data: &Rc<Value>, resolvers: &Rc<Resolvers>) -> Self {
+    fn new(
+        mut template: Node, at: usize, stack: &[&Value], data: &Rc<Value>, prefixed: &Rc<Prefixed>, resolvers: &Rc<Resolvers>,
+    ) -> Self {
         let attrs = template.data_attrs.as_mut().map(|d| {
             (d.data_source.take().unwrap_or_default(), d.data_if.take(), d.data_if_not.take())
         });
         let (path, data_if, data_if_not) = attrs.unwrap_or_default();
-        let shown = data_if.is_none_or(|p| is_truthy(resolve_path(&p, stack, root)))
-            && !data_if_not.is_some_and(|p| is_truthy(resolve_path(&p, stack, root)));
-        let count = match resolve_path(&path, stack, root) {
-            Some(Value::Array(items)) if shown => items.len(),
+        let found = |path: &str| lookup(path, stack, data, prefixed);
+        let shown = data_if.is_none_or(|p| passes_if(found(&p))) && data_if_not.is_none_or(|p| passes_if_not(found(&p)));
+        let count = match found(&path) {
+            Lookup::Found(Some(Value::Array(items))) if shown => items.len(),
             _ => 0,
         };
-        BulkRecords { template, data: Rc::clone(data), path, count, at, resolvers: Rc::clone(resolvers), list: None }
+        BulkRecords {
+            template, data: Rc::clone(data), prefixed: Rc::clone(prefixed), path, count, at, resolvers: Rc::clone(resolvers),
+            list: None,
+        }
     }
 
     /// How many records there are.
@@ -530,10 +638,12 @@ impl BulkRecords {
     /// Returns an error if a bound attribute reads a value it can't use, or the render is past its memory cap.
     pub(crate) fn bind(&self, range: std::ops::Range<usize>) -> Result<Vec<Node>, String> {
         // A bulk container stands directly in the layout, so its records are found from the root.
-        let Some(Value::Array(items)) = resolve_path(&self.path, &[], &self.data) else {
+        let Lookup::Found(Some(Value::Array(items))) = lookup(&self.path, &[], &self.data, &self.prefixed) else {
             return Ok(Vec::new());
         };
-        let bind = Bind { root: &self.data, shared: None, toc_indent_step: None, resolvers: Some(&self.resolvers) };
+        let bind = Bind {
+            root: &self.data, prefixed: &self.prefixed, shared: None, toc_indent_step: None, resolvers: Some(&self.resolvers),
+        };
         let mut out = Vec::with_capacity(range.len());
         for index in range {
             let Some(item) = items.get(index) else { break };
@@ -777,6 +887,51 @@ mod tests {
         assert_eq!(ch[0].children[0].text_runs[0].text, "A");
         assert_eq!(ch[1].children[0].text_runs[0].text, "B");
         assert_eq!(ch[2].children[0].text_runs[0].text, "C");
+    }
+
+    /// A text whose `data-value` is `path`.
+    fn bound_text(fallback: &str, path: &str) -> Node {
+        let mut node = text_node(fallback);
+        node.data_attrs = Some(Box::new(DataAttrs { data_value: Some(path.to_owned()), ..DataAttrs::default() }));
+        node
+    }
+
+    #[test]
+    fn a_path_with_a_prefix_reads_the_data_bound_under_it_beside_the_callers() {
+        let mut row = bound_text("item", "name");
+        row.data_attrs.as_mut().unwrap().data_source = Some("invoice:lines".to_owned());
+        let mut hidden = bound_text("tax", "invoice:totals.vatInTaxCurrency");
+        hidden.data_attrs.as_mut().unwrap().data_if = Some("invoice:totals.vatInTaxCurrency".to_owned());
+        let mut doc = make_doc(vec![bound_text("Seller", "invoice:seller.name"), bound_text("note", "note"), row, hidden]);
+        let invoice = parse(r#"{"seller":{"name":"Northwind"},"lines":[{"name":"Paper"},{"name":"Ink"}],"totals":{}}"#).unwrap();
+        // The caller's data may have a key of the same name: the two don't meet.
+        let root = parse(r#"{"note":"Thanks","seller":{"name":"not this one"},"invoice":{"seller":{"name":"nor this"}}}"#).unwrap();
+        apply_with(&mut doc, root, Prefixed::one("invoice", invoice)).unwrap();
+        let texts: Vec<String> = layout_children(&doc).iter().map(|n| n.text_runs[0].text.clone()).collect();
+        assert_eq!(texts, ["Northwind", "Thanks", "Paper", "Ink"]);
+    }
+
+    #[test]
+    fn a_prefix_with_nothing_bound_under_it_leaves_the_element_as_the_document_wrote_it() {
+        let mut row = bound_text("Item", "name");
+        row.data_attrs.as_mut().unwrap().data_source = Some("invoice:lines".to_owned());
+        let mut shown = bound_text("VAT in", "invoice:totals.vatInTaxCurrency");
+        shown.data_attrs.as_mut().unwrap().data_if = Some("invoice:totals.vatInTaxCurrency".to_owned());
+        let mut not_hidden = text_node("kept");
+        not_hidden.data_attrs = Some(Box::new(DataAttrs { data_if_not: Some("invoice:paid".to_owned()), ..DataAttrs::default() }));
+        let mut doc = make_doc(vec![bound_text("Seller", "invoice:seller.name"), row, shown, not_hidden, bound_text("note", "note")]);
+        apply(&mut doc, parse(r#"{"note":"Thanks"}"#).unwrap()).unwrap();
+        let texts: Vec<String> = layout_children(&doc).iter().map(|n| n.text_runs[0].text.clone()).collect();
+        assert_eq!(texts, ["Seller", "Item", "VAT in", "kept", "Thanks"]);
+    }
+
+    #[test]
+    fn a_prefix_is_a_name_and_a_colon_at_the_start_of_a_path() {
+        assert_eq!(split_prefix("invoice:seller.name"), Some(("invoice", "seller.name")));
+        assert_eq!(split_prefix("rechnung-2:lines"), Some(("rechnung-2", "lines")));
+        for path in ["seller.name", "/invoice:x", "../invoice:x", "$toc", "2x:y", ":x", "a b:c"] {
+            assert_eq!(split_prefix(path), None, "{path}");
+        }
     }
 
     #[test]

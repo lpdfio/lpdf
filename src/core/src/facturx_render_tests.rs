@@ -490,8 +490,9 @@ fn strict_does_nothing_without_the_invoice_file() {
 // ── The samples of the external check ─────────────────────────────────────────
 
 /// Writes the files `scripts/check-facturx.mjs` hands to the Mustang CLI, when `LPDF_FACTURX_OUT` names a folder: each
-/// case of `cases`, rendered unlicensed, as `<case>.pdf`. Without the variable the test does nothing, so a plain
-/// `cargo test` needs no other tool.
+/// case of `cases`, rendered unlicensed, as `<case>.pdf`, and the renders of `generatePdf`
+/// (`cross_industry_invoice_render_tests::cases`) under the names of their snapshots. Without the variable the test
+/// does nothing, so a plain `cargo test` needs no other tool.
 #[test]
 fn writes_facturx_samples_for_the_external_check() {
     let Some(dir) = std::env::var_os("LPDF_FACTURX_OUT") else { return };
@@ -499,5 +500,8 @@ fn writes_facturx_samples_for_the_external_check() {
     std::fs::create_dir_all(dir).expect("the samples' folder");
     for (name, xml) in cases() {
         std::fs::write(dir.join(format!("{name}.pdf")), render_case(&xml)).expect("a sample");
+    }
+    for (name, pdf) in crate::cross_industry_invoice_render_tests::cases() {
+        std::fs::write(dir.join(format!("{name}.pdf")), pdf).expect("a sample");
     }
 }

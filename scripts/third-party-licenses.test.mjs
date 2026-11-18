@@ -9,12 +9,14 @@ import { test } from 'node:test';
 import {
     acceptsLicense,
     collectCrates,
+    collectSchemas,
     collectToolchain,
     LicenseError,
     licenseFiles,
     linkedCrates,
     normalizeText,
     render,
+    SCHEMAS,
     TOOLCHAIN,
     toolchainLabel,
 } from './third-party-licenses.mjs';
@@ -351,4 +353,40 @@ test('a text that a crate and a part of the toolchain share is written once, wit
 
 test('a file with no parts of the toolchain has no section for them', () => {
     assert.doesNotMatch(render([crate('a', '1.0.0', 'MIT', ['license', 'one'])]), /RUST TOOLCHAIN/);
+});
+
+test('the texts of a schema are read from its folder, a NOTICE as a notice', () => {
+    withFolder({ 'vendor/a/LICENSE': 'apache text', 'vendor/a/NOTICE': 'the notice' }, (folder) => {
+        const schema = { name: 'A schema', license: 'Apache-2.0', folder: 'vendor/a', files: ['LICENSE', 'NOTICE'] };
+        const { schemas, problems } = collectSchemas([schema], { accepted: ACCEPTED, root: folder });
+        assert.deepEqual(problems, []);
+        assert.deepEqual(schemas[0].files.map((file) => [file.kind, file.text]), [['license', 'apache text'], ['notice', 'the notice']]);
+    });
+});
+
+test('a schema under a license none of the accepted meets, or without its text, is a problem', () => {
+    withFolder({ 'vendor/a/LICENSE': 'text' }, (folder) => {
+        const schema = { name: 'A schema', license: 'GPL-3.0-only', folder: 'vendor/a', files: ['LICENSE', 'NOTICE'] };
+        const { problems } = collectSchemas([schema], { accepted: ACCEPTED, root: folder });
+        assert.equal(problems.length, 2);
+        assert.match(problems[0], /^A schema is licensed "GPL-3.0-only"/);
+        assert.equal(problems[1], 'A schema names vendor/a/NOTICE, which isn\'t there');
+    });
+});
+
+test('the real list of schemas reads with no problem', () => {
+    const { schemas, problems } = collectSchemas(SCHEMAS);
+    assert.deepEqual(problems, []);
+    for (const each of schemas) assert.equal(each.files.length, 2, `${each.name} has its LICENSE and NOTICE`);
+});
+
+test('the schemas are listed last, and their texts among the others', () => {
+    const schema = { name: 'A schema', version: '1.0', license: 'Apache-2.0', repository: 'https://example.com/a',
+        files: [{ name: 'NOTICE', kind: 'notice', text: 'the notice' }] };
+    const output = render([crate('a', '1.0.0', 'MIT', ['license', 'one'])], [], [schema]);
+    assert.match(output, /\nSCHEMAS \(1\)\n=+\n\nA schema 1\.0 \| Apache-2\.0 \| https:\/\/example\.com\/a\n/);
+    assert.ok(output.indexOf('CRATES (') < output.indexOf('SCHEMAS ('));
+    assert.ok(output.indexOf('SCHEMAS (') < output.indexOf('LICENSE TEXTS ('));
+    assert.match(output, /NOTICE of:\n    A schema 1\.0\n-+\nthe notice\n/);
+    assert.doesNotMatch(render([crate('a', '1.0.0', 'MIT', ['license', 'one'])]), /SCHEMAS/);
 });

@@ -1,4 +1,5 @@
-//! Build script — injects the trusted Ed25519 public key(s) at compile time.
+//! Build script — injects the trusted Ed25519 public key(s) at compile time, and writes the table of the elements of
+//! a Cross Industry Invoice from FeRD's schema (`build_cii_schema.rs`).
 //!
 //! Reads the `LPDF_PUBLIC_KEY` environment variable, which must contain one or
 //! more comma-separated 64-character lowercase hex strings (one per Ed25519
@@ -37,6 +38,9 @@
 //!     LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
 
 use sha2::{Digest, Sha256};
+
+#[path = "../core/build_cii_schema.rs"]
+mod cii_schema;
 use std::{env, fs, path::Path};
 
 fn main() {
@@ -110,4 +114,10 @@ fn main() {
     let out_dir = env::var("OUT_DIR").expect("OUT_DIR not set by cargo");
     fs::write(Path::new(&out_dir).join("trusted_keys.rs"), src)
         .expect("failed to write trusted_keys.rs");
+
+    // Which element of a Cross Industry Invoice may sit inside which, from FeRD's schema, for the paths of an
+    // invoice map (`cross_industry_invoice/schema.rs`).
+    let vendor = Path::new(&env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set by cargo")).join("../core/vendor/factur-x-zugferd");
+    println!("cargo:rerun-if-changed={}", vendor.display());
+    cii_schema::generate(&vendor, &Path::new(&out_dir).join("cii_schema.rs"));
 }

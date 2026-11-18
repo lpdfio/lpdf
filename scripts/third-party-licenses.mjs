@@ -13,6 +13,9 @@
 // since the toolchain isn't pinned: read the notices of a new toolchain (`COPYRIGHT-library.html` in its `rust-docs`
 // component) when a release moves to one.
 //
+// And they hold what the core's build makes from the schemas of other projects that it reads, which SCHEMAS lists with
+// the license and NOTICE files kept beside them: FeRD's schema of a Cross Industry Invoice.
+//
 // A license that isn't in ACCEPTED fails the run, so a new dependency under another license is a decision someone
 // makes. A crate whose package has no license file needs an entry in OVERRIDES.
 //
@@ -151,6 +154,19 @@ export const TOOLCHAIN = [
         usedIn: 'the WASI build', files: ['wasi-libc-musl-COPYRIGHT.txt'],
     },
 ];
+/**
+ * The files of other projects that the build reads and makes part of the engine from, in no crate: FeRD's XML schema
+ * of a Cross Industry Invoice, which the core's build turns into the table of its elements. `files` are the texts in
+ * `folder`, beside the files themselves.
+ */
+export const SCHEMAS = [
+    {
+        name: 'Factur-X / ZUGFeRD EXTENDED schema', version: '1.09.2 / 2.5.2', license: 'Apache-2.0',
+        repository: 'https://www.ferd-net.de/en/ueber-uns/ressourcen-1/veroeffentlichungen/disclaimer-and-rights-of-use-zugferd',
+        folder: 'src/core/vendor/factur-x-zugferd', files: ['LICENSE', 'NOTICE'],
+    },
+];
+
 const LICENSE_FILE = /^(licen[cs]e|copying|unlicense|notice)([-._].*)?$/i;
 const WIDTH = 80;
 
@@ -367,13 +383,46 @@ export function collectToolchain(parts, { accepted = ACCEPTED, directory = TOOLC
 }
 
 /**
- * The text of the file: the crates, the parts of the toolchain, then each distinct text once, with the crates and
- * parts that carry it.
+ * Reads the texts of the schemas the build reads, each from its folder under `root`. A license that isn't accepted and
+ * a text that is missing come back as problems.
  */
-export function render(crates, toolchain = [])
+export function collectSchemas(schemas, { accepted = ACCEPTED, root = ROOT } = {})
+{
+    const problems = [];
+    const collected = schemas.map((schema) => {
+        if (!acceptsLicense(schema.license, accepted))
+        {
+            problems.push(`${schema.name} is licensed "${schema.license}", which none of the accepted licenses meets: `
+                + 'read it, and add its identifier to ACCEPTED in scripts/third-party-licenses.mjs if it may ship');
+        }
+        const files = [];
+        for (const name of schema.files)
+        {
+            try
+            {
+                const text = normalizeText(readFileSync(path.join(root, schema.folder, name), 'utf8'));
+                files.push({ name, kind: /^notice/i.test(name) ? 'notice' : 'license', text });
+            }
+            catch (error)
+            {
+                if (error.code !== 'ENOENT') throw error;
+                problems.push(`${schema.name} names ${schema.folder}/${name}, which isn't there`);
+            }
+        }
+        return { ...schema, files };
+    });
+    return { schemas: collected, problems };
+}
+
+/**
+ * The text of the file: the crates, the parts of the toolchain, the schemas the build reads, then each distinct text
+ * once, with the crates, parts and schemas that carry it.
+ */
+export function render(crates, toolchain = [], schemas = [])
 {
     const sorted = [...crates].sort(compareCrates);
     const parts = [...toolchain].sort((a, b) => compare(toolchainLabel(a), toolchainLabel(b)));
+    const schemaLabel = (schema) => [schema.name, schema.version].filter(Boolean).join(' ');
     const texts = new Map();
     const collect = (label, files) => {
         for (const file of files)
@@ -386,6 +435,7 @@ export function render(crates, toolchain = [])
     };
     for (const crate of sorted) collect(`${crate.name} ${crate.version}`, crate.files);
     for (const part of parts) collect(toolchainLabel(part), part.files);
+    for (const schema of schemas) collect(schemaLabel(schema), schema.files);
 
     const rule = (character) => character.repeat(WIDTH - 1);
     const lines = [
@@ -402,6 +452,11 @@ export function render(crates, toolchain = [])
         'library and the crates it bundles, and in the WASI build, wasi-libc. It is',
         'listed after the crates, and its texts are among the others.',
         '',
+        ...(schemas.length ? [
+            'And they hold what the build makes from the schemas of other projects,',
+            'listed last: which element of an e-invoice may sit inside which.',
+            '',
+        ] : []),
         'This file is generated from the dependencies of the engine by',
         'scripts/third-party-licenses.mjs. Do not edit it by hand.',
         '',
@@ -421,6 +476,14 @@ export function render(crates, toolchain = [])
         {
             const where = part.usedIn ? `in ${part.usedIn}` : '';
             lines.push([toolchainLabel(part), part.license, part.repository, where].filter(Boolean).join(' | '));
+        }
+    }
+    if (schemas.length)
+    {
+        lines.push('', '', `SCHEMAS (${schemas.length})`, rule('='), '');
+        for (const schema of schemas)
+        {
+            lines.push([schemaLabel(schema), schema.license, schema.repository].filter(Boolean).join(' | '));
         }
     }
     lines.push('', '', `LICENSE TEXTS (${texts.size})`, rule('='));
@@ -492,13 +555,15 @@ function main()
     problems.push(...collected.problems);
     const toolchain = collectToolchain(TOOLCHAIN);
     problems.push(...toolchain.problems);
+    const schemas = collectSchemas(SCHEMAS);
+    problems.push(...schemas.problems);
     if (problems.length)
     {
         for (const problem of problems) console.error(problem);
         process.exit(1);
     }
 
-    const text = render(crates, toolchain.parts);
+    const text = render(crates, toolchain.parts, schemas.schemas);
     const file = path.join(ROOT, OUTPUT_NAME);
     if (process.argv.includes('--check'))
     {
@@ -517,11 +582,13 @@ function main()
                 + 'and commit the file');
             process.exit(1);
         }
-        console.log(`${OUTPUT_NAME} holds the ${crates.length} crates the engine links and ${toolchain.parts.length} parts of the Rust toolchain`);
+        console.log(`${OUTPUT_NAME} holds the ${crates.length} crates the engine links, ${toolchain.parts.length} parts of the Rust `
+            + `toolchain and ${schemas.schemas.length} schema`);
         return;
     }
     writeFileSync(file, text);
-    console.log(`Wrote ${OUTPUT_NAME}: ${crates.length} crates and ${toolchain.parts.length} parts of the Rust toolchain`);
+    console.log(`Wrote ${OUTPUT_NAME}: ${crates.length} crates, ${toolchain.parts.length} parts of the Rust toolchain and `
+        + `${schemas.schemas.length} schema`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) main();

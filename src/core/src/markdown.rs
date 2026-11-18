@@ -402,7 +402,9 @@ pub(crate) enum Pass {
 
 /// Expand the `<markdown>` nodes of `sections` that this pass reaches, and settle the ids of the bookmarks they
 /// bring.
-pub(crate) fn expand_pending(sections: &mut [Section], data: Option<&Value>, pass: Pass) -> Result<(), String> {
+pub(crate) fn expand_pending(
+    sections: &mut [Section], data: Option<(&Value, &crate::data::Prefixed)>, pass: Pass,
+) -> Result<(), String> {
     let mut expanded = false;
     for section in sections.iter_mut() {
         for child in &mut section.children {
@@ -421,7 +423,7 @@ pub(crate) fn expand_pending(sections: &mut [Section], data: Option<&Value>, pas
                         continue;
                     }
                     (Some(path), Pass::Data) => match data {
-                        Some(root) => crate::data::text_at(path, root)?,
+                        Some((root, prefixed)) => crate::data::text_at(path, root, prefixed)?.unwrap_or_else(|| spec.text.clone()),
                         None       => spec.text.clone(),
                     },
                     (Some(_), Pass::Rest) => spec.text.clone(),
@@ -453,6 +455,11 @@ fn markdown_spec(node: &Node) -> Option<&MarkdownSpec> {
         Some(crate::parse::Detail::Markdown(spec)) if node.kind == NodeKind::Markdown => Some(spec),
         _ => None,
     }
+}
+
+/// The path in the data of the Markdown of a `<markdown>` not yet expanded, from its `<markdown-content data-value>`.
+pub(crate) fn data_path_of(node: &Node) -> Option<&str> {
+    markdown_spec(node).and_then(|spec| spec.data_path.as_deref())
 }
 
 /// The template that wraps a `.md` file when no other is given.

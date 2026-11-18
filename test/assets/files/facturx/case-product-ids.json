@@ -1,0 +1,74 @@
+{
+  "allowanceCharges": [],
+  "buyer": {
+    "city": "Regensburg",
+    "contacts": [],
+    "country": "DE",
+    "name": "Café am Markt GmbH",
+    "postcode": "93047",
+    "street": "Marktplatz 3"
+  },
+  "delivery": {},
+  "documents": [],
+  "invoicedObjects": [],
+  "issued": "2026-11-14",
+  "lines": [
+    {
+      "buyerItemId": "INV-0042",
+      "customsCode": "84198120",
+      "description": "Two grinders, milk system, 230 V",
+      "id": "1",
+      "name": "Bean-to-cup coffee machine KM-2",
+      "net": "3450.00",
+      "originCountry": "IT",
+      "quantity": "1",
+      "sellerItemId": "KM2-230",
+      "standardItemId": "4012345000016",
+      "standardItemIdScheme": "0160",
+      "unit": "H87",
+      "unitPrice": "3450.00",
+      "vatCategory": "S",
+      "vatRate": "19"
+    }
+  ],
+  "notes": [],
+  "number": "2026-5547",
+  "payment": {
+    "accountingReferences": [],
+    "means": []
+  },
+  "paymentTerms": [
+    {
+      "due": "2026-12-14"
+    }
+  ],
+  "precedingInvoices": [],
+  "seller": {
+    "city": "Stuttgart",
+    "contacts": [],
+    "country": "DE",
+    "name": "Kessler Maschinenbau GmbH",
+    "postcode": "70565",
+    "street": "Werkstraße 41",
+    "vatId": "DE312456789"
+  },
+  "specification": "urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:extended",
+  "taxes": [
+    {
+      "amount": "655.50",
+      "basis": "3450.00",
+      "category": "S",
+      "rate": "19"
+    }
+  ],
+  "tenderReferences": [],
+  "totals": {
+    "currency": "EUR",
+    "due": "4105.50",
+    "gross": "4105.50",
+    "lineTotal": "3450.00",
+    "net": "3450.00",
+    "vat": "655.50"
+  },
+  "typeCode": "380"
+}

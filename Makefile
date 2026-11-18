@@ -22,7 +22,7 @@ PORTAL_UI_DIR ?= ../codesense/portal/ui
         example-node example-dotnet example-php example-python example-java \
         clone-adapters sync-license check-license \
         build-portal-ui build-pages-demo build-pages build-pages-docs check-pages-docs stamp-pages-docs dev-pages meta-pages \
-        sync-examples check-examples-sync build-demo-viewer \
+        sync-examples check-examples-sync sync-invoice-map check-invoice-map-sync build-demo-viewer \
         rc-next rc-check rc-vsix package-stats
 
 build-wasm:
@@ -445,6 +445,7 @@ test-sdk-python: build-sdk-python
 		-v "$(CURDIR)/repos/lpdf-python/tests://app/tests" \
 		-v "$(CURDIR)/test/fixtures://app/test/fixtures" \
 		-v "$(CURDIR)/test/snapshots://app/test/snapshots" \
+		-v "$(CURDIR)/test/assets://app/test/assets" \
 		-v "$(CURDIR)/repos/lpdf-python/resources://app/resources" \
 		-w //app lpdf-python python -m pytest tests -v
 
@@ -773,6 +774,16 @@ sync-examples:
 check-examples-sync:
 	node scripts/sync-examples.mjs --check
 
+# ── The default invoice map ──────────────────────────────────────────────────
+# src/core/assets/cross-industry-invoice-map.xml is Lpdf's default map for LCrossIndustryInvoice, which the engine
+# embeds. sync-invoice-map copies it to $(PAGES_DIR)/www/schema as a download, beside lpdf.xsd, and writes the docs page
+# that lists its names from it; build-pages runs it. check-invoice-map-sync fails if either is not what it would write.
+sync-invoice-map:
+	node scripts/sync-invoice-map.mjs
+
+check-invoice-map-sync:
+	node scripts/sync-invoice-map.mjs --check
+
 # The demo's PDF viewer is the extension's, so a change to the viewer or its page reaches the demo through this.
 # It builds the extension's TypeScript, which has the function that makes the page, but not its engine.
 build-demo-viewer:
@@ -801,7 +812,7 @@ check-pages-docs:
 # The portal bundles are already in place: build-portal-ui writes them there.
 # It ends by stamping the docs with this core and rendering their examples with the refreshed engine,
 # so an engine change that breaks one fails here, and the docs get fixed in the same change.
-build-pages: build-portal-ui sync-examples build-demo-viewer build-pages-demo
+build-pages: build-portal-ui sync-examples sync-invoice-map build-demo-viewer build-pages-demo
 	@echo ""
 	@echo "-------------------------------"
 	@echo ">>> Copying pages assets..."
@@ -831,7 +842,7 @@ build-pages: build-portal-ui sync-examples build-demo-viewer build-pages-demo
 # bundles are copied over the committed ones.  Use this to test pages locally.
 # Do NOT commit the output — run make build-pages before committing to restore
 # sentinel values for CI deployment.
-dev-pages: sync-examples build-demo-viewer
+dev-pages: sync-examples sync-invoice-map build-demo-viewer
 	@test -d "$(PAGES_DIR)/www" || (echo "ERROR: pages checkout not found at $(PAGES_DIR)" && exit 1)
 	cd "$(PORTAL_UI_DIR)" && npm run build
 	cd "$(PAGES_DIR)/ui" && npm run build

@@ -95,6 +95,21 @@ impl Profile {
         }
     }
 
+    /// The name of the file that carries the XML of an invoice of this profile: `xrechnung.xml` for XRECHNUNG, and
+    /// `factur-x.xml` for the others.
+    pub(crate) fn file_name(&self) -> &'static str {
+        match self {
+            Self::XRechnung(_) => XRECHNUNG,
+            _ => FACTUR_X,
+        }
+    }
+
+    /// Whether the XML of an invoice of this profile is only a booking aid, MINIMUM and BASIC WL, whose PDF is the
+    /// legal invoice and shows the lines the XML doesn't hold (spec, principle no. 2).
+    pub(crate) fn is_booking_aid(&self) -> bool {
+        matches!(self, Self::Minimum | Self::BasicWl)
+    }
+
     /// The relationship of the invoice's XML when the document leaves it out: data for MINIMUM and BASIC WL, whose
     /// pages hold more than the XML, and alternative for the others, the one both France and Germany allow (p. 28).
     fn default_relationship(&self) -> Relationship {
@@ -127,7 +142,7 @@ fn xrechnung_version(value: &str) -> Option<&str> {
 }
 
 /// Whether a file of this name is the invoice's XML.
-fn is_invoice_name(name: &str) -> bool {
+pub(crate) fn is_invoice_name(name: &str) -> bool {
     name == FACTUR_X || name == XRECHNUNG
 }
 
@@ -216,6 +231,11 @@ fn read_profile(bytes: &[u8], name: &str) -> Result<Profile, String> {
     let document = roxmltree::Document::parse(text).map_err(|e| {
         in_file(format!("its XML does not parse ({e}): give the invoice's CII XML, or give the file another name"))
     })?;
+    profile_of(&document).map_err(in_file)
+}
+
+/// The profile BT-24 of a parsed invoice names, or why it names none: the errors of `read_profile`, without the file.
+pub(crate) fn profile_of(document: &roxmltree::Document) -> Result<Profile, String> {
     let is = |node: &roxmltree::Node, namespace: &str, local: &str| {
         node.is_element() && node.tag_name().namespace() == Some(namespace) && node.tag_name().name() == local
     };
@@ -226,16 +246,14 @@ fn read_profile(bytes: &[u8], name: &str) -> Result<Profile, String> {
         .and_then(|context| context.children().find(|n| is(n, RAM, "GuidelineSpecifiedDocumentContextParameter")))
         .and_then(|parameter| parameter.children().find(|n| is(n, RAM, "ID")));
     let Some(guideline) = guideline else {
-        return Err(in_file(format!(
+        return Err(format!(
             "its XML names no profile. A Factur-X invoice's XML is a CII invoice, rsm:CrossIndustryInvoice, that names \
             its profile in rsm:ExchangedDocumentContext / ram:GuidelineSpecifiedDocumentContextParameter / ram:ID \
             (BT-24), such as urn:cen.eu:en16931:2017 for EN 16931: add it. {PROFILES}"
-        )));
+        ));
     };
     let value = guideline.text().unwrap_or("");
-    Profile::from_guideline(value).ok_or_else(|| {
-        in_file(format!("BT-24 '{}' names no Factur-X profile. {PROFILES}", value.trim()))
-    })
+    Profile::from_guideline(value).ok_or_else(|| format!("BT-24 '{}' names no Factur-X profile. {PROFILES}", value.trim()))
 }
 
 /// The BT-24 values of the profiles, for the errors of `read_profile`.

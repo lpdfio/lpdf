@@ -32,6 +32,8 @@ mod tagging;
 mod attachments;
 #[path = "../../core/src/facturx.rs"]
 mod facturx;
+#[path = "../../core/src/cross_industry_invoice.rs"]
+mod cross_industry_invoice;
 #[path = "../../core/src/license.rs"]
 mod license;
 #[path = "../../core/src/aes256.rs"]

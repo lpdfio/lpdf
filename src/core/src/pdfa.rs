@@ -279,10 +279,31 @@ pub(crate) fn plain_date(created_on: Option<&str>) -> Result<Option<FileDate>, S
         .transpose()
 }
 
+/// `check_render` for a document whose level `generatePdf` set, which has no `<output pdfa>` to name.
+fn invoice_date(output: &Output, created_on: Option<&str>) -> Result<(), String> {
+    let level = output.pdfa.map_or("3b", PdfA::attribute);
+    let Some(value) = created_on else {
+        return Err(format!(
+            "generatePdf makes the invoice a PDF/A-{level} file, which carries the date it is made, and the render got \
+            no created_on: pass createdOn, such as 2026-10-31T09:30:00Z"
+        ));
+    };
+    match FileDate::parse(value) {
+        Some(_) => Ok(()),
+        None => Err(format!(
+            "generatePdf makes the invoice a PDF/A-{level} file: created_on '{value}' is not a date it can carry: give \
+            an ISO 8601 date, or date and time, such as 2026-10-31 or 2026-10-31T09:30:00Z"
+        )),
+    }
+}
+
 /// Check before the layout that the render's `created_on` is a date, and that a render of a document that asks for a
 /// standard has one, so that it fails without the work of a render.
 pub(crate) fn check_render(output: &Output, created_on: Option<&str>) -> Result<(), String> {
     let standards = Standards::of(output);
+    if output.pdfa_by_invoice {
+        return invoice_date(output, created_on);
+    }
     if standards.any() {
         file_date(standards, created_on).map(|_| ())
     } else {

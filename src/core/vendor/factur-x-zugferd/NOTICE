@@ -1,0 +1,15 @@
+Factur-X / ZUGFeRD EXTENDED schema
+
+The four .xsd files in this folder are the XML schema of the EXTENDED profile
+of Factur-X 1.09.2 / ZUGFeRD 2.5.2, one specification that FeRD (Forum
+elektronische Rechnung Deutschland) and FNFE-MPE publish together. They come
+from FeRD's ZUGFeRD 2.5.2 package, folder Schema/4_Factur-X_1.09.2_EXTENDED/,
+unmodified, under FeRD's own file names.
+
+FeRD's disclaimer and rights of use put the technical artifacts of the
+specification, its schemas and Schematron, under the Apache License,
+Version 2.0, whose text is in LICENSE beside this file:
+https://www.ferd-net.de/en/ueber-uns/ressourcen-1/veroeffentlichungen/disclaimer-and-rights-of-use-zugferd
+
+The Lpdf engine's build reads them to learn which element of a Cross Industry
+Invoice may sit inside which, and which attributes it has.

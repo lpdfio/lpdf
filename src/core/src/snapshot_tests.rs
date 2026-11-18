@@ -345,6 +345,14 @@ fn showcase_facturx() {
         check_snapshot(&crate::facturx_render_tests::snapshot_name(case), &crate::facturx_render_tests::render_case(&xml));
     }
 }
+/// `LCrossIndustryInvoice.generatePdf`: the template `showcase-cross-industry-invoice` with an invoice's values, a
+/// document built in code, and the template at level 3a (`cross_industry_invoice_render_tests::cases`).
+#[test]
+fn showcase_cross_industry_invoice() {
+    for (name, pdf) in crate::cross_industry_invoice_render_tests::cases() {
+        check_snapshot(name, &pdf);
+    }
+}
 #[test]
 fn showcase_canvas_overlay()  { run_snapshot("showcase-canvas-overlay"); }
 #[test]

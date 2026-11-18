@@ -46,6 +46,8 @@ roxmltree21 = { package = "roxmltree", version = "=0.21.2" }
 
 [build-dependencies]
 sha2 = "0.10"
+# Reads FeRD's schema of a Cross Industry Invoice into the table of its elements (`build_cii_schema.rs`)
+roxmltree = "0.20"
 
 [dev-dependencies]
 # The core's barcode tests, which this crate runs again, decode with it — same as core/Cargo.toml

@@ -4,6 +4,7 @@ mod attachments;
 mod attr_types;
 mod barcode;
 mod canvas;
+mod cross_industry_invoice;
 mod data;
 // The native library (`src/core-ffi`) starts a render's deadline from its request; this crate starts none and only
 // checks it, so what starts one goes unused here.
@@ -241,6 +242,43 @@ impl LpdfEngine {
         self.render_json(json, &encryption).map_err(|e| JsValue::from_str(&e))
     }
 
+    /// The read of `LCrossIndustryInvoice.generatePdf`: `extract_invoice_data`, under this engine's memory cap
+    /// instead of the default, as the SDK reads the invoice on the engine's worker before it formats the values.
+    pub fn extract_invoice_data(&self, invoice_xml: &[u8], invoice_map: Option<String>) -> Result<String, JsValue> {
+        let _cap = memory::start_read(self.max_memory_mb);
+        cross_industry_invoice::extract(invoice_xml, invoice_map.as_deref())
+            .map(|extracted| extracted.to_string())
+            .map_err(|e| JsValue::from_str(&e))
+    }
+
+    /// `LCrossIndustryInvoice.generatePdf` with a template: renders `xml` with the values of the invoice bound under
+    /// the prefix of `invoice_map`, or of the default map, beside `json_data`, and makes the file a Factur-X invoice,
+    /// PDF/A-3 with `invoice_xml` attached under the name its profile asks for.
+    ///
+    /// `invoice_data` is the JSON of the values `extract_invoice_data` read from `invoice_xml` with the same map,
+    /// after the SDK applied the caller's `format` functions. The template's paths under the prefix are checked
+    /// against the map first, so a name the map lacks is an error, not a blank. A PDF/A-3 file is not encrypted, so
+    /// the call takes no passwords.
+    pub fn render_invoice_pdf(
+        &self,
+        xml: &str,
+        json_data: Option<String>,
+        invoice_xml: &[u8],
+        invoice_map: Option<String>,
+        invoice_data: &str,
+    ) -> Result<Vec<u8>, JsValue> {
+        let invoice = InvoiceTemplate { xml: invoice_xml, map: invoice_map.as_deref(), data: invoice_data };
+        self.render_xml_with(xml, json_data.as_deref(), &RenderEncryption::skipping(false), Some(invoice))
+            .map_err(|e| JsValue::from_str(&e))
+    }
+
+    /// `LCrossIndustryInvoice.generatePdf` with a document built in code: renders the JSON kit tree `json` and makes
+    /// the file a Factur-X invoice, PDF/A-3 with `invoice_xml` attached under the name its profile asks for. The
+    /// document has no bindings, so it takes no map and no data.
+    pub fn render_invoice_tree_pdf(&self, json: &str, invoice_xml: &[u8]) -> Result<Vec<u8>, JsValue> {
+        self.render_json_with(json, &RenderEncryption::skipping(false), Some(invoice_xml)).map_err(|e| JsValue::from_str(&e))
+    }
+
     /// Draw PNG stamps over the pages of an existing PDF, and return the file with them added as an incremental
     /// update: the input, byte for byte, then the images and the pages they change. The original bytes stay as they
     /// were, so an owner password and its permissions stay, and so does a digital signature's revision.
@@ -295,18 +333,39 @@ impl LpdfEngine {
     /// error that is not a JS value, which the command line and the tests can read. `encryption` is what the render
     /// call says about the encryption the document's `<output>` asks for.
     pub fn render_xml(&self, xml: &str, json_data: Option<&str>, encryption: &RenderEncryption) -> Result<Vec<u8>, String> {
+        self.render_xml_with(xml, json_data, encryption, None)
+    }
+
+    /// `render_xml`, and for `generatePdf` with a template, the invoice: added to the document as a Factur-X file
+    /// (`cross_industry_invoice::prepare`), and its values bound under the map's prefix beside the data.
+    fn render_xml_with(
+        &self, xml: &str, json_data: Option<&str>, encryption: &RenderEncryption, invoice: Option<InvoiceTemplate>,
+    ) -> Result<Vec<u8>, String> {
         let _cap = memory::start(self.max_memory_mb);
-        let mut doc = parse::parse_with(xml, &self.resources())?;
+        let resources = parse::Resources { invoice: invoice.is_some(), ..self.resources() };
+        let mut doc = parse::parse_with(xml, &resources)?;
+        let invoice_file = invoice.as_ref().map(|i| cross_industry_invoice::prepare(&mut doc, i.xml)).transpose()?;
         // Checked before the layout, so a missing or stray password, a missing date or one that is not a date, a press
         // profile that is missing or not one, or a file with no bytes fails without the work of a render.
         let config = encryption.resolve(doc.output.encryption.as_ref())?;
         pdfa::check_render(&doc.output, self.created_on.as_deref())?;
         let press = pdfx::resolve(doc.output.pdfx.as_ref(), &doc.profiles, &self.profiles, &doc.meta)?;
         let attached = std::mem::take(&mut doc.attachments);
-        let files = attachments::resolve(&attached, &self.files, &doc.output)?;
+        let invoice_bytes = invoice_file.zip(invoice.as_ref().map(|i| i.xml));
+        let files = attachments::resolve_with(&attached, &self.files, invoice_bytes, &doc.output)?;
 
-        if let Some(json) = json_data {
-            data::apply(&mut doc, data::parse(json)?)?;
+        let data = json_data.map(data::parse).transpose()?;
+        match invoice {
+            Some(invoice) => {
+                let values = serde_json::from_str(invoice.data)
+                    .map_err(|e| format!("the invoice's values could not be read: {e}"))?;
+                cross_industry_invoice::bind_template(&mut doc, data, invoice.map, values)?;
+            }
+            None => {
+                if let Some(data) = data {
+                    data::apply(&mut doc, data)?;
+                }
+            }
         }
 
         // Confirm every image declared in <assets> has bytes in the registry.
@@ -356,8 +415,16 @@ impl LpdfEngine {
     /// error that is not a JS value, which the tests can read. `encryption` is what the render call says about the
     /// encryption the document's `output` asks for.
     pub fn render_json(&self, json: &str, encryption: &RenderEncryption) -> Result<Vec<u8>, String> {
+        self.render_json_with(json, encryption, None)
+    }
+
+    /// `render_json`, and for `generatePdf` with a document built in code, the invoice's XML, added to the document as
+    /// a Factur-X file (`cross_industry_invoice::prepare`).
+    fn render_json_with(&self, json: &str, encryption: &RenderEncryption, invoice_xml: Option<&[u8]>) -> Result<Vec<u8>, String> {
         let _cap = memory::start(self.max_memory_mb);
-        let mut doc = parse::parse_tree_with(json, &self.resources())?;
+        let resources = parse::Resources { invoice: invoice_xml.is_some(), ..self.resources() };
+        let mut doc = parse::parse_tree_with(json, &resources)?;
+        let invoice_file = invoice_xml.map(|xml| cross_industry_invoice::prepare(&mut doc, xml)).transpose()?;
 
         // Checked before the layout, so a missing or stray password, a missing date or one that is not a date, a press
         // profile that is missing or not one, or a file with no bytes fails without the work of a render.
@@ -365,7 +432,7 @@ impl LpdfEngine {
         pdfa::check_render(&doc.output, self.created_on.as_deref())?;
         let press = pdfx::resolve(doc.output.pdfx.as_ref(), &doc.profiles, &self.profiles, &doc.meta)?;
         let attached = std::mem::take(&mut doc.attachments);
-        let files = attachments::resolve(&attached, &self.files, &doc.output)?;
+        let files = attachments::resolve_with(&attached, &self.files, invoice_file.zip(invoice_xml), &doc.output)?;
 
         // Confirm every image declared in the tree has bytes in the registry.
         for (_alias, name) in &doc.images {
@@ -439,7 +506,7 @@ impl LpdfEngine {
 
     /// What the caller loaded for the `src` attributes of the document, for the parser.
     fn resources(&self) -> parse::Resources {
-        parse::Resources { markdown_styles: self.markdown_styles.clone() }
+        parse::Resources { markdown_styles: self.markdown_styles.clone(), invoice: false }
     }
 
     /// Render XML to PDF bytes — native API used by the CLI and tests.
@@ -542,7 +609,37 @@ impl LpdfEngine {
     }
 }
 
+/// The invoice of a `generatePdf` render of a template: its XML, the map given or none for the default, and the JSON of
+/// the values the SDK read with `extract_invoice_data` and formatted.
+struct InvoiceTemplate<'a> {
+    xml:  &'a [u8],
+    map:  Option<&'a str>,
+    data: &'a str,
+}
+
 // ── Standalone exports ────────────────────────────────────────────────────────
+
+/// `LCrossIndustryInvoice.extractInvoiceData`: the values of `invoice_xml`, an EN 16931 Cross Industry Invoice, read
+/// through `invoice_map`, or Lpdf's default map without one, as the JSON
+/// `{ "data": …, "typed": [{ "at": ["lines", 0, "unit"], "type": "code", "name": "lines.unit" }, …] }`. The SDK
+/// applies the caller's `format` function of each type to the values `typed` lists.
+///
+/// It uses no engine instance: it reads no fonts and no key, under the default memory cap. Returns an error for a map
+/// that is not one or doesn't fit the schema, an invoice that is not a Cross Industry Invoice or is MINIMUM or BASIC
+/// WL, and a required value the invoice lacks.
+#[wasm_bindgen]
+pub fn extract_invoice_data(invoice_xml: &[u8], invoice_map: Option<String>) -> Result<String, JsValue> {
+    let _cap = memory::start_read(memory::DEFAULT_CAP_MB);
+    cross_industry_invoice::extract(invoice_xml, invoice_map.as_deref())
+        .map(|extracted| extracted.to_string())
+        .map_err(|e| JsValue::from_str(&e))
+}
+
+/// `LCrossIndustryInvoice.defaultInvoiceMap`: Lpdf's default invoice map, as XML text, the start of a team's own map.
+#[wasm_bindgen]
+pub fn default_invoice_map() -> String {
+    cross_industry_invoice::DEFAULT_MAP.to_string()
+}
 
 /// What this build of the engine makes of a license key, as JSON.
 ///
@@ -1022,6 +1119,9 @@ mod attachment_render_tests;
 
 #[cfg(test)]
 mod facturx_render_tests;
+
+#[cfg(test)]
+mod cross_industry_invoice_render_tests;
 
 #[cfg(test)]
 mod ocg_render_tests;

@@ -1,0 +1,81 @@
+{
+  "allowanceCharges": [],
+  "buyer": {
+    "city": "Paris",
+    "contacts": [],
+    "country": "FR",
+    "name": "Atelier Lakeside SARL",
+    "postcode": "75011",
+    "street": "8 passage Lakeside"
+  },
+  "delivery": {},
+  "documents": [],
+  "invoicedObjects": [],
+  "issued": "2026-11-10",
+  "lines": [
+    {
+      "id": "1",
+      "name": "Copy paper, A4, 80 g/m², box of 5 reams",
+      "net": "158.40",
+      "quantity": "8",
+      "unit": "H87",
+      "unitPrice": "19.80",
+      "vatCategory": "S",
+      "vatRate": "20"
+    }
+  ],
+  "notes": [],
+  "number": "2026-0479",
+  "payee": {
+    "legalId": "552100554",
+    "legalIdScheme": "0002",
+    "name": "Factor Rhône SA"
+  },
+  "payment": {
+    "accountingReferences": [],
+    "means": [
+      {
+        "accountName": "Factor Rhône SA",
+        "bic": "AGRIFRPP",
+        "iban": "FR7630006000011234567890189",
+        "typeCode": "58"
+      }
+    ],
+    "reference": "2026-0479"
+  },
+  "paymentTerms": [
+    {
+      "description": "Pay to Factor Rhône SA, which this claim was assigned to",
+      "due": "2026-12-10"
+    }
+  ],
+  "precedingInvoices": [],
+  "seller": {
+    "city": "Lyon",
+    "contacts": [],
+    "country": "FR",
+    "name": "Northwind Paper SAS",
+    "postcode": "69002",
+    "street": "12 rue de la Charité",
+    "vatId": "FR32123456789"
+  },
+  "specification": "urn:cen.eu:en16931:2017",
+  "taxes": [
+    {
+      "amount": "31.68",
+      "basis": "158.40",
+      "category": "S",
+      "rate": "20"
+    }
+  ],
+  "tenderReferences": [],
+  "totals": {
+    "currency": "EUR",
+    "due": "190.08",
+    "gross": "190.08",
+    "lineTotal": "158.40",
+    "net": "158.40",
+    "vat": "31.68"
+  },
+  "typeCode": "380"
+}

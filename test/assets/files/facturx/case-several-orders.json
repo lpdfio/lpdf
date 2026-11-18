@@ -1,0 +1,105 @@
+{
+  "allowanceCharges": [],
+  "buyer": {
+    "city": "Paris",
+    "contacts": [],
+    "country": "FR",
+    "name": "Atelier Lakeside SARL",
+    "postcode": "75011",
+    "street": "8 passage Lakeside"
+  },
+  "delivery": {},
+  "documents": [],
+  "invoicedObjects": [],
+  "issued": "2026-11-13",
+  "lines": [
+    {
+      "id": "1",
+      "name": "Watercolour paper, A3, block of 20",
+      "net": "70.00",
+      "orderLine": "1",
+      "orderReference": "PO-7781",
+      "quantity": "5",
+      "unit": "H87",
+      "unitPrice": "14.00",
+      "vatCategory": "S",
+      "vatRate": "20"
+    },
+    {
+      "id": "2",
+      "name": "Brushes, synthetic, set of 6",
+      "net": "46.00",
+      "orderLine": "3",
+      "orderReference": "PO-7781",
+      "quantity": "4",
+      "unit": "H87",
+      "unitPrice": "11.50",
+      "vatCategory": "S",
+      "vatRate": "20"
+    },
+    {
+      "id": "3",
+      "name": "Easel, beech wood",
+      "net": "89.00",
+      "orderLine": "1",
+      "orderReference": "PO-7804",
+      "quantity": "1",
+      "unit": "H87",
+      "unitPrice": "89.00",
+      "vatCategory": "S",
+      "vatRate": "20"
+    },
+    {
+      "id": "4",
+      "name": "Masking tape, 25 mm",
+      "net": "30.00",
+      "orderLine": "2",
+      "orderReference": "PO-7810",
+      "quantity": "12",
+      "unit": "H87",
+      "unitPrice": "2.50",
+      "vatCategory": "S",
+      "vatRate": "20"
+    }
+  ],
+  "notes": [],
+  "number": "2026-0495",
+  "payment": {
+    "accountingReferences": [],
+    "means": []
+  },
+  "paymentTerms": [
+    {
+      "due": "2026-12-13"
+    }
+  ],
+  "precedingInvoices": [],
+  "seller": {
+    "city": "Lyon",
+    "contacts": [],
+    "country": "FR",
+    "name": "Northwind Paper SAS",
+    "postcode": "69002",
+    "street": "12 rue de la Charité",
+    "vatId": "FR32123456789"
+  },
+  "specification": "urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:extended",
+  "taxes": [
+    {
+      "amount": "47.00",
+      "basis": "235.00",
+      "category": "S",
+      "rate": "20"
+    }
+  ],
+  "tenderReferences": [],
+  "totals": {
+    "currency": "EUR",
+    "due": "282.00",
+    "gross": "282.00",
+    "lineTotal": "235.00",
+    "net": "235.00",
+    "vat": "47.00"
+  },
+  "typeCode": "380"
+}
