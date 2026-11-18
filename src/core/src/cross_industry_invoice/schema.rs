@@ -135,5 +135,12 @@ mod tests {
         ]);
         assert!(totals.repeats);
         assert_eq!(totals.schema_type().attributes, ["currencyID"]);
+        let registrations = at(&[
+            "rsm:SupplyChainTradeTransaction",
+            "ram:ApplicableHeaderTradeAgreement",
+            "ram:SellerTradeParty",
+            "ram:SpecifiedTaxRegistration",
+        ]);
+        assert!(registrations.repeats);
     }
 }
