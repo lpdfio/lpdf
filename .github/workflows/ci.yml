@@ -38,6 +38,11 @@ jobs:
       - name: Test the codegen check's scripts
         run: node --test scripts/check-codegen-sdk.test.mjs
 
+      # The retry of the downloads the scripts make (scripts/fetch-retry.mjs), run with a fetch that gives the answers
+      # of a server that limits its requests, and no server.
+      - name: Test the retry of the scripts' downloads
+        run: node --test scripts/fetch-retry.test.mjs
+
       - name: Test core
         env:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
@@ -101,6 +106,24 @@ jobs:
         env:
           LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
         run: make check-spot
+
+      # The Mustang CLI that the Factur-X check below downloads from Maven Central, which now and then answers 429 to the
+      # addresses the runners share: its jar is kept between runs under the version the script pins, and the script
+      # tries a download that finds none again (scripts/fetch-retry.mjs). The script checks the SHA-256 of the jar it
+      # finds, so a cache can't hand it another file.
+      - name: Read the Mustang CLI version
+        id: mustang
+        run: |
+          version=$(sed -n "s/^const MUSTANG_VERSION = '\([0-9.]*\)'.*/\1/p" scripts/check-facturx.mjs)
+          if [ -z "$version" ]; then
+            echo "::error::scripts/check-facturx.mjs must set MUSTANG_VERSION to one version, as const MUSTANG_VERSION = 'X.Y.Z';"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: target/mustang
+          key: mustang-cli-${{ steps.mustang.outputs.version }}
 
       # Java 17, the runner's default, runs the Mustang CLI, which needs 11 or later.
       - name: Check Factur-X invoices with the Mustang CLI
