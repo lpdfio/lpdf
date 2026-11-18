@@ -321,6 +321,8 @@ pub(crate) fn stamp(pdf: &[u8], stamps: &[Stamp], images: &ImageRegistry, licens
             page.set("Annots", annots);
         }
         update.set_object(page_id, page);
+        // The native library stops a stamp past its request's timeout here, once a page.
+        crate::deadline::check_now();
     }
     crate::memory::check()?;
 
