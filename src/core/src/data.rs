@@ -554,7 +554,11 @@ fn apply_single_node(node: Node, stack: &[&Value], bind: &Bind, out: &mut Vec<No
         let ((shared, shared_prefixed), resolvers) = resolvers;
         let mut children = Vec::with_capacity(node.children.len());
         for child in std::mem::take(&mut node.children) {
-            if child.data_attrs.as_ref().is_some_and(|d| d.data_source.is_some()) {
+            // A record under a prefix with nothing bound under it is laid out as the document wrote it, once, as a
+            // bulk container rendered without data lays out its children.
+            let source = child.data_attrs.as_ref().and_then(|d| d.data_source.as_deref());
+            let unbound = source.is_some_and(|path| matches!(lookup(path, stack, shared, shared_prefixed), Lookup::Unbound));
+            if source.is_some() && !unbound {
                 let records = BulkRecords::new(child, children.len(), stack, shared, shared_prefixed, resolvers);
                 data.records = Some(Rc::new(records));
             } else {

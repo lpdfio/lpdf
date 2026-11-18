@@ -292,3 +292,12 @@ fn a_bulk_table_with_a_gap_between_its_fr_columns_ends_at_the_right_margin() {
         assert!((right - 559.28).abs() < 0.01, "page {}: the cells end at {right}", n + 1);
     }
 }
+
+#[test]
+fn a_bulk_record_under_a_prefix_with_nothing_bound_lays_out_as_the_document_wrote_it() {
+    let xml = document("", r#"<table cols="1fr" bulk="true"><tr data-source="invoice:lines"><td><text data-value="name">Item</text></td></tr></table>"#);
+    let unbound = tree_of(&laid_out(&xml, &json!({ "note": "Thanks" })).unwrap());
+    let without_data = tree_of(&layout_document(&parse(&xml).unwrap().section_layouts()).unwrap());
+    assert_eq!(unbound, without_data);
+    assert!(unbound.contains("Item"), "{unbound}");
+}
