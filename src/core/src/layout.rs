@@ -9353,7 +9353,11 @@ abcdef</code><text>after</text></row>"#,
             assert!((width - wanted).abs() < 0.001, "{widths:?}");
         }
         assert!((widths.iter().sum::<f32>() + 30.0 - 400.0).abs() < 0.001, "the columns and the gaps fill the table");
-        // When the length and the gaps leave nothing, the fr columns are 0 and not below it.
+    }
+
+    #[test]
+    fn the_fr_columns_are_0_and_not_below_it_when_the_length_and_the_gaps_leave_nothing() {
+        // 100pt and two gaps of 20pt are 140pt, more than the 120pt of the table.
         assert_eq!(resolve_col_widths("100pt 1fr 1fr", 120.0, 20.0), [100.0, 0.0, 0.0]);
     }
 
