@@ -885,12 +885,17 @@ mod tests {
         let pdf = base64::engine::general_purpose::STANDARD.decode(answered["pdf"].as_str().unwrap_or_else(|| panic!("{answered}"))).unwrap();
         let text = String::from_utf8_lossy(&pdf);
         assert!(text.contains("<pdfaid:part>3</pdfaid:part>") && text.contains("<fx:DocumentFileName>factur-x.xml</fx:DocumentFileName>"));
+        // The file carries the whole invoice, not an empty copy.
+        let size = |name: &str| base64::engine::general_purpose::STANDARD.decode(invoice_base64(name)).unwrap().len();
+        assert!(text.contains(&format!("/Size {}", size("en16931.xml"))), "the size of the invoice as given");
 
         let tree = r#"{"version":1,"type":"document","attrs":{"font":"body","assets":{"fonts":[{"name":"body","src":"body.otf"}]}},"nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{},"nodes":[{"type":"text","nodes":["Invoice"]}]}]}]}"#;
         let invoice = serde_json::json!({ "xml": invoice_base64("xrechnung-3.0.xml") });
         let answered = answer("render_tree_pdf", tree, fields(invoice));
         let pdf = base64::engine::general_purpose::STANDARD.decode(answered["pdf"].as_str().unwrap_or_else(|| panic!("{answered}"))).unwrap();
-        assert!(String::from_utf8_lossy(&pdf).contains("<fx:DocumentFileName>xrechnung.xml</fx:DocumentFileName>"));
+        let text = String::from_utf8_lossy(&pdf);
+        assert!(text.contains("<fx:DocumentFileName>xrechnung.xml</fx:DocumentFileName>"));
+        assert!(text.contains(&format!("/Size {}", size("xrechnung-3.0.xml"))), "the size of the invoice as given");
 
         let typo = template.replace("invoice:seller.name", "invoice:sellr.name");
         let invoice = serde_json::json!({ "xml": invoice_base64("en16931.xml"), "data": values });
