@@ -601,24 +601,6 @@ impl LpdfEngine {
     }
 }
 
-// ── Standalone exports ────────────────────────────────────────────────────────
-
-/// What this build of the engine makes of a license key, as JSON.
-///
-/// ```json
-/// { "status": "licensed", "product": "lpdf", "tier": "professional",
-///   "expires": "2027-09-19T00:00:00Z", "license": "L-7K3M9Q", "key": 3 }
-/// ```
-///
-/// `status` is one of `licensed`, `no_key`, `expired`, `version_mismatch`, `wrong_product`,
-/// `unknown_key`, `bad_signature` or `malformed`. The remaining fields appear only once the
-/// signature verified — see [`license::report_json`].
-///
-/// A free function, not a method: asking what a key is should not require building an engine.
-/// `now_unix` is the caller's clock in seconds, since wasm has none; `0` skips the expiry check.
-///
-/// The answer is this build's. An engine older than the key, or one built for another
-/// environment, answers `unknown_key` — which is the useful part, not a caveat.
 /// The invoice of a `generatePdf` render of a template: its XML, the map given or none for the default, and the JSON of
 /// the values the SDK read with `extract_invoice_data` and formatted.
 struct InvoiceTemplate<'a> {
@@ -626,6 +608,8 @@ struct InvoiceTemplate<'a> {
     map:  Option<&'a str>,
     data: &'a str,
 }
+
+// ── Standalone exports ────────────────────────────────────────────────────────
 
 /// `LCrossIndustryInvoice.extractInvoiceData`: the values of `invoice_xml`, an EN 16931 Cross Industry Invoice, read
 /// through `invoice_map`, or Lpdf's default map without one, as the JSON
@@ -649,6 +633,22 @@ pub fn default_invoice_map() -> String {
     cross_industry_invoice::DEFAULT_MAP.to_string()
 }
 
+/// What this build of the engine makes of a license key, as JSON.
+///
+/// ```json
+/// { "status": "licensed", "product": "lpdf", "tier": "professional",
+///   "expires": "2027-09-19T00:00:00Z", "license": "L-7K3M9Q", "key": 3 }
+/// ```
+///
+/// `status` is one of `licensed`, `no_key`, `expired`, `version_mismatch`, `wrong_product`,
+/// `unknown_key`, `bad_signature` or `malformed`. The remaining fields appear only once the
+/// signature verified — see [`license::report_json`].
+///
+/// A free function, not a method: asking what a key is should not require building an engine.
+/// `now_unix` is the caller's clock in seconds, since wasm has none; `0` skips the expiry check.
+///
+/// The answer is this build's. An engine older than the key, or one built for another
+/// environment, answers `unknown_key` — which is the useful part, not a caveat.
 #[wasm_bindgen]
 pub fn check_license(token: &str, now_unix: i64) -> String {
     license::report_json(token, now_unix)
