@@ -342,8 +342,8 @@ impl LpdfEngine {
         pdfa::check_render(&doc.output, self.created_on.as_deref())?;
         let press = pdfx::resolve(doc.output.pdfx.as_ref(), &doc.profiles, &self.profiles, &doc.meta)?;
         let attached = std::mem::take(&mut doc.attachments);
-        let with_invoice = invoice_file.zip(invoice.as_ref()).map(|(name, i)| self.files.with(name, i.xml.to_vec()));
-        let files = attachments::resolve(&attached, with_invoice.as_ref().unwrap_or(&self.files), &doc.output)?;
+        let invoice_bytes = invoice_file.zip(invoice.as_ref().map(|i| i.xml));
+        let files = attachments::resolve_with(&attached, &self.files, invoice_bytes, &doc.output)?;
 
         let data = json_data.map(data::parse).transpose()?;
         match invoice {
@@ -423,8 +423,7 @@ impl LpdfEngine {
         pdfa::check_render(&doc.output, self.created_on.as_deref())?;
         let press = pdfx::resolve(doc.output.pdfx.as_ref(), &doc.profiles, &self.profiles, &doc.meta)?;
         let attached = std::mem::take(&mut doc.attachments);
-        let with_invoice = invoice_file.zip(invoice_xml).map(|(name, xml)| self.files.with(name, xml.to_vec()));
-        let files = attachments::resolve(&attached, with_invoice.as_ref().unwrap_or(&self.files), &doc.output)?;
+        let files = attachments::resolve_with(&attached, &self.files, invoice_file.zip(invoice_xml), &doc.output)?;
 
         // Confirm every image declared in the tree has bytes in the registry.
         for (_alias, name) in &doc.images {

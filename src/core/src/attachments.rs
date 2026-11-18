@@ -201,16 +201,6 @@ impl FileRegistry {
     pub fn get(&self, key: &str) -> Option<&[u8]> {
         self.files.get(key).map(Vec::as_slice)
     }
-
-    /// A copy of the registry with `bytes` loaded under `key` too: the invoice of a `generatePdf` render, beside the
-    /// files the engine was given.
-    // The WASI binary loads the invoice into the registry it builds for the request, so this is for the engine.
-    #[allow(dead_code)]
-    pub(crate) fn with(&self, key: &str, bytes: Vec<u8>) -> Self {
-        let mut registry = self.clone();
-        registry.load(key, bytes);
-        registry
-    }
 }
 
 /// A file of the document with the bytes loaded for it, and the type and relationship it is written with.
@@ -236,9 +226,24 @@ pub fn resolve<'a>(
     registry: &'a FileRegistry,
     output:   &Output,
 ) -> Result<Vec<EmbeddedFile<'a>>, String> {
+    resolve_with(files, registry, None, output)
+}
+
+/// `resolve`, with the invoice of a `generatePdf` render: the bytes of the file under its key, beside the files the
+/// engine was given, which are not copied for it.
+pub(crate) fn resolve_with<'a>(
+    files:    &'a [Attachment],
+    registry: &'a FileRegistry,
+    invoice:  Option<(&str, &'a [u8])>,
+    output:   &Output,
+) -> Result<Vec<EmbeddedFile<'a>>, String> {
+    let bytes_of = |key: &str| match invoice {
+        Some((invoice_key, bytes)) if invoice_key == key => Some(bytes),
+        _ => registry.get(key),
+    };
     let mut resolved = files
         .iter()
-        .map(|attachment| match registry.get(&attachment.key) {
+        .map(|attachment| match bytes_of(&attachment.key) {
             Some(bytes) if i32::try_from(bytes.len()).is_ok() => Ok(EmbeddedFile {
                 attachment,
                 bytes,
