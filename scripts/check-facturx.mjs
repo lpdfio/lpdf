@@ -17,12 +17,16 @@
 //
 // Usage: node scripts/check-facturx.mjs <folder of samples>     list the failures, exit 1 if any. Needs Java 11 or
 //        later on the PATH. The Mustang CLI of MUSTANG_VERSION is downloaded from Maven Central into target/mustang
-//        once, and a file whose SHA-256 is not MUSTANG_SHA256 is refused.
+//        once, tried again after a wait when Maven Central answers 429, a server error or nothing
+//        (`scripts/fetch-retry.mjs`), and a file whose SHA-256 is not MUSTANG_SHA256 is refused, whether it was
+//        downloaded or was already there, as CI's cache of the folder leaves it.
 
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+
+import { fetchBytes } from './fetch-retry.mjs';
 
 const MUSTANG_VERSION = '2.26.0';
 const MUSTANG_SHA256 = '42d7868cb68264874a7b8cab4c3587b03b23ccc7cd72373da917f66758bb9736';
@@ -43,16 +47,16 @@ if (!folder) {
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
-/** The Mustang CLI's jar, downloaded once and refused when its bytes are not the pinned ones. */
+/** The Mustang CLI's jar, downloaded once (with a retry) and refused when its bytes are not the pinned ones. */
 async function mustang() {
     if (!existsSync(JAR)) {
         mkdirSync(path.dirname(JAR), { recursive: true });
-        const response = await fetch(MUSTANG_URL);
-        if (!response.ok) {
-            console.error(`could not download ${MUSTANG_URL}: ${response.status} ${response.statusText}`);
+        try {
+            writeFileSync(JAR, await fetchBytes(MUSTANG_URL));
+        } catch (error) {
+            console.error(error.message);
             process.exit(2);
         }
-        writeFileSync(JAR, Buffer.from(await response.arrayBuffer()));
     }
     const actual = sha256(readFileSync(JAR));
     if (actual !== MUSTANG_SHA256) {
