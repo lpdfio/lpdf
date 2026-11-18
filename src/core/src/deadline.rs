@@ -4,9 +4,11 @@
 //! the timeout and PHP's `max_execution_time` doesn't stop a call into C. So the render stops itself. The request
 //! carries the timeout, the render starts its deadline with `start`, and the layout, the data binding and the PDF
 //! writer ask `check` as they go: `check_now` once a page, `check` once a node, which reads the clock every
-//! `CHECKS_PER_READ` calls. Past the deadline, the check unwinds the render with `resume_unwind`, which skips the panic
-//! hook, to the `catch_unwind` of the library's entry point, which answers the timeout's error (`TimedOut`). Each frame
-//! frees what it holds on the way out, and what a render keeps for the thread is reset when the next one starts.
+//! `CHECKS_PER_READ` calls. A merge and a stamp start theirs with `start_merge` and `start_stamp`, so the error names
+//! what ran past its timeout, and ask `check_now` once a page. Past the deadline, the check unwinds the render with
+//! `resume_unwind`, which skips the panic hook, to the `catch_unwind` of the library's entry point, which answers the
+//! timeout's error (`TimedOut`). Each frame frees what it holds on the way out, and what a render keeps for the thread
+//! is reset when the next one starts.
 //!
 //! The WebAssembly builds abort on a panic and can't unwind, so they compile the checks out: their hosts stop a render
 //! that runs past its timeout themselves, by ending the process, at an epoch deadline, or by ending the worker.
@@ -31,10 +33,19 @@ thread_local! {
     static DEADLINE: Cell<Option<Instant>> = const { Cell::new(None) };
     /// The timeout of the render going on, in seconds, for its error.
     static SECONDS: Cell<f64> = const { Cell::new(0.0) };
-    /// Whether the work going on is a merge, for its error.
-    static MERGE: Cell<bool> = const { Cell::new(false) };
+    /// What the work going on is, for its error.
+    static WORK: Cell<Work> = const { Cell::new(Work::Render) };
     /// The calls of `check` since the clock was last read.
     static CHECKS: Cell<u32> = const { Cell::new(0) };
+}
+
+/// What a deadline is for, so that the error of a timeout names it.
+#[cfg(not(target_family = "wasm"))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Work {
+    Render,
+    Merge,
+    Stamp,
 }
 
 /// What a render past its deadline unwinds with, to the library's entry point: the timeout it had.
@@ -42,16 +53,20 @@ thread_local! {
 pub(crate) struct TimedOut {
     /// The timeout, in seconds.
     pub seconds: f64,
-    /// Whether it was a merge that ran past it, not a render.
-    pub merge: bool,
+    /// What ran past it: a render, a merge or a stamp.
+    pub work: Work,
 }
 
 #[cfg(not(target_family = "wasm"))]
 impl TimedOut {
-    /// The error of a render, or a merge, that ran past its timeout, which names the timeout.
+    /// The error of a render, a merge or a stamp that ran past its timeout, which names the timeout.
     pub(crate) fn error(&self) -> String {
         let unit = if self.seconds == 1.0 { "second" } else { "seconds" };
-        let (what, parts) = if self.merge { ("merge", "merge the files in smaller groups") } else { ("render", "render the document in smaller parts") };
+        let (what, parts) = match self.work {
+            Work::Render => ("render", "render the document in smaller parts"),
+            Work::Merge => ("merge", "merge the files in smaller groups"),
+            Work::Stamp => ("stamp", "stamp the pages in smaller groups"),
+        };
         format!(
             "the {what} ran past its timeout of {} {unit}: raise the timeout in the engine's options, or {parts}",
             self.seconds
@@ -82,24 +97,30 @@ pub(crate) struct Deadline(());
 /// Start the deadline of a render that may run `seconds` from now; with 0 it runs with no limit.
 #[cfg(not(target_family = "wasm"))]
 pub(crate) fn start(seconds: f64) -> Deadline {
-    begin(seconds, false)
+    begin(seconds, Work::Render)
 }
 
 /// Start the deadline of a merge that may run `seconds` from now, whose error names a merge, not a render.
 #[cfg(not(target_family = "wasm"))]
 pub(crate) fn start_merge(seconds: f64) -> Deadline {
-    begin(seconds, true)
+    begin(seconds, Work::Merge)
+}
+
+/// Start the deadline of a stamp that may run `seconds` from now, whose error names a stamp, not a render.
+#[cfg(not(target_family = "wasm"))]
+pub(crate) fn start_stamp(seconds: f64) -> Deadline {
+    begin(seconds, Work::Stamp)
 }
 
 #[cfg(not(target_family = "wasm"))]
-fn begin(seconds: f64, merge: bool) -> Deadline {
+fn begin(seconds: f64, work: Work) -> Deadline {
     let deadline = (seconds > 0.0)
         .then(|| Duration::try_from_secs_f64(seconds).ok())
         .flatten()
         .and_then(|timeout| Instant::now().checked_add(timeout));
     DEADLINE.set(deadline);
     SECONDS.set(seconds);
-    MERGE.set(merge);
+    WORK.set(work);
     CHECKS.set(0);
     Deadline(())
 }
@@ -113,6 +134,12 @@ pub(crate) fn start(_seconds: f64) -> Deadline {
 /// The WebAssembly builds keep no deadline: their hosts stop a merge themselves.
 #[cfg(target_family = "wasm")]
 pub(crate) fn start_merge(_seconds: f64) -> Deadline {
+    Deadline(())
+}
+
+/// The WebAssembly builds keep no deadline: their hosts stop a stamp themselves.
+#[cfg(target_family = "wasm")]
+pub(crate) fn start_stamp(_seconds: f64) -> Deadline {
     Deadline(())
 }
 
@@ -144,7 +171,7 @@ pub(crate) fn check_now() {
         if Instant::now() >= deadline {
             // Cleared here, so a check in a frame that is dropped on the way out doesn't unwind a second time.
             DEADLINE.set(None);
-            std::panic::resume_unwind(Box::new(TimedOut { seconds: SECONDS.get(), merge: MERGE.get() }));
+            std::panic::resume_unwind(Box::new(TimedOut { seconds: SECONDS.get(), work: WORK.get() }));
         }
     }
 }
@@ -182,19 +209,20 @@ mod tests {
     }
 
     #[test]
-    fn a_merge_past_its_deadline_unwinds_as_a_merge_and_the_next_render_does_not() {
-        let unwound = |merge: bool| {
+    fn a_deadline_unwinds_as_the_work_it_started_for_and_the_next_render_does_not_keep_it() {
+        let unwound = |start: fn(f64) -> Deadline| {
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let _deadline = if merge { start_merge(0.001) } else { start(0.001) };
+                let _deadline = start(0.001);
                 std::thread::sleep(Duration::from_millis(5));
                 check_now();
             }))
             .err()
             .and_then(|payload| payload.downcast::<TimedOut>().ok())
-            .map(|timed_out| timed_out.merge)
+            .map(|timed_out| timed_out.work)
         };
-        assert_eq!(unwound(true), Some(true));
-        assert_eq!(unwound(false), Some(false));
+        assert_eq!(unwound(start_merge), Some(Work::Merge));
+        assert_eq!(unwound(start_stamp), Some(Work::Stamp));
+        assert_eq!(unwound(start), Some(Work::Render));
     }
 
     #[test]
@@ -225,12 +253,17 @@ mod tests {
 
     #[test]
     fn the_error_names_the_timeout() {
-        assert!(TimedOut { seconds: 5.0, merge: false }.error().starts_with("the render ran past its timeout of 5 seconds: "));
-        assert!(TimedOut { seconds: 1.0, merge: false }.error().starts_with("the render ran past its timeout of 1 second: "));
-        assert!(TimedOut { seconds: 0.25, merge: false }.error().starts_with("the render ran past its timeout of 0.25 seconds: "));
-        let merge = TimedOut { seconds: 5.0, merge: true }.error();
+        assert!(TimedOut { seconds: 5.0, work: Work::Render }.error().starts_with("the render ran past its timeout of 5 seconds: "));
+        assert!(TimedOut { seconds: 1.0, work: Work::Render }.error().starts_with("the render ran past its timeout of 1 second: "));
+        assert!(TimedOut { seconds: 0.25, work: Work::Render }.error().starts_with("the render ran past its timeout of 0.25 seconds: "));
+        let render = TimedOut { seconds: 5.0, work: Work::Render }.error();
+        assert!(render.ends_with("render the document in smaller parts"), "{render}");
+        let merge = TimedOut { seconds: 5.0, work: Work::Merge }.error();
         assert!(merge.starts_with("the merge ran past its timeout of 5 seconds: "), "{merge}");
         assert!(merge.ends_with("merge the files in smaller groups"), "{merge}");
+        let stamp = TimedOut { seconds: 5.0, work: Work::Stamp }.error();
+        assert!(stamp.starts_with("the stamp ran past its timeout of 5 seconds: "), "{stamp}");
+        assert!(stamp.ends_with("stamp the pages in smaller groups"), "{stamp}");
     }
 
     #[test]

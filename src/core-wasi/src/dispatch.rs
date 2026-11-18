@@ -55,9 +55,9 @@
 //! { "max_memory_mb": 512 }
 //! ```
 //!
-//! The native library stops a render that runs past `timeout`, in seconds, with an error that names it and
-//! `"timed_out": true`; 0 or none sets no limit (`deadline.rs`). The WASI binary keeps no deadline: its hosts stop a
-//! render themselves.
+//! The native library stops a render, a merge or a stamp that runs past `timeout`, in seconds, with an error that
+//! names it and `"timed_out": true`; 0 or none sets no limit (`deadline.rs`). The WASI binary keeps no deadline: its
+//! hosts stop a render themselves.
 //! ```json
 //! { "timeout": 5 }
 //! ```
@@ -264,6 +264,7 @@ fn dispatch(request: String) -> Answer {
 fn stamp_request(req: &mut serde_json::Value, licensed: bool, before: i64) -> Result<Vec<u8>, String> {
     let cap = render_cap(req)?;
     let _cap = memory::start_from(cap, before);
+    let _deadline = deadline::start_stamp(render_timeout(req)?);
     let pdf = match req.get_mut("pdf").map(serde_json::Value::take) {
         Some(serde_json::Value::String(b64)) => base64::engine::general_purpose::STANDARD
             .decode(b64)
@@ -944,6 +945,32 @@ mod tests {
         for timeout in [serde_json::json!(null), serde_json::json!(0), serde_json::json!(600)] {
             let answer = merge(timeout.clone());
             assert!(answer["pdf"].is_string(), "{timeout}: {answer}");
+        }
+    }
+
+    #[test]
+    fn a_stamp_past_its_timeout_answers_the_timeout_error_and_the_next_stamp_is_whole() {
+        let b64 = |bytes: &[u8]| base64::engine::general_purpose::STANDARD.encode(bytes);
+        let plain = render_request(&pages_of_text(8), serde_json::json!({}));
+        let pdf = base64::engine::general_purpose::STANDARD.decode(plain["pdf"].as_str().expect(&plain.to_string())).unwrap();
+        let stamp = |timeout: serde_json::Value| {
+            let req = serde_json::json!({
+                "method": "stamp", "timeout": timeout, "pdf": b64(&pdf), "images": { "tall": TALL_PNG },
+                "stamps": [{ "image": "tall", "page": "each", "x": "10pt", "y": "10pt", "width": "50pt", "height": "50pt" }],
+            });
+            json(super::answer(req.to_string()))
+        };
+        let answer = stamp(serde_json::json!(0.000001));
+        let error = answer["error"].as_str().unwrap_or_else(|| panic!("{answer}"));
+        assert!(error.starts_with("the stamp ran past its timeout of 0.000001 seconds: "), "{error}");
+        assert!(error.ends_with("stamp the pages in smaller groups"), "{error}");
+        assert_eq!(answer["timed_out"], true);
+        assert!(answer["pdf"].is_null(), "{answer}");
+        for timeout in [serde_json::json!(null), serde_json::json!(0), serde_json::json!(600)] {
+            let answer = stamp(timeout.clone());
+            let stamped = base64::engine::general_purpose::STANDARD.decode(answer["pdf"].as_str().unwrap_or_else(|| panic!("{timeout}: {answer}"))).unwrap();
+            assert!(stamped.starts_with(&pdf) && stamped.len() > pdf.len(), "{timeout}");
+            assert_eq!(lopdf::Document::load_mem(&stamped).expect("a PDF").get_pages().len(), 8, "{timeout}");
         }
     }
 
