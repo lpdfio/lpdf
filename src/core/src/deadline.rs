@@ -6,9 +6,9 @@
 //! writer ask `check` as they go: `check_now` once a page, `check` once a node, which reads the clock every
 //! `CHECKS_PER_READ` calls. A merge and a stamp start theirs with `start_merge` and `start_stamp`, so the error names
 //! what ran past its timeout, and ask `check_now` once a page. Past the deadline, the check unwinds the render with
-//! `resume_unwind`, which skips the panic
-//! hook, to the `catch_unwind` of the library's entry point, which answers the timeout's error (`TimedOut`). Each frame
-//! frees what it holds on the way out, and what a render keeps for the thread is reset when the next one starts.
+//! `resume_unwind`, which skips the panic hook, to the `catch_unwind` of the library's entry point, which answers the
+//! timeout's error (`TimedOut`). Each frame frees what it holds on the way out, and what a render keeps for the thread
+//! is reset when the next one starts.
 //!
 //! The WebAssembly builds abort on a panic and can't unwind, so they compile the checks out: their hosts stop a render
 //! that runs past its timeout themselves, by ending the process, at an epoch deadline, or by ending the worker.
