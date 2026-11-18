@@ -242,6 +242,15 @@ impl LpdfEngine {
         self.render_json(json, &encryption).map_err(|e| JsValue::from_str(&e))
     }
 
+    /// The read of `LCrossIndustryInvoice.generatePdf`: `extract_invoice_data`, under this engine's memory cap
+    /// instead of the default, as the SDK reads the invoice on the engine's worker before it formats the values.
+    pub fn extract_invoice_data(&self, invoice_xml: &[u8], invoice_map: Option<String>) -> Result<String, JsValue> {
+        let _cap = memory::start(self.max_memory_mb);
+        cross_industry_invoice::extract(invoice_xml, invoice_map.as_deref())
+            .map(|extracted| extracted.to_string())
+            .map_err(|e| JsValue::from_str(&e))
+    }
+
     /// `LCrossIndustryInvoice.generatePdf` with a template: renders `xml` with the values of the invoice bound under
     /// the prefix of `invoice_map`, or of the default map, beside `json_data`, and makes the file a Factur-X invoice,
     /// PDF/A-3 with `invoice_xml` attached under the name its profile asks for.
