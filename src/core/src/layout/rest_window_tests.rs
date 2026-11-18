@@ -267,3 +267,24 @@ fn a_long_container_takes_work_that_grows_with_its_children() {
         assert!((long as f64) < 5.0 * short as f64, "{name}: {long} steps for 2000 children, {short} for 500");
     }
 }
+
+#[test]
+fn the_part_of_a_table_a_page_leaves_ends_at_the_right_margin_with_a_gap_between_its_fr_columns() {
+    // The window of rows each page splits is laid out with the table's own widths, so every page ends at the right
+    // margin of A4 with a 28pt margin, 567.28pt, as the first does.
+    let rows: String = (0..300)
+        .map(|i| format!(r##"<tr><td background="#cccccc"><text>Item {i}</text></td><td background="#cccccc"><text>one</text></td></tr>"##))
+        .collect();
+    let xml = document("", &format!(r#"<table cols="1fr 1fr" gap="20pt">{rows}</table>"#));
+    rests::WINDOWS.with(|windows| windows.set(0));
+    let pages = pages_of(&xml);
+    assert!(pages.len() > 3, "{} pages", pages.len());
+    assert!(rests::WINDOWS.with(Cell::get) > 0, "split in no window");
+    let tree: Value = serde_json::from_str(&crate::render::pages_to_json(&pages, Value::Null, Value::Null)).unwrap();
+    for (n, page) in tree["pages"].as_array().unwrap().iter().enumerate() {
+        let cells: Vec<&Value> = page["nodes"][0]["nodes"].as_array().unwrap().iter().filter(|v| v["type"] == "box").collect();
+        assert!(!cells.is_empty(), "page {}: no cells", n + 1);
+        let right = cells.iter().map(|v| v["x"].as_f64().unwrap() + v["width"].as_f64().unwrap()).fold(0.0, f64::max);
+        assert!((right - 567.28).abs() < 0.01, "page {}: the cells end at {right}", n + 1);
+    }
+}

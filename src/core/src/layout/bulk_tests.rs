@@ -268,3 +268,27 @@ fn a_bulk_table_rendered_without_data_lays_out_its_template_once() {
 }
 
 
+#[test]
+fn a_bulk_table_with_a_gap_between_its_fr_columns_ends_at_the_right_margin() {
+    // A4 with a 36pt margin: the cells end at 559.28pt on every page, as the expanded table's do.
+    let table = r##"<table cols="1fr 2fr" gap="20pt" bulk="true">
+        <tr data-source="entries">
+            <td background="#cccccc"><text data-value="date" max-lines="1" ellipsis="true">-</text></td>
+            <td background="#cccccc"><text data-value="description" max-lines="2" ellipsis="true">-</text></td>
+        </tr>
+    </table>"##;
+    let pages = same_pages("a table with a gap", "", table, &ledger(900));
+    for (n, page) in pages.iter().enumerate() {
+        let page: Value = serde_json::from_str(&tree_of(std::slice::from_ref(page))).unwrap();
+        fn right_edge(node: &Value) -> f64 {
+            let own = if node["type"] == "box" && node["fill"] == "#cccccc" {
+                node["x"].as_f64().unwrap() + node["width"].as_f64().unwrap()
+            } else {
+                0.0
+            };
+            node["nodes"].as_array().into_iter().flatten().map(right_edge).fold(own, f64::max)
+        }
+        let right = right_edge(&page["pages"][0]);
+        assert!((right - 559.28).abs() < 0.01, "page {}: the cells end at {right}", n + 1);
+    }
+}
