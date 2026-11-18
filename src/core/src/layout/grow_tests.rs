@@ -463,3 +463,21 @@ fn a_page_under_three_points_is_an_error_on_a_section_and_a_document_on_both_pat
     let error = parse_tree(&tree(r#""size":"2pt 100pt""#, "")).map(|_| ()).unwrap_err();
     assert!(error.contains("page size '2pt 100pt' is under 3pt wide"), "{error}");
 }
+
+#[test]
+fn an_fr_table_with_a_gap_ends_at_the_right_margin_of_the_page_that_grew_for_it() {
+    // The page grows for the columns and the gaps, and the table is then laid out at the width it grew to: its last
+    // cell ends a margin from the page's edge, not a gap past it.
+    for cols in ["1fr 1fr", "1fr 2fr", "120pt 1fr"] {
+        let page = one_page(&document(r#"grow="width""#, &format!(
+            r##"<table cols="{cols}" gap="20pt"><tr><td background="#cccccc"><text>{FIRST_CELL}</text></td><td background="#cccccc"><text>{SECOND_CELL}</text></td></tr></table>"##
+        )));
+        let (width, _) = size(&page);
+        assert!(width > A5_WIDTH, "{cols}: the page grew: {width}");
+        let right = nodes(&page).into_iter()
+            .filter(|v| v["type"] == "box" && v["fill"] == "#cccccc")
+            .map(|v| v["x"].as_f64().unwrap() + v["width"].as_f64().unwrap())
+            .fold(0.0, f64::max);
+        assert!(close(right, width - MARGIN), "{cols}: the cells end at {right}, the margin is at {}", width - MARGIN);
+    }
+}

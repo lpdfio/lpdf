@@ -2106,15 +2106,18 @@ pub(crate) fn check_cols(spec: &str) -> Result<(), String> {
 /// Resolve a space-separated column-width spec into concrete pt values.
 ///
 /// Units:
-/// - `Nfr`  — fractional share of remaining width after fixed/percent columns.
+/// - `Nfr`  — fractional share of remaining width after fixed/percent columns and the gaps between the columns.
 /// - `Npt`, `Nmm`, `Nin` — absolute length, in pt whatever the unit.
-/// - `N%`   — percentage of `avail_w`.
+/// - `N%`   — percentage of `avail_w`, the whole table, gaps included.
 /// - `auto` — as `1fr` here, where there are no cells to measure: see `table_col_widths`.
 ///
-/// Example: `"2fr 1fr 120pt 20%"` with `avail_w=400` →
-///   fixed = 120 + 80 = 200, remaining = 200, total_fr = 3,
-///   fr_unit = 200/3 ≈ 66.7 → [133.3, 66.7, 120, 80].
-fn resolve_col_widths(spec: &str, avail_w: f32) -> Vec<f32> {
+/// The columns and the `gap` between every two of them add up to `avail_w`, unless the fixed and `%` columns and the
+/// gaps leave nothing for the `fr` columns, which are then 0.
+///
+/// Example: `"2fr 1fr 120pt 20%"` with `avail_w=400` and `gap=10` →
+///   fixed = 120 + 80 = 200, gaps = 3 × 10 = 30, remaining = 170, total_fr = 3,
+///   fr_unit = 170/3 ≈ 56.7 → [113.3, 56.7, 120, 80].
+fn resolve_col_widths(spec: &str, avail_w: f32, gap: f32) -> Vec<f32> {
     if spec.is_empty() {
         return vec![avail_w];
     }
@@ -2133,7 +2136,7 @@ fn resolve_col_widths(spec: &str, avail_w: f32) -> Vec<f32> {
         ColUnit::Fr(v) => *v,
         _              => 0.0,
     }).sum();
-    let remaining = (avail_w - fixed).max(0.0);
+    let remaining = (avail_w - fixed - gap * (units.len() - 1) as f32).max(0.0);
     let fr_unit = if total_fr > 0.0 { remaining / total_fr } else { 0.0 };
     units.iter().map(|u| match u {
         ColUnit::Fr(v)  => (v * fr_unit).max(0.0),
@@ -2235,7 +2238,7 @@ fn cut_to_level(mins: &[f32], total: f32) -> Vec<f32> {
 fn table_col_widths(rows: &[Node], spec: &str, avail_w: f32, gap: f32) -> Vec<f32> {
     let units = col_units(spec);
     if !units.contains(&ColUnit::Auto) {
-        return resolve_col_widths(spec, avail_w);
+        return resolve_col_widths(spec, avail_w, gap);
     }
     let n = units.len();
     let extents = column_extents(rows, &units, avail_w, gap);
@@ -9332,11 +9335,40 @@ abcdef</code><text>after</text></row>"#,
 
     #[test]
     fn the_columns_of_a_table_take_widths_in_pt_mm_in_and_percent_and_share_the_rest() {
-        let widths = resolve_col_widths("1in 25.4mm 36pt 25% 1fr 3fr", 800.0);
+        let widths = resolve_col_widths("1in 25.4mm 36pt 25% 1fr 3fr", 800.0, 0.0);
         let wanted = [72.0, 72.0, 36.0, 200.0, 105.0, 315.0];
         assert_eq!(widths.len(), wanted.len());
         for (width, wanted) in widths.iter().zip(wanted) {
             assert!((width - wanted).abs() < 0.001, "{widths:?}");
+        }
+    }
+
+    #[test]
+    fn the_gaps_between_the_columns_come_out_of_what_the_fr_columns_share() {
+        // The fr columns share 400 - 120 (the length) - 80 (20% of the table) - 30 (three gaps of 10) = 170.
+        let widths = resolve_col_widths("2fr 1fr 120pt 20%", 400.0, 10.0);
+        let wanted = [113.333, 56.667, 120.0, 80.0];
+        assert_eq!(widths.len(), wanted.len());
+        for (width, wanted) in widths.iter().zip(wanted) {
+            assert!((width - wanted).abs() < 0.001, "{widths:?}");
+        }
+        assert!((widths.iter().sum::<f32>() + 30.0 - 400.0).abs() < 0.001, "the columns and the gaps fill the table");
+        // When the length and the gaps leave nothing, the fr columns are 0 and not below it.
+        assert_eq!(resolve_col_widths("100pt 1fr 1fr", 120.0, 20.0), [100.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn the_columns_and_gaps_of_an_fr_table_add_up_to_the_width_of_the_table() {
+        // The table is as wide as the room, 539.28pt from the margin at 28pt to the one at 567.28pt, whatever its
+        // columns are set in, so its last cell ends at the right margin and a gap lies between every two cells.
+        for cols in ["1fr 1fr", "1fr 2fr 1fr", "100pt 1fr 1fr", "1fr 30mm 1fr", "25% 1fr", "30% 1fr 1fr"] {
+            let cells = r##"<td background="#cccccc"><text>cell</text></td>"##.repeat(cols.split_whitespace().count());
+            let boxes = cell_boxes(&format!(r#"<table cols="{cols}" gap="20pt"><tr>{cells}</tr></table>"#));
+            let (x, width) = *boxes.last().unwrap();
+            assert!((x + width - 567.28).abs() < 0.01, "{cols}: ends at {}", x + width);
+            for pair in boxes.windows(2) {
+                assert!((pair[1].0 - (pair[0].0 + pair[0].1) - 20.0).abs() < 0.01, "{cols}: {boxes:?}");
+            }
         }
     }
 
