@@ -196,6 +196,22 @@ fn generate_pdf_refuses_a_template_that_declares_the_invoice_or_sets_another_lev
 }
 
 #[test]
+fn what_pdfa_refuses_names_generate_pdf_when_the_call_set_the_level() {
+    let helvetica = template().replace(r#"<document size="a4" font="body">"#, r#"<document size="a4">"#);
+    let error = generate(&helvetica, &invoice("en16931.xml"), None).unwrap_err();
+    assert!(error.starts_with("generatePdf makes the invoice a PDF/A-3b file: the text \"Northwind Paper SAS\" is in Helvetica"), "{error}");
+    let cmyk = template().replacen("#5b6475", "cmyk(0, 0, 0, 70)", 1);
+    let error = generate(&cmyk, &invoice("en16931.xml"), None).unwrap_err();
+    assert!(error.starts_with("generatePdf makes the invoice a PDF/A-3b file: the color cmyk(0, 0, 0, 70) is CMYK"), "{error}");
+    assert!(error.ends_with("such as a hex one"), "{error}");
+    // A level the template sets itself is the template's, which can drop it.
+    let own = cmyk.replace("<meta ", "<output pdfa=\"3b\"/>\n    <meta ");
+    let error = generate(&own, &invoice("en16931.xml"), None).unwrap_err();
+    assert!(error.starts_with("<output pdfa=\"3b\">: the color cmyk(0, 0, 0, 70) is CMYK"), "{error}");
+    assert!(error.ends_with("such as a hex one, or remove pdfa"), "{error}");
+}
+
+#[test]
 fn a_document_built_in_code_gets_the_invoice_and_pdfa_3b_too() {
     let pdf = engine().render_json_with(&tree(), &RenderEncryption::default(), Some(&invoice("extended.xml"))).unwrap();
     let written = text(&pdf);

@@ -4714,7 +4714,9 @@ pub fn render_pdf(
     let spot_use = SpotUse::of(pages, paints);
     let fields = collect_render_fields(pages);
     if let Some(level) = standards.pdfa {
-        refuse_for_pdfa(level, pages, &fonts, &sorted_font_names, font_defs, &used_gradients, &spot_use, &fields)?;
+        refuse_for_pdfa(
+            level, output.pdfa_by_invoice, pages, &fonts, &sorted_font_names, font_defs, &used_gradients, &spot_use, &fields,
+        )?;
         if level.tagged() {
             refuse_for_level_a(level, meta, pages)?;
         }
@@ -4766,6 +4768,7 @@ struct StandardFile {
 #[allow(clippy::too_many_arguments)]
 fn refuse_for_pdfa(
     level:             PdfA,
+    by_invoice:        bool,
     pages:             &[RenderPage],
     fonts:             &HashMap<String, PreparedFont>,
     sorted_font_names: &[String],
@@ -4774,13 +4777,19 @@ fn refuse_for_pdfa(
     spot_use:          &SpotUse,
     fields:            &[(usize, RenderField)],
 ) -> Result<(), String> {
-    let refuse = |reason: String| Err(format!("<output pdfa=\"{}\">: {reason}", level.attribute()));
+    // What asks for the level: the document's `<output>`, whose pdfa can be removed, or `generatePdf`, which makes an
+    // invoice PDF/A-3b when the document says nothing.
+    let refuse = |reason: String| match by_invoice {
+        true => Err(format!("generatePdf makes the invoice a PDF/A-{} file: {reason}", level.attribute())),
+        false => Err(format!("<output pdfa=\"{}\">: {reason}", level.attribute())),
+    };
+    let or_remove_pdfa = if by_invoice { "" } else { ", or remove pdfa" };
 
     if let Some((_, field)) = fields.first() {
         let name = if field.name.is_empty() { String::new() } else { format!(" '{}'", field.name) };
         return refuse(format!(
             "the form field{name} can't be in a PDF/A file yet: a field draws its text in Helvetica, which is not \
-            embedded, and PDF/A embeds every font. Remove the field, or remove pdfa"
+            embedded, and PDF/A embeds every font. Remove the field{or_remove_pdfa}"
         ));
     }
 
@@ -4805,20 +4814,20 @@ fn refuse_for_pdfa(
         if let Some(color) = background.map(str::to_string).or_else(|| first_in(&page.nodes, &mut cmyk_color)) {
             return refuse(format!(
                 "the color {color} is CMYK, and the sRGB output intent of a PDF/A file covers RGB colors only: give \
-                it as an RGB color, such as a hex one, or remove pdfa"
+                it as an RGB color, such as a hex one{or_remove_pdfa}"
             ));
         }
     }
     if let Some((name, _)) = used_gradients.iter().find(|(_, gradient)| gradient.stops.iter().any(|stop| is_cmyk(&stop.color))) {
         return refuse(format!(
             "the gradient '{name}' has CMYK colors, and the sRGB output intent of a PDF/A file covers RGB colors \
-            only: give its colors as RGB ones, such as hex ones, or remove pdfa"
+            only: give its colors as RGB ones, such as hex ones{or_remove_pdfa}"
         ));
     }
     if let Some((name, spot)) = spot_use.used.iter().find(|(_, spot)| is_cmyk(&spot.value)) {
         return refuse(format!(
             "the spot color '{name}' stands in for its ink with the CMYK color {}, and the sRGB output intent of a \
-            PDF/A file covers RGB colors only: give its value as an RGB color, such as a hex one, or remove pdfa",
+            PDF/A file covers RGB colors only: give its value as an RGB color, such as a hex one{or_remove_pdfa}",
             spot.value
         ));
     }

@@ -421,6 +421,9 @@ pub struct Output {
     pub encryption: Option<crate::encrypt::OutputEncryption>,
     /// The PDF/A level of `pdfa`; `None` for a plain PDF.
     pub pdfa: Option<crate::pdfa::PdfA>,
+    /// Whether `generatePdf` set the level, PDF/A-3b, for a document that has no `pdfa` (`cross_industry_invoice::prepare`),
+    /// so that what PDF/A refuses names the call, not an `<output>` the document doesn't have.
+    pub pdfa_by_invoice: bool,
     /// The PDF/UA part of `pdfua`; `None` for a file that is not PDF/UA, which is tagged only at PDF/A level a.
     pub pdfua: Option<crate::pdfua::PdfUa>,
     /// The PDF/X version of `pdfx` and the press profile `profile` names; `None` for a file that is not for a press.

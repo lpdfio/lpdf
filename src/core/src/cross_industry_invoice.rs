@@ -154,7 +154,10 @@ pub(crate) fn prepare(doc: &mut Document, invoice_xml: &[u8]) -> Result<&'static
                 and its profile"
                 .to_string());
         }
-        None => doc.output.pdfa = Some(PdfA::Level3b),
+        None => {
+            doc.output.pdfa = Some(PdfA::Level3b);
+            doc.output.pdfa_by_invoice = true;
+        }
     }
     doc.attachments.push(Attachment {
         name:         name.to_string(),
