@@ -32,8 +32,9 @@ use crate::pdfa::PdfA;
 
 pub(crate) use map::InvoiceMap;
 
-/// Lpdf's default map: the values EN 16931 numbers but a party's identifiers, what a line may hold several of, and an
-/// attached file's content, most common first, under the prefix `invoice`. It applies when a call is given no map.
+/// Lpdf's default map: the values EN 16931 numbers but the parties' identifiers BT-29, BT-46, BT-60 and BT-71, what a
+/// line may hold several of, and an attached file's content, most common first, under the prefix `invoice`. It
+/// applies when a call is given no map.
 pub(crate) const DEFAULT_MAP: &str = include_str!("../assets/cross-industry-invoice-map.xml");
 
 /// The most XML nodes the engine reads in an invoice or a map: an invoice of tens of thousands of lines fits.
