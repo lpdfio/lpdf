@@ -261,10 +261,10 @@ fn check_path(path: &Path, place: &'static SchemaChild, shape: Shape) -> Result<
         }
         element = child;
     }
-    if let Some(attribute) = &path.attribute {
-        if !element.schema_type().attributes.contains(&attribute.as_str()) {
-            return Err(format!("'@{attribute}' is not an attribute of {}. {}", element.written(), attributes_of(element)));
-        }
+    if let Some(attribute) = &path.attribute
+        && !element.schema_type().attributes.contains(&attribute.as_str())
+    {
+        return Err(format!("'@{attribute}' is not an attribute of {}. {}", element.written(), attributes_of(element)));
     }
     match shape {
         Shape::Value(value_type) => {
@@ -320,6 +320,13 @@ fn check_test(test: &path::Test, element: &'static SchemaChild, place: &'static 
             })?;
             if !child.schema_type().text {
                 return Err(format!("the test [{}=…]: it holds other elements, not a value", name.written()));
+            }
+            if child.repeats {
+                return Err(format!(
+                    "the test [{}=…]: {} may repeat in an invoice, so the test would read only the first",
+                    name.written(),
+                    child.written()
+                ));
             }
         }
     }
@@ -450,6 +457,11 @@ mod tests {
             r#"<group name="seller" path="{SELLER}"><value name="vatId" path="ram:SpecifiedTaxRegistration/ram:ID[@scheme='VA']"/></group>"#
         ));
         assert!(error.contains("'@scheme' is not an attribute of ram:ID"), "{error}");
+        // A party may have several global identifiers, and a test reads one value.
+        let error = refused(
+            r#"<value name="seller" path="rsm:SupplyChainTradeTransaction/ram:ApplicableHeaderTradeAgreement/ram:SellerTradeParty[ram:GlobalID='4000001123452']/ram:Name"/>"#,
+        );
+        assert!(error.contains("the test [ram:GlobalID=…]: ram:GlobalID may repeat in an invoice"), "{error}");
     }
 
     #[test]
