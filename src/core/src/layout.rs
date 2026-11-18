@@ -2156,12 +2156,24 @@ struct Extent {
     max: f32,
 }
 
-/// The extents of the columns of `rows`. Those of an `auto` column are what its cells need, or those of every
-/// column when `all` is set. A cell that spans columns gives the `auto` columns it covers what the others do not.
-fn column_extents(rows: &[Node], units: &[ColUnit], avail_w: f32, gap: f32, all: bool) -> Vec<Extent> {
+/// `units` with each column that has no width of its own as `auto`, which is how a table is measured for the width
+/// its cells need: a column with a width of its own stays at it, and a share of the table (`fr`, `%`) is measured as an
+/// `auto` column is.
+fn measured_as_auto(units: &[ColUnit]) -> Vec<ColUnit> {
+    units.iter()
+        .map(|unit| match unit {
+            ColUnit::Pt(width) => ColUnit::Pt(*width),
+            _ => ColUnit::Auto,
+        })
+        .collect()
+}
+
+/// The extents of the columns of `rows`: those of an `auto` column are what its cells need, and the other columns
+/// have none. A cell that spans columns gives the `auto` columns it covers what the others do not.
+fn column_extents(rows: &[Node], units: &[ColUnit], avail_w: f32, gap: f32) -> Vec<Extent> {
     let n = units.len();
     let grid = TableGrid::new(rows, n);
-    let measured = |c: usize| all || units[c] == ColUnit::Auto;
+    let measured = |c: usize| units[c] == ColUnit::Auto;
     let mut extents = vec![Extent::default(); n];
     for (r, row) in rows.iter().enumerate() {
         for placed in grid.starting(r).iter().filter(|p| p.columns.len() == 1 && measured(p.columns.start)) {
@@ -2226,7 +2238,7 @@ fn table_col_widths(rows: &[Node], spec: &str, avail_w: f32, gap: f32) -> Vec<f3
         return resolve_col_widths(spec, avail_w);
     }
     let n = units.len();
-    let extents = column_extents(rows, &units, avail_w, gap, false);
+    let extents = column_extents(rows, &units, avail_w, gap);
     let fixed: f32 = units.iter().map(|u| match u {
         ColUnit::Pt(v)  => *v,
         ColUnit::Pct(v) => avail_w * v / 100.0,
@@ -2270,7 +2282,7 @@ fn table_col_widths(rows: &[Node], spec: &str, avail_w: f32, gap: f32) -> Vec<f3
 fn measure_table_w(node: &Node, min: bool) -> f32 {
     let units = col_units(&node.table_cols);
     if units.is_empty() { return 0.0; }
-    let extents = column_extents(&node.children, &units, 0.0, node.gap, true);
+    let extents = column_extents(&node.children, &measured_as_auto(&units), 0.0, node.gap);
     let columns: f32 = units.iter().zip(&extents).map(|(u, e)| match u {
         ColUnit::Pt(v) => *v,
         _              => if min { e.min } else { e.max },
@@ -8891,6 +8903,25 @@ abcdef</code><text>after</text></row>"#,
         };
         assert!(lines(&[1]) > 1, "the words need more than one line in a column of 100pt");
         assert_eq!(lines(&[3]), 1, "and one line in the 320pt of three columns");
+    }
+
+    #[test]
+    fn a_table_nested_in_a_box_is_as_wide_as_a_cell_over_a_fixed_and_an_auto_column_needs() {
+        // The cell is longer than the two columns under it, in all its words and in its longest one, so they lack
+        // what it needs. A column with a width of its own counts at it, and the others take the rest of the cell.
+        let spanning = "Wolfeschlegelsteinhausenbergerdorff and many more words that are longer than the columns under it";
+        // `auto auto` is the control: no column has a width of its own, and it is measured right without the change.
+        for cols in ["auto auto", "50pt auto", "auto 50pt", "50pt 1fr", "50pt 30%"] {
+            let xml = minimal(&format!(
+                r#"<frame padding="0"><table cols="{cols}" gap="10pt"><tr><td colspan="2"><text>{spanning}</text></td></tr><tr><td><text>a</text></td><td><text>b</text></td></tr></table></frame>"#
+            ));
+            let layouts = parse(&xml).unwrap().section_layouts();
+            let frame = &layouts[0].children[0];
+            let cell = &frame.children[0].children[0].children[0];
+            let (natural, least) = (measure_natural_w(frame), measure_min_w(frame));
+            assert!((natural - measure_natural_w(cell)).abs() < 0.01, "{cols}: on one line, {natural}");
+            assert!((least - measure_min_w(cell)).abs() < 0.01, "{cols}: at its least, {least}");
+        }
     }
 
     #[test]

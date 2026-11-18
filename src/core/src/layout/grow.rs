@@ -132,13 +132,8 @@ fn table_width(node: &Node) -> f32 {
     if units.is_empty() {
         return 0.0;
     }
-    let measured: Vec<ColUnit> = units.iter()
-        .map(|unit| match unit {
-            ColUnit::Pt(width) => ColUnit::Pt(*width),
-            _ => ColUnit::Auto,
-        })
-        .collect();
-    let extents = column_extents(&node.children, &measured, 0.0, node.gap, false);
+    let measured = measured_as_auto(&units);
+    let extents = column_extents(&node.children, &measured, 0.0, node.gap);
     let columns: f32 = measured.iter().zip(&extents).map(|(unit, extent)| match unit {
         ColUnit::Pt(width) => *width,
         _ => extent.max,
