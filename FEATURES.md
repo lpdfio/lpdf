@@ -18,8 +18,8 @@ A document asks for a standard, for encryption and for linearization in its `<ou
 | PDF/A-2b and PDF/A-2u (ISO 19005-2) | `pdfa="2b"`, `pdfa="2u"` | 0.31.0 | [PDF/A](https://lpdf.io/docs/pdfa/) |
 | PDF/A-2a, the tagged level | `pdfa="2a"` | 0.33.0 | [PDF/A, level a](https://lpdf.io/docs/pdfa/#level-a) |
 | PDF/A-3b, PDF/A-3u and PDF/A-3a (ISO 19005-3), which carry attachments of any kind | `pdfa="3b"`, `pdfa="3u"`, `pdfa="3a"` | 0.33.0 | [PDF/A](https://lpdf.io/docs/pdfa/) |
-| Factur-X 1.09.2 and ZUGFeRD 2.5.2 e-invoices, in the profiles MINIMUM, BASIC WL, BASIC, EN 16931, EXTENDED and XRECHNUNG | an attachment named `factur-x.xml` or `xrechnung.xml` in a PDF/A-3 document | 0.33.0 | [Factur-X e-invoices](https://lpdf.io/docs/facturx/) |
-| A Factur-X / ZUGFeRD invoice made from its XML: the values read through a map into a template or into code, the file made PDF/A-3, and the XML attached | `LCrossIndustryInvoice.generatePdf`, `extractInvoiceData` and `defaultInvoiceMap` | 0.36.0 | [Factur-X / ZUGFeRD from the invoice XML](https://lpdf.io/docs/cross-industry-invoice/) |
+| Factur-X 1.09.2 and ZUGFeRD 2.5.2 e-invoices, in the profiles MINIMUM, BASIC WL, BASIC, EN 16931, EXTENDED and XRECHNUNG | an attachment named `factur-x.xml` or `xrechnung.xml` in a PDF/A-3 document | 0.33.0 | [Factur-X / ZUGFeRD, attach the XML yourself](https://lpdf.io/docs/factur-x-zugferd/#attach-the-xml-yourself) |
+| A Factur-X / ZUGFeRD invoice made from its XML: the values read through a map into a template or into code, the file made PDF/A-3, and the XML attached | `LCrossIndustryInvoice.generatePdf`, `extractInvoiceData` and `defaultInvoiceMap` | 0.36.0 | [Factur-X / ZUGFeRD, from the invoice XML](https://lpdf.io/docs/factur-x-zugferd/#from-the-invoice-xml) |
 | PDF/UA-1 (ISO 14289-1), a tagged PDF for screen readers | `pdfua="1"` | 0.32.0 | [PDF/UA](https://lpdf.io/docs/pdfua/) |
 | PDF/X-4 (ISO 15930), for commercial printing, with the press profile as its output intent | `pdfx="4" profile="…"` | 0.32.0 | [PDF/X](https://lpdf.io/docs/pdfx/) |
 | Encryption with AES-256, a user and an owner password, and seven permissions | `encrypt="aes-256" allow="…"` | 0.30.0 | [Encryption](https://lpdf.io/docs/encryption/) |
@@ -55,7 +55,7 @@ Each error is listed under [PDF/A, errors](https://lpdf.io/docs/pdfa/#errors). L
 - `facturx-strict="true"` also refuses an invoice file whose `mime` is not `text/xml`, an invoice `relationship` its profile doesn't allow, and another attachment with no `mime` or of a format the spec doesn't list.
 - The legacy ZUGFeRD 2.0 metadata, and document types other than an invoice, are not written.
 
-Each error is listed under [Factur-X, errors](https://lpdf.io/docs/facturx/#errors). Lpdf's tests check an invoice of each profile with the Mustang CLI on every change.
+Each error is listed under [Factur-X / ZUGFeRD, errors](https://lpdf.io/docs/factur-x-zugferd/#errors). Lpdf's tests check an invoice of each profile with the Mustang CLI on every change.
 
 `LCrossIndustryInvoice` starts from an invoice's XML, a Cross Industry Invoice, and never writes one:
 
@@ -65,7 +65,7 @@ Each error is listed under [Factur-X, errors](https://lpdf.io/docs/facturx/#erro
 - `generatePdf` checks a template's paths under the map's prefix against the map, makes the file PDF/A-3b, or keeps the template's 3a or 3u, and attaches the XML as `factur-x.xml`, or `xrechnung.xml` for XRECHNUNG. Refused: another PDF/A level, `encrypt`, `pdfx`, and a document that declares the invoice file itself.
 - The invoice's XML is not validated in full: XML with a DTD, and XML of more than 2,000,000 nodes, are refused, and the rest of its content is the caller's to check.
 
-Each error is listed under [Factur-X / ZUGFeRD from the invoice XML, what it checks](https://lpdf.io/docs/cross-industry-invoice/#what-it-checks). Lpdf's tests read an invoice of each case of the default map to its expected values, and check the files `generatePdf` makes with the Mustang CLI on every change.
+Each error is listed under [Factur-X / ZUGFeRD, what it checks](https://lpdf.io/docs/factur-x-zugferd/#what-it-checks). Lpdf's tests read an invoice of each case of the default map to its expected values, and check the files `generatePdf` makes with the Mustang CLI on every change.
 
 ### PDF/UA
 
@@ -379,7 +379,7 @@ Data is JSON bound to an XML document, as an option of the render call. Docs: [D
 | Memory: a render that allocates more stops with `the render needs more memory than its cap of 1024 MB` | 1024 MB | `maxMemoryMb` on the engine's options, from 1 to 4096 | 0.33.0 | [Installation, memory limit](https://lpdf.io/docs/install/#memory-limit) |
 | Nesting: 100 levels, `<lpdf>` included | 100 | Fixed | 0.33.0 | [XML schema, document structure](https://lpdf.io/docs/xml/schema/#document-structure) |
 | Page size: 3pt at least in each size, and 14,400pt (200in) at most for a page that grows | 3pt to 14,400pt | Fixed | 0.36.0 | [Section, a page that grows](https://lpdf.io/docs/doc/section/#a-page-that-grows) |
-| The XML of an invoice and of an invoice map: 2,000,000 nodes at most, with no DTD | 2,000,000 | Fixed | 0.36.0 | [Factur-X / ZUGFeRD from the invoice XML, what it checks](https://lpdf.io/docs/cross-industry-invoice/#what-it-checks) |
+| The XML of an invoice and of an invoice map: 2,000,000 nodes at most, with no DTD | 2,000,000 | Fixed | 0.36.0 | [Factur-X / ZUGFeRD, what it checks](https://lpdf.io/docs/factur-x-zugferd/#what-it-checks) |
 
 - There is no limit on the size of the XML, or of a document built in code.
 - The engine makes no network calls.
