@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.36.0 — 2026-11-19
+### Invoices
+- `LCrossIndustryInvoice` makes a Factur-X / ZUGFeRD invoice from its XML, in all five SDKs. `generatePdf` takes a template, or a document built in code, and the invoice's XML, a Cross Industry Invoice, and returns the invoice PDF. The template only says how the invoice looks: the engine reads the values from the XML, binds them, makes the file PDF/A-3 and attaches the XML
+- `extractInvoiceData` gives an invoice's values as plain data, for a document built in code, and `defaultInvoiceMap` gives the map that says where each value sits in the XML. The default map has the values EN 16931 numbers, and the parties' identifiers BT-29, BT-46, BT-60 and BT-71, what a line may hold several of, and an attached file's content. A map of your own takes its place, and each of its paths is checked against FeRD's EXTENDED schema before an invoice is read
+- It reads the profiles BASIC, EN 16931, EXTENDED and XRECHNUNG. MINIMUM and BASIC WL are refused, since their XML is only a booking aid and the lines their PDF shows are not in it
+- `generatePdf` makes the file PDF/A-3b, or keeps a template's 3a or 3u, and attaches the XML as `factur-x.xml`, or `xrechnung.xml` for XRECHNUNG. It refuses another PDF/A level, `encrypt`, `pdfx`, and a document that declares the invoice file itself
+- Lpdf never writes the XML and doesn't validate all of it. XML with a DTD, XML of more than 2,000,000 nodes and a root other than `rsm:CrossIndustryInvoice` are refused, a value the map marks `required` that the invoice lacks is an error that names it, and so is a value that finds several in the invoice
+- A path in a template may start with a prefix, `invoice:seller.name`, which reads data bound under that prefix beside the data of the render. A prefix with nothing bound under it leaves the element as the document wrote it, as a render with no data does
+
+### Merging PDFs
+- `merge` joins existing PDFs, which may come from different tools and be of different PDF versions, into one PDF made for printing. It sits beside `render` and `stamp`, in the five SDKs: `merge(sources, options)` takes a list of `MergeSource`, each a name and the bytes of a PDF, and an optional `MergeOptions`
+- Each page is drawn as it looked, on a page of the size a viewer shows (its crop box, turned by its `/Rotate`), so pages of mixed sizes keep their sizes. An annotation that prints is drawn from its stored appearance, and layers cross over, each on or off as it prints in its file. The merged file holds no annotation: forms and their fields, links, bookmarks, named destinations, the structure of a tagged file, the document's properties and embedded files are left behind. It claims no PDF/A, PDF/UA or PDF/X, and is not encrypted. The version is the highest among the files'
+- `doubleSided` adds a blank page, the size of a document's last page, after each document with an odd number of pages, so each document starts on a front side. None goes after the last
+- Refused, each with an error that names the file: a PDF that needs a password to open, a file that can't be read, a file whose owner restricts printing or copying (unless `allowRestricted`), a signed file (unless `allowSigned`, which drops its signature), a form field that has a value and no stored appearance, and a form field that has a value in a form that sets `NeedAppearances`, which asks a viewer to redraw its fields, so that what the file stored may be out of date. A merge of no files or of more than 1,000 is refused too
+- A merge in the native library stops past its request's `timeout`, checked once a page, as a render does there
+- A `stamp` in the native library stops past its request's `timeout` too, where the `timeout` was ignored and a large PDF could run past it. The error says so: `the stamp ran past its timeout of N seconds: raise the timeout in the engine's options, or stamp the pages in smaller groups`
+
+### Layout
+- **Breaking:** a page size under 3pt in either size, on `<document>` or `<section>`, is an error that names the minimum: `page size '80mm 0' is under 3pt high, the smallest page PDF 1.7 recommends`. A bare `0` in a size is no longer in the schema either. A page 0 high put each element on a page of its own
+- `grow` on `<section>` lets its page grow to fit its content instead of starting a new page or squeezing the content: `grow="height"`, `grow="width"` or `grow="width height"`. `size` stays the page's starting size, the smallest it can be. A till receipt on an 80mm roll is `size="80mm 40mm" grow="height"`, one page as long as the order, and a table wider than the page gets a page as wide as its columns need. Without `grow` a section paginates as before
+- With `grow="height"` the flow is one page, as tall as the content and the margin, and `break-before`, `break-after` and `keep-next` start no new page. With `grow="width"` the page grows until each `auto` column holds its cells on one line and a box or an image of a fixed width fits. A column of a fixed width keeps it and wraps its cells, and `fr` and `%` columns are measured as `auto` ones for the growth, then take their share, so a long cell can still wrap there
+- On a grown page the footer and the footnotes sit right under the content, `height="fill"` is as tall as its content and `full` is the room of the starting size, a layer's `anchor` places against the final page, and the background and the ruling cover the page
+- A page grows to 14,400pt (200in) at most in each size, the largest PDF 1.7 recommends: content that needs more is an error that names the section. `grow` with `columns` above 1 or with an inset is an error
+- Every SDK takes `grow` on a section and a `Grow` type with its values, and Generate Code writes it in all five languages
+- A table whose columns are set in `fr`, lengths and `%`, with no `auto` column, no longer runs past its width by its gaps: `cols="1fr 1fr" gap="20pt"` on A5 ended 20pt past the right margin. The `fr` columns share what the gaps leave, as `auto` columns do. This reaches every page of such a table, the part of a table that continues on later pages, a bulk table and a table in a section that grows in width, so a document with one lays out narrower columns than before
+- A table nested in a cell or a box measures its width right when a cell spans a fixed-width column and an `auto` one. The fixed column's share of the cell was lost, so the nested table measured too narrow and a long cell could wrap where it fit
+
+### Third-party licenses
+- Every package that ships the engine carries `THIRD_PARTY_LICENSES_ENGINE.txt`: the Rust crates the engine links, each with its license and the license text, and the parts of the Rust toolchain and wasi-libc the builds hold. It is in the JavaScript, .NET, PHP, Python and Java packages and in the VS Code extension, and it is an asset of the GitHub release beside the engine files, listed in `SHA256SUMS`, and linked from the docs site's license page
+- The file is made from the engine's dependencies, so it can't fall behind them. The hand-written table of crates in the Java, .NET and VS Code packages, which had, is gone, and their `THIRD_PARTY_LICENSES` points to the file
+
+### Documentation
+- `FEATURES.md` lists `merge` in a new area, Merging PDFs for print, and lists `LCrossIndustryInvoice`, values under a prefix, `grow` and the page-size limits, each with its limits, since which version and its docs page
+
+### VS Code extension
+- Hover, autocomplete and validation take `grow` and its values from the schema
+- The extension carries `THIRD_PARTY_LICENSES_ENGINE.txt`
+
 ## v0.35.0 — 2026-11-15
 ### Images
 - **Breaking:** a document with a CMYK JPEG, a JPEG of two components or an interlaced PNG used to render, wrongly, and now stops with an error that says what to save instead: `image 'photo': the JPEG is in CMYK, which Lpdf doesn't read: save it in RGB`. Save the file in RGB, or without interlacing
