@@ -17,9 +17,9 @@ run-name: "${{ contains(github.ref_name, '-') && format('RC {0}: build and test,
 #                 pages, which refreshes the engine copy of its docs.
 #
 # Both end with `notes-pdf`: the notes, which are Markdown, rendered to a PDF by the command line. The final release
-# gets the PDF of its own notes as an asset. A release candidate has one line of notes, so it renders the latest
-# release's instead, to try the job on a body of real size, and keeps the PDF as a download of the run. It is a job
-# of its own, so a failure there holds back nothing above, and the final release is not its first run.
+# gets the PDF of its own notes as an asset. A release candidate has one line of notes, so its PDF lists the commits
+# since the last release instead, and is kept as a download of the run. It is a job of its own, so a failure there
+# holds back nothing above, and the final release is not its first run.
 #
 # The "Cut release candidate" button (rc-next.yml) starts this workflow by hand
 # on the RC tag it pushes, since a tag pushed with GITHUB_TOKEN starts nothing.
@@ -442,10 +442,10 @@ jobs:
   # are Markdown, so nothing is converted. It is Lpdf's own release run making a document the way its users'
   # pipelines do. The page keeps the attribution line, since no license key is given to the render.
   #
-  # A release candidate's body is one line, so on an RC the job renders the newest section of CHANGELOG.md, the
-  # latest release's notes, under a line that says so. That tries the build, the render and the PDF on a body of
-  # real size, before the final release has to. The RC's pre-release gets no PDF, since the file would say
-  # nothing about the RC: it is a download of the run, under Artifacts.
+  # A release candidate's body is one line, so on an RC the job lists what is in it instead: the commits since the
+  # last release, one for each pull request. That tries the build, the render and the PDF on a body of real size,
+  # before the final release has to, and shows what the release candidate holds. The RC's pre-release gets no PDF:
+  # it is a download of the run, under Artifacts.
   #
   # `rc` runs for a release candidate and `release` for the final tag, and whichever does not run is skipped,
   # which would skip this job too without the `if`. A release that failed gets no PDF.
@@ -459,7 +459,10 @@ jobs:
       IS_RC: ${{ contains(github.ref_name, '-') }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      # Full history, for the release candidate's list of commits since the last release.
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -472,18 +475,18 @@ jobs:
       # The final release's body is what its page shows: the notes a person typed. A release page has no title in
       # its body, so the file gets one. A body made on Windows has CRLF line ends.
       #
-      # The newest section of CHANGELOG.md is what follows its first `## ` line, up to the next, and that line, such
-      # as `## v0.36.0 — 2026-11-19`, names the release the notes belong to. The page is titled with it, not with
-      # the release candidate's tag, so it can't be taken for the notes of the release candidate.
+      # A release candidate lists the commits since the last release: the nearest tag with no `-` in it, which is a
+      # release and not a release candidate. `--first-parent` gives one line for each pull request, the title it
+      # merged with, and the bots' `changelog:` and `release:` commits are left out, as when the release is drafted.
       - name: Render the notes
         run: |
           {
+            printf '# Lpdf %s\n\n' "$TAG"
             if [ "$IS_RC" = true ]; then
-              printf '# Lpdf %s\n\n' "$(awk '/^## /{print $2; exit}' CHANGELOG.md)"
-              printf '_The notes of the latest release, rendered by %s to try the job._\n\n' "$TAG"
-              awk '/^## /{n++; next} n==1' CHANGELOG.md
+              LAST=$(git describe --tags --abbrev=0 --exclude '*-*')
+              printf 'The changes since %s, one for each pull request:\n\n' "$LAST"
+              git log --first-parent --format='- %s' "$LAST..HEAD" | grep -vE '^- (changelog|release):' || true
             else
-              printf '# Lpdf %s\n\n' "$TAG"
               gh release view "$TAG" --json body --jq .body | tr -d '\r'
             fi
           } > notes.md
