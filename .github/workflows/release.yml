@@ -473,7 +473,8 @@ jobs:
         run: cargo build --release --manifest-path src/cli/Cargo.toml
 
       # The final release's body is what its page shows: the notes a person typed. A release page has no title in
-      # its body, so the file gets one. A body made on Windows has CRLF line ends.
+      # its body, so the file gets one, and a line under it with the time the PDF was made, in UTC, since a re-run
+      # of the job makes it again. A body made on Windows has CRLF line ends.
       #
       # A release candidate lists the commits since the last release: the nearest tag with no `-` in it, which is a
       # release and not a release candidate. `--first-parent` gives one line for each pull request, the title it
@@ -482,6 +483,7 @@ jobs:
         run: |
           {
             printf '# Lpdf %s\n\n' "$TAG"
+            printf 'Generated %s\n\n' "$(date -u '+%Y-%m-%d %H:%M UTC')"
             if [ "$IS_RC" = true ]; then
               LAST=$(git describe --tags --abbrev=0 --exclude '*-*')
               printf 'The changes since %s, one for each pull request:\n\n' "$LAST"
@@ -492,12 +494,14 @@ jobs:
           } > notes.md
           target/release/lpdf convert --input notes.md --output "lpdf-$TAG-release-notes.pdf"
 
+      # `archive: false` uploads the file as it is, so the download is the PDF and not a zip with the PDF in it. The
+      # artifact is then named after the file, and `name` is ignored.
       - name: Keep the PDF of a release candidate as a download of the run
         if: ${{ contains(github.ref_name, '-') }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
-          name: release-notes-pdf
           path: lpdf-${{ github.ref_name }}-release-notes.pdf
+          archive: false
           if-no-files-found: error
 
       # --clobber: re-running the job replaces the PDF instead of failing.
