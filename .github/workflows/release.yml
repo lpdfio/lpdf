@@ -492,12 +492,14 @@ jobs:
           } > notes.md
           target/release/lpdf convert --input notes.md --output "lpdf-$TAG-release-notes.pdf"
 
+      # `archive: false` uploads the file as it is, so the download is the PDF and not a zip with the PDF in it. The
+      # artifact is then named after the file, and `name` is ignored.
       - name: Keep the PDF of a release candidate as a download of the run
         if: ${{ contains(github.ref_name, '-') }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
-          name: release-notes-pdf
           path: lpdf-${{ github.ref_name }}-release-notes.pdf
+          archive: false
           if-no-files-found: error
 
       # --clobber: re-running the job replaces the PDF instead of failing.
