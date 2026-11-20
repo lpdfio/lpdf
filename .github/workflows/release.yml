@@ -470,16 +470,20 @@ jobs:
         run: cargo build --release --manifest-path src/cli/Cargo.toml
 
       # The final release's body is what its page shows: the notes a person typed. A release page has no title in
-      # its body, so the file gets one. A body made on Windows has CRLF line ends. The newest section of
-      # CHANGELOG.md is what follows its first `## ` line, up to the next.
+      # its body, so the file gets one. A body made on Windows has CRLF line ends.
+      #
+      # The newest section of CHANGELOG.md is what follows its first `## ` line, up to the next, and that line, such
+      # as `## v0.36.0 — 2026-11-19`, names the release the notes belong to. The page is titled with it, not with
+      # the release candidate's tag, so it can't be taken for the notes of the release candidate.
       - name: Render the notes
         run: |
           {
-            printf '# Lpdf %s\n\n' "$TAG"
             if [ "$IS_RC" = true ]; then
-              printf '_The notes of the latest release, rendered by this release candidate to try the job._\n\n'
+              printf '# Lpdf %s\n\n' "$(awk '/^## /{print $2; exit}' CHANGELOG.md)"
+              printf '_The notes of the latest release, rendered by %s to try the job._\n\n' "$TAG"
               awk '/^## /{n++; next} n==1' CHANGELOG.md
             else
+              printf '# Lpdf %s\n\n' "$TAG"
               gh release view "$TAG" --json body --jq .body | tr -d '\r'
             fi
           } > notes.md
