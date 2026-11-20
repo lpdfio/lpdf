@@ -16,6 +16,10 @@ run-name: "${{ contains(github.ref_name, '-') && format('RC {0}: build and test,
 #                 to the six repos, which publish to their registries, and to
 #                 pages, which refreshes the engine copy of its docs.
 #
+# Both end with `notes-pdf`: the release's notes, which are Markdown, rendered to a PDF by the command line and
+# attached to the release. It is a job of its own, so a failure there holds back nothing above, and it runs on the
+# release candidates too, so the final release is not its first run.
+#
 # The "Cut release candidate" button (rc-next.yml) starts this workflow by hand
 # on the RC tag it pushes, since a tag pushed with GITHUB_TOKEN starts nothing.
 # Run by hand, it builds release candidates only: a final release always comes
@@ -431,3 +435,43 @@ jobs:
           # checkout set, so git sends the App token from the URL instead.
           git -c http.https://github.com/.extraheader= push \
             "https://x-access-token:${APP_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" main
+
+  # ── 4. PDF of the release notes ─────────────────────────────────────────────
+  # The notes of the release, as a PDF beside the engine files: the command line renders Markdown, and the notes
+  # are Markdown, so nothing is converted. It is Lpdf's own release run making a document the way its users'
+  # pipelines do. The page keeps the attribution line, since no license key is given to the render.
+  #
+  # `rc` runs for a release candidate and `release` for the final tag, and whichever does not run is skipped,
+  # which would skip this job too without the `if`. A release that failed gets no PDF.
+  notes-pdf:
+    name: PDF of the release notes
+    needs: [rc, release]
+    if: ${{ !cancelled() && (needs.rc.result == 'success' || needs.release.result == 'success') }}
+    runs-on: ubuntu-24.04
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build the command line
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
+        run: cargo build --release --manifest-path src/cli/Cargo.toml
+
+      # The body is what the release shows: the notes a person typed, or a release candidate's one line. A
+      # release page has no title in its body, so the file gets one. A body made on Windows has CRLF line ends.
+      - name: Render the notes
+        run: |
+          {
+            printf '# Lpdf %s\n\n' "$TAG"
+            gh release view "$TAG" --json body --jq .body | tr -d '\r'
+          } > notes.md
+          target/release/lpdf convert --input notes.md --output "lpdf-$TAG-release-notes.pdf"
+
+      # --clobber: re-running the job replaces the PDF instead of failing.
+      - name: Upload the PDF
+        run: gh release upload "$TAG" "lpdf-$TAG-release-notes.pdf" --clobber
