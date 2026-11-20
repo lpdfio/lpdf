@@ -473,7 +473,8 @@ jobs:
         run: cargo build --release --manifest-path src/cli/Cargo.toml
 
       # The final release's body is what its page shows: the notes a person typed. A release page has no title in
-      # its body, so the file gets one. A body made on Windows has CRLF line ends.
+      # its body, so the file gets one, and a line under it with the time the PDF was made, in UTC, since a re-run
+      # of the job makes it again. A body made on Windows has CRLF line ends.
       #
       # A release candidate lists the commits since the last release: the nearest tag with no `-` in it, which is a
       # release and not a release candidate. `--first-parent` gives one line for each pull request, the title it
@@ -482,6 +483,7 @@ jobs:
         run: |
           {
             printf '# Lpdf %s\n\n' "$TAG"
+            printf 'Generated %s\n\n' "$(date -u '+%Y-%m-%d %H:%M UTC')"
             if [ "$IS_RC" = true ]; then
               LAST=$(git describe --tags --abbrev=0 --exclude '*-*')
               printf 'The changes since %s, one for each pull request:\n\n' "$LAST"
