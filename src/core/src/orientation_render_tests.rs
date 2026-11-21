@@ -54,7 +54,7 @@ fn rendered(document: &[(&str, &str)], section: &[(&str, &str)]) -> [(&'static s
 }
 
 /// The one page of the document is `expected`, on both paths.
-fn assert_page(document: &[(&str, &str)], section: &[(&str, &str)], expected: (f32, f32)) {
+pub(crate) fn assert_page(document: &[(&str, &str)], section: &[(&str, &str)], expected: (f32, f32)) {
     for (path, pages) in rendered(document, section) {
         assert_eq!(pages.len(), 1, "{path}: one page for document {document:?} and section {section:?}");
         let (width, height) = pages[0];
