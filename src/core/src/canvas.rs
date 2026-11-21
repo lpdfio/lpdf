@@ -214,6 +214,22 @@ pub fn parse_anchor(s: &str) -> Result<Anchor, String> {
     }
 }
 
+/// The `line-cap` of a line or a path, as the text the drawing reads it from (`line_cap_to_u8`).
+fn parse_line_cap(s: &str) -> Result<String, String> {
+    match s {
+        "butt" | "round" | "square" => Ok(s.to_string()),
+        other => Err(format!("invalid line-cap value: '{other}' — expected butt, round, or square")),
+    }
+}
+
+/// The `fill-rule` of a path, as the text the drawing reads it from.
+fn parse_fill_rule(s: &str) -> Result<String, String> {
+    match s {
+        "nonzero" | "evenodd" => Ok(s.to_string()),
+        other => Err(format!("invalid fill-rule value: '{other}' — expected nonzero or evenodd")),
+    }
+}
+
 pub(crate) fn resolve_anchor(anchor: &Anchor, page_w: f32, page_h: f32) -> (f32, f32) {
     match anchor {
         Anchor::TopLeft      => (0.0,          0.0),
@@ -401,7 +417,7 @@ fn parse_canvas_line(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPr
     let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
     let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
     let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
-    let line_cap     = elem.attribute("line-cap").map(str::to_string);
+    let line_cap     = elem.attribute("line-cap").map(parse_line_cap).transpose()?;
     let ocg          = opt_ocg(elem)?;
     Ok(CanvasPrimitive::Line(CanvasLine { x1, y1, x2, y2, stroke, stroke_width, stroke_dash, line_cap, ocg }))
 }
@@ -410,10 +426,10 @@ fn parse_canvas_path(elem: &roxmltree::Node, tokens: &Tokens) -> Result<CanvasPr
     let d            = elem.attribute("d").unwrap_or("").to_string();
     let fill         = opt_canvas_fill(elem, tokens)?;
     let stroke       = opt_canvas_color(elem, "stroke", tokens)?;
-    let fill_rule    = elem.attribute("fill-rule").map(str::to_string);
+    let fill_rule    = elem.attribute("fill-rule").map(parse_fill_rule).transpose()?;
     let stroke_width = elem.attribute("stroke-width").map(parse_measurement).transpose()?;
     let stroke_dash  = elem.attribute("stroke-dash").map(str::to_string);
-    let line_cap     = elem.attribute("line-cap").map(str::to_string);
+    let line_cap     = elem.attribute("line-cap").map(parse_line_cap).transpose()?;
     let ocg          = opt_ocg(elem)?;
     Ok(CanvasPrimitive::Path(CanvasPath { d, fill, stroke, fill_rule, stroke_width, stroke_dash, line_cap, ocg }))
 }
@@ -642,17 +658,17 @@ fn parse_tree_canvas_primitive(json: &serde_json::Value, ctx: &LayerContext) -> 
             stroke:       get_color("stroke")?,
             stroke_width: get_f32("stroke-width")?,
             stroke_dash:  get_attr("stroke-dash").map(str::to_string),
-            line_cap:     get_attr("line-cap").map(str::to_string),
+            line_cap:     get_attr("line-cap").map(parse_line_cap).transpose()?,
             ocg:          get_ocg()?,
         })),
         "path" => Ok(CanvasPrimitive::Path(CanvasPath {
             d:            get_attr("d").unwrap_or("").to_string(),
             fill:         get_fill()?,
             stroke:       get_color("stroke")?,
-            fill_rule:    get_attr("fill-rule").map(str::to_string),
+            fill_rule:    get_attr("fill-rule").map(parse_fill_rule).transpose()?,
             stroke_width: get_f32("stroke-width")?,
             stroke_dash:  get_attr("stroke-dash").map(str::to_string),
-            line_cap:     get_attr("line-cap").map(str::to_string),
+            line_cap:     get_attr("line-cap").map(parse_line_cap).transpose()?,
             ocg:          get_ocg()?,
         })),
         "text-at" | "img-at" | "barcode-at" => {

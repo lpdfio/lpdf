@@ -1566,3 +1566,68 @@ fn every_attribute_of_the_schema_does_something() {
     );
     assert!(problems.is_empty(), "\n{}\n", problems.join("\n"));
 }
+
+// ── A wrong value ─────────────────────────────────────────────────────────────
+
+/// A value that is none of an enumeration's, and no boolean either.
+const WRONG_VALUE: &str = "zzz";
+
+/// Every attribute whose type is a closed enumeration or a boolean refuses a value that isn't one of its own, with an
+/// error that names the value. An attribute that falls back to a default for a typo, as `orientation="landscpe"` did
+/// for a portrait page, changes the PDF and says nothing, which no test of the valid values notices. The document of
+/// each is the one `every_attribute_of_the_schema_does_something` renders, with a value of the enumeration that
+/// renders, and then with the wrong one.
+#[test]
+fn every_closed_enumeration_refuses_a_wrong_value() {
+    let text = std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../schema/lpdf.xsd"))
+        .expect("schema/lpdf.xsd");
+    let doc = Document::parse(&text).expect("the schema is XML");
+    let attributes = with_contexts(schema_attributes(&doc));
+    let subjects = subjects();
+    let tweaks = tweaks();
+
+    let mut problems: Vec<String> = Vec::new();
+    let mut tried = 0;
+    for attribute in attributes.iter().filter(|a| a.one_of && !a.name.starts_with("data-")) {
+        let id = attribute.id();
+        let Some(subject) = subject_for(&subjects, attribute) else {
+            problems.push(format!("{id}: no subject for the element {}: add one to `subjects`", attribute.element));
+            continue;
+        };
+        let default = Tweak::default();
+        let tweak = tweaks.get(&id).unwrap_or(&default);
+        let base = base_pairs(subject, tweak);
+        let content = tweak.content.unwrap_or(subject.content);
+        let document = |value_base: &[(String, String)], value: &str| {
+            (subject.build)(&attribute_string(&pairs_with_value(value_base, tweak, attribute, value)), content)
+        };
+
+        // The first value of the enumeration that renders in the subject's document: a few need more than it gives.
+        let Some(value_base) = attribute.values.iter().find_map(|value| {
+            let value_base = base_for_value(&base, tweak, value);
+            render(&document(&value_base, value)).is_ok().then_some(value_base)
+        }) else {
+            problems.push(format!("{id}: no value of it renders in the subject's document: fix the subject or the tweak"));
+            continue;
+        };
+
+        match render(&document(&value_base, WRONG_VALUE)) {
+            Ok(_) => problems.push(format!("{id}: the value {WRONG_VALUE} renders, with no error")),
+            Err(e) if e.contains(WRONG_VALUE) => tried += 1,
+            Err(e) => problems.push(format!("{id}: the value {WRONG_VALUE} is refused, and the error doesn't name it: {e}")),
+        }
+    }
+
+    println!("{tried} attributes refuse a wrong value");
+    assert!(problems.is_empty(), "\n{}\n", problems.join("\n"));
+}
+
+/// The fonts `core` takes are the schema's `BuiltinFont`, since the parser checks the name against its own list.
+#[test]
+fn the_built_in_fonts_are_the_schemas() {
+    let text = std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../schema/lpdf.xsd"))
+        .expect("schema/lpdf.xsd");
+    let doc = Document::parse(&text).expect("the schema is XML");
+    let core = schema_attributes(&doc).into_iter().find(|a| a.id() == "font@core").expect("font@core is in the schema");
+    assert_eq!(core.values, crate::pdf::BUILTIN_FONTS);
+}
