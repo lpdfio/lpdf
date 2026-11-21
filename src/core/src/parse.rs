@@ -2717,7 +2717,8 @@ pub(crate) fn parse_node(
 
     match kind {
         NodeKind::Text => {
-            node.text_align = parse_text_align(elem.attribute("align").unwrap_or("left"))?;
+            node.text_align = parse_text_align(elem.attribute("align").unwrap_or("left"))
+                .map_err(|e| format!("<{}>{}: {e}", tag, node_loc(elem)))?;
             node.bold = elem.attribute("bold").map(|v| v == "true").unwrap_or(false);
             read_text_runs(&mut node, elem, tokens)?;
         }
@@ -5906,6 +5907,12 @@ mod tests {
             let err = parse(&xml).unwrap_err();
             assert!(err.contains(refused) && err.contains(names), "{xml}\n    {err}");
         }
+    }
+
+    #[test]
+    fn a_wrong_align_of_a_text_is_located_at_the_text() {
+        let err = parse(&enumerated_xml("", "", "", r#"<text align="cetner">A</text>"#, "")).unwrap_err();
+        assert!(err.starts_with("<text> at line") && err.contains("invalid align value: 'cetner'"), "{err}");
     }
 
     #[test]
