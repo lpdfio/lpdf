@@ -3559,6 +3559,26 @@ fn parse_align(val: &str) -> Result<Align, String> {
     }
 }
 
+/// The `align` of a `td`, which takes start, center and end where a column and a row also take stretch. A cell with
+/// none stretches its content across the cell, so that is a default and not a value to write.
+fn parse_cell_align(val: Option<&str>) -> Result<Align, String> {
+    match val {
+        None => Ok(Align::Stretch),
+        Some(v @ ("start" | "center" | "end")) => parse_align(v),
+        Some(other) => Err(format!("invalid align value: '{other}' — expected start, center, or end")),
+    }
+}
+
+/// The `valign` of a `td`, which sets where its content sits in the height of the cell.
+fn parse_valign(val: &str) -> Result<Justify, String> {
+    match val {
+        "top" => Ok(Justify::Start),
+        "middle" => Ok(Justify::Center),
+        "bottom" => Ok(Justify::End),
+        other => Err(format!("invalid valign value: '{other}' — expected top, middle, or bottom")),
+    }
+}
+
 fn parse_justify(val: &str) -> Result<Justify, String> {
     match val {
         "start" => Ok(Justify::Start),
@@ -3885,14 +3905,8 @@ fn apply_layout_kind_attrs(
         NodeKind::TableCell => {
             if let Some(v) = a.get("colspan") { node.col_span = parse_col_span(v)?; }
             if let Some(v) = a.get("rowspan") { node.row_span = parse_row_span(v)?; }
-            node.align   = parse_align(a.get("align").unwrap_or("stretch"))?;
-            let valign_str = a.get("valign").unwrap_or("top");
-            node.justify = parse_justify(match valign_str {
-                "top"    => "start",
-                "middle" => "center",
-                "bottom" => "end",
-                other    => other,
-            })?;
+            node.align   = parse_cell_align(a.get("align"))?;
+            node.justify = parse_valign(a.get("valign").unwrap_or("top"))?;
         }
         NodeKind::Text => {
             let mut has_capture = false;
@@ -4733,7 +4747,7 @@ fn parse_tree_region(
         "left"   => RegionPin::Left,
         "right"  => RegionPin::Right,
         "inset"  => RegionPin::Inset,
-        other => return Err(format!("region invalid pin '{other}'")),
+        other => return Err(format!("region invalid pin '{other}' — use top, bottom, left, right or inset")),
     };
     let page  = jattr(json, "page").map(parse_page_scope).transpose()?;
     let w     = jattr(json, "w").map(parse_measurement).transpose()?;
@@ -5881,6 +5895,27 @@ mod tests {
         )
     }
 
+    /// A layout with a table of one cell, whose attributes are `attributes`.
+    fn cell_xml(attributes: &str) -> String {
+        enumerated_xml("", "", "", &format!(r#"<table cols="1fr"><tr><td {attributes}><text>A</text></td></tr></table>"#), "")
+    }
+
+    /// The same for the kit tree, with `attributes` as the members of an object: `"align":"end"`.
+    fn cell_tree(attributes: &str) -> String {
+        enumerated_tree(
+            "",
+            "",
+            "",
+            &format!(
+                r#"{{"type":"table","attrs":{{"cols":"1fr"}},"nodes":[{{"type":"tr","attrs":{{}},"nodes":[{{"type":"td","attrs":{{{attributes}}},"nodes":[{{"type":"text","attrs":{{}},"nodes":["A"]}}]}}]}}]}}"#
+            ),
+            "",
+        )
+    }
+
+    const ANCHORS: &str = "top-left, top-center, top-right, center-left, center, center-right, bottom-left, bottom-center, or bottom-right";
+    const RECT_XML: &str = r##"<rect x="0pt" y="0pt" width="10pt" height="10pt" fill="#000000""##;
+
     const LINE_XML: &str = r##"<line x1="0pt" y1="0pt" x2="50pt" y2="50pt" stroke="#000000""##;
     const PATH_XML: &str = r##"<path d="M 0 0 L 10 10 Z" fill="#000000""##;
     const TEXT_AT_XML: &str = r#"<text-at x="10pt" y="10pt" width="50pt""#;
@@ -5894,6 +5929,13 @@ mod tests {
             (enumerated_xml("", r#"orientation="landscpe""#, "", "", ""), "<document>", "portrait or landscape"),
             (enumerated_xml("", "", r#"orientation="landscpe""#, "", ""), "invalid orientation value: 'landscpe'", "portrait or landscape"),
             (enumerated_xml("", "", "", r#"<divider direction="diagonal"/>"#, ""), "invalid direction value: 'diagonal'", "horizontal or vertical"),
+            (cell_xml(r#"align="stretch""#), "invalid align value: 'stretch'", "start, center, or end"),
+            (cell_xml(r#"align="midle""#), "invalid align value: 'midle'", "start, center, or end"),
+            (cell_xml(r#"valign="bottum""#), "invalid valign value: 'bottum'", "top, middle, or bottom"),
+            // `valign` took the values of `justify` too, so `center`, `start`, `end` and `between` were read.
+            (cell_xml(r#"valign="center""#), "invalid valign value: 'center'", "top, middle, or bottom"),
+            (enumerated_xml("", "", "", r#"<region pin="bottm"><text>A</text></region>"#, ""), "invalid pin 'bottm'", "top, bottom, left, right or inset"),
+            (enumerated_xml("", "", "", "", &format!(r#"{RECT_XML} anchor="midle"/>"#)), "invalid anchor value: 'midle'", ANCHORS),
             (enumerated_xml("", "", "", "", &format!(r#"{LINE_XML} line-cap="flat"/>"#)), "invalid line-cap value: 'flat'", "butt, round, or square"),
             (enumerated_xml("", "", "", "", &format!(r#"{PATH_XML} line-cap="flat"/>"#)), "invalid line-cap value: 'flat'", "butt, round, or square"),
             (enumerated_xml("", "", "", "", &format!(r#"{PATH_XML} fill-rule="even-odd"/>"#)), "invalid fill-rule value: 'even-odd'", "nonzero or evenodd"),
@@ -5929,6 +5971,16 @@ mod tests {
             (enumerated_tree("", r#","orientation":"landscpe""#, "", "", ""), "document: invalid orientation value: 'landscpe'", "portrait or landscape"),
             (enumerated_tree("", "", r#""orientation":"landscpe""#, "", ""), "invalid orientation value: 'landscpe'", "portrait or landscape"),
             (enumerated_tree("", "", "", r#"{"type":"divider","attrs":{"direction":"diagonal"}}"#, ""), "invalid direction value: 'diagonal'", "horizontal or vertical"),
+            (cell_tree(r#""align":"stretch""#), "invalid align value: 'stretch'", "start, center, or end"),
+            (cell_tree(r#""align":"midle""#), "invalid align value: 'midle'", "start, center, or end"),
+            (cell_tree(r#""valign":"bottum""#), "invalid valign value: 'bottum'", "top, middle, or bottom"),
+            (cell_tree(r#""valign":"center""#), "invalid valign value: 'center'", "top, middle, or bottom"),
+            (enumerated_tree("", "", "", r#"{"type":"region","attrs":{"pin":"bottm"},"nodes":[]}"#, ""), "invalid pin 'bottm'", "top, bottom, left, right or inset"),
+            (
+                enumerated_tree("", "", "", "", r##"{"type":"rect","attrs":{"x":"0pt","y":"0pt","width":"10pt","height":"10pt","fill":"#000000","anchor":"midle"}}"##),
+                "invalid anchor value: 'midle'",
+                ANCHORS,
+            ),
             (enumerated_tree("", "", "", "", r##"{"type":"line","attrs":{"x1":"0pt","y1":"0pt","x2":"50pt","y2":"50pt","stroke":"#000000","line-cap":"flat"}}"##), "invalid line-cap value: 'flat'", "butt, round, or square"),
             (enumerated_tree("", "", "", "", r##"{"type":"path","attrs":{"d":"M 0 0 L 10 10 Z","fill":"#000000","line-cap":"flat"}}"##), "invalid line-cap value: 'flat'", "butt, round, or square"),
             (enumerated_tree("", "", "", "", r##"{"type":"path","attrs":{"d":"M 0 0 L 10 10 Z","fill":"#000000","fill-rule":"even-odd"}}"##), "invalid fill-rule value: 'even-odd'", "nonzero or evenodd"),
@@ -5966,6 +6018,20 @@ mod tests {
         }
         for font in crate::pdf::BUILTIN_FONTS {
             parse(&enumerated_xml(&format!(r#"<assets><font name="body" core="{font}"/></assets>"#), "", "", "", "")).unwrap();
+        }
+        // A cell with no align stretches its content, and the other three of its values are still read, on both paths.
+        parse(&cell_xml("")).unwrap();
+        parse_tree(&cell_tree("")).unwrap();
+        for align in ["start", "center", "end"] {
+            parse(&cell_xml(&format!(r#"align="{align}""#))).unwrap();
+            parse_tree(&cell_tree(&format!(r#""align":"{align}""#))).unwrap();
+        }
+        for valign in ["top", "middle", "bottom"] {
+            parse(&cell_xml(&format!(r#"valign="{valign}""#))).unwrap();
+            parse_tree(&cell_tree(&format!(r#""valign":"{valign}""#))).unwrap();
+        }
+        for anchor in ANCHORS.replace(", or ", ", ").split(", ") {
+            parse(&enumerated_xml("", "", "", "", &format!(r#"{RECT_XML} anchor="{anchor}"/>"#))).unwrap();
         }
     }
 

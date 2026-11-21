@@ -210,7 +210,9 @@ pub fn parse_anchor(s: &str) -> Result<Anchor, String> {
         "bottom-left"   => Ok(Anchor::BottomLeft),
         "bottom-center" => Ok(Anchor::BottomCenter),
         "bottom-right"  => Ok(Anchor::BottomRight),
-        other => Err(format!("invalid anchor: '{other}'")),
+        other => Err(format!(
+            "invalid anchor value: '{other}' — expected top-left, top-center, top-right, center-left, center, center-right, bottom-left, bottom-center, or bottom-right"
+        )),
     }
 }
 

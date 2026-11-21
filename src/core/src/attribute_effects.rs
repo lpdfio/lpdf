@@ -1572,11 +1572,61 @@ fn every_attribute_of_the_schema_does_something() {
 /// A value that is none of an enumeration's, and no boolean either.
 const WRONG_VALUE: &str = "zzz";
 
+/// An error without the place the parser found it at (`<td> at line 1, col 72: `), which has numbers of its own.
+fn without_location(error: &str) -> &str {
+    match error.find(" at line ") {
+        Some(at) => error[at..].split_once(": ").map_or(error, |(_, rest)| rest),
+        None => error,
+    }
+}
+
+/// The values an error names, as words (`top-left` is a word, `top, left` is two) or, for a value of two words, as
+/// they stand. `h1 to h6` names every value from `h1` to `h6` in the schema's order, so a range can say what a list of
+/// six would.
+fn values_named<'a>(message: &str, values: &'a [String]) -> Vec<&'a str> {
+    let words: Vec<&str> =
+        message.split(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_')).filter(|word| !word.is_empty()).collect();
+    let position = |word: &str| values.iter().position(|v| v == word);
+    let mut named: Vec<&str> = values
+        .iter()
+        .filter(|v| if v.contains(' ') { message.contains(v.as_str()) } else { words.contains(&v.as_str()) })
+        .map(String::as_str)
+        .collect();
+    for window in words.windows(3) {
+        if window[1] == "to"
+            && let (Some(from), Some(to)) = (position(window[0]), position(window[2]))
+            && from <= to
+        {
+            named.extend(values[from..=to].iter().map(String::as_str));
+        }
+    }
+    named
+}
+
+/// What an error lists after `expected` or `use`, as in `expected start, center, or end` or `use top, bottom or inset`,
+/// one item for each name. Nothing for an error that says neither followed by a plain list, such as one that describes
+/// a range.
+fn listed_in_error(message: &str) -> Vec<String> {
+    let after = |marker: &str| message.rfind(marker).map(|at| (at, &message[at + marker.len()..]));
+    let (_, after) = [after("expected "), after(" use ")].into_iter().flatten().max_by_key(|(at, _)| *at).unzip();
+    let Some(after) = after else { return Vec::new() };
+    let list = after.split([')', ';']).next().unwrap_or("");
+    if [" to ", " from ", " for "].iter().any(|word| list.contains(word)) {
+        return Vec::new();
+    }
+    list.replace(" or ", ",")
+        .split(',')
+        .map(|item| item.trim().trim_matches('\'').trim_matches('"').to_string())
+        .filter(|item| !item.is_empty())
+        .collect()
+}
+
 /// Every attribute whose type is a closed enumeration or a boolean refuses a value that isn't one of its own, with an
-/// error that names the value. An attribute that falls back to a default for a typo, as `orientation="landscpe"` did
-/// for a portrait page, changes the PDF and says nothing, which no test of the valid values notices. The document of
-/// each is the one `every_attribute_of_the_schema_does_something` renders, with a value of the enumeration that
-/// renders, and then with the wrong one.
+/// error that names the value and every value it takes. An attribute that falls back to a default for a typo, as
+/// `orientation="landscpe"` did for a portrait page, changes the PDF and says nothing, which no test of the valid
+/// values notices. An error that names values the attribute doesn't take, as `td` `valign` did, sends the author to
+/// a value that is refused. The document of each is the one `every_attribute_of_the_schema_does_something` renders,
+/// with a value of the enumeration that renders, and then with the wrong one.
 #[test]
 fn every_closed_enumeration_refuses_a_wrong_value() {
     let text = std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../schema/lpdf.xsd"))
@@ -1613,8 +1663,26 @@ fn every_closed_enumeration_refuses_a_wrong_value() {
 
         match render(&document(&value_base, WRONG_VALUE)) {
             Ok(_) => problems.push(format!("{id}: the value {WRONG_VALUE} renders, with no error")),
-            Err(e) if e.contains(WRONG_VALUE) => tried += 1,
-            Err(e) => problems.push(format!("{id}: the value {WRONG_VALUE} is refused, and the error doesn't name it: {e}")),
+            Err(e) if !e.contains(WRONG_VALUE) => {
+                problems.push(format!("{id}: the value {WRONG_VALUE} is refused, and the error doesn't name it: {e}"));
+            }
+            Err(e) => {
+                tried += 1;
+                let message = without_location(&e);
+                let named = values_named(message, &attribute.values);
+                let left_out: Vec<&str> =
+                    attribute.values.iter().map(String::as_str).filter(|v| !named.contains(v)).collect();
+                if !left_out.is_empty() {
+                    problems.push(format!("{id}: the error doesn't name {}: {e}", left_out.join(", ")));
+                }
+                let added: Vec<String> = listed_in_error(message)
+                    .into_iter()
+                    .filter(|item| !attribute.values.contains(item))
+                    .collect();
+                if !added.is_empty() {
+                    problems.push(format!("{id}: the error names {}, which the schema doesn't list: {e}", added.join(", ")));
+                }
+            }
         }
     }
 
