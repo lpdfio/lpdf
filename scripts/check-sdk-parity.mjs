@@ -20,7 +20,8 @@ import { fileURLToPath } from 'node:url';
 
 import { LANGUAGES, sdkRepositories } from './lib/sdk-repositories.mjs';
 import { loadSchema } from './lib/xsd.mjs';
-import { constantsOf, shapeOf, STAMP_CONSTANTS, STAMP_TYPESCRIPT, typeScriptOf } from './lib/constants.mjs';
+import { constantsOf, STAMP_CONSTANTS } from './lib/constants.mjs';
+import { exportProblems, interfaceTypes, stampTypeProblems, TYPED, typeProblems } from './lib/parity.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schema = loadSchema(path.join(root, 'schema/lpdf.xsd'));
@@ -153,18 +154,11 @@ for (const sdk of selected) scans[sdk]();
 
 // ── The constants ─────────────────────────────────────────────────────────────
 
-/** The TypeScript type each attribute of a hand-written class takes, from the schema's type of it, by class name. */
-const TYPED = { DocumentAttr: 'document', SectionAttr: 'section', DocumentOutput: 'output' };
-
 const typed = { node: {} };
 const typeScans = {
     node() {
         for (const file of files(path.join(repositories.node, 'src'), '.ts')) {
-            for (const [, name, body] of read(file).matchAll(/export interface (\w+)(?:\s+extends[^{]+)?\s*\{([\s\S]*?)\n\}/g)) {
-                if (name in TYPED || name === 'StampAttr') {
-                    typed.node[name] = Object.fromEntries([...body.matchAll(/^\s+(\w+)\??\s*:\s*([^;]+);/gm)].map((m) => [kebab.camel(m[1]), m[2].trim()]));
-                }
-            }
+            Object.assign(typed.node, interfaceTypes(read(file), [...Object.keys(TYPED), 'StampAttr'], kebab.camel));
         }
     },
 };
@@ -173,13 +167,8 @@ for (const sdk of selected) typeScans[sdk]?.();
 /** What each SDK's entry point has to export, by the names that were not found: the same constants everywhere. */
 function missingExports(sdk) {
     const names = [...constants, ...STAMP_CONSTANTS].map((c) => c.name);
-    const star = { node: ["src/index.ts", "src/browser.ts"], python: ['src/lpdf/__init__.py'] }[sdk] ?? [];
-    return star.flatMap((entry) => {
-        const text = read(path.join(repositories[sdk], entry));
-        // `export * from './constants'` or `from .constants import *` exports them all; else each must be named.
-        if (/export \* from '\.\/constants'/.test(text) || /from \.constants import \*/.test(text)) return [];
-        return names.filter((name) => !new RegExp(`\\b${name}\\b`).test(text)).map((name) => `${entry} doesn't export ${name}`);
-    });
+    const entries = { node: ['src/index.ts', 'src/browser.ts'], python: ['src/lpdf/__init__.py'] }[sdk] ?? [];
+    return entries.flatMap((entry) => exportProblems(entry, read(path.join(repositories[sdk], entry)), names));
 }
 
 // ── Compare ───────────────────────────────────────────────────────────────────
@@ -210,25 +199,16 @@ for (const sdk of selected) {
     }
 }
 for (const [name, element] of Object.entries(TYPED)) {
-    const actual = typed.node?.[name];
-    if (!selected.includes('node') || !actual) continue;
-    for (const a of schema.element(element).attributes) {
-        const shape = shapeOf(schema, constants, a.typeName);
-        if (!shape || !(a.name in actual)) continue;
-        const wanted = typeScriptOf(shape);
-        if (actual[a.name].replace(/\s+/g, ' ') !== wanted) {
-            problems++;
-            console.log(`node: ${name}.${a.name} is ${actual[a.name]}, and the schema's ${a.typeName} makes it ${wanted}`);
-        }
+    if (!selected.includes('node') || !typed.node[name]) continue;
+    for (const message of typeProblems(schema, constants, name, element, typed.node[name])) {
+        problems++;
+        console.log(message);
     }
 }
-if (selected.includes('node') && typed.node?.StampAttr) {
-    for (const [option, wanted] of Object.entries(STAMP_TYPESCRIPT)) {
-        const actual = typed.node.StampAttr[option];
-        if (actual !== wanted) {
-            problems++;
-            console.log(`node: StampAttr.${option} is ${actual}, and should be ${wanted}`);
-        }
+if (selected.includes('node') && typed.node.StampAttr) {
+    for (const message of stampTypeProblems(typed.node.StampAttr)) {
+        problems++;
+        console.log(message);
     }
 }
 const where = selected.length === LANGUAGES.length ? 'all five SDKs' : `the ${selected.join(' and ')} SDK`;

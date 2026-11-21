@@ -39,9 +39,10 @@ jobs:
         run: node --test scripts/check-codegen-sdk.test.mjs
 
       # The constants the SDKs name for the schema's enumerations (scripts/lib/constants.mjs): their names, the rule for a
-      # value that starts with a digit, and the TypeScript type of an attribute that takes them.
-      - name: Test the SDK constants' script
-        run: node --test scripts/constants.test.mjs
+      # value that starts with a digit, and the TypeScript type of an attribute that takes them; and the check that each
+      # SDK exports them, and that its hand-written TypeScript types are theirs (scripts/lib/parity.mjs).
+      - name: Test the SDK constants' scripts
+        run: node --test scripts/constants.test.mjs scripts/check-sdk-parity.test.mjs
 
       # The retry of the downloads the scripts make (scripts/fetch-retry.mjs), run with a fetch that gives the answers
       # of a server that limits its requests, and no server.
