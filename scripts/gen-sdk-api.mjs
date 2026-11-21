@@ -496,8 +496,6 @@ for (const constant of CONSTANTS) constant.area = areaOfConstant(constant);
 /** The constants the SDKs have: the schema's, and the stamp's. The core's table has the schema's alone. */
 const SDK_CONSTANTS = [...CONSTANTS, ...STAMP_CONSTANTS];
 
-function upperSnake(value) { return words(value).join('_').toUpperCase(); }
-
 /**
  * The files of a constant: .NET, PHP and Java have a class of its own, in the .NET and PHP area it belongs to, and Python
  * and Node have one file for all constants (`constantsFiles`).
