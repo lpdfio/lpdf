@@ -95,11 +95,18 @@
       <xs:documentation>The named values of the `size` attribute of a document or a section. A width and a height, such as 100pt 200pt, is a string.</xs:documentation>
     </xs:annotation>
     <xs:restriction base="xs:string">
-      <xs:enumeration value="a4"/>
+      <xs:enumeration value="a0"/>
+      <xs:enumeration value="a1"/>
+      <xs:enumeration value="a2"/>
       <xs:enumeration value="a3"/>
+      <xs:enumeration value="a4"/>
       <xs:enumeration value="a5"/>
+      <xs:enumeration value="a6"/>
+      <xs:enumeration value="b4"/>
+      <xs:enumeration value="b5"/>
       <xs:enumeration value="letter"/>
       <xs:enumeration value="legal"/>
+      <xs:enumeration value="tabloid"/>
     </xs:restriction>
   </xs:simpleType>
 
@@ -112,7 +119,7 @@
 
   <xs:simpleType name="PageSize">
     <xs:annotation>
-      <xs:documentation>The size of the pages: a4, a3, a5, letter or legal, or a width and a height, such as 80mm 200mm. Each is 3pt at least, the smallest page PDF 1.7 recommends; a smaller one is an error.</xs:documentation>
+      <xs:documentation>The size of the pages: a0, a1, a2, a3, a4, a5, a6, b4, b5, letter, legal or tabloid, or a width and a height, such as 80mm 200mm. Each is 3pt at least, the smallest page PDF 1.7 recommends; a smaller one is an error.</xs:documentation>
     </xs:annotation>
     <xs:union memberTypes="PageSizeNamed PageSizeCustom"/>
   </xs:simpleType>

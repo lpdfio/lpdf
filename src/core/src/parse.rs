@@ -2177,18 +2177,35 @@ fn parse_meta(elem: &roxmltree::Node) -> Meta {
 }
 
 
+/// The named values of `size`, each as its width and height in points, written to two decimals as `a4` is. The names
+/// are the schema's `PageSizeNamed`, in its order, and the error for a wrong `size` lists them.
+const NAMED_PAGE_SIZES: [(&str, (f32, f32)); 12] = [
+    ("a0", (2383.94, 3370.39)),
+    ("a1", (1683.78, 2383.94)),
+    ("a2", (1190.55, 1683.78)),
+    ("a3", (841.89, 1190.55)),
+    ("a4", (595.28, 841.89)),
+    ("a5", (419.53, 595.28)),
+    ("a6", (297.64, 419.53)),
+    ("b4", (708.66, 1000.63)),
+    ("b5", (498.90, 708.66)),
+    ("letter", (612.0, 792.0)),
+    ("legal", (612.0, 1008.0)),
+    ("tabloid", (792.0, 1224.0)),
+];
+
 /// A page `size`: a name, or a width and a height, each at least `MIN_PAGE`.
 pub fn parse_page_size(val: &str) -> Result<(f32, f32), String> {
-    let (w, h) = match val {
-        "a4" => (595.28, 841.89),
-        "a3" => (841.89, 1190.55),
-        "a5" => (419.53, 595.28),
-        "letter" => (612.0, 792.0),
-        "legal" => (612.0, 1008.0),
-        custom => {
-            let parts: Vec<&str> = custom.split_whitespace().collect();
+    let (w, h) = match NAMED_PAGE_SIZES.iter().find(|(name, _)| *name == val) {
+        Some((_, named)) => *named,
+        None => {
+            let parts: Vec<&str> = val.split_whitespace().collect();
             let [width, height] = parts.as_slice() else {
-                return Err(format!("invalid page size: '{val}': expected a4, a3, a5, letter, legal or a width and a height, like '210mm 297mm'"));
+                let names: Vec<&str> = NAMED_PAGE_SIZES.iter().map(|(name, _)| *name).collect();
+                return Err(format!(
+                    "invalid page size: '{val}': expected {} or a width and a height, like '210mm 297mm'",
+                    names.join(", ")
+                ));
             };
             let w = parse_length(width)
                 .ok_or_else(|| format!("invalid page width: '{width}': expected a length in {LENGTH_UNITS}"))?;

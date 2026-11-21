@@ -913,11 +913,18 @@ const FIELD: Attributes = &[
 #[allow(dead_code, reason = "only codegen asks, and the WASI binary and the native library have no codegen")]
 pub(crate) const CONSTANTS: &[Constant] = &[
     Constant { name: "PageSize", area: "kit", members: &[
-        Member { value: "a4", pascal: "A4", snake: "A4" },
+        Member { value: "a0", pascal: "A0", snake: "A0" },
+        Member { value: "a1", pascal: "A1", snake: "A1" },
+        Member { value: "a2", pascal: "A2", snake: "A2" },
         Member { value: "a3", pascal: "A3", snake: "A3" },
+        Member { value: "a4", pascal: "A4", snake: "A4" },
         Member { value: "a5", pascal: "A5", snake: "A5" },
+        Member { value: "a6", pascal: "A6", snake: "A6" },
+        Member { value: "b4", pascal: "B4", snake: "B4" },
+        Member { value: "b5", pascal: "B5", snake: "B5" },
         Member { value: "letter", pascal: "Letter", snake: "LETTER" },
         Member { value: "legal", pascal: "Legal", snake: "LEGAL" },
+        Member { value: "tabloid", pascal: "Tabloid", snake: "TABLOID" },
     ] },
     Constant { name: "Orientation", area: "kit", members: &[
         Member { value: "portrait", pascal: "Portrait", snake: "PORTRAIT" },

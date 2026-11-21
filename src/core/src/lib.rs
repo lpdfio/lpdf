@@ -1142,6 +1142,9 @@ mod grow_render_tests;
 mod orientation_render_tests;
 
 #[cfg(test)]
+mod page_size_render_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
