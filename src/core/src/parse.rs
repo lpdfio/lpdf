@@ -1656,9 +1656,8 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                 if let Some(v) = child.attribute("size") {
                     doc_size = parse_page_size(v)?;
                 }
-                if is_landscape(child.attribute("orientation")).map_err(|e| format!("<document>{}: {e}", node_loc(&child)))? {
-                    doc_size = (doc_size.1, doc_size.0);
-                }
+                doc_size = with_orientation(doc_size, child.attribute("orientation"))
+                    .map_err(|e| format!("<document>{}: {e}", node_loc(&child)))?;
                 if let Some(v) = child.attribute("bleed") {
                     doc_bleed = parse_bleed(v).map_err(|e| format!("<document>{}: {e}", node_loc(&child)))?;
                 }
@@ -2100,9 +2099,7 @@ fn apply_page_overrides(
     if let Some(v) = a.get("size") {
         *size = parse_page_size(v)?;
     }
-    if is_landscape(a.get("orientation"))? {
-        *size = (size.1, size.0);
-    }
+    *size = with_orientation(*size, a.get("orientation"))?;
     if let Some(v) = a.get("background") {
         *background = Some(tokens.resolve_fill(v)?);
     }
@@ -3601,12 +3598,15 @@ fn parse_text_align(val: &str) -> Result<TextAlign, String> {
     }
 }
 
-/// Whether an `orientation` turns the page on its side: `landscape` does, and `portrait`, or no `orientation`, leaves
-/// the size as it is.
-fn is_landscape(val: Option<&str>) -> Result<bool, String> {
-    match val {
-        None | Some("portrait") => Ok(false),
-        Some("landscape") => Ok(true),
+/// The page a size gives under an `orientation`, which names the shape of the page whatever size it starts from:
+/// `portrait` is taller than wide and `landscape` wider than tall. A page already that shape, and a square one, is
+/// left as it is, and so is a page without an `orientation`.
+fn with_orientation(size: (f32, f32), orientation: Option<&str>) -> Result<(f32, f32), String> {
+    let (width, height) = size;
+    match orientation {
+        None => Ok(size),
+        Some("portrait") => Ok(if width > height { (height, width) } else { size }),
+        Some("landscape") => Ok(if height > width { (height, width) } else { size }),
         Some(other) => Err(format!("invalid orientation value: '{other}' — expected portrait or landscape")),
     }
 }
@@ -4399,14 +4399,12 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
     let doc_orient    = attrs.get("orientation").and_then(|v| v.as_str());
     let doc_bg_s      = attrs.get("background") .and_then(|v| v.as_str());
 
-    let mut doc_size = if let Some(s) = doc_size_str {
+    let doc_size = if let Some(s) = doc_size_str {
         parse_page_size(s)?
     } else {
         (595.28_f32, 841.89_f32) // a4
     };
-    if is_landscape(doc_orient).map_err(|e| format!("document: {e}"))? {
-        doc_size = (doc_size.1, doc_size.0);
-    }
+    let doc_size = with_orientation(doc_size, doc_orient).map_err(|e| format!("document: {e}"))?;
     let doc_bleed = attrs.get("bleed").and_then(|v| v.as_str())
         .map(parse_bleed)
         .transpose()

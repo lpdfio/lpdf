@@ -1139,6 +1139,9 @@ mod length_unit_tests;
 mod grow_render_tests;
 
 #[cfg(test)]
+mod orientation_render_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
