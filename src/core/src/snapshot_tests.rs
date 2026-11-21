@@ -259,6 +259,8 @@ fn showcase_grow_receipt() { run_snapshot("showcase-grow-receipt"); }
 #[test]
 fn showcase_grow_table() { run_snapshot("showcase-grow-table"); }
 #[test]
+fn showcase_section_orientation() { run_snapshot("showcase-section-orientation"); }
+#[test]
 fn showcase_text_max_lines() { run_snapshot("showcase-text-max-lines"); }
 #[test]
 fn showcase_text_line_height() { run_snapshot("showcase-text-line-height"); }
