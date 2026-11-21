@@ -1603,12 +1603,15 @@ fn values_named<'a>(message: &str, values: &'a [String]) -> Vec<&'a str> {
     named
 }
 
-/// What an error lists after `expected`, as in `expected start, center, or end`, one item for each name. Nothing for
-/// an error that doesn't say `expected` followed by a plain list, such as one that describes a range.
-fn listed_after_expected(message: &str) -> Vec<String> {
-    let Some((_, after)) = message.rsplit_once("expected ") else { return Vec::new() };
+/// What an error lists after `expected` or `use`, as in `expected start, center, or end` or `use top, bottom or inset`,
+/// one item for each name. Nothing for an error that says neither followed by a plain list, such as one that describes
+/// a range.
+fn listed_in_error(message: &str) -> Vec<String> {
+    let after = |marker: &str| message.rfind(marker).map(|at| (at, &message[at + marker.len()..]));
+    let (_, after) = [after("expected "), after(" use ")].into_iter().flatten().max_by_key(|(at, _)| *at).unzip();
+    let Some(after) = after else { return Vec::new() };
     let list = after.split([')', ';']).next().unwrap_or("");
-    if list.contains(" to ") || list.contains(" from ") {
+    if [" to ", " from ", " for "].iter().any(|word| list.contains(word)) {
         return Vec::new();
     }
     list.replace(" or ", ",")
@@ -1672,7 +1675,7 @@ fn every_closed_enumeration_refuses_a_wrong_value() {
                 if !left_out.is_empty() {
                     problems.push(format!("{id}: the error doesn't name {}: {e}", left_out.join(", ")));
                 }
-                let added: Vec<String> = listed_after_expected(message)
+                let added: Vec<String> = listed_in_error(message)
                     .into_iter()
                     .filter(|item| !attribute.values.contains(item))
                     .collect();

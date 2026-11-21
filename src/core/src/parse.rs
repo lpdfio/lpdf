@@ -4747,7 +4747,7 @@ fn parse_tree_region(
         "left"   => RegionPin::Left,
         "right"  => RegionPin::Right,
         "inset"  => RegionPin::Inset,
-        other => return Err(format!("region invalid pin '{other}'")),
+        other => return Err(format!("region invalid pin '{other}' — use top, bottom, left, right or inset")),
     };
     let page  = jattr(json, "page").map(parse_page_scope).transpose()?;
     let w     = jattr(json, "w").map(parse_measurement).transpose()?;
@@ -5932,6 +5932,9 @@ mod tests {
             (cell_xml(r#"align="stretch""#), "invalid align value: 'stretch'", "start, center, or end"),
             (cell_xml(r#"align="midle""#), "invalid align value: 'midle'", "start, center, or end"),
             (cell_xml(r#"valign="bottum""#), "invalid valign value: 'bottum'", "top, middle, or bottom"),
+            // `valign` took the values of `justify` too, so `center`, `start`, `end` and `between` were read.
+            (cell_xml(r#"valign="center""#), "invalid valign value: 'center'", "top, middle, or bottom"),
+            (enumerated_xml("", "", "", r#"<region pin="bottm"><text>A</text></region>"#, ""), "invalid pin 'bottm'", "top, bottom, left, right or inset"),
             (enumerated_xml("", "", "", "", &format!(r#"{RECT_XML} anchor="midle"/>"#)), "invalid anchor value: 'midle'", ANCHORS),
             (enumerated_xml("", "", "", "", &format!(r#"{LINE_XML} line-cap="flat"/>"#)), "invalid line-cap value: 'flat'", "butt, round, or square"),
             (enumerated_xml("", "", "", "", &format!(r#"{PATH_XML} line-cap="flat"/>"#)), "invalid line-cap value: 'flat'", "butt, round, or square"),
@@ -5971,6 +5974,8 @@ mod tests {
             (cell_tree(r#""align":"stretch""#), "invalid align value: 'stretch'", "start, center, or end"),
             (cell_tree(r#""align":"midle""#), "invalid align value: 'midle'", "start, center, or end"),
             (cell_tree(r#""valign":"bottum""#), "invalid valign value: 'bottum'", "top, middle, or bottom"),
+            (cell_tree(r#""valign":"center""#), "invalid valign value: 'center'", "top, middle, or bottom"),
+            (enumerated_tree("", "", "", r#"{"type":"region","attrs":{"pin":"bottm"},"nodes":[]}"#, ""), "invalid pin 'bottm'", "top, bottom, left, right or inset"),
             (
                 enumerated_tree("", "", "", "", r##"{"type":"rect","attrs":{"x":"0pt","y":"0pt","width":"10pt","height":"10pt","fill":"#000000","anchor":"midle"}}"##),
                 "invalid anchor value: 'midle'",
