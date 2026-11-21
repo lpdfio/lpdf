@@ -1656,7 +1656,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
                 if let Some(v) = child.attribute("size") {
                     doc_size = parse_page_size(v)?;
                 }
-                if let Some("landscape") = child.attribute("orientation") {
+                if is_landscape(child.attribute("orientation")).map_err(|e| format!("<document>{}: {e}", node_loc(&child)))? {
                     doc_size = (doc_size.1, doc_size.0);
                 }
                 if let Some(v) = child.attribute("bleed") {
@@ -1777,6 +1777,12 @@ fn font_asset_def(
     location: &str,
 ) -> Result<FontDef, String> {
     if let Some(core) = core {
+        if !crate::pdf::BUILTIN_FONTS.contains(&core) {
+            return Err(format!(
+                "<font>{location}: core '{core}' is not a built-in font — expected {}",
+                crate::pdf::BUILTIN_FONTS.join(", ")
+            ));
+        }
         return Ok(FontDef::Core(core.to_string()));
     }
     match ref_key {
@@ -2094,7 +2100,7 @@ fn apply_page_overrides(
     if let Some(v) = a.get("size") {
         *size = parse_page_size(v)?;
     }
-    if a.get("orientation") == Some("landscape") {
+    if is_landscape(a.get("orientation"))? {
         *size = (size.1, size.0);
     }
     if let Some(v) = a.get("background") {
@@ -2711,12 +2717,7 @@ pub(crate) fn parse_node(
 
     match kind {
         NodeKind::Text => {
-            node.text_align = match elem.attribute("align").unwrap_or("left") {
-                "center"  => TextAlign::Center,
-                "right"   => TextAlign::Right,
-                "justify" => TextAlign::Justify,
-                _         => TextAlign::Left,
-            };
+            node.text_align = parse_text_align(elem.attribute("align").unwrap_or("left"))?;
             node.bold = elem.attribute("bold").map(|v| v == "true").unwrap_or(false);
             read_text_runs(&mut node, elem, tokens)?;
         }
@@ -3335,12 +3336,7 @@ fn at_node_attrs(
             if let Some(v) = a.get("font-size") { node.font_size = Some(tokens.resolve_text_size(v)?); }
             node.width_constraint = at_width(a)?;
             node.text_color = a.get("color").map(|v| tokens.resolve_color(v)).transpose()?;
-            node.text_align = match a.get("align").unwrap_or("left") {
-                "center"  => TextAlign::Center,
-                "right"   => TextAlign::Right,
-                "justify" => TextAlign::Justify,
-                _         => TextAlign::Left,
-            };
+            node.text_align = parse_text_align(a.get("align").unwrap_or("left"))?;
             node.bold = a.get("bold").map(|v| v == "true").unwrap_or(false);
             if let Some(v) = a.get("line-height") { node.line_height = tokens.resolve_line_height(v)?; }
             let max_lines = a.get("max-lines").map(parse_max_lines).transpose()?.unwrap_or(1);
@@ -3569,6 +3565,28 @@ fn parse_justify(val: &str) -> Result<Justify, String> {
         "end" => Ok(Justify::End),
         "between" => Ok(Justify::Between),
         other => Err(format!("invalid justify value: '{other}' — expected start, center, end, or between")),
+    }
+}
+
+/// The `align` of a text, in each of the three places that read one (XML, a `text-at` of a layer, and the kit tree):
+/// `left` when the attribute is left out.
+fn parse_text_align(val: &str) -> Result<TextAlign, String> {
+    match val {
+        "left" => Ok(TextAlign::Left),
+        "center" => Ok(TextAlign::Center),
+        "right" => Ok(TextAlign::Right),
+        "justify" => Ok(TextAlign::Justify),
+        other => Err(format!("invalid align value: '{other}' — expected left, center, right, or justify")),
+    }
+}
+
+/// Whether an `orientation` turns the page on its side: `landscape` does, and `portrait`, or no `orientation`, leaves
+/// the size as it is.
+fn is_landscape(val: Option<&str>) -> Result<bool, String> {
+    match val {
+        None | Some("portrait") => Ok(false),
+        Some("landscape") => Ok(true),
+        Some(other) => Err(format!("invalid orientation value: '{other}' — expected portrait or landscape")),
     }
 }
 
@@ -3829,8 +3847,9 @@ fn apply_layout_kind_attrs(
         }
         NodeKind::Divider => {
             node.direction = match a.get("direction").unwrap_or("horizontal") {
-                "vertical" => Direction::Vertical,
-                _          => Direction::Horizontal,
+                "horizontal" => Direction::Horizontal,
+                "vertical"   => Direction::Vertical,
+                other        => return Err(format!("invalid direction value: '{other}' — expected horizontal or vertical")),
             };
             node.color = Some(match a.get("color") {
                 Some(v) => tokens.resolve_color(v)?,
@@ -4370,7 +4389,7 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
     } else {
         (595.28_f32, 841.89_f32) // a4
     };
-    if doc_orient == Some("landscape") {
+    if is_landscape(doc_orient).map_err(|e| format!("document: {e}"))? {
         doc_size = (doc_size.1, doc_size.0);
     }
     let doc_bleed = attrs.get("bleed").and_then(|v| v.as_str())
@@ -4790,12 +4809,7 @@ fn parse_tree_node(
 
     match kind {
         NodeKind::Text => {
-            node.text_align = match jattr(json, "align").unwrap_or("left") {
-                "center"  => TextAlign::Center,
-                "right"   => TextAlign::Right,
-                "justify" => TextAlign::Justify,
-                _         => TextAlign::Left,
-            };
+            node.text_align = parse_text_align(jattr(json, "align").unwrap_or("left"))?;
             node.bold = jattr(json, "bold").map(|v| v == "true").unwrap_or(false);
 
             read_tree_text_runs(&mut node, json, tokens)?;
@@ -5843,6 +5857,121 @@ mod tests {
 
         let err = parse_tree(&tree.replace(r#""footnote-counter":"page""#, r#""footnote-counter":"book""#)).unwrap_err();
         assert!(err.contains("section: invalid footnote-counter 'book'"), "{err}");
+    }
+
+    // ── A value that is none of an enumeration's is an error that names the values ──
+
+    /// A document of the XML path: `document` and `section` are the attributes of those elements, `layout` the content
+    /// of the layout, `layer` that of the layer, and `assets` the `<assets>`.
+    fn enumerated_xml(assets: &str, document: &str, section: &str, layout: &str, layer: &str) -> String {
+        format!(
+            r#"<lpdf version="1">{assets}<document size="a4" {document}><section {section}><layer>{layer}</layer><layout margin="28pt">{layout}</layout></section></document></lpdf>"#
+        )
+    }
+
+    /// The same for the kit tree.
+    fn enumerated_tree(assets: &str, document: &str, section: &str, layout: &str, layer: &str) -> String {
+        let assets = if assets.is_empty() { String::new() } else { format!(r#""assets":{assets},"#) };
+        format!(
+            r#"{{"version":1,"type":"document","attrs":{{{assets}"size":"a4"{document}}},"nodes":[
+                {{"type":"section","attrs":{{{section}}},"nodes":[
+                    {{"type":"layer","attrs":{{}},"nodes":[{layer}]}},
+                    {{"type":"layout","attrs":{{"margin":"28pt"}},"nodes":[{layout}]}}]}}]}}"#
+        )
+    }
+
+    const LINE_XML: &str = r##"<line x1="0pt" y1="0pt" x2="50pt" y2="50pt" stroke="#000000""##;
+    const PATH_XML: &str = r##"<path d="M 0 0 L 10 10 Z" fill="#000000""##;
+    const TEXT_AT_XML: &str = r#"<text-at x="10pt" y="10pt" width="50pt""#;
+
+    #[test]
+    fn a_wrong_value_of_an_enumeration_is_an_error_that_names_the_values_in_xml() {
+        // (the document, what the error says it refused, the values it names)
+        let cases = [
+            (enumerated_xml("", "", "", r#"<text align="cetner">A</text>"#, ""), "invalid align value: 'cetner'", "left, center, right, or justify"),
+            (enumerated_xml("", "", "", "", &format!(r#"{TEXT_AT_XML} align="cetner">A</text-at>"#)), "invalid align value: 'cetner'", "left, center, right, or justify"),
+            (enumerated_xml("", r#"orientation="landscpe""#, "", "", ""), "<document>", "portrait or landscape"),
+            (enumerated_xml("", "", r#"orientation="landscpe""#, "", ""), "invalid orientation value: 'landscpe'", "portrait or landscape"),
+            (enumerated_xml("", "", "", r#"<divider direction="diagonal"/>"#, ""), "invalid direction value: 'diagonal'", "horizontal or vertical"),
+            (enumerated_xml("", "", "", "", &format!(r#"{LINE_XML} line-cap="flat"/>"#)), "invalid line-cap value: 'flat'", "butt, round, or square"),
+            (enumerated_xml("", "", "", "", &format!(r#"{PATH_XML} line-cap="flat"/>"#)), "invalid line-cap value: 'flat'", "butt, round, or square"),
+            (enumerated_xml("", "", "", "", &format!(r#"{PATH_XML} fill-rule="even-odd"/>"#)), "invalid fill-rule value: 'even-odd'", "nonzero or evenodd"),
+            (
+                enumerated_xml(r#"<assets><font name="body" core="Helvetca"/></assets>"#, "", "", "", ""),
+                "core 'Helvetca' is not a built-in font",
+                "Courier, Courier-Bold, Courier-Oblique, Courier-BoldOblique, Helvetica, Helvetica-Bold, Helvetica-Oblique, Helvetica-BoldOblique, Times-Roman, Times-Bold, Times-Italic, Times-BoldItalic, Symbol, ZapfDingbats",
+            ),
+        ];
+        for (xml, refused, names) in cases {
+            let err = parse(&xml).unwrap_err();
+            assert!(err.contains(refused) && err.contains(names), "{xml}\n    {err}");
+        }
+    }
+
+    #[test]
+    fn a_wrong_orientation_in_the_document_is_located_at_the_document() {
+        let err = parse(&enumerated_xml("", r#"orientation="landscpe""#, "", "", "")).unwrap_err();
+        assert!(err.starts_with("<document>") && err.contains("invalid orientation value: 'landscpe'"), "{err}");
+    }
+
+    #[test]
+    fn a_wrong_value_of_an_enumeration_is_an_error_that_names_the_values_in_a_kit_tree() {
+        let cases = [
+            (enumerated_tree("", "", "", r#"{"type":"text","attrs":{"align":"cetner"},"nodes":["A"]}"#, ""), "invalid align value: 'cetner'", "left, center, right, or justify"),
+            (enumerated_tree("", "", "", "", r#"{"type":"text-at","attrs":{"x":"10pt","y":"10pt","width":"50pt","align":"cetner"},"nodes":["A"]}"#), "invalid align value: 'cetner'", "left, center, right, or justify"),
+            (enumerated_tree("", r#","orientation":"landscpe""#, "", "", ""), "document: invalid orientation value: 'landscpe'", "portrait or landscape"),
+            (enumerated_tree("", "", r#""orientation":"landscpe""#, "", ""), "invalid orientation value: 'landscpe'", "portrait or landscape"),
+            (enumerated_tree("", "", "", r#"{"type":"divider","attrs":{"direction":"diagonal"}}"#, ""), "invalid direction value: 'diagonal'", "horizontal or vertical"),
+            (enumerated_tree("", "", "", "", r##"{"type":"line","attrs":{"x1":"0pt","y1":"0pt","x2":"50pt","y2":"50pt","stroke":"#000000","line-cap":"flat"}}"##), "invalid line-cap value: 'flat'", "butt, round, or square"),
+            (enumerated_tree("", "", "", "", r##"{"type":"path","attrs":{"d":"M 0 0 L 10 10 Z","fill":"#000000","line-cap":"flat"}}"##), "invalid line-cap value: 'flat'", "butt, round, or square"),
+            (enumerated_tree("", "", "", "", r##"{"type":"path","attrs":{"d":"M 0 0 L 10 10 Z","fill":"#000000","fill-rule":"even-odd"}}"##), "invalid fill-rule value: 'even-odd'", "nonzero or evenodd"),
+            (
+                enumerated_tree(r#"{"fonts":[{"name":"body","core":"Helvetca"}]}"#, "", "", "", ""),
+                "core 'Helvetca' is not a built-in font",
+                "Helvetica-Bold, Helvetica-Oblique",
+            ),
+        ];
+        for (tree, refused, names) in cases {
+            let err = parse_tree(&tree).unwrap_err();
+            assert!(err.contains(refused) && err.contains(names), "{tree}\n    {err}");
+        }
+    }
+
+    #[test]
+    fn every_value_of_those_enumerations_is_still_read() {
+        for align in ["left", "center", "right", "justify"] {
+            parse(&enumerated_xml("", "", "", &format!(r#"<text align="{align}">A</text>"#), "")).unwrap();
+            parse(&enumerated_xml("", "", "", "", &format!(r#"{TEXT_AT_XML} align="{align}">A</text-at>"#))).unwrap();
+        }
+        for orientation in ["portrait", "landscape"] {
+            parse(&enumerated_xml("", &format!(r#"orientation="{orientation}""#), "", "", "")).unwrap();
+            parse(&enumerated_xml("", "", &format!(r#"orientation="{orientation}""#), "", "")).unwrap();
+        }
+        for direction in ["horizontal", "vertical"] {
+            parse(&enumerated_xml("", "", "", &format!(r#"<divider direction="{direction}"/>"#), "")).unwrap();
+        }
+        for cap in ["butt", "round", "square"] {
+            parse(&enumerated_xml("", "", "", "", &format!(r#"{LINE_XML} line-cap="{cap}"/>"#))).unwrap();
+            parse(&enumerated_xml("", "", "", "", &format!(r#"{PATH_XML} line-cap="{cap}"/>"#))).unwrap();
+        }
+        for rule in ["nonzero", "evenodd"] {
+            parse(&enumerated_xml("", "", "", "", &format!(r#"{PATH_XML} fill-rule="{rule}"/>"#))).unwrap();
+        }
+        for font in crate::pdf::BUILTIN_FONTS {
+            parse(&enumerated_xml(&format!(r#"<assets><font name="body" core="{font}"/></assets>"#), "", "", "", "")).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_landscape_page_is_turned_on_its_side_and_a_portrait_one_is_not() {
+        let size = |attributes: &str| {
+            let layouts = parse(&enumerated_xml("", attributes, "", "", "")).unwrap().section_layouts();
+            (layouts[0].width, layouts[0].height)
+        };
+        let (width, height) = size("");
+        assert!(width < height, "an A4 page is upright");
+        assert_eq!(size(r#"orientation="portrait""#), (width, height));
+        assert_eq!(size(r#"orientation="landscape""#), (height, width));
     }
 
     #[test]

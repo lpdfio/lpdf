@@ -765,27 +765,19 @@ fn paeth_rows(pixels: &[u8], width: usize, colors: usize) -> Vec<u8> {
 
 // ── Built-in font table ───────────────────────────────────────────────────────
 
+/// The 14 standard PDF resident fonts, in the order of the schema's `BuiltinFont`: the values of `core` on a `<font>`.
+/// Every PDF viewer is required to have these fonts; no bytes need to be embedded.
+pub(crate) const BUILTIN_FONTS: [&str; 14] = [
+    "Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique",
+    "Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
+    "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic",
+    "Symbol", "ZapfDingbats",
+];
+
 /// Map a logical font name to a PDF built-in PostScript font name, or `None`
-/// if the name is not one of the 14 standard PDF resident fonts.  Every PDF
-/// viewer is required to have these fonts; no bytes need to be embedded.
+/// if the name is not one of the 14 standard PDF resident fonts (`BUILTIN_FONTS`).
 fn pdf_builtin_name(name: &str) -> Option<&'static str> {
-    match name {
-        "Helvetica"             => Some("Helvetica"),
-        "Helvetica-Bold"        => Some("Helvetica-Bold"),
-        "Helvetica-Oblique"     => Some("Helvetica-Oblique"),
-        "Helvetica-BoldOblique" => Some("Helvetica-BoldOblique"),
-        "Times-Roman"           => Some("Times-Roman"),
-        "Times-Bold"            => Some("Times-Bold"),
-        "Times-Italic"          => Some("Times-Italic"),
-        "Times-BoldItalic"      => Some("Times-BoldItalic"),
-        "Courier"               => Some("Courier"),
-        "Courier-Bold"          => Some("Courier-Bold"),
-        "Courier-Oblique"       => Some("Courier-Oblique"),
-        "Courier-BoldOblique"   => Some("Courier-BoldOblique"),
-        "Symbol"                => Some("Symbol"),
-        "ZapfDingbats"          => Some("ZapfDingbats"),
-        _                       => None,
-    }
+    BUILTIN_FONTS.iter().copied().find(|font| *font == name)
 }
 
 // ── Internal font representation ──────────────────────────────────────────────
