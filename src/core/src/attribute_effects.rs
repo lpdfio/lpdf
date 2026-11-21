@@ -207,7 +207,7 @@ fn pattern_samples(type_name: &str) -> Vec<String> {
         "TokenName" => &[],
         "BorderValue" | "LineValue" => &["2pt #ff0000"],
         "ShadowValue" => &["4pt 5pt #333333", "4pt 5pt #333333 0.5"],
-        "PageScope" => &["2"],
+        "PageScopeRange" => &["2"],
         "MimeType" => &["text/plain"],
         other => panic!("no sample value for the pattern type {other}: add one to pattern_samples"),
     };
@@ -1698,4 +1698,56 @@ fn the_built_in_fonts_are_the_schemas() {
     let doc = Document::parse(&text).expect("the schema is XML");
     let core = schema_attributes(&doc).into_iter().find(|a| a.id() == "font@core").expect("font@core is in the schema");
     assert_eq!(core.values, crate::pdf::BUILTIN_FONTS);
+}
+
+/// Every closed enumeration of the schema has a constant of the SDKs, with its values in the schema's order and each
+/// member a name that all five languages accept. `CONSTANTS`, the table `lpdf codegen` writes constants from, is
+/// generated from the schema (`scripts/gen-sdk-api.mjs`), and this holds the generator to it from the engine's side. The
+/// slots of the tokens and the two keywords of a width or a height are the ones it leaves out.
+#[test]
+fn every_closed_enumeration_has_a_constant() {
+    let text = std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../schema/lpdf.xsd"))
+        .expect("schema/lpdf.xsd");
+    let doc = Document::parse(&text).expect("the schema is XML");
+
+    let mut problems: Vec<String> = Vec::new();
+    // An enumeration written inline on an attribute has no type to make a constant of: it is a named type, or an error.
+    for attribute in doc.descendants().filter(|n| is(*n, "attribute")) {
+        let inline = attribute.children().find(|n| is(*n, "simpleType"));
+        if inline.is_some_and(|simple| simple.descendants().any(|n| is(n, "enumeration"))) {
+            let name = attribute.attribute("name").unwrap_or("?");
+            problems.push(format!("the attribute {name} (line {}) declares its enumeration inline: give it a named type", doc.text_pos_at(attribute.range().start).row));
+        }
+    }
+    let mut enumerations = 0;
+    for simple in doc.root_element().children().filter(|n| is(*n, "simpleType")) {
+        let name = simple.attribute("name").expect("a top-level type has a name");
+        let Some(restriction) = simple.children().find(|n| is(*n, "restriction")) else { continue };
+        let values: Vec<&str> = restriction.children().filter(|n| is(*n, "enumeration")).filter_map(|n| n.attribute("value")).collect();
+        if values.is_empty() || name == "Boolean" || ["TokenScale", "HeightMode", "WidthMode"].contains(&name) {
+            continue;
+        }
+        enumerations += 1;
+        // The named part of a union is the constant of the union's name: `PageSizeNamed` is `PageSize`.
+        let constant_name = name.strip_suffix("Named").unwrap_or(name);
+        let Some(constant) = crate::schema_attrs::CONSTANTS.iter().find(|c| c.name == constant_name) else {
+            problems.push(format!("{name} has no constant {constant_name}"));
+            continue;
+        };
+        let members: Vec<&str> = constant.members.iter().map(|m| m.value).collect();
+        if members != values {
+            problems.push(format!("{constant_name} has the values {members:?}, the schema's {name} {values:?}"));
+        }
+        for crate::attr_types::Member { value, pascal, snake } in constant.members {
+            let identifier = |name: &str, case: fn(char) -> bool| {
+                name.starts_with(|c: char| c.is_ascii_uppercase()) && name.chars().all(|c| c.is_ascii_alphanumeric() || case(c))
+            };
+            if !identifier(pascal, |_| false) || !identifier(snake, |c| c == '_' || c.is_ascii_uppercase()) || snake.chars().any(|c| c.is_ascii_lowercase()) {
+                problems.push(format!("{constant_name}'s member for '{value}' is {pascal} and {snake}, not names every language accepts"));
+            }
+        }
+    }
+    assert!(enumerations >= 30, "only {enumerations} closed enumerations were found: the test reads the schema wrongly");
+    assert_eq!(crate::schema_attrs::CONSTANTS.len(), enumerations, "a constant that is none of the schema's enumerations");
+    assert!(problems.is_empty(), "the constants are not the schema's closed enumerations:\n{}", problems.join("\n"));
 }

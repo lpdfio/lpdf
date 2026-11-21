@@ -74,6 +74,8 @@ export function loadSchema(path) {
                     required: child.attrs.use === 'required',
                     doc: documentation(child),
                     type: attributeType(child),
+                    // The schema's name for the type, when the attribute names one: `Orientation`, not a built-in.
+                    typeName: child.attrs.type && !child.attrs.type.startsWith('xs:') ? child.attrs.type : null,
                 });
             } else if (tag === 'attributeGroup' && child.attrs.ref && !seen.has(child.attrs.ref)) {
                 const group = groups.get(child.attrs.ref);
@@ -184,9 +186,61 @@ export function loadSchema(path) {
         return found;
     }
 
+    /** A type that restricts a string to a list of values, and not a boolean: its values, or null. */
+    function enumerationValues(name) {
+        const simple = simpleTypes.get(name);
+        const inner = simple?.children.find((c) => local(c.name) === 'restriction');
+        if (!inner) return null;
+        const values = inner.children.filter((c) => local(c.name) === 'enumeration').map((c) => c.attrs.value);
+        const isBoolean = values.length === 2 && values.includes('true') && values.includes('false');
+        return values.length && !isBoolean ? values : null;
+    }
+
     return {
         groups,
         allElements,
+        /**
+         * The attributes that declare an enumeration inline, as `where.attribute` (`divider.direction`): `where` is the
+         * element or attribute group that holds it. An enumeration has to be a named type for the SDKs to have a constant.
+         */
+        inlineEnumerations() {
+            const found = [];
+            const walk = (node, where) => {
+                for (const child of node.children) {
+                    const tag = local(child.name);
+                    const inside = ['element', 'attributeGroup'].includes(tag) && child.attrs.name ? child.attrs.name : where;
+                    if (tag === 'attribute' && child.attrs.name) {
+                        const inline = child.children.find((c) => local(c.name) === 'simpleType');
+                        if (inline && descendants(inline, 'enumeration').length) found.push(`${where}.${child.attrs.name}`);
+                    }
+                    walk(child, inside);
+                }
+            };
+            walk(schema, '');
+            return found;
+        },
+        /** Every named closed enumeration in schema order: `{ type, values, doc }`, a boolean left out. */
+        enumerations() {
+            return [...simpleTypes.keys()].flatMap((type) => {
+                const values = enumerationValues(type);
+                return values ? [{ type, values, doc: documentation(simpleTypes.get(type)) }] : [];
+            });
+        },
+        /** The item type of a named list type, such as `Permission` of `Permissions`, or null. */
+        listItemType(name) {
+            const list = simpleTypes.get(name)?.children.find((c) => local(c.name) === 'list');
+            return list?.attrs.itemType ?? null;
+        },
+        /** The patterns of a named type that restricts a string by pattern, such as `PageSizeCustom`. */
+        patternsOf(name) {
+            const inner = simpleTypes.get(name)?.children.find((c) => local(c.name) === 'restriction');
+            return inner ? inner.children.filter((c) => local(c.name) === 'pattern').map((c) => c.attrs.value) : [];
+        },
+        /** The member types a named union lists in `memberTypes`, or null for a type that isn't a union of named types. */
+        unionMembers(name) {
+            const union = simpleTypes.get(name)?.children.find((c) => local(c.name) === 'union');
+            return union?.attrs.memberTypes ? union.attrs.memberTypes.split(/\s+/).filter(Boolean) : null;
+        },
         /** The names of the elements a model group such as `CanvasPrimitives` holds. */
         groupElements(name) {
             const group = modelGroups.get(name);

@@ -23,10 +23,31 @@ pub(crate) enum Bound {
     Exclusive(f64),
 }
 
+/// A member of a constant of the SDKs: a value of the schema, and its name in Pascal case (`Landscape`, which .NET, PHP
+/// and Node write) and in upper snake case (`LANDSCAPE`, which Python and Java write).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Member {
+    pub(crate) value: &'static str,
+    pub(crate) pascal: &'static str,
+    pub(crate) snake: &'static str,
+}
+
+/// A constant of the SDKs, one for each closed enumeration of the schema (`Orientation.Landscape`). `area` is the
+/// namespace of its class in .NET and PHP: `layout`, `canvas`, `kit`, `markdown` or `shared`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Constant {
+    pub(crate) name: &'static str,
+    pub(crate) area: &'static str,
+    pub(crate) members: &'static [Member],
+}
+
 /// The type of an attribute: what its value has to be.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum Kind {
     Text,
+    /// Text that takes the values of these constants (`Orientation`), written by `codegen` as the constant when it is
+    /// one, and as a literal when it is not, as a custom `size` is. Checked as text: the parser refuses a wrong value.
+    Constants(&'static [&'static str]),
     Boolean,
     Integer { min: Option<i64>, max: Option<i64> },
     Decimal { min: Bound, max: Bound },
@@ -38,7 +59,7 @@ impl Kind {
     /// What a value of this kind is, for an error: `a whole number from 1 to 12`.
     fn describe(self) -> String {
         match self {
-            Kind::Text => "a string".to_string(),
+            Kind::Text | Kind::Constants(_) => "a string".to_string(),
             Kind::Boolean => "true or false".to_string(),
             Kind::Integer { min, max } => match (min, max) {
                 (Some(min), Some(max)) => format!("a whole number from {min} to {max}"),
@@ -104,7 +125,7 @@ fn is_decimal(text: &str) -> bool {
 /// True when `text` is a value of `kind` as XML writes it.
 fn text_fits(kind: Kind, text: &str) -> bool {
     match kind {
-        Kind::Text => true,
+        Kind::Text | Kind::Constants(_) => true,
         Kind::Boolean => text == "true" || text == "false",
         Kind::Integer { min, max } => text.parse::<i64>().is_ok_and(|value| integer_within(value, min, max)),
         Kind::Decimal { min, max } => is_decimal(text) && text.parse::<f64>().is_ok_and(|value| within(value, min, max)),
@@ -118,7 +139,7 @@ fn text_fits(kind: Kind, text: &str) -> bool {
 /// What a kit tree writes for a value of `kind`: its text, or `None` when its JSON type or its value is wrong.
 fn json_text(kind: Kind, value: &Value) -> Option<String> {
     match (kind, value) {
-        (Kind::Text, Value::String(text)) => Some(text.clone()),
+        (Kind::Text | Kind::Constants(_), Value::String(text)) => Some(text.clone()),
         (Kind::Boolean, Value::Bool(flag)) => Some(flag.to_string()),
         // JSON has one number type, and a serializer may write a whole number as 3.0: Python's json.dumps does for
         // a float. It is a whole number all the same; 3.5 is not.

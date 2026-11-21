@@ -7,7 +7,7 @@ What Lpdf officially supports, area by area: the version each feature is in sinc
 - What this file doesn't list is not supported.
 - The same document gives the same PDF in every SDK: JavaScript, Python, Java, C# and PHP. Options and methods, such as `createdOn` and `loadImage`, are named here as JavaScript names them, and each SDK has them in its own case.
 
-**Areas:** [PDF standards and output](#pdf-standards-and-output) · [What combines with what](#what-combines-with-what) · [Images](#images) · [Color](#color) · [Fonts and text](#fonts-and-text) · [Layout](#layout) · [Barcodes](#barcodes) · [Forms](#forms) · [Graphics](#graphics) · [Attachments](#attachments) · [Stamping existing PDFs](#stamping-existing-pdfs) · [Merging PDFs for print](#merging-pdfs-for-print) · [Data binding](#data-binding) · [Render limits](#render-limits)
+**Areas:** [PDF standards and output](#pdf-standards-and-output) · [What combines with what](#what-combines-with-what) · [Images](#images) · [Color](#color) · [Fonts and text](#fonts-and-text) · [Layout](#layout) · [Barcodes](#barcodes) · [Forms](#forms) · [Graphics](#graphics) · [Attachments](#attachments) · [Stamping existing PDFs](#stamping-existing-pdfs) · [Merging PDFs for print](#merging-pdfs-for-print) · [Data binding](#data-binding) · [Constants in the SDKs](#constants-in-the-sdks) · [Render limits](#render-limits)
 
 ## PDF standards and output
 
@@ -370,6 +370,22 @@ Data is JSON bound to an XML document, as an option of the render call. Docs: [D
 - A path whose prefix has nothing bound under it leaves its element as the document wrote it, as a render with no data does.
 - An attribute from data takes a string, checked as the attribute is. Refused: a value that is not a string, a color that does not read, and an image the document does not declare. `data-name` picks among the declared images: the data can't bring a new one.
 - A bulk container sits directly in the layout and holds plain text. Each rule it sets is refused when broken, with an error that names it: see [Bulk records, the rules](https://lpdf.io/docs/data/bulk/#the-rules). A document with one has no table of contents and no cross-reference, and is not tagged.
+
+## Constants in the SDKs
+
+A document built in code can name the words an attribute takes as constants. Docs: [Installation, constants](https://lpdf.io/docs/install/#constants).
+
+| Supported | Since | Docs |
+|---|---|---|
+| A constant for every closed enumeration of the schema, in each of the five SDKs: `Orientation.Landscape`, `Paginate.KeepNext`, `PdfALevel.Level2a`, each member the word in the language's case, and `PageSize` for the named sizes | 0.37.0 | [Installation, constants](https://lpdf.io/docs/install/#constants) |
+| In TypeScript, an attribute that takes one word of a closed enumeration has its constant's type, so `orientation: 'landscpe'` doesn't compile; `size` takes a named size or a width and a height with their units, `'210mm 297mm'` | 0.37.0 | [Installation, constants](https://lpdf.io/docs/install/#constants) |
+| `lpdf codegen`, and the code tabs of the docs, write a constant where the schema has one | 0.37.0 | [Installation, constants](https://lpdf.io/docs/install/#constants) |
+| `Anchor`, `Align` and `StampScale` for the options of a stamp | 0.37.0 | [Stamping existing PDFs](https://lpdf.io/docs/stamp/) |
+
+- A word that starts with a digit takes the last word of its constant's name in front: `PdfALevel.Level2a`, `PdfUaPart.Part1`, `PdfXVersion.Version4`, `Pdf417EcLevel.Level0`. The value is the schema's in every SDK.
+- Not constants, since an attribute that takes them takes more: a custom page size (`100pt 200pt`), a range of pages (`2-4`), the slots `xs` to `xxl`, and the keywords `fill` of a width and `full` and `fill` of a height, which stay strings.
+- In TypeScript `page`, which takes a range beside its named words, and `allow`, which takes several words separated by spaces, are strings.
+- The SDKs other than JavaScript take a string, so a word that is none of an attribute's values compiles and is refused when the document is rendered, with an error that names the words it takes.
 
 ## Render limits
 

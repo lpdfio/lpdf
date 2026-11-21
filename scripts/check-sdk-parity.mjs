@@ -6,6 +6,11 @@
 // The generated classes cannot drift while `make check-sdk-api` passes; this check also covers the
 // classes that are written by hand: the document, its sections, meta, output, assets and tokens.
 //
+// It checks the constants too, which the generator writes for every closed enumeration: that Node's entry points and
+// Python's package export every one of them, which are lists written by hand, and that the TypeScript attributes that
+// are written by hand (the document, its sections and output, and a stamp) have the constants' types, as the generated
+// ones do, so `orientation: 'landscpe'` doesn't compile.
+//
 // Usage: node scripts/check-sdk-parity.mjs                      the five SDKs under repos/; list the differences, exit 1 if any
 //        node scripts/check-sdk-parity.mjs --sdk node=.          only the SDK in the given folder (an SDK repository's CI)
 
@@ -15,10 +20,13 @@ import { fileURLToPath } from 'node:url';
 
 import { LANGUAGES, sdkRepositories } from './lib/sdk-repositories.mjs';
 import { loadSchema } from './lib/xsd.mjs';
+import { constantsOf, STAMP_CONSTANTS } from './lib/constants.mjs';
+import { exportProblems, interfaceTypes, stampTypeProblems, TYPED, typeProblems } from './lib/parity.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schema = loadSchema(path.join(root, 'schema/lpdf.xsd'));
 const { repositories, selected } = sdkRepositories(root, process.argv);
+const constants = constantsOf(schema);
 
 const attributes = (element, where = 'global') =>
     schema.element(element, where).attributes.map((a) => a.name).filter((name) => !name.startsWith('data-'));
@@ -144,6 +152,25 @@ const scans = {
 };
 for (const sdk of selected) scans[sdk]();
 
+// ── The constants ─────────────────────────────────────────────────────────────
+
+const typed = { node: {} };
+const typeScans = {
+    node() {
+        for (const file of files(path.join(repositories.node, 'src'), '.ts')) {
+            Object.assign(typed.node, interfaceTypes(read(file), [...Object.keys(TYPED), 'StampAttr'], kebab.camel));
+        }
+    },
+};
+for (const sdk of selected) typeScans[sdk]?.();
+
+/** What each SDK's entry point has to export, by the names that were not found: the same constants everywhere. */
+function missingExports(sdk) {
+    const names = [...constants, ...STAMP_CONSTANTS].map((c) => c.name);
+    const entries = { node: ['src/index.ts', 'src/browser.ts'], python: ['src/lpdf/__init__.py'] }[sdk] ?? [];
+    return entries.flatMap((entry) => exportProblems(entry, read(path.join(repositories[sdk], entry)), names));
+}
+
 // ── Compare ───────────────────────────────────────────────────────────────────
 
 let problems = 0;
@@ -162,6 +189,26 @@ for (const sdk of selected) {
             problems++;
             console.log(`${sdk}: ${name}${missing.length ? ` lacks ${missing.join(', ')}` : ''}${extra.length ? ` has ${extra.join(', ')} that the schema does not` : ''}`);
         }
+    }
+}
+
+for (const sdk of selected) {
+    for (const message of missingExports(sdk)) {
+        problems++;
+        console.log(`${sdk}: ${message}`);
+    }
+}
+for (const [name, element] of Object.entries(TYPED)) {
+    if (!selected.includes('node') || !typed.node[name]) continue;
+    for (const message of typeProblems(schema, constants, name, element, typed.node[name])) {
+        problems++;
+        console.log(message);
+    }
+}
+if (selected.includes('node') && typed.node.StampAttr) {
+    for (const message of stampTypeProblems(typed.node.StampAttr)) {
+        problems++;
+        console.log(message);
     }
 }
 const where = selected.length === LANGUAGES.length ? 'all five SDKs' : `the ${selected.join(' and ')} SDK`;
