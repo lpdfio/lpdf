@@ -378,12 +378,13 @@ A document built in code can name the words an attribute takes as constants. Doc
 | Supported | Since | Docs |
 |---|---|---|
 | A constant for every closed enumeration of the schema, in each of the five SDKs: `Orientation.Landscape`, `Paginate.KeepNext`, `PdfALevel.Level2a`, each member the word in the language's case, and `PageSize` for the named sizes | 0.37.0 | [Installation, constants](https://lpdf.io/docs/install/#constants) |
-| In TypeScript, an attribute that takes a closed enumeration has its constant's type, so `orientation: 'landscpe'` doesn't compile; `size` takes a named size or a width and a height with their units, `'210mm 297mm'` | 0.37.0 | [Installation, constants](https://lpdf.io/docs/install/#constants) |
+| In TypeScript, an attribute that takes one word of a closed enumeration has its constant's type, so `orientation: 'landscpe'` doesn't compile; `size` takes a named size or a width and a height with their units, `'210mm 297mm'` | 0.37.0 | [Installation, constants](https://lpdf.io/docs/install/#constants) |
 | `lpdf codegen`, and the code tabs of the docs, write a constant where the schema has one | 0.37.0 | [Installation, constants](https://lpdf.io/docs/install/#constants) |
 | `Anchor`, `Align` and `StampScale` for the options of a stamp | 0.37.0 | [Stamping existing PDFs](https://lpdf.io/docs/stamp/) |
 
 - A word that starts with a digit takes the last word of its constant's name in front: `PdfALevel.Level2a`, `PdfUaPart.Part1`, `PdfXVersion.Version4`, `Pdf417EcLevel.Level0`. The value is the schema's in every SDK.
-- Not constants, since an attribute that takes them takes more: a custom page size (`100pt 200pt`), a range of pages (`2-4`), and the slots `xs` to `xxl`, which stay strings.
+- Not constants, since an attribute that takes them takes more: a custom page size (`100pt 200pt`), a range of pages (`2-4`), the slots `xs` to `xxl`, and the keywords `fill` of a width and `full` and `fill` of a height, which stay strings.
+- In TypeScript `page`, which takes a range beside its named words, and `allow`, which takes several words separated by spaces, are strings.
 - The SDKs other than JavaScript take a string, so a word that is none of an attribute's values compiles and is refused when the document is rendered, with an error that names the words it takes.
 
 ## Render limits

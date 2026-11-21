@@ -199,6 +199,26 @@ export function loadSchema(path) {
     return {
         groups,
         allElements,
+        /**
+         * The attributes that declare an enumeration inline, as `where.attribute` (`divider.direction`): `where` is the
+         * element or attribute group that holds it. An enumeration has to be a named type for the SDKs to have a constant.
+         */
+        inlineEnumerations() {
+            const found = [];
+            const walk = (node, where) => {
+                for (const child of node.children) {
+                    const tag = local(child.name);
+                    const inside = ['element', 'attributeGroup'].includes(tag) && child.attrs.name ? child.attrs.name : where;
+                    if (tag === 'attribute' && child.attrs.name) {
+                        const inline = child.children.find((c) => local(c.name) === 'simpleType');
+                        if (inline && descendants(inline, 'enumeration').length) found.push(`${where}.${child.attrs.name}`);
+                    }
+                    walk(child, inside);
+                }
+            };
+            walk(schema, '');
+            return found;
+        },
         /** Every named closed enumeration in schema order: `{ type, values, doc }`, a boolean left out. */
         enumerations() {
             return [...simpleTypes.keys()].flatMap((type) => {

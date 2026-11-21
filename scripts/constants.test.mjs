@@ -64,6 +64,15 @@ describe('the constants of the schema', () => {
         assert.throws(() => constantsOf(without), /Fresh.*needs an xs:documentation/);
     });
 
+    it('are refused for an enumeration written inline on an attribute, which has no name to make a constant of', () => {
+        const inline = { inlineEnumerations: () => ['divider.zzz'], enumerations: () => [] };
+        assert.throws(() => constantsOf(inline), /divider\.zzz declares an enumeration inline: give it a named xs:simpleType/);
+    });
+
+    it('are made from a schema with no enumeration inline', () => {
+        assert.deepEqual(schema.inlineEnumerations(), []);
+    });
+
     it('are refused when two members would have the same name', () => {
         const twice = { enumerations: () => [{ type: 'Twice', values: ['a-b', 'a b'], doc: 'Two words.' }] };
         assert.throws(() => constantsOf(twice), /two members called AB/);

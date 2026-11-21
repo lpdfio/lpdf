@@ -33,10 +33,16 @@ export function memberNames(name, value) {
 
 /**
  * The constants of the schema, in schema order: `{ name, type, values, doc, members }`, where `members` are the values
- * with their names (`{ value, pascal, snake }`). Refuses what the languages could not write: a type with no
- * documentation, which is the constant's doc comment, two constants of one name, a member name twice in a constant.
+ * with their names (`{ value, pascal, snake }`). Refuses what the languages could not write: an enumeration
+ * written inline on an attribute, a type with no documentation, which is the constant's doc comment, two constants of one name,
+ * a member name twice in a constant.
  */
 export function constantsOf(schema) {
+    // An enumeration written inline on an attribute has no name to make a constant of, and would get none without a word.
+    const inline = schema.inlineEnumerations?.() ?? [];
+    if (inline.length) {
+        throw new Error(`${inline.join(', ')} declare${inline.length === 1 ? 's' : ''} an enumeration inline: give it a named xs:simpleType and a type=, so the SDKs get a constant`);
+    }
     const constants = [];
     for (const { type, values, doc } of schema.enumerations()) {
         if (type in EXCLUDED) continue;

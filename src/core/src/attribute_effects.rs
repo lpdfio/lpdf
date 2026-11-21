@@ -1711,6 +1711,14 @@ fn every_closed_enumeration_has_a_constant() {
     let doc = Document::parse(&text).expect("the schema is XML");
 
     let mut problems: Vec<String> = Vec::new();
+    // An enumeration written inline on an attribute has no type to make a constant of: it is a named type, or an error.
+    for attribute in doc.descendants().filter(|n| is(*n, "attribute")) {
+        let inline = attribute.children().find(|n| is(*n, "simpleType"));
+        if inline.is_some_and(|simple| simple.descendants().any(|n| is(n, "enumeration"))) {
+            let name = attribute.attribute("name").unwrap_or("?");
+            problems.push(format!("the attribute {name} (line {}) declares its enumeration inline: give it a named type", doc.text_pos_at(attribute.range().start).row));
+        }
+    }
     let mut enumerations = 0;
     for simple in doc.root_element().children().filter(|n| is(*n, "simpleType")) {
         let name = simple.attribute("name").expect("a top-level type has a name");
