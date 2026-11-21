@@ -1734,11 +1734,11 @@ fn every_closed_enumeration_has_a_constant() {
             problems.push(format!("{name} has no constant {constant_name}"));
             continue;
         };
-        let members: Vec<&str> = constant.members.iter().map(|m| m.0).collect();
+        let members: Vec<&str> = constant.members.iter().map(|m| m.value).collect();
         if members != values {
             problems.push(format!("{constant_name} has the values {members:?}, the schema's {name} {values:?}"));
         }
-        for (value, pascal, snake) in constant.members {
+        for crate::attr_types::Member { value, pascal, snake } in constant.members {
             let identifier = |name: &str, case: fn(char) -> bool| {
                 name.starts_with(|c: char| c.is_ascii_uppercase()) && name.chars().all(|c| c.is_ascii_alphanumeric() || case(c))
             };

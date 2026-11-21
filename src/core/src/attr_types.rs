@@ -25,7 +25,12 @@ pub(crate) enum Bound {
 
 /// A member of a constant of the SDKs: a value of the schema, and its name in Pascal case (`Landscape`, which .NET, PHP
 /// and Node write) and in upper snake case (`LANDSCAPE`, which Python and Java write).
-pub(crate) type Member = (&'static str, &'static str, &'static str);
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Member {
+    pub(crate) value: &'static str,
+    pub(crate) pascal: &'static str,
+    pub(crate) snake: &'static str,
+}
 
 /// A constant of the SDKs, one for each closed enumeration of the schema (`Orientation.Landscape`). `area` is the
 /// namespace of its class in .NET and PHP: `layout`, `canvas`, `kit`, `markdown` or `shared`.

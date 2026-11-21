@@ -607,7 +607,7 @@ function coreTable() {
     const lines = [
         ...HEADER.map((h) => `// ${h}`), '',
         '//! The attributes of every element of lpdf.xsd and their types.', '',
-        'use crate::attr_types::{Bound, Constant, Kind};', '',
+        'use crate::attr_types::{Bound, Constant, Kind, Member};', '',
         '/// The attributes of an element, in the order the schema lists them, without the data-* attributes.',
         'pub(crate) type Attributes = &\'static [(&\'static str, Kind)];', '',
     ];
@@ -625,7 +625,7 @@ function coreTable() {
     );
     for (const c of CONSTANTS) {
         lines.push(`    Constant { name: "${c.name}", area: "${c.area}", members: &[`);
-        for (const m of c.members) lines.push(`        ("${m.value}", "${m.pascal}", "${m.snake}"),`);
+        for (const m of c.members) lines.push(`        Member { value: "${m.value}", pascal: "${m.pascal}", snake: "${m.snake}" },`);
         lines.push('    ] },');
     }
     lines.push('];', '');

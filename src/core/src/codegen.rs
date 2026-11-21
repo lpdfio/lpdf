@@ -572,7 +572,7 @@ impl Target {
     /// `Orientation.LANDSCAPE` in Python and Java.
     fn constant_reference(self, constant: &'static Constant, member: &Member) -> String {
         CONSTANTS_WRITTEN.with(|used| used.borrow_mut().push(constant));
-        let (_, pascal, snake) = member;
+        let Member { pascal, snake, .. } = member;
         match self {
             Target::Js | Target::Dotnet => format!("{}.{pascal}", constant.name),
             Target::Php                 => format!("{}::{pascal}", constant.name),
@@ -826,7 +826,7 @@ fn tokens_expression(target: Target, tokens: &Node) -> Option<String> {
 fn constant_member(names: &[&str], value: &str) -> Option<(&'static Constant, &'static Member)> {
     names.iter().find_map(|name| {
         let constant = CONSTANTS.iter().find(|c| c.name == *name)?;
-        let member = constant.members.iter().find(|m| m.0 == value)?;
+        let member = constant.members.iter().find(|m| m.value == value)?;
         Some((constant, member))
     })
 }
