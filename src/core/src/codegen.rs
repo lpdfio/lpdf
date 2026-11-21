@@ -18,7 +18,8 @@ use std::collections::HashMap;
 
 use roxmltree::{Document, Node, NodeType};
 
-use crate::attr_types::Kind;
+use crate::attr_types::{Constant, Kind, Member};
+use crate::schema_attrs::CONSTANTS;
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -44,6 +45,7 @@ pub fn codegen(xml: &str, options: &CodegenOptions) -> Result<String, String> {
     let doc = Document::parse(xml).map_err(|e| format!("XML parse error: {e}"))?;
     // A value the engine refuses has no literal of its type to be written as.
     crate::attr_types::check_xml(doc.root_element())?;
+    CONSTANTS_WRITTEN.with(|used| used.borrow_mut().clear());
 
     match options.target.as_str() {
         "js" => {
@@ -86,6 +88,7 @@ pub fn codegen_fragment(xml: &str, options: &CodegenOptions) -> Result<String, S
     let doc = Document::parse(&wrapped).map_err(|e| format!("XML parse error: {e}"))?;
     let root = doc.root_element();
     crate::attr_types::check_xml(root)?;
+    CONSTANTS_WRITTEN.with(|used| used.borrow_mut().clear());
 
     let elements: Vec<Node> = root.children().filter(|n| n.is_element()).collect();
     if elements.is_empty() {
@@ -543,6 +546,12 @@ impl Target {
     /// `value` written as a literal of `kind`. A decimal is a `double` in Java, `1.0` and not `1`, which Java would
     /// read as an `int` in a map of the tokens.
     fn typed(self, kind: Kind, value: &str) -> String {
+        if let Kind::Constants(names) = kind {
+            return match constant_member(names, value) {
+                Some((constant, member)) => self.constant_reference(constant, member),
+                None => self.literal(value),
+            };
+        }
         if kind == Kind::Boolean {
             return match (self, value) {
                 (Target::Python, "true") => "True".to_string(),
@@ -556,6 +565,18 @@ impl Target {
             }
             Some(number) => number,
             None => self.literal(value),
+        }
+    }
+
+    /// A member of a constant as the language writes it: `Orientation.Landscape`, `Orientation::Landscape` in PHP, and
+    /// `Orientation.LANDSCAPE` in Python and Java.
+    fn constant_reference(self, constant: &'static Constant, member: &Member) -> String {
+        CONSTANTS_WRITTEN.with(|used| used.borrow_mut().push(constant));
+        let (_, pascal, snake) = member;
+        match self {
+            Target::Js | Target::Dotnet => format!("{}.{pascal}", constant.name),
+            Target::Php                 => format!("{}::{pascal}", constant.name),
+            Target::Python | Target::Java => format!("{}.{snake}", constant.name),
         }
     }
 
@@ -800,6 +821,36 @@ fn tokens_expression(target: Target, tokens: &Node) -> Option<String> {
     (!members.is_empty()).then(|| target.object("DocumentTokens", &members, true))
 }
 
+/// The constant that has `value` among the ones in `names`, and its member: `Orientation` and `landscape` give
+/// `Orientation` and its `Landscape`. A custom `size`, which no constant has, is `None`.
+fn constant_member(names: &[&str], value: &str) -> Option<(&'static Constant, &'static Member)> {
+    names.iter().find_map(|name| {
+        let constant = CONSTANTS.iter().find(|c| c.name == *name)?;
+        let member = constant.members.iter().find(|m| m.0 == value)?;
+        Some((constant, member))
+    })
+}
+
+thread_local! {
+    /// The constants the code being written names, for its imports: each one `constant_reference` writes.
+    static CONSTANTS_WRITTEN: RefCell<Vec<&'static Constant>> = const { RefCell::new(Vec::new()) };
+}
+
+/// The constants the code written since `codegen` began names, once each, by name.
+fn constants_written() -> Vec<&'static Constant> {
+    let mut written = CONSTANTS_WRITTEN.with(|used| used.borrow().clone());
+    written.sort_by_key(|constant| constant.name);
+    written.dedup_by_key(|constant| constant.name);
+    written
+}
+
+/// The PHP and .NET namespace of the constants of an area: `Lpdf\Layout`, `Lpdf.Layout`.
+fn area_namespace(area: &str, separator: &str) -> String {
+    let mut name = area.to_string();
+    name[..1].make_ascii_uppercase();
+    format!("Lpdf{separator}{name}")
+}
+
 /// The SDK classes that generated code uses, once each and in the order they first appear: the attribute
 /// classes and the document's meta, output, assets and tokens.
 fn classes_used(code: &str) -> Vec<String> {
@@ -1034,7 +1085,10 @@ impl JsEmitter {
         let mut out = String::new();
 
         let markdown = if doc_expr.as_deref().is_some_and(|code| code.contains("LMarkdown.")) { ", LMarkdown" } else { "" };
-        out.push_str(&format!("import {{ L{markdown}, NoAttr }} from '@lpdfio/lpdf'\n"));
+        let mut constants: Vec<&str> = constants_written().iter().map(|c| c.name).collect();
+        constants.sort_unstable();
+        let constants: String = constants.iter().map(|name| format!(", {name}")).collect();
+        out.push_str(&format!("import {{ L{markdown}, NoAttr{constants} }} from '@lpdfio/lpdf'\n"));
         out.push('\n');
 
         out.push_str("const engine = L.engine()\n");
@@ -1256,9 +1310,16 @@ impl DotnetEmitter {
         let mut out = String::new();
 
         out.push_str("using Lpdf;\n");
-        // C# writes the attribute classes as `new()`; the ones named are those of the assets and tokens.
+        // C# writes the attribute classes as `new()`; the ones named are those of the assets and tokens. A constant is
+        // in the namespace of its area.
+        let mut namespaces: Vec<String> = constants_written().iter().map(|c| area_namespace(c.area, ".")).collect();
         if !classes_used(&body).is_empty() {
-            out.push_str("using Lpdf.Kit;\n");
+            namespaces.push("Lpdf.Kit".to_string());
+        }
+        namespaces.sort();
+        namespaces.dedup();
+        for namespace in namespaces {
+            out.push_str(&format!("using {namespace};\n"));
         }
         // `NoAttr` is a static member of `L`, written bare as the other targets write it.
         out.push_str("using static Lpdf.L;\n");
@@ -1472,6 +1533,7 @@ impl PhpEmitter {
         let mut classes: Vec<String> = classes_used(&body)
             .iter()
             .map(|class| format!("{}\\{class}", php_namespace(class)))
+            .chain(constants_written().iter().map(|c| format!("{}\\{}", area_namespace(c.area, "\\"), c.name)))
             .collect();
         classes.sort();
         for class in classes {
@@ -1677,6 +1739,7 @@ impl PythonEmitter {
             imports.insert(1, "LMarkdown".to_string());
         }
         let mut classes = classes_used(&body);
+        classes.extend(constants_written().iter().map(|c| c.name.to_string()));
         classes.sort();
         imports.extend(classes);
         out.push_str(&format!("from lpdf import {}\n", imports.join(", ")));
@@ -2553,7 +2616,7 @@ mod tests {
 </lpdf>"#;
         let opts = CodegenOptions { target: "js".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
-        assert!(out.contains("assets: { fonts: [{ name: 'heading', core: 'Times-Bold' }, { name: 'body', ref: 'body-font', src: './fonts/Body.ttf' }], images: [{ name: 'logo', src: './assets/logo.png' }] }"), "{out}");
+        assert!(out.contains("assets: { fonts: [{ name: 'heading', core: BuiltinFont.TimesBold }, { name: 'body', ref: 'body-font', src: './fonts/Body.ttf' }], images: [{ name: 'logo', src: './assets/logo.png' }] }"), "{out}");
         assert!(!out.contains("loadFont") && !out.contains("loadImage"), "{out}");
     }
 
@@ -2578,20 +2641,20 @@ mod tests {
         let code = |target: &str| codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
 
         assert!(code("js").contains(
-            "gradients: { fade: { type: 'linear', from: 'brand', to: '#ffffff', angle: 90 }, sunset: { type: 'radial', stops: [{ offset: '0%', color: '#f97316' }, { offset: '100%', color: '#8b5cf6' }] } }"
+            "gradients: { fade: { type: GradientType.Linear, from: 'brand', to: '#ffffff', angle: 90 }, sunset: { type: GradientType.Radial, stops: [{ offset: '0%', color: '#f97316' }, { offset: '100%', color: '#8b5cf6' }] } }"
         ), "{}", code("js"));
         assert!(code("python").contains(
-            "gradients={'fade': {'type': 'linear', 'from': 'brand', 'to': '#ffffff', 'angle': 90}, 'sunset': {'type': 'radial', 'stops': [{'offset': '0%', 'color': '#f97316'}, {'offset': '100%', 'color': '#8b5cf6'}]}}"
+            "gradients={'fade': {'type': GradientType.LINEAR, 'from': 'brand', 'to': '#ffffff', 'angle': 90}, 'sunset': {'type': GradientType.RADIAL, 'stops': [{'offset': '0%', 'color': '#f97316'}, {'offset': '100%', 'color': '#8b5cf6'}]}}"
         ), "{}", code("python"));
         assert!(code("php").contains(
-            "gradients: ['fade' => new Gradient(type: 'linear', from: 'brand', to: '#ffffff', angle: 90), 'sunset' => new Gradient(type: 'radial', stops: [new GradientStop(offset: '0%', color: '#f97316'), new GradientStop(offset: '100%', color: '#8b5cf6')])]"
+            "gradients: ['fade' => new Gradient(type: GradientType::Linear, from: 'brand', to: '#ffffff', angle: 90), 'sunset' => new Gradient(type: GradientType::Radial, stops: [new GradientStop(offset: '0%', color: '#f97316'), new GradientStop(offset: '100%', color: '#8b5cf6')])]"
         ), "{}", code("php"));
         assert!(code("php").contains("use Lpdf\\Kit\\Gradient;") && code("php").contains("use Lpdf\\Kit\\GradientStop;"), "{}", code("php"));
         assert!(code("dotnet").contains(
-            "Gradients: new() { [\"fade\"] = new Gradient { Type = \"linear\", From = \"brand\", To = \"#ffffff\", Angle = 90 }, [\"sunset\"] = new Gradient { Type = \"radial\", Stops = [new GradientStop { Offset = \"0%\", Color = \"#f97316\" }, new GradientStop { Offset = \"100%\", Color = \"#8b5cf6\" }] } }"
+            "Gradients: new() { [\"fade\"] = new Gradient { Type = GradientType.Linear, From = \"brand\", To = \"#ffffff\", Angle = 90 }, [\"sunset\"] = new Gradient { Type = GradientType.Radial, Stops = [new GradientStop { Offset = \"0%\", Color = \"#f97316\" }, new GradientStop { Offset = \"100%\", Color = \"#8b5cf6\" }] } }"
         ), "{}", code("dotnet"));
         assert!(code("java").contains(
-            ".gradients(Map.of(\"fade\", new Gradient().type(\"linear\").from(\"brand\").to(\"#ffffff\").angle(90.0), \"sunset\", new Gradient().type(\"radial\").stops(List.of(new GradientStop().offset(\"0%\").color(\"#f97316\"), new GradientStop().offset(\"100%\").color(\"#8b5cf6\")))))"
+            ".gradients(Map.of(\"fade\", new Gradient().type(GradientType.LINEAR).from(\"brand\").to(\"#ffffff\").angle(90.0), \"sunset\", new Gradient().type(GradientType.RADIAL).stops(List.of(new GradientStop().offset(\"0%\").color(\"#f97316\"), new GradientStop().offset(\"100%\").color(\"#8b5cf6\")))))"
         ), "{}", code("java"));
     }
 
@@ -2614,21 +2677,21 @@ mod tests {
         let code = |target: &str| codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
 
         assert!(code("js").contains(
-            "rulings: { graph: { origin: 'margin', edges: false, lines: [{ step: '5mm' }, { countX: 12, stepY: '25mm', color: '#b5c4d6', thickness: 's' }] } }"
+            "rulings: { graph: { origin: RulingOrigin.Margin, edges: false, lines: [{ step: '5mm' }, { countX: 12, stepY: '25mm', color: '#b5c4d6', thickness: 's' }] } }"
         ), "{}", code("js"));
         assert!(code("js").contains("ruling: 'graph'"), "{}", code("js"));
         assert!(code("python").contains(
-            "rulings={'graph': {'origin': 'margin', 'edges': False, 'lines': [{'step': '5mm'}, {'count-x': 12, 'step-y': '25mm', 'color': '#b5c4d6', 'thickness': 's'}]}}"
+            "rulings={'graph': {'origin': RulingOrigin.MARGIN, 'edges': False, 'lines': [{'step': '5mm'}, {'count-x': 12, 'step-y': '25mm', 'color': '#b5c4d6', 'thickness': 's'}]}}"
         ), "{}", code("python"));
         assert!(code("php").contains(
-            "rulings: ['graph' => new Ruling(origin: 'margin', edges: false, lines: [new RulingLines(step: '5mm'), new RulingLines(countX: 12, stepY: '25mm', color: '#b5c4d6', thickness: 's')])]"
+            "rulings: ['graph' => new Ruling(origin: RulingOrigin::Margin, edges: false, lines: [new RulingLines(step: '5mm'), new RulingLines(countX: 12, stepY: '25mm', color: '#b5c4d6', thickness: 's')])]"
         ), "{}", code("php"));
         assert!(code("php").contains("use Lpdf\\Kit\\Ruling;") && code("php").contains("use Lpdf\\Kit\\RulingLines;"), "{}", code("php"));
         assert!(code("dotnet").contains(
-            "Rulings: new() { [\"graph\"] = new Ruling { Origin = \"margin\", Edges = false, Lines = [new RulingLines { Step = \"5mm\" }, new RulingLines { CountX = 12, StepY = \"25mm\", Color = \"#b5c4d6\", Thickness = \"s\" }] } }"
+            "Rulings: new() { [\"graph\"] = new Ruling { Origin = RulingOrigin.Margin, Edges = false, Lines = [new RulingLines { Step = \"5mm\" }, new RulingLines { CountX = 12, StepY = \"25mm\", Color = \"#b5c4d6\", Thickness = \"s\" }] } }"
         ), "{}", code("dotnet"));
         assert!(code("java").contains(
-            ".rulings(Map.of(\"graph\", new Ruling().origin(\"margin\").edges(false).lines(List.of(new RulingLines().step(\"5mm\"), new RulingLines().countX(12).stepY(\"25mm\").color(\"#b5c4d6\").thickness(\"s\")))))"
+            ".rulings(Map.of(\"graph\", new Ruling().origin(RulingOrigin.MARGIN).edges(false).lines(List.of(new RulingLines().step(\"5mm\"), new RulingLines().countX(12).stepY(\"25mm\").color(\"#b5c4d6\").thickness(\"s\")))))"
         ), "{}", code("java"));
         assert!(code("java").contains("new SectionAttr().ruling(\"graph\")"), "{}", code("java"));
     }
@@ -2643,11 +2706,11 @@ mod tests {
             <document><section><layout><text>x</text></layout></section></document>
         </lpdf>"##;
         for (target, colors, gradients) in [
-            ("js", "colors: { muted: '#666666', brand: '#222222' }", "gradients: { fade: { type: 'radial', from: 'brand', to: '#000000' } }"),
-            ("python", "colors={'muted': '#666666', 'brand': '#222222'}", "gradients={'fade': {'type': 'radial', 'from': 'brand', 'to': '#000000'}}"),
-            ("php", "colors: ['muted' => '#666666', 'brand' => '#222222']", "gradients: ['fade' => new Gradient(type: 'radial', from: 'brand', to: '#000000')]"),
-            ("dotnet", "Colors: new() { [\"muted\"] = \"#666666\", [\"brand\"] = \"#222222\" }", "Gradients: new() { [\"fade\"] = new Gradient { Type = \"radial\", From = \"brand\", To = \"#000000\" } }"),
-            ("java", ".colors(Map.of(\"muted\", \"#666666\", \"brand\", \"#222222\"))", ".gradients(Map.of(\"fade\", new Gradient().type(\"radial\").from(\"brand\").to(\"#000000\")))"),
+            ("js", "colors: { muted: '#666666', brand: '#222222' }", "gradients: { fade: { type: GradientType.Radial, from: 'brand', to: '#000000' } }"),
+            ("python", "colors={'muted': '#666666', 'brand': '#222222'}", "gradients={'fade': {'type': GradientType.RADIAL, 'from': 'brand', 'to': '#000000'}}"),
+            ("php", "colors: ['muted' => '#666666', 'brand' => '#222222']", "gradients: ['fade' => new Gradient(type: GradientType::Radial, from: 'brand', to: '#000000')]"),
+            ("dotnet", "Colors: new() { [\"muted\"] = \"#666666\", [\"brand\"] = \"#222222\" }", "Gradients: new() { [\"fade\"] = new Gradient { Type = GradientType.Radial, From = \"brand\", To = \"#000000\" } }"),
+            ("java", ".colors(Map.of(\"muted\", \"#666666\", \"brand\", \"#222222\"))", ".gradients(Map.of(\"fade\", new Gradient().type(GradientType.RADIAL).from(\"brand\").to(\"#000000\")))"),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(colors), "{target}: the colors are not written as {colors}\n{out}");
@@ -2671,27 +2734,27 @@ mod tests {
     #[test]
     fn test_fragment_of_a_whole_document_is_the_document_with_its_assets_and_tokens() {
         let js = fragment("js");
-        assert!(js.starts_with("L.document({ size: 'a4', assets: { images: [{ name: 'logo', src: 'logo.png' }] }, tokens: { colors: { brand: '#336699' } } }, ["), "{js}");
+        assert!(js.starts_with("L.document({ size: PageSize.A4, assets: { images: [{ name: 'logo', src: 'logo.png' }] }, tokens: { colors: { brand: '#336699' } } }, ["), "{js}");
         assert!(!js.contains("L.element"), "{js}");
 
         let python = fragment("python");
-        assert!(python.starts_with("L.document(DocumentAttr(size='a4', assets=DocumentAssets(images=[ImageAttr(name='logo', src='logo.png')]), tokens=DocumentTokens(colors={'brand': '#336699'})), ["), "{python}");
+        assert!(python.starts_with("L.document(DocumentAttr(size=PageSize.A4, assets=DocumentAssets(images=[ImageAttr(name='logo', src='logo.png')]), tokens=DocumentTokens(colors={'brand': '#336699'})), ["), "{python}");
 
         let php = fragment("php");
-        assert!(php.starts_with("L::document(new DocumentAttr(size: 'a4', assets: new DocumentAssets(images: [new ImageAttr(name: 'logo', src: 'logo.png')]), tokens: new DocumentTokens(colors: ['brand' => '#336699'])), ["), "{php}");
+        assert!(php.starts_with("L::document(new DocumentAttr(size: PageSize::A4, assets: new DocumentAssets(images: [new ImageAttr(name: 'logo', src: 'logo.png')]), tokens: new DocumentTokens(colors: ['brand' => '#336699'])), ["), "{php}");
 
         let dotnet = fragment("dotnet");
-        assert!(dotnet.starts_with("L.Document(new() { Size = \"a4\", Assets = new DocumentAssets(Images: [new ImageAttr { Name = \"logo\", Src = \"logo.png\" }]), Tokens = new DocumentTokens(Colors: new() { [\"brand\"] = \"#336699\" }) }, ["), "{dotnet}");
+        assert!(dotnet.starts_with("L.Document(new() { Size = PageSize.A4, Assets = new DocumentAssets(Images: [new ImageAttr { Name = \"logo\", Src = \"logo.png\" }]), Tokens = new DocumentTokens(Colors: new() { [\"brand\"] = \"#336699\" }) }, ["), "{dotnet}");
 
         let java = fragment("java");
-        assert!(java.starts_with("L.document(new DocumentAttr().size(\"a4\").assets(new DocumentAssets().images(List.of(new ImageAttr().name(\"logo\").src(\"logo.png\")))).tokens(new DocumentTokens().colors(Map.of(\"brand\", \"#336699\"))), List.of("), "{java}");
+        assert!(java.starts_with("L.document(new DocumentAttr().size(PageSize.A4).assets(new DocumentAssets().images(List.of(new ImageAttr().name(\"logo\").src(\"logo.png\")))).tokens(new DocumentTokens().colors(Map.of(\"brand\", \"#336699\"))), List.of("), "{java}");
     }
 
     #[test]
     fn test_program_imports_the_classes_it_uses() {
         let opts = |target: &str| CodegenOptions { target: target.into(), indent: 4 };
         let python = codegen(FULL_DOCUMENT, &opts("python")).unwrap();
-        assert!(python.contains("from lpdf import L, NoAttr, DocumentAssets, DocumentAttr, DocumentTokens, ImageAttr, TextAttr\n"), "{python}");
+        assert!(python.contains("from lpdf import L, NoAttr, DocumentAssets, DocumentAttr, DocumentTokens, ImageAttr, PageSize, TextAttr\n"), "{python}");
 
         let php = codegen(FULL_DOCUMENT, &opts("php")).unwrap();
         for class in ["DocumentAssets", "DocumentAttr", "DocumentTokens", "ImageAttr"] {
@@ -2728,14 +2791,92 @@ mod tests {
     fn facturx_strict_is_written_in_each_language_s_case() {
         let xml = r#"<lpdf version="1"><document><output pdfa="3b" facturx-strict="true"/><section><layout><text>x</text></layout></section></document></lpdf>"#;
         for (target, expected) in [
-            ("js", "output: { pdfa: '3b', facturxStrict: true }"),
-            ("dotnet", "Output = new() { PdfA = \"3b\", FacturXStrict = true }"),
-            ("php", "output: new DocumentOutput(pdfa: '3b', facturxStrict: true)"),
-            ("python", "output=DocumentOutput(pdfa='3b', facturx_strict=True)"),
-            ("java", ".output(new DocumentOutput().pdfa(\"3b\").facturxStrict(true))"),
+            ("js", "output: { pdfa: PdfALevel.Level3b, facturxStrict: true }"),
+            ("dotnet", "Output = new() { PdfA = PdfALevel.Level3b, FacturXStrict = true }"),
+            ("php", "output: new DocumentOutput(pdfa: PdfALevel::Level3b, facturxStrict: true)"),
+            ("python", "output=DocumentOutput(pdfa=PdfALevel.LEVEL_3B, facturx_strict=True)"),
+            ("java", ".output(new DocumentOutput().pdfa(PdfALevel.LEVEL_3B).facturxStrict(true))"),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(expected), "{target}: {out}");
+        }
+    }
+
+    /// A value of a closed enumeration is written as its constant, in the language's case, with the import of each
+    /// constant the code names; a value no constant has, such as a custom page size, stays a literal; and an `ec` takes
+    /// the constant its value is in, which depends on the barcode.
+    #[test]
+    fn a_value_of_a_closed_enumeration_is_written_as_its_constant_in_each_language() {
+        let xml = r#"<lpdf><document size="a4" orientation="landscape"><section size="100pt 200pt"><layout>
+            <text align="center" paginate="keep-next">x</text>
+            <barcode type="qr" data="x" ec="H"/><barcode type="pdf417" data="y" ec="3"/>
+            <table cols="1fr"><tr><td valign="middle" align="end">c</td></tr></table>
+        </layout></section></document></lpdf>"#;
+        let cases: [(&str, &[&str]); 5] = [
+            ("js", &[
+                "import { L, NoAttr, Align, BarcodeType, CellVAlign, Orientation, PageSize, Paginate, Pdf417EcLevel, QrEcLevel, TextAlign } from '@lpdfio/lpdf'",
+                "L.document({ size: PageSize.A4, orientation: Orientation.Landscape }",
+                "L.section({ size: '100pt 200pt' }",
+                "L.text({ align: TextAlign.Center, paginate: Paginate.KeepNext }",
+                "L.barcode({ type: BarcodeType.Qr, data: 'x', ec: QrEcLevel.H })",
+                "L.barcode({ type: BarcodeType.Pdf417, data: 'y', ec: Pdf417EcLevel.Level3 })",
+                "L.td({ valign: CellVAlign.Middle, align: Align.End })",
+            ]),
+            ("dotnet", &[
+                "using Lpdf.Kit;\nusing Lpdf.Layout;\nusing Lpdf.Shared;\nusing static Lpdf.L;",
+                "L.Document(new() { Size = PageSize.A4, Orientation = Orientation.Landscape }",
+                "L.Section(new() { Size = \"100pt 200pt\" }",
+                "L.Text(new() { Align = TextAlign.Center, Paginate = Paginate.KeepNext }",
+                "L.Barcode(new() { Type = BarcodeType.Qr, Data = \"x\", Ec = QrEcLevel.H })",
+                "Ec = Pdf417EcLevel.Level3",
+                "L.Td(new() { Valign = CellVAlign.Middle, Align = Align.End })",
+            ]),
+            ("php", &[
+                "use Lpdf\\Kit\\Orientation;\nuse Lpdf\\Kit\\PageSize;",
+                "use Lpdf\\Layout\\Align;",
+                "use Lpdf\\Shared\\BarcodeType;\nuse Lpdf\\Shared\\Pdf417EcLevel;\nuse Lpdf\\Shared\\QrEcLevel;\nuse Lpdf\\Shared\\TextAlign;",
+                "new DocumentAttr(size: PageSize::A4, orientation: Orientation::Landscape)",
+                "new SectionAttr(size: '100pt 200pt')",
+                "new TextAttr(align: TextAlign::Center, paginate: Paginate::KeepNext)",
+                "new BarcodeAttr(type: BarcodeType::Qr, data: 'x', ec: QrEcLevel::H)",
+                "ec: Pdf417EcLevel::Level3",
+                "new TdAttr(valign: CellVAlign::Middle, align: Align::End)",
+            ]),
+            ("python", &[
+                "from lpdf import L, NoAttr, Align, BarcodeAttr, BarcodeType, CellVAlign, DocumentAttr, Orientation, PageSize, Paginate, Pdf417EcLevel, QrEcLevel, SectionAttr, TableAttr, TdAttr, TextAlign, TextAttr\n",
+                "DocumentAttr(size=PageSize.A4, orientation=Orientation.LANDSCAPE)",
+                "SectionAttr(size='100pt 200pt')",
+                "TextAttr(align=TextAlign.CENTER, paginate=Paginate.KEEP_NEXT)",
+                "BarcodeAttr(type=BarcodeType.QR, data='x', ec=QrEcLevel.H)",
+                "ec=Pdf417EcLevel.LEVEL_3",
+                "TdAttr(valign=CellVAlign.MIDDLE, align=Align.END)",
+            ]),
+            ("java", &[
+                "import io.lpdf.*;",
+                "new DocumentAttr().size(PageSize.A4).orientation(Orientation.LANDSCAPE)",
+                "new SectionAttr().size(\"100pt 200pt\")",
+                "new TextAttr().align(TextAlign.CENTER).paginate(Paginate.KEEP_NEXT)",
+                "new BarcodeAttr().type(BarcodeType.QR).data(\"x\").ec(QrEcLevel.H)",
+                ".ec(Pdf417EcLevel.LEVEL_3)",
+                "new TdAttr().valign(CellVAlign.MIDDLE).align(Align.END)",
+            ]),
+        ];
+        for (target, expected) in cases {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            for piece in expected {
+                assert!(out.contains(piece), "{target}: {piece}\n{out}");
+            }
+        }
+    }
+
+    /// A text that happens to hold the name of a constant is not a use of it, so it brings no import.
+    #[test]
+    fn the_name_of_a_constant_in_a_text_is_not_imported() {
+        let xml = r#"<lpdf><document><section><layout><text>Anchor.Top and Paginate::No</text></layout></section></document></lpdf>"#;
+        for target in ["js", "dotnet", "php", "python"] {
+            let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+            assert!(!out.contains("import { L, NoAttr, ") && !out.contains("using Lpdf.Layout") && !out.contains("\\Layout\\Anchor")
+                && !out.contains("NoAttr, Anchor"), "{target}: {out}");
         }
     }
 
@@ -2743,11 +2884,11 @@ mod tests {
     fn pdfa_is_written_in_each_language_s_case() {
         let xml = r#"<lpdf version="1"><document><output pdfa="2u"/><section><layout><text>x</text></layout></section></document></lpdf>"#;
         for (target, expected) in [
-            ("js", "output: { pdfa: '2u' }"),
-            ("dotnet", "Output = new() { PdfA = \"2u\" }"),
-            ("php", "output: new DocumentOutput(pdfa: '2u')"),
-            ("python", "output=DocumentOutput(pdfa='2u')"),
-            ("java", ".output(new DocumentOutput().pdfa(\"2u\"))"),
+            ("js", "output: { pdfa: PdfALevel.Level2u }"),
+            ("dotnet", "Output = new() { PdfA = PdfALevel.Level2u }"),
+            ("php", "output: new DocumentOutput(pdfa: PdfALevel::Level2u)"),
+            ("python", "output=DocumentOutput(pdfa=PdfALevel.LEVEL_2U)"),
+            ("java", ".output(new DocumentOutput().pdfa(PdfALevel.LEVEL_2U))"),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(expected), "{target}: {out}");
@@ -2760,11 +2901,11 @@ mod tests {
             <file name="invoice.xml" src="invoice.xml" mime="text/xml" relationship="data"/><file name="terms.txt" ref="terms"/>
         </attachments><section><layout><text>x</text></layout></section></document></lpdf>"#;
         for (target, expected) in [
-            ("js", "output: { encrypt: 'aes-256' }, attachments: [{ name: 'invoice.xml', src: 'invoice.xml', mime: 'text/xml', relationship: 'data' }, { name: 'terms.txt', ref: 'terms' }] }"),
-            ("dotnet", "Attachments = [new FileAttr { Name = \"invoice.xml\", Src = \"invoice.xml\", Mime = \"text/xml\", Relationship = \"data\" }, new FileAttr { Name = \"terms.txt\", Ref = \"terms\" }] }"),
-            ("php", "attachments: [new FileAttr(name: 'invoice.xml', src: 'invoice.xml', mime: 'text/xml', relationship: 'data'), new FileAttr(name: 'terms.txt', ref: 'terms')])"),
-            ("python", "attachments=[FileAttr(name='invoice.xml', src='invoice.xml', mime='text/xml', relationship='data'), FileAttr(name='terms.txt', ref='terms')])"),
-            ("java", ".attachments(List.of(new FileAttr().name(\"invoice.xml\").src(\"invoice.xml\").mime(\"text/xml\").relationship(\"data\"), new FileAttr().name(\"terms.txt\").ref(\"terms\")))"),
+            ("js", "output: { encrypt: Cipher.Aes256 }, attachments: [{ name: 'invoice.xml', src: 'invoice.xml', mime: 'text/xml', relationship: FileRelationship.Data }, { name: 'terms.txt', ref: 'terms' }] }"),
+            ("dotnet", "Attachments = [new FileAttr { Name = \"invoice.xml\", Src = \"invoice.xml\", Mime = \"text/xml\", Relationship = FileRelationship.Data }, new FileAttr { Name = \"terms.txt\", Ref = \"terms\" }] }"),
+            ("php", "attachments: [new FileAttr(name: 'invoice.xml', src: 'invoice.xml', mime: 'text/xml', relationship: FileRelationship::Data), new FileAttr(name: 'terms.txt', ref: 'terms')])"),
+            ("python", "attachments=[FileAttr(name='invoice.xml', src='invoice.xml', mime='text/xml', relationship=FileRelationship.DATA), FileAttr(name='terms.txt', ref='terms')])"),
+            ("java", ".attachments(List.of(new FileAttr().name(\"invoice.xml\").src(\"invoice.xml\").mime(\"text/xml\").relationship(FileRelationship.DATA), new FileAttr().name(\"terms.txt\").ref(\"terms\")))"),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(expected), "{target}: {out}");
@@ -2784,11 +2925,11 @@ mod tests {
     fn pdfx_its_profile_and_bleed_are_written_in_each_language() {
         let xml = r#"<lpdf version="1"><assets><profile name="press" src="press.icc"/></assets><document bleed="3mm"><meta title="T"/><output pdfx="4" profile="press"/><section bleed="5mm"><layout><text>x</text></layout></section></document></lpdf>"#;
         for (target, expected) in [
-            ("js", ["assets: { profiles: [{ name: 'press', src: 'press.icc' }] }", "output: { pdfx: '4', profile: 'press' }", "bleed: '3mm'", "bleed: '5mm'"]),
-            ("dotnet", ["Assets = new DocumentAssets(Profiles: [new ProfileAttr { Name = \"press\", Src = \"press.icc\" }])", "PdfX = \"4\", Profile = \"press\"", "Bleed = \"3mm\"", "Bleed = \"5mm\""]),
-            ("php", ["assets: new DocumentAssets(profiles: [new ProfileAttr(name: 'press', src: 'press.icc')])", "output: new DocumentOutput(pdfx: '4', profile: 'press')", "bleed: '3mm'", "bleed: '5mm'"]),
-            ("python", ["assets=DocumentAssets(profiles=[ProfileAttr(name='press', src='press.icc')])", "output=DocumentOutput(pdfx='4', profile='press')", "bleed='3mm'", "bleed='5mm'"]),
-            ("java", [".assets(new DocumentAssets().profiles(List.of(new ProfileAttr().name(\"press\").src(\"press.icc\"))))", ".output(new DocumentOutput().pdfx(\"4\").profile(\"press\"))", ".bleed(\"3mm\")", ".bleed(\"5mm\")"]),
+            ("js", ["assets: { profiles: [{ name: 'press', src: 'press.icc' }] }", "output: { pdfx: PdfXVersion.Version4, profile: 'press' }", "bleed: '3mm'", "bleed: '5mm'"]),
+            ("dotnet", ["Assets = new DocumentAssets(Profiles: [new ProfileAttr { Name = \"press\", Src = \"press.icc\" }])", "PdfX = PdfXVersion.Version4, Profile = \"press\"", "Bleed = \"3mm\"", "Bleed = \"5mm\""]),
+            ("php", ["assets: new DocumentAssets(profiles: [new ProfileAttr(name: 'press', src: 'press.icc')])", "output: new DocumentOutput(pdfx: PdfXVersion::Version4, profile: 'press')", "bleed: '3mm'", "bleed: '5mm'"]),
+            ("python", ["assets=DocumentAssets(profiles=[ProfileAttr(name='press', src='press.icc')])", "output=DocumentOutput(pdfx=PdfXVersion.VERSION_4, profile='press')", "bleed='3mm'", "bleed='5mm'"]),
+            ("java", [".assets(new DocumentAssets().profiles(List.of(new ProfileAttr().name(\"press\").src(\"press.icc\"))))", ".output(new DocumentOutput().pdfx(PdfXVersion.VERSION_4).profile(\"press\"))", ".bleed(\"3mm\")", ".bleed(\"5mm\")"]),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             for part in expected {
@@ -2805,11 +2946,11 @@ mod tests {
     fn a_boolean_of_output_is_written_as_a_boolean_and_its_text_as_a_string() {
         let xml = r#"<lpdf version="1"><document><output encrypt="aes-256" linearize="true"/><section><layout><text>x</text></layout></section></document></lpdf>"#;
         for (target, expected) in [
-            ("js", "output: { encrypt: 'aes-256', linearize: true }"),
-            ("dotnet", "Output = new() { Encrypt = \"aes-256\", Linearize = true }"),
-            ("php", "output: new DocumentOutput(encrypt: 'aes-256', linearize: true)"),
-            ("python", "output=DocumentOutput(encrypt='aes-256', linearize=True)"),
-            ("java", ".output(new DocumentOutput().encrypt(\"aes-256\").linearize(true))"),
+            ("js", "output: { encrypt: Cipher.Aes256, linearize: true }"),
+            ("dotnet", "Output = new() { Encrypt = Cipher.Aes256, Linearize = true }"),
+            ("php", "output: new DocumentOutput(encrypt: Cipher::Aes256, linearize: true)"),
+            ("python", "output=DocumentOutput(encrypt=Cipher.AES_256, linearize=True)"),
+            ("java", ".output(new DocumentOutput().encrypt(Cipher.AES_256).linearize(true))"),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(expected), "{target}: {expected}\n{out}");
@@ -2820,11 +2961,11 @@ mod tests {
     fn pdfua_lang_alt_and_role_are_written_in_each_language_s_case() {
         let xml = r#"<lpdf version="1"><assets><image name="logo" src="logo.png"/></assets><document><meta title="T" lang="en"/><output pdfua="1"/><section><layout><text role="h1">x</text><img name="logo" alt="Logo"/></layout></section></document></lpdf>"#;
         for (target, expected) in [
-            ("js", ["pdfua: '1'", "lang: 'en'", "role: 'h1'", "alt: 'Logo'"]),
-            ("dotnet", ["PdfUa = \"1\"", "Lang = \"en\"", "Role = \"h1\"", "Alt = \"Logo\""]),
-            ("php", ["pdfua: '1'", "lang: 'en'", "role: 'h1'", "alt: 'Logo'"]),
-            ("python", ["pdfua='1'", "lang='en'", "role='h1'", "alt='Logo'"]),
-            ("java", [".pdfua(\"1\")", ".lang(\"en\")", ".role(\"h1\")", ".alt(\"Logo\")"]),
+            ("js", ["pdfua: PdfUaPart.Part1", "lang: 'en'", "role: TextRole.H1", "alt: 'Logo'"]),
+            ("dotnet", ["PdfUa = PdfUaPart.Part1", "Lang = \"en\"", "Role = TextRole.H1", "Alt = \"Logo\""]),
+            ("php", ["pdfua: PdfUaPart::Part1", "lang: 'en'", "role: TextRole::H1", "alt: 'Logo'"]),
+            ("python", ["pdfua=PdfUaPart.PART_1", "lang='en'", "role=TextRole.H1", "alt='Logo'"]),
+            ("java", [".pdfua(PdfUaPart.PART_1)", ".lang(\"en\")", ".role(TextRole.H1)", ".alt(\"Logo\")"]),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             for piece in expected {
@@ -2845,7 +2986,7 @@ mod tests {
 </lpdf>"#;
         let opts = CodegenOptions { target: "js".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
-        assert!(out.contains("meta: { title: 'My Doc' }, output: { encrypt: 'aes-256', allow: 'print fill-forms' }"), "{out}");
+        assert!(out.contains("meta: { title: 'My Doc' }, output: { encrypt: Cipher.Aes256, allow: 'print fill-forms' }"), "{out}");
         assert!(!out.contains("L.output("));
     }
 
@@ -3194,7 +3335,7 @@ mod tests {
         </section></document></lpdf>"#;
         for (target, layout, import) in [
             ("js", "L.layout({ margin: '48pt' }, [", None),
-            ("python", "L.layout(LayoutAttr(margin='48pt'), [", Some("from lpdf import L, NoAttr, DocumentAttr, LayoutAttr\n")),
+            ("python", "L.layout(LayoutAttr(margin='48pt'), [", Some("from lpdf import L, NoAttr, DocumentAttr, LayoutAttr, PageSize\n")),
             ("php", "L::layout(new LayoutAttr(margin: '48pt'), [", Some("use Lpdf\\Kit\\LayoutAttr;\n")),
             ("dotnet", "L.Layout(new() { Margin = \"48pt\" }, [", None),
             ("java", "L.layout(new LayoutAttr().margin(\"48pt\"), List.of(", None),
@@ -3247,10 +3388,10 @@ mod tests {
         </layout></section></document></lpdf>"##;
         for (target, builder, class) in [
             ("js",     "L.shape(",  None),
-            ("python", "L.shape(",  Some("ShapeAttr(type='circle', r='5pt', fill='primary')")),
-            ("php",    "L::shape(", Some("new ShapeAttr(type: 'circle', r: '5pt', fill: 'primary')")),
-            ("dotnet", "L.Shape(",  Some("new() { Type = \"circle\", R = \"5pt\", Fill = \"primary\" }")),
-            ("java",   "L.shape(",  Some("L.shape(new ShapeAttr().type(\"circle\").r(\"5pt\").fill(\"primary\"))")),
+            ("python", "L.shape(",  Some("ShapeAttr(type=ShapeType.CIRCLE, r='5pt', fill='primary')")),
+            ("php",    "L::shape(", Some("new ShapeAttr(type: ShapeType::Circle, r: '5pt', fill: 'primary')")),
+            ("dotnet", "L.Shape(",  Some("new() { Type = ShapeType.Circle, R = \"5pt\", Fill = \"primary\" }")),
+            ("java",   "L.shape(",  Some("L.shape(new ShapeAttr().type(ShapeType.CIRCLE).r(\"5pt\").fill(\"primary\"))")),
         ] {
             let opts = CodegenOptions { target: target.into(), indent: 4 };
             let out  = codegen(xml, &opts).unwrap();
@@ -3262,7 +3403,7 @@ mod tests {
         }
         let opts = CodegenOptions { target: "js".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
-        assert!(out.contains("L.shape({ type: 'circle', r: '5pt', fill: 'primary' })"), "{out}");
+        assert!(out.contains("L.shape({ type: ShapeType.Circle, r: '5pt', fill: 'primary' })"), "{out}");
         // PHP imports the class from the namespace of the layout's elements.
         let opts = CodegenOptions { target: "php".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
@@ -3275,11 +3416,11 @@ mod tests {
             <list type="number" format="lower-alpha" suffix=")"><li><text>One</text><list bullet="dash"><li><text>Two</text></li></list></li></list>
         </layout></section></document></lpdf>"##;
         for (target, list, item, class) in [
-            ("js",     "L.list(",  "L.li(",  "L.list({ type: 'number', format: 'lower-alpha', suffix: ')' }, ["),
-            ("python", "L.list(",  "L.li(",  "ListAttr(type='number', format='lower-alpha', suffix=')')"),
-            ("php",    "L::list(", "L::li(", "new ListAttr(type: 'number', format: 'lower-alpha', suffix: ')')"),
-            ("dotnet", "L.List(",  "L.Li(",  "new() { Type = \"number\", Format = \"lower-alpha\", Suffix = \")\" }"),
-            ("java",   "L.list(",  "L.li(",  "new ListAttr().type(\"number\").format(\"lower-alpha\").suffix(\")\")"),
+            ("js",     "L.list(",  "L.li(",  "L.list({ type: ListType.Number, format: ListFormat.LowerAlpha, suffix: ')' }, ["),
+            ("python", "L.list(",  "L.li(",  "ListAttr(type=ListType.NUMBER, format=ListFormat.LOWER_ALPHA, suffix=')')"),
+            ("php",    "L::list(", "L::li(", "new ListAttr(type: ListType::Number, format: ListFormat::LowerAlpha, suffix: ')')"),
+            ("dotnet", "L.List(",  "L.Li(",  "new() { Type = ListType.Number, Format = ListFormat.LowerAlpha, Suffix = \")\" }"),
+            ("java",   "L.list(",  "L.li(",  "new ListAttr().type(ListType.NUMBER).format(ListFormat.LOWER_ALPHA).suffix(\")\")"),
         ] {
             let opts = CodegenOptions { target: target.into(), indent: 4 };
             let out  = codegen(xml, &opts).unwrap();
@@ -3302,7 +3443,7 @@ mod tests {
         </layout></section></document></lpdf>"##;
         let opts = CodegenOptions { target: "python".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
-        assert!(out.contains("TextAttr(align='right')"), "{out}");
+        assert!(out.contains("TextAttr(align=TextAlign.RIGHT)"), "{out}");
         assert!(out.contains("ImgAttr(name='logo')"), "{out}");
         assert!(!out.contains("Canvas"), "{out}");
     }
@@ -3378,7 +3519,7 @@ mod tests {
 </lpdf>"#;
         let opts = CodegenOptions { target: "dotnet".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
-        assert!(out.contains("Meta = new() { Title = \"My Doc\" }, Output = new() { Encrypt = \"aes-256\", Allow = \"print fill-forms\" }"), "{out}");
+        assert!(out.contains("Meta = new() { Title = \"My Doc\" }, Output = new() { Encrypt = Cipher.Aes256, Allow = \"print fill-forms\" }"), "{out}");
         assert!(!out.contains("L.Output("));
     }
 
@@ -3397,7 +3538,7 @@ mod tests {
 </lpdf>"#;
         let opts = CodegenOptions { target: "dotnet".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
-        assert!(out.contains("Assets = new DocumentAssets(Fonts: [new FontAttr { Name = \"heading\", Core = \"Times-Bold\" }, new FontAttr { Name = \"body\", Ref = \"body-font\", Src = \"./fonts/Body.ttf\" }], Images: [new ImageAttr { Name = \"logo\", Src = \"./assets/logo.png\" }])"), "{out}");
+        assert!(out.contains("Assets = new DocumentAssets(Fonts: [new FontAttr { Name = \"heading\", Core = BuiltinFont.TimesBold }, new FontAttr { Name = \"body\", Ref = \"body-font\", Src = \"./fonts/Body.ttf\" }], Images: [new ImageAttr { Name = \"logo\", Src = \"./assets/logo.png\" }])"), "{out}");
         assert!(out.contains("using Lpdf.Kit;"), "{out}");
         assert!(out.contains("L.Engine(new() { SrcFallback = File.ReadAllBytes })"), "{out}");
         assert!(!out.contains("LoadFont") && !out.contains("LoadImage"), "{out}");
@@ -3597,7 +3738,7 @@ mod tests {
 </lpdf>"#;
         let opts = CodegenOptions { target: "php".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
-        assert!(out.contains("output: new DocumentOutput(encrypt: 'aes-256', allow: 'print fill-forms')"), "{out}");
+        assert!(out.contains("output: new DocumentOutput(encrypt: Cipher::Aes256, allow: 'print fill-forms')"), "{out}");
         assert!(out.contains("use Lpdf\\Kit\\DocumentOutput;"), "{out}");
         assert!(!out.contains("L::output("));
     }
@@ -3617,7 +3758,7 @@ mod tests {
 </lpdf>"#;
         let opts = CodegenOptions { target: "php".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
-        assert!(out.contains("assets: new DocumentAssets(fonts: [new FontAttr(name: 'heading', core: 'Times-Bold'), new FontAttr(name: 'body', ref: 'body-font', src: './fonts/Body.ttf')], images: [new ImageAttr(name: 'logo', src: './assets/logo.png')])"), "{out}");
+        assert!(out.contains("assets: new DocumentAssets(fonts: [new FontAttr(name: 'heading', core: BuiltinFont::TimesBold), new FontAttr(name: 'body', ref: 'body-font', src: './fonts/Body.ttf')], images: [new ImageAttr(name: 'logo', src: './assets/logo.png')])"), "{out}");
         assert!(out.contains("use Lpdf\\Kit\\DocumentAssets;") && out.contains("use Lpdf\\Kit\\FontAttr;"), "{out}");
         assert!(!out.contains("loadFont") && !out.contains("loadImage"), "{out}");
     }
@@ -3727,8 +3868,8 @@ mod tests {
 </lpdf>"#;
         let opts = CodegenOptions { target: "python".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
-        assert!(out.contains("output=DocumentOutput(encrypt='aes-256', allow='print fill-forms')"), "{out}");
-        assert!(out.contains("from lpdf import L, NoAttr, DocumentAttr, DocumentMeta, DocumentOutput\n"), "{out}");
+        assert!(out.contains("output=DocumentOutput(encrypt=Cipher.AES_256, allow='print fill-forms')"), "{out}");
+        assert!(out.contains("from lpdf import L, NoAttr, Cipher, DocumentAttr, DocumentMeta, DocumentOutput, PageSize\n"), "{out}");
         assert!(!out.contains("L.output("));
     }
 
@@ -3747,8 +3888,8 @@ mod tests {
 </lpdf>"#;
         let opts = CodegenOptions { target: "python".into(), indent: 4 };
         let out  = codegen(xml, &opts).unwrap();
-        assert!(out.contains("assets=DocumentAssets(fonts=[FontAttr(name='heading', core='Times-Bold'), FontAttr(name='body', ref='body-font', src='./fonts/Body.ttf')], images=[ImageAttr(name='logo', src='./assets/logo.png')])"), "{out}");
-        assert!(out.contains("from lpdf import L, NoAttr, DocumentAssets, DocumentAttr, FontAttr, ImageAttr"), "{out}");
+        assert!(out.contains("assets=DocumentAssets(fonts=[FontAttr(name='heading', core=BuiltinFont.TIMES_BOLD), FontAttr(name='body', ref='body-font', src='./fonts/Body.ttf')], images=[ImageAttr(name='logo', src='./assets/logo.png')])"), "{out}");
+        assert!(out.contains("from lpdf import L, NoAttr, BuiltinFont, DocumentAssets, DocumentAttr, FontAttr, ImageAttr"), "{out}");
         assert!(!out.contains("load_font") && !out.contains("load_image"), "{out}");
     }
 
@@ -3846,7 +3987,7 @@ mod tests {
         </layout></section></document></lpdf>"#);
         assert!(out.starts_with("import io.lpdf.*;\nimport java.util.List;\nimport static io.lpdf.L.NoAttr;\n\npublic class Main {\n"), "{out}");
         assert!(out.contains("    public static void main(String[] args) {\n        var engine = L.engine();\n"), "{out}");
-        assert!(out.contains("        var doc = L.document(new DocumentAttr().size(\"a4\"), List.of(\n            L.section(NoAttr, List.of("), "{out}");
+        assert!(out.contains("        var doc = L.document(new DocumentAttr().size(PageSize.A4), List.of(\n            L.section(NoAttr, List.of("), "{out}");
         assert!(out.contains("L.layout(new LayoutAttr().margin(\"48pt\"), List.of("), "{out}");
         assert!(out.contains("L.text(new TextAttr().fontSize(\"12pt\"), List.of(\"Hello\"))"), "{out}");
         assert!(out.ends_with("        byte[] pdf = engine.render(doc);\n    }\n}\n"), "{out}");
@@ -3870,7 +4011,7 @@ mod tests {
             <meta title="My Doc" author="Alice"/><output encrypt="aes-256" allow="print fill-forms"/>
             <section><layout><text>x</text></layout></section>
         </document></lpdf>"#);
-        assert!(out.contains("new DocumentAttr().size(\"a4\").meta(new DocumentMeta().title(\"My Doc\").author(\"Alice\")).output(new DocumentOutput().encrypt(\"aes-256\").allow(\"print fill-forms\"))"), "{out}");
+        assert!(out.contains("new DocumentAttr().size(PageSize.A4).meta(new DocumentMeta().title(\"My Doc\").author(\"Alice\")).output(new DocumentOutput().encrypt(Cipher.AES_256).allow(\"print fill-forms\"))"), "{out}");
         assert!(!out.contains("L.meta(") && !out.contains("L.output("), "{out}");
     }
 
@@ -3880,7 +4021,7 @@ mod tests {
             <assets><font name="heading" core="Times-Bold"/><font name="body" ref="body-font" src="./fonts/Body.ttf"/><image name="logo" src="./assets/logo.png"/></assets>
             <document><section><layout><text>x</text></layout></section></document>
         </lpdf>"#);
-        assert!(out.contains(".assets(new DocumentAssets().fonts(List.of(new FontAttr().name(\"heading\").core(\"Times-Bold\"), new FontAttr().name(\"body\").ref(\"body-font\").src(\"./fonts/Body.ttf\"))).images(List.of(new ImageAttr().name(\"logo\").src(\"./assets/logo.png\"))))"), "{out}");
+        assert!(out.contains(".assets(new DocumentAssets().fonts(List.of(new FontAttr().name(\"heading\").core(BuiltinFont.TIMES_BOLD), new FontAttr().name(\"body\").ref(\"body-font\").src(\"./fonts/Body.ttf\"))).images(List.of(new ImageAttr().name(\"logo\").src(\"./assets/logo.png\"))))"), "{out}");
         assert!(out.contains("import java.nio.file.Files;\nimport java.nio.file.Path;\n"), "{out}");
         assert!(out.contains("var engine = L.engine(new EngineOptions().srcFallback(src -> Files.readAllBytes(Path.of(src))));"), "{out}");
         assert!(!out.contains("loadFont") && !out.contains("loadImage"), "{out}");
@@ -3932,7 +4073,7 @@ mod tests {
     fn test_java_a_document_too_large_for_one_method_has_a_method_for_each_section() {
         let xml = large_document(3, 1, 250);
         let out = java(&xml);
-        assert!(out.contains("        var doc = L.document(new DocumentAttr().size(\"a4\"), List.of(\n            section1(),\n            section2(),\n            section3()\n        ));"), "{out}");
+        assert!(out.contains("        var doc = L.document(new DocumentAttr().size(PageSize.A4), List.of(\n            section1(),\n            section2(),\n            section3()\n        ));"), "{out}");
         for n in 1..=3 {
             assert!(out.contains(&format!("\n    static SectionNode section{n}() {{\n        return L.section(NoAttr, List.of(\n            L.layout(NoAttr, List.of(\n")), "section {n}: {out}");
         }
@@ -4110,11 +4251,11 @@ mod tests {
             <section><layout><bookmark label="Methods" level="2"/><text>Methods</text></layout></section>
         </document></lpdf>"#;
         for (target, bookmark, section) in [
-            ("js", "L.bookmark({ label: 'Methods', level: 2 })", "L.section({ type: 'toc' }"),
-            ("php", "L::bookmark(new BookmarkAttr(label: 'Methods', level: 2))", "L::section(new SectionAttr(type: 'toc')"),
-            ("python", "L.bookmark(BookmarkAttr(label='Methods', level=2))", "L.section(SectionAttr(type='toc')"),
-            ("dotnet", "L.Bookmark(new() { Label = \"Methods\", Level = 2 })", "L.Section(new() { Type = \"toc\" }"),
-            ("java", "L.bookmark(new BookmarkAttr().label(\"Methods\").level(2))", "L.section(new SectionAttr().type(\"toc\")"),
+            ("js", "L.bookmark({ label: 'Methods', level: 2 })", "L.section({ type: SectionType.Toc }"),
+            ("php", "L::bookmark(new BookmarkAttr(label: 'Methods', level: 2))", "L::section(new SectionAttr(type: SectionType::Toc)"),
+            ("python", "L.bookmark(BookmarkAttr(label='Methods', level=2))", "L.section(SectionAttr(type=SectionType.TOC)"),
+            ("dotnet", "L.Bookmark(new() { Label = \"Methods\", Level = 2 })", "L.Section(new() { Type = SectionType.Toc }"),
+            ("java", "L.bookmark(new BookmarkAttr().label(\"Methods\").level(2))", "L.section(new SectionAttr().type(SectionType.TOC)"),
         ] {
             let out = codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
             assert!(out.contains(bookmark), "{target}: {out}");
