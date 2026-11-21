@@ -6,6 +6,11 @@
 // The generated classes cannot drift while `make check-sdk-api` passes; this check also covers the
 // classes that are written by hand: the document, its sections, meta, output, assets and tokens.
 //
+// It checks the constants too, which the generator writes for every closed enumeration: that Node's entry points and
+// Python's package export every one of them, which are lists written by hand, and that the TypeScript attributes that
+// are written by hand (the document, its sections and output, and a stamp) have the constants' types, as the generated
+// ones do, so `orientation: 'landscpe'` doesn't compile.
+//
 // Usage: node scripts/check-sdk-parity.mjs                      the five SDKs under repos/; list the differences, exit 1 if any
 //        node scripts/check-sdk-parity.mjs --sdk node=.          only the SDK in the given folder (an SDK repository's CI)
 
@@ -15,10 +20,12 @@ import { fileURLToPath } from 'node:url';
 
 import { LANGUAGES, sdkRepositories } from './lib/sdk-repositories.mjs';
 import { loadSchema } from './lib/xsd.mjs';
+import { constantsOf, shapeOf, STAMP_CONSTANTS, STAMP_TYPESCRIPT, typeScriptOf } from './lib/constants.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schema = loadSchema(path.join(root, 'schema/lpdf.xsd'));
 const { repositories, selected } = sdkRepositories(root, process.argv);
+const constants = constantsOf(schema);
 
 const attributes = (element, where = 'global') =>
     schema.element(element, where).attributes.map((a) => a.name).filter((name) => !name.startsWith('data-'));
@@ -144,6 +151,37 @@ const scans = {
 };
 for (const sdk of selected) scans[sdk]();
 
+// ── The constants ─────────────────────────────────────────────────────────────
+
+/** The TypeScript type each attribute of a hand-written class takes, from the schema's type of it, by class name. */
+const TYPED = { DocumentAttr: 'document', SectionAttr: 'section', DocumentOutput: 'output' };
+
+const typed = { node: {} };
+const typeScans = {
+    node() {
+        for (const file of files(path.join(repositories.node, 'src'), '.ts')) {
+            for (const [, name, body] of read(file).matchAll(/export interface (\w+)(?:\s+extends[^{]+)?\s*\{([\s\S]*?)\n\}/g)) {
+                if (name in TYPED || name === 'StampAttr') {
+                    typed.node[name] = Object.fromEntries([...body.matchAll(/^\s+(\w+)\??\s*:\s*([^;]+);/gm)].map((m) => [kebab.camel(m[1]), m[2].trim()]));
+                }
+            }
+        }
+    },
+};
+for (const sdk of selected) typeScans[sdk]?.();
+
+/** What each SDK's entry point has to export, by the names that were not found: the same constants everywhere. */
+function missingExports(sdk) {
+    const names = [...constants, ...STAMP_CONSTANTS].map((c) => c.name);
+    const star = { node: ["src/index.ts", "src/browser.ts"], python: ['src/lpdf/__init__.py'] }[sdk] ?? [];
+    return star.flatMap((entry) => {
+        const text = read(path.join(repositories[sdk], entry));
+        // `export * from './constants'` or `from .constants import *` exports them all; else each must be named.
+        if (/export \* from '\.\/constants'/.test(text) || /from \.constants import \*/.test(text)) return [];
+        return names.filter((name) => !new RegExp(`\\b${name}\\b`).test(text)).map((name) => `${entry} doesn't export ${name}`);
+    });
+}
+
 // ── Compare ───────────────────────────────────────────────────────────────────
 
 let problems = 0;
@@ -161,6 +199,35 @@ for (const sdk of selected) {
         if (missing.length || extra.length) {
             problems++;
             console.log(`${sdk}: ${name}${missing.length ? ` lacks ${missing.join(', ')}` : ''}${extra.length ? ` has ${extra.join(', ')} that the schema does not` : ''}`);
+        }
+    }
+}
+
+for (const sdk of selected) {
+    for (const message of missingExports(sdk)) {
+        problems++;
+        console.log(`${sdk}: ${message}`);
+    }
+}
+for (const [name, element] of Object.entries(TYPED)) {
+    const actual = typed.node?.[name];
+    if (!selected.includes('node') || !actual) continue;
+    for (const a of schema.element(element).attributes) {
+        const shape = shapeOf(schema, constants, a.typeName);
+        if (!shape || !(a.name in actual)) continue;
+        const wanted = typeScriptOf(shape);
+        if (actual[a.name].replace(/\s+/g, ' ') !== wanted) {
+            problems++;
+            console.log(`node: ${name}.${a.name} is ${actual[a.name]}, and the schema's ${a.typeName} makes it ${wanted}`);
+        }
+    }
+}
+if (selected.includes('node') && typed.node?.StampAttr) {
+    for (const [option, wanted] of Object.entries(STAMP_TYPESCRIPT)) {
+        const actual = typed.node.StampAttr[option];
+        if (actual !== wanted) {
+            problems++;
+            console.log(`node: StampAttr.${option} is ${actual}, and should be ${wanted}`);
         }
     }
 }

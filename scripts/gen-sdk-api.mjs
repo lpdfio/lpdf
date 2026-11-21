@@ -19,10 +19,15 @@
 // element would move the positional arguments after it.
 //
 // The constants are strings, so a value goes straight into an attribute: type: FieldType.Text in Node,
-// FieldAttr(type=FieldType.TEXT) in Python, new FieldAttr().type(FieldType.TEXT) in Java.
+// FieldAttr(type=FieldType.TEXT) in Python, new FieldAttr().type(FieldType.TEXT) in Java. There is one for each closed
+// enumeration of the schema, derived from it (scripts/lib/constants.mjs) with the doc comment of the type, so an
+// enumeration that is added gets one by running this script. In TypeScript the attribute takes the constant's type:
+// `orientation?: Orientation`, so a value that is none of its own doesn't compile; `size` also takes a width and a
+// height. The other four SDKs take a string.
 //
 // It also writes the core's table of the attributes of every element and their types, src/core/src/schema_attrs.rs,
-// which the engine checks a document against on both of its paths, XML and the kit tree.
+// which the engine checks a document against on both of its paths, XML and the kit tree, and which `lpdf codegen`
+// reads to write a constant where the schema has one: the constants' members and the constants each attribute takes.
 //
 // Usage: node scripts/gen-sdk-api.mjs                      write the core's table and the files of the five SDKs under repos/
 //        node scripts/gen-sdk-api.mjs --check              list the files that differ, exit 1 if any do
@@ -35,9 +40,11 @@ import { fileURLToPath } from 'node:url';
 
 import { sdkRepositories } from './lib/sdk-repositories.mjs';
 import { loadSchema } from './lib/xsd.mjs';
+import { constantsOf, shapeOf, STAMP_CONSTANTS, typeScriptOf } from './lib/constants.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schema = loadSchema(path.join(root, 'schema/lpdf.xsd'));
+const CONSTANTS = constantsOf(schema);
 const check = process.argv.includes('--check');
 const coreOnly = process.argv.includes('--core');
 const { repositories, selected } = coreOnly ? { repositories: {}, selected: [] } : sdkRepositories(root, process.argv);
@@ -132,11 +139,22 @@ const TYPES = {
     java: { boolean: 'boolean', integer: 'int', decimal: 'double', 'name-or-number': 'String|double', string: 'String' },
 };
 
+/** The constants' types that the interfaces of attrs.ts name, which it imports. */
+const NODE_TYPES_USED = new Set();
+
 function typeOf(language, attribute) {
     const { kind } = attribute.type;
     // LineHeight is the C# type of line-height alone; another attribute of a name or a number needs a type of its own.
     if (kind === 'name-or-number' && attribute.name !== 'line-height') {
         throw new Error(`${attribute.name} is a name or a number, which only line-height has a type for`);
+    }
+    if (language === 'node') {
+        const shape = shapeOf(schema, CONSTANTS, attribute.typeName);
+        if (shape) {
+            const type = typeScriptOf(shape);
+            for (const part of type.split(' | ')) if (part !== 'string') NODE_TYPES_USED.add(part);
+            return type;
+        }
     }
     return TYPES[language][kind];
 }
@@ -365,12 +383,11 @@ function gradientFiles() {
     ]));
     files.push(javaClass('GradientStop', 'stop', stopDoc, stopAttributes));
 
-    // Node: interfaces in attrs.ts. The type of a gradient lists its values, as the hand-written one did.
-    const kinds = schema.simpleTypeValues('GradientType').map((v) => `'${v}'`).join(' | ');
+    // Node: interfaces in attrs.ts.
     const node = ['/**', ...wrap(stopDoc, 100, ' * '), ' */', 'export interface GradientStop {'];
     for (const a of stopAttributes) node.push(...tsMember(a, typeOf('node', a)));
     node.push('}', '', '/**', ...wrap(doc, 100, ' * '), ' */', 'export interface GradientToken {');
-    for (const a of attributes) node.push(...tsMember(a, a.name === 'type' ? kinds : typeOf('node', a)));
+    for (const a of attributes) node.push(...tsMember(a, typeOf('node', a)));
     node.push(...['  /**', ...wrap(STOPS_DOC, 100, '   * '), '   */'], '  stops?: GradientStop[];', '}', '');
     return { files, node: node.join('\n') };
 }
@@ -430,99 +447,118 @@ function rulingFiles() {
     ], [...attributes.filter((a) => a.required).map((a) => a.name), 'lines']));
     files.push(javaClass('RulingLines', 'lines', linesDoc, linesAttributes));
 
-    // Node: interfaces in attrs.ts. The values of `origin` and `ocg` are listed, as a gradient's `type` is.
-    const values = (type) => schema.simpleTypeValues(type).map((v) => `'${v}'`).join(' | ');
-    const listed = { origin: values('RulingOrigin'), ocg: values('Ocg') };
+    // Node: interfaces in attrs.ts.
     const node = ['/**', ...wrap(linesDoc, 100, ' * '), ' */', 'export interface RulingLines {'];
     for (const a of linesAttributes) node.push(...tsMember(a, typeOf('node', a)));
     node.push('}', '', '/**', ...wrap(doc, 100, ' * '), ' */', 'export interface RulingToken {');
-    for (const a of attributes) node.push(...tsMember(a, listed[a.name] ?? typeOf('node', a)));
+    for (const a of attributes) node.push(...tsMember(a, typeOf('node', a)));
     node.push(...['  /**', ...wrap(LINES_DOC, 100, '   * '), '   */'], '  lines: RulingLines[];', '}', '');
     return { files, node: node.join('\n') };
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// The schema's enumerations that the SDKs name. `area` is the folder of the .NET and PHP file and the
-// Python subpackage. A constant's name is its value, in each language's case.
-const CONSTANTS = [
-    { name: 'FieldType', area: 'layout', file: 'field_type', values: () => schema.attributeValues('field', 'type'),
-      doc: 'The values of the `type` attribute of a field.' },
-    { name: 'Pin', area: 'layout', file: 'pin', values: () => schema.simpleTypeValues('RegionPin'),
-      doc: 'The values of the `pin` attribute of a region.' },
-    { name: 'Orientation', area: 'kit', file: 'orientation', values: () => schema.simpleTypeValues('Orientation'),
-      doc: 'The values of the `orientation` attribute of a document or a section.' },
-    { name: 'SectionType', area: 'kit', file: 'section_type', values: () => schema.simpleTypeValues('SectionType'),
-      doc: 'The values of the `type` attribute of a section.' },
-    { name: 'FootnoteCounter', area: 'kit', file: 'footnote_counter', values: () => schema.simpleTypeValues('FootnoteCounter'),
-      doc: 'The values of the `footnote-counter` attribute of a document or a section.' },
-    { name: 'ColumnFill', area: 'kit', file: 'column_fill', values: () => schema.simpleTypeValues('ColumnFill'),
-      doc: 'The values of the `column-fill` attribute of a section: how the columns of its last page fill.' },
-    { name: 'Grow', area: 'kit', file: 'grow', values: () => schema.simpleTypeValues('Grow'),
-      doc: 'The values of the `grow` attribute of a section: the sizes its page grows in to fit its content.' },
-    { name: 'Cipher', area: 'kit', file: 'cipher', values: () => schema.simpleTypeValues('Cipher'),
-      doc: 'The values of the `encrypt` attribute of the output: the cipher the PDF is encrypted with.' },
-    { name: 'Permission', area: 'kit', file: 'permission', values: () => schema.simpleTypeValues('Permission'),
-      doc: 'The words of the `allow` attribute of the output, separated by spaces: what a reader of an encrypted PDF may do.' },
-    { name: 'FileRelationship', area: 'kit', file: 'file_relationship', values: () => schema.simpleTypeValues('FileRelationship'),
-      doc: 'The values of the `relationship` attribute of a file the PDF carries: how it relates to the document.' },
-    { name: 'BuiltinFont', area: 'kit', file: 'builtin_font', values: () => schema.simpleTypeValues('BuiltinFont'),
-      doc: 'The values of the `core` attribute of a font: the built-in PDF fonts, which need no file.' },
-    { name: 'PageScope', area: 'shared', file: 'page_scope', values: () => schema.simpleTypeValues('PageScope'),
-      doc: 'The named values of the `page` attribute of a layer or a region. A range such as 2-4 or 1,3-5 is a string.' },
-];
+// One constant for each closed enumeration of the schema (scripts/lib/constants.mjs), except the few it excludes with
+// a reason. `area` is the folder of the .NET and PHP file: where the attributes that take it are, or `shared` when
+// they are in more than one place, as the `page` of a layer and of a region are.
 
 const AREAS = {
     layout: { folder: 'Layout', dotnet: 'Lpdf.Layout', php: 'Lpdf\\Layout' },
+    canvas: { folder: 'Canvas', dotnet: 'Lpdf.Canvas', php: 'Lpdf\\Canvas' },
     kit: { folder: 'Kit', dotnet: 'Lpdf.Kit', php: 'Lpdf\\Kit' },
+    markdown: { folder: 'Markdown', dotnet: 'Lpdf.Markdown', php: 'Lpdf\\Markdown' },
     shared: { folder: 'Shared', dotnet: 'Lpdf.Shared', php: 'Lpdf\\Shared' },
+    engine: { folder: 'Engine', dotnet: 'Lpdf.Engine', php: 'Lpdf\\Engine' },
 };
+
+/** The area of the classes of an element, as CLASSES gives it; the document, its sections, tokens and assets are `kit`. */
+function areaOfElement(element) {
+    if (element.within === 'markdown-styles' || element.within === 'markdown') return 'markdown';
+    const spec = CLASSES.find((c) => c.el === element.name && c.where !== 'markdown');
+    return spec ? spec.area : 'kit';
+}
+
+/** The area of a constant: that of every element with an attribute of its type, or `shared` for more than one. */
+function areaOfConstant(constant) {
+    const areas = new Set();
+    for (const element of schema.allElements()) {
+        for (const a of element.attributes) {
+            // A list takes its items' constant as words of a string, such as `allow` of the output.
+            const takes = [a.typeName, schema.listItemType(a.typeName)];
+            if (takes.some((type) => shapeOf(schema, CONSTANTS, type)?.constants.includes(constant.name))) areas.add(areaOfElement(element));
+        }
+    }
+    if (areas.size === 0) throw new Error(`no attribute takes the constant ${constant.name}`);
+    return areas.size === 1 ? [...areas][0] : 'shared';
+}
+for (const constant of CONSTANTS) constant.area = areaOfConstant(constant);
+
+/** The constants the SDKs have: the schema's, and the stamp's. The core's table has the schema's alone. */
+const SDK_CONSTANTS = [...CONSTANTS, ...STAMP_CONSTANTS];
 
 function upperSnake(value) { return words(value).join('_').toUpperCase(); }
 
-function constantsFor(spec) {
-    const values = spec.values();
-    const area = AREAS[spec.area];
+/**
+ * The files of a constant: .NET, PHP and Java have a class of its own, in the .NET and PHP area it belongs to, and Python
+ * and Node have one file for all constants (`constantsFiles`).
+ */
+function constantsFor(constant) {
+    const { name, doc, members } = constant;
+    const area = AREAS[constant.area];
 
     const dotnetLines = [
         ...HEADER.map((h) => `// ${h}`), `namespace ${area.dotnet};`, '', '#pragma warning disable CS1591',
-        `/// <summary>${xmlDoc(spec.doc)}</summary>`, `public static class ${spec.name}`, '{',
-        ...values.map((v) => `    public const string ${pascal(v)} = "${v}";`), '}', '',
+        `/// <summary>${xmlDoc(doc)}</summary>`, `public static class ${name}`, '{',
+        ...members.map((m) => `    public const string ${m.pascal} = "${m.value}";`), '}', '',
     ];
 
     // Untyped constants: typed class constants need PHP 8.3, and the PHP SDK runs on 8.2.
     const phpLines = [
         '<?php', '', 'declare(strict_types=1);', '', `namespace ${area.php};`, '', '/**',
-        ...wrap(spec.doc, 100, ' * '), ' *', ...HEADER.map((h) => ` * ${h}`), ' */', `final class ${spec.name}`, '{',
-        ...values.map((v) => `    public const ${pascal(v)} = '${v}';`), '}', '',
-    ];
-
-    const pythonLines = [
-        ...HEADER.map((h) => `# ${h}`), 'from enum import StrEnum', '', '',
-        `class ${spec.name}(StrEnum):`, `    """${spec.doc}"""`, '',
-        ...values.map((v) => `    ${upperSnake(v)} = "${v}"`), '',
+        ...wrap(doc, 100, ' * '), ' *', ...HEADER.map((h) => ` * ${h}`), ' */', `final class ${name}`, '{',
+        ...members.map((m) => `    public const ${m.pascal} = '${m.value}';`), '}', '',
     ];
 
     // Java's constants are in its own case, as Python's are.
     const javaLines = [
-        ...JAVA_HEADER, ...javadoc(spec.doc, ''), `public final class ${spec.name} {`, `    private ${spec.name}() {`, '    }', '',
-        ...values.map((v) => `    public static final String ${upperSnake(v)} = "${v}";`), '}', '',
+        ...JAVA_HEADER, ...javadoc(doc, ''), `public final class ${name} {`, `    private ${name}() {`, '    }', '',
+        ...members.map((m) => `    public static final String ${m.snake} = "${m.value}";`), '}', '',
     ];
 
-    const nodeLines = [
-        `/** ${spec.doc} */`, `export const ${spec.name} = {`, ...values.map((v) => `  ${pascal(v)}: '${v}',`), '} as const;', '',
-        `export type ${spec.name} = (typeof ${spec.name})[keyof typeof ${spec.name}];`, '',
+    return [
+        { file: path.join(SDK.dotnet, area.folder, `${name}.cs`), text: dotnetLines.join('\n') },
+        { file: path.join(SDK.php, area.folder, `${name}.php`), text: phpLines.join('\n') },
+        { file: path.join(SDK.java, `${name}.java`), text: javaLines.join('\n') },
     ];
+}
 
-    return {
-        files: [
-            { file: path.join(SDK.dotnet, area.folder, `${spec.name}.cs`), text: dotnetLines.join('\n') },
-            { file: path.join(SDK.php, area.folder, `${spec.name}.php`), text: phpLines.join('\n') },
-            { file: path.join(SDK.python, spec.area, `${spec.file}.py`), text: pythonLines.join('\n') },
-            { file: path.join(SDK.java, `${spec.name}.java`), text: javaLines.join('\n') },
-        ],
-        node: nodeLines.join('\n'),
-    };
+/** A width and a height, as the schema's `PageSizeCustom` writes them; TypeScript has a template literal type for it. */
+const PAGE_SIZE_CUSTOM = { pattern: '\\d+(\\.\\d+)?(pt|mm|in) \\d+(\\.\\d+)?(pt|mm|in)',
+    typeScript: "`${number}${'pt' | 'mm' | 'in'} ${number}${'pt' | 'mm' | 'in'}`",
+    doc: 'A width and a height, such as `100pt 200pt`: each a number and `pt`, `mm` or `in`.' };
+
+/** The constants of Python and Node, each in one file: a `StrEnum` for each in `lpdf/constants.py`, and `constants.ts`. */
+function constantsFiles() {
+    const pythonLines = [...HEADER.map((h) => `# ${h}`), 'from enum import StrEnum', '', '__all__ = [', ...SDK_CONSTANTS.map((c) => `    "${c.name}",`), ']', ''];
+    for (const { name, doc, members } of SDK_CONSTANTS) {
+        pythonLines.push('', `class ${name}(StrEnum):`, `    """${doc}"""`, '', ...members.map((m) => `    ${m.snake} = "${m.value}"`), '');
+    }
+
+    // The pattern of the custom size is written once in the xsd and once above: they have to agree.
+    const patterns = schema.patternsOf('PageSizeCustom');
+    if (patterns.length !== 1 || patterns[0] !== PAGE_SIZE_CUSTOM.pattern) {
+        throw new Error(`the schema's PageSizeCustom is ${patterns.join(' | ')}, which PAGE_SIZE_CUSTOM in gen-sdk-api.mjs doesn't match`);
+    }
+    const nodeLines = [...HEADER.map((h) => `// ${h}`), ''];
+    for (const { name, doc, members } of SDK_CONSTANTS) {
+        nodeLines.push(`/** ${doc} */`, `export const ${name} = {`, ...members.map((m) => `  ${m.pascal}: '${m.value}',`), '} as const;', '',
+            `export type ${name} = (typeof ${name})[keyof typeof ${name}];`, '');
+        if (name === 'PageSize') nodeLines.push(`/** ${PAGE_SIZE_CUSTOM.doc} */`, `export type PageSizeCustom = ${PAGE_SIZE_CUSTOM.typeScript};`, '');
+    }
+    return [
+        { file: path.join(SDK.python, 'constants.py'), text: pythonLines.join('\n') },
+        { file: path.join(SDK.node, 'constants.ts'), text: nodeLines.join('\n') },
+    ];
 }
 
 // ── Core ──────────────────────────────────────────────────────────────────────
@@ -539,8 +575,12 @@ function rustBound(type, end) {
     return `Bound::${exclusive ? 'Exclusive' : 'Inclusive'}(${rustNumber(value, 'decimal')})`;
 }
 
-function rustKind(type) {
+function rustKind(attribute) {
+    const { type } = attribute;
     const integer = (end) => (type[end] === undefined ? 'None' : `Some(${type[end]})`);
+    // A string that takes the values of a constant: the code generator writes the constant in its place.
+    const shape = shapeOf(schema, CONSTANTS, attribute.typeName);
+    if (shape && type.kind === 'string') return `Kind::Constants(&[${shape.constants.map((c) => `"${c}"`).join(', ')}])`;
     switch (type.kind) {
         case 'boolean': return 'Kind::Boolean';
         case 'integer': return `Kind::Integer { min: ${integer('min')}, max: ${integer('max')} }`;
@@ -569,16 +609,28 @@ function coreTable() {
     const lines = [
         ...HEADER.map((h) => `// ${h}`), '',
         '//! The attributes of every element of lpdf.xsd and their types.', '',
-        'use crate::attr_types::{Bound, Kind};', '',
+        'use crate::attr_types::{Bound, Constant, Kind};', '',
         '/// The attributes of an element, in the order the schema lists them, without the data-* attributes.',
         'pub(crate) type Attributes = &\'static [(&\'static str, Kind)];', '',
     ];
     for (const element of elements) {
         const attributes = element.attributes.filter((a) => !a.name.startsWith('data-'));
         lines.push(`const ${rustConst(element)}: Attributes = &[`);
-        for (const a of attributes) lines.push(`    ("${a.name}", ${rustKind(a.type)}),`);
+        for (const a of attributes) lines.push(`    ("${a.name}", ${rustKind(a)}),`);
         lines.push('];', '');
     }
+    lines.push(
+        '/// The constants of the SDKs, one for each closed enumeration of the schema: the name, the area it is in (the .NET',
+        '/// and PHP namespace) and its members, each a value with its name in Pascal case and in upper snake case.',
+        '#[allow(dead_code, reason = "only codegen asks, and the WASI binary and the native library have no codegen")]',
+        'pub(crate) const CONSTANTS: &[Constant] = &[',
+    );
+    for (const c of CONSTANTS) {
+        lines.push(`    Constant { name: "${c.name}", area: "${c.area}", members: &[`);
+        for (const m of c.members) lines.push(`        ("${m.value}", "${m.pascal}", "${m.snake}"),`);
+        lines.push('    ] },');
+    }
+    lines.push('];', '');
     lines.push(
         '/// The attributes of the element `name` written in the element `parent`, or `None` for an element the schema',
         '/// does not have there.',
@@ -606,16 +658,8 @@ for (const spec of CLASSES) {
     generated.push(dotnet(spec, element), php(spec, element), python(spec, element), java(spec, element));
     nodeInterfaces.push(nodeInterface(spec, element));
 }
-const nodeConstants = [];
-for (const spec of CONSTANTS) {
-    const made = constantsFor(spec);
-    generated.push(...made.files);
-    nodeConstants.push(made.node);
-}
-generated.push({
-    file: path.join(SDK.node, 'constants.ts'),
-    text: [...HEADER.map((h) => `// ${h}`), '', ...nodeConstants].join('\n'),
-});
+for (const constant of SDK_CONSTANTS) generated.push(...constantsFor(constant));
+generated.push(...constantsFiles());
 const spots = spotFiles();
 generated.push(...spots.files);
 const gradients = gradientFiles();
@@ -624,7 +668,8 @@ const rulings = rulingFiles();
 generated.push(...rulings.files);
 generated.push({
     file: path.join(SDK.node, 'attrs.ts'),
-    text: [...HEADER.map((h) => `// ${h}`), '', ...nodeInterfaces, spots.node, gradients.node, rulings.node].join('\n'),
+    text: [...HEADER.map((h) => `// ${h}`), '', `import type { ${[...NODE_TYPES_USED].sort().join(', ')} } from './constants';`, '',
+        ...nodeInterfaces, spots.node, gradients.node, rulings.node].join('\n'),
 });
 
 // Only the SDKs asked for: the files of the others are not there to compare with. The core's table goes with all

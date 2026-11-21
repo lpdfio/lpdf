@@ -3,7 +3,7 @@
 
 //! The attributes of every element of lpdf.xsd and their types.
 
-use crate::attr_types::{Bound, Kind};
+use crate::attr_types::{Bound, Constant, Kind};
 
 /// The attributes of an element, in the order the schema lists them, without the data-* attributes.
 pub(crate) type Attributes = &'static [(&'static str, Kind)];
@@ -13,27 +13,27 @@ const RECT: Attributes = &[
     ("y", Kind::Text),
     ("width", Kind::Text),
     ("height", Kind::Text),
-    ("anchor", Kind::Text),
+    ("anchor", Kind::Constants(&["Anchor"])),
     ("radius", Kind::Text),
     ("fill", Kind::Text),
     ("stroke", Kind::Text),
     ("stroke-width", Kind::Text),
     ("stroke-dash", Kind::Text),
     ("shadow", Kind::Text),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const CIRCLE: Attributes = &[
     ("x", Kind::Text),
     ("y", Kind::Text),
     ("r", Kind::Text),
-    ("anchor", Kind::Text),
+    ("anchor", Kind::Constants(&["Anchor"])),
     ("fill", Kind::Text),
     ("stroke", Kind::Text),
     ("stroke-width", Kind::Text),
     ("stroke-dash", Kind::Text),
     ("shadow", Kind::Text),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const ELLIPSE: Attributes = &[
@@ -41,13 +41,13 @@ const ELLIPSE: Attributes = &[
     ("y", Kind::Text),
     ("rx", Kind::Text),
     ("ry", Kind::Text),
-    ("anchor", Kind::Text),
+    ("anchor", Kind::Constants(&["Anchor"])),
     ("fill", Kind::Text),
     ("stroke", Kind::Text),
     ("stroke-width", Kind::Text),
     ("stroke-dash", Kind::Text),
     ("shadow", Kind::Text),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const LINE: Attributes = &[
@@ -58,52 +58,52 @@ const LINE: Attributes = &[
     ("stroke", Kind::Text),
     ("stroke-width", Kind::Text),
     ("stroke-dash", Kind::Text),
-    ("line-cap", Kind::Text),
-    ("ocg", Kind::Text),
+    ("line-cap", Kind::Constants(&["LineCap"])),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const PATH: Attributes = &[
     ("d", Kind::Text),
     ("fill", Kind::Text),
     ("stroke", Kind::Text),
-    ("fill-rule", Kind::Text),
+    ("fill-rule", Kind::Constants(&["FillRule"])),
     ("stroke-width", Kind::Text),
     ("stroke-dash", Kind::Text),
-    ("line-cap", Kind::Text),
-    ("ocg", Kind::Text),
+    ("line-cap", Kind::Constants(&["LineCap"])),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const TEXT_AT: Attributes = &[
     ("x", Kind::Text),
     ("y", Kind::Text),
-    ("anchor", Kind::Text),
+    ("anchor", Kind::Constants(&["Anchor"])),
     ("font-size", Kind::Text),
     ("font", Kind::Text),
     ("bold", Kind::Boolean),
     ("color", Kind::Text),
-    ("align", Kind::Text),
+    ("align", Kind::Constants(&["TextAlign"])),
     ("line-height", Kind::NameOrDecimal { min: Bound::Exclusive(0.0), max: Bound::Open }),
     ("max-lines", Kind::Integer { min: Some(1), max: None }),
     ("ellipsis", Kind::Boolean),
     ("width", Kind::Text),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const IMG_AT: Attributes = &[
     ("name", Kind::Text),
     ("x", Kind::Text),
     ("y", Kind::Text),
-    ("anchor", Kind::Text),
+    ("anchor", Kind::Constants(&["Anchor"])),
     ("width", Kind::Text),
     ("height", Kind::Text),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const BARCODE_AT: Attributes = &[
-    ("type", Kind::Text),
+    ("type", Kind::Constants(&["BarcodeType"])),
     ("data", Kind::Text),
     ("height", Kind::Text),
-    ("ec", Kind::Text),
+    ("ec", Kind::Constants(&["QrEcLevel", "Pdf417EcLevel"])),
     ("hrt", Kind::Boolean),
     ("rows", Kind::Integer { min: Some(1), max: Some(144) }),
     ("columns", Kind::Integer { min: Some(1), max: Some(144) }),
@@ -112,13 +112,13 @@ const BARCODE_AT: Attributes = &[
     ("background", Kind::Text),
     ("x", Kind::Text),
     ("y", Kind::Text),
-    ("anchor", Kind::Text),
+    ("anchor", Kind::Constants(&["Anchor"])),
     ("width", Kind::Text),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const LAYER: Attributes = &[
-    ("page", Kind::Text),
+    ("page", Kind::Constants(&["PageScope"])),
     ("opacity", Kind::Decimal { min: Bound::Inclusive(0.0), max: Bound::Inclusive(1.0) }),
     ("transform", Kind::Text),
     ("clip", Kind::Text),
@@ -126,12 +126,12 @@ const LAYER: Attributes = &[
     ("font-size", Kind::Text),
     ("color", Kind::Text),
     ("alt", Kind::Text),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const FONT: Attributes = &[
     ("name", Kind::Text),
-    ("core", Kind::Text),
+    ("core", Kind::Constants(&["BuiltinFont"])),
     ("ref", Kind::Text),
     ("src", Kind::Text),
 ];
@@ -172,7 +172,7 @@ const STOP: Attributes = &[
 
 const GRADIENT: Attributes = &[
     ("name", Kind::Text),
-    ("type", Kind::Text),
+    ("type", Kind::Constants(&["GradientType"])),
     ("from", Kind::Text),
     ("to", Kind::Text),
     ("angle", Kind::Decimal { min: Bound::Open, max: Bound::Open }),
@@ -191,9 +191,9 @@ const LINES: Attributes = &[
 
 const RULING: Attributes = &[
     ("name", Kind::Text),
-    ("origin", Kind::Text),
+    ("origin", Kind::Constants(&["RulingOrigin"])),
     ("edges", Kind::Boolean),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const TOKENS: Attributes = &[
@@ -299,11 +299,11 @@ const META: Attributes = &[
 ];
 
 const OUTPUT: Attributes = &[
-    ("encrypt", Kind::Text),
+    ("encrypt", Kind::Constants(&["Cipher"])),
     ("allow", Kind::Text),
-    ("pdfa", Kind::Text),
-    ("pdfua", Kind::Text),
-    ("pdfx", Kind::Text),
+    ("pdfa", Kind::Constants(&["PdfALevel"])),
+    ("pdfua", Kind::Constants(&["PdfUaPart"])),
+    ("pdfx", Kind::Constants(&["PdfXVersion"])),
     ("profile", Kind::Text),
     ("linearize", Kind::Boolean),
     ("facturx-strict", Kind::Boolean),
@@ -317,7 +317,7 @@ const FILE: Attributes = &[
     ("src", Kind::Text),
     ("ref", Kind::Text),
     ("mime", Kind::Text),
-    ("relationship", Kind::Text),
+    ("relationship", Kind::Constants(&["FileRelationship"])),
     ("description", Kind::Text),
 ];
 
@@ -326,8 +326,8 @@ const LAYOUT: Attributes = &[
 ];
 
 const LAYOUT_REGION: Attributes = &[
-    ("pin", Kind::Text),
-    ("page", Kind::Text),
+    ("pin", Kind::Constants(&["Pin"])),
+    ("page", Kind::Constants(&["PageScope"])),
     ("w", Kind::Text),
     ("debug", Kind::Boolean),
     ("col", Kind::Integer { min: Some(1), max: Some(12) }),
@@ -355,7 +355,7 @@ const MARKDOWN_STYLES_H1: Attributes = &[
     ("font-size", Kind::Text),
     ("bold", Kind::Boolean),
     ("color", Kind::Text),
-    ("align", Kind::Text),
+    ("align", Kind::Constants(&["TextAlign"])),
     ("line-height", Kind::NameOrDecimal { min: Bound::Exclusive(0.0), max: Bound::Open }),
     ("padding", Kind::Text),
     ("background", Kind::Text),
@@ -368,7 +368,7 @@ const MARKDOWN_STYLES_H2: Attributes = &[
     ("font-size", Kind::Text),
     ("bold", Kind::Boolean),
     ("color", Kind::Text),
-    ("align", Kind::Text),
+    ("align", Kind::Constants(&["TextAlign"])),
     ("line-height", Kind::NameOrDecimal { min: Bound::Exclusive(0.0), max: Bound::Open }),
     ("padding", Kind::Text),
     ("background", Kind::Text),
@@ -381,7 +381,7 @@ const MARKDOWN_STYLES_H3: Attributes = &[
     ("font-size", Kind::Text),
     ("bold", Kind::Boolean),
     ("color", Kind::Text),
-    ("align", Kind::Text),
+    ("align", Kind::Constants(&["TextAlign"])),
     ("line-height", Kind::NameOrDecimal { min: Bound::Exclusive(0.0), max: Bound::Open }),
     ("padding", Kind::Text),
     ("background", Kind::Text),
@@ -394,7 +394,7 @@ const MARKDOWN_STYLES_H4: Attributes = &[
     ("font-size", Kind::Text),
     ("bold", Kind::Boolean),
     ("color", Kind::Text),
-    ("align", Kind::Text),
+    ("align", Kind::Constants(&["TextAlign"])),
     ("line-height", Kind::NameOrDecimal { min: Bound::Exclusive(0.0), max: Bound::Open }),
     ("padding", Kind::Text),
     ("background", Kind::Text),
@@ -407,7 +407,7 @@ const MARKDOWN_STYLES_H5: Attributes = &[
     ("font-size", Kind::Text),
     ("bold", Kind::Boolean),
     ("color", Kind::Text),
-    ("align", Kind::Text),
+    ("align", Kind::Constants(&["TextAlign"])),
     ("line-height", Kind::NameOrDecimal { min: Bound::Exclusive(0.0), max: Bound::Open }),
     ("padding", Kind::Text),
     ("background", Kind::Text),
@@ -420,7 +420,7 @@ const MARKDOWN_STYLES_H6: Attributes = &[
     ("font-size", Kind::Text),
     ("bold", Kind::Boolean),
     ("color", Kind::Text),
-    ("align", Kind::Text),
+    ("align", Kind::Constants(&["TextAlign"])),
     ("line-height", Kind::NameOrDecimal { min: Bound::Exclusive(0.0), max: Bound::Open }),
     ("padding", Kind::Text),
     ("background", Kind::Text),
@@ -433,7 +433,7 @@ const MARKDOWN_STYLES_P: Attributes = &[
     ("font-size", Kind::Text),
     ("bold", Kind::Boolean),
     ("color", Kind::Text),
-    ("align", Kind::Text),
+    ("align", Kind::Constants(&["TextAlign"])),
     ("line-height", Kind::NameOrDecimal { min: Bound::Exclusive(0.0), max: Bound::Open }),
     ("padding", Kind::Text),
     ("background", Kind::Text),
@@ -458,7 +458,7 @@ const MARKDOWN_STYLES_QUOTE: Attributes = &[
     ("font-size", Kind::Text),
     ("bold", Kind::Boolean),
     ("color", Kind::Text),
-    ("align", Kind::Text),
+    ("align", Kind::Constants(&["TextAlign"])),
     ("line-height", Kind::NameOrDecimal { min: Bound::Exclusive(0.0), max: Bound::Open }),
     ("padding", Kind::Text),
     ("background", Kind::Text),
@@ -477,7 +477,7 @@ const MARKDOWN_STYLES_LI: Attributes = &[
     ("background", Kind::Text),
     ("border", Kind::Text),
     ("indent", Kind::Text),
-    ("bullet", Kind::Text),
+    ("bullet", Kind::Constants(&["ListBullet"])),
 ];
 
 const MARKDOWN_STYLES_HR: Attributes = &[
@@ -524,7 +524,7 @@ const MARKDOWN_STYLES_TH: Attributes = &[
     ("font-size", Kind::Text),
     ("bold", Kind::Boolean),
     ("color", Kind::Text),
-    ("align", Kind::Text),
+    ("align", Kind::Constants(&["TextAlign"])),
     ("padding", Kind::Text),
     ("background", Kind::Text),
     ("border", Kind::Text),
@@ -535,7 +535,7 @@ const MARKDOWN_STYLES_TD: Attributes = &[
     ("font-size", Kind::Text),
     ("bold", Kind::Boolean),
     ("color", Kind::Text),
-    ("align", Kind::Text),
+    ("align", Kind::Constants(&["TextAlign"])),
     ("padding", Kind::Text),
     ("background", Kind::Text),
     ("border", Kind::Text),
@@ -546,33 +546,33 @@ const MARKDOWN_MARKDOWN_CONTENT: Attributes = &[
 
 const DOCUMENT: Attributes = &[
     ("font", Kind::Text),
-    ("size", Kind::Text),
-    ("orientation", Kind::Text),
+    ("size", Kind::Constants(&["PageSize"])),
+    ("orientation", Kind::Constants(&["Orientation"])),
     ("bleed", Kind::Text),
     ("background", Kind::Text),
     ("debug", Kind::Boolean),
-    ("footnote-counter", Kind::Text),
+    ("footnote-counter", Kind::Constants(&["FootnoteCounter"])),
 ];
 
 const SECTION: Attributes = &[
-    ("size", Kind::Text),
-    ("orientation", Kind::Text),
+    ("size", Kind::Constants(&["PageSize"])),
+    ("orientation", Kind::Constants(&["Orientation"])),
     ("bleed", Kind::Text),
     ("background", Kind::Text),
     ("ruling", Kind::Text),
     ("title", Kind::Text),
     ("debug", Kind::Boolean),
-    ("type", Kind::Text),
-    ("footnote-counter", Kind::Text),
+    ("type", Kind::Constants(&["SectionType"])),
+    ("footnote-counter", Kind::Constants(&["FootnoteCounter"])),
     ("toc-indent-step", Kind::Text),
     ("page-start", Kind::Integer { min: Some(1), max: Some(2147483647) }),
-    ("page-format", Kind::Text),
+    ("page-format", Kind::Constants(&["ListFormat"])),
     ("page-prefix", Kind::Text),
     ("columns", Kind::Integer { min: Some(1), max: Some(12) }),
     ("column-gap", Kind::Text),
     ("column-rule", Kind::Text),
-    ("column-fill", Kind::Text),
-    ("grow", Kind::Text),
+    ("column-fill", Kind::Constants(&["ColumnFill"])),
+    ("grow", Kind::Constants(&["Grow"])),
 ];
 
 const LPDF: Attributes = &[
@@ -591,11 +591,11 @@ const COLUMN: Attributes = &[
     ("radius", Kind::Text),
     ("opacity", Kind::Decimal { min: Bound::Inclusive(0.0), max: Bound::Inclusive(1.0) }),
     ("shadow", Kind::Text),
-    ("paginate", Kind::Text),
+    ("paginate", Kind::Constants(&["Paginate"])),
     ("debug", Kind::Boolean),
-    ("ocg", Kind::Text),
-    ("align", Kind::Text),
-    ("justify", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
+    ("align", Kind::Constants(&["BoxAlign"])),
+    ("justify", Kind::Constants(&["BoxJustify"])),
     ("width", Kind::Text),
     ("bulk", Kind::Boolean),
 ];
@@ -612,11 +612,11 @@ const ROW: Attributes = &[
     ("radius", Kind::Text),
     ("opacity", Kind::Decimal { min: Bound::Inclusive(0.0), max: Bound::Inclusive(1.0) }),
     ("shadow", Kind::Text),
-    ("paginate", Kind::Text),
+    ("paginate", Kind::Constants(&["Paginate"])),
     ("debug", Kind::Boolean),
-    ("ocg", Kind::Text),
-    ("align", Kind::Text),
-    ("justify", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
+    ("align", Kind::Constants(&["BoxAlign"])),
+    ("justify", Kind::Constants(&["BoxJustify"])),
     ("width", Kind::Text),
 ];
 
@@ -632,15 +632,15 @@ const LIST: Attributes = &[
     ("radius", Kind::Text),
     ("opacity", Kind::Decimal { min: Bound::Inclusive(0.0), max: Bound::Inclusive(1.0) }),
     ("shadow", Kind::Text),
-    ("paginate", Kind::Text),
+    ("paginate", Kind::Constants(&["Paginate"])),
     ("debug", Kind::Boolean),
-    ("ocg", Kind::Text),
-    ("type", Kind::Text),
-    ("format", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
+    ("type", Kind::Constants(&["ListType"])),
+    ("format", Kind::Constants(&["ListFormat"])),
     ("start", Kind::Integer { min: None, max: None }),
     ("prefix", Kind::Text),
     ("suffix", Kind::Text),
-    ("bullet", Kind::Text),
+    ("bullet", Kind::Constants(&["ListBullet"])),
     ("indent", Kind::Text),
     ("width", Kind::Text),
     ("bulk", Kind::Boolean),
@@ -658,9 +658,9 @@ const LI: Attributes = &[
     ("radius", Kind::Text),
     ("opacity", Kind::Decimal { min: Bound::Inclusive(0.0), max: Bound::Inclusive(1.0) }),
     ("shadow", Kind::Text),
-    ("paginate", Kind::Text),
+    ("paginate", Kind::Constants(&["Paginate"])),
     ("debug", Kind::Boolean),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
     ("checked", Kind::Boolean),
 ];
 
@@ -676,9 +676,9 @@ const GRID: Attributes = &[
     ("radius", Kind::Text),
     ("opacity", Kind::Decimal { min: Bound::Inclusive(0.0), max: Bound::Inclusive(1.0) }),
     ("shadow", Kind::Text),
-    ("paginate", Kind::Text),
+    ("paginate", Kind::Constants(&["Paginate"])),
     ("debug", Kind::Boolean),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
     ("width", Kind::Text),
     ("col-width", Kind::Text),
     ("cols", Kind::Integer { min: Some(1), max: Some(12) }),
@@ -696,9 +696,9 @@ const FRAME: Attributes = &[
     ("radius", Kind::Text),
     ("opacity", Kind::Decimal { min: Bound::Inclusive(0.0), max: Bound::Inclusive(1.0) }),
     ("shadow", Kind::Text),
-    ("paginate", Kind::Text),
+    ("paginate", Kind::Constants(&["Paginate"])),
     ("debug", Kind::Boolean),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
     ("width", Kind::Text),
 ];
 
@@ -713,9 +713,9 @@ const CODE: Attributes = &[
     ("radius", Kind::Text),
     ("opacity", Kind::Decimal { min: Bound::Inclusive(0.0), max: Bound::Inclusive(1.0) }),
     ("shadow", Kind::Text),
-    ("paginate", Kind::Text),
+    ("paginate", Kind::Constants(&["Paginate"])),
     ("debug", Kind::Boolean),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
     ("width", Kind::Text),
     ("tab-size", Kind::Integer { min: Some(1), max: Some(16) }),
     ("line-height", Kind::NameOrDecimal { min: Bound::Exclusive(0.0), max: Bound::Open }),
@@ -729,7 +729,7 @@ const LINK: Attributes = &[
     ("width", Kind::Text),
     ("height", Kind::Text),
     ("debug", Kind::Boolean),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const BOOKMARK: Attributes = &[
@@ -740,12 +740,12 @@ const BOOKMARK: Attributes = &[
 ];
 
 const DIVIDER: Attributes = &[
-    ("direction", Kind::Text),
+    ("direction", Kind::Constants(&["DividerDirection"])),
     ("color", Kind::Text),
     ("thickness", Kind::Text),
     ("width", Kind::Text),
     ("debug", Kind::Boolean),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const SPAN: Attributes = &[
@@ -779,16 +779,16 @@ const IMG: Attributes = &[
     ("background", Kind::Text),
     ("border", Kind::Text),
     ("radius", Kind::Text),
-    ("paginate", Kind::Text),
+    ("paginate", Kind::Constants(&["Paginate"])),
     ("debug", Kind::Boolean),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const BARCODE: Attributes = &[
-    ("type", Kind::Text),
+    ("type", Kind::Constants(&["BarcodeType"])),
     ("data", Kind::Text),
     ("height", Kind::Text),
-    ("ec", Kind::Text),
+    ("ec", Kind::Constants(&["QrEcLevel", "Pdf417EcLevel"])),
     ("hrt", Kind::Boolean),
     ("rows", Kind::Integer { min: Some(1), max: Some(144) }),
     ("columns", Kind::Integer { min: Some(1), max: Some(144) }),
@@ -797,13 +797,13 @@ const BARCODE: Attributes = &[
     ("background", Kind::Text),
     ("width", Kind::Text),
     ("alt", Kind::Text),
-    ("paginate", Kind::Text),
+    ("paginate", Kind::Constants(&["Paginate"])),
     ("debug", Kind::Boolean),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const SHAPE: Attributes = &[
-    ("type", Kind::Text),
+    ("type", Kind::Constants(&["ShapeType"])),
     ("width", Kind::Text),
     ("height", Kind::Text),
     ("r", Kind::Text),
@@ -814,7 +814,7 @@ const SHAPE: Attributes = &[
     ("stroke-dash", Kind::Text),
     ("opacity", Kind::Decimal { min: Bound::Inclusive(0.0), max: Bound::Inclusive(1.0) }),
     ("debug", Kind::Boolean),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const TEXT: Attributes = &[
@@ -822,21 +822,21 @@ const TEXT: Attributes = &[
     ("font", Kind::Text),
     ("bold", Kind::Boolean),
     ("color", Kind::Text),
-    ("align", Kind::Text),
+    ("align", Kind::Constants(&["TextAlign"])),
     ("line-height", Kind::NameOrDecimal { min: Bound::Exclusive(0.0), max: Bound::Open }),
     ("max-lines", Kind::Integer { min: Some(1), max: None }),
     ("ellipsis", Kind::Boolean),
     ("width", Kind::Text),
-    ("role", Kind::Text),
+    ("role", Kind::Constants(&["TextRole"])),
     ("widows", Kind::Integer { min: Some(1), max: Some(10) }),
     ("orphans", Kind::Integer { min: Some(1), max: Some(10) }),
     ("capture", Kind::Text),
     ("capture-ref", Kind::Text),
-    ("capture-mode", Kind::Text),
+    ("capture-mode", Kind::Constants(&["CaptureMode"])),
     ("capture-fallback", Kind::Text),
-    ("paginate", Kind::Text),
+    ("paginate", Kind::Constants(&["Paginate"])),
     ("debug", Kind::Boolean),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const TD: Attributes = &[
@@ -851,24 +851,24 @@ const TD: Attributes = &[
     ("radius", Kind::Text),
     ("opacity", Kind::Decimal { min: Bound::Inclusive(0.0), max: Bound::Inclusive(1.0) }),
     ("shadow", Kind::Text),
-    ("paginate", Kind::Text),
+    ("paginate", Kind::Constants(&["Paginate"])),
     ("debug", Kind::Boolean),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
     ("colspan", Kind::Integer { min: Some(1), max: None }),
     ("rowspan", Kind::Integer { min: Some(1), max: None }),
-    ("align", Kind::Text),
-    ("valign", Kind::Text),
+    ("align", Kind::Constants(&["Align"])),
+    ("valign", Kind::Constants(&["CellVAlign"])),
 ];
 
 const THEAD: Attributes = &[
     ("background", Kind::Text),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const TR: Attributes = &[
-    ("keep", Kind::Text),
+    ("keep", Kind::Constants(&["RowKeep"])),
     ("background", Kind::Text),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const TABLE: Attributes = &[
@@ -882,14 +882,14 @@ const TABLE: Attributes = &[
     ("background", Kind::Text),
     ("width", Kind::Text),
     ("height", Kind::Text),
-    ("paginate", Kind::Text),
+    ("paginate", Kind::Constants(&["Paginate"])),
     ("debug", Kind::Boolean),
     ("bulk", Kind::Boolean),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
 const FIELD: Attributes = &[
-    ("type", Kind::Text),
+    ("type", Kind::Constants(&["FieldType"])),
     ("name", Kind::Text),
     ("value", Kind::Text),
     ("label", Kind::Text),
@@ -905,7 +905,249 @@ const FIELD: Attributes = &[
     ("background", Kind::Text),
     ("border", Kind::Text),
     ("debug", Kind::Boolean),
-    ("ocg", Kind::Text),
+    ("ocg", Kind::Constants(&["Ocg"])),
+];
+
+/// The constants of the SDKs, one for each closed enumeration of the schema: the name, the area it is in (the .NET
+/// and PHP namespace) and its members, each a value with its name in Pascal case and in upper snake case.
+#[allow(dead_code, reason = "only codegen asks, and the WASI binary and the native library have no codegen")]
+pub(crate) const CONSTANTS: &[Constant] = &[
+    Constant { name: "PageSize", area: "kit", members: &[
+        ("a4", "A4", "A4"),
+        ("a3", "A3", "A3"),
+        ("a5", "A5", "A5"),
+        ("letter", "Letter", "LETTER"),
+        ("legal", "Legal", "LEGAL"),
+    ] },
+    Constant { name: "Orientation", area: "kit", members: &[
+        ("portrait", "Portrait", "PORTRAIT"),
+        ("landscape", "Landscape", "LANDSCAPE"),
+    ] },
+    Constant { name: "SectionType", area: "kit", members: &[
+        ("toc", "Toc", "TOC"),
+    ] },
+    Constant { name: "ColumnFill", area: "kit", members: &[
+        ("auto", "Auto", "AUTO"),
+        ("balance", "Balance", "BALANCE"),
+    ] },
+    Constant { name: "Grow", area: "kit", members: &[
+        ("width", "Width", "WIDTH"),
+        ("height", "Height", "HEIGHT"),
+        ("width height", "WidthHeight", "WIDTH_HEIGHT"),
+    ] },
+    Constant { name: "FootnoteCounter", area: "kit", members: &[
+        ("page", "Page", "PAGE"),
+        ("section", "Section", "SECTION"),
+        ("document", "Document", "DOCUMENT"),
+    ] },
+    Constant { name: "Cipher", area: "kit", members: &[
+        ("aes-256", "Aes256", "AES_256"),
+        ("rc4-128", "Rc4128", "RC4_128"),
+    ] },
+    Constant { name: "PdfALevel", area: "kit", members: &[
+        ("2a", "Level2a", "LEVEL_2A"),
+        ("2b", "Level2b", "LEVEL_2B"),
+        ("2u", "Level2u", "LEVEL_2U"),
+        ("3a", "Level3a", "LEVEL_3A"),
+        ("3b", "Level3b", "LEVEL_3B"),
+        ("3u", "Level3u", "LEVEL_3U"),
+    ] },
+    Constant { name: "PdfUaPart", area: "kit", members: &[
+        ("1", "Part1", "PART_1"),
+    ] },
+    Constant { name: "PdfXVersion", area: "kit", members: &[
+        ("4", "Version4", "VERSION_4"),
+    ] },
+    Constant { name: "TextRole", area: "layout", members: &[
+        ("h1", "H1", "H1"),
+        ("h2", "H2", "H2"),
+        ("h3", "H3", "H3"),
+        ("h4", "H4", "H4"),
+        ("h5", "H5", "H5"),
+        ("h6", "H6", "H6"),
+    ] },
+    Constant { name: "Permission", area: "kit", members: &[
+        ("all", "All", "ALL"),
+        ("print", "Print", "PRINT"),
+        ("modify", "Modify", "MODIFY"),
+        ("copy", "Copy", "COPY"),
+        ("annotate", "Annotate", "ANNOTATE"),
+        ("fill-forms", "FillForms", "FILL_FORMS"),
+        ("accessibility", "Accessibility", "ACCESSIBILITY"),
+        ("assemble", "Assemble", "ASSEMBLE"),
+    ] },
+    Constant { name: "FileRelationship", area: "kit", members: &[
+        ("source", "Source", "SOURCE"),
+        ("data", "Data", "DATA"),
+        ("alternative", "Alternative", "ALTERNATIVE"),
+        ("supplement", "Supplement", "SUPPLEMENT"),
+        ("unspecified", "Unspecified", "UNSPECIFIED"),
+    ] },
+    Constant { name: "GradientType", area: "kit", members: &[
+        ("linear", "Linear", "LINEAR"),
+        ("radial", "Radial", "RADIAL"),
+    ] },
+    Constant { name: "RulingOrigin", area: "kit", members: &[
+        ("page", "Page", "PAGE"),
+        ("margin", "Margin", "MARGIN"),
+    ] },
+    Constant { name: "BoxAlign", area: "layout", members: &[
+        ("start", "Start", "START"),
+        ("center", "Center", "CENTER"),
+        ("end", "End", "END"),
+        ("stretch", "Stretch", "STRETCH"),
+    ] },
+    Constant { name: "Align", area: "layout", members: &[
+        ("start", "Start", "START"),
+        ("center", "Center", "CENTER"),
+        ("end", "End", "END"),
+    ] },
+    Constant { name: "BoxJustify", area: "layout", members: &[
+        ("start", "Start", "START"),
+        ("center", "Center", "CENTER"),
+        ("end", "End", "END"),
+        ("between", "Between", "BETWEEN"),
+    ] },
+    Constant { name: "CaptureMode", area: "layout", members: &[
+        ("first", "First", "FIRST"),
+        ("last", "Last", "LAST"),
+    ] },
+    Constant { name: "Paginate", area: "layout", members: &[
+        ("no", "No", "NO"),
+        ("break-before", "BreakBefore", "BREAK_BEFORE"),
+        ("break-after", "BreakAfter", "BREAK_AFTER"),
+        ("keep-next", "KeepNext", "KEEP_NEXT"),
+    ] },
+    Constant { name: "RowKeep", area: "layout", members: &[
+        ("with-next", "WithNext", "WITH_NEXT"),
+    ] },
+    Constant { name: "Ocg", area: "shared", members: &[
+        ("print", "Print", "PRINT"),
+        ("screen", "Screen", "SCREEN"),
+    ] },
+    Constant { name: "ListType", area: "layout", members: &[
+        ("bullet", "Bullet", "BULLET"),
+        ("number", "Number", "NUMBER"),
+    ] },
+    Constant { name: "ListFormat", area: "shared", members: &[
+        ("decimal", "Decimal", "DECIMAL"),
+        ("lower-alpha", "LowerAlpha", "LOWER_ALPHA"),
+        ("upper-alpha", "UpperAlpha", "UPPER_ALPHA"),
+        ("lower-roman", "LowerRoman", "LOWER_ROMAN"),
+        ("upper-roman", "UpperRoman", "UPPER_ROMAN"),
+    ] },
+    Constant { name: "ListBullet", area: "shared", members: &[
+        ("disc", "Disc", "DISC"),
+        ("circle", "Circle", "CIRCLE"),
+        ("square", "Square", "SQUARE"),
+        ("dash", "Dash", "DASH"),
+    ] },
+    Constant { name: "TextAlign", area: "shared", members: &[
+        ("left", "Left", "LEFT"),
+        ("center", "Center", "CENTER"),
+        ("right", "Right", "RIGHT"),
+        ("justify", "Justify", "JUSTIFY"),
+    ] },
+    Constant { name: "Anchor", area: "canvas", members: &[
+        ("top-left", "TopLeft", "TOP_LEFT"),
+        ("top-center", "TopCenter", "TOP_CENTER"),
+        ("top-right", "TopRight", "TOP_RIGHT"),
+        ("center-left", "CenterLeft", "CENTER_LEFT"),
+        ("center", "Center", "CENTER"),
+        ("center-right", "CenterRight", "CENTER_RIGHT"),
+        ("bottom-left", "BottomLeft", "BOTTOM_LEFT"),
+        ("bottom-center", "BottomCenter", "BOTTOM_CENTER"),
+        ("bottom-right", "BottomRight", "BOTTOM_RIGHT"),
+    ] },
+    Constant { name: "PageScope", area: "shared", members: &[
+        ("each", "Each", "EACH"),
+        ("first", "First", "FIRST"),
+        ("last", "Last", "LAST"),
+        ("odd", "Odd", "ODD"),
+        ("even", "Even", "EVEN"),
+    ] },
+    Constant { name: "LineCap", area: "canvas", members: &[
+        ("butt", "Butt", "BUTT"),
+        ("round", "Round", "ROUND"),
+        ("square", "Square", "SQUARE"),
+    ] },
+    Constant { name: "FillRule", area: "canvas", members: &[
+        ("nonzero", "Nonzero", "NONZERO"),
+        ("evenodd", "Evenodd", "EVENODD"),
+    ] },
+    Constant { name: "Pin", area: "layout", members: &[
+        ("top", "Top", "TOP"),
+        ("bottom", "Bottom", "BOTTOM"),
+        ("left", "Left", "LEFT"),
+        ("right", "Right", "RIGHT"),
+        ("inset", "Inset", "INSET"),
+    ] },
+    Constant { name: "BarcodeType", area: "shared", members: &[
+        ("qr", "Qr", "QR"),
+        ("code128", "Code128", "CODE128"),
+        ("ean13", "Ean13", "EAN13"),
+        ("code39", "Code39", "CODE39"),
+        ("ean8", "Ean8", "EAN8"),
+        ("upca", "Upca", "UPCA"),
+        ("datamatrix", "Datamatrix", "DATAMATRIX"),
+        ("pdf417", "Pdf417", "PDF417"),
+        ("gs1-128", "Gs1128", "GS1_128"),
+        ("gs1-datamatrix", "Gs1Datamatrix", "GS1_DATAMATRIX"),
+    ] },
+    Constant { name: "QrEcLevel", area: "shared", members: &[
+        ("L", "L", "L"),
+        ("M", "M", "M"),
+        ("Q", "Q", "Q"),
+        ("H", "H", "H"),
+    ] },
+    Constant { name: "Pdf417EcLevel", area: "shared", members: &[
+        ("0", "Level0", "LEVEL_0"),
+        ("1", "Level1", "LEVEL_1"),
+        ("2", "Level2", "LEVEL_2"),
+        ("3", "Level3", "LEVEL_3"),
+        ("4", "Level4", "LEVEL_4"),
+        ("5", "Level5", "LEVEL_5"),
+        ("6", "Level6", "LEVEL_6"),
+        ("7", "Level7", "LEVEL_7"),
+        ("8", "Level8", "LEVEL_8"),
+    ] },
+    Constant { name: "DividerDirection", area: "layout", members: &[
+        ("horizontal", "Horizontal", "HORIZONTAL"),
+        ("vertical", "Vertical", "VERTICAL"),
+    ] },
+    Constant { name: "ShapeType", area: "layout", members: &[
+        ("rect", "Rect", "RECT"),
+        ("circle", "Circle", "CIRCLE"),
+        ("ellipse", "Ellipse", "ELLIPSE"),
+    ] },
+    Constant { name: "CellVAlign", area: "layout", members: &[
+        ("top", "Top", "TOP"),
+        ("middle", "Middle", "MIDDLE"),
+        ("bottom", "Bottom", "BOTTOM"),
+    ] },
+    Constant { name: "FieldType", area: "layout", members: &[
+        ("text", "Text", "TEXT"),
+        ("checkbox", "Checkbox", "CHECKBOX"),
+        ("dropdown", "Dropdown", "DROPDOWN"),
+        ("radio", "Radio", "RADIO"),
+        ("button", "Button", "BUTTON"),
+    ] },
+    Constant { name: "BuiltinFont", area: "kit", members: &[
+        ("Courier", "Courier", "COURIER"),
+        ("Courier-Bold", "CourierBold", "COURIER_BOLD"),
+        ("Courier-Oblique", "CourierOblique", "COURIER_OBLIQUE"),
+        ("Courier-BoldOblique", "CourierBoldOblique", "COURIER_BOLDOBLIQUE"),
+        ("Helvetica", "Helvetica", "HELVETICA"),
+        ("Helvetica-Bold", "HelveticaBold", "HELVETICA_BOLD"),
+        ("Helvetica-Oblique", "HelveticaOblique", "HELVETICA_OBLIQUE"),
+        ("Helvetica-BoldOblique", "HelveticaBoldOblique", "HELVETICA_BOLDOBLIQUE"),
+        ("Times-Roman", "TimesRoman", "TIMES_ROMAN"),
+        ("Times-Bold", "TimesBold", "TIMES_BOLD"),
+        ("Times-Italic", "TimesItalic", "TIMES_ITALIC"),
+        ("Times-BoldItalic", "TimesBoldItalic", "TIMES_BOLDITALIC"),
+        ("Symbol", "Symbol", "SYMBOL"),
+        ("ZapfDingbats", "ZapfDingbats", "ZAPFDINGBATS"),
+    ] },
 ];
 
 /// The attributes of the element `name` written in the element `parent`, or `None` for an element the schema

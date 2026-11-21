@@ -91,6 +91,9 @@
   </xs:simpleType>
 
   <xs:simpleType name="PageSizeNamed">
+    <xs:annotation>
+      <xs:documentation>The named values of the `size` attribute of a document or a section. A width and a height, such as 100pt 200pt, is a string.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="a4"/>
       <xs:enumeration value="a3"/>
@@ -115,6 +118,9 @@
   </xs:simpleType>
 
   <xs:simpleType name="Orientation">
+    <xs:annotation>
+      <xs:documentation>The values of the `orientation` attribute of a document or a section.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="portrait"/>
       <xs:enumeration value="landscape"/>
@@ -122,6 +128,9 @@
   </xs:simpleType>
 
   <xs:simpleType name="SectionType">
+    <xs:annotation>
+      <xs:documentation>The values of the `type` attribute of a section.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="toc"/>
     </xs:restriction>
@@ -308,6 +317,9 @@
   </xs:simpleType>
 
   <xs:simpleType name="GradientType">
+    <xs:annotation>
+      <xs:documentation>The values of the `type` attribute of a gradient.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="linear"/>
       <xs:enumeration value="radial"/>
@@ -316,6 +328,9 @@
 
   <!-- the space a ruling's lines fill: the whole page, or the area inside the layout's margin -->
   <xs:simpleType name="RulingOrigin">
+    <xs:annotation>
+      <xs:documentation>The values of the `origin` attribute of a ruling: the space its lines fill.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="page"/>
       <xs:enumeration value="margin"/>
@@ -352,7 +367,10 @@
   </xs:simpleType>
 
   <!-- cross-axis alignment (a column also supports stretch) -->
-  <xs:simpleType name="AlignFull">
+  <xs:simpleType name="BoxAlign">
+    <xs:annotation>
+      <xs:documentation>The values of the `align` attribute of a column and a row: how the children sit across the box.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="start"/>
       <xs:enumeration value="center"/>
@@ -362,6 +380,9 @@
   </xs:simpleType>
 
   <xs:simpleType name="Align">
+    <xs:annotation>
+      <xs:documentation>The values of the `align` attribute of a td: how its content sits across the cell.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="start"/>
       <xs:enumeration value="center"/>
@@ -369,7 +390,10 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <xs:simpleType name="Justify">
+  <xs:simpleType name="BoxJustify">
+    <xs:annotation>
+      <xs:documentation>The values of the `justify` attribute of a column and a row: how the children are spread along the box.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="start"/>
       <xs:enumeration value="center"/>
@@ -379,6 +403,9 @@
   </xs:simpleType>
 
   <xs:simpleType name="CaptureMode">
+    <xs:annotation>
+      <xs:documentation>The values of the `capture-mode` attribute of a text: which of the captured texts it shows.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="first"/>
       <xs:enumeration value="last"/>
@@ -386,6 +413,9 @@
   </xs:simpleType>
 
   <xs:simpleType name="Paginate">
+    <xs:annotation>
+      <xs:documentation>The values of the `paginate` attribute: where a box falls in the page flow.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="no"/>
       <xs:enumeration value="break-before"/>
@@ -395,12 +425,18 @@
   </xs:simpleType>
 
   <xs:simpleType name="RowKeep">
+    <xs:annotation>
+      <xs:documentation>The value of the `keep` attribute of a tr.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="with-next"/>
     </xs:restriction>
   </xs:simpleType>
 
   <xs:simpleType name="Ocg">
+    <xs:annotation>
+      <xs:documentation>The values of the `ocg` attribute of an element, a layer or a ruling: an optional content group, a PDF layer that shows on screen only or in print only.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="print"/>
       <xs:enumeration value="screen"/>
@@ -408,6 +444,9 @@
   </xs:simpleType>
 
   <xs:simpleType name="ListType">
+    <xs:annotation>
+      <xs:documentation>The values of the `type` attribute of a list: what marks its items.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="bullet"/>
       <xs:enumeration value="number"/>
@@ -415,6 +454,9 @@
   </xs:simpleType>
 
   <xs:simpleType name="ListFormat">
+    <xs:annotation>
+      <xs:documentation>The values of the `format` attribute of a list and the `page-format` attribute of a section: how numbers are written.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="decimal"/>
       <xs:enumeration value="lower-alpha"/>
@@ -425,6 +467,9 @@
   </xs:simpleType>
 
   <xs:simpleType name="ListBullet">
+    <xs:annotation>
+      <xs:documentation>The values of the `bullet` attribute of a list and a li: the shape that marks the items of a bullet list.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="disc"/>
       <xs:enumeration value="circle"/>
@@ -433,7 +478,10 @@
     </xs:restriction>
   </xs:simpleType>
 
-  <xs:simpleType name="TextAlignH">
+  <xs:simpleType name="TextAlign">
+    <xs:annotation>
+      <xs:documentation>The values of the `align` attribute of a text, a text-at and the markdown rules: how the lines of a text align.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="left"/>
       <xs:enumeration value="center"/>
@@ -467,6 +515,9 @@
 
   <!-- Nine reference points on the page (vertical-first naming) -->
   <xs:simpleType name="Anchor">
+    <xs:annotation>
+      <xs:documentation>The values of the `anchor` attribute of a layer shape, a text-at, an img-at and a barcode-at: the nine reference points of a page and of a box.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="top-left"/>
       <xs:enumeration value="top-center"/>
@@ -481,27 +532,34 @@
   </xs:simpleType>
 
   <!-- Keyword or numeric page range: odd and even follow the printed page number, first, last and ranges count the section's own pages -->
+  <xs:simpleType name="PageScopeNamed">
+    <xs:annotation>
+      <xs:documentation>The named values of the `page` attribute of a layer or a region. A range such as 2-4 or 1,3-5 is a string.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="each"/>
+      <xs:enumeration value="first"/>
+      <xs:enumeration value="last"/>
+      <xs:enumeration value="odd"/>
+      <xs:enumeration value="even"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- matches: 1  |  1-3  |  1-last  |  1,3  |  1,3-5,7-last -->
+  <xs:simpleType name="PageScopeRange">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[1-9]\d*(-([1-9]\d*|last))?(,[1-9]\d*(-([1-9]\d*|last))?)*"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="PageScope">
-    <xs:union>
-      <xs:simpleType>
-        <xs:restriction base="xs:string">
-          <xs:enumeration value="each"/>
-          <xs:enumeration value="first"/>
-          <xs:enumeration value="last"/>
-          <xs:enumeration value="odd"/>
-          <xs:enumeration value="even"/>
-        </xs:restriction>
-      </xs:simpleType>
-      <xs:simpleType>
-        <xs:restriction base="xs:string">
-          <!-- matches: 1  |  1-3  |  1-last  |  1,3  |  1,3-5,7-last -->
-          <xs:pattern value="[1-9]\d*(-([1-9]\d*|last))?(,[1-9]\d*(-([1-9]\d*|last))?)*"/>
-        </xs:restriction>
-      </xs:simpleType>
-    </xs:union>
+    <xs:union memberTypes="PageScopeNamed PageScopeRange"/>
   </xs:simpleType>
 
   <xs:simpleType name="LineCap">
+    <xs:annotation>
+      <xs:documentation>The values of the `line-cap` attribute of a line and a path: how a stroke ends.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="butt"/>
       <xs:enumeration value="round"/>
@@ -510,6 +568,9 @@
   </xs:simpleType>
 
   <xs:simpleType name="FillRule">
+    <xs:annotation>
+      <xs:documentation>The values of the `fill-rule` attribute of a path.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="nonzero"/>
       <xs:enumeration value="evenodd"/>
@@ -518,7 +579,10 @@
 
   <!-- Pin positions for layout regions: top, bottom and inset are implemented;
        left/right schema-valid but implementation deferred. -->
-  <xs:simpleType name="RegionPin">
+  <xs:simpleType name="Pin">
+    <xs:annotation>
+      <xs:documentation>The values of the `pin` attribute of a region.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="top"/>
       <xs:enumeration value="bottom"/>
@@ -528,7 +592,106 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <xs:simpleType name="BarcodeType">
+    <xs:annotation>
+      <xs:documentation>The values of the `type` attribute of a barcode: the kind of code.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="qr"/>
+      <xs:enumeration value="code128"/>
+      <xs:enumeration value="ean13"/>
+      <xs:enumeration value="code39"/>
+      <xs:enumeration value="ean8"/>
+      <xs:enumeration value="upca"/>
+      <xs:enumeration value="datamatrix"/>
+      <xs:enumeration value="pdf417"/>
+      <xs:enumeration value="gs1-128"/>
+      <xs:enumeration value="gs1-datamatrix"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="QrEcLevel">
+    <xs:annotation>
+      <xs:documentation>The values of the `ec` attribute of a qr: its error correction, from 7% to 30% of the code.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="L"/>
+      <xs:enumeration value="M"/>
+      <xs:enumeration value="Q"/>
+      <xs:enumeration value="H"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="Pdf417EcLevel">
+    <xs:annotation>
+      <xs:documentation>The values of the `ec` attribute of a pdf417: its error correction level, from 0 to 8.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="0"/>
+      <xs:enumeration value="1"/>
+      <xs:enumeration value="2"/>
+      <xs:enumeration value="3"/>
+      <xs:enumeration value="4"/>
+      <xs:enumeration value="5"/>
+      <xs:enumeration value="6"/>
+      <xs:enumeration value="7"/>
+      <xs:enumeration value="8"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="EcLevel">
+    <xs:union memberTypes="QrEcLevel Pdf417EcLevel"/>
+  </xs:simpleType>
+
+  <xs:simpleType name="DividerDirection">
+    <xs:annotation>
+      <xs:documentation>The values of the `direction` attribute of a divider.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="horizontal"/>
+      <xs:enumeration value="vertical"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="ShapeType">
+    <xs:annotation>
+      <xs:documentation>The values of the `type` attribute of a shape.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="rect"/>
+      <xs:enumeration value="circle"/>
+      <xs:enumeration value="ellipse"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="CellVAlign">
+    <xs:annotation>
+      <xs:documentation>The values of the `valign` attribute of a td: how its content sits down the cell.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="top"/>
+      <xs:enumeration value="middle"/>
+      <xs:enumeration value="bottom"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="FieldType">
+    <xs:annotation>
+      <xs:documentation>The values of the `type` attribute of a field.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="text"/>
+      <xs:enumeration value="checkbox"/>
+      <xs:enumeration value="dropdown"/>
+      <xs:enumeration value="radio"/>
+      <xs:enumeration value="button"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="BuiltinFont">
+    <xs:annotation>
+      <xs:documentation>The values of the `core` attribute of a font: the built-in PDF fonts, which need no file.</xs:documentation>
+    </xs:annotation>
     <xs:restriction base="xs:string">
       <xs:enumeration value="Courier"/>
       <xs:enumeration value="Courier-Bold"/>
@@ -803,7 +966,7 @@
     </xs:attribute>
     <xs:attribute name="color"     type="Color"/>
     <xs:attributeGroup ref="DataColorAttr"/>
-    <xs:attribute name="align"     type="TextAlignH"/>
+    <xs:attribute name="align"     type="TextAlign"/>
     <xs:attribute name="line-height" type="TokenScaleOrFactor">
       <xs:annotation>
         <xs:documentation>The distance between lines, as a factor of the font size: a number above 0, such as 1.5, or a name from the line-height row of the tokens. Default 1.2, which is the token m.</xs:documentation>
@@ -835,51 +998,20 @@
   <!-- What a barcode means in the layout and in a layer. Its height comes after these two, and BarcodeStyle after
        the height: the layout's height takes a slot of the tokens and a layer's is a length. -->
   <xs:attributeGroup name="BarcodeCore">
-    <xs:attribute name="type" use="required">
+    <xs:attribute name="type" use="required" type="BarcodeType">
       <xs:annotation>
         <xs:documentation>The kind of barcode. qr, datamatrix, gs1-datamatrix and pdf417 are 2D codes; code128, code39, ean13, ean8, upca and gs1-128 are linear ones. gs1-128 and gs1-datamatrix carry GS1 data, written as (01)09501101530003(17)261231(10)AB12, and scanners read their fields as GS1. code39 takes the digits, the capitals A to Z, the space and - . $ / + % only; for other text use code128. ean13, ean8 and upca take their digits without the check digit, which is added, or with it, which is checked: 12 or 13 digits for ean13, 7 or 8 for ean8, 11 or 12 for upca. Data a type cannot hold draws a gray box with a red border in its place.</xs:documentation>
       </xs:annotation>
-      <xs:simpleType>
-        <xs:restriction base="xs:string">
-          <xs:enumeration value="qr"/>
-          <xs:enumeration value="code128"/>
-          <xs:enumeration value="ean13"/>
-          <xs:enumeration value="code39"/>
-          <xs:enumeration value="ean8"/>
-          <xs:enumeration value="upca"/>
-          <xs:enumeration value="datamatrix"/>
-          <xs:enumeration value="pdf417"/>
-          <xs:enumeration value="gs1-128"/>
-          <xs:enumeration value="gs1-datamatrix"/>
-        </xs:restriction>
-      </xs:simpleType>
     </xs:attribute>
     <xs:attribute name="data" type="xs:string" use="required"/>
   </xs:attributeGroup>
 
   <!-- How a barcode looks, in the layout and in a layer -->
   <xs:attributeGroup name="BarcodeStyle">
-    <xs:attribute name="ec">
+    <xs:attribute name="ec" type="EcLevel">
       <xs:annotation>
         <xs:documentation>Error correction: how much of the code can be damaged and still scan. A qr takes L, M, Q or H, from 7% to 30% of the code, and M without it. A pdf417 takes a level from 0 to 8, each one doubling the codewords it adds, and without it the level the standard recommends for the length of the data. The other types ignore it, and so does a qr a number and a pdf417 a letter.</xs:documentation>
       </xs:annotation>
-      <xs:simpleType>
-        <xs:restriction base="xs:string">
-          <xs:enumeration value="L"/>
-          <xs:enumeration value="M"/>
-          <xs:enumeration value="Q"/>
-          <xs:enumeration value="H"/>
-          <xs:enumeration value="0"/>
-          <xs:enumeration value="1"/>
-          <xs:enumeration value="2"/>
-          <xs:enumeration value="3"/>
-          <xs:enumeration value="4"/>
-          <xs:enumeration value="5"/>
-          <xs:enumeration value="6"/>
-          <xs:enumeration value="7"/>
-          <xs:enumeration value="8"/>
-        </xs:restriction>
-      </xs:simpleType>
     </xs:attribute>
     <xs:attribute name="hrt"        type="Boolean">
       <xs:annotation>
@@ -1595,7 +1727,7 @@
             <xs:sequence>
               <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
             </xs:sequence>
-            <xs:attribute name="pin"   type="RegionPin" use="required">
+            <xs:attribute name="pin"   type="Pin" use="required">
               <xs:annotation>
                 <xs:documentation>Which edge the region sticks to. top and bottom work. left and right pass validation but are not implemented yet. inset places the region inside the columns, where top, height, col and colspan say.</xs:documentation>
               </xs:annotation>
@@ -1657,7 +1789,7 @@
     <xs:attribute name="font-size"   type="TokenScaleOrPt"/>
     <xs:attribute name="bold"        type="Boolean"/>
     <xs:attribute name="color"       type="Color"/>
-    <xs:attribute name="align"       type="TextAlignH"/>
+    <xs:attribute name="align"       type="TextAlign"/>
     <xs:attribute name="line-height" type="TokenScaleOrFactor"/>
     <xs:attribute name="padding"     type="SpacingOrToken"/>
     <xs:attribute name="background"  type="Fill"/>
@@ -1677,7 +1809,7 @@
     <xs:attribute name="font-size"  type="TokenScaleOrPt"/>
     <xs:attribute name="bold"       type="Boolean"/>
     <xs:attribute name="color"      type="Color"/>
-    <xs:attribute name="align"      type="TextAlignH"/>
+    <xs:attribute name="align"      type="TextAlign"/>
     <xs:attribute name="padding"    type="SpacingOrToken"/>
     <xs:attribute name="background" type="Fill"/>
     <xs:attribute name="border"     type="BorderValue"/>
@@ -2036,8 +2168,8 @@
         <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
       </xs:sequence>
       <xs:attributeGroup ref="BoxAttrs"/>
-      <xs:attribute name="align"   type="AlignFull"/>
-      <xs:attribute name="justify" type="Justify"/>
+      <xs:attribute name="align"   type="BoxAlign"/>
+      <xs:attribute name="justify" type="BoxJustify"/>
       <xs:attributeGroup ref="WidthAttr"/>
       <xs:attribute name="bulk" type="Boolean">
         <xs:annotation>
@@ -2056,8 +2188,8 @@
         <xs:group ref="LayoutContent" minOccurs="0" maxOccurs="unbounded"/>
       </xs:sequence>
       <xs:attributeGroup ref="BoxAttrs"/>
-      <xs:attribute name="align"   type="AlignFull"/>
-      <xs:attribute name="justify" type="Justify"/>
+      <xs:attribute name="align"   type="BoxAlign"/>
+      <xs:attribute name="justify" type="BoxJustify"/>
       <xs:attributeGroup ref="WidthAttr"/>
     </xs:complexType>
   </xs:element>
@@ -2273,14 +2405,7 @@
 
   <xs:element name="divider">
     <xs:complexType>
-      <xs:attribute name="direction">
-        <xs:simpleType>
-          <xs:restriction base="xs:string">
-            <xs:enumeration value="horizontal"/>
-            <xs:enumeration value="vertical"/>
-          </xs:restriction>
-        </xs:simpleType>
-      </xs:attribute>
+      <xs:attribute name="direction" type="DividerDirection"/>
       <xs:attribute name="color"     type="Color"/>
       <xs:attribute name="thickness" type="TokenScaleOrPt"/>
       <xs:attributeGroup ref="WidthAttr"/>
@@ -2395,15 +2520,7 @@
       <xs:documentation>A rectangle, a circle or an ellipse in the layout, for a status dot, a color swatch or a progress bar. It takes its box in the flow as an image does, with no children, and is drawn centered in that box, which the parent's align places. A rect and an ellipse need a width and a height, and a circle an r. A shape with no fill and no stroke draws nothing, but keeps its box. A stroke is centered on the edge of the box, so half of it lies outside. To put a shape at a place on the page, use a rect, circle or ellipse in a layer.</xs:documentation>
     </xs:annotation>
     <xs:complexType>
-      <xs:attribute name="type" use="required">
-        <xs:simpleType>
-          <xs:restriction base="xs:string">
-            <xs:enumeration value="rect"/>
-            <xs:enumeration value="circle"/>
-            <xs:enumeration value="ellipse"/>
-          </xs:restriction>
-        </xs:simpleType>
-      </xs:attribute>
+      <xs:attribute name="type" use="required" type="ShapeType"/>
       <xs:attribute name="width" type="TokenScaleOrPt">
         <xs:annotation>
           <xs:documentation>Width of a rect or an ellipse, a length or a name from the width row of the tokens. A circle takes r instead.</xs:documentation>
@@ -2535,15 +2652,7 @@
         </xs:simpleType>
       </xs:attribute>
       <xs:attribute name="align"  type="Align"/>
-      <xs:attribute name="valign">
-        <xs:simpleType>
-          <xs:restriction base="xs:string">
-            <xs:enumeration value="top"/>
-            <xs:enumeration value="middle"/>
-            <xs:enumeration value="bottom"/>
-          </xs:restriction>
-        </xs:simpleType>
-      </xs:attribute>
+      <xs:attribute name="valign" type="CellVAlign"/>
     </xs:complexType>
   </xs:element>
 
@@ -2636,17 +2745,7 @@
 
   <xs:element name="field">
     <xs:complexType>
-      <xs:attribute name="type" use="required">
-        <xs:simpleType>
-          <xs:restriction base="xs:string">
-            <xs:enumeration value="text"/>
-            <xs:enumeration value="checkbox"/>
-            <xs:enumeration value="dropdown"/>
-            <xs:enumeration value="radio"/>
-            <xs:enumeration value="button"/>
-          </xs:restriction>
-        </xs:simpleType>
-      </xs:attribute>
+      <xs:attribute name="type" use="required" type="FieldType"/>
       <xs:attribute name="name"       type="xs:string" use="required"/>
       <xs:attribute name="value"      type="xs:string"/>
       <xs:attribute name="label"      type="xs:string"/>
