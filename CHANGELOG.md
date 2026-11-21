@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.37.0 — 2026-11-21
+### Validation
+- **Breaking:** a wrong value of an enumerated attribute is an error that names the values it takes, where the engine fell back to a default with no error: `orientation="landscpe"` gave a portrait page and `<text align="cetner">` a left-aligned one. It now stops on `align` of a `text`, a `text-at` and the Markdown rules (`left`, `center`, `right`, `justify`), `orientation` of a document and of a section (`portrait`, `landscape`), `direction` of a divider, `line-cap` of a line and a path, `fill-rule` of a path, and `core` of a font, which takes one of the 14 built-in fonts. It is the same on the XML path and for a document built in code
+- **Breaking:** `valign` of a `td` takes `top`, `middle` and `bottom`. `center`, `start`, `end` and `between`, the values of `justify`, were read before and are an error now. An explicit `align="stretch"` on a `td` is an error that names `start`, `center` and `end`: a `td` with no `align` stretches its content as before, and a `column` and a `row` still take `stretch`
+- The error for a wrong `valign` on a `td`, a wrong `anchor` and a wrong `pin` of a `region` in a document built in code names the values the schema allows. It named those of another attribute, or none: `invalid anchor value: 'x' — expected top-left, …, or bottom-right`
+
+### Page size and orientation
+- **Breaking:** `orientation` on a `<document>` and on a `<section>` gives the page the shape it names, whatever size the page starts from: `portrait` is taller than wide and `landscape` wider than tall. A `portrait` section of a landscape document has upright pages, where it kept them landscape, and `size="297mm 210mm" orientation="landscape"` stays 297 × 210 mm, where it turned upright. A page that already has the shape, and a square page, is left alone. A section that sets its own `size` and no `orientation` takes the size as written
+- `size` takes seven more names, on a document and on a section: `a0`, `a1`, `a2`, `a6`, `b4`, `b5` (ISO B) and `tabloid` (11 × 17 in), beside `a3`, `a4`, `a5`, `letter` and `legal`. `tabloid` with `orientation="landscape"` is Ledger. Any other paper size stays a width and a height, and the docs list the `size` to write for the common ones. The error for a wrong `size` names every value
+
+### Constants in the SDKs
+- Every SDK has a constant for each closed enumeration of the schema: 27 new ones, such as `PageSize`, `TextAlign`, `BoxAlign`, `PdfALevel` and `BarcodeType`, and `StampScale` for the stamp, beside the 12 it had. They are generated from the schema, so an enumeration the schema gains has one. `size: PageSize.A2` and `align: TextAlign.Center` replace the strings
+- A value that starts with a digit takes the last word of its constant's name in front, which no language accepts first: `PdfALevel.Level2a` (`PdfALevel::Level2a` in PHP, `PdfALevel.LEVEL_2A` in Python and Java), `PdfUaPart.Part1` and `PdfXVersion.Version4`
+- The stamp's `anchor`, `align`, `justify` and `scale` say which constant their words are
+- Generate Code writes `Orientation.Landscape` where an attribute has a constant, with each language's import, and a plain value where it has none, such as `size="100pt 200pt"`
+- **Breaking:** in TypeScript an attribute that takes an enumeration has its constant's type, `orientation?: Orientation`, so `orientation: 'landscpe'` no longer compiles and a variable of type `string` needs a cast. `size` takes a named size or a width and a height with their units, `'210mm 297mm'`, so a custom size still compiles
+- **Breaking:** in Python, the twelve modules that held one constant each (`lpdf.kit.orientation`, `lpdf.layout.pin`, `lpdf.shared.page_scope` …) are gone, and `lpdf.kit`, `lpdf.layout` and `lpdf.shared` no longer export the constants. `from lpdf import Orientation` is unchanged
+
+### Releases
+- Each GitHub release has a PDF of its notes, `lpdf-vX.Y.Z-release-notes.pdf`, beside the engine files. The release's own run makes it from the release's notes with `lpdf convert`, with a line under the title that gives the time it was made
+
+### Documentation
+- `FEATURES.md` lists the constants, the seven new paper sizes and the rule of `orientation`
+- The two docs pages on Factur-X, "Factur-X e-invoices" and "Factur-X / ZUGFeRD from the invoice XML", are one page, "Factur-X / ZUGFeRD", at `/docs/factur-x-zugferd/`, and `FEATURES.md` links to it. The two old addresses are gone
+
+### VS Code extension
+- Hover, autocomplete and validation take the seven new page sizes from the schema
+
 ## v0.36.0 — 2026-11-19
 ### Invoices
 - `LCrossIndustryInvoice` makes a Factur-X / ZUGFeRD invoice from its XML, in all five SDKs. `generatePdf` takes a template, or a document built in code, and the invoice's XML, a Cross Industry Invoice, and returns the invoice PDF. The template only says how the invoice looks: the engine reads the values from the XML, binds them, makes the file PDF/A-3 and attaches the XML
