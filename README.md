@@ -1,6 +1,6 @@
 <img src="https://raw.githubusercontent.com/lpdfio/lpdf/main/lpdf-mark.svg" height="48" alt="Lpdf" />
 
-# [Lpdf](https://lpdf.io?utm_campaign=core&utm_medium=referral&utm_source=readme): PDF as Code
+# [Lpdf](https://lpdf.io?utm_campaign=core&utm_medium=referral&utm_source=readme): PDF as code
 
 Render PDF documents from XML or from code in JavaScript, Python, Java, C# and PHP.
 
