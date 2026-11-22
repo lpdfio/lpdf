@@ -1,8 +1,10 @@
 <img src="https://raw.githubusercontent.com/lpdfio/lpdf/main/lpdf-mark.svg" height="48" alt="Lpdf" />
 
-# [Lpdf](https://lpdf.io?utm_campaign=core&utm_medium=referral&utm_source=readme)
+# [Lpdf](https://lpdf.io?utm_campaign=core&utm_medium=referral&utm_source=readme): PDF as Code
 
-Lpdf is a PDF engine that renders a document written in XML or built in code to the same PDF in JavaScript, Python, Java, C# and PHP.
+Render PDF documents from XML or from code in JavaScript, Python, Java, C# and PHP.
+
+With data binding, PDF/A, PDF/UA, PDF/X and Factur-X / ZUGFeRD.
 
 ## Example
 
