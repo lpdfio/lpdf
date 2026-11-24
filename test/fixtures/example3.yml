@@ -12,7 +12,7 @@ tokens:
     accent:      "#e8f0fc"
 
 document:
-  size: a4
+  size: A4
   margin: 40pt
   meta:
     title: "Invoice #1042"

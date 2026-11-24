@@ -1639,7 +1639,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
     let mut meta          = Meta::default();
     let mut output        = Output::default();
     let mut attachments   = Vec::new();
-    let mut doc_size      = (595.28_f32, 841.89_f32); // a4
+    let mut doc_size      = (595.28_f32, 841.89_f32); // A4
     let mut doc_bleed     = 0.0_f32;
     let mut doc_background: Option<String> = None;
     let mut doc_debug     = false;
@@ -4419,7 +4419,7 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
     let doc_size = if let Some(s) = doc_size_str {
         parse_page_size(s)?
     } else {
-        (595.28_f32, 841.89_f32) // a4
+        (595.28_f32, 841.89_f32) // A4
     };
     let doc_size = with_orientation(doc_size, doc_orient).map_err(|e| format!("document: {e}"))?;
     let doc_bleed = attrs.get("bleed").and_then(|v| v.as_str())

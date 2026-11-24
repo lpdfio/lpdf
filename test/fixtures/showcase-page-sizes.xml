@@ -28,7 +28,7 @@
       <layout margin="0pt">
         <frame border="4pt primary" padding="xl" height="full">
           <column gap="s">
-            <text font-size="xxl" font="Helvetica-Bold" color="primary">a0</text>
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">A0</text>
             <text font-size="m" color="muted">Expected: 841 × 1189 mm</text>
           </column>
         </frame>
@@ -39,7 +39,7 @@
       <layout margin="0pt">
         <frame border="4pt primary" padding="xl" height="full">
           <column gap="s">
-            <text font-size="xxl" font="Helvetica-Bold" color="primary">a1</text>
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">A1</text>
             <text font-size="m" color="muted">Expected: 594 × 841 mm</text>
           </column>
         </frame>
@@ -50,7 +50,7 @@
       <layout margin="0pt">
         <frame border="4pt primary" padding="xl" height="full">
           <column gap="s">
-            <text font-size="xxl" font="Helvetica-Bold" color="primary">a2</text>
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">A2</text>
             <text font-size="m" color="muted">Expected: 420 × 594 mm</text>
           </column>
         </frame>
@@ -61,7 +61,7 @@
       <layout margin="0pt">
         <frame border="4pt primary" padding="m" height="full">
           <column gap="s">
-            <text font-size="xl" font="Helvetica-Bold" color="primary">a6</text>
+            <text font-size="xl" font="Helvetica-Bold" color="primary">A6</text>
             <text font-size="s" color="muted">Expected: 105 × 148 mm</text>
           </column>
         </frame>
@@ -72,7 +72,7 @@
       <layout margin="0pt">
         <frame border="4pt primary" padding="xl" height="full">
           <column gap="s">
-            <text font-size="xxl" font="Helvetica-Bold" color="primary">b4</text>
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">B4</text>
             <text font-size="m" color="muted">Expected: 250 × 353 mm</text>
           </column>
         </frame>
@@ -83,7 +83,7 @@
       <layout margin="0pt">
         <frame border="4pt primary" padding="xl" height="full">
           <column gap="s">
-            <text font-size="xxl" font="Helvetica-Bold" color="primary">b5</text>
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">B5</text>
             <text font-size="m" color="muted">Expected: 176 × 250 mm</text>
           </column>
         </frame>
@@ -94,7 +94,7 @@
       <layout margin="0pt">
         <frame border="4pt primary" padding="xl" height="full">
           <column gap="s">
-            <text font-size="xxl" font="Helvetica-Bold" color="primary">tabloid</text>
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Tabloid</text>
             <text font-size="m" color="muted">Expected: 11 × 17 in, 279.4 × 431.8 mm</text>
           </column>
         </frame>
@@ -105,7 +105,7 @@
       <layout margin="0pt">
         <frame border="4pt primary" padding="xl" height="full">
           <column gap="s">
-            <text font-size="xxl" font="Helvetica-Bold" color="primary">tabloid, landscape</text>
+            <text font-size="xxl" font="Helvetica-Bold" color="primary">Tabloid, landscape</text>
             <text font-size="m" color="muted">Expected: 17 × 11 in, 431.8 × 279.4 mm, which is Ledger</text>
           </column>
         </frame>
