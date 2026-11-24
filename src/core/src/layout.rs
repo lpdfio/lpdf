@@ -5875,10 +5875,10 @@ mod tests {
 
     fn minimal(body: &str) -> String {
         if body.is_empty() {
-            r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt"/></section></document></lpdf>"#.to_string()
+            r#"<lpdf version="1"><document size="A4"><section><layout margin="28pt"/></section></document></lpdf>"#.to_string()
         } else {
             format!(
-                r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
+                r#"<lpdf version="1"><document size="A4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
             )
         }
     }
@@ -5893,7 +5893,7 @@ mod tests {
     #[test]
     fn a_layout_without_a_margin_places_its_content_36pt_from_the_page_edges() {
         let tree = engine_render(
-            r#"<lpdf version="1"><document size="a4"><section><layout><frame height="20pt" /></layout></section></document></lpdf>"#,
+            r#"<lpdf version="1"><document size="A4"><section><layout><frame height="20pt" /></layout></section></document></lpdf>"#,
         );
         let page = &tree["pages"][0];
         assert_eq!(page["margin"], serde_json::json!([36.0, 36.0, 36.0, 36.0]));
@@ -5916,7 +5916,7 @@ mod tests {
     fn a_box_is_as_high_as_the_height_slot_it_names() {
         let render = |tokens: &str, body: &str| {
             engine_render(&format!(
-                r#"<lpdf version="1"><tokens>{tokens}</tokens><document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
+                r#"<lpdf version="1"><tokens>{tokens}</tokens><document size="A4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
             ))
         };
         let tree = render("", r#"<frame height="s" /><frame height="xxl" /><frame height="40pt" />"#);
@@ -6477,7 +6477,7 @@ mod tests {
     /// The pages of a document with `markdown` in a section with 54pt of margin.
     fn markdown_pages(markdown: &str) -> Vec<serde_json::Value> {
         let xml = format!(
-            r#"<lpdf version="1"><document size="a4"><section><markdown margin="54pt"><markdown-content><![CDATA[{markdown}]]></markdown-content></markdown></section></document></lpdf>"#
+            r#"<lpdf version="1"><document size="A4"><section><markdown margin="54pt"><markdown-content><![CDATA[{markdown}]]></markdown-content></markdown></section></document></lpdf>"#
         );
         engine_render(&xml)["pages"].as_array().unwrap().clone()
     }
@@ -6982,7 +6982,7 @@ abcdef</code><text>after</text></row>"#,
     fn a_line_height_token_follows_the_documents_row() {
         let xml = |attr: &str| {
             format!(
-                r#"<lpdf version="1"><tokens><line-height xs="1" s="1.5" m="2" l="2.5" xl="3" xxl="4"/></tokens><document size="a4"><section><layout margin="28pt">
+                r#"<lpdf version="1"><tokens><line-height xs="1" s="1.5" m="2" l="2.5" xl="3" xxl="4"/></tokens><document size="A4"><section><layout margin="28pt">
                     <text width="90pt" font-size="10pt" {attr}>alpha beta gamma delta epsilon</text></layout></section></document></lpdf>"#
             )
         };
@@ -7287,10 +7287,10 @@ abcdef</code><text>after</text></row>"#,
     #[test]
     fn page_sizes_correct() {
         let cases: &[(&str, f64, f64)] = &[
-            ("a3",     841.89, 1190.55),
-            ("a5",     419.53,  595.28),
-            ("letter", 612.0,   792.0),
-            ("legal",  612.0,  1008.0),
+            ("A3",     841.89, 1190.55),
+            ("A5",     419.53,  595.28),
+            ("Letter", 612.0,   792.0),
+            ("Legal",  612.0,  1008.0),
         ];
         for &(size, exp_w, exp_h) in cases {
             let xml = format!(
@@ -7415,7 +7415,7 @@ abcdef</code><text>after</text></row>"#,
             <tokens>
                 <space xs="1pt" s="2pt" m="50pt" l="100pt" xl="200pt" xxl="400pt" />
             </tokens>
-            <document size="a4">
+            <document size="A4">
                 <section><layout margin="0pt">
                     <column gap="m">
                         <frame height="20pt" />
@@ -7443,7 +7443,7 @@ abcdef</code><text>after</text></row>"#,
                     <color name="primary" value="#abcdef" />
                 </colors>
             </tokens>
-            <document size="a4">
+            <document size="A4">
                 <section><layout margin="0pt">
                     <frame height="20pt" background="primary" />
                 </layout></section>
@@ -7466,7 +7466,7 @@ abcdef</code><text>after</text></row>"#,
     fn layers_before_the_layout_paint_under_it_and_layers_after_it_over_it() {
         let lines: String = (1..=120).map(|n| format!("<text>Line {n}</text>")).collect();
         let pages = render_pages(&format!(
-            r##"<lpdf version="1"><document size="a4"><section>
+            r##"<lpdf version="1"><document size="A4"><section>
                 <layer opacity="0.1"><rect width="10pt" height="10pt" fill="#000000"/></layer>
                 <layer opacity="0.2"><rect width="10pt" height="10pt" fill="#000000"/></layer>
                 <layout margin="28pt">{lines}</layout>
@@ -7675,7 +7675,7 @@ abcdef</code><text>after</text></row>"#,
     fn layer_tree(layers: &str, lines: usize) -> serde_json::Value {
         let body: String = (1..=lines).map(|n| format!("<text>Line {n}</text>")).collect();
         engine_render(&format!(
-            r#"<lpdf version="1"><document size="a4"><section>{layers}<layout margin="28pt">{body}</layout></section></document></lpdf>"#
+            r#"<lpdf version="1"><document size="A4"><section>{layers}<layout margin="28pt">{body}</layout></section></document></lpdf>"#
         ))
     }
 
@@ -7839,7 +7839,7 @@ abcdef</code><text>after</text></row>"#,
     /// pixels, or not loaded when `px` is `None`.
     fn tree_with_logo(layers: &str, body: &str, px: Option<(u32, u32)>) -> serde_json::Value {
         let xml = format!(
-            r#"<lpdf version="1"><assets><image name="logo"/></assets><document size="a4"><section>{layers}<layout margin="28pt">{body}</layout></section></document></lpdf>"#
+            r#"<lpdf version="1"><assets><image name="logo"/></assets><document size="A4"><section>{layers}<layout margin="28pt">{body}</layout></section></document></lpdf>"#
         );
         let mut doc = parse(&xml).unwrap();
         let mut lp = doc.section_layouts();
@@ -8063,7 +8063,7 @@ abcdef</code><text>after</text></row>"#,
             format!(r#"<section><layout margin="28pt"><region pin="top"><text capture-ref="k" capture-fallback="none"/></region>{body}</layout></section>"#)
         };
         let xml = format!(
-            r#"<lpdf version="1"><document size="a4">{}{}</document></lpdf>"#,
+            r#"<lpdf version="1"><document size="A4">{}{}</document></lpdf>"#,
             section(r#"<text capture="k">Alpha</text>"#),
             section("<text>Plain</text>"),
         );
@@ -8497,7 +8497,7 @@ abcdef</code><text>after</text></row>"#,
         let sections: String = sections.iter()
             .map(|(attrs, body)| format!(r#"<section {attrs}><layout margin="28pt">{body}</layout></section>"#))
             .collect();
-        format!(r#"<lpdf version="1"><document size="a4" {document_attrs}>{sections}</document></lpdf>"#)
+        format!(r#"<lpdf version="1"><document size="A4" {document_attrs}>{sections}</document></lpdf>"#)
     }
 
     /// The numbers of the notes of a page, which are the small texts at its foot (size below the body's).
@@ -9312,7 +9312,7 @@ abcdef</code><text>after</text></row>"#,
     #[test]
     fn bound_attributes_reach_the_rendered_page_for_each_row() {
         let xml = r##"<lpdf version="1"><tokens><colors><color name="late" value="#cc0000"/></colors></tokens>
-            <document size="a4"><section><layout margin="28pt"><column data-source="items">
+            <document size="A4"><section><layout margin="28pt"><column data-source="items">
                 <shape type="rect" width="60pt" height="10pt" fill="#999999" data-fill="color"/>
                 <text color="#000000" data-color="tone" data-value="label">Label</text>
             </column></layout></section></document></lpdf>"##;

@@ -10,7 +10,7 @@
     <image name="crest" src="assets/images/crest.png" />
   </assets>
 
-  <document size="letter">
+  <document size="Letter">
     <meta title="Offer of admission" author="Linden Vale University" />
     <section>
 

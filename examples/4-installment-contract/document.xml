@@ -48,7 +48,7 @@
     <text-size xs="7.5pt" s="8.5pt" m="10pt" l="12.5pt" xl="15pt" xxl="19pt" />
   </tokens>
 
-  <document size="letter" font="body">
+  <document size="Letter" font="body">
     <meta title="Retail Installment Contract (sample)" subject="A retail installment contract for a motor vehicle (a demonstration)" author="Lpdf" />
     <section background="surface">
 

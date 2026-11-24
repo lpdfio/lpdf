@@ -27,7 +27,7 @@
       <color name="accent"  value="#e0762b" />
     </colors>
   </tokens>
-  <document size="a4" font="body">
+  <document size="A4" font="body">
     <meta title="Annual Report — Accessible Copy" author="Lpdf Fixtures" subject="PDF/UA-1 showcase"
           keywords="pdf/ua, accessibility, fixture" creator="lpdf test suite" lang="en-US" />
     <output pdfua="1" />

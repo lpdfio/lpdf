@@ -25,7 +25,7 @@
       <gradient name="glow" type="radial" from="cmyk(0 0 0 0)" to="print-blue" />
     </gradients>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Colors" subject="hex, cmyk(), rgb() and hsl() colors" />
 
     <!-- Hex, rgb() and hsl() are RGB: rgb() and hsl() become their hex when the document is read. cmyk() is

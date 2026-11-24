@@ -191,7 +191,7 @@ fn run_snapshot_markdown_presets(name: &str) {
             "<section><markdown margin=\"54pt\">{styles}<markdown-content><![CDATA[{sample}]]></markdown-content></markdown></section>"
         ));
     }
-    let xml = format!(r#"<lpdf version="1"><document size="a4">{sections}</document></lpdf>"#);
+    let xml = format!(r#"<lpdf version="1"><document size="A4">{sections}</document></lpdf>"#);
     let pdf_bytes = crate::LpdfEngine::render_xml_to_pdf_bytes(&xml)
         .unwrap_or_else(|e| panic!("render failed for {name}: {e}"));
     check_snapshot(name, &pdf_bytes);

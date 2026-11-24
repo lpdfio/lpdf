@@ -4,7 +4,7 @@
   <assets>
     <image name="photo" src="../assets/images/chapter-05-caterpillar.jpg" />
   </assets>
-  <document size="a4">
+  <document size="A4">
     <meta title="Benchmark Fixture images S" />
     <section>
       <layout margin="40pt">

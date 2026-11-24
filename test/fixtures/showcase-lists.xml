@@ -8,7 +8,7 @@
       <color name="muted"   value="#737373" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Lists" subject="Bulleted and numbered lists, nested to any depth" />
 
     <!-- A <list> marks each <li> with a bullet drawn as a shape, or with a number the engine gives. A bullet list

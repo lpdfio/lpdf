@@ -2,7 +2,7 @@
 <lpdf version="1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Markdown in columns" subject="Small print set in two columns" />
 
     <!-- columns on a section with a markdown sets the Markdown in columns, as it sets a layout: the small print of

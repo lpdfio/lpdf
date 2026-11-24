@@ -53,7 +53,7 @@ fn generate(template: &str, invoice_xml: &[u8], data: Option<&str>) -> Result<Ve
 
 /// A page built in code, as a kit tree: it has no bindings, so it shows the values the code put in it.
 fn tree() -> String {
-    r#"{"version":1,"type":"document","attrs":{"size":"a4","font":"body","assets":{"fonts":[{"name":"body","src":"body.otf"}]},
+    r#"{"version":1,"type":"document","attrs":{"size":"A4","font":"body","assets":{"fonts":[{"name":"body","src":"body.otf"}]},
        "meta":{"title":"Invoice 2026-0412","lang":"en"}},
        "nodes":[{"type":"section","attrs":{},"nodes":[{"type":"layout","attrs":{"margin":"48pt"},"nodes":[
          {"type":"text","attrs":{"font-size":"20pt"},"nodes":["Northwind Paper SAS"]},
@@ -197,7 +197,7 @@ fn generate_pdf_refuses_a_template_that_declares_the_invoice_or_sets_another_lev
 
 #[test]
 fn what_pdfa_refuses_names_generate_pdf_when_the_call_set_the_level() {
-    let helvetica = template().replace(r#"<document size="a4" font="body">"#, r#"<document size="a4">"#);
+    let helvetica = template().replace(r#"<document size="A4" font="body">"#, r#"<document size="A4">"#);
     let error = generate(&helvetica, &invoice("en16931.xml"), None).unwrap_err();
     assert!(error.starts_with("generatePdf makes the invoice a PDF/A-3b file: the text \"Northwind Paper SAS\" is in Helvetica"), "{error}");
     let cmyk = template().replacen("#5b6475", "cmyk(0, 0, 0, 70)", 1);

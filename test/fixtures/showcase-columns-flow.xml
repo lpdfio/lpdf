@@ -10,7 +10,7 @@
       <color name="band"    value="#eef3fb" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Columns: breaks, tables, rules and notes" subject="What the flow does in columns" />
 
     <!-- In columns, what ends a page in one column ends a column: break-before moves its element to the top of the

@@ -12,7 +12,7 @@
       <color name="muted"    value="#737373"/>
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Layer Opacity" subject="Opacity on layers"/>
 
     <!-- Opacity belongs to a layer: it fades everything in it, as a group. To fade a single element, put it in

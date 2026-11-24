@@ -9,7 +9,7 @@
       <color name="muted"   value="#737373" />
     </colors>
   </tokens>
-  <document size="a5">
+  <document size="A5">
     <meta title="lpdf Showcase — Page Scope by Printed Number" subject="Odd and even regions and layers follow the number printed on the page; first, last and ranges count the section's own pages" />
 
     <!-- page="odd" and page="even" follow the number printed on the page, whatever its format or prefix, so a

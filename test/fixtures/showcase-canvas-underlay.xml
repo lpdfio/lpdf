@@ -12,7 +12,7 @@
       <color name="surface"  value="#ffffff"/>
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Canvas Underlay (letterhead)"
           subject="Canvas underlay + layout"/>
 

@@ -396,7 +396,7 @@ fn font_sample(file: &str) -> Vec<u8> {
     let mut engine = engine(Some(CREATED_ON));
     engine.load_font("sample", &read(&test_dir().join("assets/fonts").join(file)));
     let xml = format!(
-        r#"<lpdf version="1"><assets><font name="sample" src="{file}"/></assets><document size="a4" font="sample">
+        r#"<lpdf version="1"><assets><font name="sample" src="{file}"/></assets><document size="A4" font="sample">
         <meta title="{file}"/><output pdfa="2u"/><section><layout margin="48pt"><column gap="l">
         <text font-size="28pt">Source Sans 3 — {file}</text>
         <text font-size="12pt">Façade, naïve, Ørsted, Łódź, Dvořák — “quoted”, ‘single’, an en dash – and an em dash —,

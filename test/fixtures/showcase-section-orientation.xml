@@ -8,7 +8,7 @@
       <color name="muted"   value="#737373" />
     </colors>
   </tokens>
-  <document size="a4" orientation="landscape">
+  <document size="A4" orientation="landscape">
     <meta title="lpdf Showcase — Section orientation" subject="An orientation names the shape of the page, on a section too" />
 
     <!-- `orientation` names the shape of the page you get: `portrait` is taller than wide and `landscape` is wider than
@@ -21,8 +21,8 @@
            3  orientation="landscape"                  A4 on its side, 297 × 210 mm
            4  size="297mm 210mm" orientation="portrait"    upright, 210 × 297 mm
            5  size="297mm 210mm" orientation="landscape"   on its side, 297 × 210 mm
-           6  size="a3"                                A3 upright, 297 × 420 mm: its own size as written
-           7  size="a3" orientation="landscape"        A3 on its side, 420 × 297 mm
+           6  size="A3"                                A3 upright, 297 × 420 mm: its own size as written
+           7  size="A3" orientation="landscape"        A3 on its side, 420 × 297 mm
            8  size="200mm 200mm" orientation="portrait"    a square, 200 × 200 mm
     -->
 
@@ -86,24 +86,24 @@
       </layout>
     </section>
 
-    <section size="a3">
+    <section size="A3">
       <layout margin="0pt">
         <frame border="4pt primary" padding="xl" height="full">
           <column gap="s">
             <text font-size="xxl" font="Helvetica-Bold" color="primary">6 · Its own size</text>
-            <text font-size="l">size="a3" and no orientation, in an A4 landscape document</text>
+            <text font-size="l">size="A3" and no orientation, in an A4 landscape document</text>
             <text font-size="m" color="muted">Expected: A3 upright, 297 × 420 mm</text>
           </column>
         </frame>
       </layout>
     </section>
 
-    <section size="a3" orientation="landscape">
+    <section size="A3" orientation="landscape">
       <layout margin="0pt">
         <frame border="4pt primary" padding="xl" height="full">
           <column gap="s">
             <text font-size="xxl" font="Helvetica-Bold" color="primary">7 · Its own size, landscape</text>
-            <text font-size="l">size="a3" orientation="landscape"</text>
+            <text font-size="l">size="A3" orientation="landscape"</text>
             <text font-size="m" color="muted">Expected: A3 on its side, 420 × 297 mm</text>
           </column>
         </frame>

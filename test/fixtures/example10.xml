@@ -8,7 +8,7 @@
       <color name="ink"         value="#1a1a1a" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="Engineering Handbook — running header and page numbers" />
     <section>
       <layout margin="48pt">

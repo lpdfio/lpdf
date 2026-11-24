@@ -32,7 +32,7 @@
       <gradient name="band" type="linear" from="primary" to="accent" angle="90" />
     </gradients>
   </tokens>
-  <document size="a5" font="body">
+  <document size="A5" font="body">
     <meta title="A Catalogue in Six Pages" author="Lpdf Fixtures" subject="Fast web view, shared fonts and pictures" />
     <output linearize="true" />
 

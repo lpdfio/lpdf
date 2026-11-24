@@ -686,11 +686,11 @@ mod tests {
         let json = r#"{
             "version": 1,
             "type": "document",
-            "attrs": { "size": "a4", "orientation": "landscape" },
+            "attrs": { "size": "A4", "orientation": "landscape" },
             "nodes": [{"type":"section","attrs":{},"nodes":[]}]
         }"#;
         let xml = kit_to_xml(json).unwrap();
-        assert!(xml.contains(r#"size="a4""#));
+        assert!(xml.contains(r#"size="A4""#));
         assert!(xml.contains(r#"orientation="landscape""#));
     }
 
@@ -814,7 +814,7 @@ mod tests {
             "version": 1,
             "type": "document",
             "attrs": {
-                "size": "a4",
+                "size": "A4",
                 "assets": { "images": [{ "name": "logo" }] },
                 "tokens": { "colors": { "primary": "#1763cf" } }
             },
@@ -825,7 +825,7 @@ mod tests {
         let tokens = xml.find("<tokens>").expect("tokens");
         let document = xml.find("<document").expect("document");
         assert!(assets < tokens && tokens < document, "{xml}");
-        assert!(xml.contains(r#"<document size="a4">"#), "{xml}");
+        assert!(xml.contains(r#"<document size="A4">"#), "{xml}");
     }
 
     // ── Meta ──────────────────────────────────────────────────────────────────
@@ -1871,7 +1871,7 @@ mod tests {
             "version": 1,
             "type": "document",
             "attrs": {
-                "size": "a4",
+                "size": "A4",
                 "tokens": {
                     "space": { "xs": "2pt", "s": "4pt", "m": "8pt", "l": "16pt", "xl": "24pt", "xxl": "40pt" },
                     "colors": { "primary": "#1763cf" }

@@ -11,7 +11,7 @@
       <color name="type"    value="#7d3c98" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Code" subject="Code that keeps its spaces and lines, in a box or in a line of text" />
 
     <!-- A <code> keeps its text as it is written: every space, every line, and the blank lines between them. The box

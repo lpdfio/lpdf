@@ -74,13 +74,13 @@ fn landscape(size: (f32, f32)) -> (f32, f32) {
 #[test]
 fn a_portrait_section_of_a_landscape_document_has_portrait_pages() {
     assert_page(&[("orientation", "landscape")], &[("orientation", "portrait")], A4);
-    assert_page(&[("size", "a3"), ("orientation", "landscape")], &[("orientation", "portrait")], A3);
+    assert_page(&[("size", "A3"), ("orientation", "landscape")], &[("orientation", "portrait")], A3);
 }
 
 #[test]
 fn a_landscape_section_of_a_portrait_document_has_landscape_pages() {
     assert_page(&[], &[("orientation", "landscape")], landscape(A4));
-    assert_page(&[("size", "a3"), ("orientation", "portrait")], &[("orientation", "landscape")], landscape(A3));
+    assert_page(&[("size", "A3"), ("orientation", "portrait")], &[("orientation", "landscape")], landscape(A3));
 }
 
 #[test]
@@ -120,14 +120,14 @@ fn landscape_lays_a_portrait_shaped_size_on_its_side_and_portrait_leaves_it() {
 
 #[test]
 fn a_section_with_its_own_size_and_no_orientation_takes_the_size_as_written() {
-    assert_page(&[("orientation", "landscape")], &[("size", "a3")], A3);
+    assert_page(&[("orientation", "landscape")], &[("size", "A3")], A3);
     assert_page(&[("orientation", "landscape")], &[("size", "297mm 210mm")], (297.0 * MM, 210.0 * MM));
 }
 
 #[test]
 fn a_section_with_its_own_size_has_the_shape_its_orientation_names() {
-    assert_page(&[], &[("size", "a3"), ("orientation", "landscape")], landscape(A3));
-    assert_page(&[("orientation", "landscape")], &[("size", "a3"), ("orientation", "portrait")], A3);
+    assert_page(&[], &[("size", "A3"), ("orientation", "landscape")], landscape(A3));
+    assert_page(&[("orientation", "landscape")], &[("size", "A3"), ("orientation", "portrait")], A3);
 }
 
 #[test]

@@ -438,7 +438,7 @@ fn writes_linearized_samples_for_the_external_check() {
     write("encrypted-plain.pdf", render(&not_linearized(&encrypted), &RenderEncryption::skipping(true)));
 
     let forms = fixture("showcase-forms");
-    let linearized_forms = forms.replacen(r#"<document size="a4">"#, r#"<document size="a4"><output linearize="true"/>"#, 1);
+    let linearized_forms = forms.replacen(r#"<document size="A4">"#, r#"<document size="A4"><output linearize="true"/>"#, 1);
     assert_ne!(forms, linearized_forms);
     write("forms.pdf", render(&linearized_forms, &RenderEncryption::default()));
     write("forms-plain.pdf", render(&forms, &RenderEncryption::default()));

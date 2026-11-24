@@ -680,7 +680,7 @@ mod tests {
     // ── Full-pipeline tests (require render_xml_to_pdf_bytes) ─────────────────
 
     fn minimal_xml() -> &'static str {
-        r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt"><text>Hello</text></layout></section></document></lpdf>"#
+        r#"<lpdf version="1"><document size="A4"><section><layout margin="28pt"><text>Hello</text></layout></section></document></lpdf>"#
     }
 
     fn config(algorithm: Algorithm, user_pw: &str, owner_pw: &str) -> EncryptConfig {
@@ -782,7 +782,7 @@ mod tests {
 
     #[test]
     fn rc4_writes_each_string_as_hex_of_its_value_encrypted_with_the_key_of_its_object() {
-        let xml = r#"<lpdf version="1"><document size="a4"><meta title="C:\reports\Q3 (draft"/><section><layout margin="28pt"><text>Hello</text></layout></section></document></lpdf>"#;
+        let xml = r#"<lpdf version="1"><document size="A4"><meta title="C:\reports\Q3 (draft"/><section><layout margin="28pt"><text>Hello</text></layout></section></document></lpdf>"#;
         let plain = crate::LpdfEngine::render_xml_to_pdf_bytes(xml).expect("render failed");
         assert!(String::from_utf8_lossy(&plain).contains(r"/Title (C:\\reports\\Q3 \(draft)"), "pdf-writer escapes the title");
         let cfg = config(Algorithm::Rc4128, "user", "owner");

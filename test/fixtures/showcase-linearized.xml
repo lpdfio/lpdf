@@ -16,7 +16,7 @@
       <color name="primary" value="#1763cf" />
     </colors>
   </tokens>
-  <document size="a5" font="body">
+  <document size="A5" font="body">
     <meta title="Advice from a Caterpillar" author="Lpdf Fixtures" subject="Fast web view, one page" />
     <output linearize="true" />
 

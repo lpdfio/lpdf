@@ -133,11 +133,11 @@ fn a_section_of_a_ruling_alone_is_a_page_of_paper() {
 fn a_kit_tree_reads_rulings_as_the_xml_does() {
     let xml = r##"<lpdf version="1"><tokens><colors><color name="ink" value="#123456"/></colors><rulings>
         <ruling name="aid" origin="margin" edges="false" ocg="screen"><lines count-x="12" step-y="5mm" color="ink" thickness="xs"/></ruling>
-        </rulings></tokens><document><section size="a5" ruling="aid"><layout margin="30pt"><text>Hi</text></layout></section></document></lpdf>"##;
+        </rulings></tokens><document><section size="A5" ruling="aid"><layout margin="30pt"><text>Hi</text></layout></section></document></lpdf>"##;
     // The tree gives `edges` as a boolean and the count as a number, as an SDK writes them.
     let tree = r##"{"version":1,"type":"document","attrs":{"tokens":{"colors":{"ink":"#123456"},"rulings":{"aid":{
         "origin":"margin","edges":false,"ocg":"screen","lines":[{"count-x":12,"step-y":"5mm","color":"ink","thickness":"xs"}]}}}},
-        "nodes":[{"type":"section","attrs":{"size":"a5","ruling":"aid"},"nodes":[{"type":"layout","attrs":{"margin":"30pt"},
+        "nodes":[{"type":"section","attrs":{"size":"A5","ruling":"aid"},"nodes":[{"type":"layout","attrs":{"margin":"30pt"},
         "nodes":[{"type":"text","nodes":["Hi"]}]}]}]}"##;
     let from_xml = parse::parse(xml).unwrap();
     let from_tree = parse::parse_tree(tree).unwrap();
@@ -251,7 +251,7 @@ fn the_lines_are_written_once_and_every_page_of_the_section_invokes_them() {
 fn sections_of_one_ruling_on_pages_of_one_size_share_a_drawing_and_another_size_gets_its_own() {
     let same = render(&document(r#"<section ruling="notes"><layout/></section><section ruling="notes"><layout/></section>"#));
     assert!(text(&same).contains("/R0 ") && !text(&same).contains("/R1 "), "one drawing for both");
-    let sizes = render(&document(r#"<section ruling="notes"><layout/></section><section size="a5" ruling="notes"><layout/></section>"#));
+    let sizes = render(&document(r#"<section ruling="notes"><layout/></section><section size="A5" ruling="notes"><layout/></section>"#));
     assert!(text(&sizes).contains("/R1 "), "A5 has a drawing of its own");
     let all: String = streams(&sizes).concat();
     assert_eq!((count(&all, "/R0 Do"), count(&all, "/R1 Do")), (1, 1));

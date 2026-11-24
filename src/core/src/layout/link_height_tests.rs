@@ -8,7 +8,7 @@ use crate::parse::parse;
 /// The pages the layout makes of `body`, on A4 with a 28pt margin.
 fn pages_of(body: &str) -> Vec<RenderPage> {
     let xml = format!(
-        r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
+        r#"<lpdf version="1"><document size="A4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
     );
     let mut doc = parse(&xml).unwrap();
     doc.section_layouts().iter().flat_map(layout_page).collect()

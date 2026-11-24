@@ -34,7 +34,7 @@
       </gradient>
     </gradients>
   </tokens>
-  <document size="a4" font="body">
+  <document size="A4" font="body">
     <meta title="Annual Report — Archive Copy" author="Lpdf Fixtures" subject="PDF/A-2u showcase"
           keywords="pdf/a, archive, fixture" creator="lpdf test suite" />
     <output pdfa="2u" />

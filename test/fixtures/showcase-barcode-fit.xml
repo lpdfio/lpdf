@@ -10,7 +10,7 @@
       <color name="bg"       value="#f5f7fa" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Fitting Barcodes" subject="Width and height keep a barcode's proportions" />
 
     <!-- A barcode is never stretched. One size sets the other; both are a maximum. Images follow the same

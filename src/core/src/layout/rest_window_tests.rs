@@ -8,7 +8,7 @@ use serde_json::Value;
 
 /// A document of one A4 section with `attrs`, its layout holding `body`.
 fn document(attrs: &str, body: &str) -> String {
-    format!(r#"<lpdf version="1"><document size="a4"><section{attrs}><layout margin="28pt">{body}</layout></section></document></lpdf>"#)
+    format!(r#"<lpdf version="1"><document size="A4"><section{attrs}><layout margin="28pt">{body}</layout></section></document></lpdf>"#)
 }
 
 fn pages_of(xml: &str) -> Vec<RenderPage> {

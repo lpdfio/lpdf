@@ -10,7 +10,7 @@ With data binding, PDF/A, PDF/UA, PDF/X and Factur-X / ZUGFeRD.
 
 ```xml
 <lpdf version="1">
-  <document size="letter">
+  <document size="Letter">
     <section>
       <layout margin="48pt">
         <column gap="24pt">

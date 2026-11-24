@@ -8,23 +8,23 @@
       <color name="muted"   value="#737373" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Page sizes" subject="The named paper sizes a document and a section take" />
 
     <!-- The paper sizes `size` names beyond A3, A4, A5, Letter and Legal. Each section is one page with a border at
          its edge, and says what it is and what size it should have.
          Expected, eight pages in this order:
-           1  size="a0"                              841 × 1189 mm
-           2  size="a1"                              594 × 841 mm
-           3  size="a2"                              420 × 594 mm
-           4  size="a6"                              105 × 148 mm
-           5  size="b4"                              250 × 353 mm
-           6  size="b5"                              176 × 250 mm
-           7  size="tabloid"                         11 × 17 in, 279.4 × 431.8 mm
-           8  size="tabloid" orientation="landscape" 17 × 11 in, 431.8 × 279.4 mm, which is Ledger
+           1  size="A0"                              841 × 1189 mm
+           2  size="A1"                              594 × 841 mm
+           3  size="A2"                              420 × 594 mm
+           4  size="A6"                              105 × 148 mm
+           5  size="B4"                              250 × 353 mm
+           6  size="B5"                              176 × 250 mm
+           7  size="Tabloid"                         11 × 17 in, 279.4 × 431.8 mm
+           8  size="Tabloid" orientation="landscape" 17 × 11 in, 431.8 × 279.4 mm, which is Ledger
     -->
 
-    <section size="a0">
+    <section size="A0">
       <layout margin="0pt">
         <frame border="4pt primary" padding="xl" height="full">
           <column gap="s">
@@ -35,7 +35,7 @@
       </layout>
     </section>
 
-    <section size="a1">
+    <section size="A1">
       <layout margin="0pt">
         <frame border="4pt primary" padding="xl" height="full">
           <column gap="s">
@@ -46,7 +46,7 @@
       </layout>
     </section>
 
-    <section size="a2">
+    <section size="A2">
       <layout margin="0pt">
         <frame border="4pt primary" padding="xl" height="full">
           <column gap="s">
@@ -57,7 +57,7 @@
       </layout>
     </section>
 
-    <section size="a6">
+    <section size="A6">
       <layout margin="0pt">
         <frame border="4pt primary" padding="m" height="full">
           <column gap="s">
@@ -68,7 +68,7 @@
       </layout>
     </section>
 
-    <section size="b4">
+    <section size="B4">
       <layout margin="0pt">
         <frame border="4pt primary" padding="xl" height="full">
           <column gap="s">
@@ -79,7 +79,7 @@
       </layout>
     </section>
 
-    <section size="b5">
+    <section size="B5">
       <layout margin="0pt">
         <frame border="4pt primary" padding="xl" height="full">
           <column gap="s">
@@ -90,7 +90,7 @@
       </layout>
     </section>
 
-    <section size="tabloid">
+    <section size="Tabloid">
       <layout margin="0pt">
         <frame border="4pt primary" padding="xl" height="full">
           <column gap="s">
@@ -101,7 +101,7 @@
       </layout>
     </section>
 
-    <section size="tabloid" orientation="landscape">
+    <section size="Tabloid" orientation="landscape">
       <layout margin="0pt">
         <frame border="4pt primary" padding="xl" height="full">
           <column gap="s">

@@ -34,7 +34,7 @@
       </ruling>
     </rulings>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Ruling" subject="ruled and squared pages, counts, two sets, edges, origin and page sizes" />
 
     <!-- A section names a ruling, and its lines are drawn on every page, under everything else. -->
@@ -76,14 +76,14 @@
     </section>
 
     <!-- One ruling on pages of different sizes: a count keeps its number of parts, and a step its size. -->
-    <section size="a5" ruling="twelve">
+    <section size="A5" ruling="twelve">
       <layout margin="40pt">
         <text font-size="l" font="Helvetica-Bold" color="ink">twelve on A5</text>
         <text color="muted">12 narrower columns across A5 than across A4.</text>
       </layout>
     </section>
 
-    <section size="a5" ruling="graph">
+    <section size="A5" ruling="graph">
       <layout margin="40pt">
         <text font-size="l" font="Helvetica-Bold" color="ink">graph on A5</text>
         <text color="muted">5mm cells on A5, as on A4.</text>

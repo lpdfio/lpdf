@@ -7,7 +7,7 @@
       <color name="muted" value="#737373" />
     </colors>
   </tokens>
-  <document size="a5">
+  <document size="A5">
     <meta title="lpdf Showcase — Page Letters" subject="Pages numbered in letters past z" />
 
     <!-- page-format="lower-alpha" numbers the pages a, b, c. Past z, page letters repeat one letter, aa, bb, cc, as a

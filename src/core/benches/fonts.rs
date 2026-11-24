@@ -16,7 +16,7 @@ fn font_xml(font_ref: &str) -> String {
   <assets>
     <font name="bench-font" src="{font_ref}" />
   </assets>
-  <document size="a4">
+  <document size="A4">
     <section>
       <layout margin="40pt">
         <column gap="m">
@@ -35,7 +35,7 @@ fn font_xml(font_ref: &str) -> String {
 
 fn builtin_xml() -> String {
     r#"<lpdf version="1">
-  <document size="a4">
+  <document size="A4">
     <section>
       <layout margin="40pt">
         <column gap="m">

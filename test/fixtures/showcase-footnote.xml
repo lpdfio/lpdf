@@ -8,7 +8,7 @@
       <color name="muted"   value="#737373" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Footnote" subject="Notes at the bottom of the page where their number is" />
 
     <!-- An <fn> in a text puts a small raised number in the line and the note it holds at the bottom of the page the

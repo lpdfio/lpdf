@@ -2,7 +2,7 @@
 <lpdf version="1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Markdown wrap" subject="Names wider than their box, dollar signs and the lines of a drawn box" />
 
     <!-- Nothing of a markdown runs past its margin or its table cell, and what a built-in font has no glyph for

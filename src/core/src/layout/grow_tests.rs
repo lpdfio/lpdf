@@ -17,7 +17,7 @@ const A5_WIDTH: f64 = 419.53;
 
 /// A document on A5 of one section with `attrs`, whose layout of a 10pt margin holds `layout`.
 fn document(attrs: &str, layout: &str) -> String {
-    format!(r#"<lpdf version="1"><document size="a5"><section {attrs}><layout margin="10pt">{layout}</layout></section></document></lpdf>"#)
+    format!(r#"<lpdf version="1"><document size="A5"><section {attrs}><layout margin="10pt">{layout}</layout></section></document></lpdf>"#)
 }
 
 /// `n` lines, each a text of its own: "Line 1", "Line 2" and so on.
@@ -352,7 +352,7 @@ fn full_is_the_room_of_the_starting_size() {
 #[test]
 fn a_layer_places_its_anchors_against_the_grown_page_and_its_plain_places_from_the_top_left() {
     let xml = format!(
-        r##"<lpdf version="1"><document size="a5"><section size="80mm 40mm" grow="width height">
+        r##"<lpdf version="1"><document size="A5"><section size="80mm 40mm" grow="width height">
             <layer>
               <rect anchor="bottom-right" x="-5pt" y="-5pt" width="20pt" height="10pt" fill="#0000ff"/>
               <rect x="5pt" y="5pt" width="20pt" height="10pt" fill="#00ff00"/>
@@ -379,7 +379,7 @@ fn a_layer_places_its_anchors_against_the_grown_page_and_its_plain_places_from_t
 fn the_background_and_the_ruling_cover_the_grown_page() {
     let xml = format!(
         r##"<lpdf version="1"><tokens><rulings><ruling name="notes"><lines step-y="8mm"/></ruling></rulings></tokens>
-        <document size="a5"><section size="80mm 40mm" grow="height" background="#ffeeee" ruling="notes">
+        <document size="A5"><section size="80mm 40mm" grow="height" background="#ffeeee" ruling="notes">
         <layout margin="10pt">{}</layout></section></document></lpdf>"##,
         lines(60)
     );
@@ -395,7 +395,7 @@ fn the_background_and_the_ruling_cover_the_grown_page() {
 
 #[test]
 fn a_table_of_contents_section_grows_too() {
-    let xml = r#"<lpdf version="1"><document size="a5"><section type="toc" size="80mm 40mm" grow="height"><layout margin="10pt">
+    let xml = r#"<lpdf version="1"><document size="A5"><section type="toc" size="80mm 40mm" grow="height"><layout margin="10pt">
         <text data-source="$toc" data-value="label">-</text></layout></section>
         <section><layout>{}</layout></section></document></lpdf>"#;
     let bookmarked: String = (1..=12).map(|n| format!(r#"<bookmark label="Entry {n}"/><text>Entry {n}</text>"#)).collect();
@@ -409,7 +409,7 @@ fn a_table_of_contents_section_grows_too() {
 #[test]
 fn a_page_that_would_grow_past_the_largest_pdf_page_is_an_error_that_names_the_section() {
     let tall = format!(
-        r#"<lpdf version="1"><document size="a5"><section><layout><text>Before</text></layout></section><section size="80mm 40mm" grow="height"><layout margin="10pt">{}</layout></section></document></lpdf>"#,
+        r#"<lpdf version="1"><document size="A5"><section><layout><text>Before</text></layout></section><section size="80mm 40mm" grow="height"><layout margin="10pt">{}</layout></section></document></lpdf>"#,
         lines(1300)
     );
     assert_eq!(

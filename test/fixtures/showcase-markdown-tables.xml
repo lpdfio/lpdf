@@ -2,7 +2,7 @@
 <lpdf version="1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Markdown tables" subject="The lines and the stripe of a Markdown table, on and off" />
 
     <!-- The table rule of the default styles has head-border and row-border set and no stripe; a rule written in the

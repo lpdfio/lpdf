@@ -6,7 +6,7 @@
     <image name="avatar" src="../assets/images/image-square.png" />
     <image name="tall"   src="../assets/images/image-tall.png" />
   </assets>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Row split: images" subject="Pagination" />
 
     <!-- An image beside text: the cut moves above it -->

@@ -10,7 +10,7 @@
   <assets>
     <font name="body" src="../assets/fonts/SourceSans3-Regular.otf"/>
   </assets>
-  <document size="a4" font="body">
+  <document size="A4" font="body">
     <meta title="Invoice" author="Northwind Paper SAS" lang="en"/>
     <section>
       <layout margin="48pt">

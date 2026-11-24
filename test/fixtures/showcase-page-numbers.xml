@@ -7,7 +7,7 @@
       <color name="muted" value="#737373" />
     </colors>
   </tokens>
-  <document size="a5">
+  <document size="A5">
     <meta title="lpdf Showcase — Page Numbers" subject="A book numbered across its sections: front matter in numerals, chapters from 1, an appendix from A-1" />
 
     <!-- The pages count on through the document. A section changes that only with page-start, page-format or

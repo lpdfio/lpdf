@@ -9,7 +9,7 @@
       <color name="band"    value="#eef3fb" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — An inset on the last page" subject="Where an inset on last goes, and when it stays put" />
 
     <!-- An inset on last goes on the last page of the flow filled without it. That page is filled again with it, and

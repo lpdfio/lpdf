@@ -10,7 +10,7 @@
       <color name="ink"         value="#0f172a" />
     </colors>
   </tokens>
-  <document size="letter">
+  <document size="Letter">
     <meta title="Quarterly Investor Update — Q1 2026" />
     <section>
       <layout margin="48pt">

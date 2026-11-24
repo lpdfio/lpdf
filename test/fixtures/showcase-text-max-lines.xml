@@ -10,7 +10,7 @@
       <color name="bg"       value="#f5f7fa" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Capping Text" subject="max-lines and ellipsis on a text of the layout" />
 
     <!-- A text of the layout wraps to as many lines as it needs. max-lines caps it, and ellipsis ends the last

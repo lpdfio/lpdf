@@ -11,7 +11,7 @@
       <color name="text-muted"  value="#5a5a5a" />
     </colors>
   </tokens>
-  <document size="letter" orientation="landscape">
+  <document size="Letter" orientation="landscape">
     <meta title="Certificate of Completion — Jane Doe" />
     <section background="surface">
       <layout margin="0pt">

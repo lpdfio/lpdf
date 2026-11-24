@@ -20,7 +20,7 @@
       </ruling>
     </rulings>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Ruling in sections" subject="a ruling on every page, under layers and a background, in columns, in a markdown, with a bleed, and alone" />
 
     <!-- A ruling is drawn on every page of the section, over its background and under its layers and its layout.

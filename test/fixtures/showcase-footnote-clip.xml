@@ -8,7 +8,7 @@
       <color name="muted"   value="#737373" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Footnotes in what is cut" subject="Footnotes in content taller than the page" />
 
     <!-- A frame taller than a page, a note in each entry, with the page counter. Only the numbers above the cut have
