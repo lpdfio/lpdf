@@ -387,6 +387,10 @@ A document built in code can name the words an attribute takes as constants. Doc
 - A word that starts with a digit takes the last word of its constant's name in front: `PdfALevel.Level2a`, `PdfUaPart.Part1`, `PdfXVersion.Version4`, `Pdf417EcLevel.Level0`. The value is the schema's in every SDK.
 - Not constants, since an attribute that takes them takes more: a custom page size (`100pt 200pt`), a range of pages (`2-4`), the slots `xs` to `xxl`, and the keywords `fill` of a width and `full` and `fill` of a height, which stay strings.
 - In TypeScript `page`, which takes a range beside its named words, and `allow`, which takes several words separated by spaces, are strings.
+- In TypeScript a custom `size` compiles when it is two numbers, each with
+  `pt`, `mm` or `in`, so `'210mm'` and `'21cm 29.7cm'` don't. The numbers
+  are checked when the document is rendered: a page under 3pt wide or high,
+  such as `'-5pt 3mm'`, is an error then.
 - The SDKs other than JavaScript take a string, so a word that is none of an attribute's values compiles and is refused when the document is rendered, with an error that names the words it takes.
 
 ## Render limits
