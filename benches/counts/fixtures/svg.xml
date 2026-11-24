@@ -8,7 +8,7 @@
     <image name="diagram" src="svg-diagram.svg" />
     <image name="icon" src="svg-icon.svg" />
   </assets>
-  <document size="a4">
+  <document>
     <meta title="Bench counts: SVG pictures" />
     <section>
       <layout margin="40pt">

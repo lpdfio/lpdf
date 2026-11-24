@@ -14,7 +14,7 @@ const LINE: f64 = 13.2;
 /// The pages the layout makes of `body`.
 fn pages_of(body: &str) -> Vec<RenderPage> {
     let xml = format!(
-        r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
+        r#"<lpdf version="1"><document size="A4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
     );
     let mut doc = parse(&xml).unwrap();
     doc.section_layouts().iter().flat_map(layout_page).collect()
@@ -603,7 +603,7 @@ fn a_link_is_cut_at_the_clip_and_a_field_below_it_dropped() {
     assert_eq!(fields, vec![28.0], "only the field above the clip is left");
 
     let xml = format!(
-        r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
+        r#"<lpdf version="1"><document size="A4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
     );
     let pdf = crate::LpdfEngine::render_xml_to_pdf_bytes(&xml).unwrap();
     let has = |needle: &[u8]| pdf.windows(needle.len()).any(|w| w == needle);
@@ -729,7 +729,7 @@ fn a_row_left_a_rounding_error_of_room_goes_on_whole_to_the_next_page() {
     // the boxes around it, and can come to a rounding error instead of nothing. Nothing of the row fits there: it
     // goes on whole, and is not placed whole on this page with nothing left of it for the next.
     let xml = format!(
-        r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt">{}</layout></section></document></lpdf>"#,
+        r#"<lpdf version="1"><document size="A4"><section><layout margin="28pt">{}</layout></section></document></lpdf>"#,
         item("", &words("w", 40)),
     );
     let mut doc = parse(&xml).unwrap();

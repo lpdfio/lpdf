@@ -10,7 +10,7 @@
       <color name="box"     value="#eef2f8" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Spans in aligned text" subject="align=right and align=center: a line with spans ends at the right edge or is centered, its spans in order" />
 
     <!-- A right-aligned or centered line with spans is placed as a whole: it starts its width back from the right

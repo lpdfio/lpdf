@@ -11,7 +11,7 @@
       <color name="surface"  value="#ffffff"/>
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Region Chrome (header and footer)"
           subject="Layout region pin=top and pin=bottom"/>
 

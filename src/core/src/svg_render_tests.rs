@@ -16,7 +16,7 @@ fn fixture(name: &str) -> Vec<u8> {
 /// A document whose `<assets>` declare `images` (named as their files are) and whose first section is `section`.
 fn document(images: &[&str], section: &str) -> String {
     let assets: String = images.iter().map(|name| format!(r#"<image name="{name}" src="{name}"/>"#)).collect();
-    format!(r#"<lpdf version="1"><assets>{assets}</assets><document size="a4">{section}</document></lpdf>"#)
+    format!(r#"<lpdf version="1"><assets>{assets}</assets><document size="A4">{section}</document></lpdf>"#)
 }
 
 fn render(images: &[(&str, Vec<u8>)], section: &str) -> Result<Vec<u8>, String> {
@@ -270,7 +270,7 @@ fn leaves_an_svg_that_cannot_be_drawn_alone_when_the_document_never_declares_it(
     let bad = br#"<svg xmlns="http://www.w3.org/2000/svg"><text>x</text></svg>"#.to_vec();
     let mut engine = LpdfEngine::new("");
     engine.load_image("unused", &bad);
-    let xml = r#"<lpdf version="1"><document size="a4"><section><layout><text>Body</text></layout></section></document></lpdf>"#;
+    let xml = r#"<lpdf version="1"><document size="A4"><section><layout><text>Body</text></layout></section></document></lpdf>"#;
     engine.render_xml(xml, None, &RenderEncryption::default()).expect("renders");
 }
 

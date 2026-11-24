@@ -2502,7 +2502,7 @@ mod tests {
     fn test_minimal_document() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
-  <document size="a4">
+  <document size="A4">
     <section>
       <layout margin="48pt">
         <text font-size="12pt">Hello</text>
@@ -2722,7 +2722,7 @@ mod tests {
     const FULL_DOCUMENT: &str = r##"<lpdf version="1">
   <assets><image name="logo" src="logo.png"/></assets>
   <tokens><colors><color name="brand" value="#336699"/></colors></tokens>
-  <document size="a4">
+  <document size="A4">
     <section><layout><text color="brand">Hi</text></layout></section>
   </document>
 </lpdf>"##;
@@ -2775,7 +2775,7 @@ mod tests {
     fn test_meta_folded() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
-  <document size="a4">
+  <document size="A4">
     <meta title="My Doc" author="Alice"/>
     <section><layout><text>x</text></layout></section>
   </document>
@@ -2807,7 +2807,7 @@ mod tests {
     /// the constant its value is in, which depends on the barcode.
     #[test]
     fn a_value_of_a_closed_enumeration_is_written_as_its_constant_in_each_language() {
-        let xml = r#"<lpdf><document size="a4" orientation="landscape"><section size="100pt 200pt"><layout>
+        let xml = r#"<lpdf><document size="A4" orientation="landscape"><section size="100pt 200pt"><layout>
             <text align="center" paginate="keep-next">x</text>
             <barcode type="qr" data="x" ec="H"/><barcode type="pdf417" data="y" ec="3"/>
             <table cols="1fr"><tr><td valign="middle" align="end">c</td></tr></table>
@@ -2978,7 +2978,7 @@ mod tests {
     fn test_output_folded_after_meta() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
-  <document size="a4">
+  <document size="A4">
     <meta title="My Doc"/>
     <output encrypt="aes-256" allow="print fill-forms"/>
     <section><layout><text>x</text></layout></section>
@@ -3330,7 +3330,7 @@ mod tests {
 
     #[test]
     fn test_the_margin_is_an_attribute_of_the_layout() {
-        let xml = r#"<lpdf version="1"><document size="a4"><section>
+        let xml = r#"<lpdf version="1"><document size="A4"><section>
             <layout margin="48pt"><text>Body</text></layout>
         </section></document></lpdf>"#;
         for (target, layout, import) in [
@@ -3454,7 +3454,7 @@ mod tests {
     fn test_dotnet_minimal_document() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
-  <document size="a4">
+  <document size="A4">
     <section>
       <layout margin="48pt">
         <text font-size="12pt">Hello</text>
@@ -3496,7 +3496,7 @@ mod tests {
     fn test_dotnet_meta_folded() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
-  <document size="a4">
+  <document size="A4">
     <meta title="My Doc" author="Alice"/>
     <section><layout><text>x</text></layout></section>
   </document>
@@ -3511,7 +3511,7 @@ mod tests {
     fn test_dotnet_output_folded_after_meta() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
-  <document size="a4">
+  <document size="A4">
     <meta title="My Doc"/>
     <output encrypt="aes-256" allow="print fill-forms"/>
     <section><layout><text>x</text></layout></section>
@@ -3674,7 +3674,7 @@ mod tests {
     fn test_php_minimal_document() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
-  <document size="a4">
+  <document size="A4">
     <section>
       <layout margin="48pt">
         <text font-size="12pt">Hello</text>
@@ -3715,7 +3715,7 @@ mod tests {
     fn test_php_meta_folded() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
-  <document size="a4">
+  <document size="A4">
     <meta title="My Doc" author="Alice"/>
     <section><layout><text>x</text></layout></section>
   </document>
@@ -3730,7 +3730,7 @@ mod tests {
     fn test_php_output_folded_after_meta() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
-  <document size="a4">
+  <document size="A4">
     <meta title="My Doc"/>
     <output encrypt="aes-256" allow="print fill-forms"/>
     <section><layout><text>x</text></layout></section>
@@ -3805,7 +3805,7 @@ mod tests {
     fn test_python_minimal_document() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
-  <document size="a4">
+  <document size="A4">
     <section>
       <layout margin="48pt">
         <text font-size="12pt">Hello</text>
@@ -3845,7 +3845,7 @@ mod tests {
     fn test_python_meta_folded() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
-  <document size="a4">
+  <document size="A4">
     <meta title="My Doc" author="Alice"/>
     <section><layout><text>x</text></layout></section>
   </document>
@@ -3860,7 +3860,7 @@ mod tests {
     fn test_python_output_folded_after_meta() {
         let xml = r#"<?xml version="1.0"?>
 <lpdf version="1">
-  <document size="a4">
+  <document size="A4">
     <meta title="My Doc"/>
     <output encrypt="aes-256" allow="print fill-forms"/>
     <section><layout><text>x</text></layout></section>
@@ -3982,7 +3982,7 @@ mod tests {
 
     #[test]
     fn test_java_minimal_document_is_a_class_with_a_main_method() {
-        let out = java(r#"<lpdf version="1"><document size="a4"><section><layout margin="48pt">
+        let out = java(r#"<lpdf version="1"><document size="A4"><section><layout margin="48pt">
             <text font-size="12pt">Hello</text>
         </layout></section></document></lpdf>"#);
         assert!(out.starts_with("import io.lpdf.*;\nimport java.util.List;\nimport static io.lpdf.L.NoAttr;\n\npublic class Main {\n"), "{out}");
@@ -4007,7 +4007,7 @@ mod tests {
 
     #[test]
     fn test_java_meta_and_output_are_setters_of_the_document() {
-        let out = java(r#"<lpdf version="1"><document size="a4">
+        let out = java(r#"<lpdf version="1"><document size="A4">
             <meta title="My Doc" author="Alice"/><output encrypt="aes-256" allow="print fill-forms"/>
             <section><layout><text>x</text></layout></section>
         </document></lpdf>"#);
@@ -4060,7 +4060,7 @@ mod tests {
             .map(|i| format!(r#"<text font-size="m">Paragraph {i}, long enough that a hundred of them make a large document to write.</text>"#))
             .collect();
         let section = format!("<section><layout>{}</layout></section>", format!("<column>{text}</column>").repeat(columns));
-        format!(r#"<lpdf version="1"><document size="a4">{}</document></lpdf>"#, section.repeat(sections))
+        format!(r#"<lpdf version="1"><document size="A4">{}</document></lpdf>"#, section.repeat(sections))
     }
 
     /// The text of each method of a generated program, `main` first.

@@ -10,7 +10,7 @@
       <color name="stripe"  value="#f2f5f9" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Bulk records from data" subject="A ledger, an event log, address labels and an audit trail, each laid out a page at a time" />
 
     <!-- Records by the thousand from data (showcase-bulk.json), each container with bulk="true": its child with

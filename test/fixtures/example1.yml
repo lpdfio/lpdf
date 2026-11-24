@@ -2,7 +2,7 @@
 version: 1
 
 document:
-  size: a4
+  size: A4
   margin: 40pt
   meta:
     title: Getting Started with lpdf

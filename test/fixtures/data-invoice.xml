@@ -4,7 +4,7 @@
     <font name="body"    core="Helvetica"/>
     <font name="heading" core="Helvetica-Bold"/>
   </assets>
-  <document size="a4" font="body">
+  <document size="A4" font="body">
     <section>
       <layout margin="48pt">
         <column gap="m">

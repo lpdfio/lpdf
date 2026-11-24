@@ -10,7 +10,7 @@
       <color name="bg"       value="#f5f7fa" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Line Height" subject="line-height on a text of the layout, as a factor or a token" />
 
     <!-- The distance between lines is a factor of the font size: 1.2 unless a text says otherwise. A text

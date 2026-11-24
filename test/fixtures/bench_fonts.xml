@@ -10,7 +10,7 @@
     <font name="heading" src="../assets/fonts/CrimsonText-SemiBold.ttf" />
     <font name="sans"    src="../assets/fonts/Montserrat-Regular.ttf" />
   </assets>
-  <document size="a4" font="body">
+  <document size="A4" font="body">
     <meta title="Benchmark Fixture Fonts" />
     <section>
       <layout margin="40pt">

@@ -8,7 +8,7 @@
       <color name="muted" value="#737373" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Wide words" subject="A word or a styled run wider than its box breaks at the last character that fits" />
 
     <!-- A text breaks a word, or a styled run, that is wider than a whole line at the last character that fits, so

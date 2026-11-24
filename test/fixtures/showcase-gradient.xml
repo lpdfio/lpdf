@@ -27,7 +27,7 @@
       <gradient name="night"     type="linear" from="#0f172a" to="#1e3a8a" />
     </gradients>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Gradient" subject="gradients on boxes, table rows, layer shapes and a page" />
 
     <!-- A gradient is defined once under a name in the tokens, and used where a background or a fill goes,

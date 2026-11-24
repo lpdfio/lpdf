@@ -8,7 +8,7 @@
       <color name="muted"   value="#737373" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Footnote Counter" subject="Where the numbers of the footnotes start over" />
 
     <!-- footnote-counter says where the numbers of the footnotes start over: on every page ("page"), in every section

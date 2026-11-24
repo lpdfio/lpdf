@@ -2,7 +2,7 @@
 <lpdf version="1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Grow table" subject="A feature matrix on one page as wide and as tall as it needs" />
 
     <!-- A section that grows in width and in height: a feature matrix of twelve columns and 33 rows in eight

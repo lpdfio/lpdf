@@ -3,7 +3,7 @@
      grid in each part. Written with the elements every release since v0.24.0 reads, so each one measures
      this same file. Never edit it: a change moves every count of the fixture. -->
 <lpdf version="1">
-  <document size="a4">
+  <document>
     <meta title="Bench counts: justified text" />
     <section>
       <layout margin="40pt">

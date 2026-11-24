@@ -9,7 +9,7 @@
       <color name="rule"    value="#dde3ed" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Justified Text" subject="align=justify: the words of a line are placed so that it ends at the right edge of its box" />
 
     <!-- A justified line is spread over the width of its box by moving its words: the spare width is shared by

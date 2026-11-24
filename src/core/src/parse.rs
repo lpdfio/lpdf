@@ -1639,7 +1639,7 @@ pub fn parse_with(xml: &str, resources: &Resources) -> Result<Document, String> 
     let mut meta          = Meta::default();
     let mut output        = Output::default();
     let mut attachments   = Vec::new();
-    let mut doc_size      = (595.28_f32, 841.89_f32); // a4
+    let mut doc_size      = (595.28_f32, 841.89_f32); // A4
     let mut doc_bleed     = 0.0_f32;
     let mut doc_background: Option<String> = None;
     let mut doc_debug     = false;
@@ -2177,21 +2177,21 @@ fn parse_meta(elem: &roxmltree::Node) -> Meta {
 }
 
 
-/// The named values of `size`, each as its width and height in points, written to two decimals as `a4` is. The names
+/// The named values of `size`, each as its width and height in points, written to two decimals as `A4` is. The names
 /// are the schema's `PageSizeNamed`, in its order, and the error for a wrong `size` lists them.
 const NAMED_PAGE_SIZES: [(&str, (f32, f32)); 12] = [
-    ("a0", (2383.94, 3370.39)),
-    ("a1", (1683.78, 2383.94)),
-    ("a2", (1190.55, 1683.78)),
-    ("a3", (841.89, 1190.55)),
-    ("a4", (595.28, 841.89)),
-    ("a5", (419.53, 595.28)),
-    ("a6", (297.64, 419.53)),
-    ("b4", (708.66, 1000.63)),
-    ("b5", (498.90, 708.66)),
-    ("letter", (612.0, 792.0)),
-    ("legal", (612.0, 1008.0)),
-    ("tabloid", (792.0, 1224.0)),
+    ("A0", (2383.94, 3370.39)),
+    ("A1", (1683.78, 2383.94)),
+    ("A2", (1190.55, 1683.78)),
+    ("A3", (841.89, 1190.55)),
+    ("A4", (595.28, 841.89)),
+    ("A5", (419.53, 595.28)),
+    ("A6", (297.64, 419.53)),
+    ("B4", (708.66, 1000.63)),
+    ("B5", (498.90, 708.66)),
+    ("Letter", (612.0, 792.0)),
+    ("Legal", (612.0, 1008.0)),
+    ("Tabloid", (792.0, 1224.0)),
 ];
 
 /// A page `size`: a name, or a width and a height, each at least `MIN_PAGE`.
@@ -4419,7 +4419,7 @@ pub fn parse_tree_with(json: &str, resources: &Resources) -> Result<Document, St
     let doc_size = if let Some(s) = doc_size_str {
         parse_page_size(s)?
     } else {
-        (595.28_f32, 841.89_f32) // a4
+        (595.28_f32, 841.89_f32) // A4
     };
     let doc_size = with_orientation(doc_size, doc_orient).map_err(|e| format!("document: {e}"))?;
     let doc_bleed = attrs.get("bleed").and_then(|v| v.as_str())
@@ -4959,10 +4959,10 @@ mod tests {
 
     fn minimal(body: &str) -> String {
         if body.is_empty() {
-            r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt"/></section></document></lpdf>"#.to_string()
+            r#"<lpdf version="1"><document size="A4"><section><layout margin="28pt"/></section></document></lpdf>"#.to_string()
         } else {
             format!(
-                r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
+                r#"<lpdf version="1"><document size="A4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
             )
         }
     }
@@ -5284,7 +5284,7 @@ mod tests {
 
         let mut doc = parse(
             r##"<lpdf version="1"><tokens><colors><color name="line" value="#336699"/></colors></tokens>
-            <document size="a4"><section><layout margin="28pt"><divider/></layout></section></document></lpdf>"##,
+            <document size="A4"><section><layout margin="28pt"><divider/></layout></section></document></lpdf>"##,
         )
         .unwrap();
         let d = &doc.section_layouts()[0].children[0];
@@ -5403,7 +5403,7 @@ mod tests {
     /// A document whose tokens define the aliases `caption` (xs), `body` (m) and `heading` (xl), around `body` in a layout.
     fn with_aliases(body: &str) -> String {
         format!(
-            r#"<lpdf version="1">{ALIASES}<document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
+            r#"<lpdf version="1">{ALIASES}<document size="A4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
         )
     }
 
@@ -5515,7 +5515,7 @@ mod tests {
     fn with_height_tokens(tokens: &str, body: &str) -> String {
         format!(
             r#"<lpdf version="1"><assets><image name="logo"/></assets><tokens>{tokens}</tokens>
-            <document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
+            <document size="A4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
         )
     }
 
@@ -5595,7 +5595,7 @@ mod tests {
     fn a_height_a_layer_image_takes_is_a_length() {
         let layer = |height: &str| {
             parse(&format!(
-                r#"<lpdf version="1"><assets><image name="logo"/></assets><document size="a4"><section>
+                r#"<lpdf version="1"><assets><image name="logo"/></assets><document size="A4"><section>
                 <layer><img-at name="logo" x="0pt" y="0pt" height="{height}"/></layer><layout/></section></document></lpdf>"#
             ))
         };
@@ -5662,7 +5662,7 @@ mod tests {
             <assets>
                 <font name="body" core="Helvetica-Oblique"/>
             </assets>
-            <document size="a4" font="body"><section><layout>
+            <document size="A4" font="body"><section><layout>
                 <text>Hello</text>
             </layout></section></document>
         </lpdf>"#;
@@ -5675,7 +5675,7 @@ mod tests {
     #[test]
     fn font_size_inheritance() {
         let xml = r#"<lpdf version="1">
-            <document size="a4"><section><layout>
+            <document size="A4"><section><layout>
                 <column font-size="14pt"><text>Hello</text></column>
             </layout></section></document>
         </lpdf>"#;
@@ -5692,7 +5692,7 @@ mod tests {
             <assets>
                 <image name="logo"/>
             </assets>
-            <document size="a4"><section><layout>
+            <document size="A4"><section><layout>
                 <img name="logo" width="100pt"/>
             </layout></section></document>
         </lpdf>"#;
@@ -5740,7 +5740,7 @@ mod tests {
 
     #[test]
     fn a_shape_takes_its_size_and_radius_from_the_tokens() {
-        let xml = r#"<lpdf version="1"><document size="a4"><section><layout>
+        let xml = r#"<lpdf version="1"><document size="A4"><section><layout>
             <shape type="rect" width="m" height="m" radius="s"/>
         </layout></section></document></lpdf>"#;
         let mut doc = parse(xml).unwrap();
@@ -5823,7 +5823,7 @@ mod tests {
         let err = parse(&minimal(region)).unwrap_err();
         assert!(err.starts_with("<region>") && err.contains("<fn> is not supported in a region"), "{err}");
 
-        let layer = r#"<lpdf version="1"><document size="a4"><section><layer><text-at x="10pt" y="10pt">A<fn>B</fn></text-at></layer><layout/></section></document></lpdf>"#;
+        let layer = r#"<lpdf version="1"><document size="A4"><section><layer><text-at x="10pt" y="10pt">A<fn>B</fn></text-at></layer><layout/></section></document></lpdf>"#;
         let err = parse(layer).unwrap_err();
         assert!(err.contains("<fn> is not supported in a <text-at>"), "{err}");
     }
@@ -5856,7 +5856,7 @@ mod tests {
 
     #[test]
     fn footnote_counter_is_read_on_the_document_and_the_section_and_a_section_overrides() {
-        let xml = r#"<lpdf version="1"><document size="a4" footnote-counter="document">
+        let xml = r#"<lpdf version="1"><document size="A4" footnote-counter="document">
             <section><layout/></section>
             <section footnote-counter="page"><layout/></section>
             <section footnote-counter="section"><layout/></section>
@@ -5895,7 +5895,7 @@ mod tests {
     /// of the layout, `layer` that of the layer, and `assets` the `<assets>`.
     fn enumerated_xml(assets: &str, document: &str, section: &str, layout: &str, layer: &str) -> String {
         format!(
-            r#"<lpdf version="1">{assets}<document size="a4" {document}><section {section}><layer>{layer}</layer><layout margin="28pt">{layout}</layout></section></document></lpdf>"#
+            r#"<lpdf version="1">{assets}<document size="A4" {document}><section {section}><layer>{layer}</layer><layout margin="28pt">{layout}</layout></section></document></lpdf>"#
         )
     }
 
@@ -5903,7 +5903,7 @@ mod tests {
     fn enumerated_tree(assets: &str, document: &str, section: &str, layout: &str, layer: &str) -> String {
         let assets = if assets.is_empty() { String::new() } else { format!(r#""assets":{assets},"#) };
         format!(
-            r#"{{"version":1,"type":"document","attrs":{{{assets}"size":"a4"{document}}},"nodes":[
+            r#"{{"version":1,"type":"document","attrs":{{{assets}"size":"A4"{document}}},"nodes":[
                 {{"type":"section","attrs":{{{section}}},"nodes":[
                     {{"type":"layer","attrs":{{}},"nodes":[{layer}]}},
                     {{"type":"layout","attrs":{{"margin":"28pt"}},"nodes":[{layout}]}}]}}]}}"#
@@ -6083,7 +6083,7 @@ mod tests {
                     <color name="primary" value="#ff0000" />
                 </colors>
             </tokens>
-            <document size="a4"><section><layout><frame background="primary" /></layout></section></document>
+            <document size="A4"><section><layout><frame background="primary" /></layout></section></document>
         </lpdf>"##;
         let mut doc = parse(xml).unwrap();
         assert_eq!(
@@ -6094,7 +6094,7 @@ mod tests {
 
     #[test]
     fn landscape_swaps_dimensions() {
-        let xml = r#"<lpdf version="1"><document size="a4" orientation="landscape"><section><layout/></section></document></lpdf>"#;
+        let xml = r#"<lpdf version="1"><document size="A4" orientation="landscape"><section><layout/></section></document></lpdf>"#;
         let mut doc = parse(xml).unwrap();
         let pages = doc.section_layouts();
         assert_eq!(pages[0].width, 841.89);
@@ -6207,7 +6207,7 @@ mod tests {
     #[test]
     fn parse_section_layout_only() {
         let xml = r#"<lpdf version="1">
-            <document size="a4">
+            <document size="A4">
                 <section>
                     <layout margin="0pt"><column gap="m"><text>Hello</text></column></layout>
                 </section>
@@ -6231,7 +6231,7 @@ mod tests {
     #[test]
     fn parse_section_layers_only() {
         let xml = r##"<lpdf version="1">
-            <document size="a4">
+            <document size="A4">
                 <section>
                     <layer><rect width="100pt" height="50pt" fill="#ff0000"/></layer>
                 </section>
@@ -6246,7 +6246,7 @@ mod tests {
     #[test]
     fn parse_section_layout_plus_layer() {
         let xml = r##"<lpdf version="1">
-            <document size="a4">
+            <document size="A4">
                 <section>
                     <layout margin="0pt"><text>Body</text></layout>
                     <layer page="each"><rect width="100pt" height="5pt" fill="#000000"/></layer>
@@ -6260,7 +6260,7 @@ mod tests {
     #[test]
     fn layers_before_the_layout_go_under_it_and_layers_after_it_over_it() {
         let xml = r##"<lpdf version="1">
-            <document size="a4">
+            <document size="A4">
                 <section>
                     <layer page="first"><rect width="10pt" height="10pt" fill="#000"/></layer>
                     <layer page="last"><rect width="10pt" height="10pt" fill="#000"/></layer>
@@ -6377,7 +6377,7 @@ mod tests {
     #[test]
     fn parse_multi_section() {
         let xml = r##"<lpdf version="1">
-            <document size="a4">
+            <document size="A4">
                 <section title="Cover"><layer><rect width="100pt" height="100pt" fill="#000"/></layer></section>
                 <section title="Body"><layout margin="0pt"><text>Hello</text></layout></section>
             </document>
@@ -6392,7 +6392,7 @@ mod tests {
     #[test]
     fn parse_layout_region_top() {
         let xml = r#"<lpdf version="1">
-            <document size="a4">
+            <document size="A4">
                 <section>
                     <layout margin="0pt">
                         <region pin="top" page="each"><text>Header</text></region>
@@ -6417,7 +6417,7 @@ mod tests {
     #[test]
     fn section_layouts_from_section() {
         let xml = r#"<lpdf version="1">
-            <document size="a4">
+            <document size="A4">
                 <section>
                     <layout margin="28pt"><text>Hello</text></layout>
                 </section>
@@ -6439,7 +6439,7 @@ mod tests {
     #[test]
     fn regions_go_by_pin_wherever_they_are_written() {
         let xml = r#"<lpdf version="1">
-            <document size="a4">
+            <document size="A4">
                 <section>
                     <layout>
                         <region pin="bottom"><text>Foot</text></region>
@@ -6460,7 +6460,7 @@ mod tests {
     #[test]
     fn regions_written_at_the_edges_keep_their_order() {
         let xml = r#"<lpdf version="1">
-            <document size="a4">
+            <document size="A4">
                 <section>
                     <layout>
                         <region pin="top"><text>Head</text></region>
@@ -6479,7 +6479,7 @@ mod tests {
     #[test]
     fn a_left_region_stays_where_it_is_written() {
         let xml = r#"<lpdf version="1">
-            <document size="a4">
+            <document size="A4">
                 <section>
                     <layout>
                         <text>A</text>
@@ -6500,7 +6500,7 @@ mod tests {
     #[test]
     fn layer_page_scope() {
         let xml = r##"<lpdf version="1">
-            <document size="a4">
+            <document size="A4">
                 <section>
                     <layer page="odd"><rect width="10pt" height="10pt" fill="#000"/></layer>
                     <layer page="2-4"><rect width="10pt" height="10pt" fill="#000"/></layer>
@@ -6520,7 +6520,7 @@ mod tests {
     fn layer_rect_absolute_pos() {
         use crate::canvas::CanvasPrimitive;
         let xml = r##"<lpdf version="1">
-            <document size="a4">
+            <document size="A4">
                 <section>
                     <layer>
                         <rect x="10pt" y="20pt" width="100pt" height="50pt" fill="#ff0000" radius="4pt"/>
@@ -6542,7 +6542,7 @@ mod tests {
     fn layer_rect_anchored_pos() {
         use crate::canvas::CanvasPrimitive;
         let xml = r##"<lpdf version="1">
-            <document size="a4">
+            <document size="A4">
                 <section>
                     <layer>
                         <rect anchor="center" x="10pt" y="-5pt" width="50pt" height="20pt" fill="#000"/>
@@ -6562,7 +6562,7 @@ mod tests {
     #[test]
     fn a_circle_is_placed_by_its_box() {
         use crate::canvas::CanvasPrimitive;
-        let xml = r##"<lpdf version="1"><document size="a4"><section><layer>
+        let xml = r##"<lpdf version="1"><document size="A4"><section><layer>
             <circle x="10pt" y="20pt" r="5pt" fill="#000"/>
             <circle r="5pt" fill="#000"/>
         </layer></section></document></lpdf>"##;
@@ -6579,7 +6579,7 @@ mod tests {
     #[test]
     fn an_ellipse_is_placed_by_its_box() {
         use crate::canvas::CanvasPrimitive;
-        let xml = r##"<lpdf version="1"><document size="a4"><section><layer>
+        let xml = r##"<lpdf version="1"><document size="A4"><section><layer>
             <ellipse x="10pt" y="20pt" rx="8pt" ry="3pt" fill="#000"/>
         </layer></section></document></lpdf>"##;
         let doc = parse(xml).unwrap();
@@ -6599,7 +6599,7 @@ mod tests {
             ("center",       (595.28 / 2.0 - 5.0,     841.89 / 2.0 + 7.0)),
         ];
         for (anchor, (cx, cy)) in cases {
-            let xml = format!(r##"<lpdf version="1"><document size="a4"><section><layer>
+            let xml = format!(r##"<lpdf version="1"><document size="A4"><section><layer>
                 <circle anchor="{anchor}" x="-5pt" y="7pt" r="10pt" fill="#000"/>
             </layer></section></document></lpdf>"##);
             let doc = parse(&xml).unwrap();
@@ -6620,7 +6620,7 @@ mod tests {
             (r#"<text-at w="100pt">Hi</text-at>"#, "w", "'width'"),
         ] {
             let tag = &body[1..body[1..].find([' ', '>']).unwrap() + 1];
-            let xml = format!(r##"<lpdf version="1"><document size="a4"><section><layer>{body}</layer></section></document></lpdf>"##);
+            let xml = format!(r##"<lpdf version="1"><document size="A4"><section><layer>{body}</layer></section></document></lpdf>"##);
             let err = parse(&xml).unwrap_err();
             assert!(err.contains(&format!("<{tag}>")) && err.contains("at line"), "{err}");
             assert!(err.contains(&format!("'{attr}'")) && err.contains(replacement), "{err}");
@@ -6636,7 +6636,7 @@ mod tests {
     }
 
     fn layer_document(head: &str, layer: &str) -> String {
-        format!(r##"<lpdf version="1">{head}<document size="a4"><section><layer>{layer}</layer></section></document></lpdf>"##)
+        format!(r##"<lpdf version="1">{head}<document size="A4"><section><layer>{layer}</layer></section></document></lpdf>"##)
     }
 
     #[test]
@@ -6658,7 +6658,7 @@ mod tests {
         let layout_xml = r##"<lpdf version="1">
             <assets><font name="body" core="Times-Roman"/></assets>
             <tokens><colors><color name="text" value="#223344"/></colors></tokens>
-            <document size="a4" font="body"><section>
+            <document size="A4" font="body"><section>
                 <layer><text-at x="0pt" y="0pt">Layer</text-at></layer>
                 <layout><text>Layout</text></layout>
             </section></document></lpdf>"##;
@@ -6739,7 +6739,7 @@ mod tests {
     #[test]
     fn a_text_outside_every_box_takes_the_text_color_of_the_tokens() {
         let xml = r##"<lpdf version="1"><tokens><colors><color name="text" value="#223344"/></colors></tokens>
-            <document size="a4"><section><layout><text>a</text><column><text>b</text></column></layout></section></document></lpdf>"##;
+            <document size="A4"><section><layout><text>a</text><column><text>b</text></column></layout></section></document></lpdf>"##;
         let mut doc = parse(xml).unwrap();
         assert_eq!(text_colors(&doc.section_layouts()[0].children), ["#223344", "#223344"]);
     }
@@ -6864,7 +6864,7 @@ mod tests {
     #[test]
     fn layer_shapes_read_their_shadow() {
         use crate::canvas::CanvasPrimitive;
-        let xml = r##"<lpdf version="1"><document size="a4"><section><layer>
+        let xml = r##"<lpdf version="1"><document size="A4"><section><layer>
             <rect x="10pt" y="20pt" width="100pt" height="50pt" shadow="2pt 3pt #112233"/>
             <circle x="10pt" y="20pt" r="5pt" shadow="-2pt 3pt #fff 0.5"/>
             <ellipse x="10pt" y="20pt" rx="8pt" ry="3pt" shadow="2pt -3pt #000 0"/>
@@ -6910,7 +6910,7 @@ mod tests {
 
     #[test]
     fn a_layer_shape_shadow_that_is_not_valid_says_so() {
-        let xml = r##"<lpdf version="1"><document size="a4"><section><layer>
+        let xml = r##"<lpdf version="1"><document size="A4"><section><layer>
             <rect x="10pt" y="20pt" width="100pt" height="50pt" shadow="2pt 3pt"/>
         </layer></section></document></lpdf>"##;
         let err = parse(xml).unwrap_err();
@@ -6930,7 +6930,7 @@ mod tests {
         let xml = r##"<lpdf version="1">
             <assets><font name="body" core="Times-Roman"/><font name="mono" core="Courier"/></assets>
             <tokens><colors><color name="text" value="#223344"/></colors></tokens>
-            <document size="a4" font="body"><section>
+            <document size="A4" font="body"><section>
                 <layer font="mono" font-size="s" color="danger">
                     <text-at x="0pt" y="0pt">own</text-at>
                     <text-at x="0pt" y="9pt" font="body" font-size="20pt" color="#445566">theirs</text-at>
@@ -6963,7 +6963,7 @@ mod tests {
     fn a_layer_with_a_size_or_color_that_is_not_one_says_so() {
         for (attrs, expected) in [(r#"font-size="huge""#, "text size"), (r#"color="nope""#, "color token")] {
             let err = parse(&format!(
-                r#"<lpdf version="1"><document size="a4"><section><layer {attrs}><text-at x="0pt" y="0pt">a</text-at></layer></section></document></lpdf>"#
+                r#"<lpdf version="1"><document size="A4"><section><layer {attrs}><text-at x="0pt" y="0pt">a</text-at></layer></section></document></lpdf>"#
             )).unwrap_err();
             assert!(err.contains("<layer>") && err.contains("at line") && err.contains(expected), "{err}");
         }
@@ -7035,7 +7035,7 @@ mod tests {
 
     #[test]
     fn a_layer_reads_its_clip_and_its_conditions() {
-        let xml = r#"<lpdf version="1"><document size="a4"><section>
+        let xml = r#"<lpdf version="1"><document size="A4"><section>
             <layer clip="10pt 20pt 100pt 50pt" data-if="draft" data-if-not="final"><rect width="9pt" height="9pt"/></layer>
         </section></document></lpdf>"#;
         let doc = parse(xml).unwrap();
@@ -7048,7 +7048,7 @@ mod tests {
             (r#"data-value="title""#, "do not apply to a layer"),
             (r#"data-source="items""#, "do not apply to a layer"),
         ] {
-            let xml = format!(r#"<lpdf version="1"><document size="a4"><section><layer {attrs}/></section></document></lpdf>"#);
+            let xml = format!(r#"<lpdf version="1"><document size="A4"><section><layer {attrs}/></section></document></lpdf>"#);
             let err = parse(&xml).unwrap_err();
             assert!(err.contains(expected), "{attrs}: {err}");
         }
@@ -7344,7 +7344,7 @@ mod tests {
 
     #[test]
     fn err_region_invalid_pin() {
-        let xml = r#"<lpdf version="1"><document size="a4">
+        let xml = r#"<lpdf version="1"><document size="A4">
   <section><layout margin="28pt">
     <region pin="center" />
   </layout></section></document></lpdf>"#;
@@ -7422,7 +7422,7 @@ mod tests {
 
     #[test]
     fn err_missing_attr_region_pin() {
-        let xml = r#"<lpdf version="1"><document size="a4">
+        let xml = r#"<lpdf version="1"><document size="A4">
   <section><layout margin="28pt">
     <region />
   </layout></section></document></lpdf>"#;
@@ -7436,7 +7436,7 @@ mod tests {
     fn err_missing_attr_asset_font_name() {
         let xml = r#"<lpdf version="1">
   <assets><font core="Helvetica" /></assets>
-  <document size="a4"><section><layout /></section></document>
+  <document size="A4"><section><layout /></section></document>
 </lpdf>"#;
         let err = parse(xml).unwrap_err();
         assert!(err.contains("<font>"),   "{err}");
@@ -7637,7 +7637,7 @@ mod tests {
     fn with_gradients(gradients: &str, body: &str) -> String {
         format!(
             r##"<lpdf version="1"><tokens><colors><color name="brand" value="#112233"/></colors><gradients>{gradients}</gradients></tokens>
-            <document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"##
+            <document size="A4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"##
         )
     }
 

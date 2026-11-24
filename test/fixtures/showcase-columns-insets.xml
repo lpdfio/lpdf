@@ -14,7 +14,7 @@
       <color name="band"    value="#eef3fb" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Insets" subject="Blocks placed inside the columns, which the flow goes around" />
 
     <!-- <region pin="inset"> is a block at a spot in the columns: top and height place it, col and colspan say which

@@ -8,7 +8,7 @@
       <color name="link" value="#1d4ed8" />
     </colors>
   </tokens>
-  <document size="a5">
+  <document size="A5">
     <meta title="lpdf Showcase — Cross-References" subject="Spans that name a bookmark and print its page and its label, in the text, a footnote, a header and a text-at" />
 
     <!-- A span with bookmark-ref links to the bookmark with that id, and its words print the page the bookmark is

@@ -1156,10 +1156,10 @@ mod tests {
 
     fn minimal(body: &str) -> String {
         if body.is_empty() {
-            r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt"/></section></document></lpdf>"#.to_string()
+            r#"<lpdf version="1"><document size="A4"><section><layout margin="28pt"/></section></document></lpdf>"#.to_string()
         } else {
             format!(
-                r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
+                r#"<lpdf version="1"><document size="A4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
             )
         }
     }
@@ -1262,7 +1262,7 @@ mod tests {
     #[test]
     fn full_page_example_renders_without_error() {
         let xml = r##"<lpdf version="1">
-            <document size="a4">
+            <document size="A4">
                 <section background="surface">
                     <layout margin="28pt">
                         <column gap="m">
@@ -1447,7 +1447,7 @@ mod tests {
                 <image name="logo" src="logo.png" />
                 <font name="heading" src="../Heading.otf" />
             </assets>
-            <document size="a4"><section><layout><text>x</text></layout></section></document>
+            <document size="A4"><section><layout><text>x</text></layout></section></document>
         </lpdf>"#;
         assert_eq!(
             bench_font_srcs(xml).unwrap(),
@@ -1499,7 +1499,7 @@ mod tests {
     fn with_output(output: Option<&str>) -> String {
         let element = output.map(|attributes| format!("<output {attributes}/>")).unwrap_or_default();
         format!(
-            r#"<lpdf version="1"><document size="a4"><meta title="T"/>{element}<section><layout margin="28pt"><text>Hello</text></layout></section></document></lpdf>"#
+            r#"<lpdf version="1"><document size="A4"><meta title="T"/>{element}<section><layout margin="28pt"><text>Hello</text></layout></section></document></lpdf>"#
         )
     }
 
@@ -1604,7 +1604,7 @@ mod tests {
 
     /// A document whose strings pdf-writer writes as literal strings, `<output>` asking for RC4-128: its title and
     /// link URIs, and, since the render is unlicensed, the `CIDSystemInfo` of the attribution font.
-    const PLAIN_STRINGS_XML: &str = r#"<lpdf version="1"><document size="a4">
+    const PLAIN_STRINGS_XML: &str = r#"<lpdf version="1"><document size="A4">
         <meta title="Invoice 2026-0412" author="Accounts" subject="Plain ASCII strings" keywords="invoice, rc4"/>
         <output encrypt="rc4-128"/>
         <section><layout margin="28pt"><column gap="m">
@@ -1615,7 +1615,7 @@ mod tests {
 
     /// A document whose literal strings pdf-writer writes with escapes: a backslash and unbalanced parentheses in
     /// its title, subject and link URI, `<output>` asking for RC4-128.
-    const ESCAPED_STRINGS_XML: &str = r#"<lpdf version="1"><document size="a4">
+    const ESCAPED_STRINGS_XML: &str = r#"<lpdf version="1"><document size="A4">
         <meta title="C:\reports\Q3 (draft" author="R&amp;D (team)" subject="closed) twice) \ once"/>
         <output encrypt="rc4-128"/>
         <section><layout margin="28pt"><column gap="m">

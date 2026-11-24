@@ -59,7 +59,7 @@
     <text-size xs="7pt" s="8.5pt" m="10pt" l="18pt" xl="34pt" xxl="48pt" />
   </tokens>
 
-  <document size="a4" orientation="landscape" font="text" bleed="3mm">
+  <document size="A4" orientation="landscape" font="text" bleed="3mm">
     <meta title="Coldwater Row Capital: brochure" subject="Investor brochure (sample)" author="Coldwater Row Capital" />
     <output pdfx="4" profile="press" />
 

@@ -12,7 +12,7 @@ const WIDTH: f64 = 515.28;
 
 /// A document of one section with `attrs` whose layout holds `layout`, on A4 with a 40pt margin.
 fn section(attrs: &str, layout: &str) -> String {
-    format!(r#"<lpdf version="1"><document size="a4"><section {attrs}><layout margin="40pt">{layout}</layout></section></document></lpdf>"#)
+    format!(r#"<lpdf version="1"><document size="A4"><section {attrs}><layout margin="40pt">{layout}</layout></section></document></lpdf>"#)
 }
 
 /// `n` lines, each a text of its own: "Line 1", "Line 2" and so on.
@@ -200,7 +200,7 @@ fn an_inset_s_content_taller_than_it_is_clipped_at_its_foot() {
 fn an_inset_on_odd_pages_follows_the_number_printed_on_the_page() {
     let inset = format!(r#"<region pin="inset" top="0pt" height="100pt" page="odd"><text>Inset</text></region>{}"#, lines(150));
     let xml = format!(
-        r#"<lpdf version="1"><document size="a4"><section><layout><text>Before</text></layout></section><section columns="2"><layout margin="40pt">{inset}</layout></section></document></lpdf>"#
+        r#"<lpdf version="1"><document size="A4"><section><layout><text>Before</text></layout></section><section columns="2"><layout margin="40pt">{inset}</layout></section></document></lpdf>"#
     );
     let pages = pages(&xml);
     let shows = |page: &Value| texts(page).iter().any(|t| t.0 == "Inset");
@@ -297,7 +297,7 @@ fn columns_take_a_whole_number_from_1_to_12_and_column_fill_auto_or_balance() {
 
 #[test]
 fn a_kit_tree_in_columns_with_an_inset_lays_out_as_its_xml() {
-    let tree = r#"{"version":1,"type":"document","attrs":{"size":"a4"},"nodes":[
+    let tree = r#"{"version":1,"type":"document","attrs":{"size":"A4"},"nodes":[
         {"type":"section","attrs":{"columns":3,"column-gap":"20pt","column-rule":"1pt #ff0000","column-fill":"balance"},"nodes":[
             {"type":"layout","attrs":{"margin":"40pt"},"nodes":[
                 {"type":"region","attrs":{"pin":"inset","col":2,"colspan":2,"top":"50pt","height":"100pt"},"nodes":[{"type":"text","attrs":{},"nodes":["Inset"]}]},

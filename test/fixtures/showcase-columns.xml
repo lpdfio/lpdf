@@ -9,7 +9,7 @@
       <color name="rule"    value="#c5ccd6" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Columns" subject="A section's flow in columns, across pages" />
 
     <!-- columns="3" sets the section's flow in three columns. Each fills like a small page, left to right, and what is

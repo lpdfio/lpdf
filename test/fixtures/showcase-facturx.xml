@@ -20,7 +20,7 @@
       <color name="rule"    value="#dde3ed" />
     </colors>
   </tokens>
-  <document size="a4" font="body">
+  <document size="A4" font="body">
     <meta title="Invoice 2026-0412" author="Northwind Paper SAS" subject="Invoice 2026-0412 to Atelier Lakeside SARL"
           creator="lpdf test suite" lang="en" />
     <output pdfa="3b" />

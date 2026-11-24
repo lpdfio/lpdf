@@ -2,7 +2,7 @@
 <lpdf version="1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Markdown line breaks" subject="A line break in a paragraph, a list, a quote and a table cell" />
 
     <!-- A newline alone is a space. A line ends, and the next begins, at two spaces or a backslash at the end of a

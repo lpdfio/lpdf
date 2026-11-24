@@ -22,7 +22,7 @@
       <gradient name="gold-glow"  type="radial" from="gold 20%" to="gold" />
     </gradients>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Spot colors" subject="spot colors, tints, gradients of tints and overprint" />
 
     <section>

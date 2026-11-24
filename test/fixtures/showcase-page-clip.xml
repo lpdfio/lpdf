@@ -6,7 +6,7 @@
     <image name="avatar" src="../assets/images/image-square.png" />
     <image name="tall"   src="../assets/images/image-tall.png" />
   </assets>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Cut at the bottom of the page" subject="Pagination" />
 
     <!-- A frame taller than a page, cut above the footer -->

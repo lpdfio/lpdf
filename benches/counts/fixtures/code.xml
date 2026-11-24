@@ -3,7 +3,7 @@
      with <code-span> runs. <code> is new in 0.30, so earlier releases have no rows for it. Never edit it: a
      change moves every count of the fixture. -->
 <lpdf version="1">
-  <document size="a4">
+  <document>
     <meta title="Bench counts: code" />
     <section>
       <layout margin="40pt">

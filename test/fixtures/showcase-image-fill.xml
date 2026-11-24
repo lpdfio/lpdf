@@ -14,7 +14,7 @@
       <color name="bg"      value="#f5f7fa" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Image Fill" subject="An image with width fill takes the width of its slot" />
 
     <!-- width="fill" makes the picture as wide as the slot it is laid out in, and the height follows its proportions:

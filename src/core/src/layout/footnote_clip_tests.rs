@@ -256,7 +256,7 @@ fn a_page_with_a_header_is_cut_where_its_own_room_ends() {
 /// A section like the fixture's, its footer then `body`.
 fn section(body: &str) -> String {
     format!(
-        r#"<lpdf version="1"><document size="a4"><section><layout margin="40pt"><region pin="bottom" page="each"><text font-size="s">Footer</text></region>{body}</layout></section></document></lpdf>"#
+        r#"<lpdf version="1"><document size="A4"><section><layout margin="40pt"><region pin="bottom" page="each"><text font-size="s">Footer</text></region>{body}</layout></section></document></lpdf>"#
     )
 }
 

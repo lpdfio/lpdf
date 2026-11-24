@@ -12,7 +12,7 @@
       page scope   page="each", "first" or "2-last" says which pages a region or a layer
                    is on. {page} and {pages} become the page number and the page count. Pages
                    count on from one section to the next, so the count takes in the map
-      sections     each section sets its own page. The last one here is tabloid, landscape, and
+      sections     each section sets its own page. The last one here is Tabloid, landscape, and
                    holds only layers: a world map drawn as paths, with a marker for each site
       paginate     paginate="no" on a box keeps it whole: a heading column moves to the next page
                    with its paragraph instead of stranding the heading. It is set on each section
@@ -43,7 +43,7 @@
     </colors>
   </tokens>
 
-  <document size="letter">
+  <document size="Letter">
     <meta title="Data Centers Worldwide" subject="Cloud regions and AI campuses" author="Brightwork Studio" />
     <section background="surface">
 
@@ -311,7 +311,7 @@
       </layout>
     </section>
 
-    <!-- the map: tabloid, landscape, layers only. Generated from the data: do not edit by hand -->
+    <!-- the map: Tabloid, landscape, layers only. Generated from the data: do not edit by hand -->
     <section size="792pt 1224pt" orientation="landscape" background="surface">
       <layer page="each">
         <rect anchor="top-left" width="1224pt" height="8pt" fill="primary" />

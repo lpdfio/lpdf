@@ -2,7 +2,7 @@
 <lpdf version="1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Markdown across pages" subject="What a markdown does where a page ends" />
 
     <!-- The blocks of a markdown go on from one page to the next as any content does: a list, a quote, a block of

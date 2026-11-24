@@ -9,7 +9,7 @@
       <color name="accent"  value="#e8f0fc" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Lists in rows" subject="Checklists that a row moves after laying them out" />
 
     <!-- A row lays a child out where line breaking put it and then moves it to its place: down for align, across for

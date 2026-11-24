@@ -16,7 +16,7 @@
       <color name="wash"    value="#eef3fb" />
     </colors>
   </tokens>
-  <document size="a4" font="body">
+  <document size="A4" font="body">
     <meta title="lpdf Showcase — Markdown styles" subject="Rules that restyle a markdown, and its headings in a table of contents" />
 
     <!-- A rule is named after the Markdown it styles and takes the attributes of the element it becomes. The rules

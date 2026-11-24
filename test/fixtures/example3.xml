@@ -12,7 +12,7 @@
       <color name="accent"      value="#e8f0fc" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="Invoice #1042" author="Acme Corp" subject="Invoice" />
     <section background="surface">
       <layout margin="40pt">

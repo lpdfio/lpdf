@@ -11,7 +11,7 @@ use crate::render::{RenderBarcode, RenderNode, RenderedBarcodeKind};
 
 fn document(content: &str) -> String {
     format!(
-        r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt">{content}</layout></section></document></lpdf>"#
+        r#"<lpdf version="1"><document size="A4"><section><layout margin="28pt">{content}</layout></section></document></lpdf>"#
     )
 }
 
@@ -559,7 +559,7 @@ fn rows_columns_and_check_are_ignored_by_the_types_that_dont_use_them() {
 
 #[test]
 fn the_new_types_work_in_a_layer() {
-    let xml = r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt"/>
+    let xml = r#"<lpdf version="1"><document size="A4"><section><layout margin="28pt"/>
         <layer><barcode-at type="pdf417" data="In a layer" x="50pt" y="50pt" width="200pt"/></layer></section></document></lpdf>"#;
     let mut doc = crate::parse::parse(xml).unwrap();
     let pages = crate::layout::layout_document(&doc.section_layouts()).expect("lays out");

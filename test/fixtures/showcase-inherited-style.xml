@@ -12,7 +12,7 @@
       <color name="accent"   value="#e0762b" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Inherited Style" subject="color and opacity on a box, font, size and color on a layer" />
 
     <!-- A box passes its color to the text inside it, and its opacity fades the box and everything in it as

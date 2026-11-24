@@ -15,7 +15,7 @@
       <color name="bad"     value="#d6336c" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Shape" subject="rect, circle and ellipse shapes in the layout" />
 
     <!-- A shape takes its box in the flow as an image does, and draws a rect, a circle or an ellipse in it. A rect

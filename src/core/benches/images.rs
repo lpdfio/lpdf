@@ -16,7 +16,7 @@ fn image_xml(file: &str) -> String {
   <assets>
     <image name="{IMAGE}" src="{file}" />
   </assets>
-  <document size="a4">
+  <document size="A4">
     <section>
       <layout margin="0pt">
         <frame width="595pt" height="842pt">

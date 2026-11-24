@@ -10,7 +10,7 @@
       <color name="room"    value="#e8f0fc" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Heights inside a link" subject="What a child of full or fill height takes inside a link" />
 
     <!-- A link gives its children the height any box gives them: none at auto height, so a grey block of full height

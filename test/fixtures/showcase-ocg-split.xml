@@ -11,7 +11,7 @@
       <color name="muted"  value="#737373"/>
     </colors>
   </tokens>
-  <document size="a5">
+  <document size="A5">
     <meta title="lpdf Showcase — Optional content across pages"
           subject="ocg on a box split across pages, a repeated region and a repeated table header"/>
 

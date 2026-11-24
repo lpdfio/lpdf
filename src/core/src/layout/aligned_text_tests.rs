@@ -16,7 +16,7 @@ const NEAR: f64 = 0.05;
 
 /// A section of an A4 page holding `content`, laid out as the tree the engine hands out.
 fn section(content: &str) -> Value {
-    let xml = format!(r#"<lpdf version="1"><document size="a4"><section>{content}</section></document></lpdf>"#);
+    let xml = format!(r#"<lpdf version="1"><document size="A4"><section>{content}</section></document></lpdf>"#);
     let mut doc = parse(&xml).unwrap();
     let pages: Vec<_> = doc.section_layouts().iter().flat_map(layout_page).collect();
     serde_json::from_str(&crate::render::pages_to_json(&pages, Value::Null, Value::Null)).unwrap()

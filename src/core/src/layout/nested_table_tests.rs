@@ -12,7 +12,7 @@ use crate::parse::parse;
 
 /// The pages the layout makes of `section`, the inside of a `<section>`, on A4.
 fn pages_of(section: &str) -> Vec<RenderPage> {
-    let xml = format!(r#"<lpdf version="1"><document size="a4"><section>{section}</section></document></lpdf>"#);
+    let xml = format!(r#"<lpdf version="1"><document size="A4"><section>{section}</section></document></lpdf>"#);
     let mut doc = parse(&xml).unwrap();
     doc.section_layouts().iter().flat_map(layout_page).collect()
 }
@@ -174,7 +174,7 @@ fn cases() -> Vec<(&'static str, String)> {
 #[test]
 fn a_table_lays_out_each_cell_as_it_did_when_every_cell_was_stretched_again() {
     for (name, section) in cases() {
-        let xml = format!(r#"<lpdf version="1"><document size="a4"><section>{section}</section></document></lpdf>"#);
+        let xml = format!(r#"<lpdf version="1"><document size="A4"><section>{section}</section></document></lpdf>"#);
         assert!(pdf_of(&xml, false) == pdf_of(&xml, true), "{name}");
     }
 }
@@ -188,7 +188,7 @@ fn a_tagged_table_lays_out_each_cell_as_it_did_when_every_cell_was_stretched_aga
         |_| format!(r#"</td><td colspan="2"><text>{LONG}</text></td></tr><tr><td><text>d</text></td><td valign="middle"><text>e</text></td></tr></table>"#),
     );
     let xml = format!(
-        r#"<lpdf version="1"><document size="a4"><meta title="Report" lang="en"/><output pdfua="1"/><section>{}</section></document></lpdf>"#,
+        r#"<lpdf version="1"><document size="A4"><meta title="Report" lang="en"/><output pdfua="1"/><section>{}</section></document></lpdf>"#,
         layout(&body),
     );
     let laid_out = |stretch_every_cell: bool| {

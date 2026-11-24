@@ -6,7 +6,7 @@
     <image name="photo"  src="../assets/images/image-sample.png" />
     <image name="avatar" src="../assets/images/image-square.png" />
   </assets>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Markdown" subject="A markdown in a section, with the default styles" />
 
     <!-- A <markdown> takes the place of the layout in a section and holds Markdown, styled by the default rules

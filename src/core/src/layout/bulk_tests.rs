@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 /// A document of one A4 section with `attrs`, a header and a footer with the page numbers, its layout holding `body`.
 fn document(attrs: &str, body: &str) -> String {
     format!(
-        r#"<lpdf version="1"><document size="a4"><section{attrs}><layout margin="36pt">
+        r#"<lpdf version="1"><document size="A4"><section{attrs}><layout margin="36pt">
             <region pin="top"><text font-size="9pt">Ledger</text></region>
             {body}
             <region pin="bottom"><text font-size="9pt" align="right">Page {{page}} of {{pages}}</text></region>

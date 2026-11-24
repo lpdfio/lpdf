@@ -49,7 +49,7 @@ describe('the constants of the schema', () => {
 
     it('name the named part of a union after the union', () => {
         assert.deepEqual(named('PageSize').values, [
-            'a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'b4', 'b5', 'letter', 'legal', 'tabloid',
+            'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'B4', 'B5', 'Letter', 'Legal', 'Tabloid',
         ]);
         assert.deepEqual(named('PageScope').values, ['each', 'first', 'last', 'odd', 'even']);
         assert.equal(named('PageSizeNamed'), undefined);

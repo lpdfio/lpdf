@@ -364,7 +364,7 @@ mod tests {
 
     /// The error of a document whose layout holds `body`, after `head` in the document.
     fn error_of(head: &str, section: &str, body: &str) -> String {
-        let xml = format!(r#"<lpdf version="1"><document size="a4">{head}<section{section}><layout>{body}</layout></section></document></lpdf>"#);
+        let xml = format!(r#"<lpdf version="1"><document size="A4">{head}<section{section}><layout>{body}</layout></section></document></lpdf>"#);
         parse(&xml).expect_err("the document breaks a rule of bulk")
     }
 
@@ -499,7 +499,7 @@ mod tests {
         for output in [r#"<meta title="T" lang="en"/><output pdfua="1"/>"#, r#"<output pdfa="2a"/>"#] {
             assert_says(&error_of(output, "", &table), "a bulk table is not tagged for a reader: pdfua and a pdfa of level a tag every record");
         }
-        let untagged = format!(r#"<lpdf version="1"><document size="a4"><output pdfa="2b"/><section><layout>{table}</layout></section></document></lpdf>"#);
+        let untagged = format!(r#"<lpdf version="1"><document size="A4"><output pdfa="2b"/><section><layout>{table}</layout></section></document></lpdf>"#);
         assert!(parse(&untagged).is_ok(), "a pdfa of level b is not tagged");
     }
 
@@ -520,7 +520,7 @@ mod tests {
 
     #[test]
     fn a_text_of_a_bulk_container_that_sets_no_max_lines_holds_one_line() {
-        let xml = r#"<lpdf version="1"><document size="a4"><section><layout><column bulk="true"><text data-source="e">-</text><text max-lines="3">-</text></column></layout></section></document></lpdf>"#;
+        let xml = r#"<lpdf version="1"><document size="A4"><section><layout><column bulk="true"><text data-source="e">-</text><text max-lines="3">-</text></column></layout></section></document></lpdf>"#;
         let mut doc = parse(xml).unwrap();
         let column = doc.section_layouts().remove(0).children.remove(0);
         let texts: Vec<(Option<usize>, bool)> = column.children.iter().map(|text| (text.max_lines, text.ellipsis)).collect();

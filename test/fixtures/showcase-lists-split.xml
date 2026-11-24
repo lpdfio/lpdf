@@ -8,7 +8,7 @@
       <color name="muted"   value="#737373" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Lists split" subject="A numbered list whose items run across the page breaks" />
 
     <!-- A list item splits across pages like the paragraphs in it: through the line the page ends in. The marker stays

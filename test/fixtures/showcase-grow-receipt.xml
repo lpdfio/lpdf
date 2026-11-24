@@ -2,7 +2,7 @@
 <lpdf version="1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Grow receipt" subject="A till receipt one page as long as the order" />
 
     <!-- A section that grows in height: a till receipt on an 80mm roll, from a starting size of 80mm by 40mm. The

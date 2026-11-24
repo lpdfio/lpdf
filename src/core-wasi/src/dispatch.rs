@@ -616,7 +616,7 @@ mod tests {
 
     #[test]
     fn an_img_at_in_a_layer_is_sized_by_the_proportions_of_its_image() {
-        let xml = r#"<lpdf version="1"><assets><image name="logo"/></assets><document size="a4"><section>
+        let xml = r#"<lpdf version="1"><assets><image name="logo"/></assets><document size="A4"><section>
             <layer><img-at name="logo" x="10pt" y="10pt" width="50pt"/></layer>
             <layer><img-at name="logo" anchor="top-right" width="100pt" height="100pt"/></layer>
         </section></document></lpdf>"#;

@@ -11,7 +11,7 @@ fn page_count(pdf: &[u8]) -> usize {
 
 #[test]
 fn a_growing_section_renders_the_same_from_its_xml_and_its_kit_tree() {
-    let xml = r##"<lpdf version="1"><document size="a5"><section size="80mm 40mm" grow="width height">
+    let xml = r##"<lpdf version="1"><document size="A5"><section size="80mm 40mm" grow="width height">
         <layer><rect anchor="bottom-right" x="-5pt" y="-5pt" width="20pt" height="10pt" fill="#0000ff"/></layer>
         <layout margin="10pt">
           <table cols="auto auto"><tr><td><text>The first cell of the table, long enough to pass the roll</text></td><td><text>The second cell</text></td></tr></table>
@@ -19,7 +19,7 @@ fn a_growing_section_renders_the_same_from_its_xml_and_its_kit_tree() {
           <region pin="bottom"><text>Footer</text></region>
         </layout>
     </section></document></lpdf>"##;
-    let tree = r##"{"version":1,"type":"document","attrs":{"size":"a5"},"nodes":[{"type":"section","attrs":{"size":"80mm 40mm","grow":"width height"},"nodes":[
+    let tree = r##"{"version":1,"type":"document","attrs":{"size":"A5"},"nodes":[{"type":"section","attrs":{"size":"80mm 40mm","grow":"width height"},"nodes":[
         {"type":"layer","attrs":{},"nodes":[{"type":"rect","attrs":{"anchor":"bottom-right","x":"-5pt","y":"-5pt","width":"20pt","height":"10pt","fill":"#0000ff"}}]},
         {"type":"layout","attrs":{"margin":"10pt"},"nodes":[
           {"type":"table","attrs":{"cols":"auto auto"},"nodes":[{"type":"tr","attrs":{},"nodes":[
@@ -37,7 +37,7 @@ fn a_growing_section_renders_the_same_from_its_xml_and_its_kit_tree() {
 #[test]
 fn a_bulk_container_in_a_growing_section_lays_out_all_of_its_records_on_the_one_page() {
     let xml = |bulk: &str| format!(
-        r#"<lpdf version="1"><document size="a5"><section size="80mm 40mm" grow="height"><layout margin="10pt">
+        r#"<lpdf version="1"><document size="A5"><section size="80mm 40mm" grow="height"><layout margin="10pt">
         <column{bulk}><text data-source="rows" data-value="name" max-lines="1" ellipsis="true">-</text></column>
         </layout></section></document></lpdf>"#
     );

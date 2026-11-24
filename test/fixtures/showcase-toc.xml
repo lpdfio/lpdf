@@ -10,7 +10,7 @@
       <color name="rule"    value="#dde3ed"/>
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Bookmarks and Table of Contents"
           subject="bookmark, section type=toc and href=#id links"/>
 

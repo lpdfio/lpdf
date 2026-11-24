@@ -7,7 +7,7 @@
     <font name="body"    core="Helvetica"/>
     <font name="heading" core="Helvetica-Bold"/>
   </assets>
-  <document size="a4" font="body">
+  <document font="body">
     <meta title="Bench counts: data binding" />
     <section>
       <layout margin="48pt">

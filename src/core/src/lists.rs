@@ -334,7 +334,7 @@ mod tests {
     /// The first node of the layout of a document that holds `body`, once the data is in and the lists are lowered.
     fn first_node(body: &str, data: Option<&str>) -> Node {
         let xml = format!(
-            r#"<lpdf version="1"><document size="a4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
+            r#"<lpdf version="1"><document size="A4"><section><layout margin="28pt">{body}</layout></section></document></lpdf>"#
         );
         let mut doc = parse(&xml).unwrap();
         if let Some(data) = data {
@@ -517,7 +517,7 @@ mod tests {
 
     #[test]
     fn checked_is_true_or_false() {
-        let xml = r#"<lpdf version="1"><document size="a4"><section><layout><list><li checked="yes"><text>A</text></li></list></layout></section></document></lpdf>"#;
+        let xml = r#"<lpdf version="1"><document size="A4"><section><layout><list><li checked="yes"><text>A</text></li></list></layout></section></document></lpdf>"#;
         let err = parse(xml).unwrap_err();
         assert!(err.contains(r#"<li> at line 1, col 62: checked must be true or false, not "yes""#), "{err}");
     }

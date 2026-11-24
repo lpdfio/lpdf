@@ -33,7 +33,7 @@
       <gradient name="ink-fade" type="linear" from="cmyk(0 0 0 100)" to="cmyk(0 0 0 0)" angle="90" />
     </gradients>
   </tokens>
-  <document size="a4" font="body" bleed="3mm">
+  <document size="A4" font="body" bleed="3mm">
     <meta title="Spring Brochure — Press Copy" author="Lpdf Fixtures" subject="PDF/X-4 showcase"
           keywords="pdf/x, print, fixture" creator="lpdf test suite" />
     <output pdfx="4" profile="press" />

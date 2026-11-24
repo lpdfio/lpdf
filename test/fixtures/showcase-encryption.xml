@@ -12,7 +12,7 @@
       <color name="danger"   value="#c0392b" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Encryption" subject="RC4-128 · permission flags · owner password" />
     <output encrypt="aes-256" allow="print annotate fill-forms accessibility assemble" />
 

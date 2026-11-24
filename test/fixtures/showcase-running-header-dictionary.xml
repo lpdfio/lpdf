@@ -9,7 +9,7 @@
       <color name="rule"    value="#dde3ed" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="lpdf Showcase — Running Header, Dictionary" subject="A header that shows the first and the last entry on its page" />
 
     <!-- Every entry only says capture="entry". The header asks for the first and the last of them on its page, so one text feeds

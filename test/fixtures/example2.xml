@@ -11,7 +11,7 @@
       <color name="rule"        value="#c8d6ee" />
     </colors>
   </tokens>
-  <document size="a4">
+  <document size="A4">
     <meta title="Resume — Jane Doe" author="Jane Doe" />
     <section>
       <layout margin="0pt 18pt 0pt 0pt">

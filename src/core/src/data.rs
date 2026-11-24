@@ -830,7 +830,7 @@ mod tests {
     #[test]
     fn data_value_fills_the_text_of_a_code_as_it_is_and_data_if_leaves_the_box_out() {
         let mut doc = crate::parse::parse(
-            r#"<lpdf version="1"><document size="a4"><section><layout>
+            r#"<lpdf version="1"><document size="A4"><section><layout>
                 <code data-value="snippet">fallback</code><code data-if="show">hidden</code>
             </layout></section></document></lpdf>"#,
         )
