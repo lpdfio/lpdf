@@ -2736,7 +2736,7 @@
       </xs:attribute>
       <xs:attribute name="stroke-width" type="PtValue">
         <xs:annotation>
-          <xs:documentation>The width of every line of a line, an area or a sparkline chart, a length such as 2pt: 1.5pt by default, and 1pt for a sparkline. 0 draws no line, so an area is its fill alone. Which line is the current one and which the comparison is told by the series' color.</xs:documentation>
+          <xs:documentation>The width of every line of a line, an area or a sparkline chart, a length such as 2pt: 1.5pt by default, and 1pt for a sparkline. 0 draws no line, so an area is its fill alone. Every line takes the same width: which line is the current one and which the comparison is told by the series' color.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="font"       type="xs:string"/>
