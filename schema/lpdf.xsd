@@ -2731,7 +2731,7 @@
       </xs:attribute>
       <xs:attribute name="value-labels" type="Boolean">
         <xs:annotation>
-          <xs:documentation>Writes each value at the end of its bar or over its point, and the total of a stack at the end of the stack or over its top. Default false. A sparkline writes none.</xs:documentation>
+          <xs:documentation>Writes each value at the end of its bar, or over its point and under a point lower than the points beside it, where its line doesn't run, and the total of a stack at the end of the stack or over its top. Default false. A sparkline writes none.</xs:documentation>
         </xs:annotation>
       </xs:attribute>
       <xs:attribute name="stroke-width" type="PtValue">

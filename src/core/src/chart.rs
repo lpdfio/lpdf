@@ -1231,6 +1231,15 @@ fn runs_of(values: &[Option<f64>], point: impl Fn(usize, f64) -> [f32; 2]) -> Ve
     runs
 }
 
+/// Whether the point at `index` is lower than each point beside it on its line, so that its line runs up from it on
+/// every side it has and its value label goes under it. A point with no point beside it isn't.
+fn is_low_point(values: &[Option<f64>], index: usize) -> bool {
+    let Some(value) = values[index] else { return false };
+    let before = index.checked_sub(1).and_then(|i| values[i]);
+    let after = values.get(index + 1).copied().flatten();
+    (before.is_some() || after.is_some()) && [before, after].into_iter().flatten().all(|beside| beside > value)
+}
+
 /// What a series draws along its points: its line, `width` wide, or its area.
 fn polylines(color: &str, paint: PolylinePaint, runs: Vec<Vec<[f32; 2]>>) -> RenderNode {
     RenderNode::Polylines(RenderPolylines { color: color.to_string(), paint, runs })
@@ -1266,7 +1275,32 @@ fn draw_lines(
     let lh = text.line_height();
     let is_area = spec.kind == ChartKind::Area;
     let series = data.series.len().max(1);
+    // The values each series' line runs through: a stacked area's are the tops of its band, a missing value counting
+    // as zero, so the series above still sit on something.
+    let mut totals = vec![0.0; data.categories.len()];
+    let tops: Vec<Vec<Option<f64>>> = (0..series)
+        .map(|s| {
+            data.categories.iter().zip(totals.iter_mut())
+                .map(|(category, total)| {
+                    let value = category.values.get(s).copied().flatten().map(|n| n.value);
+                    if spec.stacked {
+                        *total += value.unwrap_or(0.0);
+                        Some(*total)
+                    } else {
+                        value
+                    }
+                })
+                .collect()
+        })
+        .collect();
+
+    // A value label goes over its point, or under a low point, where its line doesn't run. The lowest point is near the
+    // plot's bottom, so a line of room is kept under the plot for the labels under the points.
     let top = if spec.value_labels { text.size * 1.5 } else { text.size * 0.7 };
+    let labels_under = spec.value_labels
+        && !spec.stacked
+        && tops.iter().any(|values| (0..values.len()).any(|index| is_low_point(values, index)));
+    let bottom = if labels_under { text.size * 1.5 } else { 0.0 };
     let fit = |plot_h: f32| {
         if is_area {
             let (low, high) = extent(spec, data);
@@ -1290,30 +1324,11 @@ fn draw_lines(
             .collect();
         (step, lines)
     };
-    let frame = Frame::settle(spec, data, text, gap, area, top, 0.0, fit, labels);
+    let frame = Frame::settle(spec, data, text, gap, area, top, bottom, fit, labels);
     let step = frame.step;
     frame.draw_steps(spec, text, gap, out);
     let point_x = |index: usize| frame.plot_x + (index as f32 + 0.5) * frame.band;
     let point = |index: usize, value: f64| [point_x(index), frame.at(value)];
-
-    // The values each series' line runs through: a stacked area's are the tops of its band, a missing value counting
-    // as zero, so the series above still sit on something.
-    let mut totals = vec![0.0; data.categories.len()];
-    let tops: Vec<Vec<Option<f64>>> = (0..series)
-        .map(|s| {
-            data.categories.iter().zip(totals.iter_mut())
-                .map(|(category, total)| {
-                    let value = category.values.get(s).copied().flatten().map(|n| n.value);
-                    if spec.stacked {
-                        *total += value.unwrap_or(0.0);
-                        Some(*total)
-                    } else {
-                        value
-                    }
-                })
-                .collect()
-        })
-        .collect();
 
     // The areas first, so every line is drawn over them: each run closed along zero, or a stacked band along the top
     // of the band under it, from the last category back to the first.
@@ -1342,8 +1357,8 @@ fn draw_lines(
         draw_line(series_color(data, s), stroke_width(spec), runs_of(values, point), out);
     }
 
-    // The value labels over the points, a stack's total over its top, then the categories' labels, each centered in its
-    // room under its point.
+    // The value labels over the points, or under a low point, where its line doesn't run, a stack's total over its top,
+    // then the categories' labels, each centered in its room under its point.
     if spec.value_labels {
         for (index, category) in data.categories.iter().enumerate() {
             let numbers: Vec<Number> = category.values.iter().flatten().copied().collect();
@@ -1353,9 +1368,20 @@ fn draw_lines(
                     out.push(text.text(label, point_x(index), frame.at(total) - text.size * 1.25, "center"));
                 }
             } else {
-                for number in &numbers {
-                    let label = value_label(spec, &[*number]);
-                    out.push(text.text(label, point_x(index), frame.at(number.value) - text.size * 1.25, "center"));
+                // The labels over their points first, then those of the low points under them, where their lines
+                // don't run, unless one would cover a label already written in the category: it then goes over its
+                // point too.
+                let numbers = category.values.iter().enumerate().filter_map(|(s, number)| number.map(|n| (s, n)));
+                let (under, over): (Vec<_>, Vec<_>) = numbers.partition(|(s, _)| is_low_point(&tops[*s], index));
+                let labels = over.into_iter().map(|l| (l, false)).chain(under.into_iter().map(|l| (l, true)));
+                let mut written: Vec<f32> = Vec::new();
+                for ((_, number), low) in labels {
+                    let at = frame.at(number.value);
+                    let under_y = at + text.size * 0.25;
+                    let free = written.iter().all(|y| (y - under_y).abs() >= text.size);
+                    let top_y = if low && free { under_y } else { at - text.size * 1.25 };
+                    written.push(top_y);
+                    out.push(text.text(value_label(spec, &[number]), point_x(index), top_y, "center"));
                 }
             }
         }
@@ -1364,7 +1390,7 @@ fn draw_lines(
         let (from, room) = label_span(index, step, frame.plot_x, frame.band, left, right);
         let center = from + room / 2.0;
         for (line_index, label) in lines.iter().enumerate() {
-            let top_y = frame.bottom() + gap + line_index as f32 * lh + (lh - text.size) / 2.0;
+            let top_y = frame.bottom() + bottom + gap + line_index as f32 * lh + (lh - text.size) / 2.0;
             out.push(text.text(label.clone(), center, top_y, "center"));
         }
     }

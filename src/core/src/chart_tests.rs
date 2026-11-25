@@ -810,6 +810,82 @@ fn the_labels_of_a_line_stay_inside_the_chart() {
 }
 
 #[test]
+fn a_value_label_goes_under_a_point_lower_than_the_points_beside_it() {
+    let pages = laid_out(r#"<chart type="line" height="150pt" prefix="$" decimals="2" value-labels="true">
+        <category label="Mon"><value>98.40</value></category>
+        <category label="Tue"><value>101.15</value></category>
+        <category label="Wed"><value>99.80</value></category>
+        <category label="Thu"><value>103.95</value></category>
+        <category label="Fri"><value>102.30</value></category></chart>"#);
+    let points = &lines_of(&pages)[0].2[0];
+    let label_y = |content: &str| {
+        all(&pages).into_iter().find_map(|n| match n {
+            RenderNode::Text(t) if t.content == content => Some(t.y),
+            _ => None,
+        }).unwrap_or_else(|| panic!("no label {content}"))
+    };
+    let under = ["$98.40", "$99.80", "$102.30"].map(|label| label_y(label));
+    for (label_top, point) in under.iter().zip([points[0], points[2], points[4]]) {
+        assert!(*label_top > point[1], "a low point, the first and the last among them, has its label under it");
+    }
+    for (label, point) in [("$101.15", points[1]), ("$103.95", points[3])] {
+        assert!(label_y(label) < point[1], "{label} is over its point");
+    }
+}
+
+#[test]
+fn a_low_point_keeps_its_label_over_it_where_under_would_cover_another_series_label() {
+    let pages = laid_out(r#"<chart type="line" height="150pt" suffix="%" decimals="1" value-labels="true">
+        <series label="North"/><series label="South"/>
+        <category label="Q2"><value>3.1</value><value>-3.25</value></category>
+        <category label="Q3"><value>-0.6</value><value>-2</value></category>
+        <category label="Q4"><value>1.9</value><value>0.5</value></category></chart>"#);
+    let label_y = |content: &str| {
+        all(&pages).into_iter().find_map(|n| match n {
+            RenderNode::Text(t) if t.content == content => Some(t.y),
+            _ => None,
+        }).unwrap_or_else(|| panic!("no label {content}"))
+    };
+    let north = &lines_of(&pages)[0].2[0];
+    assert!(label_y("-0.6%") < north[1][1], "under its point it would cover South's -2.0%, so it is over it");
+}
+
+#[test]
+fn a_low_point_at_the_bottom_of_the_plot_has_its_label_under_the_plot() {
+    let pages = laid_out(r#"<chart type="area" height="150pt" value-labels="true" legend="none">
+        <category label="A"><value>4</value></category>
+        <category label="B"><value>0</value></category>
+        <category label="C"><value>3</value></category></chart>"#);
+    let label = |content: &str| {
+        all(&pages).into_iter().find_map(|n| match n {
+            RenderNode::Text(t) if t.content == content && t.text_align == "center" => Some((t.y, t.size)),
+            _ => None,
+        }).unwrap_or_else(|| panic!("no label {content}"))
+    };
+    let (zero, size) = label("0");
+    let bottom = areas_of(&pages)[0].1[0].iter().map(|p| p[1]).fold(f32::MIN, f32::max);
+    assert!(zero > bottom, "the label of a low point on the plot's bottom is under it");
+    assert!(zero + size <= label("B").0, "and over the category's label");
+}
+
+#[test]
+fn a_chart_with_no_low_point_keeps_no_room_under_its_plot() {
+    let flat = r#"<chart type="line" height="150pt" value-labels="true">
+        <category label="A"><value>2</value></category><category label="B"><value>2</value></category></chart>"#;
+    // The lowest gridline is the plot's bottom.
+    let plot_bottom = |xml: &str| {
+        all(&laid_out(xml)).into_iter().filter_map(|n| match n {
+            RenderNode::Line(l) => Some(l.y1),
+            _ => None,
+        }).fold(f32::MIN, f32::max)
+    };
+    let without = plot_bottom(&flat.replace(r#" value-labels="true""#, ""));
+    assert!((plot_bottom(flat) - without).abs() < 0.01, "the plot reaches as low with its labels as without");
+    let dipping = flat.replacen("<value>2</value>", "<value>3</value>", 1);
+    assert!(plot_bottom(&dipping) < without - 1.0, "a low point's label takes a line of room under the plot");
+}
+
+#[test]
 fn a_plot_moved_right_by_wider_steps_still_ends_at_the_right_edge() {
     // At this size the steps the plot is laid out for are whole numbers, and the last axis's write halves: wider.
     let pages = laid_out(r#"<chart type="bar" width="340pt" height="124pt">
