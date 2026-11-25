@@ -390,6 +390,18 @@ fn showcase_columns_flow() { run_snapshot("showcase-columns-flow"); }
 fn showcase_columns_markdown() { run_snapshot("showcase-columns-markdown"); }
 #[test]
 fn showcase_columns_data() { run_snapshot_with_data("showcase-columns-data"); }
+
+// Charts: a snapshot for each form of bars, and one bound to data.
+#[test]
+fn showcase_chart_bars() { run_snapshot("showcase-chart-bars"); }
+#[test]
+fn showcase_chart_side_by_side() { run_snapshot("showcase-chart-side-by-side"); }
+#[test]
+fn showcase_chart_stacked() { run_snapshot("showcase-chart-stacked"); }
+#[test]
+fn showcase_chart_horizontal() { run_snapshot("showcase-chart-horizontal"); }
+#[test]
+fn showcase_chart_data() { run_snapshot_with_data("showcase-chart-data"); }
 #[test]
 fn showcase_bulk() { run_snapshot_with_data("showcase-bulk"); }
 

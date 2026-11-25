@@ -365,8 +365,9 @@ fn render_node(node: &Value, depth: usize) -> String {
     let attrs_s   = attrs_str(attrs, &[]);
 
     match node_type {
-        "text" | "code" => return render_text_node(node, depth),
-        "divider" | "img" | "shape" | "barcode" => return format!("{pad}<{node_type}{}/>", attrs_s),
+        // A chart's value is a number, written by the SDK as a string, which is its text.
+        "text" | "code" | "value" => return render_text_node(node, depth),
+        "divider" | "img" | "shape" | "barcode" | "series" => return format!("{pad}<{node_type}{}/>", attrs_s),
         _ => {}
     }
 

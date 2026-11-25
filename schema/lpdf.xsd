@@ -695,6 +695,65 @@
     </xs:restriction>
   </xs:simpleType>
 
+  <xs:simpleType name="ChartType">
+    <xs:annotation>
+      <xs:documentation>The values of the `type` attribute of a chart: the kind of chart. bar draws a bar for each value.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="bar"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="ChartDirection">
+    <xs:annotation>
+      <xs:documentation>The values of the `direction` attribute of a chart: which way its bars run.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="vertical"/>
+      <xs:enumeration value="horizontal"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="ChartLegend">
+    <xs:annotation>
+      <xs:documentation>The values of the `legend` attribute of a chart: where its legend goes, or none.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="bottom"/>
+      <xs:enumeration value="top"/>
+      <xs:enumeration value="right"/>
+      <xs:enumeration value="none"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- the decimals a chart writes its values with, 0 to 6 -->
+  <xs:simpleType name="ChartDecimals">
+    <xs:restriction base="xs:nonNegativeInteger">
+      <xs:maxInclusive value="6"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- the mark between the groups of three digits of a number a chart writes: one character, or empty for none -->
+  <xs:simpleType name="ChartThousandsMark">
+    <xs:restriction base="xs:string">
+      <xs:maxLength value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- the mark before the decimals of a number a chart writes: one character -->
+  <xs:simpleType name="ChartDecimalMark">
+    <xs:restriction base="xs:string">
+      <xs:length value="1"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- the text of a chart's value: a plain number, such as 41200, -3.5 or 0.25, or nothing for no value -->
+  <xs:simpleType name="ChartValueText">
+    <xs:restriction base="xs:token">
+      <xs:pattern value="([+\-]?(\d+(\.\d*)?|\.\d+))?"/>
+    </xs:restriction>
+  </xs:simpleType>
+
   <xs:simpleType name="BuiltinFont">
     <xs:annotation>
       <xs:documentation>The values of the `core` attribute of a font: the built-in PDF fonts, which need no file.</xs:documentation>
@@ -790,6 +849,13 @@
     <xs:attribute name="data-color" type="xs:string">
       <xs:annotation>
         <xs:documentation>Dot-path to a string that sets color: a color as written (hex, cmyk(), rgb() or hsl()) or a name from the colors row of the tokens. When the path finds nothing, color stays. A value that is not a color is an error that names the path.</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:attributeGroup>
+  <xs:attributeGroup name="DataLabelAttr">
+    <xs:attribute name="data-label" type="xs:string">
+      <xs:annotation>
+        <xs:documentation>Dot-path to a string or a number that sets label. When the path finds nothing, label stays, so it is the fallback.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
   </xs:attributeGroup>
@@ -1263,6 +1329,7 @@
       <xs:element ref="divider"/>
       <xs:element ref="table"/>
       <xs:element ref="barcode"/>
+      <xs:element ref="chart"/>
       <xs:element ref="shape"/>
       <xs:element ref="field"/>
       <xs:element ref="bookmark"/>
@@ -2519,6 +2586,164 @@
       <xs:attribute name="debug"      type="Boolean"/>
       <xs:attributeGroup ref="DataBindingAttrs"/>
       <xs:attributeGroup ref="OcgAttr"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="chart">
+    <xs:annotation>
+      <xs:documentation>A chart drawn from numbers, written like a table: series are its columns, each category a row and each value a cell, a value for each series in the series' order. A chart with one series needs no series. It takes its box in the flow as an image does, never splits across pages, and moves whole to the next page when it doesn't fit. The engine draws its axis, steps, gridlines, labels and legend by fixed rules: the value axis starts at zero and runs in round steps, each 1, 2 or 5 times a power of ten, written in full; a negative value takes the axis below zero, where a zero line is drawn; a label wider than its room wraps at spaces onto three lines at most, and what still doesn't fit ends in an ellipsis, so a chart always renders. A chart is a leaf, with no padding, background or border: a column around it gives them, and a text above it is its title.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="series" minOccurs="0" maxOccurs="unbounded">
+          <xs:annotation>
+            <xs:documentation>A series of a chart: one value in each category, in the order of the series. Left out, the chart has one series. data-source repeats it for each item of a list, so the data can set how many series there are. A chart holds 100 series at most, counted after the data is bound.</xs:documentation>
+          </xs:annotation>
+          <xs:complexType>
+            <xs:attribute name="label" type="xs:string">
+              <xs:annotation>
+                <xs:documentation>The series' entry in the legend.</xs:documentation>
+              </xs:annotation>
+            </xs:attribute>
+            <xs:attribute name="color" type="Color">
+              <xs:annotation>
+                <xs:documentation>The color of the series' bars and its swatch in the legend. Without it, the series takes the next color of a fixed palette of eight, which starts over past the eighth.</xs:documentation>
+              </xs:annotation>
+            </xs:attribute>
+            <xs:attributeGroup ref="DataBindingAttrs"/>
+            <xs:attributeGroup ref="DataLabelAttr"/>
+            <xs:attributeGroup ref="DataColorAttr"/>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="category" minOccurs="0" maxOccurs="unbounded">
+          <xs:annotation>
+            <xs:documentation>A category of a chart: a bar for each series, or a stack of them, with its label beside the axis. It holds a value for each series of the chart, after the data is bound. data-source repeats it for each item of a list. A chart holds 10,000 categories at most, counted after the data is bound.</xs:documentation>
+          </xs:annotation>
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="value" minOccurs="0" maxOccurs="unbounded">
+                <xs:annotation>
+                  <xs:documentation>A value of a category: a plain number, such as 41200, -3.5 or 0.25, without marks, currency or percent sign, which prefix and suffix on the chart add, and 1,000,000,000,000,000 at most either side of zero. An empty value is no value: no bar. data-value fills it from the data, and data-source repeats it for each item of a list, in the order of the series.</xs:documentation>
+                </xs:annotation>
+                <xs:complexType>
+                  <xs:simpleContent>
+                    <xs:extension base="ChartValueText">
+                      <xs:attributeGroup ref="DataBindingAttrs"/>
+                    </xs:extension>
+                  </xs:simpleContent>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+            <xs:attribute name="label" type="xs:string">
+              <xs:annotation>
+                <xs:documentation>The category's label, under its bars, or beside them with direction="horizontal".</xs:documentation>
+              </xs:annotation>
+            </xs:attribute>
+            <xs:attribute name="color" type="Color">
+              <xs:annotation>
+                <xs:documentation>The color of the category's bar, in a chart of one series, where the series' color is the default.</xs:documentation>
+              </xs:annotation>
+            </xs:attribute>
+            <xs:attributeGroup ref="DataBindingAttrs"/>
+            <xs:attributeGroup ref="DataLabelAttr"/>
+            <xs:attributeGroup ref="DataColorAttr"/>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+      <xs:attribute name="type" use="required" type="ChartType">
+        <xs:annotation>
+          <xs:documentation>The kind of chart. bar draws a bar for each value, side by side within a category, or stacked with stacked="true".</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="direction" type="ChartDirection">
+        <xs:annotation>
+          <xs:documentation>Which way the bars run. vertical, the default, puts the categories along the bottom and the value axis on the left; horizontal lists the categories down the left side, which suits long labels, with the value axis along the bottom.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="stacked" type="Boolean">
+        <xs:annotation>
+          <xs:documentation>Stacks the bars of a category on each other, in the order of the series, so the axis runs to the largest total. A stacked value can't be negative. Default false: side by side.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attributeGroup ref="WidthAttr"/>
+      <xs:attribute name="height" use="required" type="TokenScaleOrPt">
+        <xs:annotation>
+          <xs:documentation>Height of the whole chart, a length or a name from the height row of the tokens. The axis, the labels and the legend take room inside it and the width, and the bars get the rest. The width is fill unless it is set.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="prefix" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>Written before every number of the chart, the steps and the value labels: $ writes $41,200.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="suffix" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>Written after every number of the chart: % writes 12%, and " ms" writes 12 ms. With values in thousands, suffix="k" writes $412k.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="decimals" type="ChartDecimals">
+        <xs:annotation>
+          <xs:documentation>The decimals of the value labels, 0 to 6. Left out, a value is written with the decimals it has. The steps of the axis take the decimals their size needs.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="min" type="xs:decimal">
+        <xs:annotation>
+          <xs:documentation>A number the value axis reaches down to at least, which takes it below zero: min="-50". It only widens the axis: a value below it still fits.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="max" type="xs:decimal">
+        <xs:annotation>
+          <xs:documentation>A number the value axis reaches at least: max="100" for percentages, or the same max on charts meant to be compared side by side. It only widens the axis: a value above it still fits.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="thousands-mark" type="ChartThousandsMark">
+        <xs:annotation>
+          <xs:documentation>The character between the groups of three digits of a number, or empty for none. Default ,: with decimal-mark="," and thousands-mark=".", 1234.5 is written 1.234,5; with a space, 1 234,5.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="decimal-mark" type="ChartDecimalMark">
+        <xs:annotation>
+          <xs:documentation>The character before the decimals of a number. Default ., and it can't be the thousands-mark.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="gap" type="TokenScaleOrPt">
+        <xs:annotation>
+          <xs:documentation>The space between the bars and the axis labels, and between them and the legend. Default s, from the space row of the tokens.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="bar-gap" type="TokenScaleOrPt">
+        <xs:annotation>
+          <xs:documentation>The space between the bars of one category, side by side. Default a tenth of a bar.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="category-gap" type="TokenScaleOrPt">
+        <xs:annotation>
+          <xs:documentation>The space between categories. Default a quarter of the room of a category. The bars take the room the two gaps leave.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="legend" type="ChartLegend">
+        <xs:annotation>
+          <xs:documentation>Where the legend goes, which lists each series with its label and its color: bottom, top, right, or none. Default bottom with two series or more, and none with one.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="value-labels" type="Boolean">
+        <xs:annotation>
+          <xs:documentation>Writes each value at the end of its bar, and the total of a stack at the end of the stack. Default false.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="font"       type="xs:string"/>
+      <xs:attribute name="font-size"  type="TokenScaleOrPt"/>
+      <xs:attribute name="color"      type="Color">
+        <xs:annotation>
+          <xs:documentation>The color of the chart's text, its labels, steps and legend, and of its zero line. Default the color of the text around it.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attribute name="alt"        type="xs:string">
+        <xs:annotation>
+          <xs:documentation>What the chart shows, which a screen reader reads in a tagged document, one with pdfua or a pdfa of level a: "Revenue per month, highest in March". alt="" marks it as decoration. A PDF/UA document needs it on every chart of the layout; at PDF/A level a without pdfua, a chart without it is decoration. A document that is not tagged ignores it.</xs:documentation>
+        </xs:annotation>
+      </xs:attribute>
+      <xs:attributeGroup ref="DataBindingAttrs"/>
     </xs:complexType>
   </xs:element>
 

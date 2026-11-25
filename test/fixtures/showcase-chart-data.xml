@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+<document size="A4">
+<section>
+<layout margin="40pt">
+<column gap="xl">
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Instructions per fixture</text>
+        <chart type="bar" height="180pt" alt="Instructions per fixture in each build">
+            <series data-source="builds" label="Build" data-label="name" data-color="color"/>
+            <category data-source="fixtures" label="xs" data-label="name">
+                <value data-source="counts" data-value="instructions">0</value>
+            </category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Change since the last release</text>
+        <chart type="bar" direction="horizontal" height="160pt" suffix="%" decimals="2" value-labels="true">
+            <category data-source="fixtures" label="xs" data-label="name" color="#737373" data-color="color">
+                <value data-value="change">0</value>
+            </category>
+            <category label="All" color="#1763cf" data-if="total">
+                <value data-value="total">0</value>
+            </category>
+            <category label="Draft" data-if-not="final">
+                <value>1</value>
+            </category>
+        </chart>
+    </column>
+    <chart type="bar" height="140pt" prefix="$" data-if="months">
+        <category data-source="months" label="Jan" data-label="name">
+            <value data-value="revenue">41200</value>
+        </category>
+    </chart>
+</column>
+</layout>
+</section>
+</document>
+</lpdf>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+<document size="A4">
+<section>
+<layout margin="40pt">
+<column gap="xl">
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Revenue</text>
+        <chart type="bar" height="160pt" prefix="$" alt="Revenue per month, highest in June">
+            <category label="Jan"><value>41200</value></category>
+            <category label="Feb"><value>38900</value></category>
+            <category label="Mar"><value>44100</value></category>
+            <category label="Apr"><value>39750</value></category>
+            <category label="May"><value>47300</value></category>
+            <category label="Jun"><value>51800</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Satisfaction, out of 100</text>
+        <chart type="bar" height="150pt" max="100" suffix="%" decimals="1" value-labels="true">
+            <category label="Support"><value>72.25</value></category>
+            <category label="Response time within a working day"><value>55</value></category>
+            <category label="Resolved on the first contact, without a follow-up of any kind"><value>90.5</value></category>
+            <category label="Documentation"><value>64</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Change per region</text>
+        <chart type="bar" height="160pt" min="-20" width="360pt" thousands-mark="." decimal-mark="," suffix=" €"
+               value-labels="true" color="#334155" font="Times-Roman" font-size="9pt" gap="m">
+            <category label="North" color="#2f9e44"><value>1250.5</value></category>
+            <category label="South" color="#c2255c"><value>-8.75</value></category>
+            <category label="East"><value/></category>
+            <category label="West"><value>-3</value></category>
+        </chart>
+    </column>
+</column>
+</layout>
+</section>
+</document>
+</lpdf>

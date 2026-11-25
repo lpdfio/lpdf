@@ -7,7 +7,7 @@ What Lpdf officially supports, area by area: the version each feature is in sinc
 - What this file doesn't list is not supported.
 - The same document gives the same PDF in every SDK: JavaScript, Python, Java, C# and PHP. Options and methods, such as `createdOn` and `loadImage`, are named here as JavaScript names them, and each SDK has them in its own case.
 
-**Areas:** [PDF standards and output](#pdf-standards-and-output) · [What combines with what](#what-combines-with-what) · [Images](#images) · [Color](#color) · [Fonts and text](#fonts-and-text) · [Layout](#layout) · [Barcodes](#barcodes) · [Forms](#forms) · [Graphics](#graphics) · [Attachments](#attachments) · [Stamping existing PDFs](#stamping-existing-pdfs) · [Merging PDFs for print](#merging-pdfs-for-print) · [Data binding](#data-binding) · [Constants in the SDKs](#constants-in-the-sdks) · [Render limits](#render-limits)
+**Areas:** [PDF standards and output](#pdf-standards-and-output) · [What combines with what](#what-combines-with-what) · [Images](#images) · [Color](#color) · [Fonts and text](#fonts-and-text) · [Layout](#layout) · [Barcodes](#barcodes) · [Charts](#charts) · [Forms](#forms) · [Graphics](#graphics) · [Attachments](#attachments) · [Stamping existing PDFs](#stamping-existing-pdfs) · [Merging PDFs for print](#merging-pdfs-for-print) · [Data binding](#data-binding) · [Constants in the SDKs](#constants-in-the-sdks) · [Render limits](#render-limits)
 
 ## PDF standards and output
 
@@ -70,8 +70,8 @@ Each error is listed under [Factur-X / ZUGFeRD, what it checks](https://lpdf.io/
 ### PDF/UA
 
 - `pdfua` takes `1`, and no other value.
-- The tags come from the document's own elements: paragraphs, headings (`role="h1"` to `"h6"`), tables with the header cells of their `<thead>`, lists, links, footnotes, the table of contents, and images, barcodes and layers with their `alt`. Headers, footers, backgrounds and borders are marked as decoration.
-- Refused: no `title` or no `lang` on `<meta>`, a `lang` that is not a language tag, an `<img>` or a `<barcode>` of the layout without `alt` outside a header or a footer, a first heading that is not an `h1`, and a heading that skips a level going down.
+- The tags come from the document's own elements: paragraphs, headings (`role="h1"` to `"h6"`), tables with the header cells of their `<thead>`, lists, links, footnotes, the table of contents, and images, barcodes, charts and layers with their `alt`. Headers, footers, backgrounds and borders are marked as decoration.
+- Refused: no `title` or no `lang` on `<meta>`, a `lang` that is not a language tag, an `<img>`, a `<barcode>` or a `<chart>` of the layout without `alt` outside a header or a footer, a first heading that is not an `h1`, and a heading that skips a level going down.
 - Refused, as for PDF/A: text in a built-in font, a font whose file was not loaded or whose license forbids embedding, a character its font has no glyph for, a form field, and a barcode's printed digits.
 - Refused: an encrypted file whose `allow` leaves out `accessibility`.
 - Refused: bulk records (`a bulk table is not tagged for a reader`).
@@ -140,6 +140,7 @@ What a document holds, in each kind of file. A file of two standards keeps to bo
 | Spot colors with an RGB value | Yes | Yes | Yes | Yes |
 | Opacity, shadows and gradients | Yes | Yes | Yes | Yes |
 | Images of every format, SVG included | Yes | Yes | Yes, each with an `alt` | Yes |
+| Charts | Yes | Yes | Yes, each with an `alt` | Yes |
 | Links | Clickable | Clickable | Clickable, and tagged | Printed, not clickable, with PDF/UA too: a screen reader reads the link's text as text |
 | Bookmarks | Yes | Yes | Yes | Yes |
 | Print and screen content (`ocg`) | The viewer switches it | Everything shows | Everything shows, with PDF/X too | The print version: screen content is off |
@@ -285,6 +286,29 @@ A barcode is never stretched. Docs: [Barcode](https://lpdf.io/docs/doc/layout/ba
 - GS1 data is checked: an application identifier of 2 to 4 digits before each value, GS1's characters, the length of each field whose identifier has a fixed one, and the check digit of a GTIN, an SSCC and a GLN. See [Barcode, GS1](https://lpdf.io/docs/doc/layout/barcode/#gs1).
 - `hrt` prints the data under a linear barcode, in Helvetica, so PDF/A, PDF/UA and PDF/X refuse it.
 
+## Charts
+
+A chart is drawn from numbers, written like a table: `<series>` are its columns, each `<category>` a row and each `<value>` a cell. Docs: [Chart](https://lpdf.io/docs/doc/layout/chart/).
+
+| Supported | Written with | Since | Docs |
+|---|---|---|---|
+| Bar charts: vertical, horizontal, side by side and stacked | `<chart type="bar">`, `direction`, `stacked` | 0.39.0 | [Chart](https://lpdf.io/docs/doc/layout/chart/) |
+| Series, categories and values written in the document or repeated from the data, with labels and colors from the data | `data-source` on `<series>`, `<category>` and `<value>`, `data-label`, `data-color` | 0.39.0 | [Chart, from the data](https://lpdf.io/docs/doc/layout/chart/#from-the-data) |
+| A value axis from zero in round steps, written in full, with gridlines, and a zero line under negative values | `min` and `max`, which widen it | 0.39.0 | [Chart, the axis and the labels](https://lpdf.io/docs/doc/layout/chart/#the-axis-and-the-labels) |
+| Numbers with any thousands mark and decimal mark, a prefix and a suffix, and the value of each bar written at its end | `thousands-mark`, `decimal-mark`, `prefix`, `suffix`, `decimals`, `value-labels` | 0.39.0 | [Chart, numbers](https://lpdf.io/docs/doc/layout/chart/#numbers) |
+| A legend at the bottom, the top or the right, colors from a fixed palette of eight or set on a series or a category, and the room between the bars and the categories | `legend`, `color`, `gap`, `bar-gap`, `category-gap` | 0.39.0 | [Chart, colors and spacing](https://lpdf.io/docs/doc/layout/chart/#colors-and-spacing) |
+| `LChart` in the five SDKs, whose `value` takes a number | `L.chart`, `LChart.series`, `LChart.category`, `LChart.value` | 0.39.0 | [Chart](https://lpdf.io/docs/doc/layout/chart/) |
+
+- `type` takes `bar`, and no other value.
+- A label wider than its room wraps at spaces onto three lines at most, and what still doesn't fit ends in an ellipsis, so a chart always renders. In a horizontal chart the labels take a column as wide as the longest, a third of the chart's width at most, and none where a category is thinner than a line of text.
+- A chart takes its box in the flow, never splits across pages, and moves whole to the next page when it doesn't fit. It is a leaf: no `padding`, `background` or `border`, and no title, which a `<text>` above it is. A chart can't be in a layer.
+- Without `color`, the series take the palette's colors in order, starting over past the eighth.
+- A legend at the bottom or the top takes half the chart's height at most, and one at the right its height and a third of its width: the entries that don't fit give way to an ellipsis.
+- With `value-labels`, a stacked chart writes the total of each stack. A value label is written with `decimals`, else with the decimals the value was written with, and rounds half up: `72.25` with one decimal is `72.3`.
+- Refused, with an error that names it: a value that is not a plain number (`'41,200' is not a plain number`), a category with more or fewer values than the chart has series, a negative value in a stacked chart, a value, a stack's total, `min` or `max` past 1,000,000,000,000,000 either side of zero, a value of more than one number from code, `thousands-mark` and `decimal-mark` the same, a `<series>`, `<category>` or `<value>` outside its chart or category, and a `<series>` after a category.
+- `null` in the data, or an empty `<value/>`, is no value: no bar.
+- A chart holds 10,000 categories and 100 series at most, after the data is bound. See [Render limits](#render-limits).
+
 ## Forms
 
 | Supported | Since | Docs |
@@ -363,6 +387,7 @@ Data is JSON bound to an XML document, as an option of the render call. Docs: [D
 | `data-value` fills in a text or a barcode's data, `data-source` repeats an element for each item of a list, and `data-if` and `data-if-not` show or hide it | 0.24.0 | [Data binding](https://lpdf.io/docs/data/binding/) |
 | `data-value`, `data-if` and `data-if-not` in a layer | 0.27.0 | [Layer, data in a layer](https://lpdf.io/docs/doc/layer/#data-in-a-layer) |
 | Attributes from data: `data-href`, `data-name`, `data-color`, `data-background` and `data-fill` | 0.30.0 | [Data binding, attributes from data](https://lpdf.io/docs/data/binding/#attributes-from-data) |
+| `data-label`, the label of a chart's series or category | 0.39.0 | [Chart, from the data](https://lpdf.io/docs/doc/layout/chart/#from-the-data) |
 | `$toc`, the entries of the table of contents | 0.25.0 | [Table of contents](https://lpdf.io/docs/doc/toc/) |
 | Markdown from the data | 0.30.0 | [Markdown](https://lpdf.io/docs/doc/markdown/#where-the-markdown-comes-from) |
 | Bulk records: a table, list, grid or column laid out a page at a time, for hundreds of thousands of records | 0.33.0 | [Bulk records](https://lpdf.io/docs/data/bulk/) |
@@ -371,7 +396,7 @@ Data is JSON bound to an XML document, as an option of the render call. Docs: [D
 - Data applies when the document rendered is XML.
 - `data-source` on a layer's element is refused.
 - A path whose prefix has nothing bound under it leaves its element as the document wrote it, as a render with no data does.
-- An attribute from data takes a string, checked as the attribute is. Refused: a value that is not a string, a color that does not read, and an image the document does not declare. `data-name` picks among the declared images: the data can't bring a new one.
+- An attribute from data takes a string, checked as the attribute is, and `data-label` a number too. Refused: a value that is not a string, a color that does not read, and an image the document does not declare. `data-name` picks among the declared images: the data can't bring a new one.
 - A bulk container sits directly in the layout and holds plain text. Each rule it sets is refused when broken, with an error that names it: see [Bulk records, the rules](https://lpdf.io/docs/data/bulk/#the-rules). A document with one has no table of contents and no cross-reference, and is not tagged.
 
 ## Constants in the SDKs
@@ -403,6 +428,9 @@ A document built in code can name the words an attribute takes as constants. Doc
 | Nesting: 100 levels, `<lpdf>` included | 100 | Fixed | 0.33.0 | [XML schema, document structure](https://lpdf.io/docs/xml/schema/#document-structure) |
 | Page size: 3pt at least in each size, and 14,400pt (200in) at most for a page that grows | 3pt to 14,400pt | Fixed | 0.36.0 | [Section, a page that grows](https://lpdf.io/docs/doc/section/#a-page-that-grows) |
 | The XML of an invoice and of an invoice map: 2,000,000 nodes at most, with no DTD | 2,000,000 | Fixed | 0.36.0 | [Factur-X / ZUGFeRD, what it checks](https://lpdf.io/docs/factur-x-zugferd/#what-it-checks) |
+| The categories of a chart, after the data is bound: `a chart holds 10,000 categories at most; the data of 'fixtures' gives 50,000` | 10,000 | Fixed | 0.39.0 | [Chart, limits](https://lpdf.io/docs/doc/layout/chart/#limits) |
+| The series of a chart, after the data is bound | 100 | Fixed | 0.39.0 | [Chart, limits](https://lpdf.io/docs/doc/layout/chart/#limits) |
+| The values of a chart, the total of a stack, `min` and `max`, either side of zero: `a chart holds values of 1,000,000,000,000,000 at most, either side of zero` | 1,000,000,000,000,000 | Fixed | 0.39.0 | [Chart, limits](https://lpdf.io/docs/doc/layout/chart/#limits) |
 
 - There is no limit on the size of the XML, or of a document built in code.
 - The engine makes no network calls.

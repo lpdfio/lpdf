@@ -241,10 +241,16 @@ fn bind_attributes(
             Lookup::Found(found) => found,
             Lookup::Unbound => continue,
         };
+        let number;
         let value = match found {
             None | Some(Value::Null) => continue,
             Some(Value::String(text)) if text.is_empty() => continue,
             Some(Value::String(text)) => text,
+            // A label is text, which a year or a week number is in the data as a number.
+            Some(Value::Number(n)) if *attr == BoundAttr::Label => {
+                number = n.to_string();
+                &number
+            }
             Some(other) => return Err(bound_error(*attr, path, &format!("expected a string, found {}", json_type(other)))),
         };
         set_bound(node, *attr, value, resolvers).map_err(|problem| bound_error(*attr, path, &problem))?;
@@ -266,7 +272,7 @@ fn set_bound(node: &mut Node, attr: BoundAttr, value: &str, resolvers: &Resolver
         BoundAttr::Color => {
             let color = resolvers.tokens.resolve_color(value)?;
             match node.kind {
-                NodeKind::Divider => node.color = Some(color),
+                NodeKind::Divider | NodeKind::ChartSeries | NodeKind::ChartCategory => node.color = Some(color),
                 NodeKind::Barcode => node.barcode_color = Some(color),
                 _                 => node.text_color = Some(color),
             }
@@ -281,6 +287,13 @@ fn set_bound(node: &mut Node, attr: BoundAttr, value: &str, resolvers: &Resolver
                 shape.fill = Some(fill);
             }
         }
+        BoundAttr::Label => match node.detail.as_deref_mut() {
+            Some(crate::parse::Detail::ChartPart(part)) => part.label = value.to_owned(),
+            _ => {
+                let part = crate::chart::ChartPart { label: value.to_owned(), values: None };
+                node.detail = Some(Box::new(crate::parse::Detail::ChartPart(part)));
+            }
+        },
     }
     Ok(())
 }
@@ -484,6 +497,11 @@ fn apply_single_node(node: Node, stack: &[&Value], bind: &Bind, out: &mut Vec<No
             }
         };
         if let Some(Value::Array(items)) = found {
+            check_chart_list(&node.kind, path, items.len())?;
+            if node.kind == NodeKind::ChartValue {
+                out.push(bind_values(node, items, stack, bind)?);
+                return Ok(());
+            }
             let toc_entries = bind.toc_indent_step.filter(|_| path == TOC_DATA_KEY);
             for item in items {
                 let mut new_stack = stack.to_vec();
@@ -513,7 +531,11 @@ fn apply_single_node(node: Node, stack: &[&Value], bind: &Bind, out: &mut Vec<No
     let mut node = node;
     let found = dv.as_deref().map(|path| lookup(path, stack, root, prefixed));
     if let Some(Lookup::Found(found)) = found {
-        let text = value_to_string(found);
+        let text = match node.kind {
+            // A chart's value is written without an exponent, and is refused here, by its path, when it is no number.
+            NodeKind::ChartValue => value_text(found, dv.as_deref().unwrap_or_default())?,
+            _ => value_to_string(found),
+        };
         if node.kind == NodeKind::Barcode {
             node.barcode_data = Some(text);
         } else {
@@ -569,8 +591,72 @@ fn apply_single_node(node: Node, stack: &[&Value], bind: &Bind, out: &mut Vec<No
     } else {
         node.children = apply_nodes(std::mem::take(&mut node.children), stack, bind)?;
     }
+    // A category keeps its values as numbers once they are bound, and a chart its series and categories, so a chart
+    // of many categories doesn't keep a node for each value.
+    match node.kind {
+        NodeKind::ChartCategory => crate::chart::fold_values(&mut node)?,
+        NodeKind::Chart => crate::chart::lower(&mut node)?,
+        _ => {}
+    }
     out.push(node);
     Ok(())
+}
+
+/// The text of a chart's value from the data at `path`: a number as it is, without an exponent, and else the value's
+/// text, refused by its path when it is no number.
+fn value_text(found: Option<&Value>, path: &str) -> Result<String, String> {
+    let text = match found {
+        Some(Value::Number(n)) => crate::chart::plain_number(n),
+        other => value_to_string(other),
+    };
+    crate::chart::read_number(&text).map_err(|e| format!("<value data-value=\"{path}\">: {e}"))?;
+    Ok(text)
+}
+
+/// The values a `<value data-source>` repeats, read into numbers on one node that its category folds with its other
+/// values (`chart::fold_values`): a chart of 10,000 categories of 100 series binds a million values, and a node cloned
+/// and bound for each took most of its time. Each item is read as the clone of the template would be: its `data-value`
+/// in the item's scope, or the template's text where the path's prefix has nothing bound. The template's `data-if` and
+/// `data-if-not` were read before the list, as for any element that `data-source` repeats.
+fn bind_values(template: Node, items: &[Value], stack: &[&Value], bind: &Bind) -> Result<Node, String> {
+    let path = template.data_attrs.as_ref().and_then(|d| d.data_value.clone());
+    let written: String = template.text_runs.iter().map(|run| run.text.as_str()).collect();
+    let written = crate::chart::read_number(&written).map_err(|e| format!("<value>: {e}"))?;
+    let mut scope = stack.to_vec();
+    let mut numbers = Vec::with_capacity(items.len());
+    for item in items {
+        crate::memory::check()?;
+        crate::deadline::check();
+        scope.push(item);
+        let number = match path.as_deref().map(|path| (path, lookup(path, &scope, bind.root, bind.prefixed))) {
+            Some((path, Lookup::Found(found))) => crate::chart::read_number(&value_text(found, path)?)?,
+            _ => written,
+        };
+        scope.pop();
+        numbers.push(number);
+    }
+    let mut node = template;
+    node.data_attrs = None;
+    node.text_runs = Vec::new();
+    node.detail = Some(Box::new(crate::parse::Detail::ChartPart(crate::chart::ChartPart {
+        label: String::new(),
+        values: Some(numbers),
+    })));
+    Ok(node)
+}
+
+/// Refuse a list of the data that repeats more of a chart's parts than a chart holds, before they are made: a category
+/// for each of 50,000 items would be 50,000 nodes. What the parts add up to is checked when the chart is read.
+fn check_chart_list(kind: &NodeKind, path: &str, items: usize) -> Result<(), String> {
+    use crate::chart::{too_many_in_data, MAX_CATEGORIES, MAX_SERIES};
+    match kind {
+        NodeKind::ChartCategory if items > MAX_CATEGORIES => Err(too_many_in_data("categories", MAX_CATEGORIES, path, items)),
+        NodeKind::ChartSeries if items > MAX_SERIES => Err(too_many_in_data("series", MAX_SERIES, path, items)),
+        NodeKind::ChartValue if items > MAX_SERIES => {
+            Err(format!("{}: a category holds a value for each series", too_many_in_data("series", MAX_SERIES, path, items)))
+        }
+        _ => Ok(()),
+    }
 }
 
 // ── Bulk records ──────────────────────────────────────────────────────────────

@@ -1653,7 +1653,7 @@ fn draw_node(
         let mut draw = |content: &mut Content, marks: &mut Marks| draw_drawn(content, annots, groups, marks, node, res, page_h);
         match node {
             RenderNode::Text(t) => return marks.content(content, &t.content, draw),
-            RenderNode::Line(_) | RenderNode::CanvasRect(_) | RenderNode::CanvasLine(_) | RenderNode::CanvasEllipse(_)
+            RenderNode::Line(_) | RenderNode::CanvasRect(_) | RenderNode::Bars(_) | RenderNode::CanvasLine(_) | RenderNode::CanvasEllipse(_)
                 | RenderNode::CanvasPath(_) | RenderNode::Ruling(_) => return marks.artifact(content, draw),
             RenderNode::Image(i) => return marks.whole(content, i.tag.as_deref(), draw),
             RenderNode::Barcode(bc) => return marks.whole(content, bc.tag.as_deref(), draw),
@@ -1940,6 +1940,17 @@ fn draw_drawn(
         RenderNode::Anchor(_) | RenderNode::FootnoteMark(_) => {}
 
         // ── Canvas Rect ───────────────────────────────────────────────────────
+        // The bars of a chart in one color: one fill for all of them.
+        RenderNode::Bars(b) => {
+            content.save_state();
+            set_fill_color(content, &b.fill);
+            set_overprint(content, Some(&b.fill), None);
+            for [x, y, w, h] in &b.rects {
+                content.rect(*x, page_h - y - h, *w, *h);
+            }
+            content.fill_nonzero();
+            content.restore_state();
+        }
         RenderNode::CanvasRect(r) => {
             let has_fill   = r.fill.is_some();
             let has_stroke = r.stroke.is_some() && r.stroke_width > 0.0;
@@ -5063,6 +5074,7 @@ fn node_colors(node: &RenderNode) -> Vec<&str> {
         RenderNode::Barcode(bc)      => vec![Some(&bc.color), bc.bg.as_deref()],
         RenderNode::Field(f)         => vec![f.background.as_deref(), f.border.as_ref().map(|(_, color)| color.as_str())],
         RenderNode::CanvasRect(r)    => vec![r.fill.as_deref(), r.stroke.as_deref(), shadow(&r.shadow)],
+        RenderNode::Bars(b)          => vec![Some(&b.fill)],
         RenderNode::CanvasLine(l)    => vec![Some(&l.stroke)],
         RenderNode::CanvasEllipse(e) => vec![e.fill.as_deref(), e.stroke.as_deref(), shadow(&e.shadow)],
         RenderNode::CanvasPath(p)    => vec![p.fill.as_deref(), p.stroke.as_deref()],

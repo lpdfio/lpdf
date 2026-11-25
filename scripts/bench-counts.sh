@@ -10,8 +10,8 @@
 # build keeps the dependency versions it was released with. Turns on the split-stages feature when
 # <checkout>'s lib.rs has bench_layout_doc and bench_write_pdf, the embedded-fonts feature, with the
 # fonts benchmarks (benches/fonts.rs), when it has bench_font_srcs, the svg feature, with the svg
-# benchmarks (benches/svg.rs), when it has bench_images, and the markdown and
-# code features when its schema has a <markdown> and a <code>. Writes to <out folder>:
+# benchmarks (benches/svg.rs), when it has bench_images, and the markdown, code
+# and chart features when its schema has a <markdown>, a <code> and a <chart>. Writes to <out folder>:
 #
 #   summary.jsonl       gungraun's JSON line for each benchmark: instructions and estimated cycles
 #   allocations.jsonl   a JSON line for each benchmark: allocations, bytes allocated and peak memory
@@ -68,7 +68,7 @@ if grep -q 'pub fn bench_images' "$LIB"; then
   BENCHES="$BENCHES --bench svg"
   WITH="$WITH, with SVG pictures"
 fi
-for element in markdown code; do
+for element in markdown code chart; do
   if grep -q "<xs:element name=\"$element\">" "$SCHEMA"; then
     FEATURES="${FEATURES:+$FEATURES,}$element"
     WITH="$WITH, with <$element>"

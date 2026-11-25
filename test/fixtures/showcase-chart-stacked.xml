@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+<document size="A4">
+<section>
+<layout margin="40pt">
+<column gap="xl">
+    <chart type="bar" stacked="true" height="200pt" prefix="$" value-labels="true" alt="Sales per quarter by region">
+        <series label="Europe"/>
+        <series label="Americas"/>
+        <series label="Asia"/>
+        <category label="Q1"><value>52000</value><value>41000</value><value>27000</value></category>
+        <category label="Q2"><value>55000</value><value>43000</value><value>30000</value></category>
+        <category label="Q3"><value>51000</value><value/><value>33000</value></category>
+        <category label="Q4"><value>60000</value><value>47000</value><value>35500</value></category>
+    </chart>
+    <chart type="bar" stacked="true" direction="horizontal" height="160pt" suffix=" GB" decimals="1" value-labels="true" legend="top">
+        <series label="Images"/>
+        <series label="Documents"/>
+        <category label="Marketing"><value>120.5</value><value>32</value></category>
+        <category label="Engineering"><value>48</value><value>210.25</value></category>
+        <category label="Finance"><value>12</value><value>95</value></category>
+    </chart>
+</column>
+</layout>
+</section>
+</document>
+</lpdf>

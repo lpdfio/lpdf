@@ -53,6 +53,8 @@ pub enum RenderNode {
     CanvasEllipse(RenderCanvasEllipse),
     CanvasPath(RenderCanvasPath),
     CanvasLayer(RenderCanvasLayer),
+    /// The bars of a chart in one color: one node and one fill for all of them, however many there are.
+    Bars(RenderBars),
     /// The lines of a section's ruling, shared by every page that draws them: the PDF writes the drawing once, as a
     /// form XObject each of those pages invokes.
     Ruling(Rc<crate::ruling::Drawing>),
@@ -339,6 +341,13 @@ pub struct RenderCanvasPath {
     pub line_join: u8,
 }
 
+/// Bars of one color, as a chart draws them: each a rectangle `[x, y, width, height]`, its top left `x`, `y` from the
+/// top left of the page, all filled with `fill` at once.
+pub struct RenderBars {
+    pub fill:  String,
+    pub rects: Vec<[f32; 4]>,
+}
+
 pub struct RenderCanvasClip {
     pub x: f32,
     pub y: f32,
@@ -562,6 +571,7 @@ fn node_to_json(node: &RenderNode) -> Value {
             "fill":   p.fill,
             "stroke": p.stroke,
         }),
+        RenderNode::Bars(b) => bars_to_json(b),
         RenderNode::CanvasLayer(l) => json!({
             "type":     "canvas-layer",
             "opacity":  l.opacity,
@@ -582,6 +592,14 @@ fn node_to_json(node: &RenderNode) -> Value {
         // Filtered out by `is_invisible`: the JSON pages are what is drawn.
         RenderNode::Anchor(_) | RenderNode::FootnoteMark(_) => Value::Null,
     }
+}
+
+/// The bars of a chart in one color. Out of `node_to_json`, a match whose function the WASI build keeps under the size
+/// a JVM method holds (`make check-function-sizes`).
+#[inline(never)]
+fn bars_to_json(bars: &RenderBars) -> Value {
+    let rects: Vec<[f64; 4]> = bars.rects.iter().map(|[x, y, w, h]| [r2(*x), r2(*y), r2(*w), r2(*h)]).collect();
+    json!({ "type": "bars", "fill": bars.fill, "rects": rects })
 }
 
 /// Round to 2 decimal places for compact JSON output.

@@ -273,6 +273,10 @@ fn what(node: &ParsedNode) -> &'static str {
         NodeKind::List      => "a list",
         NodeKind::ListItem  => "an item",
         NodeKind::Markdown  => "Markdown",
+        NodeKind::Chart     => "a chart",
+        NodeKind::ChartSeries => "a series",
+        NodeKind::ChartCategory => "a category",
+        NodeKind::ChartValue => "a value",
     }
 }
 

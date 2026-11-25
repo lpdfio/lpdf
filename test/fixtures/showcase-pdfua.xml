@@ -2,8 +2,8 @@
 <!-- PDF/UA-1: each thing the engine tags, in a file veraPDF's PDF/UA-1 profile accepts and a screen reader reads.
      Headings and paragraphs, a table with a header row and cells that span, a number list with a bullet list in it,
      links in a text and around one, a footnote, the table of contents, an image with alt and one that is decoration, a
-     barcode with alt, Markdown with a link that wraps onto the next line, a layer with alt, and a header, a footer and
-     a layer without alt, which are decoration.
+     barcode with alt, a bar chart with alt, Markdown with a link that wraps onto the next line, a layer with alt, and a
+     header, a footer and a layer without alt, which are decoration.
      Every text is in an embedded font of test/assets/fonts (SIL Open Font License), named relative to this file. The
      render needs created_on, and the check of `make check-pdfua` renders it with the fonts and the pictures loaded, as
      an SDK does (`writes_pdfua_samples_for_the_external_check` in pdfua_render_tests.rs). On the RC it is read with
@@ -88,6 +88,13 @@
               <td padding="4pt 6pt" colspan="2"><text>No figures for the second quarter yet</text></td>
             </tr>
           </table>
+          <chart type="bar" width="300pt" height="110pt" font="sans" font-size="8pt" value-labels="true"
+                 alt="Units by quarter: North sold 1,204 in Q1 and 1,388 in Q2, South 1,150 in Q1 and none yet in Q2">
+            <series label="Q1" color="primary" />
+            <series label="Q2" color="accent" />
+            <category label="North"><value>1204</value><value>1388</value></category>
+            <category label="South"><value>1150</value><value /></category>
+          </chart>
 
           <row gap="l" align="center">
             <barcode type="qr" data="https://lpdf.io/pay/0042" width="72pt" alt="QR code to pay this invoice" />

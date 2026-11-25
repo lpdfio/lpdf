@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+<document size="A4">
+<section>
+<layout margin="40pt">
+<column gap="xl">
+    <chart type="bar" height="170pt" prefix="$" alt="Revenue and costs per quarter">
+        <series label="Revenue" color="primary"/>
+        <series label="Costs" color="#adb5bd"/>
+        <category label="Q1"><value>120000</value><value>95000</value></category>
+        <category label="Q2"><value>131000</value><value>97000</value></category>
+        <category label="Q3"><value>128000</value><value>101000</value></category>
+        <category label="Q4"><value>142000</value><value>99500</value></category>
+    </chart>
+    <chart type="bar" height="150pt" legend="top" bar-gap="2pt" category-gap="30pt">
+        <series label="2024"/>
+        <series label="2025"/>
+        <series label="2026"/>
+        <category label="Orders"><value>320</value><value>410</value><value>455</value></category>
+        <category label="Returns"><value>48</value><value>39</value><value>31</value></category>
+        <category label="Reviews"><value>120</value><value>180</value><value>260</value></category>
+    </chart>
+    <row gap="l">
+        <chart type="bar" height="140pt" legend="right" width="300pt">
+            <series label="Planned for the whole of the year"/>
+            <series label="Actual"/>
+            <category label="A"><value>12</value><value>9</value></category>
+            <category label="B"><value>8</value><value>11</value></category>
+        </chart>
+        <chart type="bar" height="140pt" legend="none">
+            <series/><series/><series/><series/><series/><series/><series/><series/><series/><series/>
+            <category label="Ten series"><value>1</value><value>2</value><value>3</value><value>4</value><value>5</value><value>6</value><value>7</value><value>8</value><value>9</value><value>10</value></category>
+        </chart>
+    </row>
+</column>
+</layout>
+</section>
+</document>
+</lpdf>
