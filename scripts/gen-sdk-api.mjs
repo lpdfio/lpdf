@@ -67,6 +67,11 @@ const CLASSES = [
     ...['column', 'row', 'grid', 'list', 'li', 'frame', 'link', 'divider', 'span', 'code-span', 'img', 'shape', 'barcode',
         'text', 'code', 'td', 'thead', 'tr', 'table', 'field', 'bookmark'].map((el) => ({ cls: `${pascal(el)}Attr`, el, where: 'global', area: 'layout' })),
     { cls: 'RegionAttr', el: 'region', where: 'layout', area: 'layout' },
+    // A chart and its parts, which are declared inside it: the parts' classes are named `Chart` and the part's name,
+    // as the builders in `LChart` are. A value has no attributes but its data binding, so it takes `NoAttr`.
+    { cls: 'ChartAttr', el: 'chart', where: 'global', area: 'layout' },
+    { cls: 'ChartSeriesAttr', el: 'series', where: 'chart', area: 'layout' },
+    { cls: 'ChartCategoryAttr', el: 'category', where: 'chart', area: 'layout' },
     // A markdown, its styles and the rules of its styles, which share names with elements of the layout: a class
     // of each, named `Markdown` and the element's name, in an area of their own.
     { cls: 'MarkdownAttr', el: 'markdown', where: 'global', area: 'markdown' },

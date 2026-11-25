@@ -574,17 +574,20 @@ pub enum BoundAttr {
     Href,
     /// `data-name` on an `img` or `img-at`: one of the images declared in `<assets>`.
     Name,
-    /// `data-color`: the text color of a text or box, the line of a divider, the bars of a barcode.
+    /// `data-color`: the text color of a text or box, the line of a divider, the bars of a barcode, the bars of a
+    /// series or a category of a chart.
     Color,
     /// `data-background`: the fill behind a box, or behind a barcode.
     Background,
     /// `data-fill` on a `shape`.
     Fill,
+    /// `data-label` on a `series` or a `category` of a chart.
+    Label,
 }
 
 impl BoundAttr {
     /// Every bindable attribute, in the order they are read and bound.
-    pub const ALL: [BoundAttr; 5] = [Self::Href, Self::Name, Self::Color, Self::Background, Self::Fill];
+    pub const ALL: [BoundAttr; 6] = [Self::Href, Self::Name, Self::Color, Self::Background, Self::Fill, Self::Label];
 
     /// The attribute as written in a document.
     pub fn data_attribute(self) -> &'static str {
@@ -594,6 +597,7 @@ impl BoundAttr {
             Self::Color      => "data-color",
             Self::Background => "data-background",
             Self::Fill       => "data-fill",
+            Self::Label      => "data-label",
         }
     }
 }
@@ -608,7 +612,7 @@ impl BoundAttr {
                 kind,
                 NodeKind::Text | NodeKind::Column | NodeKind::Row | NodeKind::Grid | NodeKind::Frame
                     | NodeKind::TableCell | NodeKind::List | NodeKind::ListItem | NodeKind::Divider
-                    | NodeKind::Barcode
+                    | NodeKind::Barcode | NodeKind::ChartSeries | NodeKind::ChartCategory
             ),
             Self::Background => matches!(
                 kind,
@@ -616,6 +620,7 @@ impl BoundAttr {
                     | NodeKind::List | NodeKind::ListItem | NodeKind::Barcode
             ),
             Self::Fill       => *kind == NodeKind::Shape,
+            Self::Label      => matches!(kind, NodeKind::ChartSeries | NodeKind::ChartCategory),
         }
     }
 }
@@ -783,8 +788,8 @@ pub struct Check {
     pub line:    String,
 }
 
-/// What only a shape, a list, a list item, or an image or a barcode with `alt` adds to a node. They share one box, so the pointer costs a node 8 bytes and not 16:
-/// `a_node_stays_small` holds the size.
+/// What only a shape, a list, a list item, a chart or a part of one, or an image or a barcode with `alt` adds to a
+/// node. They share one box, so the pointer costs a node 8 bytes and not 16: `a_node_stays_small` holds the size.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Detail {
     Shape(Shape),
@@ -795,6 +800,10 @@ pub enum Detail {
     /// What an image or a barcode shows or is for, read by a screen reader in a tagged PDF; empty marks it as
     /// decoration, which a reader skips.
     Alt(String),
+    /// What a `<chart>` says, and its series and categories once they are read.
+    Chart(Box<crate::chart::ChartSpec>),
+    /// The label of a `<series>` or a `<category>`, and a category's values once they are read.
+    ChartPart(crate::chart::ChartPart),
 }
 
 /// What sets a table's rows apart: the background of every other row, and a line, as a thickness and a color, under
@@ -1034,6 +1043,13 @@ pub enum NodeKind {
     /// A `<markdown>`. It becomes the nodes of its Markdown once the text is known (`markdown::expand`), so the
     /// layout never sees it.
     Markdown,
+    /// A `<chart>`. Its series and categories are its children until they are read into its `ChartSpec`
+    /// (`chart::lower`), which the layout draws.
+    Chart,
+    /// A `<series>`, a `<category>` and a `<value>` of a chart.
+    ChartSeries,
+    ChartCategory,
+    ChartValue,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1431,11 +1447,13 @@ impl Node {
         self.capture.as_ref().map_or(0, |c| c.reserve_lines)
     }
 
-    /// The `alt` of an image or a barcode: what it shows or is for, or `""` for decoration. `None` without one.
+    /// The `alt` of an image, a barcode or a chart: what it shows or is for, or `""` for decoration. `None` without
+    /// one.
     pub fn alt(&self) -> Option<&str> {
         match self.detail.as_deref() {
-            Some(Detail::Alt(alt)) => Some(alt),
-            _                      => None,
+            Some(Detail::Alt(alt))    => Some(alt),
+            Some(Detail::Chart(spec)) => spec.alt.as_deref(),
+            _                         => None,
         }
     }
 
@@ -1507,7 +1525,8 @@ fn resolve_node(
     let mut children = Vec::with_capacity(n.children.len());
     children.extend(n.children.into_iter().map(|c| resolve_node(c, &font, font_size, color, fonts)));
     // A picture takes it too, for `currentColor` in an SVG; the layout drops it from a picture that has no use for it.
-    let text_color = (is_text || matches!(n.kind, NodeKind::List | NodeKind::Img)).then(|| color.to_string());
+    // A chart sets its labels, steps and legend in it.
+    let text_color = (is_text || matches!(n.kind, NodeKind::List | NodeKind::Img | NodeKind::Chart)).then(|| color.to_string());
 
     Node {
         kind:                  n.kind,
@@ -2707,6 +2726,19 @@ pub(crate) fn parse_node(
         "td"      => NodeKind::TableCell,
         "list"    => NodeKind::List,
         "li"      => NodeKind::ListItem,
+        "chart"   => NodeKind::Chart,
+        "series" | "category" | "value" => {
+            let kind = match tag {
+                "series"   => NodeKind::ChartSeries,
+                "category" => NodeKind::ChartCategory,
+                _          => NodeKind::ChartValue,
+            };
+            let parent = chart_part_parent(&kind).unwrap_or_default();
+            if !elem.parent_element().is_some_and(|p| p.has_tag_name(parent)) {
+                return Err(format!("<{tag}>{}: belongs inside a <{parent}>", node_loc(elem)));
+            }
+            kind
+        }
         other     => return Err(match replaced_element_hint(other) {
             Some(hint) => format!("<{}>{}: {hint}", other, node_loc(elem)),
             None       => format!("<{}>{}: unknown element", other, node_loc(elem)),
@@ -2759,11 +2791,20 @@ pub(crate) fn parse_node(
             apply_field_attrs(&mut node, elem, tokens)
                 .map_err(|e| format!("<{}>{}: {e}", tag, node_loc(elem)))?;
         }
+        NodeKind::ChartValue => {
+            if let Some(child) = elems(elem).next() {
+                return Err(format!(
+                    "<value>{}: a value is a number, and holds no <{}>", node_loc(elem), child.tag_name().name()
+                ));
+            }
+            let text: String = elem.children().filter(|c| c.is_text()).filter_map(|c| c.text()).collect();
+            set_value_text(&mut node, &text).map_err(|e| format!("<value>{}: {e}", node_loc(elem)))?;
+        }
         _ => {}
     }
 
     // ── Children (not for leaf nodes) ────────────────────────────────────────
-    if !matches!(kind, NodeKind::Divider | NodeKind::Text | NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field) {
+    if !is_leaf(&kind) {
         let mut pending = PendingBookmarks::default();
         let mut table_rows = (kind == NodeKind::Table).then(|| TableRows::new(&node.table_cols));
         for child in elems(elem) {
@@ -2811,9 +2852,18 @@ pub(crate) fn parse_node(
                         ));
                     }
                 }
+                NodeKind::Chart | NodeKind::ChartCategory => {
+                    check_chart_child(&node, &child_node.kind, child.tag_name().name())
+                        .map_err(|e| format!("<{tag}>{}: {e}", node_loc(elem)))?;
+                }
                 _ => {
                     if child_node.kind == NodeKind::ListItem {
                         return Err(format!("<{tag}>{}: <li> belongs inside a <list>", node_loc(elem)));
+                    }
+                    if let Some(parent) = chart_part_parent(&child_node.kind) {
+                        return Err(format!(
+                            "<{}>{}: belongs inside a <{parent}>", child.tag_name().name(), node_loc(&child)
+                        ));
                     }
                 }
             }
@@ -2831,6 +2881,9 @@ pub(crate) fn parse_node(
         }
         if kind == NodeKind::Table && node.children.iter().any(parsed_has_footnote) {
             return Err(format!("<table>{}: {}", node_loc(elem), footnote_not_here("a table")));
+        }
+        if kind == NodeKind::Chart {
+            read_static_chart(&mut node).map_err(|e| format!("<chart>{}: {e}", node_loc(elem)))?;
         }
     }
     if let Some(reason) = field_in_print(&node) {
@@ -3822,9 +3875,13 @@ fn apply_box_attrs(
         NodeKind::Column | NodeKind::Row | NodeKind::Grid | NodeKind::Frame | NodeKind::TableCell
             | NodeKind::List | NodeKind::ListItem
     );
-    let has_color   = is_box || node.kind == NodeKind::Text;
+    let has_color   = is_box || matches!(node.kind, NodeKind::Text | NodeKind::Chart);
     let has_opacity = is_box || node.kind == NodeKind::Shape;
-    let has_height  = !matches!(node.kind, NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field);
+    let has_height  = !matches!(
+        node.kind,
+        NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field | NodeKind::Chart | NodeKind::ChartSeries
+            | NodeKind::ChartCategory | NodeKind::ChartValue
+    );
     for (name, v) in a.each() {
         match name {
             "font"                   => node.font        = Some(v.to_string()),
@@ -3946,6 +4003,9 @@ fn apply_layout_kind_attrs(
         NodeKind::List => apply_list_attrs(node, a, tokens)?,
         NodeKind::ListItem => apply_item_attrs(node, a, tokens)?,
         NodeKind::Markdown => {}
+        NodeKind::Chart => apply_chart_attrs(node, a, tokens)?,
+        NodeKind::ChartSeries | NodeKind::ChartCategory => apply_chart_part_attrs(node, a, tokens)?,
+        NodeKind::ChartValue => {}
         NodeKind::Link | NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field => {}
     }
     Ok(())
@@ -4139,6 +4199,113 @@ fn apply_img_attrs(
             None         => parse_length(v)
                 .ok_or_else(|| format!("img height: invalid length '{v}': expected a length in {LENGTH_UNITS}"))?,
         });
+    }
+    Ok(())
+}
+
+/// Whether an element of this kind holds no other element: a leaf of the layout, or a series or a value of a chart.
+fn is_leaf(kind: &NodeKind) -> bool {
+    matches!(
+        kind,
+        NodeKind::Divider | NodeKind::Text | NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field
+            | NodeKind::ChartSeries | NodeKind::ChartValue
+    )
+}
+
+/// The element a part of a chart is written in: `None` for any other element.
+fn chart_part_parent(kind: &NodeKind) -> Option<&'static str> {
+    match kind {
+        NodeKind::ChartSeries | NodeKind::ChartCategory => Some("chart"),
+        NodeKind::ChartValue => Some("category"),
+        _ => None,
+    }
+}
+
+/// Refuse a child of a `<chart>` or a `<category>` that is not one of its parts: series and categories in a chart,
+/// the series first, and values in a category.
+fn check_chart_child(parent: &ParsedNode, child: &NodeKind, child_tag: &str) -> Result<(), String> {
+    match (&parent.kind, child) {
+        (NodeKind::Chart, NodeKind::ChartSeries) => {
+            if parent.children.iter().any(|c| c.kind == NodeKind::ChartCategory) {
+                return Err("a <series> goes before the categories".into());
+            }
+            Ok(())
+        }
+        (NodeKind::Chart, NodeKind::ChartCategory) | (NodeKind::ChartCategory, NodeKind::ChartValue) => Ok(()),
+        (NodeKind::Chart, _) => Err(format!("child <{child_tag}> is not allowed here — expected <series> or <category>")),
+        _ => Err(format!("child <{child_tag}> is not allowed here — expected <value>")),
+    }
+}
+
+/// Read the attributes of a `<chart>`: its spec, its height, which it needs, and its width and gap when it sets none,
+/// `fill` and the space row's `s`.
+fn apply_chart_attrs(node: &mut ParsedNode, a: &impl Attrs, tokens: &Tokens) -> Result<(), String> {
+    let spec = crate::chart::read_spec(a, tokens)?;
+    let height = a.get("height").ok_or("missing required attribute 'height'")?;
+    node.img_height_constraint = Some(tokens.resolve_height(height)?);
+    if a.get("width").is_none() {
+        node.width_fill = true;
+    }
+    if a.get("gap").is_none() {
+        node.gap = tokens.resolve_space("s")?;
+    }
+    node.detail = Some(Box::new(Detail::Chart(Box::new(spec))));
+    Ok(())
+}
+
+/// Read the attributes of a `<series>` or a `<category>`: its label and its color.
+fn apply_chart_part_attrs(node: &mut ParsedNode, a: &impl Attrs, tokens: &Tokens) -> Result<(), String> {
+    if let Some(color) = a.get("color") {
+        node.color = Some(tokens.resolve_color(color)?);
+    }
+    let label = a.get("label").unwrap_or_default().to_string();
+    node.detail = Some(Box::new(Detail::ChartPart(crate::chart::ChartPart { label, values: None })));
+    Ok(())
+}
+
+/// Keep the text of a `<value>`, once it is checked to be a plain number or nothing.
+fn set_value_text(node: &mut ParsedNode, text: &str) -> Result<(), String> {
+    crate::chart::read_number(text)?;
+    push_plain_run(&mut node.text_runs, text, &mut false);
+    Ok(())
+}
+
+/// What a part of a chart says, as it was parsed.
+fn parsed_part_label(node: &ParsedNode) -> String {
+    match node.detail.as_deref() {
+        Some(Detail::ChartPart(part)) => part.label.clone(),
+        _ => String::new(),
+    }
+}
+
+/// Read the series and categories of a chart that nothing in reads the data into its spec, and drop its children, so a
+/// chart that can't be drawn, such as one with the wrong count of values, is refused where it is written, and the
+/// layout gets numbers, not a node for each value. A chart whose parts read the data is read once the data is bound.
+fn read_static_chart(node: &mut ParsedNode) -> Result<(), String> {
+    let bound = |n: &ParsedNode| n.data_attrs.is_some();
+    if node.children.iter().any(|c| bound(c) || c.children.iter().any(bound)) {
+        return Ok(());
+    }
+    let mut data = crate::chart::ChartData::default();
+    for child in std::mem::take(&mut node.children) {
+        let label = parsed_part_label(&child);
+        match child.kind {
+            NodeKind::ChartSeries => data.series.push(crate::chart::Series { label, color: child.color }),
+            NodeKind::ChartCategory => {
+                let values = child.children.iter()
+                    .map(|value| {
+                        let text: String = value.text_runs.iter().map(|run| run.text.as_str()).collect();
+                        crate::chart::read_number(&text)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                data.categories.push(crate::chart::Category { label, color: child.color, values });
+            }
+            _ => {}
+        }
+    }
+    if let Some(Detail::Chart(spec)) = node.detail.as_deref_mut() {
+        crate::chart::check(spec, &data)?;
+        spec.data = Some(data);
     }
     Ok(())
 }
@@ -4797,6 +4964,16 @@ fn parse_tree_node(
     tokens:       &Tokens,
     asset_images: &HashMap<String, String>,
 ) -> Result<ParsedNode, String> {
+    parse_tree_node_in(json, tokens, asset_images, None)
+}
+
+/// A node of a kit tree in a node of `parent` kind: a part of a chart is read only in its chart or its category.
+fn parse_tree_node_in(
+    json:         &serde_json::Value,
+    tokens:       &Tokens,
+    asset_images: &HashMap<String, String>,
+    parent:       Option<&NodeKind>,
+) -> Result<ParsedNode, String> {
     crate::memory::check()?;
     let type_str = json.get("type").and_then(|v| v.as_str())
         .ok_or_else(|| "node missing 'type' field".to_string())?;
@@ -4822,6 +4999,20 @@ fn parse_tree_node(
         "td"      => NodeKind::TableCell,
         "list"    => NodeKind::List,
         "li"      => NodeKind::ListItem,
+        "chart"   => NodeKind::Chart,
+        "series" | "category" | "value" => {
+            let kind = match type_str {
+                "series"   => NodeKind::ChartSeries,
+                "category" => NodeKind::ChartCategory,
+                _          => NodeKind::ChartValue,
+            };
+            let within = chart_part_parent(&kind).unwrap_or_default();
+            let expected = if within == "chart" { NodeKind::Chart } else { NodeKind::ChartCategory };
+            if parent != Some(&expected) {
+                return Err(format!("'{type_str}' belongs inside a '{within}'"));
+            }
+            kind
+        }
         other => return Err(match replaced_element_hint(other) {
             Some(hint) => format!("node type '{other}': {hint}"),
             None       => format!("unknown node type: '{other}'"),
@@ -4864,11 +5055,22 @@ fn parse_tree_node(
         NodeKind::Field => {
             apply_field_attrs(&mut node, &a, tokens)?;
         }
+        NodeKind::ChartValue => {
+            let mut text = String::new();
+            for child in json.get("nodes").and_then(|v| v.as_array()).into_iter().flatten() {
+                match child.as_str() {
+                    Some(part) => text.push_str(part),
+                    None => return Err("value: a value is a number, written as a string, and holds no node".into()),
+                }
+            }
+            set_value_text(&mut node, &text).map_err(|e| format!("value: {e}"))?;
+            return Ok(node);
+        }
         _ => {}
     }
 
     // ── Layout children ───────────────────────────────────────────────────────
-    if !matches!(kind, NodeKind::Divider | NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field) {
+    if !is_leaf(&kind) {
         if let Some(arr) = json.get("nodes").and_then(|v| v.as_array()) {
             let mut pending = PendingBookmarks::default();
             let mut table_rows = (kind == NodeKind::Table).then(|| TableRows::new(&node.table_cols));
@@ -4880,7 +5082,7 @@ fn parse_tree_node(
                     pending.push(tree_bookmark(child)?);
                     continue;
                 }
-                let mut child_node = parse_tree_node(child, tokens, asset_images)?;
+                let mut child_node = parse_tree_node_in(child, tokens, asset_images, Some(&kind))?;
                 if child_node.is_bulk() {
                     return Err(format!(
                         "{}: {}",
@@ -4918,9 +5120,17 @@ fn parse_tree_node(
                             ));
                         }
                     }
+                    NodeKind::Chart | NodeKind::ChartCategory => {
+                        let child_type = child.get("type").and_then(|v| v.as_str()).unwrap_or("?");
+                        check_chart_child(&node, &child_node.kind, child_type).map_err(|e| format!("{type_str}: {e}"))?;
+                    }
                     _ => {
                         if child_node.kind == NodeKind::ListItem {
                             return Err(format!("'li' belongs inside a 'list', not in '{type_str}'"));
+                        }
+                        if let Some(parent) = chart_part_parent(&child_node.kind) {
+                            let child_type = child.get("type").and_then(|v| v.as_str()).unwrap_or("?");
+                            return Err(format!("'{child_type}' belongs inside a '{parent}', not in '{type_str}'"));
                         }
                     }
                 }
@@ -4939,6 +5149,9 @@ fn parse_tree_node(
         }
         if kind == NodeKind::Table && node.children.iter().any(parsed_has_footnote) {
             return Err(format!("table: {}", footnote_not_here("a table")));
+        }
+        if kind == NodeKind::Chart {
+            read_static_chart(&mut node).map_err(|e| format!("chart: {e}"))?;
         }
     }
     if let Some(reason) = field_in_print(&node) {

@@ -53,9 +53,9 @@ pub(crate) fn check_permissions(part: PdfUa, permissions: Permissions) -> Result
 }
 
 /// Check what a PDF/UA document must say before it is laid out: a title, which a reader shows in place of the file
-/// name (7.1), the language of its text as a language tag (7.2), an `alt` on every image and barcode of the flow, a
-/// first heading of h1 and headings that skip no level on the way down (7.4.2), and no form field, which draws its
-/// text in Helvetica, a font that is not embedded (7.21.4.1).
+/// name (7.1), the language of its text as a language tag (7.2), an `alt` on every image, barcode and chart of the
+/// flow, a first heading of h1 and headings that skip no level on the way down (7.4.2), and no form field, which
+/// draws its text in Helvetica, a font that is not embedded (7.21.4.1).
 pub(crate) fn check(part: Option<PdfUa>, meta: &Meta, sections: &[SectionLayout]) -> Result<(), String> {
     let Some(part) = part else { return Ok(()) };
     if meta.title.trim().is_empty() {
@@ -104,6 +104,11 @@ fn check_node(part: PdfUa, node: &Node, last_level: &mut u8) -> Result<(), Strin
             return Err(refusal(part, &format!("the barcode of \"{data}\" has no alt, and a PDF/UA file says what \
                 each barcode is for, since its data means nothing read aloud: add alt, such as alt=\"QR code to pay \
                 this invoice\", or alt=\"\" when it is decoration")));
+        }
+        NodeKind::Chart if node.alt().is_none() => {
+            return Err(refusal(part, "a chart has no alt, and a PDF/UA file says what each chart shows, since its \
+                bars mean nothing read aloud: add alt, such as alt=\"Revenue per month, highest in March\", or \
+                alt=\"\" when it is decoration"));
         }
         NodeKind::Field => {
             let name = node.field_name.as_deref().map(|n| format!(" '{n}'")).unwrap_or_default();

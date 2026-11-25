@@ -70,6 +70,7 @@ const INVISIBLE: &[(&str, &str)] = &[];
 /// Attributes this test cannot exercise: `element@attribute`, and why.
 const UNTESTED: &[(&str, &str)] = &[
     ("lpdf@version", "selects the format; the parser accepts only 1, so there is no second value to render"),
+    ("chart@type", "selects the kind of chart; the schema takes only bar, so there is no second value to render"),
     (
         "font@src",
         "read by the SDKs, which load the file and hand it to the engine under the font's name or ref; the engine never sees it",
@@ -166,6 +167,13 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
         ("list@prefix", &["("]),
         ("list@suffix", &[")"]),
         ("section@page-prefix", &["A-"]),
+        ("chart@prefix", &["$"]),
+        ("chart@suffix", &["%"]),
+        // The default is a comma; a dot is the default decimal mark, which the engine refuses beside it.
+        ("chart@thousands-mark", &[" ", ""]),
+        // The default is a dot; a comma is the default thousands mark, which the tweak changes.
+        ("chart@decimal-mark", &[","]),
+        ("chart@alt", &["Revenue per month", ""]),
     ];
     if let Some((_, values)) = by_id.iter().find(|(key, _)| *key == id) {
         return Some(values);
@@ -413,13 +421,16 @@ const FACTUR_X_INVOICE: &[u8] = br#"<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:
     <ram:GuidelineSpecifiedDocumentContextParameter><ram:ID>urn:cen.eu:en16931:2017</ram:ID>
     </ram:GuidelineSpecifiedDocumentContextParameter></rsm:ExchangedDocumentContext></rsm:CrossIndustryInvoice>"#;
 
+/// A font with digits, for what a tagged document draws numbers with: a chart's steps.
+const MONTSERRAT: &[u8] = include_bytes!("../../../test/assets/fonts/Montserrat-Regular.ttf");
+
 /// The press profile a PDF/X document renders with: the FOGRA39 printer profile of the test assets.
 const PRESS_PROFILE: &[u8] = include_bytes!("../../../test/assets/profiles/FOGRA39L_coated.icc");
 
-/// Renders, as `LpdfEngine::render_xml` does, with the images `logo` (red), `other` (blue) and `renamed`, the font `custom`,
-/// the files `terms.txt`, `renamed.txt` and `other` and the press profiles `press`, `other` and `renamed` loaded on the
-/// engine, a date for a document that asks for a standard, and an owner password and fixed entropy for a document that
-/// asks for encryption, then encrypted and linearized as the engine finishes a file.
+/// Renders, as `LpdfEngine::render_xml` does, with the images `logo` (red), `other` (blue) and `renamed`, the fonts
+/// `custom` and `montserrat`, the files `terms.txt`, `renamed.txt` and `other` and the press profiles `press`, `other`
+/// and `renamed` loaded on the engine, a date for a document that asks for a standard, and an owner password and fixed
+/// entropy for a document that asks for encryption, then encrypted and linearized as the engine finishes a file.
 /// A panic in the engine is an error like any other, so one bad value cannot hide the rest.
 fn render(xml: &str) -> Result<Vec<u8>, String> {
     catch_unwind(AssertUnwindSafe(|| {
@@ -457,6 +468,7 @@ fn render(xml: &str) -> Result<Vec<u8>, String> {
         let pages: Vec<crate::render::RenderPage> = crate::layout::layout_document(&layouts)?;
         let mut fonts = crate::pdf::FontRegistry::new();
         fonts.register("custom", crate::pdf::ATTRIBUTION_FONT.to_vec());
+        fonts.register("montserrat", MONTSERRAT.to_vec());
         let mut profiles = crate::pdfx::ProfileRegistry::new();
         profiles.load("press", PRESS_PROFILE.to_vec());
         profiles.load("other", crate::pdfx::test_profile(b"prtr", b"CMYK", "Another press"));
@@ -540,6 +552,12 @@ const ITEMS: &str = "<li><text>Alpha</text></li><li><text>Beta</text></li>";
 const LONG: &str = "The quick brown fox jumps over the lazy dog, and then it jumps back again, because a line of text \
     has to be long enough to wrap before alignment, width and justification can show: more words, and then even more words.";
 const SLOTS: [&str; 6] = ["xs", "s", "m", "l", "xl", "xxl"];
+/// The categories of a chart of two series: values with and without decimals, and a negative one.
+const CHART_CATEGORIES: &str = r#"<category label="North"><value>41200</value><value>38900.5</value></category><category label="South"><value>12000</value><value>-3500</value></category>"#;
+/// A chart of two series and its categories.
+const CHART: &str = r#"<series label="Plan"/><series label="Actual"/><category label="North"><value>41200</value><value>38900.5</value></category><category label="South"><value>12000</value><value>-3500</value></category>"#;
+/// A chart of two series with no negative value, which a stacked chart refuses.
+const CHART_STACKABLE: &str = r#"<series label="Plan"/><series label="Actual"/><category label="North"><value>41200</value><value>38900.5</value></category><category label="South"><value>12000</value><value>3500</value></category>"#;
 
 fn lpdf(head: &str, body: &str) -> String {
     format!(r#"<lpdf version="1">{head}{body}</lpdf>"#)
@@ -725,6 +743,13 @@ fn subjects() -> Vec<Subject> {
         Subject::new("barcode", |a, _| pdfua("", PDFUA_META, PDFUA, &format!("<barcode {a}/>"), ""))
             .only(&["alt"])
             .base(&[("type", "qr"), ("data", "Lpdf"), ("height", "40pt"), ("alt", "Pay")]),
+        // A chart writes digits, which the font `custom` lacks: it is set in Montserrat, embedded as `montserrat`.
+        Subject::new("chart", |a, c| {
+            pdfua(r#"<font name="montserrat" src="montserrat.ttf"/>"#, PDFUA_META, PDFUA, &format!(r#"<chart font="montserrat" {a}>{c}</chart>"#), "")
+        })
+        .only(&["alt"])
+        .base(&[("type", "bar"), ("height", "150pt"), ("alt", "Sales")])
+        .content(CHART),
         Subject::new("layer", |a, _| {
             pdfua("", PDFUA_META, PDFUA, "<text>Lpdf</text>", &format!(r#"<layer {a}><text-at x="40" y="40">Lpdf</text-at></layer>"#))
         })
@@ -862,6 +887,17 @@ fn subjects() -> Vec<Subject> {
             .only(&["r"]),
         Subject::new("barcode", |a, _| flow(&format!("<barcode {a}/><text>After</text>")))
             .base(&[("type", "qr"), ("data", "1234567890128"), ("width", "100pt")]),
+        // A chart of two series, a value of which is negative, and a text after it, so its height moves something.
+        Subject::new("chart", |a, c| flow(&format!("<chart {a}>{c}</chart><text>After</text>")))
+            .base(&[("type", "bar"), ("height", "150pt")])
+            .content(CHART),
+        Subject::new("series", |a, _| {
+            flow(&format!(r#"<chart type="bar" height="150pt"><series {a}/><series label="Actual"/>{CHART_CATEGORIES}</chart>"#))
+        }),
+        // A chart of one series, where a category's color is its bar's.
+        Subject::new("category", |a, _| {
+            flow(&format!(r#"<chart type="bar" height="150pt"><category {a}><value>41200</value></category><category label="South"><value>12000</value></category></chart>"#))
+        }),
         Subject::new("text", |a, c| flow(&format!("<text {a}>{c}</text><text>After</text>")))
             .content(LONG),
         // What a text records shows in a header that shows it, and a text with capture-ref is that header. Two texts
@@ -1091,6 +1127,12 @@ fn tweaks() -> HashMap<String, Tweak> {
     // A font is a core font or a registry key, not both.
     add("font@ref", Tweak::default().without("core"));
 
+    // Charts: a stack holds no negative value; the decimals and the decimal mark show on the values written by the
+    // bars, and the decimal mark beside a thousands mark that isn't the comma it would be.
+    add("chart@stacked", Tweak::default().content(CHART_STACKABLE));
+    add("chart@decimals", Tweak::default().set("value-labels", "true"));
+    add("chart@decimal-mark", Tweak::default().set("value-labels", "true").set("thousands-mark", " "));
+
     // Barcodes: the options of one type show on that type. A width and a height are a maximum together, so a
     // height shows on a barcode that has no width to fit inside.
     add("barcode@hrt", Tweak::default().set("type", "code128"));
@@ -1236,8 +1278,16 @@ fn pairs_with_value(base: &[(String, String)], tweak: &Tweak, attribute: &Attrib
     pairs
 }
 
+/// Values to try in place of the schema's, by `element@attribute`, for a number whose effect shows only past a point
+/// the schema's samples don't reach: a chart's axis already runs from zero to its data, so `min` shows below zero and
+/// `max` above the data.
+const TYPED_SAMPLES: &[(&str, &[&str])] = &[("chart@min", &["-50000"]), ("chart@max", &["100000"])];
+
 /// The values to try for an attribute: the schema's, else the samples for free text. `None` when there are none.
 fn values_to_try(attribute: &Attribute) -> Option<Vec<String>> {
+    if let Some((_, values)) = TYPED_SAMPLES.iter().find(|(id, _)| *id == attribute.id()) {
+        return Some(strs(values));
+    }
     if !attribute.values.is_empty() {
         Some(attribute.values.clone())
     } else {

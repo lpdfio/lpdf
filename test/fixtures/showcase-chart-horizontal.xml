@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+<document size="A4">
+<section>
+<layout margin="40pt">
+<column gap="xl">
+    <chart type="bar" direction="horizontal" height="200pt" value-labels="true" alt="Units sold per product">
+        <category label="Standing desk"><value>1840</value></category>
+        <category label="Ergonomic chair with adjustable arms and a headrest"><value>1525</value></category>
+        <category label="Monitor arm"><value>990</value></category>
+        <category label="Desk lamp"><value>620</value></category>
+        <category label="Cable tray"><value>275</value></category>
+    </chart>
+    <chart type="bar" direction="horizontal" height="220pt" suffix="%" decimals="2" value-labels="true"
+           alt="Change in instructions per fixture since the last release">
+        <category label="xs" color="#737373"><value>0.12</value></category>
+        <category label="s" color="#737373"><value>0.4</value></category>
+        <category label="m" color="#c0392b"><value>4.1</value></category>
+        <category label="l" color="#737373"><value>1.05</value></category>
+        <category label="markdown" color="#737373"><value>-0.8</value></category>
+        <category label="svg" color="#737373"><value>-2.3</value></category>
+    </chart>
+    <chart type="bar" direction="horizontal" height="160pt" legend="bottom" max="100" suffix="%">
+        <series label="2025"/>
+        <series label="2026"/>
+        <category label="Satisfaction"><value>72</value><value>81.5</value></category>
+        <category label="Response time within a day"><value>55</value><value>64</value></category>
+        <category label="Resolved"><value>90</value><value>93</value></category>
+    </chart>
+</column>
+</layout>
+</section>
+</document>
+</lpdf>

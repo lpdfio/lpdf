@@ -802,6 +802,43 @@ const BARCODE: Attributes = &[
     ("ocg", Kind::Constants(&["Ocg"])),
 ];
 
+const CHART: Attributes = &[
+    ("type", Kind::Constants(&["ChartType"])),
+    ("direction", Kind::Constants(&["ChartDirection"])),
+    ("stacked", Kind::Boolean),
+    ("width", Kind::Text),
+    ("height", Kind::Text),
+    ("prefix", Kind::Text),
+    ("suffix", Kind::Text),
+    ("decimals", Kind::Integer { min: Some(0), max: Some(6) }),
+    ("min", Kind::Decimal { min: Bound::Open, max: Bound::Open }),
+    ("max", Kind::Decimal { min: Bound::Open, max: Bound::Open }),
+    ("thousands-mark", Kind::Text),
+    ("decimal-mark", Kind::Text),
+    ("gap", Kind::Text),
+    ("bar-gap", Kind::Text),
+    ("category-gap", Kind::Text),
+    ("legend", Kind::Constants(&["ChartLegend"])),
+    ("value-labels", Kind::Boolean),
+    ("font", Kind::Text),
+    ("font-size", Kind::Text),
+    ("color", Kind::Text),
+    ("alt", Kind::Text),
+];
+
+const CHART_SERIES: Attributes = &[
+    ("label", Kind::Text),
+    ("color", Kind::Text),
+];
+
+const CHART_CATEGORY: Attributes = &[
+    ("label", Kind::Text),
+    ("color", Kind::Text),
+];
+
+const CATEGORY_VALUE: Attributes = &[
+];
+
 const SHAPE: Attributes = &[
     ("type", Kind::Constants(&["ShapeType"])),
     ("width", Kind::Text),
@@ -1139,6 +1176,19 @@ pub(crate) const CONSTANTS: &[Constant] = &[
         Member { value: "radio", pascal: "Radio", snake: "RADIO" },
         Member { value: "button", pascal: "Button", snake: "BUTTON" },
     ] },
+    Constant { name: "ChartType", area: "layout", members: &[
+        Member { value: "bar", pascal: "Bar", snake: "BAR" },
+    ] },
+    Constant { name: "ChartDirection", area: "layout", members: &[
+        Member { value: "vertical", pascal: "Vertical", snake: "VERTICAL" },
+        Member { value: "horizontal", pascal: "Horizontal", snake: "HORIZONTAL" },
+    ] },
+    Constant { name: "ChartLegend", area: "layout", members: &[
+        Member { value: "bottom", pascal: "Bottom", snake: "BOTTOM" },
+        Member { value: "top", pascal: "Top", snake: "TOP" },
+        Member { value: "right", pascal: "Right", snake: "RIGHT" },
+        Member { value: "none", pascal: "None", snake: "NONE" },
+    ] },
     Constant { name: "BuiltinFont", area: "kit", members: &[
         Member { value: "Courier", pascal: "Courier", snake: "COURIER" },
         Member { value: "Courier-Bold", pascal: "CourierBold", snake: "COURIER_BOLD" },
@@ -1195,6 +1245,9 @@ pub(crate) fn attributes_of(parent: &str, name: &str) -> Option<Attributes> {
         ("markdown-styles", "th") => Some(MARKDOWN_STYLES_TH),
         ("markdown-styles", "td") => Some(MARKDOWN_STYLES_TD),
         ("markdown", "markdown-content") => Some(MARKDOWN_MARKDOWN_CONTENT),
+        ("chart", "series") => Some(CHART_SERIES),
+        ("chart", "category") => Some(CHART_CATEGORY),
+        ("category", "value") => Some(CATEGORY_VALUE),
         ("layer", "rect") => Some(RECT),
         ("layer", "circle") => Some(CIRCLE),
         ("layer", "ellipse") => Some(ELLIPSE),
@@ -1249,6 +1302,7 @@ pub(crate) fn attributes_of(parent: &str, name: &str) -> Option<Attributes> {
         (_, "fn") => Some(FN),
         (_, "img") => Some(IMG),
         (_, "barcode") => Some(BARCODE),
+        (_, "chart") => Some(CHART),
         (_, "shape") => Some(SHAPE),
         (_, "text") => Some(TEXT),
         (_, "td") => Some(TD),

@@ -187,11 +187,57 @@ const MARKDOWN_RULES: [&str; 19] = [
 ];
 
 /// The element a node is. A rule of a `<markdown-styles>` shares its name with an element of the layout (`code`,
-/// `li`, `td`, `table`), so it is told apart as `markdown-` and its name: `markdown-code`.
+/// `li`, `td`, `table`), so it is told apart as `markdown-` and its name: `markdown-code`. A part of a `<chart>` is
+/// `chart-` and its name, `chart-series`, as its attribute class is `ChartSeriesAttr`.
 fn family_tag(node: &Node) -> String {
     let tag = node.tag_name().name();
-    let in_styles = node.parent_element().is_some_and(|parent| parent.has_tag_name("markdown-styles"));
-    if in_styles && MARKDOWN_RULES.contains(&tag) { format!("markdown-{tag}") } else { tag.to_string() }
+    let parent = node.parent_element();
+    let in_styles = parent.is_some_and(|parent| parent.has_tag_name("markdown-styles"));
+    let in_chart = match tag {
+        "series" | "category" => parent.is_some_and(|parent| parent.has_tag_name("chart")),
+        "value" => parent.is_some_and(|parent| parent.has_tag_name("category")),
+        _ => false,
+    };
+    if in_styles && MARKDOWN_RULES.contains(&tag) {
+        format!("markdown-{tag}")
+    } else if in_chart {
+        format!("chart-{tag}")
+    } else {
+        tag.to_string()
+    }
+}
+
+/// The name a part of a `<chart>` has in `LChart`: `series`, `category` or `value`. `None` for `chart` itself, which
+/// `L` holds, and for every other element.
+fn chart_member(family: &str) -> Option<&str> {
+    family.strip_prefix("chart-")
+}
+
+/// A chart's value as code: a number where the SDK writes it back as the same text, `41200` or `-3.5`, and else the
+/// text as a string, `'0.250'`, so its decimals, which its label keeps, stay as written. `None` for no value.
+fn chart_value_literal(node: &Node, target: Target) -> Option<String> {
+    let text: String = node.children().filter(|n| n.is_text()).filter_map(|n| n.text()).collect();
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let number = text.parse::<f64>().ok().filter(|n| n.is_finite() && n.to_string() == text && text != "-0");
+    Some(match number {
+        // A whole number past what an int holds is a long in Java, which says so.
+        Some(n) if target == Target::Java && n.fract() == 0.0 && !(f64::from(i32::MIN)..=f64::from(i32::MAX)).contains(&n) => {
+            format!("{text}L")
+        }
+        Some(_) => text.to_string(),
+        None => piece_literal(target, text),
+    })
+}
+
+/// The call of a chart's `<value>`: its value as a list of one, or no list for no value.
+fn chart_value_call(node: &Node, target: Target, method: &str, attrs: &str) -> String {
+    match chart_value_literal(node, target) {
+        Some(literal) => format!("{method}({attrs}, {})", target.list(&[literal])),
+        None => format!("{method}({attrs})"),
+    }
 }
 
 /// The name a part of a `<markdown>` has in `LMarkdown`: `styles`, `content` or a rule such as `h1`. `None` for
@@ -230,6 +276,7 @@ fn js_method(tag: &str) -> &'static str {
         "tr"       => "tr",
         "td"       => "td",
         "barcode"  => "barcode",
+        "chart"    => "chart",
         "field"    => "field",
         "region"   => "region",
         "span"     => "span",
@@ -250,6 +297,9 @@ fn js_method(tag: &str) -> &'static str {
 /// What a JS or Python call for a node is called: `L.text`, and for the parts of a markdown `L.markdown` and
 /// `LMarkdown.styles`.
 fn js_callee(tag: &str, family: &str) -> String {
+    if let Some(member) = chart_member(family) {
+        return format!("LChart.{member}");
+    }
     match (tag, markdown_member(family)) {
         ("markdown", _)   => "L.markdown".to_string(),
         (_, Some(member)) => format!("LMarkdown.{member}"),
@@ -259,6 +309,9 @@ fn js_callee(tag: &str, family: &str) -> String {
 
 /// What a C# call for a node is called.
 fn dotnet_callee(tag: &str, family: &str) -> String {
+    if let Some(member) = chart_member(family) {
+        return format!("LChart.{}", to_pascal_case(member));
+    }
     match (tag, markdown_member(family)) {
         ("markdown", _)   => "L.Markdown".to_string(),
         (_, Some(member)) => format!("LMarkdown.{}", to_pascal_case(member)),
@@ -268,6 +321,9 @@ fn dotnet_callee(tag: &str, family: &str) -> String {
 
 /// What a PHP call for a node is called.
 fn php_callee(tag: &str, family: &str) -> String {
+    if let Some(member) = chart_member(family) {
+        return format!("LChart::{member}");
+    }
     match (tag, markdown_member(family)) {
         ("markdown", _)   => "L::markdown".to_string(),
         (_, Some(member)) => format!("LMarkdown::{member}"),
@@ -277,6 +333,9 @@ fn php_callee(tag: &str, family: &str) -> String {
 
 /// What a Python call for a node is called.
 fn python_callee(tag: &str, family: &str) -> String {
+    if let Some(member) = chart_member(family) {
+        return format!("LChart.{member}");
+    }
     match (tag, markdown_member(family)) {
         ("markdown", _)   => "L.markdown".to_string(),
         // `del` is a keyword in Python, so the SDK names the rule of struck-through text `del_`.
@@ -286,8 +345,11 @@ fn python_callee(tag: &str, family: &str) -> String {
     }
 }
 
-/// What a Java call for a node is called: the JS names, on `L` and `LMarkdown`.
+/// What a Java call for a node is called: the JS names, on `L`, `LMarkdown` and `LChart`.
 fn java_callee(tag: &str, family: &str) -> String {
+    if let Some(member) = chart_member(family) {
+        return format!("LChart.{member}");
+    }
     match (tag, markdown_member(family)) {
         ("markdown", _)   => "L.markdown".to_string(),
         (_, Some(member)) => format!("LMarkdown.{member}"),
@@ -301,7 +363,7 @@ fn java_takes_no_children(family: &str) -> bool {
     matches!(
         family,
         "divider" | "img" | "shape" | "barcode" | "field" | "bookmark" | "rect" | "line" | "ellipse" | "circle" | "path"
-            | "img-at" | "barcode-at"
+            | "img-at" | "barcode-at" | "chart-series"
     ) || markdown_member(family).is_some_and(|member| member != "styles" && member != "content")
 }
 
@@ -331,6 +393,7 @@ fn dotnet_method(tag: &str) -> &'static str {
         "tr"       => "Tr",
         "td"       => "Td",
         "barcode"  => "Barcode",
+        "chart"    => "Chart",
         "field"    => "Field",
         "region"   => "Region",
         "span"     => "Span",
@@ -1085,10 +1148,11 @@ impl JsEmitter {
         let mut out = String::new();
 
         let markdown = if doc_expr.as_deref().is_some_and(|code| code.contains("LMarkdown.")) { ", LMarkdown" } else { "" };
+        let chart = if doc_expr.as_deref().is_some_and(|code| code.contains("LChart.")) { ", LChart" } else { "" };
         let mut constants: Vec<&str> = constants_written().iter().map(|c| c.name).collect();
         constants.sort_unstable();
         let constants: String = constants.iter().map(|name| format!(", {name}")).collect();
-        out.push_str(&format!("import {{ L{markdown}, NoAttr{constants} }} from '@lpdfio/lpdf'\n"));
+        out.push_str(&format!("import {{ L{chart}{markdown}, NoAttr{constants} }} from '@lpdfio/lpdf'\n"));
         out.push('\n');
 
         out.push_str("const engine = L.engine()\n");
@@ -1134,6 +1198,9 @@ impl JsEmitter {
         // Build attrs
         let data_value = node.attribute("data-value");
         let attrs = js_attrs(node, None);
+        if family == "chart-value" {
+            return format!("{binding_comments}{ind0}{}", chart_value_call(node, Target::Js, &method, &attrs));
+        }
 
         // Special: <text> with data-value override
         let text_content_override: Option<String> = data_value.map(|p| format!("{{{p}}}"));
@@ -1367,6 +1434,9 @@ impl DotnetEmitter {
         let binding_comments = data_binding_comments(node, &ind0);
         let data_value = node.attribute("data-value");
         let attrs = dotnet_attrs(node, None);
+        if family == "chart-value" {
+            return format!("{binding_comments}{ind0}{}", chart_value_call(node, Target::Dotnet, &method, &attrs));
+        }
         let text_content_override: Option<String> = data_value.map(|p| format!("{{{p}}}"));
 
         let children = self.collect_children(node, tag, level, text_content_override.as_deref());
@@ -1526,6 +1596,9 @@ impl PhpEmitter {
         out.push_str("<?php\n\n");
         out.push_str("require_once 'vendor/autoload.php';\n\n");
         out.push_str("use Lpdf\\L;\n");
+        if body.contains("LChart::") {
+            out.push_str("use Lpdf\\LChart;\n");
+        }
         if body.contains("LMarkdown::") {
             out.push_str("use Lpdf\\LMarkdown;\n");
         }
@@ -1578,6 +1651,9 @@ impl PhpEmitter {
         let binding_comments = data_binding_comments(node, &ind0);
         let data_value = node.attribute("data-value");
         let attrs = php_attrs(node, &family, None);
+        if family == "chart-value" {
+            return format!("{binding_comments}{ind0}{}", chart_value_call(node, Target::Php, &method, &attrs));
+        }
         let text_content_override: Option<String> = data_value.map(|p| format!("{{{p}}}"));
 
         let children = self.collect_children(node, tag, level, text_content_override.as_deref());
@@ -1738,6 +1814,9 @@ impl PythonEmitter {
         if body.contains("LMarkdown.") {
             imports.insert(1, "LMarkdown".to_string());
         }
+        if body.contains("LChart.") {
+            imports.insert(1, "LChart".to_string());
+        }
         let mut classes = classes_used(&body);
         classes.extend(constants_written().iter().map(|c| c.name.to_string()));
         classes.sort();
@@ -1782,6 +1861,9 @@ impl PythonEmitter {
         let binding_comments = data_binding_comments_hash(node, &ind0);
         let data_value = node.attribute("data-value");
         let attrs = python_attrs(node, &family, None);
+        if family == "chart-value" {
+            return format!("{binding_comments}{ind0}{}", chart_value_call(node, Target::Python, &method, &attrs));
+        }
         let text_content_override: Option<String> = data_value.map(|p| format!("{{{p}}}"));
 
         let children = self.collect_children(node, tag, level, text_content_override.as_deref());
@@ -1940,6 +2022,7 @@ fn python_method(tag: &str) -> &'static str {
         "tr"       => "tr",
         "td"       => "td",
         "barcode"  => "barcode",
+        "chart"    => "chart",
         "field"    => "field",
         "region"   => "region",
         "span"     => "span",
@@ -2155,6 +2238,9 @@ impl JavaEmitter {
         let binding_comments = data_binding_comments(node, &ind0);
         let data_value = node.attribute("data-value");
         let attrs = java_attrs(node, &family);
+        if family == "chart-value" {
+            return format!("{binding_comments}{ind0}{}", chart_value_call(node, Target::Java, &method, &attrs));
+        }
         let text_content_override: Option<String> = data_value.map(|p| format!("{{{p}}}"));
 
         let children = if is_text_tag(tag) || is_inline_tag(tag) {
@@ -2414,6 +2500,9 @@ mod tests {
         ("lines", "`rulings_expression`"),
         ("markdown", "`js_callee` and the callees of the other targets: `L.markdown`"),
         ("markdown-content", "`markdown_member`: `LMarkdown.content`"),
+        ("series", "`chart_member`: `LChart.series`"),
+        ("category", "`chart_member`: `LChart.category`"),
+        ("value", "`chart_member` and `chart_value_call`: `LChart.value`"),
     ];
 
     /// Every element the schema declares is a node with an entry in the method tables, a rule of a markdown, or

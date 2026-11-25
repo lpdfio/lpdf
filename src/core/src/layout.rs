@@ -133,8 +133,8 @@ pub(crate) fn tag_of(node: &Node) -> Option<TagKind> {
             NodeKind::TableHead => TagKind::TableHead,
             NodeKind::TableRow  => TagKind::TableRow,
             NodeKind::TableCell => cell(false),
-            // An image or a barcode with words in its alt shows something; with alt="" it is decoration.
-            NodeKind::Img | NodeKind::Barcode => match node.alt() {
+            // An image, a barcode or a chart with words in its alt shows something; with alt="" it is decoration.
+            NodeKind::Img | NodeKind::Barcode | NodeKind::Chart => match node.alt() {
                 Some(alt) if !alt.trim().is_empty() => TagKind::Figure(alt.to_string()),
                 _ => TagKind::Artifact,
             },
@@ -3437,6 +3437,7 @@ fn layout_node(
         NodeKind::Shape => layout_shape(node, node_x, y, node_w),
         NodeKind::Barcode => layout_barcode(node, node_x, y, node_w),
         NodeKind::Field => layout_field(node, node_x, y, node_w),
+        NodeKind::Chart => layout_chart(node, node_x, y, node_w),
         _ => layout_container(node, node_x, y, node_w, avail_h),
     };
     // In a tagged section, a node says what it is: a node with no tag id is one the layout made, as a note of a
@@ -4174,6 +4175,26 @@ fn layout_shape(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) 
     (RenderNode::Box(shape_box), h)
 }
 
+// ── Chart ─────────────────────────────────────────────────────────────────────
+
+/// The width a chart that fills its slot is taken to have where a row or a table measures it without one.
+const CHART_NATURAL_WIDTH: f32 = 200.0;
+
+/// A `<chart>`: a box of its height and the width it is given, which `chart::draw` fills. A chart that can't be drawn,
+/// one with data attributes rendered without data whose parts don't add up, is refused, and keeps its box.
+fn layout_chart(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
+    let height = node.img_height_constraint.unwrap_or(0.0);
+    let drawn = crate::chart::spec_of(node).map(|spec| (spec, crate::chart::data_of(node)));
+    match drawn {
+        Some((spec, Ok(data))) => crate::chart::draw(node, spec, &data, x, y, avail_w),
+        Some((_, Err(error))) => {
+            refuse(error);
+            (tagged_box(None, x, y, avail_w, height, Vec::new()), height)
+        }
+        None => (tagged_box(None, x, y, avail_w, height, Vec::new()), height),
+    }
+}
+
 // ── Form field ────────────────────────────────────────────────────────────────
 
 fn layout_field(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) {
@@ -4760,6 +4781,7 @@ fn measure_natural_w(node: &Node) -> f32 {
         NodeKind::Shape => node.width_constraint.unwrap_or(0.0),
         NodeKind::Barcode => own_width(node).unwrap_or(80.0),
         NodeKind::Field => node.width_constraint.unwrap_or(100.0),
+        NodeKind::Chart => node.width_constraint.unwrap_or(CHART_NATURAL_WIDTH),
         _ => {
             let [_pt, pr, _pb, pl] = node.padding;
             let inner = match node.kind {
@@ -4823,8 +4845,10 @@ const MAX_WORD_EMS: f32 = 12.0;
 fn measure_min_w(node: &Node) -> f32 {
     match node.kind {
         NodeKind::Text => text_min_w(node),
-        NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field if node.width_fill => 0.0,
-        NodeKind::Divider | NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field => measure_natural_w(node),
+        NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field | NodeKind::Chart if node.width_fill => 0.0,
+        NodeKind::Divider | NodeKind::Img | NodeKind::Shape | NodeKind::Barcode | NodeKind::Field | NodeKind::Chart => {
+            measure_natural_w(node)
+        }
         NodeKind::Table => measure_table_w(node, true),
         _ => {
             let [_pt, pr, _pb, pl] = node.padding;
@@ -4915,7 +4939,7 @@ struct TextFit {
 }
 
 /// The ending of a line cut short by its width or by `max-lines`.
-const ELLIPSIS: &str = "...";
+pub(crate) const ELLIPSIS: &str = "...";
 
 /// How far a gap of a justified line may be widened, in spaces. A line that would need more stays
 /// left-aligned: two long words are not spread across the width, since there is no hyphenation to help.
@@ -5695,6 +5719,10 @@ fn shift_y(node: RenderNode, dy: f32) -> RenderNode {
             p.d = shift_path(&p.d, 0.0, dy);
             RenderNode::CanvasPath(p)
         }
+        RenderNode::Bars(mut b) => {
+            b.rects.iter_mut().for_each(|rect| rect[1] += dy);
+            RenderNode::Bars(b)
+        }
         // The other canvas nodes use absolute canvas coordinates; y-shifting is a no-op.
         other => other,
     }
@@ -5748,6 +5776,10 @@ fn shift_x(node: RenderNode, dx: f32) -> RenderNode {
         RenderNode::CanvasPath(mut p) => {
             p.d = shift_path(&p.d, dx, 0.0);
             RenderNode::CanvasPath(p)
+        }
+        RenderNode::Bars(mut b) => {
+            b.rects.iter_mut().for_each(|rect| rect[0] += dx);
+            RenderNode::Bars(b)
         }
         // The other canvas nodes use absolute canvas coordinates; x-shifting is a no-op.
         other => other,

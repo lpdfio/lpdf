@@ -1,0 +1,24 @@
+{
+    "builds": [
+        { "name": "v0.37.0", "color": "#adb5bd" },
+        { "name": "main", "color": "#868e96" },
+        { "name": "branch", "color": "#1763cf" }
+    ],
+    "fixtures": [
+        { "name": "xs", "change": 0.12, "color": "#737373",
+          "counts": [{ "instructions": 3781398 }, { "instructions": 3790112 }, { "instructions": 3801000 }] },
+        { "name": "s", "change": -0.45, "color": "#737373",
+          "counts": [{ "instructions": 9120455 }, { "instructions": 9101230 }, { "instructions": 9081500 }] },
+        { "name": "m", "change": 4.1, "color": "#c0392b",
+          "counts": [{ "instructions": 21450210 }, { "instructions": 21980400 }, { "instructions": 22330120 }] },
+        { "name": "svg", "change": -2.3, "color": "#737373",
+          "counts": [{ "instructions": 15530120 }, { "instructions": null }, { "instructions": 15170330 }] }
+    ],
+    "total": 1.05,
+    "final": true,
+    "months": [
+        { "name": "Jan", "revenue": 41200 },
+        { "name": "Feb", "revenue": 38900 },
+        { "name": "Mar", "revenue": 44100 }
+    ]
+}
