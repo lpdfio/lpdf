@@ -1,6 +1,7 @@
-// The table of bench.yml: the instructions, estimated cycles and allocations that benches/counts measured
+// The tables of bench.yml: the instructions, estimated cycles and allocations that benches/counts measured
 // in two or three builds, the last release first, and the change from each build to the next, with the
-// changes over a threshold marked. Report only: it never fails on what the numbers show.
+// changes over a threshold marked. The marked rows come first, then a table for each measure, with the
+// fixtures as rows and the stages as columns. Report only: it never fails on what the numbers show.
 //
 // Each build is a folder bench.yml writes (scripts/bench-counts.sh):
 //   build.json          {"name": "v0.29.0", "commit": "<sha>"}
@@ -139,6 +140,25 @@ export function compare(builds, marks = DEFAULT_MARKS) {
     return rows;
 }
 
+/**
+ * The rows of `compare` as a table for each measure, in the order of `MEASURES`: the fixtures as rows, in the
+ * order of `compare`, and as columns the stages any fixture has, in pipeline order. A cell is the row of
+ * that fixture, stage and measure, or undefined where the fixture has no such stage.
+ */
+export function measureTables(rows) {
+    const fixtures = [...new Set(rows.map(r => r.fixture))];
+    const stages = [...new Set(rows.map(r => r.stage))].sort(byOrder(STAGES.map(s => s.id)));
+    const byKey = new Map(rows.map(r => [`${r.measure} ${r.fixture} ${r.stage}`, r]));
+    return MEASURES.map(measure => ({
+        measure: measure.id,
+        stages,
+        fixtures: fixtures.map(fixture => ({
+            fixture,
+            cells: stages.map(stage => byKey.get(`${measure.id} ${fixture} ${stage}`)),
+        })),
+    }));
+}
+
 const stageName = id => STAGES.find(s => s.id === id)?.name ?? id;
 const measureName = id => MEASURES.find(m => m.id === id)?.name ?? id;
 const count = n => n === undefined ? '—' : n.toLocaleString('en-US');
@@ -170,6 +190,41 @@ function table(rows, builds) {
     return lines.join('\n');
 }
 
+const capitalized = text => text.charAt(0).toUpperCase() + text.slice(1);
+
+/**
+ * A cell of a measure's table: the last build's number, and under it, when any change from build to build
+ * isn't zero, every change in order, so with three builds each keeps its place.
+ */
+function measureCell(row) {
+    const value = row?.values[row.values.length - 1];
+    if (value === undefined) return '—';
+    const moved = row.changes.some(c => c.percent !== undefined && c.percent !== 0);
+    return moved ? `${count(value)}<br>${row.changes.map(percentCell).join(' · ')}` : count(value);
+}
+
+function measureTable({ stages, fixtures }) {
+    const headers = ['Fixture', ...stages.map(stageName)];
+    const lines = [
+        `| ${headers.join(' | ')} |`,
+        `|${headers.map((_, i) => i < 1 ? '---' : '---:').join('|')}|`,
+    ];
+    for (const { fixture, cells } of fixtures) {
+        lines.push(`| ${[fixture, ...cells.map(measureCell)].join(' | ')} |`);
+    }
+    return lines.join('\n');
+}
+
+/** What a cell of the measure tables holds, and with three builds, which change comes first. */
+function cellNote(builds) {
+    const names = builds.map(b => `\`${b.name}\``);
+    const last = names[names.length - 1];
+    const steps = names.slice(1).map((name, i) => `from ${names[i]} to ${name}`);
+    const changes = steps.length === 1 ? `the change ${steps[0]}` : `the changes ${steps[0]} first, then ${steps[1]}`;
+    return `A table for each measure, a row for each fixture and a column for each stage. A cell is the number of ${last}, ` +
+        `and under it, where the number moved, ${changes}. A cell reads — where the fixture has no such stage.`;
+}
+
 /** The stages a build lacks that another has, as `{ build, stages }`, so the table can say why a column is empty. */
 export function missingStages(builds) {
     const all = new Set(builds.flatMap(b => Object.values(b.counts).flatMap(Object.keys)));
@@ -195,7 +250,7 @@ export function missingFixtures(builds) {
         .filter(m => m.fixtures.length > 0);
 }
 
-/** The report in Markdown: what was compared, the marked rows, and the whole table folded. */
+/** The report in Markdown: what was compared, the marked rows, and a folded table for each measure. */
 export function markdown(builds, rows, marks = DEFAULT_MARKS, about = {}) {
     const marked = rows.filter(r => r.changes.some(c => c.marked));
     const built = builds.map(b => `\`${b.name}\` (${b.commit ? b.commit.slice(0, 7) : 'no commit'})`).join(', ');
@@ -221,7 +276,11 @@ export function markdown(builds, rows, marks = DEFAULT_MARKS, about = {}) {
     } else {
         out.push(`**${marked.length} over the thresholds:**`, '', table(marked, builds), '');
     }
-    out.push('<details><summary>Every fixture, stage and measure</summary>', '', table(rows, builds), '', '</details>', '');
+    out.push(cellNote(builds), '');
+    for (const grid of measureTables(rows)) {
+        const summary = capitalized(measureName(grid.measure));
+        out.push(`<details><summary>${summary}</summary>`, '', measureTable(grid), '', '</details>', '');
+    }
     return out.join('\n');
 }
 

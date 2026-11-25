@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { compare, history, markdown, missingFixtures, missingStages, readCounts } from './bench-counts-report.mjs';
+import { compare, history, markdown, measureTables, missingFixtures, missingStages, readCounts } from './bench-counts-report.mjs';
 
 /**
  * The two lines of one benchmark, with only what the report reads: gungraun's JSON line for the work, and the
@@ -28,6 +28,13 @@ const readBenchmarks = benchmarks => readCounts(
 );
 
 const build = (name, benchmarks) => ({ name, commit: `${name}0000000`, counts: readBenchmarks(benchmarks) });
+
+/** The lines of one measure's table in a report, the header first, found by the summary of its fold. */
+function measureTable(report, summary) {
+    const start = report.indexOf(`<details><summary>${summary}</summary>`);
+    assert.notEqual(start, -1, `no table of ${summary}`);
+    return report.slice(start, report.indexOf('</details>', start)).split('\n').filter(line => line.startsWith('|'));
+}
 
 test('reads the five measures of each fixture and stage from the two files', () => {
     const counts = readBenchmarks([
@@ -119,7 +126,7 @@ test('shows a stage the release lacks with no change, and says why', () => {
 
     const report = markdown([release, branch], rows);
     assert.match(report, /`v0\.29\.0` has no layout benchmark/);
-    assert.match(report, /\| xs \| layout \| instructions \| — \| 5,000 \| — \|/);
+    assert.deepEqual(measureTable(report, 'Instructions'), ['| Fixture | parse | layout |', '|---|---:|---:|', '| xs | 1,000 | 5,000 |']);
 });
 
 test('puts the fixtures of one feature after the sizes, and data binding after parse', () => {
@@ -157,7 +164,7 @@ test('shows a fixture the release lacks with no change, and says it has no basel
 
     const report = markdown([release, branch], rows);
     assert.match(report, /`v0\.29\.0` has no `markdown`, `code` or `fonts` fixture, so those rows have no baseline: they compare from the first release that has them\./);
-    assert.match(report, /\| markdown \| parse \| instructions \| — \| 7,000 \| — \|/);
+    assert.ok(measureTable(report, 'Instructions').includes('| markdown | 7,000 |'));
 });
 
 test('lists the marked rows above the whole table', () => {
@@ -174,7 +181,73 @@ test('says when nothing is over the thresholds', () => {
     const lines = [benchmark('parse', 'xs', { ir: 1000 })];
     const report = markdown([build('v0.29.0', lines), build('branch', lines)], compare([build('v0.29.0', lines), build('branch', lines)]));
     assert.match(report, /\*\*Nothing over the thresholds\.\*\*/);
-    assert.match(report, /\| xs \| parse \| instructions \| 1,000 \| 1,000 \| ±0\.00% \|/);
+    assert.deepEqual(measureTable(report, 'Instructions').slice(2), ['| xs | 1,000 |']);
+    assert.doesNotMatch(report, /±0\.00%/);
+});
+
+test('groups the rows into a table for each measure, the fixtures as rows and the stages as columns', () => {
+    const lines = [
+        benchmark('end_to_end', 'svg', { ir: 1 }), benchmark('load', 'svg', { ir: 1 }),
+        benchmark('data', 'data', { ir: 1 }), benchmark('parse', 'data', { ir: 1 }),
+        benchmark('end_to_end', 'xs', { ir: 1 }), benchmark('parse', 'xs', { ir: 1 }),
+    ];
+    const tables = measureTables(compare([build('a', lines), build('b', lines)]));
+    assert.deepEqual(tables.map(t => t.measure), ['instructions', 'estimated_cycles', 'allocations', 'bytes_allocated', 'peak_bytes']);
+    for (const t of tables) {
+        assert.deepEqual(t.stages, ['load', 'parse', 'data', 'end_to_end']);
+        assert.deepEqual(t.fixtures.map(f => f.fixture), ['xs', 'data', 'svg']);
+    }
+    const svg = tables[0].fixtures[2].cells;
+    assert.deepEqual(svg.map(cell => cell?.stage), ['load', undefined, undefined, 'end_to_end']);
+    assert.equal(svg[0].measure, 'instructions');
+});
+
+test('writes the five tables folded, in the order of the measures, with — for a stage a fixture lacks', () => {
+    const lines = [benchmark('parse', 'xs', { ir: 1000 }), benchmark('load', 'svg', { ir: 2000, blocks: 7 })];
+    const report = markdown([build('v0.29.0', lines), build('branch', lines)], compare([build('v0.29.0', lines), build('branch', lines)]));
+    const summaries = [...report.matchAll(/<details><summary>(.*)<\/summary>/g)].map(m => m[1]);
+    assert.deepEqual(summaries, ['Instructions', 'Estimated cycles', 'Allocations', 'Bytes allocated', 'Peak memory']);
+    assert.deepEqual(measureTable(report, 'Instructions'), [
+        '| Fixture | image load | parse |', '|---|---:|---:|', '| xs | — | 1,000 |', '| svg | 2,000 | — |',
+    ]);
+    assert.deepEqual(measureTable(report, 'Allocations').slice(2), ['| xs | — | 100 |', '| svg | 7 | — |']);
+});
+
+test('with two builds, puts the change under the number where it moved, and the number alone where not', () => {
+    const release = build('v0.29.0', [benchmark('parse', 'm', { ir: 1000, blocks: 100 }), benchmark('layout', 'm', { ir: 5000 })]);
+    const branch = build('branch', [benchmark('parse', 'm', { ir: 1020, blocks: 95 }), benchmark('layout', 'm', { ir: 5000 })]);
+    const report = markdown([release, branch], compare([release, branch]));
+    assert.match(report, /A cell is the number of `branch`, and under it, where the number moved, the change from `v0\.29\.0` to `branch`\./);
+    assert.deepEqual(measureTable(report, 'Instructions').slice(2), ['| m | 1,020<br>+2.00% | 5,000 |']);
+    assert.deepEqual(measureTable(report, 'Allocations').slice(2), ['| m | 95<br>−5.00% | 100 |']);
+});
+
+test('marks a change past its threshold in its cell, bold with ⚠', () => {
+    const release = build('v0.29.0', [benchmark('end_to_end', 'l', { ir: 1_000_000 })]);
+    const branch = build('branch', [benchmark('end_to_end', 'l', { ir: 1_050_000 })]);
+    const report = markdown([release, branch], compare([release, branch]));
+    assert.deepEqual(measureTable(report, 'Instructions').slice(2), ['| l | 1,050,000<br>**+5.00%** ⚠ |']);
+});
+
+test('with three builds, puts both changes in their order where either moved, and says which comes first', () => {
+    const builds = [
+        build('v0.29.0', [benchmark('parse', 'm', { ir: 1000 }), benchmark('layout', 'm', { ir: 4000 })]),
+        build('main', [benchmark('parse', 'm', { ir: 1200 }), benchmark('layout', 'm', { ir: 4000 })]),
+        build('branch', [benchmark('parse', 'm', { ir: 1200 }), benchmark('layout', 'm', { ir: 4000 })]),
+    ];
+    const report = markdown(builds, compare(builds));
+    assert.match(report, /where the number moved, the changes from `v0\.29\.0` to `main` first, then from `main` to `branch`\./);
+    assert.deepEqual(measureTable(report, 'Instructions').slice(2), ['| m | 1,200<br>**+20.00%** ⚠ · ±0.00% | 4,000 |']);
+});
+
+test('with three builds, shows no change from a build that lacks the fixture', () => {
+    const builds = [
+        build('v0.29.0', [benchmark('parse', 'm', { ir: 1000 })]),
+        build('main', [benchmark('parse', 'm', { ir: 1000 }), benchmark('parse', 'markdown', { ir: 7000 })]),
+        build('branch', [benchmark('parse', 'm', { ir: 1000 }), benchmark('parse', 'markdown', { ir: 7700 })]),
+    ];
+    const report = markdown(builds, compare(builds));
+    assert.deepEqual(measureTable(report, 'Instructions').slice(2), ['| m | 1,000 |', '| markdown | 7,700<br>— · +10.00% |']);
 });
 
 test('keeps the counts of the last build, against the build before it', () => {
