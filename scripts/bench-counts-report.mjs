@@ -14,7 +14,7 @@
 //   --mark-end-to-end <percent>   instructions or estimated cycles of a whole render (default 3)
 //   --mark-stage <percent>        instructions or estimated cycles of one stage (default 10)
 //   --mark-allocations <percent>  allocations, bytes allocated or peak memory of any stage (default 10)
-//   --markdown <file>             write the table there instead of to stdout
+//   --markdown <file>             write the report there instead of to stdout
 //   --history <file>              write the counts of the last build as JSON, with the build before it as
 //                                 `against`: what lpdf-bench keeps as counts/vX.Y.Z.json
 //   --about <key>=<value>         added to the history, such as rust=<rustc -V> (repeatable)
