@@ -1,0 +1,25 @@
+{
+    "weeks": [
+        { "week": "W1", "visits": 1210, "visitsLastYear": 1005 },
+        { "week": "W2", "visits": 1340, "visitsLastYear": 980 },
+        { "week": "W3", "visits": 1285, "visitsLastYear": null },
+        { "week": "W4", "visits": 1502 },
+        { "week": "W5", "visits": 1460, "visitsLastYear": 1150 },
+        { "week": "W6", "visits": 1620, "visitsLastYear": 1090 }
+    ],
+    "kinds": [
+        { "name": "Images", "color": "#1763cf" },
+        { "name": "Documents", "color": "#0c8599" }
+    ],
+    "months": [
+        { "name": "Jan", "sizes": [{ "gb": 120 }, { "gb": 40 }] },
+        { "name": "Feb", "sizes": [{ "gb": 132 }, { "gb": null }] },
+        { "name": "Mar", "sizes": [{ "gb": 141 }, { "gb": 47 }] },
+        { "name": "Apr", "sizes": [{ "gb": 150 }, { "gb": 51 }] }
+    ],
+    "products": [
+        { "name": "Desk lamp", "total": "1,284", "weeks": [{ "sales": 80 }, { "sales": 91 }, { "sales": 88 }, { "sales": 102 }, { "sales": 131 }] },
+        { "name": "Standing desk", "total": "412", "weeks": [{ "sales": 60 }, { "sales": null }, { "sales": 41 }, { "sales": 30 }, { "sales": 22 }] },
+        { "name": "Chair", "total": "958", "weeks": [{ "sales": 70 }, { "sales": 75 }, {}, { "sales": 81 }, { "sales": 88 }] }
+    ]
+}

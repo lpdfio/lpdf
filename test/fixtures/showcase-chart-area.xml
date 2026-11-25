@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+<document size="A4">
+<section>
+<layout margin="40pt">
+<column gap="xl">
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Storage per month</text>
+        <chart type="area" stacked="true" height="170pt" suffix=" GB" value-labels="true" alt="Storage per month by kind">
+            <series label="Images"/>
+            <series label="Documents"/>
+            <series label="Backups"/>
+            <category label="Jan"><value>120</value><value>40</value><value>65</value></category>
+            <category label="Feb"><value>132</value><value>44</value><value>70</value></category>
+            <category label="Mar"><value>141</value><value/><value>72</value></category>
+            <category label="Apr"><value>150</value><value>51</value><value>80</value></category>
+            <category label="May"><value>149</value><value>55</value><value>91</value></category>
+            <category label="Jun"><value>163</value><value>60</value><value>95</value></category>
+        </chart>
+    </column>
+    <row gap="l">
+        <column gap="s" paginate="no">
+            <text bold="true">Two areas, each down to zero</text>
+            <chart type="area" height="150pt" legend="bottom">
+                <series label="Signups" color="#2f9e44"/>
+                <series label="Churn" color="#c2255c"/>
+                <category label="Q1"><value>320</value><value>80</value></category>
+                <category label="Q2"><value>410</value><value>140</value></category>
+                <category label="Q3"><value>380</value><value>210</value></category>
+                <category label="Q4"><value>460</value><value>150</value></category>
+            </chart>
+        </column>
+        <column gap="s" paginate="no">
+            <text bold="true">A gap, and values below zero</text>
+            <chart type="area" height="150pt" suffix="%" stroke-width="0">
+                <category label="1"><value>2.5</value></category>
+                <category label="2"><value>1.2</value></category>
+                <category label="3"><value>-1.8</value></category>
+                <category label="4"><value/></category>
+                <category label="5"><value>-0.4</value></category>
+                <category label="6"><value>3.1</value></category>
+            </chart>
+        </column>
+    </row>
+</column>
+</layout>
+</section>
+</document>
+</lpdf>

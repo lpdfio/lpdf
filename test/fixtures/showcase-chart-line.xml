@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+<document size="A4">
+<section>
+<layout margin="40pt">
+<column gap="xl">
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Visits per week</text>
+        <chart type="line" height="170pt" alt="Visits per week, this year against last">
+            <series label="This year" color="primary"/>
+            <series label="Last year" color="text-muted"/>
+            <category label="W1"><value>1210</value><value>1005</value></category>
+            <category label="W2"><value>1340</value><value>980</value></category>
+            <category label="W3"><value>1285</value><value/></category>
+            <category label="W4"><value>1502</value><value>1100</value></category>
+            <category label="W5"><value>1460</value><value>1150</value></category>
+            <category label="W6"><value>1620</value><value>1090</value></category>
+        </chart>
+    </column>
+    <row gap="l">
+        <column gap="s" paginate="no">
+            <text bold="true">Share price, fitted to its values</text>
+            <chart type="line" height="150pt" prefix="$" decimals="2" value-labels="true" stroke-width="2.5pt">
+                <category label="Mon"><value>98.40</value></category>
+                <category label="Tue"><value>101.15</value></category>
+                <category label="Wed"><value>99.80</value></category>
+                <category label="Thu"><value>103.95</value></category>
+                <category label="Fri"><value>102.30</value></category>
+            </chart>
+        </column>
+        <column gap="s" paginate="no">
+            <text bold="true">The same, from zero</text>
+            <chart type="line" height="150pt" prefix="$" min="0" stroke-width="1pt">
+                <category label="Mon"><value>98.40</value></category>
+                <category label="Tue"><value>101.15</value></category>
+                <category label="Wed"><value>99.80</value></category>
+                <category label="Thu"><value>103.95</value></category>
+                <category label="Fri"><value>102.30</value></category>
+            </chart>
+        </column>
+    </row>
+    <column gap="s" paginate="no">
+        <text bold="true">Margin per quarter, either side of zero</text>
+        <chart type="line" height="150pt" suffix="%" decimals="1" value-labels="true" legend="top">
+            <series label="North"/>
+            <series label="South"/>
+            <series label="West"/>
+            <category label="Q1 2025"><value>4.2</value><value>-1.5</value><value>0.8</value></category>
+            <category label="Q2 2025"><value>3.1</value><value>-3.25</value><value/></category>
+            <category label="Q3 2025"><value>-0.6</value><value>-2</value><value>2.4</value></category>
+            <category label="Q4 2025"><value>1.9</value><value>0.5</value><value/></category>
+            <category label="Q1 2026"><value>2.7</value><value>1.75</value><value>3.9</value></category>
+        </chart>
+    </column>
+</column>
+</layout>
+</section>
+</document>
+</lpdf>
