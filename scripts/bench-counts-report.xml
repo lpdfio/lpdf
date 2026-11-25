@@ -9,7 +9,7 @@
   stage of STAGES, which the JSON always gives, so its `cols` stay fixed. After the table, a bar chart for each
   change from one build to the next, the `steps` of the measure in the JSON: each fixture's end-to-end change, red
   past its threshold. A chart colors its bars from their categories only with one series, so each change is a
-  chart of its own, not a series of one. The axis runs at least from -5% to 5%: `min` and `max` only widen, so a
+  chart of its own, not a series of one, side by side in a grid of two columns. The axis runs at least from -5% to 5%: `min` and `max` only widen, so a
   change past them still fits, and a quiet run draws slivers where an axis fitted to its data would draw bars.
 -->
 <lpdf version="1">
@@ -125,22 +125,24 @@
                         </tr>
                     </table>
 
-                    <!-- A chart for each change from one build to the next, the end-to-end change of each fixture, with
-                         its title beside it in a row: keep-next works only on a child of the layout, so this keeps
-                         the title on the page of its chart. -->
-                    <row data-source="steps" gap="m">
-                        <column width="110pt" gap="xs">
-                            <text font-size="10pt" bold="true">End to end</text>
-                            <text font-size="10pt" color="text-muted" data-value="name">v0.0.0 to branch</text>
+                    <!-- A chart for each change from one build to the next, the end-to-end change of each fixture, side by
+                         side: a grid of two columns, so one change takes the left half and two take both. A grid row
+                         never splits across pages, which keeps each title with its chart. -->
+                    <grid cols="2" gap="l">
+                        <column data-source="steps" gap="xs">
+                            <row gap="s">
+                                <text font-size="10pt" bold="true">End to end</text>
+                                <text font-size="10pt" color="text-muted" data-value="name">v0.0.0 to branch</text>
+                            </row>
+                            <chart type="bar" direction="horizontal" height="190pt" suffix="%" decimals="2" value-labels="true"
+                                   min="-5" max="5"
+                                   alt="The change of each fixture, end to end, from one build to the next">
+                                <category data-source="fixtures" label="xs" data-label="name" color="#737373" data-color="color">
+                                    <value data-value="percent">0</value>
+                                </category>
+                            </chart>
                         </column>
-                        <chart type="bar" direction="horizontal" height="190pt" suffix="%" decimals="2" value-labels="true"
-                               min="-5" max="5"
-                               alt="The change of each fixture, end to end, from one build to the next">
-                            <category data-source="fixtures" label="xs" data-label="name" color="#737373" data-color="color">
-                                <value data-value="percent">0</value>
-                            </category>
-                        </chart>
-                    </row>
+                    </grid>
                 </column>
             </layout>
         </section>
