@@ -38,6 +38,9 @@ export const STAGES = [
     { id: 'end_to_end', name: 'end to end' },
 ];
 
+/** Where the end-to-end stage is in a cell list of the JSON, which has a cell for every stage of `STAGES`. */
+const END_TO_END = STAGES.findIndex(s => s.id === 'end_to_end');
+
 /** The fixtures, `bench_xs` to `bench_xl`, by the id of their benchmark. */
 export const FIXTURES = ['xs', 's', 'm', 'l', 'xl'];
 
@@ -303,7 +306,9 @@ export const CHANGE_COLORS = { marked: '#c0392b', unmarked: '#737373' };
  * them, and a table for each measure, as the Markdown has them. A table has every stage of `STAGES` as a column,
  * since the template's table has a fixed number of columns, and a cell has the number of each build and each
  * change from build to build, in their order. Numbers come as they are, `null` where a build lacks them, and as
- * text, and each change has its color.
+ * text, and each change has its color. A measure has `steps` too, what its charts show: a step for each change from
+ * a build to the next, named from the two builds, with each fixture's end-to-end change and its color. A fixture
+ * whose build lacks the end-to-end numbers, or whose change has no percent, is left out of the step, so it has no bar.
  */
 export function json(builds, rows, marks = DEFAULT_MARKS, about = {}) {
     const changeData = (delta, i) => ({
@@ -325,6 +330,14 @@ export function json(builds, rows, marks = DEFAULT_MARKS, about = {}) {
             changes: row.changes.map(changeData),
         };
     };
+    const stepsOf = ({ fixtures }) => builds.slice(1).map((to, i) => ({
+        name: `${builds[i].name} to ${to.name}`,
+        fixtures: fixtures.flatMap(({ fixture, cells }) => {
+            const delta = cells[END_TO_END]?.changes[i];
+            const { percent, color } = delta ? changeData(delta, i) : {};
+            return typeof percent === 'number' ? [{ name: fixture, percent, color }] : [];
+        }),
+    }));
     const marked = rows.flatMap(row => row.changes.flatMap((delta, i) => delta.marked
         ? [{
             fixture: row.fixture,
@@ -346,6 +359,7 @@ export function json(builds, rows, marks = DEFAULT_MARKS, about = {}) {
             name: capitalized(measureName(grid.measure)),
             stages: grid.stages.map(id => ({ id, name: stageName(id) })),
             fixtures: grid.fixtures.map(({ fixture, cells }) => ({ name: fixture, cells: cells.map(cellData) })),
+            steps: stepsOf(grid),
         })),
     };
 }

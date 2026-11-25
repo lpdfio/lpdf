@@ -340,6 +340,67 @@ test('writes a cell no build has, and a change from a build that lacks the fixtu
     });
 });
 
+const { marked: RED, unmarked: GRAY } = CHANGE_COLORS;
+
+test('gives each measure one step of two builds, with the end-to-end change of each fixture, red past its threshold', () => {
+    const builds = [
+        build('v0.29.0', [benchmark('end_to_end', 'xs', { ir: 1000 }), benchmark('end_to_end', 'm', { ir: 2000 })]),
+        build('branch', [benchmark('end_to_end', 'xs', { ir: 1010 }), benchmark('end_to_end', 'm', { ir: 2500 })]),
+    ];
+    const { measures } = json(builds, compare(builds));
+    assert.equal(measures.length, 5);
+    assert.deepEqual(measures[0].steps, [{
+        name: 'v0.29.0 to branch',
+        fixtures: [{ name: 'xs', percent: 1, color: GRAY }, { name: 'm', percent: 25, color: RED }],
+    }]);
+});
+
+test('gives each measure two steps of three builds, in their order, each with its own colors', () => {
+    const builds = [
+        build('v0.29.0', [benchmark('end_to_end', 'xs', { ir: 1000 }), benchmark('end_to_end', 'm', { ir: 2000 })]),
+        build('main', [benchmark('end_to_end', 'xs', { ir: 1250 }), benchmark('end_to_end', 'm', { ir: 2000 })]),
+        build('branch', [benchmark('end_to_end', 'xs', { ir: 1250 }), benchmark('end_to_end', 'm', { ir: 2500 })]),
+    ];
+    const { steps } = json(builds, compare(builds)).measures[0];
+    assert.deepEqual(steps.map(s => s.name), ['v0.29.0 to main', 'main to branch']);
+    assert.deepEqual(steps.map(s => s.fixtures), [
+        [{ name: 'xs', percent: 25, color: RED }, { name: 'm', percent: 0, color: GRAY }],
+        [{ name: 'xs', percent: 0, color: GRAY }, { name: 'm', percent: 25, color: RED }],
+    ]);
+});
+
+test('judges a step of each measure by its own threshold, and charts a drop as a bar to the left', () => {
+    const builds = [
+        build('v0.29.0', [benchmark('end_to_end', 'xs', { ir: 1000, blocks: 100, bytes: 1000, peak: 1000 })]),
+        build('branch', [benchmark('end_to_end', 'xs', { ir: 1050, blocks: 105, bytes: 800, peak: 1000 })]),
+    ];
+    const bars = json(builds, compare(builds)).measures.map(m => m.steps[0].fixtures[0]);
+    assert.deepEqual(bars.map(b => [Math.round(b.percent), b.color]), [[5, RED], [5, RED], [5, GRAY], [-20, GRAY], [0, GRAY]]);
+});
+
+test('leaves a fixture out of a step when a build lacks its end-to-end numbers or the change has no percent', () => {
+    const builds = [
+        build('v0.29.0', [
+            benchmark('end_to_end', 'xs', { ir: 1000 }), benchmark('end_to_end', 'justified', { ir: 0, blocks: 0, bytes: 0, peak: 0 }),
+            benchmark('parse', 'code', { ir: 500 }),
+        ]),
+        build('branch', [
+            benchmark('end_to_end', 'xs', { ir: 1000 }), benchmark('end_to_end', 'justified', { ir: 10, blocks: 4, bytes: 90, peak: 50 }),
+            benchmark('parse', 'code', { ir: 500 }), benchmark('end_to_end', 'chart', { ir: 700 }),
+        ]),
+    ];
+    for (const { steps } of json(builds, compare(builds)).measures) {
+        assert.deepEqual(steps[0].fixtures, [{ name: 'xs', percent: 0, color: GRAY }]);
+    }
+});
+
+test('gives a step no fixtures when no fixture has end-to-end numbers in both builds, and a single build no steps', () => {
+    const lines = [benchmark('parse', 'xs', { ir: 1000 })];
+    const builds = [build('v0.29.0', lines), build('branch', lines)];
+    assert.deepEqual(json(builds, compare(builds)).measures[0].steps, [{ name: 'v0.29.0 to branch', fixtures: [] }]);
+    assert.deepEqual(json(builds.slice(1), compare(builds.slice(1))).measures[0].steps, []);
+});
+
 /**
  * Renders the JSON of `builds` with the template and the command line in LPDF_CLI, and returns the PDF's text,
  * read as Latin-1 to count its pages.
