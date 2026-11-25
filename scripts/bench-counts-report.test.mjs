@@ -449,6 +449,13 @@ test('gives the template a column for the fixture and one for each stage', () =>
     assert.equal(cols.trim().split(/\s+/).length, STAGES.length + 1);
 });
 
+test('gives each chart an axis of at least -5% to 5%, so a quiet run draws slivers and not bars', () => {
+    // `min` and `max` only widen: a change past them still fits. Without them the axis fits the data, and a change
+    // of -0.03% is drawn as long as one of -7% on another page.
+    const template = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'bench-counts-report.xml'), 'utf8');
+    assert.match(template, /<chart\b[^>]*\smin="-5"[^>]*\smax="5"/);
+});
+
 test('keeps the counts of the last build, against the build before it', () => {
     const before = build('v0.28.0', [benchmark('parse', 'xs', { ir: 900 })]);
     const release = build('v0.29.0', [benchmark('parse', 'xs', { ir: 1000 })]);
