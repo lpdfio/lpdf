@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
-    CHANGE_COLORS, STAGES, compare, history, json, markdown, measureTables, missingFixtures, missingStages, readCounts,
+    CHANGE_COLORS, STAGES, compare, history, json, markdown, measureTables, missingFixtures, missingStages, readCounts, utcTime,
 } from './bench-counts-report.mjs';
 
 /**
@@ -340,6 +340,19 @@ test('writes a cell no build has, and a change from a build that lacks the fixtu
     });
 });
 
+test('writes the time of the report as the release notes PDF does, in UTC to the minute', () => {
+    assert.equal(utcTime(new Date('2026-11-25T20:06:59.999Z')), '2026-11-25 20:06 UTC');
+    assert.equal(utcTime(new Date('2026-01-02T03:04:00+02:00')), '2026-01-02 01:04 UTC');
+});
+
+test('carries the time of the report in the JSON, or null when none is given, and keeps it out of the history', () => {
+    const lines = [benchmark('parse', 'xs', { ir: 1000 })];
+    const builds = [build('v0.29.0', lines), build('branch', lines)];
+    assert.equal(json(builds, compare(builds), undefined, { generated: '2026-11-25 20:06 UTC' }).generated, '2026-11-25 20:06 UTC');
+    assert.equal(json(builds, compare(builds)).generated, null);
+    assert.equal('generated' in history(builds, { rust: 'rustc 1.99.0' }), false);
+});
+
 const { marked: RED, unmarked: GRAY } = CHANGE_COLORS;
 
 test('gives each measure one step of two builds, with the end-to-end change of each fixture, red past its threshold', () => {
@@ -410,7 +423,7 @@ function renderPdf(builds) {
     try {
         const data = path.join(folder, 'report.json');
         const pdf = path.join(folder, 'report.pdf');
-        writeFileSync(data, JSON.stringify(json(builds, compare(builds), undefined, { rust: 'rustc 1.99.0' })));
+        writeFileSync(data, JSON.stringify(json(builds, compare(builds), undefined, { rust: 'rustc 1.99.0', generated: '2026-11-25 20:06 UTC' })));
         const template = path.join(path.dirname(fileURLToPath(import.meta.url)), 'bench-counts-report.xml');
         execFileSync(process.env.LPDF_CLI, ['convert', '--input', template, '--data', data, '--output', pdf], { stdio: 'pipe' });
         return readFileSync(pdf, 'latin1');

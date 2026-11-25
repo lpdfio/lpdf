@@ -29,6 +29,10 @@
                     <text font-size="9pt" color="text-muted">Lpdf Bench counts</text>
                     <text font-size="24pt" bold="true">Instruction and allocation counts</text>
                     <text font-size="14pt" color="text-muted" data-value="build">build</text>
+                    <row data-if="generated" gap="xs" font-size="10pt">
+                        <text color="text-muted">Generated</text>
+                        <text color="text-muted" data-value="generated">0000-00-00 00:00 UTC</text>
+                    </row>
                 </column>
 
                 <column gap="s" width="440pt" font-size="9pt" padding="0pt 0pt 20pt 0pt">
