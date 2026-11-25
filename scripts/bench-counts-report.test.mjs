@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
-    CHANGE_COLORS, STAGES, compare, history, json, markdown, measureTables, missingFixtures, missingStages, readCounts,
+    CHANGE_COLORS, STAGES, compare, history, json, markdown, measureTables, missingFixtures, missingStages, readCounts, utcTime,
 } from './bench-counts-report.mjs';
 
 /**
@@ -340,6 +340,80 @@ test('writes a cell no build has, and a change from a build that lacks the fixtu
     });
 });
 
+test('writes the time of the report as the release notes PDF does, in UTC to the minute', () => {
+    assert.equal(utcTime(new Date('2026-11-25T20:06:59.999Z')), '2026-11-25 20:06 UTC');
+    assert.equal(utcTime(new Date('2026-01-02T03:04:00+02:00')), '2026-01-02 01:04 UTC');
+});
+
+test('carries the time of the report in the JSON, or null when none is given, and keeps it out of the history', () => {
+    const lines = [benchmark('parse', 'xs', { ir: 1000 })];
+    const builds = [build('v0.29.0', lines), build('branch', lines)];
+    assert.equal(json(builds, compare(builds), undefined, { generated: '2026-11-25 20:06 UTC' }).generated, '2026-11-25 20:06 UTC');
+    assert.equal(json(builds, compare(builds)).generated, null);
+    assert.equal('generated' in history(builds, { rust: 'rustc 1.99.0' }), false);
+});
+
+const { marked: RED, unmarked: GRAY } = CHANGE_COLORS;
+
+test('gives each measure one step of two builds, with the end-to-end change of each fixture, red past its threshold', () => {
+    const builds = [
+        build('v0.29.0', [benchmark('end_to_end', 'xs', { ir: 1000 }), benchmark('end_to_end', 'm', { ir: 2000 })]),
+        build('branch', [benchmark('end_to_end', 'xs', { ir: 1010 }), benchmark('end_to_end', 'm', { ir: 2500 })]),
+    ];
+    const { measures } = json(builds, compare(builds));
+    assert.equal(measures.length, 5);
+    assert.deepEqual(measures[0].steps, [{
+        name: 'v0.29.0 to branch',
+        fixtures: [{ name: 'xs', percent: 1, color: GRAY }, { name: 'm', percent: 25, color: RED }],
+    }]);
+});
+
+test('gives each measure two steps of three builds, in their order, each with its own colors', () => {
+    const builds = [
+        build('v0.29.0', [benchmark('end_to_end', 'xs', { ir: 1000 }), benchmark('end_to_end', 'm', { ir: 2000 })]),
+        build('main', [benchmark('end_to_end', 'xs', { ir: 1250 }), benchmark('end_to_end', 'm', { ir: 2000 })]),
+        build('branch', [benchmark('end_to_end', 'xs', { ir: 1250 }), benchmark('end_to_end', 'm', { ir: 2500 })]),
+    ];
+    const { steps } = json(builds, compare(builds)).measures[0];
+    assert.deepEqual(steps.map(s => s.name), ['v0.29.0 to main', 'main to branch']);
+    assert.deepEqual(steps.map(s => s.fixtures), [
+        [{ name: 'xs', percent: 25, color: RED }, { name: 'm', percent: 0, color: GRAY }],
+        [{ name: 'xs', percent: 0, color: GRAY }, { name: 'm', percent: 25, color: RED }],
+    ]);
+});
+
+test('judges a step of each measure by its own threshold, and charts a drop as a bar to the left', () => {
+    const builds = [
+        build('v0.29.0', [benchmark('end_to_end', 'xs', { ir: 1000, blocks: 100, bytes: 1000, peak: 1000 })]),
+        build('branch', [benchmark('end_to_end', 'xs', { ir: 1050, blocks: 105, bytes: 800, peak: 1000 })]),
+    ];
+    const bars = json(builds, compare(builds)).measures.map(m => m.steps[0].fixtures[0]);
+    assert.deepEqual(bars.map(b => [Math.round(b.percent), b.color]), [[5, RED], [5, RED], [5, GRAY], [-20, GRAY], [0, GRAY]]);
+});
+
+test('leaves a fixture out of a step when a build lacks its end-to-end numbers or the change has no percent', () => {
+    const builds = [
+        build('v0.29.0', [
+            benchmark('end_to_end', 'xs', { ir: 1000 }), benchmark('end_to_end', 'justified', { ir: 0, blocks: 0, bytes: 0, peak: 0 }),
+            benchmark('parse', 'code', { ir: 500 }),
+        ]),
+        build('branch', [
+            benchmark('end_to_end', 'xs', { ir: 1000 }), benchmark('end_to_end', 'justified', { ir: 10, blocks: 4, bytes: 90, peak: 50 }),
+            benchmark('parse', 'code', { ir: 500 }), benchmark('end_to_end', 'chart', { ir: 700 }),
+        ]),
+    ];
+    for (const { steps } of json(builds, compare(builds)).measures) {
+        assert.deepEqual(steps[0].fixtures, [{ name: 'xs', percent: 0, color: GRAY }]);
+    }
+});
+
+test('gives a step no fixtures when no fixture has end-to-end numbers in both builds, and a single build no steps', () => {
+    const lines = [benchmark('parse', 'xs', { ir: 1000 })];
+    const builds = [build('v0.29.0', lines), build('branch', lines)];
+    assert.deepEqual(json(builds, compare(builds)).measures[0].steps, [{ name: 'v0.29.0 to branch', fixtures: [] }]);
+    assert.deepEqual(json(builds.slice(1), compare(builds.slice(1))).measures[0].steps, []);
+});
+
 /**
  * Renders the JSON of `builds` with the template and the command line in LPDF_CLI, and returns the PDF's text,
  * read as Latin-1 to count its pages.
@@ -349,7 +423,7 @@ function renderPdf(builds) {
     try {
         const data = path.join(folder, 'report.json');
         const pdf = path.join(folder, 'report.pdf');
-        writeFileSync(data, JSON.stringify(json(builds, compare(builds), undefined, { rust: 'rustc 1.99.0' })));
+        writeFileSync(data, JSON.stringify(json(builds, compare(builds), undefined, { rust: 'rustc 1.99.0', generated: '2026-11-25 20:06 UTC' })));
         const template = path.join(path.dirname(fileURLToPath(import.meta.url)), 'bench-counts-report.xml');
         execFileSync(process.env.LPDF_CLI, ['convert', '--input', template, '--data', data, '--output', pdf], { stdio: 'pipe' });
         return readFileSync(pdf, 'latin1');
@@ -386,6 +460,13 @@ test('gives the template a column for the fixture and one for each stage', () =>
     const stages = template.indexOf('data-source="stages"');
     const cols = [...template.slice(0, stages).matchAll(/<table cols="([^"]*)"/g)].at(-1)[1];
     assert.equal(cols.trim().split(/\s+/).length, STAGES.length + 1);
+});
+
+test('gives each chart an axis of at least -5% to 5%, so a quiet run draws slivers and not bars', () => {
+    // `min` and `max` only widen: a change past them still fits. Without them the axis fits the data, and a change
+    // of -0.03% is drawn as long as one of -7% on another page.
+    const template = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'bench-counts-report.xml'), 'utf8');
+    assert.match(template, /<chart\b[^>]*\smin="-5"[^>]*\smax="5"/);
 });
 
 test('keeps the counts of the last build, against the build before it', () => {
