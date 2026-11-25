@@ -1,9 +1,18 @@
-// Tests of bench-counts-report.mjs: `node --test scripts/`. bench.yml runs them before it builds anything.
+// Tests of bench-counts-report.mjs: `node --test scripts/`. bench.yml runs them before it measures anything, with
+// LPDF_CLI set to the command line it built, so the template renders the JSON of a test of two builds and of three.
+// Without LPDF_CLI those two tests are skipped.
 
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-import { compare, history, markdown, measureTables, missingFixtures, missingStages, readCounts } from './bench-counts-report.mjs';
+import {
+    CHANGE_COLORS, STAGES, compare, history, json, markdown, measureTables, missingFixtures, missingStages, readCounts,
+} from './bench-counts-report.mjs';
 
 /**
  * The two lines of one benchmark, with only what the report reads: gungraun's JSON line for the work, and the
@@ -248,6 +257,126 @@ test('with three builds, shows no change from a build that lacks the fixture', (
     ];
     const report = markdown(builds, compare(builds));
     assert.deepEqual(measureTable(report, 'Instructions').slice(2), ['| m | 1,000 |', '| markdown | 7,700<br>— · +10.00% |']);
+});
+
+test('writes the builds, the compiler and the thresholds as JSON', () => {
+    const lines = [benchmark('parse', 'xs', { ir: 1000 })];
+    const builds = [build('v0.29.0', lines), { name: 'branch', counts: build('b', lines).counts }];
+    const data = json(builds, compare(builds), { endToEnd: 1, stage: 2, allocations: 3 }, { rust: 'rustc 1.99.0' });
+    assert.equal(data.build, 'branch');
+    assert.equal(data.rust, 'rustc 1.99.0');
+    assert.deepEqual(data.builds, [
+        { name: 'v0.29.0', commit: 'v0.29.00000000', short: 'v0.29.0' },
+        { name: 'branch', commit: null, short: 'no commit' },
+    ]);
+    assert.deepEqual(data.thresholds, { endToEnd: 1, stage: 2, allocations: 3 });
+});
+
+test('lists each change past its threshold in the JSON, red, with the builds it is between', () => {
+    const builds = [
+        build('v0.29.0', [benchmark('end_to_end', 'l', { ir: 1_000_000, cycles: 1_000_000 })]),
+        build('main', [benchmark('end_to_end', 'l', { ir: 1_000_000, cycles: 1_000_000 })]),
+        build('branch', [benchmark('end_to_end', 'l', { ir: 1_050_000, cycles: 1_050_000 })]),
+    ];
+    const data = json(builds, compare(builds));
+    assert.deepEqual(data.marked.map(({ percent, ...m }) => m), ['instructions', 'estimated cycles'].map(measure => ({
+        fixture: 'l', stage: 'end to end', measure, before: '1,000,000', after: '1,050,000',
+        from: 'main', to: 'branch', text: '+5.00%', marked: true, color: CHANGE_COLORS.marked,
+    })));
+    assert.equal(Math.round(data.marked[0].percent * 100), 500);
+    assert.deepEqual(json(builds.slice(0, 2), compare(builds.slice(0, 2))).marked, []);
+});
+
+test('gives each measure a table in the JSON with every stage as a column, in the order of the Markdown', () => {
+    const lines = [benchmark('parse', 'xs', { ir: 1000 }), benchmark('load', 'svg', { ir: 2000 })];
+    const data = json([build('a', lines), build('b', lines)], compare([build('a', lines), build('b', lines)]));
+    assert.deepEqual(data.measures.map(m => m.name), ['Instructions', 'Estimated cycles', 'Allocations', 'Bytes allocated', 'Peak memory']);
+    for (const measure of data.measures) {
+        assert.deepEqual(measure.stages, STAGES.map(({ id, name }) => ({ id, name })));
+        assert.deepEqual(measure.fixtures.map(f => f.name), ['xs', 'svg']);
+        assert.ok(measure.fixtures.every(f => f.cells.length === STAGES.length));
+    }
+    const [xs, svg] = data.measures[0].fixtures;
+    assert.deepEqual(xs.cells.map(c => c.text), ['—', '1,000', '—', '—', '—', '—', '—']);
+    assert.deepEqual(svg.cells.map(c => c.text), ['2,000', '—', '—', '—', '—', '—', '—']);
+});
+
+test('gives a cell the number of each build and each change in the JSON, with a color for each change', () => {
+    const builds = [
+        build('v0.29.0', [benchmark('parse', 'm', { ir: 1000 })]),
+        build('main', [benchmark('parse', 'm', { ir: 1200 })]),
+        build('branch', [benchmark('parse', 'm', { ir: 1200 })]),
+    ];
+    const cell = json(builds, compare(builds)).measures[0].fixtures[0].cells[1];
+    assert.equal(cell.value, 1200);
+    assert.equal(cell.text, '1,200');
+    assert.equal(cell.moved, true);
+    assert.deepEqual(cell.values, [
+        { build: 'v0.29.0', value: 1000, text: '1,000' },
+        { build: 'main', value: 1200, text: '1,200' },
+        { build: 'branch', value: 1200, text: '1,200' },
+    ]);
+    assert.deepEqual(cell.changes, [
+        { from: 'v0.29.0', to: 'main', percent: 20, text: '+20.00%', marked: true, color: CHANGE_COLORS.marked },
+        { from: 'main', to: 'branch', percent: 0, text: '±0.00%', marked: false, color: CHANGE_COLORS.unmarked },
+    ]);
+});
+
+test('writes a cell no build has, and a change from a build that lacks the fixture or had zero, with null', () => {
+    const builds = [
+        build('v0.29.0', [benchmark('parse', 'm', { ir: 1000 })]),
+        build('branch', [benchmark('parse', 'm', { ir: 1000 }), benchmark('parse', 'code', { ir: 0, blocks: 0 })]),
+        build('next', [benchmark('parse', 'm', { ir: 1000 }), benchmark('parse', 'code', { ir: 10, blocks: 4 })]),
+    ];
+    const data = json(builds, compare(builds));
+    const code = data.measures.find(m => m.id === 'allocations').fixtures.find(f => f.name === 'code').cells;
+    assert.deepEqual(code[1].changes.map(c => [c.percent, c.text]), [[null, '—'], [null, 'new']]);
+    assert.equal(code[1].moved, true);
+    assert.deepEqual(code[0], {
+        value: null, text: '—', moved: false,
+        values: ['v0.29.0', 'branch', 'next'].map(b => ({ build: b, value: null, text: '—' })),
+        changes: [['v0.29.0', 'branch'], ['branch', 'next']].map(([from, to]) => (
+            { from, to, percent: null, text: '—', marked: false, color: CHANGE_COLORS.unmarked })),
+    });
+});
+
+/**
+ * Renders the JSON of `builds` with the template and the command line in LPDF_CLI, and returns the PDF's text,
+ * read as Latin-1 to count its pages.
+ */
+function renderPdf(builds) {
+    const folder = mkdtempSync(path.join(tmpdir(), 'bench-counts-report-'));
+    try {
+        const data = path.join(folder, 'report.json');
+        const pdf = path.join(folder, 'report.pdf');
+        writeFileSync(data, JSON.stringify(json(builds, compare(builds), undefined, { rust: 'rustc 1.99.0' })));
+        const template = path.join(path.dirname(fileURLToPath(import.meta.url)), 'bench-counts-report.xml');
+        execFileSync(process.env.LPDF_CLI, ['convert', '--input', template, '--data', data, '--output', pdf], { stdio: 'pipe' });
+        return readFileSync(pdf, 'latin1');
+    } finally {
+        rmSync(folder, { recursive: true, force: true });
+    }
+}
+
+/** A run's benchmarks: two sizes, the data binding and the image load, and fixtures of features. */
+const run = scale => [
+    benchmark('parse', 'xs', { ir: 1000 * scale }), benchmark('end_to_end', 'xs', { ir: 5000 * scale }),
+    benchmark('parse', 'xl', { ir: 9000 }), benchmark('end_to_end', 'xl', { ir: 40_000 }),
+    benchmark('parse', 'data', { ir: 3000 }), benchmark('data', 'data', { ir: 2000 * scale }),
+    benchmark('load', 'svg', { ir: 7000, peak: 4000 * scale }), benchmark('render_doc', 'svg', { ir: 8000 }),
+];
+
+const pages = pdf => pdf.match(/\/Type\s*\/Page\b/g).length;
+
+test('renders the JSON of two builds with the template: a cover of two pages, and a page for each measure', { skip: !process.env.LPDF_CLI }, () => {
+    // Seven changes over the thresholds: the last goes on to a second page of the cover.
+    const pdf = renderPdf([build('v0.29.0', run(1)), build('branch', [...run(1.2), benchmark('parse', 'code', { ir: 100 })])]);
+    assert.equal(pages(pdf), 7);
+});
+
+test('renders the JSON of three builds with the template, with nothing over the thresholds', { skip: !process.env.LPDF_CLI }, () => {
+    const pdf = renderPdf([build('v0.29.0', run(1)), build('main', run(1)), build('branch', run(1))]);
+    assert.equal(pages(pdf), 6);
 });
 
 test('keeps the counts of the last build, against the build before it', () => {
