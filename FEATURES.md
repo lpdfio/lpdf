@@ -293,20 +293,27 @@ A chart is drawn from numbers, written like a table: `<series>` are its columns,
 | Supported | Written with | Since | Docs |
 |---|---|---|---|
 | Bar charts: vertical, horizontal, side by side and stacked | `<chart type="bar">`, `direction`, `stacked` | 0.39.0 | [Chart](https://lpdf.io/docs/doc/layout/chart/) |
+| Line charts: a line through the values of each series, on an axis fitted to them, with the width of the lines set | `<chart type="line">`, `stroke-width` | 0.39.0 | [Chart, lines](https://lpdf.io/docs/doc/layout/chart/#lines) |
+| Area charts: each series filled down to zero, or stacked, each filled down to the one under it | `<chart type="area">`, `stacked` | 0.39.0 | [Chart, areas](https://lpdf.io/docs/doc/layout/chart/#areas) |
+| Sparklines: one small line with no axis, labels or legend, for a table cell, in its own color | `<chart type="sparkline">`, `color`, `stroke-width` | 0.39.0 | [Chart, sparklines](https://lpdf.io/docs/doc/layout/chart/#sparklines) |
 | Series, categories and values written in the document or repeated from the data, with labels and colors from the data | `data-source` on `<series>`, `<category>` and `<value>`, `data-label`, `data-color` | 0.39.0 | [Chart, from the data](https://lpdf.io/docs/doc/layout/chart/#from-the-data) |
-| A value axis from zero in round steps, written in full, with gridlines, and a zero line under negative values | `min` and `max`, which widen it | 0.39.0 | [Chart, the axis and the labels](https://lpdf.io/docs/doc/layout/chart/#the-axis-and-the-labels) |
-| Numbers with any thousands mark and decimal mark, a prefix and a suffix, and the value of each bar written at its end | `thousands-mark`, `decimal-mark`, `prefix`, `suffix`, `decimals`, `value-labels` | 0.39.0 | [Chart, numbers](https://lpdf.io/docs/doc/layout/chart/#numbers) |
+| A value axis in round steps, written in full, with gridlines, and a zero line under negative values: from zero for bars and areas, and for a line from a round step under its lowest value to one over its highest | `min` and `max`, which widen it | 0.39.0 | [Chart, the axis and the labels](https://lpdf.io/docs/doc/layout/chart/#the-axis-and-the-labels) |
+| Numbers with any thousands mark and decimal mark, a prefix and a suffix, and the value of each bar written at its end, or of each point over it | `thousands-mark`, `decimal-mark`, `prefix`, `suffix`, `decimals`, `value-labels` | 0.39.0 | [Chart, numbers](https://lpdf.io/docs/doc/layout/chart/#numbers) |
 | A legend at the bottom, the top or the right, colors from a fixed palette of eight or set on a series or a category, and the room between the bars and the categories | `legend`, `color`, `gap`, `bar-gap`, `category-gap` | 0.39.0 | [Chart, colors and spacing](https://lpdf.io/docs/doc/layout/chart/#colors-and-spacing) |
 | `LChart` in the five SDKs, whose `value` takes a number | `L.chart`, `LChart.series`, `LChart.category`, `LChart.value` | 0.39.0 | [Chart](https://lpdf.io/docs/doc/layout/chart/) |
 
-- `type` takes `bar`, and no other value.
+- `type` takes `bar`, `line`, `area` and `sparkline`.
 - A label wider than its room wraps at spaces onto three lines at most, and what still doesn't fit ends in an ellipsis, so a chart always renders. In a horizontal chart the labels take a column as wide as the longest, a third of the chart's width at most, and none where a category is thinner than a line of text.
+- A line or an area writes every label where they all fit on one line, and else every 2nd, 3rd or 5th, starting with the first; every point keeps its place.
+- A line's axis doesn't cross zero where its values don't, and `min="0"` brings it down to zero. A sparkline spans its values, or `min` and `max` past them.
+- An area is filled faded, so the gridlines and an area behind it show through, and its line is drawn over it. The lines are `1.5pt` wide, a sparkline's `1pt`, unless `stroke-width` sets them, and `0` draws none.
+- A sparkline's line is in the chart's own `color`, else the palette's first color.
 - A chart takes its box in the flow, never splits across pages, and moves whole to the next page when it doesn't fit. It is a leaf: no `padding`, `background` or `border`, and no title, which a `<text>` above it is. A chart can't be in a layer.
 - Without `color`, the series take the palette's colors in order, starting over past the eighth.
 - A legend at the bottom or the top takes half the chart's height at most, and one at the right its height and a third of its width: the entries that don't fit give way to an ellipsis.
-- With `value-labels`, a stacked chart writes the total of each stack. A value label is written with `decimals`, else with the decimals the value was written with, and rounds half up: `72.25` with one decimal is `72.3`.
-- Refused, with an error that names it: a value that is not a plain number (`'41,200' is not a plain number`), a category with more or fewer values than the chart has series, a negative value in a stacked chart, a value, a stack's total, `min` or `max` past 1,000,000,000,000,000 either side of zero, a value of more than one number from code, `thousands-mark` and `decimal-mark` the same, a `<series>`, `<category>` or `<value>` outside its chart or category, and a `<series>` after a category.
-- `null` in the data, or an empty `<value/>`, is no value: no bar.
+- With `value-labels`, a stacked chart writes the total of each stack. A sparkline writes none. A value label is written with `decimals`, else with the decimals the value was written with, and rounds half up: `72.25` with one decimal is `72.3`.
+- Refused, with an error that names it: a value that is not a plain number (`'41,200' is not a plain number`), a category with more or fewer values than the chart has series, a negative value in a stacked chart, a value, a stack's total, `min` or `max` past 1,000,000,000,000,000 either side of zero, a value of more than one number from code, `thousands-mark` and `decimal-mark` the same, a `<series>`, `<category>` or `<value>` outside its chart or category, a `<series>` after a category, `direction` on any kind but `bar` (`direction is for a bar chart, and this is a line chart`), `stacked` on a line or a sparkline, a `<series>` in a sparkline, and a negative `stroke-width`.
+- `null` or a missing key in the data, or an empty `<value/>`, is no value: no bar, and a break in a line, an area or a sparkline, where a value alone between two missing ones is a dot. In a stacked area it counts as zero.
 - A chart holds 10,000 categories and 100 series at most, after the data is bound. See [Render limits](#render-limits).
 
 ## Forms
