@@ -15,6 +15,8 @@
 //   --mark-stage <percent>        instructions or estimated cycles of one stage (default 10)
 //   --mark-allocations <percent>  allocations, bytes allocated or peak memory of any stage (default 10)
 //   --markdown <file>             write the report there instead of to stdout
+//   --json <file>                 write the report as JSON there too: the data that
+//                                 scripts/bench-counts-report.xml renders to a PDF
 //   --history <file>              write the counts of the last build as JSON, with the build before it as
 //                                 `against`: what lpdf-bench keeps as counts/vX.Y.Z.json
 //   --about <key>=<value>         added to the history, such as rust=<rustc -V> (repeatable)
@@ -140,14 +142,16 @@ export function compare(builds, marks = DEFAULT_MARKS) {
     return rows;
 }
 
+/** The stages any row has, in pipeline order. */
+const stagesOf = rows => [...new Set(rows.map(r => r.stage))].sort(byOrder(STAGES.map(s => s.id)));
+
 /**
  * The rows of `compare` as a table for each measure, in the order of `MEASURES`: the fixtures as rows, in the
- * order of `compare`, and as columns the stages any fixture has, in pipeline order. A cell is the row of
- * that fixture, stage and measure, or undefined where the fixture has no such stage.
+ * order of `compare`, and as columns the stages any fixture has, in pipeline order, or the `stages` given. A
+ * cell is the row of that fixture, stage and measure, or undefined where the fixture has no such stage.
  */
-export function measureTables(rows) {
+export function measureTables(rows, stages = stagesOf(rows)) {
     const fixtures = [...new Set(rows.map(r => r.fixture))];
-    const stages = [...new Set(rows.map(r => r.stage))].sort(byOrder(STAGES.map(s => s.id)));
     const byKey = new Map(rows.map(r => [`${r.measure} ${r.fixture} ${r.stage}`, r]));
     return MEASURES.map(measure => ({
         measure: measure.id,
@@ -163,13 +167,21 @@ const stageName = id => STAGES.find(s => s.id === id)?.name ?? id;
 const measureName = id => MEASURES.find(m => m.id === id)?.name ?? id;
 const count = n => n === undefined ? '—' : n.toLocaleString('en-US');
 
-function percentCell(delta) {
+/** A change as text: `+1.20%`, `−0.50%`, `±0.00%`, `new` from zero, or `—` where a build lacks the row. */
+function percentText(delta) {
     if (delta.percent === undefined) return '—';
-    if (delta.percent === Infinity) return '**new** ⚠';
+    if (delta.percent === Infinity) return 'new';
     const sign = delta.percent > 0 ? '+' : delta.percent < 0 ? '−' : '±';
-    const text = `${sign}${Math.abs(delta.percent).toFixed(2)}%`;
+    return `${sign}${Math.abs(delta.percent).toFixed(2)}%`;
+}
+
+function percentCell(delta) {
+    const text = percentText(delta);
     return delta.marked ? `**${text}** ⚠` : text;
 }
+
+/** Whether any change of a row isn't zero: a build lacking the row is no change. */
+const moved = row => row.changes.some(c => c.percent !== undefined && c.percent !== 0);
 
 /** The headers of the change columns: from each build to the next. */
 const changeHeaders = builds => builds.slice(1).map((b, i) => `${builds[i].name} → ${b.name}`);
@@ -199,8 +211,7 @@ const capitalized = text => text.charAt(0).toUpperCase() + text.slice(1);
 function measureCell(row) {
     const value = row?.values[row.values.length - 1];
     if (value === undefined) return '—';
-    const moved = row.changes.some(c => c.percent !== undefined && c.percent !== 0);
-    return moved ? `${count(value)}<br>${row.changes.map(percentCell).join(' · ')}` : count(value);
+    return moved(row) ? `${count(value)}<br>${row.changes.map(percentCell).join(' · ')}` : count(value);
 }
 
 function measureTable({ stages, fixtures }) {
@@ -284,6 +295,61 @@ export function markdown(builds, rows, marks = DEFAULT_MARKS, about = {}) {
     return out.join('\n');
 }
 
+/** The color of a change in the JSON: red past its threshold, gray otherwise. */
+export const CHANGE_COLORS = { marked: '#c0392b', unmarked: '#737373' };
+
+/**
+ * The report as the data of the PDF (scripts/bench-counts-report.xml): the builds, the thresholds, each change past
+ * them, and a table for each measure, as the Markdown has them. A table has every stage of `STAGES` as a column,
+ * since the template's table has a fixed number of columns, and a cell has the number of each build and each
+ * change from build to build, in their order. Numbers come as they are, `null` where a build lacks them, and as
+ * text, and each change has its color.
+ */
+export function json(builds, rows, marks = DEFAULT_MARKS, about = {}) {
+    const changeData = (delta, i) => ({
+        from: builds[i].name,
+        to: builds[i + 1].name,
+        percent: Number.isFinite(delta.percent) ? delta.percent : null,
+        text: percentText(delta),
+        marked: delta.marked,
+        color: delta.marked ? CHANGE_COLORS.marked : CHANGE_COLORS.unmarked,
+    });
+    const noRow = { values: builds.map(() => undefined), changes: builds.slice(1).map(() => ({ percent: undefined, marked: false })) };
+    const cellData = (row = noRow) => {
+        const value = row.values[row.values.length - 1];
+        return {
+            value: value ?? null,
+            text: count(value),
+            moved: moved(row),
+            values: row.values.map((v, i) => ({ build: builds[i].name, value: v ?? null, text: count(v) })),
+            changes: row.changes.map(changeData),
+        };
+    };
+    const marked = rows.flatMap(row => row.changes.flatMap((delta, i) => delta.marked
+        ? [{
+            fixture: row.fixture,
+            stage: stageName(row.stage),
+            measure: measureName(row.measure),
+            before: count(row.values[i]),
+            after: count(row.values[i + 1]),
+            ...changeData(delta, i),
+        }]
+        : []));
+    return {
+        build: builds[builds.length - 1].name,
+        rust: about.rust ?? null,
+        builds: builds.map(b => ({ name: b.name, commit: b.commit ?? null, short: b.commit ? b.commit.slice(0, 7) : 'no commit' })),
+        thresholds: { endToEnd: marks.endToEnd, stage: marks.stage, allocations: marks.allocations },
+        marked,
+        measures: measureTables(rows, STAGES.map(s => s.id)).map(grid => ({
+            id: grid.measure,
+            name: capitalized(measureName(grid.measure)),
+            stages: grid.stages.map(id => ({ id, name: stageName(id) })),
+            fixtures: grid.fixtures.map(({ fixture, cells }) => ({ name: fixture, cells: cells.map(cellData) })),
+        })),
+    };
+}
+
 /** What lpdf-bench keeps for a release: its counts, and those of the build before it, measured in the same run. */
 export function history(builds, about = {}) {
     const last = builds[builds.length - 1];
@@ -307,7 +373,7 @@ export function readBuild(folder) {
 function usage(message) {
     console.error(`bench-counts-report: ${message}`);
     console.error('usage: node scripts/bench-counts-report.mjs [--mark-end-to-end <%>] [--mark-stage <%>] [--mark-allocations <%>]');
-    console.error('           [--markdown <file>] [--history <file>] [--about <key>=<value>]... <release> [<main>] <build>');
+    console.error('           [--markdown <file>] [--json <file>] [--history <file>] [--about <key>=<value>]... <release> [<main>] <build>');
     process.exit(2);
 }
 
@@ -315,7 +381,7 @@ function main(args) {
     const marks = { ...DEFAULT_MARKS };
     const about = {};
     const folders = [];
-    let markdownFile, historyFile;
+    let markdownFile, jsonFile, historyFile;
     const percentArg = (name, value) => {
         const n = Number(value);
         if (value === undefined || !Number.isFinite(n) || n < 0) usage(`${name} takes a percentage, not '${value}'`);
@@ -328,6 +394,7 @@ function main(args) {
             case '--mark-stage': marks.stage = percentArg(arg, args[++i]); break;
             case '--mark-allocations': marks.allocations = percentArg(arg, args[++i]); break;
             case '--markdown': markdownFile = args[++i]; break;
+            case '--json': jsonFile = args[++i]; break;
             case '--history': historyFile = args[++i]; break;
             case '--about': {
                 const [key, ...value] = (args[++i] ?? '').split('=');
@@ -343,9 +410,11 @@ function main(args) {
     if (folders.length < 2 || folders.length > 3) usage('give two or three build folders: the release, main if any, and the build');
 
     const builds = folders.map(readBuild);
-    const report = markdown(builds, compare(builds, marks), marks, about);
+    const rows = compare(builds, marks);
+    const report = markdown(builds, rows, marks, about);
     if (markdownFile) writeFileSync(markdownFile, report);
     else process.stdout.write(report);
+    if (jsonFile) writeFileSync(jsonFile, `${JSON.stringify(json(builds, rows, marks, about), null, 2)}\n`);
     if (historyFile) writeFileSync(historyFile, `${JSON.stringify(history(builds, about), null, 2)}\n`);
 }
 

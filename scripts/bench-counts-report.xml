@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The PDF of a Bench counts run (bench.yml): its report, which scripts/bench-counts-report.mjs writes as JSON
+  with its json option, rendered by `lpdf convert` of the commit the run is on, with this file as the input and
+  the JSON as the data.
+
+  A cover with the builds, the thresholds and every change past them, then a page for each measure with the
+  table of the run's summary: a row for each fixture, a column for each stage. The table has a column for each
+  stage of STAGES, which the JSON always gives, so its `cols` stay fixed.
+-->
+<lpdf version="1">
+    <tokens>
+        <colors>
+            <color name="marked" value="#c0392b"/>
+        </colors>
+    </tokens>
+    <document size="A4" orientation="landscape">
+        <meta title="Lpdf Bench counts" subject="Instruction and allocation counts of the Lpdf core"/>
+        <section>
+            <layer>
+                <text-at anchor="bottom-center" y="-20pt" font-size="xs" color="text-muted">Page {page} of {pages}</text-at>
+            </layer>
+            <layout margin="40pt">
+                <column gap="xs" padding="0pt 0pt 20pt 0pt">
+                    <text font-size="9pt" color="text-muted">Lpdf Bench counts</text>
+                    <text font-size="24pt" bold="true">Instruction and allocation counts</text>
+                    <text font-size="14pt" color="text-muted" data-value="build">build</text>
+                </column>
+
+                <column gap="s" width="440pt" font-size="9pt" padding="0pt 0pt 20pt 0pt">
+                    <text font-size="12pt" bold="true">Builds</text>
+                    <table cols="3fr 1fr" head-border="xs line-muted" row-border="xs line-muted">
+                        <thead>
+                            <td padding="s"><text bold="true">Build</text></td>
+                            <td padding="s"><text bold="true">Commit</text></td>
+                        </thead>
+                        <tr data-source="builds">
+                            <td padding="s"><text data-value="name">v0.0.0</text></td>
+                            <td padding="s"><text font="Courier" data-value="short">0000000</text></td>
+                        </tr>
+                    </table>
+                    <row gap="xs">
+                        <text color="text-muted">All built with</text>
+                        <text data-value="rust">rustc</text>
+                    </row>
+                </column>
+
+                <column gap="s" width="440pt" font-size="9pt" padding="0pt 0pt 20pt 0pt">
+                    <text font-size="12pt" bold="true">Thresholds</text>
+                    <table cols="3fr 1fr" head-border="xs line-muted" row-border="xs line-muted">
+                        <thead>
+                            <td padding="s"><text bold="true">A change is marked when it grows</text></td>
+                            <td padding="s"><text bold="true" align="right">more than, %</text></td>
+                        </thead>
+                        <tr>
+                            <td padding="s"><text>Instructions or estimated cycles of a whole render, end to end</text></td>
+                            <td padding="s"><text align="right" data-value="thresholds.endToEnd">3</text></td>
+                        </tr>
+                        <tr>
+                            <td padding="s"><text>Instructions or estimated cycles of one stage</text></td>
+                            <td padding="s"><text align="right" data-value="thresholds.stage">10</text></td>
+                        </tr>
+                        <tr>
+                            <td padding="s"><text>Allocations, bytes allocated or peak memory of any stage</text></td>
+                            <td padding="s"><text align="right" data-value="thresholds.allocations">10</text></td>
+                        </tr>
+                    </table>
+                    <text color="text-muted">Instructions and estimated cycles from Callgrind; allocations, bytes allocated and peak memory from a counting allocator. The peak is the most the heap grew over where it stood when the stage began. Every build is measured on one runner, so a change of 1% between them is a change in the code. Report only: the run passes whatever it shows.</text>
+                </column>
+
+                <column padding="0pt 0pt 8pt 0pt" paginate="keep-next">
+                    <text font-size="12pt" bold="true">Over the thresholds</text>
+                </column>
+                <column font-size="9pt">
+                    <text data-if-not="marked" font-size="10pt">Nothing crossed the thresholds.</text>
+                    <table data-if="marked" cols="1fr 1.4fr 1.4fr 3fr 1.4fr 1.4fr 1fr" head-border="xs line-muted" row-border="xs line-muted">
+                        <thead>
+                            <td padding="s"><text bold="true">Fixture</text></td>
+                            <td padding="s"><text bold="true">Stage</text></td>
+                            <td padding="s"><text bold="true">Measure</text></td>
+                            <td padding="s"><text bold="true">Builds</text></td>
+                            <td padding="s"><text bold="true" align="right">Before</text></td>
+                            <td padding="s"><text bold="true" align="right">After</text></td>
+                            <td padding="s"><text bold="true" align="right">Change</text></td>
+                        </thead>
+                        <tr data-source="marked">
+                            <td padding="s"><text data-value="fixture">xs</text></td>
+                            <td padding="s"><text data-value="stage">parse</text></td>
+                            <td padding="s"><text data-value="measure">instructions</text></td>
+                            <td padding="s">
+                                <row gap="xs">
+                                    <text data-value="from">v0.0.0</text>
+                                    <text color="text-muted">to</text>
+                                    <text data-value="to">branch</text>
+                                </row>
+                            </td>
+                            <td padding="s"><text align="right" data-value="before">0</text></td>
+                            <td padding="s"><text align="right" data-value="after">0</text></td>
+                            <td padding="s"><text align="right" bold="true" color="marked" data-value="text" data-color="color">+0.00%</text></td>
+                        </tr>
+                    </table>
+                </column>
+
+                <!-- A page for each measure. -->
+                <column data-source="measures" paginate="break-before" gap="m" font-size="9pt">
+                    <text font-size="20pt" bold="true" data-value="name">Measure</text>
+                    <text font-size="9pt" color="text-muted">A row for each fixture and a column for each stage. A cell is the number of the last build, and under it, where the number moved, the change from each build to the next, in the order of the builds on the first page; red is past its threshold. A cell reads — where the fixture has no such stage.</text>
+                    <table cols="70pt 1fr 1fr 1fr 1fr 1fr 1fr 1fr" head-border="xs line-muted" row-border="xs line-muted">
+                        <thead>
+                            <td padding="s"><text bold="true">Fixture</text></td>
+                            <td padding="s" data-source="stages"><text bold="true" align="right" data-value="name">stage</text></td>
+                        </thead>
+                        <tr data-source="fixtures">
+                            <td padding="s"><text data-value="name">xs</text></td>
+                            <td padding="s" gap="xs" data-source="cells">
+                                <text align="right" data-value="text">0</text>
+                                <row data-if="moved" gap="s" justify="end">
+                                    <text data-source="changes" font-size="7pt" color="text-muted" data-value="text" data-color="color">±0.00%</text>
+                                </row>
+                            </td>
+                        </tr>
+                    </table>
+                </column>
+            </layout>
+        </section>
+    </document>
+</lpdf>
