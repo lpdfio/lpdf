@@ -2623,7 +2623,7 @@
             <xs:sequence>
               <xs:element name="value" minOccurs="0" maxOccurs="unbounded">
                 <xs:annotation>
-                  <xs:documentation>A value of a category: a plain number, such as 41200, -3.5 or 0.25, without marks, currency or percent sign, which prefix and suffix on the chart add. An empty value is no value: no bar. data-value fills it from the data, and data-source repeats it for each item of a list, in the order of the series.</xs:documentation>
+                  <xs:documentation>A value of a category: a plain number, such as 41200, -3.5 or 0.25, without marks, currency or percent sign, which prefix and suffix on the chart add, and 1,000,000,000,000,000 at most either side of zero. An empty value is no value: no bar. data-value fills it from the data, and data-source repeats it for each item of a list, in the order of the series.</xs:documentation>
                 </xs:annotation>
                 <xs:complexType>
                   <xs:simpleContent>

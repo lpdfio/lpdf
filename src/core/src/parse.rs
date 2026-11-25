@@ -5056,14 +5056,20 @@ fn parse_tree_node_in(
             apply_field_attrs(&mut node, &a, tokens)?;
         }
         NodeKind::ChartValue => {
-            let mut text = String::new();
-            for child in json.get("nodes").and_then(|v| v.as_array()).into_iter().flatten() {
-                match child.as_str() {
-                    Some(part) => text.push_str(part),
-                    None => return Err("value: a value is a number, written as a string, and holds no node".into()),
-                }
+            let parts = json.get("nodes").and_then(|v| v.as_array()).map(Vec::as_slice).unwrap_or_default();
+            // Two numbers in one value would be read as one, their digits run together.
+            if parts.len() > 1 {
+                return Err(format!(
+                    "value: a value holds one number, and this one has {}: give each number a value of its own",
+                    parts.len(),
+                ));
             }
-            set_value_text(&mut node, &text).map_err(|e| format!("value: {e}"))?;
+            let text = match parts.first() {
+                None => "",
+                Some(part) => part.as_str()
+                    .ok_or("value: a value is a number, written as a string, and holds no node")?,
+            };
+            set_value_text(&mut node, text).map_err(|e| format!("value: {e}"))?;
             return Ok(node);
         }
         _ => {}

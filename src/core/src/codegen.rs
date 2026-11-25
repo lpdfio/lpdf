@@ -214,14 +214,18 @@ fn chart_member(family: &str) -> Option<&str> {
 }
 
 /// A chart's value as code: a number where the SDK writes it back as the same text, `41200` or `-3.5`, and else the
-/// text as a string, `'0.250'`, so its decimals, which its label keeps, stay as written. `None` for no value.
+/// text as a string, `'0.250'`, so its decimals, which its label keeps, stay as written. `None` for no value. A whole
+/// number past 2^53 is a string too: Java and C# have no integer literal for it past a long, and none reads it
+/// exactly as a double.
 fn chart_value_literal(node: &Node, target: Target) -> Option<String> {
+    const EXACT: f64 = 9_007_199_254_740_992.0;
     let text: String = node.children().filter(|n| n.is_text()).filter_map(|n| n.text()).collect();
     let text = text.trim();
     if text.is_empty() {
         return None;
     }
-    let number = text.parse::<f64>().ok().filter(|n| n.is_finite() && n.to_string() == text && text != "-0");
+    let number = text.parse::<f64>().ok()
+        .filter(|n| n.is_finite() && n.to_string() == text && text != "-0" && n.abs() <= EXACT);
     Some(match number {
         // A whole number past what an int holds is a long in Java, which says so.
         Some(n) if target == Target::Java && n.fract() == 0.0 && !(f64::from(i32::MIN)..=f64::from(i32::MAX)).contains(&n) => {
@@ -2431,6 +2435,22 @@ mod tests {
         assert!(python.contains("LMarkdown.del_(MarkdownDelAttr(strike=True))"), "{python}");
         let js = codegen(xml, &CodegenOptions { target: "js".into(), indent: 4 }).unwrap();
         assert!(js.contains("LMarkdown.del({ strike: true })"), "{js}");
+    }
+
+    #[test]
+    fn test_a_chart_value_is_a_number_where_every_language_reads_it_and_else_a_string() {
+        let xml = r#"<lpdf version="1"><document><section><layout><chart type="bar" height="100pt"><category><value>41200</value></category><category><value>3000000000</value></category><category><value>0.250</value></category><category><value>10000000000000000000</value></category></chart></layout></section></document></lpdf>"#;
+        let code = |target: &str| codegen(xml, &CodegenOptions { target: target.into(), indent: 4 }).unwrap();
+        for (target, written) in [
+            ("js", ["[41200]", "[3000000000]", "['0.250']", "['10000000000000000000']"]),
+            ("dotnet", ["[41200]", "[3000000000]", r#"["0.250"]"#, r#"["10000000000000000000"]"#]),
+            ("java", ["List.of(41200)", "List.of(3000000000L)", r#"List.of("0.250")"#, r#"List.of("10000000000000000000")"#]),
+        ] {
+            let code = code(target);
+            for literal in written {
+                assert!(code.contains(literal), "{target}: {literal} in {code}");
+            }
+        }
     }
 
     #[test]

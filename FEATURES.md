@@ -300,11 +300,12 @@ A chart is drawn from numbers, written like a table: `<series>` are its columns,
 | `LChart` in the five SDKs, whose `value` takes a number | `L.chart`, `LChart.series`, `LChart.category`, `LChart.value` | 0.39.0 | [Chart](https://lpdf.io/docs/doc/layout/chart/) |
 
 - `type` takes `bar`, and no other value.
-- A label wider than its room wraps at spaces onto three lines at most, and what still doesn't fit ends in an ellipsis, so a chart always renders. In a horizontal chart the labels take a column as wide as the longest, a third of the chart's width at most.
+- A label wider than its room wraps at spaces onto three lines at most, and what still doesn't fit ends in an ellipsis, so a chart always renders. In a horizontal chart the labels take a column as wide as the longest, a third of the chart's width at most, and none where a category is thinner than a line of text.
 - A chart takes its box in the flow, never splits across pages, and moves whole to the next page when it doesn't fit. It is a leaf: no `padding`, `background` or `border`, and no title, which a `<text>` above it is. A chart can't be in a layer.
 - Without `color`, the series take the palette's colors in order, starting over past the eighth.
+- A legend at the bottom or the top takes half the chart's height at most, and one at the right its height and a third of its width: the entries that don't fit give way to an ellipsis.
 - With `value-labels`, a stacked chart writes the total of each stack. A value label is written with `decimals`, else with the decimals the value was written with, and rounds half up: `72.25` with one decimal is `72.3`.
-- Refused, with an error that names it: a value that is not a plain number (`'41,200' is not a plain number`), a category with more or fewer values than the chart has series, a negative value in a stacked chart, `thousands-mark` and `decimal-mark` the same, a `<series>`, `<category>` or `<value>` outside its chart or category, and a `<series>` after a category.
+- Refused, with an error that names it: a value that is not a plain number (`'41,200' is not a plain number`), a category with more or fewer values than the chart has series, a negative value in a stacked chart, a value, a stack's total, `min` or `max` past 1,000,000,000,000,000 either side of zero, a value of more than one number from code, `thousands-mark` and `decimal-mark` the same, a `<series>`, `<category>` or `<value>` outside its chart or category, and a `<series>` after a category.
 - `null` in the data, or an empty `<value/>`, is no value: no bar.
 - A chart holds 10,000 categories and 100 series at most, after the data is bound. See [Render limits](#render-limits).
 
@@ -429,6 +430,7 @@ A document built in code can name the words an attribute takes as constants. Doc
 | The XML of an invoice and of an invoice map: 2,000,000 nodes at most, with no DTD | 2,000,000 | Fixed | 0.36.0 | [Factur-X / ZUGFeRD, what it checks](https://lpdf.io/docs/factur-x-zugferd/#what-it-checks) |
 | The categories of a chart, after the data is bound: `a chart holds 10,000 categories at most; the data of 'fixtures' gives 50,000` | 10,000 | Fixed | 0.39.0 | [Chart, limits](https://lpdf.io/docs/doc/layout/chart/#limits) |
 | The series of a chart, after the data is bound | 100 | Fixed | 0.39.0 | [Chart, limits](https://lpdf.io/docs/doc/layout/chart/#limits) |
+| The values of a chart, the total of a stack, `min` and `max`, either side of zero: `a chart holds values of 1,000,000,000,000,000 at most, either side of zero` | 1,000,000,000,000,000 | Fixed | 0.39.0 | [Chart, limits](https://lpdf.io/docs/doc/layout/chart/#limits) |
 
 - There is no limit on the size of the XML, or of a document built in code.
 - The engine makes no network calls.

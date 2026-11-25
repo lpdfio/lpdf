@@ -3,7 +3,7 @@
      wrap, value labels and legends, each with its title. A fixture of the harness's own, so every build reads the same
      file: never edit it. -->
 <lpdf version="1">
-<document size="A4">
+<document>
 <section>
 <layout margin="40pt">
 <column gap="m">

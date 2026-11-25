@@ -17,6 +17,11 @@ use crate::tokens::Tokens;
 pub(crate) const MAX_CATEGORIES: usize = 10_000;
 /// The most series a chart holds, counted after the data is bound.
 pub(crate) const MAX_SERIES: usize = 100;
+/// The farthest from zero a value, a stack's total, `min` and `max` reach. Every whole number up to it is exact as a
+/// float, so every step and label is written as it is, and a hundred of them stacked are still far from overflowing.
+pub(crate) const MAX_VALUE: f64 = 1e15;
+/// The share of the chart's height a legend above or below the plot takes at most.
+const LEGEND_SHARE: f32 = 0.5;
 
 /// The fixed palette the series take their colors from, in order, when they set none. It starts over past the eighth.
 pub(crate) const PALETTE: [&str; 8] = [
@@ -194,9 +199,22 @@ fn read_decimals(v: &str) -> Result<u8, String> {
 
 fn read_bound(name: &str, v: &str) -> Result<f64, String> {
     match read_number(v) {
+        Ok(Some(number)) if number.value.abs() > MAX_VALUE => Err(format!(
+            "{name} '{}' is past what a chart holds: {}", shown(number.value), past_the_limit(),
+        )),
         Ok(Some(number)) => Ok(number.value),
         _ => Err(format!("invalid {name} '{v}': expected a number, such as 100 or -50")),
     }
+}
+
+/// The end of the error for a number past `MAX_VALUE`.
+fn past_the_limit() -> String {
+    format!("a chart holds values of {} at most, either side of zero", group_digits(&format!("{MAX_VALUE}"), Some(',')))
+}
+
+/// A number in an error: in full, or with an exponent past `MAX_VALUE`, where its digits would run on.
+fn shown(value: f64) -> String {
+    if value.abs() > MAX_VALUE { format!("{value:e}") } else { format!("{value}") }
 }
 
 /// One character, or none where `empty` lets the mark be left out.
@@ -363,12 +381,23 @@ pub(crate) fn check(spec: &ChartSpec, data: &ChartData) -> Result<(), String> {
                 category_name(category, index), category.values.len(), if category.values.len() == 1 { "" } else { "s" },
             ));
         }
+        if let Some(number) = category.values.iter().flatten().find(|number| number.value.abs() > MAX_VALUE) {
+            return Err(format!(
+                "{} has the value {}, and {}", category_name(category, index), shown(number.value), past_the_limit(),
+            ));
+        }
         if spec.stacked
             && let Some(number) = category.values.iter().flatten().find(|number| number.value < 0.0)
         {
             return Err(format!(
                 "{} has the value {}, and a stacked chart can't hold a negative value",
                 category_name(category, index), number.value,
+            ));
+        }
+        let total: f64 = category.values.iter().flatten().map(|number| number.value).sum();
+        if spec.stacked && total > MAX_VALUE {
+            return Err(format!(
+                "the values of {} total {}, and {}", category_name(category, index), shown(total), past_the_limit(),
             ));
         }
     }
@@ -674,8 +703,9 @@ struct LegendLayout {
 }
 
 /// The legend of `entries`: in rows that wrap at `width` and are centered in it, or, `in_column`, one entry a line in
-/// a column at most `width` wide.
-fn legend_layout(entries: &[(&str, &str)], text: Type, width: f32, in_column: bool) -> LegendLayout {
+/// a column at most `width` wide, `height` high at most. Entries past what fits give way to an ellipsis, in place of
+/// the last that fits, and a legend with no room for a line has none.
+fn legend_layout(entries: &[(&str, &str)], text: Type, width: f32, height: f32, in_column: bool) -> LegendLayout {
     let swatch = text.size * 0.8;
     let swatch_gap = text.size * 0.4;
     let between = text.size * 1.2;
@@ -686,7 +716,16 @@ fn legend_layout(entries: &[(&str, &str)], text: Type, width: f32, in_column: bo
         let w = swatch + if label.is_empty() { 0.0 } else { swatch_gap + text.width(&label) };
         (color.to_string(), label, w)
     }).collect();
+    let lines = (height / lh + 0.01).floor() as usize;
+    let rest = (String::new(), ELLIPSIS.to_string(), text.width(ELLIPSIS));
     if in_column {
+        let mut measured = measured;
+        if measured.len() > lines {
+            measured.truncate(lines.saturating_sub(1));
+            if lines > 0 {
+                measured.push(rest);
+            }
+        }
         let widest = measured.iter().map(|(_, _, w)| *w).fold(0.0, f32::max);
         let entries = measured.into_iter().enumerate()
             .map(|(i, (color, label, _))| (color, label, 0.0, i as f32 * lh))
@@ -707,6 +746,19 @@ fn legend_layout(entries: &[(&str, &str)], text: Type, width: f32, in_column: bo
             row.push(entry);
         }
     }
+    if rows.len() > lines {
+        rows.truncate(lines);
+        if let Some(last) = rows.last_mut() {
+            // The ellipsis takes the place of the entries it doesn't leave room for.
+            let row_w = |row: &[(String, String, f32)]| {
+                row.iter().map(|e| e.2).sum::<f32>() + between * row.len() as f32
+            };
+            while !last.is_empty() && row_w(last) + rest.2 > width + 0.01 {
+                last.pop();
+            }
+            last.push(rest);
+        }
+    }
     let mut placed = Vec::new();
     for (index, row) in rows.iter().enumerate() {
         let row_w: f32 = row.iter().map(|e| e.2).sum::<f32>() + between * row.len().saturating_sub(1) as f32;
@@ -725,10 +777,15 @@ fn draw_legend(legend: &LegendLayout, text: Type, x: f32, y: f32, out: &mut Vec<
     let swatch_gap = text.size * 0.4;
     let lh = text.line_height();
     for (color, label, ex, ey) in &legend.entries {
-        let top = y + ey + (lh - swatch) / 2.0;
-        out.push(rect(x + ex, top, swatch, swatch, color));
+        // The ellipsis of the entries left out has no swatch.
+        let label_x = if color.is_empty() {
+            x + ex
+        } else {
+            out.push(rect(x + ex, y + ey + (lh - swatch) / 2.0, swatch, swatch, color));
+            x + ex + swatch + swatch_gap
+        };
         if !label.is_empty() {
-            out.push(text.text(label.clone(), x + ex + swatch + swatch_gap, y + ey + (lh - text.size) / 2.0, "left"));
+            out.push(text.text(label.clone(), label_x, y + ey + (lh - text.size) / 2.0, "left"));
         }
     }
 }
@@ -814,10 +871,11 @@ pub(crate) fn draw(node: &Node, spec: &ChartSpec, data: &ChartData, x: f32, y: f
     match legend_place(spec, data) {
         Legend::None => {}
         place @ (Legend::Bottom | Legend::Top) => {
-            let legend = legend_layout(&legend_entries(data), text, width, false);
-            ph = (ph - legend.height - gap).max(0.0);
+            let legend = legend_layout(&legend_entries(data), text, width, height * LEGEND_SHARE, false);
+            let room = if legend.entries.is_empty() { 0.0 } else { legend.height + gap };
+            ph = (ph - room).max(0.0);
             let top = if place == Legend::Top {
-                py += legend.height + gap;
+                py += room;
                 y
             } else {
                 y + height - legend.height
@@ -825,8 +883,8 @@ pub(crate) fn draw(node: &Node, spec: &ChartSpec, data: &ChartData, x: f32, y: f
             draw_legend(&legend, text, x, top, &mut out);
         }
         Legend::Right => {
-            let legend = legend_layout(&legend_entries(data), text, width / 3.0, true);
-            pw = (pw - legend.width - gap).max(0.0);
+            let legend = legend_layout(&legend_entries(data), text, width / 3.0, height, true);
+            pw = (pw - if legend.entries.is_empty() { 0.0 } else { legend.width + gap }).max(0.0);
             draw_legend(&legend, text, x + width - legend.width, y, &mut out);
         }
     }
@@ -951,12 +1009,19 @@ fn draw_horizontal(
     let categories = data.categories.len();
     let series = data.series.len().max(1);
 
-    // The labels take a column as wide as the longest, a third of the chart at most.
-    let label_w = data.categories.iter().map(|c| text.width(c.label.trim())).fold(0.0, f32::max).min(width / 3.0);
-    let label_column = if label_w > 0.0 { label_w + gap } else { 0.0 };
     // The steps' row along the bottom.
     let plot_h = (height - gap - lh).max(0.0);
     let band = if categories == 0 { plot_h } else { plot_h / categories as f32 };
+    // The lines a label wraps onto: none where a category has no room for one, as the vertical form shortens its
+    // labels to nothing, so they don't pile on each other.
+    let lines_per_label = ((band / lh + 0.01).floor() as usize).min(LABEL_LINES);
+    // The labels take a column as wide as the longest, a third of the chart at most.
+    let label_w = if lines_per_label == 0 {
+        0.0
+    } else {
+        data.categories.iter().map(|c| text.width(c.label.trim())).fold(0.0, f32::max).min(width / 3.0)
+    };
+    let label_column = if label_w > 0.0 { label_w + gap } else { 0.0 };
 
     // Room for the value labels beside the bars, and for half of the first and the last steps' labels.
     let value_room = |negative: bool| -> f32 {
@@ -999,7 +1064,6 @@ fn draw_horizontal(
         out.push(text.text(format_number(value, axis.decimals, spec), line_x, plot_y + plot_h + gap + (lh - text.size) / 2.0, "center"));
     }
 
-    let lines_per_label = ((band / lh).floor() as usize).clamp(1, LABEL_LINES);
     let mut bars = BarSets::default();
     let mut labels = Vec::new();
     for (index, category) in data.categories.iter().enumerate() {

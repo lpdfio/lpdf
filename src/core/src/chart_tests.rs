@@ -369,6 +369,89 @@ fn a_negative_value_in_a_stacked_chart_is_refused() {
 }
 
 #[test]
+fn a_value_past_what_a_chart_holds_is_refused_with_the_limit() {
+    let huge = format!("17{}", "0".repeat(307));
+    let past = error(&format!(r#"<chart type="bar" height="100pt"><category label="Q1"><value>{huge}</value></category></chart>"#));
+    assert!(past.contains("category 'Q1' has the value 1.7e308, and a chart holds values of 1,000,000,000,000,000 at \
+        most, either side of zero"), "{past}");
+    let negative = error(r#"<chart type="bar" height="100pt"><category><value>-1000000000000001</value></category></chart>"#);
+    assert!(negative.contains("category 1 has the value -1.000000000000001e15"), "{negative}");
+    let at_the_limit = r#"<chart type="bar" height="100pt" value-labels="true"><category><value>1000000000000000</value></category></chart>"#;
+    assert!(texts(&laid_out(at_the_limit)).contains(&"1,000,000,000,000,000".to_string()));
+}
+
+#[test]
+fn a_value_of_the_data_past_what_a_chart_holds_is_refused() {
+    let xml = document(r#"<chart type="bar" height="120pt"><category label="Q1"><value data-value="amount">0</value></category></chart>"#);
+    let error = pages(&xml, Some(r#"{ "amount": 1.7e308 }"#)).map(|_| ()).expect_err("the document is refused");
+    assert!(error.contains("category 'Q1' has the value 1.7e308"), "{error}");
+}
+
+#[test]
+fn a_stack_whose_total_is_past_what_a_chart_holds_is_refused() {
+    let values: String = (0..20).map(|_| "<value>100000000000000</value>").collect();
+    let series: String = (0..20).map(|_| "<series/>").collect();
+    let error = error(&format!(r#"<chart type="bar" height="100pt" stacked="true">{series}<category label="Q1">{values}</category></chart>"#));
+    assert!(error.contains("the values of category 'Q1' total 2e15, and a chart holds values of 1,000,000,000,000,000"), "{error}");
+}
+
+#[test]
+fn a_min_or_a_max_past_what_a_chart_holds_is_refused() {
+    let error = error(r#"<chart type="bar" height="100pt" max="10000000000000000"><category><value>1</value></category></chart>"#);
+    assert!(error.contains("max '1e16' is past what a chart holds"), "{error}");
+}
+
+/// Every text and rect the pages draw lies between `top` and `bottom`.
+fn drawn_between(pages: &[RenderPage], top: f32, bottom: f32) -> bool {
+    let texts = all(pages).into_iter().filter_map(|n| match n { RenderNode::Text(t) => Some(t.y), _ => None });
+    let rects = bars(pages).into_iter().map(|b| b.1);
+    texts.chain(rects).all(|y| y >= top - 0.01 && y <= bottom + 0.01)
+}
+
+#[test]
+fn a_legend_keeps_to_the_rows_that_fit_and_ends_in_an_ellipsis() {
+    let series: String = (1..=60).map(|n| format!(r#"<series label="Series {n}"/>"#)).collect();
+    let values: String = (1..=60).map(|_| "<value>1</value>").collect();
+    let pages = laid_out(&format!(r#"<chart type="bar" height="80pt">{series}<category>{values}</category></chart>"#));
+    // The chart's box starts at the layout's margin.
+    assert!(drawn_between(&pages, 28.0, 28.0 + 80.0), "the legend stays in the chart's box");
+    let words = texts(&pages);
+    assert!(words.contains(&"Series 1".to_string()) && !words.contains(&"Series 60".to_string()), "{words:?}");
+    assert_eq!(words.iter().filter(|w| *w == ELLIPSIS).count(), 1, "{words:?}");
+}
+
+#[test]
+fn a_legend_at_the_right_keeps_to_the_lines_that_fit() {
+    let series: String = (1..=30).map(|n| format!(r#"<series label="S{n}"/>"#)).collect();
+    let values: String = (1..=30).map(|_| "<value>1</value>").collect();
+    let pages = laid_out(&format!(r#"<chart type="bar" height="100pt" legend="right">{series}<category>{values}</category></chart>"#));
+    assert!(drawn_between(&pages, 28.0, 28.0 + 100.0), "the legend stays in the chart's box");
+    let words = texts(&pages);
+    assert!(words.contains(&"S1".to_string()) && !words.contains(&"S30".to_string()), "{words:?}");
+    assert_eq!(words.iter().filter(|w| *w == ELLIPSIS).count(), 1, "{words:?}");
+}
+
+#[test]
+fn a_horizontal_chart_whose_categories_are_thinner_than_a_line_writes_no_labels() {
+    let categories: String = (1..=40).map(|n| format!(r#"<category label="Item {n}"><value>{n}</value></category>"#)).collect();
+    let pages = laid_out(&format!(r#"<chart type="bar" direction="horizontal" height="120pt">{categories}</chart>"#));
+    let words = texts(&pages);
+    assert!(!words.iter().any(|w| w.starts_with("Item")), "{words:?}");
+    assert_eq!(plot_bars(&pages).len(), 40);
+    assert!(drawn_between(&pages, 28.0, 28.0 + 120.0));
+}
+
+#[test]
+fn a_value_of_more_than_one_part_is_refused() {
+    let tree = serde_json::json!({ "type": "chart", "attrs": { "type": "bar", "height": "100pt" }, "nodes": [
+        { "type": "category", "attrs": {}, "nodes": [{ "type": "value", "attrs": {}, "nodes": ["120000", "95000"] }] },
+    ]});
+    let json = serde_json::json!({ "version": 1, "type": "document", "nodes": [{ "type": "section", "nodes": [{ "type": "layout", "nodes": [tree] }] }] });
+    let Err(error) = crate::parse::parse_tree(&json.to_string()) else { panic!("refused") };
+    assert!(error.contains("a value holds one number, and this one has 2: give each number a value of its own"), "{error}");
+}
+
+#[test]
 fn a_chart_without_a_height_is_refused() {
     let error = error(r#"<chart type="bar"/>"#);
     assert!(error.contains("height"), "{error}");
