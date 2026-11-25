@@ -10,8 +10,9 @@
 # build keeps the dependency versions it was released with. Turns on the split-stages feature when
 # <checkout>'s lib.rs has bench_layout_doc and bench_write_pdf, the embedded-fonts feature, with the
 # fonts benchmarks (benches/fonts.rs), when it has bench_font_srcs, the svg feature, with the svg
-# benchmarks (benches/svg.rs), when it has bench_images, and the markdown, code
-# and chart features when its schema has a <markdown>, a <code> and a <chart>. Writes to <out folder>:
+# benchmarks (benches/svg.rs), when it has bench_images, the markdown, code
+# and chart features when its schema has a <markdown>, a <code> and a <chart>, and the chart_lines
+# feature when its chart takes a sparkline, the last of the line charts. Writes to <out folder>:
 #
 #   summary.jsonl       gungraun's JSON line for each benchmark: instructions and estimated cycles
 #   allocations.jsonl   a JSON line for each benchmark: allocations, bytes allocated and peak memory
@@ -74,6 +75,10 @@ for element in markdown code chart; do
     WITH="$WITH, with <$element>"
   fi
 done
+if grep -q '<xs:enumeration value="sparkline"/>' "$SCHEMA"; then
+  FEATURES="${FEATURES:+$FEATURES,}chart_lines"
+  WITH="$WITH, with line charts"
+fi
 FEATURES="${FEATURES:+--features $FEATURES}"
 
 COMMIT=$(git -C "$CHECKOUT" rev-parse HEAD)

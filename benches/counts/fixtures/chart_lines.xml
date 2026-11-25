@@ -1,0 +1,518 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Line, area and sparkline charts of each form: two lines with a gap, thirty days whose labels skip, an area either
+     side of zero, a stacked area, and a table of sparklines, each with its title. A fixture of the harness's own, so
+     every build reads the same file: never edit it. -->
+<lpdf version="1">
+<document>
+<section>
+<layout margin="40pt">
+<column gap="m">
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Visits per month, part 1</text>
+        <chart type="line" height="160pt" legend="top">
+            <series label="This year"/>
+            <series label="Last year"/>
+            <category label="January"><value>31084</value><value>24239</value></category>
+            <category label="February"><value>29583</value><value>25988</value></category>
+            <category label="March"><value>29340</value><value>27451</value></category>
+            <category label="April"><value>27224</value><value>27390</value></category>
+            <category label="May"><value>27371</value><value/></category>
+            <category label="June"><value>25461</value><value>29274</value></category>
+            <category label="July"><value>28317</value><value>31993</value></category>
+            <category label="August"><value>28046</value><value>31137</value></category>
+            <category label="September"><value>30330</value><value>32379</value></category>
+            <category label="October"><value>32145</value><value/></category>
+            <category label="November"><value>34871</value><value>34090</value></category>
+            <category label="December"><value>34747</value><value>36434</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Orders per day, part 1</text>
+        <chart type="line" height="150pt" width="300pt" min="0" stroke-width="2pt" value-labels="true">
+            <category label="Nov 1"><value>771</value></category>
+            <category label="Nov 2"><value>721</value></category>
+            <category label="Nov 3"><value>699</value></category>
+            <category label="Nov 4"><value>745</value></category>
+            <category label="Nov 5"><value>722</value></category>
+            <category label="Nov 6"><value>648</value></category>
+            <category label="Nov 7"><value>662</value></category>
+            <category label="Nov 8"><value>659</value></category>
+            <category label="Nov 9"><value>621</value></category>
+            <category label="Nov 10"><value>561</value></category>
+            <category label="Nov 11"><value>492</value></category>
+            <category label="Nov 12"><value>518</value></category>
+            <category label="Nov 13"><value>575</value></category>
+            <category label="Nov 14"><value>535</value></category>
+            <category label="Nov 15"><value>458</value></category>
+            <category label="Nov 16"><value>501</value></category>
+            <category label="Nov 17"><value>480</value></category>
+            <category label="Nov 18"><value>505</value></category>
+            <category label="Nov 19"><value>448</value></category>
+            <category label="Nov 20"><value>430</value></category>
+            <category label="Nov 21"><value>371</value></category>
+            <category label="Nov 22"><value>393</value></category>
+            <category label="Nov 23"><value>329</value></category>
+            <category label="Nov 24"><value>273</value></category>
+            <category label="Nov 25"><value>275</value></category>
+            <category label="Nov 26"><value>278</value></category>
+            <category label="Nov 27"><value>237</value></category>
+            <category label="Nov 28"><value>316</value></category>
+            <category label="Nov 29"><value>304</value></category>
+            <category label="Nov 30"><value>361</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Margin per week, part 1</text>
+        <chart type="area" height="150pt" suffix="%" decimals="1">
+            <category label="Week 1"><value>3.15</value></category>
+            <category label="Week 2"><value>-1.87</value></category>
+            <category label="Week 3"><value>0.98</value></category>
+            <category label="Week 4"><value>-3.13</value></category>
+            <category label="Week 5"><value>2.03</value></category>
+            <category label="Week 6"><value>-0.66</value></category>
+            <category label="Week 7"><value>-2.66</value></category>
+            <category label="Week 8"><value>-3.43</value></category>
+            <category label="Week 9"><value>-0.07</value></category>
+            <category label="Week 10"><value>-0.21</value></category>
+            <category label="Week 11"><value>2.2</value></category>
+            <category label="Week 12"><value>-2.08</value></category>
+            <category label="Week 13"><value/></category>
+            <category label="Week 14"><value>-0.76</value></category>
+            <category label="Week 15"><value>-1.94</value></category>
+            <category label="Week 16"><value>1.84</value></category>
+            <category label="Week 17"><value>1.19</value></category>
+            <category label="Week 18"><value>-2.09</value></category>
+            <category label="Week 19"><value>0.57</value></category>
+            <category label="Week 20"><value>-2.59</value></category>
+            <category label="Week 21"><value>-1.99</value></category>
+            <category label="Week 22"><value>1.33</value></category>
+            <category label="Week 23"><value>4.11</value></category>
+            <category label="Week 24"><value>-3.39</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Storage per month, part 1</text>
+        <chart type="area" stacked="true" height="180pt" suffix=" GB" value-labels="true" legend="right">
+            <series label="Images"/>
+            <series label="Documents"/>
+            <series label="Backups"/>
+            <category label="Jan"><value>122</value><value>45</value><value>75</value></category>
+            <category label="Feb"><value>136</value><value>46</value><value>75</value></category>
+            <category label="Mar"><value>145</value><value>46</value><value>75</value></category>
+            <category label="Apr"><value>148</value><value>51</value><value>84</value></category>
+            <category label="May"><value>160</value><value>50</value><value>87</value></category>
+            <category label="Jun"><value>170</value><value>54</value><value>92</value></category>
+            <category label="Jul"><value>178</value><value/><value>97</value></category>
+            <category label="Aug"><value>188</value><value>59</value><value>104</value></category>
+            <category label="Sep"><value>194</value><value>59</value><value>105</value></category>
+            <category label="Oct"><value>198</value><value>62</value><value>111</value></category>
+            <category label="Nov"><value>199</value><value>65</value><value>111</value></category>
+            <category label="Dec"><value>199</value><value>66</value><value>114</value></category>
+        </chart>
+    </column>
+    <column gap="s">
+        <text font-size="l" bold="true">Sales of the last twelve weeks, part 1</text>
+        <table cols="2fr 1fr 90pt" gap="s">
+        <tr>
+            <td><text>Product 1</text></td>
+            <td><text align="right">996</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>65</value></category><category><value>65</value></category><category><value>64</value></category><category><value>64</value></category><category><value>64</value></category><category><value>73</value></category><category><value>75</value></category><category><value>80</value></category><category><value>82</value></category><category><value>90</value></category><category><value/></category><category><value>83</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 2</text></td>
+            <td><text align="right">1848</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>146</value></category><category><value>143</value></category><category><value>140</value></category><category><value>145</value></category><category><value>148</value></category><category><value>158</value></category><category><value>152</value></category><category><value>154</value></category><category><value>154</value></category><category><value/></category><category><value>148</value></category><category><value>154</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 3</text></td>
+            <td><text align="right">1668</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>119</value></category><category><value>119</value></category><category><value>120</value></category><category><value>117</value></category><category><value>125</value></category><category><value>131</value></category><category><value>135</value></category><category><value>127</value></category><category><value/></category><category><value>135</value></category><category><value>143</value></category><category><value>139</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 4</text></td>
+            <td><text align="right">1392</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>114</value></category><category><value>122</value></category><category><value>127</value></category><category><value>127</value></category><category><value>128</value></category><category><value>121</value></category><category><value>120</value></category><category><value/></category><category><value>110</value></category><category><value>115</value></category><category><value>110</value></category><category><value>116</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 5</text></td>
+            <td><text align="right">1164</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>134</value></category><category><value>125</value></category><category><value>125</value></category><category><value>125</value></category><category><value>119</value></category><category><value>122</value></category><category><value/></category><category><value>109</value></category><category><value>110</value></category><category><value>104</value></category><category><value>97</value></category><category><value>97</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 6</text></td>
+            <td><text align="right">864</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>87</value></category><category><value>78</value></category><category><value>80</value></category><category><value>73</value></category><category><value>78</value></category><category><value/></category><category><value>91</value></category><category><value>95</value></category><category><value>88</value></category><category><value>81</value></category><category><value>80</value></category><category><value>72</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 7</text></td>
+            <td><text align="right">1452</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>144</value></category><category><value>140</value></category><category><value>132</value></category><category><value>134</value></category><category><value/></category><category><value>133</value></category><category><value>134</value></category><category><value>134</value></category><category><value>128</value></category><category><value>121</value></category><category><value>114</value></category><category><value>121</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 8</text></td>
+            <td><text align="right">588</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>43</value></category><category><value>44</value></category><category><value>44</value></category><category><value/></category><category><value>45</value></category><category><value>52</value></category><category><value>61</value></category><category><value>62</value></category><category><value>70</value></category><category><value>63</value></category><category><value>56</value></category><category><value>49</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 9</text></td>
+            <td><text align="right">744</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>83</value></category><category><value>82</value></category><category><value/></category><category><value>83</value></category><category><value>91</value></category><category><value>82</value></category><category><value>79</value></category><category><value>74</value></category><category><value>77</value></category><category><value>69</value></category><category><value>71</value></category><category><value>62</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 10</text></td>
+            <td><text align="right">888</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>74</value></category><category><value/></category><category><value>68</value></category><category><value>61</value></category><category><value>55</value></category><category><value>61</value></category><category><value>55</value></category><category><value>54</value></category><category><value>63</value></category><category><value>66</value></category><category><value>71</value></category><category><value>74</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 11</text></td>
+            <td><text align="right">1764</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value/></category><category><value>132</value></category><category><value>127</value></category><category><value>123</value></category><category><value>121</value></category><category><value>130</value></category><category><value>132</value></category><category><value>141</value></category><category><value>151</value></category><category><value>147</value></category><category><value>141</value></category><category><value/></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 12</text></td>
+            <td><text align="right">1620</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>146</value></category><category><value>147</value></category><category><value>154</value></category><category><value>154</value></category><category><value>150</value></category><category><value>141</value></category><category><value>133</value></category><category><value>133</value></category><category><value>138</value></category><category><value>138</value></category><category><value/></category><category><value>135</value></category></chart></td>
+        </tr>
+        </table>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Visits per month, part 2</text>
+        <chart type="line" height="160pt" legend="top">
+            <series label="This year"/>
+            <series label="Last year"/>
+            <category label="January"><value>33469</value><value>25516</value></category>
+            <category label="February"><value>36814</value><value>24246</value></category>
+            <category label="March"><value>39593</value><value>22638</value></category>
+            <category label="April"><value>37602</value><value>22766</value></category>
+            <category label="May"><value>37880</value><value/></category>
+            <category label="June"><value>40619</value><value>22002</value></category>
+            <category label="July"><value>43973</value><value>20959</value></category>
+            <category label="August"><value>41773</value><value>20279</value></category>
+            <category label="September"><value>41379</value><value>21691</value></category>
+            <category label="October"><value>43482</value><value/></category>
+            <category label="November"><value>42763</value><value>24262</value></category>
+            <category label="December"><value>40591</value><value>25038</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Orders per day, part 2</text>
+        <chart type="line" height="150pt" width="300pt" min="0" stroke-width="2pt" value-labels="true">
+            <category label="Nov 1"><value>877</value></category>
+            <category label="Nov 2"><value>896</value></category>
+            <category label="Nov 3"><value>849</value></category>
+            <category label="Nov 4"><value>802</value></category>
+            <category label="Nov 5"><value>773</value></category>
+            <category label="Nov 6"><value>723</value></category>
+            <category label="Nov 7"><value>669</value></category>
+            <category label="Nov 8"><value>688</value></category>
+            <category label="Nov 9"><value>658</value></category>
+            <category label="Nov 10"><value>726</value></category>
+            <category label="Nov 11"><value>676</value></category>
+            <category label="Nov 12"><value>752</value></category>
+            <category label="Nov 13"><value>674</value></category>
+            <category label="Nov 14"><value>666</value></category>
+            <category label="Nov 15"><value>588</value></category>
+            <category label="Nov 16"><value>588</value></category>
+            <category label="Nov 17"><value>602</value></category>
+            <category label="Nov 18"><value>646</value></category>
+            <category label="Nov 19"><value>693</value></category>
+            <category label="Nov 20"><value>649</value></category>
+            <category label="Nov 21"><value>696</value></category>
+            <category label="Nov 22"><value>679</value></category>
+            <category label="Nov 23"><value>740</value></category>
+            <category label="Nov 24"><value>804</value></category>
+            <category label="Nov 25"><value>803</value></category>
+            <category label="Nov 26"><value>857</value></category>
+            <category label="Nov 27"><value>914</value></category>
+            <category label="Nov 28"><value>923</value></category>
+            <category label="Nov 29"><value>932</value></category>
+            <category label="Nov 30"><value>855</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Margin per week, part 2</text>
+        <chart type="area" height="150pt" suffix="%" decimals="1">
+            <category label="Week 1"><value>2.85</value></category>
+            <category label="Week 2"><value>3.69</value></category>
+            <category label="Week 3"><value>3.37</value></category>
+            <category label="Week 4"><value>-1.47</value></category>
+            <category label="Week 5"><value>-0.66</value></category>
+            <category label="Week 6"><value>4.26</value></category>
+            <category label="Week 7"><value>-0.14</value></category>
+            <category label="Week 8"><value>-1.37</value></category>
+            <category label="Week 9"><value>-0.4</value></category>
+            <category label="Week 10"><value>0.09</value></category>
+            <category label="Week 11"><value>1.21</value></category>
+            <category label="Week 12"><value>-3.41</value></category>
+            <category label="Week 13"><value/></category>
+            <category label="Week 14"><value>3.16</value></category>
+            <category label="Week 15"><value>3.21</value></category>
+            <category label="Week 16"><value>0.12</value></category>
+            <category label="Week 17"><value>1.54</value></category>
+            <category label="Week 18"><value>1.94</value></category>
+            <category label="Week 19"><value>-3.34</value></category>
+            <category label="Week 20"><value>-2.49</value></category>
+            <category label="Week 21"><value>1.16</value></category>
+            <category label="Week 22"><value>0.78</value></category>
+            <category label="Week 23"><value>-0.83</value></category>
+            <category label="Week 24"><value>-1.93</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Storage per month, part 2</text>
+        <chart type="area" stacked="true" height="180pt" suffix=" GB" value-labels="true" legend="right">
+            <series label="Images"/>
+            <series label="Documents"/>
+            <series label="Backups"/>
+            <category label="Jan"><value>134</value><value>44</value><value>74</value></category>
+            <category label="Feb"><value>134</value><value>42</value><value>80</value></category>
+            <category label="Mar"><value>137</value><value>41</value><value>87</value></category>
+            <category label="Apr"><value>140</value><value>47</value><value>90</value></category>
+            <category label="May"><value>147</value><value>51</value><value>91</value></category>
+            <category label="Jun"><value>161</value><value>53</value><value>100</value></category>
+            <category label="Jul"><value>173</value><value/><value>110</value></category>
+            <category label="Aug"><value>182</value><value>61</value><value>118</value></category>
+            <category label="Sep"><value>190</value><value>60</value><value>128</value></category>
+            <category label="Oct"><value>202</value><value>60</value><value>128</value></category>
+            <category label="Nov"><value>207</value><value>59</value><value>135</value></category>
+            <category label="Dec"><value>219</value><value>60</value><value>135</value></category>
+        </chart>
+    </column>
+    <column gap="s">
+        <text font-size="l" bold="true">Sales of the last twelve weeks, part 2</text>
+        <table cols="2fr 1fr 90pt" gap="s">
+        <tr>
+            <td><text>Product 1</text></td>
+            <td><text align="right">1032</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>81</value></category><category><value>81</value></category><category><value>74</value></category><category><value>77</value></category><category><value>76</value></category><category><value>82</value></category><category><value>82</value></category><category><value>76</value></category><category><value>86</value></category><category><value>77</value></category><category><value/></category><category><value>86</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 2</text></td>
+            <td><text align="right">1620</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>133</value></category><category><value>135</value></category><category><value>128</value></category><category><value>131</value></category><category><value>138</value></category><category><value>139</value></category><category><value>131</value></category><category><value>132</value></category><category><value>132</value></category><category><value/></category><category><value>132</value></category><category><value>135</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 3</text></td>
+            <td><text align="right">1596</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>137</value></category><category><value>145</value></category><category><value>142</value></category><category><value>139</value></category><category><value>136</value></category><category><value>141</value></category><category><value>148</value></category><category><value>139</value></category><category><value/></category><category><value>141</value></category><category><value>138</value></category><category><value>133</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 4</text></td>
+            <td><text align="right">768</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>59</value></category><category><value>55</value></category><category><value>49</value></category><category><value>50</value></category><category><value>56</value></category><category><value>56</value></category><category><value>50</value></category><category><value/></category><category><value>59</value></category><category><value>60</value></category><category><value>56</value></category><category><value>64</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 5</text></td>
+            <td><text align="right">1128</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>107</value></category><category><value>114</value></category><category><value>112</value></category><category><value>114</value></category><category><value>109</value></category><category><value>104</value></category><category><value/></category><category><value>100</value></category><category><value>96</value></category><category><value>105</value></category><category><value>101</value></category><category><value>94</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 6</text></td>
+            <td><text align="right">1332</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>115</value></category><category><value>123</value></category><category><value>119</value></category><category><value>128</value></category><category><value>128</value></category><category><value/></category><category><value>126</value></category><category><value>118</value></category><category><value>113</value></category><category><value>112</value></category><category><value>116</value></category><category><value>111</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 7</text></td>
+            <td><text align="right">1572</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>135</value></category><category><value>137</value></category><category><value>137</value></category><category><value>131</value></category><category><value/></category><category><value>138</value></category><category><value>147</value></category><category><value>148</value></category><category><value>144</value></category><category><value>144</value></category><category><value>137</value></category><category><value>131</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 8</text></td>
+            <td><text align="right">1644</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>130</value></category><category><value>137</value></category><category><value>144</value></category><category><value/></category><category><value>135</value></category><category><value>136</value></category><category><value>136</value></category><category><value>127</value></category><category><value>131</value></category><category><value>130</value></category><category><value>130</value></category><category><value>137</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 9</text></td>
+            <td><text align="right">1704</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>124</value></category><category><value>131</value></category><category><value/></category><category><value>123</value></category><category><value>123</value></category><category><value>114</value></category><category><value>121</value></category><category><value>126</value></category><category><value>132</value></category><category><value>141</value></category><category><value>150</value></category><category><value>142</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 10</text></td>
+            <td><text align="right">1476</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>150</value></category><category><value/></category><category><value>148</value></category><category><value>141</value></category><category><value>141</value></category><category><value>141</value></category><category><value>133</value></category><category><value>126</value></category><category><value>135</value></category><category><value>127</value></category><category><value>127</value></category><category><value>123</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 11</text></td>
+            <td><text align="right">804</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value/></category><category><value>54</value></category><category><value>54</value></category><category><value>60</value></category><category><value>56</value></category><category><value>62</value></category><category><value>56</value></category><category><value>62</value></category><category><value>68</value></category><category><value>71</value></category><category><value>63</value></category><category><value/></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 12</text></td>
+            <td><text align="right">1200</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>76</value></category><category><value>81</value></category><category><value>74</value></category><category><value>78</value></category><category><value>78</value></category><category><value>81</value></category><category><value>81</value></category><category><value>81</value></category><category><value>87</value></category><category><value>87</value></category><category><value/></category><category><value>100</value></category></chart></td>
+        </tr>
+        </table>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Visits per month, part 3</text>
+        <chart type="line" height="160pt" legend="top">
+            <series label="This year"/>
+            <series label="Last year"/>
+            <category label="January"><value>33444</value><value>24392</value></category>
+            <category label="February"><value>36170</value><value>24276</value></category>
+            <category label="March"><value>36562</value><value>22341</value></category>
+            <category label="April"><value>36777</value><value>23666</value></category>
+            <category label="May"><value>34695</value><value/></category>
+            <category label="June"><value>35140</value><value>23166</value></category>
+            <category label="July"><value>37668</value><value>25665</value></category>
+            <category label="August"><value>35693</value><value>25282</value></category>
+            <category label="September"><value>36894</value><value>24754</value></category>
+            <category label="October"><value>35406</value><value/></category>
+            <category label="November"><value>37473</value><value>23722</value></category>
+            <category label="December"><value>35553</value><value>25925</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Orders per day, part 3</text>
+        <chart type="line" height="150pt" width="300pt" min="0" stroke-width="2pt" value-labels="true">
+            <category label="Nov 1"><value>815</value></category>
+            <category label="Nov 2"><value>739</value></category>
+            <category label="Nov 3"><value>806</value></category>
+            <category label="Nov 4"><value>774</value></category>
+            <category label="Nov 5"><value>769</value></category>
+            <category label="Nov 6"><value>828</value></category>
+            <category label="Nov 7"><value>827</value></category>
+            <category label="Nov 8"><value>874</value></category>
+            <category label="Nov 9"><value>950</value></category>
+            <category label="Nov 10"><value>1009</value></category>
+            <category label="Nov 11"><value>1039</value></category>
+            <category label="Nov 12"><value>1076</value></category>
+            <category label="Nov 13"><value>1017</value></category>
+            <category label="Nov 14"><value>1047</value></category>
+            <category label="Nov 15"><value>1028</value></category>
+            <category label="Nov 16"><value>1099</value></category>
+            <category label="Nov 17"><value>1162</value></category>
+            <category label="Nov 18"><value>1116</value></category>
+            <category label="Nov 19"><value>1067</value></category>
+            <category label="Nov 20"><value>1083</value></category>
+            <category label="Nov 21"><value>1121</value></category>
+            <category label="Nov 22"><value>1104</value></category>
+            <category label="Nov 23"><value>1111</value></category>
+            <category label="Nov 24"><value>1079</value></category>
+            <category label="Nov 25"><value>1136</value></category>
+            <category label="Nov 26"><value>1192</value></category>
+            <category label="Nov 27"><value>1170</value></category>
+            <category label="Nov 28"><value>1098</value></category>
+            <category label="Nov 29"><value>1099</value></category>
+            <category label="Nov 30"><value>1116</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Margin per week, part 3</text>
+        <chart type="area" height="150pt" suffix="%" decimals="1">
+            <category label="Week 1"><value>0.96</value></category>
+            <category label="Week 2"><value>1.38</value></category>
+            <category label="Week 3"><value>-1.59</value></category>
+            <category label="Week 4"><value>3.53</value></category>
+            <category label="Week 5"><value>-3.01</value></category>
+            <category label="Week 6"><value>1.77</value></category>
+            <category label="Week 7"><value>0.48</value></category>
+            <category label="Week 8"><value>1.24</value></category>
+            <category label="Week 9"><value>-2.02</value></category>
+            <category label="Week 10"><value>-3.09</value></category>
+            <category label="Week 11"><value>-2.05</value></category>
+            <category label="Week 12"><value>-1.0</value></category>
+            <category label="Week 13"><value/></category>
+            <category label="Week 14"><value>-1.79</value></category>
+            <category label="Week 15"><value>-3.13</value></category>
+            <category label="Week 16"><value>2.8</value></category>
+            <category label="Week 17"><value>-0.98</value></category>
+            <category label="Week 18"><value>-2.33</value></category>
+            <category label="Week 19"><value>0.84</value></category>
+            <category label="Week 20"><value>3.05</value></category>
+            <category label="Week 21"><value>1.3</value></category>
+            <category label="Week 22"><value>-1.75</value></category>
+            <category label="Week 23"><value>-2.49</value></category>
+            <category label="Week 24"><value>3.1</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Storage per month, part 3</text>
+        <chart type="area" stacked="true" height="180pt" suffix=" GB" value-labels="true" legend="right">
+            <series label="Images"/>
+            <series label="Documents"/>
+            <series label="Backups"/>
+            <category label="Jan"><value>125</value><value>40</value><value>66</value></category>
+            <category label="Feb"><value>139</value><value>38</value><value>76</value></category>
+            <category label="Mar"><value>145</value><value>38</value><value>87</value></category>
+            <category label="Apr"><value>149</value><value>37</value><value>87</value></category>
+            <category label="May"><value>150</value><value>39</value><value>88</value></category>
+            <category label="Jun"><value>155</value><value>39</value><value>89</value></category>
+            <category label="Jul"><value>158</value><value/><value>94</value></category>
+            <category label="Aug"><value>170</value><value>41</value><value>95</value></category>
+            <category label="Sep"><value>179</value><value>39</value><value>100</value></category>
+            <category label="Oct"><value>192</value><value>38</value><value>105</value></category>
+            <category label="Nov"><value>194</value><value>42</value><value>109</value></category>
+            <category label="Dec"><value>202</value><value>46</value><value>112</value></category>
+        </chart>
+    </column>
+    <column gap="s">
+        <text font-size="l" bold="true">Sales of the last twelve weeks, part 3</text>
+        <table cols="2fr 1fr 90pt" gap="s">
+        <tr>
+            <td><text>Product 1</text></td>
+            <td><text align="right">1320</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>95</value></category><category><value>101</value></category><category><value>101</value></category><category><value>102</value></category><category><value>93</value></category><category><value>102</value></category><category><value>102</value></category><category><value>102</value></category><category><value>102</value></category><category><value>110</value></category><category><value/></category><category><value>110</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 2</text></td>
+            <td><text align="right">1116</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>104</value></category><category><value>104</value></category><category><value>98</value></category><category><value>97</value></category><category><value>102</value></category><category><value>96</value></category><category><value>101</value></category><category><value>100</value></category><category><value>102</value></category><category><value/></category><category><value>94</value></category><category><value>93</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 3</text></td>
+            <td><text align="right">972</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>74</value></category><category><value>69</value></category><category><value>70</value></category><category><value>61</value></category><category><value>53</value></category><category><value>49</value></category><category><value>59</value></category><category><value>61</value></category><category><value/></category><category><value>74</value></category><category><value>77</value></category><category><value>81</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 4</text></td>
+            <td><text align="right">1764</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>129</value></category><category><value>133</value></category><category><value>142</value></category><category><value>135</value></category><category><value>137</value></category><category><value>143</value></category><category><value>139</value></category><category><value/></category><category><value>145</value></category><category><value>145</value></category><category><value>152</value></category><category><value>147</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 5</text></td>
+            <td><text align="right">1008</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>81</value></category><category><value>81</value></category><category><value>89</value></category><category><value>91</value></category><category><value>82</value></category><category><value>87</value></category><category><value/></category><category><value>76</value></category><category><value>79</value></category><category><value>76</value></category><category><value>74</value></category><category><value>84</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 6</text></td>
+            <td><text align="right">1464</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>123</value></category><category><value>116</value></category><category><value>120</value></category><category><value>117</value></category><category><value>115</value></category><category><value/></category><category><value>110</value></category><category><value>110</value></category><category><value>119</value></category><category><value>120</value></category><category><value>128</value></category><category><value>122</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 7</text></td>
+            <td><text align="right">1008</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>94</value></category><category><value>100</value></category><category><value>97</value></category><category><value>98</value></category><category><value/></category><category><value>104</value></category><category><value>104</value></category><category><value>104</value></category><category><value>98</value></category><category><value>90</value></category><category><value>82</value></category><category><value>84</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 8</text></td>
+            <td><text align="right">1260</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>103</value></category><category><value>99</value></category><category><value>90</value></category><category><value/></category><category><value>92</value></category><category><value>98</value></category><category><value>98</value></category><category><value>105</value></category><category><value>102</value></category><category><value>111</value></category><category><value>102</value></category><category><value>105</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 9</text></td>
+            <td><text align="right">1440</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>134</value></category><category><value>129</value></category><category><value/></category><category><value>122</value></category><category><value>117</value></category><category><value>120</value></category><category><value>124</value></category><category><value>123</value></category><category><value>123</value></category><category><value>124</value></category><category><value>124</value></category><category><value>120</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 10</text></td>
+            <td><text align="right">1320</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>86</value></category><category><value/></category><category><value>81</value></category><category><value>85</value></category><category><value>88</value></category><category><value>93</value></category><category><value>94</value></category><category><value>103</value></category><category><value>110</value></category><category><value>102</value></category><category><value>102</value></category><category><value>110</value></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 11</text></td>
+            <td><text align="right">1752</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value/></category><category><value>153</value></category><category><value>159</value></category><category><value>151</value></category><category><value>143</value></category><category><value>134</value></category><category><value>132</value></category><category><value>140</value></category><category><value>146</value></category><category><value>146</value></category><category><value>146</value></category><category><value/></category></chart></td>
+        </tr>
+        <tr>
+            <td><text>Product 12</text></td>
+            <td><text align="right">1068</text></td>
+            <td><chart type="sparkline" height="14pt"><category><value>102</value></category><category><value>100</value></category><category><value>95</value></category><category><value>89</value></category><category><value>86</value></category><category><value>79</value></category><category><value>76</value></category><category><value>71</value></category><category><value>76</value></category><category><value>83</value></category><category><value/></category><category><value>89</value></category></chart></td>
+        </tr>
+        </table>
+    </column>
+</column>
+</layout>
+</section>
+</document>
+</lpdf>

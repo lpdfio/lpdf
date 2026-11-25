@@ -45,7 +45,7 @@ const END_TO_END = STAGES.findIndex(s => s.id === 'end_to_end');
 export const FIXTURES = ['xs', 's', 'm', 'l', 'xl'];
 
 /** The fixtures of one feature each, in the order of the table, after the sizes. */
-export const FEATURE_FIXTURES = ['justified', 'data', 'markdown', 'code', 'chart', 'fonts', 'svg'];
+export const FEATURE_FIXTURES = ['justified', 'data', 'markdown', 'code', 'chart', 'chart_lines', 'fonts', 'svg'];
 
 /**
  * What the table shows. The work is Callgrind's, under the metric of gungraun's summary; the memory is the

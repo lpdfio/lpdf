@@ -28,6 +28,9 @@ code     = []
 # The checkout reads a <chart>, which the fixture `chart` of `fixtures/` is made of. scripts/bench-counts.sh turns it on
 # where the checkout's schema has the element.
 chart    = []
+# The checkout draws line, area and sparkline charts, which the fixture `chart_lines` of `fixtures/` is made of.
+# scripts/bench-counts.sh turns it on where the checkout's schema has a chart of type sparkline.
+chart_lines = []
 # The checkout's lib.rs has bench_images and bench_render_doc_with_loaded_images, which the `svg` fixture's stages call: it
 # draws SVG pictures, which an earlier release can't read. scripts/bench-counts.sh turns it on where they are.
 svg = []
