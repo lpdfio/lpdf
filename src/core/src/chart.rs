@@ -49,7 +49,7 @@ const LINE_WIDTH: f32 = 1.5;
 const SPARKLINE_WIDTH: f32 = 1.0;
 /// How strong an area's fill is, from 0 to 1: the gridlines, and an area behind it, show through.
 const AREA_OPACITY: f32 = 0.3;
-/// How much wider than its line a value alone between two missing ones is drawn, as a dot: as wide as the line, it
+/// How much wider than its line a value with no value next to it is drawn, as a dot: as wide as the line, it
 /// would hardly show.
 const DOT_SCALE: f32 = 2.5;
 /// The steps a line's category labels are written at: every label, or every 2nd, 3rd or 5th.
@@ -1033,7 +1033,7 @@ fn widest_step(spec: &ChartSpec, axis: &Axis, text: Type) -> f32 {
 }
 
 /// The plot of a chart whose categories run along the bottom, with the value axis on its left: where it is, its axis,
-/// the room of a category, and the lines of each category's label under it.
+/// the room of a category, and the lines of each category's label under it, written every `step`th category.
 struct Frame {
     plot_x: f32,
     plot_y: f32,
@@ -1041,39 +1041,40 @@ struct Frame {
     plot_h: f32,
     band:   f32,
     axis:   Axis,
+    step:   usize,
     lines:  Vec<Vec<String>>,
 }
 
 impl Frame {
     /// The plot in `area`, `top` and `bottom` kept free above and below it: `fit` gives the axis of a plot that high,
-    /// and `labels` the lines of each category's label for a plot whose left edge is at its first argument, in
-    /// categories as wide as its second. The steps set the room of their labels,
-    /// which sets the room of the categories, which sets how many lines their labels take, which sets the room left for
-    /// the plot, which sets how many steps fit: twice round settles it.
+    /// and `labels` every how many categories a label is written and the lines of each category's label, for a plot
+    /// whose left edge is at its first argument, in categories as wide as its second. The steps set the room of their
+    /// labels, which sets the room of the categories, which sets how many lines their labels take, which sets the room
+    /// left for the plot, which sets how many steps fit: twice round settles it.
     #[allow(clippy::too_many_arguments)]
     fn settle(
         spec: &ChartSpec, data: &ChartData, text: Type, gap: f32, area: (f32, f32, f32, f32), top: f32, bottom: f32,
-        fit: impl Fn(f32) -> Axis, labels: impl Fn(f32, f32) -> Vec<Vec<String>>,
+        fit: impl Fn(f32) -> Axis, labels: impl Fn(f32, f32) -> (usize, Vec<Vec<String>>),
     ) -> Frame {
         let (x, y, width, height) = area;
         let lh = text.line_height();
         let categories = data.categories.len();
         let labeled = data.categories.iter().any(|c| !c.label.trim().is_empty());
         let mut axis = fit(height);
-        let mut layout = (0.0, 0.0, 0.0, Vec::new());
+        let mut layout = (0.0, 0.0, 0.0, 1, Vec::new());
         for _ in 0..2 {
             let axis_w = widest_step(spec, &axis, text);
             let plot_x = x + axis_w + gap;
             let plot_w = (width - axis_w - gap).max(0.0);
             let band = if categories == 0 { plot_w } else { plot_w / categories as f32 };
-            let lines = labels(plot_x, band);
+            let (step, lines) = labels(plot_x, band);
             let label_h = lines.iter().map(Vec::len).max().unwrap_or(0) as f32 * lh;
             let below = if labeled { gap + label_h } else { 0.0 };
             let plot_h = (height - top - bottom - below).max(0.0);
             axis = fit(plot_h);
-            layout = (plot_x, plot_w, plot_h, lines);
+            layout = (plot_x, plot_w, plot_h, step, lines);
         }
-        let (plot_x, plot_w, plot_h, lines) = layout;
+        let (plot_x, plot_w, plot_h, step, lines) = layout;
         let axis_w = widest_step(spec, &axis, text);
         Frame {
             plot_x: plot_x.max(x + axis_w + gap),
@@ -1082,6 +1083,7 @@ impl Frame {
             plot_h,
             band: if categories == 0 { 0.0 } else { plot_w / categories as f32 },
             axis,
+            step,
             lines,
         }
     }
@@ -1129,7 +1131,7 @@ fn draw_vertical(
     let frame = Frame::settle(
         spec, data, text, gap, area, top, bottom,
         |plot_h| Axis::fit(low, high, plot_h, lh * 1.2),
-        |_, band| data.categories.iter().map(|c| text.wrapped(&c.label, band * 0.95, LABEL_LINES)).collect(),
+        |_, band| (1, data.categories.iter().map(|c| text.wrapped(&c.label, band * 0.95, LABEL_LINES)).collect()),
     );
     frame.draw_steps(spec, text, gap, out);
     let (plot_x, band, lines) = (frame.plot_x, frame.band, &frame.lines);
@@ -1231,7 +1233,7 @@ fn polylines(color: &str, paint: PolylinePaint, runs: Vec<Vec<[f32; 2]>>) -> Ren
     RenderNode::Polylines(RenderPolylines { color: color.to_string(), paint, runs })
 }
 
-/// The line of a series, `width` wide, through its runs of points, and a value alone between missing ones as a dot
+/// The line of a series, `width` wide, through its runs of points, and a value with no value next to it as a dot
 /// `DOT_SCALE` times as wide. Nothing for a width of zero.
 fn draw_line(color: &str, width: f32, runs: Vec<Vec<[f32; 2]>>, out: &mut Vec<RenderNode>) {
     if width <= 0.0 {
@@ -1272,10 +1274,9 @@ fn draw_lines(
         }
     };
     let (left, right) = (x, x + width);
-    let step_of = |plot_x: f32, band: f32| label_step(data, text, plot_x, band, left, right);
     let labels = |plot_x: f32, band: f32| {
-        let step = step_of(plot_x, band);
-        data.categories.iter().enumerate()
+        let step = label_step(data, text, plot_x, band, left, right);
+        let lines = data.categories.iter().enumerate()
             .map(|(index, c)| {
                 if index % step != 0 {
                     return Vec::new();
@@ -1283,10 +1284,11 @@ fn draw_lines(
                 let (_, room) = label_span(index, step, plot_x, band, left, right);
                 text.wrapped(&c.label, room * 0.95, LABEL_LINES)
             })
-            .collect()
+            .collect();
+        (step, lines)
     };
     let frame = Frame::settle(spec, data, text, gap, area, top, 0.0, fit, labels);
-    let step = step_of(frame.plot_x, frame.band);
+    let step = frame.step;
     frame.draw_steps(spec, text, gap, out);
     let point_x = |index: usize| frame.plot_x + (index as f32 + 0.5) * frame.band;
     let point = |index: usize, value: f64| [point_x(index), frame.at(value)];
@@ -1378,7 +1380,7 @@ fn draw_sparkline(spec: &ChartSpec, data: &ChartData, area: (f32, f32, f32, f32)
     let high = spec.max.map_or(high, |max| max.max(high));
     // Values that are all the same draw a line across the middle.
     let (low, high) = if high > low { (low, high) } else { (low - 1.0, high + 1.0) };
-    // The line's round ends and joins, and the dot of a value alone between missing ones, stay inside the box.
+    // The line's round ends and joins, and the dot of a value with no value next to it, stay inside the box.
     let alone = |index: usize| {
         values[index].is_some()
             && (index == 0 || values[index - 1].is_none())
