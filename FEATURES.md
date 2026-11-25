@@ -313,7 +313,7 @@ A chart is drawn from numbers, written like a table: `<series>` are its columns,
 - A legend at the bottom or the top takes half the chart's height at most, and one at the right its height and a third of its width: the entries that don't fit give way to an ellipsis.
 - With `value-labels`, a stacked chart writes the total of each stack. A sparkline writes none. A value label is written with `decimals`, else with the decimals the value was written with, and rounds half up: `72.25` with one decimal is `72.3`.
 - Refused, with an error that names it: a value that is not a plain number (`'41,200' is not a plain number`), a category with more or fewer values than the chart has series, a negative value in a stacked chart, a value, a stack's total, `min` or `max` past 1,000,000,000,000,000 either side of zero, a value of more than one number from code, `thousands-mark` and `decimal-mark` the same, a `<series>`, `<category>` or `<value>` outside its chart or category, a `<series>` after a category, `direction` on any kind but `bar` (`direction is for a bar chart, and this is a line chart`), `stacked` on a line or a sparkline, a `<series>` in a sparkline, and a negative `stroke-width`.
-- `null` or a missing key in the data, or an empty `<value/>`, is no value: no bar, and a break in a line, an area or a sparkline, where a value alone between two missing ones is a dot. In a stacked area it counts as zero.
+- `null` or a missing key in the data, or an empty `<value/>`, is no value: no bar, and a break in a line, an area or a sparkline, where a value with no value next to it is a dot. In a stacked area it counts as zero.
 - A chart holds 10,000 categories and 100 series at most, after the data is bound. See [Render limits](#render-limits).
 
 ## Forms
