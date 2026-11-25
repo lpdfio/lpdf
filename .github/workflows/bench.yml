@@ -22,9 +22,15 @@ run-name: "${{ inputs.tags && format('Bench counts: backfill {0}', inputs.tags) 
 # function: the Callgrind profile of each benchmark for callgrind_annotate, and a DHAT profile with
 # whole stacks for dh_view.html (scripts/bench-counts.sh).
 #
+# The report is a PDF too, rendered by the command line of the commit the run is on, from
+# scripts/bench-counts-report.xml and the report as JSON: Lpdf making a document from data in a
+# pipeline, as its users' do. A run of a branch, main or an RC keeps it as a download of the run,
+# named after the build it measured; a release keeps it in lpdf-bench.
+#
 # A release, and each tag of a backfill, saves its counts to lpdf-bench as counts/vX.Y.Z.json, with
-# those of the release before it, measured in the same run (job "history"), and writes
-# counts/SUMMARY.md there: a row for each release, to see how the core moved over the releases.
+# those of the release before it, measured in the same run, and the PDF beside them as
+# counts/vX.Y.Z.pdf (job "history"), and writes counts/SUMMARY.md there: a row for each release, to
+# see how the core moved over the releases.
 
 on:
   push:
@@ -63,7 +69,24 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: dtolnay/rust-toolchain@1.99.0
+        # Rust is pinned here only, and bumped on purpose, such as at a release: every build of a run
+        # uses this compiler, and the history in lpdf-bench names it, so a step from a new compiler
+        # shows as one. CI and the release build stay on stable.
+
+      # The command line of the commit the run is on, which renders the PDF of the report, built as
+      # release.yml builds it for the release notes. In the checkout's own target: each build the run
+      # measures is built in a checkout of its own (scripts/bench-counts.sh).
+      - name: Build the command line
+        env:
+          LPDF_PUBLIC_KEY: ${{ secrets.LPDF_PUBLIC_KEY }}
+        run: cargo build --release --manifest-path src/cli/Cargo.toml
+
+      # With LPDF_CLI, the tests render the JSON of a test of two builds and of three with the
+      # template, so a template the JSON doesn't fit fails here, before anything is measured.
       - name: Test the report and the summary
+        env:
+          LPDF_CLI: ${{ github.workspace }}/target/release/lpdf
         run: node --test scripts/bench-counts-report.test.mjs scripts/bench-counts-summary.test.mjs
 
       # Writes $RUNNER_TEMP/builds.txt, a build a line: `<folder> <commit> <name>`, and reports.txt,
@@ -146,11 +169,6 @@ jobs:
 
           echo "Builds:"; cat "$BUILDS"
           echo "Reports:"; cat "$REPORTS"
-
-      - uses: dtolnay/rust-toolchain@1.99.0
-        # Rust is pinned here only, and bumped on purpose, such as at a release: every build of a run
-        # uses this compiler, and the history in lpdf-bench names it, so a step from a new compiler
-        # shows as one. CI and the release build stay on stable.
 
       # Valgrind from Ubuntu's archive, its packages kept between runs. It needs the libc6-dbg of the
       # runner's libc6, so a new libc6 in the runner image makes a new cache.
@@ -246,7 +264,7 @@ jobs:
               continue
             fi
             set -- --mark-end-to-end "$MARK_END_TO_END" --mark-stage "$MARK_STAGE" --mark-allocations "$MARK_ALLOCATIONS" \
-              --markdown "$RUNNER_TEMP/report/$n.md" --about "rust=$rust"
+              --markdown "$RUNNER_TEMP/report/$n.md" --json "$RUNNER_TEMP/report/$n.json" --about "rust=$rust"
             if [ "$history" = history ]; then
               set -- "$@" --history "$RUNNER_TEMP/history/$name.json" \
                 --about "valgrind=$(valgrind --version)" \
@@ -257,6 +275,16 @@ jobs:
             for folder in $folders; do set -- "$@" "$RUNNER_TEMP/counts/$folder"; done
             node scripts/bench-counts-report.mjs "$@"
             cat "$RUNNER_TEMP/report/$n.md" >> "$GITHUB_STEP_SUMMARY"
+            # The PDF, named after the build the report is for. A release keeps it beside its counts for
+            # lpdf-bench; any other run has one report, whose PDF the next step keeps as a download.
+            pdf="$RUNNER_TEMP/report/lpdf-bench-counts-$last.pdf"
+            target/release/lpdf convert --input scripts/bench-counts-report.xml --data "$RUNNER_TEMP/report/$n.json" \
+              --output "$pdf" < /dev/null
+            if [ "$history" = history ]; then
+              cp "$pdf" "$RUNNER_TEMP/history/$name.pdf"
+            else
+              echo "BENCH_PDF=$pdf" >> "$GITHUB_ENV"
+            fi
           done < "$RUNNER_TEMP/reports.txt"
 
       - uses: actions/upload-artifact@v6
@@ -268,6 +296,16 @@ jobs:
             ${{ runner.temp }}/report/
             ${{ runner.temp }}/history/
           if-no-files-found: ignore
+
+      # `archive: false` uploads the file as it is, so the download is the PDF and not a zip with the PDF
+      # in it. The artifact is then named after the file, and `name` is ignored.
+      - name: Keep the PDF as a download of the run
+        if: ${{ !cancelled() && env.BENCH_PDF != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ env.BENCH_PDF }}
+          archive: false
+          if-no-files-found: error
 
       # Apart from bench-counts, which the history job downloads.
       - uses: actions/upload-artifact@v6
@@ -340,6 +378,10 @@ jobs:
           set -eu
           mkdir -p counts
           cp ../bench-counts/history/*.json counts/
+          # The PDF of each release that was measured, beside its counts. One that wasn't has none.
+          for pdf in ../bench-counts/history/*.pdf; do
+            if [ -f "$pdf" ]; then cp "$pdf" counts/; fi
+          done
           node ../lpdf/scripts/bench-counts-summary.mjs counts --markdown counts/SUMMARY.md
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
