@@ -810,6 +810,24 @@ fn the_labels_of_a_line_stay_inside_the_chart() {
 }
 
 #[test]
+fn a_plot_moved_right_by_wider_steps_still_ends_at_the_right_edge() {
+    // At this size the steps the plot is laid out for are whole numbers, and the last axis's write halves: wider.
+    let pages = laid_out(r#"<chart type="bar" width="340pt" height="124pt">
+        <category label="Northern region"><value>1.2</value></category>
+        <category label="South"><value>2.6</value></category>
+        <category label="East"><value>2.0</value></category>
+        <category label="West"><value>0.7</value></category></chart>"#);
+    let right = 28.0 + 340.0;
+    for node in all(&pages) {
+        if let RenderNode::Line(l) = node {
+            assert!(l.x2 <= right + 0.01, "a gridline ends at {} past {right}", l.x2);
+        }
+    }
+    let (x, _, w, _, _) = *plot_bars(&pages).last().expect("bars");
+    assert!(x + w <= right + 0.01, "the last bar ends at {} past {right}", x + w);
+}
+
+#[test]
 fn value_labels_are_over_the_points_and_a_stacked_area_writes_its_totals() {
     let line = texts(&laid_out(r#"<chart type="line" height="160pt" value-labels="true" decimals="1">
         <category><value>4</value></category><category><value>6.25</value></category></chart>"#));

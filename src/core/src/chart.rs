@@ -1075,9 +1075,12 @@ impl Frame {
             layout = (plot_x, plot_w, plot_h, step, lines);
         }
         let (plot_x, plot_w, plot_h, step, lines) = layout;
-        let axis_w = widest_step(spec, &axis, text);
+        // The last axis's steps can write wider than the steps the plot was laid out for: the plot then moves right
+        // by the difference, and narrows by as much, so it still ends at the chart's right edge.
+        let moved = (x + widest_step(spec, &axis, text) + gap - plot_x).max(0.0);
+        let plot_w = (plot_w - moved).max(0.0);
         Frame {
-            plot_x: plot_x.max(x + axis_w + gap),
+            plot_x: plot_x + moved,
             plot_y: y + top,
             plot_w,
             plot_h,
