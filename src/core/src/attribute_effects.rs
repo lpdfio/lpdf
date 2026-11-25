@@ -70,7 +70,6 @@ const INVISIBLE: &[(&str, &str)] = &[];
 /// Attributes this test cannot exercise: `element@attribute`, and why.
 const UNTESTED: &[(&str, &str)] = &[
     ("lpdf@version", "selects the format; the parser accepts only 1, so there is no second value to render"),
-    ("chart@type", "selects the kind of chart; the schema takes only bar, so there is no second value to render"),
     (
         "font@src",
         "read by the SDKs, which load the file and hand it to the engine under the font's name or ref; the engine never sees it",
@@ -556,6 +555,8 @@ const SLOTS: [&str; 6] = ["xs", "s", "m", "l", "xl", "xxl"];
 const CHART_CATEGORIES: &str = r#"<category label="North"><value>41200</value><value>38900.5</value></category><category label="South"><value>12000</value><value>-3500</value></category>"#;
 /// A chart of two series and its categories.
 const CHART: &str = r#"<series label="Plan"/><series label="Actual"/><category label="North"><value>41200</value><value>38900.5</value></category><category label="South"><value>12000</value><value>-3500</value></category>"#;
+/// A chart of one series, which every kind takes: a sparkline takes no series.
+const CHART_ONE_SERIES: &str = r#"<category label="North"><value>41200</value></category><category label="South"><value>-3500</value></category><category label="East"><value>12000</value></category>"#;
 /// A chart of two series with no negative value, which a stacked chart refuses.
 const CHART_STACKABLE: &str = r#"<series label="Plan"/><series label="Actual"/><category label="North"><value>41200</value><value>38900.5</value></category><category label="South"><value>12000</value><value>3500</value></category>"#;
 
@@ -1130,6 +1131,9 @@ fn tweaks() -> HashMap<String, Tweak> {
     // Charts: a stack holds no negative value; the decimals and the decimal mark show on the values written by the
     // bars, and the decimal mark beside a thousands mark that isn't the comma it would be.
     add("chart@stacked", Tweak::default().content(CHART_STACKABLE));
+    // Every kind on a chart of one series, which a sparkline is; the width of the lines on a line.
+    add("chart@type", Tweak::default().content(CHART_ONE_SERIES));
+    add("chart@stroke-width", Tweak::default().set("type", "line"));
     add("chart@decimals", Tweak::default().set("value-labels", "true"));
     add("chart@decimal-mark", Tweak::default().set("value-labels", "true").set("thousands-mark", " "));
 

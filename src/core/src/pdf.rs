@@ -45,7 +45,10 @@ use subsetter::GlyphRemapper;
 
 use crate::attachments::{self, EmbeddedFile};
 use crate::facturx;
-use crate::render::{placed_anchors, PlacedAnchor, RenderBox, RenderCanvasLayer, RenderField, RenderNode, RenderPage, RenderedBarcodeKind};
+use crate::render::{
+    placed_anchors, PlacedAnchor, PolylinePaint, RenderBox, RenderCanvasLayer, RenderField, RenderNode, RenderPage,
+    RenderPolylines, RenderedBarcodeKind,
+};
 use crate::parse::{FieldKind, ListFormat, Meta, Ocg, Output, Shadow};
 use crate::pdfa::{self, FileDate, PdfA, Standards, XmpIds};
 use crate::pdfx::{PdfXVersion, PressProfile, ProfileSpace};
@@ -1653,8 +1656,10 @@ fn draw_node(
         let mut draw = |content: &mut Content, marks: &mut Marks| draw_drawn(content, annots, groups, marks, node, res, page_h);
         match node {
             RenderNode::Text(t) => return marks.content(content, &t.content, draw),
-            RenderNode::Line(_) | RenderNode::CanvasRect(_) | RenderNode::Bars(_) | RenderNode::CanvasLine(_) | RenderNode::CanvasEllipse(_)
-                | RenderNode::CanvasPath(_) | RenderNode::Ruling(_) => return marks.artifact(content, draw),
+            RenderNode::Line(_) | RenderNode::CanvasRect(_) | RenderNode::Bars(_) | RenderNode::Polylines(_)
+                | RenderNode::CanvasLine(_) | RenderNode::CanvasEllipse(_) | RenderNode::CanvasPath(_) | RenderNode::Ruling(_) => {
+                return marks.artifact(content, draw);
+            }
             RenderNode::Image(i) => return marks.whole(content, i.tag.as_deref(), draw),
             RenderNode::Barcode(bc) => return marks.whole(content, bc.tag.as_deref(), draw),
             RenderNode::CanvasLayer(l) if l.tag.is_some() => return marks.whole(content, l.tag.as_deref(), draw),
@@ -1951,6 +1956,7 @@ fn draw_drawn(
             content.fill_nonzero();
             content.restore_state();
         }
+        RenderNode::Polylines(p) => draw_polylines(content, p, page_h),
         RenderNode::CanvasRect(r) => {
             let has_fill   = r.fill.is_some();
             let has_stroke = r.stroke.is_some() && r.stroke_width > 0.0;
@@ -2113,6 +2119,54 @@ fn draw_drawn(
             }
         }
     }
+}
+
+/// The line or the area of a series of a chart: every run in one path, stroked with round ends and joins, so a run of
+/// one point is a dot, or each run closed and filled, faded through the opacity's ExtGState.
+fn draw_polylines(content: &mut Content, p: &RenderPolylines, page_h: f32) {
+    let percent = match p.paint {
+        PolylinePaint::Fill { opacity } => opacity_percent(opacity),
+        PolylinePaint::Stroke { .. } => 100,
+    };
+    if percent == 0 || p.runs.is_empty() {
+        return;
+    }
+    content.save_state();
+    match p.paint {
+        PolylinePaint::Stroke { width } => {
+            set_stroke_color(content, &p.color);
+            set_overprint(content, None, Some(&p.color));
+            content.set_line_width(width);
+            content.set_line_cap(LineCapStyle::RoundCap);
+            content.set_line_join(LineJoinStyle::RoundJoin);
+        }
+        PolylinePaint::Fill { .. } => {
+            if percent < 100 {
+                content.set_parameters(Name(opacity_gs_name(percent).as_bytes()));
+            }
+            set_fill_color(content, &p.color);
+            set_overprint(content, Some(&p.color), None);
+        }
+    }
+    for run in &p.runs {
+        let Some([x, y]) = run.first() else { continue };
+        content.move_to(*x, page_h - y);
+        if run.len() == 1 {
+            // A point on its own: a round end on a path of no length draws a dot.
+            content.line_to(*x, page_h - y);
+        }
+        for [x, y] in &run[1..] {
+            content.line_to(*x, page_h - y);
+        }
+        if matches!(p.paint, PolylinePaint::Fill { .. }) {
+            content.close_path();
+        }
+    }
+    match p.paint {
+        PolylinePaint::Stroke { .. } => content.stroke(),
+        PolylinePaint::Fill { .. } => content.fill_nonzero(),
+    };
+    content.restore_state();
 }
 
 /// A box: its fill and border, then its children.
@@ -2463,6 +2517,9 @@ fn collect_used_opacities(nodes: &[RenderNode], out: &mut HashSet<u32>) {
             }
             RenderNode::CanvasEllipse(e) => {
                 if let Some(s) = &e.shadow { note_opacity(s.opacity, out); }
+            }
+            RenderNode::Polylines(p) => {
+                if let PolylinePaint::Fill { opacity } = p.paint { note_opacity(opacity, out); }
             }
             RenderNode::Link(l) => collect_used_opacities(&l.children, out),
             _                   => {}
@@ -5075,6 +5132,7 @@ fn node_colors(node: &RenderNode) -> Vec<&str> {
         RenderNode::Field(f)         => vec![f.background.as_deref(), f.border.as_ref().map(|(_, color)| color.as_str())],
         RenderNode::CanvasRect(r)    => vec![r.fill.as_deref(), r.stroke.as_deref(), shadow(&r.shadow)],
         RenderNode::Bars(b)          => vec![Some(&b.fill)],
+        RenderNode::Polylines(p)     => vec![Some(&p.color)],
         RenderNode::CanvasLine(l)    => vec![Some(&l.stroke)],
         RenderNode::CanvasEllipse(e) => vec![e.fill.as_deref(), e.stroke.as_deref(), shadow(&e.shadow)],
         RenderNode::CanvasPath(p)    => vec![p.fill.as_deref(), p.stroke.as_deref()],
