@@ -55,6 +55,8 @@ pub enum RenderNode {
     CanvasLayer(RenderCanvasLayer),
     /// The bars of a chart in one color: one node and one fill for all of them, however many there are.
     Bars(RenderBars),
+    /// The line or the area of a series of a chart: one node and one path for all its points.
+    Polylines(RenderPolylines),
     /// The lines of a section's ruling, shared by every page that draws them: the PDF writes the drawing once, as a
     /// form XObject each of those pages invokes.
     Ruling(Rc<crate::ruling::Drawing>),
@@ -348,6 +350,23 @@ pub struct RenderBars {
     pub rects: Vec<[f32; 4]>,
 }
 
+/// The line or the area of a series of a chart, in one color: runs of points, each `[x, y]` from the top left of the
+/// page, every point of a run joined to the next. A missing value breaks a line, so a series can have several runs.
+pub struct RenderPolylines {
+    pub color: String,
+    pub paint: PolylinePaint,
+    pub runs:  Vec<Vec<[f32; 2]>>,
+}
+
+/// How the runs of a `RenderPolylines` are painted.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PolylinePaint {
+    /// Stroked `width` wide, with round ends and joins, so a run of one point is a dot.
+    Stroke { width: f32 },
+    /// Each run closed and filled, faded to `opacity`, from 0 to 1.
+    Fill { opacity: f32 },
+}
+
 pub struct RenderCanvasClip {
     pub x: f32,
     pub y: f32,
@@ -572,6 +591,7 @@ fn node_to_json(node: &RenderNode) -> Value {
             "stroke": p.stroke,
         }),
         RenderNode::Bars(b) => bars_to_json(b),
+        RenderNode::Polylines(p) => polylines_to_json(p),
         RenderNode::CanvasLayer(l) => json!({
             "type":     "canvas-layer",
             "opacity":  l.opacity,
@@ -600,6 +620,19 @@ fn node_to_json(node: &RenderNode) -> Value {
 fn bars_to_json(bars: &RenderBars) -> Value {
     let rects: Vec<[f64; 4]> = bars.rects.iter().map(|[x, y, w, h]| [r2(*x), r2(*y), r2(*w), r2(*h)]).collect();
     json!({ "type": "bars", "fill": bars.fill, "rects": rects })
+}
+
+/// The line or the area of a series of a chart. Out of `node_to_json`, as `bars_to_json` is.
+#[inline(never)]
+fn polylines_to_json(polylines: &RenderPolylines) -> Value {
+    let runs: Vec<Vec<[f64; 2]>> =
+        polylines.runs.iter().map(|run| run.iter().map(|[x, y]| [r2(*x), r2(*y)]).collect()).collect();
+    let mut v = json!({ "type": "polylines", "color": polylines.color, "runs": runs });
+    match polylines.paint {
+        PolylinePaint::Stroke { width } => v["stroke-width"] = json!(r2(width)),
+        PolylinePaint::Fill { opacity } => v["opacity"] = json!(r2(opacity)),
+    }
+    v
 }
 
 /// Round to 2 decimal places for compact JSON output.

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+<document size="A4">
+<section>
+<layout margin="40pt">
+<column gap="xl">
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Visits per week</text>
+        <chart type="line" height="160pt" alt="Visits per week, this year against last">
+            <series label="This year" color="primary"/>
+            <series label="Last year" color="text-muted"/>
+            <category data-source="weeks" label="W1" data-label="week">
+                <value data-value="visits">0</value>
+                <value data-value="visitsLastYear">0</value>
+            </category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Storage per month</text>
+        <chart type="area" stacked="true" height="160pt" suffix=" GB">
+            <series data-source="kinds" label="Kind" data-label="name" data-color="color"/>
+            <category data-source="months" label="Jan" data-label="name">
+                <value data-source="sizes" data-value="gb">0</value>
+            </category>
+        </chart>
+    </column>
+    <table cols="2fr 1fr 80pt" gap="s">
+        <tr data-source="products">
+            <td><text data-value="name">Product</text></td>
+            <td><text data-value="total" align="right">0</text></td>
+            <td>
+                <chart type="sparkline" height="14pt">
+                    <category data-source="weeks">
+                        <value data-value="sales">0</value>
+                    </category>
+                </chart>
+            </td>
+        </tr>
+    </table>
+</column>
+</layout>
+</section>
+</document>
+</lpdf>

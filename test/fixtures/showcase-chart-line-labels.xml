@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+<document size="A4">
+<section>
+<layout margin="40pt">
+<column gap="xl">
+    <column gap="s" paginate="no">
+        <text bold="true">Thirty days in 300pt: every 5th label</text>
+        <chart type="line" height="150pt" width="300pt" alt="Orders per day in November">
+            <category label="Nov 1"><value>872</value></category>
+            <category label="Nov 2"><value>919</value></category>
+            <category label="Nov 3"><value>956</value></category>
+            <category label="Nov 4"><value>980</value></category>
+            <category label="Nov 5"><value>989</value></category>
+            <category label="Nov 6"><value>983</value></category>
+            <category label="Nov 7"><value>963</value></category>
+            <category label="Nov 8"><value>932</value></category>
+            <category label="Nov 9"><value>894</value></category>
+            <category label="Nov 10"><value>853</value></category>
+            <category label="Nov 11"><value>816</value></category>
+            <category label="Nov 12"><value>786</value></category>
+            <category label="Nov 13"><value>768</value></category>
+            <category label="Nov 14"><value>764</value></category>
+            <category label="Nov 15"><value>776</value></category>
+            <category label="Nov 16"><value>802</value></category>
+            <category label="Nov 17"><value>841</value></category>
+            <category label="Nov 18"><value>889</value></category>
+            <category label="Nov 19"><value>941</value></category>
+            <category label="Nov 20"><value>992</value></category>
+            <category label="Nov 21"><value>1038</value></category>
+            <category label="Nov 22"><value>1073</value></category>
+            <category label="Nov 23"><value>1096</value></category>
+            <category label="Nov 24"><value>1103</value></category>
+            <category label="Nov 25"><value>1094</value></category>
+            <category label="Nov 26"><value>1072</value></category>
+            <category label="Nov 27"><value>1040</value></category>
+            <category label="Nov 28"><value>1001</value></category>
+            <category label="Nov 29"><value>960</value></category>
+            <category label="Nov 30"><value>924</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text bold="true">A day by the hour, the full width: every 2nd or 3rd label</text>
+        <chart type="area" height="150pt" suffix=" req/s" alt="Requests per second by the hour">
+            <category label="00:00"><value>3</value></category>
+            <category label="01:00"><value>2</value></category>
+            <category label="02:00"><value>2</value></category>
+            <category label="03:00"><value>1</value></category>
+            <category label="04:00"><value>1</value></category>
+            <category label="05:00"><value>2</value></category>
+            <category label="06:00"><value>5</value></category>
+            <category label="07:00"><value>12</value></category>
+            <category label="08:00"><value>20</value></category>
+            <category label="09:00"><value>24</value></category>
+            <category label="10:00"><value>22</value></category>
+            <category label="11:00"><value>21</value></category>
+            <category label="12:00"><value>23</value></category>
+            <category label="13:00"><value>25</value></category>
+            <category label="14:00"><value>24</value></category>
+            <category label="15:00"><value>22</value></category>
+            <category label="16:00"><value>21</value></category>
+            <category label="17:00"><value>24</value></category>
+            <category label="18:00"><value>27</value></category>
+            <category label="19:00"><value>22</value></category>
+            <category label="20:00"><value>15</value></category>
+            <category label="21:00"><value>10</value></category>
+            <category label="22:00"><value>7</value></category>
+            <category label="23:00"><value>4</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text bold="true">Labels too wide on their own wrap and shorten</text>
+        <chart type="line" height="190pt" width="320pt">
+            <category label="January of the first year of the plan"><value>12</value></category>
+            <category label="February of the first year of the plan"><value>15</value></category>
+            <category label="March of the first year of the plan"><value>14</value></category>
+            <category label="April of the first year of the plan"><value>18</value></category>
+            <category label="May of the first year of the plan"><value>21</value></category>
+            <category label="June of the first year of the plan"><value>19</value></category>
+            <category label="July of the first year of the plan"><value>24</value></category>
+            <category label="August of the first year of the plan"><value>26</value></category>
+            <category label="September of the first year of the plan"><value>25</value></category>
+            <category label="October of the first year of the plan"><value>29</value></category>
+            <category label="November of the first year of the plan"><value>31</value></category>
+            <category label="December of the first year of the plan"><value>34</value></category>
+        </chart>
+    </column>
+</column>
+</layout>
+</section>
+</document>
+</lpdf>

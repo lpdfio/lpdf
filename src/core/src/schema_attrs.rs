@@ -820,6 +820,7 @@ const CHART: Attributes = &[
     ("category-gap", Kind::Text),
     ("legend", Kind::Constants(&["ChartLegend"])),
     ("value-labels", Kind::Boolean),
+    ("stroke-width", Kind::Text),
     ("font", Kind::Text),
     ("font-size", Kind::Text),
     ("color", Kind::Text),
@@ -1178,6 +1179,9 @@ pub(crate) const CONSTANTS: &[Constant] = &[
     ] },
     Constant { name: "ChartType", area: "layout", members: &[
         Member { value: "bar", pascal: "Bar", snake: "BAR" },
+        Member { value: "line", pascal: "Line", snake: "LINE" },
+        Member { value: "area", pascal: "Area", snake: "AREA" },
+        Member { value: "sparkline", pascal: "Sparkline", snake: "SPARKLINE" },
     ] },
     Constant { name: "ChartDirection", area: "layout", members: &[
         Member { value: "vertical", pascal: "Vertical", snake: "VERTICAL" },

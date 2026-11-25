@@ -9,7 +9,7 @@
 //! PDF write apart with the `split-stages` feature. Each benchmark runs in a process of its own, as under
 //! Gungraun, so that what one leaves behind, such as a buffer made on first use, doesn't change the count
 //! of the next. Reading the fixture, and parsing or laying it out for a later stage, is setup, which
-//! isn't counted. With the `markdown`, `code`, `chart`, `embedded-fonts` and `svg` features, it counts those fixtures too,
+//! isn't counted. With the `markdown`, `code`, `chart`, `chart_lines`, `embedded-fonts` and `svg` features, it counts those fixtures too,
 //! as `counts.rs`, `fonts.rs` and `svg.rs` do, the fonts of `fonts` loaded in the setup. `data` has a stage of its
 //! own, `data`, which binds its data, as in `data.rs`.
 //!
@@ -75,6 +75,8 @@ fn fixtures() -> Vec<&'static str> {
     fixtures.push("code");
     #[cfg(feature = "chart")]
     fixtures.push("chart");
+    #[cfg(feature = "chart_lines")]
+    fixtures.push("chart_lines");
     #[cfg(feature = "embedded-fonts")]
     fixtures.push("fonts");
     #[cfg(feature = "svg")]

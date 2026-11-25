@@ -564,12 +564,12 @@ fn data_label_on_an_element_that_has_no_label_is_refused() {
 
 // ── Limits ────────────────────────────────────────────────────────────────────
 
-/// A chart of `categories` categories of `series` values each, bound from the data.
-fn at_the_limits(categories: usize, series: usize) -> (String, String) {
-    let xml = document(r#"<chart type="bar" height="400pt" value-labels="true">
+/// A chart of `categories` categories of `series` values each, bound from the data, with `attrs` on it.
+fn at_the_limits(attrs: &str, categories: usize, series: usize) -> (String, String) {
+    let xml = document(&format!(r#"<chart {attrs} height="400pt" value-labels="true">
         <series data-source="series" data-label="name"/>
         <category data-source="categories" data-label="name"><value data-source="values" data-value="v">0</value></category>
-        </chart>"#);
+        </chart>"#));
     let values: Vec<serde_json::Value> = (0..series).map(|n| serde_json::json!({ "v": n as f64 * 1.5 })).collect();
     let data = serde_json::json!({
         "series": (0..series).map(|n| serde_json::json!({ "name": format!("Series {n}") })).collect::<Vec<_>>(),
@@ -580,15 +580,456 @@ fn at_the_limits(categories: usize, series: usize) -> (String, String) {
 
 #[test]
 fn a_chart_at_the_limits_renders() {
-    for (categories, series) in [(MAX_CATEGORIES, 1), (100, MAX_SERIES)] {
-        let (xml, data) = at_the_limits(categories, series);
-        let pages = pages(&xml, Some(&data)).unwrap_or_else(|e| panic!("{categories} by {series}: {e}"));
-        let doc = crate::parse::parse(&xml).unwrap_or_else(|e| panic!("{e}"));
-        let bytes = crate::pdf::render_pdf(
-            &pages, &doc.fonts, &crate::pdf::FontRegistry::new(), &crate::pdf::ImageRegistry::new(), &doc.meta, doc.paints(),
-            None, false, &doc.output, &[], None,
-        )
-        .unwrap_or_else(|e| panic!("{categories} by {series}: {e}"));
-        assert!(bytes.starts_with(b"%PDF"));
+    let kinds = [r#"type="bar""#, r#"type="line""#, r#"type="area" stacked="true""#];
+    for attrs in kinds {
+        for (categories, series) in [(MAX_CATEGORIES, 1), (100, MAX_SERIES)] {
+            let (xml, data) = at_the_limits(attrs, categories, series);
+            let pages = pages(&xml, Some(&data)).unwrap_or_else(|e| panic!("{attrs}, {categories} by {series}: {e}"));
+            let doc = crate::parse::parse(&xml).unwrap_or_else(|e| panic!("{e}"));
+            let bytes = crate::pdf::render_pdf(
+                &pages, &doc.fonts, &crate::pdf::FontRegistry::new(), &crate::pdf::ImageRegistry::new(), &doc.meta,
+                doc.paints(), None, false, &doc.output, &[], None,
+            )
+            .unwrap_or_else(|e| panic!("{attrs}, {categories} by {series}: {e}"));
+            assert!(bytes.starts_with(b"%PDF"));
+        }
     }
+}
+
+
+// ── Lines, areas and sparklines ───────────────────────────────────────────────
+
+/// The lines and the areas the pages draw, in the order they are drawn: how each is painted, its color and its runs.
+fn traces(pages: &[RenderPage]) -> Vec<(PolylinePaint, String, Vec<Vec<[f32; 2]>>)> {
+    all(pages)
+        .into_iter()
+        .filter_map(|n| match n {
+            RenderNode::Polylines(p) => Some((p.paint, p.color.clone(), p.runs.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
+fn lines_of(pages: &[RenderPage]) -> Vec<(f32, String, Vec<Vec<[f32; 2]>>)> {
+    traces(pages)
+        .into_iter()
+        .filter_map(|(paint, color, runs)| match paint {
+            PolylinePaint::Stroke { width } => Some((width, color, runs)),
+            PolylinePaint::Fill { .. } => None,
+        })
+        .collect()
+}
+
+fn areas_of(pages: &[RenderPage]) -> Vec<(String, Vec<Vec<[f32; 2]>>)> {
+    traces(pages)
+        .into_iter()
+        .filter_map(|(paint, color, runs)| matches!(paint, PolylinePaint::Fill { .. }).then_some((color, runs)))
+        .collect()
+}
+
+const VISITS: &str = r#"<chart type="line" height="160pt">
+    <series label="This year" color="primary"/>
+    <series label="Last year" color="text-muted"/>
+    <category label="W1"><value>120</value><value>100</value></category>
+    <category label="W2"><value>135</value><value>98</value></category>
+    <category label="W3"><value>128</value><value/></category>
+    <category label="W4"><value>150</value><value>110</value></category>
+</chart>"#;
+
+#[test]
+fn a_line_axis_runs_a_round_step_under_its_lowest_value_and_one_over_its_highest() {
+    let axis = Axis::fit_line(98.0, 104.0, None, None, 300.0, 10.0);
+    assert_eq!((axis.lo, axis.hi, axis.step), (96.0, 106.0, 2.0));
+}
+
+#[test]
+fn a_line_axis_does_not_cross_zero_where_its_values_do_not() {
+    let counts = Axis::fit_line(0.0, 37.0, None, None, 300.0, 10.0);
+    assert_eq!((counts.lo, counts.hi), (0.0, 40.0), "{counts:?}");
+    let losses = Axis::fit_line(-37.0, -2.0, None, None, 300.0, 10.0);
+    assert_eq!(losses.hi, 0.0, "{losses:?}");
+    let both = Axis::fit_line(-3.0, 4.0, None, None, 300.0, 10.0);
+    assert!(both.lo < -3.0 && both.hi > 4.0, "{both:?}");
+}
+
+#[test]
+fn min_and_max_only_widen_a_line_axis_and_min_of_zero_brings_it_to_zero() {
+    let axis = Axis::fit_line(98.0, 104.0, Some(0.0), None, 300.0, 10.0);
+    assert_eq!(axis.lo, 0.0, "{axis:?}");
+    let axis = Axis::fit_line(98.0, 104.0, Some(100.0), Some(102.0), 300.0, 10.0);
+    assert_eq!((axis.lo, axis.hi), (96.0, 106.0), "min and max inside the values change nothing: {axis:?}");
+    let words = texts(&laid_out(r#"<chart type="line" height="160pt" min="0"><category><value>98</value></category>
+        <category><value>104</value></category></chart>"#));
+    assert_eq!(words.first().map(String::as_str), Some("0"), "{words:?}");
+}
+
+#[test]
+fn a_line_of_equal_values_runs_across_the_middle_of_its_axis() {
+    let axis = Axis::fit_line(100.0, 100.0, None, None, 300.0, 10.0);
+    assert!((axis.lo + axis.hi) / 2.0 == 100.0 && axis.lo < 100.0, "{axis:?}");
+    let zero = Axis::fit_line(0.0, 0.0, None, None, 300.0, 10.0);
+    assert_eq!((zero.lo, zero.hi), (0.0, 1.0));
+}
+
+#[test]
+fn a_short_chart_with_values_either_side_of_zero_keeps_both_on_its_axis() {
+    let pages = laid_out(r#"<chart type="bar" height="20pt"><category><value>-5</value></category><category><value>5</value></category></chart>"#);
+    let words = texts(&pages);
+    assert_eq!(words, ["-5", "0", "5"], "{words:?}");
+    assert_eq!(plot_bars(&pages).len(), 2);
+}
+
+#[test]
+fn a_line_chart_draws_a_line_for_each_series_through_the_middle_of_its_categories() {
+    let pages = laid_out(VISITS);
+    let lines = lines_of(&pages);
+    assert_eq!(lines.len(), 3, "the two lines, and last year's value alone in W4 as a dot: {lines:?}");
+    assert!(areas_of(&pages).is_empty());
+    let this_year = &lines[0].2;
+    assert_eq!(this_year.len(), 1);
+    assert_eq!(this_year[0].len(), 4);
+    // The points are evenly spaced, and the highest value is the highest point.
+    let xs: Vec<f32> = this_year[0].iter().map(|p| p[0]).collect();
+    assert!(((xs[1] - xs[0]) - (xs[3] - xs[2])).abs() < 0.01, "{xs:?}");
+    assert!(this_year[0][3][1] < this_year[0][0][1], "150 is above 120");
+    let words = texts(&pages);
+    for expected in ["W1", "W4", "This year", "Last year"] {
+        assert!(words.contains(&expected.to_string()), "{expected} in {words:?}");
+    }
+    // The axis fits the values, from 90 to 160, and doesn't start at zero.
+    assert!(!words.contains(&"0".to_string()), "{words:?}");
+}
+
+/// The lengths of the runs of each line the pages draw, a line's dots after it.
+fn run_lengths(pages: &[RenderPage]) -> Vec<Vec<usize>> {
+    lines_of(pages).iter().map(|line| line.2.iter().map(Vec::len).collect()).collect()
+}
+
+#[test]
+fn a_missing_value_breaks_a_line_and_a_value_alone_between_two_is_a_dot() {
+    let pages = laid_out(VISITS);
+    assert_eq!(run_lengths(&pages), [vec![4], vec![2], vec![1]]);
+    let widths: Vec<f32> = lines_of(&pages).iter().map(|line| line.0).collect();
+    assert_eq!(widths, [LINE_WIDTH, LINE_WIDTH, LINE_WIDTH * DOT_SCALE]);
+}
+
+#[test]
+fn null_and_a_missing_key_in_the_data_break_a_line() {
+    let xml = document(r#"<chart type="line" height="160pt">
+        <category data-source="weeks" label="W1" data-label="week"><value data-value="visits">0</value></category></chart>"#);
+    let data = r#"{ "weeks": [{ "week": "W1", "visits": 3 }, { "week": "W2", "visits": null }, { "week": "W3", "visits": 5 },
+        { "week": "W4" }, { "week": "W5", "visits": 6 }, { "week": "W6", "visits": 7 }] }"#;
+    let pages = pages(&xml, Some(data)).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(run_lengths(&pages), [vec![2], vec![1, 1]]);
+}
+
+#[test]
+fn an_area_fills_each_run_down_to_zero_under_its_line() {
+    let pages = laid_out(r#"<chart type="area" height="160pt"><category><value>98</value></category>
+        <category><value>104</value></category><category><value/></category><category><value>100</value></category></chart>"#);
+    let words = texts(&pages);
+    assert_eq!(words.first().map(String::as_str), Some("0"), "an area's axis keeps zero: {words:?}");
+    let areas = areas_of(&pages);
+    let lines = lines_of(&pages);
+    assert_eq!((areas.len(), lines.len()), (1, 2), "the area, its line, and the dot of 100 alone after the gap");
+    let runs = &areas[0].1;
+    assert_eq!(runs.len(), 2, "the missing value breaks the area too: {runs:?}");
+    // Each run goes along its points, then down to zero and back: the last two points are on the zero line.
+    let zero = runs[0][runs[0].len() - 1][1];
+    assert!(runs.iter().all(|run| run[run.len() - 2][1] == zero && run[run.len() - 1][1] == zero), "{runs:?}");
+    assert!(runs[0][0][1] < zero);
+    // The fill comes before the line, so the line is drawn over it.
+    let order: Vec<bool> = traces(&pages).iter().map(|t| matches!(t.0, PolylinePaint::Fill { .. })).collect();
+    assert_eq!(order, [true, false, false]);
+}
+
+#[test]
+fn a_stacked_area_fills_each_series_down_to_the_one_under_it() {
+    let pages = laid_out(r#"<chart type="area" stacked="true" height="160pt" legend="none"><series/><series/>
+        <category><value>10</value><value>5</value></category>
+        <category><value>20</value><value/></category>
+        <category><value>15</value><value>10</value></category></chart>"#);
+    let areas = areas_of(&pages);
+    let lines = lines_of(&pages);
+    assert_eq!((areas.len(), lines.len()), (2, 2));
+    // The second band's top is the first band's top where its value is missing, which counts as zero.
+    let first_top = &lines[0].2[0];
+    let second_top = &lines[1].2[0];
+    assert_eq!(second_top.len(), 3, "a stacked area doesn't break: {second_top:?}");
+    assert_eq!(second_top[1], first_top[1]);
+    assert!(second_top[0][1] < first_top[0][1]);
+    // The second band runs along its top, then back along the first band's top.
+    let band = &areas[1].1[0];
+    let back: Vec<[f32; 2]> = first_top.iter().rev().copied().collect();
+    assert_eq!(&band[3..], &back[..]);
+    // The first band runs back along zero.
+    let zero = areas[0].1[0][3][1];
+    assert!(areas[0].1[0][3..].iter().all(|p| p[1] == zero));
+}
+
+#[test]
+fn a_line_writes_every_label_that_fits_and_else_every_2nd_3rd_or_5th() {
+    let days: String = (1..=30).map(|d| format!(r#"<category label="Nov {d}"><value>{}</value></category>"#, d % 7)).collect();
+    let words = texts(&laid_out(&format!(r#"<chart type="line" height="160pt" width="300pt">{days}</chart>"#)));
+    let labels: Vec<&String> = words.iter().filter(|w| w.starts_with("Nov")).collect();
+    assert_eq!(labels, ["Nov 1", "Nov 6", "Nov 11", "Nov 16", "Nov 21", "Nov 26"], "{words:?}");
+    let points = lines_of(&laid_out(&format!(r#"<chart type="line" height="160pt" width="300pt">{days}</chart>"#)));
+    assert_eq!(points[0].2[0].len(), 30, "every point keeps its place");
+
+    let few = texts(&laid_out(r#"<chart type="line" height="160pt" width="300pt"><category label="Jan"><value>1</value></category>
+        <category label="Feb"><value>2</value></category><category label="Mar"><value>3</value></category></chart>"#));
+    assert!(["Jan", "Feb", "Mar"].iter().all(|m| few.contains(&m.to_string())), "{few:?}");
+}
+
+#[test]
+fn a_line_label_too_wide_on_its_own_wraps_and_ends_in_an_ellipsis() {
+    let long = "A rather long category name that has to wrap onto more lines than a label takes";
+    let categories: String = (0..12).map(|n| format!(r#"<category label="{long}"><value>{n}</value></category>"#)).collect();
+    let words = texts(&laid_out(&format!(r#"<chart type="line" height="200pt" width="300pt">{categories}</chart>"#)));
+    let first = words.iter().position(|w| w.starts_with("A rather")).expect("the first label");
+    assert!(words[first + LABEL_LINES - 1].ends_with(ELLIPSIS), "{words:?}");
+}
+
+#[test]
+fn the_labels_of_a_line_stay_inside_the_chart() {
+    let categories: String = (1..=10).map(|n| format!(r#"<category label="Week {n} of the year"><value>{n}</value></category>"#)).collect();
+    let pages = laid_out(&format!(r#"<chart type="line" height="160pt" width="200pt">{categories}</chart>"#));
+    let left = 28.0;
+    let right = 28.0 + 200.0;
+    for node in all(&pages) {
+        if let RenderNode::Text(t) = node {
+            let w = text_width(&t.font, &t.content, t.size);
+            let (from, to) = match t.text_align.as_str() {
+                "center" => (t.x - w / 2.0, t.x + w / 2.0),
+                "right" => (t.x - w, t.x),
+                _ => (t.x, t.x + w),
+            };
+            assert!(from >= left - 0.01 && to <= right + 0.01, "'{}' from {from} to {to}", t.content);
+        }
+    }
+}
+
+#[test]
+fn a_value_label_goes_under_a_point_lower_than_the_points_beside_it() {
+    let pages = laid_out(r#"<chart type="line" height="150pt" prefix="$" decimals="2" value-labels="true">
+        <category label="Mon"><value>98.40</value></category>
+        <category label="Tue"><value>101.15</value></category>
+        <category label="Wed"><value>99.80</value></category>
+        <category label="Thu"><value>103.95</value></category>
+        <category label="Fri"><value>102.30</value></category></chart>"#);
+    let points = &lines_of(&pages)[0].2[0];
+    let label_y = |content: &str| {
+        all(&pages).into_iter().find_map(|n| match n {
+            RenderNode::Text(t) if t.content == content => Some(t.y),
+            _ => None,
+        }).unwrap_or_else(|| panic!("no label {content}"))
+    };
+    let under = ["$98.40", "$99.80", "$102.30"].map(|label| label_y(label));
+    for (label_top, point) in under.iter().zip([points[0], points[2], points[4]]) {
+        assert!(*label_top > point[1], "a low point, the first and the last among them, has its label under it");
+    }
+    for (label, point) in [("$101.15", points[1]), ("$103.95", points[3])] {
+        assert!(label_y(label) < point[1], "{label} is over its point");
+    }
+}
+
+#[test]
+fn a_low_point_keeps_its_label_over_it_where_under_would_cover_another_series_label() {
+    let pages = laid_out(r#"<chart type="line" height="150pt" suffix="%" decimals="1" value-labels="true">
+        <series label="North"/><series label="South"/>
+        <category label="Q2"><value>3.1</value><value>-3.25</value></category>
+        <category label="Q3"><value>-0.6</value><value>-2</value></category>
+        <category label="Q4"><value>1.9</value><value>0.5</value></category></chart>"#);
+    let label_y = |content: &str| {
+        all(&pages).into_iter().find_map(|n| match n {
+            RenderNode::Text(t) if t.content == content => Some(t.y),
+            _ => None,
+        }).unwrap_or_else(|| panic!("no label {content}"))
+    };
+    let north = &lines_of(&pages)[0].2[0];
+    assert!(label_y("-0.6%") < north[1][1], "under its point it would cover South's -2.0%, so it is over it");
+}
+
+#[test]
+fn a_low_point_at_the_bottom_of_the_plot_has_its_label_under_the_plot() {
+    let pages = laid_out(r#"<chart type="area" height="150pt" value-labels="true" legend="none">
+        <category label="A"><value>4</value></category>
+        <category label="B"><value>0</value></category>
+        <category label="C"><value>3</value></category></chart>"#);
+    let label = |content: &str| {
+        all(&pages).into_iter().find_map(|n| match n {
+            RenderNode::Text(t) if t.content == content && t.text_align == "center" => Some((t.y, t.size)),
+            _ => None,
+        }).unwrap_or_else(|| panic!("no label {content}"))
+    };
+    let (zero, size) = label("0");
+    let bottom = areas_of(&pages)[0].1[0].iter().map(|p| p[1]).fold(f32::MIN, f32::max);
+    assert!(zero > bottom, "the label of a low point on the plot's bottom is under it");
+    assert!(zero + size <= label("B").0, "and over the category's label");
+}
+
+#[test]
+fn a_chart_with_no_low_point_keeps_no_room_under_its_plot() {
+    let flat = r#"<chart type="line" height="150pt" value-labels="true">
+        <category label="A"><value>2</value></category><category label="B"><value>2</value></category></chart>"#;
+    // The lowest gridline is the plot's bottom.
+    let plot_bottom = |xml: &str| {
+        all(&laid_out(xml)).into_iter().filter_map(|n| match n {
+            RenderNode::Line(l) => Some(l.y1),
+            _ => None,
+        }).fold(f32::MIN, f32::max)
+    };
+    let without = plot_bottom(&flat.replace(r#" value-labels="true""#, ""));
+    assert!((plot_bottom(flat) - without).abs() < 0.01, "the plot reaches as low with its labels as without");
+    let dipping = flat.replacen("<value>2</value>", "<value>3</value>", 1);
+    assert!(plot_bottom(&dipping) < without - 1.0, "a low point's label takes a line of room under the plot");
+}
+
+#[test]
+fn a_plot_moved_right_by_wider_steps_still_ends_at_the_right_edge() {
+    // At this size the steps the plot is laid out for are whole numbers, and the last axis's write halves: wider.
+    let pages = laid_out(r#"<chart type="bar" width="340pt" height="124pt">
+        <category label="Northern region"><value>1.2</value></category>
+        <category label="South"><value>2.6</value></category>
+        <category label="East"><value>2.0</value></category>
+        <category label="West"><value>0.7</value></category></chart>"#);
+    let right = 28.0 + 340.0;
+    for node in all(&pages) {
+        if let RenderNode::Line(l) = node {
+            assert!(l.x2 <= right + 0.01, "a gridline ends at {} past {right}", l.x2);
+        }
+    }
+    let (x, _, w, _, _) = *plot_bars(&pages).last().expect("bars");
+    assert!(x + w <= right + 0.01, "the last bar ends at {} past {right}", x + w);
+}
+
+#[test]
+fn value_labels_are_over_the_points_and_a_stacked_area_writes_its_totals() {
+    let line = texts(&laid_out(r#"<chart type="line" height="160pt" value-labels="true" decimals="1">
+        <category><value>4</value></category><category><value>6.25</value></category></chart>"#));
+    assert!(line.contains(&"4.0".to_string()) && line.contains(&"6.3".to_string()), "{line:?}");
+    let stacked = texts(&laid_out(r#"<chart type="area" stacked="true" height="160pt" value-labels="true" legend="none">
+        <series/><series/><category><value>10</value><value>7</value></category><category><value>21</value><value/></category></chart>"#));
+    assert!(stacked.contains(&"17".to_string()) && stacked.contains(&"21".to_string()), "{stacked:?}");
+    assert!(!stacked.contains(&"7".to_string()), "a stack writes its total only: {stacked:?}");
+}
+
+#[test]
+fn stroke_width_sets_the_width_of_every_line() {
+    let widths = |xml: &str| lines_of(&laid_out(xml)).into_iter().map(|l| l.0).collect::<Vec<_>>();
+    assert_eq!(widths(VISITS), [LINE_WIDTH, LINE_WIDTH, LINE_WIDTH * DOT_SCALE]);
+    assert_eq!(widths(&VISITS.replace(r#"type="line""#, r#"type="line" stroke-width="3pt""#)), [3.0, 3.0, 3.0 * DOT_SCALE]);
+    let area = r#"<chart type="area" height="160pt" stroke-width="0"><category><value>1</value></category><category><value>2</value></category></chart>"#;
+    let pages = laid_out(area);
+    assert!(lines_of(&pages).is_empty() && areas_of(&pages).len() == 1, "zero draws no line, and the area still fills");
+}
+
+const SPARKLINE: &str = r#"<chart type="sparkline" height="14pt" width="80pt">
+    <category><value>5</value></category><category><value>9</value></category>
+    <category><value>2</value></category><category><value>7</value></category>
+</chart>"#;
+
+#[test]
+fn a_sparkline_draws_one_line_across_its_box_and_no_axis_labels_or_legend() {
+    let pages = laid_out(SPARKLINE);
+    assert!(texts(&pages).is_empty());
+    assert!(all(&pages).iter().all(|n| !matches!(n, RenderNode::Line(_))), "no gridlines");
+    let lines = lines_of(&pages);
+    assert_eq!(lines.len(), 1);
+    let (width, color, runs) = &lines[0];
+    assert_eq!((*width, color.as_str()), (SPARKLINE_WIDTH, PALETTE[0]));
+    let points = &runs[0];
+    let inset = SPARKLINE_WIDTH / 2.0;
+    assert!((points[0][0] - (28.0 + inset)).abs() < 0.01 && (points[3][0] - (28.0 + 80.0 - inset)).abs() < 0.01, "{points:?}");
+    // The highest value at the top of the box, the lowest at the bottom.
+    assert!((points[1][1] - (28.0 + inset)).abs() < 0.01 && (points[2][1] - (28.0 + 14.0 - inset)).abs() < 0.01, "{points:?}");
+}
+
+#[test]
+fn min_and_max_widen_a_sparkline() {
+    let pages = laid_out(&SPARKLINE.replace(r#"width="80pt""#, r#"width="80pt" min="0" max="18""#));
+    let points = &lines_of(&pages)[0].2[0];
+    // 9, the highest, is halfway up from 0 to 18.
+    assert!((points[1][1] - (28.0 + 7.0)).abs() < 0.01, "{points:?}");
+}
+
+#[test]
+fn a_sparkline_takes_its_own_color_and_not_the_one_around_it() {
+    let around = laid_out(&format!(r##"<column color="#ff0000">{SPARKLINE}</column>"##));
+    assert_eq!(lines_of(&around)[0].1, PALETTE[0]);
+    let own = laid_out(&SPARKLINE.replace(r#"width="80pt""#, r##"width="80pt" color="#00aa00""##));
+    assert_eq!(lines_of(&own)[0].1, "#00aa00");
+}
+
+#[test]
+fn a_sparkline_in_a_table_reads_its_values_from_each_row() {
+    let xml = document(r#"<table cols="2fr 80pt"><tr data-source="products"><td><text data-value="name">Product</text></td>
+        <td><chart type="sparkline" height="14pt"><category data-source="weeks"><value data-value="sales">0</value></category></chart></td>
+        </tr></table>"#);
+    let data = r#"{ "products": [
+        { "name": "Lamp", "weeks": [{ "sales": 3 }, { "sales": 5 }, { "sales": 4 }] },
+        { "name": "Desk", "weeks": [{ "sales": 9 }, { "sales": null }, { "sales": 2 }, { "sales": 6 }] }
+    ] }"#;
+    let pages = pages(&xml, Some(data)).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(run_lengths(&pages), [vec![3], vec![2], vec![1]]);
+}
+
+#[test]
+fn the_dots_of_a_sparkline_stay_inside_its_box() {
+    let pages = laid_out(r#"<chart type="sparkline" height="14pt" width="80pt"><category><value>1</value></category>
+        <category><value/></category><category><value>3</value></category><category><value/></category>
+        <category><value>2</value></category></chart>"#);
+    let lines = lines_of(&pages);
+    assert_eq!(run_lengths(&pages), [vec![1, 1, 1]]);
+    let dot = SPARKLINE_WIDTH * DOT_SCALE;
+    assert_eq!(lines[0].0, dot);
+    let points: Vec<[f32; 2]> = lines[0].2.iter().map(|run| run[0]).collect();
+    assert!(points.iter().all(|[x, y]| *x >= 28.0 + dot / 2.0 - 0.01 && *x <= 28.0 + 80.0 - dot / 2.0 + 0.01
+        && *y >= 28.0 + dot / 2.0 - 0.01 && *y <= 28.0 + 14.0 - dot / 2.0 + 0.01), "{points:?}");
+}
+
+#[test]
+fn a_chart_of_a_type_it_does_not_have_is_refused() {
+    let error = error(r#"<chart type="pie" height="100pt"><category><value>1</value></category></chart>"#);
+    assert!(error.contains("invalid chart type 'pie': expected bar, line, area or sparkline"), "{error}");
+}
+
+#[test]
+fn direction_on_a_line_an_area_or_a_sparkline_is_refused() {
+    for (kind, named) in [("line", "a line chart"), ("area", "an area chart"), ("sparkline", "a sparkline")] {
+        let error = error(&format!(r#"<chart type="{kind}" direction="vertical" height="100pt"><category><value>1</value></category></chart>"#));
+        assert!(error.contains(&format!("direction is for a bar chart, and this is {named}")), "{error}");
+    }
+}
+
+#[test]
+fn stacked_on_a_line_or_a_sparkline_is_refused() {
+    for (kind, named) in [("line", "a line chart"), ("sparkline", "a sparkline")] {
+        let error = error(&format!(r#"<chart type="{kind}" stacked="false" height="100pt"><category><value>1</value></category></chart>"#));
+        assert!(error.contains(&format!("stacked is for a bar or an area chart, and this is {named}")), "{error}");
+    }
+}
+
+#[test]
+fn a_series_in_a_sparkline_is_refused_where_it_is_written() {
+    let xml = error(r#"<chart type="sparkline" height="14pt"><series color="primary"/><category><value>1</value></category></chart>"#);
+    assert!(xml.contains("<chart> at line 1") && xml.contains("a sparkline has one series, and takes no <series>"), "{xml}");
+    let tree = serde_json::json!({ "type": "chart", "attrs": { "type": "sparkline", "height": "14pt" }, "nodes": [
+        { "type": "series", "attrs": {} },
+    ]});
+    let json = serde_json::json!({ "version": 1, "type": "document", "nodes": [{ "type": "section", "nodes": [{ "type": "layout", "nodes": [tree] }] }] });
+    let Err(error) = crate::parse::parse_tree(&json.to_string()) else { panic!("refused") };
+    assert!(error.contains("a sparkline has one series, and takes no <series>"), "{error}");
+}
+
+#[test]
+fn a_negative_value_in_a_stacked_area_is_refused() {
+    let error = error(r#"<chart type="area" height="100pt" stacked="true"><category label="Jan"><value>-5</value></category></chart>"#);
+    assert!(error.contains("category 'Jan' has the value -5, and a stacked chart can't hold a negative value"), "{error}");
+}
+
+#[test]
+fn a_negative_stroke_width_is_refused() {
+    let error = error(r#"<chart type="line" height="100pt" stroke-width="-1pt"><category><value>1</value></category></chart>"#);
+    assert!(error.contains("invalid stroke-width '-1pt': expected a length of zero or more"), "{error}");
 }

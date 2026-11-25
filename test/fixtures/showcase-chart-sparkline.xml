@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+<document size="A4">
+<section>
+<layout margin="40pt">
+<column gap="xl">
+    <table cols="2fr 1fr 90pt" gap="s">
+        <thead>
+            <td><text bold="true">Product</text></td>
+            <td><text bold="true" align="right">Sales</text></td>
+            <td><text bold="true">Last twelve weeks</text></td>
+        </thead>
+        <tr>
+            <td><text>Desk lamp</text></td>
+            <td><text align="right">1,284</text></td>
+            <td>
+                <chart type="sparkline" height="14pt" alt="Rising">
+                    <category><value>80</value></category><category><value>85</value></category>
+                    <category><value>91</value></category><category><value>88</value></category>
+                    <category><value>97</value></category><category><value>102</value></category>
+                    <category><value>99</value></category><category><value>110</value></category>
+                    <category><value>118</value></category><category><value>115</value></category>
+                    <category><value>124</value></category><category><value>131</value></category>
+                </chart>
+            </td>
+        </tr>
+        <tr>
+            <td><text>Standing desk</text></td>
+            <td><text align="right">412</text></td>
+            <td>
+                <chart type="sparkline" height="14pt" color="#c2255c" stroke-width="1.5pt">
+                    <category><value>60</value></category><category><value>52</value></category>
+                    <category><value>47</value></category><category><value/></category>
+                    <category><value>41</value></category><category><value>38</value></category>
+                    <category><value>36</value></category><category><value>30</value></category>
+                    <category><value/></category><category><value>27</value></category>
+                    <category><value/></category><category><value>22</value></category>
+                </chart>
+            </td>
+        </tr>
+        <tr>
+            <td><text>Chair, on one scale from 0 to 150</text></td>
+            <td><text align="right">958</text></td>
+            <td>
+                <chart type="sparkline" height="14pt" min="0" max="150" color="text-muted">
+                    <category><value>70</value></category><category><value>72</value></category>
+                    <category><value>75</value></category><category><value>74</value></category>
+                    <category><value>79</value></category><category><value>81</value></category>
+                    <category><value>78</value></category><category><value>80</value></category>
+                    <category><value>83</value></category><category><value>85</value></category>
+                    <category><value>84</value></category><category><value>88</value></category>
+                </chart>
+            </td>
+        </tr>
+        <tr>
+            <td><text>Monitor arm, flat</text></td>
+            <td><text align="right">300</text></td>
+            <td>
+                <chart type="sparkline" height="14pt">
+                    <category><value>25</value></category><category><value>25</value></category>
+                    <category><value>25</value></category><category><value>25</value></category>
+                </chart>
+            </td>
+        </tr>
+    </table>
+    <row gap="l">
+        <chart type="sparkline" height="40pt" width="160pt" stroke-width="3pt" color="primary">
+            <category><value>3</value></category><category><value>7</value></category>
+            <category><value>4</value></category><category><value>9</value></category>
+            <category><value>6</value></category><category><value>12</value></category>
+        </chart>
+        <chart type="sparkline" height="40pt" width="60pt">
+            <category><value>5</value></category>
+        </chart>
+    </row>
+</column>
+</layout>
+</section>
+</document>
+</lpdf>

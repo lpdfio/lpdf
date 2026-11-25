@@ -53,9 +53,10 @@ const argv = process.argv.slice(2);
 const DATA_BINDING = 'it binds data with data-source or data-value, which the builders of the SDKs can not write';
 const CANNOT_EXPRESS = new Map([
     ...[
-        'bench_data_m', 'bench_data_s', 'data-invoice', 'showcase-bulk', 'showcase-chart-data', 'showcase-columns-data',
-        'showcase-cross-industry-invoice', 'showcase-markdown-styles', 'showcase-page-letters', 'showcase-page-numbers',
-        'showcase-pdfua-toc', 'showcase-pdfua', 'showcase-references', 'showcase-toc',
+        'bench_data_m', 'bench_data_s', 'data-invoice', 'showcase-bulk', 'showcase-chart-data',
+        'showcase-chart-lines-data', 'showcase-columns-data', 'showcase-cross-industry-invoice',
+        'showcase-markdown-styles', 'showcase-page-letters', 'showcase-page-numbers', 'showcase-pdfua-toc',
+        'showcase-pdfua', 'showcase-references', 'showcase-toc',
     ].map((name) => [`fixtures/${name}.xml`, DATA_BINDING]),
     ...[
         'section@type=toc', 'section@toc-indent-step=xs', 'column@bulk=true', 'column@bulk=false', 'list@bulk=true',

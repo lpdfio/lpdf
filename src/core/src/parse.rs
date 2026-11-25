@@ -4226,6 +4226,9 @@ fn chart_part_parent(kind: &NodeKind) -> Option<&'static str> {
 fn check_chart_child(parent: &ParsedNode, child: &NodeKind, child_tag: &str) -> Result<(), String> {
     match (&parent.kind, child) {
         (NodeKind::Chart, NodeKind::ChartSeries) => {
+            if let Some(Detail::Chart(spec)) = parent.detail.as_deref() {
+                crate::chart::check_series(spec)?;
+            }
             if parent.children.iter().any(|c| c.kind == NodeKind::ChartCategory) {
                 return Err("a <series> goes before the categories".into());
             }
