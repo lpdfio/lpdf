@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Bar charts of each form: one series, side by side, stacked, horizontal and with negative values, with labels that
+     wrap, value labels and legends, each with its title. A fixture of the harness's own, so every build reads the same
+     file: never edit it. -->
+<lpdf version="1">
+<document size="A4">
+<section>
+<layout margin="40pt">
+<column gap="m">
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Revenue per month, part 1</text>
+        <chart type="bar" height="160pt" prefix="$">
+            <category label="January"><value>30005</value></category>
+            <category label="February"><value>47857</value></category>
+            <category label="March"><value>36284</value></category>
+            <category label="April"><value>37238</value></category>
+            <category label="May"><value>53271</value></category>
+            <category label="June"><value>39835</value></category>
+            <category label="July"><value>48145</value></category>
+            <category label="August"><value>53582</value></category>
+            <category label="September"><value>55210</value></category>
+            <category label="October"><value>36138</value></category>
+            <category label="November"><value>48805</value></category>
+            <category label="December"><value>57682</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Sales per region</text>
+        <chart type="bar" height="180pt" prefix="$" bar-gap="1pt">
+            <series label="Europe"/>
+            <series label="Americas"/>
+            <series label="Asia"/>
+            <series label="Africa"/>
+            <category label="Jan"><value>7646</value><value>28344</value><value>10020</value><value>25370</value></category>
+            <category label="Feb"><value>9775</value><value>38796</value><value>7922</value><value>31820</value></category>
+            <category label="Mar"><value>7790</value><value>39382</value><value>15377</value><value>24985</value></category>
+            <category label="Apr"><value>15876</value><value>30576</value><value>10355</value><value>5207</value></category>
+            <category label="May"><value>17177</value><value>7036</value><value>24380</value><value>36588</value></category>
+            <category label="Jun"><value>10572</value><value>26149</value><value>31880</value><value>23497</value></category>
+            <category label="Jul"><value>33840</value><value>33347</value><value>10140</value><value>27939</value></category>
+            <category label="Aug"><value>14324</value><value>5904</value><value>11890</value><value>37007</value></category>
+            <category label="Sep"><value>20634</value><value>19347</value><value>22557</value><value>17005</value></category>
+            <category label="Oct"><value>24784</value><value>21190</value><value>25572</value><value>14429</value></category>
+            <category label="Nov"><value>16091</value><value>6890</value><value>11131</value><value>11962</value></category>
+            <category label="Dec"><value>7517</value><value>35936</value><value>17678</value><value>38115</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Sales per region, stacked</text>
+        <chart type="bar" stacked="true" height="180pt" value-labels="true" suffix="k" decimals="1" legend="top">
+            <series label="Europe"/>
+            <series label="Americas"/>
+            <series label="Asia"/>
+            <series label="Africa"/>
+            <category label="Jan"><value>6.38</value><value>10.16</value><value>36.14</value><value>17.04</value></category>
+            <category label="Feb"><value>11.67</value><value>23.67</value><value>36.56</value><value>12.76</value></category>
+            <category label="Mar"><value>8.24</value><value>14.14</value><value>23.52</value><value>14.52</value></category>
+            <category label="Apr"><value>6.86</value><value>30.16</value><value>27.89</value><value>21.34</value></category>
+            <category label="May"><value>34.01</value><value>30.50</value><value>16.76</value><value>10.52</value></category>
+            <category label="Jun"><value>29.84</value><value>37.75</value><value>32.82</value><value>8.31</value></category>
+            <category label="Jul"><value>17.45</value><value>29.80</value><value>15.44</value><value>8.99</value></category>
+            <category label="Aug"><value>6.97</value><value>32.48</value><value>25.74</value><value>10.30</value></category>
+            <category label="Sep"><value>14.68</value><value>36.57</value><value>18.50</value><value>36.27</value></category>
+            <category label="Oct"><value>32.11</value><value>28.50</value><value>23.78</value><value>19.98</value></category>
+            <category label="Nov"><value>35.65</value><value>7.06</value><value>26.77</value><value>27.47</value></category>
+            <category label="Dec"><value>32.46</value><value>15.44</value><value>34.74</value><value>10.10</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Units per product</text>
+        <chart type="bar" direction="horizontal" height="240pt" value-labels="true" thousands-mark="." decimal-mark=",">
+            <category label="Standing desk"><value>1040</value></category>
+            <category label="Ergonomic chair with adjustable arms and a headrest"><value>720</value></category>
+            <category label="Monitor arm"><value>222</value></category>
+            <category label="Desk lamp"><value>1439</value></category>
+            <category label="Cable tray"><value>1164</value></category>
+            <category label="Keyboard tray"><value>101</value></category>
+            <category label="Footrest"><value>2032</value></category>
+            <category label="Document holder"><value>657</value></category>
+            <category label="Laptop stand"><value>558</value></category>
+            <category label="Whiteboard on wheels"><value>2226</value></category>
+            <category label="Acoustic panel"><value>1800</value></category>
+            <category label="Drawer unit on castors"><value>1667</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Change since last year</text>
+        <chart type="bar" direction="horizontal" height="200pt" suffix="%" decimals="2" value-labels="true" legend="right">
+            <series label="This year"/>
+            <series label="Last year"/>
+            <category label="Standing desk"><value>-5.05</value><value>-6.83</value></category>
+            <category label="Ergonomic chair with adjustable arms and a headrest"><value>1.46</value><value>-5.75</value></category>
+            <category label="Monitor arm"><value>6.09</value><value>6.59</value></category>
+            <category label="Desk lamp"><value>10.66</value><value>-5.48</value></category>
+            <category label="Cable tray"><value>8.36</value><value>-6.40</value></category>
+            <category label="Keyboard tray"><value>7.18</value><value>5.47</value></category>
+            <category label="Footrest"><value>-0.89</value><value>-11.21</value></category>
+            <category label="Document holder"><value>-9.66</value><value>1.16</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Revenue per month, part 2</text>
+        <chart type="bar" height="160pt" prefix="$">
+            <category label="January"><value>50011</value></category>
+            <category label="February"><value>41632</value></category>
+            <category label="March"><value>44563</value></category>
+            <category label="April"><value>46820</value></category>
+            <category label="May"><value>30133</value></category>
+            <category label="June"><value>31976</value></category>
+            <category label="July"><value>32113</value></category>
+            <category label="August"><value>47111</value></category>
+            <category label="September"><value>39871</value></category>
+            <category label="October"><value>32075</value></category>
+            <category label="November"><value>36304</value></category>
+            <category label="December"><value>57583</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Sales per region</text>
+        <chart type="bar" height="180pt" prefix="$" bar-gap="1pt">
+            <series label="Europe"/>
+            <series label="Americas"/>
+            <series label="Asia"/>
+            <series label="Africa"/>
+            <category label="Jan"><value>37545</value><value>23522</value><value>18304</value><value>10954</value></category>
+            <category label="Feb"><value>24402</value><value>35732</value><value>20592</value><value>31292</value></category>
+            <category label="Mar"><value>24442</value><value>9898</value><value>15379</value><value>9361</value></category>
+            <category label="Apr"><value>19774</value><value>18771</value><value>27824</value><value>26470</value></category>
+            <category label="May"><value>6905</value><value>36034</value><value>15383</value><value>17510</value></category>
+            <category label="Jun"><value>36194</value><value>28752</value><value>35304</value><value>30651</value></category>
+            <category label="Jul"><value>27527</value><value>31025</value><value>13799</value><value>27745</value></category>
+            <category label="Aug"><value>34626</value><value>15845</value><value>7826</value><value>12821</value></category>
+            <category label="Sep"><value>38283</value><value>34575</value><value>19769</value><value>10096</value></category>
+            <category label="Oct"><value>23694</value><value>28636</value><value>13380</value><value>17120</value></category>
+            <category label="Nov"><value>10514</value><value>5272</value><value>35539</value><value>19907</value></category>
+            <category label="Dec"><value>21814</value><value>28849</value><value>34189</value><value>34901</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Sales per region, stacked</text>
+        <chart type="bar" stacked="true" height="180pt" value-labels="true" suffix="k" decimals="1" legend="top">
+            <series label="Europe"/>
+            <series label="Americas"/>
+            <series label="Asia"/>
+            <series label="Africa"/>
+            <category label="Jan"><value>10.29</value><value>25.33</value><value>30.05</value><value>34.56</value></category>
+            <category label="Feb"><value>6.19</value><value>16.67</value><value>35.91</value><value>14.87</value></category>
+            <category label="Mar"><value>16.02</value><value>19.42</value><value>28.30</value><value>13.94</value></category>
+            <category label="Apr"><value>26.67</value><value>33.49</value><value>10.11</value><value>16.39</value></category>
+            <category label="May"><value>11.96</value><value>13.12</value><value>13.35</value><value>38.86</value></category>
+            <category label="Jun"><value>12.73</value><value>15.40</value><value>28.00</value><value>31.67</value></category>
+            <category label="Jul"><value>31.63</value><value>13.82</value><value>30.34</value><value>14.90</value></category>
+            <category label="Aug"><value>33.88</value><value>33.09</value><value>18.19</value><value>14.58</value></category>
+            <category label="Sep"><value>30.67</value><value>18.14</value><value>6.47</value><value>39.62</value></category>
+            <category label="Oct"><value>17.12</value><value>28.99</value><value>17.59</value><value>26.45</value></category>
+            <category label="Nov"><value>9.06</value><value>8.19</value><value>30.77</value><value>15.50</value></category>
+            <category label="Dec"><value>8.68</value><value>32.65</value><value>33.35</value><value>38.52</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Units per product</text>
+        <chart type="bar" direction="horizontal" height="240pt" value-labels="true" thousands-mark="." decimal-mark=",">
+            <category label="Standing desk"><value>319</value></category>
+            <category label="Ergonomic chair with adjustable arms and a headrest"><value>2239</value></category>
+            <category label="Monitor arm"><value>1008</value></category>
+            <category label="Desk lamp"><value>2335</value></category>
+            <category label="Cable tray"><value>943</value></category>
+            <category label="Keyboard tray"><value>1266</value></category>
+            <category label="Footrest"><value>1859</value></category>
+            <category label="Document holder"><value>922</value></category>
+            <category label="Laptop stand"><value>2370</value></category>
+            <category label="Whiteboard on wheels"><value>237</value></category>
+            <category label="Acoustic panel"><value>1831</value></category>
+            <category label="Drawer unit on castors"><value>286</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Change since last year</text>
+        <chart type="bar" direction="horizontal" height="200pt" suffix="%" decimals="2" value-labels="true" legend="right">
+            <series label="This year"/>
+            <series label="Last year"/>
+            <category label="Standing desk"><value>-1.36</value><value>5.46</value></category>
+            <category label="Ergonomic chair with adjustable arms and a headrest"><value>-9.14</value><value>10.79</value></category>
+            <category label="Monitor arm"><value>-9.62</value><value>5.87</value></category>
+            <category label="Desk lamp"><value>-0.81</value><value>-6.49</value></category>
+            <category label="Cable tray"><value>9.71</value><value>9.33</value></category>
+            <category label="Keyboard tray"><value>2.23</value><value>-1.25</value></category>
+            <category label="Footrest"><value>-5.92</value><value>-5.38</value></category>
+            <category label="Document holder"><value>4.85</value><value>6.26</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Revenue per month, part 3</text>
+        <chart type="bar" height="160pt" prefix="$">
+            <category label="January"><value>33971</value></category>
+            <category label="February"><value>59917</value></category>
+            <category label="March"><value>47808</value></category>
+            <category label="April"><value>30287</value></category>
+            <category label="May"><value>44907</value></category>
+            <category label="June"><value>39355</value></category>
+            <category label="July"><value>50535</value></category>
+            <category label="August"><value>45961</value></category>
+            <category label="September"><value>32652</value></category>
+            <category label="October"><value>30065</value></category>
+            <category label="November"><value>52452</value></category>
+            <category label="December"><value>54143</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Sales per region</text>
+        <chart type="bar" height="180pt" prefix="$" bar-gap="1pt">
+            <series label="Europe"/>
+            <series label="Americas"/>
+            <series label="Asia"/>
+            <series label="Africa"/>
+            <category label="Jan"><value>26484</value><value>29436</value><value>34428</value><value>25299</value></category>
+            <category label="Feb"><value>10226</value><value>25349</value><value>37478</value><value>11083</value></category>
+            <category label="Mar"><value>20479</value><value>16445</value><value>33531</value><value>16225</value></category>
+            <category label="Apr"><value>22701</value><value>9491</value><value>16258</value><value>30472</value></category>
+            <category label="May"><value>36354</value><value>10197</value><value>34787</value><value>35213</value></category>
+            <category label="Jun"><value>33306</value><value>16485</value><value>20992</value><value>12404</value></category>
+            <category label="Jul"><value>10675</value><value>16599</value><value>27586</value><value>30629</value></category>
+            <category label="Aug"><value>30083</value><value>9458</value><value>5913</value><value>30995</value></category>
+            <category label="Sep"><value>5676</value><value>24853</value><value>8984</value><value>27621</value></category>
+            <category label="Oct"><value>8157</value><value>20616</value><value>14014</value><value>30559</value></category>
+            <category label="Nov"><value>11232</value><value>22126</value><value>34277</value><value>13952</value></category>
+            <category label="Dec"><value>17291</value><value>8144</value><value>12685</value><value>13771</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Sales per region, stacked</text>
+        <chart type="bar" stacked="true" height="180pt" value-labels="true" suffix="k" decimals="1" legend="top">
+            <series label="Europe"/>
+            <series label="Americas"/>
+            <series label="Asia"/>
+            <series label="Africa"/>
+            <category label="Jan"><value>31.15</value><value>5.58</value><value>10.36</value><value>28.11</value></category>
+            <category label="Feb"><value>17.40</value><value>21.92</value><value>10.47</value><value>22.80</value></category>
+            <category label="Mar"><value>37.17</value><value>6.65</value><value>10.99</value><value>14.44</value></category>
+            <category label="Apr"><value>13.75</value><value>23.61</value><value>39.34</value><value>37.69</value></category>
+            <category label="May"><value>18.24</value><value>28.21</value><value>25.33</value><value>26.52</value></category>
+            <category label="Jun"><value>14.67</value><value>9.61</value><value>9.53</value><value>22.98</value></category>
+            <category label="Jul"><value>27.83</value><value>31.56</value><value>16.58</value><value>21.78</value></category>
+            <category label="Aug"><value>25.25</value><value>28.47</value><value>31.15</value><value>21.24</value></category>
+            <category label="Sep"><value>25.06</value><value>20.34</value><value>31.02</value><value>21.69</value></category>
+            <category label="Oct"><value>37.73</value><value>11.04</value><value>29.59</value><value>31.69</value></category>
+            <category label="Nov"><value>29.87</value><value>32.85</value><value>8.53</value><value>6.74</value></category>
+            <category label="Dec"><value>12.08</value><value>34.40</value><value>34.68</value><value>6.66</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Units per product</text>
+        <chart type="bar" direction="horizontal" height="240pt" value-labels="true" thousands-mark="." decimal-mark=",">
+            <category label="Standing desk"><value>1349</value></category>
+            <category label="Ergonomic chair with adjustable arms and a headrest"><value>1323</value></category>
+            <category label="Monitor arm"><value>1489</value></category>
+            <category label="Desk lamp"><value>990</value></category>
+            <category label="Cable tray"><value>1552</value></category>
+            <category label="Keyboard tray"><value>1017</value></category>
+            <category label="Footrest"><value>511</value></category>
+            <category label="Document holder"><value>405</value></category>
+            <category label="Laptop stand"><value>1922</value></category>
+            <category label="Whiteboard on wheels"><value>1937</value></category>
+            <category label="Acoustic panel"><value>741</value></category>
+            <category label="Drawer unit on castors"><value>840</value></category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Change since last year</text>
+        <chart type="bar" direction="horizontal" height="200pt" suffix="%" decimals="2" value-labels="true" legend="right">
+            <series label="This year"/>
+            <series label="Last year"/>
+            <category label="Standing desk"><value>-5.32</value><value>-5.33</value></category>
+            <category label="Ergonomic chair with adjustable arms and a headrest"><value>-2.21</value><value>-3.67</value></category>
+            <category label="Monitor arm"><value>3.50</value><value>-9.32</value></category>
+            <category label="Desk lamp"><value>-10.96</value><value>11.94</value></category>
+            <category label="Cable tray"><value>9.91</value><value>-10.68</value></category>
+            <category label="Keyboard tray"><value>-1.62</value><value>4.26</value></category>
+            <category label="Footrest"><value>-11.01</value><value>-7.69</value></category>
+            <category label="Document holder"><value>-11.78</value><value>-5.27</value></category>
+        </chart>
+    </column>
+</column>
+</layout>
+</section>
+</document>
+</lpdf>
