@@ -24,8 +24,8 @@ run-name: "${{ inputs.tags && format('Bench counts: backfill {0}', inputs.tags) 
 #
 # The report is a PDF too, rendered by the command line of the commit the run is on, from
 # scripts/bench-counts-report.xml and the report as JSON: Lpdf making a document from data in a
-# pipeline, as its users' do. A run of a branch, main or an RC keeps it as a download of the run,
-# named after the build it measured; a release keeps it in lpdf-bench.
+# pipeline, as its users' pipelines do. A run of a branch, main or an RC keeps it as a download of
+# the run, named after the build it measured; a release keeps it in lpdf-bench.
 #
 # A release, and each tag of a backfill, saves its counts to lpdf-bench as counts/vX.Y.Z.json, with
 # those of the release before it, measured in the same run, and the PDF beside them as
@@ -276,7 +276,7 @@ jobs:
             node scripts/bench-counts-report.mjs "$@"
             cat "$RUNNER_TEMP/report/$n.md" >> "$GITHUB_STEP_SUMMARY"
             # The PDF, named after the build the report is for. A release keeps it beside its counts for
-            # lpdf-bench; any other run has one report, whose PDF the next step keeps as a download.
+            # lpdf-bench; any other run has one report, whose PDF "Keep the PDF as a download of the run" keeps.
             pdf="$RUNNER_TEMP/report/lpdf-bench-counts-$last.pdf"
             target/release/lpdf convert --input scripts/bench-counts-report.xml --data "$RUNNER_TEMP/report/$n.json" \
               --output "$pdf" < /dev/null
