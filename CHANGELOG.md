@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.38.0 — 2026-11-25
+### Page sizes
+- **Breaking:** a named page size is written as its paper is named: `A0` to `A6`, `B4`, `B5`, `Letter`, `Legal` and `Tabloid`, on a document and on a section. A name in lowercase, `size="a4"`, is an error now, which lists the names: `invalid page size: 'a4': expected A0, A1, A2, A3, A4, A5, A6, B4, B5, Letter, Legal, Tabloid or a width and a height, like '210mm 297mm'`. It is the same on the XML path and for a document built in code, and in TypeScript `size: 'a4'` no longer compiles. A width and a height are written as before, and a document with no `size` is A4
+- The `PageSize` constants of the SDKs hold the new names, so code that writes `size: PageSize.A4` needs no change
+
+### Documentation
+- `FEATURES.md` gives the page sizes as they are written now. It also says what TypeScript checks of a custom `size`: it compiles when it is two numbers, each with `pt`, `mm` or `in`, so `'210mm'` and `'21cm 29.7cm'` don't, and the engine checks the numbers when the document renders, so a page under 3pt wide or high is an error then
+- The Lpdf README is titled "Lpdf: PDF as code". It and the README of each SDK open with one line, "Render PDF documents from XML or from code", and name data binding, PDF/A, PDF/UA, PDF/X and Factur-X / ZUGFeRD. The package descriptions on npm, NuGet, Packagist, PyPI and Maven Central say the same
+
+### VS Code extension
+- The extension is named "Lpdf: PDF Viewer & Markdown to PDF" on the VS Code Marketplace and Open VSX, and described as "PDF viewer, Markdown to PDF, PDF diff and XML editor with live PDF preview". Its README opens the same way
+- The templates write `size="A4"` and `size="Letter"`, and hover, autocomplete and validation take the new names from the schema
+
 ## v0.37.0 — 2026-11-21
 ### Validation
 - **Breaking:** a wrong value of an enumerated attribute is an error that names the values it takes, where the engine fell back to a default with no error: `orientation="landscpe"` gave a portrait page and `<text align="cetner">` a left-aligned one. It now stops on `align` of a `text`, a `text-at` and the Markdown rules (`left`, `center`, `right`, `justify`), `orientation` of a document and of a section (`portrait`, `landscape`), `direction` of a divider, `line-cap` of a line and a path, `fill-rule` of a path, and `core` of a font, which takes one of the 14 built-in fonts. It is the same on the XML path and for a document built in code
