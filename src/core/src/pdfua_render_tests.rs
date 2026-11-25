@@ -116,14 +116,16 @@ fn each_thing_the_fixture_shows_has_its_structure_element() {
     // The header cells head their columns, and the cells that span say so.
     assert_eq!(count(&pdf, "/Scope /Column"), 5, "the three header cells of the table and the two of the Markdown's");
     assert!(pdf.contains("/RowSpan 2") && pdf.contains("/ColSpan 2"));
-    // The chart, the barcode and the map are figures with their descriptions; the badge is decoration.
+    // The picture of a chart, the bar chart, the barcode and the map are figures with their descriptions; the badge
+    // is decoration.
     for alt in [
         "/Alt (A bar chart of the units sold in each quarter, rising from left to right)",
+        "/Alt (Units by quarter: North sold 1,204 in Q1 and 1,388 in Q2, South 1,150 in Q1 and none yet in Q2)",
         "/Alt (QR code to pay this invoice)", "/Alt (A map of the two regions: North above South)",
     ] {
         assert!(pdf.contains(alt), "{alt}");
     }
-    assert_eq!(count(&pdf, "/S /Figure\n"), 3);
+    assert_eq!(count(&pdf, "/S /Figure\n"), 4);
     // A note has an id, and the ids are in the tree of ids.
     assert!(pdf.contains("/ID (note-1)") && pdf.contains("/IDTree"));
 }
