@@ -416,6 +416,14 @@ fn the_font_of_a_text_field_a_user_can_type_in_is_embedded_whole() {
         let kept = size(&layout);
         assert!(kept < text_only + 5_000, "a subset of {text_only} bytes against {kept} with {field}");
     }
+    // A push button shows its caption, which the subset has. PDF/A refuses a button, so this is a document without it,
+    // with a typed field as the control that the size means something there too.
+    let plain = |layout: &str| render(&document("", layout).replace(r#"<output pdfa="2b"/>"#, "")).expect("renders").len();
+    let plain_text = plain(r#"<text>ada@example.com</text>"#);
+    let plain_typed = plain(r#"<text>ada@example.com</text><field type="text" name="email" width="160pt"/>"#);
+    assert!(plain_typed > plain_text + 30_000, "a subset of {plain_text} bytes against the whole font's {plain_typed}");
+    let button = plain(r#"<text>ada@example.com</text><field type="button" name="send" label="Send" width="100pt" height="28pt"/>"#);
+    assert!(button < plain_text + 5_000, "a subset of {plain_text} bytes against {button} with a push button");
     let face = read(&test_dir().join("assets/fonts/CrimsonText-Regular.ttf"));
     let chars = crate::pdf::chars_of_font(&face);
     assert!(['Z', 'Å', 'ö', '€'].iter().all(|c| chars.contains(c)) && chars.len() > 500, "{} characters", chars.len());

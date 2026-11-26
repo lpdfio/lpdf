@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- PDF/A-2u with a form: a field of each kind that PDF/A allows, each in the font around it, which the file
      embeds. The document's font is Crimson Text; one box sets its italic and another Montserrat, and the fields in
-     them follow. A text field a person can type in has its font written whole (the read-only one has a subset),
-     so a reader that redraws what is typed finds every glyph. A push button is left out: PDF/A refuses it. Every
+     them follow. The font of a text field a person can type in is written whole, so a reader that redraws what is
+     typed finds every glyph: each of the three has such a field here, and the heading font, which no field uses, is
+     a subset. A push button is left out: PDF/A refuses it. Every
      font is of test/assets/fonts (SIL Open Font License), named relative to this file; the render needs created_on,
      and the check of `make check-pdfa` renders it with the fonts loaded, as an SDK does
      (`writes_pdfa_samples_for_the_external_check` in pdfa_render_tests.rs). -->
