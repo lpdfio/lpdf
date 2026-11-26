@@ -173,6 +173,7 @@ fn strings(id: &str, name: &str) -> Option<&'static [&'static str]> {
         // The default is a dot; a comma is the default thousands mark, which the tweak changes.
         ("chart@decimal-mark", &[","]),
         ("chart@alt", &["Revenue per month", ""]),
+        ("chart@hole-text", &["Total"]),
     ];
     if let Some((_, values)) = by_id.iter().find(|(key, _)| *key == id) {
         return Some(values);
@@ -555,8 +556,9 @@ const SLOTS: [&str; 6] = ["xs", "s", "m", "l", "xl", "xxl"];
 const CHART_CATEGORIES: &str = r#"<category label="North"><value>41200</value><value>38900.5</value></category><category label="South"><value>12000</value><value>-3500</value></category>"#;
 /// A chart of two series and its categories.
 const CHART: &str = r#"<series label="Plan"/><series label="Actual"/><category label="North"><value>41200</value><value>38900.5</value></category><category label="South"><value>12000</value><value>-3500</value></category>"#;
-/// A chart of one series, which every kind takes: a sparkline takes no series.
-const CHART_ONE_SERIES: &str = r#"<category label="North"><value>41200</value></category><category label="South"><value>-3500</value></category><category label="East"><value>12000</value></category>"#;
+/// A chart of one series with no negative value, which every kind takes: a sparkline, a pie and a donut take no series
+/// and refuse a negative value.
+const CHART_ONE_SERIES: &str = r#"<category label="North"><value>41200</value></category><category label="South"><value>3500</value></category><category label="East"><value>12000</value></category>"#;
 /// A chart of two series with no negative value, which a stacked chart refuses.
 const CHART_STACKABLE: &str = r#"<series label="Plan"/><series label="Actual"/><category label="North"><value>41200</value><value>38900.5</value></category><category label="South"><value>12000</value><value>3500</value></category>"#;
 
@@ -1134,6 +1136,9 @@ fn tweaks() -> HashMap<String, Tweak> {
     // Every kind on a chart of one series, which a sparkline is; the width of the lines on a line.
     add("chart@type", Tweak::default().content(CHART_ONE_SERIES));
     add("chart@stroke-width", Tweak::default().set("type", "line"));
+    // The hole and its text are a donut's.
+    add("chart@hole", Tweak::default().set("type", "donut").content(CHART_ONE_SERIES));
+    add("chart@hole-text", Tweak::default().set("type", "donut").content(CHART_ONE_SERIES));
     add("chart@decimals", Tweak::default().set("value-labels", "true"));
     add("chart@decimal-mark", Tweak::default().set("value-labels", "true").set("thousands-mark", " "));
 

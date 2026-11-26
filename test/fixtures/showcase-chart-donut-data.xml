@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+<document size="A4">
+<section>
+<layout margin="40pt">
+<column gap="xl">
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Where the money went</text>
+        <chart type="donut" height="160pt" prefix="$" hole-text="$11,100" data-hole-text="total"
+               alt="Expenses by kind, colored from the data">
+            <category data-source="expenses" label="Rent" data-label="name" color="#737373" data-color="color">
+                <value data-value="amount">2400</value>
+            </category>
+        </chart>
+    </column>
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Tickets by team</text>
+        <chart type="pie" height="150pt" decimals="1">
+            <category data-source="teams" label="Team" data-label="name">
+                <value data-value="open">1</value>
+            </category>
+        </chart>
+    </column>
+</column>
+</layout>
+</section>
+</document>
+</lpdf>

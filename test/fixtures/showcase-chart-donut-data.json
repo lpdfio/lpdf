@@ -1,0 +1,14 @@
+{
+    "total": "$11,100",
+    "expenses": [
+        { "name": "Rent", "amount": 2400, "color": "#1763cf" },
+        { "name": "Salaries", "amount": 8100, "color": "#2f9e44" },
+        { "name": "Travel", "amount": 600, "color": "#e8590c" }
+    ],
+    "teams": [
+        { "name": "Billing", "open": 41 },
+        { "name": "Platform", "open": 87 },
+        { "name": "Mobile", "open": 23 },
+        { "name": "Data", "open": 0 }
+    ]
+}

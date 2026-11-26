@@ -294,6 +294,11 @@ fn set_bound(node: &mut Node, attr: BoundAttr, value: &str, resolvers: &Resolver
                 node.detail = Some(Box::new(crate::parse::Detail::ChartPart(part)));
             }
         },
+        BoundAttr::HoleText => {
+            if let Some(crate::parse::Detail::Chart(spec)) = node.detail.as_deref_mut() {
+                spec.hole_text = Some(value.to_owned());
+            }
+        }
     }
     Ok(())
 }

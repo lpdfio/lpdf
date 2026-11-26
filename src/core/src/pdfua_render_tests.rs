@@ -153,6 +153,20 @@ fn the_decoration_is_marked_as_artifacts_and_the_text_with_mcids() {
 }
 
 #[test]
+fn a_pie_and_a_donut_are_figures_with_their_alt_and_their_slices_are_decoration() {
+    let layout = r#"
+        <chart type="pie" height="100pt" alt="Visits by browser"><category label="Chrome"><value>5</value></category><category label="Safari"><value>3</value></category></chart>
+        <chart type="donut" height="100pt" alt="Expenses by kind" hole-text="Total"><category label="Rent"><value>5</value></category></chart>"#;
+    let pdf = render(&document(layout)).expect("renders");
+    let words = text(&pdf);
+    assert!(words.contains("/Alt (Visits by browser)") && words.contains("/Alt (Expenses by kind)"));
+    let content = contents(&pdf);
+    assert_eq!(count(&content, "/Figure <<"), 2, "each chart is marked as one figure");
+    let opened = count(&content, " BDC") + count(&content, " BMC");
+    assert_eq!(opened, count(&content, "EMC"), "every marked sequence is closed");
+}
+
+#[test]
 fn a_text_split_across_pages_stays_one_paragraph() {
     let long = "Words that fill the page. ".repeat(400);
     let pdf = text(&render(&document(&format!("<text>{long}</text>"))).expect("renders"));

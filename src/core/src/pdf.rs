@@ -47,7 +47,7 @@ use crate::attachments::{self, EmbeddedFile};
 use crate::facturx;
 use crate::render::{
     placed_anchors, PlacedAnchor, PolylinePaint, RenderBox, RenderCanvasLayer, RenderField, RenderNode, RenderPage,
-    RenderPolylines, RenderedBarcodeKind,
+    RenderPolylines, RenderSectors, RenderedBarcodeKind,
 };
 use crate::parse::{FieldKind, ListFormat, Meta, Ocg, Output, Shadow};
 use crate::pdfa::{self, FileDate, PdfA, Standards, XmpIds};
@@ -1657,7 +1657,7 @@ fn draw_node(
         match node {
             RenderNode::Text(t) => return marks.content(content, &t.content, draw),
             RenderNode::Line(_) | RenderNode::CanvasRect(_) | RenderNode::Bars(_) | RenderNode::Polylines(_)
-                | RenderNode::CanvasLine(_) | RenderNode::CanvasEllipse(_) | RenderNode::CanvasPath(_) | RenderNode::Ruling(_) => {
+                | RenderNode::Sectors(_) | RenderNode::CanvasLine(_) | RenderNode::CanvasEllipse(_) | RenderNode::CanvasPath(_) | RenderNode::Ruling(_) => {
                 return marks.artifact(content, draw);
             }
             RenderNode::Image(i) => return marks.whole(content, i.tag.as_deref(), draw),
@@ -1957,6 +1957,7 @@ fn draw_drawn(
             content.restore_state();
         }
         RenderNode::Polylines(p) => draw_polylines(content, p, page_h),
+        RenderNode::Sectors(s) => draw_sectors(content, s, page_h),
         RenderNode::CanvasRect(r) => {
             let has_fill   = r.fill.is_some();
             let has_stroke = r.stroke.is_some() && r.stroke_width > 0.0;
@@ -2167,6 +2168,52 @@ fn draw_polylines(content: &mut Content, p: &RenderPolylines, page_h: f32) {
         PolylinePaint::Fill { .. } => content.fill_nonzero(),
     };
     content.restore_state();
+}
+
+/// The slices of a pie or a donut in one color: each a path of arcs, drawn as cubic Béziers of a quarter turn at most,
+/// all filled at once. A slice of a donut runs out along its outer arc, back along its inner arc and closes; a slice
+/// of a pie meets at the center, and a whole turn is a circle of its own. Out of `draw_drawn`, whose size the Java SDK's
+/// 64 KB method limit bounds (`make check-function-sizes`).
+#[inline(never)]
+fn draw_sectors(content: &mut Content, s: &RenderSectors, page_h: f32) {
+    if s.slices.is_empty() || s.outer <= 0.0 {
+        return;
+    }
+    content.save_state();
+    set_fill_color(content, &s.fill);
+    set_overprint(content, Some(&s.fill), None);
+    let [cx, cy] = s.center;
+    for &[start, end] in &s.slices {
+        let (x, y) = on_arc(s.center, page_h, s.outer, start);
+        content.move_to(x, y);
+        arc_to(content, s.center, page_h, s.outer, start, end);
+        if s.inner > 0.0 {
+            let (x, y) = on_arc(s.center, page_h, s.inner, end);
+            content.line_to(x, y);
+            arc_to(content, s.center, page_h, s.inner, end, start);
+        } else if end - start < std::f32::consts::TAU - 1e-4 {
+            content.line_to(cx, page_h - cy);
+        }
+        content.close_path();
+    }
+    content.fill_nonzero();
+    content.restore_state();
+}
+
+/// The point at `angle` on the circle of `radius` around `center`, which is `[x, y]` from the top left of the page,
+/// in the page's coordinates, which run up.
+fn on_arc([cx, cy]: [f32; 2], page_h: f32, radius: f32, angle: f32) -> (f32, f32) {
+    let [x, y] = crate::chart::arc_point(radius, angle);
+    (cx + x, page_h - (cy + y))
+}
+
+/// Append the arc of `radius` around `center`, from the angle `from` to `to`, to the current path.
+fn arc_to(content: &mut Content, [cx, cy]: [f32; 2], page_h: f32, radius: f32, from: f32, to: f32) {
+    let flip = |[x, y]: [f32; 2]| (cx + x, page_h - (cy + y));
+    crate::chart::arc_curves(radius, from, to, |c1, c2, p| {
+        let (c1, c2, p) = (flip(c1), flip(c2), flip(p));
+        content.cubic_to(c1.0, c1.1, c2.0, c2.1, p.0, p.1);
+    });
 }
 
 /// A box: its fill and border, then its children.
@@ -5133,6 +5180,7 @@ fn node_colors(node: &RenderNode) -> Vec<&str> {
         RenderNode::CanvasRect(r)    => vec![r.fill.as_deref(), r.stroke.as_deref(), shadow(&r.shadow)],
         RenderNode::Bars(b)          => vec![Some(&b.fill)],
         RenderNode::Polylines(p)     => vec![Some(&p.color)],
+        RenderNode::Sectors(s)       => vec![Some(&s.fill)],
         RenderNode::CanvasLine(l)    => vec![Some(&l.stroke)],
         RenderNode::CanvasEllipse(e) => vec![e.fill.as_deref(), e.stroke.as_deref(), shadow(&e.shadow)],
         RenderNode::CanvasPath(p)    => vec![p.fill.as_deref(), p.stroke.as_deref()],

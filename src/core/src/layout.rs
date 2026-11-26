@@ -5727,6 +5727,10 @@ fn shift_y(node: RenderNode, dy: f32) -> RenderNode {
             p.runs.iter_mut().flatten().for_each(|point| point[1] += dy);
             RenderNode::Polylines(p)
         }
+        RenderNode::Sectors(mut s) => {
+            s.center[1] += dy;
+            RenderNode::Sectors(s)
+        }
         // The other canvas nodes use absolute canvas coordinates; y-shifting is a no-op.
         other => other,
     }
@@ -5788,6 +5792,10 @@ fn shift_x(node: RenderNode, dx: f32) -> RenderNode {
         RenderNode::Polylines(mut p) => {
             p.runs.iter_mut().flatten().for_each(|point| point[0] += dx);
             RenderNode::Polylines(p)
+        }
+        RenderNode::Sectors(mut s) => {
+            s.center[0] += dx;
+            RenderNode::Sectors(s)
         }
         // The other canvas nodes use absolute canvas coordinates; x-shifting is a no-op.
         other => other,
