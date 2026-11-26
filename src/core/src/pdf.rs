@@ -1570,10 +1570,13 @@ fn prepare_truetype_font(bytes: &[u8], used_chars: &HashSet<char>) -> PreparedFo
         .collect();
 
     // Build glyph_unicode: (new_gid, unicode_codepoint), one entry per new GID.
-    // Use a HashMap to deduplicate (multiple chars can share a glyph; keep first).
+    // Use a HashMap to deduplicate (multiple chars can share a glyph; keep the lowest codepoint, by walking the
+    // sorted list: a font embedded whole has many such glyphs, and a hash map's order differs from run to run).
     let mut gid_to_unicode: HashMap<u16, u32> = HashMap::new();
-    for (c, new_gid) in &char_to_gid {
-        gid_to_unicode.entry(*new_gid).or_insert(*c as u32);
+    for (c, _) in &char_gid_orig {
+        if let Some(new_gid) = char_to_gid.get(c) {
+            gid_to_unicode.entry(*new_gid).or_insert(*c as u32);
+        }
     }
     let mut glyph_unicode: Vec<(u16, u32)> = gid_to_unicode.into_iter().collect();
     glyph_unicode.sort_by_key(|(gid, _)| *gid);

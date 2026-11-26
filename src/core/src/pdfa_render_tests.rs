@@ -16,7 +16,7 @@ fn read(path: &Path) -> Vec<u8> {
     std::fs::read(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
-/// The fixture `showcase-pdfa-<level>.xml`.
+/// The fixture `showcase-pdfa-<level>.xml`: a level, or `form`, the form's.
 pub(crate) fn fixture(level: &str) -> String {
     String::from_utf8(read(&test_dir().join(format!("fixtures/showcase-pdfa-{level}.xml")))).expect("UTF-8")
 }
@@ -422,6 +422,16 @@ fn the_font_of_a_text_field_a_user_can_type_in_is_embedded_whole() {
 }
 
 #[test]
+fn a_font_embedded_whole_renders_the_same_bytes_each_time() {
+    // A whole font has glyphs that several characters map to, and which of them the file's map back to Unicode names
+    // is the lowest, not whichever a hash map gives first.
+    let first = render_fixture("form");
+    for run in 1..6 {
+        assert!(render_fixture("form") == first, "render {run} differs from the first");
+    }
+}
+
+#[test]
 fn a_form_follows_the_font_around_it_where_a_box_sets_another() {
     let layout = r#"<column><field type="text" name="a" width="80pt"/>
         <column font="italic"><field type="text" name="b" width="80pt"/></column></column>"#;
@@ -549,6 +559,8 @@ fn writes_pdfa_samples_for_the_external_check() {
         let xml = form_document(level);
         std::fs::write(dir.join(format!("pdfa-{level}-form.pdf")), render(&xml).unwrap_or_else(|e| panic!("{level}: {e}"))).expect("a sample");
     }
+    // The form fixture, which sets its fields in three fonts.
+    std::fs::write(dir.join("pdfa-2u-form-showcase.pdf"), render_fixture("form")).expect("a sample");
     // A form nobody types in, whose font is the subset of the characters it shows.
     let checks = r#"<column gap="8pt"><text>Terms</text>
         <field type="text" name="ref" value="REF-1" readonly="true" width="120pt" height="24pt"/>
