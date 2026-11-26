@@ -210,6 +210,9 @@ pub struct RenderField {
     pub width:        f32,
     pub height:       f32,
     pub kind:         FieldKind,
+    /// The font the field's text is set in: the one around it, as a text's is (the document's or a box's),
+    /// Helvetica when nothing sets one.
+    pub font:         String,
     pub name:         String,
     pub value:        String,
     pub label:        String,
@@ -222,6 +225,19 @@ pub struct RenderField {
     pub action_url:   Option<String>,
     pub background:   Option<String>,
     pub border:       Option<(f32, String)>,
+}
+
+impl RenderField {
+    /// What a reader or the field's appearance draws in its font: a text field's value, a dropdown's value and
+    /// options, a button's caption. A checkbox and a radio button draw no text, and their value is only a name.
+    pub fn shown_text(&self) -> String {
+        match self.kind {
+            FieldKind::Text     => self.value.clone(),
+            FieldKind::Dropdown => std::iter::once(self.value.as_str()).chain(self.options.iter().map(String::as_str)).collect(),
+            FieldKind::Button   => self.label.clone(),
+            FieldKind::Checkbox | FieldKind::Radio => String::new(),
+        }
+    }
 }
 
 pub struct RenderBox {

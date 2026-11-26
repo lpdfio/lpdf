@@ -16,7 +16,7 @@ fn read(path: &Path) -> Vec<u8> {
     std::fs::read(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
-/// The fixture `showcase-pdfa-<level>.xml`.
+/// The fixture `showcase-pdfa-<level>.xml`: a level, or `form`, the form's.
 pub(crate) fn fixture(level: &str) -> String {
     String::from_utf8(read(&test_dir().join(format!("fixtures/showcase-pdfa-{level}.xml")))).expect("UTF-8")
 }
@@ -333,10 +333,191 @@ pub(crate) fn restricted(font: &[u8]) -> Vec<u8> {
     font
 }
 
+/// One field of each kind a PDF/A file can hold, as a form has them.
+const FORM: &str = r#"<column gap="8pt">
+    <field type="text" name="email" value="ada@example.com" width="160pt" height="24pt"/>
+    <field type="dropdown" name="size" value="M" options="S,M,L" width="80pt" height="24pt"/>
+    <field type="checkbox" name="terms" width="16pt" height="16pt"/>
+    <field type="radio" name="pay_card" group="pay" value="card" checked="true" width="14pt" height="14pt"/>
+</column>"#;
+
+/// A push button, which a PDF/A file refuses.
+const BUTTON: &str = r#"<field type="button" name="send" label="Send" width="100pt" height="28pt"/>"#;
+
+/// `FORM` at `level`, with the title and language a level a file says.
+fn form_document(level: &str) -> String {
+    document("", FORM)
+        .replace(r#"pdfa="2b""#, &format!(r#"pdfa="{level}""#))
+        .replace("<output ", r#"<meta title="A form" lang="en"/><output "#)
+}
+
 #[test]
-fn a_form_field_is_an_error_that_names_it() {
-    let error = refused(&document("", r#"<field type="text" name="email" width="120pt"/>"#));
-    assert!(error.contains("'email'") && error.contains("Helvetica") && error.contains("Remove the field"), "{error}");
+fn a_form_is_a_pdfa_file_at_every_level() {
+    for level in ["2a", "2b", "2u", "3a", "3b", "3u"] {
+        let pdf = text(&render(&form_document(level)).unwrap_or_else(|e| panic!("{level}: {e}")));
+        assert!(pdf.contains("/AcroForm"), "{level}");
+    }
+}
+
+#[test]
+fn every_widget_of_a_pdfa_form_prints() {
+    let pdf = text(&render(&document("", FORM)).expect("renders"));
+    let widgets: Vec<&str> = pdf.split("endobj").filter(|object| object.contains("/Subtype /Widget")).collect();
+    assert_eq!(widgets.len(), 4);
+    assert!(widgets.iter().all(|widget| widget.contains("/F 4")), "each widget has the Print flag, as a link of a PDF/A file has");
+    // Without PDF/A nothing changes: a field has no flags.
+    let xml = r##"<lpdf version="1"><document><section><layout>
+        <field type="text" name="email" width="100pt"/></layout></section></document></lpdf>"##;
+    let other = text(&render(xml).expect("renders"));
+    let widget = other.split("endobj").find(|object| object.contains("/Subtype /Widget")).expect("a widget");
+    assert!(!widget.contains("/F 4"), "{widget}");
+}
+
+#[test]
+fn a_push_button_is_an_error_that_names_it() {
+    let error = refused(&document("", BUTTON));
+    assert!(error.contains("the push button 'send'") && error.contains("Remove the button"), "{error}");
+}
+
+#[test]
+fn a_push_button_caption_is_in_the_font_of_the_document() {
+    let xml = document("", BUTTON).replace(r#"<output pdfa="2b"/>"#, "");
+    let pdf = text(&render(&xml).expect("a button in an embedded font renders"));
+    assert!(!pdf.contains("Helv"), "the caption's font is the document's");
+    assert!(pdf.contains("/CIDFontType2"));
+}
+
+#[test]
+fn a_form_is_set_in_the_font_of_the_document_and_a_pdfa_file_embeds_it() {
+    let pdf = text(&render(&document("", FORM)).expect("a form in an embedded font renders as PDF/A"));
+    assert!(!pdf.contains("Helv"), "no built-in font is written, in the form's resources or anywhere");
+    // F0 is the name face of the attribution, which an unlicensed render adds; the document's font is F1.
+    assert!(pdf.contains("/DA (/F1 0 Tf 0 g)"), "the default appearance names the embedded font");
+    assert!(pdf.contains("/DR <<"), "the form's resources hold it");
+    assert!(pdf.contains("/CIDFontType2"), "and it is embedded");
+}
+
+#[test]
+fn the_font_of_a_text_field_a_user_can_type_in_is_embedded_whole() {
+    // A reader that redraws a field draws what is typed in the field's font, and pdfium draws nothing for a glyph the
+    // file's copy lacks: a subset would have the glyphs of "ada@example.com" only.
+    let size = |layout: &str| render(&document("", layout)).expect("renders").len();
+    let text_only = size(r#"<text>ada@example.com</text>"#);
+    let typed = size(r#"<field type="text" name="email" value="ada@example.com" width="160pt"/>"#);
+    assert!(typed > text_only + 30_000, "a subset of {text_only} bytes against the whole font's {typed}");
+    // What nobody types in shows what it holds, which the subset has.
+    for field in [
+        r#"<field type="text" name="email" value="ada@example.com" readonly="true" width="160pt"/>"#,
+        r#"<field type="checkbox" name="terms" width="16pt"/>"#,
+        r#"<field type="radio" name="pay" group="pay" value="card" width="14pt"/>"#,
+        r#"<field type="dropdown" name="size" value="M" options="S,M,L" width="80pt"/>"#,
+    ] {
+        let layout = format!("<text>ada@example.com</text>{field}");
+        let kept = size(&layout);
+        assert!(kept < text_only + 5_000, "a subset of {text_only} bytes against {kept} with {field}");
+    }
+    // A push button shows its caption, which the subset has. PDF/A refuses a button, so this is a document without it,
+    // with a typed field as the control that the size means something there too.
+    let plain = |layout: &str| render(&document("", layout).replace(r#"<output pdfa="2b"/>"#, "")).expect("renders").len();
+    let plain_text = plain(r#"<text>ada@example.com</text>"#);
+    let plain_typed = plain(r#"<text>ada@example.com</text><field type="text" name="email" width="160pt"/>"#);
+    assert!(plain_typed > plain_text + 30_000, "a subset of {plain_text} bytes against the whole font's {plain_typed}");
+    let button = plain(r#"<text>ada@example.com</text><field type="button" name="send" label="Send" width="100pt" height="28pt"/>"#);
+    assert!(button < plain_text + 5_000, "a subset of {plain_text} bytes against {button} with a push button");
+    let face = read(&test_dir().join("assets/fonts/CrimsonText-Regular.ttf"));
+    let chars = crate::pdf::chars_of_font(&face);
+    assert!(['Z', 'Å', 'ö', '€'].iter().all(|c| chars.contains(c)) && chars.len() > 500, "{} characters", chars.len());
+}
+
+/// The value of each entry of each ToUnicode map of `pdf`: the second of the `<glyph> <value>` pair on a `bfchar` line.
+fn to_unicode_values(pdf: &[u8]) -> Vec<String> {
+    use miniz_oxide::inflate::decompress_to_vec_zlib;
+    const START: &[u8] = b"\nstream\n";
+    const END: &[u8] = b"\nendstream";
+    let find = |from: usize, needle: &[u8]| pdf[from..].windows(needle.len()).position(|w| w == needle).map(|i| from + i);
+    let mut values = Vec::new();
+    let mut from = 0;
+    while let Some(at) = find(from, START) {
+        let start = at + START.len();
+        let end = find(start, END).expect("a stream end");
+        if let Ok(inflated) = decompress_to_vec_zlib(&pdf[start..end]) {
+            let map = String::from_utf8_lossy(&inflated).into_owned();
+            if map.contains("beginbfchar") {
+                for line in map.lines().filter(|line| line.starts_with('<') && line.matches('<').count() == 2) {
+                    values.push(line.rsplit('<').next().expect("a value").trim_end_matches('>').to_uppercase());
+                }
+            }
+        }
+        from = end;
+    }
+    values
+}
+
+#[test]
+fn a_font_embedded_whole_maps_no_glyph_to_a_value_pdfa_forbids() {
+    // veraPDF's PDF/A-2u rule 6.2.11.7.2: no ToUnicode value of zero, U+FEFF or U+FFFE. It checks the glyphs a page
+    // draws, so a glyph of the whole font that no page draws passes it, and a validator that reads the whole map doesn't.
+    for file in ["Montserrat-Regular.ttf", "Radley-Regular.ttf", "SourceSans3-Regular.otf", "SourceSans3VF-Upright.otf",
+                 "SourceSans3VF-Upright.ttf"] {
+        let chars = crate::pdf::chars_of_font(&read(&test_dir().join("assets/fonts").join(file)));
+        assert!(chars.len() > 100, "{file}: {} characters", chars.len());
+        assert!(['\u{0}', '\u{FEFF}', '\u{FFFE}'].iter().all(|c| !chars.contains(c)), "{file}");
+    }
+    let mut engine = engine(Some(CREATED_ON));
+    let file = "SourceSans3VF-Upright.ttf";
+    engine.load_font("sample", &read(&test_dir().join("assets/fonts").join(file)));
+    let xml = format!(
+        r#"<lpdf version="1"><assets><font name="sample" src="{file}"/></assets><document font="sample"><output pdfa="2u"/>
+        <section><layout><field type="text" name="email" width="160pt"/></layout></section></document></lpdf>"#
+    );
+    let pdf = engine.render_xml(&xml, None, &RenderEncryption::default()).expect("renders");
+    let values = to_unicode_values(&pdf);
+    assert!(values.len() > 500, "{} entries in the maps", values.len());
+    assert!(values.iter().all(|value| !["0000", "FEFF", "FFFE"].contains(&value.as_str())), "a forbidden value");
+    let form = to_unicode_values(&render_fixture("form"));
+    assert!(form.len() > 1_000 && form.iter().all(|value| !["0000", "FEFF", "FFFE"].contains(&value.as_str())));
+}
+
+#[test]
+fn a_font_embedded_whole_renders_the_same_bytes_each_time() {
+    // A whole font has glyphs that several characters map to, and which of them the file's map back to Unicode names
+    // is the lowest, not whichever a hash map gives first.
+    let first = render_fixture("form");
+    for run in 1..6 {
+        assert!(render_fixture("form") == first, "render {run} differs from the first");
+    }
+}
+
+#[test]
+fn a_form_follows_the_font_around_it_where_a_box_sets_another() {
+    let layout = r#"<column><field type="text" name="a" width="80pt"/>
+        <column font="italic"><field type="text" name="b" width="80pt"/></column></column>"#;
+    let assets = r#"<font name="italic" src="italic.ttf"/>"#;
+    let pdf = text(&render(&document(assets, layout)).expect("renders"));
+    assert!(pdf.contains("/DA (/F1 0 Tf 0 g)") && pdf.contains("/DA (/F2 0 Tf 0 g)"), "a field each in its own font");
+    let resources = &pdf[pdf.find("/AcroForm").expect("a form")..];
+    assert!(resources.contains("/F1 ") && resources.contains("/F2 "), "both in the form's resources");
+}
+
+#[test]
+fn a_form_field_in_a_built_in_font_is_an_error_that_says_to_set_the_font() {
+    let error = refused(&document("", r#"<column font="Helvetica"><field type="text" name="email" width="120pt"/></column>"#));
+    assert!(error.contains("the form field 'email' is in Helvetica"), "{error}");
+    assert!(error.contains("font on the document or on a box around the field"), "{error}");
+}
+
+#[test]
+fn a_form_field_with_a_character_its_font_lacks_is_an_error() {
+    let error = refused(&document("", r#"<field type="text" name="email" value="日本" width="120pt"/>"#));
+    assert!(error.contains("the form field 'email' has '日'") && error.contains("no glyph"), "{error}");
+}
+
+#[test]
+fn a_form_without_a_font_keeps_helvetica() {
+    let xml = r##"<lpdf version="1"><document><section><layout>
+        <field type="text" name="email" width="120pt"/></layout></section></document></lpdf>"##;
+    let pdf = text(&render(xml).expect("renders"));
+    assert!(pdf.contains("/DA (/Helv 0 Tf 0 g)") && pdf.contains("/Helv "), "{pdf}");
 }
 
 #[test]
@@ -430,6 +611,21 @@ fn writes_pdfa_samples_for_the_external_check() {
     for (name, file) in FONT_SAMPLES {
         std::fs::write(dir.join(format!("pdfa-2u-{name}.pdf")), font_sample(file)).expect("a sample");
     }
+    // A form in the document's embedded font, a field of each kind, at each level.
+    for level in ["2a", "2b", "2u", "3a", "3b", "3u"] {
+        let xml = form_document(level);
+        std::fs::write(dir.join(format!("pdfa-{level}-form.pdf")), render(&xml).unwrap_or_else(|e| panic!("{level}: {e}"))).expect("a sample");
+    }
+    // The form fixture, which sets its fields in three fonts.
+    std::fs::write(dir.join("pdfa-2u-form-showcase.pdf"), render_fixture("form")).expect("a sample");
+    // A form nobody types in, whose font is the subset of the characters it shows.
+    let checks = r#"<column gap="8pt"><text>Terms</text>
+        <field type="text" name="ref" value="REF-1" readonly="true" width="120pt" height="24pt"/>
+        <field type="checkbox" name="terms" width="16pt" height="16pt"/>
+        <field type="radio" name="pay_card" group="pay" value="card" checked="true" width="14pt" height="14pt"/>
+        <field type="dropdown" name="size" value="M" options="S,M,L" width="80pt" height="24pt"/></column>"#;
+    let xml = document("", checks).replace(r#"pdfa="2b""#, r#"pdfa="2u""#);
+    std::fs::write(dir.join("pdfa-2u-form-checks.pdf"), render(&xml).expect("renders")).expect("a sample");
     // With content in optional content groups, which a PDF/A file leaves out of them.
     let grouped = crate::ocg_render_tests::with_groups(&fixture("2u"));
     std::fs::write(dir.join("pdfa-2u-ocg.pdf"), render(&grouped).expect("renders")).expect("a sample");

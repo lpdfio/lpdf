@@ -54,8 +54,8 @@ pub(crate) fn check_permissions(part: PdfUa, permissions: Permissions) -> Result
 
 /// Check what a PDF/UA document must say before it is laid out: a title, which a reader shows in place of the file
 /// name (7.1), the language of its text as a language tag (7.2), an `alt` on every image, barcode and chart of the
-/// flow, a first heading of h1 and headings that skip no level on the way down (7.4.2), and no form field, which
-/// draws its text in Helvetica, a font that is not embedded (7.21.4.1).
+/// flow, a first heading of h1 and headings that skip no level on the way down (7.4.2), and no form field, which a
+/// PDF/UA file holds as a Form element of its structure, and the engine does not write one.
 pub(crate) fn check(part: Option<PdfUa>, meta: &Meta, sections: &[SectionLayout]) -> Result<(), String> {
     let Some(part) = part else { return Ok(()) };
     if meta.title.trim().is_empty() {
@@ -112,9 +112,9 @@ fn check_node(part: PdfUa, node: &Node, last_level: &mut u8) -> Result<(), Strin
         }
         NodeKind::Field => {
             let name = node.field_name.as_deref().map(|n| format!(" '{n}'")).unwrap_or_default();
-            return Err(refusal(part, &format!("the form field{name} can't be in a PDF/UA file yet: a field draws \
-                its text in Helvetica, which is not embedded, and PDF/UA embeds every font. Remove the field, or \
-                remove pdfua")));
+            return Err(refusal(part, &format!("the form field{name} can't be in a PDF/UA file yet: PDF/UA asks \
+                every field to be a Form element of the file's structure with a description, which the engine does \
+                not write. Remove the field, or remove pdfua")));
         }
         _ => {}
     }
@@ -223,9 +223,10 @@ mod tests {
     }
 
     #[test]
-    fn a_form_field_is_an_error_until_fields_have_an_embedded_font() {
+    fn a_form_field_is_an_error_until_fields_are_in_the_structure() {
         let error = check_xml(META, r#"<field type="text" name="email"/>"#).unwrap_err();
-        assert!(error.contains("the form field 'email'") && error.contains("Helvetica"), "{error}");
+        assert!(error.contains("the form field 'email'") && error.contains("Form element"), "{error}");
+        assert!(!error.contains("Helvetica"), "the font is no reason: {error}");
     }
 
     #[test]

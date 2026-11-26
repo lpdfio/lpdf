@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- PDF/A-2u with a form: a field of each kind that PDF/A allows, each in the font around it, which the file
+     embeds. The document's font is Crimson Text; one box sets its italic and another Montserrat, and the fields in
+     them follow. The font of a text field a person can type in is written whole, so a reader that redraws what is
+     typed finds every glyph: each of the three has such a field here, and the heading font, which no field uses, is
+     a subset. A push button is left out: PDF/A refuses it. Every font is of test/assets/fonts (SIL Open Font
+     License), named relative to this file; the render needs created_on, and the check of `make check-pdfa` renders
+     it with the fonts loaded, as an SDK does (`writes_pdfa_samples_for_the_external_check` in
+     pdfa_render_tests.rs). -->
+<lpdf version="1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">
+  <assets>
+    <font name="body"    src="../assets/fonts/CrimsonText-Regular.ttf" />
+    <font name="italic"  src="../assets/fonts/CrimsonText-Italic.ttf" />
+    <font name="heading" src="../assets/fonts/CrimsonText-SemiBold.ttf" />
+    <font name="sans"    src="../assets/fonts/Montserrat-Regular.ttf" />
+  </assets>
+  <tokens>
+    <colors>
+      <color name="ink"   value="#1f2a44" />
+      <color name="muted" value="#5b6475" />
+      <color name="rule"  value="#dde3ed" />
+    </colors>
+  </tokens>
+  <document size="A4" font="body">
+    <meta title="Registration form — Archive Copy" author="Lpdf Fixtures" subject="PDF/A-2u form showcase"
+          keywords="pdf/a, form, fixture" creator="lpdf test suite" lang="en" />
+    <output pdfa="2u" />
+
+    <section>
+      <layout margin="48pt">
+        <column gap="l">
+          <text font="heading" font-size="26pt" color="ink">Registration</text>
+          <text font="italic" font-size="13pt" color="muted">A form kept as PDF/A: every field is drawn in a font the file carries.</text>
+          <divider color="rule" thickness="0.5pt" />
+
+          <column gap="m">
+            <text font="heading" font-size="14pt">Your details</text>
+            <field type="text" name="name" background="#f5f7fa" border="0.75pt muted" value="Zoë Müller" required="true" height="26pt" />
+            <field type="text" name="city" background="#f5f7fa" border="0.75pt muted" value="Zürich" width="200pt" height="26pt" />
+            <field type="text" name="postcode" background="#f5f7fa" border="0.75pt muted" max-len="5" width="80pt" height="26pt" />
+            <field type="text" name="reference" background="#f5f7fa" border="0.75pt muted" value="REF-2026-0042" readonly="true" width="160pt" height="26pt" />
+          </column>
+
+          <column gap="m">
+            <text font="heading" font-size="14pt">Choices</text>
+            <field type="dropdown" name="size" background="#f5f7fa" border="0.75pt muted" value="M" options="S,M,L,XL" width="90pt" height="26pt" />
+            <row gap="s" align="center">
+              <field type="checkbox" name="terms" background="#f5f7fa" border="0.75pt muted" width="16pt" height="16pt" />
+              <text width="fill">I agree to the terms</text>
+            </row>
+            <row gap="m" align="center">
+              <field type="radio" name="pay_card" background="#f5f7fa" border="0.75pt muted" group="pay" value="card" checked="true" width="14pt" height="14pt" />
+              <text>Card</text>
+              <field type="radio" name="pay_transfer" background="#f5f7fa" border="0.75pt muted" group="pay" value="transfer" width="14pt" height="14pt" />
+              <text>Transfer</text>
+            </row>
+          </column>
+
+          <column gap="m">
+            <text font="heading" font-size="14pt">In another font</text>
+            <column font="italic" gap="xs">
+              <text color="muted">A box sets the italic: its field follows.</text>
+              <field type="text" name="note" background="#f5f7fa" border="0.75pt muted" value="Fond of the Crimson Text italic" height="26pt" />
+            </column>
+            <column font="sans" gap="xs">
+              <text font-size="9pt" color="muted">A box sets Montserrat: Кириллица и латиница.</text>
+              <field type="text" name="comment" background="#f5f7fa" border="0.75pt muted" value="Ça va très bien" height="26pt" />
+            </column>
+          </column>
+        </column>
+      </layout>
+    </section>
+  </document>
+</lpdf>

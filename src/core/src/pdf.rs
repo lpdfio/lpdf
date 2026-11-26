@@ -1411,6 +1411,9 @@ fn collect_chars_for_font(nodes: &[RenderNode], font_name: &str, out: &mut HashS
             RenderNode::Text(t) if t.font == font_name => {
                 out.extend(t.content.chars());
             }
+            // What a field shows: a button's caption in its appearance, the others' value and options, which a
+            // reader draws in the font the field's `/DA` names.
+            RenderNode::Field(f) if f.font == font_name => out.extend(f.shown_text().chars()),
             RenderNode::Box(b)  => collect_chars_for_font(&b.children, font_name, out),
             RenderNode::Link(l) => collect_chars_for_font(&l.children, font_name, out),
             RenderNode::CanvasLayer(l) => collect_chars_for_font(&l.children, font_name, out),
@@ -1419,20 +1422,52 @@ fn collect_chars_for_font(nodes: &[RenderNode], font_name: &str, out: &mut HashS
     }
 }
 
-/// Recursively collect every font the nodes draw in: a text's own font, and Helvetica for the caption of a
-/// barcode and for a form field, whose appearance and `/DA` name it as `Helv`.
+/// Recursively collect every font the nodes draw in: a text's own font, a form field's, which its appearance and
+/// `/DA` name, and Helvetica for the caption of a barcode.
 fn collect_used_fonts(nodes: &[RenderNode], out: &mut HashSet<String>) {
     for node in nodes {
         match node {
             RenderNode::Text(t) => { out.insert(t.font.clone()); }
             RenderNode::Barcode(bc) if has_caption(&bc.kind) => { out.insert("Helvetica".to_string()); }
-            RenderNode::Field(_) => { out.insert("Helvetica".to_string()); }
+            RenderNode::Field(f) => { out.insert(f.font.clone()); }
             RenderNode::Box(b)  => collect_used_fonts(&b.children, out),
             RenderNode::Link(l) => collect_used_fonts(&l.children, out),
             RenderNode::CanvasLayer(l) => collect_used_fonts(&l.children, out),
             _ => {}
         }
     }
+}
+
+/// Recursively collect the fonts of the text fields among `nodes` that a user can type in: the other fields show
+/// only the characters they hold, which the subset has.
+fn collect_typed_field_fonts(nodes: &[RenderNode], out: &mut HashSet<String>) {
+    for node in nodes {
+        match node {
+            RenderNode::Field(f) if f.kind == FieldKind::Text && !f.readonly => { out.insert(f.font.clone()); }
+            RenderNode::Box(b)  => collect_typed_field_fonts(&b.children, out),
+            RenderNode::Link(l) => collect_typed_field_fonts(&l.children, out),
+            RenderNode::CanvasLayer(l) => collect_typed_field_fonts(&l.children, out),
+            _ => {}
+        }
+    }
+}
+
+/// Every character the font maps to a glyph, for a font that is embedded whole, but for the three that no ToUnicode
+/// map may hold (veraPDF 6.2.11.7.2 in PDF/A-2u: a value of zero, U+FEFF or U+FFFE). Nobody types them, and a font's
+/// `.null` or byte-order glyphs would otherwise be named by them.
+pub(crate) fn chars_of_font(bytes: &[u8]) -> HashSet<char> {
+    let mut chars = HashSet::new();
+    if let Ok(face) = Face::parse(bytes, 0)
+        && let Some(cmap) = face.tables().cmap
+    {
+        for subtable in cmap.subtables.into_iter().filter(|subtable| subtable.is_unicode()) {
+            subtable.codepoints(|code| chars.extend(char::from_u32(code)));
+        }
+    }
+    for forbidden in ['\u{0}', '\u{FEFF}', '\u{FFFE}'] {
+        chars.remove(&forbidden);
+    }
+    chars
 }
 
 /// Whether a barcode draws its human-readable text under the bars.
@@ -1540,10 +1575,13 @@ fn prepare_truetype_font(bytes: &[u8], used_chars: &HashSet<char>) -> PreparedFo
         .collect();
 
     // Build glyph_unicode: (new_gid, unicode_codepoint), one entry per new GID.
-    // Use a HashMap to deduplicate (multiple chars can share a glyph; keep first).
+    // Use a HashMap to deduplicate (multiple chars can share a glyph; keep the lowest codepoint, by walking the
+    // sorted list: a font embedded whole has many such glyphs, and a hash map's order differs from run to run).
     let mut gid_to_unicode: HashMap<u16, u32> = HashMap::new();
-    for (c, new_gid) in &char_to_gid {
-        gid_to_unicode.entry(*new_gid).or_insert(*c as u32);
+    for (c, _) in &char_gid_orig {
+        if let Some(new_gid) = char_to_gid.get(c) {
+            gid_to_unicode.entry(*new_gid).or_insert(*c as u32);
+        }
     }
     let mut glyph_unicode: Vec<(u16, u32)> = gid_to_unicode.into_iter().collect();
     glyph_unicode.sort_by_key(|(gid, _)| *gid);
@@ -3251,6 +3289,15 @@ fn prepare_fonts(
     // Pre-collect every character used per font across all pages.  This must
     // happen before font preparation so that subsetting knows which glyphs to
     // keep and can build the remapped-GID tables used by the content streams.
+    //
+    // A font a text field is set in goes in whole, when its user can type in it: a reader that redraws the field
+    // draws what is typed in the font the field names, and a subset has only the glyphs of the document, so a
+    // character typed that the document doesn't use would draw nothing (pdfium, Chrome's reader, does so). The
+    // other fields show what they hold, which the subset has.
+    let mut field_font_names: HashSet<String> = HashSet::new();
+    for page in pages {
+        collect_typed_field_fonts(&page.nodes, &mut field_font_names);
+    }
     let mut chars_per_font: HashMap<String, HashSet<char>> = HashMap::new();
     for name in &sorted_font_names {
         let mut used: HashSet<char> = HashSet::new();
@@ -3259,6 +3306,12 @@ fn prepare_fonts(
         }
         if name == ATTRIBUTION_FONT_KEY {
             used.extend(ATTRIBUTION_NAME.chars());
+        }
+        if field_font_names.contains(name)
+            && let Some(FontDef::Ref(_)) = font_defs.get(name)
+            && let Some(bytes) = registry.get(name)
+        {
+            used.extend(chars_of_font(bytes));
         }
         chars_per_font.insert(name.clone(), used);
     }
@@ -3854,13 +3907,15 @@ fn assemble_pdf(
             for (_, parent_id) in &radio_parent_alloc {
                 root_fields.push(*parent_id);
             }
-            let helv_font_id = font_id_map.get("Helvetica").map(|f| f.font_dict_id);
             let mut aform = cat.form();
             aform.fields(root_fields.iter().copied());
-            if let Some(helv_id) = helv_font_id {
+            let field_fonts = field_font_resources(fonts, &font_id_map, fields);
+            if !field_fonts.is_empty() {
                 let mut dr = aform.default_resources();
                 let mut dfr = dr.fonts();
-                dfr.pair(Name(b"Helv"), helv_id);
+                for (name, id) in &field_fonts {
+                    dfr.pair(Name(name.as_bytes()), *id);
+                }
             }
         }
     }
@@ -4137,7 +4192,7 @@ fn assemble_pdf(
 
     // -- AcroForm and field annotations ----------------------------------------
     if !fields.is_empty() {
-        write_fields(&mut pdf, pages, &page_ids, fonts, &font_id_map, fields, &field_alloc, &radio_parent_alloc, &spot_ids, &overprint_ids);
+        write_fields(&mut pdf, pages, &page_ids, fonts, &font_id_map, fields, &field_alloc, &radio_parent_alloc, &spot_ids, &overprint_ids, pdfa.is_some());
     }
 
     // -- Font objects ----------------------------------------------------------
@@ -4190,6 +4245,38 @@ fn assemble_pdf(
     Ok(pdf.finish())
 }
 
+/// The name a field's font goes by in the AcroForm's `/DR`, in the field's `/DA` and in its appearance: `Helv` for
+/// Helvetica, as a form has always named it, and the font's own resource name (`F3`) for any other.
+fn field_font_name(font: &str, fonts: &HashMap<String, PreparedFont>) -> String {
+    match fonts.get(font) {
+        Some(prepared) if font != "Helvetica" => prepared.resource_name.clone(),
+        _ => "Helv".to_string(),
+    }
+}
+
+/// The `/DA` of a text or choice field: its font (`field_font_name`) at the size the reader picks, in black.
+fn field_default_appearance(font: &str, fonts: &HashMap<String, PreparedFont>) -> String {
+    format!("/{} 0 Tf 0 g", field_font_name(font, fonts))
+}
+
+/// The fonts of the form's fields for the AcroForm's `/DR`: each one's name (`field_font_name`) and the object of its
+/// font, in name order so that a document written twice is the same file.
+fn field_font_resources(
+    fonts:       &HashMap<String, PreparedFont>,
+    font_id_map: &HashMap<String, FontIds>,
+    fields:      &[(usize, RenderField)],
+) -> Vec<(String, Ref)> {
+    let mut resources: Vec<(String, Ref)> = fields.iter()
+        .filter_map(|(_, field)| {
+            let ids = font_id_map.get(&field.font)?;
+            Some((field_font_name(&field.font, fonts), ids.font_dict_id))
+        })
+        .collect();
+    resources.sort_by(|a, b| a.0.cmp(&b.0));
+    resources.dedup_by(|a, b| a.0 == b.0);
+    resources
+}
+
 /// The form fields: the appearance streams of each field, its widget annotation, and a parent for each group of radio
 /// buttons.
 ///
@@ -4208,8 +4295,8 @@ fn write_fields(
     radio_parent_alloc: &[(String, Ref)],
     spot_ids:           &[(&str, Ref)],
     overprint_ids:      &[Ref],
+    pdfa:               bool,
 ) {
-    let helv_font_id = font_id_map.get("Helvetica").map(|f| f.font_dict_id);
     let spots_of = field_spots;
     let write_spots = |resources: &mut Resources<'_>, field: &RenderField| write_field_spots(resources, field, spot_ids, overprint_ids);
 
@@ -4242,8 +4329,9 @@ fn write_fields(
                 ap_content.rect(0.0, 0.0, w, h);
                 ap_content.fill_nonzero();
                 ap_content.restore_state();
+                let font_name = field_font_name(&field.font, fonts);
                 if !field.label.is_empty() {
-                    let font = fonts.get("Helvetica").expect("a document with fields has Helvetica");
+                    let font = fonts.get(&field.font).expect("a document with fields has the font of each");
                     let font_size = (h * 0.55).max(6.0);
                     let text_w = font.text_width(&field.label, font_size);
                     let text_x = (w - text_w) / 2.0;
@@ -4251,7 +4339,7 @@ fn write_fields(
                     let encoded = font.encode_text(&field.label);
                     ap_content.begin_text();
                     ap_content.set_fill_rgb(1.0, 1.0, 1.0);
-                    ap_content.set_font(Name(b"Helv"), font_size);
+                    ap_content.set_font(Name(font_name.as_bytes()), font_size);
                     ap_content.set_text_matrix([1.0, 0.0, 0.0, 1.0, text_x, text_y]);
                     ap_content.show(Str(&encoded));
                     ap_content.end_text();
@@ -4262,8 +4350,8 @@ fn write_fields(
                 let mut res = xobj.resources();
                 {
                     let mut fr = res.fonts();
-                    if let Some(helv_id) = helv_font_id {
-                        fr.pair(Name(b"Helv"), helv_id);
+                    if let Some(font_ids) = font_id_map.get(&field.font) {
+                        fr.pair(Name(font_name.as_bytes()), font_ids.font_dict_id);
                     }
                 }
                 if !spots_of(field).is_empty() {
@@ -4357,12 +4445,13 @@ fn write_fields(
                 if !field.name.is_empty() { fw.partial_name(TextStr(&field.name)); }
                 if !field.value.is_empty() { fw.text_value(TextStr(&field.value)); }
                 if let Some(ml) = field.max_len { fw.text_max_len(ml as i32); }
-                fw.vartext_default_appearance(Str(b"/Helv 0 Tf 0 g"));
+                fw.vartext_default_appearance(Str(field_default_appearance(&field.font, fonts).as_bytes()));
                 let mut aw = fw.into_annotation();
                 aw.rect(rect)
                   .page(page_id)
                   .highlight(HighlightEffect::None)
                   .border(0.0, 0.0, 0.0, None);
+                if pdfa { aw.flags(AnnotationFlags::PRINT); }
                 aw.appearance()
                   .normal()
                   .stream(fa.ap_ids[0]);
@@ -4379,12 +4468,13 @@ fn write_fields(
                 if !field.options.is_empty() {
                     fw.choice_options().options(field.options.iter().map(|o| TextStr(o.as_str())));
                 }
-                fw.vartext_default_appearance(Str(b"/Helv 0 Tf 0 g"));
+                fw.vartext_default_appearance(Str(field_default_appearance(&field.font, fonts).as_bytes()));
                 let mut aw = fw.into_annotation();
                 aw.rect(rect)
                   .page(page_id)
                   .highlight(HighlightEffect::None)
                   .border(0.0, 0.0, 0.0, None);
+                if pdfa { aw.flags(AnnotationFlags::PRINT); }
                 aw.appearance()
                   .normal()
                   .stream(fa.ap_ids[0]);
@@ -4408,6 +4498,7 @@ fn write_fields(
                   .page(page_id)
                   .highlight(HighlightEffect::None)
                   .border(0.0, 0.0, 0.0, None);
+                if pdfa { aw.flags(AnnotationFlags::PRINT); }
                 aw.appearance_state(Name(if field.checked { b"Yes" } else { b"Off" }));
                 {
                     let mut ap = aw.appearance();
@@ -4432,6 +4523,7 @@ fn write_fields(
                       .page(page_id)
                       .highlight(HighlightEffect::None)
                       .border(0.0, 0.0, 0.0, None);
+                    if pdfa { aw.flags(AnnotationFlags::PRINT); }
                     aw.appearance_state(Name(if field.checked { &on_name_bytes } else { b"Off" }));
                     {
                         let mut ap = aw.appearance();
@@ -4868,10 +4960,10 @@ struct StandardFile {
 // ── PDF/A refusals ────────────────────────────────────────────────────────────
 
 /// Refuse what a PDF/A file cannot hold where only the author can change it, with an error that says what to
-/// change: a form field, text in a font that is not embedded, a font whose licence forbids embedding, a character
-/// the font has no glyph for, which a reader would draw as an empty box, and a CMYK color, or a spot color with a CMYK
-/// stand-in, which the sRGB output intent doesn't cover. The engine repairs none of these; it writes the rest of what
-/// PDF/A needs itself.
+/// change: a push button, text in a font that is not embedded, which a form field's text is too, a font whose licence
+/// forbids embedding, a character the font has no glyph for, which a reader would draw as an empty box, and a CMYK
+/// color, or a spot color with a CMYK stand-in, which the sRGB output intent doesn't cover. The engine repairs none of
+/// these; it writes the rest of what PDF/A needs itself.
 #[allow(clippy::too_many_arguments)]
 fn refuse_for_pdfa(
     level:             PdfA,
@@ -4892,11 +4984,14 @@ fn refuse_for_pdfa(
     };
     let or_remove_pdfa = if by_invoice { "" } else { ", or remove pdfa" };
 
-    if let Some((_, field)) = fields.first() {
+    // PDF/A asks the appearance of every button to be a dictionary of states (ISO 19005-2, 6.3.3, which veraPDF
+    // checks), and macOS Preview doesn't draw a push button that has one, so the button would vanish for those who
+    // open the file there. A checkbox and a radio button have states anyway.
+    if let Some((_, field)) = fields.iter().find(|(_, field)| field.kind == FieldKind::Button) {
         let name = if field.name.is_empty() { String::new() } else { format!(" '{}'", field.name) };
         return refuse(format!(
-            "the form field{name} can't be in a PDF/A file yet: a field draws its text in Helvetica, which is not \
-            embedded, and PDF/A embeds every font. Remove the field{or_remove_pdfa}"
+            "the push button{name} can't be in a PDF/A file yet: PDF/A asks a button's appearance to be a set of \
+            states, and macOS Preview doesn't draw a push button that has them. Remove the button{or_remove_pdfa}"
         ));
     }
 
@@ -5100,9 +5195,9 @@ fn first_in(nodes: &[RenderNode], check: &mut impl FnMut(&RenderNode) -> Option<
     }))
 }
 
-/// Why `node` can't be drawn in a file of `standard`, PDF/A, PDF/UA or PDF/X, for its font: its text is in a font that is not
-/// embedded, or has a character its embedded font has no glyph for, or it is a barcode's digits, which are drawn in
-/// Helvetica.
+/// Why `node` can't be drawn in a file of `standard`, PDF/A, PDF/UA or PDF/X, for its font: its text, or a form
+/// field's, is in a font that is not embedded, or has a character its embedded font has no glyph for, or it is a
+/// barcode's digits, which are drawn in Helvetica.
 fn font_refusal(
     node:      &RenderNode,
     fonts:     &HashMap<String, PreparedFont>,
@@ -5110,42 +5205,59 @@ fn font_refusal(
     standard:  &str,
 ) -> Option<String> {
     match node {
-        RenderNode::Text(t) => match &fonts.get(&t.font)?.kind {
-            PreparedFontKind::Builtin { base_name, .. } => {
-                let text = excerpt(&t.content);
-                Some(match font_defs.get(&t.font) {
-                    Some(FontDef::Ref(_)) => format!(
-                        "the text \"{text}\" is in the font '{}', which <assets> declares, and its file was not loaded, \
-                        so it would be drawn in Helvetica, which is not embedded: check the font's src",
-                        t.font
-                    ),
-                    _ => format!(
-                        "the text \"{text}\" is in {base_name}, a font built into PDF readers, which is not embedded, \
-                        and a {standard} file embeds every font: declare a font in <assets> and set it with font on the \
-                        document or on the text"
-                    ),
-                })
-            }
-            PreparedFontKind::Truetype { advances: None, .. } => Some(format!(
-                "the font '{}' could not be read as a TrueType or OpenType font, so its glyphs are unknown: use another \
-                font file",
-                t.font
-            )),
-            PreparedFontKind::Truetype { char_to_gid, .. } => {
-                let missing = t.content.chars().find(|c| !char_to_gid.contains_key(c))?;
-                Some(format!(
-                    "the text \"{}\" has '{missing}' (U+{:04X}), which the font '{}' has no glyph for, and a {standard} \
-                    file may not draw the empty box a reader shows instead: use a font that has it, or leave it out",
-                    excerpt(&t.content), missing as u32, t.font
-                ))
-            }
-        },
+        RenderNode::Text(t) => set_in_font_refusal(
+            &format!("the text \"{}\"", excerpt(&t.content)), &t.font, &t.content,
+            "the document or on the text", fonts, font_defs, standard,
+        ),
+        RenderNode::Field(f) => {
+            let subject = if f.name.is_empty() { "a form field".to_string() } else { format!("the form field '{}'", f.name) };
+            set_in_font_refusal(
+                &subject, &f.font, &f.shown_text(), "the document or on a box around the field", fonts, font_defs, standard,
+            )
+        }
         RenderNode::Barcode(bc) if has_caption(&bc.kind) => Some(format!(
             "a barcode's digits (hrt) are drawn in Helvetica, which is not embedded, and a {standard} file embeds every \
             font: set hrt=\"false\" on the barcode, and write the digits as text in a font of <assets> if they are \
             needed"
         )),
         _ => None,
+    }
+}
+
+/// Why what `subject` names, drawn in `font`, can't be in a file of `standard`: the font is not embedded, can't be read,
+/// or has no glyph for a character of `drawn`. `set_with` says where `font` is set, for the error to say what to change.
+fn set_in_font_refusal(
+    subject:   &str,
+    font:      &str,
+    drawn:     &str,
+    set_with:  &str,
+    fonts:     &HashMap<String, PreparedFont>,
+    font_defs: &HashMap<String, FontDef>,
+    standard:  &str,
+) -> Option<String> {
+    match &fonts.get(font)?.kind {
+        PreparedFontKind::Builtin { base_name, .. } => Some(match font_defs.get(font) {
+            Some(FontDef::Ref(_)) => format!(
+                "{subject} is in the font '{font}', which <assets> declares, and its file was not loaded, so it would \
+                be drawn in Helvetica, which is not embedded: check the font's src"
+            ),
+            _ => format!(
+                "{subject} is in {base_name}, a font built into PDF readers, which is not embedded, and a {standard} \
+                file embeds every font: declare a font in <assets> and set it with font on {set_with}"
+            ),
+        }),
+        PreparedFontKind::Truetype { advances: None, .. } => Some(format!(
+            "the font '{font}' could not be read as a TrueType or OpenType font, so its glyphs are unknown: use another \
+            font file"
+        )),
+        PreparedFontKind::Truetype { char_to_gid, .. } => {
+            let missing = drawn.chars().find(|c| !char_to_gid.contains_key(c))?;
+            Some(format!(
+                "{subject} has '{missing}' (U+{:04X}), which the font '{font}' has no glyph for, and a {standard} \
+                file may not draw the empty box a reader shows instead: use a font that has it, or leave it out",
+                missing as u32
+            ))
+        }
     }
 }
 

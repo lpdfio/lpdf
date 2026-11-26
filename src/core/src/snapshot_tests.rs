@@ -316,6 +316,9 @@ fn showcase_encryption_aes256() { run_snapshot_encrypted("showcase-encryption-ae
 fn showcase_pdfa_2b() { check_snapshot("showcase-pdfa-2b", &crate::pdfa_render_tests::render_fixture("2b")); }
 #[test]
 fn showcase_pdfa_2u() { check_snapshot("showcase-pdfa-2u", &crate::pdfa_render_tests::render_fixture("2u")); }
+/// A form in PDF/A: each field in the font around it, which the file embeds.
+#[test]
+fn showcase_pdfa_form() { check_snapshot("showcase-pdfa-form", &crate::pdfa_render_tests::render_fixture("form")); }
 /// Level a: the PDF/A fixture tagged, without PDF/UA.
 #[test]
 fn showcase_pdfa_2a() { check_snapshot("showcase-pdfa-2a", &crate::pdfa_render_tests::render_fixture("2a")); }

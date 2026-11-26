@@ -4203,6 +4203,7 @@ fn layout_field(node: &Node, x: f32, y: f32, avail_w: f32) -> (RenderNode, f32) 
     let field = RenderField {
         x, y, width: w, height: h,
         kind:       node.field_kind.clone().unwrap_or(FieldKind::Text),
+        font:       node.font.clone(),
         name:       node.field_name.clone().unwrap_or_default(),
         value:      node.field_value.clone().unwrap_or_default(),
         label:      node.field_label.clone().unwrap_or_default(),
