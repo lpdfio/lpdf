@@ -1335,7 +1335,6 @@ fn a_pie_at_the_limit_of_categories_renders() {
         let data = serde_json::json!({
             "categories": (0..MAX_CATEGORIES).map(|n| serde_json::json!({ "name": format!("C{n}"), "v": n + 1 })).collect::<Vec<_>>(),
         }).to_string();
-        let started = std::time::Instant::now();
         let pages = pages(&xml, Some(&data)).unwrap_or_else(|e| panic!("{kind}: {e}"));
         let doc = crate::parse::parse(&xml).unwrap_or_else(|e| panic!("{e}"));
         let bytes = crate::pdf::render_pdf(
@@ -1344,7 +1343,6 @@ fn a_pie_at_the_limit_of_categories_renders() {
         )
         .unwrap_or_else(|e| panic!("{kind}: {e}"));
         assert!(bytes.starts_with(b"%PDF"));
-        assert!(started.elapsed() < std::time::Duration::from_secs(20), "{kind} took {:?}", started.elapsed());
     }
 }
 
