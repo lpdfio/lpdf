@@ -398,14 +398,24 @@ fn a_form_is_set_in_the_font_of_the_document_and_a_pdfa_file_embeds_it() {
 }
 
 #[test]
-fn the_font_of_a_form_is_embedded_whole_so_that_what_a_user_types_has_glyphs() {
+fn the_font_of_a_text_field_a_user_can_type_in_is_embedded_whole() {
     // A reader that redraws a field draws what is typed in the field's font, and pdfium draws nothing for a glyph the
     // file's copy lacks: a subset would have the glyphs of "ada@example.com" only.
-    let text_only = r#"<text>ada@example.com</text>"#;
-    let with_field = r#"<field type="text" name="email" value="ada@example.com" width="160pt"/>"#;
-    let subset = render(&document("", text_only)).expect("renders").len();
-    let whole = render(&document("", with_field)).expect("renders").len();
-    assert!(whole > subset + 30_000, "a subset of {subset} bytes against the whole font's {whole}");
+    let size = |layout: &str| render(&document("", layout)).expect("renders").len();
+    let text_only = size(r#"<text>ada@example.com</text>"#);
+    let typed = size(r#"<field type="text" name="email" value="ada@example.com" width="160pt"/>"#);
+    assert!(typed > text_only + 30_000, "a subset of {text_only} bytes against the whole font's {typed}");
+    // What nobody types in shows what it holds, which the subset has.
+    for field in [
+        r#"<field type="text" name="email" value="ada@example.com" readonly="true" width="160pt"/>"#,
+        r#"<field type="checkbox" name="terms" width="16pt"/>"#,
+        r#"<field type="radio" name="pay" group="pay" value="card" width="14pt"/>"#,
+        r#"<field type="dropdown" name="size" value="M" options="S,M,L" width="80pt"/>"#,
+    ] {
+        let layout = format!("<text>ada@example.com</text>{field}");
+        let kept = size(&layout);
+        assert!(kept < text_only + 5_000, "a subset of {text_only} bytes against {kept} with {field}");
+    }
     let face = read(&test_dir().join("assets/fonts/CrimsonText-Regular.ttf"));
     let chars = crate::pdf::chars_of_font(&face);
     assert!(['Z', 'Å', 'ö', '€'].iter().all(|c| chars.contains(c)) && chars.len() > 500, "{} characters", chars.len());
@@ -539,6 +549,14 @@ fn writes_pdfa_samples_for_the_external_check() {
         let xml = form_document(level);
         std::fs::write(dir.join(format!("pdfa-{level}-form.pdf")), render(&xml).unwrap_or_else(|e| panic!("{level}: {e}"))).expect("a sample");
     }
+    // A form nobody types in, whose font is the subset of the characters it shows.
+    let checks = r#"<column gap="8pt"><text>Terms</text>
+        <field type="text" name="ref" value="REF-1" readonly="true" width="120pt" height="24pt"/>
+        <field type="checkbox" name="terms" width="16pt" height="16pt"/>
+        <field type="radio" name="pay_card" group="pay" value="card" checked="true" width="14pt" height="14pt"/>
+        <field type="dropdown" name="size" value="M" options="S,M,L" width="80pt" height="24pt"/></column>"#;
+    let xml = document("", checks).replace(r#"pdfa="2b""#, r#"pdfa="2u""#);
+    std::fs::write(dir.join("pdfa-2u-form-checks.pdf"), render(&xml).expect("renders")).expect("a sample");
     // With content in optional content groups, which a PDF/A file leaves out of them.
     let grouped = crate::ocg_render_tests::with_groups(&fixture("2u"));
     std::fs::write(dir.join("pdfa-2u-ocg.pdf"), render(&grouped).expect("renders")).expect("a sample");

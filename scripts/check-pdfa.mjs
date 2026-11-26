@@ -6,7 +6,7 @@
 //    and the three pages in a font of each kind the fixtures lack (CFF, CFF2, variable TrueType) PDF/A-2u, and so must
 //    pdfa-2u-ocg.pdf, the fixture with content in optional content groups, pdfa-2u-ruling.pdf, the fixture with
 //    graph paper on its sections, pdfa-2u-spot.pdf, the fixture with spot colors, overprint included, and pdfa-2u-svg.pdf, the fixture with an SVG picture. pdfa-<level>-form.pdf, a form with a field of each kind in the
-//    document's embedded font, at each level of parts 2 and 3. pdfa-3a.pdf, pdfa-3b.pdf and pdfa-3u.pdf,
+//    document's embedded font, at each level of parts 2 and 3, and pdfa-2u-form-checks.pdf, one nobody types in, whose font is a subset. pdfa-3a.pdf, pdfa-3b.pdf and pdfa-3u.pdf,
 //    the three fixtures at the levels of part 3, must declare PDF/A-3a, PDF/A-3b and PDF/A-3u, and
 //    pdfa-3b-facturx.pdf, a Factur-X invoice that carries its XML and six other files, PDF/A-3b. pdfa-2a-pdfua-1.pdf
 //    and pdfa-3a-pdfua-1.pdf, the PDF/UA fixture at level a, must declare PDF/A-2a or PDF/A-3a and PDF/UA-1. The
@@ -55,6 +55,7 @@ const SAMPLE_SETS = {
         { file: 'pdfa-3a-form.pdf', profiles: ['PDF/A-3a validation profile'] },
         { file: 'pdfa-3b-form.pdf', profiles: ['PDF/A-3b validation profile'] },
         { file: 'pdfa-3u-form.pdf', profiles: ['PDF/A-3u validation profile'] },
+        { file: 'pdfa-2u-form-checks.pdf', profiles: ['PDF/A-2u validation profile'] },
         { file: 'pdfa-3a.pdf', profiles: ['PDF/A-3a validation profile'] },
         { file: 'pdfa-3b.pdf', profiles: ['PDF/A-3b validation profile'] },
         { file: 'pdfa-3u.pdf', profiles: ['PDF/A-3u validation profile'] },

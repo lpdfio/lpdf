@@ -1438,14 +1438,15 @@ fn collect_used_fonts(nodes: &[RenderNode], out: &mut HashSet<String>) {
     }
 }
 
-/// Recursively collect the fonts the form fields among `nodes` are set in.
-fn collect_field_fonts(nodes: &[RenderNode], out: &mut HashSet<String>) {
+/// Recursively collect the fonts of the text fields among `nodes` that a user can type in: the other fields show
+/// only the characters they hold, which the subset has.
+fn collect_typed_field_fonts(nodes: &[RenderNode], out: &mut HashSet<String>) {
     for node in nodes {
         match node {
-            RenderNode::Field(f) => { out.insert(f.font.clone()); }
-            RenderNode::Box(b)  => collect_field_fonts(&b.children, out),
-            RenderNode::Link(l) => collect_field_fonts(&l.children, out),
-            RenderNode::CanvasLayer(l) => collect_field_fonts(&l.children, out),
+            RenderNode::Field(f) if f.kind == FieldKind::Text && !f.readonly => { out.insert(f.font.clone()); }
+            RenderNode::Box(b)  => collect_typed_field_fonts(&b.children, out),
+            RenderNode::Link(l) => collect_typed_field_fonts(&l.children, out),
+            RenderNode::CanvasLayer(l) => collect_typed_field_fonts(&l.children, out),
             _ => {}
         }
     }
@@ -3281,12 +3282,13 @@ fn prepare_fonts(
     // happen before font preparation so that subsetting knows which glyphs to
     // keep and can build the remapped-GID tables used by the content streams.
     //
-    // A font a form field is set in goes in whole: a reader that redraws a field draws what its user types in
-    // the font the field names, and a subset has only the glyphs of the document, so a character typed that the
-    // document doesn't use would draw nothing (pdfium, Chrome's reader, does so).
+    // A font a text field is set in goes in whole, when its user can type in it: a reader that redraws the field
+    // draws what is typed in the font the field names, and a subset has only the glyphs of the document, so a
+    // character typed that the document doesn't use would draw nothing (pdfium, Chrome's reader, does so). The
+    // other fields show what they hold, which the subset has.
     let mut field_font_names: HashSet<String> = HashSet::new();
     for page in pages {
-        collect_field_fonts(&page.nodes, &mut field_font_names);
+        collect_typed_field_fonts(&page.nodes, &mut field_font_names);
     }
     let mut chars_per_font: HashMap<String, HashSet<char>> = HashMap::new();
     for name in &sorted_font_names {
@@ -4945,10 +4947,10 @@ struct StandardFile {
 // ── PDF/A refusals ────────────────────────────────────────────────────────────
 
 /// Refuse what a PDF/A file cannot hold where only the author can change it, with an error that says what to
-/// change: a form field, text in a font that is not embedded, a font whose licence forbids embedding, a character
-/// the font has no glyph for, which a reader would draw as an empty box, and a CMYK color, or a spot color with a CMYK
-/// stand-in, which the sRGB output intent doesn't cover. The engine repairs none of these; it writes the rest of what
-/// PDF/A needs itself.
+/// change: a push button, text in a font that is not embedded, which a form field's text is too, a font whose licence
+/// forbids embedding, a character the font has no glyph for, which a reader would draw as an empty box, and a CMYK
+/// color, or a spot color with a CMYK stand-in, which the sRGB output intent doesn't cover. The engine repairs none of
+/// these; it writes the rest of what PDF/A needs itself.
 #[allow(clippy::too_many_arguments)]
 fn refuse_for_pdfa(
     level:             PdfA,
