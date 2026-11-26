@@ -583,11 +583,14 @@ pub enum BoundAttr {
     Fill,
     /// `data-label` on a `series` or a `category` of a chart.
     Label,
+    /// `data-hole-text` on a `chart`: the text in a donut's hole.
+    HoleText,
 }
 
 impl BoundAttr {
     /// Every bindable attribute, in the order they are read and bound.
-    pub const ALL: [BoundAttr; 6] = [Self::Href, Self::Name, Self::Color, Self::Background, Self::Fill, Self::Label];
+    pub const ALL: [BoundAttr; 7] =
+        [Self::Href, Self::Name, Self::Color, Self::Background, Self::Fill, Self::Label, Self::HoleText];
 
     /// The attribute as written in a document.
     pub fn data_attribute(self) -> &'static str {
@@ -598,6 +601,7 @@ impl BoundAttr {
             Self::Background => "data-background",
             Self::Fill       => "data-fill",
             Self::Label      => "data-label",
+            Self::HoleText   => "data-hole-text",
         }
     }
 }
@@ -621,6 +625,7 @@ impl BoundAttr {
             ),
             Self::Fill       => *kind == NodeKind::Shape,
             Self::Label      => matches!(kind, NodeKind::ChartSeries | NodeKind::ChartCategory),
+            Self::HoleText   => *kind == NodeKind::Chart,
         }
     }
 }

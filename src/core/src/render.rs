@@ -57,6 +57,8 @@ pub enum RenderNode {
     Bars(RenderBars),
     /// The line or the area of a series of a chart: one node and one path for all its points.
     Polylines(RenderPolylines),
+    /// The slices of a pie or a donut chart in one color: one node and one fill for all of them.
+    Sectors(RenderSectors),
     /// The lines of a section's ruling, shared by every page that draws them: the PDF writes the drawing once, as a
     /// form XObject each of those pages invokes.
     Ruling(Rc<crate::ruling::Drawing>),
@@ -358,6 +360,19 @@ pub struct RenderPolylines {
     pub runs:  Vec<Vec<[f32; 2]>>,
 }
 
+/// The slices of a pie or a donut in one color, around one center: each slice runs clockwise from the angle of its
+/// start to the angle of its end, in radians from the top, between the inner radius, 0 for a pie, and the outer one.
+/// The page's y runs down, so a slice starts at `[x, y - outer]` for the angle 0.
+pub struct RenderSectors {
+    pub fill:   String,
+    /// `[x, y]` from the top left of the page.
+    pub center: [f32; 2],
+    pub outer:  f32,
+    pub inner:  f32,
+    /// Each slice's `[start, end]`, with `start` below `end` and at most a whole turn between them.
+    pub slices: Vec<[f32; 2]>,
+}
+
 /// How the runs of a `RenderPolylines` are painted.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PolylinePaint {
@@ -592,6 +607,7 @@ fn node_to_json(node: &RenderNode) -> Value {
         }),
         RenderNode::Bars(b) => bars_to_json(b),
         RenderNode::Polylines(p) => polylines_to_json(p),
+        RenderNode::Sectors(s) => sectors_to_json(s),
         RenderNode::CanvasLayer(l) => json!({
             "type":     "canvas-layer",
             "opacity":  l.opacity,
@@ -633,6 +649,22 @@ fn polylines_to_json(polylines: &RenderPolylines) -> Value {
         PolylinePaint::Fill { opacity } => v["opacity"] = json!(r2(opacity)),
     }
     v
+}
+
+/// The slices of a pie or a donut in one color. Out of `node_to_json`, as `bars_to_json` is.
+#[inline(never)]
+fn sectors_to_json(sectors: &RenderSectors) -> Value {
+    let slices: Vec<[f64; 2]> = sectors.slices.iter().map(|[start, end]| [r4(*start), r4(*end)]).collect();
+    json!({
+        "type": "sectors", "fill": sectors.fill,
+        "center": [r2(sectors.center[0]), r2(sectors.center[1])],
+        "outer": r2(sectors.outer), "inner": r2(sectors.inner), "slices": slices,
+    })
+}
+
+/// Round to 4 decimal places: an angle in radians.
+fn r4(v: f32) -> f64 {
+    (v as f64 * 10_000.0).round() / 10_000.0
 }
 
 /// Round to 2 decimal places for compact JSON output.

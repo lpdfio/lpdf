@@ -391,7 +391,8 @@ fn showcase_columns_markdown() { run_snapshot("showcase-columns-markdown"); }
 #[test]
 fn showcase_columns_data() { run_snapshot_with_data("showcase-columns-data"); }
 
-// Charts: a snapshot for each form of bars, for lines and their labels, areas and sparklines, and two bound to data.
+// Charts: a snapshot for each form of bars, for lines and their labels, areas and sparklines, pies and donuts, and three
+// bound to data.
 #[test]
 fn showcase_chart_bars() { run_snapshot("showcase-chart-bars"); }
 #[test]
@@ -412,6 +413,12 @@ fn showcase_chart_area() { run_snapshot("showcase-chart-area"); }
 fn showcase_chart_sparkline() { run_snapshot("showcase-chart-sparkline"); }
 #[test]
 fn showcase_chart_lines_data() { run_snapshot_with_data("showcase-chart-lines-data"); }
+#[test]
+fn showcase_chart_pie() { run_snapshot("showcase-chart-pie"); }
+#[test]
+fn showcase_chart_donut() { run_snapshot("showcase-chart-donut"); }
+#[test]
+fn showcase_chart_donut_data() { run_snapshot_with_data("showcase-chart-donut-data"); }
 #[test]
 fn showcase_bulk() { run_snapshot_with_data("showcase-bulk"); }
 

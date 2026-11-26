@@ -6,13 +6,15 @@
 //! are then read into a `ChartData` (`lower`), which the layout draws: a static chart when it is parsed, a bound one
 //! right after its data is bound, and one with data attributes rendered without data when it is laid out. The engine
 //! draws the chart as the rects, lines and text it already draws, by fixed rules for the axis, the steps, the labels
-//! and the legend: bars as one node of rects for each color (`RenderBars`), and the lines and areas of a series as one
-//! node of runs of points (`RenderPolylines`).
+//! and the legend: bars as one node of rects for each color (`RenderBars`), the lines and areas of a series as one
+//! node of runs of points (`RenderPolylines`), and the slices of a pie or a donut as one node of arcs for each color
+//! (`RenderSectors`).
 
 use crate::layout::{text_width, ELLIPSIS};
 use crate::parse::{Attrs, Detail, Node, NodeKind};
 use crate::render::{
-    PolylinePaint, RenderBars, RenderBox, RenderCanvasRect, RenderLine, RenderNode, RenderPolylines, RenderText,
+    PolylinePaint, RenderBars, RenderBox, RenderCanvasRect, RenderLine, RenderNode, RenderPolylines, RenderSectors,
+    RenderText,
 };
 use crate::tokens::Tokens;
 
@@ -54,6 +56,10 @@ const AREA_OPACITY: f32 = 0.3;
 const DOT_SCALE: f32 = 2.5;
 /// The steps a line's category labels are written at: every label, or every 2nd, 3rd or 5th.
 const LABEL_STEPS: [usize; 4] = [1, 2, 3, 5];
+/// The hole of a donut as a share of its size, when `hole` sets none, and the most and the least it can be.
+const HOLE: f32 = 0.6;
+const HOLE_LEAST: f64 = 0.1;
+const HOLE_MOST: f64 = 0.9;
 
 /// The kind of chart: `type`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,6 +67,8 @@ pub enum ChartKind {
     Bar,
     Line,
     Area,
+    Pie,
+    Donut,
     Sparkline,
 }
 
@@ -71,6 +79,8 @@ impl ChartKind {
             ChartKind::Bar => "a bar chart",
             ChartKind::Line => "a line chart",
             ChartKind::Area => "an area chart",
+            ChartKind::Pie => "a pie chart",
+            ChartKind::Donut => "a donut chart",
             ChartKind::Sparkline => "a sparkline",
         }
     }
@@ -141,6 +151,10 @@ pub struct ChartSpec {
     pub value_labels: bool,
     /// The width of the lines of a line, an area and a sparkline: `None` for the default of the kind.
     pub stroke_width: Option<f32>,
+    /// A donut's hole as a share of its size, from 0.1 to 0.9.
+    pub hole:         f32,
+    /// The text in a donut's hole, as the template or the data writes it.
+    pub hole_text:    Option<String>,
     /// A sparkline's own `color`, which its line takes, as it has no text for it to color: `None` for the palette's
     /// first. A color the chart inherits doesn't count.
     pub line_color:   Option<String>,
@@ -160,6 +174,13 @@ pub struct ChartPart {
     pub values: Option<Vec<Option<Number>>>,
 }
 
+impl ChartSpec {
+    /// Whether the chart is a pie or a donut: a slice for each category, with no axis.
+    fn is_slices(&self) -> bool {
+        matches!(self.kind, ChartKind::Pie | ChartKind::Donut)
+    }
+}
+
 // ── Reading ───────────────────────────────────────────────────────────────────
 
 /// Read the attributes of a `<chart>` that its node doesn't keep. `width`, `gap`, `font`, `font-size` and `color` are
@@ -169,8 +190,12 @@ pub(crate) fn read_spec(a: &impl Attrs, tokens: &Tokens) -> Result<ChartSpec, St
         Some("bar") => ChartKind::Bar,
         Some("line") => ChartKind::Line,
         Some("area") => ChartKind::Area,
+        Some("pie") => ChartKind::Pie,
+        Some("donut") => ChartKind::Donut,
         Some("sparkline") => ChartKind::Sparkline,
-        Some(other) => return Err(format!("invalid chart type '{other}': expected bar, line, area or sparkline")),
+        Some(other) => {
+            return Err(format!("invalid chart type '{other}': expected bar, line, area, pie, donut or sparkline"));
+        }
         None => return Err("missing required attribute 'type'".into()),
     };
     let mut spec = ChartSpec {
@@ -188,6 +213,8 @@ pub(crate) fn read_spec(a: &impl Attrs, tokens: &Tokens) -> Result<ChartSpec, St
         legend:       None,
         value_labels: false,
         stroke_width: None,
+        hole:         HOLE,
+        hole_text:    None,
         line_color:   None,
         alt:          None,
         grid_color:   tokens.resolve_color("line")?,
@@ -201,6 +228,11 @@ pub(crate) fn read_spec(a: &impl Attrs, tokens: &Tokens) -> Result<ChartSpec, St
             "stacked" if !matches!(kind, ChartKind::Bar | ChartKind::Area) => {
                 return Err(format!("stacked is for a bar or an area chart, and this is {}", kind.named()));
             }
+            "hole" | "hole-text" | "data-hole-text" if kind != ChartKind::Donut => {
+                return Err(format!("{name} is for a donut chart, and this is {}", kind.named()));
+            }
+            "hole"           => spec.hole = read_hole(v)?,
+            "hole-text"      => spec.hole_text = Some(v.to_string()),
             "direction" => spec.horizontal = match v {
                 "vertical"   => false,
                 "horizontal" => true,
@@ -239,6 +271,14 @@ pub(crate) fn read_spec(a: &impl Attrs, tokens: &Tokens) -> Result<ChartSpec, St
     Ok(spec)
 }
 
+/// A `hole`: a plain number from 0.1 to 0.9.
+fn read_hole(v: &str) -> Result<f32, String> {
+    match read_number(v) {
+        Ok(Some(number)) if (HOLE_LEAST..=HOLE_MOST).contains(&number.value) => Ok(number.value as f32),
+        _ => Err(format!("invalid hole '{v}': expected a number from {HOLE_LEAST} to {HOLE_MOST}, such as 0.6")),
+    }
+}
+
 /// A `stroke-width`: a length of zero or more, as on a layer's shapes. Zero draws no line.
 fn read_stroke_width(v: &str) -> Result<f32, String> {
     crate::parse::parse_measurement(v)
@@ -247,10 +287,12 @@ fn read_stroke_width(v: &str) -> Result<f32, String> {
         .ok_or_else(|| format!("invalid stroke-width '{v}': expected a length of zero or more, such as 1.5pt"))
 }
 
-/// Refuse a `<series>` in a chart of a kind that has one series. A sparkline is the one.
+/// Refuse a `<series>` in a chart of a kind that has one series: a pie, a donut and a sparkline.
 pub(crate) fn check_series(spec: &ChartSpec) -> Result<(), String> {
     match spec.kind {
-        ChartKind::Sparkline => Err("a sparkline has one series, and takes no <series>".into()),
+        ChartKind::Pie | ChartKind::Donut | ChartKind::Sparkline => {
+            Err(format!("{} has one series, and takes no <series>", spec.kind.named()))
+        }
         _ => Ok(()),
     }
 }
@@ -456,6 +498,14 @@ pub(crate) fn check(spec: &ChartSpec, data: &ChartData) -> Result<(), String> {
                 category_name(category, index), number.value,
             ));
         }
+        if spec.is_slices()
+            && let Some(number) = category.values.iter().flatten().find(|number| number.value < 0.0)
+        {
+            return Err(format!(
+                "{} has the value {}, and {} can't hold a negative value",
+                category_name(category, index), number.value, spec.kind.named(),
+            ));
+        }
         let total: f64 = category.values.iter().flatten().map(|number| number.value).sum();
         if spec.stacked && total > MAX_VALUE {
             return Err(format!(
@@ -463,7 +513,18 @@ pub(crate) fn check(spec: &ChartSpec, data: &ChartData) -> Result<(), String> {
             ));
         }
     }
+    if spec.is_slices() && slices_total(data) <= 0.0 {
+        return Err(format!(
+            "the values of {} add up to zero, so there is no whole to share into slices", spec.kind.named(),
+        ));
+    }
     Ok(())
+}
+
+/// What the slices of a pie or a donut add up to: the sum of the values, which are not negative, in the order of the
+/// categories, so a running sum of them ends on exactly the total.
+fn slices_total(data: &ChartData) -> f64 {
+    data.categories.iter().filter_map(|category| category.values.first().copied().flatten()).map(|n| n.value).sum()
 }
 
 /// The error for more parts than a chart holds.
@@ -771,18 +832,57 @@ fn bar_color<'a>(data: &'a ChartData, category: &'a Category, series: usize) -> 
     }
 }
 
-/// Where the legend goes: where `legend` says, or under a chart of two series or more. A sparkline has none.
+/// Where the legend goes: where `legend` says, or beside a pie or a donut, or under a chart of two series or more. A
+/// sparkline has none.
 fn legend_place(spec: &ChartSpec, data: &ChartData) -> Legend {
-    if spec.kind == ChartKind::Sparkline {
-        return Legend::None;
+    match spec.kind {
+        ChartKind::Sparkline => Legend::None,
+        ChartKind::Pie | ChartKind::Donut => spec.legend.unwrap_or(Legend::Right),
+        _ => spec.legend.unwrap_or(if data.series.len() >= 2 { Legend::Bottom } else { Legend::None }),
     }
-    spec.legend.unwrap_or(if data.series.len() >= 2 { Legend::Bottom } else { Legend::None })
 }
 
-/// The entries of the legend: a swatch of each series' color and its label.
-fn legend_entries(data: &ChartData) -> Vec<(&str, &str)> {
+/// An entry of the legend: a swatch, a label that shortens to fit, and a tail that is always written after it, a
+/// slice's share.
+struct Entry<'a> {
+    color: &'a str,
+    label: &'a str,
+    tail:  String,
+}
+
+/// The entries of the legend: a swatch of each series' color and its label, or of each slice's color and its label
+/// and share.
+fn legend_entries<'a>(spec: &ChartSpec, data: &'a ChartData) -> Vec<Entry<'a>> {
+    if spec.is_slices() {
+        let total = slices_total(data);
+        return data.categories.iter().enumerate().map(|(index, category)| Entry {
+            color: slice_color(category, index),
+            label: category.label.as_str(),
+            tail: category.values.first().copied().flatten().map_or_else(String::new, |n| share_text(n.value, total, spec)),
+        }).collect();
+    }
     let count = data.series.len().max(1);
-    (0..count).map(|i| (series_color(data, i), data.series.get(i).map_or("", |s| s.label.as_str()))).collect()
+    (0..count).map(|i| Entry {
+        color: series_color(data, i),
+        label: data.series.get(i).map_or("", |s| s.label.as_str()),
+        tail: String::new(),
+    }).collect()
+}
+
+/// The color of the slice of the category at `index`: its own, or the palette's in order, started over past the eighth.
+fn slice_color(category: &Category, index: usize) -> &str {
+    category.color.as_deref().unwrap_or(PALETTE[index % PALETTE.len()])
+}
+
+/// A slice's share of the whole as a percent, `22%`: a whole number unless `decimals` says otherwise, with the chart's
+/// decimal mark. Written on its own, with no `prefix` or `suffix`, which belong to the values.
+fn share_text(value: f64, total: f64, spec: &ChartSpec) -> String {
+    let share = fixed(value / total * 100.0, usize::from(spec.decimals.unwrap_or(0)));
+    let share = match share.split_once('.') {
+        Some((whole, fraction)) => format!("{whole}{}{fraction}", spec.marks.decimal),
+        None => share,
+    };
+    format!("{share}%")
 }
 
 /// A filled rectangle.
@@ -827,16 +927,25 @@ struct LegendLayout {
 /// The legend of `entries`: in rows that wrap at `width` and are centered in it, or, `in_column`, one entry a line in
 /// a column at most `width` wide, `height` high at most. Entries past what fits give way to an ellipsis, in place of
 /// the last that fits, and a legend with no room for a line has none.
-fn legend_layout(entries: &[(&str, &str)], text: Type, width: f32, height: f32, in_column: bool) -> LegendLayout {
+fn legend_layout(entries: &[Entry], text: Type, width: f32, height: f32, in_column: bool) -> LegendLayout {
     let swatch = text.size * 0.8;
     let swatch_gap = text.size * 0.4;
     let between = text.size * 1.2;
     let lh = text.line_height();
     let room = (width - swatch - swatch_gap).max(0.0);
-    let measured: Vec<(String, String, f32)> = entries.iter().map(|(color, label)| {
-        let label = text.shortened(label, room);
+    let space = text.width(" ");
+    let measured: Vec<(String, String, f32)> = entries.iter().map(|entry| {
+        // The tail is always written, so the label shortens to what it leaves.
+        let tail = if entry.tail.is_empty() { 0.0 } else { text.width(&entry.tail) };
+        let apart = if entry.label.is_empty() || entry.tail.is_empty() { 0.0 } else { space };
+        let label = text.shortened(entry.label, (room - tail - apart).max(0.0));
+        let label = match (label.is_empty(), entry.tail.is_empty()) {
+            (_, true) => label,
+            (true, false) => entry.tail.clone(),
+            (false, false) => format!("{label} {}", entry.tail),
+        };
         let w = swatch + if label.is_empty() { 0.0 } else { swatch_gap + text.width(&label) };
-        (color.to_string(), label, w)
+        (entry.color.to_string(), label, w)
     }).collect();
     let lines = (height / lh + 0.01).floor() as usize;
     let rest = (String::new(), ELLIPSIS.to_string(), text.width(ELLIPSIS));
@@ -994,7 +1103,7 @@ pub(crate) fn draw(node: &Node, spec: &ChartSpec, data: &ChartData, x: f32, y: f
     match legend_place(spec, data) {
         Legend::None => {}
         place @ (Legend::Bottom | Legend::Top) => {
-            let legend = legend_layout(&legend_entries(data), text, width, height * LEGEND_SHARE, false);
+            let legend = legend_layout(&legend_entries(spec, data), text, width, height * LEGEND_SHARE, false);
             let room = if legend.entries.is_empty() { 0.0 } else { legend.height + gap };
             ph = (ph - room).max(0.0);
             let top = if place == Legend::Top {
@@ -1006,7 +1115,7 @@ pub(crate) fn draw(node: &Node, spec: &ChartSpec, data: &ChartData, x: f32, y: f
             draw_legend(&legend, text, x, top, &mut out);
         }
         Legend::Right => {
-            let legend = legend_layout(&legend_entries(data), text, width / 3.0, height, true);
+            let legend = legend_layout(&legend_entries(spec, data), text, width / 3.0, height, true);
             pw = (pw - if legend.entries.is_empty() { 0.0 } else { legend.width + gap }).max(0.0);
             draw_legend(&legend, text, x + width - legend.width, y, &mut out);
         }
@@ -1017,6 +1126,7 @@ pub(crate) fn draw(node: &Node, spec: &ChartSpec, data: &ChartData, x: f32, y: f
         ChartKind::Bar if spec.horizontal => draw_horizontal(spec, data, text, gap, area, &mut out),
         ChartKind::Bar => draw_vertical(spec, data, text, gap, area, &mut out),
         ChartKind::Line | ChartKind::Area => draw_lines(spec, data, text, gap, area, &mut out),
+        ChartKind::Pie | ChartKind::Donut => draw_slices(spec, data, text, area, &mut out),
         ChartKind::Sparkline => draw_sparkline(spec, data, area, &mut out),
     }
     let chart = RenderNode::Box(RenderBox {
@@ -1423,6 +1533,121 @@ fn draw_sparkline(spec: &ChartSpec, data: &ChartData, area: (f32, f32, f32, f32)
         [px, y + inset + (height - 2.0 * inset) * ((high - value) / (high - low)) as f32]
     };
     draw_line(spec.line_color.as_deref().unwrap_or(PALETTE[0]), line_width, runs_of(&values, point), out);
+}
+
+/// The sine and the cosine of `angle` radians, worked out with arithmetic alone: the angle's quarter turns, and a
+/// series for the rest, which is at most an eighth of a turn from zero. The `sin` and `cos` of a platform's libm round
+/// their last digit differently from one build to the next, and the WASI build's moved a coordinate of a donut's PDF by
+/// 0.001 from the native one's, so the same document gave a different file. Addition, multiplication and division are
+/// the same everywhere, so the arcs are too.
+fn sin_cos(angle: f32) -> (f64, f64) {
+    use std::f64::consts::FRAC_PI_2;
+    let angle = f64::from(angle);
+    let quarters = (angle / FRAC_PI_2 + 0.5).floor();
+    let rest = angle - quarters * FRAC_PI_2;
+    let square = rest * rest;
+    let sin = rest * (1.0 - square / 6.0 * (1.0 - square / 20.0 * (1.0 - square / 42.0 * (1.0 - square / 72.0
+        * (1.0 - square / 110.0 * (1.0 - square / 156.0))))));
+    let cos = 1.0 - square / 2.0 * (1.0 - square / 12.0 * (1.0 - square / 30.0 * (1.0 - square / 56.0
+        * (1.0 - square / 90.0 * (1.0 - square / 132.0 * (1.0 - square / 182.0))))));
+    // The sine and the cosine of the quarter turns, which are 0, 1 or -1.
+    match (quarters as i64).rem_euclid(4) {
+        0 => (sin, cos),
+        1 => (cos, -sin),
+        2 => (-sin, -cos),
+        _ => (-cos, sin),
+    }
+}
+
+/// The point at `angle` on the circle of `radius`, from its center with y down: the angle runs clockwise from the top,
+/// in radians.
+pub(crate) fn arc_point(radius: f32, angle: f32) -> [f32; 2] {
+    let (sin, cos) = sin_cos(angle);
+    [(f64::from(radius) * sin) as f32, (-f64::from(radius) * cos) as f32]
+}
+
+/// The arc of `radius` from the angle `from` to `to`, clockwise when `to` is the larger, as cubic Béziers of a quarter
+/// turn at most: `curve` gets each one's two control points and its end, from the center with y down, the start being
+/// `arc_point(radius, from)`.
+pub(crate) fn arc_curves(radius: f32, from: f32, to: f32, mut curve: impl FnMut([f32; 2], [f32; 2], [f32; 2])) {
+    let span = to - from;
+    let pieces = (span.abs() / std::f32::consts::FRAC_PI_2 - 1e-4).ceil().max(1.0) as usize;
+    let step = span / pieces as f32;
+    // The handle of a Bézier that follows an arc of `step` closely, 0.5523 of the radius for a quarter turn.
+    let (quarter_sin, quarter_cos) = sin_cos(step / 4.0);
+    let handle = 4.0 / 3.0 * quarter_sin / quarter_cos * f64::from(radius);
+    for piece in 0..pieces {
+        let start = from + step * piece as f32;
+        let end = if piece + 1 == pieces { to } else { start + step };
+        let (from_point, to_point) = (arc_point(radius, start), arc_point(radius, end));
+        let ((leaving_sin, leaving_cos), (arriving_sin, arriving_cos)) = (sin_cos(start), sin_cos(end));
+        // The way the arc runs at its start and its end: where the angle grows, the cosine along x and the sine along y.
+        curve(
+            [
+                from_point[0] + (handle * leaving_cos) as f32,
+                from_point[1] + (handle * leaving_sin) as f32,
+            ],
+            [
+                to_point[0] - (handle * arriving_cos) as f32,
+                to_point[1] - (handle * arriving_sin) as f32,
+            ],
+            to_point,
+        );
+    }
+}
+
+/// The slices of a pie or a donut, by color in the order each color is first drawn: one node for each, however many
+/// slices it has.
+fn slice_sets(data: &ChartData, center: [f32; 2], outer: f32, inner: f32) -> Vec<RenderSectors> {
+    let total = slices_total(data);
+    let mut sets: Vec<RenderSectors> = Vec::new();
+    let mut running = 0.0;
+    for (index, category) in data.categories.iter().enumerate() {
+        let Some(number) = category.values.first().copied().flatten().filter(|n| n.value > 0.0) else { continue };
+        let from = running / total * f64::from(std::f32::consts::TAU);
+        running += number.value;
+        let to = running / total * f64::from(std::f32::consts::TAU);
+        let slice = [from as f32, to as f32];
+        let color = slice_color(category, index);
+        match sets.iter_mut().find(|set| set.fill == color) {
+            Some(set) => set.slices.push(slice),
+            None => sets.push(RenderSectors { fill: color.to_string(), center, outer, inner, slices: vec![slice] }),
+        }
+    }
+    sets
+}
+
+/// A pie or a donut: a slice for each category, clockwise from the top, as wide as its share of the whole, in the
+/// largest circle the plot holds, centered in it. A donut's hole is `hole` of the circle, with its text in the middle.
+fn draw_slices(spec: &ChartSpec, data: &ChartData, text: Type, area: (f32, f32, f32, f32), out: &mut Vec<RenderNode>) {
+    let (x, y, width, height) = area;
+    let outer = width.min(height) / 2.0;
+    if outer <= 0.0 {
+        return;
+    }
+    let center = [x + width / 2.0, y + height / 2.0];
+    let inner = if spec.kind == ChartKind::Donut { outer * spec.hole } else { 0.0 };
+    out.extend(slice_sets(data, center, outer, inner).into_iter().map(RenderNode::Sectors));
+    if let Some(words) = spec.hole_text.as_deref() {
+        draw_hole_text(words, text, center, inner, out);
+    }
+}
+
+/// The text in the middle of a donut's hole, centered, in the square the hole's circle holds: wrapped at spaces onto
+/// as many lines as fit, three at most, and shortened with an ellipsis where it is still too wide.
+fn draw_hole_text(words: &str, text: Type, center: [f32; 2], inner: f32, out: &mut Vec<RenderNode>) {
+    let side = inner * std::f32::consts::SQRT_2;
+    let line_height = text.line_height();
+    let lines = ((side / line_height + 0.01).floor() as usize).min(LABEL_LINES);
+    if lines == 0 {
+        return;
+    }
+    let rows = text.wrapped(words, side, lines);
+    let top = center[1] - rows.len() as f32 * line_height / 2.0;
+    for (index, row) in rows.into_iter().enumerate() {
+        let line_top = top + index as f32 * line_height;
+        out.push(text.text(row, center[0], line_top + (line_height - text.size) / 2.0, "center"));
+    }
 }
 
 /// Bars that run right from the value axis along the bottom, the categories down the left side.

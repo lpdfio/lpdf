@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+<document size="A4">
+<section>
+<layout margin="40pt">
+<column gap="xl">
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Visits by browser</text>
+        <chart type="pie" height="170pt" alt="Visits by browser, Chrome the largest share">
+            <category label="Chrome"><value>6120</value></category>
+            <category label="Safari"><value>2740</value></category>
+            <category label="Firefox"><value>780</value></category>
+            <category label="Edge"><value>610</value></category>
+            <category label="Other"><value>150</value></category>
+        </chart>
+    </column>
+    <row gap="l">
+        <column gap="s" paginate="no">
+            <text bold="true">Colors of its own, shares to a decimal</text>
+            <chart type="pie" height="150pt" decimals="1" legend="bottom">
+                <category label="Won" color="#2f9e44"><value>38</value></category>
+                <category label="Lost" color="#c2255c"><value>11</value></category>
+                <category label="Open" color="text-muted"><value>7</value></category>
+            </chart>
+        </column>
+        <column gap="s" paginate="no">
+            <text bold="true">No legend, a slice of the whole</text>
+            <chart type="pie" height="150pt" legend="none">
+                <category label="Everything" color="#1763cf"><value>1</value></category>
+            </chart>
+        </column>
+    </row>
+    <column gap="s" paginate="no">
+        <text bold="true">A zero and a missing value draw no slice, and a long label keeps its share</text>
+        <chart type="pie" width="250pt" height="140pt" decimal-mark="," thousands-mark=".">
+            <category label="Subscriptions and renewals of the whole year"><value>12500</value></category>
+            <category label="Refunds"><value>0</value></category>
+            <category label="Pending"><value/></category>
+            <category label="One-off"><value>3100</value></category>
+            <category label="Support"><value>1.5</value></category>
+        </chart>
+    </column>
+</column>
+</layout>
+</section>
+</document>
+</lpdf>

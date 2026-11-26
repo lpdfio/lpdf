@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lpdf version="1">
+<document size="A4">
+<section>
+<layout margin="40pt">
+<column gap="xl">
+    <column gap="s" paginate="no">
+        <text font-size="l" bold="true">Where the money went</text>
+        <chart type="donut" height="170pt" prefix="$" hole-text="$11,100" alt="Expenses by kind, salaries the largest">
+            <category label="Rent" color="#1763cf"><value>2400</value></category>
+            <category label="Salaries" color="#2f9e44"><value>8100</value></category>
+            <category label="Travel" color="#e8590c"><value>600</value></category>
+        </chart>
+    </column>
+    <row gap="l">
+        <column gap="s" paginate="no">
+            <text bold="true">A thin ring for a share</text>
+            <chart type="donut" width="150pt" height="150pt" hole="0.8" hole-text="72%" legend="none">
+                <category label="Done" color="#2f9e44"><value>72</value></category>
+                <category label="Left" color="#e9ecef"><value>28</value></category>
+            </chart>
+        </column>
+        <column gap="s" paginate="no">
+            <text bold="true">A thick one</text>
+            <chart type="donut" width="150pt" height="150pt" hole="0.3" legend="none">
+                <category label="A"><value>5</value></category>
+                <category label="B"><value>3</value></category>
+                <category label="C"><value>2</value></category>
+            </chart>
+        </column>
+        <column gap="s" paginate="no">
+            <text bold="true">Too small for text</text>
+            <chart type="donut" width="150pt" height="150pt" hole="0.1" hole-text="Total" legend="none">
+                <category label="A"><value>1</value></category>
+                <category label="B"><value>1</value></category>
+            </chart>
+        </column>
+    </row>
+    <column gap="s" paginate="no">
+        <text bold="true">A text too wide for its hole wraps and then ends in an ellipsis</text>
+        <chart type="donut" height="210pt" legend="bottom" hole-text="Total of everything, spent over the whole year">
+            <category label="Rent"><value>2400</value></category>
+            <category label="Salaries"><value>8100</value></category>
+            <category label="Travel"><value>600</value></category>
+            <category label="Software"><value>300</value></category>
+            <category label="Office"><value>1200</value></category>
+        </chart>
+    </column>
+</column>
+</layout>
+</section>
+</document>
+</lpdf>

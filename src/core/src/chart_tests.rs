@@ -990,8 +990,8 @@ fn the_dots_of_a_sparkline_stay_inside_its_box() {
 
 #[test]
 fn a_chart_of_a_type_it_does_not_have_is_refused() {
-    let error = error(r#"<chart type="pie" height="100pt"><category><value>1</value></category></chart>"#);
-    assert!(error.contains("invalid chart type 'pie': expected bar, line, area or sparkline"), "{error}");
+    let error = error(r#"<chart type="scatter" height="100pt"><category><value>1</value></category></chart>"#);
+    assert!(error.contains("invalid chart type 'scatter': expected bar, line, area, pie, donut or sparkline"), "{error}");
 }
 
 #[test]
@@ -1032,4 +1032,372 @@ fn a_negative_value_in_a_stacked_area_is_refused() {
 fn a_negative_stroke_width_is_refused() {
     let error = error(r#"<chart type="line" height="100pt" stroke-width="-1pt"><category><value>1</value></category></chart>"#);
     assert!(error.contains("invalid stroke-width '-1pt': expected a length of zero or more"), "{error}");
+}
+
+// ── Pies and donuts ───────────────────────────────────────────────────────────
+
+/// The slices the pages draw, one node for each color, in the order they are drawn.
+fn sectors(pages: &[RenderPage]) -> Vec<&RenderSectors> {
+    all(pages).into_iter().filter_map(|n| match n { RenderNode::Sectors(s) => Some(s), _ => None }).collect()
+}
+
+fn near(a: f32, b: f32) -> bool {
+    (a - b).abs() < 0.01
+}
+
+/// Where the expenses go: a chart 160pt square, so its circle is the whole of it when it has no legend.
+fn expenses(kind: &str, attrs: &str) -> String {
+    expenses_in(kind, "160pt", attrs)
+}
+
+/// The expenses in a chart `width` wide, 160pt high, whose legend has the room for each slice's label and share.
+fn expenses_in(kind: &str, width: &str, attrs: &str) -> String {
+    format!(r#"<chart type="{kind}" width="{width}" height="160pt" {attrs}>
+        <category label="Rent"><value>2400</value></category>
+        <category label="Salaries"><value>8100</value></category>
+        <category label="Travel"><value>600</value></category>
+    </chart>"#)
+}
+
+const TURN: f32 = std::f32::consts::TAU;
+
+#[test]
+fn a_pie_draws_a_slice_for_each_category_clockwise_from_the_top_as_wide_as_its_share() {
+    let pages = laid_out(&expenses("pie", r#"legend="none""#));
+    let sets = sectors(&pages);
+    assert_eq!(sets.len(), 3, "a color each");
+    let colors: Vec<&str> = sets.iter().map(|s| s.fill.as_str()).collect();
+    assert_eq!(colors, &PALETTE[..3]);
+    let slices: Vec<[f32; 2]> = sets.iter().flat_map(|s| s.slices.clone()).collect();
+    assert!(near(slices[0][0], 0.0) && near(slices[2][1], TURN), "{slices:?}");
+    assert!(near(slices[0][1], slices[1][0]) && near(slices[1][1], slices[2][0]), "each starts where the one before ends");
+    for (slice, share) in slices.iter().zip([2400.0, 8100.0, 600.0]) {
+        assert!(near((slice[1] - slice[0]) / TURN, share / 11100.0), "{slice:?}");
+    }
+    assert!(sets.iter().all(|s| near(s.outer, 80.0) && near(s.inner, 0.0)), "the largest circle the box holds");
+    assert!(sets.iter().all(|s| near(s.center[0], 28.0 + 80.0) && near(s.center[1], 28.0 + 80.0)));
+}
+
+#[test]
+fn a_pie_has_no_axis_and_a_slice_of_the_whole_is_a_turn() {
+    let pages = laid_out(r#"<chart type="pie" width="100pt" height="100pt" legend="none"><category label="All"><value>5</value></category></chart>"#);
+    assert!(texts(&pages).is_empty(), "no steps, no labels under the slices");
+    let sets = sectors(&pages);
+    assert_eq!(sets.len(), 1);
+    assert!(near(sets[0].slices[0][0], 0.0) && near(sets[0].slices[0][1], TURN));
+}
+
+#[test]
+fn the_circle_is_the_largest_the_plot_holds_and_is_centered_in_it() {
+    let pages = laid_out(r#"<chart type="pie" width="300pt" height="120pt" legend="none"><category><value>1</value></category></chart>"#);
+    let set = sectors(&pages)[0];
+    assert!(near(set.outer, 60.0) && near(set.center[0], 28.0 + 150.0) && near(set.center[1], 28.0 + 60.0));
+    let pages = laid_out(r#"<chart type="pie" width="100pt" height="120pt" legend="none"><category><value>1</value></category></chart>"#);
+    assert!(near(sectors(&pages)[0].outer, 50.0));
+}
+
+#[test]
+fn a_slice_takes_the_color_of_its_category_and_else_the_next_of_the_palette() {
+    let pages = laid_out(r##"<chart type="pie" height="100pt" legend="none">
+        <category><value>1</value></category>
+        <category color="#112233"><value>1</value></category>
+        <category><value>1</value></category>
+    </chart>"##);
+    let colors: Vec<&str> = sectors(&pages).iter().map(|s| s.fill.as_str()).collect();
+    assert_eq!(colors, [PALETTE[0], "#112233", PALETTE[2]]);
+}
+
+#[test]
+fn slices_of_one_color_are_one_node_and_the_palette_starts_over_past_the_eighth() {
+    let categories: String = (0..10).map(|n| format!("<category><value>{}</value></category>", n + 1)).collect();
+    let pages = laid_out(&format!(r#"<chart type="pie" height="100pt" legend="none">{categories}</chart>"#));
+    let sets = sectors(&pages);
+    assert_eq!(sets.len(), 8);
+    assert_eq!(sets[0].slices.len(), 2, "the first and the ninth");
+    assert_eq!(sets[1].slices.len(), 2, "the second and the tenth");
+}
+
+#[test]
+fn the_legend_of_a_pie_is_at_the_right_and_lists_each_slice_with_its_color_and_share() {
+    let pages = laid_out(&expenses_in("pie", "400pt", ""));
+    assert_eq!(texts(&pages), ["Rent 22%", "Salaries 73%", "Travel 5%"]);
+    let swatches: Vec<String> = bars(&pages).into_iter().map(|b| b.4).collect();
+    assert_eq!(swatches, &PALETTE[..3]);
+    let set = sectors(&pages)[0];
+    let swatch_x = bars(&pages)[0].0;
+    assert!(swatch_x >= set.center[0] + set.outer, "the legend is beside the circle, at the right");
+    assert!(near(set.outer, 80.0), "the circle keeps the room the legend leaves it");
+}
+
+#[test]
+fn legend_places_the_legend_of_a_pie_and_none_drops_it() {
+    let none = laid_out(&expenses("pie", r#"legend="none""#));
+    assert!(texts(&none).is_empty() && bars(&none).is_empty());
+    let bottom = laid_out(&expenses_in("donut", "400pt", r#"legend="bottom""#));
+    let set = sectors(&bottom)[0];
+    assert!(bars(&bottom).iter().all(|b| b.1 >= set.center[1] + set.outer - 0.01), "under the circle");
+    let top = laid_out(&expenses_in("donut", "400pt", r#"legend="top""#));
+    let set = sectors(&top)[0];
+    assert!(bars(&top).iter().all(|b| b.1 + b.3 <= set.center[1] - set.outer + 0.01), "over the circle");
+    assert!(set.outer < 80.0, "the legend takes its room from the circle");
+}
+
+#[test]
+fn a_share_is_a_whole_percent_unless_decimals_says_otherwise_and_takes_the_decimal_mark() {
+    let pages = laid_out(&expenses_in("pie", "400pt", r#"decimals="1" thousands-mark="" decimal-mark=",""#));
+    assert_eq!(texts(&pages), ["Rent 21,6%", "Salaries 73,0%", "Travel 5,4%"]);
+}
+
+#[test]
+fn prefix_and_suffix_are_not_written_around_a_share() {
+    let pages = laid_out(&expenses_in("pie", "400pt", r#"prefix="$" suffix=" USD""#));
+    assert_eq!(texts(&pages), ["Rent 22%", "Salaries 73%", "Travel 5%"]);
+}
+
+#[test]
+fn a_label_too_wide_for_the_legend_is_shortened_and_keeps_its_share() {
+    let pages = laid_out(r#"<chart type="pie" width="240pt" height="100pt">
+        <category label="A very long name for the only slice of this pie"><value>5</value></category></chart>"#);
+    let words = texts(&pages);
+    assert_eq!(words.len(), 1);
+    assert!(words[0].starts_with("A ") && words[0].ends_with("... 100%"), "{words:?}");
+}
+
+#[test]
+fn a_zero_or_missing_value_draws_no_slice() {
+    let pages = laid_out(r#"<chart type="pie" width="300pt" height="100pt">
+        <category label="A"><value>5</value></category>
+        <category label="B"><value>0</value></category>
+        <category label="C"><value/></category>
+        <category label="D"><value>5</value></category>
+    </chart>"#);
+    assert_eq!(texts(&pages), ["A 50%", "B 0%", "C", "D 50%"], "a missing value has no share");
+    let colors: Vec<&str> = sectors(&pages).iter().map(|s| s.fill.as_str()).collect();
+    assert_eq!(colors, [PALETTE[0], PALETTE[3]]);
+}
+
+#[test]
+fn a_donut_has_a_hole_of_six_tenths_of_its_size_unless_hole_says_otherwise() {
+    let default = laid_out(&expenses("donut", r#"legend="none""#));
+    assert!(sectors(&default).iter().all(|s| near(s.inner, 48.0) && near(s.outer, 80.0)));
+    for (hole, inner) in [("0.1", 8.0), ("0.5", 40.0), ("0.8", 64.0), ("0.9", 72.0)] {
+        let pages = laid_out(&expenses("donut", &format!(r#"legend="none" hole="{hole}""#)));
+        assert!(sectors(&pages).iter().all(|s| near(s.inner, inner)), "{hole}");
+    }
+    let pie = laid_out(&expenses("pie", r#"legend="none""#));
+    assert!(sectors(&pie).iter().all(|s| s.inner == 0.0));
+}
+
+#[test]
+fn hole_text_is_written_as_given_in_the_middle_of_the_hole() {
+    let pages = laid_out(&expenses("donut", r#"legend="none" hole-text="$11,100""#));
+    let node = all(&pages).into_iter().find_map(|n| match n { RenderNode::Text(t) => Some(t), _ => None }).expect("a text");
+    assert_eq!(node.content, "$11,100");
+    assert_eq!(node.text_align, "center");
+    assert!(near(node.x, 28.0 + 80.0), "centered on the hole");
+    assert!(node.y > 28.0 + 80.0 - node.size && node.y < 28.0 + 80.0, "and on its middle: {}", node.y);
+}
+
+#[test]
+fn a_hole_text_too_wide_for_the_hole_wraps_and_then_ends_in_an_ellipsis() {
+    let words = "Total spent over the whole of the year, rent and salaries and travel and all the rest of it";
+    let pages = laid_out(&expenses("donut", &format!(r#"legend="none" hole-text="{words}""#)));
+    let lines = texts(&pages);
+    assert!((2..=3).contains(&lines.len()), "{lines:?}");
+    assert!(lines.last().is_some_and(|line| line.ends_with(ELLIPSIS)), "{lines:?}");
+    let centers: Vec<f32> = all(&pages).into_iter().filter_map(|n| match n { RenderNode::Text(t) => Some(t.x), _ => None }).collect();
+    assert!(centers.iter().all(|x| near(*x, 28.0 + 80.0)));
+}
+
+#[test]
+fn a_hole_with_no_room_for_a_line_of_text_writes_none() {
+    let pages = laid_out(&expenses("donut", r#"legend="none" hole="0.1" hole-text="Total""#));
+    assert!(texts(&pages).is_empty());
+}
+
+#[test]
+fn data_hole_text_sets_the_text_of_the_hole_from_the_data_and_hole_text_is_its_fallback() {
+    let xml = document(r#"<chart type="donut" width="160pt" height="160pt" legend="none" hole-text="Total" data-hole-text="total">
+        <category data-source="expenses" label="Rent" data-label="name"><value data-value="amount">1</value></category></chart>"#);
+    let data = r#"{ "total": "$11,100", "expenses": [{ "name": "Rent", "amount": 2400 }, { "name": "Pay", "amount": 8100 }] }"#;
+    assert_eq!(texts(&pages(&xml, Some(data)).unwrap_or_else(|e| panic!("{e}"))), ["$11,100"]);
+    assert_eq!(texts(&pages(&xml, Some(r#"{ "expenses": [{ "name": "Rent", "amount": 2400 }] }"#)).unwrap_or_else(|e| panic!("{e}"))), ["Total"]);
+    assert_eq!(texts(&pages(&xml, None).unwrap_or_else(|e| panic!("{e}"))), ["Total"]);
+}
+
+#[test]
+fn a_data_hole_text_that_is_not_a_string_is_refused_by_its_path() {
+    let xml = document(r#"<chart type="donut" height="100pt" data-hole-text="total"><category><value>1</value></category></chart>"#);
+    let error = pages(&xml, Some(r#"{ "total": 11100 }"#)).map(|_| ()).expect_err("refused");
+    assert!(error.contains(r#"data-hole-text="total": expected a string, found a number"#), "{error}");
+}
+
+#[test]
+fn a_pie_and_a_donut_read_their_categories_from_the_data() {
+    let xml = document(r##"<chart type="donut" width="400pt" height="160pt" hole-text="Total">
+        <category data-source="expenses" label="Rent" data-label="name" color="#737373" data-color="color">
+            <value data-value="amount">2400</value></category></chart>"##);
+    let data = r##"{ "expenses": [
+        { "name": "Rent", "amount": 2400, "color": "#1763cf" },
+        { "name": "Salaries", "amount": 8100, "color": "#2f9e44" },
+        { "name": "Travel", "amount": 600, "color": "#e8590c" } ] }"##;
+    let pages = pages(&xml, Some(data)).unwrap_or_else(|e| panic!("{e}"));
+    let colors: Vec<&str> = sectors(&pages).iter().map(|s| s.fill.as_str()).collect();
+    assert_eq!(colors, ["#1763cf", "#2f9e44", "#e8590c"]);
+    assert_eq!(texts(&pages), ["Rent 22%", "Salaries 73%", "Travel 5%", "Total"]);
+}
+
+#[test]
+fn without_data_a_pie_renders_as_written() {
+    let xml = document(r#"<chart type="pie" width="300pt" height="100pt">
+        <category data-source="expenses" label="Rent" data-label="name"><value data-value="amount">2400</value></category></chart>"#);
+    let pages = pages(&xml, None).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(texts(&pages), ["Rent 100%"]);
+    assert_eq!(sectors(&pages).len(), 1);
+}
+
+#[test]
+fn a_pie_moves_with_its_chart_to_the_next_page() {
+    let lines: String = (1..=56).map(|n| format!("<text>Line {n}</text>")).collect();
+    let pages = laid_out(&format!("{lines}{}", expenses("donut", r#"legend="none""#)));
+    assert_eq!(pages.len(), 2);
+    let set = sectors(&pages[1..])[0];
+    assert!(near(set.center[1], 28.0 + 80.0), "{:?}", set.center);
+}
+
+#[test]
+fn a_negative_value_in_a_pie_or_a_donut_is_refused_and_names_the_category() {
+    for (kind, named) in [("pie", "a pie chart"), ("donut", "a donut chart")] {
+        let error = error(&format!(r#"<chart type="{kind}" height="100pt"><category label="Rent"><value>5</value></category><category label="Refund"><value>-2</value></category></chart>"#));
+        assert!(error.contains(&format!("category 'Refund' has the value -2, and {named} can't hold a negative value")), "{error}");
+    }
+}
+
+#[test]
+fn values_that_add_up_to_zero_are_refused() {
+    for (kind, named) in [("pie", "a pie chart"), ("donut", "a donut chart")] {
+        for values in ["<category><value>0</value></category>", "<category><value/></category>", ""] {
+            let error = error(&format!(r#"<chart type="{kind}" height="100pt">{values}</chart>"#));
+            assert!(error.contains(&format!("the values of {named} add up to zero")), "{error}");
+        }
+    }
+    let xml = document(r#"<chart type="pie" height="100pt"><category data-source="rows"><value data-value="v">1</value></category></chart>"#);
+    let error = pages(&xml, Some(r#"{ "rows": [{ "v": 0 }, { "v": 0 }] }"#)).map(|_| ()).expect_err("refused");
+    assert!(error.contains("the values of a pie chart add up to zero"), "{error}");
+}
+
+#[test]
+fn a_series_in_a_pie_or_a_donut_is_refused_where_it_is_written() {
+    for (kind, named) in [("pie", "a pie chart"), ("donut", "a donut chart")] {
+        let error = error(&format!(r#"<chart type="{kind}" height="100pt"><series label="One"/><category><value>1</value></category></chart>"#));
+        assert!(error.contains(&format!("{named} has one series, and takes no <series>")), "{error}");
+    }
+}
+
+#[test]
+fn direction_and_stacked_on_a_pie_or_a_donut_are_refused() {
+    for (kind, named) in [("pie", "a pie chart"), ("donut", "a donut chart")] {
+        let error_direction = error(&format!(r#"<chart type="{kind}" direction="vertical" height="100pt"><category><value>1</value></category></chart>"#));
+        assert!(error_direction.contains(&format!("direction is for a bar chart, and this is {named}")), "{error_direction}");
+        let error_stacked = error(&format!(r#"<chart type="{kind}" stacked="true" height="100pt"><category><value>1</value></category></chart>"#));
+        assert!(error_stacked.contains(&format!("stacked is for a bar or an area chart, and this is {named}")), "{error_stacked}");
+    }
+}
+
+#[test]
+fn hole_and_hole_text_on_any_kind_but_a_donut_are_refused() {
+    for (kind, named) in [
+        ("bar", "a bar chart"), ("line", "a line chart"), ("area", "an area chart"), ("pie", "a pie chart"),
+        ("sparkline", "a sparkline"),
+    ] {
+        for attr in [r#"hole="0.5""#, r#"hole-text="Total""#, r#"data-hole-text="total""#] {
+            let error = error(&format!(r#"<chart type="{kind}" {attr} height="100pt"><category><value>1</value></category></chart>"#));
+            let name = attr.split('=').next().unwrap_or_default();
+            assert!(error.contains(&format!("{name} is for a donut chart, and this is {named}")), "{attr}: {error}");
+        }
+    }
+}
+
+#[test]
+fn a_hole_outside_one_tenth_to_nine_tenths_is_refused() {
+    for hole in ["0.05", "0.95", "1", "0", "60%", "wide"] {
+        let error = error(&format!(r#"<chart type="donut" hole="{hole}" height="100pt"><category><value>1</value></category></chart>"#));
+        assert!(error.contains("hole must be a number from 0.1 to 0.9"), "{hole}: {error}");
+    }
+}
+
+#[test]
+fn a_pie_at_the_limit_of_categories_renders() {
+    for kind in ["pie", "donut"] {
+        let hole_text = if kind == "donut" { r#"hole-text="Total""# } else { "" };
+        let xml = document(&format!(r#"<chart type="{kind}" height="400pt" {hole_text}>
+            <category data-source="categories" data-label="name"><value data-value="v">1</value></category></chart>"#));
+        let data = serde_json::json!({
+            "categories": (0..MAX_CATEGORIES).map(|n| serde_json::json!({ "name": format!("C{n}"), "v": n + 1 })).collect::<Vec<_>>(),
+        }).to_string();
+        let pages = pages(&xml, Some(&data)).unwrap_or_else(|e| panic!("{kind}: {e}"));
+        let doc = crate::parse::parse(&xml).unwrap_or_else(|e| panic!("{e}"));
+        let bytes = crate::pdf::render_pdf(
+            &pages, &doc.fonts, &crate::pdf::FontRegistry::new(), &crate::pdf::ImageRegistry::new(), &doc.meta,
+            doc.paints(), None, false, &doc.output, &[], None,
+        )
+        .unwrap_or_else(|e| panic!("{kind}: {e}"));
+        assert!(bytes.starts_with(b"%PDF"));
+    }
+}
+
+#[test]
+fn a_pie_in_a_tagged_document_is_a_figure_with_its_alt() {
+    let xml = r#"<lpdf version="1"><document size="A4"><meta title="T" lang="en"/><output pdfua="1"/><section><layout>
+        <chart type="donut" height="100pt" alt="Expenses by kind" hole-text="Total"><category label="Rent"><value>5</value></category></chart>
+        </layout></section></document></lpdf>"#;
+    let pages = pages(xml, None).unwrap_or_else(|e| panic!("{e}"));
+    let RenderNode::Box(chart) = &pages[0].nodes[0] else { panic!("a box") };
+    assert_eq!(chart.tag.as_ref().map(|t| &t.kind), Some(&TagKind::Figure("Expenses by kind".into())));
+}
+
+// ── Arcs ──────────────────────────────────────────────────────────────────────
+
+fn curves(radius: f32, from: f32, to: f32) -> Vec<([f32; 2], [f32; 2], [f32; 2])> {
+    let mut out = Vec::new();
+    arc_curves(radius, from, to, |c1, c2, end| out.push((c1, c2, end)));
+    out
+}
+
+#[test]
+fn a_quarter_turn_is_one_bezier_with_the_handle_of_a_circle() {
+    let [(c1, c2, end)] = curves(100.0, 0.0, std::f32::consts::FRAC_PI_2)[..] else { panic!("one curve") };
+    // From the top, 12 o'clock, to the right, 3 o'clock, with y down from the center.
+    assert!(near(c1[0], 55.23) && near(c1[1], -100.0), "{c1:?}");
+    assert!(near(c2[0], 100.0) && near(c2[1], -55.23), "{c2:?}");
+    assert!(near(end[0], 100.0) && near(end[1], 0.0), "{end:?}");
+}
+
+#[test]
+fn an_arc_is_cut_into_curves_of_a_quarter_turn_at_most_and_ends_where_it_says() {
+    assert_eq!(curves(10.0, 0.0, TURN).len(), 4);
+    assert_eq!(curves(10.0, 0.5, 0.6).len(), 1);
+    let three = curves(10.0, 0.0, TURN * 0.75);
+    assert_eq!(three.len(), 3);
+    let end = arc_point(10.0, TURN * 0.75);
+    assert!(near(three[2].2[0], end[0]) && near(three[2].2[1], end[1]));
+    let back = curves(10.0, TURN * 0.75, 0.0);
+    assert_eq!(back.len(), 3, "an arc can run back, as the inner edge of a slice does");
+    let start = arc_point(10.0, 0.0);
+    assert!(near(back[2].2[0], start[0]) && near(back[2].2[1], start[1]));
+    for (_, _, point) in three.iter().chain(back.iter()) {
+        assert!((point[0].hypot(point[1]) - 10.0).abs() < 0.01, "{point:?} is on the circle");
+    }
+}
+
+#[test]
+fn the_sine_and_the_cosine_of_an_arc_agree_with_the_library_to_a_millionth() {
+    for step in 0..=720 {
+        let angle = step as f32 * TURN / 720.0;
+        let (sin, cos) = sin_cos(angle);
+        assert!((sin - f64::from(angle).sin()).abs() < 1e-6, "sin {angle}");
+        assert!((cos - f64::from(angle).cos()).abs() < 1e-6, "cos {angle}");
+    }
+    let (sin, cos) = sin_cos(std::f32::consts::FRAC_PI_2);
+    assert!((sin - 1.0).abs() < 1e-6 && cos.abs() < 1e-6, "a quarter turn");
 }

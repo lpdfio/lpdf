@@ -821,6 +821,8 @@ const CHART: Attributes = &[
     ("legend", Kind::Constants(&["ChartLegend"])),
     ("value-labels", Kind::Boolean),
     ("stroke-width", Kind::Text),
+    ("hole", Kind::Decimal { min: Bound::Inclusive(0.1), max: Bound::Inclusive(0.9) }),
+    ("hole-text", Kind::Text),
     ("font", Kind::Text),
     ("font-size", Kind::Text),
     ("color", Kind::Text),
@@ -1181,6 +1183,8 @@ pub(crate) const CONSTANTS: &[Constant] = &[
         Member { value: "bar", pascal: "Bar", snake: "BAR" },
         Member { value: "line", pascal: "Line", snake: "LINE" },
         Member { value: "area", pascal: "Area", snake: "AREA" },
+        Member { value: "pie", pascal: "Pie", snake: "PIE" },
+        Member { value: "donut", pascal: "Donut", snake: "DONUT" },
         Member { value: "sparkline", pascal: "Sparkline", snake: "SPARKLINE" },
     ] },
     Constant { name: "ChartDirection", area: "layout", members: &[
