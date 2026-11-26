@@ -39,7 +39,9 @@ A document asks for a standard, for encryption and for linearization in its `<ou
 - The render needs `createdOn`: the engine has no clock. A render without it, or with one that is not a date, is refused.
 - Refused, since a PDF/A file embeds every font: text in a built-in font (`the text "…" is in Helvetica, a font built into PDF readers, which is not embedded`), a declared font whose file was not loaded, a font whose license forbids embedding, and a character its font has no glyph for.
 - Refused, since the sRGB output intent covers RGB colors only: a CMYK color or gradient, and a spot color whose `value` is `cmyk()`.
-- Refused: a form field, and a barcode's printed digits (`hrt`), both drawn in Helvetica.
+- A form field is carried at every level, text, dropdown, checkbox and radio button, set in the font around it (`font` on the document, a section or a box), which a PDF/A file embeds whole so that what a user types has glyphs. Each widget prints, as a link does. At level a the field is not a Form element of the file's structure, which PDF/UA asks and refuses a field for.
+- Refused, as a font is: a field in a built-in font (`the form field 'name' is in Helvetica, a font built into PDF readers, which is not embedded`), and a field whose value, options or caption have a character its font has no glyph for.
+- Refused: a push button (`the push button 'name' can't be in a PDF/A file yet`), since PDF/A asks a button's appearance to be a set of states, which macOS Preview doesn't draw for a push button, and a barcode's printed digits (`hrt`), drawn in Helvetica.
 - Refused: `encrypt` (`pdfa="2b" and encrypt don't go together`) and `pdfx` on the same `<output>`.
 - Refused at part 2: attachments, since a PDF/A-2 file carries only files that are PDF/A themselves. Part 3 carries files of any kind.
 - Refused at level a: a `lang` that is not a language tag, and a character of Unicode's private use area.
@@ -72,7 +74,8 @@ Each error is listed under [Factur-X / ZUGFeRD, what it checks](https://lpdf.io/
 - `pdfua` takes `1`, and no other value.
 - The tags come from the document's own elements: paragraphs, headings (`role="h1"` to `"h6"`), tables with the header cells of their `<thead>`, lists, links, footnotes, the table of contents, and images, barcodes, charts and layers with their `alt`. Headers, footers, backgrounds and borders are marked as decoration.
 - Refused: no `title` or no `lang` on `<meta>`, a `lang` that is not a language tag, an `<img>`, a `<barcode>` or a `<chart>` of the layout without `alt` outside a header or a footer, a first heading that is not an `h1`, and a heading that skips a level going down.
-- Refused, as for PDF/A: text in a built-in font, a font whose file was not loaded or whose license forbids embedding, a character its font has no glyph for, a form field, and a barcode's printed digits.
+- Refused, as for PDF/A: text in a built-in font, a font whose file was not loaded or whose license forbids embedding, a character its font has no glyph for, and a barcode's printed digits.
+- Refused: a form field, which a PDF/UA file holds as a Form element of its structure (`the form field 'name' can't be in a PDF/UA file yet`).
 - Refused: an encrypted file whose `allow` leaves out `accessibility`.
 - Refused: bulk records (`a bulk table is not tagged for a reader`).
 - The render needs `createdOn`.
@@ -133,7 +136,7 @@ What a document holds, in each kind of file. A file of two standards keeps to bo
 |---|---|---|---|---|
 | Text in an embedded font | Yes | Yes | Yes | Yes |
 | Text in a built-in font | Yes | Refused | Refused | Refused |
-| Form fields | Yes | Refused | Refused | Refused |
+| Form fields | Yes | Yes, in an embedded font, but no push button | Refused | Refused |
 | A barcode's printed digits (`hrt`) | Yes | Refused | Refused | Refused |
 | RGB colors: hex, `rgb()`, `hsl()` | Yes | Yes | Yes | Yes, tied to sRGB |
 | CMYK colors, and spot colors with a `cmyk()` value | Yes | Refused | Yes | With a CMYK press profile: yes. With a gray or an RGB one: refused |
@@ -324,9 +327,10 @@ A chart is drawn from numbers, written like a table: `<series>` are its columns,
 | Supported | Since | Docs |
 |---|---|---|
 | Fillable AcroForm fields: text, checkbox, dropdown, radio button and button, with a default value, `required`, `readonly`, `max-len` and a button's submit URL | 0.24.0 | [Field](https://lpdf.io/docs/doc/layout/field/) |
+| Fields in the font around them (`font` on the document, a section or a box), so a PDF/A file carries a form in an embedded font | 0.39.0 | [Field, font](https://lpdf.io/docs/doc/layout/field/#font) |
 
-- A field's text is drawn in Helvetica.
-- PDF/A, PDF/UA and PDF/X refuse a form field: `the form field 'name' can't be in a PDF/X file`.
+- A field's text is set in the font around it, as a text's is: the `font` of the document, a section or a box, Helvetica when none is set. A font declared in `assets` is embedded whole, not as a subset, so what a user types in a reader that redraws the field has glyphs, at the cost of the font file's size.
+- PDF/UA and PDF/X refuse a form field: `the form field 'name' can't be in a PDF/X file`. PDF/A carries one in an embedded font, and refuses a push button (see [PDF/A](#pdfa)).
 - A field in print-only content is refused.
 
 ## Graphics
