@@ -1452,7 +1452,9 @@ fn collect_typed_field_fonts(nodes: &[RenderNode], out: &mut HashSet<String>) {
     }
 }
 
-/// Every character the font maps to a glyph, for a font that is embedded whole.
+/// Every character the font maps to a glyph, for a font that is embedded whole, but for the three that no ToUnicode
+/// map may hold (veraPDF 6.2.11.7.2 in PDF/A-2u: a value of zero, U+FEFF or U+FFFE). Nobody types them, and a font's
+/// `.null` or byte-order glyphs would otherwise be named by them.
 pub(crate) fn chars_of_font(bytes: &[u8]) -> HashSet<char> {
     let mut chars = HashSet::new();
     if let Ok(face) = Face::parse(bytes, 0)
@@ -1461,6 +1463,9 @@ pub(crate) fn chars_of_font(bytes: &[u8]) -> HashSet<char> {
         for subtable in cmap.subtables.into_iter().filter(|subtable| subtable.is_unicode()) {
             subtable.codepoints(|code| chars.extend(char::from_u32(code)));
         }
+    }
+    for forbidden in ['\u{0}', '\u{FEFF}', '\u{FFFE}'] {
+        chars.remove(&forbidden);
     }
     chars
 }
@@ -4249,6 +4254,11 @@ fn field_font_name(font: &str, fonts: &HashMap<String, PreparedFont>) -> String 
     }
 }
 
+/// The `/DA` of a text or choice field: its font (`field_font_name`) at the size the reader picks, in black.
+fn field_default_appearance(font: &str, fonts: &HashMap<String, PreparedFont>) -> String {
+    format!("/{} 0 Tf 0 g", field_font_name(font, fonts))
+}
+
 /// The fonts of the form's fields for the AcroForm's `/DR`: each one's name (`field_font_name`) and the object of its
 /// font, in name order so that a document written twice is the same file.
 fn field_font_resources(
@@ -4435,7 +4445,7 @@ fn write_fields(
                 if !field.name.is_empty() { fw.partial_name(TextStr(&field.name)); }
                 if !field.value.is_empty() { fw.text_value(TextStr(&field.value)); }
                 if let Some(ml) = field.max_len { fw.text_max_len(ml as i32); }
-                fw.vartext_default_appearance(Str(format!("/{} 0 Tf 0 g", field_font_name(&field.font, fonts)).as_bytes()));
+                fw.vartext_default_appearance(Str(field_default_appearance(&field.font, fonts).as_bytes()));
                 let mut aw = fw.into_annotation();
                 aw.rect(rect)
                   .page(page_id)
@@ -4458,7 +4468,7 @@ fn write_fields(
                 if !field.options.is_empty() {
                     fw.choice_options().options(field.options.iter().map(|o| TextStr(o.as_str())));
                 }
-                fw.vartext_default_appearance(Str(format!("/{} 0 Tf 0 g", field_font_name(&field.font, fonts)).as_bytes()));
+                fw.vartext_default_appearance(Str(field_default_appearance(&field.font, fonts).as_bytes()));
                 let mut aw = fw.into_annotation();
                 aw.rect(rect)
                   .page(page_id)

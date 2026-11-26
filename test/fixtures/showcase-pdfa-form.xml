@@ -3,10 +3,10 @@
      embeds. The document's font is Crimson Text; one box sets its italic and another Montserrat, and the fields in
      them follow. The font of a text field a person can type in is written whole, so a reader that redraws what is
      typed finds every glyph: each of the three has such a field here, and the heading font, which no field uses, is
-     a subset. A push button is left out: PDF/A refuses it. Every
-     font is of test/assets/fonts (SIL Open Font License), named relative to this file; the render needs created_on,
-     and the check of `make check-pdfa` renders it with the fonts loaded, as an SDK does
-     (`writes_pdfa_samples_for_the_external_check` in pdfa_render_tests.rs). -->
+     a subset. A push button is left out: PDF/A refuses it. Every font is of test/assets/fonts (SIL Open Font
+     License), named relative to this file; the render needs created_on, and the check of `make check-pdfa` renders
+     it with the fonts loaded, as an SDK does (`writes_pdfa_samples_for_the_external_check` in
+     pdfa_render_tests.rs). -->
 <lpdf version="1"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="../../schema/lpdf.xsd">

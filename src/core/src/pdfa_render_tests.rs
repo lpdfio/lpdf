@@ -429,6 +429,55 @@ fn the_font_of_a_text_field_a_user_can_type_in_is_embedded_whole() {
     assert!(['Z', 'Å', 'ö', '€'].iter().all(|c| chars.contains(c)) && chars.len() > 500, "{} characters", chars.len());
 }
 
+/// The value of each entry of each ToUnicode map of `pdf`: the second of the `<glyph> <value>` pair on a `bfchar` line.
+fn to_unicode_values(pdf: &[u8]) -> Vec<String> {
+    use miniz_oxide::inflate::decompress_to_vec_zlib;
+    const START: &[u8] = b"\nstream\n";
+    const END: &[u8] = b"\nendstream";
+    let find = |from: usize, needle: &[u8]| pdf[from..].windows(needle.len()).position(|w| w == needle).map(|i| from + i);
+    let mut values = Vec::new();
+    let mut from = 0;
+    while let Some(at) = find(from, START) {
+        let start = at + START.len();
+        let end = find(start, END).expect("a stream end");
+        if let Ok(inflated) = decompress_to_vec_zlib(&pdf[start..end]) {
+            let map = String::from_utf8_lossy(&inflated).into_owned();
+            if map.contains("beginbfchar") {
+                for line in map.lines().filter(|line| line.starts_with('<') && line.matches('<').count() == 2) {
+                    values.push(line.rsplit('<').next().expect("a value").trim_end_matches('>').to_uppercase());
+                }
+            }
+        }
+        from = end;
+    }
+    values
+}
+
+#[test]
+fn a_font_embedded_whole_maps_no_glyph_to_a_value_pdfa_forbids() {
+    // veraPDF's PDF/A-2u rule 6.2.11.7.2: no ToUnicode value of zero, U+FEFF or U+FFFE. It checks the glyphs a page
+    // draws, so a glyph of the whole font that no page draws passes it, and a validator that reads the whole map doesn't.
+    for file in ["Montserrat-Regular.ttf", "Radley-Regular.ttf", "SourceSans3-Regular.otf", "SourceSans3VF-Upright.otf",
+                 "SourceSans3VF-Upright.ttf"] {
+        let chars = crate::pdf::chars_of_font(&read(&test_dir().join("assets/fonts").join(file)));
+        assert!(chars.len() > 100, "{file}: {} characters", chars.len());
+        assert!(['\u{0}', '\u{FEFF}', '\u{FFFE}'].iter().all(|c| !chars.contains(c)), "{file}");
+    }
+    let mut engine = engine(Some(CREATED_ON));
+    let file = "SourceSans3VF-Upright.ttf";
+    engine.load_font("sample", &read(&test_dir().join("assets/fonts").join(file)));
+    let xml = format!(
+        r#"<lpdf version="1"><assets><font name="sample" src="{file}"/></assets><document font="sample"><output pdfa="2u"/>
+        <section><layout><field type="text" name="email" width="160pt"/></layout></section></document></lpdf>"#
+    );
+    let pdf = engine.render_xml(&xml, None, &RenderEncryption::default()).expect("renders");
+    let values = to_unicode_values(&pdf);
+    assert!(values.len() > 500, "{} entries in the maps", values.len());
+    assert!(values.iter().all(|value| !["0000", "FEFF", "FFFE"].contains(&value.as_str())), "a forbidden value");
+    let form = to_unicode_values(&render_fixture("form"));
+    assert!(form.len() > 1_000 && form.iter().all(|value| !["0000", "FEFF", "FFFE"].contains(&value.as_str())));
+}
+
 #[test]
 fn a_font_embedded_whole_renders_the_same_bytes_each_time() {
     // A whole font has glyphs that several characters map to, and which of them the file's map back to Unicode names
