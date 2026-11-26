@@ -210,8 +210,8 @@ pub struct RenderField {
     pub width:        f32,
     pub height:       f32,
     pub kind:         FieldKind,
-    /// The font the field's text is set in: the one around it, as a text's is (the document's, a section's or a
-    /// box's), Helvetica when nothing sets one.
+    /// The font the field's text is set in: the one around it, as a text's is (the document's or a box's),
+    /// Helvetica when nothing sets one.
     pub font:         String,
     pub name:         String,
     pub value:        String,
