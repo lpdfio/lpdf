@@ -3108,6 +3108,44 @@ fn write_field_background_border(
     }
 }
 
+/// The size a field's text is drawn at in its appearance: a share of the field's height, never under 6pt. A push
+/// button's caption and a text field's value both fit the height this way, so the size follows the box. The
+/// field's `/DA` says 0, which leaves the size to a reader that draws the field itself.
+fn field_text_size(height: f32) -> f32 {
+    (height * 0.55).max(6.0)
+}
+
+/// Draws the value of a text field or a dropdown in the field's appearance, in the field's font, black, from the
+/// left edge inside the border and centered on the height. It is clipped to the inside of the border, so a value
+/// longer than the field never reaches the border. A field with no value, and any other kind, draw nothing.
+fn write_field_value(
+    content: &mut Content,
+    field: &RenderField,
+    font_name: &str,
+    fonts: &HashMap<String, PreparedFont>,
+) {
+    if field.value.is_empty() || !matches!(field.kind, FieldKind::Text | FieldKind::Dropdown) {
+        return;
+    }
+    let Some(font) = fonts.get(&field.font) else { return };
+    let (w, h) = (field.width, field.height);
+    let border = field.border.as_ref().map_or(0.0, |(width, _)| width.max(0.0));
+    let size = field_text_size(h);
+    // The cap height of a typical face is 0.7 of its size: the baseline puts the capitals in the middle of the field.
+    let baseline = (h - size * 0.7) / 2.0;
+    content.save_state();
+    content.rect(border, border, (w - 2.0 * border).max(0.0), (h - 2.0 * border).max(0.0));
+    content.clip_nonzero();
+    content.end_path();
+    set_fill_color(content, "#000000");
+    content.begin_text();
+    content.set_font(Name(font_name.as_bytes()), size);
+    content.set_text_matrix([1.0, 0.0, 0.0, 1.0, border + 2.0, baseline]);
+    content.show(Str(&font.encode_text(&field.value)));
+    content.end_text();
+    content.restore_state();
+}
+
 /// Draw a circle using 4 Bézier curves.  If `filled` is true, fills with
 /// current fill colour; otherwise strokes with a 1pt black stroke.
 fn write_circle(content: &mut Content, cx: f32, cy: f32, r: f32, filled: bool) {
@@ -4307,15 +4345,27 @@ fn write_fields(
         let h = field.height;
         match &field.kind {
             FieldKind::Text | FieldKind::Dropdown => {
-                // Normal AP: draw field background and border.
+                // Normal AP: the field's background and border, and the value on them, so that a reader that draws
+                // the appearance as it is, such as pdfium, shows it before the field has focus.
                 let ap_id = fa.ap_ids[0];
                 let mut ap_content = Content::new();
                 write_field_background_border(&mut ap_content, &field.background, &field.border, w, h);
+                let font_name = field_font_name(&field.font, fonts);
+                write_field_value(&mut ap_content, field, &font_name, fonts);
                 let ap_bytes = ap_content.finish();
                 let mut xobj = pdf.form_xobject(ap_id, &ap_bytes);
                 xobj.bbox(Rect::new(0.0, 0.0, w, h));
-                if !spots_of(field).is_empty() {
-                    write_spots(&mut xobj.resources(), field);
+                let has_value = !field.value.is_empty();
+                if has_value || !spots_of(field).is_empty() {
+                    let mut res = xobj.resources();
+                    if has_value {
+                        if let Some(font_ids) = font_id_map.get(&field.font) {
+                            res.fonts().pair(Name(font_name.as_bytes()), font_ids.font_dict_id);
+                        }
+                    }
+                    if !spots_of(field).is_empty() {
+                        write_spots(&mut res, field);
+                    }
                 }
             }
             FieldKind::Button => {
@@ -4332,7 +4382,7 @@ fn write_fields(
                 let font_name = field_font_name(&field.font, fonts);
                 if !field.label.is_empty() {
                     let font = fonts.get(&field.font).expect("a document with fields has the font of each");
-                    let font_size = (h * 0.55).max(6.0);
+                    let font_size = field_text_size(h);
                     let text_w = font.text_width(&field.label, font_size);
                     let text_x = (w - text_w) / 2.0;
                     let text_y = (h - font_size) / 2.0;
@@ -5885,6 +5935,93 @@ mod tests {
         let (_, catalog) = object_with(&text, "/Type /Catalog");
         assert!(catalog.contains(&format!("/Helv {helvetica} 0 R")), "{catalog}");
         assert!(text.contains("/DA (/Helv 0 Tf 0 g)"));
+    }
+
+    /// The appearance streams of a PDF's fields: the dictionary and the content of each form XObject that is the size
+    /// `width` by `height`, which only a field's appearance is in these documents. The streams are not compressed.
+    fn appearances(pdf: &[u8], width: f32, height: f32) -> Vec<(String, String)> {
+        let bbox = format!("/BBox [0 0 {width} {height}]");
+        let text = String::from_utf8_lossy(pdf).into_owned();
+        text.split("endobj")
+            .filter(|object| object.contains("/Subtype /Form") && object.contains(&bbox))
+            .filter_map(|object| object.split_once("stream\n"))
+            .map(|(dict, content)| (dict.to_string(), content.split("endstream").next().unwrap_or("").to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn a_text_field_draws_its_value_in_its_appearance_at_a_size_that_fits_its_height() {
+        let pdf = render_as(r#"<field type="text" name="city" value="Zürich" width="100pt" height="30pt"/>"#, true);
+        let found = appearances(&pdf, 100.0, 30.0);
+        assert_eq!(found.len(), 1, "{found:?}");
+        let (dict, content) = &found[0];
+        // 55% of 30pt, in the font the field's /DA names
+        assert!(content.contains("/Helv 16.5 Tf"), "{content}");
+        assert!(content.contains("Tj"), "{content}");
+        assert!(dict.contains("/Font <<") && dict.contains("/Helv "), "the appearance names its font: {dict}");
+        assert!(String::from_utf8_lossy(&pdf).contains("/DA (/Helv 0 Tf 0 g)"), "a reader still picks its own size");
+    }
+
+    #[test]
+    fn a_dropdown_draws_its_selected_value_in_its_appearance() {
+        let pdf = render_as(r#"<field type="dropdown" name="size" value="M" options="S,M,L" width="90pt" height="20pt"/>"#, true);
+        let found = appearances(&pdf, 90.0, 20.0);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].1.contains("/Helv 11 Tf") && found[0].1.contains("Tj"), "{}", found[0].1);
+    }
+
+    #[test]
+    fn the_size_of_a_value_is_never_under_six_points() {
+        let pdf = render_as(r#"<field type="text" name="tiny" value="x" width="60pt" height="8pt"/>"#, true);
+        let found = appearances(&pdf, 60.0, 8.0);
+        assert!(found[0].1.contains("/Helv 6 Tf"), "{}", found[0].1);
+    }
+
+    #[test]
+    fn a_field_without_a_value_draws_no_text_and_keeps_no_resources() {
+        for field in [
+            r#"<field type="text" name="a" width="100pt" height="30pt"/>"#,
+            r#"<field type="dropdown" name="b" options="S,M" width="100pt" height="30pt"/>"#,
+        ] {
+            let pdf = render_as(field, true);
+            let found = appearances(&pdf, 100.0, 30.0);
+            assert_eq!(found.len(), 1, "{field}");
+            assert!(!found[0].1.contains(" Tf") && !found[0].0.contains("/Resources"), "{field}: {found:?}");
+        }
+    }
+
+    #[test]
+    fn a_checkbox_and_a_radio_button_draw_no_text_in_their_appearance() {
+        let pdf = render_as(r#"<field type="checkbox" name="t" value="on" width="20pt" height="20pt"/>
+                               <field type="radio" name="r" group="g" value="a" width="20pt" height="20pt"/>"#, true);
+        for (dict, content) in appearances(&pdf, 20.0, 20.0) {
+            assert!(!content.contains(" Tf") && !dict.contains("/Font"), "{dict} {content}");
+        }
+    }
+
+    #[test]
+    fn a_value_is_drawn_in_the_font_around_the_field() {
+        let pdf = render_as(r#"<column font="Times-Roman"><field type="text" name="a" value="Zürich" width="100pt" height="30pt"/></column>"#, true);
+        let text = String::from_utf8_lossy(&pdf);
+        let name = text.split("/DA (/").nth(1).and_then(|rest| rest.split(' ').next()).expect("a /DA").to_string();
+        assert_ne!(name, "Helv", "the field is not in Helvetica");
+        let found = appearances(&pdf, 100.0, 30.0);
+        assert!(found[0].1.contains(&format!("/{name} 16.5 Tf")), "{}", found[0].1);
+        assert!(found[0].0.contains(&format!("/{name} ")), "{}", found[0].0);
+    }
+
+    #[test]
+    fn a_value_longer_than_the_field_is_clipped_inside_its_border() {
+        let long = "A value much longer than a field this narrow can show";
+        let pdf = render_as(&format!(r#"<field type="text" name="a" value="{long}" width="100pt" height="20pt" border="2pt #888888"/>"#), true);
+        let found = appearances(&pdf, 100.0, 20.0);
+        let content = &found[0].1;
+        // the clip is the field inside its 2pt border, set before the text is drawn
+        let clip = content.find("2 2 96 16 re").unwrap_or_else(|| panic!("no clip inside the border: {content}"));
+        let clipped = content[clip..].lines().take(3).collect::<Vec<_>>();
+        assert_eq!(&clipped[1..], ["W", "n"], "{content}");
+        assert!(clip > content.find("S\n").or(content.find("B\n")).expect("the border is drawn first"), "{content}");
+        assert!(clip < content.find("BT").expect("text"), "{content}");
     }
 
     /// pdf-writer's `into_annotation` writes the widget's subtype, so a second one is a duplicated key, which qpdf
